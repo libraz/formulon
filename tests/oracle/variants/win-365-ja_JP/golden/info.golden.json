@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -249,19 +249,28 @@
       "id": "t_of_number",
       "formula": "=T(42)",
       "setup": {},
-      "skipped": "xlwings classifies the empty-string result of =T(42) as blank on read-back; Formulon returns text(\"\") which is strictly correct."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "t_of_bool",
       "formula": "=T(TRUE)",
       "setup": {},
-      "skipped": "Same xlwings \"\" -> blank read-back gap as t_of_number."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "t_of_blank_cell",
       "formula": "=T(A1)",
       "setup": {},
-      "skipped": "Same xlwings \"\" -> blank read-back gap as t_of_number."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "n_of_number",

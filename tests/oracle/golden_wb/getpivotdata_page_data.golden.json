@@ -1,0 +1,193 @@
+{
+  "suite": "getpivotdata_page_data",
+  "kind": "workbook",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-08-15T19:44:49Z",
+    "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+  },
+  "cases": [
+    {
+      "id": "page_axis_field",
+      "spec": {
+        "id": "page_axis_field",
+        "description": "Page-axis field/item addressing plus the direct #REF branch.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Product"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C3": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C4": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C5": {
+              "kind": "number",
+              "value": 300.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:C5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Product"
+          ],
+          "page_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ],
+          "formula_probes": [
+            {
+              "id": "page_field_item",
+              "cell": "Report!Z1",
+              "formula": "=GETPIVOTDATA(\"合計 / Amount\",Report!A1,\"Region\",\"North\")"
+            },
+            {
+              "id": "unknown_field_ref",
+              "cell": "Report!Z2",
+              "formula": "=GETPIVOTDATA(\"合計 / Amount\",Report!A1,\"MissingField\",\"x\")"
+            }
+          ]
+        }
+      },
+      "skipped": "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
+    },
+    {
+      "id": "data_axis_field",
+      "spec": {
+        "id": "data_axis_field",
+        "description": "Value-axis field/item addressing plus the direct #REF branch.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 400.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ],
+          "formula_probes": [
+            {
+              "id": "data_field_item",
+              "cell": "Report!Z1",
+              "formula": "=GETPIVOTDATA(\"合計 / Amount\",Report!A1,\"Amount\",100)"
+            },
+            {
+              "id": "unknown_field_ref",
+              "cell": "Report!Z2",
+              "formula": "=GETPIVOTDATA(\"合計 / Amount\",Report!A1,\"MissingField\",\"x\")"
+            }
+          ]
+        }
+      },
+      "skipped": "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
+    }
+  ]
+}

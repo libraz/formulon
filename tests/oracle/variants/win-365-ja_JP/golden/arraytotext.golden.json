@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -620,31 +620,31 @@
       "id": "arraytotext_error_in_array_default",
       "formula": "=ARRAYTOTEXT({1,NA(),3})",
       "setup": {},
-      "skipped": "driver skip: COM -2147352567: 例外が発生しました。"
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
     },
     {
       "id": "arraytotext_error_in_array_strict",
       "formula": "=ARRAYTOTEXT({1,NA(),3},1)",
       "setup": {},
-      "skipped": "driver skip: COM -2147352567: 例外が発生しました。"
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
     },
     {
       "id": "arraytotext_only_errors_default",
       "formula": "=ARRAYTOTEXT({NA(),#DIV/0!})",
       "setup": {},
-      "skipped": "driver skip: COM -2147352567: 例外が発生しました。"
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
     },
     {
       "id": "arraytotext_arity_zero",
       "formula": "=ARRAYTOTEXT()",
       "setup": {},
-      "skipped": "driver skip: COM -2147352567: 例外が発生しました。"
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
     },
     {
       "id": "arraytotext_arity_three",
       "formula": "=ARRAYTOTEXT(\"a\",0,0)",
       "setup": {},
-      "skipped": "driver skip: COM -2147352567: 例外が発生しました。"
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
     }
   ]
 }

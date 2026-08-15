@@ -1,12 +1,12 @@
 {
   "suite": "dynamic_array_reshape",
-  "description": "dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS. 11 members × 7 perspectives = 77 cases. Spill outputs flow through skip-oracle (compare_value cannot navigate ArrayValue); live cases focus on scalar errors and 1×1 spills. TRIMRANGE deferred.",
+  "description": "dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS, TRIMRANGE. Spill outputs and scalar errors are captured live by the array-aware oracle harness.",
   "environment": {
     "excel_version": "16.0",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -17,37 +17,100 @@
       "id": "take_head_rows_positive",
       "formula": "=TAKE({1,2,3;4,5,6;7,8,9}, 2)",
       "setup": {},
-      "skipped": "TAKE returns a dynamic-array spill (head rows positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "take_tail_rows_negative",
       "formula": "=TAKE({1,2,3;4,5,6;7,8,9}, -1)",
       "setup": {},
-      "skipped": "TAKE returns a dynamic-array spill (tail rows negative); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          7.0,
+          8.0,
+          9.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "take_head_cols_positive",
       "formula": "=TAKE({1,2,3;4,5,6}, 2, 2)",
       "setup": {},
-      "skipped": "TAKE returns a dynamic-array spill (head cols positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          4.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "take_tail_cols_negative",
       "formula": "=TAKE({1,2,3;4,5,6}, 2, -2)",
       "setup": {},
-      "skipped": "TAKE returns a dynamic-array spill (tail cols negative); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "take_count_exceeds_dimension",
       "formula": "=TAKE({10;20;30}, 99)",
       "setup": {},
-      "skipped": "TAKE returns a dynamic-array spill (count exceeds dimension); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
     },
     {
       "id": "take_single_cell_result",
       "formula": "=TAKE({42}, 1)",
       "setup": {},
-      "skipped": "TAKE returns a dynamic-array spill (single cell result); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
     },
     {
       "id": "take_rows_zero_with_cols",
@@ -59,22 +122,96 @@
       }
     },
     {
+      "id": "take_omitted_rows_keeps_source_height",
+      "formula": "=TAKE({1,2,3;4,5,6},,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          4.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "take_omitted_cols_keeps_source_width",
+      "formula": "=TAKE({1,2,3;4,5,6},2,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
       "id": "drop_head_rows_positive",
       "formula": "=DROP({1,2;3,4;5,6}, 1)",
       "setup": {},
-      "skipped": "DROP returns a dynamic-array spill (head rows positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "drop_tail_rows_negative",
       "formula": "=DROP({1,2;3,4;5,6}, -1)",
       "setup": {},
-      "skipped": "DROP returns a dynamic-array spill (tail rows negative); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "drop_head_cols_positive",
       "formula": "=DROP({1,2,3;4,5,6}, 0, 1)",
       "setup": {},
-      "skipped": "DROP returns a dynamic-array spill (head cols positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "drop_count_eq_row_count_error",
@@ -98,7 +235,19 @@
       "id": "drop_zero_identity",
       "formula": "=DROP({1,2;3,4}, 0)",
       "setup": {},
-      "skipped": "DROP returns a dynamic-array spill (zero identity); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "drop_negative_cols_all_error",
@@ -110,16 +259,100 @@
       }
     },
     {
+      "id": "drop_omitted_rows_keeps_source_height",
+      "formula": "=DROP({1,2,3;4,5,6},,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "drop_omitted_cols_keeps_source_width",
+      "formula": "=DROP({1,2,3;4,5,6},1,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
       "id": "expand_explicit_pad_with",
       "formula": "=EXPAND({1,2;3,4}, 3, 3, 0)",
       "setup": {},
-      "skipped": "EXPAND returns a dynamic-array spill (explicit pad with); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          0.0,
+          3.0,
+          4.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
     },
     {
       "id": "expand_default_pad_na",
       "formula": "=EXPAND({1,2;3,4}, 3, 3)",
       "setup": {},
-      "skipped": "EXPAND returns a dynamic-array spill (default pad na); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          3.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
     },
     {
       "id": "expand_target_rows_smaller_error",
@@ -143,121 +376,504 @@
       "id": "expand_scalar_to_2x2",
       "formula": "=EXPAND({7}, 2, 2, 0)",
       "setup": {},
-      "skipped": "EXPAND returns a dynamic-array spill (scalar to 2x2); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          7.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "expand_col_vector_to_matrix",
       "formula": "=EXPAND({1;2;3}, 3, 3, 99)",
       "setup": {},
-      "skipped": "EXPAND returns a dynamic-array spill (col vector to matrix); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          99.0,
+          99.0,
+          2.0,
+          99.0,
+          99.0,
+          3.0,
+          99.0,
+          99.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
     },
     {
       "id": "expand_identity_pass_through",
       "formula": "=EXPAND({1,2;3,4}, 2, 2, 0)",
       "setup": {},
-      "skipped": "EXPAND returns a dynamic-array spill (identity pass through); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "expand_omitted_rows_keeps_source_height",
+      "formula": "=EXPAND({1,2;3,4},,4)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          3.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          4
+        ]
+      }
+    },
+    {
+      "id": "expand_omitted_cols_keeps_source_width",
+      "formula": "=EXPAND({1,2;3,4},3,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "expand_explicit_empty_pad_count",
+      "formula": "=COUNT(EXPAND({1,2;3,4},3,4,))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "expand_explicit_empty_pad_direct_spill",
+      "formula": "=EXPAND({1,2;3,4},3,4,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          0.0,
+          0.0,
+          3.0,
+          4.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          3,
+          4
+        ]
+      }
+    },
+    {
+      "id": "expand_explicit_empty_pad_spill_ref_count",
+      "formula": "=COUNT(A1#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=EXPAND({1,2;3,4},3,4,)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "expand_explicit_empty_pad_spill_ref_isblank",
+      "formula": "=ISBLANK(INDEX(A1#,3,4))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=EXPAND({1,2;3,4},3,4,)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "expand_blank_ref_pad_count",
+      "formula": "=COUNT(EXPAND({1,2;3,4},3,4,D1))",
+      "setup": {
+        "D1": {
+          "kind": "blank"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "expand_empty_text_pad_is_text",
+      "formula": "=ISTEXT(INDEX(EXPAND({1,2;3,4},3,4,\"\"),3,4))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
     },
     {
       "id": "tocol_row_major_default",
       "formula": "=TOCOL({1,2;3,4})",
       "setup": {},
-      "skipped": "TOCOL returns a dynamic-array spill (row major default); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
+      }
     },
     {
       "id": "tocol_column_major",
       "formula": "=TOCOL({1,2;3,4}, 0, TRUE)",
       "setup": {},
-      "skipped": "TOCOL returns a dynamic-array spill (column major); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
+      }
     },
     {
       "id": "tocol_ignore_blanks",
       "formula": "=TOCOL({1,\"\",2;\"\",3,\"\"}, 1)",
       "setup": {},
-      "skipped": "TOCOL returns a dynamic-array spill (ignore blanks); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          null,
+          2.0,
+          null,
+          3.0,
+          null
+        ],
+        "shape": [
+          6,
+          1
+        ]
+      }
     },
     {
       "id": "tocol_ignore_errors",
       "formula": "=TOCOL({1,#N/A;2,3}, 2)",
       "setup": {},
-      "skipped": "TOCOL returns a dynamic-array spill (ignore errors); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
     },
     {
       "id": "tocol_ignore_both",
       "formula": "=TOCOL({1,#N/A;\"\",3}, 3)",
       "setup": {},
-      "skipped": "TOCOL returns a dynamic-array spill (ignore both); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          null,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
     },
     {
       "id": "tocol_all_blank_ignore_one_error",
       "formula": "=TOCOL({\"\",\"\"}, 1)",
       "setup": {},
-      "skipped": "TOCOL returns a dynamic-array spill (all blank ignore one error); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          null,
+          null
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
     },
     {
       "id": "tocol_single_row_to_column",
       "formula": "=TOCOL({10,20,30})",
       "setup": {},
-      "skipped": "TOCOL returns a dynamic-array spill (single row to column); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
     },
     {
       "id": "torow_row_major_default",
       "formula": "=TOROW({1,2;3,4})",
       "setup": {},
-      "skipped": "TOROW returns a dynamic-array spill (row major default); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          4
+        ]
+      }
     },
     {
       "id": "torow_column_major",
       "formula": "=TOROW({1,2;3,4}, 0, TRUE)",
       "setup": {},
-      "skipped": "TOROW returns a dynamic-array spill (column major); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          4
+        ]
+      }
     },
     {
       "id": "torow_ignore_blanks",
       "formula": "=TOROW({\"\",1,\"\",2}, 1)",
       "setup": {},
-      "skipped": "TOROW returns a dynamic-array spill (ignore blanks); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          null,
+          1.0,
+          null,
+          2.0
+        ],
+        "shape": [
+          1,
+          4
+        ]
+      }
     },
     {
       "id": "torow_ignore_errors",
       "formula": "=TOROW({#VALUE!,1,#N/A,2}, 2)",
       "setup": {},
-      "skipped": "TOROW returns a dynamic-array spill (ignore errors); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
     },
     {
       "id": "torow_ignore_both",
       "formula": "=TOROW({\"\",#N/A,1,#VALUE!,2}, 3)",
       "setup": {},
-      "skipped": "TOROW returns a dynamic-array spill (ignore both); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          null,
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "torow_all_errors_ignore_two_error",
       "formula": "=TOROW({#N/A,#VALUE!}, 2)",
       "setup": {},
-      "skipped": "TOROW returns a dynamic-array spill (all errors ignore two error); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
     },
     {
       "id": "torow_single_column_to_row",
       "formula": "=TOROW({10;20;30})",
       "setup": {},
-      "skipped": "TOROW returns a dynamic-array spill (single column to row); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "wrapcols_even_no_padding",
       "formula": "=WRAPCOLS({1,2,3,4,5,6}, 3)",
       "setup": {},
-      "skipped": "WRAPCOLS returns a dynamic-array spill (even no padding); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          2.0,
+          5.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
     },
     {
       "id": "wrapcols_odd_default_pad_na",
       "formula": "=WRAPCOLS({1,2,3,4,5}, 2)",
       "setup": {},
-      "skipped": "WRAPCOLS returns a dynamic-array spill (odd default pad na); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          5.0,
+          2.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "wrapcols_explicit_pad_with",
       "formula": "=WRAPCOLS({1,2,3,4,5}, 2, 0)",
       "setup": {},
-      "skipped": "WRAPCOLS returns a dynamic-array spill (explicit pad with); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          5.0,
+          2.0,
+          4.0,
+          0.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "wrapcols_zero_count_error",
@@ -272,37 +888,116 @@
       "id": "wrapcols_count_exceeds_length",
       "formula": "=WRAPCOLS({1,2,3}, 10)",
       "setup": {},
-      "skipped": "WRAPCOLS returns a dynamic-array spill (count exceeds length); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
     },
     {
       "id": "wrapcols_column_input",
       "formula": "=WRAPCOLS({1;2;3;4}, 2)",
       "setup": {},
-      "skipped": "WRAPCOLS returns a dynamic-array spill (column input); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "wrapcols_count_one",
       "formula": "=WRAPCOLS({10,20,30}, 1)",
       "setup": {},
-      "skipped": "WRAPCOLS returns a dynamic-array spill (count one); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "wraprows_even_no_padding",
       "formula": "=WRAPROWS({1,2,3,4,5,6}, 3)",
       "setup": {},
-      "skipped": "WRAPROWS returns a dynamic-array spill (even no padding); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "wraprows_odd_default_pad_na",
       "formula": "=WRAPROWS({1,2,3,4,5}, 3)",
       "setup": {},
-      "skipped": "WRAPROWS returns a dynamic-array spill (odd default pad na); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "wraprows_explicit_pad_with",
       "formula": "=WRAPROWS({1,2,3,4,5}, 3, -1)",
       "setup": {},
-      "skipped": "WRAPROWS returns a dynamic-array spill (explicit pad with); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          -1.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "wraprows_zero_count_error",
@@ -317,127 +1012,423 @@
       "id": "wraprows_count_exceeds_length",
       "formula": "=WRAPROWS({1,2,3}, 10)",
       "setup": {},
-      "skipped": "WRAPROWS returns a dynamic-array spill (count exceeds length); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "wraprows_column_input",
       "formula": "=WRAPROWS({1;2;3;4}, 2)",
       "setup": {},
-      "skipped": "WRAPROWS returns a dynamic-array spill (column input); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "wraprows_count_one",
       "formula": "=WRAPROWS({10,20,30}, 1)",
       "setup": {},
-      "skipped": "WRAPROWS returns a dynamic-array spill (count one); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
     },
     {
       "id": "hstack_same_height",
       "formula": "=HSTACK({1;2;3}, {4;5;6})",
       "setup": {},
-      "skipped": "HSTACK returns a dynamic-array spill (same height); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          2.0,
+          5.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
     },
     {
       "id": "hstack_ragged_padded",
       "formula": "=HSTACK({1;2;3}, {4;5})",
       "setup": {},
-      "skipped": "HSTACK returns a dynamic-array spill (ragged padded); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          2.0,
+          5.0,
+          3.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
     },
     {
       "id": "hstack_three_args",
       "formula": "=HSTACK({1,2}, {3,4}, {5,6})",
       "setup": {},
-      "skipped": "HSTACK returns a dynamic-array spill (three args); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          6
+        ]
+      }
     },
     {
       "id": "hstack_single_row",
       "formula": "=HSTACK({1,2,3}, {4,5,6})",
       "setup": {},
-      "skipped": "HSTACK returns a dynamic-array spill (single row); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          6
+        ]
+      }
     },
     {
       "id": "hstack_error_cell_propagates",
       "formula": "=HSTACK({1;#N/A;3}, {4;5;6})",
       "setup": {},
-      "skipped": "HSTACK returns a dynamic-array spill (error cell propagates); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          5.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
     },
     {
       "id": "hstack_scalars",
       "formula": "=HSTACK({1}, {2})",
       "setup": {},
-      "skipped": "HSTACK returns a dynamic-array spill (scalars); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
     },
     {
       "id": "hstack_2d_ragged_row_mismatch",
       "formula": "=HSTACK({1,2;3,4}, {5;6;7})",
       "setup": {},
-      "skipped": "HSTACK returns a dynamic-array spill (2d ragged row mismatch); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          5.0,
+          3.0,
+          4.0,
+          6.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          7.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
     },
     {
       "id": "vstack_same_width",
       "formula": "=VSTACK({1,2,3}, {4,5,6})",
       "setup": {},
-      "skipped": "VSTACK returns a dynamic-array spill (same width); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "vstack_ragged_padded",
       "formula": "=VSTACK({1,2,3}, {4,5})",
       "setup": {},
-      "skipped": "VSTACK returns a dynamic-array spill (ragged padded); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "vstack_three_args",
       "formula": "=VSTACK({1;2}, {3;4}, {5;6})",
       "setup": {},
-      "skipped": "VSTACK returns a dynamic-array spill (three args); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          6,
+          1
+        ]
+      }
     },
     {
       "id": "vstack_single_col",
       "formula": "=VSTACK({1;2;3}, {4;5;6})",
       "setup": {},
-      "skipped": "VSTACK returns a dynamic-array spill (single col); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          6,
+          1
+        ]
+      }
     },
     {
       "id": "vstack_error_cell_propagates",
       "formula": "=VSTACK({1,2,3}, {#VALUE!,5,6})",
       "setup": {},
-      "skipped": "VSTACK returns a dynamic-array spill (error cell propagates); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "vstack_scalars",
       "formula": "=VSTACK({1}, {2})",
       "setup": {},
-      "skipped": "VSTACK returns a dynamic-array spill (scalars); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
     },
     {
       "id": "vstack_2d_ragged_col_mismatch",
       "formula": "=VSTACK({1,2;3,4}, {5,6,7})",
       "setup": {},
-      "skipped": "VSTACK returns a dynamic-array spill (2d ragged col mismatch); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          3.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          5.0,
+          6.0,
+          7.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
     },
     {
       "id": "choosecols_single_positive",
       "formula": "=CHOOSECOLS({1,2,3;4,5,6}, 2)",
       "setup": {},
-      "skipped": "CHOOSECOLS returns a dynamic-array spill (single positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
     },
     {
       "id": "choosecols_multiple_positive",
       "formula": "=CHOOSECOLS({1,2,3;4,5,6}, 1, 3)",
       "setup": {},
-      "skipped": "CHOOSECOLS returns a dynamic-array spill (multiple positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          4.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "choosecols_negative_index",
       "formula": "=CHOOSECOLS({1,2,3;4,5,6}, -1)",
       "setup": {},
-      "skipped": "CHOOSECOLS returns a dynamic-array spill (negative index); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
     },
     {
       "id": "choosecols_repeated_index",
       "formula": "=CHOOSECOLS({1,2,3;4,5,6}, 2, 2)",
       "setup": {},
-      "skipped": "CHOOSECOLS returns a dynamic-array spill (repeated index); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          2.0,
+          5.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "choosecols_out_of_range_positive_error",
@@ -470,25 +1461,75 @@
       "id": "chooserows_single_positive",
       "formula": "=CHOOSEROWS({1,2,3;4,5,6;7,8,9}, 2)",
       "setup": {},
-      "skipped": "CHOOSEROWS returns a dynamic-array spill (single positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "chooserows_multiple_positive",
       "formula": "=CHOOSEROWS({1,2,3;4,5,6;7,8,9}, 1, 3)",
       "setup": {},
-      "skipped": "CHOOSEROWS returns a dynamic-array spill (multiple positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          7.0,
+          8.0,
+          9.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "chooserows_negative_index",
       "formula": "=CHOOSEROWS({1,2,3;4,5,6;7,8,9}, -1)",
       "setup": {},
-      "skipped": "CHOOSEROWS returns a dynamic-array spill (negative index); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          7.0,
+          8.0,
+          9.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "chooserows_repeated_index",
       "formula": "=CHOOSEROWS({1,2,3;4,5,6}, 1, 1)",
       "setup": {},
-      "skipped": "CHOOSEROWS returns a dynamic-array spill (repeated index); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
     },
     {
       "id": "chooserows_out_of_range_positive_error",
@@ -538,7 +1579,19 @@
           "value": 4.0
         }
       },
-      "skipped": "TRIMRANGE returns a dynamic-array spill (default trim both edges); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "trimrange_trim_rows_zero_keeps_all",
@@ -561,7 +1614,25 @@
           "value": 4.0
         }
       },
-      "skipped": "TRIMRANGE returns a dynamic-array spill (trim_rows=0 keeps every row); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          5,
+          2
+        ]
+      }
     },
     {
       "id": "trimrange_trim_rows_leading_only",
@@ -584,7 +1655,23 @@
           "value": 4.0
         }
       },
-      "skipped": "TRIMRANGE returns a dynamic-array spill (trim_rows=1 leading only); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
     },
     {
       "id": "trimrange_trim_rows_trailing_only",
@@ -607,7 +1694,21 @@
           "value": 4.0
         }
       },
-      "skipped": "TRIMRANGE returns a dynamic-array spill (trim_rows=2 trailing only); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
     },
     {
       "id": "trimrange_invalid_mode_value_error",
@@ -647,6 +1748,68 @@
       "expect": {
         "kind": "error",
         "code": "#REF!"
+      }
+    },
+    {
+      "id": "trimrange_internal_blank_direct_spill",
+      "formula": "=TRIMRANGE(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          0.0,
+          2.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "trimrange_internal_blank_nested_count",
+      "formula": "=COUNT(TRIMRANGE(A1:A3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimrange_internal_blank_nested_counta",
+      "formula": "=COUNTA(TRIMRANGE(A1:A3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
       }
     }
   ]

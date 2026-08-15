@@ -45,26 +45,32 @@ targets:
                                           # (e.g. tests/oracle/variants/<name>/divergence.yaml).
 
   win-365-ja_JP:
-    # Reserved slot for genuine Microsoft 365 (Windows, ja-JP) goldens.
+    # Microsoft 365 (Windows, ja-JP) goldens.
     # Goldens previously committed under this target turned out to be
     # generated on a host whose Click-to-Run package was actually
     # `ProPlus2019Retail` (Office 2019 Pro Plus perpetual) -- the M365
     # subscription license was attached but the installed binary set was
     # never replaced. ARRAYTOTEXT / VALUETOTEXT / XLOOKUP / LET / LAMBDA
     # and the rest of the post-2019 function set therefore returned
-    # `#NAME?` rather than real values. Those goldens are now under
-    # `win-2019-ja_JP` (see below); this slot stays `wanted` until a
-    # real M365 install regenerates them.
-    status: wanted
-    # This directory is retained as a historical capture only.  It is not
-    # evidence of a Microsoft 365 installation and is excluded from the
-    # default CTest / coverage surface until a fresh, product-verified
-    # capture is donated.
+    # `#NAME?` rather than real values. That data is retained unchanged
+    # under `tests/oracle/reference/win-2019-ja_JP/` (see below).
+    #
+    # Re-captured 2026-08-16 on a genuine Microsoft 365 ja-JP install,
+    # EXCEL.EXE file version 16.0.20228.20190, through the WSL2 -> Windows
+    # COM bridge: the workbook track (tests/oracle/golden_wb, promoted via
+    # `make oracle-promote`) and the formula track (`output_dir` below).
+    # Both generators gate on the ARRAYTOTEXT(1) M365 sentinel.
+    status: scaffolded
+    # Only the workbook track is active CTest coverage; its marker lives in
+    # tests/oracle/golden_wb/PROVENANCE.json. The formula-track directory
+    # record below stays `active_ctest: false` because provenance.py's
+    # variant inventory check needs a per-golden `capture_id` that
+    # oracle_gen.py does not stamp yet.
     provenance:
-      classification: reference-only
-      verified: false
-      product: Office Professional Plus 2019 Retail (historical capture)
-      source: tests/oracle/reference/win-2019-ja_JP
+      classification: verified
+      verified: true
+      product: Microsoft 365 Apps, Excel 16.0.20228.20190 (ja-JP)
+      source: tests/oracle/variants/win-365-ja_JP/PROVENANCE.json
     driver: windows_excel
     runs_on: [Windows, Linux]
     locale: ja-JP

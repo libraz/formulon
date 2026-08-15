@@ -6,7 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-17T07:25:00Z"
+    "generated_at": "2026-08-15T19:44:49Z",
+    "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
   },
   "cases": [
     {
@@ -438,6 +439,73 @@
           ],
           "v_breaks": [],
           "pages": 2,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "multi_area_row_stacked_col_break",
+      "spec": {
+        "id": "multi_area_row_stacked_col_break",
+        "description": "Two vertically-stacked print areas (A1:H6 and A9:H14), each spanning wide columns A:H so the columns overflow one A4-portrait page, split by a manual column break before D. Exercises multi-area pagination where each print area is an independent page grid: the shared manual column break splits both areas' columns, symmetric with how a shared manual row break splits two side-by-side areas.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H6": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A9": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H14": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 20
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H6,A9:H14",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          },
+          "manual_breaks": {
+            "cols": [
+              "D"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H6,A9:H14",
+          "h_breaks": [],
+          "v_breaks": [
+            3
+          ],
+          "pages": 4,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,

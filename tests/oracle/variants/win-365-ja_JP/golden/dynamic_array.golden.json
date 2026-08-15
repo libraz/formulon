@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -18,8 +18,16 @@
       "formula": "=SEQUENCE(3)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -27,8 +35,19 @@
       "formula": "=SEQUENCE(2,3)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
       }
     },
     {
@@ -36,8 +55,17 @@
       "formula": "=SEQUENCE(2,2,10,5)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 10.0
+        "kind": "array",
+        "value": [
+          10.0,
+          15.0,
+          20.0,
+          25.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     },
     {
@@ -45,8 +73,16 @@
       "formula": "=SEQUENCE(3,1,10,-2)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 10.0
+        "kind": "array",
+        "value": [
+          10.0,
+          8.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -54,15 +90,26 @@
       "formula": "=SEQUENCE(3,1,0.5,0.25)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 0.5
+        "kind": "array",
+        "value": [
+          0.5,
+          0.75,
+          1.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
       "id": "sequence_zero_rows_value",
       "formula": "=SEQUENCE(0)",
       "setup": {},
-      "skipped": "SEQUENCE error path returns Error scalar but golden registers an array-shaped error in some configurations; re-verify after oracle-gen rerun captures the live Mac result post-anchor-unwrap landing."
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
     },
     {
       "id": "sequence_negative_rows_value",
@@ -87,8 +134,19 @@
       "formula": "=TRANSPOSE({1,2,3;4,5,6})",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          2.0,
+          5.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
       }
     },
     {
@@ -113,8 +171,17 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     },
     {
@@ -131,8 +198,17 @@
       "formula": "=TRANSPOSE({1,2,3,4})",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
       }
     },
     {
@@ -140,8 +216,17 @@
       "formula": "=TRANSPOSE({1;2;3;4})",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          4
+        ]
       }
     },
     {
@@ -149,8 +234,17 @@
       "formula": "=TRANSPOSE({\"a\",\"b\";\"c\",\"d\"})",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "a"
+        "kind": "array",
+        "value": [
+          "a",
+          "c",
+          "b",
+          "d"
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     },
     {
@@ -162,7 +256,94 @@
           "formula": "=SEQUENCE(3)"
         }
       },
-      "skipped": "Spill-ref `A1#` consumed by SUM requires the spill region to be materialized in the workbook, but the oracle harness evaluates the formula in isolation; SUM sees the bare Array reference and produces a different result than Excel's resolved spill region."
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "whole_column_sum_sequence_5",
+      "formula": "=SUM(A:A)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "whole_column_count_sequence_5",
+      "formula": "=COUNT(A:A)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "whole_column_sum_sequence_3x2",
+      "formula": "=SUM(B:B)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "whole_row_sum_sequence_2x3",
+      "formula": "=SUM(2:2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "whole_column_sum_xfd_sequence_2",
+      "formula": "=SUM(XFD:XFD)",
+      "setup": {
+        "XFD1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "explicit_xfd_range_sum_sequence_2",
+      "formula": "=SUM(XFD1:XFD2)",
+      "setup": {
+        "XFD1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
     },
     {
       "id": "anchorarray_static_value_anchor",
@@ -190,7 +371,7 @@
           "formula": "=SEQUENCE(3)"
         }
       },
-      "skipped": "_xlfn.ANCHORARRAY(A1) over a setup-formula spill source (A1=SEQUENCE(3)) requires the spill region to be materialized before the test formula is evaluated. The static oracle harness evaluates the test formula in isolation, so spill_region_at_anchor(A1) returns null and ANCHORARRAY surfaces #REF!. Same harness limitation as spill_ref_after_sequence_sum above."
+      "skipped": "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
     },
     {
       "id": "anchorarray_resolves_sequence_rows",
@@ -201,7 +382,7 @@
           "formula": "=SEQUENCE(3)"
         }
       },
-      "skipped": "_xlfn.ANCHORARRAY(A1) requires the A1=SEQUENCE(3) spill source to be materialized before the test formula evaluates. Same harness limitation as spill_ref_after_sequence_sum."
+      "skipped": "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
     },
     {
       "id": "anchorarray_offset_resolved_anchor",
@@ -212,7 +393,7 @@
           "formula": "=SEQUENCE(2,2)"
         }
       },
-      "skipped": "_xlfn.ANCHORARRAY(OFFSET(A1,1,0)) requires the A2=SEQUENCE(2,2) spill source to be materialized before the test formula evaluates. Same harness limitation as spill_ref_after_sequence_sum."
+      "skipped": "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
     }
   ]
 }

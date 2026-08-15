@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -83,8 +83,15 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 60.0
+        "kind": "array",
+        "value": [
+          60.0,
+          70.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
       }
     },
     {
@@ -101,8 +108,15 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 47.0
+        "kind": "array",
+        "value": [
+          47.0,
+          70.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
       }
     },
     {

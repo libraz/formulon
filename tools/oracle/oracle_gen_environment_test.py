@@ -95,10 +95,32 @@ class WriteEnvironmentMdTest(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / "ENVIRONMENT.md"
-            oracle_gen._write_environment_md(path, env, "2026-08-14T00:00:00Z", excel_version="16.108.1")
+            oracle_gen._write_environment_md(
+                path,
+                env,
+                "2026-08-14T00:00:00Z",
+                excel_version="16.108.1",
+                golden_dir=oracle_gen.REPO_ROOT / "tests" / "oracle" / "golden",
+            )
             body = path.read_text(encoding="utf-8")
             self.assertIn("`16.108.1`", body)
             self.assertNotIn("`16.112`", body)
+
+    def test_names_the_golden_directory_it_documents(self) -> None:
+        # A variant keeps its own ENVIRONMENT.md beside its own goldens, so
+        # the body must not point every target at the primary's directory.
+        from tools.oracle.drivers.base import EnvironmentInfo
+
+        env = EnvironmentInfo(excel_version="16.112", excel_locale="ja-JP", date1904=False, iterative=False)
+        variant_dir = oracle_gen.REPO_ROOT / "tests" / "oracle" / "variants" / "win-365-ja_JP" / "golden"
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "ENVIRONMENT.md"
+            oracle_gen._write_environment_md(
+                path, env, "2026-08-14T00:00:00Z", excel_version="16.112", golden_dir=variant_dir
+            )
+            body = path.read_text(encoding="utf-8")
+            self.assertIn("`tests/oracle/variants/win-365-ja_JP/golden/`", body)
+            self.assertNotIn("`tests/oracle/golden/`", body)
 
 
 if __name__ == "__main__":

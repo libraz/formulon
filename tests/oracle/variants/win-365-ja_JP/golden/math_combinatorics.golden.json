@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -386,7 +386,10 @@
       "id": "roman_zero_is_empty",
       "formula": "=ROMAN(0)",
       "setup": {},
-      "skipped": "ROMAN(0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "roman_four",

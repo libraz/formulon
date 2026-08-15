@@ -1,12 +1,12 @@
 {
   "suite": "pivotby",
-  "description": "PIVOTBY dynamic-array pivot (Excel 365). Six perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
+  "description": "PIVOTBY dynamic-array pivot (Excel 365). Perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
   "environment": {
     "excel_version": "16.0",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-15T02:55:28Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -15,15 +15,55 @@
   "cases": [
     {
       "id": "pivotby_bare_sum",
-      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0)",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, , 0)",
       "setup": {},
-      "skipped": "Win Excel 365 returns #VALUE! for this compact inline-array PIVOTBY/SUM probe; Formulon keeps the documented pivot spill implementation covered by unit tests."
+      "expect": {
+        "kind": "array",
+        "value": [
+          null,
+          "X",
+          "Y",
+          "A",
+          1.0,
+          null,
+          "B",
+          null,
+          2.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
     },
     {
       "id": "pivotby_lambda_sum",
-      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, 0, 0, 0)",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, , 0)",
       "setup": {},
-      "skipped": "Win Excel 365 returns #VALUE! for this compact inline-array PIVOTBY/LAMBDA probe; Formulon keeps the documented pivot spill implementation covered by unit tests."
+      "expect": {
+        "kind": "array",
+        "value": [
+          null,
+          "X",
+          "Y",
+          "A",
+          1.0,
+          null,
+          "B",
+          null,
+          2.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "pivotby_row_sort_order_zero_rejected",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0)",
+      "setup": {},
+      "skipped": "As groupby_sort_order_zero_rejected, on PIVOTBY's row_sort_order slot: Excel returns #VALUE! for a literal 0, Formulon returns the pivot spill."
     },
     {
       "id": "pivotby_unknown_name_error",
@@ -265,6 +305,55 @@
         ],
         "shape": [
           6,
+          5
+        ]
+      }
+    },
+    {
+      "id": "pivotby_row_subtotal_depth_two",
+      "formula": "=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          null,
+          null,
+          "X",
+          "Y",
+          "合計",
+          "A",
+          "x",
+          10.0,
+          null,
+          10.0,
+          "A",
+          "y",
+          null,
+          20.0,
+          20.0,
+          "A",
+          null,
+          10.0,
+          20.0,
+          30.0,
+          "B",
+          "x",
+          30.0,
+          null,
+          30.0,
+          "B",
+          null,
+          30.0,
+          null,
+          30.0,
+          "総計",
+          null,
+          40.0,
+          20.0,
+          60.0
+        ],
+        "shape": [
+          7,
           5
         ]
       }

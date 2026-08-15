@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -18,8 +18,16 @@
       "formula": "=SEQUENCE(3)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -115,6 +123,18 @@
           "formula": "=\"\""
         }
       },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "spill_blocked_by_merged_anchor",
+      "formula": "=SEQUENCE(2)",
+      "setup": {},
+      "merges": [
+        "Z1:AA1"
+      ],
       "expect": {
         "kind": "error",
         "code": "#SPILL!"

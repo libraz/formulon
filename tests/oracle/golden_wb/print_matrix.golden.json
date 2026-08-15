@@ -6,7 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-17T07:25:00Z"
+    "generated_at": "2026-08-15T19:44:49Z",
+    "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
   },
   "cases": [
     {
@@ -191,7 +192,7 @@
           }
         }
       },
-      "skipped": "Excel PageBreakPreview reports column auto-breaks at PageSetup.Zoom<=50 that do not follow any simple geometric model: identical A1:H30 geometry produces v=[] at scale=100/75, v=[7] at scale=50, v=[3,6] at scale=25 (more breaks at smaller scale, inverted from the intuitive shrink-to-fit model the Excel VBA community has documented). Reverse-engineering the true PBP rule requires Excel internals access; multiple community workarounds (view toggle / FitToPages mutual-exclusion) confirm this is a notorious COM quirk. Skipping until a principled model emerges."
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     },
     {
       "id": "zoom_25_dense_fit_off",
@@ -239,7 +240,7 @@
           }
         }
       },
-      "skipped": "Excel PageBreakPreview reports column auto-breaks at PageSetup.Zoom<=50 that do not follow any simple geometric model: identical A1:H30 geometry produces v=[] at scale=100/75, v=[7] at scale=50, v=[3,6] at scale=25 (more breaks at smaller scale, inverted from the intuitive shrink-to-fit model the Excel VBA community has documented). Reverse-engineering the true PBP rule requires Excel internals access; multiple community workarounds (view toggle / FitToPages mutual-exclusion) confirm this is a notorious COM quirk. Skipping until a principled model emerges."
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     },
     {
       "id": "fit_off_zoom_100_dense",
@@ -1133,7 +1134,7 @@
           }
         }
       },
-      "skipped": "Excel PageBreakPreview reports column auto-breaks at PageSetup.Zoom<=50 that do not follow any simple geometric model: identical A1:H30 geometry produces v=[] at scale=100/75, v=[7] at scale=50, v=[3,6] at scale=25 (more breaks at smaller scale, inverted from the intuitive shrink-to-fit model the Excel VBA community has documented). Reverse-engineering the true PBP rule requires Excel internals access; multiple community workarounds (view toggle / FitToPages mutual-exclusion) confirm this is a notorious COM quirk. Skipping until a principled model emerges."
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     },
     {
       "id": "scale_50_flat_rows",
@@ -1177,7 +1178,7 @@
           }
         }
       },
-      "skipped": "Excel PageBreakPreview reports column auto-breaks at PageSetup.Zoom<=50 that do not follow any simple geometric model: identical A1:H30 geometry produces v=[] at scale=100/75, v=[7] at scale=50, v=[3,6] at scale=25 (more breaks at smaller scale, inverted from the intuitive shrink-to-fit model the Excel VBA community has documented). Reverse-engineering the true PBP rule requires Excel internals access; multiple community workarounds (view toggle / FitToPages mutual-exclusion) confirm this is a notorious COM quirk. Skipping until a principled model emerges."
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     },
     {
       "id": "scale_75_short_row",

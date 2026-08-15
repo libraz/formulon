@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -586,8 +586,88 @@
         }
       },
       "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "offset_internal_blank_direct_spill",
+      "formula": "=OFFSET(A1,0,0,3,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          0.0,
+          2.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "offset_internal_blank_nested_count",
+      "formula": "=COUNT(OFFSET(A1,0,0,3,1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
         "kind": "number",
-        "value": 1.0
+        "value": 2.0
+      }
+    },
+    {
+      "id": "offset_internal_blank_nested_counta",
+      "formula": "=COUNTA(OFFSET(A1,0,0,3,1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "offset_all_blank_nested_and",
+      "formula": "=AND(OFFSET(A1,0,0,3,1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     },
     {
@@ -604,8 +684,15 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 42.0
+        "kind": "array",
+        "value": [
+          42.0,
+          99.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
       }
     }
   ]

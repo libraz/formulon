@@ -476,12 +476,21 @@ def _tree_wide_excel_version(golden_dir: Path, fallback: str) -> str:
     return min(versions, key=lambda pair: pair[0])[1]
 
 
-def _write_environment_md(path: Path, env: EnvironmentInfo, iso_now: str, *, excel_version: str) -> None:
+def _write_environment_md(
+    path: Path, env: EnvironmentInfo, iso_now: str, *, excel_version: str, golden_dir: Path
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Name the directory this file actually documents: variants keep their
+    # own ENVIRONMENT.md next to their own goldens, so a hard-coded
+    # `tests/oracle/golden/` would misdescribe every target but the primary.
+    try:
+        documented_dir = golden_dir.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        documented_dir = golden_dir.as_posix()
     body = (
         "# Oracle Environment\n\n"
         "This file records the oldest Excel version any committed suite\n"
-        "in `tests/oracle/golden/` was generated against. Reviewers\n"
+        f"in `{documented_dir}/` was generated against. Reviewers\n"
         "should watch this file on oracle-gen PRs to catch\n"
         "version-driven divergences early.\n\n"
         f"- **Excel version**: `{excel_version}`\n"
@@ -796,7 +805,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         # thing.
         if not args.suite and not args.case and args.golden_dir is None and exit_code == 0:
             excel_version = _tree_wide_excel_version(golden_dir, env.excel_version)
-            _write_environment_md(env_md_path, env, iso_now, excel_version=excel_version)
+            _write_environment_md(env_md_path, env, iso_now, excel_version=excel_version, golden_dir=golden_dir)
     return exit_code
 
 

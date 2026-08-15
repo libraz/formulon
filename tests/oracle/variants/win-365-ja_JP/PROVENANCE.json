@@ -1,11 +1,15 @@
 {
   "target": "win-365-ja_JP",
-  "status": "wanted",
-  "classification": "reference-only",
-  "verified": false,
+  "status": "scaffolded",
+  "classification": "verified",
+  "verified": true,
+  "active_ctest": false,
   "locale": "ja-JP",
-  "product": "Office Professional Plus 2019 Retail (historical capture)",
-  "source": "tests/oracle/reference/win-2019-ja_JP",
-  "reason": "The former win-365-ja_JP directory was captured on an Office 2019 host. It is retained for historical comparison and is not a Microsoft 365 oracle.",
-  "active_ctest": false
+  "product": "16.0",
+  "product_build": "16.0.20228.20190",
+  "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
+  "generated_at": "2026-08-15T18:52:11Z",
+  "suite_count": 103,
+  "source": "tools/oracle/oracle_gen.py --target win-365-ja_JP (full corpus, WSL2 -> Windows COM bridge)",
+  "reason": "Formula-track goldens under golden/ were re-captured on a product-verified Microsoft 365 ja-JP host; oracle_gen.py runs OracleDriver.assert_m365_or_abort() before the first suite, so the ARRAYTOTEXT(1) sentinel gated this capture. `product` mirrors the `environment.excel_version` the goldens carry (Application.Version reports the bare \"16.0\" on Windows); `product_build` is EXCEL.EXE's file version, read separately, and is the real build evidence. This replaces the Office Professional Plus 2019 Retail capture that previously occupied this directory -- that data is retained unchanged under tests/oracle/reference/win-2019-ja_JP/. `active_ctest` stays false: provenance.py's variant inventory check requires every golden's environment block to carry a per-capture `capture_id`, and the formula-track generator does not stamp one (unlike the workbook track's PROVENANCE.candidate.json flow). Landing this as active variant coverage needs that stamp plus a suite inventory."
 }

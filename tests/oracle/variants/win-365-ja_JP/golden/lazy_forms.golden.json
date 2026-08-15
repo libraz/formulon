@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-07T15:19:09Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -26,7 +26,7 @@
       "id": "lazy_phonetic_literal_text",
       "formula": "=PHONETIC(\"テスト\")",
       "setup": {},
-      "skipped": "PHONETIC literal-text and rPh metadata behavior is covered by unit tests; oracle parity for annotated workbook metadata needs a dedicated fixture."
+      "skipped": "PHONETIC is a real lazy form, but annotated rPh workbook metadata needs a dedicated oracle fixture; unit tests cover literal and workbook-backed behavior meanwhile."
     }
   ]
 }

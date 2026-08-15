@@ -1,11 +1,90 @@
 {
-  "track": "workbook",
   "target": "win-365-ja_JP",
-  "status": "wanted",
-  "classification": "reference-only",
-  "verified": false,
+  "status": "scaffolded",
+  "classification": "active",
+  "verified": true,
+  "active_ctest": true,
+  "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z",
+  "all_suites_same_capture": true,
+  "product": "16.0",
   "locale": "ja-JP",
-  "product": "unknown Excel 16.0 capture",
-  "reason": "The workbook goldens predate the provenance guard and do not carry a product-level Microsoft 365 check. They remain useful for local research but are excluded from active CTest coverage.",
-  "active_ctest": false
+  "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
+  "required_suites": [
+    "example_smoke",
+    "getpivotdata_page_data",
+    "pivot_aggregations",
+    "pivot_basic",
+    "pivot_layout",
+    "print_basic",
+    "print_fit",
+    "print_matrix",
+    "print_pagination"
+  ],
+  "captured_suites": [
+    "example_smoke",
+    "getpivotdata_page_data",
+    "pivot_aggregations",
+    "pivot_basic",
+    "pivot_layout",
+    "print_basic",
+    "print_fit",
+    "print_matrix",
+    "print_pagination"
+  ],
+  "suite_inventory": [
+    {
+      "suite": "example_smoke",
+      "case_count": 1,
+      "sha256": "159d3c67343ac0c44bcbdeded6ee21be598460831521db84d393da2240a5ecd5",
+      "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    },
+    {
+      "suite": "getpivotdata_page_data",
+      "case_count": 2,
+      "sha256": "57277357833684e95480558305800eadb0f43dfa548947caa8644839959d0162",
+      "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    },
+    {
+      "suite": "pivot_aggregations",
+      "case_count": 10,
+      "sha256": "063f998f8f86c361ad8d721ec1783e31905297745384c8fc552ab066435eb5c6",
+      "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    },
+    {
+      "suite": "pivot_basic",
+      "case_count": 8,
+      "sha256": "412ccb9dd29fcb0fddbc991c96ce4399a08d9225cf941c9a6902968e95b8da8a",
+      "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    },
+    {
+      "suite": "pivot_layout",
+      "case_count": 10,
+      "sha256": "2c42dcf08501f321f5964ff325bb150a489c0c15651d2e3030fa89ba1e63c85a",
+      "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    },
+    {
+      "suite": "print_basic",
+      "case_count": 8,
+      "sha256": "02d5ee854e36d4fdbf836e22e2682f59d0ceda7e841d91bba9aeef51c3eaf251",
+      "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    },
+    {
+      "suite": "print_fit",
+      "case_count": 7,
+      "sha256": "e78154909dc9cac334c8d475a38d9d871b1f5c33d257357510b7951c68b65707",
+      "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    },
+    {
+      "suite": "print_matrix",
+      "case_count": 18,
+      "sha256": "6d9b868e82d0c6a2a09dd7f477bfe2f6d2e0e016f38268c3a86fa65d60610c64",
+      "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    },
+    {
+      "suite": "print_pagination",
+      "case_count": 9,
+      "sha256": "4297b2288e969089312c3db8d1a6cb3f4b03b9d43f14d0a7cf0d48a52255b4d8",
+      "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    }
+  ]
 }

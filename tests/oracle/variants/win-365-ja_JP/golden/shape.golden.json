@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -149,8 +149,16 @@
       "formula": "=ROW(B2:D4)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 2.0
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -158,8 +166,16 @@
       "formula": "=COLUMN(B2:D4)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 2.0
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {
@@ -375,7 +391,7 @@
       "id": "rows_of_mixed_row_array_literal",
       "formula": "=ROWS({1,2;3,4,5})",
       "setup": {},
-      "skipped": "Mac Excel rejects =ROWS({1,2;3,4,5}) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #NAME? for the jagged array literal."
+      "skipped": "Mac Excel refuses =ROWS({1,2;3,4,5}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's parser surfaces #NAME? for the jagged array literal."
     },
     {
       "id": "rows_of_let_rangeop",

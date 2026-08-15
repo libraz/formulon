@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -126,8 +126,15 @@
       "formula": "=BYROW({1,2,3;4,5,6}, LAMBDA(row, SUM(row)))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 6.0
+        "kind": "array",
+        "value": [
+          6.0,
+          15.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
       }
     },
     {
@@ -160,8 +167,15 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 6.0
+        "kind": "array",
+        "value": [
+          6.0,
+          15.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
       }
     },
     {
@@ -178,8 +192,16 @@
       "formula": "=BYROW({1;2;3}, LAMBDA(row, row*10))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 10.0
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -205,8 +227,16 @@
       "formula": "=BYCOL({1,2,3;4,5,6}, LAMBDA(col, SUM(col)))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 5.0
+        "kind": "array",
+        "value": [
+          5.0,
+          7.0,
+          9.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {
@@ -239,8 +269,16 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 5.0
+        "kind": "array",
+        "value": [
+          5.0,
+          7.0,
+          9.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {
@@ -248,8 +286,16 @@
       "formula": "=BYCOL({1,2,3}, LAMBDA(col, col*10))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 10.0
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {
@@ -272,17 +318,38 @@
     },
     {
       "id": "bycol_error_in_column",
-      "formula": "=BYCOL({1,2;1/0,3}, LAMBDA(col, SUM(col)))",
+      "formula": "=BYCOL({1,2;#DIV/0!,3}, LAMBDA(col, SUM(col)))",
       "setup": {},
-      "skipped": "BYCOL with errored column produces a per-column array including the error; not anchor-unwrapped. Mac Excel returns blank at anchor (Z1) when one column errors — a separate quirk worth re-verifying when the unwrap path lands."
+      "expect": {
+        "kind": "array",
+        "value": [
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          5.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
     },
     {
       "id": "map_single_array_doubles",
       "formula": "=MAP({1,2,3}, LAMBDA(x, x*2))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 2.0
+        "kind": "array",
+        "value": [
+          2.0,
+          4.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {
@@ -290,8 +357,16 @@
       "formula": "=MAP({1,2,3}, {10,20,30}, LAMBDA(a, b, a+b))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 11.0
+        "kind": "array",
+        "value": [
+          11.0,
+          22.0,
+          33.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {
@@ -299,15 +374,37 @@
       "formula": "=MAP({1,2,3}, {10,20,30}, {100,200,300}, LAMBDA(a, b, c, a+b+c))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 111.0
+        "kind": "array",
+        "value": [
+          111.0,
+          222.0,
+          333.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {
       "id": "map_shape_mismatch",
       "formula": "=MAP({1,2,3}, {10,20}, LAMBDA(a, b, a+b))",
       "setup": {},
-      "skipped": "MAP with mismatched array shapes; Mac pairs elements by index up to min length (returns 11 at anchor, not #N/A as initially expected). Skip-oracle until the unwrap path lands so the spec assumption can be re-verified."
+      "expect": {
+        "kind": "array",
+        "value": [
+          11.0,
+          22.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "map_lambda_arity_mismatch",
@@ -320,9 +417,23 @@
     },
     {
       "id": "map_error_propagation",
-      "formula": "=MAP({1,1/0,3}, LAMBDA(x, x*2))",
+      "formula": "=MAP({1,#DIV/0!,3}, LAMBDA(x, x*2))",
       "setup": {},
-      "skipped": "MAP propagating errors per-element: Mac returns blank at Z1 (the anchor). Skip-oracle pending unwrap support so the per-element error pattern can be observed."
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          6.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "reduce_sum_from_initial",
@@ -396,8 +507,16 @@
       "formula": "=SCAN(0, {1,2,3}, LAMBDA(a, v, a+v))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {
@@ -405,8 +524,16 @@
       "formula": "=SCAN(\"\", {\"a\",\"b\",\"c\"}, LAMBDA(a, v, a&v))",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "a"
+        "kind": "array",
+        "value": [
+          "a",
+          "ab",
+          "abc"
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {
@@ -427,15 +554,40 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
       "id": "scan_error_in_element",
-      "formula": "=SCAN(0, {1,1/0,3}, LAMBDA(a, v, a+v))",
+      "formula": "=SCAN(0, {1,#DIV/0!,3}, LAMBDA(a, v, a+v))",
       "setup": {},
-      "skipped": "SCAN propagating errors downstream; Mac anchor reads as blank. Skip-oracle pending unwrap."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "scan_single_element",
@@ -451,8 +603,17 @@
       "formula": "=SCAN(0, {1,2;3,4}, LAMBDA(a, v, a+v))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          6.0,
+          10.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     },
     {
@@ -460,8 +621,22 @@
       "formula": "=MAKEARRAY(3,3,LAMBDA(r, c, r*c))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          2.0,
+          4.0,
+          6.0,
+          3.0,
+          6.0,
+          9.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
       }
     },
     {
@@ -469,8 +644,18 @@
       "formula": "=MAKEARRAY(1,5,LAMBDA(r, c, c))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0
+        ],
+        "shape": [
+          1,
+          5
+        ]
       }
     },
     {
@@ -478,8 +663,18 @@
       "formula": "=MAKEARRAY(5,1,LAMBDA(r, c, r))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0
+        ],
+        "shape": [
+          5,
+          1
+        ]
       }
     },
     {
@@ -487,8 +682,17 @@
       "formula": "=MAKEARRAY(2,2,LAMBDA(r, c, 7))",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 7.0
+        "kind": "array",
+        "value": [
+          7.0,
+          7.0,
+          7.0,
+          7.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     },
     {
@@ -505,8 +709,29 @@
       "formula": "=MAKEARRAY(2,2,LAMBDA(r, c, 1/0))",
       "setup": {},
       "expect": {
-        "kind": "error",
-        "code": "#DIV/0!"
+        "kind": "array",
+        "value": [
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     }
   ]

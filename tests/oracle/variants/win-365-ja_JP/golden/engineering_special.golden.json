@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
     "abs": 1e-08,
@@ -264,7 +264,7 @@
       "id": "erf_precise_two_arg_rejected",
       "formula": "=ERF.PRECISE(1,2)",
       "setup": {},
-      "skipped": "Mac Excel rejects =ERF.PRECISE(1,2) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #VALUE! from arity enforcement."
+      "skipped": "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors."
     },
     {
       "id": "erfc_large_positive_to_zero",
@@ -516,7 +516,7 @@
       "id": "erfc_precise_two_arg_rejected",
       "formula": "=ERFC.PRECISE(1,2)",
       "setup": {},
-      "skipped": "Mac Excel rejects =ERFC.PRECISE(1,2) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected."
+      "skipped": "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected."
     }
   ]
 }
