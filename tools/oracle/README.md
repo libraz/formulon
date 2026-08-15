@@ -224,12 +224,15 @@ entries:
 ```
 
 `cause` is one of `excel-no-value`, `harness-cannot-capture`,
-`accepted-divergence`, `engine-gap`; `divergence_check.py` rejects a skip
-without one and prints a per-cause tally of skipped **cases**. Only
-`excel-no-value` is a case that can never pass, which is the release
-gate's stated grounds for leaving skips out of the pass-rate denominator
-— the other three are work owed, and the tally is what keeps them
-visible. The full definitions live in the header of
+`accepted-divergence`, `engine-gap`, `non-identifiable`;
+`divergence_check.py` rejects a skip without one and prints a per-cause
+tally of skipped **cases**. Only `excel-no-value` is a case that can never
+pass, which is the release gate's stated grounds for leaving skips out of
+the pass-rate denominator. Of the rest, `harness-cannot-capture` and
+`engine-gap` are work owed and the tally is what keeps them visible;
+`accepted-divergence` and `non-identifiable` are long-lived by design, and
+differ in who chose — we did in the first, the mathematics did in the
+second. The full definitions live in the header of
 `tests/divergence.yaml`.
 
 Per-variant overrides live in `tests/oracle/variants/<target>/divergence.yaml`

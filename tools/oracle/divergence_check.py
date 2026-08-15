@@ -39,7 +39,7 @@ NON_ORACLE_SCOPES = {
 # Why a `mode: skip-oracle` entry is not verified against Excel. Required,
 # because the release gate excludes skipped cases from the pass-rate
 # denominator on the grounds that the case "can never pass" -- and that is
-# true of exactly one of these four. The others are debts of different
+# true of exactly one of these causes. The others are debts of different
 # lifetimes, and the tally below is what keeps them from ageing into
 # permanent exemptions on a reason string nobody re-reads.
 #
@@ -60,8 +60,17 @@ NON_ORACLE_SCOPES = {
 #   engine-gap              Excel answers and Formulon is wrong or not there
 #                           yet. Must come back: the entry is deleted when
 #                           the engine work lands.
+#   non-identifiable        Both engines answer and the quantity itself has
+#                           no unique value to agree on: a smoothing weight
+#                           the data cannot pin down once the fit saturates,
+#                           an F statistic whose residual is zero in the
+#                           limit. Neither answer is the wrong one, and no
+#                           engine work closes it -- which is what separates
+#                           this from `engine-gap`. It is not
+#                           `accepted-divergence` either, because we did not
+#                           choose to differ; the mathematics did.
 #   unclassified            The entry's own text does not determine which of
-#                           the four applies -- typically because it states
+#                           the others applies -- typically because it states
 #                           two different blockers, or states none in these
 #                           terms. Deliberately not a judgement call: a
 #                           guessed cause is worse than an admitted gap,
@@ -73,6 +82,7 @@ SKIP_CAUSES = {
     "harness-cannot-capture",
     "accepted-divergence",
     "engine-gap",
+    "non-identifiable",
     "unclassified",
 }
 
@@ -352,6 +362,7 @@ def validate(path: Path, *, strict: bool) -> int:
     print(f"skipped cases by cause: {skipped_cases} total")
     notes = {
         "excel-no-value": " (outside the release-gate denominator)",
+        "non-identifiable": " (both engines answer; the quantity has no unique value)",
         "unclassified": " (entry text does not determine the cause; needs a source review)",
     }
     for cause in sorted(cause_counts):
