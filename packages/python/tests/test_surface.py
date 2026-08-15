@@ -13,6 +13,7 @@ Run via ``make python-test`` (or ``python -m unittest`` with
 from __future__ import annotations
 
 import inspect
+import json
 import struct
 import subprocess
 import unittest
@@ -850,6 +851,36 @@ class FunctionCatalogTests(unittest.TestCase):
         self.assertIs(none, base)
         self.assertIsNone(none.signature_template)
         self.assertIsNone(none.description)
+
+    def test_shipped_example_document_conforms_to_the_engine(self) -> None:
+        """The example provider document must stay usable against this engine.
+
+        ``docs/examples/function-metadata.example.json`` is offered as a
+        ready-to-use starting point, but nothing else loads it, so a
+        function rename or a schema change would leave a broken example
+        shipped in the docs. Checking it here also pins the two claims the
+        schema doc makes about the keys -- canonical, uppercase, English --
+        against the engine that decides what canonical means.
+        """
+        path = Path(__file__).resolve().parents[3] / "docs" / "examples" / "function-metadata.example.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(document["version"], 1)
+        functions = document["functions"]
+        self.assertTrue(functions, "the example document declares no functions")
+
+        for name, entry in functions.items():
+            self.assertEqual(name, name.upper(), f"{name} is not an uppercase key")
+            base = Workbook.function_metadata(name, 0)
+            self.assertIsNotNone(base, f"{name} is not a function this engine knows")
+            self.assertEqual(base.name, name, f"{name} is not the canonical spelling")
+            # Merging must actually reach the entry: an alias-only entry
+            # (VLOOKUP here) still has to resolve its display name, which is
+            # what distinguishes a real merge from returning `base` verbatim.
+            for locale in sorted(set(entry.get("aliases", {})) | set(entry.get("localized", {}))):
+                merged = formulon.merge_function_metadata(base, entry, locale)
+                self.assertEqual(merged.name, name)
+                alias = entry.get("aliases", {}).get(locale)
+                self.assertEqual(merged.localized_name, alias if alias is not None else name)
 
 
 class ExternalLinkTests(unittest.TestCase):

@@ -3069,6 +3069,12 @@ FM_API fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, uint32_t shee
  * from "Formulon has a real Excel-compatible implementation." Consumers
  * should surface `FM_FUNCTION_UNAVAILABLE_STUB` clearly in autocomplete
  * and migration reports instead of treating it as implemented parity.
+ *
+ * `FM_FUNCTION_IMPLEMENTED_UNVERIFIED` is a reserved ordinal that the
+ * engine never returns: every catalogued function is classified by the
+ * table in `parts/function_catalog.cpp`, which uses only the other three.
+ * A consumer switching over this enum still has to accept it so the
+ * switch stays total.
  */
 typedef enum {
   FM_FUNCTION_IMPLEMENTED = 0,
@@ -3088,16 +3094,16 @@ typedef enum {
  * reported as `min_arity = 0` with the `0xFFFFFFFFu` `max_arity`
  * sentinel (unknown / unbounded).
  * `availability` reports whether the function is a real implementation,
- * a real-but-not-fully-verified implementation, host/environment-bound,
- * or an intentionally unavailable fixed-error stub.
- * `description` and `signature_template` are populated when the
- * locale-specific metadata table has an entry for this function;
- * otherwise both are `NULL`.
+ * host/environment-bound, or an intentionally unavailable fixed-error
+ * stub (see `fm_function_availability_t`).
  *
- * `description` / `signature_template` are host-injected display metadata,
- * not engine-owned data: the engine returns `NULL` for them and expects a
- * host (editor / docs surface) to supply its own document and merge it over
- * this structural result at display time. The document contract lives in
+ * `description` and `signature_template` are **always `NULL`**. They are
+ * host-injected display metadata, not engine-owned data: the engine ships
+ * no human-readable function text at all, and expects a host (editor /
+ * docs surface) to supply its own document and merge it over this
+ * structural result at display time. Merging over a `NULL` is the whole
+ * contract — a host never has to handle the engine winning that
+ * precedence. The document contract lives in
  * `docs/function-metadata-schema.md`; the native Node and Python bindings
  * ship pure merge helpers (`mergeFunctionMetadata` /
  * `merge_function_metadata`) for it. This
@@ -3115,9 +3121,9 @@ typedef struct {
   uint32_t min_arity;
   uint32_t max_arity;
   fm_function_availability_t availability;
-  /* `NULL` until the locale metadata table populates it. */
+  /* Always `NULL` - supplied by the host's provider document. */
   const char* signature_template;
-  /* `NULL` until the locale metadata table populates it. */
+  /* Always `NULL` - supplied by the host's provider document. */
   const char* description;
 } fm_function_metadata_t;
 
@@ -3169,11 +3175,14 @@ FM_API fm_status_t fm_function_name_at(size_t idx, const char** out_name);
  *        registered.
  *
  * `*out_localized` is a static view into process-static storage and must not
- * be freed. For locales that are not the workbook's primary locale
- * (`FM_LOCALE_EN_US`), the alias table is currently empty (the
- * `data/function_names_<locale>.csv` curation is pending) and the
- * function falls through to `canonical_name`. `locale` is a raw signed
- * 32-bit ordinal; unknown values return `kInvalidArgument`.
+ * be freed. No alias table exists for any locale, so this always falls
+ * through to `canonical_name` — for both supported locales, and by design
+ * rather than pending work. The primary locale is `ja-JP`, whose function
+ * names are identical to the English canonical names (the alias would be
+ * the identity map); display names for any other locale belong to the
+ * host's provider document, not to the engine. `locale` is still
+ * validated: it is a raw signed 32-bit ordinal and unknown values return
+ * `kInvalidArgument`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;
@@ -3186,11 +3195,10 @@ FM_API fm_status_t fm_function_localize(const char* canonical_name, int32_t loca
  * @brief Returns the canonical (English UPPERCASE) name for the
  *        localized function `localized_name` in `locale`.
  *
- * `localized_name` is matched exactly (case-sensitive for non-ASCII
- * locales). When the locale's alias table is empty (currently the case
- * for non-`en-US` locales), this falls through to a case-insensitive
- * match against the canonical name list. `locale` is a raw signed 32-bit
- * ordinal; unknown values return `kInvalidArgument`.
+ * With no alias table in any locale (see `fm_function_localize`), this is
+ * a case-insensitive ASCII match against the canonical name list, in
+ * every locale. `locale` is still validated: it is a raw signed 32-bit
+ * ordinal and unknown values return `kInvalidArgument`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;

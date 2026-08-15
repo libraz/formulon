@@ -1158,7 +1158,9 @@ export interface CellNode {
  *  `false` when no function matches `name`; the remaining fields are
  *  then absent. When `ok` is `true`, `name` / `minArity` / `maxArity`
  *  are always populated; `signatureTemplate` and `description` are
- *  populated only when the locale metadata table has an entry. */
+ *  always `undefined` — the engine ships no human-readable function
+ *  text, and {@link mergeFunctionMetadata} overlays a host-supplied
+ *  provider document (`docs/function-metadata-schema.md`). */
 export interface FunctionMetadataResult {
   readonly ok: boolean;
   readonly name?: string;

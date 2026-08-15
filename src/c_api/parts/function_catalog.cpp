@@ -3,10 +3,15 @@
 //
 // Surfaces the engine's canonical-name + arity data through the C ABI
 // so JS / Python autocomplete UIs can enumerate Formulon functions
-// without reaching into the engine internals. `description` /
-// `signature_template` are reserved for the locale metadata table
-// (data/function_metadata_<locale>.cpp) and stay `NULL` until that
-// table is wired up; the surface itself is shippable today.
+// without reaching into the engine internals.
+//
+// `description` / `signature_template` are always `NULL`, and the alias
+// tables behind localize / canonicalize are always empty. That is the
+// design, not an unfinished table: the engine ships no human-readable
+// function text, and a host merges its own document over this structural
+// result at display time (`docs/function-metadata-schema.md`). Anything
+// that would populate these fields from inside the engine contradicts
+// that contract.
 //
 // A runtime-recognised function name comes from one of three sources:
 // the eager `FunctionRegistry`, the tree walker's lazy-dispatch table
@@ -179,8 +184,7 @@ extern "C" fm_status_t fm_function_metadata(const char* name, std::int32_t local
   out->min_arity = def->min_arity;
   out->max_arity = def->max_arity;
   out->availability = function_availability(def->canonical_name);
-  // Locale metadata table (description / signature_template) is not
-  // yet populated - the public ABI documents these as nullable.
+  // Display text is host-supplied, never engine-owned: see the file header.
   out->signature_template = nullptr;
   out->description = nullptr;
   return 0;
@@ -220,9 +224,10 @@ extern "C" fm_status_t fm_function_localize(const char* canonical_name, std::int
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_localize: unknown function",
                              std::string("canonical_name=") + canonical_name);
   }
-  // Locale alias table not yet populated - fall through to the canonical
-  // name. Once `data/function_names_<locale>.csv` lands, this lookup
-  // will branch on `locale` and consult the alias table first.
+  // No alias table in any locale, so the canonical name IS the display
+  // name here. `locale` is still validated above: rejecting an
+  // out-of-range ordinal is part of the contract even when every valid
+  // ordinal produces the same answer.
   *out_localized = canonical;
   return 0;
 }
@@ -239,9 +244,9 @@ extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, std:
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_canonicalize: invalid locale",
                              "locale=" + std::to_string(locale));
   }
-  // Alias table not yet populated - fall through to a case-insensitive
-  // canonical-name match across the registry, lazy, and special-form
-  // tables so every enumerated function canonicalizes.
+  // No alias table, so this is a case-insensitive canonical-name match
+  // across the registry, lazy, and special-form tables, in every locale,
+  // so that each enumerated function canonicalizes to itself.
   const char* canonical = resolve_canonical_name(std::string_view(localized_name));
   if (canonical == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,

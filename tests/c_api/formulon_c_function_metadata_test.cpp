@@ -21,7 +21,7 @@ TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
   // SUM is variadic.
   EXPECT_EQ(md.max_arity, 0xFFFFFFFFU);
   EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
-  // signature_template / description are not yet populated.
+  // Display text is host-supplied; the engine always reports NULL.
   EXPECT_EQ(md.signature_template, nullptr);
   EXPECT_EQ(md.description, nullptr);
 }
@@ -157,30 +157,45 @@ TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {
 // resolve through the same catalog APIs. Regression guard for the
 // membership split where localize / canonicalize consulted only the eager
 // registry and rejected XLOOKUP / LET / SUMIFS despite enumerating them.
+//
+// Swept across every supported locale because the locale ordinal must not
+// change any answer: display names and function text belong to the host's
+// provider document, so the engine's reply is locale-invariant. A
+// per-locale table growing inside the engine would break the merge
+// contract in `docs/function-metadata-schema.md`, and this is where that
+// shows up.
 TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalogApis) {
   const std::size_t count = fm_function_count();
   ASSERT_GT(count, 0U);
-  for (std::size_t i = 0; i < count; ++i) {
-    const char* name = nullptr;
-    ASSERT_EQ(fm_function_name_at(i, &name), 0);
-    ASSERT_NE(name, nullptr);
+  for (const std::int32_t locale : {FM_LOCALE_EN_US, FM_LOCALE_JA_JP}) {
+    for (std::size_t i = 0; i < count; ++i) {
+      const char* name = nullptr;
+      ASSERT_EQ(fm_function_name_at(i, &name), 0);
+      ASSERT_NE(name, nullptr);
 
-    // metadata
-    fm_function_metadata_t md{};
-    EXPECT_EQ(fm_function_metadata(name, FM_LOCALE_EN_US, &md), 0) << name << " has no metadata";
+      // metadata
+      fm_function_metadata_t md{};
+      EXPECT_EQ(fm_function_metadata(name, locale, &md), 0) << name << " has no metadata in locale " << locale;
+      // Display text is host-supplied, never engine-owned. Asserted for
+      // the whole catalog rather than one sample: the eager and the
+      // lazy / special-form branches populate the result separately, so
+      // a single function only covers one of them.
+      EXPECT_EQ(md.signature_template, nullptr) << name << " carries engine-side signature text";
+      EXPECT_EQ(md.description, nullptr) << name << " carries engine-side description text";
 
-    // canonicalize: an enumerated name is already canonical, so it maps to
-    // itself.
-    const char* canonical = nullptr;
-    ASSERT_EQ(fm_function_canonicalize(name, FM_LOCALE_EN_US, &canonical), 0) << name << " did not canonicalize";
-    ASSERT_NE(canonical, nullptr);
-    EXPECT_STREQ(canonical, name);
+      // canonicalize: an enumerated name is already canonical, so it maps to
+      // itself.
+      const char* canonical = nullptr;
+      ASSERT_EQ(fm_function_canonicalize(name, locale, &canonical), 0) << name << " did not canonicalize";
+      ASSERT_NE(canonical, nullptr);
+      EXPECT_STREQ(canonical, name);
 
-    // localize: with no alias table it falls through to the canonical name.
-    const char* localized = nullptr;
-    ASSERT_EQ(fm_function_localize(name, FM_LOCALE_EN_US, &localized), 0) << name << " did not localize";
-    ASSERT_NE(localized, nullptr);
-    EXPECT_STREQ(localized, name);
+      // localize: with no alias table it falls through to the canonical name.
+      const char* localized = nullptr;
+      ASSERT_EQ(fm_function_localize(name, locale, &localized), 0) << name << " did not localize";
+      ASSERT_NE(localized, nullptr);
+      EXPECT_STREQ(localized, name);
+    }
   }
 }
 

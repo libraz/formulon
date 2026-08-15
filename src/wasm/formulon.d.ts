@@ -806,8 +806,9 @@ export interface CellNode {
  *  `ok` is `false` when no function matches `name`; the remaining
  *  fields are absent. When `ok` is `true`, `name` / `minArity` /
  *  `maxArity` are always populated; `signatureTemplate` and
- *  `description` are populated only when the locale metadata table
- *  has an entry for this function and locale. */
+ *  `description` are always `undefined` — the engine ships no
+ *  human-readable function text and a host merges its own provider
+ *  document over this result (`docs/function-metadata-schema.md`). */
 export interface FunctionMetadataResult {
   readonly ok: boolean;
   readonly name?: string;
@@ -1920,24 +1921,25 @@ export interface Workbook {
 
   /** Returns metadata for the function `name` (case-insensitive). When
    *  the function is unknown, returns `{ok: false}`. `locale` selects
-   *  the catalog locale (`0` = `en-US`, `1` = `ja-JP`); description /
-   *  signature fields are populated only when the locale metadata table
-   *  has an entry. */
+   *  the catalog locale (`0` = `en-US`, `1` = `ja-JP`) and is validated,
+   *  but does not change the result: the description / signature fields
+   *  are always `undefined` (see {@link FunctionMetadataResult}). */
   functionMetadata(name: string, locale: number): FunctionMetadataResult;
   /** Returns every registered function's canonical name in ascending
    *  sort order. */
   functionNames(): ReadonlyArray<string>;
 
   /** Returns the localized display name for the canonical function
-   *  `canonicalName` in `locale`. Returns the canonical name unchanged
-   *  when the locale's alias table is empty (currently always for
-   *  non-`en-US` locales). Returns the empty string when the canonical
-   *  name does not match a registered function. */
+   *  `canonicalName` in `locale`. No alias table exists in any locale,
+   *  so this always returns the canonical name unchanged; localized
+   *  display names belong to the host's provider document. Returns the
+   *  empty string when the canonical name does not match a registered
+   *  function. */
   localizeFunctionName(canonicalName: string, locale: number): string;
   /** Inverse of `localizeFunctionName`: returns the canonical English
-   *  name for the localized function `localizedName`. Falls through to
-   *  case-insensitive canonical-name matching when no alias is
-   *  registered. Returns the empty string when no function matches. */
+   *  name for the localized function `localizedName`. With no alias
+   *  table this is a case-insensitive canonical-name match, in every
+   *  locale. Returns the empty string when no function matches. */
   canonicalizeFunctionName(localizedName: string, locale: number): string;
 
   /** Returns dynamic-array spill info for `(sheet, row, col)`.
