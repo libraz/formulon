@@ -427,6 +427,15 @@ class DataBar:
     show_value: bool
     min_length_pct: int
     max_length_pct: int
+    # x14 extension. `None` keeps the model default: gradient fill on,
+    # automatic axis, negative fill equal to `fill`, no border, black axis.
+    # `axis_position` is 0 = automatic, 1 = middle, 2 = none.
+    gradient: Optional[bool]
+    axis_position: Optional[int]
+    negative_fill: Optional[CfColor]
+    border: Optional[CfColor]
+    negative_border: Optional[CfColor]
+    axis_color: Optional[CfColor]
     def __init__(
         self,
         minimum: CfValueObject,
@@ -435,6 +444,12 @@ class DataBar:
         show_value: bool = ...,
         min_length_pct: int = ...,
         max_length_pct: int = ...,
+        gradient: Optional[bool] = ...,
+        axis_position: Optional[int] = ...,
+        negative_fill: Optional[CfColor] = ...,
+        border: Optional[CfColor] = ...,
+        negative_border: Optional[CfColor] = ...,
+        axis_color: Optional[CfColor] = ...,
     ) -> None: ...
 
 class IconSet:

@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/cf_overlay.h"
 #include "io/cf_writer.h"
 #include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml/emission_plan.h"
@@ -654,6 +655,11 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.
   const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxf_count);
+  // Data-bar settings with no legacy attribute live in the worksheet
+  // `<extLst>`, which is emitted much further down; build them here so
+  // the CF model is read once.
+  const std::string ext_lst_xml =
+      merge_x14_cf_entries(sheet.ext_lst_xml(), build_x14_cf_overlay_entries(sheet.conditional_formats()));
   const std::string merges_xml = BuildMergeCellsBlock(sheet);
   const std::string dv_xml = BuildDataValidationsBlock(sheet);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
@@ -862,9 +868,9 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // ECMA-376 order (after `<tableParts>`). Re-emit the captured block
   // verbatim so 2010+ extension data (x14 conditional formatting, etc.)
   // survives the round trip.
-  if (!sheet.ext_lst_xml().empty()) {
+  if (!ext_lst_xml.empty()) {
     out.append("  ");
-    out.append(sheet.ext_lst_xml());
+    out.append(ext_lst_xml);
     out.push_back('\n');
   }
   out.append("</worksheet>\n");

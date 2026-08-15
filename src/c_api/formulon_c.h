@@ -2021,9 +2021,15 @@ typedef struct {
  * does not refresh the scratch storage.
  */
 typedef struct {
-  /* Stable rule id (matches OOXML `<x14:cfRule id="...">`). On input,
-   * pass `NULL` or `""` to auto-generate one. On output, always a
-   * model-backed, non-NULL view. */
+  /* Stable rule id, linking the rule to the `<x14:cfRule id="...">`
+   * block that carries whatever settings the legacy OOXML schema cannot
+   * express. On input, pass `NULL` or `""` to auto-generate one; a
+   * supplied id must be GUID-shaped, since that is the schema type of
+   * the attribute it becomes. On output, always a model-backed, non-NULL
+   * view.
+   *
+   * Only rules that need such a block put their id in the saved file, so
+   * for most rules this is an in-memory handle and nothing more. */
   const char* id;
   uint8_t type;        /* `formulon::cf::RuleType` ordinal */
   uint8_t op;          /* `formulon::cf::CellIsOperator` ordinal */

@@ -1082,6 +1082,19 @@ export interface ConditionalFormatEntry {
     readonly showValue: boolean;
     readonly minLengthPct: number;
     readonly maxLengthPct: number;
+    /**
+     * `x14` extension payload. Present whenever the rule states the
+     * setting; a rule read back from a workbook always carries all six, so
+     * the object can be handed straight to `addConditionalFormat`.
+     *
+     * `axisPosition` is 0 = automatic, 1 = middle, 2 = none.
+     */
+    readonly gradient?: boolean;
+    readonly axisPosition?: number;
+    readonly negativeFill?: CfColor;
+    readonly border?: CfColor;
+    readonly negativeBorder?: CfColor;
+    readonly axisColor?: CfColor;
   };
   /** Engaged for `iconSet` rules. */
   readonly iconSet?: {
@@ -1132,6 +1145,18 @@ export interface ConditionalFormatInput {
     showValue?: boolean;
     minLengthPct?: number;
     maxLengthPct?: number;
+    /**
+     * `x14` extension payload. Omit a key to keep the model default:
+     * gradient fill on, automatic axis, negative fill equal to `fill`, no
+     * border, and a black axis. `axisPosition` is 0 = automatic,
+     * 1 = middle, 2 = none.
+     */
+    gradient?: boolean;
+    axisPosition?: number;
+    negativeFill?: CfColor;
+    border?: CfColor;
+    negativeBorder?: CfColor;
+    axisColor?: CfColor;
   };
   /** Payload for type 4 (`iconSet`). `name` is `formulon::cf::IconSetName` ordinal. */
   iconSet?: {

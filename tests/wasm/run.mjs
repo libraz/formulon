@@ -694,6 +694,84 @@ async function run() {
     }
   });
 
+  test('data bar x14 fields survive save and load', () => {
+    // The six live in the `x14` extension, not the legacy `<dataBar>`
+    // element. An in-session round-trip would still pass with a writer that
+    // never emits the extension -- which is how they were lost before -- so
+    // this goes through a real save and load.
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(
+        wb.addConditionalFormat(0, {
+          sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
+          type: 3,
+          dataBar: {
+            min: { type: 3 },
+            max: { type: 4 },
+            fill: { r: 0, g: 0, b: 255 },
+            gradient: false,
+            axisPosition: 1,
+            negativeFill: { r: 255, g: 0, b: 0 },
+            border: { r: 9, g: 9, b: 9 },
+            negativeBorder: { r: 8, g: 8, b: 8 },
+            axisColor: { r: 1, g: 2, b: 3 },
+          },
+        }).status.ok,
+      );
+      const saved = wb.save();
+      assert.ok(saved.status.ok, `save failed: ${JSON.stringify(saved.status)}`);
+      const loaded = Module.Workbook.loadBytes(saved.bytes);
+      try {
+        assert.ok(loaded.isValid(), `load failed: ${Module.lastErrorMessage()}`);
+        const bar = loaded.getConditionalFormats(0)[0].dataBar;
+        assert.equal(bar.gradient, false);
+        assert.equal(bar.axisPosition, 1);
+        assert.equal(bar.negativeFill.r, 255);
+        assert.equal(bar.border.r, 9);
+        assert.equal(bar.negativeBorder.r, 8);
+        assert.equal(bar.axisColor.b, 3);
+
+        // The decoded bar fed straight back reproduces the same rule.
+        assert.ok(
+          loaded.addConditionalFormat(0, {
+            sqref: [{ firstRow: 4, firstCol: 0, lastRow: 6, lastCol: 0 }],
+            type: 3,
+            dataBar: bar,
+          }).status.ok,
+        );
+        const reread = loaded.getConditionalFormats(0)[1].dataBar;
+        assert.equal(reread.gradient, false);
+        assert.equal(reread.axisPosition, 1);
+        assert.equal(reread.axisColor.b, 3);
+      } finally {
+        loaded.delete();
+      }
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('omitted data bar x14 fields keep the model defaults', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(
+        wb.addConditionalFormat(0, {
+          sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
+          type: 3,
+          dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 0, g: 0, b: 255 } },
+        }).status.ok,
+      );
+      // The getter engages all six, so they read back as the defaults
+      // rather than as absent keys.
+      const bar = wb.getConditionalFormats(0)[0].dataBar;
+      assert.equal(bar.gradient, true);
+      assert.equal(bar.axisPosition, 0);
+      assert.equal(bar.negativeFill.b, 255);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('saveWithDiagnostics() and readDiagnostics() expose stable counters', () => {
     const wb = Module.Workbook.createDefault();
     try {

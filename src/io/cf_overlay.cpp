@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -47,7 +48,88 @@ bool RemoveMatchingChildren(pugi::xml_node parent, const char* name, Pred doomed
   return !victims.empty();
 }
 
+/// URI of the worksheet-level `<ext>` that carries the x14
+/// conditional-formatting overlay, and the x14 namespace, both fixed
+/// constants Excel matches literally.
+constexpr const char* kWorksheetCfExtUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
+constexpr const char* kX14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+
+/// Collects every id already claimed by an `<x14:cfRule>` anywhere under
+/// `ext_lst`, at any nesting depth, so a rebuilt entry can be recognised
+/// as a duplicate no matter which `<ext>` block holds the original.
+void CollectClaimedRuleIds(const pugi::xml_node& node, std::unordered_set<std::string>* out) {
+  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
+    if (std::string_view(child.name()) == "x14:cfRule") {
+      if (const char* id = child.attribute("id").value(); id[0] != '\0') {
+        out->insert(id);
+      }
+    }
+    CollectClaimedRuleIds(child, out);
+  }
+}
+
 }  // namespace
+
+std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::string& entries) {
+  if (entries.empty()) {
+    return ext_lst_xml;
+  }
+
+  // The entries arrive as a bare sibling sequence; give them a root so
+  // pugixml will parse more than the first one.
+  pugi::xml_document entries_doc;
+  const std::string wrapped = "<entries>" + entries + "</entries>";
+  if (!entries_doc.load_string(wrapped.c_str())) {
+    return ext_lst_xml;
+  }
+
+  pugi::xml_document doc;
+  pugi::xml_node ext_lst;
+  if (ext_lst_xml.empty()) {
+    ext_lst = doc.append_child("extLst");
+  } else {
+    if (!doc.load_string(ext_lst_xml.c_str())) {
+      return ext_lst_xml;
+    }
+    ext_lst = doc.child("extLst");
+    if (!ext_lst) {
+      return ext_lst_xml;
+    }
+  }
+
+  std::unordered_set<std::string> claimed;
+  CollectClaimedRuleIds(ext_lst, &claimed);
+
+  pugi::xml_node formattings;
+  bool added = false;
+  for (pugi::xml_node entry = entries_doc.child("entries").first_child(); entry; entry = entry.next_sibling()) {
+    const char* id = entry.child("x14:cfRule").attribute("id").value();
+    if (id[0] == '\0' || claimed.count(id) != 0U) {
+      continue;
+    }
+    if (!formattings) {
+      for (pugi::xml_node ext = ext_lst.child("ext"); ext && !formattings; ext = ext.next_sibling("ext")) {
+        formattings = ext.child("x14:conditionalFormattings");
+      }
+    }
+    if (!formattings) {
+      pugi::xml_node ext = ext_lst.append_child("ext");
+      ext.append_attribute("uri") = kWorksheetCfExtUri;
+      ext.append_attribute("xmlns:x14") = kX14Ns;
+      formattings = ext.append_child("x14:conditionalFormattings");
+    }
+    formattings.append_copy(entry);
+    claimed.insert(id);
+    added = true;
+  }
+
+  if (!added) {
+    // Nothing new: hand the original bytes back untouched rather than
+    // re-serialising a document that only round-tripped through pugixml.
+    return ext_lst_xml;
+  }
+  return raw_xml(ext_lst);
+}
 
 std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml,
                                      const std::vector<cf::ConditionalFormat>& formats) {

@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <utility>
 #include <vector>
@@ -392,10 +393,17 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   if (rule.id != nullptr && rule.id[0] != '\0') {
     out_rule.id = rule.id;
   } else {
-    // Synthesize a stable id from priority. The format mirrors the
-    // x14:cfRule guid-like string Excel emits, but uses a priority
-    // suffix so add-then-list is deterministic.
-    out_rule.id = "{cf-" + std::to_string(out_rule.priority) + "}";
+    // The id reaches the file as `<x14:cfRule id="...">`, whose schema
+    // type is a GUID, so a synthesized one has to be GUID-shaped or
+    // Excel rejects the extension block. It is derived from the priority
+    // rather than drawn at random so add-then-list is deterministic and
+    // two saves of the same model produce the same bytes. The version
+    // nibble is `0`, which no random (version 4) GUID Excel generates
+    // can carry, so a synthesized id can never collide with a loaded
+    // one.
+    char buf[40];
+    std::snprintf(buf, sizeof(buf), "{FC000000-0000-0000-0000-%012X}", static_cast<unsigned>(out_rule.priority));
+    out_rule.id = buf;
   }
   if (rule.formula1 != nullptr) {
     out_rule.formula1 = std::string(rule.formula1);

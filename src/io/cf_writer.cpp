@@ -292,6 +292,170 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i) {
   out.append("</iconSet>");
 }
 
+/// URI of the `<ext>` that links a legacy `<cfRule>` to its x14
+/// counterpart, and the two namespaces the extension content lives in.
+/// All three are fixed constants Excel matches literally.
+constexpr std::string_view kX14CfRuleExtUri = "{B025F937-C7B1-47D3-B67F-A62EFF666E3E}";
+constexpr std::string_view kX14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+constexpr std::string_view kXmNs = "http://schemas.microsoft.com/office/excel/2006/main";
+
+/// The axis colour a data bar has when the x14 extension says nothing —
+/// mirrors `DataBarSpec::axis_color`'s in-class initializer.
+constexpr cf::Color kDefaultAxisColor{0, 0, 0, 255};
+
+/// True when `d` carries at least one setting the legacy `<dataBar>`
+/// element has no attribute for, so the rule needs an x14 counterpart to
+/// survive a save. False for a plain bar, which keeps a legacy-only file
+/// legacy-only across a round trip.
+bool NeedsX14DataBarPayload(const cf::DataBarSpec& d) {
+  return d.border.has_value() || d.negative_border.has_value() || d.negative_fill != d.fill ||
+         d.axis_position != cf::DataBarAxisPosition::Automatic || !d.gradient || d.axis_color != kDefaultAxisColor;
+}
+
+/// True when the rule both needs an x14 counterpart and has an id to
+/// link it by. An id is required: the link and the payload find each
+/// other by that GUID and nothing else.
+bool RuleNeedsX14Payload(const cf::CFRule& r) {
+  return !r.id.empty() && r.data_bar.has_value() && NeedsX14DataBarPayload(r.data_bar.value());
+}
+
+/// True when the rule's captured `<extLst>` already carries an x14 link,
+/// i.e. the rule was loaded from a file that had one. Re-emitting the
+/// capture verbatim is then both sufficient and more faithful than
+/// rebuilding the element.
+bool HasCapturedX14Link(const cf::CFRule& r) {
+  return r.ext_lst_raw.has_value() && r.ext_lst_raw->find("x14:id") != std::string::npos;
+}
+
+/// Emits `CT_CfRule`'s schema-trailing `extLst?`, folding in the x14
+/// link when the rule needs one and does not already carry it.
+///
+/// The link is a nested `<ext><x14:id>`, never an `id` attribute on the
+/// `<cfRule>` itself: `CT_CfRule` has no such attribute, and Excel
+/// discards both the attribute and the worksheet-level payload it was
+/// meant to reach when it re-saves a file spelled that way.
+void AppendRuleExtLst(std::string& out, const cf::CFRule& r) {
+  if (!RuleNeedsX14Payload(r) || HasCapturedX14Link(r)) {
+    if (r.ext_lst_raw.has_value()) {
+      out.append(r.ext_lst_raw.value());
+    }
+    return;
+  }
+
+  std::string link("<ext uri=\"");
+  link.append(kX14CfRuleExtUri);
+  link.append("\" xmlns:x14=\"");
+  link.append(kX14Ns);
+  link.append("\"><x14:id>");
+  AppendXmlEscaped(link, r.id);
+  link.append("</x14:id></ext>");
+
+  // `CT_CfRule` allows a single `extLst`, so a captured one is extended
+  // with another `<ext>` sibling rather than joined by a second element.
+  const std::size_t close = r.ext_lst_raw.has_value() ? r.ext_lst_raw->rfind("</extLst>") : std::string::npos;
+  if (close == std::string::npos) {
+    // No capture, or a self-closing `<extLst/>` capture with no content
+    // worth preserving.
+    out.append("<extLst>");
+    out.append(link);
+    out.append("</extLst>");
+    return;
+  }
+  out.append(r.ext_lst_raw.value(), 0, close);
+  out.append(link);
+  out.append(r.ext_lst_raw.value(), close, std::string::npos);
+}
+
+/// Emits one x14 colour element. The x14 schema names each colour slot
+/// with its own element rather than reusing `<color>`, so the element
+/// name is a parameter here where `AppendColor` can hard-code it.
+void AppendX14Color(std::string& out, std::string_view element, cf::Color c) {
+  char buf[16];
+  std::snprintf(buf, sizeof(buf), "%02X%02X%02X%02X", c.a, c.r, c.g, c.b);
+  out.push_back('<');
+  out.append(element);
+  out.append(" rgb=\"");
+  out.append(buf);
+  out.append("\"/>");
+}
+
+/// Emits one `<x14:cfvo>`, mirroring the legacy `<cfvo>` it accompanies.
+/// The x14 shape differs: the value is an `<xm:f>` child, not a `val`
+/// attribute.
+void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v) {
+  out.append("<x14:cfvo type=\"");
+  out.append(CfvoTypeToString(v.type));
+  out.push_back('"');
+  if (!v.gte) {
+    out.append(" gte=\"0\"");
+  }
+  if (v.value.empty()) {
+    out.append("/>");
+    return;
+  }
+  out.append("><xm:f>");
+  AppendXmlEscaped(out, v.value);
+  out.append("</xm:f></x14:cfvo>");
+}
+
+/// Emits the `<x14:conditionalFormatting>` entry holding `r`'s data-bar
+/// extension payload, scoped to `sqref` (the enclosing block's range
+/// union, restated because the entry is a sibling of the legacy block
+/// rather than a child of it).
+void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vector<cf::CFCellRange>& sqref) {
+  const cf::DataBarSpec& d = r.data_bar.value();
+  out.append("<x14:conditionalFormatting xmlns:xm=\"");
+  out.append(kXmNs);
+  out.append("\"><x14:cfRule type=\"dataBar\" id=\"");
+  AppendXmlAttrEscaped(out, r.id);
+  // The bar-length bounds are restated because the reader lets the
+  // extension win over the legacy element, matching Excel: Excel omits
+  // them from `<dataBar>` (which means the pre-2010 defaults 10/90) and
+  // states the real bounds only here.
+  out.append("\"><x14:dataBar minLength=\"");
+  out.append(std::to_string(static_cast<unsigned>(d.min_length_pct)));
+  out.append("\" maxLength=\"");
+  out.append(std::to_string(static_cast<unsigned>(d.max_length_pct)));
+  out.push_back('"');
+  if (!d.gradient) {
+    out.append(" gradient=\"0\"");
+  }
+  if (d.border.has_value()) {
+    out.append(" border=\"1\"");
+  }
+  if (d.negative_fill != d.fill) {
+    out.append(" negativeBarColorSameAsPositive=\"0\"");
+  }
+  if (d.negative_border.has_value()) {
+    out.append(" negativeBarBorderColorSameAsPositive=\"0\"");
+  }
+  if (d.axis_position == cf::DataBarAxisPosition::Middle) {
+    out.append(" axisPosition=\"middle\"");
+  } else if (d.axis_position == cf::DataBarAxisPosition::None) {
+    out.append(" axisPosition=\"none\"");
+  }
+  out.push_back('>');
+  // Schema order inside `<x14:dataBar>`: two cfvo, then the colour slots
+  // border / negativeFill / negativeBorder / axis.
+  AppendX14Cfvo(out, d.min);
+  AppendX14Cfvo(out, d.max);
+  if (d.border.has_value()) {
+    AppendX14Color(out, "x14:borderColor", d.border.value());
+  }
+  if (d.negative_fill != d.fill) {
+    AppendX14Color(out, "x14:negativeFillColor", d.negative_fill);
+  }
+  if (d.negative_border.has_value()) {
+    AppendX14Color(out, "x14:negativeBorderColor", d.negative_border.value());
+  }
+  if (d.axis_color != kDefaultAxisColor) {
+    AppendX14Color(out, "x14:axisColor", d.axis_color);
+  }
+  out.append("</x14:dataBar></x14:cfRule><xm:sqref>");
+  AppendXmlEscaped(out, EncodeSqref(sqref));
+  out.append("</xm:sqref></x14:conditionalFormatting>");
+}
+
 void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) {
   out.append("<cfRule type=\"");
   out.append(RuleTypeToString(r.type));
@@ -380,11 +544,8 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) 
     out.append(TimePeriodToString(r.time_period.value()));
     out.push_back('"');
   }
-  if (!r.id.empty()) {
-    out.append(" id=\"");
-    AppendXmlAttrEscaped(out, r.id);
-    out.push_back('"');
-  }
+  // `CFRule::id` is deliberately not emitted as an attribute here — see
+  // `AppendRuleExtLst` for where the linkage actually goes.
   out.push_back('>');
 
   if (r.formula1.has_value()) {
@@ -406,12 +567,7 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) 
   if (r.icon_set.has_value()) {
     AppendIconSet(out, r.icon_set.value());
   }
-  // `CT_CfRule`'s schema-trailing `extLst?`, round-tripped byte-for-byte
-  // (see `CFRule::ext_lst_raw`); already a complete `<extLst>...</extLst>`
-  // string captured verbatim by the reader.
-  if (r.ext_lst_raw.has_value()) {
-    out.append(r.ext_lst_raw.value());
-  }
+  AppendRuleExtLst(out, r);
 
   out.append("</cfRule>");
 }
@@ -441,6 +597,18 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
       out.append(cf.ext_lst_raw.value());
     }
     out.append("</conditionalFormatting>");
+  }
+  return out;
+}
+
+std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat>& formats) {
+  std::string out;
+  for (const auto& cf : formats) {
+    for (const auto& rule : cf.rules) {
+      if (RuleNeedsX14Payload(rule)) {
+        AppendX14CfRuleEntry(out, rule, cf.sqref);
+      }
+    }
   }
   return out;
 }

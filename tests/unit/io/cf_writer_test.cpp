@@ -13,6 +13,7 @@
 
 #include "cf/cf_types.h"
 #include "gtest/gtest.h"
+#include "io/cf_overlay.h"
 #include "io/cf_reader.h"
 #include "pugixml.hpp"
 
@@ -326,7 +327,11 @@ TEST(CFWriter, TimePeriodRoundTrip) {
   EXPECT_EQ(out[0].rules[0].time_period.value(), cf::TimePeriod::LastWeek);
 }
 
-TEST(CFWriter, IdAttributeRoundTrips) {
+TEST(CFWriter, IdOnARuleWithNoExtensionPayloadIsNotEmitted) {
+  // `CT_CfRule` has no `id` attribute and a rule with nothing in the x14
+  // extension has nothing to link to, so the id stays an in-memory
+  // handle. Emitting it would put a non-schema attribute in the file
+  // that Excel strips on its next save anyway.
   cf::ConditionalFormat cf{};
   cf.sqref.push_back({{0, 0}, {0, 0}});
   cf::CFRule r;
@@ -337,8 +342,9 @@ TEST(CFWriter, IdAttributeRoundTrips) {
   r.dxf_id = 0u;
   cf.rules.push_back(std::move(r));
 
-  auto out = RoundTrip({cf});
-  EXPECT_EQ(out[0].rules[0].id, "{12345678-90AB-CDEF-1234-567890ABCDEF}");
+  const std::string xml = write_conditional_formattings({cf}, kDxfCount);
+  EXPECT_EQ(xml.find("12345678-90AB-CDEF-1234-567890ABCDEF"), std::string::npos) << xml;
+  EXPECT_TRUE(RoundTrip({cf})[0].rules[0].id.empty());
 }
 
 TEST(CFWriter, RuleExtLstRoundTrips) {
@@ -521,6 +527,170 @@ TEST(CFWriter, EveryEmittedDxfIdResolvesAgainstAnEmptyDxfsTable) {
 
   EXPECT_EQ(write_conditional_formattings({cf}, /*dxf_count=*/0u).find("dxfId="), std::string::npos);
   EXPECT_NE(write_conditional_formattings({cf}, /*dxf_count=*/1u).find("dxfId=\"0\""), std::string::npos);
+}
+
+// --- x14 data-bar extension ------------------------------------------
+//
+// The settings below have no legacy `<dataBar>` attribute, so they only
+// survive a save if the writer builds the x14 counterpart. `RoundTrip`
+// above deliberately omits the worksheet `<extLst>`, which is where that
+// counterpart lives; these tests use `RoundTripWithOverlay` so a failure
+// to emit either half shows up as a lost setting rather than as XML that
+// merely looks right.
+
+/// A data bar carrying every x14-only setting, so one round trip covers
+/// all of them.
+cf::ConditionalFormat DataBarWithExtensionSettings(std::string id) {
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 0}, {4, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::DataBar;
+  r.id = std::move(id);
+  cf::DataBarSpec d;
+  d.min = {cf::CfvoType::Min, "", true};
+  d.max = {cf::CfvoType::Max, "", true};
+  d.fill = {0x63, 0x8E, 0xC6, 255};
+  d.border = cf::Color{0x00, 0x33, 0x66, 255};
+  d.negative_fill = cf::Color{0xFF, 0x00, 0x00, 255};
+  d.negative_border = cf::Color{0x99, 0x00, 0x00, 255};
+  d.axis_position = cf::DataBarAxisPosition::Middle;
+  d.axis_color = cf::Color{0x11, 0x22, 0x33, 255};
+  d.gradient = false;
+  d.min_length_pct = 0;
+  d.max_length_pct = 100;
+  r.data_bar = std::move(d);
+  cf.rules.push_back(std::move(r));
+  return cf;
+}
+
+/// Round trip through both halves of the save path: the legacy blocks
+/// and the worksheet-level `<extLst>` the extension entries are merged
+/// into. `existing_ext_lst` stands in for an overlay the source file
+/// already had.
+std::vector<cf::ConditionalFormat> RoundTripWithOverlay(const std::vector<cf::ConditionalFormat>& input,
+                                                        const std::string& existing_ext_lst = std::string()) {
+  std::string xml = "<worksheet>";
+  xml.append(write_conditional_formattings(input, kDxfCount));
+  xml.append(merge_x14_cf_entries(existing_ext_lst, build_x14_cf_overlay_entries(input)));
+  xml.append("</worksheet>");
+  pugi::xml_document doc;
+  pugi::xml_parse_result rc = doc.load_string(xml.c_str());
+  EXPECT_TRUE(rc) << rc.description() << "\n" << xml;
+  auto out_or = read_conditional_formats(doc.child("worksheet"));
+  EXPECT_TRUE(static_cast<bool>(out_or));
+  return std::move(out_or.value());
+}
+
+TEST(CFWriter, ProgrammaticDataBarExtensionSettingsSurviveASaveCycle) {
+  const auto input = DataBarWithExtensionSettings("{FC000000-0000-0000-0000-000000000001}");
+  auto out = RoundTripWithOverlay({input});
+
+  ASSERT_EQ(out.size(), 1u);
+  ASSERT_EQ(out[0].rules.size(), 1u);
+  const cf::CFRule& r = out[0].rules[0];
+  EXPECT_EQ(r.id, "{FC000000-0000-0000-0000-000000000001}");
+  ASSERT_TRUE(r.data_bar.has_value());
+  const cf::DataBarSpec& d = r.data_bar.value();
+  EXPECT_EQ(d.fill, (cf::Color{0x63, 0x8E, 0xC6, 255}));
+  ASSERT_TRUE(d.border.has_value());
+  EXPECT_EQ(d.border.value(), (cf::Color{0x00, 0x33, 0x66, 255}));
+  EXPECT_EQ(d.negative_fill, (cf::Color{0xFF, 0x00, 0x00, 255}));
+  ASSERT_TRUE(d.negative_border.has_value());
+  EXPECT_EQ(d.negative_border.value(), (cf::Color{0x99, 0x00, 0x00, 255}));
+  EXPECT_EQ(d.axis_position, cf::DataBarAxisPosition::Middle);
+  EXPECT_EQ(d.axis_color, (cf::Color{0x11, 0x22, 0x33, 255}));
+  EXPECT_FALSE(d.gradient);
+  EXPECT_EQ(d.min_length_pct, 0);
+  EXPECT_EQ(d.max_length_pct, 100);
+}
+
+TEST(CFWriter, DataBarExtensionIsReachedThroughTheNestedIdNotAnAttribute) {
+  const auto input = DataBarWithExtensionSettings("{FC000000-0000-0000-0000-000000000001}");
+  const std::string legacy = write_conditional_formattings({input}, kDxfCount);
+
+  EXPECT_NE(legacy.find("<x14:id>{FC000000-0000-0000-0000-000000000001}</x14:id>"), std::string::npos) << legacy;
+  EXPECT_NE(legacy.find("uri=\"{B025F937-C7B1-47D3-B67F-A62EFF666E3E}\""), std::string::npos) << legacy;
+  // Excel drops both the attribute and the block it points at when it
+  // re-saves a file spelled that way.
+  EXPECT_EQ(legacy.find("<cfRule type=\"dataBar\" priority=\"1\" id="), std::string::npos) << legacy;
+}
+
+TEST(CFWriter, PlainDataBarProducesNoExtensionContent) {
+  // A bar expressible in the legacy element alone must not grow an x14
+  // overlay: a file that never had one would gain extension bytes on
+  // every save.
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::DataBar;
+  r.id = "{FC000000-0000-0000-0000-000000000007}";
+  cf::DataBarSpec d;
+  d.min = {cf::CfvoType::Min, "", true};
+  d.max = {cf::CfvoType::Max, "", true};
+  d.fill = {0x63, 0x8E, 0xC6, 255};
+  d.negative_fill = d.fill;
+  r.data_bar = std::move(d);
+  cf.rules.push_back(std::move(r));
+
+  EXPECT_TRUE(build_x14_cf_overlay_entries({cf}).empty());
+  EXPECT_EQ(write_conditional_formattings({cf}, kDxfCount).find("x14:id"), std::string::npos);
+}
+
+TEST(CFWriter, LoadedOverlayWinsOverARebuiltEntry) {
+  // The captured overlay carries the whole `<x14:cfRule>` payload,
+  // including parts the model does not represent. Appending a rebuilt
+  // entry beside it would duplicate the id and drop those parts.
+  const auto input = DataBarWithExtensionSettings("{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}");
+  const std::string loaded =
+      "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+      "<x14:conditionalFormattings><x14:conditionalFormatting>"
+      "<x14:cfRule type=\"dataBar\" id=\"{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}\">"
+      "<x14:dataBar minLength=\"0\" maxLength=\"100\"><x14:cfvo type=\"autoMin\"/>"
+      "<x14:cfvo type=\"autoMax\"/><x14:someUnmodelledThing/></x14:dataBar></x14:cfRule>"
+      "<xm:sqref>A1:A5</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>";
+
+  const std::string merged = merge_x14_cf_entries(loaded, build_x14_cf_overlay_entries({input}));
+  EXPECT_EQ(merged, loaded);
+}
+
+TEST(CFWriter, RebuiltEntryJoinsAnOverlayThatBelongsToAnotherRule) {
+  const auto input = DataBarWithExtensionSettings("{FC000000-0000-0000-0000-000000000001}");
+  const std::string loaded =
+      "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+      "<x14:conditionalFormattings><x14:conditionalFormatting>"
+      "<x14:cfRule type=\"dataBar\" id=\"{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}\">"
+      "<x14:dataBar><x14:cfvo type=\"autoMin\"/><x14:cfvo type=\"autoMax\"/></x14:dataBar>"
+      "</x14:cfRule><xm:sqref>B1:B5</xm:sqref>"
+      "</x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>";
+
+  const std::string merged = merge_x14_cf_entries(loaded, build_x14_cf_overlay_entries({input}));
+  EXPECT_NE(merged.find("{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}"), std::string::npos) << merged;
+  EXPECT_NE(merged.find("{FC000000-0000-0000-0000-000000000001}"), std::string::npos) << merged;
+  // One `<ext>`, not a second one alongside the existing block.
+  EXPECT_EQ(merged.find("{78C0D931-6437-407d-A8EE-F0AAD7539E65}"),
+            merged.rfind("{78C0D931-6437-407d-A8EE-F0AAD7539E65}"))
+      << merged;
+}
+
+TEST(CFWriter, EmptyEntryListLeavesTheOverlayByteIdentical) {
+  const std::string loaded = "<extLst><ext uri=\"{some-future-extension}\"><futureThing/></ext></extLst>";
+  EXPECT_EQ(merge_x14_cf_entries(loaded, std::string()), loaded);
+  EXPECT_TRUE(merge_x14_cf_entries(std::string(), std::string()).empty());
+}
+
+TEST(CFWriter, ExtensionEntryReusesTheRuleExtLstWhenTheRuleAlreadyHasOne) {
+  // A rule can arrive with an `<extLst>` holding some other extension.
+  // `CT_CfRule` allows one, so the x14 link has to join it rather than
+  // be emitted as a second element.
+  auto input = DataBarWithExtensionSettings("{FC000000-0000-0000-0000-000000000001}");
+  input.rules[0].ext_lst_raw = "<extLst><ext uri=\"{some-future-extension}\"><futureThing/></ext></extLst>";
+
+  const std::string legacy = write_conditional_formattings({input}, kDxfCount);
+  EXPECT_EQ(legacy.find("<extLst>"), legacy.rfind("<extLst>")) << legacy;
+  EXPECT_NE(legacy.find("<futureThing/>"), std::string::npos) << legacy;
+  EXPECT_NE(legacy.find("<x14:id>{FC000000-0000-0000-0000-000000000001}</x14:id>"), std::string::npos) << legacy;
 }
 
 }  // namespace

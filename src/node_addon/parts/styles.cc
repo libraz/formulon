@@ -843,6 +843,28 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
       data_bar.Set("showValue", Napi::Boolean::New(env, rule.data_bar_show_value != 0));
       data_bar.Set("minLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_min_length_pct)));
       data_bar.Set("maxLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_max_length_pct)));
+      // `x14` extension payload. Each key appears only when the C ABI
+      // reports the matching `*_engaged` flag, so an absent key means the
+      // rule keeps the model default and the object round-trips through
+      // `addConditionalFormat` unchanged. The getter engages all six.
+      if (rule.data_bar_gradient_engaged != 0) {
+        data_bar.Set("gradient", Napi::Boolean::New(env, rule.data_bar_gradient != 0));
+      }
+      if (rule.data_bar_axis_position_engaged != 0) {
+        data_bar.Set("axisPosition", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_axis_position)));
+      }
+      if (rule.data_bar_negative_fill_engaged != 0) {
+        data_bar.Set("negativeFill", CfColorToJs(env, rule.data_bar_negative_fill));
+      }
+      if (rule.data_bar_border_engaged != 0) {
+        data_bar.Set("border", CfColorToJs(env, rule.data_bar_border));
+      }
+      if (rule.data_bar_negative_border_engaged != 0) {
+        data_bar.Set("negativeBorder", CfColorToJs(env, rule.data_bar_negative_border));
+      }
+      if (rule.data_bar_axis_color_engaged != 0) {
+        data_bar.Set("axisColor", CfColorToJs(env, rule.data_bar_axis_color));
+      }
       item.Set("dataBar", data_bar);
     }
     if (rule.icon_set_engaged != 0) {
@@ -983,6 +1005,34 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     rule.data_bar_show_value = SpecPullBool(db, "showValue", true) ? 1 : 0;
     rule.data_bar_min_length_pct = static_cast<uint8_t>(SpecPullU32(db, "minLengthPct", 10U) & 0xFFU);
     rule.data_bar_max_length_pct = static_cast<uint8_t>(SpecPullU32(db, "maxLengthPct", 90U) & 0xFFU);
+    // `x14` extension payload. An omitted key leaves the `*_engaged` flag
+    // clear, which the C ABI reads as "keep the model default" (gradient
+    // on, automatic axis, negative fill equal to the positive fill, no
+    // border, black axis).
+    if (SpecHas(db, "gradient")) {
+      rule.data_bar_gradient_engaged = 1;
+      rule.data_bar_gradient = SpecPullBool(db, "gradient", true) ? 1 : 0;
+    }
+    if (SpecHas(db, "axisPosition")) {
+      rule.data_bar_axis_position_engaged = 1;
+      rule.data_bar_axis_position = static_cast<uint8_t>(SpecPullU32(db, "axisPosition", 0U) & 0xFFU);
+    }
+    if (SpecHas(db, "negativeFill") && db.Get("negativeFill").IsObject()) {
+      rule.data_bar_negative_fill_engaged = 1;
+      rule.data_bar_negative_fill = PullCfColor(db.Get("negativeFill").As<Napi::Object>());
+    }
+    if (SpecHas(db, "border") && db.Get("border").IsObject()) {
+      rule.data_bar_border_engaged = 1;
+      rule.data_bar_border = PullCfColor(db.Get("border").As<Napi::Object>());
+    }
+    if (SpecHas(db, "negativeBorder") && db.Get("negativeBorder").IsObject()) {
+      rule.data_bar_negative_border_engaged = 1;
+      rule.data_bar_negative_border = PullCfColor(db.Get("negativeBorder").As<Napi::Object>());
+    }
+    if (SpecHas(db, "axisColor") && db.Get("axisColor").IsObject()) {
+      rule.data_bar_axis_color_engaged = 1;
+      rule.data_bar_axis_color = PullCfColor(db.Get("axisColor").As<Napi::Object>());
+    }
   }
   if (SpecHas(v, "iconSet") && v.Get("iconSet").IsObject()) {
     Napi::Object is = v.Get("iconSet").As<Napi::Object>();

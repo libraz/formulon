@@ -4,7 +4,7 @@
 // the bytes produced here back into the reader must reproduce the
 // input list of `cf::ConditionalFormat` records.
 //
-// Coverage parity with the reader (PR2):
+// Coverage parity with the reader:
 //   * All 17 `<cfRule type=...>` spellings.
 //   * `cellIs` (8 operators), `top10`, `aboveAverage`, `containsText` /
 //     `beginsWith` / `endsWith` / `notContainsText` (with the `text`
@@ -14,18 +14,21 @@
 //     prefers the canonical 8-hex form).
 //   * `<cfvo>` thresholds with `gte` boundary attribute.
 //
-// Out of scope:
-//   * Synthesising a *new* worksheet-level `<x14:conditionalFormattings>`
-//     overlay for a `DataBarSpec` whose negative-fill / axis / gradient
-//     fields were set programmatically (never loaded from an x14-bearing
-//     file). `<cf_reader.h>` decodes an existing overlay into
-//     `DataBarSpec`, but this writer only re-emits the legacy `<dataBar>`
-//     element here; the worksheet-level overlay text for a *loaded* file
-//     survives a save cycle unchanged via `Sheet::ext_lst_xml()`'s raw
-//     passthrough (see `BuildWorksheetXml`), not through this writer.
+// A `DataBarSpec` field that the legacy `<dataBar>` element cannot
+// express (negative fill / borders / axis position / axis colour /
+// solid-vs-gradient) lives only in the Excel 2010+ `x14` extension, in
+// two places at once: a link on the rule itself and a payload element at
+// worksheet level. This writer emits the link; the payload is built by
+// `build_x14_cf_overlay_entries` and merged into the worksheet
+// `<extLst>` by `merge_x14_cf_entries` (see `src/io/cf_overlay.h`),
+// because that block is a sibling of `<conditionalFormatting>` rather
+// than a child. For a rule loaded from an x14-bearing file both halves
+// are already present as captured raw XML and are re-emitted verbatim
+// instead of being rebuilt.
 //
 // Design references:
 //   * src/io/cf_reader.h (sister reader; canonical grammar)
+//   * src/io/cf_overlay.h (worksheet-level overlay reconciliation)
 
 #ifndef FORMULON_IO_CF_WRITER_H_
 #define FORMULON_IO_CF_WRITER_H_
@@ -56,6 +59,26 @@ namespace formulon::io {
 /// its conditional formatting, which costs far more than the one rule's
 /// formatting. The rule itself is still emitted.
 std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count);
+
+/// Builds the `<x14:conditionalFormatting>` entries that carry the
+/// data-bar settings the legacy `<dataBar>` element cannot express, for
+/// every rule in `formats` that needs one. Returns the entries
+/// concatenated, with no enclosing `<x14:conditionalFormattings>` /
+/// `<ext>` / `<extLst>` wrapper — `merge_x14_cf_entries` owns the
+/// wrapping, since it also has to fold them into whatever overlay the
+/// source file already had.
+///
+/// Returns an empty string when no rule needs an entry, which is the
+/// common case: a rule whose data bar is expressible in the legacy
+/// element alone produces no extension bytes, so a file that never had
+/// an x14 overlay does not grow one.
+///
+/// A rule loaded from an x14-bearing file is included here too. Its
+/// entry is a rebuild of what the source file carried, and
+/// `merge_x14_cf_entries` drops it in favour of the captured original;
+/// deciding that here would need the worksheet `<extLst>`, which this
+/// writer does not see.
+std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat>& formats);
 
 }  // namespace formulon::io
 

@@ -400,6 +400,60 @@ TEST(OoxmlCF, RoundTripPreservesDataBarRule) {
   EXPECT_FALSE(rule.data_bar->show_value);
 }
 
+TEST(OoxmlCF, RoundTripPreservesDataBarExtensionSettings) {
+  // None of these settings has a legacy `<dataBar>` attribute; they only
+  // survive a save through the x14 extension, which lives half on the
+  // rule and half in the worksheet-level `<extLst>`. Driving the whole
+  // package through `write_ooxml` / `read_ooxml` is what proves both
+  // halves are emitted and that they find each other.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {4, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::DataBar;
+  r.priority = 1;
+  r.id = "{FC000000-0000-0000-0000-000000000001}";
+  cf::DataBarSpec bar;
+  bar.min = {cf::CfvoType::Min, "", true};
+  bar.max = {cf::CfvoType::Max, "", true};
+  bar.fill = {0x63, 0x8E, 0xC6, 255};
+  bar.negative_fill = {255, 0, 0, 255};
+  bar.negative_border = cf::Color{0x99, 0, 0, 255};
+  bar.border = cf::Color{0, 0x33, 0x66, 255};
+  bar.axis_position = cf::DataBarAxisPosition::Middle;
+  bar.axis_color = {0x11, 0x22, 0x33, 255};
+  bar.gradient = false;
+  bar.min_length_pct = 0;
+  bar.max_length_pct = 100;
+  r.data_bar = std::move(bar);
+  block.rules.push_back(std::move(r));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 1U);
+  const auto& rule = cfs[0].rules[0];
+  EXPECT_EQ(rule.id, "{FC000000-0000-0000-0000-000000000001}");
+  ASSERT_TRUE(rule.data_bar.has_value());
+  EXPECT_EQ(rule.data_bar->negative_fill, cf::Color({255, 0, 0, 255}));
+  ASSERT_TRUE(rule.data_bar->negative_border.has_value());
+  EXPECT_EQ(rule.data_bar->negative_border.value(), cf::Color({0x99, 0, 0, 255}));
+  ASSERT_TRUE(rule.data_bar->border.has_value());
+  EXPECT_EQ(rule.data_bar->border.value(), cf::Color({0, 0x33, 0x66, 255}));
+  EXPECT_EQ(rule.data_bar->axis_position, cf::DataBarAxisPosition::Middle);
+  EXPECT_EQ(rule.data_bar->axis_color, cf::Color({0x11, 0x22, 0x33, 255}));
+  EXPECT_FALSE(rule.data_bar->gradient);
+  EXPECT_EQ(rule.data_bar->min_length_pct, 0U);
+  EXPECT_EQ(rule.data_bar->max_length_pct, 100U);
+}
+
 TEST(OoxmlCF, RoundTripPreservesIconSetRule) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");

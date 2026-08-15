@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Data-bar `x14` settings on every binding. `gradient`, `axisPosition`,
+  `negativeFill`, `border`, `negativeBorder` and `axisColor` reach WASM and
+  the native Node addon on the `dataBar` object, and Python as the matching
+  `DataBar` fields. They live in the `x14` extension rather than the legacy
+  `<dataBar>` element, and now survive a save and load rather than
+  collapsing to the defaults. Omitting one keeps the model default —
+  gradient fill on, automatic axis, negative fill equal to the positive
+  fill, no border, black axis — so an object read back from a rule can be
+  handed straight to the adder and reproduces it. Purely additive; the C
+  ABI already carried the fields.
 - `fm_workbook_pivot_field_add_item_at(wb, sheet, pivot, field, cache_index,
   visible)` appends a manual-filter item addressed by its position in the
   bound cache field's shared items — the same index space as OOXML

@@ -201,6 +201,30 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
       data_bar.set("showValue", rule.data_bar_show_value != 0);
       data_bar.set("minLengthPct", static_cast<uint32_t>(rule.data_bar_min_length_pct));
       data_bar.set("maxLengthPct", static_cast<uint32_t>(rule.data_bar_max_length_pct));
+      // `x14` extension payload. Each key is present only when the C ABI
+      // reports the corresponding `*_engaged` flag, so an absent key means
+      // "this rule does not override the model default" and feeding the
+      // object straight back into `addConditionalFormat` reproduces the
+      // rule. The getter engages all six, so a rule read from a workbook
+      // always carries them.
+      if (rule.data_bar_gradient_engaged != 0) {
+        data_bar.set("gradient", rule.data_bar_gradient != 0);
+      }
+      if (rule.data_bar_axis_position_engaged != 0) {
+        data_bar.set("axisPosition", static_cast<uint32_t>(rule.data_bar_axis_position));
+      }
+      if (rule.data_bar_negative_fill_engaged != 0) {
+        data_bar.set("negativeFill", cf_color_to_js(rule.data_bar_negative_fill));
+      }
+      if (rule.data_bar_border_engaged != 0) {
+        data_bar.set("border", cf_color_to_js(rule.data_bar_border));
+      }
+      if (rule.data_bar_negative_border_engaged != 0) {
+        data_bar.set("negativeBorder", cf_color_to_js(rule.data_bar_negative_border));
+      }
+      if (rule.data_bar_axis_color_engaged != 0) {
+        data_bar.set("axisColor", cf_color_to_js(rule.data_bar_axis_color));
+      }
       item.set("dataBar", data_bar);
     }
     if (rule.icon_set_engaged != 0) {
@@ -320,6 +344,34 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     rule.data_bar_show_value = js_pull_bool(db, "showValue", true) ? 1 : 0;
     rule.data_bar_min_length_pct = js_pull_u8(db, "minLengthPct", 10U);
     rule.data_bar_max_length_pct = js_pull_u8(db, "maxLengthPct", 90U);
+    // `x14` extension payload. An omitted key leaves the corresponding
+    // `*_engaged` flag clear, which the C ABI reads as "keep the model
+    // default" (gradient on, automatic axis, negative fill equal to the
+    // positive fill, no border, black axis).
+    if (!db["gradient"].isUndefined() && !db["gradient"].isNull()) {
+      rule.data_bar_gradient_engaged = 1;
+      rule.data_bar_gradient = js_pull_bool(db, "gradient", true) ? 1 : 0;
+    }
+    if (!db["axisPosition"].isUndefined() && !db["axisPosition"].isNull()) {
+      rule.data_bar_axis_position_engaged = 1;
+      rule.data_bar_axis_position = js_pull_u8(db, "axisPosition", 0U);
+    }
+    if (!db["negativeFill"].isUndefined() && !db["negativeFill"].isNull()) {
+      rule.data_bar_negative_fill_engaged = 1;
+      rule.data_bar_negative_fill = js_pull_cf_color(db["negativeFill"]);
+    }
+    if (!db["border"].isUndefined() && !db["border"].isNull()) {
+      rule.data_bar_border_engaged = 1;
+      rule.data_bar_border = js_pull_cf_color(db["border"]);
+    }
+    if (!db["negativeBorder"].isUndefined() && !db["negativeBorder"].isNull()) {
+      rule.data_bar_negative_border_engaged = 1;
+      rule.data_bar_negative_border = js_pull_cf_color(db["negativeBorder"]);
+    }
+    if (!db["axisColor"].isUndefined() && !db["axisColor"].isNull()) {
+      rule.data_bar_axis_color_engaged = 1;
+      rule.data_bar_axis_color = js_pull_cf_color(db["axisColor"]);
+    }
   }
   if (!v["iconSet"].isUndefined() && !v["iconSet"].isNull()) {
     emscripten::val is = v["iconSet"];

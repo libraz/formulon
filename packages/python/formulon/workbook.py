@@ -811,12 +811,28 @@ class ColorScale:
 
 @dataclass(frozen=True)
 class DataBar:
+    """``<dataBar>`` payload of a conditional-format rule.
+
+    The fields after ``max_length_pct`` live in the ``x14`` extension
+    rather than the legacy element. ``None`` means "do not override the
+    model default" -- gradient fill on, automatic axis, negative fill
+    equal to ``fill``, no border, and a black axis. Reading a rule back
+    always populates them, so ``add_conditional_format`` of a value
+    returned by ``get_conditional_format_at`` reproduces the rule.
+    """
+
     minimum: CfValueObject
     maximum: CfValueObject
     fill: CfColor
     show_value: bool = True
     min_length_pct: int = 10
     max_length_pct: int = 90
+    gradient: Optional[bool] = None
+    axis_position: Optional[int] = None
+    negative_fill: Optional[CfColor] = None
+    border: Optional[CfColor] = None
+    negative_border: Optional[CfColor] = None
+    axis_color: Optional[CfColor] = None
 
 
 @dataclass(frozen=True)
@@ -3297,6 +3313,23 @@ class Workbook:
                     bool(d["data_bar_show_value"]),
                     d["data_bar_min_length_pct"],
                     d["data_bar_max_length_pct"],
+                    # x14 extension. Each field is decoded only when the C
+                    # ABI reports its `*_engaged` flag, so `None` keeps its
+                    # "no override" meaning on the way back in.
+                    bool(d["data_bar_gradient"]) if d["data_bar_gradient_engaged"] else None,
+                    d["data_bar_axis_position"] if d["data_bar_axis_position_engaged"] else None,
+                    self._decode_cf_color_at(ptr + offsets["data_bar_negative_fill"][1])
+                    if d["data_bar_negative_fill_engaged"]
+                    else None,
+                    self._decode_cf_color_at(ptr + offsets["data_bar_border"][1])
+                    if d["data_bar_border_engaged"]
+                    else None,
+                    self._decode_cf_color_at(ptr + offsets["data_bar_negative_border"][1])
+                    if d["data_bar_negative_border_engaged"]
+                    else None,
+                    self._decode_cf_color_at(ptr + offsets["data_bar_axis_color"][1])
+                    if d["data_bar_axis_color_engaged"]
+                    else None,
                 )
             icon_set = None
             if d["icon_set_engaged"]:
@@ -3416,6 +3449,25 @@ class Workbook:
                 LIB.write_bytes(ptr + ro["data_bar_show_value"][1], struct.pack("<i", 1 if data_bar.show_value else 0))
                 LIB.write_bytes(ptr + ro["data_bar_min_length_pct"][1], struct.pack("<B", int(data_bar.min_length_pct)))
                 LIB.write_bytes(ptr + ro["data_bar_max_length_pct"][1], struct.pack("<B", int(data_bar.max_length_pct)))
+                # x14 extension. A `None` leaves the `*_engaged` flag clear,
+                # which the C ABI reads as "keep the model default".
+                if data_bar.gradient is not None:
+                    LIB.write_bytes(ptr + ro["data_bar_gradient_engaged"][1], struct.pack("<i", 1))
+                    LIB.write_bytes(ptr + ro["data_bar_gradient"][1], struct.pack("<i", 1 if data_bar.gradient else 0))
+                if data_bar.axis_position is not None:
+                    LIB.write_bytes(ptr + ro["data_bar_axis_position_engaged"][1], struct.pack("<i", 1))
+                    LIB.write_bytes(
+                        ptr + ro["data_bar_axis_position"][1], struct.pack("<B", int(data_bar.axis_position))
+                    )
+                for field, color in (
+                    ("negative_fill", data_bar.negative_fill),
+                    ("border", data_bar.border),
+                    ("negative_border", data_bar.negative_border),
+                    ("axis_color", data_bar.axis_color),
+                ):
+                    if color is not None:
+                        LIB.write_bytes(ptr + ro[f"data_bar_{field}_engaged"][1], struct.pack("<i", 1))
+                        self._write_cf_color(ptr + ro[f"data_bar_{field}"][1], color)
             if rule.icon_set is not None:
                 icon_set = rule.icon_set
                 count = len(icon_set.thresholds)

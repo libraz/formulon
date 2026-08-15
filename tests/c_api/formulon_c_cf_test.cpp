@@ -1036,6 +1036,17 @@ std::string X14OverlayFor(std::initializer_list<const char*> ids) {
          rules + "<xm:sqref>A1:A10</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>";
 }
 
+// Builds the nested `<extLst>` link a legacy `<cfRule>` carries to reach
+// its x14 counterpart. This, not an `id` attribute on the `<cfRule>`, is
+// how Excel spells the cross-reference, so a rule loaded from an
+// x14-bearing file always has one.
+std::string X14RuleLinkFor(const char* id) {
+  return std::string(
+             "<extLst><ext uri=\"{B025F937-C7B1-47D3-B67F-A62EFF666E3E}\" "
+             "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:id>") +
+         id + "</x14:id></ext></extLst>";
+}
+
 // Seeds sheet 0 with one CF block holding two id-bearing dataBar rules
 // plus the matching two-entry x14 overlay, mirroring the state produced
 // by loading an Excel 2010+ file with extended data bars.
@@ -1047,6 +1058,7 @@ void SeedDataBarRulesWithOverlay(fm_workbook_t* handle) {
     formulon::cf::CFRule rule;
     rule.type = formulon::cf::RuleType::DataBar;
     rule.id = id;
+    rule.ext_lst_raw = X14RuleLinkFor(id);
     rule.data_bar = formulon::cf::DataBarSpec{};
     block.rules.push_back(std::move(rule));
   }
@@ -1110,4 +1122,48 @@ TEST(FormulonCApiCfMutate, RemovedRuleDoesNotResurfaceThroughSaveLoad) {
   EXPECT_EQ(sheet.conditional_formats()[0].rules[0].id, kX14IdB);
   EXPECT_FALSE(ContainsSubstring(sheet.ext_lst_xml(), kX14IdA));
   EXPECT_TRUE(ContainsSubstring(sheet.ext_lst_xml(), kX14IdB));
+}
+
+TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
+  // Reaching the model is not enough: axis, gradient and the negative
+  // colours have no legacy `<dataBar>` attribute, so a save that does not
+  // build the x14 extension loses every one of them and the caller gets a
+  // plain bar back. This is the only test on this path that crosses the
+  // ABI boundary in both directions.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule = MakeDataBarRule(&sqref);
+  rule.data_bar_gradient_engaged = 1;
+  rule.data_bar_gradient = 0;
+  rule.data_bar_axis_position_engaged = 1;
+  rule.data_bar_axis_position = 1;  // middle
+  rule.data_bar_negative_fill_engaged = 1;
+  rule.data_bar_negative_fill = fm_cf_color_t{255, 0, 0, 255};
+  rule.data_bar_border_engaged = 1;
+  rule.data_bar_border = fm_cf_color_t{1, 2, 3, 255};
+  rule.data_bar_negative_border_engaged = 1;
+  rule.data_bar_negative_border = fm_cf_color_t{4, 5, 6, 255};
+  rule.data_bar_axis_color_engaged = 1;
+  rule.data_bar_axis_color = fm_cf_color_t{7, 8, 9, 255};
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+
+  fm_cf_rule_t back{};
+  ASSERT_EQ(fm_sheet_cf_get_at(reloaded.handle, 0, 0, &back), 0) << fm_last_error_message();
+  EXPECT_EQ(back.data_bar_gradient, 0);
+  EXPECT_EQ(back.data_bar_axis_position, 1U);
+  EXPECT_EQ(back.data_bar_negative_fill.r, 255U);
+  EXPECT_EQ(back.data_bar_negative_fill.g, 0U);
+  EXPECT_EQ(back.data_bar_border_engaged, 1);
+  EXPECT_EQ(back.data_bar_border.b, 3U);
+  EXPECT_EQ(back.data_bar_negative_border_engaged, 1);
+  EXPECT_EQ(back.data_bar_negative_border.b, 6U);
+  EXPECT_EQ(back.data_bar_axis_color.r, 7U);
+  EXPECT_EQ(back.data_bar_axis_color.b, 9U);
 }

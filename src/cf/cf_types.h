@@ -221,15 +221,15 @@ struct IconSetSpec {
 /// `cellIs` rules carry `op` and `formula1` (+ `formula2` for `Between`/
 /// `NotBetween`); `colorScale` rules carry `color_scale`; etc.
 struct CFRule {
-  /// Stable identifier for the rule, read from the `id` attribute on the
-  /// base `<cfRule id="...">` element itself (not from any `<x14:cfRule>`
-  /// extension, which this engine does not parse). Excel emits this
-  /// attribute directly on the legacy `<cfRule>` when the rule has a
-  /// richer `<x14:cfRule>` counterpart elsewhere in `<extLst>`, using it
-  /// to cross-reference the two; the value happens to be the same
-  /// GUID-shaped string `<x14:cfRule id="...">` carries. Empty for
-  /// legacy rules with no such counterpart. The writer round-trips
-  /// whatever value is present onto the base element.
+  /// Stable identifier linking this rule to its richer `<x14:cfRule>`
+  /// counterpart in the worksheet-level `<extLst>` overlay, which is
+  /// where the settings the legacy schema has no attribute for live.
+  ///
+  /// In the file the link is a nested
+  /// `<extLst><ext><x14:id>{GUID}</x14:id>` inside the `<cfRule>`, not an
+  /// attribute on it: `CT_CfRule` has no `id` attribute, and Excel
+  /// discards the attribute spelling on re-save. Empty for rules with no
+  /// x14 counterpart, which is every rule in a pre-2010 file.
   std::string id;
   RuleType type = RuleType::Expression;
   /// Workbook-global priority. Smaller numbers evaluate first.

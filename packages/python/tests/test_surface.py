@@ -747,6 +747,58 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertEqual(got[1].data_bar.fill, CfColor(0, 0, 255))
             self.assertEqual(got[2].icon_set.thresholds[1].value, "67")
 
+    def test_data_bar_x14_fields_survive_save_and_load(self) -> None:
+        # These six live in the `x14` extension, not the legacy `<dataBar>`
+        # element. An in-session round-trip alone would not catch a writer
+        # that never emits the extension, which is how they were lost
+        # before: the values came back from the model and disappeared on
+        # the way through the file.
+        bar = DataBar(
+            CfValueObject(3),
+            CfValueObject(4),
+            CfColor(0, 0, 255),
+            gradient=False,
+            axis_position=1,
+            negative_fill=CfColor(255, 0, 0),
+            border=CfColor(9, 9, 9),
+            negative_border=CfColor(8, 8, 8),
+            axis_color=CfColor(1, 2, 3),
+        )
+        with Workbook.create_default() as wb:
+            wb.add_conditional_format(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 2, 0)], type=3, data_bar=bar))
+            saved = wb.save()
+
+        with Workbook.load(saved) as reloaded:
+            got = reloaded.get_conditional_formats(0)[0].data_bar
+            self.assertIs(got.gradient, False)
+            self.assertEqual(got.axis_position, 1)
+            self.assertEqual(got.negative_fill, CfColor(255, 0, 0))
+            self.assertEqual(got.border, CfColor(9, 9, 9))
+            self.assertEqual(got.negative_border, CfColor(8, 8, 8))
+            self.assertEqual(got.axis_color, CfColor(1, 2, 3))
+            # Feeding the decoded bar straight back must reproduce it.
+            reloaded.add_conditional_format(
+                0, ConditionalFormatInput(sqref=[MergeRange(4, 0, 6, 0)], type=3, data_bar=got)
+            )
+            self.assertEqual(reloaded.get_conditional_formats(0)[1].data_bar, got)
+
+    def test_omitted_data_bar_x14_fields_keep_the_model_defaults(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.add_conditional_format(
+                0,
+                ConditionalFormatInput(
+                    sqref=[MergeRange(0, 0, 2, 0)],
+                    type=3,
+                    data_bar=DataBar(CfValueObject(3), CfValueObject(4), CfColor(0, 0, 255)),
+                ),
+            )
+            got = wb.get_conditional_formats(0)[0].data_bar
+            # The getter engages all six, so they read back as the defaults
+            # rather than as `None`.
+            self.assertIs(got.gradient, True)
+            self.assertEqual(got.axis_position, 0)
+            self.assertEqual(got.negative_fill, CfColor(0, 0, 255))
+
 
 class PivotTests(unittest.TestCase):
     def test_build_and_project_pivot(self) -> None:
