@@ -102,12 +102,14 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   //   rows = L (col-axis label rows) + (output_emits_header ? 1 : 0) +
   //          nR (one per row group) + (emit_col_totals_row ? 1 : 0)
   //          [for the multi-column layout K>1 OR L>1 OR V>1]
-  //   rows = (output_emits_header ? 1 : 0) + nR + (emit_col_totals_row ? 1 : 0)
+  //   rows = 1 (col-axis/header row) + nR + (emit_col_totals_row ? 1 : 0)
   //          [for the merged singletons layout K==1 AND L==1 AND V==1;
-  //           the col-axis row collapses into the header row when emitted,
-  //           or is suppressed entirely when output_emits_header is
-  //           false — preserved for backwards compatibility with the
-  //           original single-column impl]
+  //           the col-axis row and the header row collapse into a single
+  //           combined top row, always emitted -- the row_fields header
+  //           label in its corner cell is blank when output_emits_header
+  //           is false, but the col-axis labels always render, preserved
+  //           for backwards compatibility with the original single-column
+  //           impl]
   //   cols = K + S * V + (emit_row_totals_col ? V : 0), where S is the
   //          physical column-slot count (leaf groups plus one outer subtotal
   //          slot per outer group when |col_total_depth| == 2)
@@ -666,12 +668,17 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // The all-singletons case (K==1 AND L==1 AND V==1) uses a compact
   // merged layout that pre-dates the multi-column extension and is
-  // preserved for backwards compatibility:
-  //   - When output_emits_header is true: a single top row carries the
-  //     row_fields header label at col 0 alongside the col-axis labels at
-  //     cols 1..; the values-header tile collapses into the col-axis row.
-  //   - When output_emits_header is false: NO label rows at all (the L
-  //     col-axis row is also suppressed).
+  // preserved for backwards compatibility. Mac Excel always shows the
+  // pivot's column keys (X/Y) on this row regardless of field_headers --
+  // they identify which output column is which, independent of whether
+  // descriptive field-name headers are requested -- so this row is
+  // unconditionally emitted, mirroring the multi-column layout below:
+  //   - When output_emits_header is true: the row_fields header label
+  //     occupies col 0 alongside the col-axis labels at cols 1..; the
+  //     values-header tile collapses into the col-axis row.
+  //   - When output_emits_header is false: col 0 (the corner cell) stays
+  //     blank, but the col-axis labels and the grand-total label (if
+  //     col_total_depth != 0) still render.
   // For K > 1 OR L > 1 OR V > 1, the multi-column layout always emits L
   // col-axis label rows and (optionally) a separate header row beneath
   // them.
@@ -679,18 +686,22 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // Helper: render the merged top row for the single-column layout. The
   // row carries:
-  //   - col 0: row_fields header label (or "Field 1" for fh=2)
-  //   - cols 1..nC: col-axis labels (level 0 keys), one per col group
+  //   - col 0: row_fields header label (or "Field 1" for fh=2), left blank
+  //     when output_emits_header is false
+  //   - cols 1..nC: col-axis labels (level 0 keys), one per col group --
+  //     always rendered, independent of output_emits_header
   //   - last col (if emit_row_totals_col): "Grand Total"
   // V is always 1 in this branch (key_cols == 1 == col_levels), so no
   // tiling is required.
   auto render_merged_header_row = [&]() {
     std::vector<Value> row(out_cols, Value::blank());
-    if (field_headers == 1 || field_headers == 3) {
-      row[0] = row_fields->cells[0];
-    } else {
-      // field_headers == 2: synth "Field 1".
-      row[0] = Value::text(arena.intern("Field 1"));
+    if (layout.output_emits_header) {
+      if (field_headers == 1 || field_headers == 3) {
+        row[0] = row_fields->cells[0];
+      } else {
+        // field_headers == 2: synth "Field 1".
+        row[0] = Value::text(arena.intern("Field 1"));
+      }
     }
     for (std::size_t ci = 0; ci < n_cols; ++ci) {
       const std::size_t cg = col_order[ci];
@@ -779,10 +790,10 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::vector<std::vector<Value>> out_rows;
   out_rows.reserve(static_cast<std::size_t>(col_levels) + n_rows + row_subtotal_rows.size() + 3U);
   if (merged_single_col_layout) {
-    // Merged single-column layout: one optional combined top row.
-    if (layout.output_emits_header) {
-      out_rows.push_back(render_merged_header_row());
-    }
+    // Merged single-column layout: the combined top row (col-axis labels,
+    // plus the row_fields header label when output_emits_header) is
+    // always emitted -- see the comment on merged_single_col_layout above.
+    out_rows.push_back(render_merged_header_row());
   } else {
     // Multi-column layout: always emit L col-axis label rows; emit a
     // separate header row when output_emits_header is true.

@@ -416,9 +416,11 @@ entries:
   # came from a literal 0 in the sort_order slot, which Excel treats as
   # out of domain (sort_order is a signed column index with no zero
   # member). The cases now pass an in-contract argument list. Both GROUPBY
-  # cases became live goldens that Formulon matches exactly; the two
-  # PIVOTBY cases surfaced a real shape defect that the old skip had been
-  # hiding, recorded below.
+  # and PIVOTBY sort_order cases became live goldens that Formulon
+  # matches exactly. Re-probing the two PIVOTBY aggregator-dispatch cases
+  # here (pivotby_bare_sum / pivotby_lambda_sum) surfaced a real 2x3-vs-3x3
+  # shape defect in the merged single-column layout, since fixed -- both
+  # are live goldens now too.
   - id: groupby_sort_order_zero_rejected
     cause: engine-gap
     reason: "sort_order 0 is outside Excel's domain for that argument (a signed column index, no zero member) and Excel returns #VALUE!. Formulon accepts it and returns the grouped spill, so a workbook that computes here errors in Excel. Isolated by varying one argument at a time: field_headers=0 and total_depth=0 are both accepted, and every form carrying sort_order=0 errors while 1 or omission spills."
@@ -429,20 +431,6 @@ entries:
   - id: pivotby_row_sort_order_zero_rejected
     cause: engine-gap
     reason: "As groupby_sort_order_zero_rejected, on PIVOTBY's row_sort_order slot: Excel returns #VALUE! for a literal 0, Formulon returns the pivot spill."
-    prefer: mac-excel-365
-    first_noted: 2026-08-15
-    last_verified_excel_version: "16.112"
-    mode: skip-oracle
-  - id: pivotby_bare_sum
-    cause: engine-gap
-    reason: "Excel spills 3x3 for this pivot -- a pivot always carries the column-field value row, so the layout is a blank corner cell, an X/Y header row, then the A/B rows with values on the diagonal. Formulon returns 2x3: it emits the row-label column but omits the column-field header row when col_total_depth is 0. The richer multi-axis PIVOTBY cases in this suite pass with their header rows intact, so the defect is specific to the zero-total-depth form. Previously skipped on a wrong diagnosis (\"compact inline-array\"), which hid this."
-    prefer: mac-excel-365
-    first_noted: 2026-08-15
-    last_verified_excel_version: "16.112"
-    mode: skip-oracle
-  - id: pivotby_lambda_sum
-    cause: engine-gap
-    reason: "Same 2x3-versus-3x3 shape defect as pivotby_bare_sum, reached through the inline-LAMBDA aggregator path rather than the bare name."
     prefer: mac-excel-365
     first_noted: 2026-08-15
     last_verified_excel_version: "16.112"

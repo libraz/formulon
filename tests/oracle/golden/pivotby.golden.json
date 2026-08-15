@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-14T19:34:32Z"
+    "generated_at": "2026-08-14T21:26:21Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -17,13 +17,47 @@
       "id": "pivotby_bare_sum",
       "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, , 0)",
       "setup": {},
-      "skipped": "Excel spills 3x3 for this pivot -- a pivot always carries the column-field value row, so the layout is a blank corner cell, an X/Y header row, then the A/B rows with values on the diagonal. Formulon returns 2x3: it emits the row-label column but omits the column-field header row when col_total_depth is 0. The richer multi-axis PIVOTBY cases in this suite pass with their header rows intact, so the defect is specific to the zero-total-depth form. Previously skipped on a wrong diagnosis (\"compact inline-array\"), which hid this."
+      "expect": {
+        "kind": "array",
+        "value": [
+          null,
+          "X",
+          "Y",
+          "A",
+          1.0,
+          null,
+          "B",
+          null,
+          2.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
     },
     {
       "id": "pivotby_lambda_sum",
       "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, , 0)",
       "setup": {},
-      "skipped": "Same 2x3-versus-3x3 shape defect as pivotby_bare_sum, reached through the inline-LAMBDA aggregator path rather than the bare name."
+      "expect": {
+        "kind": "array",
+        "value": [
+          null,
+          "X",
+          "Y",
+          "A",
+          1.0,
+          null,
+          "B",
+          null,
+          2.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
     },
     {
       "id": "pivotby_row_sort_order_zero_rejected",
