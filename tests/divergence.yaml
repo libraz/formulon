@@ -1034,11 +1034,11 @@ entries:
     cause: engine-gap
     mode: skip-oracle
     scope: fixture
-    evidence: [tests/unit/io/xlsb_fidelity_test.cpp]
-    reason: "Pivot tables loaded from .xlsb are not decoded into the evaluated pivot model (the XLSB reader wires no pivot caches / tables onto the workbook), so GETPIVOTDATA over an XLSB-sourced pivot returns #REF! where Excel returns the aggregated value. Deferred pending XLSB pivot record decoding."
+    evidence: [tests/unit/io/xlsb_pivot_fixture_test.cpp]
+    reason: "Pivot tables loaded from .xlsb are not decoded into the evaluated pivot model (the XLSB reader wires no pivot caches / tables onto the workbook), so GETPIVOTDATA over an XLSB-sourced pivot returns #REF! where Excel returns the aggregated value. Measured on tests/fixtures/excel/xlsb_pivot_base.xlsb, an Excel-authored workbook whose Sheet1 carries a Region x Qtr pivot over A1:C7 and three probes Excel evaluated before saving: GETPIVOTDATA(\"Amt\",$E$1,\"Region\",\"North\") = 15, GETPIVOTDATA(\"Amt\",$E$1) = 56, and GETPIVOTDATA(\"Amt\",$E$1,\"Region\",\"North\",\"Qtr\",\"Q1\") = 10. The package holds pivotCacheDefinition1.bin, pivotCacheRecords1.bin and pivotTable1.bin; none is decoded, and a recalc replaces all three cached answers with #REF!. Deferred pending XLSB pivot record decoding."
     prefer: mac-excel-365
     first_noted: 2026-07-02
-    last_verified_excel_version: "unverified (Mac Excel 365 observed 2026-07-02; build number not recorded, needs reprobe)"
+    last_verified_excel_version: "16.112"
 
   # -- XLSB external-workbook defined names --------------------------------
   # PtgNameX resolves through the external-supporting-book and external-name
@@ -1123,29 +1123,28 @@ entries:
     first_noted: 2026-08-15
     last_verified_excel_version: "16.112"
 
-  # -- Pivot: authored <filters> block is not evaluated --------------------
+  # -- Pivot: authored value / date <filters> are not evaluated -------------
   # An authored `<filters>` element (OOXML pivotTableDefinition) survives
-  # save/reload byte-for-byte in the verbatim passthrough tail -- see
-  # PivotTableReader.AuthoredFiltersRoundTripAsPassthroughAndStayOutOfTheModel
-  # and PivotTableWriter.ActiveFiltersAreSessionStateAndAreNotSerialized --
-  # but it never populates PivotTable::active_filters() and therefore never
-  # participates in evaluation. Excel applies the filter when it evaluates
-  # the same pivot. src/pivot/pivot_table.h documents the model-side
-  # rationale (active_filters() is deliberately session-only in both
-  # directions); this entry records only the Excel-observable gap.
-  - id: pivot_authored_filters_block_not_evaluated
+  # save/reload byte-for-byte in the verbatim passthrough tail, and its
+  # caption entries are decoded into PivotTable::authored_caption_filters()
+  # and applied during evaluation. The value, date and relative-period
+  # families are not decoded, so a pivot filtered by one of those still
+  # evaluates unfiltered. src/pivot/pivot_table.h documents why the decode
+  # is read-side only (the writer keeps emitting the block verbatim, so
+  # nothing has to author filter XML).
+  - id: pivot_authored_value_date_filters_not_evaluated
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
     evidence:
       [
+        tests/integration/pivot_caption_filter_fixture_test.cpp,
         tests/unit/io/pivot_table_reader_test.cpp,
-        tests/unit/io/pivot_table_writer_test.cpp,
       ]
-    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Formulon retains the <filters> block byte-for-byte across save/reload (verbatim passthrough) but evaluates the pivot as if unfiltered, because the block is never decoded into PivotTable::active_filters(). Confirming the exact Excel-filtered values requires a live Microsoft 365 host: author a pivot workbook with a real <filters> block (label/value/date filter), record the pivot's aggregated cell values under that filter, and compare against Formulon's unfiltered evaluation of the same workbook. No such probe has been run this session."
+    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Verified on tests/fixtures/excel/pivot_caption_filter.xlsx, an Excel-authored pivot over A1:C7 (Region rows, Qtr columns, sum of Amt) filtered from the row-label dropdown with 'label filters -> equals -> North': Excel renders North alone at 10 / 5 / 15 with a grand total of 15, where the unfiltered table is East / North / South totalling 56. The caption family (ST_PivotFilterType's caption* members) is decoded and now matches that render. The value, date and relative-period families are still passthrough-only and evaluate unfiltered. The same fixture shows why item visibility cannot stand in for the decode: Excel leaves all three <item> entries visible and records the filter only in <filters>, with the result mirrored into <rowItems>."
     prefer: mac-excel-365
     first_noted: 2026-08-14
-    last_verified_excel_version: "unverified (needs a live Excel probe: author a <filters>-bearing pivot workbook and record its filtered evaluation)"
+    last_verified_excel_version: "16.112"
 
   # -- Bare whole-axis reference: geometry cases are live --------------
   # The five geometry cases (a declared rectangle that no longer fits from
