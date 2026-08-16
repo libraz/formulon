@@ -24,10 +24,10 @@ from typing import Any, Dict
 import yaml
 
 try:  # pragma: no cover - trivial fallback
-    from tools.oracle import divergence_check, oracle_gen, workbook_case_schema
+    from tools.oracle import divergence_check, emit_skip_list, oracle_gen, workbook_case_schema
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from tools.oracle import divergence_check, oracle_gen, workbook_case_schema
+    from tools.oracle import divergence_check, emit_skip_list, oracle_gen, workbook_case_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -192,6 +192,55 @@ class ObservationReportingTests(unittest.TestCase):
     def test_a_plain_skip_reports_nothing(self) -> None:
         found = divergence_check.load_observations([self._golden_dir({"id": "c", "spec": {}, "skipped": "w"})])
         self.assertEqual(found, {})
+
+
+class SkipProjectionTests(unittest.TestCase):
+    """The registry has to reach the verifier without another capture.
+
+    A `skip-oracle` entry registered after a golden was captured cannot be
+    written into that golden, so the C++ verifier reads a JSON projection
+    instead. If the projection ever stops matching the registry, a newly
+    adjudicated divergence goes back to failing until someone with Excel
+    re-runs the suite -- the same deadlock, one layer down.
+    """
+
+    def _emit(self, target: str = "win-365-ja_JP") -> Dict[str, Any]:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
+        out = tmp / "skips.json"
+        emit_skip_list.emit(REPO_ROOT / "tests/divergence.yaml", target, out)
+        return json.loads(out.read_text(encoding="utf-8"))
+
+    def test_projection_matches_the_registry(self) -> None:
+        doc = self._emit()
+        expected = oracle_gen._load_divergence_skips(REPO_ROOT / "tests/divergence.yaml", "win-365-ja_JP")
+        self.assertEqual(doc["target"], "win-365-ja_JP")
+        self.assertEqual(doc["skips"], expected)
+
+    def test_every_skip_carries_a_reason(self) -> None:
+        # The verifier prints the reason when it skips; an empty one would
+        # leave a silent hole in the run.
+        doc = self._emit()
+        self.assertTrue(doc["skips"])
+        self.assertTrue(all(isinstance(v, str) and v.strip() for v in doc["skips"].values()))
+
+    def test_applies_to_scoping_survives_the_projection(self) -> None:
+        # A win-only entry must not skip the case on another target.
+        win = self._emit("win-365-ja_JP")["skips"]
+        mac = self._emit("mac-365-ja_JP")["skips"]
+        self.assertIn("scale_50_flat_rows", win)
+        self.assertNotIn("scale_50_flat_rows", mac)
+
+    def test_rewrite_is_skipped_when_the_content_is_unchanged(self) -> None:
+        # The file is a CMake configure input; rewriting it unconditionally
+        # would retrigger a reconfigure on every run.
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
+        out = tmp / "skips.json"
+        emit_skip_list.emit(REPO_ROOT / "tests/divergence.yaml", "win-365-ja_JP", out)
+        first = out.stat().st_mtime_ns
+        emit_skip_list.emit(REPO_ROOT / "tests/divergence.yaml", "win-365-ja_JP", out)
+        self.assertEqual(out.stat().st_mtime_ns, first)
 
 
 if __name__ == "__main__":

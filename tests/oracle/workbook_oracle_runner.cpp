@@ -11,6 +11,14 @@
 
 #include "tests/oracle/json_reader.h"
 
+// Path to the JSON projection of tests/divergence.yaml that CMake emits at
+// configure time (tools/oracle/emit_skip_list.py). Empty disables the
+// registry lookup, which is the state in a build configured without the
+// oracle Python venv.
+#ifndef FORMULON_WORKBOOK_ORACLE_SKIP_FILE
+#define FORMULON_WORKBOOK_ORACLE_SKIP_FILE ""
+#endif
+
 #ifndef FORMULON_WORKBOOK_ORACLE_VARIANT_DIRS_DEFAULT
 #define FORMULON_WORKBOOK_ORACLE_VARIANT_DIRS_DEFAULT ""
 #endif
@@ -91,6 +99,43 @@ std::vector<std::pair<std::string, std::string>> configured_workbook_variant_dir
   }
   return out;
 }
+
+namespace {
+
+/// Loads `{case_id: reason}` from the divergence projection CMake emits.
+///
+/// The registry is a verification-time policy, so it must apply to
+/// goldens that were captured before the entry existed. Baking the skip
+/// into the golden -- which is all the generator can do -- would make a
+/// newly adjudicated divergence wait on a fresh Excel capture to take
+/// effect, which is the deadlock this whole path exists to avoid.
+/// Read once; a missing or malformed file simply yields no skips.
+const std::map<std::string, std::string>& registry_skips() {
+  static const std::map<std::string, std::string> table = [] {
+    std::map<std::string, std::string> out;
+    const std::string path = FORMULON_WORKBOOK_ORACLE_SKIP_FILE;
+    if (path.empty()) {
+      return out;
+    }
+    auto parsed = parse_json_file(path);
+    if (!parsed.has_value() || !parsed.value().is_object()) {
+      return out;
+    }
+    const JsonValue* skips = parsed.value().find("skips");
+    if (skips == nullptr || !skips->is_object()) {
+      return out;
+    }
+    for (const auto& [case_id, reason] : skips->as_object()) {
+      if (reason.is_string()) {
+        out.emplace(case_id, reason.as_string());
+      }
+    }
+    return out;
+  }();
+  return table;
+}
+
+}  // namespace
 
 std::vector<WorkbookOracleCase> load_workbook_oracle_cases(const std::string& golden_dir,
                                                            const std::string& variant_tag) {
@@ -178,6 +223,8 @@ std::vector<WorkbookOracleCase> load_workbook_oracle_cases(const std::string& go
       }
       if (const JsonValue* skipped_v = c.find("skipped"); skipped_v != nullptr && skipped_v->is_string()) {
         wc.skipped_reason = skipped_v->as_string();
+      } else if (const auto it = registry_skips().find(case_id); it != registry_skips().end()) {
+        wc.skipped_reason = it->second;
       }
       wc.environment = env;
       wc.variant = variant_tag;

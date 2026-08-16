@@ -450,9 +450,33 @@ target_include_directories(formulon_workbook_oracle_tests
     ${CMAKE_SOURCE_DIR}
 )
 
+# Project tests/divergence.yaml to JSON so the C++ verifier can honour a
+# skip-oracle entry that was registered after the golden was captured. The
+# generator can only bake a skip into the golden it writes, which would
+# make a newly adjudicated divergence wait on another Excel session.
+set(_workbook_oracle_skip_file "")
+if(Python3_Interpreter_FOUND AND _workbook_oracle_active)
+  set(_workbook_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/workbook_oracle_skips.json")
+  execute_process(
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+            --out ${_workbook_oracle_skip_file}
+    RESULT_VARIABLE _workbook_skip_rc
+    OUTPUT_QUIET
+    ERROR_QUIET
+  )
+  if(NOT _workbook_skip_rc EQUAL 0)
+    set(_workbook_oracle_skip_file "")
+  endif()
+endif()
+set_property(
+  DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_SOURCE_DIR}/tests/divergence.yaml"
+)
+
 target_compile_definitions(formulon_workbook_oracle_tests
   PRIVATE
     FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR="${_workbook_oracle_golden_dir}"
+    FORMULON_WORKBOOK_ORACLE_SKIP_FILE="${_workbook_oracle_skip_file}"
 )
 
 formulon_apply_warnings(formulon_workbook_oracle_tests)
