@@ -1586,6 +1586,86 @@ FM_API fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t
 FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, int32_t mode);
 
 /* -------------------------------------------------------------------------- */
+/* Clock seam (`NOW` / `TODAY` and pivot relative-period filters)             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief A wall-clock reading in local civil fields.
+ *
+ * Local calendar fields are carried rather than a timestamp so a pinned
+ * reading has no residual timezone interpretation: the same values
+ * reproduce the same results on any host, in any zone. Every field is
+ * `int32_t` for ABI stability, matching the wide-POD convention used by
+ * the other structs in this header.
+ *
+ * Ranges accepted by `fm_workbook_set_pinned_now`: `year` in
+ * `[1900, 9999]`, `month` in `[1, 12]`, `day` in `[1, N]` where `N` is the
+ * length of that month under the Gregorian leap rule, `hour` in `[0, 23]`,
+ * `minute` and `second` in `[0, 59]`. The pin is a calendar instant, not a
+ * normalising constructor: a month of `13` is rejected rather than rolled
+ * into the next year, because silently moving a host's pin would make the
+ * results it pinned unexplainable.
+ */
+typedef struct {
+  int32_t year;
+  int32_t month;
+  int32_t day;
+  int32_t hour;
+  int32_t minute;
+  int32_t second;
+} fm_civil_time_t;
+
+/**
+ * @brief Reads the workbook's pinned wall-clock reading, if any.
+ *
+ * @param wb         Workbook handle. Must not be NULL.
+ * @param out_now    Populated with the pin when one is set; zero-filled
+ *                   otherwise. Must not be NULL.
+ * @param out_pinned Set to `1` when a pin is in effect and `0` when the
+ *                   workbook follows the host clock. Must not be NULL —
+ *                   without it a zero-filled `out_now` is indistinguishable
+ *                   from a pin, since no civil field combination is
+ *                   reserved as a sentinel.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any argument is NULL.
+ */
+FM_API fm_status_t fm_workbook_pinned_now(const fm_workbook_t* wb, fm_civil_time_t* out_now, int32_t* out_pinned);
+
+/**
+ * @brief Pins every clock-dependent result in the workbook to one instant.
+ *
+ * `NOW`, `TODAY` and the pivot relative-period filters ("this month",
+ * "year to date", ...) each read the clock independently by default, which
+ * makes a recalc internally inconsistent across a midnight boundary and
+ * makes any such result untestable. Pinning gives the whole workbook one
+ * instant to agree on.
+ *
+ * This is model state, not file state: nothing in the OOXML package records
+ * it, so a save drops it and a reload comes back unpinned. Cached formula
+ * values are not recomputed here — drive `fm_workbook_recalc` (or an
+ * equivalent partial recalc) to see the pin take effect on existing cells.
+ *
+ * @param wb  Workbook handle. Must not be NULL.
+ * @param now The reading to pin. Must not be NULL, and every field must be
+ *            in the range documented on `fm_civil_time_t`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `now` is NULL;
+ *         `kInvalidArgument` if any field is out of range.
+ */
+FM_API fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_civil_time_t* now);
+
+/**
+ * @brief Releases the pin so clock-dependent results follow the host clock
+ *        again. Clearing an unpinned workbook succeeds and does nothing.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`.
+ */
+FM_API fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb);
+
+/* -------------------------------------------------------------------------- */
 /* Excel formula compatibility profile                                        */
 /* -------------------------------------------------------------------------- */
 

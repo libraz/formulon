@@ -17,6 +17,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "eval/date_time.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -894,6 +895,61 @@ extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, std::int32_t
                                "fm_workbook_set_calc_mode: unknown mode");
   }
   wb->workbook().set_calc_mode(resolved);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pinned_now(const fm_workbook_t* wb, fm_civil_time_t* out_now,
+                                              std::int32_t* out_pinned) {
+  clear_last_error();
+  if (wb == nullptr || out_now == nullptr || out_pinned == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_pinned_now: NULL argument");
+  }
+  *out_now = fm_civil_time_t{};
+  const auto& pinned = wb->workbook().pinned_now();
+  *out_pinned = pinned.has_value() ? 1 : 0;
+  if (pinned.has_value()) {
+    out_now->year = pinned->date.y;
+    out_now->month = static_cast<std::int32_t>(pinned->date.m);
+    out_now->day = static_cast<std::int32_t>(pinned->date.d);
+    out_now->hour = static_cast<std::int32_t>(pinned->time.h);
+    out_now->minute = static_cast<std::int32_t>(pinned->time.m);
+    out_now->second = static_cast<std::int32_t>(pinned->time.s);
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_civil_time_t* now) {
+  clear_last_error();
+  if (wb == nullptr || now == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_pinned_now: NULL argument");
+  }
+  // Validated rather than normalised: `days_from_civil` would happily roll
+  // month 13 into the next January, and a pin that silently moved would make
+  // every result computed under it unexplainable to the host that set it.
+  const bool in_range = now->year >= 1900 && now->year <= 9999 && now->month >= 1 && now->month <= 12 &&
+                        now->day >= 1 &&
+                        now->day <= static_cast<std::int32_t>(formulon::eval::date_time::days_in_month(
+                                        now->year, static_cast<unsigned>(now->month))) &&
+                        now->hour >= 0 && now->hour <= 23 && now->minute >= 0 && now->minute <= 59 &&
+                        now->second >= 0 && now->second <= 59;
+  if (!in_range) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_pinned_now: field out of range");
+  }
+  wb->workbook().set_pinned_now(formulon::eval::date_time::CivilTime{
+      {now->year, static_cast<unsigned>(now->month), static_cast<unsigned>(now->day)},
+      {static_cast<unsigned>(now->hour), static_cast<unsigned>(now->minute), static_cast<unsigned>(now->second)}});
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_clear_pinned_now: wb is NULL");
+  }
+  wb->workbook().clear_pinned_now();
   return 0;
 }
 

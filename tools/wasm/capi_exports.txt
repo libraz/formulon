@@ -81,6 +81,9 @@ fm_workbook_partial_recalc
 fm_workbook_set_iterative_progress
 fm_workbook_calc_mode
 fm_workbook_set_calc_mode
+fm_workbook_pinned_now
+fm_workbook_set_pinned_now
+fm_workbook_clear_pinned_now
 fm_workbook_excel_profile_id
 fm_workbook_set_excel_profile_id
 
