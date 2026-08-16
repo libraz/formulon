@@ -1222,21 +1222,29 @@ groups:
 
   # -------------------------------------------------------------------------
   # GROUPBY — Excel 365 dynamic-array group-and-aggregate. Returns a 2D
-  # spill of (key columns | aggregated values). Six perspectives cover
+  # spill of (key columns | aggregated values). Seven perspectives cover
   # bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch
   # (spill), unknown name -> #NAME?, field_headers out of range -> #VALUE!,
-  # filter_array length mismatch -> #VALUE!, and filter_array empty
-  # selection -> #CALC!.
+  # filter_array length mismatch -> #VALUE!, filter_array empty
+  # selection -> #CALC!, and a literal 0 in the sort_order slot -> #VALUE!.
+  #
+  # The two spill probes omit sort_order rather than passing 0: that
+  # argument is a signed column index with no zero member, so a literal 0
+  # is rejected before any aggregation runs. Passing it here would probe
+  # the rejection instead of the dispatch it names.
   # -------------------------------------------------------------------------
 
   - function: "GROUPBY"
     aspect: "dynamic-array group-aggregate"
     behaviors:
       - name: "bare SUM aggregator -> 2D spill"
-        probe: '=GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0, 0)'
-        expected: diverged
+        probe: '=GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0)'
+        expected: impl
       - name: "LAMBDA aggregator -> 2D spill"
-        probe: '=GROUPBY({"A";"B";"A";"C"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0, 0)'
+        probe: '=GROUPBY({"A";"B";"A";"C"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0)'
+        expected: impl
+      - name: "sort_order 0 -> #VALUE!"
+        probe: '=GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0, 0)'
         expected: diverged
       - name: "unknown bare aggregator name -> #NAME?"
         probe: '=GROUPBY({"A";"B"}, {1;2}, NOPE_THIS_IS_NOT_A_FUNCTION, 0, 0, 0)'
@@ -1253,21 +1261,28 @@ groups:
 
   # -------------------------------------------------------------------------
   # PIVOTBY — Excel 365 dynamic-array pivot. Returns a 2D spill of the
-  # cross-tabulation (row keys x col keys plus headers / totals). Six
+  # cross-tabulation (row keys x col keys plus headers / totals). Seven
   # perspectives parallel GROUPBY: bare-name aggregator dispatch (spill),
   # LAMBDA aggregator dispatch (spill), unknown name -> #NAME?,
   # field_headers out of range -> #VALUE!, filter_array length mismatch
-  # -> #VALUE!, filter_array empty selection -> error.
+  # -> #VALUE!, filter_array empty selection -> error, and a literal 0 in
+  # the row_sort_order slot -> #VALUE!.
+  #
+  # As with GROUPBY, the spill probes leave row_sort_order empty so they
+  # probe aggregator dispatch rather than the out-of-domain rejection.
   # -------------------------------------------------------------------------
 
   - function: "PIVOTBY"
     aspect: "dynamic-array pivot"
     behaviors:
       - name: "bare SUM aggregator -> 2D spill"
-        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0)'
-        expected: diverged
+        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, , 0)'
+        expected: impl
       - name: "LAMBDA aggregator -> 2D spill"
-        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, 0, 0, 0)'
+        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, , 0)'
+        expected: impl
+      - name: "row_sort_order 0 -> #VALUE!"
+        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0)'
         expected: diverged
       - name: "unknown bare aggregator name -> #NAME?"
         probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, NOPE_NAME, 0, 0, 0, 0, 0)'
