@@ -131,6 +131,105 @@ bool label_filter_passes(const PivotFilter& f, std::string_view label) {
   return true;
 }
 
+// ASCII-only case folding for authored caption comparisons.
+//
+// Excel matches a pivot caption filter the way it matches an AutoFilter
+// criterion: without regard to case. Only the ASCII range is folded here
+// — a full Unicode case mapping is a table this build does not carry, and
+// the pivot corpus that reaches these filters is field labels rather than
+// arbitrary text.
+constexpr char AsciiLower(char c) {
+  return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+}
+
+// Three-way ASCII-case-insensitive comparison, ordering by folded bytes
+// and breaking ties on length.
+int CaseInsensitiveCompare(std::string_view lhs, std::string_view rhs) {
+  const std::size_t common = lhs.size() < rhs.size() ? lhs.size() : rhs.size();
+  for (std::size_t i = 0; i < common; ++i) {
+    const char a = AsciiLower(lhs[i]);
+    const char b = AsciiLower(rhs[i]);
+    if (a != b) {
+      return a < b ? -1 : 1;
+    }
+  }
+  if (lhs.size() == rhs.size()) {
+    return 0;
+  }
+  return lhs.size() < rhs.size() ? -1 : 1;
+}
+
+bool CaseInsensitiveEquals(std::string_view lhs, std::string_view rhs) {
+  return lhs.size() == rhs.size() && CaseInsensitiveCompare(lhs, rhs) == 0;
+}
+
+bool CaseInsensitiveContains(std::string_view haystack, std::string_view needle) {
+  if (needle.empty()) {
+    return true;
+  }
+  if (needle.size() > haystack.size()) {
+    return false;
+  }
+  const std::size_t last = haystack.size() - needle.size();
+  for (std::size_t i = 0; i <= last; ++i) {
+    if (CaseInsensitiveEquals(haystack.substr(i, needle.size()), needle)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool CaseInsensitiveBeginsWith(std::string_view label, std::string_view value) {
+  return label.size() >= value.size() && CaseInsensitiveEquals(label.substr(0, value.size()), value);
+}
+
+bool CaseInsensitiveEndsWith(std::string_view label, std::string_view value) {
+  return label.size() >= value.size() && CaseInsensitiveEquals(label.substr(label.size() - value.size()), value);
+}
+
+// Evaluates one decoded `<filters>` caption entry against `label`.
+//
+// The ordering comparisons treat the label as text even when it renders
+// as digits, which is what a caption filter means: it filters what the
+// grid draws, not the underlying cache value.
+bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view label) {
+  const std::string_view value = f.value;
+  const auto between = [&]() {
+    return CaseInsensitiveCompare(label, value) >= 0 && CaseInsensitiveCompare(label, f.value_high) <= 0;
+  };
+  switch (f.predicate) {
+    case CaptionPredicate::Equal:
+      return CaseInsensitiveEquals(label, value);
+    case CaptionPredicate::NotEqual:
+      return !CaseInsensitiveEquals(label, value);
+    case CaptionPredicate::BeginsWith:
+      return CaseInsensitiveBeginsWith(label, value);
+    case CaptionPredicate::NotBeginsWith:
+      return !CaseInsensitiveBeginsWith(label, value);
+    case CaptionPredicate::EndsWith:
+      return CaseInsensitiveEndsWith(label, value);
+    case CaptionPredicate::NotEndsWith:
+      return !CaseInsensitiveEndsWith(label, value);
+    case CaptionPredicate::Contains:
+      return CaseInsensitiveContains(label, value);
+    case CaptionPredicate::NotContains:
+      return !CaseInsensitiveContains(label, value);
+    case CaptionPredicate::GreaterThan:
+      return CaseInsensitiveCompare(label, value) > 0;
+    case CaptionPredicate::GreaterThanOrEqual:
+      return CaseInsensitiveCompare(label, value) >= 0;
+    case CaptionPredicate::LessThan:
+      return CaseInsensitiveCompare(label, value) < 0;
+    case CaptionPredicate::LessThanOrEqual:
+      return CaseInsensitiveCompare(label, value) <= 0;
+    case CaptionPredicate::Between:
+      return between();
+    case CaptionPredicate::NotBetween:
+      return !between();
+  }
+  return true;
+}
+
 // Resolves the cache value a manual-filter item binds to, using the same
 // index `resolve_pivot_names` reads when it derives `PivotItem::name`, so the
 // two cannot disagree about which shared item an entry denotes. Returns
@@ -266,6 +365,20 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
       continue;
     }
     if (!with_display_string(v, [&](std::string_view label) { return label_filter_passes(f, label); })) {
+      return false;
+    }
+  }
+  // Authored `<filters>` caption entries, decoded by the OOXML reader.
+  // `field_index` is the source `fld` attribute, and OOXML keeps
+  // `<pivotFields>` parallel to the bound cache's fields, so it indexes
+  // `table.fields()` directly instead of resolving through a name. An
+  // index past the end is a malformed definition and filters nothing.
+  for (const AuthoredCaptionFilter& f : table.authored_caption_filters()) {
+    if (f.field_index >= table.fields().size()) {
+      continue;
+    }
+    const Value v = cell_value(cache, record, f.field_index);
+    if (!with_display_string(v, [&](std::string_view label) { return caption_filter_passes(f, label); })) {
       return false;
     }
   }

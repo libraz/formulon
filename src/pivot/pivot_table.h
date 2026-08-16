@@ -136,18 +136,31 @@ class PivotTable {
   //     `<filters>` block, so entries added here shape every evaluation for
   //     as long as this object lives and are gone after a save + reload;
   //   * it is never populated by the reader — an authored `<filters>` block
-  //     is retained verbatim in `raw_passthrough_xml()` and round-trips
-  //     byte-for-byte, but it does not appear here and does not take part
-  //     in evaluation, so a workbook carrying one evaluates against its
-  //     unfiltered records.
-  //
-  // Modelling `<filters>` structurally would mean owning a block whose
-  // schema position sits inside the verbatim tail bin, and authoring filter
-  // XML this version has no reference file to check against. The persisted
-  // filter surface Excel does round-trip here is `PivotField::items`
-  // visibility, which the reader and writer both model.
+  //     decodes into `authored_caption_filters()` instead, so a slicer
+  //     selection and a persisted filter never overwrite one another.
   const std::vector<PivotFilter>& active_filters() const { return active_filters_; }
   std::vector<PivotFilter>& mutable_active_filters() { return active_filters_; }
+
+  // Authored `<filters>` caption filters ------------------------------------
+  //
+  // Decoded from the OOXML `<filters>` block for evaluation only. The
+  // block itself stays in the verbatim tail bin (`raw_passthrough_xml_`)
+  // and the writer re-emits it from there, so this list is read-side
+  // state: populating it does not change a single byte of the round trip,
+  // and clearing it would not remove the filter from a saved file.
+  //
+  // Splitting the decode from the serialisation is what makes modelling
+  // `<filters>` affordable. Owning the block outright would mean
+  // authoring filter XML — including the nested `<autoFilter>` criteria —
+  // which this version has no Excel-produced reference file to check
+  // against. Reading it needs no such reference: the criteria reduce to a
+  // predicate over labels the bound cache already spells out.
+  //
+  // Only the caption family is decoded. Value and date filters
+  // (`valueGreaterThan`, `dateBetween`, the top-N `count` family, ...)
+  // stay passthrough-only for now and still evaluate unfiltered.
+  const std::vector<AuthoredCaptionFilter>& authored_caption_filters() const { return authored_caption_filters_; }
+  std::vector<AuthoredCaptionFilter>& mutable_authored_caption_filters() { return authored_caption_filters_; }
 
   // Most-recent evaluation result -------------------------------------------
   //
@@ -240,6 +253,7 @@ class PivotTable {
   bool grand_totals_rows_ = true;
   bool grand_totals_cols_ = true;
   std::vector<PivotFilter> active_filters_;
+  std::vector<AuthoredCaptionFilter> authored_caption_filters_;
   std::string raw_passthrough_xml_;
   std::string raw_passthrough_after_row_fields_;
   std::string raw_passthrough_after_col_fields_;

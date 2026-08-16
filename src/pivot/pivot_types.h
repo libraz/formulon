@@ -158,6 +158,48 @@ struct PivotFilter {
   std::uint32_t data_field_index = 0;
 };
 
+/// Comparison an authored OOXML `<filters>` caption filter applies to a
+/// field's rendered labels.
+///
+/// This mirrors the caption half of `ST_PivotFilterType` one-to-one.
+/// It is deliberately separate from `FilterType`: `FilterType` is the
+/// embedder-facing surface exposed through the C ABI and the bindings,
+/// while these values only ever originate from a file the reader
+/// decodes, so widening them costs no ABI compatibility.
+///
+/// Ordering comparisons (`GreaterThan` .. `NotBetween`) compare labels
+/// as text, which is what Excel does for a caption filter even when the
+/// labels happen to look numeric.
+enum class CaptionPredicate : std::uint8_t {
+  Equal = 0,
+  NotEqual = 1,
+  BeginsWith = 2,
+  NotBeginsWith = 3,
+  EndsWith = 4,
+  NotEndsWith = 5,
+  Contains = 6,
+  NotContains = 7,
+  GreaterThan = 8,
+  GreaterThanOrEqual = 9,
+  LessThan = 10,
+  LessThanOrEqual = 11,
+  Between = 12,
+  NotBetween = 13,
+};
+
+/// One decoded `<filter>` entry from an authored `<filters>` block.
+///
+/// `field_index` is the source `fld` attribute: an index into
+/// `<pivotFields>`, which OOXML keeps parallel to the bound cache's
+/// fields. `value_high` carries the upper bound for `Between` /
+/// `NotBetween` and is unused otherwise.
+struct AuthoredCaptionFilter {
+  std::uint32_t field_index = 0;
+  CaptionPredicate predicate = CaptionPredicate::Equal;
+  std::string value;
+  std::string value_high;
+};
+
 /// Sort directive for a pivot field.
 struct SortSpec {
   bool ascending = true;

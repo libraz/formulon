@@ -321,6 +321,150 @@ Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::Pivot
   return Expected<void, Error>::Ok();
 }
 
+/// Maps a `<filter type="...">` body to a `CaptionPredicate`.
+///
+/// Returns `nullopt` for every non-caption member of `ST_PivotFilterType`
+/// (the value, date, and relative-period families, plus `unknown`). Those
+/// stay passthrough-only: the block is still re-emitted verbatim, it just
+/// does not take part in evaluation.
+std::optional<pivot::CaptionPredicate> ParseCaptionPredicate(std::string_view text) {
+  struct Entry {
+    std::string_view name;
+    pivot::CaptionPredicate predicate;
+  };
+  static constexpr Entry kEntries[] = {
+      {"captionEqual", pivot::CaptionPredicate::Equal},
+      {"captionNotEqual", pivot::CaptionPredicate::NotEqual},
+      {"captionBeginsWith", pivot::CaptionPredicate::BeginsWith},
+      {"captionNotBeginsWith", pivot::CaptionPredicate::NotBeginsWith},
+      {"captionEndsWith", pivot::CaptionPredicate::EndsWith},
+      {"captionNotEndsWith", pivot::CaptionPredicate::NotEndsWith},
+      {"captionContains", pivot::CaptionPredicate::Contains},
+      {"captionNotContains", pivot::CaptionPredicate::NotContains},
+      {"captionGreaterThan", pivot::CaptionPredicate::GreaterThan},
+      {"captionGreaterThanOrEqual", pivot::CaptionPredicate::GreaterThanOrEqual},
+      {"captionLessThan", pivot::CaptionPredicate::LessThan},
+      {"captionLessThanOrEqual", pivot::CaptionPredicate::LessThanOrEqual},
+      {"captionBetween", pivot::CaptionPredicate::Between},
+      {"captionNotBetween", pivot::CaptionPredicate::NotBetween},
+  };
+  for (const Entry& e : kEntries) {
+    if (e.name == text) {
+      return e.predicate;
+    }
+  }
+  return std::nullopt;
+}
+
+/// Strips the wildcards Excel bakes into a caption filter's criterion.
+///
+/// The `type` attribute already names the predicate, but the criterion
+/// Excel writes underneath repeats it as an `autoFilter` wildcard
+/// pattern: `captionBeginsWith` stores `"North*"`, `captionEndsWith`
+/// `"*North"`, and `captionContains` `"*North*"`. Matching those against
+/// a label verbatim would look for a literal asterisk, so the marker the
+/// predicate implies is removed here and nowhere else.
+std::string_view StripPredicateWildcards(std::string_view val, pivot::CaptionPredicate predicate) {
+  const bool leading =
+      predicate == pivot::CaptionPredicate::EndsWith || predicate == pivot::CaptionPredicate::NotEndsWith ||
+      predicate == pivot::CaptionPredicate::Contains || predicate == pivot::CaptionPredicate::NotContains;
+  const bool trailing =
+      predicate == pivot::CaptionPredicate::BeginsWith || predicate == pivot::CaptionPredicate::NotBeginsWith ||
+      predicate == pivot::CaptionPredicate::Contains || predicate == pivot::CaptionPredicate::NotContains;
+  if (leading && !val.empty() && val.front() == '*') {
+    val.remove_prefix(1);
+  }
+  if (trailing && !val.empty() && val.back() == '*') {
+    val.remove_suffix(1);
+  }
+  return val;
+}
+
+/// Collects the criterion strings a `<filter>`'s nested `<autoFilter>`
+/// carries, in document order.
+///
+/// Two shapes reach the same place: `<customFilters>` holds one
+/// `<customFilter val="...">` for a single-sided comparison and two for a
+/// `Between`, while a plain equality is also spelled as a `<filters>`
+/// list of `<filter val="...">`. Both are read; anything else (a
+/// `<top10>` or a `<dynamicFilter>`) contributes no criterion and leaves
+/// the entry to be dropped by the caller.
+std::vector<std::string_view> CollectFilterCriteria(const pugi::xml_node& filter_node) {
+  std::vector<std::string_view> out;
+  const pugi::xml_node column = filter_node.child("autoFilter").child("filterColumn");
+  if (!column) {
+    return out;
+  }
+  if (pugi::xml_node custom = column.child("customFilters"); custom) {
+    for (pugi::xml_node c = custom.child("customFilter"); c; c = c.next_sibling("customFilter")) {
+      if (pugi::xml_attribute val = c.attribute("val"); val) {
+        out.emplace_back(val.value());
+      }
+    }
+    return out;
+  }
+  if (pugi::xml_node plain = column.child("filters"); plain) {
+    for (pugi::xml_node f = plain.child("filter"); f; f = f.next_sibling("filter")) {
+      if (pugi::xml_attribute val = f.attribute("val"); val) {
+        out.emplace_back(val.value());
+      }
+    }
+  }
+  return out;
+}
+
+/// Decodes the caption entries of an authored `<filters>` block.
+///
+/// The block stays in the verbatim passthrough tail regardless — this
+/// only populates the evaluation-side view, so a decode that drops an
+/// entry costs fidelity on save nothing. An entry is dropped when its
+/// type is outside the caption family or when it carries no criterion
+/// (`Between` needs two, everything else one).
+///
+/// Excel writes the criterion twice. `stringValue1` / `stringValue2` on
+/// the `<filter>` element carry it as entered, while the nested
+/// `<autoFilter>` repeats it as a wildcard pattern. The direct attributes
+/// win because they need no pattern interpretation; the nested criterion
+/// is the fallback for a producer that omits them.
+void ParseAuthoredFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
+  for (pugi::xml_node f = parent.child("filter"); f; f = f.next_sibling("filter")) {
+    const auto predicate_or = ParseCaptionPredicate(attr_str(f, "type"));
+    if (!predicate_or) {
+      continue;
+    }
+    const bool ranged =
+        *predicate_or == pivot::CaptionPredicate::Between || *predicate_or == pivot::CaptionPredicate::NotBetween;
+    const pugi::xml_attribute direct_low = f.attribute("stringValue1");
+    const pugi::xml_attribute direct_high = f.attribute("stringValue2");
+    const bool direct = direct_low && (!ranged || direct_high);
+
+    std::string low;
+    std::string high;
+    if (direct) {
+      low.assign(direct_low.value());
+      if (ranged) {
+        high.assign(direct_high.value());
+      }
+    } else {
+      const std::vector<std::string_view> criteria = CollectFilterCriteria(f);
+      if (criteria.size() < (ranged ? 2U : 1U)) {
+        continue;
+      }
+      low.assign(StripPredicateWildcards(criteria[0], *predicate_or));
+      if (ranged) {
+        high.assign(criteria[1]);
+      }
+    }
+
+    pivot::AuthoredCaptionFilter entry;
+    entry.field_index = parse_xml_u32_attr(f.attribute("fld"), 0U);
+    entry.predicate = *predicate_or;
+    entry.value = std::move(low);
+    entry.value_high = std::move(high);
+    out->mutable_authored_caption_filters().push_back(std::move(entry));
+  }
+}
+
 }  // namespace
 
 Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector<std::uint8_t>& definition_bytes) {
@@ -423,6 +567,13 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     if (auto status = ParseDataFields(data, &table); !status) {
       return status.error();
     }
+  }
+  // `<filters>` is decoded for evaluation but deliberately left out of
+  // `kRecognized` below, so the block still reaches the passthrough tail
+  // and the writer keeps re-emitting it byte-for-byte. See
+  // `PivotTable::authored_caption_filters`.
+  if (pugi::xml_node filters = root.child("filters"); filters) {
+    ParseAuthoredFilters(filters, &table);
   }
   // Capture any remaining direct children of <pivotTableDefinition> that
   // we do not model structurally into position-keyed raw-XML buffers, so

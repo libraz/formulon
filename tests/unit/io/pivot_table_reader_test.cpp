@@ -347,11 +347,13 @@ TEST(PivotTableReader, UnmodelledChildrenCapturedAsPassthrough) {
   EXPECT_EQ(passthrough.find("<location"), std::string::npos);
 }
 
-// `<filters>` is an authored element this version does not model. It has to
-// survive a read -> write round trip byte-for-byte and exactly once, and it
-// must not silently appear in `active_filters()`, which is a session-only
-// list the writer never emits (see `PivotTable::active_filters`).
-TEST(PivotTableReader, AuthoredFiltersRoundTripAsPassthroughAndStayOutOfTheModel) {
+// `<filters>` is decoded for evaluation but serialised by nobody: the block
+// has to survive a read -> write round trip byte-for-byte and exactly once
+// out of the passthrough tail, while the decoded view lands in
+// `authored_caption_filters()`. It must still not appear in
+// `active_filters()`, which is a session-only list the writer never emits
+// (see `PivotTable::active_filters`).
+TEST(PivotTableReader, AuthoredFiltersDecodeForEvaluationAndStillRoundTripAsPassthrough) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
   xml.append("<location ref=\"A1:B2\"/>");
@@ -368,6 +370,10 @@ TEST(PivotTableReader, AuthoredFiltersRoundTripAsPassthroughAndStayOutOfTheModel
   ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
   const pivot::PivotTable& table = table_or.value();
   EXPECT_TRUE(table.active_filters().empty());
+  ASSERT_EQ(table.authored_caption_filters().size(), 1U);
+  EXPECT_EQ(table.authored_caption_filters()[0].field_index, 0U);
+  EXPECT_EQ(table.authored_caption_filters()[0].predicate, pivot::CaptionPredicate::Equal);
+  EXPECT_EQ(table.authored_caption_filters()[0].value, "North");
   EXPECT_NE(table.raw_passthrough_xml().find("<filters"), std::string::npos);
   EXPECT_NE(table.raw_passthrough_xml().find("val=\"North\""), std::string::npos);
 
@@ -381,7 +387,83 @@ TEST(PivotTableReader, AuthoredFiltersRoundTripAsPassthroughAndStayOutOfTheModel
   auto reparsed_or = read_pivot_table_definition(Bytes(round));
   ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
   EXPECT_TRUE(reparsed_or.value().active_filters().empty());
+  // The decode is stable across the round trip, and the writer still emits
+  // the block from the passthrough tail rather than from the decoded view.
+  EXPECT_EQ(reparsed_or.value().authored_caption_filters().size(), 1U);
   EXPECT_EQ(write_pivot_table_definition(reparsed_or.value()), round);
+}
+
+// Excel repeats the predicate inside the criterion as an `autoFilter`
+// wildcard pattern, so the decode has to strip the marker the `type`
+// already names. `<top10>`-driven and value-family entries carry no
+// caption criterion and are skipped rather than decoded into a wrong
+// predicate.
+TEST(PivotTableReader, AuthoredCaptionFilterVariantsDecodeAndNonCaptionTypesAreSkipped) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"5\">");
+  xml.append(
+      "<filter fld=\"1\" type=\"captionBeginsWith\"><autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
+      "<customFilters><customFilter operator=\"equal\" val=\"No*\"/></customFilters>"
+      "</filterColumn></autoFilter></filter>");
+  xml.append(
+      "<filter fld=\"2\" type=\"captionContains\"><autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
+      "<customFilters><customFilter operator=\"equal\" val=\"*or*\"/></customFilters>"
+      "</filterColumn></autoFilter></filter>");
+  xml.append(
+      "<filter fld=\"3\" type=\"captionEndsWith\"><autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
+      "<customFilters><customFilter operator=\"equal\" val=\"*th\"/></customFilters>"
+      "</filterColumn></autoFilter></filter>");
+  xml.append(
+      "<filter fld=\"4\" type=\"captionBetween\"><autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
+      "<customFilters and=\"1\"><customFilter operator=\"greaterThanOrEqual\" val=\"B\"/>"
+      "<customFilter operator=\"lessThanOrEqual\" val=\"M\"/></customFilters>"
+      "</filterColumn></autoFilter></filter>");
+  // Value family: outside the caption set, so passthrough-only.
+  xml.append(
+      "<filter fld=\"5\" type=\"valueGreaterThan\" iMeasureFld=\"0\"><autoFilter ref=\"A3:A9\">"
+      "<filterColumn colId=\"0\"><customFilters><customFilter operator=\"greaterThan\" val=\"100\"/>"
+      "</customFilters></filterColumn></autoFilter></filter>");
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const auto& decoded = table_or.value().authored_caption_filters();
+  ASSERT_EQ(decoded.size(), 4U);
+  EXPECT_EQ(decoded[0].field_index, 1U);
+  EXPECT_EQ(decoded[0].predicate, pivot::CaptionPredicate::BeginsWith);
+  EXPECT_EQ(decoded[0].value, "No");
+  EXPECT_EQ(decoded[1].predicate, pivot::CaptionPredicate::Contains);
+  EXPECT_EQ(decoded[1].value, "or");
+  EXPECT_EQ(decoded[2].predicate, pivot::CaptionPredicate::EndsWith);
+  EXPECT_EQ(decoded[2].value, "th");
+  EXPECT_EQ(decoded[3].predicate, pivot::CaptionPredicate::Between);
+  EXPECT_EQ(decoded[3].value, "B");
+  EXPECT_EQ(decoded[3].value_high, "M");
+  // Every entry, decoded or not, is still re-emitted from the passthrough.
+  const std::string round = write_pivot_table_definition(table_or.value());
+  EXPECT_NE(round.find("valueGreaterThan"), std::string::npos) << round;
+  EXPECT_EQ(CountOccurrences(round, "<filter "), 5U) << round;
+}
+
+// A plain equality is also spelled as a `<filters>` list of `<filter val>`
+// rather than a `<customFilters>` comparison; both reach the same decode.
+TEST(PivotTableReader, AuthoredCaptionFilterAcceptsThePlainFilterListShape) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append(
+      "<filters count=\"1\"><filter fld=\"0\" type=\"captionEqual\"><autoFilter ref=\"A3:A9\">"
+      "<filterColumn colId=\"0\"><filters><filter val=\"South\"/></filters>"
+      "</filterColumn></autoFilter></filter></filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  ASSERT_EQ(table_or.value().authored_caption_filters().size(), 1U);
+  EXPECT_EQ(table_or.value().authored_caption_filters()[0].value, "South");
 }
 
 TEST(PivotTableReader, ShowDataAsAttributesAreParsed) {

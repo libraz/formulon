@@ -1276,6 +1276,99 @@ TEST(PivotEvaluator, LabelBeginsWithFilterDropsRecords) {
   EXPECT_EQ(r.rows[0].label, "North");
 }
 
+// ---------------------------------------------------------------------------
+// 8e. AuthoredCaptionFilter (decoded from an OOXML `<filters>` block)
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, AuthoredCaptionEqualFilterDropsRecords) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredCaptionFilter f;
+  f.field_index = 0;  // Region
+  f.predicate = CaptionPredicate::Equal;
+  f.value = "North";
+  table.mutable_authored_caption_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "North");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 175.0);  // 100 + 50 + 25
+}
+
+// Excel matches a caption filter the way it matches an AutoFilter
+// criterion, so a criterion that differs only in case still selects.
+TEST(PivotEvaluator, AuthoredCaptionFilterIgnoresCase) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredCaptionFilter f;
+  f.field_index = 0;
+  f.predicate = CaptionPredicate::Equal;
+  f.value = "nOrTh";
+  table.mutable_authored_caption_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "North");
+}
+
+TEST(PivotEvaluator, AuthoredCaptionNotContainsFilterDropsMatchingRecords) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredCaptionFilter f;
+  f.field_index = 0;
+  f.predicate = CaptionPredicate::NotContains;
+  f.value = "outh";
+  table.mutable_authored_caption_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "North");
+}
+
+TEST(PivotEvaluator, AuthoredCaptionBetweenFilterKeepsTheInclusiveRange) {
+  PivotCache cache = build_basic_cache();
+  // Row on Product so the range spans "Gadget" / "Widget".
+  PivotTable table = build_sum_amount_table(/*row=*/{1}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredCaptionFilter f;
+  f.field_index = 1;  // Product
+  f.predicate = CaptionPredicate::Between;
+  f.value = "A";
+  f.value_high = "M";
+  table.mutable_authored_caption_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "Gadget");
+  EXPECT_DOUBLE_EQ(r_or.value().values[0][0][0].as_number(), 350.0);  // 50 + 300
+}
+
+// A `fld` past the end of `<pivotFields>` is a malformed definition; it
+// must filter nothing rather than drop every record.
+TEST(PivotEvaluator, AuthoredCaptionFilterWithOutOfRangeFieldIsInert) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredCaptionFilter f;
+  f.field_index = 99;
+  f.predicate = CaptionPredicate::Equal;
+  f.value = "North";
+  table.mutable_authored_caption_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  EXPECT_EQ(r_or.value().rows.size(), 2U);
+}
+
 TEST(PivotEvaluator, ValueTop10FilterKeepsTopRows) {
   // Use a richer cache so ranking is meaningful.
   PivotCache cache;
