@@ -6,8 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T23:41:31Z",
-    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-15T23:41:31Z"
+    "generated_at": "2026-08-16T02:04:24Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-16T02:04:24Z"
   },
   "cases": [
     {
@@ -78,6 +78,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -150,6 +197,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -200,19 +294,17 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk).",
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[29] pages=8 at zoom 50, where zoom 100 gives h=[]; breaks do not shrink as the scale does, and at 25 they grow.",
       "observed": {
         "print": {
           "print_area": "A1:H30",
-          "h_breaks": [
-            29
-          ],
+          "h_breaks": [],
           "v_breaks": [
             2,
             4,
             6
           ],
-          "pages": 8,
+          "pages": 4,
           "applied_page_setup": {
             "zoom": 50,
             "fit_to_width": false,
@@ -225,6 +317,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -275,12 +414,12 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk).",
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[1,2,3,4,5,6,7] h=[18] pages=16 at zoom 25; breaks do not shrink as the scale does, and at 25 they grow.",
       "observed": {
         "print": {
           "print_area": "A1:H30",
           "h_breaks": [
-            18
+            23
           ],
           "v_breaks": [
             1,
@@ -304,6 +443,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -378,6 +564,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -448,6 +681,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -522,6 +802,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -594,6 +921,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -726,6 +1100,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -790,6 +1211,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -870,6 +1338,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -927,11 +1442,9 @@
       "expect": {
         "print": {
           "print_area": "A1:D40",
-          "h_breaks": [
-            39
-          ],
+          "h_breaks": [],
           "v_breaks": [],
-          "pages": 2,
+          "pages": 1,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,
@@ -944,6 +1457,59 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              51.4286,
+              51.4286,
+              51.4286,
+              51.4286
+            ],
+            "row_heights_pt": [
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -1033,11 +1599,9 @@
       "expect": {
         "print": {
           "print_area": "A1:D40",
-          "h_breaks": [
-            39
-          ],
+          "h_breaks": [],
           "v_breaks": [],
-          "pages": 2,
+          "pages": 1,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,
@@ -1050,6 +1614,59 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              51.4286,
+              51.4286,
+              51.4286,
+              51.4286
+            ],
+            "row_heights_pt": [
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -1171,11 +1788,9 @@
       "expect": {
         "print": {
           "print_area": "A1:D40",
-          "h_breaks": [
-            39
-          ],
+          "h_breaks": [],
           "v_breaks": [],
-          "pages": 2,
+          "pages": 1,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,
@@ -1188,6 +1803,59 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              51.4286,
+              51.4286,
+              51.4286,
+              51.4286
+            ],
+            "row_heights_pt": [
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -1222,7 +1890,7 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk).",
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow.",
       "observed": {
         "print": {
           "print_area": "A1:H1",
@@ -1245,6 +1913,24 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -1291,7 +1977,7 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk).",
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow.",
       "observed": {
         "print": {
           "print_area": "A1:H30",
@@ -1314,6 +2000,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -1370,6 +2103,24 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -1438,6 +2189,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }

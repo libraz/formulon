@@ -6,8 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T23:41:31Z",
-    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-15T23:41:31Z"
+    "generated_at": "2026-08-16T02:04:24Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-16T02:04:24Z"
   },
   "cases": [
     {
@@ -109,8 +109,7 @@
           ]
         }
       },
-      "skipped": "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted.",
-      "observed": {
+      "expect": {
         "pivot": {
           "anchor": "Report!A1",
           "rows": 6,
@@ -308,8 +307,7 @@
           ]
         }
       },
-      "skipped": "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted.",
-      "observed": {
+      "expect": {
         "pivot": {
           "anchor": "Report!A1",
           "rows": 4,

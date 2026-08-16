@@ -6,8 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T23:41:31Z",
-    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-15T23:41:31Z"
+    "generated_at": "2026-08-16T02:04:24Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-16T02:04:24Z"
   },
   "cases": [
     {
@@ -62,6 +62,24 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -102,11 +120,9 @@
       "expect": {
         "print": {
           "print_area": "A1:A30",
-          "h_breaks": [
-            29
-          ],
+          "h_breaks": [],
           "v_breaks": [],
-          "pages": 2,
+          "pages": 1,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,
@@ -119,6 +135,46 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              51.4286
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -175,6 +231,26 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              51.4286
+            ],
+            "row_heights_pt": [
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -231,6 +307,22 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              51.4286,
+              51.4286,
+              51.4286,
+              51.4286,
+              51.4286,
+              51.4286
+            ],
+            "row_heights_pt": [
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -292,6 +384,33 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              51.4286,
+              51.4286,
+              51.4286,
+              51.4286,
+              51.4286,
+              51.4286
+            ],
+            "row_heights_pt": [
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -331,10 +450,9 @@
           "print_area": "A1:H1",
           "h_breaks": [],
           "v_breaks": [
-            3,
-            6
+            4
           ],
-          "pages": 3,
+          "pages": 2,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,
@@ -347,6 +465,24 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -407,6 +543,53 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0,
+              171.0
+            ],
+            "row_heights_pt": [
+              79.7143,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              79.7143
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -462,6 +645,11 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
@@ -515,8 +703,8 @@
           "h_breaks": [],
           "v_breaks": [
             3,
-            6,
-            6
+            7,
+            7
           ],
           "pages": 6,
           "applied_page_setup": {
@@ -531,6 +719,29 @@
               "header": 0.3,
               "footer": 0.3
             }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              115.2857,
+              115.2857,
+              115.2857,
+              115.2857,
+              115.2857,
+              115.2857,
+              115.2857,
+              115.2857
+            ],
+            "row_heights_pt": [
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714,
+              14.5714
+            ],
+            "page_width_pt": null,
+            "page_height_pt": null,
+            "normal_font": "Calibri 11"
           }
         }
       }
