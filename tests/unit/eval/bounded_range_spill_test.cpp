@@ -42,7 +42,10 @@ namespace formulon {
 namespace eval {
 namespace {
 
-Sheet& RecalcWith(Workbook& wb, std::uint32_t row, std::uint32_t col, const std::string& formula) {
+// `formula` is a `const char*` so the call creates no temporary: the returned
+// reference points into `wb`, but any temporary argument makes GCC read the
+// result as possibly dangling (-Wdangling-reference).
+Sheet& RecalcWith(Workbook& wb, std::uint32_t row, std::uint32_t col, const char* formula) {
   EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, col, formula)));
   EXPECT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
   return wb.sheet(0);

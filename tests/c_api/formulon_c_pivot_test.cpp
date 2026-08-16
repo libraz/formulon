@@ -50,6 +50,18 @@ struct PartFile {
   std::string_view body;
 };
 
+// A foreign-ABI caller can put any int-sized value into an enum field, which is
+// exactly what the C surface has to reject. Writing the bytes reproduces that
+// without a constant conversion: an enumerator outside the enum's implied value
+// range is unspecified, and GCC rejects it under -Wconversion.
+template <typename Enum>
+Enum RawEnumValue(std::uint32_t raw) {
+  static_assert(sizeof(Enum) == sizeof(std::uint32_t), "C ABI enums are int-sized");
+  Enum value{};
+  std::memcpy(&value, &raw, sizeof(value));
+  return value;
+}
+
 std::vector<std::uint8_t> BuildZip(const std::vector<PartFile>& parts) {
   mz_zip_archive writer{};
   EXPECT_NE(mz_zip_writer_init_heap(&writer, 0, 4096), MZ_FALSE);
@@ -1131,7 +1143,7 @@ TEST(FormulonCApiPivot, PivotFilterAddRejectsRawAxisAndTypeWithoutMutation) {
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
 
   fm_pivot_filter_spec_t spec{};
-  spec.axis = static_cast<fm_pivot_axis_t>(99);
+  spec.axis = RawEnumValue<fm_pivot_axis_t>(99);
   spec.field_name = "Region";
   spec.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
   spec.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
@@ -1145,7 +1157,7 @@ TEST(FormulonCApiPivot, PivotFilterAddRejectsRawAxisAndTypeWithoutMutation) {
   EXPECT_EQ(count, 0U);
 
   spec.axis = FM_PIVOT_AXIS_ROW;
-  spec.type = static_cast<fm_pivot_filter_type_t>(99);
+  spec.type = RawEnumValue<fm_pivot_filter_type_t>(99);
   EXPECT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), invalid);
   ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &count), 0);
   EXPECT_EQ(count, 0U);
