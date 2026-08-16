@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A workbook-level clock seam, so results that depend on when they are
+  computed can be pinned to one instant. `NOW`, `TODAY` and the pivot
+  relative-period filters otherwise each read the host clock independently,
+  which makes a recalc internally inconsistent across a midnight boundary
+  and makes any such result untestable. It reaches the C ABI as
+  `fm_workbook_pinned_now` / `fm_workbook_set_pinned_now` /
+  `fm_workbook_clear_pinned_now` over a new 24-byte `fm_civil_time_t`, WASM
+  and the native Node addon as `pinnedNow()` / `setPinnedNow(...)` /
+  `clearPinnedNow()`, and Python as `pinned_now()` / `set_pinned_now(...)` /
+  `clear_pinned_now()`. The reading is carried as local civil fields rather
+  than a timestamp, so a pin has no residual timezone interpretation and
+  reproduces identically on any host. It is model state, not file state: a
+  save does not record it and a reloaded workbook comes back unpinned, and
+  an unpinned workbook follows the host clock exactly as before. A pin is a
+  calendar instant rather than a normalising constructor — a month of 13 is
+  rejected instead of rolled into the next year. Purely additive.
+- Authored pivot relative-period and top-N percent / sum filters are now
+  evaluated instead of skipped. Thirteen relative-period families ("this
+  month", "year to date", ...) prune records against the workbook clock
+  before aggregation, and the two running-total flavours of the top-10
+  dialog rank an axis leaf by its aggregate and accumulate in descending
+  order until the running total first reaches the target, keeping the leaf
+  that crosses it — `percent` reading the target as a share of the axis
+  total and `sum` as an absolute amount. The three top-N flavours share a
+  byte-identical `<top10>` element and are told apart only by the filter's
+  `type`, so reading one as another silently produced a different table.
+  Week-relative families and the recurring `M1`..`M12` / `Q1`..`Q4` families
+  stay unevaluated and remain registered as a divergence.
 - Data-bar `x14` settings on every binding. `gradient`, `axisPosition`,
   `negativeFill`, `border`, `negativeBorder` and `axisColor` reach WASM and
   the native Node addon on the `dataBar` object, and Python as the matching
