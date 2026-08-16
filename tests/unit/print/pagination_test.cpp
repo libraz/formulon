@@ -72,21 +72,28 @@ TEST(PaginationTest, SingleSmallPrintAreaIsOnePage) {
   EXPECT_TRUE(result.value().v_breaks.empty());
 }
 
-TEST(PaginationTest, WideTableSuppressesAutoVerticalBreaks) {
+TEST(PaginationTest, WideTableWrapsOntoFurtherPageColumns) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  // 20 very wide columns (60 char units ~= 315 pt each) would overrun
-  // the ~494 pt A4 body width several times. Excel's PageBreakPreview
-  // does not auto-break columns at explicit print scale -- the overflow
-  // clips at the right margin -- and Formulon's pagination mirrors
-  // that. Only manually-inserted column breaks contribute.
+  // 20 very wide columns (60 char units ~= 315 pt each) overrun the ~494 pt
+  // A4 body width several times, so the overflow wraps onto further
+  // page-columns. The column axis breaks on the body width exactly as the
+  // row axis breaks on the body height; it does not clip at the right
+  // margin. Breaks are ascending, strictly inside the area, and each one
+  // starts a page.
   SetColumnWidth(&sheet, 0, 19, 60.0);
   wb.set_defined_names({PrintArea("Sheet1!$A$1:$T$5", 0)});
 
   auto result = paginate(wb, 0);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  EXPECT_TRUE(result.value().v_breaks.empty());
-  EXPECT_EQ(result.value().page_count, 1U);
+  const std::vector<std::uint32_t>& breaks = result.value().v_breaks;
+  ASSERT_FALSE(breaks.empty());
+  for (std::size_t i = 1; i < breaks.size(); ++i) {
+    EXPECT_LT(breaks[i - 1], breaks[i]);
+  }
+  EXPECT_GT(breaks.front(), 0U);
+  EXPECT_LE(breaks.back(), 19U);
+  EXPECT_EQ(result.value().page_count, breaks.size() + 1U);
 }
 
 TEST(PaginationTest, TallTableForcesHorizontalBreak) {

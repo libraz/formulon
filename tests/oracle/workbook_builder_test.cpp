@@ -300,12 +300,11 @@ JsonValue print_spec(JsonValue print_block) {
 
 }  // namespace
 
-TEST(WorkbookBuilderPrint, WideTableSuppressesAutoVerticalBreaks) {
-  // An 8-column print area whose geometry would overflow a single A4
-  // page-wide at scale=100. Excel's PageBreakPreview never auto-breaks
-  // columns for an explicit-scale print -- the overflow is clipped on
-  // the right rather than wrapped, matching the print_pagination.wide_
-  // table_vertical_breaks oracle case (v=[] pages=1 in golden).
+TEST(WorkbookBuilderPrint, WideTableWrapsOntoFurtherPageColumns) {
+  // An 8-column print area whose geometry overflows a single A4 page-wide
+  // at scale=100. The overflow wraps onto further page-columns; it is not
+  // clipped at the right margin, and the column axis breaks on the body
+  // width exactly as the row axis breaks on the body height.
   JsonValue widths = jobj({{"A:H", jnum(kWideColumnChars)}});
   JsonValue spec = jobj({
       {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"H1", text_cell("x")}})}})},
@@ -325,9 +324,13 @@ TEST(WorkbookBuilderPrint, WideTableSuppressesAutoVerticalBreaks) {
   ASSERT_TRUE(static_cast<bool>(pag_or)) << pag_or.error().message;
   const print::PaginationResult& pag = pag_or.value();
 
+  // A single row of content never breaks horizontally.
   EXPECT_TRUE(pag.h_breaks.empty());
-  EXPECT_TRUE(pag.v_breaks.empty());
-  EXPECT_EQ(pag.page_count, 1U);
+  // The exact break positions follow the width model, which is calibrated
+  // against the oracle; what this pins is that the axis breaks at all and
+  // that the page count is the number of page-columns it produced.
+  EXPECT_FALSE(pag.v_breaks.empty());
+  EXPECT_EQ(pag.page_count, pag.v_breaks.size() + 1U);
 }
 
 TEST(WorkbookBuilderPrint, TallTableForcesHorizontalBreak) {
@@ -509,11 +512,56 @@ TEST(WorkbookBuilderPrint, HidingAndSizingTheSameColumnStayIndependent) {
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const SheetLayout& layout = built_or.value().workbook->sheet(built_or.value().sheet_index).layout();
 
+  // The hidden span must come first: both pagination and ColumnWidthChars
+  // resolve a column against the first matching span, so a width span that
+  // covers the hidden column would otherwise mask it.
   ASSERT_EQ(layout.columns.size(), 2U);
-  EXPECT_FALSE(layout.columns[0].hidden);
-  EXPECT_EQ(layout.columns[0].width, kWideColumnChars);
-  EXPECT_TRUE(layout.columns[1].hidden);
-  EXPECT_FALSE(layout.columns[1].has_width);
+  EXPECT_TRUE(layout.columns[0].hidden);
+  EXPECT_FALSE(layout.columns[0].has_width);
+  EXPECT_EQ(layout.columns[0].first, 2U);  // C
+  EXPECT_FALSE(layout.columns[1].hidden);
+  EXPECT_EQ(layout.columns[1].width, kWideColumnChars);
+}
+
+TEST(WorkbookBuilderPrint, HiddenColumnIsNotMaskedByAWidthSpanCoveringIt) {
+  // The regression this ordering exists for: pagination reads a column's
+  // first matching span, so the case would have paginated as though nothing
+  // were hidden -- and the golden diff would blame the engine.
+  JsonValue spec = jobj({
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"H1", text_cell("x")}})}})},
+      {"column_widths", jobj({{"A:H", jnum(kWideColumnChars)}})},
+      {"hidden_columns", jarr({jstr("C"), jstr("D"), jstr("E")})},
+      {"print", jobj({
+                    {"sheet", jstr("Sheet1")},
+                    {"print_area", jstr("A1:H1")},
+                    {"page_setup", a4_portrait_setup()},
+                })},
+  });
+
+  auto built_or = build_print_from_spec(spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const BuiltPrint& built = built_or.value();
+
+  auto with_hidden = print::paginate(*built.workbook, built.sheet_index);
+  ASSERT_TRUE(static_cast<bool>(with_hidden)) << with_hidden.error().message;
+
+  // Same sheet without the hidden columns: three fewer wide columns have to
+  // fit, so the two pagination results cannot coincide.
+  JsonValue visible = jobj({
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"H1", text_cell("x")}})}})},
+      {"column_widths", jobj({{"A:H", jnum(kWideColumnChars)}})},
+      {"print", jobj({
+                    {"sheet", jstr("Sheet1")},
+                    {"print_area", jstr("A1:H1")},
+                    {"page_setup", a4_portrait_setup()},
+                })},
+  });
+  auto visible_built = build_print_from_spec(visible);
+  ASSERT_TRUE(static_cast<bool>(visible_built)) << visible_built.error().message;
+  auto without_hidden = print::paginate(*visible_built.value().workbook, visible_built.value().sheet_index);
+  ASSERT_TRUE(static_cast<bool>(without_hidden)) << without_hidden.error().message;
+
+  EXPECT_LT(with_hidden.value().page_count, without_hidden.value().page_count);
 }
 
 TEST(WorkbookBuilderPrint, RejectsMalformedHiddenColumnKey) {

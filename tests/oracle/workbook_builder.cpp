@@ -653,6 +653,54 @@ constexpr const char* kPrintTitlesName = "_xlnm.Print_Titles";
 /// A `row_heights` key is a 1-based Excel row number ("3"); each entry
 /// becomes one `RowLayout{row,height}`. Both maps are optional.
 Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* sheet) {
+  // Hidden lines are emitted before the size maps on purpose: both the
+  // pagination fast path and `ColumnWidthChars` resolve a track against the
+  // *first* matching span, so a `column_widths` span covering a hidden
+  // column would otherwise mask it and silently paginate the case as if
+  // nothing were hidden.
+  if (const JsonValue* hidden_v = spec.find("hidden_columns"); hidden_v != nullptr && !hidden_v->is_null()) {
+    if (!hidden_v->is_array()) {
+      return invalid("'hidden_columns' must be an array");
+    }
+    for (const JsonValue& item : hidden_v->as_array()) {
+      if (!item.is_string()) {
+        return invalid("hidden_columns: entries must be column letters");
+      }
+      const std::string& key = item.as_string();
+      std::size_t pos = 0;
+      std::uint32_t col1 = 0;
+      if (!io::parse_column_letters(key, &pos, &col1) || pos != key.size()) {
+        return invalid("hidden_columns/" + key + ": malformed column key");
+      }
+      ColumnLayout col;
+      col.first = col1 - 1U;
+      col.last = col1 - 1U;
+      col.hidden = true;
+      sheet->mutable_layout().columns.push_back(col);
+    }
+  }
+
+  if (const JsonValue* hidden_v = spec.find("hidden_rows"); hidden_v != nullptr && !hidden_v->is_null()) {
+    if (!hidden_v->is_array()) {
+      return invalid("'hidden_rows' must be an array");
+    }
+    for (const JsonValue& item : hidden_v->as_array()) {
+      if (!item.is_string()) {
+        return invalid("hidden_rows: entries must be 1-based row numbers");
+      }
+      const std::string& key = item.as_string();
+      std::size_t pos = 0;
+      std::uint32_t row1 = 0;
+      if (!io::parse_uint(key, &pos, &row1) || pos != key.size() || row1 == 0U) {
+        return invalid("hidden_rows/" + key + ": malformed 1-based row key");
+      }
+      RowLayout row;
+      row.row = row1 - 1U;
+      row.hidden = true;
+      sheet->mutable_layout().row_overrides.push_back(row);
+    }
+  }
+
   if (const JsonValue* widths_v = spec.find("column_widths"); widths_v != nullptr && !widths_v->is_null()) {
     if (!widths_v->is_object()) {
       return invalid("'column_widths' must be an object");
@@ -705,52 +753,6 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* shee
     }
   }
 
-  // `hidden_columns` / `hidden_rows` carry no size, which is the point:
-  // they reproduce the shape where Excel records a hidden line with no
-  // width / ht attribute at all, and pagination has to decide what such a
-  // line contributes without one to read.
-  if (const JsonValue* hidden_v = spec.find("hidden_columns"); hidden_v != nullptr && !hidden_v->is_null()) {
-    if (!hidden_v->is_array()) {
-      return invalid("'hidden_columns' must be an array");
-    }
-    for (const JsonValue& item : hidden_v->as_array()) {
-      if (!item.is_string()) {
-        return invalid("hidden_columns: entries must be column letters");
-      }
-      const std::string& key = item.as_string();
-      std::size_t pos = 0;
-      std::uint32_t col1 = 0;
-      if (!io::parse_column_letters(key, &pos, &col1) || pos != key.size()) {
-        return invalid("hidden_columns/" + key + ": malformed column key");
-      }
-      ColumnLayout col;
-      col.first = col1 - 1U;
-      col.last = col1 - 1U;
-      col.hidden = true;
-      sheet->mutable_layout().columns.push_back(col);
-    }
-  }
-
-  if (const JsonValue* hidden_v = spec.find("hidden_rows"); hidden_v != nullptr && !hidden_v->is_null()) {
-    if (!hidden_v->is_array()) {
-      return invalid("'hidden_rows' must be an array");
-    }
-    for (const JsonValue& item : hidden_v->as_array()) {
-      if (!item.is_string()) {
-        return invalid("hidden_rows: entries must be 1-based row numbers");
-      }
-      const std::string& key = item.as_string();
-      std::size_t pos = 0;
-      std::uint32_t row1 = 0;
-      if (!io::parse_uint(key, &pos, &row1) || pos != key.size() || row1 == 0U) {
-        return invalid("hidden_rows/" + key + ": malformed 1-based row key");
-      }
-      RowLayout row;
-      row.row = row1 - 1U;
-      row.hidden = true;
-      sheet->mutable_layout().row_overrides.push_back(row);
-    }
-  }
   return {};
 }
 

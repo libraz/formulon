@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -438,17 +437,13 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     row_axis.limit_pt = body.height_pt;
     const std::uint32_t row_pages = WalkAxis(row_axis, &all_h);
 
-    // Column axis: symmetric per-area walk through the same axis walker.
-    // Excel never auto-breaks columns at explicit print scale (a wide
-    // print area renders on a single page-column and clips at the right
-    // margin; both VPageBreaks and Pages.Count ignore automatic column
-    // overflow — see tests/oracle/cases_wb/print_matrix.yaml Block C and
-    // print_pagination.yaml wide_table_vertical_breaks), so the width limit
-    // is unbounded and only manual column breaks contribute. Using the same
-    // per-area walker as the row axis makes multi-area column pagination
-    // symmetric with multi-area row pagination: each area's manual column
-    // breaks are counted within that area rather than de-duplicated across
-    // areas.
+    // Column axis: symmetric per-area walk through the same axis walker,
+    // against the body width exactly as the row axis walks the body height.
+    // A wide print area wraps onto further page-columns; it is not clipped
+    // at the right margin. Using the same per-area walker as the row axis
+    // also makes multi-area column pagination symmetric with multi-area row
+    // pagination: each area's breaks are counted within that area rather
+    // than de-duplicated across areas.
     std::vector<double> col_points;
     col_points.reserve(rect.last_col - rect.first_col + 1);
     for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
@@ -458,7 +453,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     col_axis.first = rect.first_col;
     col_axis.track_sizes = std::move(col_points);
     col_axis.manual = &settings.manual_col_breaks;
-    col_axis.limit_pt = std::numeric_limits<double>::infinity();
+    col_axis.limit_pt = body.width_pt;
     const std::uint32_t col_pages = WalkAxis(col_axis, &all_v);
 
     total_pages += static_cast<std::uint64_t>(col_pages) * static_cast<std::uint64_t>(row_pages);
