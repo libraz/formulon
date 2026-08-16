@@ -2,12 +2,12 @@
   "suite": "getpivotdata_page_data",
   "kind": "workbook",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T19:44:49Z",
-    "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    "generated_at": "2026-08-15T23:41:31Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-15T23:41:31Z"
   },
   "cases": [
     {
@@ -109,7 +109,128 @@
           ]
         }
       },
-      "skipped": "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
+      "skipped": "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted.",
+      "observed": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 6,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "Region"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "(すべて)"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "Gadget"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 350.0
+              }
+            },
+            {
+              "r": 4,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "Widget"
+              }
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 300.0
+              }
+            },
+            {
+              "r": 5,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 5,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 650.0
+              }
+            }
+          ]
+        },
+        "formula_probes": [
+          {
+            "id": "page_field_item",
+            "cell": "Report!Z1",
+            "result": {
+              "kind": "error",
+              "code": "#REF!"
+            }
+          },
+          {
+            "id": "unknown_field_ref",
+            "cell": "Report!Z2",
+            "result": {
+              "kind": "error",
+              "code": "#REF!"
+            }
+          }
+        ]
+      }
     },
     {
       "id": "data_axis_field",
@@ -187,7 +308,98 @@
           ]
         }
       },
-      "skipped": "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
+      "skipped": "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted.",
+      "observed": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 300.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 700.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 1000.0
+              }
+            }
+          ]
+        },
+        "formula_probes": [
+          {
+            "id": "data_field_item",
+            "cell": "Report!Z1",
+            "result": {
+              "kind": "error",
+              "code": "#REF!"
+            }
+          },
+          {
+            "id": "unknown_field_ref",
+            "cell": "Report!Z2",
+            "result": {
+              "kind": "error",
+              "code": "#REF!"
+            }
+          }
+        ]
+      }
     }
   ]
 }

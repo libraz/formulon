@@ -2,12 +2,12 @@
   "suite": "print_basic",
   "kind": "workbook",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T19:44:49Z",
-    "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    "generated_at": "2026-08-15T23:41:31Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-15T23:41:31Z"
   },
   "cases": [
     {
@@ -403,6 +403,240 @@
       "expect": {
         "print": {
           "print_area": "C3",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "hidden_columns_no_width",
+      "spec": {
+        "id": "hidden_columns_no_width",
+        "description": "Wide columns with three of them hidden and no width recorded for the hidden ones. Whether a hidden column still consumes page width decides the horizontal break count.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "A40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "B40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "C40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "D1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "D40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "E1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "E40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "F1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "F40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "G1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "G40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "H40": {
+              "kind": "text",
+              "value": "end"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 28
+        },
+        "hidden_columns": [
+          "C",
+          "D",
+          "E"
+        ],
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H40",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H40",
+          "h_breaks": [
+            39
+          ],
+          "v_breaks": [
+            5,
+            7
+          ],
+          "pages": 6,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "hidden_rows_no_height",
+      "spec": {
+        "id": "hidden_rows_no_height",
+        "description": "The row-axis counterpart: hidden rows carry no ht, so the vertical break count says whether they still occupy page height.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "A40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "B40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "C40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "D1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "D40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "E1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "E40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "F1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "F40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "G1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "G40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "H40": {
+              "kind": "text",
+              "value": "end"
+            }
+          }
+        },
+        "row_heights": {
+          "1": 60,
+          "40": 60
+        },
+        "hidden_rows": [
+          "10",
+          "11",
+          "12",
+          "13",
+          "14"
+        ],
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H40",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H40",
           "h_breaks": [],
           "v_breaks": [],
           "pages": 1,

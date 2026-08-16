@@ -2,12 +2,12 @@
   "suite": "example_smoke",
   "kind": "workbook",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T19:44:49Z",
-    "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    "generated_at": "2026-08-15T23:41:31Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-15T23:41:31Z"
   },
   "cases": [
     {

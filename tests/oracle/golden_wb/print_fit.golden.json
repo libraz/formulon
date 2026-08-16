@@ -2,12 +2,12 @@
   "suite": "print_fit",
   "kind": "workbook",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T19:44:49Z",
-    "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    "generated_at": "2026-08-15T23:41:31Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-15T23:41:31Z"
   },
   "cases": [
     {
@@ -44,8 +44,12 @@
         "print": {
           "print_area": "A1:H1",
           "h_breaks": [],
-          "v_breaks": [],
-          "pages": 1,
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,
@@ -92,7 +96,32 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk).",
+      "observed": {
+        "print": {
+          "print_area": "A1:H1",
+          "h_breaks": [],
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
+          "applied_page_setup": {
+            "zoom": 50,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
+        }
+      }
     },
     {
       "id": "fit_to_width_one_collapses_vertical",
@@ -236,8 +265,10 @@
         "print": {
           "print_area": "A1:H1",
           "h_breaks": [],
-          "v_breaks": [],
-          "pages": 1,
+          "v_breaks": [
+            4
+          ],
+          "pages": 2,
           "applied_page_setup": {
             "zoom": false,
             "fit_to_width": 2,
@@ -345,7 +376,38 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk).",
+      "observed": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [
+            18
+          ],
+          "v_breaks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "pages": 16,
+          "applied_page_setup": {
+            "zoom": 25,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
+        }
+      }
     }
   ]
 }

@@ -146,10 +146,20 @@ make oracle-gen-workbook
 make oracle-gen-workbook TARGET=win-365-ja_JP
 make oracle-gen-workbook TARGET=win-365-ja_JP SUITE=getpivotdata_page_data
 
+# Print cases paginate against the *active printer's* driver metrics, not
+# the paper size alone, so the capture pins "Microsoft Print to PDF": it
+# imposes no hardware unprintable margin, which is also what the C++
+# paginator models. Set FORMULON_EXCEL_PRINTER to pin a different device
+# (the "on <port>:" suffix is optional); leaving it unset and lacking the
+# PDF device falls back to the host default with a warning, and the
+# goldens then carry that printer's metrics.
+FORMULON_EXCEL_PRINTER="Microsoft Print to PDF" make oracle-gen-workbook TARGET=win-365-ja_JP
+
 # A target whose status is still `wanted` has no established provenance,
 # so its capture stages outside the repository (the generator prints the
 # path) and is landed separately after review. GOLDEN_DIR= overrides where
-# it stages.
+# it stages. Once the target is scaffolded the capture lands in
+# tests/oracle/golden_wb/ directly and promotion is the review step alone.
 make oracle-promote TRACK=workbook TARGET=win-365-ja_JP DRY_RUN=1
 make oracle-promote TRACK=workbook TARGET=win-365-ja_JP
 

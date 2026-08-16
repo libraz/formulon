@@ -259,14 +259,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     target_record = targets_doc["targets"][target_name]
 
-    staged_dir = args.staged_dir or staging_dir_for(args.track, target_name)
+    golden_dir = TRACKS[args.track]["default_golden_dir"]
+    # Only a `wanted` target stages outside the tree; a scaffolded one has
+    # its capture written straight into the golden directory, so defaulting
+    # to the staging path there would re-promote whatever capture happens
+    # to be left in the cache from the run that scaffolded it.
+    stages_outside_tree = target_record.get("status") == "wanted"
+    default_staged_dir = staging_dir_for(args.track, target_name) if stages_outside_tree else golden_dir
+    staged_dir = args.staged_dir or default_staged_dir
     try:
         candidate = check_capture(staged_dir, target_name, target_record)
     except RuntimeError as exc:
         print(f"oracle-promote: {exc}", file=sys.stderr)
         return 1
 
-    golden_dir = TRACKS[args.track]["default_golden_dir"]
     suites = sorted(candidate["captured_suites"])
     print(f"oracle-promote: track={args.track} target={target_name}")
     print(f"  from:    {staged_dir}")
@@ -279,10 +285,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     golden_dir.mkdir(parents=True, exist_ok=True)
+    # A `wanted` target stages outside the tree, but once it is scaffolded
+    # the generator writes its goldens -- and the candidate beside them --
+    # straight into the golden directory. Promotion is then purely the
+    # review step: the checks above still have to run, but there is nothing
+    # to copy, and copying a file onto itself raises SameFileError.
+    in_place = staged_dir.resolve() == golden_dir.resolve()
     for suite in suites:
         name = f"{suite}.golden.json"
-        shutil.copyfile(staged_dir / name, golden_dir / name)
-        print(f"  -> {(golden_dir / name).relative_to(REPO_ROOT)}")
+        if not in_place:
+            shutil.copyfile(staged_dir / name, golden_dir / name)
+        print(f"  -> {(golden_dir / name).relative_to(REPO_ROOT)}{' (in place)' if in_place else ''}")
     provenance_path = golden_dir / PROVENANCE_NAME
     provenance_path.write_text(
         json.dumps(_promoted_provenance(candidate), indent=2, ensure_ascii=False) + "\n",

@@ -18,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 from typing import Any, Dict
 
 try:  # pragma: no cover - trivial fallback
@@ -261,6 +262,73 @@ targets:
     def test_unknown_target_raises(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "no `status:` line"):
             promote_capture._set_target_status(self._manifest(), "win-365-zz_ZZ", "scaffolded")
+
+
+class ScaffoldedInPlacePromotionTests(unittest.TestCase):
+    """Promotion of a target that no longer stages outside the tree.
+
+    Only a `wanted` target stages into the cache; once it is scaffolded the
+    generator writes its goldens and its candidate straight into the golden
+    directory, so promotion is the review step alone. Defaulting to the
+    staging path there would land whichever capture the cache still holds
+    from the run that scaffolded the target, and copying the goldens onto
+    themselves raises SameFileError.
+    """
+
+    MANIFEST = """tracks:
+  workbook:
+    primary: win-365-ja_JP
+
+targets:
+  win-365-ja_JP:
+    status: scaffolded
+    driver: windows_excel
+    locale: ja-JP
+"""
+
+    def _fixture(self) -> "tuple[Path, Path]":
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
+        golden_dir = _write_capture(tmp / "golden_wb", status="scaffolded")
+        targets = tmp / "targets.yaml"
+        targets.write_text(self.MANIFEST, encoding="utf-8")
+        return golden_dir, targets
+
+    def _promote(self, golden_dir: Path, targets: Path, extra: "list[str]") -> int:
+        with (
+            mock.patch.dict(promote_capture.TRACKS["workbook"], {"default_golden_dir": golden_dir}),
+            mock.patch.object(promote_capture, "REPO_ROOT", golden_dir.parent),
+        ):
+            return promote_capture.main(["--targets-file", str(targets), *extra])
+
+    def test_capture_already_in_the_golden_dir_is_promoted_in_place(self) -> None:
+        golden_dir, targets = self._fixture()
+        goldens_before = {p.name: p.read_bytes() for p in golden_dir.glob("*.golden.json")}
+
+        self.assertEqual(self._promote(golden_dir, targets, []), 0)
+
+        promoted = json.loads((golden_dir / "PROVENANCE.json").read_text(encoding="utf-8"))
+        self.assertEqual(promoted["capture_id"], _CAPTURE)
+        self.assertEqual(promoted["product"], _PRODUCT)
+        # The goldens are the capture's own; promotion must not touch them.
+        self.assertEqual({p.name: p.read_bytes() for p in golden_dir.glob("*.golden.json")}, goldens_before)
+
+    def test_explicit_from_pointing_at_the_golden_dir_is_accepted(self) -> None:
+        golden_dir, targets = self._fixture()
+
+        self.assertEqual(self._promote(golden_dir, targets, ["--from", str(golden_dir)]), 0)
+
+        self.assertTrue((golden_dir / "PROVENANCE.json").is_file())
+
+    def test_a_stale_staged_capture_is_not_promoted_for_a_scaffolded_target(self) -> None:
+        golden_dir, targets = self._fixture()
+        stale = _write_capture(golden_dir.parent / "stale", capture_id="stale-0000")
+        with mock.patch.object(promote_capture, "staging_dir_for", return_value=stale) as staging:
+            self.assertEqual(self._promote(golden_dir, targets, []), 0)
+
+        staging.assert_not_called()
+        promoted = json.loads((golden_dir / "PROVENANCE.json").read_text(encoding="utf-8"))
+        self.assertEqual(promoted["capture_id"], _CAPTURE)
 
 
 if __name__ == "__main__":

@@ -2,12 +2,12 @@
   "suite": "print_pagination",
   "kind": "workbook",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T19:44:49Z",
-    "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    "generated_at": "2026-08-15T23:41:31Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-15T23:41:31Z"
   },
   "cases": [
     {
@@ -44,8 +44,12 @@
         "print": {
           "print_area": "A1:H1",
           "h_breaks": [],
-          "v_breaks": [],
-          "pages": 1,
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,
@@ -326,8 +330,11 @@
         "print": {
           "print_area": "A1:H1",
           "h_breaks": [],
-          "v_breaks": [],
-          "pages": 1,
+          "v_breaks": [
+            3,
+            6
+          ],
+          "pages": 3,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,
@@ -382,8 +389,12 @@
         "print": {
           "print_area": "A1:H30",
           "h_breaks": [],
-          "v_breaks": [],
-          "pages": 1,
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,
@@ -503,9 +514,11 @@
           "print_area": "A1:H6,A9:H14",
           "h_breaks": [],
           "v_breaks": [
-            3
+            3,
+            6,
+            6
           ],
-          "pages": 4,
+          "pages": 6,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,

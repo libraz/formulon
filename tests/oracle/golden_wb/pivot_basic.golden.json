@@ -2,12 +2,12 @@
   "suite": "pivot_basic",
   "kind": "workbook",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T19:44:49Z",
-    "capture_id": "win-365-ja_JP:16.0:ja-JP:2026-08-15T19:44:49Z"
+    "generated_at": "2026-08-15T23:41:31Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-15T23:41:31Z"
   },
   "cases": [
     {
@@ -1635,6 +1635,152 @@
               "value": {
                 "kind": "number",
                 "value": 1110.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "blank_row_item_label",
+      "spec": {
+        "id": "blank_row_item_label",
+        "description": "A source row whose Region cell is empty. Excel groups those records under a locale-specific blank label rather than an empty string; this case is what pins the ja-JP wording.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "B3": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "B5": {
+              "kind": "number",
+              "value": 25.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 5,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 100.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 200.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "(空白)"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 75.0
+              }
+            },
+            {
+              "r": 4,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 375.0
               }
             }
           ]

@@ -58,9 +58,12 @@ and amortising it once over the whole run cuts wall-clock by ~10x.
 from __future__ import annotations
 
 import datetime as _dt
+import os
 import platform
+import sys
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ._locale import detect_locale_from_app, normalise_error_token
 from .base import (
@@ -315,6 +318,19 @@ def _classify_result_cell(app, sht, anchor_addr: str = DEFAULT_FORMULA_CELL) -> 
     return CaseResult(id="", kind="array", value=flat, array_shape=[rows, cols])
 
 
+# Names the printer whose driver metrics Excel paginates against; see
+# `WindowsExcelOracle._ensure_printer_pinned`. Excel addresses a device as
+# "<name> on <port>:" and the port is assigned per machine, so a bare name
+# is tried against the ports Windows hands out first.
+_PRINTER_ENV_VAR = "FORMULON_EXCEL_PRINTER"
+_PRINTER_PORTS = ("Ne00:", "Ne01:", "Ne02:", "Ne03:", "Ne04:", "Ne05:", "PORTPROMPT:")
+# Shipped on every supported Windows build and, unlike a physical device,
+# imposes no hardware unprintable margin -- so the printable area is the
+# paper minus the margins the case asked for, which is also the model the
+# C++ paginator implements.
+_DEFAULT_PRINTER = "Microsoft Print to PDF"
+
+
 class WindowsExcelOracle(OracleDriver):
     """Thin wrapper over a single hidden Excel.exe instance (COM).
 
@@ -337,6 +353,7 @@ class WindowsExcelOracle(OracleDriver):
         # the gated ones inside run_suite() once books.add() succeeds.
         self._app.screen_updating = False
         self._app.display_alerts = False
+        self._printer_pinned = False
 
     def __enter__(self) -> "WindowsExcelOracle":
         return self
@@ -360,7 +377,9 @@ class WindowsExcelOracle(OracleDriver):
         Microsoft 365 one; ``tools/oracle/divergence_check.py`` rejects it
         by name. ``Application.Build`` carries the discriminating part, so
         it is always appended (2019 builds are 10xxx, Microsoft 365 18xxx),
-        producing a ``16.0.<build>`` stamp that survives that check.
+        producing a ``16.0.<build>`` stamp that survives that check --
+        three components, never more, because that check accepts at most a
+        ``16.<n>.<n>`` shape.
 
         The locale is detected via
         ``Application.International(xlCountryCode)`` (see
@@ -385,16 +404,25 @@ class WindowsExcelOracle(OracleDriver):
             build = str(b).strip()
         except Exception:
             build = ""
-        # `Build` is normally the bare build number ("18025"), but some
-        # Office channels report a full dotted version there. Take it whole
-        # in that case rather than concatenating a doubled prefix.
+        # `Build` is normally the bare build number ("18025"), but the
+        # channels disagree: this ja-JP Microsoft 365 install reports
+        # "20228.0" (build plus a sub-build that does not even match the
+        # EXCEL.EXE file version), and others report a whole dotted version
+        # there. Only the leading component discriminates a Microsoft 365
+        # install from an Office 2019 one, so a whole dotted Build replaces
+        # the bare version rather than doubling its prefix, and the result
+        # is cut to three components -- appending a sub-build would stamp a
+        # `16.0.<build>.<sub>` that `is_pending_stamp` refuses outright.
         if build:
             if not version:
-                version = build
+                stamp = build
             elif build.startswith(version):
-                version = build
-            elif build not in version.split("."):
-                version = f"{version}.{build}"
+                stamp = build
+            elif build.split(".")[0] in version.split("."):
+                stamp = version
+            else:
+                stamp = f"{version}.{build.split('.')[0]}"
+            version = ".".join(stamp.split(".")[:3])
         locale = detect_locale_from_app(self._app) or ""
         return EnvironmentInfo(
             excel_version=version.strip(),
@@ -708,6 +736,7 @@ class WindowsExcelOracle(OracleDriver):
         location, and the physical page count.
         """
 
+        self._ensure_printer_pinned()
         wb = self._app.books.add()
         try:
             self._build_workbook_sheets(wb, case)
@@ -721,6 +750,53 @@ class WindowsExcelOracle(OracleDriver):
                 wb.close()
             except Exception:
                 pass
+
+    def _ensure_printer_pinned(self) -> None:
+        """Points Excel at the printer named by ``FORMULON_EXCEL_PRINTER``.
+
+        Excel does not paginate against the paper size alone: automatic
+        breaks are computed from the *active printer driver's* metrics, so
+        a device with hardware unprintable margins shrinks the usable area
+        and a network device that renegotiates its capabilities can move
+        the breaks between two otherwise identical captures. Pinning a
+        fixed device -- "Microsoft Print to PDF" has no hardware margins
+        and is present on every Windows install -- is what makes a capture
+        reproducible.
+
+        The value may name the device alone or carry Excel's ``on <port>:``
+        suffix; the port differs per machine, so a bare name is tried
+        against the usual ports. Leaving the variable unset keeps whatever
+        the host defaults to.
+        """
+
+        if self._printer_pinned:
+            return
+        self._printer_pinned = True
+        requested = os.environ.get(_PRINTER_ENV_VAR, "").strip()
+        explicit = bool(requested)
+        if not explicit:
+            requested = _DEFAULT_PRINTER
+        candidates = [requested] if " on " in requested else [f"{requested} on {port}" for port in _PRINTER_PORTS]
+        for candidate in candidates:
+            try:
+                self._app.api.ActivePrinter = candidate
+            except Exception:
+                continue
+            return
+        if explicit:
+            raise RuntimeError(
+                f"{_PRINTER_ENV_VAR}={requested!r} names no printer Excel would accept "
+                f"(tried: {', '.join(candidates)}); pagination would run against "
+                f"{self._app.api.ActivePrinter!r} instead"
+            )
+        # An unset variable is a preference, not an instruction: capture
+        # against whatever the host defaults to, but say so, because the
+        # goldens then carry that device's metrics.
+        print(
+            f"  ! {_DEFAULT_PRINTER} is unavailable; paginating against "
+            f"{self._app.api.ActivePrinter!r}, whose driver metrics the goldens will carry",
+            file=sys.stderr,
+        )
 
     def _build_workbook_sheets(self, wb, case: Dict[str, Any]) -> None:
         """Materialises the declarative ``sheets`` block into ``wb``.
@@ -736,26 +812,19 @@ class WindowsExcelOracle(OracleDriver):
             for addr, rec in (cells or {}).items():
                 _write_cell(sht, addr, rec)
 
+        # Sizes are applied against the first sheet; workbook cases that
+        # need a per-sheet layout map can extend the schema later.
         widths = case.get("column_widths") or {}
         for col_key, width in widths.items():
-            # Apply against the first sheet; workbook cases that need a
-            # per-sheet width map can extend the schema later.
-            try:
-                wb.sheets[0].range(f"{col_key}1").column_width = float(width)
-            except Exception:
-                pass
+            _apply_axis_size(wb.sheets[0], "column", str(col_key), float(width))
         heights = case.get("row_heights") or {}
         for row_key, height in heights.items():
-            try:
-                wb.sheets[0].range(f"A{row_key}").row_height = float(height)
-            except Exception:
-                pass
+            _apply_axis_size(wb.sheets[0], "row", str(row_key), float(height))
 
-        # Hiding is read back and asserted rather than attempted quietly.
-        # The width / height loops above swallow failures because a wrong
-        # size is visible in the captured page counts, but a column that
-        # silently failed to hide yields a golden that looks perfectly
-        # ordinary while answering a different question than the case asks.
+        # Hiding is read back and asserted rather than attempted quietly: a
+        # column that silently failed to hide yields a golden that looks
+        # perfectly ordinary while answering a different question than the
+        # case asks.
         for col_key in case.get("hidden_columns") or []:
             target = wb.sheets[0].range(f"{col_key}1").api.EntireColumn
             target.Hidden = True
@@ -766,6 +835,33 @@ class WindowsExcelOracle(OracleDriver):
             target.Hidden = True
             if not target.Hidden:
                 raise RuntimeError(f"row {row_key!r} did not hide; refusing to capture a case it does not match")
+
+
+def _apply_axis_size(sheet, axis: str, key: str, size: float) -> None:
+    """Sets one column width / row height and asserts Excel took it.
+
+    The key is a label or a span -- ``"A"``, ``"A:H"``, ``"3"``, ``"3:5"``
+    -- which is what ``Columns`` / ``Rows`` accept. The address form this
+    used to build (``f"{key}1"``) cannot express a span at all: a case
+    declaring ``"A:H"`` produced the invalid reference ``"A:H1"``, threw,
+    and was swallowed, so the capture ran at Excel's default width and the
+    golden answered a different question than the case asks. The read-back
+    is what keeps that failure from looking like an ordinary golden; the
+    tolerance covers Excel snapping a size to its own grid.
+    """
+
+    axis_api = sheet.api.Columns if axis == "column" else sheet.api.Rows
+    prop = "ColumnWidth" if axis == "column" else "RowHeight"
+    target = axis_api(key)
+    setattr(target, prop, size)
+    applied = getattr(target, prop)
+    # A span whose members disagree reads back as None; that cannot happen
+    # here because every member was just assigned the same size.
+    if applied is None or abs(float(applied) - size) > 1.0:
+        raise RuntimeError(
+            f"{axis} {key!r} kept {applied!r} instead of the requested {size}; "
+            "refusing to capture a case it does not match"
+        )
 
 
 def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":
@@ -1068,6 +1164,108 @@ _XL_PAGE_BREAK_PREVIEW_ZOOM = 60
 _POINTS_PER_INCH = 72.0
 
 
+# How many times a case's pagination is read before the capture gives up
+# on it settling. Two consecutive agreeing reads end the loop, so a stable
+# case costs two reads and one wait.
+_BREAK_READ_ATTEMPTS = 6
+
+# How long to leave Excel alone between two pagination reads.
+_LAYOUT_SETTLE_SECONDS = 0.3
+
+
+def _settle_layout(ws, wb) -> None:
+    """Nudges Excel into finishing its pagination pass before a read.
+
+    Recalculates, then flips ``ScreenUpdating`` off and on: Excel uses
+    that transition as a trigger to re-run the layout, without which the
+    break collections can answer from the previous case's last pass.
+
+    The wait afterwards is load-bearing rather than superstition: Excel
+    lays a page out on its own schedule, so a tight read-again loop can
+    take two consecutive readings from the same not-yet-recomputed
+    layout. `tall_and_wide_table` alternated between its own portrait
+    pagination and the preceding landscape case's until the reads were
+    spaced out.
+    """
+
+    try:
+        ws.Calculate()
+    except Exception:
+        pass
+    try:
+        wb.app.api.ScreenUpdating = False
+        wb.app.api.ScreenUpdating = True
+    except Exception:
+        pass
+    time.sleep(_LAYOUT_SETTLE_SECONDS)
+
+
+def _read_pagination(ws, page_setup, wb) -> Tuple[List[int], List[int], int]:
+    """Reads ``(h_breaks, v_breaks, pages)`` as Excel currently reports it.
+
+    Breaks come back as the 0-based row / column indices the C++ engine
+    reports; ``Pages.Count`` falls back to the XLM ``GET.DOCUMENT`` page
+    count on hosts where the property is unavailable. Any read failure
+    yields an empty axis rather than raising -- the caller's settle loop
+    is what decides whether a reading is trustworthy.
+    """
+
+    h_breaks: List[int] = []
+    try:
+        for i in range(1, int(ws.HPageBreaks.Count) + 1):
+            # `.Location.Row` is the 1-based row the break precedes.
+            h_breaks.append(int(ws.HPageBreaks(i).Location.Row) - 1)
+    except Exception:
+        pass
+    v_breaks: List[int] = []
+    try:
+        for i in range(1, int(ws.VPageBreaks.Count) + 1):
+            v_breaks.append(int(ws.VPageBreaks(i).Location.Column) - 1)
+    except Exception:
+        pass
+    h_breaks.sort()
+    v_breaks.sort()
+
+    pages = 0
+    try:
+        pages = int(page_setup.Pages.Count)
+    except Exception:
+        try:
+            pages = int(wb.app.api.ExecuteExcel4Macro(f"GET.DOCUMENT({_GET_DOCUMENT_PAGE_COUNT})"))
+        except Exception:
+            pages = 0
+    return h_breaks, v_breaks, pages
+
+
+def _read_pagination_settled(ws, page_setup, wb) -> Tuple[List[int], List[int], int]:
+    """Reads the pagination and keeps only a value that reproduces.
+
+    Every nudge the caller performs -- PageBreakPreview, the pinned PBP
+    zoom, recalc, the ScreenUpdating flip -- is a way of asking Excel to
+    finish paginating before the read, and none of them is a guarantee: a
+    stale read still surfaced intermittently, with
+    `print_titles_repeat_rows` returning the preceding landscape case's
+    break at full-suite position while every solo capture returned its
+    own. So the read itself decides. The triple is read repeatedly with a
+    settle between attempts and only a reading two consecutive reads
+    agree on is returned; the first read doubles as the dummy touch that
+    populates Excel's cache. A case that never settles raises, because a
+    golden nobody can reproduce is worse than a missing one.
+    """
+
+    reading: Optional[Tuple[List[int], List[int], int]] = None
+    for _attempt in range(_BREAK_READ_ATTEMPTS):
+        candidate = _read_pagination(ws, page_setup, wb)
+        if candidate == reading:
+            return candidate
+        reading = candidate
+        _settle_layout(ws, wb)
+    raise RuntimeError(
+        f"page breaks did not settle after {_BREAK_READ_ATTEMPTS} reads (last: {reading}); "
+        "refusing to capture a golden that does not reproduce"
+    )
+
+
 def _resolve_print_sheet(wb, print_spec: Dict[str, Any]):
     """Returns the worksheet the `print` block names, or raises."""
 
@@ -1239,51 +1437,9 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
         # transition as a trigger to re-run the pagination layout; without
         # it the HPageBreaks / VPageBreaks collections can return stale
         # counts from the prior case's last layout pass.
-        try:
-            ws.Calculate()
-        except Exception:
-            pass
-        try:
-            wb.app.api.ScreenUpdating = False
-            wb.app.api.ScreenUpdating = True
-        except Exception:
-            pass
+        _settle_layout(ws, wb)
 
-        # Dummy-touch the break collections once so Excel's internal
-        # cache is populated before the indexed-read loop. Reading
-        # `.Count` for the first time triggers the pagination recompute;
-        # reading the individual breaks before that recompute completes
-        # has been observed to return entries from the previous case.
-        try:
-            _ = int(ws.HPageBreaks.Count)
-            _ = int(ws.VPageBreaks.Count)
-        except Exception:
-            pass
-
-        h_breaks: List[int] = []
-        try:
-            for i in range(1, int(ws.HPageBreaks.Count) + 1):
-                # `.Location.Row` is the 1-based row the break precedes.
-                h_breaks.append(int(ws.HPageBreaks(i).Location.Row) - 1)
-        except Exception:
-            pass
-        v_breaks: List[int] = []
-        try:
-            for i in range(1, int(ws.VPageBreaks.Count) + 1):
-                v_breaks.append(int(ws.VPageBreaks(i).Location.Column) - 1)
-        except Exception:
-            pass
-        h_breaks.sort()
-        v_breaks.sort()
-
-        pages = 0
-        try:
-            pages = int(page_setup.Pages.Count)
-        except Exception:
-            try:
-                pages = int(wb.app.api.ExecuteExcel4Macro(f"GET.DOCUMENT({_GET_DOCUMENT_PAGE_COUNT})"))
-            except Exception:
-                pages = 0
+        h_breaks, v_breaks, pages = _read_pagination_settled(ws, page_setup, wb)
     finally:
         if prior_view is not None:
             try:
