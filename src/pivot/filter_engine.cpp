@@ -382,7 +382,54 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
       return false;
     }
   }
+  // Authored date-range entries. Their siblings in the same list rank an
+  // axis leaf by its aggregate and so cannot be decided here; they are
+  // applied by the post-aggregation pass instead.
+  for (const AuthoredValueFilter& f : table.authored_value_filters()) {
+    if (f.type != FilterType::LabelDate || f.field_index >= table.fields().size()) {
+      continue;
+    }
+    if (!f.value_high) {
+      continue;  // Unbounded above: no-op, matching `PivotFilter`.
+    }
+    const Value v = cell_value(cache, record, f.field_index);
+    if (!v.is_number()) {
+      continue;  // Non-numeric cells are outside the date domain.
+    }
+    const double serial = v.as_number();
+    if (serial < f.value || serial > *f.value_high) {
+      return false;
+    }
+  }
   return true;
+}
+
+std::optional<PivotFilter> authored_value_filter_as_pivot_filter(const PivotTable& table,
+                                                                 const AuthoredValueFilter& authored) {
+  if (authored.type != FilterType::ValueTop10 && authored.type != FilterType::ValueGreaterThan &&
+      authored.type != FilterType::ValueBetween) {
+    return std::nullopt;
+  }
+  const auto on_axis = [&](const std::vector<std::uint32_t>& order) {
+    return std::find(order.begin(), order.end(), authored.field_index) != order.end();
+  };
+  PivotFilter out;
+  if (on_axis(table.row_field_order())) {
+    out.axis = PivotAxis::Row;
+  } else if (on_axis(table.col_field_order())) {
+    out.axis = PivotAxis::Col;
+  } else {
+    return std::nullopt;  // Field is on neither axis: nothing to prune.
+  }
+  out.type = authored.type;
+  out.value = authored.value;
+  if (authored.value_high) {
+    out.value_high = *authored.value_high;
+  }
+  out.data_field_index = authored.data_field_index;
+  // `field_name` stays empty: the post-aggregation pass selects leaves by
+  // axis and score, never by name.
+  return out;
 }
 
 AxisScores score_row_axis(const PivotResult& result, std::size_t row_count, std::size_t col_count,

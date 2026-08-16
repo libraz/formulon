@@ -1369,6 +1369,135 @@ TEST(PivotEvaluator, AuthoredCaptionFilterWithOutOfRangeFieldIsInert) {
   EXPECT_EQ(r_or.value().rows.size(), 2U);
 }
 
+// ---------------------------------------------------------------------------
+// 8f. AuthoredValueFilter (the value and date half of the same block)
+//
+// The basic cache totals North 175 and South 500 by Region.
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, AuthoredTopCountKeepsTheHighestScoringLeaf) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredValueFilter f;
+  f.field_index = 0;
+  f.type = FilterType::ValueTop10;
+  f.value = 1.0;
+  table.mutable_authored_value_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "South");
+}
+
+TEST(PivotEvaluator, AuthoredGreaterThanIsStrictOnTheThreshold) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredValueFilter f;
+  f.field_index = 0;
+  f.type = FilterType::ValueGreaterThan;
+  f.value = 175.0;  // exactly North's total
+  table.mutable_authored_value_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "South");
+}
+
+TEST(PivotEvaluator, AuthoredBetweenIncludesBothBounds) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredValueFilter f;
+  f.field_index = 0;
+  f.type = FilterType::ValueBetween;
+  f.value = 175.0;
+  f.value_high = 500.0;
+  table.mutable_authored_value_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  EXPECT_EQ(r_or.value().rows.size(), 2U);
+}
+
+// A file names only the field; the axis it prunes has to be recovered
+// from that field's place in the row / column order. A field on neither
+// axis leaves nothing to prune.
+TEST(PivotEvaluator, AuthoredValueFilterOnAnOffAxisFieldIsInert) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredValueFilter f;
+  f.field_index = 2;  // Amount: a data field, on no axis
+  f.type = FilterType::ValueTop10;
+  f.value = 1.0;
+  table.mutable_authored_value_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  EXPECT_EQ(r_or.value().rows.size(), 2U);
+}
+
+// Ranked by aggregate, so it cannot be decided until the aggregates
+// exist -- unlike its caption and date siblings, which prune records.
+// Pinning it on the column axis proves the axis recovery is not
+// hard-coded to rows.
+TEST(PivotEvaluator, AuthoredValueFilterPrunesTheColumnAxisToo) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{}, /*col=*/{0});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredValueFilter f;
+  f.field_index = 0;
+  f.type = FilterType::ValueTop10;
+  f.value = 1.0;
+  table.mutable_authored_value_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().cols.size(), 1U);
+  EXPECT_EQ(r_or.value().cols[0].label, "South");
+}
+
+TEST(PivotEvaluator, AuthoredDateFilterPrunesRecordsByTheirSerial) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  // Field 2 holds the amounts, which are plain numbers -- the date pass
+  // reads whatever serial the bound cell carries, so a range that spans
+  // only North's two smaller amounts drops South entirely.
+  AuthoredValueFilter f;
+  f.field_index = 2;
+  f.type = FilterType::LabelDate;
+  f.value = 0.0;
+  f.value_high = 100.0;
+  table.mutable_authored_value_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "North");
+}
+
+// An unbounded range is a no-op rather than a half-open filter, matching
+// how `PivotFilter` treats a missing upper bound.
+TEST(PivotEvaluator, AuthoredDateFilterWithNoUpperBoundIsInert) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredValueFilter f;
+  f.field_index = 2;
+  f.type = FilterType::LabelDate;
+  f.value = 1000.0;
+  table.mutable_authored_value_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  EXPECT_EQ(r_or.value().rows.size(), 2U);
+}
+
 TEST(PivotEvaluator, ValueTop10FilterKeepsTopRows) {
   // Use a richer cache so ranking is meaningful.
   PivotCache cache;

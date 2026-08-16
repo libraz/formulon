@@ -48,6 +48,17 @@ namespace formulon::pivot {
 /// here because the public mutators already reject one on entry.
 bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record);
 
+/// Projects an authored `<filters>` value entry onto the `PivotFilter`
+/// shape the post-aggregation pass already consumes.
+///
+/// A file names only the field, so the axis is recovered here from that
+/// field's membership in `row_field_order()` / `col_field_order()`.
+/// Returns `nullopt` when the entry is not a value family (a date entry
+/// is applied pre-aggregation by `record_passes_manual_filter`) or when
+/// the field sits on neither axis, leaving nothing to prune.
+std::optional<PivotFilter> authored_value_filter_as_pivot_filter(const PivotTable& table,
+                                                                 const AuthoredValueFilter& authored);
+
 /// Per-axis scoring intermediate used by `build_value_filter_keep`.
 /// `scores[i]` is the numeric aggregate sum at leaf `i`; `all_blank[i]`
 /// is true when leaf `i` had no numeric content (such leaves can be

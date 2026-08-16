@@ -200,6 +200,43 @@ struct AuthoredCaptionFilter {
   std::string value_high;
 };
 
+/// One decoded value-or-date `<filter>` entry from an authored
+/// `<filters>` block.
+///
+/// Sibling of `AuthoredCaptionFilter`, and separate from `PivotFilter`
+/// for the same reason: `PivotFilter` is the embedder-facing slicer
+/// surface reached through the C ABI, and clearing a slicer selection
+/// must not clear a rule that came out of the file.
+///
+/// It reuses `FilterType` rather than introducing another enum because
+/// each decoded family already has an evaluation counterpart there, and
+/// the reader only produces a member it can evaluate:
+///
+///   * `ValueTop10` — `<filter type="count">`, `value` is the item count
+///     from the nested `<top10 val="N">`.
+///   * `ValueGreaterThan` — `<filter type="valueGreaterThan">`, `value`
+///     is the exclusive threshold.
+///   * `ValueBetween` — `<filter type="valueBetween">`, inclusive bounds
+///     in `value` / `value_high`.
+///   * `LabelDate` — `<filter type="dateBetween">`, inclusive date
+///     serials in `value` / `value_high`.
+///
+/// The axis is not stored: a file names only the field, and which axis
+/// the pruning applies to follows from that field's membership in
+/// `row_field_order()` / `col_field_order()`.
+struct AuthoredValueFilter {
+  /// Source `fld` attribute: an index into `<pivotFields>`, which OOXML
+  /// keeps parallel to the bound cache's fields.
+  std::uint32_t field_index = 0;
+  FilterType type = FilterType::ValueTop10;
+  double value = 0.0;
+  /// Upper bound for the range families; absent otherwise. A range entry
+  /// with no upper bound degrades to a no-op, matching `PivotFilter`.
+  std::optional<double> value_high;
+  /// Source `iMeasureFld`: which data field's aggregate is scored.
+  std::uint32_t data_field_index = 0;
+};
+
 /// Sort directive for a pivot field.
 struct SortSpec {
   bool ascending = true;

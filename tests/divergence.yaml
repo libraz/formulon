@@ -1132,16 +1132,17 @@ entries:
   # evaluates unfiltered. src/pivot/pivot_table.h documents why the decode
   # is read-side only (the writer keeps emitting the block verbatim, so
   # nothing has to author filter XML).
-  - id: pivot_authored_value_date_filters_not_evaluated
+  - id: pivot_authored_relative_period_filters_not_evaluated
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
     evidence:
       [
         tests/integration/pivot_caption_filter_fixture_test.cpp,
+        tests/integration/pivot_value_date_filter_fixture_test.cpp,
         tests/unit/io/pivot_table_reader_test.cpp,
       ]
-    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Verified on tests/fixtures/excel/pivot_caption_filter.xlsx, an Excel-authored pivot over A1:C7 (Region rows, Qtr columns, sum of Amt) filtered from the row-label dropdown with 'label filters -> equals -> North': Excel renders North alone at 10 / 5 / 15 with a grand total of 15, where the unfiltered table is East / North / South totalling 56. The caption family (ST_PivotFilterType's caption* members) is decoded and now matches that render. The value, date and relative-period families are still passthrough-only and evaluate unfiltered. The same fixture shows why item visibility cannot stand in for the decode: Excel leaves all three <item> entries visible and records the filter only in <filters>, with the result mirrored into <rowItems>."
+    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Two Excel-authored fixtures pin the families that are decoded. tests/fixtures/excel/pivot_caption_filter.xlsx covers the caption family: a pivot over A1:C7 (Region rows, Qtr columns, sum of Amt) filtered with 'label filters -> equals -> North' renders North alone at 10 / 5 / 15, grand total 15, against 56 unfiltered. tests/fixtures/excel/pivot_value_date_filters.xlsx covers the value and absolute-date families over one source table whose Region totals are North 150 / South 500 / East 100 / West 175: top 2 items keeps South and West; 'greater than 100' keeps North, South and West, dropping East on the threshold, so the comparison is strict; 'between 100 and 175' keeps East, North and West, so both bounds are inclusive; and a date range of 2024-01-01..2024-03-31 keeps the five first-quarter rows totalling 580. All four match Formulon. What remains undecoded is the relative-period family (dateThisMonth, dateYearToDate and their siblings), which resolves against the current date and would make a pivot's result depend on the day it was computed, plus the percent and sum flavours of the top-N dialog, which rank on a different quantity than the decoded count flavour. Both fixtures also show why item visibility cannot stand in for the decode: Excel leaves every <item> entry visible and records the rule only in <filters>, with the result mirrored into <rowItems>."
     prefer: mac-excel-365
     first_noted: 2026-08-14
     last_verified_excel_version: "16.112"

@@ -466,6 +466,76 @@ TEST(PivotTableReader, AuthoredCaptionFilterAcceptsThePlainFilterListShape) {
   EXPECT_EQ(table_or.value().authored_caption_filters()[0].value, "South");
 }
 
+// Entries the value decoder must refuse rather than answer approximately,
+// all of which still have to survive the round trip as passthrough.
+//
+// `percent` and `sum` are the other two flavours of Excel's "top ten"
+// dialog. They share `count`'s nested `<top10>` element but rank on a
+// share of the total rather than on an item count, so reading them as a
+// count would quietly return the wrong rows -- worse than not filtering.
+// `dateThisMonth` stands in for the relative-period families, which
+// resolve against the current date this engine has no clock for.
+TEST(PivotTableReader, UnevaluableFilterFamiliesAreSkippedButStillRoundTrip) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"4\">");
+  xml.append(
+      "<filter fld=\"0\" type=\"percent\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+      "<top10 percent=\"1\" val=\"25\"/></filterColumn></autoFilter></filter>");
+  xml.append(
+      "<filter fld=\"0\" type=\"sum\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+      "<top10 val=\"500\"/></filterColumn></autoFilter></filter>");
+  xml.append("<filter fld=\"2\" type=\"dateThisMonth\"><autoFilter ref=\"A1\"/></filter>");
+  // A count filter with no nested `<top10>` names no quantity at all.
+  xml.append("<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
+  EXPECT_TRUE(table_or.value().authored_caption_filters().empty());
+
+  const std::string round = write_pivot_table_definition(table_or.value());
+  EXPECT_EQ(CountOccurrences(round, "<filter "), 4U) << round;
+  EXPECT_NE(round.find("dateThisMonth"), std::string::npos) << round;
+}
+
+TEST(PivotTableReader, ValueFilterCriteriaThatAreNotNumbersAreSkipped) {
+  // The criterion shares the sheet path's number lexer, so a caption-ish
+  // payload under a value type is refused instead of reaching the
+  // comparison as zero.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append(
+      "<filters count=\"1\"><filter fld=\"0\" type=\"valueGreaterThan\"><autoFilter ref=\"A1\">"
+      "<filterColumn colId=\"0\"><customFilters><customFilter operator=\"greaterThan\" val=\"North\"/>"
+      "</customFilters></filterColumn></autoFilter></filter></filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
+}
+
+TEST(PivotTableReader, ValueBetweenWithOnlyOneBoundIsSkipped) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append(
+      "<filters count=\"1\"><filter fld=\"0\" type=\"valueBetween\"><autoFilter ref=\"A1\">"
+      "<filterColumn colId=\"0\"><customFilters and=\"1\">"
+      "<customFilter operator=\"greaterThanOrEqual\" val=\"100\"/>"
+      "</customFilters></filterColumn></autoFilter></filter></filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
+}
+
 TEST(PivotTableReader, ShowDataAsAttributesAreParsed) {
   // <dataField> exercises showDataAs / baseField / baseItem decoding.
   std::string xml(kXmlDecl);

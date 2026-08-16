@@ -14,6 +14,7 @@
 
 #include "io/cell_parser.h"
 #include "io/xml_utils.h"
+#include "io/xsd_double.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pugixml.hpp"
@@ -413,6 +414,112 @@ std::vector<std::string_view> CollectFilterCriteria(const pugi::xml_node& filter
   return out;
 }
 
+/// Maps a `<filter type="...">` body to the value or date family it
+/// evaluates as.
+///
+/// Only the members with an evaluation counterpart are mapped. Excel's
+/// "top ten" dialog writes `count` for an item count, and `percent` /
+/// `sum` for its other two flavours; those two rank on a different
+/// quantity and are left undecoded rather than silently answered as an
+/// item count. The relative-period families resolve against the current
+/// date and are excluded on purpose — see `PivotTable`.
+std::optional<pivot::FilterType> ParseValueFilterType(std::string_view text) {
+  struct Entry {
+    std::string_view name;
+    pivot::FilterType type;
+  };
+  static constexpr Entry kEntries[] = {
+      {"count", pivot::FilterType::ValueTop10},
+      {"valueGreaterThan", pivot::FilterType::ValueGreaterThan},
+      {"valueBetween", pivot::FilterType::ValueBetween},
+      {"dateBetween", pivot::FilterType::LabelDate},
+  };
+  for (const Entry& entry : kEntries) {
+    if (entry.name == text) {
+      return entry.type;
+    }
+  }
+  return std::nullopt;
+}
+
+/// Reads the item count out of a top-N filter's nested
+/// `<top10 val="N"/>`. Returns `nullopt` when the element is absent, so
+/// the entry is dropped rather than defaulting to a count nobody wrote.
+std::optional<double> CollectTopCount(const pugi::xml_node& filter_node) {
+  const pugi::xml_node top = filter_node.child("autoFilter").child("filterColumn").child("top10");
+  if (!top) {
+    return std::nullopt;
+  }
+  const pugi::xml_attribute val = top.attribute("val");
+  if (!val) {
+    return std::nullopt;
+  }
+  double parsed = 0.0;
+  if (!parse_xsd_double(val.value(), &parsed)) {
+    return std::nullopt;
+  }
+  return parsed;
+}
+
+/// Parses one `<customFilter val="...">` payload, rejecting anything the
+/// sheet path's lexer would not accept as a number. Sharing that lexer
+/// keeps `0x10` from meaning sixteen here and nothing elsewhere.
+std::optional<double> ParseCriterionNumber(std::string_view text) {
+  double parsed = 0.0;
+  if (!parse_xsd_double(text, &parsed)) {
+    return std::nullopt;
+  }
+  return parsed;
+}
+
+/// Decodes the value and date entries of an authored `<filters>` block.
+///
+/// Unlike a caption filter, these carry no `stringValue*` shorthand: the
+/// criteria live only in the nested `<autoFilter>`, as one
+/// `<customFilter val="...">` for a threshold and two for a range. Date
+/// bounds are written as serials, which is the form the evaluation pass
+/// wants anyway — the rendered label would lose both precision and
+/// locale.
+void ParseAuthoredValueFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
+  for (pugi::xml_node node = parent.child("filter"); node; node = node.next_sibling("filter")) {
+    const auto type_or = ParseValueFilterType(attr_str(node, "type"));
+    if (!type_or) {
+      continue;
+    }
+    pivot::AuthoredValueFilter entry;
+    entry.field_index = parse_xml_u32_attr(node.attribute("fld"), 0U);
+    entry.data_field_index = parse_xml_u32_attr(node.attribute("iMeasureFld"), 0U);
+    entry.type = *type_or;
+
+    if (*type_or == pivot::FilterType::ValueTop10) {
+      const auto count_or = CollectTopCount(node);
+      if (!count_or) {
+        continue;
+      }
+      entry.value = *count_or;
+    } else {
+      const bool ranged = *type_or == pivot::FilterType::ValueBetween || *type_or == pivot::FilterType::LabelDate;
+      const std::vector<std::string_view> criteria = CollectFilterCriteria(node);
+      if (criteria.size() < (ranged ? 2U : 1U)) {
+        continue;
+      }
+      const auto low_or = ParseCriterionNumber(criteria[0]);
+      if (!low_or) {
+        continue;
+      }
+      entry.value = *low_or;
+      if (ranged) {
+        const auto high_or = ParseCriterionNumber(criteria[1]);
+        if (!high_or) {
+          continue;
+        }
+        entry.value_high = *high_or;
+      }
+    }
+    out->mutable_authored_value_filters().push_back(entry);
+  }
+}
+
 /// Decodes the caption entries of an authored `<filters>` block.
 ///
 /// The block stays in the verbatim passthrough tail regardless — this
@@ -535,6 +642,10 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   if (auto status = DecodeLocationRef(ref_attr.value(), &table); !status) {
     return status.error();
   }
+  // The span now describes a range Excel itself wrote. Recording that keeps
+  // the writer from replacing it with our own layout projection, which would
+  // make a read -> write cycle rewrite an authored `ref`.
+  table.mark_span_authored();
 
   // Capture the `<location>` offset attributes. ECMA-376 requires
   // `firstHeaderRow`, `firstDataRow`, and `firstDataCol`; `rowPageCount`
@@ -571,9 +682,12 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // `<filters>` is decoded for evaluation but deliberately left out of
   // `kRecognized` below, so the block still reaches the passthrough tail
   // and the writer keeps re-emitting it byte-for-byte. See
-  // `PivotTable::authored_caption_filters`.
+  // `PivotTable::authored_caption_filters`. The two decoders read the
+  // same elements and each keeps only the families it can evaluate, so an
+  // entry outside both is simply passthrough.
   if (pugi::xml_node filters = root.child("filters"); filters) {
     ParseAuthoredFilters(filters, &table);
+    ParseAuthoredValueFilters(filters, &table);
   }
   // Capture any remaining direct children of <pivotTableDefinition> that
   // we do not model structurally into position-keyed raw-XML buffers, so

@@ -482,20 +482,26 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // retain their pre-filter values so a Top-N report can still surface
   // "X out of total" framing; a subtotal whose group is filtered away
   // entirely is dropped along with the leaves it covered.
-  for (const PivotFilter& f : table.active_filters()) {
+  //
+  // Both filter lists feed this pass. A slicer selection and a rule the
+  // reader decoded out of `<filters>` prune identically once the latter
+  // has recovered the axis a file does not spell out, so the authored
+  // entries are projected onto the same shape rather than given a second
+  // copy of the pruning logic.
+  const auto apply_value_filter = [&](const PivotFilter& f) {
     if (f.type != FilterType::ValueTop10 && f.type != FilterType::ValueGreaterThan &&
         f.type != FilterType::ValueBetween) {
-      continue;  // Label/Date filters handled pre-aggregation.
+      return;  // Label/Date filters handled pre-aggregation.
     }
     if (data_field_count == 0) {
-      continue;
+      return;
     }
     // A value filter names the measure whose aggregate determines ranking.
     // Invalid selectors are deliberately a no-op for filters constructed
     // directly against the C++ model; public binding APIs reject them before
     // mutation.
     if (f.data_field_index >= data_field_count) {
-      continue;
+      return;
     }
     if (f.axis == PivotAxis::Row && !table.row_field_order().empty()) {
       // `n` is the number of row leaves (DFS pre-order), which is what
@@ -504,12 +510,12 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       // the row hierarchy is multi-level.
       const std::size_t n = result.values.size();
       if (n == 0) {
-        continue;
+        return;
       }
       const auto keep_or = build_value_filter_keep(
           f, score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count, f.data_field_index));
       if (!keep_or) {
-        continue;
+        return;
       }
       const std::vector<bool>& keep = *keep_or;
       // Prune the row hierarchy: leaves survive when `keep[leaf] == true`
@@ -525,12 +531,12 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       // and the filter is a no-op below.
       const std::size_t n = result.values.empty() ? 0 : result.values[0].size();
       if (n == 0) {
-        continue;
+        return;
       }
       const std::size_t row_n = row_levels.empty() ? 1u : result.values.size();
       const auto keep_or = build_value_filter_keep(f, score_col_axis(result, n, row_n, f.data_field_index));
       if (!keep_or) {
-        continue;
+        return;
       }
       const std::vector<bool>& keep = *keep_or;
       // Prune the col hierarchy then re-express every column-leaf-indexed
@@ -540,6 +546,15 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     }
     // Mixed-direction (e.g. row-axis filter referencing a column field)
     // remains out of scope; such filters fall through here as a no-op.
+  };
+
+  for (const PivotFilter& f : table.active_filters()) {
+    apply_value_filter(f);
+  }
+  for (const AuthoredValueFilter& authored : table.authored_value_filters()) {
+    if (const auto projected = authored_value_filter_as_pivot_filter(table, authored)) {
+      apply_value_filter(*projected);
+    }
   }
 
   // 8. Show-values-as transforms.

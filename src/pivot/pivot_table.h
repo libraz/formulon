@@ -90,6 +90,29 @@ class PivotTable {
     span_cols_ = cols;
   }
 
+  /// True when the span came from a `<location ref>` the reader decoded,
+  /// rather than from a model assembled in memory.
+  ///
+  /// The saved `ref` has to describe the grid Excel will actually draw.
+  /// Nothing in this model keeps the span in step with the fields, so a
+  /// table assembled through the C API still carries the placeholder span
+  /// installed at creation however many fields are added afterwards, and a
+  /// `ref` smaller than the rendered report makes Excel terminate when it
+  /// refreshes. The writer therefore projects the real extent for a table
+  /// whose span is not authored (see `write_pivot_table_definition`).
+  ///
+  /// An authored span is re-emitted exactly as it was read. Re-deriving it
+  /// would rewrite a `ref` Excel itself wrote, on the strength of our own
+  /// layout projection — the round-trip fidelity gate exists to catch
+  /// precisely that.
+  /// Cleared again as soon as anything about the table changes: the span
+  /// Excel wrote described the report as it stood, and a field, an order,
+  /// a filter or a move all resize it. Position stays the caller's to set;
+  /// the extent goes back to being projected.
+  bool has_authored_span() const { return has_authored_span_; }
+  void mark_span_authored() { has_authored_span_ = true; }
+  void clear_span_authored() { has_authored_span_ = false; }
+
   // `<location>` required / commonly-present attributes ----------------------
   //
   // ECMA-376 marks `firstHeaderRow`, `firstDataRow`, and `firstDataCol` as
@@ -154,13 +177,24 @@ class PivotTable {
   // authoring filter XML — including the nested `<autoFilter>` criteria —
   // which this version has no Excel-produced reference file to check
   // against. Reading it needs no such reference: the criteria reduce to a
-  // predicate over labels the bound cache already spells out.
+  // predicate the bound cache already spells out.
   //
-  // Only the caption family is decoded. Value and date filters
-  // (`valueGreaterThan`, `dateBetween`, the top-N `count` family, ...)
-  // stay passthrough-only for now and still evaluate unfiltered.
+  // The two lists split by when the rule can be decided. A caption or
+  // date criterion is a property of one source record, so it prunes
+  // before aggregation; a value criterion ranks an axis leaf by its
+  // aggregate, so it cannot be decided until the aggregates exist. That
+  // is the same split `active_filters()` already drives, and both lists
+  // feed the same two passes.
+  //
+  // The relative-period families (`thisMonth`, `yearToDate`, ...) are the
+  // one part left undecoded: they resolve against the current date, and
+  // this engine has no injectable clock, so evaluating them would make a
+  // pivot's result depend on the day it was computed.
   const std::vector<AuthoredCaptionFilter>& authored_caption_filters() const { return authored_caption_filters_; }
   std::vector<AuthoredCaptionFilter>& mutable_authored_caption_filters() { return authored_caption_filters_; }
+
+  const std::vector<AuthoredValueFilter>& authored_value_filters() const { return authored_value_filters_; }
+  std::vector<AuthoredValueFilter>& mutable_authored_value_filters() { return authored_value_filters_; }
 
   // Most-recent evaluation result -------------------------------------------
   //
@@ -245,6 +279,7 @@ class PivotTable {
   std::uint32_t anchor_col_ = 0;
   std::uint32_t span_rows_ = 0;
   std::uint32_t span_cols_ = 0;
+  bool has_authored_span_ = false;
   std::optional<std::uint32_t> location_first_header_row_;
   std::optional<std::uint32_t> location_first_data_row_;
   std::optional<std::uint32_t> location_first_data_col_;
@@ -254,6 +289,7 @@ class PivotTable {
   bool grand_totals_cols_ = true;
   std::vector<PivotFilter> active_filters_;
   std::vector<AuthoredCaptionFilter> authored_caption_filters_;
+  std::vector<AuthoredValueFilter> authored_value_filters_;
   std::string raw_passthrough_xml_;
   std::string raw_passthrough_after_row_fields_;
   std::string raw_passthrough_after_col_fields_;
