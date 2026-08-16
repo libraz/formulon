@@ -334,10 +334,15 @@ TEST_P(WorkbookOracleTest, Matches) {
   ASSERT_TRUE(static_cast<bool>(built_or)) << "build_pivot_from_spec failed: " << built_or.error().message;
   BuiltPivot built = std::move(built_or.value());
 
-  auto result_or = pivot::evaluate(built.table, built.cache);
+  // `blank_item_label` names an axis item, so it has to reach `evaluate`,
+  // which bakes node labels into the result; passing the options only to
+  // `layout` leaves a blank group spelled in English under a ja-JP profile
+  // while every other label is localized. Both production call sites
+  // (getpivotdata_lazy.cpp, c_api/parts/pivot_layout.cpp) pass them here.
+  const pivot::PivotLayoutOptions layout_options = eval::pivot_layout_options_for(built.workbook->excel_profile());
+  auto result_or = pivot::evaluate(built.table, built.cache, layout_options);
   ASSERT_TRUE(static_cast<bool>(result_or)) << "pivot::evaluate failed: " << result_or.error().message;
 
-  const pivot::PivotLayoutOptions layout_options = eval::pivot_layout_options_for(built.workbook->excel_profile());
   auto cells_or = pivot::layout(built.table, result_or.value(), layout_options);
   ASSERT_TRUE(static_cast<bool>(cells_or)) << "pivot::layout failed: " << cells_or.error().message;
   const pivot::PivotCells& cells = cells_or.value();
