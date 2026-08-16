@@ -842,15 +842,18 @@ entries:
   # principled rule emerges (would need source-level Excel access or a
   # significantly broader capture matrix to derive empirically).
   #
-  # A product-verified Microsoft 365 capture (16.0.20228, ja-JP) has now
-  # observed all six; the values are recorded per entry below. They are
-  # still stamped `unverified` because that capture resolved a column
-  # width in the ja-JP host's own UI font while the engine resolves the
-  # same character count against Calibri 11, so the two sides paginated
-  # physically different sheets and the scale behaviour cannot be
-  # separated from that mismatch yet. The driver now pins the Normal
-  # style (windows_excel.py::_pin_normal_font); the next capture is what
-  # these stamps wait on.
+  # Verified against Microsoft 365 16.0.20228 (ja-JP) with the capture
+  # host's Normal style pinned to Calibri 11, so both sides resolve a
+  # character-unit column width the same way. The goldens record the
+  # resolved geometry: the column stays 171.0 pt at every zoom, and at
+  # 100% the engine reproduces Excel's breaks exactly on these same
+  # cases. That isolates the divergence to the scale itself.
+  #
+  # Excel's automatic column breaks do not move at all between zoom 100
+  # and zoom 50 -- v=[2,4,6] for every one -- and at zoom 25 they invert
+  # to one column per page. Formulon scales geometrically, which is what
+  # the rendered output does; this is what the COM PageBreaks collection
+  # reports.
   - id: scale_50_shrinks_breaks
     cause: accepted-divergence
     mode: skip-oracle
@@ -858,7 +861,7 @@ entries:
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
+    last_verified_excel_version: "16.0.20228"
   - id: scale_25_extreme_shrink
     cause: accepted-divergence
     mode: skip-oracle
@@ -866,7 +869,7 @@ entries:
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[1,2,3,4,5,6,7] h=[18] pages=16 at scale 25 -- one column per page, more breaks than at scale 50; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
+    last_verified_excel_version: "16.0.20228"
   - id: zoom_50_dense_fit_off
     cause: accepted-divergence
     mode: skip-oracle
@@ -874,7 +877,7 @@ entries:
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[29] pages=8 at zoom 50, where zoom 100 gives h=[]; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
+    last_verified_excel_version: "16.0.20228"
   - id: zoom_25_dense_fit_off
     cause: accepted-divergence
     mode: skip-oracle
@@ -882,7 +885,7 @@ entries:
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[1,2,3,4,5,6,7] h=[18] pages=16 at zoom 25; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
+    last_verified_excel_version: "16.0.20228"
   - id: scale_50_short_row
     cause: accepted-divergence
     mode: skip-oracle
@@ -890,7 +893,7 @@ entries:
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
+    last_verified_excel_version: "16.0.20228"
   - id: scale_50_flat_rows
     cause: accepted-divergence
     mode: skip-oracle
@@ -898,7 +901,7 @@ entries:
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
+    last_verified_excel_version: "16.0.20228"
 
   # -- GROUPBY / PIVOTBY nested subtotals (|total_depth| == 2) -------------
   # Both functions build the outer/inner hierarchy over the first key
@@ -920,6 +923,30 @@ entries:
   # the exact cell each engine lands on differs. Both behaviours are
   # "right" under the sorted-input contract — this entry records the
   # accepted divergence on contract-violating input.
+  - id: zoom_75_dense_fit_off
+    cause: accepted-divergence
+    mode: skip-oracle
+    applies_to: [win-365-ja_JP]
+    reason: "Excel's automatic column breaks do not respond to the print scale: Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at zoom 75, identical to zoom 100, with the column measured at the same 171.0 pt throughout. Formulon paginates the scaled geometry."
+    prefer: formulon
+    first_noted: 2026-08-16
+    last_verified_excel_version: "16.0.20228"
+  - id: scale_75_short_row
+    cause: accepted-divergence
+    mode: skip-oracle
+    applies_to: [win-365-ja_JP]
+    reason: "Excel's automatic column breaks do not respond to the print scale: Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 75, identical to scale 100, with the column measured at the same 171.0 pt throughout. Formulon paginates the scaled geometry."
+    prefer: formulon
+    first_noted: 2026-08-16
+    last_verified_excel_version: "16.0.20228"
+  - id: scale_75_flat_rows
+    cause: accepted-divergence
+    mode: skip-oracle
+    applies_to: [win-365-ja_JP]
+    reason: "Excel's automatic column breaks do not respond to the print scale: Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 75, identical to scale 100, with the column measured at the same 171.0 pt throughout. Formulon paginates the scaled geometry."
+    prefer: formulon
+    first_noted: 2026-08-16
+    last_verified_excel_version: "16.0.20228"
   - id: xlookup_binary_search_dirty_data
     cause: accepted-divergence
     mode: skip-oracle
@@ -929,6 +956,20 @@ entries:
     prefer: formulon
     first_noted: 2026-06-26
     last_verified_excel_version: "16.109"
+
+  # -- Page-field header block --------------------------------------------
+  # Retired the pair of `engine-gap` entries that claimed GETPIVOTDATA
+  # could not address a page/data-axis field: Microsoft 365 16.0.20228
+  # answers `#REF!` for both probes, exactly as Formulon does, so nothing
+  # was owed. What the same capture did surface is narrower and real --
+  # the header block Excel draws above a pivot that has a page field.
+  - id: page_axis_field
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel prepends a page-field header to the rendered grid -- one row per page field carrying the field name and the selected item (`Region | (すべて)` when unfiltered), then a blank separator row -- before the row/column header row. Formulon's pivot model carries no page-field axis, so `pivot::layout` projects the grid starting at the row-labels header. The aggregated values agree exactly (Gadget 350, Widget 300, total 650 under Microsoft 365 16.0.20228); only the two leading header rows are missing. GETPIVOTDATA over the same pivot already matches Excel."
+    prefer: excel
+    first_noted: 2026-08-16
+    last_verified_excel_version: "16.0.20228"
 
   # AREAS recurses into CHOOSE / IF reference branches, so a branch that is
   # itself a union reports its real area count.
