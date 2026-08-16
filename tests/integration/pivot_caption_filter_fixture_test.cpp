@@ -33,6 +33,7 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/zip_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
@@ -158,6 +159,33 @@ TEST(PivotCaptionFilterFixture, EvaluationMatchesTheExcelFilteredRender) {
   EXPECT_DOUBLE_EQ(result.values[0][1][0].as_number(), kNorthQ2);
   ASSERT_TRUE(result.grand_total.is_number());
   EXPECT_DOUBLE_EQ(result.grand_total.as_number(), kNorthTotal);
+}
+
+// ---------------------------------------------------------------------------
+// (c) Excel's own `<location ref>` survives a read -> write cycle.
+// ---------------------------------------------------------------------------
+
+// The writer projects the rendered extent into `ref` for a pivot built in
+// memory, because such a table carries a placeholder span that understates
+// the report and makes Excel terminate on refresh. That projection must not
+// reach a `ref` Excel wrote: here the authored range is E1:H4 while the
+// pivot renders a filtered single-region report, so a writer that reprojected
+// unconditionally would silently shrink Excel's own bytes.
+TEST(PivotCaptionFilterFixture, ExcelAuthoredLocationRefIsReEmittedUnchanged) {
+  Workbook wb = LoadFixture();
+  const pivot::PivotTable* table = FirstPivot(wb);
+  ASSERT_NE(table, nullptr);
+  ASSERT_TRUE(table->has_authored_span());
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(io::ByteSpan{bytes_or.value().data(), bytes_or.value().size()})));
+  auto part_or = zip.read_entry("xl/pivotTables/pivotTable1.xml");
+  ASSERT_TRUE(static_cast<bool>(part_or)) << "missing pivotTable1.xml";
+  const std::string part(part_or.value().begin(), part_or.value().end());
+  EXPECT_NE(part.find("<location ref=\"E1:H4\""), std::string::npos) << part;
 }
 
 }  // namespace

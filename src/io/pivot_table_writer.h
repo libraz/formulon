@@ -20,11 +20,24 @@
 #ifndef FORMULON_IO_PIVOT_TABLE_WRITER_H_
 #define FORMULON_IO_PIVOT_TABLE_WRITER_H_
 
+#include <cstdint>
+#include <optional>
 #include <string>
 
 #include "pivot/pivot_table.h"
 
 namespace formulon::io {
+
+/// Extent, in cells, of the grid a pivot actually renders.
+///
+/// Supplied by the caller (which owns the evaluator and the layout
+/// projection; this writer deliberately depends on the pivot *model*
+/// only) so `<location ref>` can describe the report Excel will draw
+/// rather than whatever span the model happens to carry.
+struct PivotRenderedSpan {
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+};
 
 /// Emits a complete `xl/pivotTables/pivotTable*.xml` document.
 ///
@@ -48,9 +61,29 @@ namespace formulon::io {
 ///     for clarity, matching real Excel files), and an optional
 ///     `numFmtId` (passthrough of `data_field.number_format`).
 ///
+/// `rendered_span`, when supplied, is the extent the caller projected for
+/// this pivot. It bears on `<location ref>` in one direction only, as a
+/// lower bound, and only for a span the reader did not decode
+/// (`PivotTable::has_authored_span()`):
+///
+///   * A span read back from a file is Excel's own and is re-emitted
+///     untouched, so a read -> write cycle cannot rewrite authored bytes on
+///     the strength of our own projection.
+///   * Otherwise the emitted range is the larger of the model's span and
+///     the projection. Under-sizing is the failure that matters — Excel
+///     terminates when it refreshes a pivot whose `ref` is smaller than the
+///     grid it draws — and a model assembled in memory keeps whatever
+///     placeholder span it was created with however many fields are added
+///     afterwards. Over-sizing is harmless, so a caller that deliberately
+///     reserved a wider range keeps it.
+///
+/// Passing it unconditionally is therefore safe — this function owns the
+/// choice.
+///
 /// Returns an owning `std::string`; there is no error channel because
 /// the inputs are pure-data (no I/O, no allocation failure surfaced).
-std::string write_pivot_table_definition(const pivot::PivotTable& table);
+std::string write_pivot_table_definition(const pivot::PivotTable& table,
+                                         std::optional<PivotRenderedSpan> rendered_span = std::nullopt);
 
 }  // namespace formulon::io
 

@@ -312,7 +312,8 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
 
 }  // namespace
 
-std::string write_pivot_table_definition(const pivot::PivotTable& table) {
+std::string write_pivot_table_definition(const pivot::PivotTable& table,
+                                         std::optional<PivotRenderedSpan> rendered_span) {
   std::string out;
   // Pre-reserve a rough lower bound. The XML declaration + root + location
   // run ~200B; per-field cost is ~80B with a few items each, per data-
@@ -365,7 +366,24 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table) {
   // Anchor is unconditionally emitted as a range; an empty table
   // (span_rows == span_cols == 0) round-trips through the single-cell
   // form via EncodeA1Range's zero-span guard.
-  AppendXmlEscaped(out, EncodeA1Range(table.anchor_row(), table.anchor_col(), table.span_rows(), table.span_cols()));
+  //
+  // A span the reader decoded is Excel's own and is re-emitted verbatim.
+  //
+  // Otherwise the projection acts as a floor rather than a replacement.
+  // Under-sizing is the failure that matters: a `ref` smaller than the grid
+  // the pivot draws makes Excel terminate when the report is refreshed, and
+  // that is what a model assembled in memory produces, because nothing
+  // revises the span it was created with as fields are added. Over-sizing
+  // is not a failure -- Excel reserves the range and recomputes it on
+  // refresh -- so a caller that deliberately set a wider span through
+  // `fm_workbook_pivot_set_anchor` keeps it.
+  std::uint32_t span_rows = table.span_rows();
+  std::uint32_t span_cols = table.span_cols();
+  if (rendered_span.has_value() && !table.has_authored_span()) {
+    span_rows = span_rows > rendered_span->rows ? span_rows : rendered_span->rows;
+    span_cols = span_cols > rendered_span->cols ? span_cols : rendered_span->cols;
+  }
+  AppendXmlEscaped(out, EncodeA1Range(table.anchor_row(), table.anchor_col(), span_rows, span_cols));
   out.append("\"");
   // ECMA-376 requires firstHeaderRow / firstDataRow / firstDataCol. Preserve
   // authored values, including explicit zero, while supplying the schema's

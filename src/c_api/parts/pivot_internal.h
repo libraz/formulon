@@ -43,8 +43,14 @@ formulon::pivot::PivotTable* resolve_pivot_mut(formulon::Workbook& wb, std::size
 const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, std::size_t sheet_index,
                                                  std::size_t pivot_index, const char* fn);
 
-// Invalidates the pivot's `last_result_` cache so the next layout call
+// Invalidates the pivot's derived state so the next layout call
 // recomputes. Called after every mutation that could affect projection.
+//
+// That state is both the `last_result_` cache and the "this span is
+// Excel's own" mark: a span read out of a file described the report as it
+// then stood, so a field, an order, a filter or a move all invalidate it
+// as surely as they invalidate the aggregates. Positioning stays the
+// caller's; the extent goes back to being projected at save time.
 void invalidate_pivot_result(formulon::pivot::PivotTable& table);
 
 // Invalidates `last_result_` on every pivot table (across all sheets)

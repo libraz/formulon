@@ -88,6 +88,7 @@ const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, s
 
 void invalidate_pivot_result(formulon::pivot::PivotTable& table) {
   table.clear_last_result();
+  table.clear_span_authored();
 }
 
 void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id) {

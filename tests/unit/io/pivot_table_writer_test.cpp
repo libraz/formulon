@@ -67,6 +67,73 @@ TEST(PivotTableWriter, LocationRequiredAttrsDefaultIndependentlyAndPreserveZero)
 }
 
 // ---------------------------------------------------------------------------
+// `<location ref>` against a caller-supplied rendered span.
+//
+// Nothing in the model keeps a span in step with the fields, so a table
+// assembled in memory keeps whatever placeholder span it was created
+// with. Emitting that understates the report, and Excel terminates when it
+// refreshes a pivot whose `ref` is smaller than the grid it draws. The
+// writer therefore raises such a span to the caller's projection. It only
+// ever raises: over-sizing a `ref` is harmless, so a span deliberately set
+// wider stands, and a span read out of a file is left alone entirely.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, RenderedSpanRaisesAPlaceholderSpan) {
+  pivot::PivotTable table;
+  table.set_anchor(0U, 0U, 1U, 1U);  // the placeholder `fm_workbook_pivot_create` installs
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{4U, 3U});
+  EXPECT_NE(xml.find("<location ref=\"A1:C4\""), std::string::npos) << "xml=" << xml;
+}
+
+TEST(PivotTableWriter, RenderedSpanIsOffsetFromTheAnchorNotFromA1) {
+  pivot::PivotTable table;
+  table.set_anchor(2U, 4U, 1U, 1U);  // E3
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{4U, 3U});
+  EXPECT_NE(xml.find("<location ref=\"E3:G6\""), std::string::npos) << "xml=" << xml;
+}
+
+TEST(PivotTableWriter, AnAuthoredSpanIsReEmittedAndNeverReprojected) {
+  // The span here came from a `ref` Excel wrote. Replacing it with our own
+  // projection would make a read -> write cycle rewrite authored bytes,
+  // which is exactly what the round-trip fidelity gate exists to catch --
+  // so a projection that disagrees must lose.
+  std::string source(kXmlDecl);
+  source.append("<pivotTableDefinition");
+  source.append(kPivotNs);
+  source.append(" name=\"P\" cacheId=\"1\">");
+  source.append("<location ref=\"A3:D10\" firstHeaderRow=\"1\" firstDataRow=\"2\" firstDataCol=\"1\"/>");
+  source.append("<pivotFields count=\"0\"/>");
+  source.append("</pivotTableDefinition>");
+
+  auto parsed_or = read_pivot_table_definition(Bytes(source));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  const pivot::PivotTable& parsed = parsed_or.value();
+  ASSERT_TRUE(parsed.has_authored_span());
+
+  const std::string xml = write_pivot_table_definition(parsed, PivotRenderedSpan{99U, 99U});
+  EXPECT_NE(xml.find("<location ref=\"A3:D10\""), std::string::npos) << "xml=" << xml;
+}
+
+TEST(PivotTableWriter, AWiderDeliberateSpanOutranksASmallerProjection) {
+  // `fm_workbook_pivot_set_anchor` takes spans, so a caller that passes
+  // them means them. Over-reserving is not the failure mode -- Excel
+  // recomputes the range on refresh -- so the projection must not shrink
+  // a range someone asked for, or those two parameters would be dead.
+  pivot::PivotTable table;
+  table.set_anchor(0U, 0U, 8U, 4U);
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{4U, 2U});
+  EXPECT_NE(xml.find("<location ref=\"A1:D8\""), std::string::npos) << "xml=" << xml;
+}
+
+TEST(PivotTableWriter, WithoutAProjectionTheModelSpanIsEmitted) {
+  // The projection is optional: a caller that cannot evaluate the pivot
+  // passes nothing and the model's own span is emitted, as it always was.
+  pivot::PivotTable table;
+  table.set_anchor(0U, 0U, 2U, 2U);
+  EXPECT_NE(write_pivot_table_definition(table).find("<location ref=\"A1:B2\""), std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
 // Definition: round-trip via reader, mirroring the integration test
 // fixture in tests/integration/ooxml_pivot_test.cpp.
 // ---------------------------------------------------------------------------

@@ -527,6 +527,80 @@ TEST(FormulonCApiPivot, SavedScratchPivotEmitsLocationRequiredDefaults) {
       << "xml=" << pivot_xml;
 }
 
+TEST(FormulonCApiPivot, SavedPivotLocationRefCoversTheProjectedGrid) {
+  // `fm_workbook_pivot_create` installs a 1x1 placeholder span and nothing
+  // revises it as fields are added, so a pivot built purely through the C
+  // surface used to save a `ref` describing a single cell. Excel opens such
+  // a file cleanly and recognises the pivot, then terminates the moment the
+  // report is refreshed -- the defect is invisible to a round trip and has
+  // to be pinned on the emitted bytes.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  // Deliberately no `fm_workbook_pivot_set_anchor`: this is the path a host
+  // takes when it never reasons about the report's extent at all.
+  PivotCellsGuard projected;
+  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ASSERT_EQ(fm_pivot_cells_bounds(projected.handle, &top, &left, &rows, &cols), 0);
+  ASSERT_GT(rows, 1U) << "projection must be larger than the placeholder for this test to mean anything";
+  ASSERT_GT(cols, 1U);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
+  const std::vector<std::uint8_t> package(saved.data, saved.data + saved.len);
+  const std::string pivot_xml = ExtractZipEntry(package, "xl/pivotTables/pivotTable1.xml");
+  ASSERT_FALSE(pivot_xml.empty());
+
+  // Anchored at D1, projected 4 rows x 2 cols -> D1:E4.
+  EXPECT_NE(pivot_xml.find("<location ref=\"D1:E4\""), std::string::npos) << "xml=" << pivot_xml;
+  EXPECT_EQ(pivot_xml.find("<location ref=\"D1:D1\""), std::string::npos) << "xml=" << pivot_xml;
+}
+
+TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
+  // The loaded package declares `ref="D1:E5"`, which described the report
+  // as Excel left it. Adding a column field widens the grid, so re-emitting
+  // the authored span would now under-size it -- the same crash, reached by
+  // loading rather than by building.
+  WorkbookGuard wb;
+  const std::vector<std::uint8_t> package = BuildPivotWorkbookBytes();
+  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_last_error_message();
+
+  fm_pivot_field_spec_t region_spec{};
+  region_spec.source_name = "Region";
+  region_spec.custom_name = "";
+  region_spec.axis = FM_PIVOT_AXIS_COL;
+  region_spec.subtotal_top = 0;
+  region_spec.number_format = "";
+  std::size_t added = 99;
+  ASSERT_EQ(fm_workbook_pivot_field_add(wb.handle, 1, 0, &region_spec, &added), 0) << fm_last_error_message();
+  const std::uint32_t col_order[] = {static_cast<std::uint32_t>(added)};
+  ASSERT_EQ(fm_workbook_pivot_set_col_field_order(wb.handle, 1, 0, col_order, 1), 0) << fm_last_error_message();
+
+  PivotCellsGuard projected;
+  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 1, 0, &projected.handle), 0) << fm_last_error_message();
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ASSERT_EQ(fm_pivot_cells_bounds(projected.handle, &top, &left, &rows, &cols), 0);
+  ASSERT_GT(cols, 2U) << "the added column field must widen the report";
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
+  const std::vector<std::uint8_t> written(saved.data, saved.data + saved.len);
+  const std::string pivot_xml = ExtractZipEntry(written, "xl/pivotTables/pivotTable1.xml");
+  ASSERT_FALSE(pivot_xml.empty());
+  EXPECT_EQ(pivot_xml.find("<location ref=\"D1:E5\""), std::string::npos)
+      << "the authored span no longer describes the report; xml=" << pivot_xml;
+}
+
 TEST(FormulonCApiPivot, PivotCacheMutationInvalidatesMemoisedLayout) {
   // fm_workbook_pivot_layout memoises the pivot's evaluated result. A cache
   // mutation must invalidate that memo so a re-layout reflects the change

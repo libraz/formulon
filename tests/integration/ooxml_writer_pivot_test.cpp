@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/pivot_locale.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -505,6 +506,70 @@ TEST(OoxmlWriterPivot, PivotTableWithUnresolvableCacheIdEmitsNoRels) {
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
   EXPECT_TRUE(zip.has_entry("xl/pivotTables/pivotTable1.xml"));
   EXPECT_FALSE(zip.has_entry("xl/pivotTables/_rels/pivotTable1.xml.rels"));
+}
+
+// ---------------------------------------------------------------------------
+// 10. `<location ref>` describes the grid the pivot renders, not the span
+//     the model happened to carry.
+//
+//     A table assembled in memory keeps whatever span it was created with
+//     -- `fm_workbook_pivot_create` installs a 1x1 placeholder and nothing
+//     revises it as fields are added. Excel opens such a file cleanly and
+//     recognises the pivot, then terminates the moment the report is
+//     refreshed, so the defect is invisible to a round-trip assertion and
+//     has to be pinned on the emitted bytes.
+// ---------------------------------------------------------------------------
+
+TEST(OoxmlWriterPivot, LocationRefCoversTheRenderedGridNotThePlaceholderSpan) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/0U)));
+  auto table = BuildRegionAmountTable(/*cache_id=*/0U, /*anchor_row=*/0U, /*anchor_col=*/3U);
+  // The placeholder a C-API-built pivot still carries at save time.
+  table->set_anchor(0U, 3U, 1U, 1U);
+  wb.sheet(0).add_pivot_table(std::move(table));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+
+  // Anchored at D1. Sum of Amount by Region renders one header row, one
+  // row per region (North, South), and a grand-total row, across a
+  // row-label column plus the single data column -> D1:E4.
+  const std::string part = PartText(bytes_or.value(), "xl/pivotTables/pivotTable1.xml");
+  EXPECT_NE(part.find("<location ref=\"D1:E4\""), std::string::npos) << part;
+
+  // Cross-check against the projection itself, so this stays honest if the
+  // profile's rendering shape is ever revised: whatever the layout says,
+  // the emitted ref has to match it.
+  const Workbook& source = wb;
+  const pivot::PivotTable& built = *source.sheet(0).pivot_tables().front();
+  const pivot::PivotCache* cache = source.find_pivot_cache(built.pivot_cache_id());
+  ASSERT_NE(cache, nullptr);
+  const pivot::PivotLayoutOptions options = eval::pivot_layout_options_for(source.excel_profile());
+  auto eval_or = pivot::evaluate(built, *cache, options);
+  ASSERT_TRUE(static_cast<bool>(eval_or)) << eval_or.error().message;
+  auto cells_or = pivot::layout(built, eval_or.value(), options);
+  ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
+  EXPECT_EQ(cells_or.value().rows, 4U);
+  EXPECT_EQ(cells_or.value().cols, 2U);
+}
+
+// A pivot the writer cannot evaluate must still save. Emitting the model's
+// span is the behaviour that predates the projection; failing the whole
+// workbook because one pivot could not be scored would be a far worse
+// trade.
+TEST(OoxmlWriterPivot, UnresolvableCacheFallsBackToTheModelSpan) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/0U)));
+  auto table = BuildRegionAmountTable(/*cache_id=*/99U, /*anchor_row=*/0U, /*anchor_col=*/3U);
+  table->set_anchor(0U, 3U, 5U, 2U);
+  wb.sheet(0).add_pivot_table(std::move(table));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  const std::string part = PartText(bytes_or.value(), "xl/pivotTables/pivotTable1.xml");
+  EXPECT_NE(part.find("<location ref=\"D1:E5\""), std::string::npos) << part;
 }
 
 }  // namespace

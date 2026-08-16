@@ -24,12 +24,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include "eval/pivot_locale.h"
 #include "io/comments_writer.h"
 #include "io/external_links.h"
 #include "io/ooxml/emission_plan.h"
@@ -49,6 +52,8 @@
 #include "io/xml_utils.h"
 #include "miniz.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_evaluator.h"
+#include "pivot/pivot_layout.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -72,6 +77,53 @@ std::string BuildPivotCacheDefinitionRels(std::string_view records_filename) {
   AppendRelationship(out, 1, kRelPivotCacheRecords, records_filename);
   out.append("</Relationships>\n");
   return out;
+}
+
+/// Projects the grid `table` will actually occupy, for `<location ref>`.
+///
+/// The saved `ref` has to describe the report Excel draws, and only the
+/// layout layer knows how many rows and columns that is. This is the one
+/// place the writer reaches past the pivot model into evaluation; keeping
+/// it here rather than inside `write_pivot_table_definition` leaves that
+/// writer a pure model-to-XML function.
+///
+/// The layout options bear on the *extent*, not merely on label text:
+/// `pivot::layout` selects Excel's compact shape only when the profile
+/// supplies axis-label captions, and the compact and legacy shapes differ
+/// in header-row and grand-total-strip counts. Projecting under the
+/// workbook's own profile is what makes the emitted `ref` agree with the
+/// grid Excel renders.
+///
+/// Returns `nullopt` when the extent cannot be established — no resolvable
+/// cache, or evaluation or projection failed. Saving then falls back to
+/// the table's own span, which is what it has always emitted; a workbook
+/// must not fail to save because one pivot could not be evaluated.
+std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivot::PivotTable& table) {
+  const pivot::PivotLayoutOptions options = eval::pivot_layout_options_for(wb.excel_profile());
+  // Reuse the memoised result when the host has already evaluated this
+  // pivot; `last_result()` is the same cache GETPIVOTDATA and the layout
+  // API read.
+  std::shared_ptr<const pivot::PivotResult> result = table.last_result();
+  if (!result) {
+    const pivot::PivotCache* cache = wb.find_pivot_cache(table.pivot_cache_id());
+    if (cache == nullptr) {
+      return std::nullopt;
+    }
+    auto eval_or = pivot::evaluate(table, *cache, options);
+    if (!eval_or) {
+      return std::nullopt;
+    }
+    table.set_last_result(std::move(eval_or.value()));
+    result = table.last_result();
+  }
+  if (!result) {
+    return std::nullopt;
+  }
+  auto layout_or = pivot::layout(table, *result, options);
+  if (!layout_or) {
+    return std::nullopt;
+  }
+  return PivotRenderedSpan{layout_or.value().rows, layout_or.value().cols};
 }
 
 /// Builds the `_rels` document for a pivotTable part: a single
@@ -394,7 +446,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // Sheet-rels emission in step 5 already wired a rId to each part.
   for (const auto& per_sheet : plan.pivot_tables_by_sheet) {
     for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
-      auto result = AddPart(writer.get(), t.path, write_pivot_table_definition(*t.table), &written_paths);
+      auto result = AddPart(writer.get(), t.path,
+                            write_pivot_table_definition(*t.table, ProjectPivotSpan(wb, *t.table)), &written_paths);
       if (!result) {
         return result.error();
       }
