@@ -18,8 +18,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 from typing import Any, Dict
+from unittest import mock
 
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import promote_capture

@@ -842,18 +842,20 @@ entries:
   # principled rule emerges (would need source-level Excel access or a
   # significantly broader capture matrix to derive empirically).
   #
-  # The capturing host's `Application.Version` reported "16.0", which
-  # tests/oracle/variants/win-365-ja_JP/ENVIRONMENT.md and
-  # PROVENANCE.json (`classification: reference-only`, `verified: false`,
-  # `active_ctest: false`) both identify as an Office 2019 install, not a
-  # Microsoft 365 one. Stamped `unverified` below rather than "16.0" so
-  # these six entries surface as pending reprobes instead of masquerading
-  # as verified Microsoft 365 evidence.
+  # A product-verified Microsoft 365 capture (16.0.20228, ja-JP) has now
+  # observed all six; the values are recorded per entry below. They are
+  # still stamped `unverified` because that capture resolved a column
+  # width in the ja-JP host's own UI font while the engine resolves the
+  # same character count against Calibri 11, so the two sides paginated
+  # physically different sheets and the scale behaviour cannot be
+  # separated from that mismatch yet. The driver now pins the Normal
+  # style (windows_excel.py::_pin_normal_font); the next capture is what
+  # these stamps wait on.
   - id: scale_50_shrinks_breaks
     cause: accepted-divergence
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
-    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
+    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
     last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
@@ -861,7 +863,7 @@ entries:
     cause: accepted-divergence
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
-    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
+    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[1,2,3,4,5,6,7] h=[18] pages=16 at scale 25 -- one column per page, more breaks than at scale 50; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
     last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
@@ -869,7 +871,7 @@ entries:
     cause: accepted-divergence
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
-    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
+    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[29] pages=8 at zoom 50, where zoom 100 gives h=[]; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
     last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
@@ -877,7 +879,7 @@ entries:
     cause: accepted-divergence
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
-    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
+    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[1,2,3,4,5,6,7] h=[18] pages=16 at zoom 25; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
     last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
@@ -885,7 +887,7 @@ entries:
     cause: accepted-divergence
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
-    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
+    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
     last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
@@ -893,7 +895,7 @@ entries:
     cause: accepted-divergence
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
-    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
+    reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
     prefer: formulon
     first_noted: 2026-05-17
     last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
@@ -927,32 +929,6 @@ entries:
     prefer: formulon
     first_noted: 2026-06-26
     last_verified_excel_version: "16.109"
-
-  # -- GETPIVOTDATA page-axis / data-axis field addressing ----------------
-  # GETPIVOTDATA currently returns #REF! when a field/item pair addresses a
-  # field that is on neither the row nor the column axis (page-axis or
-  # data-axis fields), because routing through pivot filter state is not
-  # yet implemented (src/eval/getpivotdata_lazy.cpp). Excel's real surface
-  # for page/data-axis addressing has NOT been confirmed against a live
-  # product-verified Microsoft 365 Windows oracle. The workbook driver now
-  # builds page/data-axis pivots and records post-build formula probes, while
-  # the native verifier pins the current direct #REF! branch. The existing
-  # Office 2019 / unknown-version files are reference-only and must not be
-  # used as a Microsoft 365 result.
-  - id: page_axis_field
-    cause: engine-gap
-    mode: skip-oracle
-    reason: "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
-    prefer: formulon
-    first_noted: 2026-06-26
-    last_verified_excel_version: "unverified (external Microsoft 365 Windows probe pending)"
-  - id: data_axis_field
-    cause: engine-gap
-    mode: skip-oracle
-    reason: "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
-    prefer: formulon
-    first_noted: 2026-06-26
-    last_verified_excel_version: "unverified (external Microsoft 365 Windows probe pending)"
 
   # AREAS recurses into CHOOSE / IF reference branches, so a branch that is
   # itself a union reports its real area count.

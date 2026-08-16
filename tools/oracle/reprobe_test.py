@@ -21,6 +21,8 @@ import unittest
 from pathlib import Path
 from typing import Any, Dict
 
+import yaml
+
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import divergence_check, oracle_gen, workbook_case_schema
 except ImportError:  # pragma: no cover
@@ -101,12 +103,27 @@ class ReprobeSelectionTests(unittest.TestCase):
         skips = set(oracle_gen._load_divergence_skips(self.path, "win-365-ja_JP"))
         self.assertTrue(set(self._reprobes("win-365-ja_JP")).issubset(skips))
 
-    def test_repository_pending_queue_is_selected(self) -> None:
-        # Guards the actual deadlock: the eight entries the Windows track
-        # owes an observation must be the ones a Windows capture drives.
+    def test_every_repository_pending_reprobe_is_driven(self) -> None:
+        # Guards the actual deadlock, against the live registry and without
+        # naming individual entries -- an entry that gets retired must not
+        # be able to take this guard down with it. Reads the YAML directly
+        # so the expectation does not come from the code under test.
+        doc = yaml.safe_load((REPO_ROOT / "tests/divergence.yaml").read_text(encoding="utf-8")) or {}
+        expected = set()
+        for entry in doc.get("entries") or []:
+            if not isinstance(entry, dict) or entry.get("mode") != "skip-oracle":
+                continue
+            scope = entry.get("applies_to")
+            if isinstance(scope, list) and "win-365-ja_JP" not in scope:
+                continue
+            if not divergence_check.is_pending_stamp(entry.get("last_verified_excel_version")):
+                continue
+            ids = entry.get("ids") if "ids" in entry else ([entry["id"]] if "id" in entry else [])
+            expected.update(i for i in ids if isinstance(i, str))
+
         reprobes = oracle_gen._load_divergence_reprobes(REPO_ROOT / "tests/divergence.yaml", "win-365-ja_JP")
-        self.assertIn("page_axis_field", reprobes)
-        self.assertIn("scale_50_shrinks_breaks", reprobes)
+        self.assertTrue(expected, "no pending reprobes in the registry; this guard would assert nothing")
+        self.assertEqual(expected - set(reprobes), set())
 
 
 def _golden(case: Dict[str, Any]) -> Dict[str, Any]:
