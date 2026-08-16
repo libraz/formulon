@@ -430,6 +430,8 @@ std::optional<pivot::FilterType> ParseValueFilterType(std::string_view text) {
   };
   static constexpr Entry kEntries[] = {
       {"count", pivot::FilterType::ValueTop10},
+      {"percent", pivot::FilterType::ValueTop10},
+      {"sum", pivot::FilterType::ValueTop10},
       {"valueGreaterThan", pivot::FilterType::ValueGreaterThan},
       {"valueBetween", pivot::FilterType::ValueBetween},
       {"dateBetween", pivot::FilterType::LabelDate},
@@ -480,6 +482,70 @@ std::optional<double> ParseCriterionNumber(std::string_view text) {
 /// bounds are written as serials, which is the form the evaluation pass
 /// wants anyway — the rendered label would lose both precision and
 /// locale.
+/// Which quantity a top-N entry counts out.
+///
+/// The three flavours share one element shape, so only the type name
+/// separates them: `<top10 val="100"/>` under `sum` and under `count` are
+/// byte-identical. Anything that is not a top-N type never reaches here.
+pivot::TopNBasis ParseTopNBasis(std::string_view text) {
+  if (text == "percent") {
+    return pivot::TopNBasis::Percent;
+  }
+  if (text == "sum") {
+    return pivot::TopNBasis::Sum;
+  }
+  return pivot::TopNBasis::Items;
+}
+
+/// Maps a relative-period `<filter type>` onto its evaluation counterpart.
+///
+/// These types carry no criteria at all — the window is implied by the
+/// name — so the mapping is the entire decode. The `dateThisWeek` group is
+/// absent because a week's first day is locale-dependent and nothing pins
+/// it yet, and `M1`..`M12` / `Q1`..`Q4` are absent because they select a
+/// recurring period rather than one contiguous window.
+std::optional<pivot::RelativePeriod> ParseRelativePeriod(std::string_view text) {
+  struct Entry {
+    std::string_view name;
+    pivot::RelativePeriod period;
+  };
+  static constexpr Entry kEntries[] = {
+      {"today", pivot::RelativePeriod::Today},
+      {"yesterday", pivot::RelativePeriod::Yesterday},
+      {"tomorrow", pivot::RelativePeriod::Tomorrow},
+      {"thisMonth", pivot::RelativePeriod::ThisMonth},
+      {"lastMonth", pivot::RelativePeriod::LastMonth},
+      {"nextMonth", pivot::RelativePeriod::NextMonth},
+      {"thisQuarter", pivot::RelativePeriod::ThisQuarter},
+      {"lastQuarter", pivot::RelativePeriod::LastQuarter},
+      {"nextQuarter", pivot::RelativePeriod::NextQuarter},
+      {"thisYear", pivot::RelativePeriod::ThisYear},
+      {"lastYear", pivot::RelativePeriod::LastYear},
+      {"nextYear", pivot::RelativePeriod::NextYear},
+      {"yearToDate", pivot::RelativePeriod::YearToDate},
+  };
+  for (const Entry& entry : kEntries) {
+    if (entry.name == text) {
+      return entry.period;
+    }
+  }
+  return std::nullopt;
+}
+
+/// Decodes the relative-period entries of a `<filters>` block.
+void ParseAuthoredPeriodFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
+  for (pugi::xml_node node = parent.child("filter"); node; node = node.next_sibling("filter")) {
+    const auto period_or = ParseRelativePeriod(attr_str(node, "type"));
+    if (!period_or) {
+      continue;
+    }
+    pivot::AuthoredPeriodFilter entry;
+    entry.field_index = parse_xml_u32_attr(node.attribute("fld"), 0U);
+    entry.period = *period_or;
+    out->mutable_authored_period_filters().push_back(entry);
+  }
+}
+
 void ParseAuthoredValueFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
   for (pugi::xml_node node = parent.child("filter"); node; node = node.next_sibling("filter")) {
     const auto type_or = ParseValueFilterType(attr_str(node, "type"));
@@ -490,6 +556,7 @@ void ParseAuthoredValueFilters(const pugi::xml_node& parent, pivot::PivotTable* 
     entry.field_index = parse_xml_u32_attr(node.attribute("fld"), 0U);
     entry.data_field_index = parse_xml_u32_attr(node.attribute("iMeasureFld"), 0U);
     entry.type = *type_or;
+    entry.top_n_basis = ParseTopNBasis(attr_str(node, "type"));
 
     if (*type_or == pivot::FilterType::ValueTop10) {
       const auto count_or = CollectTopCount(node);
@@ -688,6 +755,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   if (pugi::xml_node filters = root.child("filters"); filters) {
     ParseAuthoredFilters(filters, &table);
     ParseAuthoredValueFilters(filters, &table);
+    ParseAuthoredPeriodFilters(filters, &table);
   }
   // Capture any remaining direct children of <pivotTableDefinition> that
   // we do not model structurally into position-keyed raw-XML buffers, so

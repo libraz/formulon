@@ -112,7 +112,7 @@ Aggregation aggregation_from_subtotal_fn(SubtotalFn fn) {
 }  // namespace
 
 Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache& cache,
-                                      const PivotLayoutOptions& options) {
+                                      const PivotLayoutOptions& options, const PivotFilterEnv& env) {
   // 1. Validate.
   if (table.pivot_cache_id() != cache.cache_id()) {
     return make_error(FormulonErrorCode::kEvalPivotMissing, "pivot table cache_id does not match supplied PivotCache",
@@ -129,10 +129,19 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   }
 
   // 2. Filter records.
+  //
+  // The clock is read once here rather than per record. Reading it inside
+  // the loop would cost a syscall per record, and worse, an evaluation
+  // spanning midnight would filter its early records against one day and
+  // its later ones against the next.
+  PivotFilterEnv resolved_env = env;
+  if (!resolved_env.pinned_now.has_value()) {
+    resolved_env.pinned_now = eval::date_time::host_civil_time();
+  }
   std::vector<std::size_t> surviving;
   surviving.reserve(cache.records().size());
   for (std::size_t i = 0; i < cache.records().size(); ++i) {
-    if (record_passes_manual_filter(table, cache, cache.records()[i])) {
+    if (record_passes_manual_filter(table, cache, cache.records()[i], resolved_env)) {
       surviving.push_back(i);
     }
   }
@@ -488,7 +497,22 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // has recovered the axis a file does not spell out, so the authored
   // entries are projected onto the same shape rather than given a second
   // copy of the pruning logic.
-  const auto apply_value_filter = [&](const PivotFilter& f) {
+  // The running-total target rides in the same `value` slot the item count
+  // uses, since the three flavours share one dialog field.
+  const auto filter_target = [](const PivotFilter& f) {
+    if (const auto* as_double = std::get_if<double>(&f.value)) {
+      return *as_double;
+    }
+    if (const auto* as_int = std::get_if<int>(&f.value)) {
+      return static_cast<double>(*as_int);
+    }
+    return 0.0;
+  };
+  // `basis` selects how a top-N entry counts: `Items` uses the
+  // leaf-count rule, the other two accumulate a running total. It is
+  // only ever non-default for an authored entry, since the dialog
+  // choice has no embedder-facing counterpart on `PivotFilter`.
+  const auto apply_value_filter = [&](const PivotFilter& f, TopNBasis basis = TopNBasis::Items) {
     if (f.type != FilterType::ValueTop10 && f.type != FilterType::ValueGreaterThan &&
         f.type != FilterType::ValueBetween) {
       return;  // Label/Date filters handled pre-aggregation.
@@ -512,8 +536,9 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       if (n == 0) {
         return;
       }
-      const auto keep_or = build_value_filter_keep(
-          f, score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count, f.data_field_index));
+      const AxisScores axis = score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count, f.data_field_index);
+      const auto keep_or = basis == TopNBasis::Items ? build_value_filter_keep(f, axis)
+                                                     : build_running_total_keep(basis, filter_target(f), axis);
       if (!keep_or) {
         return;
       }
@@ -534,7 +559,9 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
         return;
       }
       const std::size_t row_n = row_levels.empty() ? 1u : result.values.size();
-      const auto keep_or = build_value_filter_keep(f, score_col_axis(result, n, row_n, f.data_field_index));
+      const AxisScores axis = score_col_axis(result, n, row_n, f.data_field_index);
+      const auto keep_or = basis == TopNBasis::Items ? build_value_filter_keep(f, axis)
+                                                     : build_running_total_keep(basis, filter_target(f), axis);
       if (!keep_or) {
         return;
       }
@@ -553,7 +580,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   }
   for (const AuthoredValueFilter& authored : table.authored_value_filters()) {
     if (const auto projected = authored_value_filter_as_pivot_filter(table, authored)) {
-      apply_value_filter(*projected);
+      apply_value_filter(*projected, authored.top_n_basis);
     }
   }
 

@@ -200,6 +200,28 @@ struct AuthoredCaptionFilter {
   std::string value_high;
 };
 
+/// Which quantity the top-N dialog counts out.
+///
+/// Excel's "Top 10" dialog offers three, and writes each as a different
+/// `<filter type>` over an identically shaped `<top10 val="N">`: `count`,
+/// `percent`, `sum`. Nothing inside `<top10>` distinguishes `count` from
+/// `sum` at all, so the type attribute is the only discriminator and
+/// reading one as the other silently returns different rows.
+///
+/// This is deliberately not folded into `FilterType`: that enum is the
+/// embedder-facing surface exposed through the C ABI, and these values
+/// only ever originate from a file the reader decodes.
+enum class TopNBasis : std::uint8_t {
+  /// `<filter type="count">` — keep the N highest-scoring leaves.
+  Items = 0,
+  /// `<filter type="percent">` — keep the highest-scoring leaves whose
+  /// running total first reaches N percent of the axis total.
+  Percent = 1,
+  /// `<filter type="sum">` — the same running-total rule against an
+  /// absolute target rather than a share.
+  Sum = 2,
+};
+
 /// One decoded value-or-date `<filter>` entry from an authored
 /// `<filters>` block.
 ///
@@ -235,6 +257,52 @@ struct AuthoredValueFilter {
   std::optional<double> value_high;
   /// Source `iMeasureFld`: which data field's aggregate is scored.
   std::uint32_t data_field_index = 0;
+  /// Which quantity `value` counts out. Only meaningful when `type` is
+  /// `ValueTop10`, which is the one family the dialog offers a choice for.
+  TopNBasis top_n_basis = TopNBasis::Items;
+};
+
+/// A date window named relative to when the pivot is computed.
+///
+/// The `<filters>` block spells these as a bare type with no criteria —
+/// `<filter type="dateThisMonth" fld="2"/>` — because the window is
+/// implied by the name. Resolving one therefore needs a clock reading,
+/// which is why they are held apart from `AuthoredValueFilter` (whose
+/// bounds are literals in the file) and why the workbook can pin the
+/// reading they resolve against.
+///
+/// Only the families whose boundaries are unambiguous are represented.
+/// The `dateThisWeek` group is deliberately absent: a week's first day is
+/// locale-dependent and no Excel observation pins it yet. The recurring
+/// `M1`..`M12` / `Q1`..`Q4` families are absent for a different reason —
+/// they select every January, not a contiguous range, so they are not a
+/// window at all.
+enum class RelativePeriod : std::uint8_t {
+  Today = 0,
+  Yesterday = 1,
+  Tomorrow = 2,
+  ThisMonth = 3,
+  LastMonth = 4,
+  NextMonth = 5,
+  ThisQuarter = 6,
+  LastQuarter = 7,
+  NextQuarter = 8,
+  ThisYear = 9,
+  LastYear = 10,
+  NextYear = 11,
+  YearToDate = 12,
+};
+
+/// An authored relative-period date filter.
+///
+/// Sibling of `AuthoredValueFilter`, split off because its window is not
+/// in the file: it is resolved at evaluation time from the workbook's
+/// clock. Applied pre-aggregation, exactly like the absolute `dateBetween`
+/// family it degenerates to once resolved.
+struct AuthoredPeriodFilter {
+  /// Source `fld` attribute: an index into `<pivotFields>`.
+  std::uint32_t field_index = 0;
+  RelativePeriod period = RelativePeriod::Today;
 };
 
 /// Sort directive for a pivot field.

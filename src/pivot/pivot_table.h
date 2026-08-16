@@ -186,15 +186,20 @@ class PivotTable {
   // is the same split `active_filters()` already drives, and both lists
   // feed the same two passes.
   //
-  // The relative-period families (`thisMonth`, `yearToDate`, ...) are the
-  // one part left undecoded: they resolve against the current date, and
-  // this engine has no injectable clock, so evaluating them would make a
-  // pivot's result depend on the day it was computed.
+  // The relative-period families (`thisMonth`, `yearToDate`, ...) form a
+  // third list. They carry no criteria in the file — the window is implied
+  // by the type name — so they resolve against a clock reading supplied at
+  // evaluation time. Pinning that reading (`Workbook::pinned_now`) is what
+  // keeps a pivot that uses them reproducible rather than dependent on the
+  // day it happened to be computed.
   const std::vector<AuthoredCaptionFilter>& authored_caption_filters() const { return authored_caption_filters_; }
   std::vector<AuthoredCaptionFilter>& mutable_authored_caption_filters() { return authored_caption_filters_; }
 
   const std::vector<AuthoredValueFilter>& authored_value_filters() const { return authored_value_filters_; }
   std::vector<AuthoredValueFilter>& mutable_authored_value_filters() { return authored_value_filters_; }
+
+  const std::vector<AuthoredPeriodFilter>& authored_period_filters() const { return authored_period_filters_; }
+  std::vector<AuthoredPeriodFilter>& mutable_authored_period_filters() { return authored_period_filters_; }
 
   // Most-recent evaluation result -------------------------------------------
   //
@@ -290,6 +295,7 @@ class PivotTable {
   std::vector<PivotFilter> active_filters_;
   std::vector<AuthoredCaptionFilter> authored_caption_filters_;
   std::vector<AuthoredValueFilter> authored_value_filters_;
+  std::vector<AuthoredPeriodFilter> authored_period_filters_;
   std::string raw_passthrough_xml_;
   std::string raw_passthrough_after_row_fields_;
   std::string raw_passthrough_after_col_fields_;

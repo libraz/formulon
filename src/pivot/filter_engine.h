@@ -22,12 +22,43 @@
 #include <optional>
 #include <vector>
 
+#include "eval/date_time.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "value.h"
 
 namespace formulon::pivot {
+
+/// Evaluation-time inputs a filter can need beyond the pivot model itself.
+///
+/// Only the relative-period family reads any of this, but it travels with
+/// every filter pass so the two entry points keep one signature. The
+/// default value reproduces the pre-seam behaviour exactly: follow the host
+/// clock, 1900 epoch.
+struct PivotFilterEnv {
+  /// Pinned wall-clock reading (`Workbook::pinned_now()`), or empty to read
+  /// the host clock. Pinning is what makes a pivot carrying a
+  /// relative-period filter reproducible.
+  std::optional<eval::date_time::CivilTime> pinned_now;
+  /// The workbook date epoch, so a window resolved from the clock lands on
+  /// the same serial scale as the dates stored in the cache.
+  bool date1904 = false;
+};
+
+/// An inclusive date window, in Excel serials under the workbook epoch.
+struct DateWindow {
+  double low = 0.0;
+  double high = 0.0;
+};
+
+/// Resolves a relative period against a wall-clock reading.
+///
+/// Exposed rather than kept internal because the calendar boundaries are
+/// the whole substance of the family — month lengths, quarter starts, the
+/// year-to-date half-open end — and they are worth asserting directly
+/// instead of only through a filtered pivot.
+DateWindow resolve_relative_period(RelativePeriod period, const eval::date_time::CivilTime& now, bool date1904);
 
 /// True iff `record` survives the manual `items[]` filter on every
 /// field that declares one, AND the axis-level label filters in
@@ -46,7 +77,8 @@ namespace formulon::pivot {
 /// An axis filter names its field under the shared resolution rule
 /// (`resolve_field_by_any_name`); a name that resolves to nothing is skipped
 /// here because the public mutators already reject one on entry.
-bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record);
+bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record,
+                                 const PivotFilterEnv& env = PivotFilterEnv{});
 
 /// Projects an authored `<filters>` value entry onto the `PivotFilter`
 /// shape the post-aggregation pass already consumes.
@@ -81,6 +113,16 @@ AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std:
 /// Builds a per-leaf keep mask for `f`. Returns `nullopt` for filter
 /// shapes that should degrade to a no-op (e.g. unbounded `ValueBetween`).
 std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis);
+
+/// Keep mask for the two running-total flavours of the top-N dialog.
+///
+/// Both walk the scoring leaves in descending order and stop once the
+/// running total first reaches the target, so the last kept leaf is the
+/// one that crosses it. `Percent` reads `target` as a share of the axis
+/// total; `Sum` reads it as an absolute amount. Returns `nullopt` for
+/// `Items`, which counts leaves rather than accumulating them and is
+/// served by `build_value_filter_keep`.
+std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis);
 
 /// Which leaf axis a value filter pruned.
 enum class LeafAxis : std::uint8_t {

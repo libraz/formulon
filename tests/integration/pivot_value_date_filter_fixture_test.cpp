@@ -62,6 +62,8 @@ constexpr std::size_t kTopCountSheet = 0;
 constexpr std::size_t kGreaterThanSheet = 1;
 constexpr std::size_t kBetweenSheet = 2;
 constexpr std::size_t kDateBetweenSheet = 3;
+constexpr std::size_t kTopPercentSheet = 4;
+constexpr std::size_t kTopSumSheet = 5;
 
 // Region aggregates, as Excel rendered them.
 constexpr double kNorth = 150.0;
@@ -208,7 +210,8 @@ TEST(PivotValueDateFilterFixture, DateBoundsDecodeAsSerialsOnTheDateField) {
 // the items list already covers it.
 TEST(PivotValueDateFilterFixture, ExcelLeavesEveryItemVisible) {
   Workbook wb = LoadFixture();
-  for (const std::size_t sheet : {kTopCountSheet, kGreaterThanSheet, kBetweenSheet, kDateBetweenSheet}) {
+  for (const std::size_t sheet :
+       {kTopCountSheet, kGreaterThanSheet, kBetweenSheet, kDateBetweenSheet, kTopPercentSheet, kTopSumSheet}) {
     const pivot::PivotTable* table = PivotOn(wb, sheet);
     ASSERT_NE(table, nullptr) << "sheet " << sheet;
     for (const pivot::PivotField& field : table->fields()) {
@@ -226,6 +229,34 @@ TEST(PivotValueDateFilterFixture, ExcelLeavesEveryItemVisible) {
 TEST(PivotValueDateFilterFixture, TopCountKeepsTheTwoLargestRegions) {
   const Workbook wb = LoadFixture();
   const std::vector<std::pair<std::string, double>> rows = EvaluateRows(wb, kTopCountSheet);
+  ASSERT_EQ(rows.size(), 2U);
+  EXPECT_EQ(rows[0].first, "South");
+  EXPECT_DOUBLE_EQ(rows[0].second, kSouth);
+  EXPECT_EQ(rows[1].first, "West");
+  EXPECT_DOUBLE_EQ(rows[1].second, kWest);
+}
+
+// The item-count flavour's sibling flavours accumulate rather than count.
+//
+// Regions total 925. A "top 100 sum" keeps South alone, whose 500 already
+// clears 100 -- so the target is a running total, not a per-region floor,
+// which would have kept all four (every region totals at least 100).
+// Nothing in the file says which: `<top10 val="100"/>` under `sum` is
+// byte-identical to the same element under `count`.
+TEST(PivotValueDateFilterFixture, TopSumAccumulatesUntilItReachesTheTarget) {
+  const Workbook wb = LoadFixture();
+  const std::vector<std::pair<std::string, double>> rows = EvaluateRows(wb, kTopSumSheet);
+  ASSERT_EQ(rows.size(), 1U);
+  EXPECT_EQ(rows[0].first, "South");
+  EXPECT_DOUBLE_EQ(rows[0].second, kSouth);
+}
+
+// 70 percent of the 925 total is 647.5. South alone (500) falls short and
+// South + West (675) clears it, so the accumulation stops on the leaf that
+// crosses the threshold rather than before it.
+TEST(PivotValueDateFilterFixture, TopPercentAccumulatesAShareOfTheTotal) {
+  const Workbook wb = LoadFixture();
+  const std::vector<std::pair<std::string, double>> rows = EvaluateRows(wb, kTopPercentSheet);
   ASSERT_EQ(rows.size(), 2U);
   EXPECT_EQ(rows[0].first, "South");
   EXPECT_DOUBLE_EQ(rows[0].second, kSouth);

@@ -320,7 +320,8 @@ AxisScores score_axis(const PivotResult& result, ScoreAxis score_axis, std::size
 
 }  // namespace
 
-bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record) {
+bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record,
+                                 const PivotFilterEnv& env) {
   for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
     const PivotField& field = table.fields()[fi];
     if (field.items.empty()) {
@@ -401,7 +402,100 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
       return false;
     }
   }
+  // Authored relative-period entries. Once resolved against the clock they
+  // are ordinary inclusive date windows, so they prune here alongside the
+  // absolute `dateBetween` family above.
+  if (!table.authored_period_filters().empty()) {
+    // `evaluate` resolves the reading once before the record loop, so the
+    // fallback here only serves a caller invoking this directly.
+    const eval::date_time::CivilTime now =
+        env.pinned_now.has_value() ? *env.pinned_now : eval::date_time::host_civil_time();
+    for (const AuthoredPeriodFilter& f : table.authored_period_filters()) {
+      if (f.field_index >= table.fields().size()) {
+        continue;
+      }
+      const Value v = cell_value(cache, record, f.field_index);
+      if (!v.is_number()) {
+        continue;  // Non-numeric cells are outside the date domain.
+      }
+      const DateWindow window = resolve_relative_period(f.period, now, env.date1904);
+      const double serial = v.as_number();
+      if (serial < window.low || serial > window.high) {
+        return false;
+      }
+    }
+  }
   return true;
+}
+
+DateWindow resolve_relative_period(RelativePeriod period, const eval::date_time::CivilTime& now, bool date1904) {
+  const auto serial = [date1904](int year, unsigned month, unsigned day) {
+    return eval::date_time::serial_from_ymd(year, month, day, date1904);
+  };
+  // Normalised (year, month) arithmetic. `serial_from_ymd` normalises an
+  // out-of-range *day*, but a month of 0 would fall outside the era math it
+  // is built on, so the rollover is done here instead.
+  const auto add_months = [](int year, unsigned month, int delta) {
+    long long total = static_cast<long long>(year) * 12 + static_cast<long long>(month) - 1 + delta;
+    long long out_year = total / 12;
+    long long out_month = total % 12;
+    if (out_month < 0) {
+      out_month += 12;
+      --out_year;
+    }
+    return std::pair<int, unsigned>{static_cast<int>(out_year), static_cast<unsigned>(out_month) + 1U};
+  };
+  // A whole-month window, given the month it starts in and its length.
+  const auto span = [&](int year, unsigned month, int months) {
+    const auto [end_year, end_month] = add_months(year, month, months);
+    return DateWindow{serial(year, month, 1U), serial(end_year, end_month, 1U) - 1.0};
+  };
+
+  const int year = now.date.y;
+  const unsigned month = now.date.m;
+  const double today = serial(year, month, now.date.d);
+  // The calendar quarter's first month: 1, 4, 7 or 10.
+  const unsigned quarter_start = ((month - 1U) / 3U) * 3U + 1U;
+
+  switch (period) {
+    case RelativePeriod::Today:
+      return DateWindow{today, today};
+    case RelativePeriod::Yesterday:
+      return DateWindow{today - 1.0, today - 1.0};
+    case RelativePeriod::Tomorrow:
+      return DateWindow{today + 1.0, today + 1.0};
+    case RelativePeriod::ThisMonth:
+      return span(year, month, 1);
+    case RelativePeriod::LastMonth: {
+      const auto [prev_year, prev_month] = add_months(year, month, -1);
+      return span(prev_year, prev_month, 1);
+    }
+    case RelativePeriod::NextMonth: {
+      const auto [next_year, next_month] = add_months(year, month, 1);
+      return span(next_year, next_month, 1);
+    }
+    case RelativePeriod::ThisQuarter:
+      return span(year, quarter_start, 3);
+    case RelativePeriod::LastQuarter: {
+      const auto [prev_year, prev_month] = add_months(year, quarter_start, -3);
+      return span(prev_year, prev_month, 3);
+    }
+    case RelativePeriod::NextQuarter: {
+      const auto [next_year, next_month] = add_months(year, quarter_start, 3);
+      return span(next_year, next_month, 3);
+    }
+    case RelativePeriod::ThisYear:
+      return span(year, 1U, 12);
+    case RelativePeriod::LastYear:
+      return span(year - 1, 1U, 12);
+    case RelativePeriod::NextYear:
+      return span(year + 1, 1U, 12);
+    case RelativePeriod::YearToDate:
+      // Excel's "year to date" runs from January 1 through today inclusive,
+      // not through the end of the year.
+      return DateWindow{serial(year, 1U, 1U), today};
+  }
+  return DateWindow{today, today};
 }
 
 std::optional<PivotFilter> authored_value_filter_as_pivot_filter(const PivotTable& table,
@@ -440,6 +534,37 @@ AxisScores score_row_axis(const PivotResult& result, std::size_t row_count, std:
 AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std::size_t row_count,
                           std::size_t data_field_index) {
   return score_axis(result, ScoreAxis::Col, col_count, row_count, data_field_index);
+}
+
+std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis) {
+  const std::size_t n = axis.scores.size();
+  std::vector<bool> keep(n, false);
+  if (basis == TopNBasis::Items) {
+    return std::nullopt;  // Not a running-total flavour.
+  }
+  // Rank the scoring leaves descending; all-blank leaves never contribute
+  // and never survive, matching the item-count flavour.
+  std::vector<std::size_t> order;
+  order.reserve(n);
+  double total = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    if (!axis.all_blank[i]) {
+      order.push_back(i);
+      total += axis.scores[i];
+    }
+  }
+  std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return axis.scores[a] > axis.scores[b]; });
+  // `percent` is the same rule expressed as a share of the axis total.
+  const double threshold = basis == TopNBasis::Percent ? total * target / 100.0 : target;
+  double running = 0.0;
+  for (const std::size_t idx : order) {
+    if (running >= threshold) {
+      break;
+    }
+    keep[idx] = true;
+    running += axis.scores[idx];
+  }
+  return keep;
 }
 
 std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis) {

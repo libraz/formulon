@@ -479,14 +479,13 @@ TEST(PivotTableReader, UnevaluableFilterFamiliesAreSkippedButStillRoundTrip) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
   xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"4\">");
-  xml.append(
-      "<filter fld=\"0\" type=\"percent\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
-      "<top10 percent=\"1\" val=\"25\"/></filterColumn></autoFilter></filter>");
-  xml.append(
-      "<filter fld=\"0\" type=\"sum\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
-      "<top10 val=\"500\"/></filterColumn></autoFilter></filter>");
-  xml.append("<filter fld=\"2\" type=\"dateThisMonth\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("<filters count=\"3\">");
+  // A week window's first day is locale-dependent, so the family is left
+  // undecoded rather than guessed at.
+  xml.append("<filter fld=\"2\" type=\"thisWeek\"><autoFilter ref=\"A1\"/></filter>");
+  // M1 selects every January rather than one contiguous window, so it is
+  // not a date range at all.
+  xml.append("<filter fld=\"2\" type=\"M1\"><autoFilter ref=\"A1\"/></filter>");
   // A count filter with no nested `<top10>` names no quantity at all.
   xml.append("<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"/></filter>");
   xml.append("</filters>");
@@ -496,10 +495,77 @@ TEST(PivotTableReader, UnevaluableFilterFamiliesAreSkippedButStillRoundTrip) {
   ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
   EXPECT_TRUE(table_or.value().authored_value_filters().empty());
   EXPECT_TRUE(table_or.value().authored_caption_filters().empty());
+  EXPECT_TRUE(table_or.value().authored_period_filters().empty());
 
   const std::string round = write_pivot_table_definition(table_or.value());
-  EXPECT_EQ(CountOccurrences(round, "<filter "), 4U) << round;
-  EXPECT_NE(round.find("dateThisMonth"), std::string::npos) << round;
+  EXPECT_EQ(CountOccurrences(round, "<filter "), 3U) << round;
+  EXPECT_NE(round.find("thisWeek"), std::string::npos) << round;
+  EXPECT_NE(round.find("\"M1\""), std::string::npos) << round;
+}
+
+TEST(PivotTableReader, TopNFlavoursAreDistinguishedByTheirTypeAlone) {
+  // The three flavours share an identically shaped `<top10 val="N">`, so a
+  // decode that ignored the type attribute would silently conflate them.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"3\">");
+  xml.append(
+      "<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+      "<top10 val=\"2\"/></filterColumn></autoFilter></filter>");
+  xml.append(
+      "<filter fld=\"0\" type=\"percent\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+      "<top10 percent=\"1\" val=\"70\"/></filterColumn></autoFilter></filter>");
+  xml.append(
+      "<filter fld=\"0\" type=\"sum\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+      "<top10 val=\"100\"/></filterColumn></autoFilter></filter>");
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const auto& filters = table_or.value().authored_value_filters();
+  ASSERT_EQ(filters.size(), 3U);
+  for (const auto& entry : filters) {
+    EXPECT_EQ(entry.type, pivot::FilterType::ValueTop10);
+  }
+  EXPECT_EQ(filters[0].top_n_basis, pivot::TopNBasis::Items);
+  EXPECT_DOUBLE_EQ(filters[0].value, 2.0);
+  EXPECT_EQ(filters[1].top_n_basis, pivot::TopNBasis::Percent);
+  EXPECT_DOUBLE_EQ(filters[1].value, 70.0);
+  EXPECT_EQ(filters[2].top_n_basis, pivot::TopNBasis::Sum);
+  EXPECT_DOUBLE_EQ(filters[2].value, 100.0);
+}
+
+TEST(PivotTableReader, RelativePeriodFiltersDecodeFromTheTypeNameAlone) {
+  // These carry no criteria: the window is implied by the type, so the
+  // decode is the name mapping and nothing else.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"3\">");
+  xml.append("<filter fld=\"2\" type=\"thisMonth\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("<filter fld=\"3\" type=\"yearToDate\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("<filter fld=\"1\" type=\"lastQuarter\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const auto& periods = table_or.value().authored_period_filters();
+  ASSERT_EQ(periods.size(), 3U);
+  EXPECT_EQ(periods[0].field_index, 2U);
+  EXPECT_EQ(periods[0].period, pivot::RelativePeriod::ThisMonth);
+  EXPECT_EQ(periods[1].field_index, 3U);
+  EXPECT_EQ(periods[1].period, pivot::RelativePeriod::YearToDate);
+  EXPECT_EQ(periods[2].field_index, 1U);
+  EXPECT_EQ(periods[2].period, pivot::RelativePeriod::LastQuarter);
+  // A period entry carries no bounds, so it must not land in the list whose
+  // members all do.
+  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
+
+  const std::string round = write_pivot_table_definition(table_or.value());
+  EXPECT_EQ(CountOccurrences(round, "<filter "), 3U) << round;
 }
 
 TEST(PivotTableReader, ValueFilterCriteriaThatAreNotNumbersAreSkipped) {

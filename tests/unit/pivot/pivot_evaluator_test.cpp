@@ -1481,6 +1481,155 @@ TEST(PivotEvaluator, AuthoredDateFilterPrunesRecordsByTheirSerial) {
   EXPECT_EQ(r_or.value().rows[0].label, "North");
 }
 
+// ---------------------------------------------------------------------------
+// 8g. Relative-period filters
+//
+// These carry no bounds in the file, so the substance is the calendar
+// arithmetic that turns a period name plus a clock reading into a window.
+// The boundaries are asserted directly against `serial_from_ymd` rather
+// than against literal serials: the point under test is which calendar day
+// each window starts and ends on, not the serial encoding, which
+// `DateTimeDate` already pins.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// 2026-05-20 12:00:00. Mid-month, mid-quarter, so every window's two
+// boundaries are distinct from the reading itself.
+constexpr eval::date_time::CivilTime kMay20{{2026, 5U, 20U}, {12U, 0U, 0U}};
+
+double Serial(int year, unsigned month, unsigned day) {
+  return eval::date_time::serial_from_ymd(year, month, day, /*date1904=*/false);
+}
+
+void ExpectWindow(RelativePeriod period, const eval::date_time::CivilTime& now, int low_y, unsigned low_m,
+                  unsigned low_d, int high_y, unsigned high_m, unsigned high_d) {
+  const DateWindow window = resolve_relative_period(period, now, /*date1904=*/false);
+  EXPECT_DOUBLE_EQ(window.low, Serial(low_y, low_m, low_d));
+  EXPECT_DOUBLE_EQ(window.high, Serial(high_y, high_m, high_d));
+}
+
+}  // namespace
+
+TEST(RelativePeriod, DayWindowsAreSingleDays) {
+  ExpectWindow(RelativePeriod::Today, kMay20, 2026, 5, 20, 2026, 5, 20);
+  ExpectWindow(RelativePeriod::Yesterday, kMay20, 2026, 5, 19, 2026, 5, 19);
+  ExpectWindow(RelativePeriod::Tomorrow, kMay20, 2026, 5, 21, 2026, 5, 21);
+}
+
+TEST(RelativePeriod, MonthWindowsEndOnTheirOwnLastDay) {
+  // May has 31 days, April 30 -- the window end is derived from the next
+  // month's first day, so a wrong month length would show up here.
+  ExpectWindow(RelativePeriod::ThisMonth, kMay20, 2026, 5, 1, 2026, 5, 31);
+  ExpectWindow(RelativePeriod::LastMonth, kMay20, 2026, 4, 1, 2026, 4, 30);
+  ExpectWindow(RelativePeriod::NextMonth, kMay20, 2026, 6, 1, 2026, 6, 30);
+}
+
+TEST(RelativePeriod, QuarterWindowsSnapToTheCalendarQuarter) {
+  // May sits in Q2, so "this quarter" starts in April rather than in May.
+  ExpectWindow(RelativePeriod::ThisQuarter, kMay20, 2026, 4, 1, 2026, 6, 30);
+  ExpectWindow(RelativePeriod::LastQuarter, kMay20, 2026, 1, 1, 2026, 3, 31);
+  ExpectWindow(RelativePeriod::NextQuarter, kMay20, 2026, 7, 1, 2026, 9, 30);
+}
+
+TEST(RelativePeriod, YearWindowsSpanTheWholeCalendarYear) {
+  ExpectWindow(RelativePeriod::ThisYear, kMay20, 2026, 1, 1, 2026, 12, 31);
+  ExpectWindow(RelativePeriod::LastYear, kMay20, 2025, 1, 1, 2025, 12, 31);
+  ExpectWindow(RelativePeriod::NextYear, kMay20, 2027, 1, 1, 2027, 12, 31);
+}
+
+TEST(RelativePeriod, YearToDateStopsAtTheReadingNotAtYearEnd) {
+  ExpectWindow(RelativePeriod::YearToDate, kMay20, 2026, 1, 1, 2026, 5, 20);
+}
+
+TEST(RelativePeriod, WindowsRollOverTheYearBoundary) {
+  // January is the case the explicit month arithmetic exists for: naive
+  // subtraction would produce month 0 rather than the previous December.
+  constexpr eval::date_time::CivilTime kJan10{{2026, 1U, 10U}, {0U, 0U, 0U}};
+  ExpectWindow(RelativePeriod::LastMonth, kJan10, 2025, 12, 1, 2025, 12, 31);
+  ExpectWindow(RelativePeriod::LastQuarter, kJan10, 2025, 10, 1, 2025, 12, 31);
+  constexpr eval::date_time::CivilTime kDec10{{2026, 12U, 10U}, {0U, 0U, 0U}};
+  ExpectWindow(RelativePeriod::NextMonth, kDec10, 2027, 1, 1, 2027, 1, 31);
+  ExpectWindow(RelativePeriod::NextQuarter, kDec10, 2027, 1, 1, 2027, 3, 31);
+}
+
+TEST(RelativePeriod, LeapFebruaryKeepsItsTwentyNinthDay) {
+  constexpr eval::date_time::CivilTime kFeb2024{{2024, 2U, 5U}, {0U, 0U, 0U}};
+  ExpectWindow(RelativePeriod::ThisMonth, kFeb2024, 2024, 2, 1, 2024, 2, 29);
+}
+
+TEST(RelativePeriod, TheWindowFollowsTheWorkbookEpoch) {
+  // A 1904-system workbook stores every date 1462 lower, so the resolved
+  // window has to shift with it or it would select the wrong records.
+  const DateWindow window = resolve_relative_period(RelativePeriod::ThisMonth, kMay20, /*date1904=*/true);
+  EXPECT_DOUBLE_EQ(window.low, Serial(2026, 5, 1) - eval::date_time::kDate1904EpochGap);
+  EXPECT_DOUBLE_EQ(window.high, Serial(2026, 5, 31) - eval::date_time::kDate1904EpochGap);
+}
+
+TEST(PivotEvaluator, AuthoredPeriodFilterPrunesRecordsAgainstThePinnedClock) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  // Field 2 carries the amounts (North 100 / 50 / 25, South 200 / 300),
+  // read here as date serials. Pinning to 1900-02-15 makes "this quarter"
+  // 1900-01-01..1900-03-31, i.e. serials 1..91: it admits North's 50 and
+  // 25 and excludes everything else, South included.
+  AuthoredPeriodFilter f;
+  f.field_index = 2;
+  f.period = RelativePeriod::ThisQuarter;
+  table.mutable_authored_period_filters().push_back(f);
+
+  PivotFilterEnv env;
+  env.pinned_now = eval::date_time::CivilTime{{1900, 2U, 15U}, {0U, 0U, 0U}};
+  auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "North");
+  ASSERT_EQ(r_or.value().values.size(), 1U);
+  ASSERT_EQ(r_or.value().values[0].size(), 1U);
+  ASSERT_EQ(r_or.value().values[0][0].size(), 1U);
+  EXPECT_DOUBLE_EQ(r_or.value().values[0][0][0].as_number(), 75.0);
+}
+
+TEST(PivotEvaluator, MovingThePinnedClockMovesWhichRecordsSurvive) {
+  // Same filter, a quarter later: the window becomes serials 92..181,
+  // which admits North's 100 alone and still excludes South.
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredPeriodFilter f;
+  f.field_index = 2;
+  f.period = RelativePeriod::ThisQuarter;
+  table.mutable_authored_period_filters().push_back(f);
+
+  PivotFilterEnv env;
+  env.pinned_now = eval::date_time::CivilTime{{1900, 5U, 15U}, {0U, 0U, 0U}};
+  auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "North");
+  ASSERT_EQ(r_or.value().values.size(), 1U);
+  ASSERT_EQ(r_or.value().values[0].size(), 1U);
+  ASSERT_EQ(r_or.value().values[0][0].size(), 1U);
+  EXPECT_DOUBLE_EQ(r_or.value().values[0][0][0].as_number(), 100.0);
+}
+
+TEST(PivotEvaluator, APeriodFilterOnAnOutOfRangeFieldIsInert) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredPeriodFilter f;
+  f.field_index = 99;
+  f.period = RelativePeriod::Today;
+  table.mutable_authored_period_filters().push_back(f);
+
+  PivotFilterEnv env;
+  env.pinned_now = eval::date_time::CivilTime{{1900, 2U, 15U}, {0U, 0U, 0U}};
+  auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  EXPECT_EQ(r_or.value().rows.size(), 2U);
+}
+
 // An unbounded range is a no-op rather than a half-open filter, matching
 // how `PivotFilter` treats a missing upper bound.
 TEST(PivotEvaluator, AuthoredDateFilterWithNoUpperBoundIsInert) {

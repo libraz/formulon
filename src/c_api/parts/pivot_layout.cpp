@@ -116,7 +116,9 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
                                "fm_workbook_pivot_layout: pivot cache not found",
                                "cache_id=" + std::to_string(table->pivot_cache_id()));
     }
-    auto eval_or = formulon::pivot::evaluate(*table, *cache, layout_options);
+    auto eval_or = formulon::pivot::evaluate(
+        *table, *cache, layout_options,
+        formulon::pivot::PivotFilterEnv{wb->workbook().pinned_now(), wb->workbook().date1904()});
     if (!eval_or) {
       return set_last_error(eval_or.error());
     }

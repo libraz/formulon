@@ -18,6 +18,7 @@
 #ifndef FORMULON_PIVOT_PIVOT_EVALUATOR_H_
 #define FORMULON_PIVOT_PIVOT_EVALUATOR_H_
 
+#include "pivot/filter_engine.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_result.h"
@@ -41,7 +42,8 @@ namespace formulon::pivot {
 /// `PivotDataField::field_index` is out of bounds against
 /// `cache.fields()`.
 Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache& cache,
-                                      const PivotLayoutOptions& options = PivotLayoutOptions{});
+                                      const PivotLayoutOptions& options = PivotLayoutOptions{},
+                                      const PivotFilterEnv& env = PivotFilterEnv{});
 
 }  // namespace formulon::pivot
 
