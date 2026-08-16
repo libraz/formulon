@@ -72,6 +72,12 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Workbook-level calc policy / behaviour profile.
   Napi::Value CalcMode(const Napi::CallbackInfo& info);
   Napi::Value SetCalcMode(const Napi::CallbackInfo& info);
+  /// Clock seam: `pinnedNow()` returns `{year, ..., second}` or `null`;
+  /// `setPinnedNow(y, mo, d, h, mi, s)` and `clearPinnedNow()` return a
+  /// status. See `fm_workbook_set_pinned_now` for the accepted ranges.
+  Napi::Value PinnedNow(const Napi::CallbackInfo& info);
+  Napi::Value SetPinnedNow(const Napi::CallbackInfo& info);
+  Napi::Value ClearPinnedNow(const Napi::CallbackInfo& info);
   Napi::Value ExcelProfileId(const Napi::CallbackInfo& info);
   Napi::Value SetExcelProfileId(const Napi::CallbackInfo& info);
 

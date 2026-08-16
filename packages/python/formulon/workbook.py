@@ -677,6 +677,23 @@ class SheetProtection:
 
 
 @dataclass(frozen=True)
+class CivilTime:
+    """A wall-clock reading in local civil fields.
+
+    Local calendar fields are carried rather than a timestamp so a pinned
+    reading has no residual timezone interpretation: the same values
+    reproduce the same results on any host, in any zone.
+    """
+
+    year: int
+    month: int
+    day: int
+    hour: int = 0
+    minute: int = 0
+    second: int = 0
+
+
+@dataclass(frozen=True)
 class SheetView:
     """Per-sheet view: zoom, frozen-pane counts, tab-hidden flag, and the
     display / orientation flags mirrored from OOXML ``<sheetView>``."""
@@ -2288,6 +2305,82 @@ class Workbook:
         """Set the workbook's calc mode."""
         h = self._require()
         _check(LIB.fm_workbook_set_calc_mode(h, _sint(mode, "mode")), "fm_workbook_set_calc_mode")
+
+    def pinned_now(self) -> "CivilTime | None":
+        """Return the pinned wall-clock reading, or ``None`` when the
+        workbook follows the host clock (the default)."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.CIVIL_TIME)
+        flag = _alloc_out_ptr()
+        try:
+            _check(LIB.fm_workbook_pinned_now(h, ptr, flag), "fm_workbook_pinned_now")
+            if LIB.read_i32(flag) == 0:
+                return None
+            d = S.CIVIL_TIME.unpack(LIB, ptr)
+            return CivilTime(
+                year=d["year"],
+                month=d["month"],
+                day=d["day"],
+                hour=d["hour"],
+                minute=d["minute"],
+                second=d["second"],
+            )
+        finally:
+            LIB.free(flag)
+            LIB.free(ptr)
+
+    def set_pinned_now(
+        self,
+        year: int,
+        month: int,
+        day: int,
+        hour: int = 0,
+        minute: int = 0,
+        second: int = 0,
+    ) -> None:
+        """Pin every clock-dependent result to one instant.
+
+        ``NOW()``, ``TODAY()`` and the pivot relative-period filters ("this
+        month", "year to date", ...) otherwise each read the clock
+        independently, which makes a recalc internally inconsistent across a
+        midnight boundary and makes any such result untestable.
+
+        This is model state, not file state: nothing in the OOXML package
+        records it, so :meth:`save` drops it. Existing formula cells keep
+        their cached values until the next :meth:`recalc`.
+
+        Raises:
+          FormulonError: with ``kInvalidArgument`` unless ``year`` is in
+            ``[1900, 9999]``, ``month`` in ``[1, 12]``, ``day`` within that
+            month's real length, ``hour`` in ``[0, 23]``, and ``minute`` /
+            ``second`` in ``[0, 59]``. The pin is a calendar instant, not a
+            normalising constructor: a month of 13 is rejected rather than
+            rolled into the next year.
+        """
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.CIVIL_TIME)
+        try:
+            S.CIVIL_TIME.pack(
+                LIB,
+                ptr,
+                {
+                    "year": _sint(year, "year"),
+                    "month": _sint(month, "month"),
+                    "day": _sint(day, "day"),
+                    "hour": _sint(hour, "hour"),
+                    "minute": _sint(minute, "minute"),
+                    "second": _sint(second, "second"),
+                },
+            )
+            _check(LIB.fm_workbook_set_pinned_now(h, ptr), "fm_workbook_set_pinned_now")
+        finally:
+            LIB.free(ptr)
+
+    def clear_pinned_now(self) -> None:
+        """Release the pin so clock-dependent results follow the host clock
+        again. Clearing an unpinned workbook does nothing."""
+        h = self._require()
+        _check(LIB.fm_workbook_clear_pinned_now(h), "fm_workbook_clear_pinned_now")
 
     def excel_profile_id(self) -> str:
         """Return the workbook's active Excel formula profile id."""

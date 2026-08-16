@@ -328,6 +328,46 @@ JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
   return status_from_rc(rc);
 }
 
+emscripten::val JsWorkbook::pinnedNow() const {
+  if (handle_ == nullptr) {
+    return emscripten::val::null();
+  }
+  fm_civil_time_t now{};
+  std::int32_t pinned = 0;
+  if (fm_workbook_pinned_now(handle_, &now, &pinned) != 0 || pinned == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val out = emscripten::val::object();
+  out.set("year", now.year);
+  out.set("month", now.month);
+  out.set("day", now.day);
+  out.set("hour", now.hour);
+  out.set("minute", now.minute);
+  out.set("second", now.second);
+  return out;
+}
+
+JsStatus JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute,
+                                  uint32_t second) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  // Each field is widened rather than range-checked here: the C layer owns
+  // the calendar domain, and a JS-side duplicate would be a second place to
+  // keep in step with it.
+  const fm_civil_time_t now{static_cast<std::int32_t>(year),   static_cast<std::int32_t>(month),
+                            static_cast<std::int32_t>(day),    static_cast<std::int32_t>(hour),
+                            static_cast<std::int32_t>(minute), static_cast<std::int32_t>(second)};
+  return status_from_rc(fm_workbook_set_pinned_now(handle_, &now));
+}
+
+JsStatus JsWorkbook::clearPinnedNow() {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  return status_from_rc(fm_workbook_clear_pinned_now(handle_));
+}
+
 std::string JsWorkbook::excelProfileId() const {
   if (handle_ == nullptr) {
     return "win-365-ja_JP";

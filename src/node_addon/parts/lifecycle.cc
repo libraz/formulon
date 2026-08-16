@@ -285,6 +285,49 @@ Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::PinnedNow(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return env.Null();
+  }
+  fm_civil_time_t now{};
+  std::int32_t pinned = 0;
+  if (fm_workbook_pinned_now(handle_, &now, &pinned) != 0 || pinned == 0) {
+    return env.Null();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("year", Napi::Number::New(env, now.year));
+  out.Set("month", Napi::Number::New(env, now.month));
+  out.Set("day", Napi::Number::New(env, now.day));
+  out.Set("hour", Napi::Number::New(env, now.hour));
+  out.Set("minute", Napi::Number::New(env, now.minute));
+  out.Set("second", Napi::Number::New(env, now.second));
+  return out;
+}
+
+Napi::Value Workbook::SetPinnedNow(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  // Missing arguments fall through as 0, which the C layer rejects: the
+  // calendar domain is validated in exactly one place.
+  fm_civil_time_t now{};
+  std::int32_t* const fields[] = {&now.year, &now.month, &now.day, &now.hour, &now.minute, &now.second};
+  for (std::size_t index = 0; index < 6; ++index) {
+    *fields[index] = info.Length() > index ? info[index].ToNumber().Int32Value() : 0;
+  }
+  return MakeStatus(env, fm_workbook_set_pinned_now(handle_, &now));
+}
+
+Napi::Value Workbook::ClearPinnedNow(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  return MakeStatus(env, fm_workbook_clear_pinned_now(handle_));
+}
+
 Napi::Value Workbook::ExcelProfileId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

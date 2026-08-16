@@ -484,6 +484,18 @@ export const ExternalLinkKind: Readonly<{
 /** Full formula-behaviour profile id. Defaults to `win-365-ja_JP`. */
 export type ExcelProfileId = 'mac-365-ja_JP' | 'win-365-ja_JP';
 
+/** A wall-clock reading in local civil fields, as read back from
+ *  `Workbook.pinnedNow()`. `month` is 1-12 and `day` is 1-31; the other
+ *  fields follow the usual 24-hour ranges. */
+export interface CivilTime {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
 /** RGBA colour. Channels are 0-255 (sRGB). */
 export interface CfColor {
   r: number;
@@ -1411,6 +1423,29 @@ export interface Workbook {
    *  metadata and surfaced here so the UI can mirror Excel's state. */
   calcMode(): CalcMode;
   setCalcMode(mode: CalcMode): Status;
+  /** The workbook's pinned wall-clock reading, or `null` when it follows
+   *  the host clock (the default).
+   *
+   *  Pinning gives `NOW()`, `TODAY()` and the pivot relative-period filters
+   *  ("this month", "year to date", ...) one instant to agree on; without a
+   *  pin each reads the clock independently, so a recalc can straddle a
+   *  midnight boundary and no such result is testable. Local civil fields
+   *  are carried rather than a timestamp, so the same values reproduce the
+   *  same results in any timezone.
+   *
+   *  Model state, not file state: `save()` does not record it and a reloaded
+   *  workbook comes back unpinned. Existing formula cells keep their cached
+   *  values until the next `recalc()`. */
+  pinnedNow(): CivilTime | null;
+  /** Pins the workbook clock. Returns `kInvalidArgument` unless `year` is in
+   *  `[1900, 9999]`, `month` in `[1, 12]`, `day` within that month's real
+   *  length, `hour` in `[0, 23]`, and `minute` / `second` in `[0, 59]` — the
+   *  pin is a calendar instant, not a normalising constructor, so a month of
+   *  13 is rejected rather than rolled into the next year. */
+  setPinnedNow(year: number, month: number, day: number, hour: number, minute: number, second: number): Status;
+  /** Releases the pin. Clearing an unpinned workbook succeeds and does
+   *  nothing. */
+  clearPinnedNow(): Status;
   /** Full formula-behaviour profile id. Defaults to `win-365-ja_JP`. */
   excelProfileId(): ExcelProfileId;
   setExcelProfileId(profileId: ExcelProfileId): Status;

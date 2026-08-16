@@ -350,6 +350,14 @@ class SheetProtection:
         pivot_tables: bool = ...,
     ) -> None: ...
 
+class CivilTime:
+    year: int
+    month: int
+    day: int
+    hour: int
+    minute: int
+    second: int
+
 class SheetView:
     zoom_scale: int
     freeze_rows: int
@@ -890,6 +898,17 @@ class Workbook:
     ) -> int: ...
     def calc_mode(self) -> CalcMode: ...
     def set_calc_mode(self, mode: Union[CalcMode, int]) -> None: ...
+    def pinned_now(self) -> Optional[CivilTime]: ...
+    def set_pinned_now(
+        self,
+        year: int,
+        month: int,
+        day: int,
+        hour: int = ...,
+        minute: int = ...,
+        second: int = ...,
+    ) -> None: ...
+    def clear_pinned_now(self) -> None: ...
     def excel_profile_id(self) -> str: ...
     def set_excel_profile_id(self, profile_id: str) -> None: ...
 

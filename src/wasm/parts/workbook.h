@@ -117,6 +117,13 @@ class JsWorkbook {
   JsStatus setIterative(bool enabled, uint32_t max_iterations, double max_change);
   uint32_t calcMode() const;
   JsStatus setCalcMode(uint32_t mode);
+  /// The pinned wall-clock reading as `{year, month, day, hour, minute,
+  /// second}`, or `null` when the workbook follows the host clock. `null`
+  /// rather than a flag beside the fields because JS already has a way to
+  /// say "no reading", and every field combination is a legal date.
+  emscripten::val pinnedNow() const;
+  JsStatus setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute, uint32_t second);
+  JsStatus clearPinnedNow();
   std::string excelProfileId() const;
   JsStatus setExcelProfileId(const std::string& profile_id);
   emscripten::val partialRecalc(emscripten::val viewport);

@@ -416,6 +416,18 @@ FUNCTION_METADATA = Struct(
     ],
 )
 
+CIVIL_TIME = Struct(
+    "fm_civil_time_t",
+    [
+        ("year", I32),
+        ("month", I32),
+        ("day", I32),
+        ("hour", I32),
+        ("minute", I32),
+        ("second", I32),
+    ],
+)
+
 SHEET_VIEW = Struct(
     "fm_sheet_view_t",
     [

@@ -25,6 +25,7 @@ from formulon import (
     CalcMode,
     CfColor,
     CfValueObject,
+    CivilTime,
     ColorScale,
     ColorSpec,
     ConditionalFormatInput,
@@ -33,6 +34,7 @@ from formulon import (
     DifferentialFormat,
     FillRecord,
     FontRecord,
+    FormulonError,
     IconSet,
     MergeRange,
     PivotAggregation,
@@ -127,6 +129,7 @@ class StructLayoutTests(unittest.TestCase):
         "SAVE_DIAGNOSTICS": 20,
         "SPILL_INFO": 20,
         "FUNCTION_METADATA": 24,
+        "CIVIL_TIME": 24,
         "SHEET_VIEW": 40,
         "COLUMN_LAYOUT": 40,
         "ROW_LAYOUT": 32,
@@ -292,6 +295,27 @@ class CalcPolicyTests(unittest.TestCase):
             self.assertEqual(wb.calc_mode(), CalcMode.AUTO)
             wb.set_calc_mode(CalcMode.MANUAL)
             self.assertEqual(wb.calc_mode(), CalcMode.MANUAL)
+
+    def test_pinned_now_roundtrip(self) -> None:
+        with Workbook.create_default() as wb:
+            # Unpinned by default: the workbook follows the host clock.
+            self.assertIsNone(wb.pinned_now())
+            wb.set_pinned_now(2026, 4, 23, 15, 30, 45)
+            self.assertEqual(wb.pinned_now(), CivilTime(2026, 4, 23, 15, 30, 45))
+            # 2026-04-23 is serial 46135 under the 1900 date system.
+            grid = wb.evaluate_formula_array(0, 0, 0, "=TODAY()")
+            self.assertEqual(grid[0][0].number, 46135.0)
+            wb.clear_pinned_now()
+            self.assertIsNone(wb.pinned_now())
+
+    def test_pinned_now_rejects_a_non_calendar_instant(self) -> None:
+        with Workbook.create_default() as wb:
+            # The pin is a calendar instant, not a normalising constructor.
+            with self.assertRaises(FormulonError):
+                wb.set_pinned_now(2026, 13, 1)
+            with self.assertRaises(FormulonError):
+                wb.set_pinned_now(2025, 2, 29)
+            self.assertIsNone(wb.pinned_now())
 
     def test_excel_profile_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
@@ -1042,6 +1066,9 @@ class SurfaceParityTests(unittest.TestCase):
         "delete_cols",
         "calc_mode",
         "set_calc_mode",
+        "pinned_now",
+        "set_pinned_now",
+        "clear_pinned_now",
         "excel_profile_id",
         "set_excel_profile_id",
         "partial_recalc",

@@ -367,13 +367,21 @@ test('Workbook.createDefault + setNumber + getValue round-trip', async () => {
 test('paginate exposes a status envelope and page geometry', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
+  // Asserts the envelope's shape, not the page geometry: how many rows fit a
+  // page is the print engine's business and is pinned by the native print
+  // suite against Excel. Row 400 is far enough down to force a break under
+  // any plausible body height.
   assert.ok(wb.setNumber(0, 0, 0, 1).ok);
-  assert.ok(wb.setNumber(0, 48, 0, 2).ok);
+  assert.ok(wb.setNumber(0, 400, 0, 2).ok);
   const result = wb.paginate(0);
   assert.ok(result.status.ok, `paginate: ${JSON.stringify(result.status)}`);
-  assert.equal(result.pageCount, 2);
+  assert.ok(result.pageCount >= 2, `pageCount: ${result.pageCount}`);
   assert.deepEqual(result.printArea, []);
-  assert.deepEqual(result.horizontalBreaks, [44]);
+  assert.ok(result.horizontalBreaks.length > 0);
+  assert.deepEqual(
+    result.horizontalBreaks,
+    [...new Set(result.horizontalBreaks)].sort((a, b) => a - b),
+  );
   assert.deepEqual(result.verticalBreaks, []);
 });
 
@@ -1766,6 +1774,35 @@ test('setCalcMode / calcMode round-trip the calc policy', async () => {
   assert.equal(wb.calcMode(), 1);
   assert.ok(wb.setCalcMode(2).ok);
   assert.equal(wb.calcMode(), 2);
+});
+
+test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // Unpinned by default: the workbook follows the host clock.
+  assert.equal(wb.pinnedNow(), null);
+
+  assert.ok(wb.setPinnedNow(2026, 4, 23, 15, 30, 45).ok);
+  assert.deepEqual(wb.pinnedNow(), {
+    year: 2026,
+    month: 4,
+    day: 23,
+    hour: 15,
+    minute: 30,
+    second: 45,
+  });
+
+  // 2026-04-23 is serial 46135 under the 1900 date system.
+  const today = wb.evaluateFormulaText(0, 0, 0, '=TODAY()');
+  assert.ok(today.status.ok, `evaluateFormulaText: ${JSON.stringify(today.status)}`);
+  assert.equal(today.value.number, 46135);
+
+  // The pin is a calendar instant, not a normalising constructor.
+  assert.equal(wb.setPinnedNow(2026, 13, 1, 0, 0, 0).ok, false);
+  assert.equal(wb.setPinnedNow(2025, 2, 29, 0, 0, 0).ok, false);
+
+  assert.ok(wb.clearPinnedNow().ok);
+  assert.equal(wb.pinnedNow(), null);
 });
 
 test('excelProfileId / setExcelProfileId round-trip the profile id', async () => {
