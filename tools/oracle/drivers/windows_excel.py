@@ -806,6 +806,8 @@ class WindowsExcelOracle(OracleDriver):
         shape ``_write_cell`` already understands.
         """
 
+        _pin_normal_font(wb)
+
         sheets = case.get("sheets") or {}
         for sheet_name, cells in sheets.items():
             sht = _get_or_add_sheet(wb, sheet_name)
@@ -835,6 +837,40 @@ class WindowsExcelOracle(OracleDriver):
             target.Hidden = True
             if not target.Hidden:
                 raise RuntimeError(f"row {row_key!r} did not hide; refusing to capture a case it does not match")
+
+
+_NORMAL_FONT_NAME = "Calibri"
+_NORMAL_FONT_SIZE = 11.0
+
+
+def _pin_normal_font(wb) -> None:
+    """Pins the Normal style to Calibri 11 before any content is written.
+
+    A column width is stated in *characters*, which is a font-relative
+    unit: it resolves through the Normal style font's maximum digit width.
+    A ja-JP Excel opens new workbooks in the locale's UI font, so a case
+    saying `column_widths: {"A:H": 30}` produced a physically different
+    sheet on the capture host than `src/print/pagination.cpp` builds from
+    the same number -- the engine's width model is the documented Calibri
+    11 one (MDW 7px, the 8.43-characters == 64-pixels default). The two
+    sides were resolving the same unit against different fonts, so every
+    width-derived page break was compared across incompatible geometry.
+
+    Pinning the font here makes the case self-describing rather than
+    dependent on the capture host's locale defaults. Excel resizes existing
+    columns when the Normal font changes, so this must run before any width
+    is applied.
+    """
+
+    style = wb.api.Styles("Normal")
+    style.Font.Name = _NORMAL_FONT_NAME
+    style.Font.Size = _NORMAL_FONT_SIZE
+    applied = str(style.Font.Name)
+    if applied != _NORMAL_FONT_NAME:
+        raise RuntimeError(
+            f"Normal style font is {applied!r}, not {_NORMAL_FONT_NAME!r}; character-unit column "
+            "widths would not be comparable with the engine's width model"
+        )
 
 
 def _apply_axis_size(sheet, axis: str, key: str, size: float) -> None:
@@ -1466,7 +1502,85 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
         "v_breaks": v_breaks,
         "pages": pages,
         "applied_page_setup": applied,
+        "applied_geometry": _read_applied_geometry(sht, resolved_area, page_setup),
     }
+
+
+def _read_applied_geometry(sht, resolved_area: str, page_setup) -> Dict[str, Any]:
+    """Records the physical sizes Excel resolved, in points.
+
+    Break positions alone cannot say *why* a page broke where it did: they
+    only bound the track sizes that produced them, so a model that
+    disagrees can only be diagnosed by solving inequalities across the
+    whole suite -- and an under-determined system sends you back for
+    another capture. These are the numbers `src/print/pagination.cpp`
+    predicts (`ColumnCharsToPoints`, `RowHeightPoints`,
+    `compute_printable_area`), read directly, so a disagreement is
+    attributable offline from one capture instead of another Excel
+    session.
+
+    Best-effort: a probe failure omits its key rather than failing the
+    case, since this is diagnostic and never asserted.
+    """
+
+    out: Dict[str, Any] = {}
+    ws = sht.api
+
+    def points(getter) -> Any:
+        try:
+            value = getter()
+            return round(float(value), 4) if value is not None else None
+        except Exception:
+            return None
+
+    # Per-track sizes over the resolved print area's first rectangle. The
+    # engine's model is per-track, so a summed width would hide which
+    # track it disagrees about.
+    first_rect = resolved_area.split(",")[0] if resolved_area else ""
+    if ":" in first_rect:
+        try:
+            start, end = first_rect.split(":")
+            first_row, first_col = _split_a1(start)
+            last_row, last_col = _split_a1(end)
+        except Exception:
+            first_row = first_col = last_row = last_col = None
+        if first_col is not None and last_col - first_col < _GEOMETRY_TRACK_CAP:
+            out["column_widths_pt"] = [
+                points(lambda c=col: ws.Columns(c).Width) for col in range(first_col, last_col + 1)
+            ]
+        if first_row is not None and last_row - first_row < _GEOMETRY_TRACK_CAP:
+            out["row_heights_pt"] = [points(lambda r=row: ws.Rows(r).Height) for row in range(first_row, last_row + 1)]
+
+    # The printable body Excel paginated against, so a margin / paper /
+    # printer-metric disagreement is separable from a track-size one.
+    for key, prop in (("page_width_pt", "PageWidth"), ("page_height_pt", "PageHeight")):
+        out[key] = points(lambda p=prop: getattr(page_setup, p))
+    # The Normal style font is what makes a character-unit width physical;
+    # recording it is what says whether _pin_normal_font took effect.
+    try:
+        style = sht.book.api.Styles("Normal").Font
+        out["normal_font"] = f"{style.Name} {float(style.Size):g}"
+    except Exception:
+        pass
+    return out
+
+
+# A whole-column print area would otherwise issue 16,384 COM round trips
+# for a diagnostic nobody asserts.
+_GEOMETRY_TRACK_CAP = 64
+
+
+def _split_a1(addr: str) -> Tuple[int, int]:
+    """Splits a bare A1 address into 1-based (row, column) COM indices."""
+
+    addr = addr.replace("$", "")
+    i = 0
+    while i < len(addr) and addr[i].isalpha():
+        i += 1
+    col = 0
+    for ch in addr[:i]:
+        col = col * 26 + (ord(ch.upper()) - ord("A") + 1)
+    return int(addr[i:]), col
 
 
 def _read_zoom_value(page_setup) -> Any:
