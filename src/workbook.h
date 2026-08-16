@@ -15,11 +15,13 @@
 #include <cstdint>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "eval/compat.h"
+#include "eval/date_time.h"
 #include "io/calc_mode.h"
 #include "io/default_content_type.h"
 #include "io/defined_names.h"
@@ -599,6 +601,33 @@ class Workbook {
   void set_date1904(bool value) noexcept { date1904_ = value; }
 
   // ---------------------------------------------------------------------------
+  // Clock seam
+  // ---------------------------------------------------------------------------
+  //
+  // Some results depend on when they are computed: `NOW` / `TODAY`, and the
+  // pivot relative-period filters that ask for "this month" or "year to
+  // date". Left to themselves each would read the host clock independently,
+  // which makes a recalc internally inconsistent across a midnight boundary
+  // and makes every such result untestable.
+  //
+  // Pinning a reading here gives the whole workbook one instant to agree on.
+  // This is model state, not file state: nothing in the OOXML package
+  // records it, and a save drops it.
+
+  /// The pinned wall-clock reading, or `std::nullopt` when the workbook
+  /// follows the host clock (the default). Threaded into `EvalContext` at
+  /// the evaluator boundary and into the pivot filter engine.
+  const std::optional<eval::date_time::CivilTime>& pinned_now() const noexcept { return pinned_now_; }
+
+  /// Pins every clock-dependent result to `value`. Intended for tests and
+  /// for hosts that need a reproducible recalc; production callers leave it
+  /// unset so the host clock shows through.
+  void set_pinned_now(eval::date_time::CivilTime value) noexcept { pinned_now_ = value; }
+
+  /// Releases the pin so clock-dependent results follow the host clock again.
+  void clear_pinned_now() noexcept { pinned_now_.reset(); }
+
+  // ---------------------------------------------------------------------------
   // Workbook-level element round-trip (`<workbookPr>` / `<workbookProtection>`
   // / `<bookViews>`)
   // ---------------------------------------------------------------------------
@@ -827,6 +856,9 @@ class Workbook {
   // 1904 date system flag parsed from `<workbookPr date1904>`. Default
   // false (1900 system).
   bool date1904_ = false;
+  // Pinned wall-clock reading for the clock seam above. Empty by default so
+  // an untouched workbook behaves exactly as it did before the seam existed.
+  std::optional<eval::date_time::CivilTime> pinned_now_;
   // Raw workbook.xml level elements captured for verbatim re-emission
   // (see the `workbook_pr_xml` accessor group). Empty when absent from
   // the source.

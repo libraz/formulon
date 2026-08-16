@@ -1414,6 +1414,84 @@ TEST(DateTime1904, TodayIsPositiveIntegerUnder1904) {
   EXPECT_DOUBLE_EQ(v.as_number(), std::floor(v.as_number()));
 }
 
+// ---------------------------------------------------------------------------
+// Clock seam
+//
+// `EvalContext::wall_clock()` falls through to the host clock unless a
+// reading is pinned. Pinning is what makes NOW / TODAY assertable at all:
+// without it every expectation here would have to be a shape check against
+// whatever day the suite happens to run on, as the test above has to be.
+// ---------------------------------------------------------------------------
+
+// 2026-04-23 15:30:45. The date half matches `DateTimeDate.CurrentDateSerial`
+// above, so the expected serial 46135 is already independently pinned.
+constexpr date_time::CivilTime kPinnedNow{{2026, 4U, 23U}, {15U, 30U, 45U}};
+constexpr double kPinnedSerial = 46135.0;
+// 15:30:45 == 55,845 seconds into the day.
+constexpr double kPinnedTimeOfDay = 55845.0 / 86400.0;
+
+Value EvalSourcePinned(std::string_view src, date_time::CivilTime pinned = kPinnedNow, bool date1904 = false) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(),
+                  test::mac_context().with_date1904(date1904).with_pinned_now(pinned));
+}
+
+TEST(ClockSeam, TodayReturnsThePinnedDate) {
+  const Value v = EvalSourcePinned("=TODAY()");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), kPinnedSerial);
+}
+
+TEST(ClockSeam, NowCarriesThePinnedTimeOfDay) {
+  const Value v = EvalSourcePinned("=NOW()");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), kPinnedSerial + kPinnedTimeOfDay);
+}
+
+TEST(ClockSeam, TodayDiscardsTheTimeOfDayNowKeeps) {
+  const Value today = EvalSourcePinned("=TODAY()");
+  const Value now = EvalSourcePinned("=NOW()");
+  ASSERT_TRUE(today.is_number());
+  ASSERT_TRUE(now.is_number());
+  EXPECT_DOUBLE_EQ(today.as_number(), std::floor(now.as_number()));
+  EXPECT_GT(now.as_number(), today.as_number());
+}
+
+TEST(ClockSeam, MovingThePinMovesTheAnswer) {
+  // Guards against the pin being accepted but ignored: a second reading a
+  // day later must shift the serial by exactly one.
+  constexpr date_time::CivilTime kNextDay{{2026, 4U, 24U}, {15U, 30U, 45U}};
+  const Value v = EvalSourcePinned("=TODAY()", kNextDay);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), kPinnedSerial + 1.0);
+}
+
+TEST(ClockSeam, ThePinnedReadingStillHonoursTheWorkbookEpoch) {
+  // The pin carries calendar fields, not a serial, so the 1904 epoch is
+  // applied downstream exactly as it is for an argument-supplied date.
+  const Value v = EvalSourcePinned("=TODAY()", kPinnedNow, /*date1904=*/true);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), kPinnedSerial - date_time::kDate1904EpochGap);
+}
+
+TEST(ClockSeam, AnUnpinnedContextStillFollowsTheHostClock) {
+  // The seam must not disturb the shipping default: with nothing pinned both
+  // functions keep reading the host clock, so only the shape is assertable.
+  const Value v = EvalSource("=TODAY()");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GT(v.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), std::floor(v.as_number()));
+}
+
 TEST(DateTime1904, TextDateRenderingUsesWorkbookEpoch) {
   // Serial 42369 is 2015-12-31 in the 1900 system and 2020-01-01 in the 1904
   // system. TEXT's date format must render against the workbook epoch.

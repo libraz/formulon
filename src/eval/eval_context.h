@@ -22,9 +22,11 @@
 #define FORMULON_EVAL_EVAL_CONTEXT_H_
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "eval/compat.h"
+#include "eval/date_time.h"
 #include "eval/spill_committer.h"
 #include "parser/reference.h"
 #include "utils/error.h"
@@ -266,6 +268,36 @@ class EvalContext {
     return copy;
   }
 
+  /// The wall-clock reading every clock-dependent evaluator must use.
+  ///
+  /// Returns the workbook's pinned reading when one is set, and otherwise
+  /// reads the host clock. Routing `NOW` / `TODAY` through here rather than
+  /// letting each read the clock itself is what makes a clock-dependent
+  /// result reproducible: pin the workbook and the whole recalc sees one
+  /// instant.
+  ///
+  /// Note this is deliberately *not* memoised on the context. Excel marks
+  /// both functions volatile and the previous behaviour re-read the clock
+  /// per invocation; preserving that keeps an unpinned workbook's semantics
+  /// exactly as they were.
+  date_time::CivilTime wall_clock() const noexcept {
+    return pinned_now_.has_value() ? *pinned_now_ : date_time::host_civil_time();
+  }
+
+  /// The pinned reading itself, or `std::nullopt` when the context follows
+  /// the host clock. Callers that must distinguish "pinned" from "happens to
+  /// equal now" read this; everything else wants `wall_clock()`.
+  const std::optional<date_time::CivilTime>& pinned_now() const noexcept { return pinned_now_; }
+
+  /// Returns a copy of `*this` whose clock is pinned to `value` (or released
+  /// back to the host clock when `value` is empty). Sourced from
+  /// `Workbook::pinned_now()` at the cell-evaluator boundary.
+  EvalContext with_pinned_now(std::optional<date_time::CivilTime> value) const noexcept {
+    EvalContext copy = *this;
+    copy.pinned_now_ = value;
+    return copy;
+  }
+
   /// Returns a copy of `*this` whose recursive-evaluation `state()` is
   /// `&state`. Used by the iterative-calc driver to run each fixed-point
   /// pass against a fresh memoisation map / in-progress stack so stale
@@ -453,6 +485,10 @@ class EvalContext {
   // to date-aware evaluators so serial <-> calendar conversions pick the
   // correct epoch. Defaults to the 1900 system.
   bool date1904_ = false;
+  // Pinned wall-clock reading, sourced from `Workbook::pinned_now()`. Empty
+  // means "follow the host clock", which is the shipping default; a value
+  // here makes every clock-dependent result in the recalc deterministic.
+  std::optional<date_time::CivilTime> pinned_now_;
   // Spill-write authority for the current `evaluate()` call. Decoupled from
   // `current_sheet_` so that ad-hoc / read-only contexts (CLI eval, tests
   // that only resolve refs) cannot accidentally mutate the sheet.

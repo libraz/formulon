@@ -6,8 +6,10 @@
 
 #include "eval/date_time.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <ctime>
 
 namespace formulon {
 namespace eval {
@@ -260,6 +262,29 @@ double basis_days_between(double a, double b, int basis) noexcept {
   }
   // Bases 1, 2, 3: actual days.
   return b - a;
+}
+
+CivilTime host_civil_time() noexcept {
+  // Excel's clock functions are locale-bound: a worksheet shows the user's
+  // local calendar, not UTC. `localtime_r` / `localtime_s` is therefore the
+  // decomposition to use, and the result is handed back as civil fields so
+  // no caller has to re-derive a timezone.
+  using std::chrono::system_clock;
+  const std::time_t stamp = system_clock::to_time_t(system_clock::now());
+  std::tm local{};
+#if defined(_WIN32)
+  localtime_s(&local, &stamp);
+#else
+  localtime_r(&stamp, &local);
+#endif
+  CivilTime out{};
+  out.date.y = local.tm_year + 1900;
+  out.date.m = static_cast<unsigned>(local.tm_mon + 1);
+  out.date.d = static_cast<unsigned>(local.tm_mday);
+  out.time.h = static_cast<unsigned>(local.tm_hour);
+  out.time.m = static_cast<unsigned>(local.tm_min);
+  out.time.s = static_cast<unsigned>(local.tm_sec);
+  return out;
 }
 
 }  // namespace date_time

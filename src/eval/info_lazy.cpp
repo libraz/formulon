@@ -635,7 +635,7 @@ Value eval_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (entry == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return invoke_date_entry(*entry, args, 2U, arena, ctx.date1904());
+  return invoke_date_entry(*entry, args, 2U, arena, ctx.date1904(), ctx.wall_clock());
 }
 
 }  // namespace eval

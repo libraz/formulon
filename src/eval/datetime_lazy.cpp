@@ -22,7 +22,13 @@
 namespace formulon {
 namespace eval {
 
-Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t arity, Arena& arena, bool date1904) {
+Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t arity, Arena& arena, bool date1904,
+                        const date_time::CivilTime& now) {
+  // The clock builtins are zero-arity, so none of the broadcasting below
+  // applies to them; they only need the reading the caller resolved.
+  if (entry.clock_impl != nullptr) {
+    return entry.clock_impl(now, date1904);
+  }
   std::uint32_t rows = 1U;
   std::uint32_t cols = 1U;
   bool has_array = false;
@@ -102,7 +108,8 @@ Value eval_datetime_lazy(const parser::AstNode& call, Arena& arena, const Functi
     }
     args.push_back(v);
   }
-  return invoke_date_entry(*entry, args.empty() ? nullptr : args.data(), arity, arena, ctx.date1904());
+  return invoke_date_entry(*entry, args.empty() ? nullptr : args.data(), arity, arena, ctx.date1904(),
+                           ctx.wall_clock());
 }
 
 }  // namespace eval

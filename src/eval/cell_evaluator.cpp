@@ -56,6 +56,7 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
     ctx = EvalContext::workbook_only(workbook, sheet)
               .with_excel_profile(workbook.excel_profile())
               .with_date1904(workbook.date1904())
+              .with_pinned_now(workbook.pinned_now())
               .with_mutable_sheet(sheet)
               .with_spill_release_callback(opts.spill_release_callback, opts.spill_release_user_data)
               .with_formula_cell(row, col);
@@ -63,6 +64,7 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
     ctx = EvalContext(workbook, sheet, state)
               .with_excel_profile(workbook.excel_profile())
               .with_date1904(workbook.date1904())
+              .with_pinned_now(workbook.pinned_now())
               .with_mutable_sheet(sheet)
               .with_spill_release_callback(opts.spill_release_callback, opts.spill_release_user_data)
               .with_formula_cell(row, col);

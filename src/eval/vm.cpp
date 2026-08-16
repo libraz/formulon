@@ -600,8 +600,12 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
             ++pc;
             break;
           }
-          const Value out = date->impl(date_argv.empty() ? nullptr : date_argv.data(),
-                                       static_cast<std::uint32_t>(date_argv.size()), arena, ctx.date1904());
+          // NOW / TODAY need the context's wall-clock reading rather than
+          // arguments, so a pinned workbook stays deterministic here too.
+          const Value out = date->clock_impl != nullptr
+                                ? date->clock_impl(ctx.wall_clock(), ctx.date1904())
+                                : date->impl(date_argv.empty() ? nullptr : date_argv.data(),
+                                             static_cast<std::uint32_t>(date_argv.size()), arena, ctx.date1904());
           RETURN_IF_ERROR(push_value(s, out));
           ++pc;
           break;

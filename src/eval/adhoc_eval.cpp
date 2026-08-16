@@ -48,6 +48,7 @@ EvalContext make_readonly_context(const Workbook& workbook, const Sheet& sheet, 
   return EvalContext(workbook, sheet, state)
       .with_excel_profile(workbook.excel_profile())
       .with_date1904(workbook.date1904())
+      .with_pinned_now(workbook.pinned_now())
       .with_formula_cell(row, col);
 }
 

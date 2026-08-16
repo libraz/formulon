@@ -45,6 +45,31 @@ struct HMS {
   unsigned s;
 };
 
+/// A wall-clock reading decomposed into local civil fields.
+///
+/// This is the currency of the engine's clock seam. Everything that asks
+/// "what does the user's calendar say right now" — `NOW`, `TODAY`, and the
+/// pivot relative-period filters — resolves through a value of this type, so
+/// a single workbook-level reading keeps them mutually consistent instead of
+/// each racing the clock independently.
+///
+/// Decomposed local fields are stored rather than a timestamp on purpose: a
+/// pinned reading then carries no residual timezone interpretation and
+/// reproduces identically on any host, which is what makes a clock-dependent
+/// result testable at all.
+struct CivilTime {
+  YMD date;
+  HMS time;
+};
+
+/// Reads the host's local wall clock.
+///
+/// Lives beside the calendar primitives rather than beside `NOW` because the
+/// pivot filter engine needs the same reading and must not have to depend on
+/// the calendar builtins to get it. Callers that need a reproducible result
+/// take a pinned reading from the workbook instead of calling this.
+CivilTime host_civil_time() noexcept;
+
 /// Gap between the two Excel date systems, in days: the 1904-system serial
 /// for a calendar day is exactly this much less than its 1900-system serial.
 /// Shared by the calendar builtins and by callers that must move a serial

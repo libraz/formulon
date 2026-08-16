@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "eval/date_time.h"
 #include "value.h"
 
 namespace formulon {
@@ -38,12 +39,24 @@ class FunctionRegistry;
 /// trailing `date1904` flag threaded from `EvalContext::date1904()`.
 using DateImplFn = Value (*)(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 
+/// A clock-reading impl. `NOW` and `TODAY` take no arguments, so what they
+/// need from the context is not an argument at all but the wall-clock
+/// reading; the argument-shaped `DateImplFn` convention cannot carry it.
+/// Giving them their own slot keeps the other fifteen calendar impls'
+/// signatures untouched.
+using ClockImplFn = Value (*)(const date_time::CivilTime& now, bool date1904);
+
 /// One calendar-family entry: the impl plus its arity bounds (the eager
 /// dispatcher's arity guard is replicated by the callers below).
 struct DateEntry {
   DateImplFn impl;
   std::uint32_t min_arity;
   std::uint32_t max_arity;
+  /// Non-null only for the clock builtins. When set, callers must invoke
+  /// this with the context's wall-clock reading rather than calling `impl`,
+  /// so a pinned workbook stays deterministic. `impl` remains valid and
+  /// reads the host clock, serving callers that have no context to offer.
+  ClockImplFn clock_impl = nullptr;
 };
 
 /// Returns the calendar entry for `name` (canonical UPPERCASE, future-prefix
@@ -54,7 +67,12 @@ const DateEntry* find_date_entry(std::string_view name) noexcept;
 
 /// Invokes a date-aware scalar implementation, lifting array arguments
 /// cellwise with Excel 365 broadcasting semantics.
-Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+///
+/// `now` is the caller's wall-clock reading (`EvalContext::wall_clock()`).
+/// It is consumed only by entries carrying a `clock_impl`; the calendar
+/// entries ignore it, since they derive everything from their arguments.
+Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t arity, Arena& arena, bool date1904,
+                        const date_time::CivilTime& now);
 
 /// Single tree-walker lazy impl covering the whole date1904-sensitive
 /// calendar family. Evaluates the call's arguments (scalar-only,

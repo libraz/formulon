@@ -924,58 +924,59 @@ Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
 // ---------------------------------------------------------------------------
 // NOW / TODAY
 //
-// Both read the host wall clock. Excel returns local time (the worksheet is
-// locale-bound), so we convert `system_clock::now()` via `localtime_r` /
-// `localtime_s` to decompose the timestamp into a calendar date + time of
-// day, then build the Excel serial from those fields. NOW includes the
-// fractional time-of-day; TODAY discards it. Both are marked volatile in
-// Excel; the engine's recalc scheduling is out of scope for this impl — every
-// invocation re-reads the clock.
+// Excel returns local time (the worksheet is locale-bound), so both build
+// their serial from a wall-clock reading already decomposed into local
+// civil fields. NOW includes the fractional time-of-day; TODAY discards it.
+//
+// The reading is supplied by the caller rather than read here, because a
+// workbook can pin its clock (`Workbook::pinned_now`) to make every
+// clock-dependent result reproducible. Callers holding an `EvalContext`
+// resolve it via `EvalContext::wall_clock()`, which falls through to the
+// host clock when nothing is pinned. Both functions stay volatile in
+// Excel's sense; recalc scheduling is out of scope for this impl, and an
+// unpinned workbook still re-reads the clock per invocation.
 // ---------------------------------------------------------------------------
 
-// Returns (date_serial, tod_fraction) for the current local time. Called
-// independently by NOW and TODAY so neither routes through a dummy-arena
-// call. Defined here rather than in `date_time.cpp` because the clock read
-// is only needed by these two builtins and we want to keep `date_time.h`
-// clock-agnostic.
-struct LocalNow {
+// Splits a wall-clock reading into the two halves of an Excel serial: the
+// day count under the workbook epoch, and the time of day as a fraction of
+// 86,400 seconds.
+struct SerialNow {
   double date_serial;
   double tod_fraction;
 };
 
-LocalNow read_local_now(bool date1904) noexcept {
-  using std::chrono::system_clock;
-  const std::time_t tt = system_clock::to_time_t(system_clock::now());
-  std::tm local{};
-#if defined(_WIN32)
-  localtime_s(&local, &tt);
-#else
-  localtime_r(&tt, &local);
-#endif
-  const int y = local.tm_year + 1900;
-  const unsigned m = static_cast<unsigned>(local.tm_mon + 1);
-  const unsigned d = static_cast<unsigned>(local.tm_mday);
-  const double date_serial = date_time::serial_from_ymd(y, m, d, date1904);
-  const double tod = (static_cast<double>(local.tm_hour) * 3600.0 + static_cast<double>(local.tm_min) * 60.0 +
-                      static_cast<double>(local.tm_sec)) /
+SerialNow serial_from_civil(const date_time::CivilTime& now, bool date1904) noexcept {
+  const double date_serial = date_time::serial_from_ymd(now.date.y, now.date.m, now.date.d, date1904);
+  const double tod = (static_cast<double>(now.time.h) * 3600.0 + static_cast<double>(now.time.m) * 60.0 +
+                      static_cast<double>(now.time.s)) /
                      86400.0;
-  return LocalNow{date_serial, tod};
+  return SerialNow{date_serial, tod};
 }
 
-/// NOW(). Returns the current local date-time as an Excel serial
-/// (integer = days since the Excel epoch; fraction = time-of-day / 86400).
-/// Zero-argument; `localtime_r` / `localtime_s` decompose the wall clock.
+/// NOW(), against a caller-supplied reading. Returns the local date-time as
+/// an Excel serial (integer = days since the Excel epoch; fraction =
+/// time-of-day / 86400).
+Value NowAt_(const date_time::CivilTime& now, bool date1904) {
+  const SerialNow split = serial_from_civil(now, date1904);
+  return Value::number(split.date_serial + split.tod_fraction);
+}
+
+/// TODAY(), against a caller-supplied reading. Returns the local date as an
+/// integer Excel serial: `NOW()` with the time of day discarded.
+Value TodayAt_(const date_time::CivilTime& now, bool date1904) {
+  return Value::number(serial_from_civil(now, date1904).date_serial);
+}
+
+/// Host-clock fallbacks. Callers holding an `EvalContext` reach the two
+/// functions above through `DateEntry::clock_impl` instead, so a pinned
+/// workbook stays deterministic; these serve the contextless callers and
+/// keep one reading per invocation (no drift between date and time halves).
 Value Now_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  const LocalNow now = read_local_now(date1904);
-  return Value::number(now.date_serial + now.tod_fraction);
+  return NowAt_(date_time::host_civil_time(), date1904);
 }
 
-/// TODAY(). Returns the current local date as an integer Excel serial.
-/// Equivalent to `std::floor(NOW())` but reads the clock once to avoid any
-/// second-boundary drift between the two halves.
 Value Today_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  const LocalNow now = read_local_now(date1904);
-  return Value::number(now.date_serial);
+  return TodayAt_(date_time::host_civil_time(), date1904);
 }
 
 // ---------------------------------------------------------------------------
@@ -1105,8 +1106,8 @@ const DateEntry* find_date_entry(std::string_view name) noexcept {
       {"DAYS360", {&Days360_, 2u, 3u}},
       {"DATEVALUE", {&Datevalue_, 1u, 1u}},
       {"DAYS", {&Days_, 2u, 2u}},
-      {"NOW", {&Now_, 0u, 0u}},
-      {"TODAY", {&Today_, 0u, 0u}},
+      {"NOW", {&Now_, 0u, 0u, &NowAt_}},
+      {"TODAY", {&Today_, 0u, 0u, &TodayAt_}},
       // TEXT is not a calendar function, but its date format codes read the
       // workbook epoch, so it shares this ctx-date1904 lookup. The impl lives
       // in builtins/text_format.cpp.
