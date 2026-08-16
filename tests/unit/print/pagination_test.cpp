@@ -157,16 +157,16 @@ TEST(PaginationTest, HiddenRowsAreExcludedFromPaginationExtent) {
 }
 
 TEST(PaginationTest, HiddenWidthlessColumnDoesNotConsumeFitToPageWidth) {
-  // The column widths only affect the scale factor here: automatic vertical
-  // breaks are intentionally disabled at explicit print scale. Forty-nine
-  // default-height rows sit just across the one-page boundary for the
-  // visible-width variants, making an accidental hidden-column width easy to
-  // observe without relying on an internal geometry helper.
+  // fit_to_width=1 makes the total column width set the scale factor, and
+  // the scale then decides how many rows fit per page. A hidden column
+  // whose width leaked into that total would shrink the sheet further and
+  // show up as a smaller page count -- observable without reaching into an
+  // internal geometry helper.
   const auto make_workbook = [](bool hidden, bool explicit_width) {
     Workbook wb = Workbook::create();
     Sheet& sheet = wb.sheet(0);
     sheet.set_cell_value(0U, 0U, Value::number(1.0));
-    sheet.set_cell_value(48U, 1U, Value::number(2.0));
+    sheet.set_cell_value(4999U, 1U, Value::number(2.0));
 
     ColumnLayout first;
     first.first = 0U;
@@ -185,7 +185,7 @@ TEST(PaginationTest, HiddenWidthlessColumnDoesNotConsumeFitToPageWidth) {
     }
     sheet.mutable_layout().columns.push_back(second);
 
-    wb.set_defined_names({PrintArea("Sheet1!$A$1:$B$49", 0)});
+    wb.set_defined_names({PrintArea("Sheet1!$A$1:$B$5000", 0)});
     sheet.mutable_print_settings().page_setup.fit_to_page = true;
     sheet.mutable_print_settings().page_setup.fit_to_width = 1;
     sheet.mutable_print_settings().page_setup.fit_to_height = 0;
@@ -217,36 +217,53 @@ TEST(PaginationTest, OutlineOnlyRowUsesDefaultHeight) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   sheet.set_cell_value(0, 0, Value::number(1.0));
-  sheet.set_cell_value(48, 0, Value::number(2.0));
-  // 49 default rows are just beyond the A4 body. If this outline-only row
-  // were incorrectly treated as 0pt the range would fit on one page.
+  sheet.set_cell_value(199, 0, Value::number(2.0));
+  // Outline metadata only: no `ht`, so the row keeps the sheet default.
   sheet.mutable_layout().row_overrides.push_back(RowLayout{24U, 0.0, false, 1U, false});
-  wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$49", 0)});
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$200", 0)});
 
   auto result = paginate(wb, 0);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  // The outline-only row has no `ht`; it retains the default 15pt height
-  // rather than silently collapsing to zero.
-  EXPECT_EQ(result.value().page_count, 2U);
-  ASSERT_EQ(result.value().h_breaks.size(), 1U);
-  EXPECT_EQ(result.value().h_breaks[0], 44U);
+
+  // Compared against the same sheet with no override at all. Asserting a
+  // page count here would only say what the current body height is; what
+  // has to hold is that carrying outline metadata changes nothing.
+  Workbook control = Workbook::create();
+  control.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  control.sheet(0).set_cell_value(199, 0, Value::number(2.0));
+  control.set_defined_names({PrintArea("Sheet1!$A$1:$A$200", 0)});
+  auto control_result = paginate(control, 0);
+  ASSERT_TRUE(static_cast<bool>(control_result)) << control_result.error().message;
+
+  EXPECT_GT(result.value().page_count, 1U);
+  EXPECT_EQ(result.value().page_count, control_result.value().page_count);
+  EXPECT_EQ(result.value().h_breaks, control_result.value().h_breaks);
 }
 
 TEST(PaginationTest, ExplicitVisibleRowWithoutHeightUsesDefaultHeight) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   sheet.set_cell_value(0, 0, Value::number(1.0));
-  sheet.set_cell_value(48, 0, Value::number(2.0));
-  // This models `<row hidden="0">`: it is an explicit row override but
-  // has no `ht`, so it must not collapse during pagination.
+  sheet.set_cell_value(199, 0, Value::number(2.0));
+  // This models `<row hidden="0">`: an explicit row override with no `ht`,
+  // so it must not collapse during pagination.
   sheet.mutable_layout().row_overrides.push_back(RowLayout{24U, 0.0, false, 0U, false});
-  wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$49", 0)});
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$200", 0)});
 
   auto result = paginate(wb, 0);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  EXPECT_EQ(result.value().page_count, 2U);
-  ASSERT_EQ(result.value().h_breaks.size(), 1U);
-  EXPECT_EQ(result.value().h_breaks[0], 44U);
+
+  // Same control as the outline-only case: the override must be inert.
+  Workbook control = Workbook::create();
+  control.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  control.sheet(0).set_cell_value(199, 0, Value::number(2.0));
+  control.set_defined_names({PrintArea("Sheet1!$A$1:$A$200", 0)});
+  auto control_result = paginate(control, 0);
+  ASSERT_TRUE(static_cast<bool>(control_result)) << control_result.error().message;
+
+  EXPECT_GT(result.value().page_count, 1U);
+  EXPECT_EQ(result.value().page_count, control_result.value().page_count);
+  EXPECT_EQ(result.value().h_breaks, control_result.value().h_breaks);
 }
 
 TEST(PaginationTest, FiftyThousandMetadataOnlyRowsRemainPractical) {
@@ -315,17 +332,25 @@ TEST(PaginationTest, FitToWidthCollapsesToSingleColumnPage) {
   auto result = paginate(wb, 0);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_TRUE(result.value().v_breaks.empty());
+
+  // And the same area without fit-to-page does need several column pages,
+  // so the collapse above is the fit doing work rather than the geometry
+  // happening to fit.
+  Workbook unfitted = Workbook::create();
+  SetColumnWidth(&unfitted.sheet(0), 0, 19, 60.0);
+  unfitted.set_defined_names({PrintArea("Sheet1!$A$1:$T$5", 0)});
+  auto unfitted_result = paginate(unfitted, 0);
+  ASSERT_TRUE(static_cast<bool>(unfitted_result)) << unfitted_result.error().message;
+  EXPECT_FALSE(unfitted_result.value().v_breaks.empty());
 }
 
 TEST(PaginationTest, ScalePercentChangesPageCount) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  // A tall single-column print area that fits on a single page at 100%
-  // scale (40 rows * 15 pt = 600 pt < 663 pt A4 body). Column auto-
-  // breaks are intentionally suppressed (see WideTableSuppressesAuto*),
-  // so this test exercises the ROW axis where scale changes the page
-  // count: at 400% scale each row becomes 60 pt, overflowing the body
-  // and forcing horizontal breaks.
+  // A tall single-column print area that fits on one page at 100% scale.
+  // One column never breaks horizontally, so this exercises the ROW axis:
+  // at 400% scale each row is four times as tall, overflowing the body and
+  // forcing breaks.
   wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$40", 0)});
 
   sheet.mutable_print_settings().page_setup.scale = 100;

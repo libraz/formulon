@@ -338,21 +338,32 @@ TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 48, 0, 2.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 199, 0, 2.0), 0);
 
   fm_pagination_t* pagination = nullptr;
   ASSERT_EQ(fm_workbook_paginate(wb.handle, 0, &pagination), 0);
   ASSERT_NE(pagination, nullptr);
-  EXPECT_EQ(fm_pagination_page_count(pagination), 2U);
+  // 200 default-height rows in one column: the row axis breaks, the column
+  // axis does not. The exact break row follows the geometry model and is
+  // pinned by the workbook oracle, so this asserts the ABI's shape -- a
+  // reported count that matches what the indexed accessor will hand back,
+  // and an out-of-range index that fails rather than reading past the end.
+  const auto breaks = static_cast<std::uint32_t>(fm_pagination_horizontal_break_count(pagination));
+  ASSERT_GE(breaks, 1U);
+  EXPECT_EQ(fm_pagination_page_count(pagination), breaks + 1U);
   // No explicit _xlnm.Print_Area is reported even though pagination falls
   // back to the used range internally.
   EXPECT_EQ(fm_pagination_print_area_count(pagination), 0U);
-  ASSERT_EQ(fm_pagination_horizontal_break_count(pagination), 1U);
   std::uint32_t row = 0;
-  ASSERT_EQ(fm_pagination_horizontal_break_at(pagination, 0, &row), 0);
-  EXPECT_EQ(row, 44U);
+  std::uint32_t previous = 0;
+  for (std::uint32_t i = 0; i < breaks; ++i) {
+    ASSERT_EQ(fm_pagination_horizontal_break_at(pagination, i, &row), 0);
+    EXPECT_GT(row, previous);
+    EXPECT_LE(row, 199U);
+    previous = row;
+  }
   EXPECT_EQ(fm_pagination_vertical_break_count(pagination), 0U);
-  EXPECT_NE(fm_pagination_horizontal_break_at(pagination, 1, &row), 0);
+  EXPECT_NE(fm_pagination_horizontal_break_at(pagination, breaks, &row), 0);
   fm_pagination_destroy(pagination);
 
   EXPECT_NE(fm_workbook_paginate(nullptr, 0, &pagination), 0);

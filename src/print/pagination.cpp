@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -26,41 +25,44 @@ namespace {
 // conversion below is Excel's documented formula; the constants are
 // named so the arithmetic carries no bare literals.
 
-/// Maximum digit width of the default font (Calibri 11), in pixels.
-constexpr double kMaxDigitWidthPx = 7.0;
-
-/// Fixed-point scale Excel uses inside the width formula (1 character
-/// expands to 256 internal units).
-constexpr double kWidthFixedPointScale = 256.0;
-
-/// Padding term in the width formula (half the fixed-point scale).
-constexpr double kWidthPaddingHalf = 128.0;
-
-/// Screen pixel density Excel's width model assumes, in pixels per inch.
-constexpr double kScreenPixelsPerInch = 96.0;
+/// Points per character unit and the per-column padding, as Excel 365
+/// resolves a character-unit column width under the Normal style pinned to
+/// Calibri 11 (`Range.Width`, captured in every workbook golden's
+/// `applied_geometry.column_widths_pt`).
+///
+/// These replace the textbook 96-DPI screen model (MDW 7px, so 5.25 pt per
+/// character). That model predicts 157.5 pt for a 30-character column;
+/// Excel resolves 171.0. Every measured size is an exact multiple of
+/// 1/7 pt, and the law is linear across the captured widths:
+///
+///     20 chars -> 115.2857 pt    28 -> 159.8571 pt    30 -> 171.0 pt
+///
+/// Pagination compares these against the printable body, so using the
+/// screen model made a wide print area fit roughly one column too many per
+/// page.
+constexpr double kPointsPerColumnChar = 39.0 / 7.0;
+constexpr double kColumnPaddingPt = 27.0 / 7.0;
 
 /// Excel's standard default column width, in character units. Used when
 /// neither a `<col>` override nor `<sheetFormatPr defaultColWidth>`
 /// applies.
 constexpr double kStandardColWidthChars = 8.43;
 
-/// Excel's standard default row height, in points. Used when neither a
-/// `<row ht>` override nor `<sheetFormatPr defaultRowHeight>` applies.
-constexpr double kStandardRowHeightPt = 15.0;
+/// Excel's default row height, in points, measured the same way as the
+/// column constants above (`applied_geometry.row_heights_pt`). Used when
+/// neither a `<row ht>` override nor `<sheetFormatPr defaultRowHeight>`
+/// applies. The nominal 15.0 is the 96-DPI screen figure; Excel resolves
+/// 102/7.
+constexpr double kStandardRowHeightPt = 102.0 / 7.0;
 
 /// Lower clamp for the effective scale factor (1%). Mirrors Excel's
 /// `<pageSetup scale>` minimum so a degenerate `scale="0"` cannot divide
 /// the printable area by zero.
 constexpr double kMinScaleFactor = 0.01;
 
-/// Converts an Excel column width in character units to a width in
-/// points, following Excel's character -> pixel -> point pipeline.
+/// Converts an Excel column width in character units to a width in points.
 double ColumnCharsToPoints(double chars) {
-  // pixels = floor(((256 * chars + floor(128 / MDW)) / 256) * MDW)
-  const double padded = std::floor(kWidthPaddingHalf / kMaxDigitWidthPx);
-  const double pixels =
-      std::floor(((kWidthFixedPointScale * chars + padded) / kWidthFixedPointScale) * kMaxDigitWidthPx);
-  return pixels * kPointsPerInch / kScreenPixelsPerInch;
+  return chars * kPointsPerColumnChar + kColumnPaddingPt;
 }
 
 /// Returns the width, in character units, of column `col` on `sheet`.
@@ -139,20 +141,6 @@ CellRange BoundingBox(const std::vector<CellRange>& ranges) {
   return box;
 }
 
-/// Returns the rectangular intersection of `a` and `b`, or `std::nullopt`
-/// when they are disjoint.
-std::optional<CellRange> Intersect(const CellRange& a, const CellRange& b) {
-  CellRange out;
-  out.first_row = std::max(a.first_row, b.first_row);
-  out.first_col = std::max(a.first_col, b.first_col);
-  out.last_row = std::min(a.last_row, b.last_row);
-  out.last_col = std::min(a.last_col, b.last_col);
-  if (out.first_row > out.last_row || out.first_col > out.last_col) {
-    return std::nullopt;
-  }
-  return out;
-}
-
 /// True when `index` is the target of a *manual* break in `breaks`.
 ///
 /// Excel persists automatic page breaks (`man="0"`) alongside user-placed
@@ -163,6 +151,11 @@ bool HasManualBreakAt(const std::vector<ManualBreak>& breaks, std::uint32_t inde
   return std::any_of(breaks.begin(), breaks.end(),
                      [index](const ManualBreak& brk) { return brk.manual && brk.id == index; });
 }
+
+/// Relative tolerance for the "does this track still fit" comparison.
+/// Sized to absorb the accumulated rounding of a few thousand additions
+/// while staying far below one track's width.
+constexpr double kAxisFitEpsilon = 1e-9;
 
 /// One axis of the break walk.
 ///
@@ -180,7 +173,8 @@ struct AxisInput {
 /// reached. Appends the absolute index each break precedes to `out_breaks`
 /// and returns the number of pages produced (always >= 1 when the axis has
 /// at least one track).
-std::uint32_t WalkAxis(const AxisInput& axis, std::vector<std::uint32_t>* out_breaks) {
+std::uint32_t WalkAxis(const AxisInput& axis, std::vector<std::uint32_t>* out_breaks,
+                       std::vector<std::uint32_t>* out_manual_breaks) {
   const std::size_t track_count = axis.track_sizes.size();
   if (track_count == 0) {
     return 0;
@@ -195,9 +189,20 @@ std::uint32_t WalkAxis(const AxisInput& axis, std::vector<std::uint32_t>* out_br
     // An automatic break fires when adding this track overflows the body
     // and the page already holds at least one track (so a single track
     // wider than the page still occupies one page rather than zero).
-    const bool overflow = i != 0 && accumulated > 0.0 && accumulated + size > axis.limit_pt;
+    // Relative epsilon: `fit_to_page` sizes the scale so the content total
+    // lands exactly on the limit, and a strict comparison then breaks a page
+    // on nothing but accumulated rounding -- fitToWidth=1 could report two
+    // page-columns. The tolerance is proportional so it stays meaningful at
+    // any page size.
+    const double slack = axis.limit_pt * kAxisFitEpsilon;
+    const bool overflow = i != 0 && accumulated > 0.0 && accumulated + size > axis.limit_pt + slack;
     if (manual_break || overflow) {
-      out_breaks->push_back(absolute);
+      // A manual break belongs to the sheet, an automatic one to the page
+      // region that overflowed. Excel reports them accordingly: a manual
+      // break shared by two print areas appears once, while each area
+      // contributes its own automatic break (`print_pagination.
+      // multi_area_row_stacked_col_break` -> v=[3,7,7], where 3 is manual).
+      (manual_break ? out_manual_breaks : out_breaks)->push_back(absolute);
       ++pages;
       accumulated = 0.0;
     }
@@ -292,16 +297,14 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
       return result;
     }
   } else {
-    // Intersect each declared rectangle with the populated bounding box.
-    // A rectangle whose populated intersection is empty contributes no
-    // pages (Excel reports zero breaks across such an area).
+    // An explicit print area paginates as declared. Intersecting it with
+    // the populated box used to look right on cases whose content reaches
+    // the area's corners, but `print_matrix.density_col_sparse_only_a`
+    // (content in column A only, print area A1:H30) shows Excel breaking
+    // at the same columns as the dense case: the declared geometry drives
+    // the page grid, not where the cells happen to be.
     for (const CellRange& r : result.print_area) {
-      if (auto isect = Intersect(r, used_box); isect.has_value()) {
-        effective_areas.push_back(*isect);
-      }
-    }
-    if (effective_areas.empty()) {
-      return result;
+      effective_areas.push_back(r);
     }
   }
 
@@ -417,6 +420,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // of breaks across all areas; the page count sums across areas.
   std::vector<std::uint32_t> all_h;
   std::vector<std::uint32_t> all_v;
+  std::vector<std::uint32_t> manual_h;
+  std::vector<std::uint32_t> manual_v;
   // Accumulated in 64 bits: one axis can produce a page per grid track, so
   // the per-area product reaches 2^34 and the sum across areas grows past
   // that again. A 32-bit accumulator would wrap and report a count that is
@@ -435,7 +440,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     row_axis.track_sizes = std::move(row_points);
     row_axis.manual = &settings.manual_row_breaks;
     row_axis.limit_pt = body.height_pt;
-    const std::uint32_t row_pages = WalkAxis(row_axis, &all_h);
+    const std::uint32_t row_pages = WalkAxis(row_axis, &all_h, &manual_h);
 
     // Column axis: symmetric per-area walk through the same axis walker,
     // against the body width exactly as the row axis walks the body height.
@@ -454,7 +459,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     col_axis.track_sizes = std::move(col_points);
     col_axis.manual = &settings.manual_col_breaks;
     col_axis.limit_pt = body.width_pt;
-    const std::uint32_t col_pages = WalkAxis(col_axis, &all_v);
+    const std::uint32_t col_pages = WalkAxis(col_axis, &all_v, &manual_v);
 
     total_pages += static_cast<std::uint64_t>(col_pages) * static_cast<std::uint64_t>(row_pages);
     if (total_pages > kMaxPaginationPages) {
@@ -463,14 +468,19 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     }
   }
 
-  // 5. Sort and de-duplicate aggregated break positions: Excel's COM
-  // collections are ascending and never repeat.
-  auto sort_unique = [](std::vector<std::uint32_t>* v) {
-    std::sort(v->begin(), v->end());
-    v->erase(std::unique(v->begin(), v->end()), v->end());
+  // 5. Sort the aggregated break positions. Excel's COM collections are
+  // ascending but do repeat across areas: `print_pagination.
+  // multi_area_row_stacked_col_break` (two stacked areas that each break
+  // before column H) reports v=[3,7,7], one entry per area, so
+  // de-duplicating here dropped a break Excel reports.
+  auto merge_manual = [](std::vector<std::uint32_t>* automatic, std::vector<std::uint32_t>* manual) {
+    std::sort(manual->begin(), manual->end());
+    manual->erase(std::unique(manual->begin(), manual->end()), manual->end());
+    automatic->insert(automatic->end(), manual->begin(), manual->end());
+    std::sort(automatic->begin(), automatic->end());
   };
-  sort_unique(&all_h);
-  sort_unique(&all_v);
+  merge_manual(&all_h, &manual_h);
+  merge_manual(&all_v, &manual_v);
 
   result.h_breaks = std::move(all_h);
   result.v_breaks = std::move(all_v);

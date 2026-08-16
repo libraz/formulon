@@ -188,7 +188,7 @@ std::string SheetXmlWithGeometry(std::string_view format_attrs, std::string_view
       .append(
           "<sheetData>\n"
           "    <row r=\"1\"><c r=\"A1\"><v>1</v></c></row>\n"
-          "    <row r=\"50\"><c r=\"D50\"><v>2</v></c></row>\n"
+          "    <row r=\"200\"><c r=\"D200\"><v>2</v></c></row>\n"
           "  </sheetData>\n  ")
       .append(trailing)
       .append("</worksheet>\n");
@@ -236,8 +236,12 @@ TEST(SheetPrintGeometry, HostileTrackSizesPaginateLikeTheSchemaDefaults) {
   // height breaks a page before every row, and a NaN one makes every
   // accumulation comparison false so the whole sheet reports a single
   // page. Both must now match the well-formed sheet exactly.
-  const std::vector<std::uint8_t> baseline_bytes =
-      BuildPackageWithSheetXml(SheetXmlWithGeometry("defaultRowHeight=\"15\" defaultColWidth=\"8.43\"", ""));
+  // The baseline omits both measurements rather than spelling the schema
+  // defaults: "treated as absent" is the claim, so the comparison has to be
+  // against a genuinely absent attribute. Spelling a number here made the
+  // test assert that the engine's fallback equals that literal, which is a
+  // different (and geometry-model-dependent) claim.
+  const std::vector<std::uint8_t> baseline_bytes = BuildPackageWithSheetXml(SheetXmlWithGeometry("", ""));
   auto baseline_or = io::read_ooxml(SpanOf(baseline_bytes));
   ASSERT_TRUE(static_cast<bool>(baseline_or)) << baseline_or.error().message;
   auto baseline_pages_or = print::paginate(baseline_or.value().workbook, 0U);
@@ -246,8 +250,7 @@ TEST(SheetPrintGeometry, HostileTrackSizesPaginateLikeTheSchemaDefaults) {
   ASSERT_GT(baseline.page_count, 1U) << "the baseline must span pages for this comparison to bite";
 
   for (const char* spelling : {"INF", "NaN", "1e999", "abc"}) {
-    const std::string format_attrs =
-        std::string("defaultRowHeight=\"").append(spelling).append("\" defaultColWidth=\"8.43\"");
+    const std::string format_attrs = std::string("defaultRowHeight=\"").append(spelling).append("\"");
     const std::vector<std::uint8_t> source = BuildPackageWithSheetXml(SheetXmlWithGeometry(format_attrs, ""));
     auto result_or = io::read_ooxml(SpanOf(source));
     ASSERT_TRUE(static_cast<bool>(result_or)) << spelling << ": " << result_or.error().message;

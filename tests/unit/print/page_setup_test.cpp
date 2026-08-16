@@ -64,11 +64,12 @@ TEST(PageSetupTest, PrintableAreaSubtractsDefaultMargins) {
                         // 0.3in header/footer.
 
   const PrintableArea area = compute_printable_area(setup, margins);
-  // A4 portrait is ~595.27 x 841.89 pt; 1.4in side margin = 100.8 pt,
-  // 1.5in top/bottom = 108 pt, 0.6in header+footer band = 43.2 pt,
-  // plus a 28 pt header/footer text reservation (one line each).
+  // A4 portrait is ~595.27 x 841.89 pt; 1.4in side margin = 100.8 pt and
+  // 1.5in top/bottom = 108 pt. The 0.3in header / footer bands sit inside
+  // those margins -- 0.3in plus a one-line 14 pt strip is still under the
+  // 0.75in margin -- so at the default preset they take no body height.
   EXPECT_NEAR(area.width_pt, 595.27 - 100.8, kTol);
-  EXPECT_NEAR(area.height_pt, 841.89 - 108.0 - 43.2 - 28.0, kTol);
+  EXPECT_NEAR(area.height_pt, 841.89 - 108.0, kTol);
 }
 
 TEST(PageSetupTest, PrintableAreaSubtractsCustomMargins) {
@@ -84,9 +85,26 @@ TEST(PageSetupTest, PrintableAreaSubtractsCustomMargins) {
   margins.footer = 0.25;
 
   const PrintableArea area = compute_printable_area(setup, margins);
-  EXPECT_NEAR(area.width_pt, 612.0 - 144.0, kTol);                // 2in horizontal.
-  EXPECT_NEAR(area.height_pt, 792.0 - 72.0 - 36.0 - 28.0, kTol);  // 1in vertical + 0.5in H/F band
-                                                                  // + 28pt text reservation.
+  EXPECT_NEAR(area.width_pt, 612.0 - 144.0, kTol);  // 2in horizontal.
+  // 1in vertical. A 0.25in band plus its 14 pt strip (32 pt) exceeds the
+  // 0.5in (36 pt)? No -- 32 < 36, so neither band reaches past its margin.
+  EXPECT_NEAR(area.height_pt, 792.0 - 72.0, kTol);
+}
+
+TEST(PageSetupTest, HeaderReachingPastItsMarginTakesBodyHeight) {
+  // The only shape that costs body height: a header margin large enough
+  // that the band plus its one-line text strip runs past the top margin.
+  PageSetup setup;
+  setup.paper_size = 1;  // Letter, 612 x 792 pt.
+  setup.orientation = Orientation::kPortrait;
+  PageMargins margins;
+  margins.top = 0.5;     // 36 pt
+  margins.bottom = 0.5;  // 36 pt
+  margins.header = 0.5;  // 36 pt + 14 pt strip = 50 pt, i.e. 14 pt past the margin
+  margins.footer = 0.0;  // collapsed entirely
+
+  const PrintableArea area = compute_printable_area(setup, margins);
+  EXPECT_NEAR(area.height_pt, 792.0 - 72.0 - 14.0, kTol);
 }
 
 TEST(PageSetupTest, OversizedMarginsClampBodyToZero) {

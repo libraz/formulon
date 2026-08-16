@@ -72,31 +72,35 @@ PrintableArea compute_printable_area(const PageSetup& setup, const PageMargins& 
 
   const double horizontal_margin = (margins.left + margins.right) * kPointsPerInch;
   const double vertical_margin = (margins.top + margins.bottom) * kPointsPerInch;
-  // Excel reserves the header and footer bands above and below the cell
-  // body even when no header / footer text is set; the band height
-  // matches the configured `margin.header` / `margin.footer` and shrinks
-  // the printable cell body accordingly. OOXML's `<pageMargins>` stores
-  // header / footer as the distance from the page edge to the band, and
-  // Excel paginates the body between (top + header) and (bottom + footer).
+  // Excel's `<pageMargins>` stores header / footer as the distance from
+  // the page edge to that band, and the top / bottom margins as the
+  // distance to the cell body. The bands therefore sit *inside* the
+  // margins and steal no body height at the standard preset (header 0.3"
+  // inside a 0.75" top margin). Only when a band plus its one-line text
+  // strip reaches past its margin does the body give way, which is what
+  // setting a header margin larger than the top margin does.
+  //
+  // Reserving both bands unconditionally cost ~71 pt of body height and
+  // broke pages Excel keeps whole: the workbook goldens' measured row
+  // geometry bounds the total reserve at 36.18 pt (print_pagination.
+  // tall_table_horizontal_breaks) and no captured case requires any.
+  //
+  // The strip is sized for the default 11 pt header/footer font at 1.2x
+  // line height, ~13.2 pt; 14 pt keeps the body in lockstep with Excel's
+  // `Pages.Count`.
+  constexpr double kHeaderFooterTextBandPt = 14.0;
   const double header_band = margins.header * kPointsPerInch;
   const double footer_band = margins.footer * kPointsPerInch;
-
-  // Excel additionally reserves a one-line text strip inside each band
-  // even when no header / footer string is configured. The strip is
-  // sized for the default 11pt header/footer font (Calibri 11) at 1.2x
-  // line height, ~13.2 pt; rounding to 14 pt keeps the body in lockstep
-  // with Excel's `Pages.Count` against the standard Normal margin
-  // preset. The strip is only reserved when the corresponding header /
-  // footer margin is non-zero: setting `margin.header = 0` collapses
-  // the band entirely, just as Excel does.
-  constexpr double kHeaderFooterTextBandPt = 14.0;
-  const double header_text_band = header_band > 0.0 ? kHeaderFooterTextBandPt : 0.0;
-  const double footer_text_band = footer_band > 0.0 ? kHeaderFooterTextBandPt : 0.0;
+  const double top_margin = margins.top * kPointsPerInch;
+  const double bottom_margin = margins.bottom * kPointsPerInch;
+  const double header_encroach =
+      header_band > 0.0 ? std::max(0.0, header_band + kHeaderFooterTextBandPt - top_margin) : 0.0;
+  const double footer_encroach =
+      footer_band > 0.0 ? std::max(0.0, footer_band + kHeaderFooterTextBandPt - bottom_margin) : 0.0;
 
   PrintableArea area;
   area.width_pt = std::max(0.0, page_width - horizontal_margin);
-  area.height_pt =
-      std::max(0.0, page_height - vertical_margin - header_band - footer_band - header_text_band - footer_text_band);
+  area.height_pt = std::max(0.0, page_height - vertical_margin - header_encroach - footer_encroach);
   return area;
 }
 
