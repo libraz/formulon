@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `INDIRECT(ref_text, FALSE)` reads R1C1 text instead of returning `#REF!`
+  for every call. An axis is written absolutely (`R5C2`) or relative to the
+  cell holding the formula (`R[-1]C`, or a bare `R` meaning the same row),
+  and an endpoint naming one axis is unbounded along the other, so `R5` is
+  the whole of row 5 exactly as `5:5` is. The `a1` flag selects a grammar
+  rather than adding a fallback: A1 text under `FALSE` is `#REF!`, as R1C1
+  text under `TRUE` already was. A relative axis evaluated with no formula
+  cell — the ad-hoc "evaluate this text" entry points bind none — is `#REF!`
+  rather than being measured from an assumed origin.
+
 - A workbook-level clock seam, so results that depend on when they are
   computed can be pinned to one instant. `NOW`, `TODAY` and the pivot
   relative-period filters otherwise each read the host clock independently,
@@ -121,6 +131,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `GROUPBY`'s `sort_order` and `PIVOTBY`'s `row_sort_order` /
+  `col_sort_order` reject a supplied `0` with `#VALUE!`. The argument is a
+  signed column index and that domain has no zero member, which is what
+  Excel answers. Omitting the argument still selects the documented default
+  of first-occurrence order, and an empty slot between commas counts as an
+  omission — so the way to ask for the default is to leave it out rather
+  than to spell it. A fraction truncating to zero lands on the same
+  rejection. Excel pins the row half of the PIVOTBY pair; the column half is
+  held to the same rule rather than accepting on one side what the other
+  rejects.
 - Saving a workbook whose PivotTable cache declares no worksheet source now
   fails instead of writing the package. Excel offers to repair any file
   carrying a bare `<cacheSource type="worksheet"/>`, and there is no form of

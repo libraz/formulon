@@ -273,11 +273,16 @@ entries:
   # underlying subsystem lands, the corresponding stub is replaced with
   # a real implementation and the entry below is removed.
   - id: phonetic_returns_input_text
-    cause: engine-gap
+    cause: harness-cannot-capture
     mode: skip-oracle
     scope: deferred-feature
-    evidence: [tests/integration/ooxml_phonetic_roundtrip_test.cpp]
-    reason: "PHONETIC currently returns the input text instead of the IME-typed kana because OOXML <rPh> annotations are not yet read into Formulon's Value model; phonetic metadata not yet modelled."
+    evidence:
+      [
+        tests/integration/ooxml_phonetic_roundtrip_test.cpp,
+        tests/unit/eval/phonetic_lazy_test.cpp,
+        tests/unit/io/sst_reader_test.cpp,
+      ]
+    reason: "Reclassified 2026-08-18: the reason this entry carried (rPh annotations not read into the Value model) stopped being true without the entry being revisited. The reader does surface them -- sst_reader.cpp fills a parallel phonetic view per SST entry, sax_xml_reader.cpp does the same for inline strings, both land in Cell::phonetic_text, phonetic_lazy.cpp reads it, and the writer emits it back -- and PhoneticLazy.AnnotatedTextCellReturnsKana pins an annotated cell returning its kana rather than its surface text. What is missing is an oracle fixture: capturing this against real Excel needs a workbook whose annotations were produced by typing through the IME, which the case harness cannot author. Unannotated text passing through unchanged is the same on both sides."
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
@@ -428,20 +433,12 @@ entries:
   # here (pivotby_bare_sum / pivotby_lambda_sum) surfaced a real 2x3-vs-3x3
   # shape defect in the merged single-column layout, since fixed -- both
   # are live goldens now too.
-  - id: groupby_sort_order_zero_rejected
-    cause: engine-gap
-    reason: "sort_order 0 is outside Excel's domain for that argument (a signed column index, no zero member) and Excel returns #VALUE!. Formulon accepts it and returns the grouped spill, so a workbook that computes here errors in Excel. Isolated by varying one argument at a time: field_headers=0 and total_depth=0 are both accepted, and every form carrying sort_order=0 errors while 1 or omission spills."
-    prefer: mac-excel-365
-    first_noted: 2026-08-15
-    last_verified_excel_version: "16.112"
-    mode: skip-oracle
-  - id: pivotby_row_sort_order_zero_rejected
-    cause: engine-gap
-    reason: "As groupby_sort_order_zero_rejected, on PIVOTBY's row_sort_order slot: Excel returns #VALUE! for a literal 0, Formulon returns the pivot spill."
-    prefer: mac-excel-365
-    first_noted: 2026-08-15
-    last_verified_excel_version: "16.112"
-    mode: skip-oracle
+  # Retired the pair of `engine-gap` entries that recorded a supplied
+  # `sort_order` of 0 spilling instead of erroring
+  # (`groupby_sort_order_zero_rejected` / `pivotby_row_sort_order_zero_rejected`).
+  # The slot is a signed column index with no zero member, so a supplied 0
+  # now returns #VALUE! while omission keeps taking the documented default;
+  # both cases are live goldens.
 
   # Regression family residuals after array-aware oracle capture. Most
   # LINEST/TREND/LOGEST/GROWTH/FREQUENCY spill cases are live now; these
@@ -666,10 +663,14 @@ entries:
   # PHONETIC is a real lazy form. The remaining divergence records the
   # rPh metadata coverage gap, not an unavailable function stub.
   - id: external_stub_phonetic
-    cause: engine-gap
+    cause: harness-cannot-capture
     scope: deferred-feature
-    evidence: [tests/integration/ooxml_phonetic_roundtrip_test.cpp]
-    reason: "PHONETIC reads OOXML rPh annotations; Formulon's OOXML reader does not surface rPh into Value, so unannotated text passes through. Mac without rPh annotations behaves the same on text-cell input but diverges on annotated cells."
+    evidence:
+      [
+        tests/integration/ooxml_phonetic_roundtrip_test.cpp,
+        tests/unit/eval/phonetic_lazy_test.cpp,
+      ]
+    reason: "As phonetic_returns_input_text, which carries the detail: the rPh pipeline is implemented end to end, and what is missing is an IME-authored fixture to capture against. Unannotated text-cell input behaves identically on both sides."
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
@@ -966,7 +967,7 @@ entries:
   - id: page_axis_field
     cause: engine-gap
     mode: skip-oracle
-    reason: "Excel prepends a page-field header to the rendered grid -- one row per page field carrying the field name and the selected item (`Region | (すべて)` when unfiltered), then a blank separator row -- before the row/column header row. Formulon's pivot model carries no page-field axis, so `pivot::layout` projects the grid starting at the row-labels header. The aggregated values agree exactly (Gadget 350, Widget 300, total 650 under Microsoft 365 16.0.20228); only the two leading header rows are missing. GETPIVOTDATA over the same pivot already matches Excel."
+    reason: "Excel prepends a page-field header to the rendered grid -- one row per page field carrying the field name and the selected item (`Region | (すべて)` when unfiltered), then a blank separator row -- before the row/column header row. `pivot::layout` projects the grid starting at the row-labels header instead. The axis itself is modelled (`PivotAxis::Page`, decoded from the `axisPage` axis token); what is missing is the selection: `<pageFields>` rides in the verbatim passthrough tail rather than being decoded, so no part of the model says which item a page field is showing. Closing this means decoding that element, which moves it out of the passthrough tail and onto the writer, and pinning the placeholder text per locale (`(すべて)` here, plus whatever Excel writes when several items are selected) -- neither is observed by the primary oracle, whose capture for this case came from Windows. The aggregated values agree exactly (Gadget 350, Widget 300, total 650 under Microsoft 365 16.0.20228); only the two leading header rows are missing, and GETPIVOTDATA over the same pivot already matches Excel."
     prefer: excel
     first_noted: 2026-08-16
     last_verified_excel_version: "16.0.20228"
@@ -1080,48 +1081,12 @@ entries:
     first_noted: 2026-08-13
     last_verified_excel_version: "16.112"
 
-  # -- INDIRECT: R1C1 style (a1=FALSE) not decoded -------------------------
-  # `parse_a1_ref` (src/eval/reference/common.cpp) only understands A1
-  # syntax. Any `INDIRECT(ref_text, FALSE)` call takes the R1C1 branch
-  # unconditionally to #REF! before ref_text is even parsed -- including
-  # inputs ADDRESS() itself can produce, e.g.
-  # `INDIRECT(ADDRESS(2,3,1,FALSE),FALSE)`. Real Excel decodes R1C1 and
-  # resolves the cell. Deferred; tracked by
-  # tests/unit/eval/builtins_references_test.cpp
-  # BuiltinsIndirect.R1C1StyleNotSupportedMvp, which pins today's #REF!
-  # surface rather than the eventual Excel-matching behavior.
-  - id: indirect_r1c1_style_deferred
-    cause: engine-gap
-    mode: skip-oracle
-    scope: deferred-feature
-    evidence: [tests/unit/eval/builtins_references_test.cpp]
-    reason: "INDIRECT(ref_text, FALSE) always returns #REF! because the R1C1 branch is deferred (src/eval/reference/common.cpp). Excel decodes R1C1 and resolves the cell: with C2 = 42, INDIRECT(\"R2C3\", FALSE) and INDIRECT(ADDRESS(2,3,1,FALSE), FALSE) both return 42, while the same text under a1 = TRUE is #REF! -- so Excel is reading the flag rather than resolving the text some other way. See tools/catalog/function_status.tsv for the INDIRECT catalog note."
-    prefer: mac-excel-365
-    first_noted: 2026-08-14
-    last_verified_excel_version: "16.112"
-
-  # The two executable halves of the entry above. A skipped case carries
-  # no `expect` in the golden, so the measured Excel answer lives in these
-  # reason strings and nowhere else; closing the R1C1 branch means
-  # deleting both entries and regenerating the suite. The `a1 = TRUE`
-  # cases in the same suite are not skipped: they run, and they are what
-  # makes these two mean "the flag is not decoded" rather than "INDIRECT
-  # is broken".
-  - id: indirect_r1c1_absolute
-    cause: engine-gap
-    mode: skip-oracle
-    reason: "Excel returns 42 for INDIRECT(\"R2C3\", FALSE) with C2 = 42; Formulon returns #REF! because the R1C1 branch in src/eval/reference/common.cpp is deferred. See indirect_r1c1_style_deferred."
-    prefer: mac-excel-365
-    first_noted: 2026-08-15
-    last_verified_excel_version: "16.112"
-
-  - id: indirect_r1c1_from_address
-    cause: engine-gap
-    mode: skip-oracle
-    reason: "Excel returns 42 for INDIRECT(ADDRESS(2,3,1,FALSE), FALSE) with C2 = 42 -- an R1C1 string ADDRESS itself produces -- while Formulon returns #REF! from the deferred R1C1 branch. See indirect_r1c1_style_deferred."
-    prefer: mac-excel-365
-    first_noted: 2026-08-15
-    last_verified_excel_version: "16.112"
+  # Retired the INDIRECT R1C1 entries (`indirect_r1c1_style_deferred`,
+  # `indirect_r1c1_absolute`, `indirect_r1c1_from_address`): `a1 = FALSE`
+  # now parses R1C1 rather than short-circuiting to #REF!, so all three
+  # cases are live goldens. `parse_r1c1_ref` reads absolute (`R5C2`) and
+  # relative (`R[-1]C`, bare `R`) axes against the formula cell, and a
+  # single-axis endpoint is unbounded along the other exactly as `5:5` is.
 
   # -- Pivot: authored value / date <filters> are not evaluated -------------
   # An authored `<filters>` element (OOXML pivotTableDefinition) survives
@@ -1142,7 +1107,7 @@ entries:
         tests/integration/pivot_value_date_filter_fixture_test.cpp,
         tests/unit/io/pivot_table_reader_test.cpp,
       ]
-    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Two Excel-authored fixtures pin the families that are decoded. tests/fixtures/excel/pivot_caption_filter.xlsx covers the caption family: a pivot over A1:C7 (Region rows, Qtr columns, sum of Amt) filtered with 'label filters -> equals -> North' renders North alone at 10 / 5 / 15, grand total 15, against 56 unfiltered. tests/fixtures/excel/pivot_value_date_filters.xlsx covers the value and absolute-date families over one source table whose Region totals are North 150 / South 500 / East 100 / West 175: top 2 items keeps South and West; 'greater than 100' keeps North, South and West, dropping East on the threshold, so the comparison is strict; 'between 100 and 175' keeps East, North and West, so both bounds are inclusive; and a date range of 2024-01-01..2024-03-31 keeps the five first-quarter rows totalling 580. All four match Formulon. The relative-period family (thisMonth, yearToDate and their day / month / quarter / year siblings) is decoded too: it resolves against a wall-clock reading the workbook can pin, so a pivot using it is reproducible rather than dependent on the day it was computed. The percent and sum flavours of the top-N dialog are decoded too, and the same fixture pins what they count: a 'top 100 sum' keeps South alone, whose 500 already clears 100, so the target is a running total over leaves ranked descending rather than a per-leaf floor, which would have kept all four regions. A 'top 70 percent' keeps South and West (675 against a 647.5 threshold), so percent is that same running total expressed as a share of the total and the accumulation stops on the leaf that crosses it. Nothing in the file distinguishes these from the count flavour: <top10 val=\"100\"/> under sum is byte-identical to the same element under count, and only the filter type attribute separates them. Two families remain undecoded. The week windows (thisWeek and siblings) turn on which weekday a week starts, which is locale-dependent and unobserved. The recurring M1..M12 and Q1..Q4 selectors pick every January rather than one contiguous range, so they are not a window at all. Both fixtures also show why item visibility cannot stand in for the decode: Excel leaves every <item> entry visible and records the rule only in <filters>, with the result mirrored into <rowItems>."
+    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Two Excel-authored fixtures pin the families that are decoded. tests/fixtures/excel/pivot_caption_filter.xlsx covers the caption family: a pivot over A1:C7 (Region rows, Qtr columns, sum of Amt) filtered with 'label filters -> equals -> North' renders North alone at 10 / 5 / 15, grand total 15, against 56 unfiltered. tests/fixtures/excel/pivot_value_date_filters.xlsx covers the value and absolute-date families over one source table whose Region totals are North 150 / South 500 / East 100 / West 175: top 2 items keeps South and West; 'greater than 100' keeps North, South and West, dropping East on the threshold, so the comparison is strict; 'between 100 and 175' keeps East, North and West, so both bounds are inclusive; and a date range of 2024-01-01..2024-03-31 keeps the five first-quarter rows totalling 580. All four match Formulon. The relative-period family (thisMonth, yearToDate and their day / month / quarter / year siblings) is decoded too: it resolves against a wall-clock reading the workbook can pin, so a pivot using it is reproducible rather than dependent on the day it was computed. The percent and sum flavours of the top-N dialog are decoded too, and the same fixture pins what they count: a 'top 100 sum' keeps South alone, whose 500 already clears 100, so the target is a running total over leaves ranked descending rather than a per-leaf floor, which would have kept all four regions. A 'top 70 percent' keeps South and West (675 against a 647.5 threshold), which is consistent with a running total but does not on its own establish one: reading the percentage as a share of the leaf count (0.7 x 4 regions, truncated to 2) keeps the same two. A 'top 50 percent' separates them and keeps South alone, because 500 clears the 462.5 threshold by itself while a count share would have kept two. So percent is the running total expressed as a share of the axis total, and the accumulation stops on the leaf that crosses it. Nothing in the file distinguishes these from the count flavour: <top10 val=\"100\"/> under sum is byte-identical to the same element under count, and only the filter type attribute separates them. Two families remain undecoded. The week windows (thisWeek and siblings) turn on which weekday a week starts, which is locale-dependent and unobserved. The recurring M1..M12 and Q1..Q4 selectors pick every January rather than one contiguous range, so they are not a window at all. Both fixtures also show why item visibility cannot stand in for the decode: Excel leaves every <item> entry visible and records the rule only in <filters>, with the result mirrored into <rowItems>."
     prefer: mac-excel-365
     first_noted: 2026-08-14
     last_verified_excel_version: "16.112"
