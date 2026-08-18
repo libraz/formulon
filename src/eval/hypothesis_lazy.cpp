@@ -130,6 +130,13 @@ bool collect_single_array_numeric(const parser::AstNode& arg_node, Arena& arena,
 // `samples.size() < 2` — the caller decides how to surface that (T.TEST
 // routes it to `#DIV/0!`; Z.TEST routes it to `#DIV/0!` only when sigma
 // is not supplied).
+// One sample reduced to what a two-sample test reads off it.
+struct SampleMoments {
+  double mean;
+  double variance;
+  double count;
+};
+
 bool mean_and_sample_variance(const std::vector<double>& samples, double* out_mean, double* out_var) noexcept {
   const std::size_t n = samples.size();
   if (n < 2U) {
@@ -157,6 +164,33 @@ Value finite_number(double r) {
     return Value::error(ErrorCode::Num);
   }
   return Value::number(r);
+}
+
+// Collects the two independent samples T.TEST (types 2 and 3) and
+// F.TEST both take, and reduces each to its mean and sample variance.
+// Error propagation runs left to right, array1 first. A sample too
+// small for the unbiased variance estimator is `#DIV/0!`, which is what
+// both functions surface.
+//
+// Returns `false` with the propagating error in `*out_err`.
+bool two_sample_moments(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, SampleMoments* out_first, SampleMoments* out_second, Value* out_err) {
+  std::vector<double> first;
+  std::vector<double> second;
+  if (!collect_single_array_numeric(call.as_call_arg(0), arena, registry, ctx, &first, out_err)) {
+    return false;
+  }
+  if (!collect_single_array_numeric(call.as_call_arg(1), arena, registry, ctx, &second, out_err)) {
+    return false;
+  }
+  if (!mean_and_sample_variance(first, &out_first->mean, &out_first->variance) ||
+      !mean_and_sample_variance(second, &out_second->mean, &out_second->variance)) {
+    *out_err = Value::error(ErrorCode::Div0);
+    return false;
+  }
+  out_first->count = static_cast<double>(first.size());
+  out_second->count = static_cast<double>(second.size());
+  return true;
 }
 
 // Two-tailed half-probability for Student's t: given `t` and `df`, the
@@ -236,25 +270,18 @@ Value eval_t_test_lazy(const parser::AstNode& call, Arena& arena, const Function
     df = n - 1.0;
   } else {
     // Two-sample paths collect each array independently with no pairing.
-    // Error propagation runs left-to-right (array1 first).
-    std::vector<double> a;
-    std::vector<double> b;
+    SampleMoments first{};
+    SampleMoments second{};
     Value err = Value::blank();
-    if (!collect_single_array_numeric(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
+    if (!two_sample_moments(call, arena, registry, ctx, &first, &second, &err)) {
       return err;
     }
-    if (!collect_single_array_numeric(call.as_call_arg(1), arena, registry, ctx, &b, &err)) {
-      return err;
-    }
-    double m1 = 0.0;
-    double m2 = 0.0;
-    double v1 = 0.0;
-    double v2 = 0.0;
-    if (!mean_and_sample_variance(a, &m1, &v1) || !mean_and_sample_variance(b, &m2, &v2)) {
-      return Value::error(ErrorCode::Div0);
-    }
-    const double n1 = static_cast<double>(a.size());
-    const double n2 = static_cast<double>(b.size());
+    const double m1 = first.mean;
+    const double m2 = second.mean;
+    const double v1 = first.variance;
+    const double v2 = second.variance;
+    const double n1 = first.count;
+    const double n2 = second.count;
     if (type == 2) {
       // Pooled-variance equal-variance t-test.
       const double sp2 = ((n1 - 1.0) * v1 + (n2 - 1.0) * v2) / (n1 + n2 - 2.0);
@@ -290,28 +317,18 @@ Value eval_f_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (call.as_call_arity() != 2U) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<double> a;
-  std::vector<double> b;
+  SampleMoments first{};
+  SampleMoments second{};
   Value err = Value::blank();
-  if (!collect_single_array_numeric(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
+  if (!two_sample_moments(call, arena, registry, ctx, &first, &second, &err)) {
     return err;
   }
-  if (!collect_single_array_numeric(call.as_call_arg(1), arena, registry, ctx, &b, &err)) {
-    return err;
-  }
-  double m1 = 0.0;
-  double m2 = 0.0;
-  double v1 = 0.0;
-  double v2 = 0.0;
-  if (!mean_and_sample_variance(a, &m1, &v1) || !mean_and_sample_variance(b, &m2, &v2)) {
+  if (first.variance == 0.0 || second.variance == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  if (v1 == 0.0 || v2 == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double df1 = static_cast<double>(a.size()) - 1.0;
-  const double df2 = static_cast<double>(b.size()) - 1.0;
-  const double f = v1 / v2;
+  const double df1 = first.count - 1.0;
+  const double df2 = second.count - 1.0;
+  const double f = first.variance / second.variance;
   // CDF of F(df1, df2) at `f` is `I(df1/2, df2/2, df1*f / (df1*f + df2))`.
   const double x = (df1 * f) / (df1 * f + df2);
   const double cdf = stats::regularized_incomplete_beta(df1 / 2.0, df2 / 2.0, x);

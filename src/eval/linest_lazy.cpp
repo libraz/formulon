@@ -647,27 +647,54 @@ ArrayValue* build_stats_output(const std::vector<double>& coeffs, const std::vec
   return make_double_array(cells, out_rows, out_cols, arena);
 }
 
-}  // namespace
+/// Replaces every entry of `dm.y` with `ln(y_i)`. Returns `false` if
+/// any `y_i <= 0` — `ln` is undefined there, and Mac Excel's
+/// LOGEST / GROWTH surface `#NUM!` in that case.
+bool log_transform_y(DesignMatrix& dm) {
+  for (std::uint32_t i = 0; i < dm.m; ++i) {
+    if (!(dm.y[i] > 0.0)) {
+      return false;
+    }
+    dm.y[i] = std::log(dm.y[i]);
+  }
+  return true;
+}
 
-Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                       const EvalContext& ctx) {
+/// Reads the `known_y, [known_x]` head all four regression builtins
+/// take, along with the arity bound they share. `*out_x` stays null when
+/// `known_x` was omitted, which the design-matrix builder reads as the
+/// implicit `{1, 2, 3, ...}` predictor.
+///
+/// Returns `false` with the propagating error in `*out_err`.
+bool read_known_xy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                   const ArrayValue** out_y, const ArrayValue** out_x, Value* out_err) {
   const std::uint32_t arity = call.as_call_arity();
   if (arity < 1U || arity > 4U) {
-    return Value::error(ErrorCode::Value);
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
   }
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, out_y, out_err)) {
+    return false;
+  }
+  if (arity >= 2U && !resolve_array_value(call.as_call_arg(1), arena, registry, ctx, out_x, out_err)) {
+    return false;
+  }
+  return true;
+}
 
+/// LINEST and LOGEST take the same four arguments — `known_y`,
+/// `known_x`, `const`, `stats` — and run the same regression. LOGEST
+/// fits `ln(y)` and reports the coefficients in exponential form;
+/// `log_form` selects between the two.
+Value eval_fit(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+               bool log_form) {
   const ArrayValue* y_arr = nullptr;
+  const ArrayValue* x_arr = nullptr;
   Value err = Value::blank();
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
+  if (!read_known_xy(call, arena, registry, ctx, &y_arr, &x_arr, &err)) {
     return err;
   }
-
-  const ArrayValue* x_arr = nullptr;
-  if (arity >= 2U) {
-    if (!resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
-      return err;
-    }
-  }
+  const std::uint32_t arity = call.as_call_arity();
 
   bool with_const = true;
   if (arity >= 3U) {
@@ -687,6 +714,9 @@ Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (!build_design_matrix(*y_arr, x_arr, with_const, &dm, &err)) {
     return err;
   }
+  if (log_form && !log_transform_y(dm)) {
+    return Value::error(ErrorCode::Num);
+  }
 
   const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
   if (dm.m < p) {
@@ -704,7 +734,7 @@ Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const Function
     // `build_simple_output` reads coeffs[0..k-1] always and coeffs[k]
     // only on the `with_const=true` branch — so `coeffs.size() == p`
     // is correct in both branches.
-    ArrayValue* arr = build_simple_output(coeffs, dm.k, with_const, arena);
+    ArrayValue* arr = build_simple_output(coeffs, dm.k, with_const, arena, log_form);
     if (arr == nullptr) {
       return Value::error(ErrorCode::Num);
     }
@@ -712,11 +742,24 @@ Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
 
   const FitStats stats = compute_fit_stats(dm, coeffs);
-  ArrayValue* arr = build_stats_output(coeffs, inv_a, dm, stats.ss_resid, stats.ss_total, stats.mean_y, arena);
+  ArrayValue* arr =
+      build_stats_output(coeffs, inv_a, dm, stats.ss_resid, stats.ss_total, stats.mean_y, arena, log_form);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   return Value::array(arr);
+}
+
+}  // namespace
+
+Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  return eval_fit(call, arena, registry, ctx, /*log_form=*/false);
+}
+
+Value eval_logest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  return eval_fit(call, arena, registry, ctx, /*log_form=*/true);
 }
 
 namespace {
@@ -785,26 +828,19 @@ bool resolve_new_x_design(const ArrayValue& new_x, const DesignMatrix& dm, bool 
   return true;
 }
 
-}  // namespace
-
-Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 1U || arity > 4U) {
-    return Value::error(ErrorCode::Value);
-  }
-
+/// TREND and GROWTH take the same four arguments — `known_y`,
+/// `known_x`, `new_x`, `const` — and predict from the same solve.
+/// GROWTH fits `ln(y)` and exponentiates the prediction; `log_form`
+/// selects between the two.
+Value eval_prediction(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx, bool log_form) {
   const ArrayValue* y_arr = nullptr;
+  const ArrayValue* x_arr = nullptr;
   Value err = Value::blank();
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
+  if (!read_known_xy(call, arena, registry, ctx, &y_arr, &x_arr, &err)) {
     return err;
   }
-  const ArrayValue* x_arr = nullptr;
-  if (arity >= 2U) {
-    if (!resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
-      return err;
-    }
-  }
+  const std::uint32_t arity = call.as_call_arity();
   const ArrayValue* new_x_arr = nullptr;
   if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
     if (!resolve_array_value(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
@@ -821,6 +857,9 @@ Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   DesignMatrix dm;
   if (!build_design_matrix(*y_arr, x_arr, with_const, &dm, &err)) {
     return err;
+  }
+  if (log_form && !log_transform_y(dm)) {
+    return Value::error(ErrorCode::Num);
   }
   const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
   if (dm.m < p) {
@@ -849,168 +888,23 @@ Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     }
   }
 
-  ArrayValue* arr = build_prediction_output(coeffs, pred_design, n_obs, p, y_is_col, /*exp_result=*/false, arena);
+  ArrayValue* arr = build_prediction_output(coeffs, pred_design, n_obs, p, y_is_col, /*exp_result=*/log_form, arena);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   return Value::array(arr);
-}
-
-namespace {
-
-/// Replaces every entry of `dm.y` with `ln(y_i)`. Returns `false` if
-/// any `y_i <= 0` — `ln` is undefined there, and Mac Excel's
-/// LOGEST / GROWTH surface `#NUM!` in that case.
-bool log_transform_y(DesignMatrix& dm) {
-  for (std::uint32_t i = 0; i < dm.m; ++i) {
-    if (!(dm.y[i] > 0.0)) {
-      return false;
-    }
-    dm.y[i] = std::log(dm.y[i]);
-  }
-  return true;
 }
 
 }  // namespace
 
-Value eval_logest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                       const EvalContext& ctx) {
-  // Same argument shape as LINEST. The only differences are the
-  // log-transform on `y` before solving and the `exp()` of the row-1
-  // coefficients in the output.
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 1U || arity > 4U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const ArrayValue* y_arr = nullptr;
-  Value err = Value::blank();
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
-    return err;
-  }
-  const ArrayValue* x_arr = nullptr;
-  if (arity >= 2U) {
-    if (!resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
-      return err;
-    }
-  }
-  bool with_const = true;
-  if (arity >= 3U) {
-    if (!eval_bool_arg(call.as_call_arg(2), arena, registry, ctx, true, &with_const, &err)) {
-      return err;
-    }
-  }
-  bool want_stats = false;
-  if (arity >= 4U) {
-    if (!eval_bool_arg(call.as_call_arg(3), arena, registry, ctx, false, &want_stats, &err)) {
-      return err;
-    }
-  }
-
-  DesignMatrix dm;
-  if (!build_design_matrix(*y_arr, x_arr, with_const, &dm, &err)) {
-    return err;
-  }
-  if (!log_transform_y(dm)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
-  if (dm.m < p) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  std::vector<double> coeffs;
-  std::vector<double> inv_a;
-  if (!solve_normal_equations(dm, /*want_inv=*/want_stats, &coeffs, &inv_a)) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  if (!want_stats) {
-    ArrayValue* arr = build_simple_output(coeffs, dm.k, with_const, arena, /*log_form=*/true);
-    if (arr == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    return Value::array(arr);
-  }
-
-  const FitStats stats = compute_fit_stats(dm, coeffs);
-  ArrayValue* arr =
-      build_stats_output(coeffs, inv_a, dm, stats.ss_resid, stats.ss_total, stats.mean_y, arena, /*log_form=*/true);
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::array(arr);
+Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  return eval_prediction(call, arena, registry, ctx, /*log_form=*/false);
 }
 
 Value eval_growth_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  // Same argument shape as TREND. The body is the TREND recipe with
-  // a `log()` on `y` before solving and an `exp()` on the predicted
-  // log-scale `y_hat`.
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 1U || arity > 4U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const ArrayValue* y_arr = nullptr;
-  Value err = Value::blank();
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
-    return err;
-  }
-  const ArrayValue* x_arr = nullptr;
-  if (arity >= 2U) {
-    if (!resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
-      return err;
-    }
-  }
-  const ArrayValue* new_x_arr = nullptr;
-  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
-    if (!resolve_array_value(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
-      return err;
-    }
-  }
-  bool with_const = true;
-  if (arity >= 4U) {
-    if (!eval_bool_arg(call.as_call_arg(3), arena, registry, ctx, true, &with_const, &err)) {
-      return err;
-    }
-  }
-
-  DesignMatrix dm;
-  if (!build_design_matrix(*y_arr, x_arr, with_const, &dm, &err)) {
-    return err;
-  }
-  if (!log_transform_y(dm)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
-  if (dm.m < p) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  std::vector<double> coeffs;
-  std::vector<double> unused_inv;
-  if (!solve_normal_equations(dm, /*want_inv=*/false, &coeffs, &unused_inv)) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  const bool y_is_col = y_arr->cols == 1U && y_arr->rows >= 1U;
-  std::vector<double> pred_design;
-  std::uint32_t n_obs = 0;
-  if (new_x_arr == nullptr) {
-    n_obs = dm.m;
-    pred_design = dm.data;
-  } else {
-    if (!resolve_new_x_design(*new_x_arr, dm, y_is_col, with_const, &pred_design, &n_obs, &err)) {
-      return err;
-    }
-  }
-
-  ArrayValue* arr = build_prediction_output(coeffs, pred_design, n_obs, p, y_is_col, /*exp_result=*/true, arena);
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::array(arr);
+  return eval_prediction(call, arena, registry, ctx, /*log_form=*/true);
 }
 
 }  // namespace eval

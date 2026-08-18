@@ -360,6 +360,38 @@ Value finite_number(double r) {
   return Value::number(r);
 }
 
+// Runs the argument shape every D-function shares — `database`,
+// `field`, `criteria` — and yields the field-column value of each
+// matching record. Returns `false` with the propagating error written to
+// `*out_err` when any of the three arguments fails to resolve.
+bool resolve_field_values(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx, std::vector<Value>* out_vals, Value* out_err) {
+  std::vector<Value> db;
+  std::vector<Value> crit;
+  std::uint32_t db_rows = 0;
+  std::uint32_t db_cols = 0;
+  std::uint32_t crit_rows = 0;
+  std::uint32_t crit_cols = 0;
+  std::uint32_t field_col = 0;
+  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
+                      out_err)) {
+    return false;
+  }
+  *out_vals =
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
+  return true;
+}
+
+// Sums the matched numbers left to right, which is the order Excel
+// accumulates a range in.
+double sum_of(const std::vector<double>& nums) {
+  double sum = 0.0;
+  for (double x : nums) {
+    sum += x;
+  }
+  return sum;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -368,64 +400,32 @@ Value finite_number(double r) {
 
 Value eval_dsum_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
+  std::vector<Value> vals;
   Value err = Value::blank();
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      &err)) {
+  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
     return err;
   }
-  const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
-  const std::vector<double> nums = collect_matching_numbers(vals);
-  double sum = 0.0;
-  for (double x : nums) {
-    sum += x;
-  }
-  return finite_number(sum);
+  return finite_number(sum_of(collect_matching_numbers(vals)));
 }
 
 Value eval_dcount_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
+  std::vector<Value> vals;
   Value err = Value::blank();
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      &err)) {
+  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
     return err;
   }
-  const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   return Value::number(static_cast<double>(nums.size()));
 }
 
 Value eval_dcounta_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
+  std::vector<Value> vals;
   Value err = Value::blank();
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      &err)) {
+  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
     return err;
   }
-  const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   double count = 0.0;
   for (const Value& v : vals) {
     if (!v.is_blank()) {
@@ -437,105 +437,61 @@ Value eval_dcounta_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
 Value eval_daverage_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
+  std::vector<Value> vals;
   Value err = Value::blank();
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      &err)) {
+  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
     return err;
   }
-  const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::error(ErrorCode::Div0);
   }
-  double sum = 0.0;
-  for (double x : nums) {
-    sum += x;
-  }
-  return finite_number(sum / static_cast<double>(nums.size()));
+  return finite_number(sum_of(nums) / static_cast<double>(nums.size()));
 }
 
-Value eval_dmax_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
+namespace {
+
+// DMAX and DMIN differ only in which way the comparison runs; an empty
+// match set is 0 for both, as it is for the range-aware MAX / MIN.
+Value aggregate_extremum(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, bool want_max) {
+  std::vector<Value> vals;
   Value err = Value::blank();
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      &err)) {
+  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
     return err;
   }
-  const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::number(0.0);
   }
   double best = nums[0];
   for (std::size_t i = 1; i < nums.size(); ++i) {
-    if (nums[i] > best) {
+    if (want_max ? (nums[i] > best) : (nums[i] < best)) {
       best = nums[i];
     }
   }
   return finite_number(best);
+}
+
+}  // namespace
+
+Value eval_dmax_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  return aggregate_extremum(call, arena, registry, ctx, /*want_max=*/true);
 }
 
 Value eval_dmin_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
-  Value err = Value::blank();
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      &err)) {
-    return err;
-  }
-  const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
-  const std::vector<double> nums = collect_matching_numbers(vals);
-  if (nums.empty()) {
-    return Value::number(0.0);
-  }
-  double best = nums[0];
-  for (std::size_t i = 1; i < nums.size(); ++i) {
-    if (nums[i] < best) {
-      best = nums[i];
-    }
-  }
-  return finite_number(best);
+  return aggregate_extremum(call, arena, registry, ctx, /*want_max=*/false);
 }
 
 Value eval_dproduct_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
+  std::vector<Value> vals;
   Value err = Value::blank();
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      &err)) {
+  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
     return err;
   }
-  const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::number(0.0);
@@ -571,12 +527,8 @@ bool compute_variance(const std::vector<double>& nums, bool sample, double* out_
       return false;
     }
   }
-  double sum = 0.0;
-  for (double x : nums) {
-    sum += x;
-  }
   const double dn = static_cast<double>(n);
-  const double mean = sum / dn;
+  const double mean = sum_of(nums) / dn;
   double ss = 0.0;
   for (double x : nums) {
     const double d = x - mean;
@@ -589,20 +541,11 @@ bool compute_variance(const std::vector<double>& nums, bool sample, double* out_
 
 Value aggregate_variance(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, bool sample, bool stddev) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
+  std::vector<Value> vals;
   Value err = Value::blank();
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      &err)) {
+  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
     return err;
   }
-  const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   double var = 0.0;
   if (!compute_variance(nums, sample, &var, &err)) {
@@ -642,20 +585,11 @@ Value eval_dvarp_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 
 Value eval_dget_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
+  std::vector<Value> vals;
   Value err = Value::blank();
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      &err)) {
+  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
     return err;
   }
-  const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   if (vals.empty()) {
     return Value::error(ErrorCode::Value);
   }

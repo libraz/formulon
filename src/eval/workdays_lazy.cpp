@@ -214,6 +214,38 @@ bool is_holiday_sorted(double day_serial, const std::vector<double>& holidays) n
   return std::binary_search(holidays.begin(), holidays.end(), day_serial);
 }
 
+// Reads the trailing `weekend` and `holidays` arguments both *.INTL
+// workday functions carry in positions 3 and 4. An omitted `weekend`
+// leaves the Sat+Sun mask (selector 1, matching NETWORKDAYS / WORKDAY),
+// and the holiday list comes back sorted and deduplicated, ready for
+// `is_holiday_sorted`.
+//
+// Returns `false` with the propagating error in `*out_err`.
+bool resolve_intl_calendar(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
+                           const FunctionRegistry& registry, const EvalContext& ctx, std::uint8_t* out_mask,
+                           std::vector<double>* out_holidays, Value* out_err) {
+  *out_mask = 0x60U;
+  if (arity >= 3U) {
+    const Value weekend = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (weekend.is_error()) {
+      *out_err = weekend;
+      return false;
+    }
+    ErrorCode code = ErrorCode::Value;
+    if (!parse_weekend_arg(weekend, out_mask, &code)) {
+      *out_err = Value::error(code);
+      return false;
+    }
+  }
+  out_holidays->clear();
+  if (arity >= 4U && !collect_holidays_from_arg(call.as_call_arg(3), arena, registry, ctx, out_holidays, out_err)) {
+    return false;
+  }
+  std::sort(out_holidays->begin(), out_holidays->end());
+  out_holidays->erase(std::unique(out_holidays->begin(), out_holidays->end()), out_holidays->end());
+  return true;
+}
+
 }  // namespace
 
 Value eval_networkdays_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -357,27 +389,12 @@ Value eval_networkdays_intl_lazy(const parser::AstNode& call, Arena& arena, cons
   if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_serial(end_n.value())) {
     return Value::error(ErrorCode::Num);
   }
-  // Default to the Sat+Sun weekend (matches NETWORKDAYS / selector 1).
-  std::uint8_t mask = 0x60U;
-  if (arity >= 3U) {
-    const Value w = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (w.is_error()) {
-      return w;
-    }
-    ErrorCode ec = ErrorCode::Value;
-    if (!parse_weekend_arg(w, &mask, &ec)) {
-      return Value::error(ec);
-    }
-  }
+  std::uint8_t mask = 0;
   std::vector<double> holidays;
-  Value hol_err = Value::blank();
-  if (arity >= 4U) {
-    if (!collect_holidays_from_arg(call.as_call_arg(3), arena, registry, ctx, &holidays, &hol_err)) {
-      return hol_err;
-    }
+  Value cal_err = Value::blank();
+  if (!resolve_intl_calendar(call, arity, arena, registry, ctx, &mask, &holidays, &cal_err)) {
+    return cal_err;
   }
-  std::sort(holidays.begin(), holidays.end());
-  holidays.erase(std::unique(holidays.begin(), holidays.end()), holidays.end());
 
   double s = std::floor(start_n.value());
   double e = std::floor(end_n.value());
@@ -425,26 +442,12 @@ Value eval_workday_intl_lazy(const parser::AstNode& call, Arena& arena, const Fu
   if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_count(days_n.value())) {
     return Value::error(ErrorCode::Num);
   }
-  std::uint8_t mask = 0x60U;
-  if (arity >= 3U) {
-    const Value w = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (w.is_error()) {
-      return w;
-    }
-    ErrorCode ec = ErrorCode::Value;
-    if (!parse_weekend_arg(w, &mask, &ec)) {
-      return Value::error(ec);
-    }
-  }
+  std::uint8_t mask = 0;
   std::vector<double> holidays;
-  Value hol_err = Value::blank();
-  if (arity >= 4U) {
-    if (!collect_holidays_from_arg(call.as_call_arg(3), arena, registry, ctx, &holidays, &hol_err)) {
-      return hol_err;
-    }
+  Value cal_err = Value::blank();
+  if (!resolve_intl_calendar(call, arity, arena, registry, ctx, &mask, &holidays, &cal_err)) {
+    return cal_err;
   }
-  std::sort(holidays.begin(), holidays.end());
-  holidays.erase(std::unique(holidays.begin(), holidays.end()), holidays.end());
 
   double cur = std::floor(start_n.value());
   long long remaining = static_cast<long long>(std::trunc(days_n.value()));

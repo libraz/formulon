@@ -208,32 +208,49 @@ bool lu_decompose(std::vector<double>& m, std::uint32_t n, double* sign) {
   return true;
 }
 
+// Resolves the single square-matrix argument MDETERM and MINVERSE both
+// take, into a row-major `n x n` buffer. A non-square or degenerate
+// (0x0) input is `#VALUE!`, which is what Mac Excel surfaces for both.
+//
+// Returns `false` with the propagating error in `*out_err`.
+bool resolve_square_matrix(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, std::vector<double>* out_matrix, std::uint32_t* out_n,
+                           Value* out_err) {
+  if (call.as_call_arity() != 1U) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  const ArrayValue* arr = nullptr;
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &arr, out_err)) {
+    return false;
+  }
+  if (arr->rows != arr->cols) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  if (!coerce_matrix(*arr, *out_matrix, *out_err)) {
+    return false;
+  }
+  // A 0x0 matrix can only arise via `eval_node_as_array` returning a 1x1
+  // wrapper; `rows` is always >= 1 here. Guard explicitly anyway so a
+  // degenerate input is `#VALUE!` rather than an empty decomposition.
+  if (arr->rows == 0U) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  *out_n = arr->rows;
+  return true;
+}
+
 }  // namespace
 
 Value eval_mdeterm_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  if (call.as_call_arity() != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* a = nullptr;
-  Value err = Value::blank();
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
-    return err;
-  }
-  if (a->rows != a->cols) {
-    return Value::error(ErrorCode::Value);
-  }
   std::vector<double> m;
-  if (!coerce_matrix(*a, m, err)) {
+  std::uint32_t n = 0;
+  Value err = Value::blank();
+  if (!resolve_square_matrix(call, arena, registry, ctx, &m, &n, &err)) {
     return err;
-  }
-  const std::uint32_t n = a->rows;
-  // 0x0 matrix can only arise via `eval_node_as_array` returning a 1x1
-  // wrapper; n is always >= 1 here. Nonetheless guard explicitly so the
-  // determinant of a degenerate input is `#VALUE!` (Mac Excel surfaces
-  // the same code for an empty array).
-  if (n == 0U) {
-    return Value::error(ErrorCode::Value);
   }
 
   double sign = 1.0;
@@ -255,24 +272,11 @@ Value eval_mdeterm_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
 Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  if (call.as_call_arity() != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* a = nullptr;
-  Value err = Value::blank();
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
-    return err;
-  }
-  if (a->rows != a->cols) {
-    return Value::error(ErrorCode::Value);
-  }
   std::vector<double> m;
-  if (!coerce_matrix(*a, m, err)) {
+  std::uint32_t n = 0;
+  Value err = Value::blank();
+  if (!resolve_square_matrix(call, arena, registry, ctx, &m, &n, &err)) {
     return err;
-  }
-  const std::uint32_t n = a->rows;
-  if (n == 0U) {
-    return Value::error(ErrorCode::Value);
   }
   // Hard cap to keep downstream `uint32_t` arithmetic from wrapping. The
   // augmented system is `n x 2n`, so `2U * n` and the loop indices over
