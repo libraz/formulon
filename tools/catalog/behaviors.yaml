@@ -1245,7 +1245,7 @@ groups:
         expected: impl
       - name: "sort_order 0 -> #VALUE!"
         probe: '=GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0, 0)'
-        expected: diverged
+        expected: impl
       - name: "unknown bare aggregator name -> #NAME?"
         probe: '=GROUPBY({"A";"B"}, {1;2}, NOPE_THIS_IS_NOT_A_FUNCTION, 0, 0, 0)'
         expected: impl
@@ -1283,7 +1283,7 @@ groups:
         expected: impl
       - name: "row_sort_order 0 -> #VALUE!"
         probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0)'
-        expected: diverged
+        expected: impl
       - name: "unknown bare aggregator name -> #NAME?"
         probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, NOPE_NAME, 0, 0, 0, 0, 0)'
         expected: impl
