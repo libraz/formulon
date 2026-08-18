@@ -176,6 +176,38 @@ std::string_view SubtotalAttrName(pivot::SubtotalFn fn) {
   return {};
 }
 
+/// Maps a `SubtotalFn` to the `<item t="...">` token that names it inside
+/// a field's `<items>` list. Distinct from `SubtotalAttrName`: the
+/// attribute family spells the selection (`countASubtotal`), the item
+/// token spells the same function as a list entry (`countA`).
+std::string_view SubtotalItemToken(pivot::SubtotalFn fn) {
+  switch (fn) {
+    case pivot::SubtotalFn::Sum:
+      return "sum";
+    case pivot::SubtotalFn::Count:
+      return "countA";
+    case pivot::SubtotalFn::Average:
+      return "avg";
+    case pivot::SubtotalFn::Max:
+      return "max";
+    case pivot::SubtotalFn::Min:
+      return "min";
+    case pivot::SubtotalFn::Product:
+      return "product";
+    case pivot::SubtotalFn::CountNumbers:
+      return "count";
+    case pivot::SubtotalFn::StdDev:
+      return "stdDev";
+    case pivot::SubtotalFn::StdDevP:
+      return "stdDevP";
+    case pivot::SubtotalFn::Var:
+      return "var";
+    case pivot::SubtotalFn::VarP:
+      return "varP";
+  }
+  return {};
+}
+
 /// Emits one `<pivotField>` element. Self-closing when there are no
 /// items; open/close pair otherwise.
 void AppendPivotField(std::string& out, const pivot::PivotField& field) {
@@ -224,8 +256,22 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
     out.append("/>");
     return;
   }
+  // Excel closes a field's `<items>` with one entry per subtotal it shows:
+  // `<item t="default"/>` for the implicit one, or a token per explicitly
+  // selected function. The reader drops these on the way in because they
+  // are not real items -- the selection lives in `default_subtotal` /
+  // `subtotal_fns` -- so the writer has to put them back. Excel treats a
+  // field whose items lack its subtotal entry as damaged and offers to
+  // repair the file, and every part of that file is otherwise valid, so
+  // nothing short of Excel's own verdict reports it.
+  std::size_t subtotal_markers = field.default_subtotal ? 1U : 0U;
+  for (const pivot::SubtotalFn fn : field.subtotal_fns) {
+    if (!SubtotalItemToken(fn).empty()) {
+      ++subtotal_markers;
+    }
+  }
   out.append("><items count=\"");
-  out.append(std::to_string(field.items.size()));
+  out.append(std::to_string(field.items.size() + subtotal_markers));
   out.append("\">");
   for (std::size_t i = 0; i < field.items.size(); ++i) {
     const pivot::PivotItem& item = field.items[i];
@@ -243,6 +289,18 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
       out.append(" h=\"1\"");
     }
     out.append("/>");
+  }
+  if (field.default_subtotal) {
+    out.append("<item t=\"default\"/>");
+  }
+  for (const pivot::SubtotalFn fn : field.subtotal_fns) {
+    const std::string_view token = SubtotalItemToken(fn);
+    if (token.empty()) {
+      continue;
+    }
+    out.append("<item t=\"");
+    out.append(token);
+    out.append("\"/>");
   }
   out.append("</items></pivotField>");
 }

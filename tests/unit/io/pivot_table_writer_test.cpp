@@ -778,5 +778,83 @@ TEST(PivotTableWriter, FieldNameWithControlCharsRoundTrips) {
   EXPECT_EQ(parsed_or.value().fields()[0].custom_name, "x\ty\nz");
 }
 
+// ---------------------------------------------------------------------------
+// Subtotal entries inside `<items>`
+//
+// Excel closes a field's item list with the subtotals it displays, and
+// treats a file whose items lack them as damaged -- it offers to repair on
+// open. Nothing else notices: every part validates against the schema
+// (`<item>` is optional there), and the reader deliberately skips these
+// markers, so a read-write round trip compares equal while silently
+// shedding them. Pin the emitted bytes, which is the only place the loss
+// is visible.
+// ---------------------------------------------------------------------------
+
+pivot::PivotTable TableWithTwoItemRowField() {
+  pivot::PivotTable table;
+  table.set_anchor(0U, 0U, 4U, 2U);
+  pivot::PivotField region;
+  region.source_name = "Region";
+  region.axis = pivot::PivotAxis::Row;
+  region.items.push_back(pivot::PivotItem{"", true});
+  region.items.push_back(pivot::PivotItem{"", true});
+  table.mutable_fields().push_back(std::move(region));
+  return table;
+}
+
+TEST(PivotTableWriter, ItemsCloseWithTheImplicitSubtotalEntry) {
+  const std::string xml = write_pivot_table_definition(TableWithTwoItemRowField());
+
+  EXPECT_NE(xml.find("<items count=\"3\">"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<item t=\"default\"/></items>"), std::string::npos) << xml;
+  // The count covers the marker: two real items plus the subtotal.
+  EXPECT_EQ(xml.find("<items count=\"2\">"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, SuppressedSubtotalEmitsNoMarker) {
+  pivot::PivotTable table = TableWithTwoItemRowField();
+  table.mutable_fields()[0].default_subtotal = false;
+
+  const std::string xml = write_pivot_table_definition(table);
+
+  EXPECT_NE(xml.find("<items count=\"2\">"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("<item t="), std::string::npos) << xml;
+  // `defaultSubtotal="0"` is what makes the absence deliberate rather than
+  // the defect this test exists for.
+  EXPECT_NE(xml.find("defaultSubtotal=\"0\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, CustomSubtotalSelectionEmitsOneEntryPerFunction) {
+  pivot::PivotTable table = TableWithTwoItemRowField();
+  pivot::PivotField& region = table.mutable_fields()[0];
+  region.default_subtotal = false;
+  region.subtotal_fns = {pivot::SubtotalFn::Sum, pivot::SubtotalFn::Count};
+
+  const std::string xml = write_pivot_table_definition(table);
+
+  EXPECT_NE(xml.find("<items count=\"4\">"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<item t=\"sum\"/>"), std::string::npos) << xml;
+  // `Count` is the count-of-values function, spelled `countA` as an item
+  // token and `countASubtotal` as the selection attribute.
+  EXPECT_NE(xml.find("<item t=\"countA\"/>"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("<item t=\"default\"/>"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, ValueFieldWithoutItemsStaysSelfClosing) {
+  // A data-only field carries no item list, so it must not acquire one
+  // just because subtotals default to on.
+  pivot::PivotTable table;
+  table.set_anchor(0U, 0U, 1U, 1U);
+  pivot::PivotField amount;
+  amount.source_name = "Amount";
+  amount.axis = pivot::PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(amount));
+
+  const std::string xml = write_pivot_table_definition(table);
+
+  EXPECT_EQ(xml.find("<items"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<pivotField dataField=\"1\"/>"), std::string::npos) << xml;
+}
+
 }  // namespace
 }  // namespace formulon::io
