@@ -1,5 +1,11 @@
 # formulon
 
+[![PyPI](https://img.shields.io/pypi/v/formulon)](https://pypi.org/project/formulon/)
+[![npm](https://img.shields.io/npm/v/@libraz/formulon)](https://www.npmjs.com/package/@libraz/formulon)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/formulon/blob/main/LICENSE)
+[![Python](https://img.shields.io/pypi/pyversions/formulon)](https://pypi.org/project/formulon/)
+[![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
+
 Excel 365 calculation engine, exposed as a pure-Python binding driven by
 WebAssembly. Evaluates formulas; loads and saves `.xlsx` workbooks; and
 edits cells, the row/column matrix, styles, merges, comments,
@@ -295,8 +301,9 @@ once on Linux and publishes it to PyPI as `py3-none-any`.
 
 ## Project
 
-Source, design notes, and the oracle test suite live at
-<https://github.com/libraz/formulon>.
+Documentation — guides, compatibility notes, and the per-runtime API
+reference — is at <https://formulon.libraz.net>. Source, design notes,
+and the oracle test suite live at <https://github.com/libraz/formulon>.
 
 ## License
 

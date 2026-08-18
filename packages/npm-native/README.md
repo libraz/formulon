@@ -1,7 +1,13 @@
 # @libraz/formulon-native
 
+[![npm: @libraz/formulon](https://img.shields.io/npm/v/@libraz/formulon?label=%40libraz%2Fformulon)](https://www.npmjs.com/package/@libraz/formulon)
+[![PyPI](https://img.shields.io/pypi/v/formulon)](https://pypi.org/project/formulon/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/formulon/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
+
 Native N-API binding for [Formulon](https://github.com/libraz/formulon),
-the Excel 365 calculation engine.
+the Excel 365 calculation engine. The badges above track the sibling
+WebAssembly and Python packages; this one is not published to npm yet.
 
 Formula evaluation uses Formulon's default `win-365-ja_JP` profile. Call
 `setExcelProfileId()` when a workbook must use the separately supported
@@ -196,6 +202,12 @@ strings, passthrough parts and workbook metadata — and refreshes the
 report at the same time. That refresh matters for a long-running writer:
 between the points listed above the reported figure goes stale, because
 filling a million cells grows the workbook without V8 hearing about it.
+
+## Project
+
+Documentation — guides, compatibility notes, and the per-runtime API
+reference — is at <https://formulon.libraz.net>. Source, design notes,
+and the oracle test suite live at <https://github.com/libraz/formulon>.
 
 ## License
 

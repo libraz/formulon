@@ -1,5 +1,10 @@
 # @libraz/formulon
 
+[![npm](https://img.shields.io/npm/v/@libraz/formulon)](https://www.npmjs.com/package/@libraz/formulon)
+[![PyPI](https://img.shields.io/pypi/v/formulon)](https://pypi.org/project/formulon/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/formulon/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
+
 Excel 365 calculation engine, compiled to WebAssembly. Evaluates formulas,
 loads and saves `.xlsx` workbooks, and defaults to the `win-365-ja_JP`
 behavior profile. Hosts can select the separately supported
@@ -168,8 +173,9 @@ address space. Results are identical either way.
 
 ## Project
 
-Source, design notes, and the oracle test suite live at
-<https://github.com/libraz/formulon>.
+Documentation — guides, compatibility notes, and the per-runtime API
+reference — is at <https://formulon.libraz.net>. Source, design notes,
+and the oracle test suite live at <https://github.com/libraz/formulon>.
 
 ## License
 
