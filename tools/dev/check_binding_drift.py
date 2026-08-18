@@ -65,6 +65,16 @@ Checks:
                   struct, across the WASM `.d.ts`, the Node `.d.ts` and
                   the Python dataclasses. Deliberate omissions live in
                   `_STYLE_RECORD_EXEMPT_TYPES`.
+  abi-baseline    Every entry point in the released C ABI surface
+                  (tools/dev/c_abi_v0_9_7.txt) is still declared in
+                  src/c_api/formulon_c.h with the same signature, unless
+                  the divergence is recorded in tools/dev/c_abi_breaks.txt.
+                  Five of the eight base/`_ex` families are reached only
+                  through their `_ex` variant, so deleting or renaming the
+                  base leaves all four surfaces green and the break ships
+                  silently -- this is the only artifact that notices. A
+                  stale ledger entry fails too, so the ledger cannot
+                  outlive the break it excuses.
   staged-dist     packages/npm-native/dist/{index.d.ts,index.mjs} are
                   byte-identical to the package-root sources `stage.mjs`
                   copied them from, so the published package cannot ship a
@@ -103,6 +113,9 @@ NODE_DTS = REPO_ROOT / "packages" / "npm-native" / "index.d.ts"
 NODE_README = REPO_ROOT / "packages" / "npm-native" / "README.md"
 NODE_INDEX_MJS = REPO_ROOT / "packages" / "npm-native" / "index.mjs"
 NODE_DIST_DIR = REPO_ROOT / "packages" / "npm-native" / "dist"
+
+C_ABI_BASELINE = Path(__file__).resolve().parent / "c_abi_v0_9_7.txt"
+C_ABI_BREAKS = Path(__file__).resolve().parent / "c_abi_breaks.txt"
 NPM_INDEX_MJS = REPO_ROOT / "packages" / "npm" / "index.mjs"
 
 VALUE_H = REPO_ROOT / "src" / "value.h"
@@ -550,7 +563,10 @@ def check_python_struct_layouts() -> List[str]:
 # if a runtime binding test happens to exercise that path.
 # ---------------------------------------------------------------------------
 
-_C_FUNCTION_DECL_RE = re.compile(r"FM_API\s+[A-Za-z_][A-Za-z0-9_ *]*?\b(fm_[A-Za-z0-9_]+)\s*\(([^;]*?)\)\s*;", re.S)
+_C_FUNCTION_DECL_RE = re.compile(
+    r"FM_API\s+([A-Za-z_][A-Za-z0-9_ *]*?)\b(fm_[A-Za-z0-9_]+)\s*\(([^;]*?)\)\s*;",
+    re.S,
+)
 
 # Scratch readers whose name pins how many bytes come back out of the slot.
 # `read_cstr` is deliberately absent: it walks to a NUL rather than reading a
@@ -585,13 +601,24 @@ def _c_function_params(header: str) -> dict[str, List[str]]:
     this header is named, so dropping the last whitespace-delimited token is
     unambiguous.
     """
-    declarations: dict[str, List[str]] = {}
-    for name, params in _C_FUNCTION_DECL_RE.findall(header):
+    return {name: params for name, (_, params) in c_abi_declarations(header).items()}
+
+
+def c_abi_declarations(header: str) -> dict[str, tuple[str, List[str]]]:
+    """Maps each `FM_API` entry point to its `(return type, parameter types)`.
+
+    Public because `gen_c_abi_baseline.py` writes the released-surface file
+    with it: generating the baseline through the same parser the check reads
+    it back with keeps a formatting difference from masquerading as a break.
+    """
+    declarations: dict[str, tuple[str, List[str]]] = {}
+    for ret, name, params in _C_FUNCTION_DECL_RE.findall(header):
+        ret = " ".join(ret.split())
         params = " ".join(params.split())
         if params in ("", "void"):
-            declarations[name] = []
+            declarations[name] = (ret, [])
             continue
-        declarations[name] = [" ".join(param.split()[:-1]) for param in _split_c_params(params)]
+        declarations[name] = (ret, [" ".join(param.split()[:-1]) for param in _split_c_params(params)])
     return declarations
 
 
@@ -1713,6 +1740,102 @@ def check_staged_dist() -> List[str]:
     return problems
 
 
+def _parse_abi_manifest(path: Path) -> List[str]:
+    """Non-comment, non-blank lines of a baseline / ledger file."""
+    lines = []
+    for raw in _read(path).splitlines():
+        line = raw.strip()
+        if line and not line.startswith("#"):
+            lines.append(line)
+    return lines
+
+
+_ABI_BREAK_RE = re.compile(r"^(removed|signature|retyped)\s+(fm_[A-Za-z0-9_]+)\s*::\s*(\S.*)$")
+_ABI_BASELINE_RE = re.compile(r"^(.+?)\s+(fm_[A-Za-z0-9_]+)\((.*)\)$")
+
+
+def check_abi_baseline() -> List[str]:
+    """The released C ABI surface is still declared, or its loss is recorded.
+
+    A deletion or rename of a base entry point is invisible to every other
+    check here: five of the eight base/`_ex` families have no in-repo caller
+    at all, so the C API tests recompile against the new header and pass. The
+    only party that notices is a third-party consumer compiled against the
+    released header, which no test can stand in for -- hence a pinned copy of
+    that header's surface plus an explicit ledger of what was broken on
+    purpose.
+
+    Signature comparison is by declared parameter *type*, so it catches an
+    added, dropped or retyped parameter. It does NOT catch a by-value struct
+    that keeps its name and changes size; that is a calling convention change
+    the `static_assert(sizeof(...))` tripwires in the C ABI tests pin instead.
+    """
+    problems: List[str] = []
+
+    baseline: dict[str, tuple[str, List[str]]] = {}
+    for line in _parse_abi_manifest(C_ABI_BASELINE):
+        match = _ABI_BASELINE_RE.match(line)
+        if match is None:
+            problems.append(f"abi-baseline: unparsable baseline line: {line!r}")
+            continue
+        ret, name, params = match.groups()
+        parsed = [] if params.strip() in ("", "void") else [p.strip() for p in params.split(",")]
+        baseline[name] = (ret.strip(), parsed)
+
+    ledger: dict[str, str] = {}
+    for line in _parse_abi_manifest(C_ABI_BREAKS):
+        match = _ABI_BREAK_RE.match(line)
+        if match is None:
+            problems.append(f"abi-baseline: unparsable ledger line: {line!r}")
+            continue
+        kind, name, _reason = match.groups()
+        if name in ledger:
+            problems.append(f"abi-baseline: {name} is listed twice in {C_ABI_BREAKS.name}")
+        ledger[name] = kind
+
+    current = c_abi_declarations(_read(CAPI_HEADER))
+
+    for name, declared in sorted(baseline.items()):
+        recorded = ledger.get(name)
+        if name not in current:
+            if recorded != "removed":
+                problems.append(
+                    f"abi-baseline: {name} shipped in the released header but is gone from "
+                    f"{CAPI_HEADER.relative_to(REPO_ROOT)}. A consumer built against the release "
+                    f"loses it at link time. Record the break as `removed {name} :: <reason>` in "
+                    f"{C_ABI_BREAKS.relative_to(REPO_ROOT)} and carry it into the CHANGELOG's "
+                    "Removed section, or restore the entry point."
+                )
+            continue
+        if current[name] != declared:
+            if recorded not in ("signature", "retyped"):
+                problems.append(
+                    f"abi-baseline: {name} changed signature since the release.\n"
+                    f"  released: {declared[0]} {name}({', '.join(declared[1]) or 'void'})\n"
+                    f"  current:  {current[name][0]} {name}({', '.join(current[name][1]) or 'void'})\n"
+                    f"  Record it in {C_ABI_BREAKS.relative_to(REPO_ROOT)} as `signature` (breaks a "
+                    "stale caller) or `retyped` (invisible to a C caller and to the calling "
+                    "convention), with the reason."
+                )
+            continue
+        # Declared and unchanged: any ledger entry naming it is stale.
+        if recorded is not None:
+            problems.append(
+                f"abi-baseline: {C_ABI_BREAKS.relative_to(REPO_ROOT)} records {name} as "
+                f"`{recorded}`, but it is declared unchanged from the release. Drop the line -- a "
+                "ledger that outlives its break stops meaning anything."
+            )
+
+    for name in sorted(set(ledger) - set(baseline)):
+        problems.append(
+            f"abi-baseline: {C_ABI_BREAKS.relative_to(REPO_ROOT)} records {name}, which was never "
+            f"in the released surface. Only an entry point a consumer could have compiled against "
+            "can be broken; drop the line."
+        )
+
+    return problems
+
+
 CHECKS = {
     "python-exports": check_python_exports,
     "python-struct-layouts": check_python_struct_layouts,
@@ -1724,6 +1847,7 @@ CHECKS = {
     "dts-enums": check_dts_enums,
     "style-record-fields": check_style_record_fields,
     "staged-dist": check_staged_dist,
+    "abi-baseline": check_abi_baseline,
 }
 
 

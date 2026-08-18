@@ -412,6 +412,16 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py staged-dist
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The released C ABI surface is still declared, or its loss is on the
+  # ledger. This is the only artifact that notices a deleted or renamed base
+  # entry point: five of the eight base/`_ex` families have no in-repo caller,
+  # so the C API tests recompile against the new header and pass while a
+  # consumer built against the release loses the symbol at link time.
+  add_test(
+    NAME binding_drift_abi_baseline
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py abi-baseline
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Structural invariants enforced by "exactly one implementation exists":
   # the bounds-checked array-allocation seam (what keeps a wasm32
   # `rows * cols` from wrapping into a short buffer) and the raw-XML
