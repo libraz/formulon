@@ -87,6 +87,10 @@ bool parse_xml_bool(std::string_view value);
 /// XML (undeclared prefix) and real Excel refuses to open the file.
 /// Attribute values are escaped before output. This also covers custom
 /// compatibility attributes whose values may contain XML-critical characters.
+///
+/// `capture_unknown_attrs` is the element-level half of the same rule; the
+/// two drifted apart once, with this one preserving bindings while that one
+/// stripped them, so keep them in step.
 std::string capture_root_extra_ns_attrs(const pugi::xml_node& root);
 
 // ---------------------------------------------------------------------------
@@ -175,6 +179,11 @@ bool attr_bool(const pugi::xml_node& n, const char* name, bool def = false);
 /// The default `xmlns` and any `xmlns:*` written on the node are still
 /// skipped: the writer emits the bindings it needs for the elements it
 /// generates, and re-emitting those would duplicate them.
+///
+/// This is the element-level half of a rule `capture_root_extra_ns_attrs`
+/// applies at the part root. Both exist for the same reason — a prefix
+/// whose binding is left behind produces malformed XML, not merely a lossy
+/// one — so a change to either belongs in both.
 void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std::string_view> known,
                            std::vector<std::pair<std::string, std::string>>& out);
 
