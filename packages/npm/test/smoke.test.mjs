@@ -221,6 +221,9 @@ test('staged constant tables carry the ordinals the staged .d.ts declares', asyn
 function makePivotWorkbook(Workbook) {
   const wb = Workbook.createDefault();
   const cacheId = wb.pivotCacheCreate(0).index;
+  // A cache without a worksheet source cannot be saved, so the fixture
+  // declares the range its two fields and two records occupy.
+  assert.ok(wb.pivotCacheSetWorksheetSource(cacheId, { present: true, ref: 'A1:B3', sheet: 'Sheet1' }).ok);
   assert.ok(wb.pivotCacheFieldAdd(cacheId, 'Region').status.ok);
   assert.ok(wb.pivotCacheFieldAdd(cacheId, 'Amount').status.ok);
   for (const [region, amount] of [
