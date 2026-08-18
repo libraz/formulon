@@ -489,6 +489,13 @@ families:
     category_file: tests/oracle/cases/width.yaml
     min_perspectives_per_member: 5
     cluster_reason: "ja-JP halfwidth/fullwidth conversion; share Unicode block transformations and locale-bound semantics."
+    aliases:
+      # `JIS` is a ja-JP formula-bar spelling Excel rewrites to `DBCS` before
+      # it stores or evaluates the formula (tests/oracle/cases/width.yaml:32),
+      # and Mac Excel ja-JP answers a direct `JIS(...)` with #NAME?. No oracle
+      # case can name it, so its closure is `DBCS`'s -- which is also what the
+      # engine does, both spellings reaching one backend.
+      JIS: DBCS
 
   # -- Accrued-interest and depreciation family ---------------------------
   # ACCRINT / ACCRINTM (accrued interest), AMORDEGRC / AMORLINC (French

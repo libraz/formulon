@@ -10036,7 +10036,9 @@ groups:
   # left pointing at cases that no longer exist, and the one behavior
   # without a `DBCS` equivalent ("ASC(JIS(...)) round-trip") was moved
   # into the `DBCS` group below as "ASC(DBCS(...)) round-trip", which has
-  # live oracle coverage (`dbcs_round_trip`).
+  # live oracle coverage (`dbcs_round_trip`). `JIS` is declared an alias of
+  # `DBCS` in tools/catalog/families.yaml, so the closure harness reads its
+  # closure off the group below rather than expecting one here.
   - function: "DBCS"
     aspect: "halfwidth -> fullwidth conversion (alias of JIS)"
     behaviors:

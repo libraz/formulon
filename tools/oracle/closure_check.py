@@ -86,6 +86,11 @@ class Family:
     category_file: Optional[Path]
     min_perspectives_per_member: int
     cluster_reason: str
+    # Members Excel treats as an alternate spelling of another member, as
+    # `{alias: canonical}`. An alias cannot hold oracle cases of its own —
+    # Excel rewrites it to the canonical name before it ever stores or
+    # evaluates the formula — so its closure is the canonical member's.
+    aliases: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -100,6 +105,9 @@ class FunctionClosure:
     fn: str
     family: Family
     conditions: List[ConditionResult] = field(default_factory=list)
+    # Set when `fn` is an alias: the canonical member whose conditions these
+    # are.
+    alias_of: Optional[str] = None
 
     @property
     def closed(self) -> bool:
@@ -139,6 +147,7 @@ def load_families() -> Tuple[Dict[str, Family], Dict[str, Family]]:
             category_file=cf_path,
             min_perspectives_per_member=int(entry.get("min_perspectives_per_member", DEFAULT_MIN_PERSPECTIVES)),
             cluster_reason=entry.get("cluster_reason", ""),
+            aliases=dict(entry.get("aliases") or {}),
         )
         by_name[fam.name] = fam
         for m in fam.members:
@@ -403,6 +412,22 @@ def evaluate_function(
     golden_ids: Set[str],
     ctx: CoverageContext,
 ) -> FunctionClosure:
+    alias_target = family.aliases.get(fn)
+    if alias_target is not None:
+        # The canonical member is evaluated here rather than its declaration
+        # being taken on trust, so an alias cannot close while the function it
+        # defers to is open.
+        if alias_target == fn or alias_target in family.aliases or alias_target not in family.members:
+            detail = f"alias target {alias_target} is not a non-alias member of family {family.name}"
+            return FunctionClosure(
+                fn=fn,
+                family=family,
+                conditions=[ConditionResult("alias_resolves", False, detail)],
+                alias_of=alias_target,
+            )
+        target = evaluate_function(alias_target, family, cases, golden_ids, ctx)
+        return FunctionClosure(fn=fn, family=family, conditions=target.conditions, alias_of=alias_target)
+
     fn_behaviors = behaviors_for_function(fn, ctx.behaviors)
     fc = FunctionClosure(fn=fn, family=family)
     fc.conditions.append(check_condition_1_behaviors(fn, ctx.behaviors, family.min_perspectives_per_member))
@@ -419,6 +444,10 @@ def audit_family(family: Family, all_behaviors: List[Dict]) -> List[Tuple[str, s
     by_member: Dict[str, Set[str]] = {}
     aspect_origin: Dict[str, str] = {}
     for member in family.members:
+        # An alias declares no behaviors of its own; auditing it against the
+        # family's aspect union would report every one of them as missing.
+        if member in family.aliases:
+            continue
         aspects = {b["aspect"] for b in behaviors_for_function(member, all_behaviors) if b["aspect"]}
         by_member[member] = aspects
         for a in aspects:
@@ -446,7 +475,8 @@ def _colour(text: str, code: str) -> str:
 
 def print_function_closure(fc: FunctionClosure, verbose: bool = True) -> None:
     status = _colour("CLOSED", GREEN) if fc.closed else _colour("OPEN", RED)
-    print(f"{fc.fn:20}  family={fc.family.name:24}  {status}")
+    suffix = f"  (alias of {fc.alias_of})" if fc.alias_of else ""
+    print(f"{fc.fn:20}  family={fc.family.name:24}  {status}{suffix}")
     if verbose or not fc.closed:
         for c in fc.conditions:
             mark = _colour("OK", GREEN) if c.ok else _colour("FAIL", RED)
@@ -520,6 +550,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "fn": fc.fn,
                     "family": fc.family.name,
                     "closed": fc.closed,
+                    "alias_of": fc.alias_of,
                     "conditions": [{"name": c.name, "ok": c.ok, "detail": c.detail} for c in fc.conditions],
                 }
                 for fc in closures
