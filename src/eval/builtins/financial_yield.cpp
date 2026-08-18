@@ -212,65 +212,7 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   // price kernel to evaluate an invalid negative yield.
   yld = std::max(0.0, yld);
 
-  constexpr int kMaxIter = 100;
-  // Convergence: function tolerance is scaled by |pr|+1 so the criterion
-  // remains meaningful across the full bond price range; step tolerance
-  // catches the case where Newton has flat-lined at floating-point
-  // resolution.
-  const double f_tol = 1.0e-12 * (std::fabs(pr_v) + 1.0);
-  constexpr double kStepTol = 1.0e-15;
-  for (int iter = 0; iter < kMaxIter; ++iter) {
-    auto f0 = price_at(args, arity, yld);
-    if (!f0) {
-      return f0.error();
-    }
-    const double residual = f0.value() - pr_v;
-    if (std::fabs(residual) < f_tol) {
-      if (std::isnan(yld) || std::isinf(yld)) {
-        return ErrorCode::Num;
-      }
-      return yld;
-    }
-    // Central-difference derivative. The step size is scaled with |yld|
-    // to keep relative precision near the limit of double-precision
-    // arithmetic without underflowing for tiny yields.
-    const double h = 1.0e-7 * std::max(1.0, std::fabs(yld));
-    auto f_plus = price_at(args, arity, yld + h);
-    if (!f_plus) {
-      return f_plus.error();
-    }
-    double df = 0.0;
-    if (yld < h) {
-      df = (f_plus.value() - f0.value()) / h;
-    } else {
-      auto f_minus = price_at(args, arity, yld - h);
-      if (!f_minus) {
-        return f_minus.error();
-      }
-      df = (f_plus.value() - f_minus.value()) / (2.0 * h);
-    }
-    if (df == 0.0 || std::isnan(df) || std::isinf(df)) {
-      return ErrorCode::Num;
-    }
-    const double delta = residual / df;
-    double damped_delta = delta;
-    double new_yld = yld - damped_delta;
-    while (new_yld < 0.0 && std::fabs(damped_delta) >= kStepTol) {
-      damped_delta *= 0.5;
-      new_yld = yld - damped_delta;
-    }
-    new_yld = std::max(0.0, new_yld);
-    if (std::isnan(new_yld) || std::isinf(new_yld)) {
-      return ErrorCode::Num;
-    }
-    if (std::fabs(damped_delta) < kStepTol) {
-      return new_yld;
-    }
-    yld = new_yld;
-  }
-  // Iteration cap reached without convergence. Excel surfaces this as
-  // `#NUM!` (caller can retry with a different price if needed).
-  return ErrorCode::Num;
+  return solve_yield_by_newton(price_at, args, arity, pr_v, yld);
 }
 
 }  // namespace

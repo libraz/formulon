@@ -268,6 +268,76 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& arena);
 Value Amordegrc(const Value* args, std::uint32_t arity, Arena& arena);
 Value Amorlinc(const Value* args, std::uint32_t arity, Arena& arena);
 
+// A bond price kernel evaluated at one candidate yield, in the shape the
+// yield solvers below invert: the call's own argument vector with the
+// yield slot replaced by `yld`.
+using BondPriceFn = Expected<double, ErrorCode> (*)(const Value* args, std::uint32_t arity, double yld);
+
+// Solves `price_at(yld) == target_price` by Newton-Raphson, shared by
+// YIELD and ODDFYIELD. The derivative is a central difference with step
+// `1e-7 * max(1, |yld|)`, one-sided while the iterate sits within one
+// step of zero, because every price kernel here has domain `yld >= 0`
+// and a damped step keeps the iterate on that side of the boundary.
+//
+// Converges on `|price - target| < 1e-12 * (|target| + 1)` or on a step
+// below `1e-15`. A degenerate derivative, a non-finite iterate, or
+// exhausting the iteration cap surfaces `#NUM!`, which is what Excel
+// reports for a price the bond cannot reach.
+inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, const Value* args, std::uint32_t arity,
+                                                         double target_price, double initial_guess) {
+  constexpr int kMaxIter = 100;
+  constexpr double kStepTol = 1.0e-15;
+  const double f_tol = 1.0e-12 * (std::fabs(target_price) + 1.0);
+  double yld = initial_guess;
+  for (int iter = 0; iter < kMaxIter; ++iter) {
+    auto f0 = price_at(args, arity, yld);
+    if (!f0) {
+      return f0.error();
+    }
+    const double residual = f0.value() - target_price;
+    if (std::fabs(residual) < f_tol) {
+      if (std::isnan(yld) || std::isinf(yld)) {
+        return ErrorCode::Num;
+      }
+      return yld;
+    }
+    const double step = 1.0e-7 * std::fmax(1.0, std::fabs(yld));
+    auto f_plus = price_at(args, arity, yld + step);
+    if (!f_plus) {
+      return f_plus.error();
+    }
+    double df = 0.0;
+    if (yld < step) {
+      df = (f_plus.value() - f0.value()) / step;
+    } else {
+      auto f_minus = price_at(args, arity, yld - step);
+      if (!f_minus) {
+        return f_minus.error();
+      }
+      df = (f_plus.value() - f_minus.value()) / (2.0 * step);
+    }
+    if (df == 0.0 || std::isnan(df) || std::isinf(df)) {
+      return ErrorCode::Num;
+    }
+    double damped_delta = residual / df;
+    double new_yld = yld - damped_delta;
+    while (new_yld < 0.0 && std::fabs(damped_delta) >= kStepTol) {
+      damped_delta *= 0.5;
+      new_yld = yld - damped_delta;
+    }
+    new_yld = std::fmax(0.0, new_yld);
+    if (std::isnan(new_yld) || std::isinf(new_yld)) {
+      return ErrorCode::Num;
+    }
+    if (std::fabs(damped_delta) < kStepTol) {
+      return new_yld;
+    }
+    yld = new_yld;
+  }
+  // Iteration cap reached without convergence.
+  return ErrorCode::Num;
+}
+
 // Value-returning builtins implemented in `financial_accrual.cpp`.
 Value Accrint(const Value* args, std::uint32_t arity, Arena& arena);
 Value Accrintm(const Value* args, std::uint32_t arity, Arena& arena);
