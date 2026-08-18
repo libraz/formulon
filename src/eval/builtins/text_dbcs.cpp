@@ -32,32 +32,17 @@ namespace text_detail {
 // DBCS bytes). Not found / out-of-range `start_num` / `start_num < 1`
 // surface `#VALUE!`. Empty `find_text` returns `start_num` (FIND's quirk).
 Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto needle = coerce_to_text(args[0]);
-  if (!needle) {
-    return Value::error(needle.error());
+  SearchArgs sargs;
+  Value early = Value::blank();
+  if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
+    return early;
   }
-  auto haystack = coerce_to_text(args[1]);
-  if (!haystack) {
-    return Value::error(haystack.error());
-  }
-  auto parsed = read_optional_int_arg(args, arity, 2u, 1);
-  if (!parsed) {
-    return Value::error(parsed.error());
-  }
-  const int start = parsed.value();
-  const std::uint64_t total_dbcs = bytes_in_jajp(haystack.value());
-  if (start < 1 || static_cast<std::uint64_t>(start) > total_dbcs + 1) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (needle.value().empty()) {
-    return Value::number(static_cast<double>(start));
-  }
-  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(haystack.value());
+  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack);
   for (const DbcsCharRec& rec : chars) {
-    if (rec.dbcs_position < static_cast<std::uint64_t>(start)) {
+    if (rec.dbcs_position < static_cast<std::uint64_t>(sargs.start)) {
       continue;
     }
-    if (haystack.value().compare(rec.byte_offset, needle.value().size(), needle.value()) == 0) {
+    if (sargs.haystack.compare(rec.byte_offset, sargs.needle.size(), sargs.needle) == 0) {
       return Value::number(static_cast<double>(rec.dbcs_position));
     }
   }
@@ -68,40 +53,25 @@ Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // DOS-style wildcards. Mirrors SEARCH semantically but position values are
 // in DBCS bytes. `start_num` is also in DBCS bytes.
 Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto needle = coerce_to_text(args[0]);
-  if (!needle) {
-    return Value::error(needle.error());
+  SearchArgs sargs;
+  Value early = Value::blank();
+  if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
+    return early;
   }
-  auto haystack = coerce_to_text(args[1]);
-  if (!haystack) {
-    return Value::error(haystack.error());
-  }
-  auto parsed = read_optional_int_arg(args, arity, 2u, 1);
-  if (!parsed) {
-    return Value::error(parsed.error());
-  }
-  const int start = parsed.value();
-  const std::uint64_t total_dbcs = bytes_in_jajp(haystack.value());
-  if (start < 1 || static_cast<std::uint64_t>(start) > total_dbcs + 1) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (needle.value().empty()) {
-    return Value::number(static_cast<double>(start));
-  }
-  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(haystack.value());
+  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack);
   // Find the byte offset that corresponds to `start`. If `start` lands
   // strictly inside a 2-byte character, round up to the next character
   // boundary (matches SEARCH's rounding-up convention on UTF-16 splits).
-  std::size_t start_byte = haystack.value().size();
+  std::size_t start_byte = sargs.haystack.size();
   for (const DbcsCharRec& rec : chars) {
-    if (rec.dbcs_position >= static_cast<std::uint64_t>(start)) {
+    if (rec.dbcs_position >= static_cast<std::uint64_t>(sargs.start)) {
       start_byte = rec.byte_offset;
       break;
     }
   }
   // Case-fold on both sides (ASCII only; matches SEARCH's policy).
-  const std::string lowered_haystack = to_lower_ascii(haystack.value());
-  const std::string lowered_needle = to_lower_ascii(needle.value());
+  const std::string lowered_haystack = to_lower_ascii(sargs.haystack);
+  const std::string lowered_needle = to_lower_ascii(sargs.needle);
   std::size_t match_byte = std::string::npos;
   const bool has_metachar = lowered_needle.find_first_of("*?~") != std::string::npos;
   if (!has_metachar) {
@@ -134,7 +104,7 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Defensive: if the match happens to land exactly at haystack.size()
   // (possible with wildcard on empty trailing), return the final position
   // after the last character.
-  return Value::number(static_cast<double>(total_dbcs + 1));
+  return Value::number(static_cast<double>(bytes_in_jajp(sargs.haystack) + 1));
 }
 
 }  // namespace text_detail
@@ -176,6 +146,36 @@ Utf8Step next_utf8_step(std::string_view src, std::size_t i) noexcept {
   return {cp, bytes, byte_count_jajp(cp)};
 }
 
+// Reads the `text, [num_bytes=1]` prologue LEFTB and RIGHTB share.
+// Returns `false` when the caller must return `*out_early` instead of
+// slicing: a coercion error, a negative budget (`#VALUE!`), or a zero
+// budget (the empty string).
+bool read_byte_budget_args(const Value* args, std::uint32_t arity, std::string* out_text, std::uint64_t* out_budget,
+                           Value* out_early) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    *out_early = Value::error(text.error());
+    return false;
+  }
+  auto byte_count = text_detail::read_optional_int_arg(args, arity, 1, 1);
+  if (!byte_count) {
+    *out_early = Value::error(byte_count.error());
+    return false;
+  }
+  const int budget = byte_count.value();
+  if (budget < 0) {
+    *out_early = Value::error(ErrorCode::Value);
+    return false;
+  }
+  if (budget == 0) {
+    *out_early = Value::text({});
+    return false;
+  }
+  *out_text = std::move(text.value());
+  *out_budget = static_cast<std::uint64_t>(budget);
+  return true;
+}
+
 }  // namespace
 
 namespace text_detail {
@@ -193,23 +193,12 @@ Value Lenb(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // character would straddle the budget (1 byte remaining), emit an ASCII
 // space in its place and stop.
 Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
+  std::string src;
+  std::uint64_t budget = 0;
+  Value early = Value::blank();
+  if (!read_byte_budget_args(args, arity, &src, &budget, &early)) {
+    return early;
   }
-  auto byte_count = read_optional_int_arg(args, arity, 1, 1);
-  if (!byte_count) {
-    return Value::error(byte_count.error());
-  }
-  const int n = byte_count.value();
-  if (n < 0) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (n == 0) {
-    return Value::text({});
-  }
-  const std::string& src = text.value();
-  const auto budget = static_cast<std::uint64_t>(n);
   std::uint64_t used = 0;
   std::string out;
   out.reserve(src.size());
@@ -242,23 +231,12 @@ Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
 // the rightmost window that fits the budget. If a 2-byte character would
 // straddle the window boundary on the left edge, emit an ASCII space.
 Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
+  std::string src;
+  std::uint64_t budget = 0;
+  Value early = Value::blank();
+  if (!read_byte_budget_args(args, arity, &src, &budget, &early)) {
+    return early;
   }
-  auto byte_count = read_optional_int_arg(args, arity, 1, 1);
-  if (!byte_count) {
-    return Value::error(byte_count.error());
-  }
-  const int n = byte_count.value();
-  if (n < 0) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (n == 0) {
-    return Value::text({});
-  }
-  const std::string& src = text.value();
-  const auto budget = static_cast<std::uint64_t>(n);
 
   // Collect (byte_offset, byte_len, dbcs_cost) for each character.
   struct CharRec {

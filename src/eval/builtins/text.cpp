@@ -346,33 +346,19 @@ Value Replace_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // `start_num` (default 1). Not found -> `#VALUE!`. Out-of-range `start_num`
 // -> `#VALUE!`. Empty `find_text` returns `start_num` (Excel quirk).
 Value Find(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto needle = coerce_to_text(args[0]);
-  if (!needle) {
-    return Value::error(needle.error());
+  text_detail::SearchArgs sargs;
+  Value early = Value::blank();
+  if (!text_detail::read_search_args(args, arity, text_detail::SearchUnit::Utf16, &sargs, &early)) {
+    return early;
   }
-  auto haystack = coerce_to_text(args[1]);
-  if (!haystack) {
-    return Value::error(haystack.error());
-  }
-  auto parsed = read_optional_int_arg(args, arity, 2u, 1);
-  if (!parsed) {
-    return Value::error(parsed.error());
-  }
-  const int start = parsed.value();
-  const std::uint32_t total = utf16_units_in(haystack.value());
-  if (start < 1 || static_cast<std::uint32_t>(start) > total + 1) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (needle.value().empty()) {
-    return Value::number(static_cast<double>(start));
-  }
-  const std::size_t start_byte = utf16_to_byte_offset(haystack.value(), static_cast<std::uint32_t>(start - 1));
-  const std::size_t pos = haystack.value().find(needle.value(), start_byte);
+  const int start = sargs.start;
+  const std::size_t start_byte = utf16_to_byte_offset(sargs.haystack, static_cast<std::uint32_t>(start - 1));
+  const std::size_t pos = sargs.haystack.find(sargs.needle, start_byte);
   if (pos == std::string::npos) {
     return Value::error(ErrorCode::Value);
   }
   // Convert byte offset back to a 1-based UTF-16 unit position.
-  const std::uint32_t units = utf16_units_in(std::string_view(haystack.value()).substr(0, pos));
+  const std::uint32_t units = utf16_units_in(std::string_view(sargs.haystack).substr(0, pos));
   return Value::number(static_cast<double>(units + 1));
 }
 
@@ -382,29 +368,14 @@ Value Find(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // literal metacharacter. Otherwise mirrors FIND (which is strictly literal
 // and retains that contract).
 Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto needle = coerce_to_text(args[0]);
-  if (!needle) {
-    return Value::error(needle.error());
+  text_detail::SearchArgs sargs;
+  Value early = Value::blank();
+  if (!text_detail::read_search_args(args, arity, text_detail::SearchUnit::Utf16, &sargs, &early)) {
+    return early;
   }
-  auto haystack = coerce_to_text(args[1]);
-  if (!haystack) {
-    return Value::error(haystack.error());
-  }
-  auto parsed = read_optional_int_arg(args, arity, 2u, 1);
-  if (!parsed) {
-    return Value::error(parsed.error());
-  }
-  const int start = parsed.value();
-  const std::uint32_t total = utf16_units_in(haystack.value());
-  if (start < 1 || static_cast<std::uint32_t>(start) > total + 1) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (needle.value().empty()) {
-    return Value::number(static_cast<double>(start));
-  }
-  const std::string lowered_haystack = to_lower_ascii(haystack.value());
-  const std::string lowered_needle = to_lower_ascii(needle.value());
-  const std::size_t start_byte = utf16_to_byte_offset(haystack.value(), static_cast<std::uint32_t>(start - 1));
+  const std::string lowered_haystack = to_lower_ascii(sargs.haystack);
+  const std::string lowered_needle = to_lower_ascii(sargs.needle);
+  const std::size_t start_byte = utf16_to_byte_offset(sargs.haystack, static_cast<std::uint32_t>(sargs.start - 1));
   // Fast path: when the pattern carries no metacharacter at all (no `*`,
   // `?`, or `~`), use a plain substring search on the lower-cased buffers.
   // This keeps the common wildcard-free case allocation-free beyond the
@@ -428,7 +399,7 @@ Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (pos == std::string::npos) {
     return Value::error(ErrorCode::Value);
   }
-  const std::uint32_t units = utf16_units_in(std::string_view(haystack.value()).substr(0, pos));
+  const std::uint32_t units = utf16_units_in(std::string_view(sargs.haystack).substr(0, pos));
   return Value::number(static_cast<double>(units + 1));
 }
 

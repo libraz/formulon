@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -36,6 +37,28 @@ Expected<int, ErrorCode> read_int_arg(const Value& v);
 // variants so the defaulting rule stays in one place.
 Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
                                                int default_value);
+
+// Unit a search family counts positions in: UTF-16 units for FIND and
+// SEARCH, ja-JP DBCS bytes for FINDB and SEARCHB.
+enum class SearchUnit : std::uint8_t { Utf16, DbcsByte };
+
+// The coerced `find_text` / `within_text` / `start_num` arguments the
+// four search builtins share.
+struct SearchArgs {
+  std::string needle;
+  std::string haystack;
+  int start;
+};
+
+// Reads the argument prologue of FIND / SEARCH / FINDB / SEARCHB,
+// including the two answers Excel gives before it ever looks at the
+// haystack: a `start_num` outside `[1, length + 1]` is `#VALUE!`, and an
+// empty `find_text` returns `start_num` itself. `unit` selects the unit
+// the length bound is measured in.
+//
+// Returns `true` with `*out` filled when the caller should go on to
+// search; `false` when the caller must return `*out_result` verbatim.
+bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, SearchArgs* out, Value* out_result);
 
 // Per-character record: UTF-8 byte offset, byte length, 1-based DBCS
 // position (byte position under the ja-JP DBCS rule), and DBCS cost.
