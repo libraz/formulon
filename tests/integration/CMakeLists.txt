@@ -22,6 +22,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_sheet_features_batch_test.cpp
   ooxml_workbook_pr_roundtrip_test.cpp
   ooxml_writer_pivot_test.cpp
+  pivot_blank_item_fixture_test.cpp
   pivot_caption_filter_fixture_test.cpp
   pivot_value_date_filter_fixture_test.cpp
   real_excel_fixture_smoke_test.cpp

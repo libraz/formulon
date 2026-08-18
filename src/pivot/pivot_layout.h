@@ -52,15 +52,18 @@ enum class PivotCellKind : std::uint8_t {
 /// the projection falls back to `" " + grand_total_label` so existing
 /// English consumers see "North Grand Total" unchanged.
 ///
-/// `blank_item_label` carries a provisional spelling: an axis group with
-/// no source value must be named — an empty label can be neither drawn
-/// nor addressed by GETPIVOTDATA — but the text itself is not yet pinned
-/// by an Excel observation, so treat it as subject to change and do not
-/// hard-code it at a use site.
+/// `blank_item_label` names an axis group with no source value, which
+/// must be named because an empty label can be neither drawn nor
+/// addressed by GETPIVOTDATA. The ja-JP spelling is measured — Excel
+/// cached `(空白)` into the grid of
+/// `tests/fixtures/excel/pivot_blank_item.xlsx` — but the English
+/// default is still a guess, so do not hard-code it at a use site. The
+/// label is applied after the axis is ordered: Excel sorts the blank
+/// group last by its source value, not first by this text.
 struct PivotLayoutOptions {
   std::string grand_total_label = "Grand Total";
   std::string values_label = "Values";
-  std::string blank_item_label = "(blank)";  ///< Provisional; label of an axis item with no value.
+  std::string blank_item_label = "(blank)";  ///< Label of an axis item with no value; English is provisional.
   std::string row_labels_label;              ///< e.g. "行ラベル"; empty disables.
   std::string column_labels_label;           ///< e.g. "列ラベル"; empty disables.
   std::string subtotal_suffix;               ///< e.g. " 集計"; empty falls back to grand_total_label.

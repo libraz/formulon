@@ -144,6 +144,13 @@ TEST(SavedPackageWellFormed, PivotValueDateFilterFixture) {
   ExpectSavedPartsParse("pivot_value_date_filters.xlsx");
 }
 
+// Adds the one shared-item shape the other two do not have: an `<m/>` blank
+// under `containsBlank="1"`, which the cache writer has to re-emit as an
+// empty element rather than as a typed item with no value.
+TEST(SavedPackageWellFormed, PivotBlankItemFixture) {
+  ExpectSavedPartsParse("pivot_blank_item.xlsx");
+}
+
 TEST(SavedPackageWellFormed, StylesAndFormulaFixtures) {
   ExpectSavedPartsParse("xlsb_fidelity_base.xlsx");
   ExpectSavedPartsParse("formula_corpus.xlsx");
