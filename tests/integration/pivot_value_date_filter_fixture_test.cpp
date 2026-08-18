@@ -3,13 +3,13 @@
 // Excel 365 (ja-JP) workbook
 // (`tests/fixtures/excel/pivot_value_date_filters.xlsx`).
 //
-// The fixture carries four pivots over one source table, each filtered
-// from the row-label dropdown so that every decoded family appears
-// exactly once. Excel's own bytes make the expectations below
-// measurements rather than a reading of the schema, and its cached
-// render of each report is what the evaluation is compared against.
+// The fixture carries one pivot per filter family over a single source
+// table, each filtered from the row-label dropdown. Excel's own bytes
+// make the expectations below measurements rather than a reading of the
+// schema, and its cached render of each report is what the evaluation is
+// compared against.
 //
-// Source table (`Sheet5`, A1:D9) — Region / Product / Date / Amt:
+// Source table (`Sheet1`, A1:D9) — Region / Product / Date / Amt:
 //   North Alpha 2024-01-15 100   East Alpha 2024-01-25  80
 //   North Beta  2024-02-20  50   East Beta  2024-06-18  20
 //   South Alpha 2024-03-10 200   West Alpha 2024-02-08 150
@@ -64,6 +64,7 @@ constexpr std::size_t kBetweenSheet = 2;
 constexpr std::size_t kDateBetweenSheet = 3;
 constexpr std::size_t kTopPercentSheet = 4;
 constexpr std::size_t kTopSumSheet = 5;
+constexpr std::size_t kTopPercent50Sheet = 6;
 
 // Region aggregates, as Excel rendered them.
 constexpr double kNorth = 150.0;
@@ -210,8 +211,8 @@ TEST(PivotValueDateFilterFixture, DateBoundsDecodeAsSerialsOnTheDateField) {
 // the items list already covers it.
 TEST(PivotValueDateFilterFixture, ExcelLeavesEveryItemVisible) {
   Workbook wb = LoadFixture();
-  for (const std::size_t sheet :
-       {kTopCountSheet, kGreaterThanSheet, kBetweenSheet, kDateBetweenSheet, kTopPercentSheet, kTopSumSheet}) {
+  for (const std::size_t sheet : {kTopCountSheet, kGreaterThanSheet, kBetweenSheet, kDateBetweenSheet, kTopPercentSheet,
+                                  kTopSumSheet, kTopPercent50Sheet}) {
     const pivot::PivotTable* table = PivotOn(wb, sheet);
     ASSERT_NE(table, nullptr) << "sheet " << sheet;
     for (const pivot::PivotField& field : table->fields()) {
@@ -254,6 +255,11 @@ TEST(PivotValueDateFilterFixture, TopSumAccumulatesUntilItReachesTheTarget) {
 // 70 percent of the 925 total is 647.5. South alone (500) falls short and
 // South + West (675) clears it, so the accumulation stops on the leaf that
 // crosses the threshold rather than before it.
+//
+// This case alone does not say *what* the percentage is a share of. Reading
+// `val` as a share of the total and reading it as a share of the item count
+// (0.7 x 4 regions, truncated to 2) both keep exactly South and West here.
+// The 50 percent case below is what separates them.
 TEST(PivotValueDateFilterFixture, TopPercentAccumulatesAShareOfTheTotal) {
   const Workbook wb = LoadFixture();
   const std::vector<std::pair<std::string, double>> rows = EvaluateRows(wb, kTopPercentSheet);
@@ -262,6 +268,31 @@ TEST(PivotValueDateFilterFixture, TopPercentAccumulatesAShareOfTheTotal) {
   EXPECT_DOUBLE_EQ(rows[0].second, kSouth);
   EXPECT_EQ(rows[1].first, "West");
   EXPECT_DOUBLE_EQ(rows[1].second, kWest);
+}
+
+// The percentage ranks against the accumulated total, not against the number
+// of items — and only a threshold this low says so on this table.
+//
+// 50 percent of 925 is 462.5, which South clears on its own. Were `val` a
+// share of the item count instead, 0.5 x 4 regions would keep two, adding
+// West. Excel's cached render is a single row, so the quantity being
+// accumulated is the measure.
+TEST(PivotValueDateFilterFixture, TopPercentRanksAgainstTheTotalNotTheItemCount) {
+  const Workbook wb = LoadFixture();
+  const pivot::PivotTable* table = PivotOn(wb, kTopPercent50Sheet);
+  ASSERT_NE(table, nullptr);
+  ASSERT_EQ(table->authored_value_filters().size(), 1U);
+  const pivot::AuthoredValueFilter& filter = table->authored_value_filters().front();
+  EXPECT_EQ(filter.field_index, 0U);  // Region
+  EXPECT_EQ(filter.type, pivot::FilterType::ValueTop10);
+  EXPECT_EQ(filter.top_n_basis, pivot::TopNBasis::Percent);
+  EXPECT_DOUBLE_EQ(filter.value, 50.0);
+  EXPECT_FALSE(filter.value_high.has_value());
+
+  const std::vector<std::pair<std::string, double>> rows = EvaluateRows(wb, kTopPercent50Sheet);
+  ASSERT_EQ(rows.size(), 1U);
+  EXPECT_EQ(rows[0].first, "South");
+  EXPECT_DOUBLE_EQ(rows[0].second, kSouth);
 }
 
 // East totals exactly the threshold. Excel drops it, so the comparison is

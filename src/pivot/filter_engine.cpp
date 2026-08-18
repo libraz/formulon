@@ -554,7 +554,10 @@ std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, doubl
     }
   }
   std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return axis.scores[a] > axis.scores[b]; });
-  // `percent` is the same rule expressed as a share of the axis total.
+  // `percent` is the same rule expressed as a share of the axis total,
+  // not as a share of the leaf count. Only a threshold low enough for one
+  // leaf to clear it alone tells the two apart, which is what the 50 %
+  // pivot in `tests/fixtures/excel/pivot_value_date_filters.xlsx` is for.
   const double threshold = basis == TopNBasis::Percent ? total * target / 100.0 : target;
   double running = 0.0;
   for (const std::size_t idx : order) {
