@@ -66,7 +66,7 @@ Checks:
                   the Python dataclasses. Deliberate omissions live in
                   `_STYLE_RECORD_EXEMPT_TYPES`.
   abi-baseline    Every entry point in the released C ABI surface
-                  (tools/dev/c_abi_v0_9_7.txt) is still declared in
+                  (tools/dev/c_abi_baseline.txt) is still declared in
                   src/c_api/formulon_c.h with the same signature, unless
                   the divergence is recorded in tools/dev/c_abi_breaks.txt.
                   Five of the eight base/`_ex` families are reached only
@@ -114,7 +114,7 @@ NODE_README = REPO_ROOT / "packages" / "npm-native" / "README.md"
 NODE_INDEX_MJS = REPO_ROOT / "packages" / "npm-native" / "index.mjs"
 NODE_DIST_DIR = REPO_ROOT / "packages" / "npm-native" / "dist"
 
-C_ABI_BASELINE = Path(__file__).resolve().parent / "c_abi_v0_9_7.txt"
+C_ABI_BASELINE = Path(__file__).resolve().parent / "c_abi_baseline.txt"
 C_ABI_BREAKS = Path(__file__).resolve().parent / "c_abi_breaks.txt"
 NPM_INDEX_MJS = REPO_ROOT / "packages" / "npm" / "index.mjs"
 

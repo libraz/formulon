@@ -7,7 +7,8 @@
 # or renaming one leaves all four surfaces green and the break ships silently.
 # That is the gap this file closes.
 #
-# Regenerate: tools/dev/gen_c_abi_baseline.py (reads the tag, writes this file).
+# Regenerate: tools/dev/gen_c_abi_baseline.py <tag> (reads the tag, writes this
+# file). One generation only -- rebasing onto a newer tag replaces it.
 # Do NOT hand-edit to make a check pass. A deliberate break is recorded in
 # tools/dev/c_abi_breaks.txt instead, so it stays visible in review and can be
 # carried into the CHANGELOG and the migration notes.

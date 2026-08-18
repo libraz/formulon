@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """Regenerates the released C ABI baseline from a git tag.
 
-The baseline (`c_abi_v0_9_7.txt`) is the surface a third-party consumer
+The baseline (`c_abi_baseline.txt`) is the surface a third-party consumer
 compiled against, which is what makes a deletion or rename of a base entry
 point a real break rather than a refactor. It is generated rather than
 hand-written so it cannot drift into "whatever the header says today", which
 would make the guard vacuous.
 
-Run this only to add a newly released tag's surface, never to silence a
+It holds one generation: the most recently released tag. The file name is
+fixed so that cutting a release does not require editing the checker, and
+the tag it was taken from is named in its first line. Rebase it *after* the
+tag exists, as the last step of a release -- at which point every entry in
+`c_abi_breaks.txt` that the new baseline absorbs can be dropped, since the
+ledger only has to explain breaks against the current baseline.
+
+Run this only to rebase onto a newly released tag, never to silence a
 failing check -- a deliberate break belongs in `c_abi_breaks.txt`.
 
 Usage:
@@ -36,7 +43,8 @@ PREAMBLE = """# Released C ABI surface, as shipped in {tag}.
 # or renaming one leaves all four surfaces green and the break ships silently.
 # That is the gap this file closes.
 #
-# Regenerate: tools/dev/gen_c_abi_baseline.py (reads the tag, writes this file).
+# Regenerate: tools/dev/gen_c_abi_baseline.py <tag> (reads the tag, writes this
+# file). One generation only -- rebasing onto a newer tag replaces it.
 # Do NOT hand-edit to make a check pass. A deliberate break is recorded in
 # tools/dev/c_abi_breaks.txt instead, so it stays visible in review and can be
 # carried into the CHANGELOG and the migration notes.
@@ -62,7 +70,7 @@ def main(argv: list[str]) -> int:
         f"{ret} {name}({', '.join(params) if params else 'void'})"
         for name, (ret, params) in sorted(declarations.items())
     ]
-    out = HERE / f"c_abi_{tag.replace('.', '_')}.txt"
+    out = HERE / "c_abi_baseline.txt"
     out.write_text(PREAMBLE.format(tag=tag) + "\n" + "\n".join(lines) + "\n", encoding="utf-8")
     print(f"gen_c_abi_baseline: wrote {len(lines)} declarations to {out.relative_to(HERE.parents[1])}")
     return 0

@@ -1,6 +1,6 @@
 # Acknowledged divergences from the released C ABI baseline.
 #
-# Every entry point in `c_abi_v0_9_7.txt` must still be declared in
+# Every entry point in `c_abi_baseline.txt` must still be declared in
 # `src/c_api/formulon_c.h` with the same signature, unless it is listed here.
 # The list is a ledger, not an allowlist to grow at will: adding a line is the
 # act of deciding that a break is worth making, and a `removed` or `signature`
@@ -24,7 +24,7 @@
 # and changes size is a calling convention change this file cannot see. The
 # `static_assert(sizeof(...))` tripwires in the C ABI tests pin those.
 
-# -- 1.0 entry-point consolidation (one entry point per operation) ------------
+# -- v0.10.0 entry-point consolidation (one entry point per operation) --------
 # All seven reach the CHANGELOG's Removed section with their per-symbol
 # replacement. Five of them had zero in-repo consumers, which is exactly why
 # this ledger exists: nothing else in the tree would have gone red.
