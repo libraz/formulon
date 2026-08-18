@@ -389,6 +389,21 @@ cases:
     setup: { A1: 1, B1: 2, A2: 3, B2: 4 }
     formula: "=INDEX(A1:B2,1,0)"
 
+  # The two-argument form against a 2D array is the one combination the
+  # suite never pinned, and it is where the "0 spans the whole dimension"
+  # rule has to declare which dimension it spans. The three-argument
+  # control sits next to it so the pair is read together: if the same
+  # literal 0 means different shapes depending only on whether col_num
+  # was written, that is a property of Excel worth recording, not an
+  # inconsistency to smooth over.
+  - id: index_zero_row_two_dimensional
+    description: "INDEX with row=0 and col_num omitted, against a 2D array"
+    formula: "=INDEX({1,2;3,4},0)"
+
+  - id: index_zero_both
+    description: "INDEX with row=0 and col=0 explicit, against the same 2D array"
+    formula: "=INDEX({1,2;3,4},0,0)"
+
   - id: index_out_of_range
     setup: { A1: 1, A2: 2, A3: 3 }
     formula: "=INDEX(A1:A3,5)"
