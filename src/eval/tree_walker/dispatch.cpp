@@ -253,6 +253,43 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
   return Value::array(out);
 }
 
+// Resolves a bounded `RangeOp`'s two endpoints and hands back the union
+// rectangle as the corner Refs `expand_range` takes. Endpoints may be
+// plain Refs (the simple `A1:B2` form) or reference-producing calls
+// (`OFFSET(...)` / `INDIRECT(...)`); anything else surfaces as `#REF!` /
+// `#VALUE!` per `resolve_range_endpoint`'s error code. Each corner keeps
+// its own sheet qualifier so `expand_range` stays the single place that
+// rejects a mismatched pair.
+//
+// Returns `false` with the endpoint's error code in `*out_err`.
+bool union_endpoint_refs(const parser::AstNode& lhs_ast, const parser::AstNode& rhs_ast, Arena& arena,
+                         const FunctionRegistry& registry, const EvalContext& ctx, parser::Reference* out_lhs,
+                         parser::Reference* out_rhs, ErrorCode* out_err) {
+  std::string_view lhs_sheet;
+  std::string_view rhs_sheet;
+  std::uint32_t lhs_top = 0;
+  std::uint32_t lhs_left = 0;
+  std::uint32_t lhs_bottom = 0;
+  std::uint32_t lhs_right = 0;
+  std::uint32_t rhs_top = 0;
+  std::uint32_t rhs_left = 0;
+  std::uint32_t rhs_bottom = 0;
+  std::uint32_t rhs_right = 0;
+  if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
+                              out_err) ||
+      !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
+                              out_err)) {
+    return false;
+  }
+  out_lhs->sheet = lhs_sheet;
+  out_lhs->row = std::min(lhs_top, rhs_top);
+  out_lhs->col = std::min(lhs_left, rhs_left);
+  out_rhs->sheet = rhs_sheet;
+  out_rhs->row = std::max(lhs_bottom, rhs_bottom);
+  out_rhs->col = std::max(lhs_right, rhs_right);
+  return true;
+}
+
 }  // namespace
 
 Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -559,27 +596,12 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         }
         continue;
       }
-      // Endpoints may be plain Refs (the simple `A1:B2` form) or
-      // reference-producing calls (`OFFSET(...)` / `INDIRECT(...)`);
-      // `resolve_range_endpoint` normalises both to a rectangle so we
-      // can union them and feed `expand_range` two synthetic Refs.
-      // Anything else (literals, arithmetic, named ranges, …) surfaces
-      // as #REF! / #VALUE! per the helper's error code.
-      std::string_view lhs_sheet;
-      std::string_view rhs_sheet;
-      std::uint32_t lhs_top = 0;
-      std::uint32_t lhs_left = 0;
-      std::uint32_t lhs_bottom = 0;
-      std::uint32_t lhs_right = 0;
-      std::uint32_t rhs_top = 0;
-      std::uint32_t rhs_left = 0;
-      std::uint32_t rhs_bottom = 0;
-      std::uint32_t rhs_right = 0;
+      // Union the two endpoints into one rectangle and let `expand_range`
+      // validate sheet equality (mismatched qualifiers surface as #REF!).
+      parser::Reference union_lhs{};
+      parser::Reference union_rhs{};
       ErrorCode endpoint_err = ErrorCode::Ref;
-      if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom,
-                                  &lhs_right, &endpoint_err) ||
-          !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom,
-                                  &rhs_right, &endpoint_err)) {
+      if (!union_endpoint_refs(lhs_ast, rhs_ast, arena, registry, ctx, &union_lhs, &union_rhs, &endpoint_err)) {
         const Value err = Value::error(endpoint_err);
         if (def->propagate_errors) {
           return err;
@@ -587,17 +609,6 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         values.push_back(err);
         continue;
       }
-      // Build the union rectangle's two corner Refs and let
-      // `expand_range` validate sheet equality (mismatched qualifiers
-      // surface as #REF!).
-      parser::Reference union_lhs{};
-      parser::Reference union_rhs{};
-      union_lhs.sheet = lhs_sheet;
-      union_lhs.row = std::min(lhs_top, rhs_top);
-      union_lhs.col = std::min(lhs_left, rhs_left);
-      union_rhs.sheet = rhs_sheet;
-      union_rhs.row = std::max(lhs_bottom, rhs_bottom);
-      union_rhs.col = std::max(lhs_right, rhs_right);
       auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
       if (!expanded) {
         const Value err = Value::error(expanded.error());
@@ -632,21 +643,10 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
           (lhs_ast.kind() == parser::NodeKind::Ref && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row)) ||
           (rhs_ast.kind() == parser::NodeKind::Ref && (rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row));
       if (!whole) {
-        std::string_view lhs_sheet;
-        std::string_view rhs_sheet;
-        std::uint32_t lhs_top = 0;
-        std::uint32_t lhs_left = 0;
-        std::uint32_t lhs_bottom = 0;
-        std::uint32_t lhs_right = 0;
-        std::uint32_t rhs_top = 0;
-        std::uint32_t rhs_left = 0;
-        std::uint32_t rhs_bottom = 0;
-        std::uint32_t rhs_right = 0;
+        parser::Reference union_lhs{};
+        parser::Reference union_rhs{};
         ErrorCode endpoint_err = ErrorCode::Ref;
-        if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom,
-                                    &lhs_right, &endpoint_err) ||
-            !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom,
-                                    &rhs_right, &endpoint_err)) {
+        if (!union_endpoint_refs(lhs_ast, rhs_ast, arena, registry, ctx, &union_lhs, &union_rhs, &endpoint_err)) {
           const Value err = Value::error(endpoint_err);
           if (def->propagate_errors) {
             return err;
@@ -654,14 +654,6 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
           values.push_back(err);
           continue;
         }
-        parser::Reference union_lhs{};
-        parser::Reference union_rhs{};
-        union_lhs.sheet = lhs_sheet;
-        union_lhs.row = std::min(lhs_top, rhs_top);
-        union_lhs.col = std::min(lhs_left, rhs_left);
-        union_rhs.sheet = rhs_sheet;
-        union_rhs.row = std::max(lhs_bottom, rhs_bottom);
-        union_rhs.col = std::max(lhs_right, rhs_right);
         auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
         if (!expanded) {
           const Value err = Value::error(expanded.error());
