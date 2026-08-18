@@ -126,11 +126,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `add_hyperlink_range` alongside `lastRow` / `lastCol` on a read-back
   hyperlink. OOXML and XLSB carry the full anchor span in both directions.
 - A pivot value filter can name the measure it ranks.
-  `PivotFilter::data_field_index` — reachable as `fm_pivot_filter_spec_ex_t`
-  with `fm_workbook_pivot_filter_add_ex`, `dataFieldIndex` and
-  `data_field_index` — indexes the table's data fields; a table with several
-  measures previously always scored the first one. Label and date filters
-  ignore the selector.
+  `PivotFilter::data_field_index` — reachable as `data_field_index` on the
+  `fm_pivot_filter_spec_t` that `fm_workbook_pivot_filter_add` takes, and as
+  `dataFieldIndex` / `data_field_index` in the bindings — indexes the table's
+  data fields; a table with several measures previously always scored the
+  first one. Label and date filters ignore the selector.
 - `formulon recalc` accepts `.xlsx` or `.xlsb` on both sides, the output
   container following the extension of `-o`, and warns on stderr when a load
   left undecoded formulas, undecoded defined names or dropped package parts,
