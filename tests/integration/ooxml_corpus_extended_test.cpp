@@ -300,6 +300,14 @@ pivot::PivotCache build_pivot_cache() {
   pivot::PivotCache cache;
   cache.set_cache_id(0U);
 
+  // A cache with no declared source cannot be saved -- Excel offers to
+  // repair any package containing one -- so the corpus books carry the
+  // same source the canonical writer fixtures do.
+  pivot::WorksheetSource& source = cache.mutable_worksheet_source();
+  source.present = true;
+  source.ref = "A1:B4";
+  source.sheet = "Sheet1";
+
   pivot::PivotCacheField region;
   region.name = "Region";
   region.shared_items.push_back(cache_text(cache, "North"));
