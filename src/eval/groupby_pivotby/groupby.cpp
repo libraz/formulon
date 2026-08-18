@@ -75,7 +75,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- arg 5: sort_order ----------------------------------------------------
   int sort_order = 0;
-  if (!read_optional_int(call, 5, arity, 0, arena, registry, ctx, &sort_order, &err)) {
+  if (!read_optional_sort_order(call, 5, arity, arena, registry, ctx, &sort_order, &err)) {
     return err;
   }
 

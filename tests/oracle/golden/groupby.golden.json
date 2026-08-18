@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-14T19:34:32Z"
+    "generated_at": "2026-08-18T04:43:10Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -55,7 +55,10 @@
       "id": "groupby_sort_order_zero_rejected",
       "formula": "=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, 0)",
       "setup": {},
-      "skipped": "sort_order 0 is outside Excel's domain for that argument (a signed column index, no zero member) and Excel returns #VALUE!. Formulon accepts it and returns the grouped spill, so a workbook that computes here errors in Excel. Isolated by varying one argument at a time: field_headers=0 and total_depth=0 are both accepted, and every form carrying sort_order=0 errors while 1 or omission spills."
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "groupby_unknown_name_error",

@@ -121,7 +121,7 @@ TEST(PivotBy, BareSumName) {
   // followed by the A/B body rows.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 0, 0, 0)");
+      "         {1;2;3;4}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 3U);
@@ -140,14 +140,14 @@ TEST(PivotBy, BareSumName) {
 TEST(PivotBy, BareSumFiltersRangeSourcedNonNumbers) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"X\";\"X\";\"X\"},"
-      "         {1;TRUE;\"text\";2}, SUM, 0, 0, 0, 0, 0)");
+      "         {1;TRUE;\"text\";2}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
   EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 2.0);
 }
 
 TEST(PivotBy, BareSumInvokedWhenRangeFilterKeepsNothing) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"A\"}, {\"X\";\"X\"}, {TRUE;\"text\"}, SUM, 0, 0, 0, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"A\"}, {\"X\";\"X\"}, {TRUE;\"text\"}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 0.0);
 }
@@ -156,7 +156,7 @@ TEST(PivotBy, BareAverageName) {
   // (A, X) = avg(10, 30) = 20; (A, Y) = 40; (B, X) = 20; (B, Y) = avg(60, 80) = 70.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"A\";\"B\";\"B\";\"B\"}, {\"X\";\"X\";\"Y\";\"X\";\"Y\";\"Y\"},"
-      "         {10;30;40;20;60;80}, AVERAGE, 0, 0, 0, 0, 0)");
+      "         {10;30;40;20;60;80}, AVERAGE, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 20.0);  // (A, X)
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 40.0);  // (A, Y)
@@ -167,7 +167,7 @@ TEST(PivotBy, BareAverageName) {
 TEST(PivotBy, BareCountAName) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, COUNTA, 0, 0, 0, 0, 0)");
+      "         {1;2;3;4}, COUNTA, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 1.0);
@@ -178,7 +178,7 @@ TEST(PivotBy, BareCountAName) {
 TEST(PivotBy, UnknownBareNameYieldsNameError) {
   // `NOPE_NAME` resolves neither in NameEnv nor in the registry; the raw
   // NameRef evaluation surfaces #NAME?.
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, NOPE_NAME, 0, 0, 0, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, NOPE_NAME, 0, 0,, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
@@ -191,7 +191,7 @@ TEST(PivotBy, NameBoundLambdaViaLet) {
   const Value v = EvalSrc(
       "=LET(agg, LAMBDA(v, SUM(v)),"
       "     PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "             {1;2;3;4}, agg, 0, 0, 0, 0, 0))");
+      "             {1;2;3;4}, agg, 0, 0,, 0))");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
@@ -208,7 +208,7 @@ TEST(PivotBy, FieldHeadersZeroNoHeaders) {
   // independent of field_headers.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 0, 0, 0)");
+      "         {1;2;3;4}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // Row 0 is the col-axis label row; its corner cell is blank.
   EXPECT_TRUE(Cell(v, 0, 0).is_blank());
@@ -263,7 +263,7 @@ TEST(PivotBy, FieldHeadersOneCopiesInputHeaders) {
   // row_fields header label ("Row").
   const Value v = EvalSrc(
       "=PIVOTBY({\"Row\";\"A\";\"A\";\"B\";\"B\"}, {\"Col\";\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {\"V\";1;2;3;4}, SUM, 1, 0, 0, 0, 0)");
+      "         {\"V\";1;2;3;4}, SUM, 1, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "Row");
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
@@ -272,7 +272,7 @@ TEST(PivotBy, FieldHeadersOneCopiesInputHeaders) {
 
 TEST(PivotBy, FieldHeadersTwoSynthesizesDefaults) {
   // Inputs have no header row; output emits a synthesised "Field 1".
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 2, 0, 0, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 2, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "Field 1");
 }
@@ -280,13 +280,13 @@ TEST(PivotBy, FieldHeadersTwoSynthesizesDefaults) {
 TEST(PivotBy, FieldHeadersThreeBothInputsHaveAndOutputEmits) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"R\";\"A\";\"B\"}, {\"C\";\"X\";\"Y\"},"
-      "         {\"V\";1;2}, SUM, 3, 0, 0, 0, 0)");
+      "         {\"V\";1;2}, SUM, 3, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "R");
 }
 
 TEST(PivotBy, FieldHeadersOutOfRangeYieldsValueError) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, SUM, 5, 0, 0, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, SUM, 5, 0,, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -299,7 +299,7 @@ TEST(PivotBy, RowTotalDepthZeroNoColumnTotals) {
   // No "column totals" row anywhere.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 0, 0, 0)");
+      "         {1;2;3;4}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // Col-axis row + 2 body rows, no totals row.
   EXPECT_EQ(v.as_array_rows(), 3U);
@@ -308,7 +308,7 @@ TEST(PivotBy, RowTotalDepthZeroNoColumnTotals) {
 TEST(PivotBy, RowTotalDepthPositiveOneColumnTotalsAtBottom) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 1, 0, 0, 0)");
+      "         {1;2;3;4}, SUM, 0, 1,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 4U);
   // Last row is the totals row: ["合計", X-total=4, Y-total=6].
@@ -320,7 +320,7 @@ TEST(PivotBy, RowTotalDepthPositiveOneColumnTotalsAtBottom) {
 TEST(PivotBy, RowTotalDepthNegativeOneColumnTotalsAtTop) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, -1, 0, 0, 0)");
+      "         {1;2;3;4}, SUM, 0, -1,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 4U);
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "合計");
@@ -329,7 +329,7 @@ TEST(PivotBy, RowTotalDepthNegativeOneColumnTotalsAtTop) {
 }
 
 TEST(PivotBy, RowTotalDepthOutOfRangeYieldsValueError) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, SUM, 0, 99, 0, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, SUM, 0, 99,, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -341,7 +341,7 @@ TEST(PivotBy, RowTotalDepthOutOfRangeYieldsValueError) {
 TEST(PivotBy, ColTotalDepthZeroNoRowTotals) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 0, 0, 0)");
+      "         {1;2;3;4}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // No row-totals column.
   EXPECT_EQ(v.as_array_cols(), 3U);
@@ -350,7 +350,7 @@ TEST(PivotBy, ColTotalDepthZeroNoRowTotals) {
 TEST(PivotBy, ColTotalDepthPositiveOneRowTotalsOnRight) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 0, 1, 0)");
+      "         {1;2;3;4}, SUM, 0, 0,, 1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_cols(), 4U);
   // Last column on each body row is the row-total: A->3, B->7 (row 0 is
@@ -364,7 +364,7 @@ TEST(PivotBy, ColTotalDepthNegativeOneRowTotalsOnLeft) {
   // the row label column.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"Y\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 0, -1, 0)");
+      "         {1;2;3;4}, SUM, 0, 0,, -1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_cols(), 4U);
   // Col layout: [row_label, row_total, X, Y]. Row 0 is the col-axis
@@ -376,7 +376,7 @@ TEST(PivotBy, ColTotalDepthNegativeOneRowTotalsOnLeft) {
 }
 
 TEST(PivotBy, ColTotalDepthOutOfRangeYieldsValueError) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, SUM, 0, 0, 0, 99, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, SUM, 0, 0,, 99)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -385,12 +385,12 @@ TEST(PivotBy, ColTotalDepthOutOfRangeYieldsValueError) {
 // row_sort_order
 // ---------------------------------------------------------------------------
 
-TEST(PivotBy, RowSortOrderZeroPreservesFirstOccurrence) {
-  // Row groups in input order: B, A, C. With sort_order=0 they stay that
-  // way. Row 0 is the col-axis label row.
+TEST(PivotBy, OmittedRowSortOrderPreservesFirstOccurrence) {
+  // Row groups in input order: B, A, C. With the slot left out they stay
+  // that way. Row 0 is the col-axis label row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"B\";\"A\";\"C\";\"A\"}, {\"X\";\"X\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 0, 0, 0)");
+      "         {1;2;3;4}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "B");
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A");
@@ -402,7 +402,7 @@ TEST(PivotBy, RowSortOrderPositiveAscendingByRowTotal) {
   // the col-axis label row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"B\";\"A\";\"C\";\"A\"}, {\"X\";\"X\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 1, 1, 0)");
+      "         {1;2;3;4}, SUM, 0, 0, 1, 1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "B");
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "C");
@@ -413,7 +413,7 @@ TEST(PivotBy, RowSortOrderNegativeDescendingByRowTotal) {
   // Row 0 is the col-axis label row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"B\";\"A\";\"C\";\"A\"}, {\"X\";\"X\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, -1, 1, 0)");
+      "         {1;2;3;4}, SUM, 0, 0, -1, 1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "C");
@@ -424,11 +424,27 @@ TEST(PivotBy, RowSortOrderNegativeDescendingByRowTotal) {
 // col_sort_order
 // ---------------------------------------------------------------------------
 
-TEST(PivotBy, ColSortOrderZeroPreservesFirstOccurrence) {
+// Both slots take the same signed-column-index domain, which has no zero
+// member. Excel pins the row half (pivotby_row_sort_order_zero_rejected);
+// the column half is held to the same rule so a symmetric argument pair
+// does not accept on one side what it rejects on the other.
+TEST(PivotBy, SuppliedRowSortOrderZeroYieldsValueError) {
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(PivotBy, SuppliedColSortOrderZeroYieldsValueError) {
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, , 1, 0)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(PivotBy, OmittedColSortOrderPreservesFirstOccurrence) {
   // Col groups in input order: Y, X, Z.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"A\";\"A\"}, {\"Y\";\"X\";\"Z\";\"X\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 0, 0, 0)");
+      "         {1;2;3;4}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // Col layout: row_label | Y | X | Z. Row 0 is the col-axis label row;
   // row 1 is the single "A" body row.
@@ -441,7 +457,7 @@ TEST(PivotBy, ColSortOrderPositiveAscendingByColTotal) {
   // Col totals: Y=1, X=6, Z=3. Ascending col-total: Y(1), Z(3), X(6).
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"A\";\"A\"}, {\"Y\";\"X\";\"Z\";\"X\"},"
-      "         {1;2;3;4}, SUM, 0, 1, 0, 0, 1)");
+      "         {1;2;3;4}, SUM, 0, 1,, 0, 1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // Layout: col-axis row (row 0, always emitted), the single "A" body
   // row (row 1), then the bottom totals row (row_total_depth=1, row 2).
@@ -456,7 +472,7 @@ TEST(PivotBy, ColSortOrderNegativeDescendingByColTotal) {
   // Descending: X(6), Z(3), Y(1). Row 0 is the col-axis label row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"A\";\"A\"}, {\"Y\";\"X\";\"Z\";\"X\"},"
-      "         {1;2;3;4}, SUM, 0, 1, 0, 0, -1)");
+      "         {1;2;3;4}, SUM, 0, 1,, 0, -1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 6.0);  // X
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 3.0);  // Z
@@ -471,7 +487,7 @@ TEST(PivotBy, FilterArrayBasicIncludeExclude) {
   // Mask drops the second row (B, X, 3); only A rows and (B, Y, 4) survive.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"B\";\"A\";\"B\"}, {\"X\";\"X\";\"Y\";\"Y\"},"
-      "         {1;3;2;4}, SUM, 0, 0, 0, 0, 0,"
+      "         {1;3;2;4}, SUM, 0, 0,, 0,,"
       "         {TRUE;FALSE;TRUE;TRUE})");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
@@ -490,7 +506,7 @@ TEST(PivotBy, FilterArrayBasicIncludeExclude) {
 
 TEST(PivotBy, FilterArrayLengthMismatchYieldsValueError) {
   const Value v = EvalSrc(
-      "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0,"
+      "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0,, 0,,"
       "         {TRUE;FALSE;TRUE})");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
@@ -498,7 +514,7 @@ TEST(PivotBy, FilterArrayLengthMismatchYieldsValueError) {
 
 TEST(PivotBy, FilterArrayAllExcludedYieldsValueError) {
   const Value v = EvalSrc(
-      "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0,"
+      "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0,, 0,,"
       "         {FALSE;FALSE})");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
@@ -514,7 +530,7 @@ TEST(PivotBy, PerCellErrorIsolation) {
   // valid numbers.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\"}, {\"X\";\"Y\";\"Y\"},"
-      "         {0;5;4}, LAMBDA(v, 1/SUM(v)), 0, 0, 0, 0, 0)");
+      "         {0;5;4}, LAMBDA(v, 1/SUM(v)), 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 3U);
@@ -541,7 +557,7 @@ TEST(PivotBy, JapaneseFoldingAppliesToRowAndColKeys) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"\xef\xbd\xb1\";\"\xe3\x82\xa2\"},"
       "         {\"\xef\xbd\xb6\";\"\xe3\x82\xab\"},"  // ｶ folds to カ
-      "         {10;20}, SUM, 0, 0, 0, 0, 0)");
+      "         {10;20}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 2U);
   EXPECT_EQ(v.as_array_cols(), 2U);
@@ -553,14 +569,14 @@ TEST(PivotBy, JapaneseFoldingAppliesToRowAndColKeys) {
 // ---------------------------------------------------------------------------
 
 TEST(PivotBy, MismatchedRowCountsRowVsValuesYieldsValueError) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\";\"C\"}, {\"X\";\"Y\";\"Z\"}, {1;2}, SUM, 0, 0, 0, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\";\"C\"}, {\"X\";\"Y\";\"Z\"}, {1;2}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(PivotBy, MismatchedRowCountsColVsValuesYieldsValueError) {
   // row_fields has 2 rows, values has 2 rows, col_fields has 3 -> #VALUE!.
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\";\"Z\"}, {1;2}, SUM, 0, 0, 0, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\";\"Z\"}, {1;2}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -897,7 +913,7 @@ TEST(PivotBy, MultiColumnRowsWithFilterArray) {
   // rows = 1 + 0 + 1 + 1 = 3, cols = 2 + 1 + 1 = 4.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\",\"P\";\"B\",\"Q\";\"A\",\"P\"}, {\"X\";\"Y\";\"X\"},"
-      "         {1;2;3}, SUM, 0, -1, 0, 1, 0, {TRUE;FALSE;TRUE})");
+      "         {1;2;3}, SUM, 0, -1,, 1,, {TRUE;FALSE;TRUE})");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 4U);
@@ -923,26 +939,26 @@ TEST(PivotBy, MultiColumnRowsWithFilterArray) {
 // ---------------------------------------------------------------------------
 
 TEST(PivotBy, NonLambdaNonNameAggregatorYieldsValueError) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, 42, 0, 0, 0, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, 42, 0,, 0,, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(PivotBy, LambdaWrongArityYieldsValueError) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, LAMBDA(a, b, a+b), 0, 0, 0, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, LAMBDA(a, b, a+b), 0, 0,, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(PivotBy, RowSortOrderAbsTwoYieldsValueError) {
   // First-commit scope: only ±1 / 0 are supported on the sort orders.
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 2, 0, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 2, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(PivotBy, ColSortOrderAbsTwoYieldsValueError) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 2)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0,, 0, 2)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -963,7 +979,7 @@ TEST(PivotBy, AggregatorReturningArrayYieldsCalcInThatCell) {
   // SEQUENCE returns multi-cell; each body cell becomes #CALC!.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\"}, {\"X\";\"Y\";\"X\"},"
-      "         {1;2;3}, LAMBDA(v, SEQUENCE(1, 3)), 0, 0, 0, 0, 0)");
+      "         {1;2;3}, LAMBDA(v, SEQUENCE(1, 3)), 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_TRUE(Cell(v, 1, 1).is_error());
   EXPECT_EQ(Cell(v, 1, 1).as_error(), ErrorCode::Calc);
@@ -1050,7 +1066,7 @@ TEST(PivotBy, ColTotalDepthTwoEmitsNoDiagnostic) {
   // announce a degraded grand-total-only layout.
   ::formulon::test::LogRecorder log;
   ASSERT_TRUE(log.probe_and_clear()) << "log sink is not carrying records; the assertion below would be vacuous";
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\",\"p\";\"X\",\"q\"}, {10;20}, SUM, 0, 1, 0, 2)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\",\"p\";\"X\",\"q\"}, {10;20}, SUM, 0, 1, , 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_TRUE(log.empty()) << "unexpected diagnostic: " << log.joined();
 }
@@ -1064,7 +1080,7 @@ TEST(PivotBy, ColTotalDepthPositiveTwoMatchesMacExcelObservedMatrix) {
   //   [B, blank, blank, 2, 2, 2]
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"},"
-      "         {1;2;3}, SUM, 0, -1, 0, 2, 0)");
+      "         {1;2;3}, SUM, 0, -1,, 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 5U);
   ASSERT_EQ(v.as_array_cols(), 6U);
@@ -1101,7 +1117,7 @@ TEST(PivotBy, ColTotalDepthNegativeTwoMatchesMacExcelObservedMatrix) {
   // subtotal immediately before its leaf blocks.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"},"
-      "         {1;2;3}, SUM, 0, -1, 0, -2, 0)");
+      "         {1;2;3}, SUM, 0, -1,, -2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 5U);
   ASSERT_EQ(v.as_array_cols(), 6U);
@@ -1127,7 +1143,7 @@ TEST(PivotBy, ColTotalDepthNegativeTwoMatchesMacExcelObservedMatrix) {
 TEST(PivotBy, ColTotalDepthTwoTilesEveryValueColumn) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"},"
-      "         {1,10;2,20;3,30}, SUM, 0, 0, 0, 2, 0)");
+      "         {1,10;2,20;3,30}, SUM, 0, 0,, 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 4U);
   ASSERT_EQ(v.as_array_cols(), 11U);  // key + (leaf, subtotal) * 2 outers * V=2 + grand V=2
@@ -1150,7 +1166,7 @@ TEST(PivotBy, RowAndColumnNestedSubtotalsIntersectAtBothOuterKeys) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"},"
       "         {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"},"
-      "         {10;20;30}, SUM, 0, 2, 0, 2, 0)");
+      "         {10;20;30}, SUM, 0, 2,, 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 8U);
   ASSERT_EQ(v.as_array_cols(), 7U);
@@ -1173,7 +1189,7 @@ TEST(PivotBy, ColSubtotalSortKeepsOuterGroupsContiguous) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"A\";\"A\"},"
       "         {\"Y\",\"N\";\"X\",\"M\";\"Y\",\"O\";\"X\",\"P\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 0, 2, 1)");
+      "         {1;2;3;4}, SUM, 0, 0, , 2, 1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_cols(), 8U);
   // col_sort_order=1 orders leaves by totals Y(1), X(2), Y(3), X(4), but
@@ -1191,7 +1207,7 @@ TEST(PivotBy, ColSubtotalFilterAndErrorRemainLocal) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"},"
       "         {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\";\"Y\",\"N\"},"
-      "         {0;5;4;8}, LAMBDA(v, 1/SUM(v)), 0, 0, 0, 2, 0,"
+      "         {0;5;4;8}, LAMBDA(v, 1/SUM(v)), 0, 0,, 2,,"
       "         {TRUE;FALSE;TRUE;TRUE})");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 4U);
@@ -1211,7 +1227,7 @@ TEST(PivotBy, ColSubtotalFilterAndErrorRemainLocal) {
 TEST(PivotBy, ColTotalDepthTwoWithOneColumnLevelKeepsOrdinaryLayout) {
   ::formulon::test::LogRecorder log;
   ASSERT_TRUE(log.probe_and_clear()) << "log sink is not carrying records; the assertion below would be vacuous";
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 2, 0)");
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0,, 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_cols(), 4U);  // key + two leaves + ordinary grand total
   // Row 0 is the col-axis label row; row 1 is the first body row (A).

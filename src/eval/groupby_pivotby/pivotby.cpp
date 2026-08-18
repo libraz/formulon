@@ -171,7 +171,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // every (row_group, col_group) cell of the row). 0 preserves first-
   // occurrence order; positive means ascending; negative descending.
   int row_sort_order = 0;
-  if (!read_optional_int(call, 6, arity, 0, arena, registry, ctx, &row_sort_order, &err)) {
+  if (!read_optional_sort_order(call, 6, arity, arena, registry, ctx, &row_sort_order, &err)) {
     return err;
   }
 
@@ -187,8 +187,12 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // -- arg 8: col_sort_order, default 0 ------------------------------------
+  // Excel pins the zero rejection on the row slot; this slot takes the same
+  // signed-column-index domain, so the same rule is applied to both rather
+  // than leaving one half of a symmetric argument pair accepting a value the
+  // other rejects.
   int col_sort_order = 0;
-  if (!read_optional_int(call, 8, arity, 0, arena, registry, ctx, &col_sort_order, &err)) {
+  if (!read_optional_sort_order(call, 8, arity, arena, registry, ctx, &col_sort_order, &err)) {
     return err;
   }
 

@@ -78,7 +78,7 @@ const Value& Cell(const Value& v, std::uint32_t r, std::uint32_t c) {
 
 TEST(GroupBy, SingleKeyLambdaAggregatorSum) {
   // Three groups (A=10+30=40, B=20, C=40) ordered by first occurrence.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\";\"C\"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\";\"C\"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 2U);
@@ -96,7 +96,7 @@ TEST(GroupBy, SingleKeyLambdaAggregatorSum) {
 // ---------------------------------------------------------------------------
 
 TEST(GroupBy, BareSumName) {
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 2U);
   EXPECT_EQ(v.as_array_cols(), 2U);
@@ -107,21 +107,21 @@ TEST(GroupBy, BareSumName) {
 }
 
 TEST(GroupBy, BareAverageName) {
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"A\";\"B\"}, {10;30;20}, AVERAGE, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"A\";\"B\"}, {10;30;20}, AVERAGE, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 20.0);
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 20.0);
 }
 
 TEST(GroupBy, BareSumFiltersRangeSourcedNonNumbers) {
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"A\";\"B\";\"B\"}, {1;TRUE;\"text\";2}, SUM, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"A\";\"B\";\"B\"}, {1;TRUE;\"text\";2}, SUM, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 1.0);
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 2.0);
 }
 
 TEST(GroupBy, BareSumInvokedWhenRangeFilterKeepsNothing) {
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"A\"}, {TRUE;\"text\"}, SUM, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"A\"}, {TRUE;\"text\"}, SUM, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 0.0);
 }
@@ -131,7 +131,7 @@ TEST(GroupBy, BareCountAName) {
   // behaves like COUNT for the registered eager-dispatch path. (Bare COUNT
   // itself rides the lazy dispatch table and is intentionally not eligible
   // for Form C — the registry-only fallback ignores lazy entries.)
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\";\"A\"}, {1;2;3;4}, COUNTA, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\";\"A\"}, {1;2;3;4}, COUNTA, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 3.0);
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
@@ -152,7 +152,7 @@ TEST(GroupBy, UnknownBareNameYieldsNameError) {
 TEST(GroupBy, NameBoundLambdaViaLet) {
   const Value v = EvalSrc(
       "=LET(agg, LAMBDA(v, SUM(v)),"
-      "     GROUPBY({\"A\";\"B\";\"A\"}, {1;2;3}, agg, 0, 0, 0))");
+      "     GROUPBY({\"A\";\"B\";\"A\"}, {1;2;3}, agg, 0, 0))");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 2.0);
@@ -165,7 +165,7 @@ TEST(GroupBy, NameBoundLambdaViaLet) {
 TEST(GroupBy, MultiColumnValuesAggregateIndependently) {
   // values has two columns; the output adds two aggregated columns.
   // Group A: col1 (10+30)=40, col2 (1+3)=4. Group B: col1=20, col2=2.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10,1;20,2;30,3}, SUM, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10,1;20,2;30,3}, SUM, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 2U);
   EXPECT_EQ(v.as_array_cols(), 3U);
@@ -181,7 +181,7 @@ TEST(GroupBy, MultiColumnValuesAggregateIndependently) {
 
 TEST(GroupBy, FieldHeadersZeroNoHeaders) {
   // No headers anywhere; only data.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {1;2;3}, SUM, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {1;2;3}, SUM, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // First row should be a data group (key + agg), not a header.
   EXPECT_TRUE(Cell(v, 0, 0).is_text());
@@ -190,7 +190,7 @@ TEST(GroupBy, FieldHeadersZeroNoHeaders) {
 
 TEST(GroupBy, FieldHeadersOneCopiesInputHeaders) {
   // Row 0 of inputs is the header row and is excluded from data.
-  const Value v = EvalSrc("=GROUPBY({\"Grp\";\"A\";\"B\";\"A\"}, {\"Sales\";1;2;3}, SUM, 1, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"Grp\";\"A\";\"B\";\"A\"}, {\"Sales\";1;2;3}, SUM, 1, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // Header row first.
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "Grp");
@@ -204,14 +204,14 @@ TEST(GroupBy, FieldHeadersOneCopiesInputHeaders) {
 
 TEST(GroupBy, FieldHeadersTwoSynthesizesDefaults) {
   // Inputs have no headers; output emits "Field 1" / "Value 1" defaults.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 2, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 2, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "Field 1");
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "Value 1");
 }
 
 TEST(GroupBy, FieldHeadersThreeBothInputsHaveAndOutputEmits) {
-  const Value v = EvalSrc("=GROUPBY({\"H1\";\"A\";\"B\"}, {\"V1\";10;20}, SUM, 3, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"H1\";\"A\";\"B\"}, {\"V1\";10;20}, SUM, 3, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "H1");
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "V1");
@@ -228,14 +228,14 @@ TEST(GroupBy, FieldHeadersOutOfRangeYieldsValueError) {
 // ---------------------------------------------------------------------------
 
 TEST(GroupBy, TotalDepthZeroNoTotals) {
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // Two group rows; no extra total row.
   EXPECT_EQ(v.as_array_rows(), 2U);
 }
 
 TEST(GroupBy, TotalDepthOneGrandTotalAtBottom) {
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 1, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
   // Last row is the grand total: "合計" / 30.
@@ -244,7 +244,7 @@ TEST(GroupBy, TotalDepthOneGrandTotalAtBottom) {
 }
 
 TEST(GroupBy, TotalDepthNegativeOneGrandTotalAtTop) {
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, -1, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, -1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "合計");
@@ -255,7 +255,7 @@ TEST(GroupBy, TotalDepthTwoAddsASubtotalRowPerOuterGroup) {
   // The outer level is the first key column, so X covers two groups and Y
   // one. Each outer group's rows are followed by its subtotal, and the
   // grand total closes the block.
-  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 2, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 6U);  // 3 group rows + 2 subtotals + 1 grand total
   ASSERT_EQ(v.as_array_cols(), 3U);  // 2 key cols + 1 value col
@@ -278,7 +278,7 @@ TEST(GroupBy, TotalDepthTwoAddsASubtotalRowPerOuterGroup) {
 }
 
 TEST(GroupBy, TotalDepthNegativeTwoPutsEverySubtotalAboveItsGroup) {
-  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, -2, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, -2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 6U);
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "総計");
@@ -292,7 +292,7 @@ TEST(GroupBy, TotalDepthNegativeTwoPutsEverySubtotalAboveItsGroup) {
 TEST(GroupBy, TotalDepthTwoWithOneKeyColumnKeepsTheGrandTotalOnlyLayout) {
   // With a single key column every subtotal would just restate its group,
   // so the ±1 layout stands.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 2, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
@@ -323,7 +323,7 @@ TEST(GroupBy, TotalDepthTwoEmitsNoDiagnostic) {
   // stderr assertion would hold even if the code did warn.
   ::formulon::test::LogRecorder log;
   ASSERT_TRUE(log.probe_and_clear()) << "log sink is not carrying records; the assertion below would be vacuous";
-  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 2, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_TRUE(log.empty()) << "unexpected diagnostic: " << log.joined();
 }
@@ -338,13 +338,49 @@ TEST(GroupBy, TotalDepthOutOfRangeYieldsValueError) {
 // sort_order
 // ---------------------------------------------------------------------------
 
-TEST(GroupBy, SortOrderZeroPreservesFirstOccurrence) {
+TEST(GroupBy, OmittedSortOrderPreservesFirstOccurrence) {
   // Groups in input order: B, A, C.
-  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "B");
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "C");
+}
+
+// A slot left empty between commas is an omission, not the value 0, so it
+// reaches the same default rather than the rejection below.
+TEST(GroupBy, EmptySortOrderSlotIsAnOmission) {
+  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, , {TRUE;TRUE;TRUE;TRUE})");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "B");
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "C");
+}
+
+// The argument is a signed column index and that domain has no zero member,
+// so spelling the default out loud is rejected even though omitting it is
+// not. Measured against Excel (groupby_sort_order_zero_rejected).
+TEST(GroupBy, SuppliedSortOrderZeroYieldsValueError) {
+  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, 0)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// A fraction truncates toward zero before the domain check, so it lands on
+// the same rejection rather than resolving to a column.
+TEST(GroupBy, SortOrderTruncatingToZeroYieldsValueError) {
+  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, 0.5)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// An unresolvable aggregator wins over the sort_order check. Excel agrees
+// (groupby_unknown_name_error carries sort_order 0 and still answers
+// #NAME?), so the two checks are ordered, not interchangeable.
+TEST(GroupBy, UnknownAggregatorOutranksASuppliedSortOrderZero) {
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, NOPE_THIS_IS_NOT_A_FUNCTION, 0, 0, 0)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
 TEST(GroupBy, SortOrderPositiveAscendingByAggregate) {
@@ -381,7 +417,7 @@ TEST(GroupBy, SortOrderOutOfRangeYieldsValueError) {
 
 TEST(GroupBy, FilterArrayBasicIncludeExclude) {
   // Mask drops the second row (B) so only A remains.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, 0, {TRUE;FALSE;TRUE})");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, , {TRUE;FALSE;TRUE})");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 1U);
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "A");
@@ -410,7 +446,7 @@ TEST(GroupBy, PerGroupErrorIsolation) {
   // aggregator surfaces #DIV/0! for that group; group B sums to 5 -> the
   // aggregator returns 0.2. Mac Excel keeps both groups in the result; the
   // failing group shows the error verbatim and the rest are still computed.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {0;5}, LAMBDA(v, 1/SUM(v)), 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {0;5}, LAMBDA(v, 1/SUM(v)), 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 2U);
   // A's aggregate errored.
@@ -466,7 +502,7 @@ TEST(GroupBy, JapaneseKeyFoldingHalfWidthMatchesFullWidth) {
   // Half-width "ｱ" (U+FF71) and full-width "ア" (U+30A2) should fold to the
   // same group key under fold_jp_text. The aggregator therefore sees both
   // rows in a single group totalling 30.
-  const Value v = EvalSrc("=GROUPBY({\"\xef\xbd\xb1\";\"\xe3\x82\xa2\"}, {10;20}, SUM, 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"\xef\xbd\xb1\";\"\xe3\x82\xa2\"}, {10;20}, SUM, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 1U);
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 30.0);
@@ -480,7 +516,7 @@ TEST(GroupBy, AggregatorReturningArrayYieldsCalcInThatCell) {
   // SEQUENCE returns a multi-cell array. GROUPBY has a single cell per
   // (group, value-column) slot, so each aggregated cell is #CALC!.
   // The remaining columns / rows are still rendered.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, LAMBDA(v, SEQUENCE(1, 3)), 0, 0, 0)");
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, LAMBDA(v, SEQUENCE(1, 3)), 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_TRUE(Cell(v, 0, 1).is_error());
   EXPECT_EQ(Cell(v, 0, 1).as_error(), ErrorCode::Calc);

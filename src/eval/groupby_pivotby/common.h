@@ -117,10 +117,18 @@ bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_ind
                               int default_value, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                               const int* allowed, std::size_t count, int* out, Value* out_err);
 
-/// Optional plain integer with a default.
-bool read_optional_int(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
-                       Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out,
-                       Value* out_err);
+/// Reads an optional `sort_order` slot, defaulting to 0.
+///
+/// Excel reads the argument as a signed column index, and that domain has no
+/// zero member: a call that spells `0` there returns #VALUE! even though
+/// leaving the argument out behaves as "preserve first-occurrence order".
+/// The two are told apart the way the rest of the engine does it — an absent
+/// slot and a syntactically omitted one (`f(a,,c)`) both take the default,
+/// and only a supplied value is rejected. Bounds-checking the index against
+/// the value-column count stays with the caller, which is the only side that
+/// knows the count.
+bool read_optional_sort_order(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, Arena& arena,
+                              const FunctionRegistry& registry, const EvalContext& ctx, int* out, Value* out_err);
 
 /// Computes input/output header layout from `field_headers ∈ {0,1,2,3}` and
 /// the input row count.

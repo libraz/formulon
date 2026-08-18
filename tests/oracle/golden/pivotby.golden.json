@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-14T21:26:21Z"
+    "generated_at": "2026-08-18T04:43:48Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -63,7 +63,10 @@
       "id": "pivotby_row_sort_order_zero_rejected",
       "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0)",
       "setup": {},
-      "skipped": "As groupby_sort_order_zero_rejected, on PIVOTBY's row_sort_order slot: Excel returns #VALUE! for a literal 0, Formulon returns the pivot spill."
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "pivotby_unknown_name_error",

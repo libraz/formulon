@@ -19,6 +19,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
@@ -297,14 +298,28 @@ bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_ind
   return read_int_in_set(call.as_call_arg(arg_index), arena, registry, ctx, allowed, count, out, out_err);
 }
 
-bool read_optional_int(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
-                       Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out,
-                       Value* out_err) {
-  *out = default_value;
+bool read_optional_sort_order(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, Arena& arena,
+                              const FunctionRegistry& registry, const EvalContext& ctx, int* out, Value* out_err) {
+  *out = 0;
   if (arity <= arg_index) {
     return true;
   }
-  return read_int(call.as_call_arg(arg_index), arena, registry, ctx, out, out_err);
+  const parser::AstNode& arg = call.as_call_arg(arg_index);
+  if (is_omitted_arg(arg)) {
+    return true;
+  }
+  if (!read_int(arg, arena, registry, ctx, out, out_err)) {
+    return false;
+  }
+  if (*out == 0) {
+    // Reached only by a supplied value, so the default is still available
+    // through omission. A fraction truncates before this check, which puts
+    // `0.5` out of domain as well -- consistent with reading the slot as a
+    // column index rather than as a magnitude.
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  return true;
 }
 
 Expected<HeaderLayout, ErrorCode> resolve_header_layout(int field_headers, std::uint32_t input_rows) {
