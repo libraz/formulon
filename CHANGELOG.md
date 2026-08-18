@@ -232,6 +232,24 @@ have no binding to notice their absence and no test in this repo calls them.
 
 ### Fixed
 
+- A saved PivotTable closes each field's `<items>` with the subtotal entries
+  the field displays — `<item t="default"/>` for the implicit subtotal, or one
+  token per explicitly selected function. Excel treats a field whose item list
+  lacks them as damaged and offers to repair the workbook on open, so every
+  package carrying a pivot was affected: one built through the API, and one
+  loaded from Excel and saved again, which also dropped the entries Excel had
+  written. Nothing short of opening the file reported it — the markers are
+  optional in the schema, and the reader skips them deliberately because the
+  selection is modelled as `defaultSubtotal` / the `*Subtotal` family rather
+  than as items, so a read-write round trip compared equal while shedding
+  them.
+- A namespace-qualified attribute retained from a consumed part is re-emitted
+  together with the binding for its prefix, searched from the element up
+  through its ancestors because the declaration usually sits on the part root.
+  Excel writes `mc:Ignorable` and `xr:uid` on the pivot parts; re-emitting one
+  with nothing binding its prefix produced XML that is not well-formed, so
+  loading an Excel-authored workbook with a pivot and saving it yielded a
+  package no parser would accept.
 - `DATEDIF` matches its unit argument case-insensitively for every documented
   token (`Y`, `M`, `D`, `YM`, `YD`, `MD`). A lowercase or mixed-case spelling
   such as `DATEDIF(a, b, "y")` or `"yM"` returned `#NUM!` where Excel returns
