@@ -234,17 +234,20 @@ std::size_t column_letters(std::uint32_t col, char* out) {
   return letters.size();
 }
 
-A1Parse parse_a1_ref(std::string_view text) {
-  A1Parse out;
-  if (text.empty()) {
-    return out;
-  }
-  std::size_t i = 0;
+// Outcome of reading an optional leading `Sheet!` qualifier.
+enum class SheetQualifier : std::uint8_t {
+  kNone,       ///< No qualifier; `*i` is unmoved and the whole text is the reference.
+  kParsed,     ///< Qualifier consumed; `*sheet` is set and `*i` points past the `!`.
+  kMalformed,  ///< Unterminated quote or a quoted name with no `!`; the whole reference is invalid.
+};
 
-  // Sheet qualifier detection. Two shapes:
-  //   'Sheet Name'!A1 — quoted (supports spaces / punctuation, doubled `'`
-  //                     is an escaped apostrophe inside the name).
-  //   Sheet1!A1       — bare (letters / digits / `_`).
+// Reads the optional sheet qualifier at the head of `text`, advancing `*i`
+// past it. Shared by the A1 and R1C1 parsers, which differ only in how
+// they read the reference body that follows.
+SheetQualifier parse_sheet_qualifier(std::string_view text, std::size_t* i, std::string_view* sheet) {
+  if (text.empty()) {
+    return SheetQualifier::kNone;
+  }
   if (text[0] == '\'') {
     // Scan for the closing `'` that is NOT followed by another `'` (the
     // doubled form is an escaped apostrophe and stays inside the name).
@@ -260,7 +263,7 @@ A1Parse parse_a1_ref(std::string_view text) {
       ++j;
     }
     if (j >= text.size() || text[j] != '\'') {
-      return out;  // unterminated
+      return SheetQualifier::kMalformed;  // unterminated
     }
     // Inside content is `text.substr(1, j - 1)`; unescape `''` -> `'`.
     // We don't own backing storage here, so write into a static-sized
@@ -270,26 +273,39 @@ A1Parse parse_a1_ref(std::string_view text) {
     const std::size_t content_len = j - 1;
     const std::size_t used = unescape_quoted_sheet(text.substr(1, content_len), scratch, sizeof(scratch));
     // This view points into thread_local storage — callers keep it alive
-    // only until the next `parse_a1_ref` call on the same thread. The
-    // consuming code (`indirect`) copies before storing.
-    out.sheet = std::string_view(scratch, used);
-    i = j + 1;
-    if (i >= text.size() || text[i] != '!') {
-      return out;  // missing `!` after quoted sheet
+    // only until the next parse on the same thread. The consuming code
+    // (`indirect`) copies before storing.
+    *sheet = std::string_view(scratch, used);
+    std::size_t after = j + 1;
+    if (after >= text.size() || text[after] != '!') {
+      return SheetQualifier::kMalformed;  // missing `!` after quoted sheet
     }
-    ++i;
-  } else {
-    // Bare sheet name: run of letters/digits/underscore followed by `!`.
-    // We only commit to treating it as a sheet qualifier if we find the
-    // `!` — otherwise the run is part of the reference itself.
-    std::size_t j = 0;
-    while (j < text.size() && (is_letter(text[j]) || is_digit(text[j]) || text[j] == '_')) {
-      ++j;
-    }
-    if (j > 0 && j < text.size() && text[j] == '!') {
-      out.sheet = text.substr(0, j);
-      i = j + 1;
-    }
+    *i = after + 1;
+    return SheetQualifier::kParsed;
+  }
+  // Bare sheet name: run of letters/digits/underscore followed by `!`.
+  // We only commit to treating it as a sheet qualifier if we find the
+  // `!` — otherwise the run is part of the reference itself.
+  std::size_t j = 0;
+  while (j < text.size() && (is_letter(text[j]) || is_digit(text[j]) || text[j] == '_')) {
+    ++j;
+  }
+  if (j > 0 && j < text.size() && text[j] == '!') {
+    *sheet = text.substr(0, j);
+    *i = j + 1;
+    return SheetQualifier::kParsed;
+  }
+  return SheetQualifier::kNone;
+}
+
+A1Parse parse_a1_ref(std::string_view text) {
+  A1Parse out;
+  if (text.empty()) {
+    return out;
+  }
+  std::size_t i = 0;
+  if (parse_sheet_qualifier(text, &i, &out.sheet) == SheetQualifier::kMalformed) {
+    return out;
   }
 
   // Full-column / full-row shapes (`D:D`, `$FF:FG`, `5:5`, `$12:$23`)
@@ -323,6 +339,180 @@ A1Parse parse_a1_ref(std::string_view text) {
   if (i != text.size()) {
     return out;
   }
+  out.valid = true;
+  return out;
+}
+
+namespace {
+
+// One axis of an R1C1 endpoint: `R`/`C` on its own, `R5` (absolute), or
+// `R[-2]` (relative). `present` distinguishes an axis that was written
+// from one that was left out, which is what makes `R5` a whole row and
+// `R5C2` a single cell.
+struct R1C1Axis {
+  bool present = false;
+  bool relative = false;
+  long long value = 0;  ///< 1-based index when absolute, signed offset when relative.
+};
+
+// Reads one `R`/`C` axis at `text[*i]` when the marker matches `marker`.
+// Returns false only on malformed input; an absent axis leaves `*out`
+// unset and still returns true.
+bool parse_r1c1_axis(std::string_view text, std::size_t* i, char marker, R1C1Axis* out) {
+  if (*i >= text.size()) {
+    return true;
+  }
+  char head = text[*i];
+  if (head >= 'a' && head <= 'z') {
+    head = static_cast<char>(head - ('a' - 'A'));
+  }
+  if (head != marker) {
+    return true;
+  }
+  ++*i;
+  out->present = true;
+  if (*i < text.size() && text[*i] == '[') {
+    ++*i;
+    bool negative = false;
+    if (*i < text.size() && (text[*i] == '-' || text[*i] == '+')) {
+      negative = text[*i] == '-';
+      ++*i;
+    }
+    const std::size_t digits_start = *i;
+    long long magnitude = 0;
+    while (*i < text.size() && is_digit(text[*i])) {
+      magnitude = magnitude * 10 + (text[*i] - '0');
+      if (magnitude > Sheet::kMaxRows) {
+        return false;  // saturate well before overflow; out of grid either way
+      }
+      ++*i;
+    }
+    if (*i == digits_start || *i >= text.size() || text[*i] != ']') {
+      return false;
+    }
+    ++*i;
+    out->relative = true;
+    out->value = negative ? -magnitude : magnitude;
+    return true;
+  }
+  // A bare `R` / `C` is the current row / column: a zero relative offset.
+  const std::size_t digits_start = *i;
+  long long absolute = 0;
+  while (*i < text.size() && is_digit(text[*i])) {
+    absolute = absolute * 10 + (text[*i] - '0');
+    if (absolute > Sheet::kMaxRows) {
+      return false;
+    }
+    ++*i;
+  }
+  if (*i == digits_start) {
+    out->relative = true;
+    out->value = 0;
+    return true;
+  }
+  out->value = absolute;
+  return true;
+}
+
+// Resolves one axis to a 0-based coordinate against `base`, rejecting
+// anything outside `[0, max)`. A relative axis with no base has nothing
+// to measure from and fails rather than assuming the origin.
+bool resolve_r1c1_axis(const R1C1Axis& axis, bool base_present, std::uint32_t base, std::uint32_t max,
+                       std::uint32_t* out) {
+  if (axis.relative && !base_present) {
+    return false;
+  }
+  const long long resolved = axis.relative ? static_cast<long long>(base) + axis.value : axis.value - 1;
+  if (resolved < 0 || resolved >= static_cast<long long>(max)) {
+    return false;
+  }
+  *out = static_cast<std::uint32_t>(resolved);
+  return true;
+}
+
+// Parses one `R...C...` endpoint. At least one axis must be written.
+bool parse_r1c1_endpoint(std::string_view text, std::size_t* i, R1C1Axis* row, R1C1Axis* col) {
+  if (!parse_r1c1_axis(text, i, 'R', row)) {
+    return false;
+  }
+  if (!parse_r1c1_axis(text, i, 'C', col)) {
+    return false;
+  }
+  return row->present || col->present;
+}
+
+}  // namespace
+
+A1Parse parse_r1c1_ref(std::string_view text, const R1C1Base& base) {
+  A1Parse out;
+  if (text.empty()) {
+    return out;
+  }
+  std::size_t i = 0;
+  if (parse_sheet_qualifier(text, &i, &out.sheet) == SheetQualifier::kMalformed) {
+    return out;
+  }
+
+  R1C1Axis row1;
+  R1C1Axis col1;
+  if (!parse_r1c1_endpoint(text, &i, &row1, &col1)) {
+    return out;
+  }
+  R1C1Axis row2 = row1;
+  R1C1Axis col2 = col1;
+  bool is_range = false;
+  if (i < text.size() && text[i] == ':') {
+    ++i;
+    row2 = R1C1Axis{};
+    col2 = R1C1Axis{};
+    if (!parse_r1c1_endpoint(text, &i, &row2, &col2)) {
+      return out;
+    }
+    // A range whose endpoints name different axes (`R2:R3C4`) has no
+    // rectangle; Excel rejects it rather than guessing the missing bound.
+    if (row1.present != row2.present || col1.present != col2.present) {
+      return out;
+    }
+    is_range = true;
+  }
+  if (i != text.size()) {
+    return out;  // trailing garbage
+  }
+
+  // An endpoint that names only one axis is unbounded along the other, the
+  // same shape `5:5` and `D:D` take on the A1 side.
+  if (!col1.present) {
+    if (!resolve_r1c1_axis(row1, base.present, base.row, Sheet::kMaxRows, &out.row) ||
+        !resolve_r1c1_axis(row2, base.present, base.row, Sheet::kMaxRows, &out.row2)) {
+      return out;
+    }
+    out.col = 0;
+    out.col2 = Sheet::kMaxCols - 1U;
+    out.is_full_row = true;
+    out.is_range = true;
+    out.valid = true;
+    return out;
+  }
+  if (!row1.present) {
+    if (!resolve_r1c1_axis(col1, base.present, base.col, Sheet::kMaxCols, &out.col) ||
+        !resolve_r1c1_axis(col2, base.present, base.col, Sheet::kMaxCols, &out.col2)) {
+      return out;
+    }
+    out.row = 0;
+    out.row2 = Sheet::kMaxRows - 1U;
+    out.is_full_col = true;
+    out.is_range = true;
+    out.valid = true;
+    return out;
+  }
+
+  if (!resolve_r1c1_axis(row1, base.present, base.row, Sheet::kMaxRows, &out.row) ||
+      !resolve_r1c1_axis(col1, base.present, base.col, Sheet::kMaxCols, &out.col) ||
+      !resolve_r1c1_axis(row2, base.present, base.row, Sheet::kMaxRows, &out.row2) ||
+      !resolve_r1c1_axis(col2, base.present, base.col, Sheet::kMaxCols, &out.col2)) {
+    return out;
+  }
+  out.is_range = is_range;
   out.valid = true;
   return out;
 }
@@ -383,24 +573,22 @@ bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const
     }
     a1_style = b.value();
   }
-  if (!a1_style) {
-    // R1C1 style not yet supported by the A1 parser: every
-    // `a1=FALSE` call takes this branch straight to #REF!, including
-    // inputs ADDRESS() itself can produce. Tracked as
-    // tests/divergence.yaml: indirect_r1c1_style_deferred and
-    // tools/catalog/function_status.tsv's INDIRECT note (status stays
-    // `implemented` since the A1 path is complete; only R1C1 is
-    // deferred).
-    *out_err = ErrorCode::Ref;
-    return false;
-  }
-
   const std::string& src = text_exp.value();
   if (src.empty()) {
     *out_err = ErrorCode::Ref;
     return false;
   }
-  const A1Parse parsed = parse_a1_ref(src);
+  // The flag picks the grammar outright: A1 text under `a1 = FALSE` is as
+  // invalid as R1C1 text under `a1 = TRUE`, and each parser rejects the
+  // other's spelling on its own. Relative axes resolve against the cell
+  // the formula sits in, which is the only reading `R[1]C[1]` has.
+  R1C1Base base;
+  if (ctx.has_formula_cell()) {
+    base.present = true;
+    base.row = ctx.formula_row();
+    base.col = ctx.formula_col();
+  }
+  const A1Parse parsed = a1_style ? parse_a1_ref(src) : parse_r1c1_ref(src, base);
   if (!parsed.valid) {
     *out_err = ErrorCode::Ref;
     return false;

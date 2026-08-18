@@ -65,6 +65,35 @@ struct A1Parse {
 /// Returns an `A1Parse` with `valid = false` for any malformed input.
 A1Parse parse_a1_ref(std::string_view text);
 
+/// The cell an R1C1 relative axis is measured from.
+///
+/// `present` is false when the formula has no cell of its own — the
+/// ad-hoc "evaluate this text" entry points have none — which leaves a
+/// relative axis with nothing to resolve against. Absolute axes do not
+/// consult the base and keep working either way.
+struct R1C1Base {
+  bool present = false;
+  std::uint32_t row = 0;  ///< 0-based.
+  std::uint32_t col = 0;  ///< 0-based.
+};
+
+/// Parses `text` as an R1C1-style reference. Accepts the same optional
+/// sheet qualifier as `parse_a1_ref` and the same `:` range separator,
+/// and reports its result in the same `A1Parse` shape so both styles
+/// reach one consumer.
+///
+/// An axis is written either absolutely (`R5`, 1-based) or relative to
+/// `base` (`R[-2]`, or a bare `R` meaning offset 0). An endpoint that
+/// names only one axis is unbounded along the other — `R5` is the whole
+/// of row 5 and `C2` the whole of column B — which sets `is_full_row` /
+/// `is_full_col` exactly as `5:5` and `B:B` do on the A1 side.
+///
+/// Returns `valid = false` for malformed input, for an axis that resolves
+/// outside the grid, for a relative axis with no base to measure from,
+/// and for a range whose endpoints name different axes (`R2:R3C4`),
+/// which describes no rectangle.
+A1Parse parse_r1c1_ref(std::string_view text, const R1C1Base& base);
+
 /// Writes the uppercase A1 column letters for the 1-based column `col`
 /// to `out`. Returns the number of letters written (1..3); `out` must
 /// have room for at least 3 chars. `col` must satisfy

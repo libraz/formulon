@@ -1,12 +1,12 @@
 {
   "suite": "indirect_r1c1",
-  "description": "INDIRECT's `a1` flag. The two `a1 = FALSE` cases are the Excel side of a deferred implementation gap: Formulon takes the R1C1 branch straight to #REF! without parsing ref_text, so they carry a divergence entry and are skipped until that branch is written. They are here rather than in prose so that closing the gap activates a verified golden instead of requiring someone to re-derive what Excel does.\nThe two `a1 = TRUE` cases run. They are what makes the skipped pair meaningful: the first shows the reference resolves at all, and the second shows Excel rejects R1C1 text when the flag says A1 -- without it, \"R2C3 resolved\" would not distinguish Excel honouring the flag from Excel ignoring ref_text's syntax entirely.\n",
+  "description": "INDIRECT's `a1` flag. The `a1 = FALSE` cases show the R1C1 grammar being read rather than the flag being ignored: `R2C3` resolves to the same cell `C2` names, and the string ADDRESS itself emits under `a1 = FALSE` round trips back through INDIRECT.\nThe `a1 = TRUE` cases are what make that meaningful. The first shows the reference resolves at all; the second shows Excel rejects R1C1 text when the flag says A1 -- without it, \"R2C3 resolved\" would not distinguish Excel honouring the flag from Excel ignoring ref_text's syntax entirely. Each style rejects the other's spelling, so the flag selects a grammar instead of adding a fallback.\nRelative axes (`R[1]C[-1]`, bare `RC`) are not covered here: they measure from the cell holding the formula, and the harness places every case at a fixed anchor, so a golden would pin the anchor rather than the semantics. Those live in tests/unit/eval/builtins_references_test.cpp.\n",
   "environment": {
     "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T06:13:16Z"
+    "generated_at": "2026-08-18T04:54:23Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -50,7 +50,10 @@
           "value": 42.0
         }
       },
-      "skipped": "Excel returns 42 for INDIRECT(\"R2C3\", FALSE) with C2 = 42; Formulon returns #REF! because the R1C1 branch in src/eval/reference/common.cpp is deferred. See indirect_r1c1_style_deferred."
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
     },
     {
       "id": "indirect_r1c1_from_address",
@@ -61,7 +64,10 @@
           "value": 42.0
         }
       },
-      "skipped": "Excel returns 42 for INDIRECT(ADDRESS(2,3,1,FALSE), FALSE) with C2 = 42 -- an R1C1 string ADDRESS itself produces -- while Formulon returns #REF! from the deferred R1C1 branch. See indirect_r1c1_style_deferred."
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
     }
   ]
 }

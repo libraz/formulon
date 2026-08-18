@@ -341,12 +341,120 @@ TEST(BuiltinsIndirect, RangeTextCollapsingToSingleCellIsScalar) {
   EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
 }
 
-TEST(BuiltinsIndirect, R1C1StyleNotSupportedMvp) {
-  // R1C1 style is deferred and surfaces as #REF! per the MVP spec.
+TEST(BuiltinsIndirect, R1C1AbsoluteResolvesTheCell) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   const Value v = EvalSourceIn("=INDIRECT(\"R1C1\",FALSE)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+// Evaluates `src` as though the formula sat at (row, col), which is what a
+// relative R1C1 axis measures from.
+Value EvalAnchoredAt(std::string_view src, const Workbook& wb, std::uint32_t row, std::uint32_t col) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser parser_instance(src, parse_arena);
+  parser::AstNode* root = parser_instance.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalState state;
+  const EvalContext ctx = test::workbook_context(wb, wb.sheet(0), state).with_formula_cell(row, col);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
+}
+
+// Relative axes measure from the cell holding the formula. Anchored at B2,
+// `R[1]C[1]` is C3.
+TEST(BuiltinsIndirect, R1C1RelativeResolvesAgainstTheFormulaCell) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(2, 2, Value::number(7.0));
+  const Value v = EvalAnchoredAt("=INDIRECT(\"R[1]C[1]\",FALSE)", wb, 1, 1);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.0);
+}
+
+// A bare axis letter is a zero offset, not a missing one.
+TEST(BuiltinsIndirect, R1C1BareAxesAreTheFormulaCellItself) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::number(5.0));
+  const Value v = EvalAnchoredAt("=SUM(INDIRECT(\"RC\",FALSE))", wb, 1, 1);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
+}
+
+// The ad-hoc "evaluate this text" entry points bind no formula cell, so a
+// relative axis has nothing to measure from and must not quietly assume the
+// origin -- that would resolve to a real but arbitrary cell.
+TEST(BuiltinsIndirect, R1C1RelativeWithoutAFormulaCellIsRef) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  const Value v = EvalSourceIn("=INDIRECT(\"RC\",FALSE)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+// An absolute reference needs no base and keeps working on that same path.
+TEST(BuiltinsIndirect, R1C1AbsoluteWithoutAFormulaCellStillResolves) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 2, Value::number(42.0));
+  const Value v = EvalSourceIn("=INDIRECT(\"R2C3\",FALSE)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
+}
+
+TEST(BuiltinsIndirect, R1C1RangeSumsTheRectangle) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(4.0));
+  const Value v = EvalSourceIn("=SUM(INDIRECT(\"R1C1:R2C2\",FALSE))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 10.0);
+}
+
+// An endpoint naming one axis is unbounded along the other, so `R2` is the
+// whole of row 2 the way `2:2` is.
+TEST(BuiltinsIndirect, R1C1SingleAxisIsAWholeRow) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 5, Value::number(20.0));
+  wb.sheet(0).set_cell_value(0, 0, Value::number(99.0));
+  const Value v = EvalSourceIn("=SUM(INDIRECT(\"R2\",FALSE))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
+}
+
+// The flag selects the grammar rather than adding a fallback: each style
+// rejects the other's spelling.
+TEST(BuiltinsIndirect, A1TextUnderR1C1FlagIsRef) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  const Value v = EvalSourceIn("=INDIRECT(\"A1\",FALSE)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+// Anchored at A1, so a -1 row offset falls off the top edge. Anchoring
+// matters here: without a formula cell the call would fail for the unrelated
+// reason above and stop testing the bound.
+TEST(BuiltinsIndirect, R1C1OffsetOutsideTheGridIsRef) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalAnchoredAt("=INDIRECT(\"R[-1]C\",FALSE)", wb, 0, 0);
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+// A range whose endpoints name different axes describes no rectangle.
+TEST(BuiltinsIndirect, R1C1MismatchedRangeEndpointsAreRef) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  const Value v = EvalSourceIn("=INDIRECT(\"R2:R3C4\",FALSE)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
