@@ -3,10 +3,12 @@
 
 #include "io/xml_utils.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -142,11 +144,34 @@ bool parse_xml_bool_attr(const pugi::xml_attribute& attr) {
   return parse_xml_bool(attr.value());
 }
 
+namespace {
+
+/// Finds the `xmlns:<prefix>` binding in scope for `node`, or an empty
+/// view when nothing declares it. pugixml does no namespace resolution,
+/// so a declaration is an ordinary attribute on whichever ancestor
+/// carries it — Excel puts these on the part root.
+std::string_view find_namespace_binding(const pugi::xml_node& node, std::string_view prefix) {
+  std::string declaration("xmlns:");
+  declaration.append(prefix);
+  for (pugi::xml_node scope = node; scope; scope = scope.parent()) {
+    if (pugi::xml_attribute decl = scope.attribute(declaration.c_str()); decl) {
+      return decl.value();
+    }
+  }
+  return {};
+}
+
+}  // namespace
+
 void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std::string_view> known,
                            std::vector<std::pair<std::string, std::string>>& out) {
+  std::vector<std::pair<std::string, std::string>> captured;
+  std::vector<std::pair<std::string, std::string>> bindings;
+
   for (pugi::xml_attribute attr = node.first_attribute(); attr; attr = attr.next_attribute()) {
     const std::string_view name = attr.name();
-    // Never round-trip namespace declarations; the writer emits its own.
+    // The writer emits the declarations for the elements it generates;
+    // re-emitting the source's copies would duplicate them.
     if (name == "xmlns" || name.rfind("xmlns:", 0) == 0) {
       continue;
     }
@@ -157,10 +182,36 @@ void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std
         break;
       }
     }
-    if (!is_known) {
-      out.emplace_back(std::string(name), std::string(attr.value()));
+    if (is_known) {
+      continue;
+    }
+    captured.emplace_back(std::string(name), std::string(attr.value()));
+
+    // Carry the prefix's binding across with it. Emitting the attribute
+    // without one leaves the prefix unbound, which no XML parser will
+    // accept -- so the loss is not confined to the attribute itself.
+    const std::size_t colon = name.find(':');
+    if (colon == std::string_view::npos) {
+      continue;
+    }
+    const std::string_view prefix = name.substr(0, colon);
+    std::string declaration("xmlns:");
+    declaration.append(prefix);
+    const bool already_bound = std::any_of(bindings.begin(), bindings.end(),
+                                           [&declaration](const auto& entry) { return entry.first == declaration; });
+    if (already_bound) {
+      continue;
+    }
+    const std::string_view uri = find_namespace_binding(node, prefix);
+    if (!uri.empty()) {
+      bindings.emplace_back(std::move(declaration), std::string(uri));
     }
   }
+
+  // Declarations first, so the re-emitted element reads the way Excel
+  // writes it and a prefix is bound before the eye reaches its user.
+  out.insert(out.end(), std::make_move_iterator(bindings.begin()), std::make_move_iterator(bindings.end()));
+  out.insert(out.end(), std::make_move_iterator(captured.begin()), std::make_move_iterator(captured.end()));
 }
 
 namespace {

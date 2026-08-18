@@ -161,9 +161,20 @@ bool attr_bool(const pugi::xml_node& n, const char* name, bool def = false);
 /// Captures every attribute of `node` whose name is NOT in `known` into
 /// `out` as `(name, value)` pairs, in document order. Used to round-trip
 /// OOXML attributes the model does not represent structurally so the
-/// writer can re-emit them verbatim. Namespace declarations (`xmlns` and
-/// any `xmlns:*`) are always skipped — the writer emits its own. Modelled
-/// attributes are listed in `known` so they are not double-emitted.
+/// writer can re-emit them verbatim. Modelled attributes are listed in
+/// `known` so they are not double-emitted.
+///
+/// A captured attribute may be namespace-qualified — Excel writes
+/// `mc:Ignorable` and `xr:uid` on the parts this is used for. The binding
+/// for each such prefix is captured alongside it, searching `node` and
+/// then its ancestors, because the declaration usually sits on the part
+/// root while the attribute may not. Without it the writer re-emits the
+/// attribute with nothing binding its prefix, which is not merely lossy
+/// but malformed XML.
+///
+/// The default `xmlns` and any `xmlns:*` written on the node are still
+/// skipped: the writer emits the bindings it needs for the elements it
+/// generates, and re-emitting those would duplicate them.
 void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std::string_view> known,
                            std::vector<std::pair<std::string, std::string>>& out);
 

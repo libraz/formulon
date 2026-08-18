@@ -300,5 +300,83 @@ TEST(XmlUtilsLoadPart, BothLoadersReportTheSameParseFailureEnvelope) {
   EXPECT_EQ(inplace_status.error().context, copy_status.error().context);
 }
 
+// ---------------------------------------------------------------------------
+// `capture_unknown_attrs` and namespace bindings
+//
+// Excel writes `mc:Ignorable` and `xr:uid` on the pivot parts, and the
+// model represents neither, so they travel as captured attributes. Re-
+// emitting one without the binding for its prefix does not merely lose
+// metadata: it produces XML no parser will accept, which is why the
+// binding travels with the attribute rather than being left to the writer.
+// ---------------------------------------------------------------------------
+
+TEST(XmlUtilsCaptureAttrs, PrefixedAttributeCarriesItsNamespaceBinding) {
+  pugi::xml_document doc = Load(
+      "<root xmlns=\"urn:main\" xmlns:mc=\"urn:mce\" xmlns:xr=\"urn:rev\""
+      " mc:Ignorable=\"xr\" xr:uid=\"{ABC}\" recordCount=\"4\"/>");
+
+  std::vector<std::pair<std::string, std::string>> captured;
+  capture_unknown_attrs(doc.child("root"), {"recordCount"}, captured);
+
+  std::string rendered;
+  append_raw_attrs(rendered, captured);
+  EXPECT_NE(rendered.find("xmlns:mc=\"urn:mce\""), std::string::npos) << rendered;
+  EXPECT_NE(rendered.find("xmlns:xr=\"urn:rev\""), std::string::npos) << rendered;
+  EXPECT_NE(rendered.find("mc:Ignorable=\"xr\""), std::string::npos) << rendered;
+  EXPECT_NE(rendered.find("xr:uid=\"{ABC}\""), std::string::npos) << rendered;
+  EXPECT_EQ(rendered.find("recordCount"), std::string::npos) << rendered;
+
+  // The real test: what the writer emits has to parse.
+  pugi::xml_document reparsed;
+  const std::string element = "<e" + rendered + "/>";
+  EXPECT_TRUE(reparsed.load_string(element.c_str())) << element;
+}
+
+TEST(XmlUtilsCaptureAttrs, BindingIsFoundOnAnAncestor) {
+  // Excel declares the prefixes once on the part root; a captured
+  // attribute deeper in the tree still needs one emitted next to it.
+  pugi::xml_document doc = Load("<root xmlns:xr=\"urn:rev\"><pivotField xr:uid=\"{DEF}\" compact=\"0\"/></root>");
+
+  std::vector<std::pair<std::string, std::string>> captured;
+  capture_unknown_attrs(doc.child("root").child("pivotField"), {}, captured);
+
+  std::string rendered;
+  append_raw_attrs(rendered, captured);
+  EXPECT_NE(rendered.find("xmlns:xr=\"urn:rev\""), std::string::npos) << rendered;
+  EXPECT_NE(rendered.find("compact=\"0\""), std::string::npos) << rendered;
+
+  pugi::xml_document reparsed;
+  const std::string element = "<e" + rendered + "/>";
+  EXPECT_TRUE(reparsed.load_string(element.c_str())) << element;
+}
+
+TEST(XmlUtilsCaptureAttrs, UnprefixedAttributesAddNoBindings) {
+  pugi::xml_document doc = Load("<root xmlns=\"urn:main\" compact=\"0\" outline=\"1\"/>");
+
+  std::vector<std::pair<std::string, std::string>> captured;
+  capture_unknown_attrs(doc.child("root"), {}, captured);
+
+  ASSERT_EQ(captured.size(), 2U);
+  std::string rendered;
+  append_raw_attrs(rendered, captured);
+  EXPECT_EQ(rendered.find("xmlns"), std::string::npos) << rendered;
+}
+
+TEST(XmlUtilsCaptureAttrs, UnbindablePrefixIsCapturedWithoutInventingABinding) {
+  // Nothing declares `zz`. Emitting a made-up URI would be worse than the
+  // loss it hides, so only the attribute travels -- and the document it
+  // came from was already malformed.
+  pugi::xml_document doc = Load("<root zz:thing=\"1\" xmlns:zz=\"urn:zz\"/>");
+  pugi::xml_document orphan;
+  orphan.load_string("<root/>");
+  orphan.child("root").append_attribute("zz:thing") = "1";
+
+  std::vector<std::pair<std::string, std::string>> captured;
+  capture_unknown_attrs(orphan.child("root"), {}, captured);
+
+  ASSERT_EQ(captured.size(), 1U);
+  EXPECT_EQ(captured[0].first, "zz:thing");
+}
+
 }  // namespace
 }  // namespace formulon::io
