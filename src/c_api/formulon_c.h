@@ -2698,6 +2698,13 @@ FM_API fm_status_t fm_workbook_pivot_cache_id_at(const fm_workbook_t* wb, size_t
  * `requested_id` must not collide with an existing cache. The assigned
  * id is written to `*out_cache_id`.
  *
+ * A new cache has no worksheet source, and a workbook containing one
+ * cannot be saved: `fm_workbook_save` fails rather than write a package
+ * Excel offers to repair on open. Call
+ * `fm_workbook_pivot_cache_set_worksheet_source` before saving. The range
+ * only has to name where the records came from; it need not hold data,
+ * because the records carry the values themselves.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
  *         `kInvalidArgument` when `requested_id` collides with an

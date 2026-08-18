@@ -73,6 +73,14 @@ pivot::PivotCache BuildRegionAmountCache(std::uint32_t cache_id) {
   pivot::PivotCache cache;
   cache.set_cache_id(cache_id);
 
+  // A cache with no declared source cannot be saved -- Excel offers to
+  // repair any package containing one -- so every cache these tests write
+  // needs a source, exactly as an Excel-authored cache has.
+  pivot::WorksheetSource& source = cache.mutable_worksheet_source();
+  source.present = true;
+  source.ref = "A1:B4";
+  source.sheet = "Sheet1";
+
   // Field 0: shared-items text field "Region" with two values.
   pivot::PivotCacheField region;
   region.name = "Region";
@@ -368,6 +376,9 @@ TEST(OoxmlWriterPivot, MultiCacheRoundTrips) {
   // "Product" with three distinct values, plus a numeric "Qty" field.
   pivot::PivotCache cache_b;
   cache_b.set_cache_id(7U);
+  cache_b.mutable_worksheet_source().present = true;
+  cache_b.mutable_worksheet_source().ref = "D1:E2";
+  cache_b.mutable_worksheet_source().sheet = "Sheet1";
   pivot::PivotCacheField product;
   product.name = "Product";
   product.shared_items.push_back(MakeText(cache_b, "Apple"));

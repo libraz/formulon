@@ -34,6 +34,7 @@ from formulon import (
     PivotFilterSpec,
     PivotFilterType,
     PivotFilterValueKind,
+    PivotWorksheetSource,
     ValueKind,
     Workbook,
     _c,
@@ -421,6 +422,9 @@ class PivotFilterSessionStateTests(unittest.TestCase):
     def _workbook_with_pivot():
         wb = Workbook.create_default()
         cache_id = wb.pivot_cache_create()
+        # A cache with no declared source cannot be saved: Excel offers to
+        # repair any package containing one, so the writer refuses instead.
+        wb.set_pivot_cache_worksheet_source(cache_id, PivotWorksheetSource(ref="A1:B3", sheet="Sheet1"))
         wb.pivot_cache_field_add(cache_id, "Region")
         wb.pivot_cache_field_add(cache_id, "Amount")
         for region, amount in (("East", 10.0), ("West", 30.0)):

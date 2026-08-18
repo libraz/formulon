@@ -413,6 +413,21 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // is just the basename because both parts live in the same package
   // directory (`xl/pivotCache/`).
   for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
+    // A cache with no declared source used to be written as the minimal
+    // `<cacheSource type="worksheet"/>`, and Excel offers to repair every
+    // package containing one. There is no form of that element Excel
+    // accepts without a `<worksheetSource>`: a declared range is enough
+    // even when the sheet holds no data, because the records carry the
+    // values. So the fallback described a state that cannot be saved, and
+    // failing here is the only way the host learns of it -- the package
+    // is otherwise well-formed and schema-valid, and nothing short of
+    // opening it in Excel reports the problem.
+    if (!c.cache->worksheet_source().present) {
+      std::string context("context=ooxml_writer cache_id=");
+      context.append(std::to_string(c.cache_id));
+      return make_error(FormulonErrorCode::kIoWriteFailed, "pivot cache has no worksheet source; set one before saving",
+                        std::move(context));
+    }
     {
       auto result = AddPart(writer.get(), c.definition_path, write_pivot_cache_definition(*c.cache), &written_paths);
       if (!result) {

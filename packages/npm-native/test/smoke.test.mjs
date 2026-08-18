@@ -1291,6 +1291,9 @@ test('evaluateCfRange with todaySerial omitted disables timePeriod rules', async
 function makePivotWorkbook(Workbook) {
   const wb = Workbook.createDefault();
   const cacheId = wb.pivotCacheCreate(0).index;
+  // A cache with no declared source cannot be saved: Excel offers to repair
+  // any package containing one, so the writer refuses rather than emit it.
+  assert.ok(wb.pivotCacheSetWorksheetSource(cacheId, { present: true, ref: 'A1:B3', sheet: 'Sheet1' }).ok);
   assert.ok(wb.pivotCacheFieldAdd(cacheId, 'Region').status.ok);
   assert.ok(wb.pivotCacheFieldAdd(cacheId, 'Amount').status.ok);
   for (const [region, amount] of [

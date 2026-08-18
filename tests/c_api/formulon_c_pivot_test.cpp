@@ -181,7 +181,10 @@ std::vector<std::uint8_t> BuildPivotWorkbookBytes() {
       "<pivotCacheDefinition xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
       "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" "
       "r:id=\"rId1\" recordCount=\"3\">\n"
-      "  <cacheSource type=\"worksheet\"/>\n"
+      // Excel always names the range the records came from. The bare
+      // `<cacheSource type="worksheet"/>` this once carried is a form no
+      // Excel-authored package uses, and one Excel refuses to open.
+      "  <cacheSource type=\"worksheet\"><worksheetSource ref=\"A1:B4\" sheet=\"Sheet1\"/></cacheSource>\n"
       "  <cacheFields count=\"2\">\n"
       "    <cacheField name=\"Region\"><sharedItems count=\"2\"><s v=\"North\"/><s "
       "v=\"South\"/></sharedItems></cacheField>\n"
@@ -341,6 +344,14 @@ namespace {
 fm_status_t BuildScratchPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, std::size_t* out_pivot_index) {
   std::uint32_t cache_id = 0;
   fm_status_t st = fm_workbook_pivot_cache_create(wb, 0, &cache_id);
+  if (st != 0) {
+    return st;
+  }
+  // Excel refuses a package whose cache declares no source, so a cache
+  // that is going to be saved needs one. The range only has to describe
+  // where the records came from; it is not required to hold data, since
+  // the records themselves carry the values.
+  st = fm_workbook_pivot_cache_set_worksheet_source(wb, cache_id, /*present=*/1, "A1:B5", "Sheet1", nullptr);
   if (st != 0) {
     return st;
   }
@@ -506,6 +517,34 @@ TEST(FormulonCApiPivot, CreatePivotFromScratch) {
   EXPECT_TRUE(saw_north);
   EXPECT_TRUE(saw_south);
   EXPECT_TRUE(saw_grand);
+}
+
+TEST(FormulonCApiPivot, SaveRejectsAPivotCacheWithNoWorksheetSource) {
+  // The failure this replaces was silent: the package saved, validated
+  // against the schema, and round-tripped through our own reader, and only
+  // Excel -- offering to repair it -- ever said otherwise. A host has no
+  // way to discover that from the API, so the save has to say it.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  ASSERT_EQ(fm_workbook_pivot_cache_set_worksheet_source(wb.handle, cache_id, /*present=*/0, nullptr, nullptr, nullptr),
+            0)
+      << fm_last_error_message();
+
+  BufferGuard saved;
+  EXPECT_NE(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << "a cache with no source must not save silently";
+  EXPECT_NE(std::string(fm_last_error_message()).find("worksheet source"), std::string::npos)
+      << "message must name what is missing: " << fm_last_error_message();
+
+  // Restoring the source makes the same workbook savable again, so the
+  // check is about the cache's state and not about some other damage.
+  ASSERT_EQ(
+      fm_workbook_pivot_cache_set_worksheet_source(wb.handle, cache_id, /*present=*/1, "A1:B5", "Sheet1", nullptr), 0);
+  BufferGuard retry;
+  EXPECT_EQ(fm_workbook_save(wb.handle, &retry.data, &retry.len), 0) << fm_last_error_message();
 }
 
 TEST(FormulonCApiPivot, SavedScratchPivotEmitsLocationRequiredDefaults) {
@@ -711,6 +750,10 @@ TEST(FormulonCApiPivot, PivotCacheWorksheetSourceRoundTripsThroughApi) {
   const char* ref = nullptr;
   const char* sheet = nullptr;
   const char* name = nullptr;
+  // `BuildScratchPivot` installs a source because a cache without one
+  // cannot be saved. Clear it here so the absent state this test is about
+  // is established by the test rather than inherited from the helper.
+  ASSERT_EQ(fm_workbook_pivot_cache_set_worksheet_source(wb.handle, cache_id, 0, nullptr, nullptr, nullptr), 0);
   ASSERT_EQ(fm_workbook_pivot_cache_get_worksheet_source(wb.handle, cache_id, &present, &ref, &sheet, &name), 0);
   EXPECT_EQ(present, 0);
   EXPECT_STREQ(ref, "");
