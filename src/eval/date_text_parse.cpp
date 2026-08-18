@@ -117,6 +117,31 @@ int expand_two_digit_year(int y, std::size_t digits) noexcept {
   return y;
 }
 
+// Turns a parsed (year, month, day) triple into a serial, applying the
+// pivot and the calendar bounds every text date form shares. `year` is
+// still in its written form; `year_digits` decides whether the pivot
+// applies. Excel keeps Lotus 1-2-3's fictitious 1900-02-29 (serial 60),
+// which the Gregorian calendar does not have, so that one date is
+// exempted from the day-of-month bound.
+//
+// Returns `false` for anything outside the range DATEVALUE accepts.
+bool serial_from_parsed_ymd(int year, std::size_t year_digits, int month, int day, double* out_serial) noexcept {
+  const int expanded_year = expand_two_digit_year(year, year_digits);
+  if (expanded_year < 1900 || expanded_year > 9999) {
+    return false;
+  }
+  if (month < 1 || month > 12) {
+    return false;
+  }
+  const unsigned dim = days_in_month(expanded_year, static_cast<unsigned>(month));
+  const bool is_excel_ghost_day = (expanded_year == 1900 && month == 2 && day == 29);
+  if (!is_excel_ghost_day && (day < 1 || static_cast<unsigned>(day) > dim)) {
+    return false;
+  }
+  *out_serial = date_time::serial_from_ymd(expanded_year, static_cast<unsigned>(month), static_cast<unsigned>(day));
+  return true;
+}
+
 // Case-insensitive ASCII equality for a single character.
 bool ci_equal_ascii(char a, char b) noexcept {
   const char la = (a >= 'A' && a <= 'Z') ? static_cast<char>(a + ('a' - 'A')) : a;
@@ -398,22 +423,9 @@ bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* re
     }
     s.remove_prefix(3);
   }
-  const int expanded_year = expand_two_digit_year(year, year_digits);
-  if (expanded_year < 1900 || expanded_year > 9999) {
+  if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
     return false;
   }
-  if (month < 1 || month > 12) {
-    return false;
-  }
-  const unsigned dim = days_in_month(expanded_year, static_cast<unsigned>(month));
-  // Excel preserves Lotus 1-2-3's fictitious 1900-02-29 (serial 60). The
-  // Gregorian calendar says that day does not exist (1900 is divisible by
-  // 100 but not 400), but DATEVALUE must still accept it for parity.
-  const bool is_excel_ghost_day = (expanded_year == 1900 && month == 2 && day == 29);
-  if (!is_excel_ghost_day && (day < 1 || static_cast<unsigned>(day) > dim)) {
-    return false;
-  }
-  *out_serial = date_time::serial_from_ymd(expanded_year, static_cast<unsigned>(month), static_cast<unsigned>(day));
   *rest = s;
   return true;
 }
@@ -453,21 +465,9 @@ bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view
   if (year_digits == 0) {
     return false;
   }
-  const int expanded_year = expand_two_digit_year(year, year_digits);
-  if (expanded_year < 1900 || expanded_year > 9999) {
+  if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
     return false;
   }
-  if (month < 1 || month > 12) {
-    return false;
-  }
-  const unsigned dim = days_in_month(expanded_year, static_cast<unsigned>(month));
-  // Reuse the same 1900-02-29 ghost-day escape as the yyyy-first path so
-  // `DATEVALUE("29-Feb-1900")` still resolves to serial 60.
-  const bool is_excel_ghost_day = (expanded_year == 1900 && month == 2 && day == 29);
-  if (!is_excel_ghost_day && (day < 1 || static_cast<unsigned>(day) > dim)) {
-    return false;
-  }
-  *out_serial = date_time::serial_from_ymd(expanded_year, static_cast<unsigned>(month), static_cast<unsigned>(day));
   *rest = s;
   return true;
 }
@@ -511,19 +511,9 @@ bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_v
   if (year_digits == 0) {
     return false;
   }
-  const int expanded_year = expand_two_digit_year(year, year_digits);
-  if (expanded_year < 1900 || expanded_year > 9999) {
+  if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
     return false;
   }
-  if (month < 1 || month > 12) {
-    return false;
-  }
-  const unsigned dim = days_in_month(expanded_year, static_cast<unsigned>(month));
-  const bool is_excel_ghost_day = (expanded_year == 1900 && month == 2 && day == 29);
-  if (!is_excel_ghost_day && (day < 1 || static_cast<unsigned>(day) > dim)) {
-    return false;
-  }
-  *out_serial = date_time::serial_from_ymd(expanded_year, static_cast<unsigned>(month), static_cast<unsigned>(day));
   *rest = s;
   return true;
 }
