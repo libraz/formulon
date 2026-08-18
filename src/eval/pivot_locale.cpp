@@ -80,6 +80,13 @@ pivot::PivotLayoutOptions pivot_layout_options_for(ExcelProfile profile) {
     options.column_labels_label = "列ラベル";
     options.subtotal_suffix = " 集計";
     options.blank_item_label = "(空白)";
+    // `(すべて)` is measured: Excel cached it into the page-field header of
+    // the `getpivotdata_page_data` workbook-oracle capture. The
+    // several-items spelling has never been captured — no oracle case
+    // selects more than one page item — so it reproduces Excel's UI
+    // wording and nothing more.
+    options.all_pages_label = "(すべて)";
+    options.multiple_items_label = "(複数のアイテム)";
   }
   return options;
 }

@@ -73,6 +73,51 @@ class PivotTable {
   const std::vector<std::uint32_t>& col_field_order() const { return col_field_order_; }
   std::vector<std::uint32_t>& mutable_col_field_order() { return col_field_order_; }
 
+  // Page (report filter) axis -----------------------------------------------
+  //
+  // Decoded from `<pageFields>` for rendering only. The block itself stays
+  // in the pre-dataFields passthrough bin and the writer re-emits it from
+  // there, so this list is read-side state exactly like
+  // `authored_caption_filters()`: populating it changes not one byte of a
+  // round trip, and clearing it would not remove the page field from a
+  // saved file. The one thing the writer does own is the element's absence
+  // — see `write_pivot_table_definition`, which synthesises `<pageFields>`
+  // only for a table that never carried one.
+  //
+  // Selection is not a filter: a page field's hidden items already prune
+  // records through `record_passes_manual_filter`, which keys off
+  // `PivotField::items` on every axis alike. What this list adds is the
+  // report order and the explicit single-item selection, neither of which
+  // is recoverable from `<pivotFields>`.
+  const std::vector<PivotPageField>& page_fields() const { return page_fields_; }
+  std::vector<PivotPageField>& mutable_page_fields() { return page_fields_; }
+
+  /// Indices into `fields()` of the page-axis fields, in report order.
+  ///
+  /// `<pageFields>` states that order explicitly and wins when it was
+  /// decoded. A table assembled in memory (C API, the workbook-oracle
+  /// builder) sets only `PivotField::axis`, so the fallback is `fields()`
+  /// document order — which is what Excel itself falls back to when a page
+  /// field carries no `<pageField>` entry of its own.
+  std::vector<std::uint32_t> page_field_order() const {
+    std::vector<std::uint32_t> order;
+    if (!page_fields_.empty()) {
+      order.reserve(page_fields_.size());
+      for (const PivotPageField& page : page_fields_) {
+        if (page.field_index < fields_.size()) {
+          order.push_back(page.field_index);
+        }
+      }
+      return order;
+    }
+    for (std::size_t i = 0; i < fields_.size(); ++i) {
+      if (fields_[i].axis == PivotAxis::Page) {
+        order.push_back(static_cast<std::uint32_t>(i));
+      }
+    }
+    return order;
+  }
+
   // Layout / location --------------------------------------------------------
 
   PivotLayout layout() const { return layout_; }
@@ -279,6 +324,7 @@ class PivotTable {
   std::vector<PivotDataField> data_fields_;
   std::vector<std::uint32_t> row_field_order_;
   std::vector<std::uint32_t> col_field_order_;
+  std::vector<PivotPageField> page_fields_;
   PivotLayout layout_ = PivotLayout::Compact;
   std::uint32_t anchor_row_ = 0;
   std::uint32_t anchor_col_ = 0;

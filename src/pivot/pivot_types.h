@@ -124,6 +124,30 @@ struct PivotItem {
   std::uint32_t cache_index = 0;
 };
 
+/// One entry of the OOXML `<pageFields>` block: a field placed on the page
+/// (report-filter) axis, plus the item it is currently showing.
+///
+/// The block exists because `<pivotFields>` records only that a field sits
+/// on the page axis, never in which order the page fields stack above the
+/// report nor which of their items is selected.
+struct PivotPageField {
+  /// Index into `PivotTable::fields()`, from `<pageField fld="N">`.
+  std::uint32_t field_index = 0;
+
+  /// The single selected item, from `<pageField item="N">`. Absent means no
+  /// single item is selected: either every item is showing, or several are.
+  /// Excel expresses a multi-item selection through the field's own hidden
+  /// `PivotItem`s rather than through this attribute, so the two cases are
+  /// told apart by item visibility, not by presence.
+  ///
+  /// ECMA-376 words the index as "the item in the PivotTable field", which
+  /// reads as a position in `PivotField::items` rather than a cache
+  /// shared-item index; the two coincide for the ordinary field whose items
+  /// are listed in shared-item order. Resolution follows the literal
+  /// reading.
+  std::optional<std::uint32_t> item_index;
+};
+
 /// Configuration for grouping a date-typed source column.
 struct PivotDateGroup {
   DateGrouping granularity = DateGrouping::Year;

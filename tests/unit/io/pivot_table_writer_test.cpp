@@ -856,5 +856,71 @@ TEST(PivotTableWriter, ValueFieldWithoutItemsStaysSelfClosing) {
   EXPECT_NE(xml.find("<pivotField dataField=\"1\"/>"), std::string::npos) << xml;
 }
 
+// ---------------------------------------------------------------------------
+// `<pageFields>`
+// ---------------------------------------------------------------------------
+//
+// The element is both passed through and synthesised: an authored block is
+// re-emitted from the bin the reader filled, and a table assembled in memory
+// gets one built for it, because a saved `axis="axisPage"` field with no
+// page-field entry leaves Excel with no page-axis order to draw.
+
+pivot::PivotTable BuildPageAxisTable() {
+  pivot::PivotTable table;
+  table.set_anchor(0U, 0U, 1U, 1U);
+  pivot::PivotField region;
+  region.source_name = "Region";
+  region.axis = pivot::PivotAxis::Page;
+  table.mutable_fields().push_back(std::move(region));
+  pivot::PivotField amount;
+  amount.source_name = "Amount";
+  amount.axis = pivot::PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(amount));
+  return table;
+}
+
+TEST(PivotTableWriter, PageAxisFieldGainsAPageFieldsBlock) {
+  const std::string xml = write_pivot_table_definition(BuildPageAxisTable());
+
+  EXPECT_NE(xml.find("<pageFields count=\"1\"><pageField fld=\"0\" hier=\"-1\"/></pageFields>"), std::string::npos)
+      << xml;
+  // Schema order: `<pageFields>` sits between `<colFields>` and
+  // `<dataFields>`, so a definition that emits both must not invert them.
+  EXPECT_LT(xml.find("<pageFields"), xml.find("</pivotTableDefinition>")) << xml;
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  ASSERT_EQ(parsed_or.value().page_fields().size(), 1U);
+  EXPECT_EQ(parsed_or.value().page_fields()[0].field_index, 0U);
+  EXPECT_FALSE(parsed_or.value().page_fields()[0].item_index.has_value());
+}
+
+TEST(PivotTableWriter, TableWithoutAPageAxisEmitsNoPageFields) {
+  pivot::PivotTable table;
+  table.set_anchor(0U, 0U, 1U, 1U);
+  pivot::PivotField region;
+  region.source_name = "Region";
+  region.axis = pivot::PivotAxis::Row;
+  table.mutable_fields().push_back(std::move(region));
+
+  EXPECT_EQ(write_pivot_table_definition(table).find("<pageFields"), std::string::npos);
+}
+
+TEST(PivotTableWriter, AuthoredPageFieldsAreNotDuplicated) {
+  // What the reader decoded is re-emitted from the passthrough bin, so the
+  // writer must leave the element alone rather than add a second one built
+  // from the axis assignments.
+  pivot::PivotTable table = BuildPageAxisTable();
+  table.mutable_page_fields().push_back(pivot::PivotPageField{0U, std::optional<std::uint32_t>{3}});
+  table.mutable_raw_passthrough_after_col_fields() =
+      "<pageFields count=\"1\"><pageField fld=\"0\" item=\"3\"/></pageFields>";
+
+  const std::string xml = write_pivot_table_definition(table);
+
+  EXPECT_NE(xml.find("<pageField fld=\"0\" item=\"3\"/>"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("hier=\"-1\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("<pageFields", xml.find("<pageFields") + 1), std::string::npos) << xml;
+}
+
 }  // namespace
 }  // namespace formulon::io

@@ -963,14 +963,20 @@ entries:
   # could not address a page/data-axis field: Microsoft 365 16.0.20228
   # answers `#REF!` for both probes, exactly as Formulon does, so nothing
   # was owed. What the same capture did surface is narrower and real --
-  # the header block Excel draws above a pivot that has a page field.
-  - id: page_axis_field
-    cause: engine-gap
-    mode: skip-oracle
-    reason: "Excel prepends a page-field header to the rendered grid -- one row per page field carrying the field name and the selected item (`Region | (すべて)` when unfiltered), then a blank separator row -- before the row/column header row. `pivot::layout` projects the grid starting at the row-labels header instead. The axis itself is modelled (`PivotAxis::Page`, decoded from the `axisPage` axis token); what is missing is the selection: `<pageFields>` rides in the verbatim passthrough tail rather than being decoded, so no part of the model says which item a page field is showing. Closing this means decoding that element, which moves it out of the passthrough tail and onto the writer, and pinning the placeholder text per locale (`(すべて)` here, plus whatever Excel writes when several items are selected) -- neither is observed by the primary oracle, whose capture for this case came from Windows. The aggregated values agree exactly (Gadget 350, Widget 300, total 650 under Microsoft 365 16.0.20228); only the two leading header rows are missing, and GETPIVOTDATA over the same pivot already matches Excel."
-    prefer: excel
-    first_noted: 2026-08-16
-    last_verified_excel_version: "16.0.20228"
+  # the header block Excel draws above a pivot that has a page field --
+  # and `page_axis_field` is retired too, now that the block is projected:
+  # `pivot::evaluate` resolves each page field's selection against the
+  # bound cache and `pivot::layout` draws one row per field plus the blank
+  # separator, so `getpivotdata_page_data.page_axis_field` runs unskipped.
+  #
+  # `<pageFields>` follows the `<filters>` split -- decoded for rendering,
+  # re-emitted from the passthrough bin -- so the round trip is unchanged;
+  # the writer only synthesises the element for a table that never carried
+  # one. What stays unobserved is the several-items selection: no capture
+  # picks more than one page item, so `multiple_items_label` reproduces
+  # Excel's UI wording without a measurement behind it. That is a label
+  # default, not a divergence, and it is documented where it is declared
+  # (`pivot::PivotLayoutOptions`) rather than tracked here.
 
   # AREAS recurses into CHOOSE / IF reference branches, so a branch that is
   # itself a union reports its real area count.

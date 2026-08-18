@@ -478,6 +478,27 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
   // elements, which the schema places before `<dataFields>`.
   out.append(table.raw_passthrough_after_col_fields());
 
+  // A table whose `<pageFields>` was decoded re-emits it from the bin
+  // just flushed, so synthesise the element only for a table that never
+  // carried one -- built through the C API, or read from a definition
+  // that placed a field on the page axis without declaring it here.
+  // `hier="-1"` is the non-OLAP marker Excel writes for a page field
+  // bound to a cache field rather than to an OLAP hierarchy.
+  if (table.page_fields().empty()) {
+    const std::vector<std::uint32_t> page_order = table.page_field_order();
+    if (!page_order.empty()) {
+      out.append("<pageFields count=\"");
+      out.append(std::to_string(page_order.size()));
+      out.append("\">");
+      for (const std::uint32_t idx : page_order) {
+        out.append("<pageField fld=\"");
+        out.append(std::to_string(idx));
+        out.append("\" hier=\"-1\"/>");
+      }
+      out.append("</pageFields>");
+    }
+  }
+
   if (!table.data_fields().empty()) {
     AppendDataFields(out, table.data_fields());
   }

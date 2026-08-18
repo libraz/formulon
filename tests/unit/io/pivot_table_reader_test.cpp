@@ -244,9 +244,7 @@ TEST(PivotTableReader, UnknownSubtotalFallsBackToSum) {
   EXPECT_EQ(table_or.value().data_fields()[0].aggregation, pivot::Aggregation::Sum);
 }
 
-TEST(PivotTableReader, PageFieldsSilentlySkipped) {
-  // `<pageFields>` carries `<pageField>` entries we do not yet model.
-  // The reader must not fail and must not surface anything from them.
+TEST(PivotTableReader, PageFieldsCarryTheSelectedItem) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"7\">");
   xml.append("  <location ref=\"A1:C5\"/>");
@@ -263,6 +261,76 @@ TEST(PivotTableReader, PageFieldsSilentlySkipped) {
   EXPECT_EQ(table.pivot_cache_id(), 7U);
   ASSERT_EQ(table.fields().size(), 1U);
   EXPECT_EQ(table.fields()[0].axis, pivot::PivotAxis::Page);
+
+  ASSERT_EQ(table.page_fields().size(), 1U);
+  EXPECT_EQ(table.page_fields()[0].field_index, 0U);
+  ASSERT_TRUE(table.page_fields()[0].item_index.has_value());
+  EXPECT_EQ(*table.page_fields()[0].item_index, 2U);
+
+  // Decoding does not take the block off the writer's hands: the authored
+  // bytes still ride in the pre-dataFields bin so the round trip re-emits
+  // them untouched.
+  EXPECT_NE(table.raw_passthrough_after_col_fields().find("<pageField "), std::string::npos);
+}
+
+TEST(PivotTableReader, PageFieldWithoutASelectionLeavesTheItemAbsent) {
+  // The unfiltered state: Excel writes no `item`, and the field is showing
+  // every item rather than item 0.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("  <location ref=\"A1:C5\"/>");
+  xml.append("  <pivotFields count=\"1\"><pivotField axis=\"axisPage\"/></pivotFields>");
+  xml.append("  <pageFields count=\"1\"><pageField fld=\"0\" hier=\"-1\"/></pageFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  ASSERT_EQ(table_or.value().page_fields().size(), 1U);
+  EXPECT_FALSE(table_or.value().page_fields()[0].item_index.has_value());
+}
+
+TEST(PivotTableReader, PageFieldWithoutAFieldIndexIsSkipped) {
+  // `fld` names the field; absent, the entry designates nothing. Defaulting
+  // it to 0 would draw a page header over a field the user never filtered by.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("  <location ref=\"A1:C5\"/>");
+  xml.append("  <pivotFields count=\"2\"><pivotField axis=\"axisPage\"/><pivotField axis=\"axisRow\"/></pivotFields>");
+  xml.append("  <pageFields count=\"2\"><pageField item=\"1\"/><pageField fld=\"0\"/></pageFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  ASSERT_EQ(table_or.value().page_fields().size(), 1U);
+  EXPECT_EQ(table_or.value().page_fields()[0].field_index, 0U);
+}
+
+TEST(PivotTableReader, PageFieldOrderOverridesDocumentOrder) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("  <location ref=\"A1:C5\"/>");
+  xml.append("  <pivotFields count=\"2\"><pivotField axis=\"axisPage\"/><pivotField axis=\"axisPage\"/></pivotFields>");
+  xml.append("  <pageFields count=\"2\"><pageField fld=\"1\"/><pageField fld=\"0\"/></pageFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  EXPECT_EQ(table_or.value().page_field_order(), (std::vector<std::uint32_t>{1, 0}));
+}
+
+TEST(PivotTableReader, PageAxisWithoutAPageFieldsBlockFallsBackToDocumentOrder) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("  <location ref=\"A1:C5\"/>");
+  xml.append("  <pivotFields count=\"3\">");
+  xml.append("    <pivotField axis=\"axisRow\"/><pivotField axis=\"axisPage\"/><pivotField axis=\"axisPage\"/>");
+  xml.append("  </pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  EXPECT_TRUE(table_or.value().page_fields().empty());
+  EXPECT_EQ(table_or.value().page_field_order(), (std::vector<std::uint32_t>{1, 2}));
 }
 
 // ---------------------------------------------------------------------------

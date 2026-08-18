@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A pivot with a report-filter (page) field now renders the header block
+  Excel draws above it: one row per page field carrying the field name and
+  the item it is showing, then a blank separator row, all inside the pivot's
+  own extent. The selection is resolved during evaluation, where the bound
+  cache is available, so `PivotResult` carries it and the projection only
+  draws it. Excel records a selection two ways and both are read — a single
+  chosen item as `<pageField item>`, a wider one as the field's own hidden
+  items — and the placeholder text follows the locale (`(すべて)` under the
+  ja-JP profile). `<pageFields>` is decoded for the report order and the
+  selection but still re-emitted from the passthrough bin, so a round trip
+  is byte-identical; the writer synthesises the element only for a table
+  that never carried one, which a page-axis field previously saved without.
+
 - `INDIRECT(ref_text, FALSE)` reads R1C1 text instead of returning `#REF!`
   for every call. An axis is written absolutely (`R5C2`) or relative to the
   cell holding the formula (`R[-1]C`, or a bare `R` meaning the same row),

@@ -72,8 +72,14 @@ namespace formulon::io {
 ///       - `numFmtId` -> number_format (we capture it as a stringified
 ///         int; a follow-up converts it to a real format code via
 ///         the styles part).
-///   * `<pageFields>` is parsed but only for round-trip preservation
-///     in the future; for this reader it is silently skipped.
+///   * `<pageFields>` walked in document order. Each `<pageField>`
+///     records `fld` -> the page-axis field index (an entry without
+///     `fld` is skipped, not defaulted to 0) and `item` -> the single
+///     selected item, absent when the field shows every item or several.
+///     The block itself still reaches the passthrough bin so the writer
+///     re-emits the authored bytes; the decode exists to supply the
+///     report order and the selection, which `<pivotFields>` does not
+///     record. See `PivotTable::page_fields`.
 ///   * `<formats>`, `<conditionalFormats>`, `<chartFormats>`, etc. are
 ///     silently skipped (preserved as bytes by a future writer).
 ///

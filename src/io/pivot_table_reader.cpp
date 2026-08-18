@@ -290,6 +290,27 @@ void ParseFieldOrder(const pugi::xml_node& parent, std::vector<std::uint32_t>* o
   }
 }
 
+/// Walks `<pageFields>` in document order, recording each page field's
+/// position on the axis and its single-item selection (`item`).
+///
+/// A `<pageField>` with no `fld` is skipped rather than defaulted to field
+/// 0: unlike `<field x>` on a row/column axis, where 0 is a real index the
+/// element is simply spelling out, an absent `fld` here names no field at
+/// all, and inventing one would place a page header over a field the user
+/// never filtered by.
+void ParsePageFields(const pugi::xml_node& parent, pivot::PivotTable* out) {
+  for (pugi::xml_node node = parent.child("pageField"); node; node = node.next_sibling("pageField")) {
+    const std::optional<std::uint32_t> field_index = parse_xml_u32_attr_strict(node.attribute("fld"));
+    if (!field_index.has_value()) {
+      continue;
+    }
+    pivot::PivotPageField entry;
+    entry.field_index = *field_index;
+    entry.item_index = parse_xml_u32_attr_strict(node.attribute("item"));
+    out->mutable_page_fields().push_back(entry);
+  }
+}
+
 /// Walks `<dataFields>` in document order. Returns `kIoSheetCorrupt` on
 /// the first `<dataField>` that lacks a `name` attribute, since that
 /// name is the GETPIVOTDATA lookup key.
@@ -740,6 +761,14 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   }
   if (pugi::xml_node cols = root.child("colFields"); cols) {
     ParseFieldOrder(cols, &table.mutable_col_field_order());
+  }
+  // `<pageFields>` follows the same decode-but-do-not-own split as
+  // `<filters>` below: it stays out of `kRecognized`, so the block still
+  // lands in the pre-dataFields passthrough bin and the writer re-emits
+  // the authored bytes. What the decode adds is the page-axis report
+  // order and the selected item, neither of which `<pivotFields>` records.
+  if (pugi::xml_node pages = root.child("pageFields"); pages) {
+    ParsePageFields(pages, &table);
   }
   if (pugi::xml_node data = root.child("dataFields"); data) {
     if (auto status = ParseDataFields(data, &table); !status) {

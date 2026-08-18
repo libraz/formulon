@@ -7,11 +7,18 @@
 // anchor, axis assignments, item visibility, row/col/data field order
 // and aggregation).
 //
-// `<pageFields>`, `<formats>`, `<conditionalFormats>`, `<chartFormats>`,
-// `<pivotTableStyleInfo>`, and `<extLst>` are intentionally NOT emitted;
-// these will land via a separate passthrough mechanism in a follow-up
-// PR. The reader silently skips them today, so the round-trip is closed
-// for the subset both ends agree on.
+// `<formats>`, `<conditionalFormats>`, `<chartFormats>`,
+// `<pivotTableStyleInfo>`, `<extLst>` and the rest of the unmodelled set
+// are not authored here: the reader captures each as raw bytes and this
+// writer flushes them back at the schema slot they came from, so a round
+// trip preserves them without either end modelling their content.
+//
+// `<pageFields>` is the one element that is both passed through and
+// synthesised. A table read from a file re-emits its authored block from
+// the passthrough bin; a table assembled in memory has no such block, so
+// the writer builds one from the page-axis fields. Without it a saved
+// `axis="axisPage"` field names no page-field order and Excel treats the
+// definition as damaged.
 //
 // Design references:
 //   * src/io/pivot_table_reader.h (sister reader; canonical grammar)

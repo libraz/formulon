@@ -59,6 +59,22 @@ struct ColSubtotal {
   std::vector<std::vector<Value>> values;
 };
 
+/// One page-axis (report filter) field as it is drawn above the report.
+///
+/// Both labels are resolved during evaluation rather than by the
+/// projection, for the same reason a blank axis item is: naming the
+/// selection needs the bound cache, which `layout` is not given. Entries
+/// appear in `PivotTable::page_field_order()` order.
+struct PivotPageSelection {
+  std::uint32_t field_index = 0;
+  /// The field's display name — the same text a row/column header would
+  /// carry for it.
+  std::string field_label;
+  /// The item the field is showing: a single item's own name, or the
+  /// locale's "all items" / "several items" placeholder.
+  std::string item_label;
+};
+
 /// Snapshot of a single pivot evaluation.
 ///
 /// Storage is heap-owned and self-contained: each `Value` (including any
@@ -93,6 +109,10 @@ struct PivotResult {
   /// column-hierarchy display order, after each subtotal owner's descendant
   /// leaves.
   std::vector<ColSubtotal> col_subtotals;
+
+  /// Page-axis fields with their resolved selection, in report order.
+  /// Empty when the table places no field on the page axis.
+  std::vector<PivotPageSelection> page_selections;
 
   /// Grand total across every aggregation. Defaults to `Blank`.
   Value grand_total = Value::blank();

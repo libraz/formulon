@@ -60,13 +60,24 @@ enum class PivotCellKind : std::uint8_t {
 /// default is still a guess, so do not hard-code it at a use site. The
 /// label is applied after the axis is ordered: Excel sorts the blank
 /// group last by its source value, not first by this text.
+///
+/// `all_pages_label` / `multiple_items_label` name a page field's
+/// selection when no single item identifies it, and are resolved
+/// alongside `blank_item_label` for the same reason. Only the ja-JP
+/// `all_pages_label` is oracle-measured — Excel wrote `(すべて)` into the
+/// grid of the `getpivotdata_page_data` capture. The English pair and the
+/// several-items spelling reproduce Excel's UI wording but no capture
+/// pins them, so treat them the way `blank_item_label`'s English default
+/// is treated and do not hard-code either at a use site.
 struct PivotLayoutOptions {
   std::string grand_total_label = "Grand Total";
   std::string values_label = "Values";
   std::string blank_item_label = "(blank)";  ///< Label of an axis item with no value; English is provisional.
-  std::string row_labels_label;              ///< e.g. "行ラベル"; empty disables.
-  std::string column_labels_label;           ///< e.g. "列ラベル"; empty disables.
-  std::string subtotal_suffix;               ///< e.g. " 集計"; empty falls back to grand_total_label.
+  std::string all_pages_label = "(All)";     ///< Page field showing every item; English is provisional.
+  std::string multiple_items_label = "(Multiple Items)";  ///< Page field showing several items; provisional.
+  std::string row_labels_label;                           ///< e.g. "行ラベル"; empty disables.
+  std::string column_labels_label;                        ///< e.g. "列ラベル"; empty disables.
+  std::string subtotal_suffix;                            ///< e.g. " 集計"; empty falls back to grand_total_label.
 };
 
 struct PivotCell {

@@ -102,6 +102,62 @@ Value aggregate_or_blank(Aggregation aggregation, const std::vector<Value>& valu
   return reify(apply_aggregation(aggregation, values), result);
 }
 
+/// Names what a page (report filter) field is currently showing.
+///
+/// Settled here rather than in the projection for the same reason a blank
+/// axis item is: the answer comes from the bound cache, which `layout` is
+/// never handed. `resolve_pivot_names` has already copied each shared
+/// item's rendering into `PivotItem::name`, so the cache is not re-read —
+/// what the evaluation supplies is the timing, not the data.
+///
+/// Excel records the selection two different ways and both are honoured:
+/// a single chosen item as `<pageField item="N">`, and any wider selection
+/// as visibility flags on the field's own items. A field that hides
+/// nothing is unfiltered, which is also what an empty item list means — a
+/// table assembled in memory lists items only once something filters them.
+std::string page_item_label(const PivotField& field, std::optional<std::uint32_t> selected,
+                            const PivotLayoutOptions& options) {
+  const auto label_of = [&options](const PivotItem& item) {
+    return item.name.empty() ? options.blank_item_label : item.name;
+  };
+  if (selected.has_value() && *selected < field.items.size()) {
+    return label_of(field.items[*selected]);
+  }
+  const PivotItem* only_visible = nullptr;
+  std::size_t visible_count = 0;
+  for (const PivotItem& item : field.items) {
+    if (!item.visible) {
+      continue;
+    }
+    ++visible_count;
+    only_visible = &item;
+  }
+  if (visible_count == field.items.size()) {
+    return options.all_pages_label;
+  }
+  if (visible_count == 1U && only_visible != nullptr) {
+    return label_of(*only_visible);
+  }
+  return options.multiple_items_label;
+}
+
+void resolve_page_selections(const PivotTable& table, const PivotLayoutOptions& options, PivotResult& result) {
+  const std::vector<std::uint32_t> order = table.page_field_order();
+  result.page_selections.reserve(order.size());
+  for (const std::uint32_t field_index : order) {
+    const PivotField& field = table.fields()[field_index];
+    std::optional<std::uint32_t> selected;
+    for (const PivotPageField& page : table.page_fields()) {
+      if (page.field_index == field_index) {
+        selected = page.item_index;
+        break;
+      }
+    }
+    result.page_selections.push_back(
+        PivotPageSelection{field_index, pivot_field_display_name(field), page_item_label(field, selected, options)});
+  }
+}
+
 // `SubtotalFn` and `Aggregation` share the same ordinal layout (Sum=0 ..
 // VarP=10), so a custom subtotal function maps to the matching aggregation
 // by ordinal.
@@ -221,6 +277,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   std::vector<HierNode*> col_leaves;
   finalize_hierarchy<RowHierarchyNode>(row_tree, row_levels, 0U, result.rows, row_leaves);
   finalize_hierarchy<ColHierarchyNode>(col_tree, col_levels, 0U, result.cols, col_leaves);
+  resolve_page_selections(table, options, result);
 
   // Degenerate axis: if a side has no field configured, treat it as a
   // single implicit leaf so the values matrix still has a slot per

@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #include "pivot/pivot_table.h"
@@ -21,6 +22,13 @@ namespace formulon::pivot {
 /// layout renders).
 inline bool pivot_field_has_name(const PivotField& field, std::string_view name) {
   return field.source_name == name || (!field.custom_name.empty() && field.custom_name == name);
+}
+
+/// The name a field is drawn with: its `custom_name` when the user renamed
+/// it, otherwise its `source_name`. The inverse of `pivot_field_has_name`,
+/// which accepts either spelling.
+inline std::string pivot_field_display_name(const PivotField& field) {
+  return field.custom_name.empty() ? field.source_name : field.custom_name;
 }
 
 /// Resolves `name` to an index into `table.fields()`. Direct field names win

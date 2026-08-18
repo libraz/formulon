@@ -375,12 +375,15 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
 
   // Build one `PivotField` per source header, in source-column order, so a
   // data field's `field_index` lines up with the cache field index. The
-  // axis defaults to Page (treated as "not on row/col") and is promoted to
-  // Row / Col when the field name appears in `row_fields` / `col_fields`.
+  // axis starts at `None` — an available field the report does not place —
+  // and is promoted when the field name appears in `row_fields` /
+  // `col_fields` / `page_fields`. `Page` is a placement of its own and
+  // draws a header above the report, so a source column nobody positioned
+  // must not borrow it.
   for (std::uint32_t f = 0; f < headers.size(); ++f) {
     PivotField field;
     field.source_name = headers[f];
-    field.axis = PivotAxis::Page;
+    field.axis = PivotAxis::None;
     auto hidden_it = hidden_items.find(headers[f]);
     if (hidden_it != hidden_items.end()) {
       for (const Value& shared : cache.fields()[f].shared_items) {

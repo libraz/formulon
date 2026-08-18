@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "pivot/field_lookup.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -38,12 +39,10 @@ struct ColEntry {
   std::size_t subtotal_index = 0;
 };
 
-std::string field_display_name(const PivotField& field) {
-  if (!field.custom_name.empty()) {
-    return field.custom_name;
-  }
-  return field.source_name;
-}
+/// Columns a page-field header row occupies: the field name and the item it
+/// is showing. Excel leaves the rest of the row empty however wide the
+/// report below it is.
+constexpr std::size_t kPageHeaderCols = 2;
 
 std::string data_field_name(const PivotTable& table, std::size_t index) {
   if (index >= table.data_fields().size()) {
@@ -454,8 +453,17 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       table.grand_totals_rows() && (!(compact || multi_col_layout) || col_depth > 0);
   const bool emit_grand_totals_cols_strip =
       table.grand_totals_cols() && (!(compact || multi_col_layout) || row_depth > 0);
-  const std::size_t total_rows = header_rows + row_entries.size() + (emit_grand_totals_cols_strip ? 1 : 0);
-  const std::size_t total_cols = row_header_cols + data_cols + (emit_grand_totals_rows_strip ? data_field_count : 0);
+  // Page (report filter) fields are drawn above the report proper: one row
+  // per field, then a blank row separating the block from the row/column
+  // headers. Excel counts both inside the pivot's own `ref`, so they take
+  // the top of the projected grid and the report body starts below them.
+  // The block is at least `kPageHeaderCols` wide even over a report
+  // narrower than that, because the selection cell has to land somewhere.
+  const std::size_t page_rows = result.page_selections.empty() ? 0 : result.page_selections.size() + 1;
+  const std::size_t body_rows = header_rows + row_entries.size() + (emit_grand_totals_cols_strip ? 1 : 0);
+  const std::size_t body_cols = row_header_cols + data_cols + (emit_grand_totals_rows_strip ? data_field_count : 0);
+  const std::size_t total_rows = page_rows + body_rows;
+  const std::size_t total_cols = (page_rows > 0 && body_cols < kPageHeaderCols) ? kPageHeaderCols : body_cols;
 
   if (total_rows > UINT32_MAX || total_cols > UINT32_MAX) {
     return make_error(FormulonErrorCode::kEvalPivotInvalid, "pivot layout: projected bounds exceed uint32_t",
@@ -473,11 +481,33 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   cells.cols = static_cast<std::uint32_t>(total_cols);
   cells.cells.reserve(cell_count_or.value());
 
-  const std::uint32_t top = cells.top;
   const std::uint32_t left = cells.left;
+  const std::uint32_t top = cells.top + static_cast<std::uint32_t>(page_rows);
   const std::uint32_t data_top = top + static_cast<std::uint32_t>(header_rows);
   const std::uint32_t data_left = left + static_cast<std::uint32_t>(row_header_cols);
   const std::uint32_t row_header_row = top + static_cast<std::uint32_t>(header_rows - 1);
+
+  // The page block: field name, then the item it is showing. Both are
+  // header furniture, so neither earns a `PivotCellKind` of its own — the
+  // vocabulary is mirrored by the C ABI and the WASM enum, and a page cell
+  // is not something a renderer has to draw differently from a header.
+  // Trailing columns and the separator row are explicit blanks so the
+  // rendered extent is the rectangle Excel reports.
+  for (std::size_t i = 0; i < result.page_selections.size(); ++i) {
+    const PivotPageSelection& page = result.page_selections[i];
+    const std::uint32_t row = cells.top + static_cast<std::uint32_t>(i);
+    append_cell(cells, row, left, text_value(cells, page.field_label), PivotCellKind::Header, 0, page.field_label);
+    append_cell(cells, row, left + 1, text_value(cells, page.item_label), PivotCellKind::Header, 0, page.field_label);
+    for (std::size_t col = kPageHeaderCols; col < total_cols; ++col) {
+      append_cell(cells, row, left + static_cast<std::uint32_t>(col), Value::blank(), PivotCellKind::Blank, 0);
+    }
+  }
+  if (page_rows > 0) {
+    const std::uint32_t row = cells.top + static_cast<std::uint32_t>(result.page_selections.size());
+    for (std::size_t col = 0; col < total_cols; ++col) {
+      append_cell(cells, row, left + static_cast<std::uint32_t>(col), Value::blank(), PivotCellKind::Blank, 0);
+    }
+  }
 
   if (multi_col_layout) {
     // Tabular / Outline header: one row containing the per-row-field
@@ -486,7 +516,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
     for (std::size_t d = 0; d < row_depth; ++d) {
       std::string label;
       if (table.row_field_order()[d] < table.fields().size()) {
-        label = field_display_name(table.fields()[table.row_field_order()[d]]);
+        label = pivot_field_display_name(table.fields()[table.row_field_order()[d]]);
       }
       append_cell(cells, top, left + static_cast<std::uint32_t>(d), text_value(cells, std::move(label)),
                   PivotCellKind::Header, static_cast<std::uint32_t>(d));
@@ -559,7 +589,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           }
           std::string field_name;
           if (depth < col_depth && table.col_field_order()[depth] < table.fields().size()) {
-            field_name = field_display_name(table.fields()[table.col_field_order()[depth]]);
+            field_name = pivot_field_display_name(table.fields()[table.col_field_order()[depth]]);
           }
           for (std::size_t df = 0; df < data_field_count; ++df) {
             const std::uint32_t col = data_left + static_cast<std::uint32_t>(c_entry * data_field_count + df);
@@ -586,7 +616,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
     for (std::size_t depth = 0; depth < row_header_cols; ++depth) {
       std::string label;
       if (depth < row_depth && table.row_field_order()[depth] < table.fields().size()) {
-        label = field_display_name(table.fields()[table.row_field_order()[depth]]);
+        label = pivot_field_display_name(table.fields()[table.row_field_order()[depth]]);
       }
       append_cell(cells, row_header_row, left + static_cast<std::uint32_t>(depth), text_value(cells, std::move(label)),
                   PivotCellKind::Header, static_cast<std::uint32_t>(depth));
@@ -613,7 +643,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         }
         std::string field_name;
         if (depth < col_depth && table.col_field_order()[depth] < table.fields().size()) {
-          field_name = field_display_name(table.fields()[table.col_field_order()[depth]]);
+          field_name = pivot_field_display_name(table.fields()[table.col_field_order()[depth]]);
         }
         for (std::size_t df = 0; df < data_field_count; ++df) {
           const std::uint32_t col = data_left + static_cast<std::uint32_t>(c_entry * data_field_count + df);
@@ -723,7 +753,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       }
       std::string field_name;
       if (depth < row_depth && table.row_field_order()[depth] < table.fields().size()) {
-        field_name = field_display_name(table.fields()[table.row_field_order()[depth]]);
+        field_name = pivot_field_display_name(table.fields()[table.row_field_order()[depth]]);
       }
       if (emit_blank) {
         append_cell(cells, row, left + static_cast<std::uint32_t>(depth), Value::blank(),
