@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-18
+
 ### Added
 
 - A pivot with a report-filter (page) field now renders the header block
@@ -801,7 +803,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.7...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/libraz/formulon/compare/v0.9.7...v0.10.0
 [0.9.7]: https://github.com/libraz/formulon/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/libraz/formulon/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/libraz/formulon/compare/v0.9.4...v0.9.5

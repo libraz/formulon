@@ -6,8 +6,10 @@
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
 
 Native N-API binding for [Formulon](https://github.com/libraz/formulon),
-the Excel 365 calculation engine. The badges above track the sibling
-WebAssembly and Python packages; this one is not published to npm yet.
+the Excel 365 calculation engine. This package is not distributed on npm;
+it is built from the repository, as described under
+[Building from source](#building-from-source). The badges above track the
+sibling WebAssembly and Python packages, which are published.
 
 Formula evaluation uses Formulon's default `win-365-ja_JP` profile. Call
 `setExcelProfileId()` when a workbook must use the separately supported

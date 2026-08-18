@@ -6,7 +6,8 @@ The high-level summary lives in [`CHANGELOG.md`](../../CHANGELOG.md).
 
 ## Available Versions
 
-- [v0.9.7](https://github.com/libraz/formulon/releases/tag/v0.9.7) — Latest release (2026-08-06) — pagination across the CLI, C ABI and every binding, workbook memory-footprint reporting, XLSB styles and worksheet-tail retention, and broad evaluation / I/O correctness work.
+- [v0.10.0](https://github.com/libraz/formulon/releases/tag/v0.10.0) — Latest release (2026-08-18) — C ABI entry-point consolidation (the `_ex` variants folded into their base names, a binary break against v0.9.7), pivot report-filter rendering, a verified Windows Excel 365 primary oracle for the workbook track, and broad evaluation / I/O correctness work.
+- [v0.9.7](https://github.com/libraz/formulon/releases/tag/v0.9.7) — 2026-08-06 — pagination across the CLI, C ABI and every binding, workbook memory-footprint reporting, XLSB styles and worksheet-tail retention, and broad evaluation / I/O correctness work.
 - [v0.9.6](https://github.com/libraz/formulon/releases/tag/v0.9.6) — 2026-07-19 — full Excel 365 dynamic-array spill semantics plus broad security / robustness hardening across evaluation and I/O.
 - [v0.9.5](https://github.com/libraz/formulon/releases/tag/v0.9.5) — 2026-07-04 — ad-hoc array evaluation, function-metadata provider seam, and spill-phantom / range-shaped defined-name fixes.
 - [v0.9.4](https://github.com/libraz/formulon/releases/tag/v0.9.4) — 2026-07-03 — read-only ad-hoc formula/CF evaluation, comment enumeration, and data-validation dropdown fixes.
