@@ -56,7 +56,9 @@
 #include "eval/name_env.h"
 #include "eval/range_args.h"
 #include "eval/scalar_ops.h"
+#include "eval/spill_anchor.h"
 #include "eval/structured_ref.h"
+#include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -149,99 +151,31 @@ bool coerce_to_truthy_for_jump(const Value& v, ErrorCode* out_err, bool* out_has
   return b.value();
 }
 
-// Resolves a structured-ref bracket payload through the workbook. Mirrors
-// tree_walker.cpp's `NodeKind::StructuredRef` branch and funnels the
-// resolved rectangle through `EvalContext::expand_range` so cross-sheet
-// resolution + cycle detection stays in one place.
+// Wraps the shared structured-ref projection (the tree walker runs the
+// same one) so an exhausted arena surfaces as a VM fault rather than as
+// a `#NUM!` cell value.
 Expected<Value, Error> resolve_struct_ref_op(std::string_view table_name, std::string_view column_payload, Arena& arena,
                                              const FunctionRegistry& registry, const EvalContext& ctx) {
-  const Workbook* wb = ctx.workbook();
-  const Sheet* current = ctx.current_sheet();
-  if (wb == nullptr || current == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  auto sel_or = parse_structured_ref_payload(column_payload);
-  if (!sel_or) {
-    return Value::error(sel_or.error());
-  }
-  StructuredRefSelector sel = std::move(sel_or).value();
-  sel.table_name = table_name;
-  std::uint32_t current_sheet_index = 0;
-  for (std::size_t i = 0; i < wb->sheet_count(); ++i) {
-    if (&wb->sheet(i) == current) {
-      current_sheet_index = static_cast<std::uint32_t>(i);
-      break;
-    }
-  }
-  const std::uint32_t current_row = ctx.has_formula_cell() ? ctx.formula_row() : EvalContext::kNoFormulaCell;
-  auto rect_or = resolve_structured_ref(sel, *wb, current_sheet_index, current_row);
-  if (!rect_or) {
-    return Value::error(rect_or.error());
-  }
-  const StructuredRefRange rect = std::move(rect_or).value();
-  parser::Reference lhs{};
-  lhs.sheet = rect.sheet_name;
-  lhs.row = rect.row_first;
-  lhs.col = rect.col_first;
-  parser::Reference rhs{};
-  rhs.sheet = rect.sheet_name;
-  rhs.row = rect.row_last;
-  rhs.col = rect.col_last;
-  if (rect.row_first == rect.row_last && rect.col_first == rect.col_last) {
-    return ctx.resolve_ref(lhs, arena, registry);
-  }
-  auto cells = ctx.expand_range(lhs, rhs, arena, registry);
-  if (!cells) {
-    return Value::error(cells.error());
-  }
-  const std::uint32_t rows = rect.row_last - rect.row_first + 1u;
-  const std::uint32_t cols = rect.col_last - rect.col_first + 1u;
-  Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
-  if (arr == nullptr) {
+  bool arena_exhausted = false;
+  const Value projected = project_structured_ref(table_name, column_payload, arena, registry, ctx, &arena_exhausted);
+  if (arena_exhausted) {
     return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a structured reference");
   }
-  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  const std::vector<Value>& expanded = cells.value();
-  for (std::size_t i = 0; i < total; ++i) {
-    buffer[i] = i < expanded.size() ? expanded[i] : Value::blank();
-  }
-  return Value::array(arr);
+  return projected;
 }
 
-// Mirror of tree_walker.cpp's SpillRef branch: resolve the spill region at
-// the anchor and project it as a `Value::Array`.
+// Wraps the shared spill-anchor projection, with the same out-of-memory
+// distinction as `resolve_struct_ref_op` above.
 Expected<Value, Error> resolve_spill_ref_op(const parser::Reference& r, Arena& arena, const EvalContext& ctx) {
-  const Sheet* current = ctx.current_sheet();
-  if (current == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  const Sheet* target = current;
-  if (!r.sheet.empty()) {
-    const Workbook* wb = ctx.workbook();
-    if (wb == nullptr) {
-      return Value::error(ErrorCode::Ref);
-    }
-    target = wb->sheet_by_name(r.sheet);
-    if (target == nullptr) {
-      return Value::error(ErrorCode::Ref);
-    }
-  }
-  if (r.row >= Sheet::kMaxRows || r.col >= Sheet::kMaxCols) {
-    return Value::error(ErrorCode::Ref);
-  }
-  const SpillRegion* region = target->spill_region_at_anchor(r.row, r.col);
-  if (region == nullptr) {
-    return Value::error(ErrorCode::Ref);
-  }
-  Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(region->rows, region->cols, arena, buffer, kMaxDerivedArrayCells);
+  ErrorCode err = ErrorCode::Ref;
+  ArrayValue* arr = project_spill_at_anchor(r.sheet, r.row, r.col, arena, ctx, &err);
   if (arr == nullptr) {
-    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a spilled reference");
-  }
-  const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
-  for (std::size_t i = 0; i < n; ++i) {
-    buffer[i] = region->cells[i];
+    // `#NUM!` is the projection's arena-exhaustion signal; the VM carries
+    // that as a structured error rather than a cell value.
+    if (err == ErrorCode::Num) {
+      return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a spilled reference");
+    }
+    return Value::error(err);
   }
   return Value::array(arr);
 }

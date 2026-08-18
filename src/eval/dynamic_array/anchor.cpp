@@ -5,9 +5,9 @@
 #include <cstdint>
 #include <string_view>
 
-#include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/range_resolvers.h"
+#include "eval/spill_anchor.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -66,36 +66,10 @@ Value eval_anchorarray_lazy(const parser::AstNode& call, Arena& arena, const Fun
       return Value::error(ErrorCode::Value);
   }
 
-  const Sheet* current = ctx.current_sheet();
-  if (current == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  const Sheet* target = current;
-  if (!sheet_name.empty()) {
-    const Workbook* wb = ctx.workbook();
-    if (wb == nullptr) {
-      return Value::error(ErrorCode::Ref);
-    }
-    target = wb->sheet_by_name(sheet_name);
-    if (target == nullptr) {
-      return Value::error(ErrorCode::Ref);
-    }
-  }
-  if (anchor_row >= Sheet::kMaxRows || anchor_col >= Sheet::kMaxCols) {
-    return Value::error(ErrorCode::Ref);
-  }
-  const SpillRegion* region = target->spill_region_at_anchor(anchor_row, anchor_col);
-  if (region == nullptr) {
-    return Value::error(ErrorCode::Ref);
-  }
-  Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(region->rows, region->cols, arena, buffer, kMaxDerivedArrayCells);
+  ErrorCode err = ErrorCode::Ref;
+  ArrayValue* arr = project_spill_at_anchor(sheet_name, anchor_row, anchor_col, arena, ctx, &err);
   if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
-  for (std::size_t i = 0; i < n; ++i) {
-    buffer[i] = region->cells[i];
+    return Value::error(err);
   }
   return Value::array(arr);
 }

@@ -35,7 +35,9 @@
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
+#include "eval/spill_anchor.h"
 #include "eval/structured_ref.h"
+#include "eval/structured_ref_project.h"
 #include "eval/tree_walker.h"
 #include "eval/tree_walker/broadcast.h"
 #include "eval/tree_walker/depth_guard.h"
@@ -616,36 +618,10 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       // payloads point into `SpillRegion::owned_strings`, which lives on
       // Sheet and outlives any single evaluation arena (zero-copy reuse).
       const parser::Reference& r = node.as_spill_ref();
-      const Sheet* current = ctx.current_sheet();
-      if (current == nullptr) {
-        return Value::error(ErrorCode::Name);
-      }
-      const Sheet* target = current;
-      if (!r.sheet.empty()) {
-        const Workbook* wb = ctx.workbook();
-        if (wb == nullptr) {
-          return Value::error(ErrorCode::Ref);
-        }
-        target = wb->sheet_by_name(r.sheet);
-        if (target == nullptr) {
-          return Value::error(ErrorCode::Ref);
-        }
-      }
-      if (r.row >= Sheet::kMaxRows || r.col >= Sheet::kMaxCols) {
-        return Value::error(ErrorCode::Ref);
-      }
-      const SpillRegion* region = target->spill_region_at_anchor(r.row, r.col);
-      if (region == nullptr) {
-        return Value::error(ErrorCode::Ref);
-      }
-      Value* buffer = nullptr;
-      ArrayValue* arr = allocate_array_value(region->rows, region->cols, arena, buffer, kMaxDerivedArrayCells);
+      ErrorCode spill_err = ErrorCode::Ref;
+      ArrayValue* arr = project_spill_at_anchor(r.sheet, r.row, r.col, arena, ctx, &spill_err);
       if (arr == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
-      for (std::size_t i = 0; i < n; ++i) {
-        buffer[i] = region->cells[i];
+        return Value::error(spill_err);
       }
       return Value::array(arr);
     }
@@ -741,76 +717,12 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     }
 
     case parser::NodeKind::StructuredRef: {
-      // Resolve the table reference (`Table[Col]`, `Table[#All]`, ...) to a
-      // concrete rectangle on the table's home sheet, then read the cells
-      // through the existing reference-resolution machinery. The bracket
-      // payload was captured verbatim by the parser into the node's
-      // `column` slot; the resolver re-parses it here so multi-specifier
-      // and column-range forms can flow through a single AST shape.
-      const Workbook* wb = ctx.workbook();
-      const Sheet* current = ctx.current_sheet();
-      if (wb == nullptr || current == nullptr) {
-        return Value::error(ErrorCode::Name);
-      }
-      auto sel_or = parse_structured_ref_payload(node.as_structured_ref_column());
-      if (!sel_or) {
-        return Value::error(sel_or.error());
-      }
-      StructuredRefSelector sel = std::move(sel_or).value();
-      sel.table_name = node.as_structured_ref_table();
-      // Locate the current sheet's workbook index; falling back to 0 is fine
-      // because the resolver only consults `current_sheet_index` for
-      // future cross-sheet contracts (the row-implicit form uses the
-      // formula cell's row directly).
-      std::uint32_t current_sheet_index = 0;
-      for (std::size_t i = 0; i < wb->sheet_count(); ++i) {
-        if (&wb->sheet(i) == current) {
-          current_sheet_index = static_cast<std::uint32_t>(i);
-          break;
-        }
-      }
-      const std::uint32_t current_row = ctx.has_formula_cell() ? ctx.formula_row() : EvalContext::kNoFormulaCell;
-      auto rect_or = resolve_structured_ref(sel, *wb, current_sheet_index, current_row);
-      if (!rect_or) {
-        return Value::error(rect_or.error());
-      }
-      const StructuredRefRange rect = std::move(rect_or).value();
-      // Build A1 references for the rectangle's two corners and let
-      // `expand_range` do the actual cell fetch. This funnels structured
-      // refs through the same cross-sheet / cycle-detecting path as a
-      // literal `Sheet1!A1:C10` reference.
-      parser::Reference lhs{};
-      lhs.sheet = rect.sheet_name;
-      lhs.row = rect.row_first;
-      lhs.col = rect.col_first;
-      parser::Reference rhs{};
-      rhs.sheet = rect.sheet_name;
-      rhs.row = rect.row_last;
-      rhs.col = rect.col_last;
-      // Single-cell rectangle: read the value directly, mirroring `Ref`.
-      if (rect.row_first == rect.row_last && rect.col_first == rect.col_last) {
-        return ctx.resolve_ref(lhs, arena, registry);
-      }
-      auto cells = ctx.expand_range(lhs, rhs, arena, registry);
-      if (!cells) {
-        return Value::error(cells.error());
-      }
-      const std::uint32_t rows = rect.row_last - rect.row_first + 1u;
-      const std::uint32_t cols = rect.col_last - rect.col_first + 1u;
-      Value* buffer = nullptr;
-      ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
-      if (arr == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      // The seam hands back uninitialised storage, so every cell must be
-      // written even when the expansion returned fewer values than the
-      // rectangle covers (a clamped whole-row / whole-column endpoint).
-      const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-      const std::vector<Value>& expanded = cells.value();
-      for (std::size_t i = 0; i < total; ++i) {
-        buffer[i] = i < expanded.size() ? expanded[i] : Value::blank();
-      }
-      return Value::array(arr);
+      // Resolve the table reference (`Table[Col]`, `Table[#All]`, ...) to
+      // a concrete rectangle and read it through the shared projection,
+      // which the bytecode VM's `StructRef` opcode also runs.
+      bool arena_exhausted = false;
+      return project_structured_ref(node.as_structured_ref_table(), node.as_structured_ref_column(), arena, registry,
+                                    ctx, &arena_exhausted);
     }
 
     case parser::NodeKind::Lambda: {
