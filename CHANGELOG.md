@@ -121,6 +121,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Saving a workbook whose PivotTable cache declares no worksheet source now
+  fails instead of writing the package. Excel offers to repair any file
+  carrying a bare `<cacheSource type="worksheet"/>`, and there is no form of
+  it Excel accepts without a `<worksheetSource>` — so the writer was
+  describing a state that cannot be saved. A declared range is enough even
+  when the sheet holds no data, because the cache records carry the values
+  themselves. Call `fm_workbook_pivot_cache_set_worksheet_source` (Python
+  `set_pivot_cache_worksheet_source`, Node `pivotCacheSetWorksheetSource`)
+  after creating a cache. This is a breaking change for a host that builds
+  pivots through the API and never set one, but those saves were already
+  producing a file Excel would not open cleanly, with nothing in the API
+  reporting it; the save path is the only place the host can learn of it.
+  Caches read from a file are unaffected — Excel always writes a source.
 - The C ABI carries one entry point per operation instead of a base name plus
   an `_ex` / `_ex2` successor. The surviving rung is the one that represents
   the whole model; the narrower one is gone. This is a coordinated,
