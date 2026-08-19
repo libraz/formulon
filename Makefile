@@ -386,6 +386,11 @@ python-test: python-package
 	  exit 1; \
 	fi
 	@(cd $(PY_PKG_DIR) && $(PYTHON) -m unittest discover -v tests)
+	@# The oracle's print round-trip fixtures are authored through this
+	@# binding, so they belong to whatever interpreter can import it. The
+	@# CTest copy runs on the oracle venv, which installs the capture
+	@# dependencies rather than the wheel, and skips the authoring half.
+	@PYTHONPATH=$(PY_PKG_DIR) $(PYTHON) -m unittest tools.oracle.print_roundtrip_test
 
 python-wheel: python-package
 	@if ! $(PYTHON) -m pip --version >/dev/null 2>&1; then \

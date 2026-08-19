@@ -61,8 +61,9 @@ except ImportError:  # pragma: no cover
     from drivers import select_driver  # type: ignore
     from oracle_gen import _load_divergence_reprobes, _load_divergence_skips  # type: ignore
 try:
-    from tools.oracle import workbook_case_schema
+    from tools.oracle import print_roundtrip, workbook_case_schema
 except ImportError:  # pragma: no cover
+    import print_roundtrip  # type: ignore
     import workbook_case_schema  # type: ignore
 
 
@@ -80,6 +81,46 @@ DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 # staging out of the tree, survives a reboot (unlike /tmp) so a capture can
 # be reviewed the next day, and gives `promote_capture.py` a default source.
 STAGING_ROOT = Path.home() / ".cache" / "formulon" / "oracle-capture"
+
+
+def _formulon_module() -> Any:
+    """Imports the Formulon Python binding for round-trip fixtures.
+
+    Deferred and wrapped so a suite that carries no `roundtrip` case never
+    needs the binding at all, and one that does gets told how to supply it
+    instead of an ImportError from three frames down.
+    """
+
+    try:
+        import formulon  # noqa: PLC0415 - deferred; only roundtrip cases need it
+    except ImportError as exc:
+        raise RuntimeError(
+            "a roundtrip case needs the Formulon Python binding, which is not importable; "
+            "from a source checkout export PYTHONPATH=packages/python"
+        ) from exc
+    return formulon
+
+
+def _dispatch_case(oracle: Any, case: Dict[str, Any]) -> Dict[str, Any]:
+    """Runs one workbook case, authoring its fixture first if it needs one.
+
+    A `roundtrip` case is captured against a workbook Formulon wrote, so
+    the bytes have to exist before the driver is called. They are authored
+    here rather than in the driver because the driver may be running on a
+    Windows host across the WSL bridge, where the repo -- and therefore
+    the binding -- is not necessarily installed.
+
+    The payload is attached to a copy. The golden stores the case spec
+    verbatim, and a base64 workbook has no business in a file people read.
+    """
+
+    spec = case.get("roundtrip")
+    if not isinstance(spec, dict):
+        return oracle.run_workbook_case(case)
+    payload = print_roundtrip.fixture_payload(case, module=_formulon_module())
+    prepared = dict(case)
+    prepared["roundtrip"] = {**spec, **payload}
+    return oracle.run_workbook_case(prepared)
 
 
 def staging_dir_for(track: str, target_name: str) -> Path:
@@ -488,7 +529,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         # two and either retires it or stamps it.
                         if cid in reprobes:
                             try:
-                                entry["observed"] = oracle.run_workbook_case(case)
+                                entry["observed"] = _dispatch_case(oracle, case)
                             except Exception as exc:  # noqa: BLE001 - reported, not raised
                                 # One unobservable case must not sink an
                                 # otherwise complete capture.
@@ -499,7 +540,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         continue
                     # The driver evaluates the declarative workbook spec
                     # and returns the observed pivot / print result.
-                    expect = oracle.run_workbook_case(case)
+                    expect = _dispatch_case(oracle, case)
                     out_cases.append(
                         {
                             "id": cid,

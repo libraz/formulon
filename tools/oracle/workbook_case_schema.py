@@ -238,6 +238,175 @@ def _validate_pivot_block(raw: Any, where: str) -> None:
 _PRINT_ORIENTATIONS = {"portrait", "landscape", "default"}
 
 
+# Field name -> accepted Python type for every `roundtrip` sub-block.
+# Unlike the `print` block these mirror the print-authoring API's own
+# parameters one-for-one, because a roundtrip case's job is to state
+# exactly what a caller would call and nothing else.
+_ROUNDTRIP_PAGE_SETUP_FIELDS = {
+    "orientation": int,
+    "paper_size": int,
+    "scale": int,
+    "fit_to_width": int,
+    "fit_to_height": int,
+    "fit_to_page": bool,
+}
+_ROUNDTRIP_MARGIN_FIELDS = ("left", "right", "top", "bottom", "header", "footer")
+_ROUNDTRIP_PRINT_OPTION_FIELDS = ("grid_lines", "headings", "horizontal_centered", "vertical_centered")
+_ROUNDTRIP_HEADER_FOOTER_TEXT = (
+    "odd_header",
+    "odd_footer",
+    "even_header",
+    "even_footer",
+    "first_header",
+    "first_footer",
+)
+_ROUNDTRIP_HEADER_FOOTER_FLAGS = (
+    "different_odd_even",
+    "different_first",
+    "scale_with_doc",
+    "align_with_margins",
+)
+_ROUNDTRIP_BLOCK_KEYS = frozenset(
+    {
+        "sheet",
+        "page_setup",
+        "page_margins",
+        "print_options",
+        "header_footer",
+        "print_area",
+        "print_titles",
+        "row_breaks",
+        "col_breaks",
+    }
+)
+
+# Column letters, as `col_breaks` and `print_titles` spell them.
+_COLUMN_LETTERS_RE = re.compile(r"^[A-Za-z]{1,3}$")
+
+
+def _validate_roundtrip_block(raw: Any, where: str) -> None:
+    """Validates a `roundtrip` feature block.
+
+    The block states the print settings Formulon should author before the
+    workbook is written and handed to Excel. Every member is optional
+    except `sheet`, and each one maps to a single print-authoring call.
+
+    Unknown keys are rejected rather than ignored. A misspelled sub-block
+    would author nothing, and the capture would then record Excel
+    resolving the file's defaults -- a golden that looks like a clean pass
+    while testing nothing the case describes.
+    """
+
+    if not isinstance(raw, dict):
+        raise ValidationError(f"{where}: roundtrip block must be a mapping")
+
+    unknown = sorted(set(raw) - _ROUNDTRIP_BLOCK_KEYS)
+    if unknown:
+        raise ValidationError(
+            f"{where}: unknown roundtrip field(s) {unknown}; expected {sorted(_ROUNDTRIP_BLOCK_KEYS)}"
+        )
+
+    if "sheet" not in raw:
+        raise ValidationError(f"{where}: roundtrip block missing required 'sheet'")
+    if not isinstance(raw["sheet"], str) or not raw["sheet"]:
+        raise ValidationError(f"{where}/sheet: expected non-empty string")
+
+    setup = raw.get("page_setup")
+    if setup is not None:
+        if not isinstance(setup, dict):
+            raise ValidationError(f"{where}/page_setup: expected mapping")
+        unknown = sorted(set(setup) - set(_ROUNDTRIP_PAGE_SETUP_FIELDS))
+        if unknown:
+            raise ValidationError(f"{where}/page_setup: unknown field(s) {unknown}")
+        for field, expected in _ROUNDTRIP_PAGE_SETUP_FIELDS.items():
+            if field not in setup or setup[field] is None:
+                continue
+            value = setup[field]
+            if expected is bool:
+                if not isinstance(value, bool):
+                    raise ValidationError(f"{where}/page_setup/{field}: expected a boolean, got {value!r}")
+            elif isinstance(value, bool) or not isinstance(value, int):
+                raise ValidationError(f"{where}/page_setup/{field}: expected an integer, got {value!r}")
+
+    margins = raw.get("page_margins")
+    if margins is not None:
+        if not isinstance(margins, dict):
+            raise ValidationError(f"{where}/page_margins: expected mapping")
+        unknown = sorted(set(margins) - set(_ROUNDTRIP_MARGIN_FIELDS))
+        if unknown:
+            raise ValidationError(f"{where}/page_margins: unknown field(s) {unknown}")
+        for field in _ROUNDTRIP_MARGIN_FIELDS:
+            if field not in margins or margins[field] is None:
+                continue
+            value = margins[field]
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValidationError(f"{where}/page_margins/{field}: expected a number, got {value!r}")
+            if value < 0:
+                raise ValidationError(f"{where}/page_margins/{field}: must be non-negative, got {value!r}")
+
+    options = raw.get("print_options")
+    if options is not None:
+        if not isinstance(options, dict):
+            raise ValidationError(f"{where}/print_options: expected mapping")
+        unknown = sorted(set(options) - set(_ROUNDTRIP_PRINT_OPTION_FIELDS))
+        if unknown:
+            raise ValidationError(f"{where}/print_options: unknown field(s) {unknown}")
+        for field in _ROUNDTRIP_PRINT_OPTION_FIELDS:
+            if field in options and options[field] is not None and not isinstance(options[field], bool):
+                raise ValidationError(f"{where}/print_options/{field}: expected a boolean, got {options[field]!r}")
+
+    header_footer = raw.get("header_footer")
+    if header_footer is not None:
+        if not isinstance(header_footer, dict):
+            raise ValidationError(f"{where}/header_footer: expected mapping")
+        allowed = set(_ROUNDTRIP_HEADER_FOOTER_TEXT) | set(_ROUNDTRIP_HEADER_FOOTER_FLAGS)
+        unknown = sorted(set(header_footer) - allowed)
+        if unknown:
+            raise ValidationError(f"{where}/header_footer: unknown field(s) {unknown}")
+        for field in _ROUNDTRIP_HEADER_FOOTER_TEXT:
+            # An empty string is meaningful here -- it clears the section --
+            # so only the type is checked.
+            if field in header_footer and header_footer[field] is not None:
+                if not isinstance(header_footer[field], str):
+                    raise ValidationError(f"{where}/header_footer/{field}: expected a string")
+        for field in _ROUNDTRIP_HEADER_FOOTER_FLAGS:
+            if field in header_footer and header_footer[field] is not None:
+                if not isinstance(header_footer[field], bool):
+                    raise ValidationError(f"{where}/header_footer/{field}: expected a boolean")
+
+    if raw.get("print_area") is not None:
+        if not isinstance(raw["print_area"], str) or not raw["print_area"]:
+            raise ValidationError(f"{where}/print_area: expected non-empty string")
+
+    titles = raw.get("print_titles")
+    if titles is not None:
+        if not isinstance(titles, dict):
+            raise ValidationError(f"{where}/print_titles: expected mapping")
+        unknown = sorted(set(titles) - {"repeat_rows", "repeat_cols"})
+        if unknown:
+            raise ValidationError(f"{where}/print_titles: unknown field(s) {unknown}")
+        for axis in ("repeat_rows", "repeat_cols"):
+            if axis in titles and titles[axis] is not None:
+                if not isinstance(titles[axis], str) or not titles[axis]:
+                    raise ValidationError(f"{where}/print_titles/{axis}: expected non-empty string")
+
+    rows = raw.get("row_breaks")
+    if rows is not None:
+        if not isinstance(rows, list):
+            raise ValidationError(f"{where}/row_breaks: expected a list")
+        for i, row in enumerate(rows):
+            if isinstance(row, bool) or not isinstance(row, int) or row < 1:
+                raise ValidationError(f"{where}/row_breaks[{i}]: expected a 1-based row number, got {row!r}")
+
+    cols = raw.get("col_breaks")
+    if cols is not None:
+        if not isinstance(cols, list):
+            raise ValidationError(f"{where}/col_breaks: expected a list")
+        for i, col in enumerate(cols):
+            if not isinstance(col, str) or not _COLUMN_LETTERS_RE.match(col):
+                raise ValidationError(f"{where}/col_breaks[{i}]: expected column letters, got {col!r}")
+
+
 def _validate_print_block(raw: Any, where: str) -> None:
     """Validates a `print` feature block.
 
@@ -344,6 +513,8 @@ def _validate_case_entry(case: Any, where: str) -> str:
         _validate_pivot_block(case["pivot"], f"{where}/pivot")
     if "print" in case and case["print"] is not None:
         _validate_print_block(case["print"], f"{where}/print")
+    if "roundtrip" in case and case["roundtrip"] is not None:
+        _validate_roundtrip_block(case["roundtrip"], f"{where}/roundtrip")
 
     return cid
 
@@ -371,6 +542,67 @@ def validate_case_json(doc: Any) -> List[str]:
         seen.add(cid)
         ids.append(cid)
     return ids
+
+
+# Every sub-block a `roundtrip` capture must report, and the fields
+# inside it. The capture reads all of them unconditionally -- a field the
+# host could not answer is recorded as null rather than omitted -- so a
+# missing key means the golden was produced by an older capture and is
+# not comparable against the current one.
+_ROUNDTRIP_EXPECT_SHAPE = {
+    "page_setup": ("paper_size", "orientation", "zoom", "fit_to_pages_wide", "fit_to_pages_tall"),
+    "page_margins": _ROUNDTRIP_MARGIN_FIELDS,
+    "print_options": _ROUNDTRIP_PRINT_OPTION_FIELDS,
+}
+_ROUNDTRIP_EXPECT_SCALARS = ("print_area", "print_title_rows", "print_title_cols")
+_ROUNDTRIP_EXPECT_LISTS = ("manual_row_breaks", "manual_col_breaks")
+
+
+def _validate_roundtrip_expect(expect: Any, where: str) -> None:
+    """Validates the `roundtrip` block of a golden's `expect`.
+
+    A round-trip golden is the only artefact that says Excel read what we
+    wrote, so an incomplete one is worse than none: a sub-block that
+    silently went missing reads as "nothing to compare" on the C++ side.
+    """
+
+    if not isinstance(expect, dict):
+        raise ValidationError(f"{where}: expected mapping")
+    observed = expect.get("roundtrip")
+    if not isinstance(observed, dict):
+        raise ValidationError(f"{where}/roundtrip: a roundtrip case must report a roundtrip block")
+
+    for block, fields in _ROUNDTRIP_EXPECT_SHAPE.items():
+        sub = observed.get(block)
+        if not isinstance(sub, dict):
+            raise ValidationError(f"{where}/roundtrip/{block}: expected mapping")
+        missing = [f for f in fields if f not in sub]
+        if missing:
+            raise ValidationError(f"{where}/roundtrip/{block}: missing field(s) {missing}")
+
+    header_footer = observed.get("header_footer")
+    if not isinstance(header_footer, dict):
+        raise ValidationError(f"{where}/roundtrip/header_footer: expected mapping")
+
+    for field in _ROUNDTRIP_EXPECT_SCALARS:
+        if field not in observed:
+            raise ValidationError(f"{where}/roundtrip/{field}: missing")
+        if not isinstance(observed[field], str):
+            raise ValidationError(f"{where}/roundtrip/{field}: expected string")
+
+    for field in _ROUNDTRIP_EXPECT_LISTS:
+        value = observed.get(field)
+        if not isinstance(value, list):
+            raise ValidationError(f"{where}/roundtrip/{field}: expected a list")
+        for i, item in enumerate(value):
+            if isinstance(item, bool) or not isinstance(item, int) or item < 0:
+                raise ValidationError(f"{where}/roundtrip/{field}[{i}]: expected a zero-based index, got {item!r}")
+
+    # The digest is what ties this golden to a specific authored workbook.
+    # Without it a stale golden cannot be told from a current one.
+    digest = observed.get("xlsx_sha256")
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise ValidationError(f"{where}/roundtrip/xlsx_sha256: expected a sha256 hex digest")
 
 
 def validate_golden_json(doc: Any) -> List[str]:
@@ -457,6 +689,8 @@ def validate_golden_json(doc: Any) -> List[str]:
                         f"{where}/expect/formula_probes: ids do not match declared probes "
                         f"(expected {sorted(declared_ids)}, got {sorted(expected_ids)})"
                     )
+            if isinstance(case["spec"].get("roundtrip"), dict):
+                _validate_roundtrip_expect(case["expect"], _at(where, "expect"))
         if has_skipped and (not isinstance(case["skipped"], str) or not case["skipped"]):
             raise ValidationError(f"{where}/skipped: expected non-empty string")
         ids.append(cid)

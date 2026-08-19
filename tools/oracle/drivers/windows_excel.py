@@ -57,10 +57,13 @@ and amortising it once over the whole run cuts wall-clock by ~10x.
 
 from __future__ import annotations
 
+import base64
 import datetime as _dt
 import os
 import platform
+import shutil
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -689,6 +692,9 @@ class WindowsExcelOracle(OracleDriver):
 
         pivot_spec = case.get("pivot")
         print_spec = case.get("print")
+        roundtrip_spec = case.get("roundtrip")
+        if isinstance(roundtrip_spec, dict):
+            return self._run_roundtrip_case(case, roundtrip_spec)
         if isinstance(print_spec, dict):
             return self._run_print_case(case, print_spec)
         if isinstance(pivot_spec, dict):
@@ -751,6 +757,62 @@ class WindowsExcelOracle(OracleDriver):
                 wb.close()
             except Exception:
                 pass
+
+    def _run_roundtrip_case(self, case: Dict[str, Any], spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Opens a Formulon-written xlsx and reads back what Excel made of it.
+
+        This is the only capture path where Formulon's own bytes reach
+        Excel. Every other workbook case builds the workbook with
+        ``books.add()`` and COM calls, which measures how Excel behaves
+        rather than whether Excel understands what we wrote.
+
+        The fixture arrives base64-encoded in the case block -- the
+        generator authors it on the repo side (see
+        ``tools/oracle/print_roundtrip.py``), so the Excel host needs no
+        Formulon install and the WSL bridge needs no path translation.
+
+        Note what this does NOT capture: whether Excel showed a repair
+        dialog. Automation runs with alerts suppressed, so a repaired file
+        opens silently and reads back exactly like a healthy one. That
+        judgement stays with the mechanical checks on our side (child-
+        element order, relationship resolution) and a one-off manual open.
+        """
+
+        encoded = spec.get("xlsx_base64")
+        if not isinstance(encoded, str) or not encoded:
+            raise RuntimeError(
+                f"roundtrip case {case.get('id')!r} carries no authored fixture; "
+                "the generator attaches `xlsx_base64` before dispatching"
+            )
+        self._ensure_printer_pinned()
+
+        tmp_dir = tempfile.mkdtemp(prefix="formulon-roundtrip-")
+        # Excel keys several caches off the file name, and a name it has
+        # seen in this session can hand back a stale book; the case id
+        # keeps each fixture distinct within a suite run.
+        fixture = Path(tmp_dir) / f"{_sanitize_sheet_name(str(case.get('id') or 'case'))}.xlsx"
+        fixture.write_bytes(base64.b64decode(encoded))
+
+        wb = None
+        try:
+            wb = self._app.books.open(str(fixture))
+            sheet_name = spec.get("sheet")
+            sht = wb.sheets[sheet_name] if isinstance(sheet_name, str) and sheet_name else wb.sheets[0]
+            observed = _read_roundtrip(sht)
+            observed["xlsx_sha256"] = spec.get("xlsx_sha256")
+            observed["xlsx_bytes"] = spec.get("xlsx_bytes")
+            return {"roundtrip": observed}
+        except Exception as exc:
+            raise RuntimeError(
+                f"roundtrip automation failed for case {case.get('id')!r}: {_format_com_error(exc)}"
+            ) from exc
+        finally:
+            if wb is not None:
+                try:
+                    wb.close()
+                except Exception:
+                    pass
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def _ensure_printer_pinned(self) -> None:
         """Points Excel at the printer named by ``FORMULON_EXCEL_PRINTER``.
@@ -1713,6 +1775,151 @@ def _read_margins(page_setup) -> Dict[str, Any]:
         else:
             out[key] = None
     return out
+
+
+# `XlPageBreak`. A manual break authored into the file must read back as
+# manual; one that degraded to automatic means Excel discarded the
+# `<rowBreaks man="1">` we wrote and re-derived the break itself.
+_XL_PAGE_BREAK_MANUAL = -4135
+
+# The header/footer sections Excel exposes per page class, in the order
+# OOXML concatenates them into one string (`&L...&C...&R...`).
+_HEADER_FOOTER_POSITIONS = ("Left", "Center", "Right")
+
+# `PageSetup.<name>` for the odd/primary pages, and the `Page` object
+# carrying the same three positions for the even and first-page classes.
+_HEADER_FOOTER_CLASSES = (
+    ("odd", None),
+    ("even", "EvenPage"),
+    ("first", "FirstPage"),
+)
+
+
+def _com_scalar(owner, attr: str) -> Any:
+    """Reads one COM property, mapping an unavailable one to ``None``.
+
+    A property Excel does not expose on this host must not abort the
+    capture: the golden records `null` and the comparison skips that
+    field, which is honest about what was observed.
+    """
+
+    try:
+        return getattr(owner, attr)
+    except Exception:
+        return None
+
+
+def _com_bool(owner, attr: str) -> Optional[bool]:
+    value = _com_scalar(owner, attr)
+    return bool(value) if isinstance(value, bool) else None
+
+
+def _com_int(owner, attr: str) -> Optional[int]:
+    value = _com_scalar(owner, attr)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
+
+
+def _com_text(owner, attr: str) -> Optional[str]:
+    value = _com_scalar(owner, attr)
+    return value if isinstance(value, str) else None
+
+
+def _read_header_footer(page_setup) -> Dict[str, Any]:
+    """Reads the six header/footer sections as Excel reports them.
+
+    OOXML stores one string per section with `&L` / `&C` / `&R` markers
+    inside it; COM splits the same content across three properties. The
+    golden records the split form, because that is what Excel actually
+    parsed the string into -- collapsing it back would hide a case where
+    Excel put our text in the wrong third.
+    """
+
+    out: Dict[str, Any] = {
+        "different_odd_even": _com_bool(page_setup, "OddAndEvenPagesHeaderFooter"),
+        "different_first": _com_bool(page_setup, "DifferentFirstPageHeaderFooter"),
+        "scale_with_doc": _com_bool(page_setup, "ScaleWithDocHeaderFooter"),
+        "align_with_margins": _com_bool(page_setup, "AlignMarginsHeaderFooter"),
+    }
+    for class_name, page_attr in _HEADER_FOOTER_CLASSES:
+        owner = page_setup if page_attr is None else _com_scalar(page_setup, page_attr)
+        for band in ("Header", "Footer"):
+            for position in _HEADER_FOOTER_POSITIONS:
+                key = f"{class_name}_{band.lower()}_{position.lower()}"
+                if owner is None:
+                    out[key] = None
+                    continue
+                if page_attr is None:
+                    # The odd/primary sections are plain strings on
+                    # `PageSetup` itself.
+                    out[key] = _com_text(owner, f"{position}{band}")
+                    continue
+                section = _com_scalar(owner, f"{position}{band}")
+                out[key] = None if section is None else _com_text(section, "Text")
+    return out
+
+
+def _read_manual_breaks(ws) -> Dict[str, List[int]]:
+    """Returns the manual row / column breaks as zero-based indices.
+
+    Automatic breaks are filtered out: an authored break that Excel
+    re-derived rather than honoured is the failure this case exists to
+    catch, and keeping both kinds in one list would let a coincidental
+    automatic break at the same position mask it.
+    """
+
+    rows: List[int] = []
+    try:
+        for i in range(1, int(ws.api.HPageBreaks.Count) + 1):
+            brk = ws.api.HPageBreaks(i)
+            if _com_int(brk, "Type") == _XL_PAGE_BREAK_MANUAL:
+                rows.append(int(brk.Location.Row) - 1)
+    except Exception:
+        pass
+    cols: List[int] = []
+    try:
+        for i in range(1, int(ws.api.VPageBreaks.Count) + 1):
+            brk = ws.api.VPageBreaks(i)
+            if _com_int(brk, "Type") == _XL_PAGE_BREAK_MANUAL:
+                cols.append(int(brk.Location.Column) - 1)
+    except Exception:
+        pass
+    rows.sort()
+    cols.sort()
+    return {"manual_row_breaks": rows, "manual_col_breaks": cols}
+
+
+def _read_roundtrip(sht) -> Dict[str, Any]:
+    """Reads every print setting Excel resolved from an opened workbook."""
+
+    page_setup = sht.api.PageSetup
+    print_area = _com_text(page_setup, "PrintArea") or ""
+    title_rows = _com_text(page_setup, "PrintTitleRows") or ""
+    title_cols = _com_text(page_setup, "PrintTitleColumns") or ""
+
+    observed: Dict[str, Any] = {
+        "page_setup": {
+            "paper_size": _com_int(page_setup, "PaperSize"),
+            "orientation": _com_int(page_setup, "Orientation"),
+            "zoom": _read_zoom_value(page_setup),
+            "fit_to_pages_wide": _read_fit_value(page_setup, "FitToPagesWide"),
+            "fit_to_pages_tall": _read_fit_value(page_setup, "FitToPagesTall"),
+        },
+        "page_margins": _read_margins(page_setup),
+        "print_options": {
+            "grid_lines": _com_bool(page_setup, "PrintGridlines"),
+            "headings": _com_bool(page_setup, "PrintHeadings"),
+            "horizontal_centered": _com_bool(page_setup, "CenterHorizontally"),
+            "vertical_centered": _com_bool(page_setup, "CenterVertically"),
+        },
+        "header_footer": _read_header_footer(page_setup),
+        "print_area": _normalise_print_area(print_area),
+        "print_title_rows": _normalise_print_area(title_rows),
+        "print_title_cols": _normalise_print_area(title_cols),
+    }
+    observed.update(_read_manual_breaks(sht))
+    return observed
 
 
 def _normalise_print_area(area: str) -> str:

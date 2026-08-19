@@ -569,4 +569,15 @@ if(Python3_Interpreter_FOUND)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   set_tests_properties(formulon_workbook_case_schema_negative PROPERTIES LABELS "oracle;oracle-metadata")
+  # This entry covers the spec and address handling only. The suite's
+  # authoring half needs the Formulon Python binding, which the oracle
+  # venv does not install -- it carries the capture dependencies (PyYAML,
+  # xlwings) instead -- so those cases skip here and are covered by
+  # `make python-test`, which runs on an interpreter that has the binding.
+  add_test(
+    NAME formulon_print_roundtrip_fixture
+    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.print_roundtrip_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(formulon_print_roundtrip_fixture PROPERTIES LABELS "oracle;oracle-metadata")
 endif()

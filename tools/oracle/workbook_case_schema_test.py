@@ -147,5 +147,126 @@ class HiddenLineSchemaTest(unittest.TestCase):
             schema.validate_case_json(_layout_case(column_widths={"C": 0}))
 
 
+def _roundtrip_case(block):
+    return {
+        "suite": "negative",
+        "kind": "workbook",
+        "cases": [
+            {
+                "id": "case",
+                "sheets": {"Sheet1": {"A1": {"kind": "text", "value": "x"}}},
+                "roundtrip": block,
+            }
+        ],
+    }
+
+
+def _roundtrip_observed(**overrides):
+    observed = {
+        "page_setup": {
+            "paper_size": 9,
+            "orientation": 1,
+            "zoom": 100,
+            "fit_to_pages_wide": False,
+            "fit_to_pages_tall": False,
+        },
+        "page_margins": {k: 0.5 for k in ("left", "right", "top", "bottom", "header", "footer")},
+        "print_options": {
+            "grid_lines": False,
+            "headings": False,
+            "horizontal_centered": False,
+            "vertical_centered": False,
+        },
+        "header_footer": {},
+        "print_area": "A1:D20",
+        "print_title_rows": "",
+        "print_title_cols": "",
+        "manual_row_breaks": [],
+        "manual_col_breaks": [],
+        "xlsx_sha256": "0" * 64,
+    }
+    observed.update(overrides)
+    return observed
+
+
+def _roundtrip_golden(observed):
+    return {
+        "suite": "negative",
+        "kind": "workbook",
+        "cases": [
+            {
+                "id": "case",
+                "spec": {"roundtrip": {"sheet": "Sheet1"}},
+                "expect": {"roundtrip": observed},
+            }
+        ],
+    }
+
+
+class RoundtripSchemaTest(unittest.TestCase):
+    """The roundtrip block is the only case shape whose fixture is authored
+    by us rather than by Excel, so a field that quietly does nothing would
+    produce a golden of Excel resolving defaults -- a clean-looking pass
+    that tested nothing."""
+
+    def test_minimal_block_is_accepted(self):
+        schema.validate_case_json(_roundtrip_case({"sheet": "Sheet1"}))
+
+    def test_sheet_is_required(self):
+        with self.assertRaisesRegex(schema.ValidationError, "missing required 'sheet'"):
+            schema.validate_case_json(_roundtrip_case({"page_setup": {"scale": 75}}))
+
+    def test_misspelled_sub_block_is_rejected(self):
+        with self.assertRaisesRegex(schema.ValidationError, "unknown roundtrip field"):
+            schema.validate_case_json(_roundtrip_case({"sheet": "Sheet1", "page_setups": {}}))
+
+    def test_misspelled_field_inside_a_sub_block_is_rejected(self):
+        with self.assertRaisesRegex(schema.ValidationError, "unknown field"):
+            schema.validate_case_json(_roundtrip_case({"sheet": "Sheet1", "page_setup": {"scal": 75}}))
+
+    def test_fit_to_page_must_be_a_boolean(self):
+        with self.assertRaisesRegex(schema.ValidationError, "expected a boolean"):
+            schema.validate_case_json(_roundtrip_case({"sheet": "Sheet1", "page_setup": {"fit_to_page": 1}}))
+
+    def test_row_breaks_are_one_based(self):
+        with self.assertRaisesRegex(schema.ValidationError, "1-based row number"):
+            schema.validate_case_json(_roundtrip_case({"sheet": "Sheet1", "row_breaks": [0]}))
+
+    def test_col_breaks_are_column_letters(self):
+        with self.assertRaisesRegex(schema.ValidationError, "column letters"):
+            schema.validate_case_json(_roundtrip_case({"sheet": "Sheet1", "col_breaks": [4]}))
+
+    def test_empty_header_footer_section_is_allowed(self):
+        # An empty string clears the section, which is a thing a case may
+        # legitimately want to pin.
+        schema.validate_case_json(_roundtrip_case({"sheet": "Sheet1", "header_footer": {"odd_header": ""}}))
+
+    def test_golden_must_report_a_roundtrip_block(self):
+        golden = _roundtrip_golden(_roundtrip_observed())
+        golden["cases"][0]["expect"] = {}
+        with self.assertRaisesRegex(schema.ValidationError, "must report a roundtrip block"):
+            schema.validate_golden_json(golden)
+
+    def test_golden_rejects_a_missing_sub_block_field(self):
+        observed = _roundtrip_observed()
+        del observed["page_setup"]["zoom"]
+        with self.assertRaisesRegex(schema.ValidationError, "missing field"):
+            schema.validate_golden_json(_roundtrip_golden(observed))
+
+    def test_golden_requires_the_fixture_digest(self):
+        # Without it a stale golden cannot be told from a current one.
+        observed = _roundtrip_observed()
+        del observed["xlsx_sha256"]
+        with self.assertRaisesRegex(schema.ValidationError, "sha256"):
+            schema.validate_golden_json(_roundtrip_golden(observed))
+
+    def test_golden_break_indices_are_zero_based(self):
+        with self.assertRaisesRegex(schema.ValidationError, "zero-based index"):
+            schema.validate_golden_json(_roundtrip_golden(_roundtrip_observed(manual_row_breaks=[-1])))
+
+    def test_complete_golden_is_accepted(self):
+        self.assertEqual(schema.validate_golden_json(_roundtrip_golden(_roundtrip_observed())), ["case"])
+
+
 if __name__ == "__main__":
     unittest.main()
