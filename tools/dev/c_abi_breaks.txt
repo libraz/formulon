@@ -23,34 +23,8 @@
 # Struct layout is out of scope here: a by-value struct that keeps its name
 # and changes size is a calling convention change this file cannot see. The
 # `static_assert(sizeof(...))` tripwires in the C ABI tests pin those.
-
-# -- v0.10.0 entry-point consolidation (one entry point per operation) --------
-# All seven reach the CHANGELOG's Removed section with their per-symbol
-# replacement. Five of them had zero in-repo consumers, which is exactly why
-# this ledger exists: nothing else in the tree would have gone red.
-removed fm_sheet_get_view_ex :: folded into fm_sheet_get_view, which now fills the widened fm_sheet_view_t
-removed fm_styles_get_font_ex :: folded into fm_styles_get_font once fm_font_record absorbed vertAlign
-removed fm_styles_add_font_ex :: folded into fm_styles_add_font once fm_font_record absorbed vertAlign
-removed fm_workbook_defined_name_at_ex :: folded into fm_workbook_defined_name_at, which took the scope out-param
-removed fm_workbook_save_ex :: renamed to fm_workbook_save_as, same signature
-removed fm_workbook_save_xlsb_with_result :: replaced by fm_workbook_save_with_diagnostics with the container as an argument
-removed fm_workbook_xlsb_read_diagnostics :: replaced by fm_workbook_read_diagnostics with container-agnostic counters
-
-# -- parameter list changed ---------------------------------------------------
-signature fm_workbook_defined_name_at :: absorbed the _ex form's scope out-param as an optional int32_t* fifth parameter
-
-# -- enum parameters restated as their int32_t ordinal ------------------------
-# An FFI caller cannot always construct an out-of-domain C enum to probe with,
-# so these entry points take the raw ordinal and validate it, returning
-# kInvalidArgument for an undocumented value. A C caller passing the enum is
-# unaffected: these enums have underlying type int, so neither the source nor
-# the calling convention changes. Not a CHANGELOG break.
-retyped fm_function_canonicalize :: fm_locale_t -> int32_t
-retyped fm_function_localize :: fm_locale_t -> int32_t
-retyped fm_function_metadata :: fm_locale_t -> int32_t
-retyped fm_workbook_pivot_field_add_aggregation :: fm_pivot_aggregation_t -> int32_t
-retyped fm_workbook_pivot_field_add_subtotal_fn :: fm_pivot_aggregation_t -> int32_t
-retyped fm_workbook_pivot_field_set_axis :: fm_pivot_axis_t -> int32_t
-retyped fm_workbook_pivot_field_set_date_group :: fm_pivot_date_grouping_t and fm_pivot_calendar_t -> int32_t
-retyped fm_workbook_pivot_set_layout :: fm_pivot_layout_t -> int32_t
-retyped fm_workbook_set_calc_mode :: fm_calc_mode_t -> int32_t
+#
+# Empty is the resting state. The ledger fills up as breaks land against the
+# current baseline, and empties again when the baseline is rebased onto the
+# release that shipped them -- at that point the new surface *is* what a
+# consumer compiled against, so there is nothing left to excuse.

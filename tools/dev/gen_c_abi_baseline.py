@@ -18,7 +18,7 @@ Run this only to rebase onto a newly released tag, never to silence a
 failing check -- a deliberate break belongs in `c_abi_breaks.txt`.
 
 Usage:
-  python3 tools/dev/gen_c_abi_baseline.py [tag]      # default: v0.9.7
+  python3 tools/dev/gen_c_abi_baseline.py [tag]      # default: v0.10.0
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_binding_drift import c_abi_declarations  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_TAG = "v0.9.7"
+DEFAULT_TAG = "v0.10.0"
 
 PREAMBLE = """# Released C ABI surface, as shipped in {tag}.
 #
