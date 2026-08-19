@@ -407,15 +407,7 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
           // `B1=A1-1`) settles on a different pair depending on which
           // member goes first, so the order has to be pinned. Address order
           // also matches Excel's top-left-first calculation chain.
-          std::sort(component.begin(), component.end(), [](CellNodeId lhs, CellNodeId rhs) {
-            if (lhs.sheet_id != rhs.sheet_id) {
-              return lhs.sheet_id < rhs.sheet_id;
-            }
-            if (lhs.row != rhs.row) {
-              return lhs.row < rhs.row;
-            }
-            return lhs.col < rhs.col;
-          });
+          std::sort(component.begin(), component.end(), CellNodeIdOrder{});
           sccs.push_back(std::move(component));
         }
 

@@ -52,6 +52,25 @@ struct CellNodeId {
   friend bool operator!=(CellNodeId lhs, CellNodeId rhs) noexcept { return !(lhs == rhs); }
 };
 
+/// Orders cells by sheet, then row, then column — Excel's top-left-first
+/// calculation order, and the canonical order every pinned cell sequence
+/// in the recalc path is emitted in.
+///
+/// A named type rather than a lambda at each call site: the four places
+/// that need this order would otherwise each instantiate their own copy of
+/// the sort body.
+struct CellNodeIdOrder {
+  bool operator()(CellNodeId lhs, CellNodeId rhs) const noexcept {
+    if (lhs.sheet_id != rhs.sheet_id) {
+      return lhs.sheet_id < rhs.sheet_id;
+    }
+    if (lhs.row != rhs.row) {
+      return lhs.row < rhs.row;
+    }
+    return lhs.col < rhs.col;
+  }
+};
+
 /// Hash for `CellNodeId` suitable for `std::unordered_map` /
 /// `std::unordered_set`.
 ///

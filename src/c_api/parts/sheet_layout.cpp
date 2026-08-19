@@ -35,6 +35,19 @@ bool SameColumnLayoutState(const formulon::ColumnLayout& lhs, const formulon::Co
          lhs.has_width == rhs.has_width && lhs.has_style == rhs.has_style && lhs.style_xf == rhs.style_xf;
 }
 
+// Orders column spans by start, then by end. This lives at namespace scope
+// rather than inside `overlay_column_span` on purpose: a comparator declared
+// inside a template has a distinct closure type per instantiation, so every
+// setter would get its own copy of the whole `std::sort` body.
+struct ColumnSpanOrder {
+  bool operator()(const formulon::ColumnLayout& lhs, const formulon::ColumnLayout& rhs) const {
+    if (lhs.first != rhs.first) {
+      return lhs.first < rhs.first;
+    }
+    return lhs.last < rhs.last;
+  }
+};
+
 // Applies one column setter to every intersection with `[first, last]`.
 // Existing entries are split into left residual / updated intersection / right
 // residual, so fields not owned by this setter remain local to the source
@@ -109,12 +122,7 @@ void overlay_column_span(formulon::SheetLayout& layout, std::uint32_t first, std
     next.push_back(gap);
   }
 
-  std::sort(next.begin(), next.end(), [](const formulon::ColumnLayout& lhs, const formulon::ColumnLayout& rhs) {
-    if (lhs.first != rhs.first) {
-      return lhs.first < rhs.first;
-    }
-    return lhs.last < rhs.last;
-  });
+  std::sort(next.begin(), next.end(), ColumnSpanOrder{});
   std::vector<formulon::ColumnLayout> merged;
   merged.reserve(next.size());
   for (const formulon::ColumnLayout& entry : next) {

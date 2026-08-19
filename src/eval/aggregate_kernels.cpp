@@ -197,7 +197,7 @@ Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs)
   for (std::size_t i = 0; i < xs.size(); ++i) {
     ranked.emplace_back(xs[i], i);
   }
-  std::sort(ranked.begin(), ranked.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+  std::sort(ranked.begin(), ranked.end(), ValueThenPositionOrder{});
   std::size_t best_count = 0;
   std::size_t best_first = xs.size();
   double best_value = 0.0;

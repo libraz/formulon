@@ -21,6 +21,8 @@
 #ifndef FORMULON_EVAL_AGGREGATE_KERNELS_H_
 #define FORMULON_EVAL_AGGREGATE_KERNELS_H_
 
+#include <cstddef>
+#include <utility>
 #include <vector>
 
 #include "utils/expected.h"
@@ -85,6 +87,19 @@ Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_
 /// AGGREGATE function 13 (`aggregate_lazy.cpp`) so the two cannot
 /// diverge on the tie-break rule.
 Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs);
+
+/// Orders `(value, source position)` pairs by value, leaving equal values
+/// adjacent so a grouping pass can apply Excel's first-occurrence rule.
+///
+/// A named type rather than a lambda at each call site: the mode kernel
+/// here and `build_mode_frequencies` in `builtins/stats.cpp` sort the same
+/// vector the same way, and two closure types would put two copies of the
+/// sort body in the binary.
+struct ValueThenPositionOrder {
+  bool operator()(const std::pair<double, std::size_t>& lhs, const std::pair<double, std::size_t>& rhs) const {
+    return lhs.first < rhs.first;
+  }
+};
 
 }  // namespace aggregate_kernels
 }  // namespace eval

@@ -46,6 +46,7 @@
 #include "io/ooxml/sheet_aux_rels_reader.h"
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/ooxml_defs.h"
+#include "io/passthrough_part.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
 #include "io/sheet_reader.h"
@@ -1163,8 +1164,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   }
 
   // Stable order so callers / tests can compare deterministically.
-  std::sort(unknown_parts.begin(), unknown_parts.end(),
-            [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
+  std::sort(unknown_parts.begin(), unknown_parts.end(), PassthroughPathOrder{});
 
   // The workbook is the sole owner of the passthrough payload; the read
   // result does not mirror it. Handing it over by move keeps a package

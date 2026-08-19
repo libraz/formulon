@@ -44,6 +44,16 @@ struct PassthroughPart {
   std::vector<std::uint8_t> bytes;
 };
 
+/// Orders captured parts by package path, giving both readers a stable
+/// emission order callers and tests can compare against.
+///
+/// A named type rather than a lambda at each call site: each closure type
+/// instantiates its own copy of the sort, and the two readers would then
+/// carry two identical sort bodies in the binary.
+struct PassthroughPathOrder {
+  bool operator()(const PassthroughPart& lhs, const PassthroughPart& rhs) const { return lhs.path < rhs.path; }
+};
+
 }  // namespace io
 }  // namespace formulon
 

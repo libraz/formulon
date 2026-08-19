@@ -2250,8 +2250,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     captured_parts.insert(entry);
   }
 
-  std::sort(unknown_parts.begin(), unknown_parts.end(),
-            [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
+  std::sort(unknown_parts.begin(), unknown_parts.end(), PassthroughPathOrder{});
 
   if (dropped_part_count != 0U) {
     StructuredLog("xlsb.package.parts_dropped")

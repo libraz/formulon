@@ -160,15 +160,7 @@ std::vector<CellNodeId> RecalcEngine::compact_range_precedents_of(CellNodeId cel
   });
   // A cell can be reached through two overlapping rectangles of the same
   // formula; the trace surface reports each precedent once.
-  std::sort(precedents.begin(), precedents.end(), [](CellNodeId lhs, CellNodeId rhs) {
-    if (lhs.sheet_id != rhs.sheet_id) {
-      return lhs.sheet_id < rhs.sheet_id;
-    }
-    if (lhs.row != rhs.row) {
-      return lhs.row < rhs.row;
-    }
-    return lhs.col < rhs.col;
-  });
+  std::sort(precedents.begin(), precedents.end(), CellNodeIdOrder{});
   precedents.erase(std::unique(precedents.begin(), precedents.end()), precedents.end());
   return precedents;
 }
@@ -195,15 +187,7 @@ std::vector<CellNodeId> RecalcEngine::LockedMutator::three_d_span_owners_coverin
       owners.push_back(entry.owner);
     }
   }
-  std::sort(owners.begin(), owners.end(), [](const CellNodeId& lhs, const CellNodeId& rhs) {
-    if (lhs.sheet_id != rhs.sheet_id) {
-      return lhs.sheet_id < rhs.sheet_id;
-    }
-    if (lhs.row != rhs.row) {
-      return lhs.row < rhs.row;
-    }
-    return lhs.col < rhs.col;
-  });
+  std::sort(owners.begin(), owners.end(), CellNodeIdOrder{});
   return owners;
 }
 

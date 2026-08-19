@@ -223,7 +223,7 @@ ModeFrequencies build_mode_frequencies(const std::vector<double>& xs) {
   for (std::size_t i = 0; i < xs.size(); ++i) {
     ranked.emplace_back(xs[i], i);
   }
-  std::sort(ranked.begin(), ranked.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+  std::sort(ranked.begin(), ranked.end(), aggregate_kernels::ValueThenPositionOrder{});
   std::vector<Entry> entries;
   entries.reserve(ranked.size());
   for (std::size_t begin = 0; begin < ranked.size();) {
