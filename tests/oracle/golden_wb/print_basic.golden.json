@@ -6,8 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-16T02:04:24Z",
-    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-16T02:04:24Z"
+    "generated_at": "2026-08-19T09:28:59Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-19T09:28:59Z"
   },
   "cases": [
     {
@@ -44,6 +44,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -85,8 +87,7 @@
               14.5714,
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -129,6 +130,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -142,8 +145,7 @@
             }
           },
           "applied_geometry": {
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -183,6 +185,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 1,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -236,8 +240,7 @@
               14.5714,
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -277,6 +280,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "landscape",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -330,8 +335,7 @@
               14.5714,
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -374,6 +378,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -435,8 +441,7 @@
               14.5714,
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -480,6 +485,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -545,8 +552,7 @@
               14.5714,
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -594,6 +600,8 @@
           "v_breaks": [],
           "pages": 2,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -615,8 +623,7 @@
               14.5714,
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -652,6 +659,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -665,8 +674,7 @@
             }
           },
           "applied_geometry": {
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -772,6 +780,8 @@
           ],
           "pages": 2,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -837,8 +847,7 @@
               14.5714,
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -945,6 +954,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -1010,8 +1021,7 @@
               14.5714,
               60.0
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }

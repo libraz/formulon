@@ -6,8 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-16T02:04:24Z",
-    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-16T02:04:24Z"
+    "generated_at": "2026-08-19T09:28:59Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-19T09:28:59Z"
   },
   "cases": [
     {
@@ -51,6 +51,8 @@
           ],
           "pages": 4,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": 100,
             "fit_to_width": false,
             "fit_to_height": false,
@@ -77,8 +79,7 @@
             "row_heights_pt": [
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -114,50 +115,7 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow.",
-      "observed": {
-        "print": {
-          "print_area": "A1:H1",
-          "h_breaks": [],
-          "v_breaks": [
-            2,
-            4,
-            6
-          ],
-          "pages": 4,
-          "applied_page_setup": {
-            "zoom": 50,
-            "fit_to_width": false,
-            "fit_to_height": false,
-            "margins": {
-              "left": 0.7,
-              "right": 0.7,
-              "top": 0.75,
-              "bottom": 0.75,
-              "header": 0.3,
-              "footer": 0.3
-            }
-          },
-          "applied_geometry": {
-            "column_widths_pt": [
-              171.0,
-              171.0,
-              171.0,
-              171.0,
-              171.0,
-              171.0,
-              171.0,
-              171.0
-            ],
-            "row_heights_pt": [
-              14.5714
-            ],
-            "page_width_pt": null,
-            "page_height_pt": null,
-            "normal_font": "Calibri 11"
-          }
-        }
-      }
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
     },
     {
       "id": "fit_to_width_one_collapses_vertical",
@@ -197,6 +155,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": false,
             "fit_to_width": 1,
             "fit_to_height": false,
@@ -223,8 +183,7 @@
             "row_heights_pt": [
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -269,6 +228,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": false,
             "fit_to_width": false,
             "fit_to_height": 1,
@@ -317,8 +278,7 @@
               14.5714,
               79.7143
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -364,6 +324,8 @@
           ],
           "pages": 2,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": false,
             "fit_to_width": 2,
             "fit_to_height": false,
@@ -390,8 +352,7 @@
             "row_heights_pt": [
               14.5714
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -439,6 +400,8 @@
           "v_breaks": [],
           "pages": 1,
           "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
             "zoom": false,
             "fit_to_width": 1,
             "fit_to_height": 1,
@@ -494,8 +457,7 @@
               14.5714,
               79.7143
             ],
-            "page_width_pt": null,
-            "page_height_pt": null,
+            "printer": "Microsoft Print to PDF on Ne00:",
             "normal_font": "Calibri 11"
           }
         }
@@ -535,85 +497,7 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[1,2,3,4,5,6,7] h=[18] pages=16 at scale 25 -- one column per page, more breaks than at scale 50; breaks do not shrink as the scale does, and at 25 they grow.",
-      "observed": {
-        "print": {
-          "print_area": "A1:H30",
-          "h_breaks": [
-            23
-          ],
-          "v_breaks": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7
-          ],
-          "pages": 16,
-          "applied_page_setup": {
-            "zoom": 25,
-            "fit_to_width": false,
-            "fit_to_height": false,
-            "margins": {
-              "left": 0.7,
-              "right": 0.7,
-              "top": 0.75,
-              "bottom": 0.75,
-              "header": 0.3,
-              "footer": 0.3
-            }
-          },
-          "applied_geometry": {
-            "column_widths_pt": [
-              171.0,
-              171.0,
-              171.0,
-              171.0,
-              171.0,
-              171.0,
-              171.0,
-              171.0
-            ],
-            "row_heights_pt": [
-              79.7143,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              14.5714,
-              79.7143
-            ],
-            "page_width_pt": null,
-            "page_height_pt": null,
-            "normal_font": "Calibri 11"
-          }
-        }
-      }
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[1,2,3,4,5,6,7] h=[18] pages=16 at scale 25 -- one column per page, more breaks than at scale 50; breaks do not shrink as the scale does, and at 25 they grow."
     }
   ]
 }
