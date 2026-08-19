@@ -218,6 +218,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/scheduler.cpp
   src/eval/spill_anchor.cpp
   src/eval/structured_ref_project.cpp
+  src/eval/implicit_intersection.cpp
+  src/eval/numeric_pairs.cpp
   src/eval/spill_release.cpp
   src/eval/spill_potential.cpp
   src/eval/volatile_tracker.cpp
