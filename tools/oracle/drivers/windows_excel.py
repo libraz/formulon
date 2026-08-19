@@ -784,8 +784,6 @@ class WindowsExcelOracle(OracleDriver):
                 f"roundtrip case {case.get('id')!r} carries no authored fixture; "
                 "the generator attaches `xlsx_base64` before dispatching"
             )
-        self._ensure_printer_pinned()
-
         tmp_dir = tempfile.mkdtemp(prefix="formulon-roundtrip-")
         # Excel keys several caches off the file name, and a name it has
         # seen in this session can hand back a stale book; the case id
@@ -796,6 +794,10 @@ class WindowsExcelOracle(OracleDriver):
         wb = None
         try:
             wb = self._app.books.open(str(fixture))
+            # After the open, never before: `ActivePrinter` is
+            # workbook-gated, so pinning against no open book silently
+            # leaves the run on the host's default device.
+            self._ensure_printer_pinned()
             sheet_name = spec.get("sheet")
             sht = wb.sheets[sheet_name] if isinstance(sheet_name, str) and sheet_name else wb.sheets[0]
             observed = _read_roundtrip(sht)

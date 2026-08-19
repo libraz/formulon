@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import os
 import unittest
@@ -882,6 +883,37 @@ class WindowsPrinterPinTest(unittest.TestCase):
             patch.object(windows_excel, "_apply_and_read_print", lambda wb, spec: {"pages": 1}),
         ):
             oracle._run_print_case({"id": "c"}, {"sheet": "Sheet1"})
+
+        self.assertEqual(api.ActivePrinter, "Microsoft Print to PDF on Ne00:")
+
+    def test_a_roundtrip_case_pins_after_it_has_opened_its_workbook(self) -> None:
+        """The same ordering, on the capture path that opens a file.
+
+        A round-trip case reaches its workbook through `books.open`
+        rather than `books.add()`, so it needs its own guard: the gate is
+        about whether a book is open, not about how it got there.
+        """
+
+        oracle = self._oracle({"Microsoft Print to PDF on Ne00:"}, books_open=0)
+        api = oracle._app.api
+
+        class _FakeBooks:
+            @staticmethod
+            def open(path):  # noqa: A003 - mirrors the xlwings method name
+                api.books_open += 1
+                return type(
+                    "_Wb",
+                    (),
+                    {"sheets": {"Sheet1": object()}, "close": staticmethod(lambda: None)},
+                )()
+
+        oracle._app.books = _FakeBooks()
+
+        with patch.object(windows_excel, "_read_roundtrip", lambda sht: {}):
+            oracle._run_roundtrip_case(
+                {"id": "c"},
+                {"sheet": "Sheet1", "xlsx_base64": base64.b64encode(b"not-a-real-xlsx").decode("ascii")},
+            )
 
         self.assertEqual(api.ActivePrinter, "Microsoft Print to PDF on Ne00:")
 
