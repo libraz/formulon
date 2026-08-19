@@ -343,7 +343,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       return Value::error(ErrorCode::Value);
     }
     const bool descending = (row_sort_order < 0);
-    std::stable_sort(row_order.begin(), row_order.end(), [&](std::size_t a, std::size_t b) {
+    sort_group_order(row_order, [&](std::size_t a, std::size_t b) {
       if (row_is_error[a] != row_is_error[b]) {
         return !row_is_error[a];
       }
@@ -366,7 +366,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       return cmp_keys_asc(*row_fields, row_repr[a], row_repr[b]) < 0;
     });
   } else {
-    std::stable_sort(row_order.begin(), row_order.end(), [&](std::size_t a, std::size_t b) {
+    sort_group_order(row_order, [&](std::size_t a, std::size_t b) {
       if (row_is_error[a] != row_is_error[b]) {
         return !row_is_error[a];
       }
@@ -385,7 +385,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       return Value::error(ErrorCode::Value);
     }
     const bool descending = (col_sort_order < 0);
-    std::stable_sort(col_order.begin(), col_order.end(), [&](std::size_t a, std::size_t b) {
+    sort_group_order(col_order, [&](std::size_t a, std::size_t b) {
       if (col_is_error[a] != col_is_error[b]) {
         return !col_is_error[a];
       }
@@ -406,7 +406,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       return cmp_keys_asc(*col_fields, col_repr[a], col_repr[b]) < 0;
     });
   } else {
-    std::stable_sort(col_order.begin(), col_order.end(), [&](std::size_t a, std::size_t b) {
+    sort_group_order(col_order, [&](std::size_t a, std::size_t b) {
       if (col_is_error[a] != col_is_error[b]) {
         return !col_is_error[a];
       }

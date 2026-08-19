@@ -181,7 +181,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     }
     const std::uint32_t value_col_idx = static_cast<std::uint32_t>(abs_sort - 1);
     const bool descending = (sort_order < 0);
-    std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+    sort_group_order(order, [&](std::size_t a, std::size_t b) {
       // Error-keyed groups always go last regardless of
       // direction; this matches Mac Excel's "errors trail"
       // surface for the dynamic-array sort family.
@@ -201,7 +201,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     // Even at sort_order=0, error-keyed groups sink to the bottom in stable
     // first-occurrence order (matching Mac Excel's UNIQUE / FILTER pattern
     // for cells whose evaluation produced an error).
-    std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+    sort_group_order(order, [&](std::size_t a, std::size_t b) {
       if (group_is_error[a] != group_is_error[b]) {
         return !group_is_error[a];
       }
