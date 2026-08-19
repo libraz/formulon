@@ -117,10 +117,13 @@ inline constexpr std::uint64_t kMaxStyledRangeCells = 1048576U;  // 2^20
 
 /// Ceiling on manual page breaks per axis.
 ///
-/// Excel refuses to insert more than 1026 horizontal page breaks on a
-/// sheet and applies the same bound to the vertical axis. Matching it
-/// keeps a workbook this engine authors openable, and keeps the break
-/// vectors small enough that the paginator's per-break scan stays trivial.
+/// 1026 is Excel's published limit on horizontal page breaks in a sheet.
+/// The vertical axis carries no separately published figure, so the same
+/// number is applied there rather than left unbounded: over-rejecting a
+/// break configuration no report layout needs costs nothing, while
+/// authoring past a limit Excel does enforce would produce a file it
+/// refuses to open. Bounding both axes also keeps the break vectors small
+/// enough that the paginator's per-break scan stays trivial.
 inline constexpr std::size_t kMaxManualBreaksPerAxis = 1026U;
 
 /// Ceiling on the arena backing one evaluation, in bytes.
