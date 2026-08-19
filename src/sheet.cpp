@@ -42,6 +42,39 @@ struct SpillTable {
   std::unordered_map<CellAddress, BlockedSpillFootprint, CellAddressHash> blocked_by_anchor;
 };
 
+namespace {
+
+/// Returns the anchors of every rectangle in `table` that overlaps
+/// `[first_row, first_row + rows) x [first_col, first_col + cols)`.
+///
+/// Both anchor tables carry the same four rectangle fields under different
+/// payload types, so the walk is shared and only the map type varies. Widening
+/// to 64 bits keeps the end coordinates from wrapping on an anchor sitting at
+/// the last row or column. `table` may be null when the sheet has no spill
+/// table yet; callers hold the spill mutex.
+template <typename AnchorMap>
+std::vector<CellAddress> collect_anchors_intersecting(const AnchorMap* table, std::uint32_t first_row,
+                                                      std::uint32_t first_col, std::uint32_t rows, std::uint32_t cols) {
+  std::vector<CellAddress> out;
+  if (table == nullptr || rows == 0U || cols == 0U) {
+    return out;
+  }
+  const std::uint64_t row_end = static_cast<std::uint64_t>(first_row) + rows;
+  const std::uint64_t col_end = static_cast<std::uint64_t>(first_col) + cols;
+  out.reserve(table->size());
+  for (const auto& [address, rect] : *table) {
+    const std::uint64_t rect_row_end = static_cast<std::uint64_t>(rect.anchor_row) + rect.rows;
+    const std::uint64_t rect_col_end = static_cast<std::uint64_t>(rect.anchor_col) + rect.cols;
+    if (static_cast<std::uint64_t>(first_row) < rect_row_end && static_cast<std::uint64_t>(rect.anchor_row) < row_end &&
+        static_cast<std::uint64_t>(first_col) < rect_col_end && static_cast<std::uint64_t>(rect.anchor_col) < col_end) {
+      out.push_back(address);
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
 // ---------------------------------------------------------------------------
 // Special members (must be defined here where SpillTable is complete).
 // ---------------------------------------------------------------------------
@@ -461,54 +494,16 @@ std::vector<CellAddress> Sheet::spill_phantom_addresses() const {
 
 std::vector<CellAddress> Sheet::blocked_spill_anchors_intersecting(std::uint32_t first_row, std::uint32_t first_col,
                                                                    std::uint32_t rows, std::uint32_t cols) const {
-  std::vector<CellAddress> out;
-  if (rows == 0U || cols == 0U) {
-    return out;
-  }
-  const std::uint64_t row_end = static_cast<std::uint64_t>(first_row) + rows;
-  const std::uint64_t col_end = static_cast<std::uint64_t>(first_col) + cols;
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  if (spill_table_ == nullptr) {
-    return out;
-  }
-  out.reserve(spill_table_->blocked_by_anchor.size());
-  for (const auto& [address, footprint] : spill_table_->blocked_by_anchor) {
-    const std::uint64_t footprint_row_end = static_cast<std::uint64_t>(footprint.anchor_row) + footprint.rows;
-    const std::uint64_t footprint_col_end = static_cast<std::uint64_t>(footprint.anchor_col) + footprint.cols;
-    if (static_cast<std::uint64_t>(first_row) < footprint_row_end &&
-        static_cast<std::uint64_t>(footprint.anchor_row) < row_end &&
-        static_cast<std::uint64_t>(first_col) < footprint_col_end &&
-        static_cast<std::uint64_t>(footprint.anchor_col) < col_end) {
-      out.push_back(address);
-    }
-  }
-  return out;
+  return collect_anchors_intersecting(spill_table_ == nullptr ? nullptr : &spill_table_->blocked_by_anchor, first_row,
+                                      first_col, rows, cols);
 }
 
 std::vector<CellAddress> Sheet::committed_spill_anchors_intersecting(std::uint32_t first_row, std::uint32_t first_col,
                                                                      std::uint32_t rows, std::uint32_t cols) const {
-  std::vector<CellAddress> out;
-  if (rows == 0U || cols == 0U) {
-    return out;
-  }
-  const std::uint64_t row_end = static_cast<std::uint64_t>(first_row) + rows;
-  const std::uint64_t col_end = static_cast<std::uint64_t>(first_col) + cols;
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  if (spill_table_ == nullptr) {
-    return out;
-  }
-  out.reserve(spill_table_->by_anchor.size());
-  for (const auto& [address, region] : spill_table_->by_anchor) {
-    const std::uint64_t region_row_end = static_cast<std::uint64_t>(region.anchor_row) + region.rows;
-    const std::uint64_t region_col_end = static_cast<std::uint64_t>(region.anchor_col) + region.cols;
-    if (static_cast<std::uint64_t>(first_row) < region_row_end &&
-        static_cast<std::uint64_t>(region.anchor_row) < row_end &&
-        static_cast<std::uint64_t>(first_col) < region_col_end &&
-        static_cast<std::uint64_t>(region.anchor_col) < col_end) {
-      out.push_back(address);
-    }
-  }
-  return out;
+  return collect_anchors_intersecting(spill_table_ == nullptr ? nullptr : &spill_table_->by_anchor, first_row,
+                                      first_col, rows, cols);
 }
 
 std::vector<CellAddress> Sheet::blocked_spill_anchors() const {
@@ -1002,165 +997,116 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
 
 namespace {
 
-// Shifts every entry in `metadata` whose anchor lies on or past the
-// affected row by the row insert / delete rule encoded in `count` and
-// `is_delete`. Entries whose anchor falls inside the deleted interval
-// are removed. `Anchor` exposes a mutable `row` field.
+// Shifts every entry in `items` whose anchor lies on or past `index` by the
+// insert / delete rule encoded in `count` and `is_delete`. Entries whose
+// anchor falls inside the deleted interval, or whose insert would push it
+// past `bound`, are removed. `field` names the axis coordinate, so one
+// instantiation per anchor type serves both axes.
 template <typename Anchor>
-void ShiftRowAnchored(std::vector<Anchor>& items, std::uint32_t row, std::uint32_t count, bool is_delete) {
+void ShiftAnchored(std::vector<Anchor>& items, std::uint32_t Anchor::*field, std::uint32_t index, std::uint32_t count,
+                   bool is_delete, std::uint32_t bound) {
   std::vector<Anchor> retained;
   retained.reserve(items.size());
   for (Anchor& item : items) {
-    if (item.row < row) {
+    if (item.*field < index) {
       retained.push_back(std::move(item));
       continue;
     }
     if (is_delete) {
-      if (item.row < row + count) {
+      if (item.*field < index + count) {
         continue;  // Anchor inside deleted interval; drop the entry.
       }
-      item.row -= count;
+      item.*field -= count;
     } else {
-      // Insert. Anchors at or past `row` shift forward; entries pushed
+      // Insert. Anchors at or past `index` shift forward; entries pushed
       // past the sheet bound are dropped.
-      const std::uint64_t shifted = static_cast<std::uint64_t>(item.row) + count;
-      if (shifted >= Sheet::kMaxRows) {
+      const std::uint64_t shifted = static_cast<std::uint64_t>(item.*field) + count;
+      if (shifted >= bound) {
         continue;
       }
-      item.row = static_cast<std::uint32_t>(shifted);
+      item.*field = static_cast<std::uint32_t>(shifted);
     }
     retained.push_back(std::move(item));
   }
   items = std::move(retained);
+}
+
+template <typename Anchor>
+void ShiftRowAnchored(std::vector<Anchor>& items, std::uint32_t row, std::uint32_t count, bool is_delete) {
+  ShiftAnchored(items, &Anchor::row, row, count, is_delete, Sheet::kMaxRows);
 }
 
 template <typename Anchor>
 void ShiftColAnchored(std::vector<Anchor>& items, std::uint32_t col, std::uint32_t count, bool is_delete) {
-  std::vector<Anchor> retained;
-  retained.reserve(items.size());
-  for (Anchor& item : items) {
-    if (item.col < col) {
-      retained.push_back(std::move(item));
-      continue;
-    }
-    if (is_delete) {
-      if (item.col < col + count) {
-        continue;
-      }
-      item.col -= count;
-    } else {
-      const std::uint64_t shifted = static_cast<std::uint64_t>(item.col) + count;
-      if (shifted >= Sheet::kMaxCols) {
-        continue;
-      }
-      item.col = static_cast<std::uint32_t>(shifted);
-    }
-    retained.push_back(std::move(item));
-  }
-  items = std::move(retained);
+  ShiftAnchored(items, &Anchor::col, col, count, is_delete, Sheet::kMaxCols);
 }
 
-// Rectangular merge / validation range shifter along the row axis.
-// Ranges that fall entirely inside the deleted interval are dropped;
-// ranges that straddle the deletion are clamped so the surviving rows
-// stay contiguous (Excel's "shrink the merge" behaviour). Inserts that
-// would push `last_row` past `kMaxRows-1` clamp to the sheet bound.
-void ShiftRowRange(MergeRange& range, std::uint32_t row, std::uint32_t count, bool is_delete, bool* out_drop) {
+// Rectangular merge / validation range shifter along one axis.
+// Spans that fall entirely inside the deleted interval are dropped;
+// spans that straddle the deletion are clamped so the survivors stay
+// contiguous (Excel's "shrink the merge" behaviour). Inserts that would
+// push `last` past `bound - 1` clamp to the sheet bound.
+void ShiftSpan(std::uint32_t& first, std::uint32_t& last, std::uint32_t index, std::uint32_t count, bool is_delete,
+               std::uint32_t bound, bool* out_drop) {
   *out_drop = false;
   if (is_delete) {
-    const std::uint32_t del_end = row + count;  // exclusive
+    const std::uint32_t del_end = index + count;  // exclusive
     // Both endpoints below the deletion: unchanged.
-    if (range.last_row < row) {
+    if (last < index) {
       return;
     }
     // Both endpoints inside the deletion: drop the range entirely.
-    if (range.first_row >= row && range.last_row < del_end) {
+    if (first >= index && last < del_end) {
       *out_drop = true;
       return;
     }
     // Split shifts depending on which endpoints fall inside.
-    if (range.first_row < row && range.last_row >= row && range.last_row < del_end) {
-      // Bottom endpoint inside the deletion; clamp to row-1.
-      range.last_row = row - 1U;
+    if (first < index && last >= index && last < del_end) {
+      // Trailing endpoint inside the deletion; clamp to index-1.
+      last = index - 1U;
       return;
     }
-    if (range.first_row >= row && range.first_row < del_end && range.last_row >= del_end) {
-      // Top endpoint inside the deletion; clamp to the row after the
-      // deletion (which after shift becomes `row`).
-      range.first_row = row;
-      range.last_row -= count;
+    if (first >= index && first < del_end && last >= del_end) {
+      // Leading endpoint inside the deletion; clamp to the line after the
+      // deletion (which after the shift becomes `index`).
+      first = index;
+      last -= count;
       return;
     }
-    if (range.first_row < row && range.last_row >= del_end) {
+    if (first < index && last >= del_end) {
       // Range straddles the entire deletion: shrink by `count`. The
-      // top endpoint stays put; the bottom shifts up.
-      range.last_row -= count;
+      // leading endpoint stays put; the trailing one shifts back.
+      last -= count;
       return;
     }
-    // Both endpoints past the deletion: shift up.
-    range.first_row -= count;
-    range.last_row -= count;
+    // Both endpoints past the deletion: shift back.
+    first -= count;
+    last -= count;
     return;
   }
-  // Insert. Endpoints at or past `row` shift forward; clamp to bound.
-  if (range.last_row < row) {
+  // Insert. Endpoints at or past `index` shift forward; clamp to bound.
+  if (last < index) {
     return;  // Both endpoints below the insert; unchanged.
   }
-  auto shift_one = [count](std::uint32_t value) -> std::uint32_t {
+  auto shift_one = [count, bound](std::uint32_t value) -> std::uint32_t {
     const std::uint64_t shifted = static_cast<std::uint64_t>(value) + count;
-    if (shifted >= Sheet::kMaxRows) {
-      return Sheet::kMaxRows - 1U;
+    if (shifted >= bound) {
+      return bound - 1U;
     }
     return static_cast<std::uint32_t>(shifted);
   };
-  if (range.first_row >= row) {
-    range.first_row = shift_one(range.first_row);
+  if (first >= index) {
+    first = shift_one(first);
   }
-  range.last_row = shift_one(range.last_row);
+  last = shift_one(last);
+}
+
+void ShiftRowRange(MergeRange& range, std::uint32_t row, std::uint32_t count, bool is_delete, bool* out_drop) {
+  ShiftSpan(range.first_row, range.last_row, row, count, is_delete, Sheet::kMaxRows, out_drop);
 }
 
 void ShiftColRange(MergeRange& range, std::uint32_t col, std::uint32_t count, bool is_delete, bool* out_drop) {
-  *out_drop = false;
-  if (is_delete) {
-    const std::uint32_t del_end = col + count;
-    if (range.last_col < col) {
-      return;
-    }
-    if (range.first_col >= col && range.last_col < del_end) {
-      *out_drop = true;
-      return;
-    }
-    if (range.first_col < col && range.last_col >= col && range.last_col < del_end) {
-      range.last_col = col - 1U;
-      return;
-    }
-    if (range.first_col >= col && range.first_col < del_end && range.last_col >= del_end) {
-      range.first_col = col;
-      range.last_col -= count;
-      return;
-    }
-    if (range.first_col < col && range.last_col >= del_end) {
-      range.last_col -= count;
-      return;
-    }
-    range.first_col -= count;
-    range.last_col -= count;
-    return;
-  }
-  if (range.last_col < col) {
-    return;
-  }
-  auto shift_one = [count](std::uint32_t value) -> std::uint32_t {
-    const std::uint64_t shifted = static_cast<std::uint64_t>(value) + count;
-    if (shifted >= Sheet::kMaxCols) {
-      return Sheet::kMaxCols - 1U;
-    }
-    return static_cast<std::uint32_t>(shifted);
-  };
-  if (range.first_col >= col) {
-    range.first_col = shift_one(range.first_col);
-  }
-  range.last_col = shift_one(range.last_col);
+  ShiftSpan(range.first_col, range.last_col, col, count, is_delete, Sheet::kMaxCols, out_drop);
 }
 
 void ShiftRangeList(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
