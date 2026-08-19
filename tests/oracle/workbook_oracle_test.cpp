@@ -313,9 +313,9 @@ void verify_roundtrip(const RoundtripObservation& got, const JsonValue& expect) 
   const JsonValue* margins = expect.find("page_margins");
   ASSERT_TRUE(margins != nullptr && margins->is_object()) << "golden roundtrip has no 'page_margins' block";
   static constexpr double kMarginTolerance = 1e-6;
-  const std::pair<const char*, double> margin_fields[] = {
-      {"left", got.margin_left},     {"right", got.margin_right},   {"top", got.margin_top},
-      {"bottom", got.margin_bottom}, {"header", got.margin_header}, {"footer", got.margin_footer}};
+  const std::pair<const char*, double> margin_fields[] = {{"left", got.margin_left},     {"right", got.margin_right},
+                                                          {"top", got.margin_top},       {"bottom", got.margin_bottom},
+                                                          {"header", got.margin_header}, {"footer", got.margin_footer}};
   for (const auto& [field, value] : margin_fields) {
     const JsonValue* want = margins->find(field);
     ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_margins has no numeric '" << field << "'";

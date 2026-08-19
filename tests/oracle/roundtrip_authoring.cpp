@@ -1,8 +1,8 @@
 #include "tests/oracle/roundtrip_authoring.h"
 
 #include <algorithm>
-#include <cstdint>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <map>
 #include <memory>
