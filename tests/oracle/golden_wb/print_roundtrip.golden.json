@@ -1,0 +1,537 @@
+{
+  "suite": "print_roundtrip",
+  "kind": "workbook",
+  "environment": {
+    "excel_version": "16.0.20228",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-08-19T15:02:20Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-19T15:02:20Z"
+  },
+  "cases": [
+    {
+      "id": "a4_landscape_fit_one_page",
+      "spec": {
+        "id": "a4_landscape_fit_one_page",
+        "description": "fitToPage with an explicit 1x1 fitToWidth / fitToHeight pair. Excel reports Zoom as False and both FitToPages axes as 1 only when the sheetPr flag and the pageSetup attributes agree; writing one without the other is the failure this case pins.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "Header"
+            },
+            "H60": {
+              "kind": "text",
+              "value": "End"
+            }
+          }
+        },
+        "roundtrip": {
+          "sheet": "Sheet1",
+          "page_setup": {
+            "orientation": 2,
+            "paper_size": 9,
+            "fit_to_page": true,
+            "fit_to_width": 1,
+            "fit_to_height": 1
+          }
+        }
+      },
+      "expect": {
+        "roundtrip": {
+          "page_setup": {
+            "paper_size": 9,
+            "orientation": 2,
+            "zoom": false,
+            "fit_to_pages_wide": 1,
+            "fit_to_pages_tall": 1
+          },
+          "page_margins": {
+            "left": 0.7,
+            "right": 0.7,
+            "top": 0.75,
+            "bottom": 0.75,
+            "header": 0.3,
+            "footer": 0.3
+          },
+          "print_options": {
+            "grid_lines": false,
+            "headings": false,
+            "horizontal_centered": false,
+            "vertical_centered": false
+          },
+          "header_footer": {
+            "different_odd_even": false,
+            "different_first": false,
+            "scale_with_doc": true,
+            "align_with_margins": true,
+            "odd_header_left": "",
+            "odd_header_center": "",
+            "odd_header_right": "",
+            "odd_footer_left": "",
+            "odd_footer_center": "",
+            "odd_footer_right": "",
+            "even_header_left": "",
+            "even_header_center": "",
+            "even_header_right": "",
+            "even_footer_left": "",
+            "even_footer_center": "",
+            "even_footer_right": "",
+            "first_header_left": "",
+            "first_header_center": "",
+            "first_header_right": "",
+            "first_footer_left": "",
+            "first_footer_center": "",
+            "first_footer_right": ""
+          },
+          "print_area": "",
+          "print_title_rows": "",
+          "print_title_cols": "",
+          "manual_row_breaks": [],
+          "manual_col_breaks": [],
+          "xlsx_sha256": "f575ccf43de754b68345157054f911bc1c654ca08214f78f7cfbbd8c1624f4ec",
+          "xlsx_bytes": 2634
+        }
+      }
+    },
+    {
+      "id": "portrait_scale_75",
+      "spec": {
+        "id": "portrait_scale_75",
+        "description": "An explicit scale with fitToPage off. Zoom reads back as the integer percent and both FitToPages axes stay unconstrained.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "Header"
+            },
+            "F40": {
+              "kind": "text",
+              "value": "End"
+            }
+          }
+        },
+        "roundtrip": {
+          "sheet": "Sheet1",
+          "page_setup": {
+            "orientation": 1,
+            "paper_size": 9,
+            "scale": 75,
+            "fit_to_page": false
+          }
+        }
+      },
+      "expect": {
+        "roundtrip": {
+          "page_setup": {
+            "paper_size": 9,
+            "orientation": 1,
+            "zoom": 75,
+            "fit_to_pages_wide": 1,
+            "fit_to_pages_tall": 1
+          },
+          "page_margins": {
+            "left": 0.7,
+            "right": 0.7,
+            "top": 0.75,
+            "bottom": 0.75,
+            "header": 0.3,
+            "footer": 0.3
+          },
+          "print_options": {
+            "grid_lines": false,
+            "headings": false,
+            "horizontal_centered": false,
+            "vertical_centered": false
+          },
+          "header_footer": {
+            "different_odd_even": false,
+            "different_first": false,
+            "scale_with_doc": true,
+            "align_with_margins": true,
+            "odd_header_left": "",
+            "odd_header_center": "",
+            "odd_header_right": "",
+            "odd_footer_left": "",
+            "odd_footer_center": "",
+            "odd_footer_right": "",
+            "even_header_left": "",
+            "even_header_center": "",
+            "even_header_right": "",
+            "even_footer_left": "",
+            "even_footer_center": "",
+            "even_footer_right": "",
+            "first_header_left": "",
+            "first_header_center": "",
+            "first_header_right": "",
+            "first_footer_left": "",
+            "first_footer_center": "",
+            "first_footer_right": ""
+          },
+          "print_area": "",
+          "print_title_rows": "",
+          "print_title_cols": "",
+          "manual_row_breaks": [],
+          "manual_col_breaks": [],
+          "xlsx_sha256": "daebb10486ec5202babda12839162bbe7582d3eb229118a9abbd3244220cf9f2",
+          "xlsx_bytes": 2602
+        }
+      }
+    },
+    {
+      "id": "margins_and_print_options",
+      "spec": {
+        "id": "margins_and_print_options",
+        "description": "All six margins plus the four printOptions booleans. COM reports margins in points and the golden converts to inches, so a unit slip on either side of the round trip shows up as a factor of 72.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "Header"
+            },
+            "D20": {
+              "kind": "text",
+              "value": "End"
+            }
+          }
+        },
+        "roundtrip": {
+          "sheet": "Sheet1",
+          "page_margins": {
+            "left": 0.5,
+            "right": 0.5,
+            "top": 0.9,
+            "bottom": 0.9,
+            "header": 0.25,
+            "footer": 0.25
+          },
+          "print_options": {
+            "grid_lines": true,
+            "headings": true,
+            "horizontal_centered": true,
+            "vertical_centered": false
+          }
+        }
+      },
+      "expect": {
+        "roundtrip": {
+          "page_setup": {
+            "paper_size": 1,
+            "orientation": 1,
+            "zoom": 100,
+            "fit_to_pages_wide": 1,
+            "fit_to_pages_tall": 1
+          },
+          "page_margins": {
+            "left": 0.5,
+            "right": 0.5,
+            "top": 0.9,
+            "bottom": 0.9,
+            "header": 0.25,
+            "footer": 0.25
+          },
+          "print_options": {
+            "grid_lines": true,
+            "headings": true,
+            "horizontal_centered": true,
+            "vertical_centered": false
+          },
+          "header_footer": {
+            "different_odd_even": false,
+            "different_first": false,
+            "scale_with_doc": true,
+            "align_with_margins": true,
+            "odd_header_left": "",
+            "odd_header_center": "",
+            "odd_header_right": "",
+            "odd_footer_left": "",
+            "odd_footer_center": "",
+            "odd_footer_right": "",
+            "even_header_left": "",
+            "even_header_center": "",
+            "even_header_right": "",
+            "even_footer_left": "",
+            "even_footer_center": "",
+            "even_footer_right": "",
+            "first_header_left": "",
+            "first_header_center": "",
+            "first_header_right": "",
+            "first_footer_left": "",
+            "first_footer_center": "",
+            "first_footer_right": ""
+          },
+          "print_area": "",
+          "print_title_rows": "",
+          "print_title_cols": "",
+          "manual_row_breaks": [],
+          "manual_col_breaks": [],
+          "xlsx_sha256": "892329bc1214ed9c8e1204c7b3c986d288c113583b1434162322129772454242",
+          "xlsx_bytes": 2654
+        }
+      }
+    },
+    {
+      "id": "header_footer_six_sections",
+      "spec": {
+        "id": "header_footer_six_sections",
+        "description": "All three page classes with distinct text, including a literal ampersand and a page-number field. Two escaping layers stack here and the case pins both. Excel's header syntax spells a literal ampersand as a doubled \"&&\", which is the caller's business; the engine then XML-escapes every ampersand on the way to the file, which is ours. A section that comes back with the wrong number of ampersands says which of the two layers is wrong.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "Header"
+            },
+            "C10": {
+              "kind": "text",
+              "value": "End"
+            }
+          }
+        },
+        "roundtrip": {
+          "sheet": "Sheet1",
+          "header_footer": {
+            "different_odd_even": true,
+            "different_first": true,
+            "odd_header": "&L売上 && 原価&C月次レポート&R&P/&N",
+            "odd_footer": "&C-&P-",
+            "even_header": "&L偶数ページ&R&D",
+            "even_footer": "&Cverso",
+            "first_header": "&C表紙",
+            "first_footer": "&Rrecto"
+          }
+        }
+      },
+      "expect": {
+        "roundtrip": {
+          "page_setup": {
+            "paper_size": 1,
+            "orientation": 1,
+            "zoom": 100,
+            "fit_to_pages_wide": 1,
+            "fit_to_pages_tall": 1
+          },
+          "page_margins": {
+            "left": 0.7,
+            "right": 0.7,
+            "top": 0.75,
+            "bottom": 0.75,
+            "header": 0.3,
+            "footer": 0.3
+          },
+          "print_options": {
+            "grid_lines": false,
+            "headings": false,
+            "horizontal_centered": false,
+            "vertical_centered": false
+          },
+          "header_footer": {
+            "different_odd_even": true,
+            "different_first": true,
+            "scale_with_doc": true,
+            "align_with_margins": true,
+            "odd_header_left": "売上 && 原価",
+            "odd_header_center": "月次レポート",
+            "odd_header_right": "&P/&N",
+            "odd_footer_left": "",
+            "odd_footer_center": "-&P-",
+            "odd_footer_right": "",
+            "even_header_left": "偶数ページ",
+            "even_header_center": "",
+            "even_header_right": "&D",
+            "even_footer_left": "",
+            "even_footer_center": "verso",
+            "even_footer_right": "",
+            "first_header_left": "",
+            "first_header_center": "表紙",
+            "first_header_right": "",
+            "first_footer_left": "",
+            "first_footer_center": "",
+            "first_footer_right": "recto"
+          },
+          "print_area": "",
+          "print_title_rows": "",
+          "print_title_cols": "",
+          "manual_row_breaks": [],
+          "manual_col_breaks": [],
+          "xlsx_sha256": "965ada3608ea13bf4f80a226c4dc3f412dbf5920f1d3b2c6ceb7379ad5358ea7",
+          "xlsx_bytes": 2762
+        }
+      }
+    },
+    {
+      "id": "print_area_and_titles",
+      "spec": {
+        "id": "print_area_and_titles",
+        "description": "A print area with repeating rows and columns. Excel reports all three fully qualified and anchored; the golden strips the sheet prefix and the anchors so both sides compare the same shape.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "Header"
+            },
+            "F40": {
+              "kind": "text",
+              "value": "End"
+            }
+          }
+        },
+        "roundtrip": {
+          "sheet": "Sheet1",
+          "print_area": "A1:F40",
+          "print_titles": {
+            "repeat_rows": "1:2",
+            "repeat_cols": "A:A"
+          }
+        }
+      },
+      "expect": {
+        "roundtrip": {
+          "page_setup": {
+            "paper_size": 1,
+            "orientation": 1,
+            "zoom": 100,
+            "fit_to_pages_wide": 1,
+            "fit_to_pages_tall": 1
+          },
+          "page_margins": {
+            "left": 0.7,
+            "right": 0.7,
+            "top": 0.75,
+            "bottom": 0.75,
+            "header": 0.3,
+            "footer": 0.3
+          },
+          "print_options": {
+            "grid_lines": false,
+            "headings": false,
+            "horizontal_centered": false,
+            "vertical_centered": false
+          },
+          "header_footer": {
+            "different_odd_even": false,
+            "different_first": false,
+            "scale_with_doc": true,
+            "align_with_margins": true,
+            "odd_header_left": "",
+            "odd_header_center": "",
+            "odd_header_right": "",
+            "odd_footer_left": "",
+            "odd_footer_center": "",
+            "odd_footer_right": "",
+            "even_header_left": "",
+            "even_header_center": "",
+            "even_header_right": "",
+            "even_footer_left": "",
+            "even_footer_center": "",
+            "even_footer_right": "",
+            "first_header_left": "",
+            "first_header_center": "",
+            "first_header_right": "",
+            "first_footer_left": "",
+            "first_footer_center": "",
+            "first_footer_right": ""
+          },
+          "print_area": "A1:F40",
+          "print_title_rows": "1:2",
+          "print_title_cols": "A:A",
+          "manual_row_breaks": [],
+          "manual_col_breaks": [],
+          "xlsx_sha256": "7c3df2fab348cfbb36b56fa8e74ae718d002f1506d87045bae87ec9ad3be0fae",
+          "xlsx_bytes": 2640
+        }
+      }
+    },
+    {
+      "id": "manual_breaks_stay_manual",
+      "spec": {
+        "id": "manual_breaks_stay_manual",
+        "description": "Manual row and column breaks. The golden keeps only breaks whose Type is manual, so a break Excel discarded and re-derived at the same position cannot pass for the one we wrote.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "Header"
+            },
+            "H60": {
+              "kind": "text",
+              "value": "End"
+            }
+          }
+        },
+        "roundtrip": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H60",
+          "row_breaks": [
+            21,
+            41
+          ],
+          "col_breaks": [
+            "D"
+          ]
+        }
+      },
+      "expect": {
+        "roundtrip": {
+          "page_setup": {
+            "paper_size": 1,
+            "orientation": 1,
+            "zoom": 100,
+            "fit_to_pages_wide": 1,
+            "fit_to_pages_tall": 1
+          },
+          "page_margins": {
+            "left": 0.7,
+            "right": 0.7,
+            "top": 0.75,
+            "bottom": 0.75,
+            "header": 0.3,
+            "footer": 0.3
+          },
+          "print_options": {
+            "grid_lines": false,
+            "headings": false,
+            "horizontal_centered": false,
+            "vertical_centered": false
+          },
+          "header_footer": {
+            "different_odd_even": false,
+            "different_first": false,
+            "scale_with_doc": true,
+            "align_with_margins": true,
+            "odd_header_left": "",
+            "odd_header_center": "",
+            "odd_header_right": "",
+            "odd_footer_left": "",
+            "odd_footer_center": "",
+            "odd_footer_right": "",
+            "even_header_left": "",
+            "even_header_center": "",
+            "even_header_right": "",
+            "even_footer_left": "",
+            "even_footer_center": "",
+            "even_footer_right": "",
+            "first_header_left": "",
+            "first_header_center": "",
+            "first_header_right": "",
+            "first_footer_left": "",
+            "first_footer_center": "",
+            "first_footer_right": ""
+          },
+          "print_area": "A1:H60",
+          "print_title_rows": "",
+          "print_title_cols": "",
+          "manual_row_breaks": [
+            20,
+            40
+          ],
+          "manual_col_breaks": [
+            3
+          ],
+          "xlsx_sha256": "a4c6c50268c3f6e7e5edaf356972561fd858d8c59f44d7e8b21f82dce4e27a2f",
+          "xlsx_bytes": 2704
+        }
+      }
+    }
+  ]
+}
