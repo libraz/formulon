@@ -1173,11 +1173,14 @@ async function run() {
   test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      // Empty workbook starts with empty styles tables.
-      assert.equal(wb.fontCount(), 0);
-      assert.equal(wb.fillCount(), 0);
-      assert.equal(wb.borderCount(), 0);
-      assert.equal(wb.xfCount(), 0);
+      // A new workbook carries the minimum style table Excel writes, so
+      // a caller-appended record never lands on one of the slots Excel
+      // reserves: one font, the `none` and `gray125` fills, one border,
+      // one xf.
+      assert.equal(wb.fontCount(), 1);
+      assert.equal(wb.fillCount(), 2);
+      assert.equal(wb.borderCount(), 1);
+      assert.equal(wb.xfCount(), 1);
 
       const f1 = wb.addFont({
         name: 'Arial',
@@ -1203,7 +1206,7 @@ async function run() {
       });
       assert.ok(f1b.status.ok);
       assert.equal(f1b.index, f1.index);
-      assert.equal(wb.fontCount(), 1);
+      assert.equal(wb.fontCount(), 2);
 
       const fill = wb.addFill({ pattern: 1, fgArgb: 0xffff0000, bgArgb: 0xff000000 });
       assert.ok(fill.status.ok);
