@@ -39,6 +39,7 @@
 #include "eval/forecast_ets_lazy.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -599,13 +600,18 @@ double simulate(const std::vector<double>& y, std::uint32_t m, double alpha, dou
 // Bounded Nelder-Mead in 2D / 3D
 // ---------------------------------------------------------------------------
 
-// Clamps each coordinate of `v` (length `dim`) into (kBoundEps, 1 - kBoundEps).
-void clamp_vertex(double* v, std::size_t dim) noexcept {
+struct ParamBounds {
+  double lo;
+  double hi;
+};
+
+// Clamps each coordinate of `v` (length `dim`) into its per-coordinate bound.
+void clamp_vertex_bounded(double* v, std::size_t dim, const ParamBounds* bounds) noexcept {
   for (std::size_t i = 0; i < dim; ++i) {
-    if (v[i] < kBoundEps)
-      v[i] = kBoundEps;
-    if (v[i] > 1.0 - kBoundEps)
-      v[i] = 1.0 - kBoundEps;
+    if (v[i] < bounds[i].lo)
+      v[i] = bounds[i].lo;
+    if (v[i] > bounds[i].hi)
+      v[i] = bounds[i].hi;
   }
 }
 
@@ -618,9 +624,15 @@ void unpack_params(const double* p, std::size_t dim, double* alpha, double* beta
   *gamma = (dim == 3U) ? p[2] : 0.0;
 }
 
-// SSE objective used by the optimiser. Returns +inf for non-finite SSE
-// (which guides the simplex away from pathological corners).
-double objective(const double* params, std::size_t dim, const std::vector<double>& y, std::uint32_t m) {
+// Objective evaluated by the simplex search. `smooth_dim` is only meaningful
+// to the joint objective; the smoothing-only one ignores it.
+using SimplexObjective = double (*)(const double* params, std::size_t dim, std::size_t smooth_dim,
+                                    const std::vector<double>& y, std::uint32_t m);
+
+// SSE objective for the smoothing-only optimiser. Returns +inf for non-finite
+// SSE (which guides the simplex away from pathological corners).
+double objective(const double* params, std::size_t dim, std::size_t /*smooth_dim*/, const std::vector<double>& y,
+                 std::uint32_t m) {
   double alpha = 0.0;
   double beta = 0.0;
   double gamma = 0.0;
@@ -632,38 +644,39 @@ double objective(const double* params, std::size_t dim, const std::vector<double
   return sse;
 }
 
-// Runs bounded Nelder-Mead over the unit cube of dimension `dim` (2 or 3)
-// minimising `objective`. Writes the best (alpha, beta, gamma) into the
-// out-pointers and returns the best SSE.
+// Bounded Nelder-Mead over `dim` coordinates, minimising `evaluate`. The
+// starting simplex is `seed` plus one `seed_step` perturbation per axis; every
+// vertex is clamped into `bounds` after each move. Writes the best vertex into
+// `*out_params` and returns its objective value.
 //
 // The simplex coefficients are the canonical (Nelder-Mead 1965) values:
 //   reflect rho = 1, expand chi = 2, contract psi = 0.5, shrink sigma = 0.5.
-double nelder_mead(const std::vector<double>& y, std::uint32_t m, std::size_t dim, double* out_alpha, double* out_beta,
-                   double* out_gamma) {
-  // Initial simplex: (0.2, 0.1, 0.1) plus unit-perturbations of magnitude
-  // 0.1 in each axis. Comfortably inside the bounds.
+double nelder_mead_search(const std::vector<double>& y, std::uint32_t m, std::size_t dim, std::size_t smooth_dim,
+                          const double* seed, double seed_step, const std::vector<ParamBounds>& bounds, int iter_cap,
+                          SimplexObjective evaluate, std::vector<double>* out_params) {
   const std::size_t k = dim + 1U;
   std::vector<std::vector<double>> simplex(k, std::vector<double>(dim, 0.0));
   // Vertex 0: anchor.
-  simplex[0][0] = 0.2;
-  simplex[0][1] = 0.1;
-  if (dim == 3U)
-    simplex[0][2] = 0.1;
+  for (std::size_t j = 0; j < dim; ++j) {
+    simplex[0][j] = seed[j];
+  }
   // Vertices 1..dim: perturb the i-th axis.
   for (std::size_t i = 1; i < k; ++i) {
-    for (std::size_t j = 0; j < dim; ++j)
+    for (std::size_t j = 0; j < dim; ++j) {
       simplex[i][j] = simplex[0][j];
-    simplex[i][i - 1U] += 0.1;
+    }
+    simplex[i][i - 1U] += seed_step;
   }
-  for (auto& v : simplex)
-    clamp_vertex(v.data(), dim);
+  for (auto& v : simplex) {
+    clamp_vertex_bounded(v.data(), dim, bounds.data());
+  }
 
   std::vector<double> fvals(k, 0.0);
   for (std::size_t i = 0; i < k; ++i) {
-    fvals[i] = objective(simplex[i].data(), dim, y, m);
+    fvals[i] = evaluate(simplex[i].data(), dim, smooth_dim, y, m);
   }
 
-  for (int iter = 0; iter < kMaxNelderMeadIters; ++iter) {
+  for (int iter = 0; iter < iter_cap; ++iter) {
     // Sort vertices by function value (ascending).
     std::vector<std::size_t> order(k);
     for (std::size_t i = 0; i < k; ++i)
@@ -695,8 +708,8 @@ double nelder_mead(const std::vector<double>& y, std::uint32_t m, std::size_t di
     for (std::size_t j = 0; j < dim; ++j) {
       reflected[j] = centroid[j] + 1.0 * (centroid[j] - simplex[worst][j]);
     }
-    clamp_vertex(reflected.data(), dim);
-    const double f_reflected = objective(reflected.data(), dim, y, m);
+    clamp_vertex_bounded(reflected.data(), dim, bounds.data());
+    const double f_reflected = evaluate(reflected.data(), dim, smooth_dim, y, m);
 
     if (f_reflected < fvals[second_worst] && f_reflected >= fvals[best]) {
       simplex[worst] = reflected;
@@ -710,8 +723,8 @@ double nelder_mead(const std::vector<double>& y, std::uint32_t m, std::size_t di
       for (std::size_t j = 0; j < dim; ++j) {
         expanded[j] = centroid[j] + 2.0 * (reflected[j] - centroid[j]);
       }
-      clamp_vertex(expanded.data(), dim);
-      const double f_expanded = objective(expanded.data(), dim, y, m);
+      clamp_vertex_bounded(expanded.data(), dim, bounds.data());
+      const double f_expanded = evaluate(expanded.data(), dim, smooth_dim, y, m);
       if (f_expanded < f_reflected) {
         simplex[worst] = expanded;
         fvals[worst] = f_expanded;
@@ -735,8 +748,8 @@ double nelder_mead(const std::vector<double>& y, std::uint32_t m, std::size_t di
         contracted[j] = centroid[j] + 0.5 * (simplex[worst][j] - centroid[j]);
       }
     }
-    clamp_vertex(contracted.data(), dim);
-    const double f_contracted = objective(contracted.data(), dim, y, m);
+    clamp_vertex_bounded(contracted.data(), dim, bounds.data());
+    const double f_contracted = evaluate(contracted.data(), dim, smooth_dim, y, m);
     if (f_contracted < std::min(f_reflected, fvals[worst])) {
       simplex[worst] = contracted;
       fvals[worst] = f_contracted;
@@ -750,8 +763,8 @@ double nelder_mead(const std::vector<double>& y, std::uint32_t m, std::size_t di
       for (std::size_t j = 0; j < dim; ++j) {
         simplex[i][j] = simplex[best][j] + 0.5 * (simplex[i][j] - simplex[best][j]);
       }
-      clamp_vertex(simplex[i].data(), dim);
-      fvals[i] = objective(simplex[i].data(), dim, y, m);
+      clamp_vertex_bounded(simplex[i].data(), dim, bounds.data());
+      fvals[i] = evaluate(simplex[i].data(), dim, smooth_dim, y, m);
     }
   }
 
@@ -761,8 +774,24 @@ double nelder_mead(const std::vector<double>& y, std::uint32_t m, std::size_t di
     if (fvals[i] < fvals[best_idx])
       best_idx = i;
   }
-  unpack_params(simplex[best_idx].data(), dim, out_alpha, out_beta, out_gamma);
+  *out_params = simplex[best_idx];
   return fvals[best_idx];
+}
+
+// Runs the search over the unit cube of dimension `dim` (2 or 3), tuning the
+// smoothing parameters alone. Writes the best (alpha, beta, gamma) into the
+// out-pointers and returns the best SSE.
+double nelder_mead(const std::vector<double>& y, std::uint32_t m, std::size_t dim, double* out_alpha, double* out_beta,
+                   double* out_gamma) {
+  // Initial simplex: (0.2, 0.1, 0.1) plus unit-perturbations of magnitude
+  // 0.1 in each axis. Comfortably inside the bounds.
+  const std::array<double, 3> seed{0.2, 0.1, 0.1};
+  const std::vector<ParamBounds> bounds(dim, ParamBounds{kBoundEps, 1.0 - kBoundEps});
+  std::vector<double> best;
+  const double sse = nelder_mead_search(y, m, dim, /*smooth_dim=*/dim, seed.data(), 0.1, bounds, kMaxNelderMeadIters,
+                                        &objective, &best);
+  unpack_params(best.data(), dim, out_alpha, out_beta, out_gamma);
+  return sse;
 }
 
 // ---------------------------------------------------------------------------
@@ -781,11 +810,6 @@ double nelder_mead(const std::vector<double>& y, std::uint32_t m, std::size_t di
 // clamped to (kBoundEps, 1 - kBoundEps); the initial-state block is bounded
 // to a generous data-range envelope so the simplex can move freely without
 // running away to non-finite SSE.
-
-struct ParamBounds {
-  double lo;
-  double hi;
-};
 
 // Computes the per-coordinate bounds used by `nelder_mead_full`. The
 // smoothing-param block (the first `smooth_dim` coordinates) is `(eps,
@@ -814,15 +838,6 @@ std::vector<ParamBounds> make_full_bounds(const std::vector<double>& y, std::siz
   return bounds;
 }
 
-void clamp_vertex_bounded(double* v, std::size_t dim, const ParamBounds* bounds) noexcept {
-  for (std::size_t i = 0; i < dim; ++i) {
-    if (v[i] < bounds[i].lo)
-      v[i] = bounds[i].lo;
-    if (v[i] > bounds[i].hi)
-      v[i] = bounds[i].hi;
-  }
-}
-
 // SSE objective for the joint optimiser. Reads packed params:
 //   smooth_dim == 2 (m == 1): [alpha, beta, L_0, B_0]
 //   smooth_dim == 3 (m >= 2): [alpha, beta, gamma, L_0, B_0, S_0..S_{m-1}]
@@ -838,130 +853,17 @@ double objective_full(const double* p, std::size_t /*dim*/, std::size_t smooth_d
   return std::isfinite(sse) ? sse : std::numeric_limits<double>::infinity();
 }
 
-// Generalised bounded Nelder-Mead with per-coordinate bounds and an
-// arbitrary-dimension starting simplex. Identical search logic to the 3D
-// `nelder_mead`; the only differences are that the simplex is built around
-// the supplied `seed` (length `dim`) and that `clamp_vertex_bounded` uses
-// the per-coordinate bounds. Iteration cap and ftol are scaled with `dim`
-// so higher-dim landscapes get proportionally more budget.
+// Joint optimisation over the smoothing parameters and the initial state.
+// Only the knobs differ from the smoothing-only search: the simplex is built
+// around the supplied `seed` (length `dim`) instead of the fixed anchor, the
+// bounds are per-coordinate, and the iteration budget grows with `dim` — a 9D
+// landscape needs ~2-3x more iterations than the 3D one to converge through
+// the same number of simplex collapses.
 double nelder_mead_full(const std::vector<double>& y, std::uint32_t m, std::size_t dim, std::size_t smooth_dim,
                         const double* seed, double seed_step, const std::vector<ParamBounds>& bounds,
                         std::vector<double>* out_params) {
-  const std::size_t k = dim + 1U;
-  std::vector<std::vector<double>> simplex(k, std::vector<double>(dim, 0.0));
-  for (std::size_t j = 0; j < dim; ++j) {
-    simplex[0][j] = seed[j];
-  }
-  for (std::size_t i = 1; i < k; ++i) {
-    for (std::size_t j = 0; j < dim; ++j) {
-      simplex[i][j] = simplex[0][j];
-    }
-    simplex[i][i - 1U] += seed_step;
-  }
-  for (auto& v : simplex) {
-    clamp_vertex_bounded(v.data(), dim, bounds.data());
-  }
-
-  std::vector<double> fvals(k, 0.0);
-  for (std::size_t i = 0; i < k; ++i) {
-    fvals[i] = objective_full(simplex[i].data(), dim, smooth_dim, y, m);
-  }
-
-  // Iteration budget grows with dim — a 9D landscape needs ~2-3x more
-  // iterations than the 3D one to converge through the same number of
-  // simplex collapses.
   const int iter_cap = static_cast<int>(static_cast<std::size_t>(kMaxNelderMeadIters) * std::max<std::size_t>(1U, dim));
-
-  for (int iter = 0; iter < iter_cap; ++iter) {
-    std::vector<std::size_t> order(k);
-    for (std::size_t i = 0; i < k; ++i)
-      order[i] = i;
-    std::sort(order.begin(), order.end(),
-              [&fvals](std::size_t a, std::size_t b) noexcept { return fvals[a] < fvals[b]; });
-    const std::size_t best = order[0];
-    const std::size_t worst = order[k - 1U];
-    const std::size_t second_worst = order[k - 2U];
-
-    if (std::isfinite(fvals[best]) && std::isfinite(fvals[worst]) && (fvals[worst] - fvals[best]) < kNelderMeadFTol) {
-      break;
-    }
-
-    std::vector<double> centroid(dim, 0.0);
-    for (std::size_t i = 0; i < k; ++i) {
-      if (i == worst)
-        continue;
-      for (std::size_t j = 0; j < dim; ++j)
-        centroid[j] += simplex[i][j];
-    }
-    for (std::size_t j = 0; j < dim; ++j)
-      centroid[j] /= static_cast<double>(dim);
-
-    std::vector<double> reflected(dim);
-    for (std::size_t j = 0; j < dim; ++j) {
-      reflected[j] = centroid[j] + 1.0 * (centroid[j] - simplex[worst][j]);
-    }
-    clamp_vertex_bounded(reflected.data(), dim, bounds.data());
-    const double f_reflected = objective_full(reflected.data(), dim, smooth_dim, y, m);
-
-    if (f_reflected < fvals[second_worst] && f_reflected >= fvals[best]) {
-      simplex[worst] = reflected;
-      fvals[worst] = f_reflected;
-      continue;
-    }
-
-    if (f_reflected < fvals[best]) {
-      std::vector<double> expanded(dim);
-      for (std::size_t j = 0; j < dim; ++j) {
-        expanded[j] = centroid[j] + 2.0 * (reflected[j] - centroid[j]);
-      }
-      clamp_vertex_bounded(expanded.data(), dim, bounds.data());
-      const double f_expanded = objective_full(expanded.data(), dim, smooth_dim, y, m);
-      if (f_expanded < f_reflected) {
-        simplex[worst] = expanded;
-        fvals[worst] = f_expanded;
-      } else {
-        simplex[worst] = reflected;
-        fvals[worst] = f_reflected;
-      }
-      continue;
-    }
-
-    std::vector<double> contracted(dim);
-    if (f_reflected < fvals[worst]) {
-      for (std::size_t j = 0; j < dim; ++j) {
-        contracted[j] = centroid[j] + 0.5 * (reflected[j] - centroid[j]);
-      }
-    } else {
-      for (std::size_t j = 0; j < dim; ++j) {
-        contracted[j] = centroid[j] + 0.5 * (simplex[worst][j] - centroid[j]);
-      }
-    }
-    clamp_vertex_bounded(contracted.data(), dim, bounds.data());
-    const double f_contracted = objective_full(contracted.data(), dim, smooth_dim, y, m);
-    if (f_contracted < std::min(f_reflected, fvals[worst])) {
-      simplex[worst] = contracted;
-      fvals[worst] = f_contracted;
-      continue;
-    }
-
-    for (std::size_t i = 0; i < k; ++i) {
-      if (i == best)
-        continue;
-      for (std::size_t j = 0; j < dim; ++j) {
-        simplex[i][j] = simplex[best][j] + 0.5 * (simplex[i][j] - simplex[best][j]);
-      }
-      clamp_vertex_bounded(simplex[i].data(), dim, bounds.data());
-      fvals[i] = objective_full(simplex[i].data(), dim, smooth_dim, y, m);
-    }
-  }
-
-  std::size_t best_idx = 0;
-  for (std::size_t i = 1; i < k; ++i) {
-    if (fvals[i] < fvals[best_idx])
-      best_idx = i;
-  }
-  *out_params = simplex[best_idx];
-  return fvals[best_idx];
+  return nelder_mead_search(y, m, dim, smooth_dim, seed, seed_step, bounds, iter_cap, &objective_full, out_params);
 }
 
 // ---------------------------------------------------------------------------
