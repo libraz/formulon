@@ -61,9 +61,58 @@ Workbook::Workbook(Workbook&&) noexcept = default;
 Workbook& Workbook::operator=(Workbook&&) noexcept = default;
 Workbook::~Workbook() = default;
 
+namespace {
+
+/// OOXML pattern ordinal for `gray125`.
+constexpr std::uint8_t kFillPatternGray125 = 17U;
+
+/// Fills `styles` with the minimum style table Excel puts in a new
+/// workbook.
+///
+/// Leaving the table empty is representable — the writer synthesises a
+/// single default record per section when it sees one — but the synthesis
+/// stops the moment a caller appends anything. A caller that adds one fill
+/// therefore lands it at `fills[0]`, taking the slot Excel reserves for
+/// `none`, and every `fillId` in the file shifts by one relative to what
+/// Excel expects. The same trap applies to fonts and borders, and it is
+/// only visible after the file reaches Excel.
+///
+/// Seeding also makes index 0 a usable template: `get_font(0)` returns the
+/// default font, so "copy the default and change the size" works without a
+/// separate partial-input type.
+void seed_default_styles(io::StylesTable& styles) {
+  io::FontRecord font;
+  font.name = "Calibri";
+  font.size = 11.0;
+  font.has_family = true;
+  font.family = 2U;
+  styles.fonts.push_back(std::move(font));
+
+  // Excel reserves the first two fills and never renders either: `none` is
+  // the no-fill default every unstyled cell points at, and `gray125` is a
+  // legacy placeholder it writes unconditionally.
+  styles.fills.emplace_back();
+  io::FillRecord gray125;
+  gray125.pattern = kFillPatternGray125;
+  styles.fills.push_back(gray125);
+
+  styles.borders.emplace_back();
+  styles.cell_style_xfs.emplace_back();
+  styles.cell_xfs.emplace_back();
+
+  io::CellStyleRecord normal;
+  normal.name = "Normal";
+  normal.xf_id = 0U;
+  normal.builtin_id = 0U;
+  styles.cell_styles.push_back(std::move(normal));
+}
+
+}  // namespace
+
 Workbook Workbook::create() {
   Workbook wb;
   wb.sheets_.emplace_back(Sheet{std::string("Sheet1")});
+  seed_default_styles(wb.styles_);
   return wb;
 }
 

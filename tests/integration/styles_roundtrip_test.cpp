@@ -285,13 +285,23 @@ TEST(StylesRoundTrip, EmptyWorkbookHasDefaultStyles) {
   auto load_or = io::read_ooxml(SpanOf(save_or.value()));
   ASSERT_TRUE(static_cast<bool>(load_or));
   const io::StylesTable& rt = load_or.value().workbook.styles();
-  // The minimal styles document the writer produces for a default
-  // workbook carries one default font / fill / border / cellXf so
-  // `xf_index = 0` always resolves.
+  // `Workbook::create()` seeds Excel's minimum style table rather than
+  // leaving the sections empty for the writer to synthesise, so index 0
+  // always resolves and, crucially, the first two fill slots are the ones
+  // Excel reserves. A caller appending its own fill lands at index 2
+  // instead of displacing `none`.
   EXPECT_EQ(rt.fonts.size(), 1U);
-  EXPECT_EQ(rt.fills.size(), 1U);
+  EXPECT_EQ(rt.fonts[0].name, "Calibri");
+  EXPECT_DOUBLE_EQ(rt.fonts[0].size, 11.0);
+  ASSERT_EQ(rt.fills.size(), 2U);
+  EXPECT_EQ(rt.fills[0].pattern, 0U);   // none
+  EXPECT_EQ(rt.fills[1].pattern, 17U);  // gray125
   EXPECT_EQ(rt.borders.size(), 1U);
   EXPECT_EQ(rt.cell_xfs.size(), 1U);
+  EXPECT_EQ(rt.cell_style_xfs.size(), 1U);
+  ASSERT_EQ(rt.cell_styles.size(), 1U);
+  EXPECT_EQ(rt.cell_styles[0].name, "Normal");
+  EXPECT_EQ(rt.cell_styles[0].builtin_id, 0U);
 }
 
 TEST(StylesRoundTrip, CellProtectReflectsRoundTrippedLockedFlag) {

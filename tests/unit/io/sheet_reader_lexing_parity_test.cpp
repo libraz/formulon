@@ -82,6 +82,19 @@ void SnapshotSheet(const Sheet& sheet, LoadResult* out) {
 /// Reads `sheet_xml` through the DOM path. Row overrides live in
 /// `read_sheet_view_and_layout` on this path, which the OOXML reader
 /// calls over the same document, so both are run here.
+/// A one-sheet workbook with no style table.
+///
+/// These fixtures feed a bare `<sheetData>` fragment to the sheet readers
+/// with no `xl/styles.xml` alongside it, which is the case `ApplyParsedCell`
+/// exempts from its dangling-`s=` clamp. `Workbook::create()` seeds the
+/// Excel-canonical minimum style table, so building the host that way would
+/// clamp `s="5"` to 0 and pin the wrong disposition here.
+Workbook MakeStylelessHost() {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  return wb;
+}
+
 LoadResult LoadDom(std::string_view sheet_xml) {
   LoadResult result;
   pugi::xml_document doc;
@@ -89,7 +102,7 @@ LoadResult LoadDom(std::string_view sheet_xml) {
     result.code = FormulonErrorCode::kIoXmlParse;
     return result;
   }
-  Workbook wb = Workbook::create();
+  Workbook wb = MakeStylelessHost();
   SheetReadContext ctx;
   std::deque<std::string>& text_storage = wb.mutable_text_storage();
   auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage);
@@ -111,7 +124,7 @@ LoadResult LoadDom(std::string_view sheet_xml) {
 /// row overrides from the one scan.
 LoadResult LoadSax(std::string_view sheet_xml) {
   LoadResult result;
-  Workbook wb = Workbook::create();
+  Workbook wb = MakeStylelessHost();
   SheetReadContext ctx;
   std::deque<std::string>& text_storage = wb.mutable_text_storage();
   const ByteSpan span{reinterpret_cast<const std::uint8_t*>(sheet_xml.data()), sheet_xml.size()};

@@ -580,10 +580,10 @@ TEST(FormulonCApiStyles, GetCellXfRejectsOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   fm_cell_xf xf{};
-  // A fresh workbook has an empty styles table, so any xf_index is
-  // out of range. Calling with index 0 still fails because the table
-  // has zero entries.
-  EXPECT_NE(fm_styles_get_cell_xf(wb.handle, 0, &xf), 0);
+  // A fresh workbook seeds one default xf, so index 0 resolves and index
+  // 1 is the first out-of-range one.
+  EXPECT_EQ(fm_styles_get_cell_xf(wb.handle, 0, &xf), 0);
+  EXPECT_NE(fm_styles_get_cell_xf(wb.handle, 1, &xf), 0);
 }
 
 TEST(FormulonCApiStyles, CellXfGetterDiagnosticsUseInvokedApi) {
@@ -597,9 +597,11 @@ TEST(FormulonCApiStyles, CellXfGetterDiagnosticsUseInvokedApi) {
     EXPECT_EQ(std::string(message).rfind(prefix, 0), 0U) << message;
   };
 
+  // Index 1 is past both seeded single-entry tables, so each getter takes
+  // its out-of-range path and must name itself in the diagnostic.
   fm_cell_xf cell_xf{};
-  expect_prefix(fm_styles_get_cell_xf(wb.handle, 0, &cell_xf), "fm_styles_get_cell_xf:");
-  expect_prefix(fm_styles_get_cell_style_xf(wb.handle, 0, &cell_xf), "fm_styles_get_cell_style_xf:");
+  expect_prefix(fm_styles_get_cell_xf(wb.handle, 1, &cell_xf), "fm_styles_get_cell_xf:");
+  expect_prefix(fm_styles_get_cell_style_xf(wb.handle, 1, &cell_xf), "fm_styles_get_cell_style_xf:");
 }
 
 TEST(FormulonCApiStyles, CellXfAdderDiagnosticsUseInvokedApi) {
@@ -820,9 +822,11 @@ TEST(FormulonCApiStyles, AddFontGrowsTable) {
   ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &idx), 0);
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_font_count(wb.handle, &after), 0);
-  EXPECT_EQ(before, 0U);
-  EXPECT_EQ(after, 1U);
-  EXPECT_EQ(idx, 0U);
+  // A new workbook seeds the default font at index 0, so the caller's
+  // first font lands at index 1.
+  EXPECT_EQ(before, 1U);
+  EXPECT_EQ(after, 2U);
+  EXPECT_EQ(idx, 1U);
   // Round-trip: the freshly added font should read back equal.
   fm_font_record out{};
   ASSERT_EQ(fm_styles_get_font(wb.handle, idx, &out), 0);
@@ -1187,9 +1191,11 @@ TEST(FormulonCApiStyles, AddFillGrowsTable) {
   ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &idx), 0);
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_fill_count(wb.handle, &after), 0);
-  EXPECT_EQ(before, 0U);
-  EXPECT_EQ(after, 1U);
-  EXPECT_EQ(idx, 0U);
+  // The seeded table reserves `none` and `gray125` at 0 and 1, matching
+  // what Excel puts in every workbook, so the caller's fill starts at 2.
+  EXPECT_EQ(before, 2U);
+  EXPECT_EQ(after, 3U);
+  EXPECT_EQ(idx, 2U);
   fm_fill_record out{};
   ASSERT_EQ(fm_styles_get_fill(wb.handle, idx, &out), 0);
   EXPECT_EQ(out.pattern, 1U);
@@ -1228,9 +1234,10 @@ TEST(FormulonCApiStyles, AddBorderGrowsTable) {
   ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &idx), 0);
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_border_count(wb.handle, &after), 0);
-  EXPECT_EQ(before, 0U);
-  EXPECT_EQ(after, 1U);
-  EXPECT_EQ(idx, 0U);
+  // Index 0 is the seeded empty border.
+  EXPECT_EQ(before, 1U);
+  EXPECT_EQ(after, 2U);
+  EXPECT_EQ(idx, 1U);
   fm_border_record out{};
   ASSERT_EQ(fm_styles_get_border(wb.handle, idx, &out), 0);
   EXPECT_EQ(out.left.style, 1U);
@@ -1248,7 +1255,7 @@ TEST(FormulonCApiStyles, AddNumFmtBuiltinReturnsBuiltinId) {
   // Adding a built-in must not create a custom entry.
   uint32_t font_count = 7;  // unrelated, just ensure other tables untouched
   EXPECT_EQ(fm_styles_get_font_count(wb.handle, &font_count), 0);
-  EXPECT_EQ(font_count, 0U);
+  EXPECT_EQ(font_count, 1U);  // the seeded default only
 }
 
 TEST(FormulonCApiStyles, AddNumFmtCustomReturnsCustomId) {
@@ -1396,7 +1403,8 @@ TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
   ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &idx), 0);
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_cell_xf_count(wb.handle, &after), 0);
-  EXPECT_EQ(before, 0U);
+  // Index 0 is the seeded default xf.
+  EXPECT_EQ(before, 1U);
   EXPECT_EQ(after, 2U);
   EXPECT_EQ(idx, 1U);
 }
@@ -1411,12 +1419,12 @@ TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
   ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
   ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
 
-  // A fresh workbook's tables start empty, so the first font/fill/border
-  // added legitimately becomes index 0 — there is no anonymous placeholder
-  // seeded ahead of it.
-  EXPECT_EQ(font_idx, 0U);
-  EXPECT_EQ(fill_idx, 0U);
-  EXPECT_EQ(border_idx, 0U);
+  // A fresh workbook seeds Excel's reserved slots, so the caller's first
+  // record lands after them: one default font, one empty border, and the
+  // two fills (`none`, `gray125`) Excel always writes first.
+  EXPECT_EQ(font_idx, 1U);
+  EXPECT_EQ(fill_idx, 2U);
+  EXPECT_EQ(border_idx, 1U);
 
   fm_cell_xf xf{};
   xf.font_index = font_idx;
@@ -1667,9 +1675,10 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
   uint32_t style_count = 0;
   ASSERT_EQ(fm_styles_get_cell_style_count(loaded.handle, &style_count), 0);
-  ASSERT_EQ(style_count, 1U);
+  // The seeded `Normal` keeps index 0; `Highlight` is appended after it.
+  ASSERT_EQ(style_count, 2U);
   fm_cell_style_record_t style{};
-  ASSERT_EQ(fm_styles_get_cell_style(loaded.handle, 0, &style), 0);
+  ASSERT_EQ(fm_styles_get_cell_style(loaded.handle, 1, &style), 0);
   EXPECT_STREQ(style.name, "Highlight");
   uint32_t reread_cell_xf = 0;
   ASSERT_EQ(fm_cell_get_xf_index(loaded.handle, 0, 0, 0, &reread_cell_xf), 0);

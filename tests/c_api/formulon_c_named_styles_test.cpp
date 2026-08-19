@@ -24,15 +24,25 @@ struct WorkbookGuard {
 
 }  // namespace
 
-TEST(FormulonCApiNamedStyles, FreshWorkbookHasNoNamedStyles) {
+TEST(FormulonCApiNamedStyles, FreshWorkbookHasSeededNormalStyle) {
+  // A new workbook seeds Excel's minimum style table, which includes the
+  // `Normal` named style and its `<cellStyleXfs>` entry. Before that seed
+  // the pair existed only in the serialized document, so a caller could not
+  // reference it without a save/load cycle.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   uint32_t cs_count = 99;
   uint32_t cs_xf_count = 99;
   EXPECT_EQ(fm_styles_get_cell_style_count(wb.handle, &cs_count), 0);
   EXPECT_EQ(fm_styles_get_cell_style_xf_count(wb.handle, &cs_xf_count), 0);
-  EXPECT_EQ(cs_count, 0U);
-  EXPECT_EQ(cs_xf_count, 0U);
+  EXPECT_EQ(cs_count, 1U);
+  EXPECT_EQ(cs_xf_count, 1U);
+
+  fm_cell_style_record_t normal{};
+  ASSERT_EQ(fm_styles_get_cell_style(wb.handle, 0, &normal), 0);
+  ASSERT_NE(normal.name, nullptr);
+  EXPECT_STREQ(normal.name, "Normal");
+  EXPECT_EQ(normal.builtin_id, 0U);
 }
 
 TEST(FormulonCApiNamedStyles, IndexOutOfRangeReturnsInvalidArgument) {
@@ -40,9 +50,10 @@ TEST(FormulonCApiNamedStyles, IndexOutOfRangeReturnsInvalidArgument) {
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   fm_cell_style_record_t cs{};
   fm_cell_xf xf{};
-  EXPECT_EQ(fm_styles_get_cell_style(wb.handle, 0, &cs),
+  // Index 0 is the seeded `Normal` style; index 1 is past both tables.
+  EXPECT_EQ(fm_styles_get_cell_style(wb.handle, 1, &cs),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_styles_get_cell_style_xf(wb.handle, 0, &xf),
+  EXPECT_EQ(fm_styles_get_cell_style_xf(wb.handle, 1, &xf),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
@@ -71,10 +82,9 @@ TEST(FormulonCApiNamedStyles, NullArgsReturnBindingNullPointer) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
-TEST(FormulonCApiNamedStyles, RoundTripExposesNamedStylesAfterReload) {
-  // A fresh live model intentionally stays empty. The OOXML writer
-  // synthesizes the default cellStyleXfs/Normal pair only in the
-  // serialized document, so the pair becomes visible after reload.
+TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
+  // The seeded `Normal` pair must survive a save/load cycle unchanged -
+  // the writer must not duplicate it while synthesizing its own default.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
@@ -82,8 +92,8 @@ TEST(FormulonCApiNamedStyles, RoundTripExposesNamedStylesAfterReload) {
   uint32_t live_cs_xf_count = 99;
   ASSERT_EQ(fm_styles_get_cell_style_count(wb.handle, &live_cs_count), 0);
   ASSERT_EQ(fm_styles_get_cell_style_xf_count(wb.handle, &live_cs_xf_count), 0);
-  EXPECT_EQ(live_cs_count, 0U);
-  EXPECT_EQ(live_cs_xf_count, 0U);
+  EXPECT_EQ(live_cs_count, 1U);
+  EXPECT_EQ(live_cs_xf_count, 1U);
 
   uint8_t* saved_data = nullptr;
   size_t saved_len = 0;
