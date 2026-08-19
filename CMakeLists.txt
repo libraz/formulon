@@ -137,6 +137,7 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml/external_link_reader.cpp
   src/io/ooxml/package_validator.cpp
   src/io/ooxml/pivot_target_reader.cpp
+  src/io/ooxml/print_settings_parse.cpp
   src/io/ooxml/sheet_aux_rels_reader.cpp
   src/io/ooxml/workbook_rels_reader.cpp
   src/io/ooxml_writer.cpp
@@ -354,6 +355,8 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/pivot_layout.cpp
   src/c_api/parts/pivot_table.cpp
   src/c_api/parts/pagination.cpp
+  src/c_api/parts/print_settings.cpp
+  src/c_api/parts/xml_fragment.cpp
   src/c_api/parts/sheet_layout.cpp
   src/c_api/parts/sheets_ui.cpp
   src/c_api/parts/styles.cpp

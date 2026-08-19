@@ -216,6 +216,14 @@ JsStatus JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, 
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
+                                     uint32_t lastCol, uint32_t xf_index) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  return status_from_rc(fm_sheet_set_range_xf_index(handle_, sheet, firstRow, firstCol, lastRow, lastCol, xf_index));
+}
+
 // ---- Style record getters ----------------------------------------------
 
 emscripten::val JsWorkbook::getCellXf(uint32_t xf_index) const {

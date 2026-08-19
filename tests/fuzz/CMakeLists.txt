@@ -101,6 +101,7 @@ _formulon_add_fuzz_target(parser_fuzz parser_fuzz.cpp)
 _formulon_add_fuzz_target(eval_fuzz   eval_fuzz.cpp)
 _formulon_add_fuzz_target(xlsx_fuzz   xlsx_fuzz.cpp)
 _formulon_add_fuzz_target(xlsb_fuzz   xlsb_fuzz.cpp)
+_formulon_add_fuzz_target(print_settings_fuzz print_settings_fuzz.cpp)
 
 # Smoke tests run a handful of iterations against an empty corpus so a
 # default `ctest` invocation surfaces obvious regressions without
@@ -154,4 +155,15 @@ add_test(
 )
 set_tests_properties(FuzzXlsbSmoke PROPERTIES LABELS "SLOW")
 set_tests_properties(FuzzXlsbSmoke PROPERTIES ENVIRONMENT
+  "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
+
+# The print-settings setters are the only place caller-authored XML reaches
+# pugixml through the C ABI, and each one re-parses what it stored to feed
+# the paginator. The harness runs both halves.
+add_test(
+  NAME FuzzPrintSettingsSmoke
+  COMMAND print_settings_fuzz -runs=1000 -timeout=10
+)
+set_tests_properties(FuzzPrintSettingsSmoke PROPERTIES LABELS "SLOW")
+set_tests_properties(FuzzPrintSettingsSmoke PROPERTIES ENVIRONMENT
   "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")

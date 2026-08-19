@@ -104,6 +104,38 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SheetName(const Napi::CallbackInfo& info);
   Napi::Value Paginate(const Napi::CallbackInfo& info);
 
+  // Print settings. Method names and JS shapes mirror the embind surface
+  // exactly; `tools/dev/check_binding_drift.py` fails the build if the
+  // two diverge.
+  Napi::Value GetSheetPageSetupXml(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetPageSetupXml(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetPageMarginsXml(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetPageMarginsXml(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetPrintOptionsXml(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetPrintOptionsXml(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetHeaderFooterXml(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetHeaderFooterXml(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetSheetPrXml(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetSheetPrXml(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetFitToPage(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetPrintArea(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetPrintArea(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetPrintTitles(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetPrintTitles(const Napi::CallbackInfo& info);
+  Napi::Value AddSheetRowBreak(const Napi::CallbackInfo& info);
+  Napi::Value AddSheetColBreak(const Napi::CallbackInfo& info);
+  Napi::Value RemoveSheetRowBreak(const Napi::CallbackInfo& info);
+  Napi::Value RemoveSheetColBreak(const Napi::CallbackInfo& info);
+  Napi::Value ClearSheetBreaks(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetRowBreaks(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetColBreaks(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetPageSetup(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetPageMargins(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetPrintOptions(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetHeaderFooter(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetPageSetup(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetPageMargins(const Napi::CallbackInfo& info);
+
   // Row / column structural edits.
   Napi::Value InsertRows(const Napi::CallbackInfo& info);
   Napi::Value DeleteRows(const Napi::CallbackInfo& info);
@@ -229,6 +261,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Styles.
   Napi::Value GetCellXfIndex(const Napi::CallbackInfo& info);
   Napi::Value SetCellXfIndex(const Napi::CallbackInfo& info);
+  Napi::Value SetRangeXfIndex(const Napi::CallbackInfo& info);
   Napi::Value GetCellXf(const Napi::CallbackInfo& info);
   Napi::Value GetFont(const Napi::CallbackInfo& info);
   Napi::Value GetFill(const Napi::CallbackInfo& info);
@@ -285,6 +318,16 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   using RowColEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, uint32_t);
   Napi::Value InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn);
+
+  // Shared bodies for the five raw print-settings fragment pairs and the
+  // two break enumerators. Ten near-identical entry points would otherwise
+  // each carry the same handle check, status envelope and empty-result
+  // shape.
+  using XmlFragmentGetFn = fm_status_t (*)(const fm_workbook_t*, size_t, const char**);
+  using XmlFragmentSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const char*);
+  Napi::Value XmlFragmentGetter(const Napi::CallbackInfo& info, XmlFragmentGetFn getter);
+  Napi::Value XmlFragmentSetter(const Napi::CallbackInfo& info, XmlFragmentSetFn setter);
+  Napi::Value BreaksArray(const Napi::CallbackInfo& info, bool rows);
 
   /// Builds an error-Status envelope when the wrapper has been
   /// finalized / destroyed but JS still holds a reference.

@@ -769,6 +769,66 @@ class PaginationResult:
 
 
 @dataclass(frozen=True)
+class PageBreak:
+    """One manual page break as the worksheet declares it.
+
+    ``id`` is the zero-based row or column the break precedes; ``min`` /
+    ``max`` bound the break on the perpendicular axis. ``manual`` is False
+    for a break Excel computed and recorded rather than one a user placed.
+    """
+
+    id: int
+    min: int
+    max: int
+    manual: bool
+
+
+@dataclass(frozen=True)
+class PageSetup:
+    """Effective ``<pageSetup>`` values, with per-attribute presence.
+
+    Every value field carries the setting in force. The ``*_stated`` flags
+    say whether the XML actually declares it, which is the only way to tell
+    ``scale="100"`` from an absent attribute that defaults to 100.
+
+    ``fit_to_page`` lives in ``<sheetPr><pageSetUpPr>`` rather than
+    ``<pageSetup>``; it is reported here because callers reason about it as
+    part of one page-setup decision.
+    """
+
+    orientation: int
+    paper_size: int
+    scale: int
+    fit_to_width: int
+    fit_to_height: int
+    fit_to_page: bool
+    orientation_stated: bool
+    paper_size_stated: bool
+    scale_stated: bool
+    fit_to_width_stated: bool
+    fit_to_height_stated: bool
+    fit_to_page_stated: bool
+
+
+@dataclass(frozen=True)
+class PageMargins:
+    """Effective ``<pageMargins>`` values in inches, with presence flags."""
+
+    left: float
+    right: float
+    top: float
+    bottom: float
+    header: float
+    footer: float
+    left_stated: bool
+    right_stated: bool
+    top_stated: bool
+    bottom_stated: bool
+    header_stated: bool
+    footer_stated: bool
+
+
+@dataclass(frozen=True)
 class CfMatch:
     """A resolved conditional-format match for one cell.
 
@@ -3108,6 +3168,457 @@ class Workbook:
         finally:
             LIB.free(xml_ptr)
 
+    # -- Print settings: raw XML -------------------------------------------
+    #
+    # The five worksheet print elements are stored verbatim and re-emitted
+    # on save, so these getters return what the file says rather than a
+    # re-serialisation of a partial model. An absent element reads as "".
+    #
+    # Setting the empty string removes the element and restores the
+    # structured defaults it fed; any non-empty value must be exactly one
+    # well-formed element with the matching root name.
+
+    def _get_print_xml(self, sheet: int, export: str) -> str:
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(getattr(LIB, export)(h, _uint(sheet, "sheet_index"), out), export)
+            return LIB.read_cstr(LIB.read_u32(out))
+        finally:
+            LIB.free(out)
+
+    def _set_print_xml(self, sheet: int, export: str, xml: str) -> None:
+        h = self._require()
+        xml_ptr, _ = LIB.alloc_utf8(xml)
+        try:
+            _check(getattr(LIB, export)(h, _uint(sheet, "sheet_index"), xml_ptr), export)
+        finally:
+            LIB.free(xml_ptr)
+
+    def get_page_setup_xml(self, sheet: int) -> str:
+        """Return the sheet's ``<pageSetup>`` fragment, or ``""``."""
+        return self._get_print_xml(sheet, "fm_sheet_get_page_setup_xml")
+
+    def set_page_setup_xml(self, sheet: int, xml: str) -> None:
+        """Replace the sheet's ``<pageSetup>`` fragment.
+
+        Note that ``fitToPage`` is not a ``<pageSetup>`` attribute -- use
+        :meth:`set_fit_to_page`. A fragment carrying ``r:id`` is rejected
+        unless the sheet already has a printerSettings part, because the
+        reference would otherwise dangle and Excel would repair the file.
+        """
+        self._set_print_xml(sheet, "fm_sheet_set_page_setup_xml", xml)
+
+    def get_page_margins_xml(self, sheet: int) -> str:
+        """Return the sheet's ``<pageMargins>`` fragment, or ``""``."""
+        return self._get_print_xml(sheet, "fm_sheet_get_page_margins_xml")
+
+    def set_page_margins_xml(self, sheet: int, xml: str) -> None:
+        """Replace the sheet's ``<pageMargins>`` fragment."""
+        self._set_print_xml(sheet, "fm_sheet_set_page_margins_xml", xml)
+
+    def get_print_options_xml(self, sheet: int) -> str:
+        """Return the sheet's ``<printOptions>`` fragment, or ``""``."""
+        return self._get_print_xml(sheet, "fm_sheet_get_print_options_xml")
+
+    def set_print_options_xml(self, sheet: int, xml: str) -> None:
+        """Replace the sheet's ``<printOptions>`` fragment."""
+        self._set_print_xml(sheet, "fm_sheet_set_print_options_xml", xml)
+
+    def get_header_footer_xml(self, sheet: int) -> str:
+        """Return the sheet's ``<headerFooter>`` fragment, or ``""``."""
+        return self._get_print_xml(sheet, "fm_sheet_get_header_footer_xml")
+
+    def set_header_footer_xml(self, sheet: int, xml: str) -> None:
+        """Replace the sheet's ``<headerFooter>`` fragment.
+
+        Header and footer codes are introduced by ``&``, which lives in XML
+        element text and so must arrive escaped: Excel writes
+        ``<oddHeader>&amp;C...</oddHeader>``. Pass decoded text to
+        :meth:`set_header_footer` instead to let the engine escape it.
+        """
+        self._set_print_xml(sheet, "fm_sheet_set_header_footer_xml", xml)
+
+    def get_sheet_pr_xml(self, sheet: int) -> str:
+        """Return the sheet's ``<sheetPr>`` fragment, or ``""``.
+
+        ``<sheetPr>`` is not print-only: it also carries the tab colour and
+        the VBA code name, which is why toggling fit-to-page has its own
+        entry point rather than going through this setter.
+        """
+        return self._get_print_xml(sheet, "fm_sheet_get_sheet_pr_xml")
+
+    def set_sheet_pr_xml(self, sheet: int, xml: str) -> None:
+        """Replace the sheet's ``<sheetPr>`` fragment."""
+        self._set_print_xml(sheet, "fm_sheet_set_sheet_pr_xml", xml)
+
+    def set_fit_to_page(self, sheet: int, enabled: bool) -> None:
+        """Set or clear ``<sheetPr><pageSetUpPr fitToPage>``.
+
+        Leaves every other ``<sheetPr>`` child and attribute alone.
+        ``fitToPage`` only selects the mode; state the target with
+        ``fit_to_width`` / ``fit_to_height`` on :meth:`set_page_setup`.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_fit_to_page(h, _uint(sheet, "sheet_index"), 1 if enabled else 0),
+            "fm_sheet_set_fit_to_page",
+        )
+
+    # -- Print settings: area and titles -----------------------------------
+
+    def get_print_area(self, sheet: int) -> str:
+        """Return the print area as comma-separated A1 ranges, or ``""``.
+
+        A whole-axis area reads back expanded to explicit corners (``"A:D"``
+        becomes ``"A1:D1048576"``), because this reports the rectangles the
+        paginator resolves rather than the authored shape.
+        """
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(LIB.fm_sheet_get_print_area(h, _uint(sheet, "sheet_index"), out), "fm_sheet_get_print_area")
+            return LIB.read_cstr(LIB.read_u32(out))
+        finally:
+            LIB.free(out)
+
+    def set_print_area(self, sheet: int, ranges_a1: str) -> None:
+        """Write ``_xlnm.Print_Area`` from one or more A1 ranges.
+
+        Accepts ``"A1:F8"``, ``"A1:B10,D5:E20"``, ``"A:D"`` or ``"1:50"``,
+        with or without ``$``. Corners are absolutised and each area is
+        qualified with this sheet's name. An empty string removes the name.
+        """
+        h = self._require()
+        ranges_ptr, _ = LIB.alloc_utf8(ranges_a1)
+        try:
+            _check(
+                LIB.fm_sheet_set_print_area(h, _uint(sheet, "sheet_index"), ranges_ptr),
+                "fm_sheet_set_print_area",
+            )
+        finally:
+            LIB.free(ranges_ptr)
+
+    def get_print_titles(self, sheet: int) -> tuple[str, str]:
+        """Return ``(repeat_rows, repeat_cols)`` as ``"1:2"`` / ``"A:A"``.
+
+        Either is ``""`` when that axis is unset.
+        """
+        h = self._require()
+        rows_out = _alloc_out_ptr()
+        cols_out = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_sheet_get_print_titles(h, _uint(sheet, "sheet_index"), rows_out, cols_out),
+                "fm_sheet_get_print_titles",
+            )
+            return (LIB.read_cstr(LIB.read_u32(rows_out)), LIB.read_cstr(LIB.read_u32(cols_out)))
+        finally:
+            LIB.free(rows_out)
+            LIB.free(cols_out)
+
+    def set_print_titles(self, sheet: int, repeat_rows: str = "", repeat_cols: str = "") -> None:
+        """Write ``_xlnm.Print_Titles`` from a row span and a column span.
+
+        ``repeat_rows`` is a whole-row span (``"1:2"``), ``repeat_cols`` a
+        whole-column span (``"A:A"``). Both empty removes the defined name.
+        """
+        h = self._require()
+        rows_ptr, _ = LIB.alloc_utf8(repeat_rows)
+        cols_ptr, _ = LIB.alloc_utf8(repeat_cols)
+        try:
+            _check(
+                LIB.fm_sheet_set_print_titles(h, _uint(sheet, "sheet_index"), rows_ptr, cols_ptr),
+                "fm_sheet_set_print_titles",
+            )
+        finally:
+            LIB.free(rows_ptr)
+            LIB.free(cols_ptr)
+
+    # -- Print settings: manual page breaks --------------------------------
+
+    def add_row_break(self, sheet: int, row: int, manual: bool = True) -> None:
+        """Upsert a row break before ``row``, spanning the whole sheet."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_add_row_break(h, _uint(sheet, "sheet_index"), _uint(row, "row"), 1 if manual else 0),
+            "fm_sheet_add_row_break",
+        )
+
+    def add_col_break(self, sheet: int, col: int, manual: bool = True) -> None:
+        """Upsert a column break before ``col``, spanning the whole sheet."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_add_col_break(h, _uint(sheet, "sheet_index"), _uint(col, "col"), 1 if manual else 0),
+            "fm_sheet_add_col_break",
+        )
+
+    def remove_row_break(self, sheet: int, row: int) -> None:
+        """Remove the row break at ``row``. An absent break is a no-op."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_remove_row_break(h, _uint(sheet, "sheet_index"), _uint(row, "row")),
+            "fm_sheet_remove_row_break",
+        )
+
+    def remove_col_break(self, sheet: int, col: int) -> None:
+        """Remove the column break at ``col``. An absent break is a no-op."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_remove_col_break(h, _uint(sheet, "sheet_index"), _uint(col, "col")),
+            "fm_sheet_remove_col_break",
+        )
+
+    def clear_breaks(self, sheet: int) -> None:
+        """Remove every manual break on both axes."""
+        h = self._require()
+        _check(LIB.fm_sheet_clear_breaks(h, _uint(sheet, "sheet_index")), "fm_sheet_clear_breaks")
+
+    def _read_breaks(self, sheet: int, count_export: str, at_export: str) -> List[PageBreak]:
+        h = self._require()
+        count = int(getattr(LIB, count_export)(h, _uint(sheet, "sheet_index")))
+        out: List[PageBreak] = []
+        ptr = S.alloc_struct(LIB, S.PAGE_BREAK)
+        try:
+            for i in range(count):
+                _check(getattr(LIB, at_export)(h, _uint(sheet, "sheet_index"), _uint(i, "index"), ptr), at_export)
+                d = S.PAGE_BREAK.unpack(LIB, ptr)
+                out.append(PageBreak(id=d["id"], min=d["min"], max=d["max"], manual=bool(d["manual"])))
+        finally:
+            LIB.free(ptr)
+        return out
+
+    def get_row_breaks(self, sheet: int) -> List[PageBreak]:
+        """Return the row breaks, ascending by row."""
+        return self._read_breaks(sheet, "fm_sheet_row_break_count", "fm_sheet_row_break_at")
+
+    def get_col_breaks(self, sheet: int) -> List[PageBreak]:
+        """Return the column breaks, ascending by column."""
+        return self._read_breaks(sheet, "fm_sheet_col_break_count", "fm_sheet_col_break_at")
+
+    # -- Print settings: typed patch setters -------------------------------
+    #
+    # Each keyword defaults to ``None`` meaning "leave this attribute as the
+    # file has it". That is how the C ``*_engaged`` flags are expressed in
+    # Python: a caller states the two or three attributes it cares about and
+    # every other one, including attributes the engine does not model, stays
+    # exactly where the file put it.
+
+    def set_page_setup(
+        self,
+        sheet: int,
+        *,
+        orientation: Optional[int] = None,
+        paper_size: Optional[int] = None,
+        scale: Optional[int] = None,
+        fit_to_width: Optional[int] = None,
+        fit_to_height: Optional[int] = None,
+        fit_to_page: Optional[bool] = None,
+    ) -> None:
+        """Apply a partial ``<pageSetup>`` update.
+
+        ``orientation`` is 0 (default) / 1 (portrait) / 2 (landscape);
+        ``paper_size`` is the OOXML code (9 = A4). ``scale`` outside
+        ``[10, 400]`` is rejected rather than clamped -- a mis-stated print
+        scale lands on paper, so rounding it silently would hide the error.
+        ``fit_to_page`` is routed to ``<sheetPr><pageSetUpPr>``.
+        """
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PAGE_SETUP)
+        try:
+            S.PAGE_SETUP.pack(
+                LIB,
+                ptr,
+                {
+                    "orientation_engaged": 0 if orientation is None else 1,
+                    "orientation": _uint(orientation or 0, "orientation"),
+                    "paper_size_engaged": 0 if paper_size is None else 1,
+                    "paper_size": _uint(paper_size or 0, "paper_size"),
+                    "scale_engaged": 0 if scale is None else 1,
+                    "scale": _uint(scale or 0, "scale"),
+                    "fit_to_width_engaged": 0 if fit_to_width is None else 1,
+                    "fit_to_width": _uint(fit_to_width or 0, "fit_to_width"),
+                    "fit_to_height_engaged": 0 if fit_to_height is None else 1,
+                    "fit_to_height": _uint(fit_to_height or 0, "fit_to_height"),
+                    "fit_to_page_engaged": 0 if fit_to_page is None else 1,
+                    "fit_to_page": 1 if fit_to_page else 0,
+                },
+            )
+            _check(LIB.fm_sheet_set_page_setup(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_set_page_setup")
+        finally:
+            LIB.free(ptr)
+
+    def set_page_margins(
+        self,
+        sheet: int,
+        *,
+        left: Optional[float] = None,
+        right: Optional[float] = None,
+        top: Optional[float] = None,
+        bottom: Optional[float] = None,
+        header: Optional[float] = None,
+        footer: Optional[float] = None,
+    ) -> None:
+        """Apply a partial ``<pageMargins>`` update, in inches.
+
+        A negative, infinite or NaN margin is rejected: the paginator
+        subtracts these from the paper, so such a value does not describe a
+        printable body.
+        """
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PAGE_MARGINS)
+        try:
+            values: Dict[str, object] = {}
+            for name, value in (
+                ("left", left),
+                ("right", right),
+                ("top", top),
+                ("bottom", bottom),
+                ("header", header),
+                ("footer", footer),
+            ):
+                values[f"{name}_engaged"] = 0 if value is None else 1
+                values[name] = 0.0 if value is None else float(value)
+            S.PAGE_MARGINS.pack(LIB, ptr, values)
+            _check(LIB.fm_sheet_set_page_margins(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_set_page_margins")
+        finally:
+            LIB.free(ptr)
+
+    def set_print_options(
+        self,
+        sheet: int,
+        *,
+        grid_lines: Optional[bool] = None,
+        headings: Optional[bool] = None,
+        horizontal_centered: Optional[bool] = None,
+        vertical_centered: Optional[bool] = None,
+    ) -> None:
+        """Apply a partial ``<printOptions>`` update."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PRINT_OPTIONS)
+        try:
+            values: Dict[str, object] = {}
+            for name, value in (
+                ("grid_lines", grid_lines),
+                ("headings", headings),
+                ("horizontal_centered", horizontal_centered),
+                ("vertical_centered", vertical_centered),
+            ):
+                values[f"{name}_engaged"] = 0 if value is None else 1
+                values[name] = 1 if value else 0
+            S.PRINT_OPTIONS.pack(LIB, ptr, values)
+            _check(LIB.fm_sheet_set_print_options(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_set_print_options")
+        finally:
+            LIB.free(ptr)
+
+    def set_header_footer(
+        self,
+        sheet: int,
+        *,
+        odd_header: Optional[str] = None,
+        odd_footer: Optional[str] = None,
+        even_header: Optional[str] = None,
+        even_footer: Optional[str] = None,
+        first_header: Optional[str] = None,
+        first_footer: Optional[str] = None,
+        different_odd_even: Optional[bool] = None,
+        different_first: Optional[bool] = None,
+        scale_with_doc: Optional[bool] = None,
+        align_with_margins: Optional[bool] = None,
+    ) -> None:
+        """Apply a partial ``<headerFooter>`` update.
+
+        Each section is tri-state: ``None`` leaves it untouched, ``""``
+        clears it, anything else replaces it. Pass decoded text -- Excel's
+        formatting codes go in plainly (``"&C&\\"MS Gothic\\"Report &P/&N"``)
+        and the engine applies the XML escaping.
+        """
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.HEADER_FOOTER)
+        owned: List[int] = []
+        try:
+            values: Dict[str, object] = {}
+            for name, value in (
+                ("different_odd_even", different_odd_even),
+                ("different_first", different_first),
+                ("scale_with_doc", scale_with_doc),
+                ("align_with_margins", align_with_margins),
+            ):
+                values[f"{name}_engaged"] = 0 if value is None else 1
+                values[name] = 1 if value else 0
+            S.HEADER_FOOTER.pack(LIB, ptr, values)
+            # Written after `pack`, which zeroes the whole block: a NULL
+            # pointer is the "leave this section alone" signal, and an
+            # empty string still needs a real (empty) buffer to mean
+            # "clear it".
+            for field, value in (
+                ("odd_header", odd_header),
+                ("odd_footer", odd_footer),
+                ("even_header", even_header),
+                ("even_footer", even_footer),
+                ("first_header", first_header),
+                ("first_footer", first_footer),
+            ):
+                if value is None:
+                    continue
+                text_ptr, _ = LIB.alloc_utf8(value)
+                owned.append(text_ptr)
+                _, off = S.HEADER_FOOTER.offsets[field]
+                LIB.write_bytes(ptr + off, struct.pack("<I", text_ptr))
+            _check(LIB.fm_sheet_set_header_footer(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_set_header_footer")
+        finally:
+            LIB.free(ptr)
+            for owned_ptr in owned:
+                LIB.free(owned_ptr)
+
+    def get_page_setup(self, sheet: int) -> PageSetup:
+        """Read the effective page setup and which attributes state it."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PAGE_SETUP)
+        try:
+            _check(LIB.fm_sheet_get_page_setup(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_get_page_setup")
+            d = S.PAGE_SETUP.unpack(LIB, ptr)
+            return PageSetup(
+                orientation=d["orientation"],
+                paper_size=d["paper_size"],
+                scale=d["scale"],
+                fit_to_width=d["fit_to_width"],
+                fit_to_height=d["fit_to_height"],
+                fit_to_page=bool(d["fit_to_page"]),
+                orientation_stated=bool(d["orientation_engaged"]),
+                paper_size_stated=bool(d["paper_size_engaged"]),
+                scale_stated=bool(d["scale_engaged"]),
+                fit_to_width_stated=bool(d["fit_to_width_engaged"]),
+                fit_to_height_stated=bool(d["fit_to_height_engaged"]),
+                fit_to_page_stated=bool(d["fit_to_page_engaged"]),
+            )
+        finally:
+            LIB.free(ptr)
+
+    def get_page_margins(self, sheet: int) -> PageMargins:
+        """Read the effective page margins in inches, with presence flags."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PAGE_MARGINS)
+        try:
+            _check(LIB.fm_sheet_get_page_margins(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_get_page_margins")
+            d = S.PAGE_MARGINS.unpack(LIB, ptr)
+            return PageMargins(
+                left=d["left"],
+                right=d["right"],
+                top=d["top"],
+                bottom=d["bottom"],
+                header=d["header"],
+                footer=d["footer"],
+                left_stated=bool(d["left_engaged"]),
+                right_stated=bool(d["right_engaged"]),
+                top_stated=bool(d["top_engaged"]),
+                bottom_stated=bool(d["bottom_engaged"]),
+                header_stated=bool(d["header_engaged"]),
+                footer_stated=bool(d["footer_engaged"]),
+            )
+        finally:
+            LIB.free(ptr)
+
     def get_sheet_columns(self, sheet: int) -> List[ColumnLayout]:
         """Return the column-layout overrides on ``sheet``."""
         h = self._require()
@@ -3621,6 +4132,29 @@ class Workbook:
                 h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), _uint(xf_index, "xf_index")
             ),
             "fm_cell_set_xf_index",
+        )
+
+    def set_range_xf_index(
+        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int, xf_index: int
+    ) -> None:
+        """Store ``xf_index`` on every cell in the inclusive rectangle.
+
+        Cells that do not exist yet are materialised as blanks carrying only
+        the style, so an empty ruled box renders. Ruling a report this way
+        costs one call instead of one per cell.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_range_xf_index(
+                h,
+                _uint(sheet, "sheet"),
+                _uint(first_row, "first_row"),
+                _uint(first_col, "first_col"),
+                _uint(last_row, "last_row"),
+                _uint(last_col, "last_col"),
+                _uint(xf_index, "xf_index"),
+            ),
+            "fm_sheet_set_range_xf_index",
         )
 
     @staticmethod

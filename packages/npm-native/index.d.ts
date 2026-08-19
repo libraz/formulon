@@ -563,6 +563,149 @@ export interface PaginationResult {
   pageCount: number;
 }
 
+/** Result of the five raw print-settings getters. The empty `xml` string
+ * means the sheet declares no such element. */
+export interface SheetPrintXmlResult {
+  status: Status;
+  xml: string;
+}
+
+/** Result of `Workbook.getSheetPrintArea`. `ranges` is comma-separated A1
+ * (`"A1:F8"`, `"A1:B10,D5:E20"`), empty when no print area is declared. A
+ * whole-axis area reads back expanded to explicit corners. */
+export interface SheetPrintAreaResult {
+  status: Status;
+  ranges: string;
+}
+
+/** Result of `Workbook.getSheetPrintTitles`. Either span is empty when
+ * that axis has no repeat setting. */
+export interface SheetPrintTitlesResult {
+  status: Status;
+  /** Whole-row span, e.g. `"1:2"`. */
+  repeatRows: string;
+  /** Whole-column span, e.g. `"A:A"`. */
+  repeatCols: string;
+}
+
+/** One manual page break. `id` is the 0-based row / column the break
+ * precedes; `min` / `max` bound it on the perpendicular axis. `manual` is
+ * false for a break Excel computed rather than one a user placed. */
+export interface PageBreak {
+  id: number;
+  min: number;
+  max: number;
+  manual: boolean;
+}
+
+/** Result of `Workbook.getSheetRowBreaks` / `getSheetColBreaks`. */
+export interface SheetPageBreaksResult {
+  status: Status;
+  breaks: PageBreak[];
+}
+
+/** Page orientation as `<pageSetup orientation>` encodes it: `0` leaves the
+ * attribute off (the printer default), `1` is portrait, `2` is landscape.
+ *
+ * Declared as a union rather than an `enum` so it stays a compile-time-only
+ * type: there is no runtime table to keep in step across the two packages,
+ * and the three values are the whole domain. */
+export type Orientation = 0 | 1 | 2;
+
+/** Partial `<pageSetup>` update. Only the keys present are applied; every
+ * other attribute in the stored XML — including ones this engine does not
+ * model, such as `r:id`, `horizontalDpi` and `copies` — is left alone.
+ *
+ * `fitToPage` is not a `<pageSetup>` attribute: it is routed to
+ * `<sheetPr><pageSetUpPr>`. It selects the fit-to-page mode, and
+ * `fitToWidth` / `fitToHeight` state the target, so "fit onto one page"
+ * needs all three. */
+export interface PageSetupInput {
+  orientation?: Orientation;
+  /** OOXML paperSize code; 9 = A4. */
+  paperSize?: number;
+  /** Print scale percentage. Outside `[10, 400]` is rejected, not clamped. */
+  scale?: number;
+  fitToWidth?: number;
+  fitToHeight?: number;
+  fitToPage?: boolean;
+}
+
+/** Result of `Workbook.getSheetPageSetup`. Every value carries the setting
+ * in force; the `*Stated` flags say whether the XML declares it, which is
+ * the only way to tell `scale="100"` from an absent attribute. */
+export interface SheetPageSetupResult {
+  status: Status;
+  orientation: Orientation;
+  paperSize: number;
+  scale: number;
+  fitToWidth: number;
+  fitToHeight: number;
+  fitToPage: boolean;
+  orientationStated: boolean;
+  paperSizeStated: boolean;
+  scaleStated: boolean;
+  fitToWidthStated: boolean;
+  fitToHeightStated: boolean;
+  fitToPageStated: boolean;
+}
+
+/** Partial `<pageMargins>` update, in inches. A negative, infinite or NaN
+ * margin is rejected: the paginator subtracts these from the paper. */
+export interface PageMarginsInput {
+  left?: number;
+  right?: number;
+  top?: number;
+  bottom?: number;
+  header?: number;
+  footer?: number;
+}
+
+/** Result of `Workbook.getSheetPageMargins`, in inches. */
+export interface SheetPageMarginsResult {
+  status: Status;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  header: number;
+  footer: number;
+  leftStated: boolean;
+  rightStated: boolean;
+  topStated: boolean;
+  bottomStated: boolean;
+  headerStated: boolean;
+  footerStated: boolean;
+}
+
+/** Partial `<printOptions>` update. */
+export interface PrintOptionsInput {
+  gridLines?: boolean;
+  headings?: boolean;
+  horizontalCentered?: boolean;
+  verticalCentered?: boolean;
+}
+
+/** Partial `<headerFooter>` update.
+ *
+ * Each section is tri-state: omit the key to leave it untouched, pass `""`
+ * to clear it, pass anything else to replace it. Section text is the
+ * decoded string, so Excel's formatting codes go in plainly
+ * (`'&C&"MS Gothic"Report &P/&N'`); the engine applies the XML escaping
+ * that turns each leading `&` into the `&amp;` Excel stores. */
+export interface HeaderFooterInput {
+  oddHeader?: string;
+  oddFooter?: string;
+  evenHeader?: string;
+  evenFooter?: string;
+  firstHeader?: string;
+  firstFooter?: string;
+  differentOddEven?: boolean;
+  differentFirst?: boolean;
+  scaleWithDoc?: boolean;
+  alignWithMargins?: boolean;
+}
+
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
  *  counts, tab-hidden flag, and the display / orientation flags mirrored
  *  from OOXML `<sheetView>`. Booleans are encoded as `0`/`1` to match
@@ -1671,6 +1814,74 @@ export interface Workbook {
   /** Computes print-area page breaks and physical page count for `sheet`. */
   paginate(sheet: number): PaginationResult;
 
+  /** Reads the worksheet's `<pageSetup>` fragment; empty when absent. */
+  getSheetPageSetupXml(sheet: number): SheetPrintXmlResult;
+  /** Replaces `<pageSetup>`; empty removes it and restores the defaults.
+   *  A fragment carrying `r:id` is rejected unless the sheet already has a
+   *  printerSettings part, since the reference would otherwise dangle. */
+  setSheetPageSetupXml(sheet: number, xml: string): Status;
+  /** Reads the worksheet's `<pageMargins>` fragment; empty when absent. */
+  getSheetPageMarginsXml(sheet: number): SheetPrintXmlResult;
+  /** Replaces `<pageMargins>`; empty removes it. */
+  setSheetPageMarginsXml(sheet: number, xml: string): Status;
+  /** Reads the worksheet's `<printOptions>` fragment; empty when absent. */
+  getSheetPrintOptionsXml(sheet: number): SheetPrintXmlResult;
+  /** Replaces `<printOptions>`; empty removes it. */
+  setSheetPrintOptionsXml(sheet: number, xml: string): Status;
+  /** Reads the worksheet's `<headerFooter>` fragment; empty when absent. */
+  getSheetHeaderFooterXml(sheet: number): SheetPrintXmlResult;
+  /** Replaces `<headerFooter>`; empty removes it. Header codes live in XML
+   *  element text, so a hand-built fragment writes them escaped
+   *  (`<oddHeader>&amp;C...</oddHeader>`); `setSheetHeaderFooter` takes the
+   *  decoded text instead. */
+  setSheetHeaderFooterXml(sheet: number, xml: string): Status;
+  /** Reads the worksheet's `<sheetPr>` fragment; empty when absent. It also
+   *  carries the tab colour and VBA code name, not just print settings. */
+  getSheetSheetPrXml(sheet: number): SheetPrintXmlResult;
+  /** Replaces `<sheetPr>`; empty removes it. */
+  setSheetSheetPrXml(sheet: number, xml: string): Status;
+  /** Sets or clears `<sheetPr><pageSetUpPr fitToPage>` without disturbing
+   *  anything else `<sheetPr>` carries. */
+  setSheetFitToPage(sheet: number, enabled: boolean): Status;
+
+  /** Reads `_xlnm.Print_Area` as comma-separated A1 ranges. */
+  getSheetPrintArea(sheet: number): SheetPrintAreaResult;
+  /** Writes `_xlnm.Print_Area` from one or more comma-separated A1 ranges
+   *  (`"A1:F8"`, `"A1:B10,D5:E20"`, `"A:D"`). Empty removes it. */
+  setSheetPrintArea(sheet: number, rangesA1: string): Status;
+  /** Reads `_xlnm.Print_Titles` as a row span and a column span. */
+  getSheetPrintTitles(sheet: number): SheetPrintTitlesResult;
+  /** Writes `_xlnm.Print_Titles`. Both empty removes it. */
+  setSheetPrintTitles(sheet: number, repeatRows: string, repeatCols: string): Status;
+
+  /** Upserts a row break before `row`, spanning the whole sheet. */
+  addSheetRowBreak(sheet: number, row: number, manual: boolean): Status;
+  /** Upserts a column break before `col`, spanning the whole sheet. */
+  addSheetColBreak(sheet: number, col: number, manual: boolean): Status;
+  /** Removes the row break at `row`. An absent break is a no-op. */
+  removeSheetRowBreak(sheet: number, row: number): Status;
+  /** Removes the column break at `col`. An absent break is a no-op. */
+  removeSheetColBreak(sheet: number, col: number): Status;
+  /** Removes every manual break on both axes. */
+  clearSheetBreaks(sheet: number): Status;
+  /** Returns the row breaks, ascending by row. */
+  getSheetRowBreaks(sheet: number): SheetPageBreaksResult;
+  /** Returns the column breaks, ascending by column. */
+  getSheetColBreaks(sheet: number): SheetPageBreaksResult;
+
+  /** Applies a partial `<pageSetup>` update. */
+  setSheetPageSetup(sheet: number, setup: PageSetupInput): Status;
+  /** Applies a partial `<pageMargins>` update, in inches. */
+  setSheetPageMargins(sheet: number, margins: PageMarginsInput): Status;
+  /** Applies a partial `<printOptions>` update. */
+  setSheetPrintOptions(sheet: number, options: PrintOptionsInput): Status;
+  /** Applies a partial `<headerFooter>` update. */
+  setSheetHeaderFooter(sheet: number, headerFooter: HeaderFooterInput): Status;
+  /** Reads the effective page setup and which attributes state it. */
+  getSheetPageSetup(sheet: number): SheetPageSetupResult;
+  /** Reads the effective page margins, in inches. */
+  getSheetPageMargins(sheet: number): SheetPageMarginsResult;
+
   // Sheet view / layout.
   /** Reads the full per-sheet view (zoom, freeze, tab-hidden, and the
    *  display / orientation flags). */
@@ -1725,6 +1936,16 @@ export interface Workbook {
   getCellXfIndex(sheet: number, row: number, col: number): CellXfIndexResult;
   /** Persists `xfIndex` on the cell at `(sheet, row, col)`. */
   setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): Status;
+  /** Applies `xfIndex` across an inclusive rectangle, materialising blank
+   *  cells so an empty ruled box renders. Saves one call per cell. */
+  setRangeXfIndex(
+    sheet: number,
+    firstRow: number,
+    firstCol: number,
+    lastRow: number,
+    lastCol: number,
+    xfIndex: number,
+  ): Status;
   /** Returns the resolved XF record at `xfIndex`. */
   getCellXf(xfIndex: number): CellXfResult;
   /** Returns the font record at `fontIndex`, including its ColorSpec selector. */

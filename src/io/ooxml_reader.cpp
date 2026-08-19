@@ -42,6 +42,7 @@
 #include "io/ooxml/external_link_reader.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/pivot_target_reader.h"
+#include "io/ooxml/print_settings_parse.h"
 #include "io/ooxml/sheet_aux_rels_reader.h"
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/ooxml_defs.h"
@@ -121,82 +122,14 @@ Expected<std::vector<UnknownRelationship>, Error> ReadUnknownPackageRels(const s
 constexpr std::string_view kCtPrinterSettings =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
 
-/// Populates the structured `PageSetup` fields from a `<pageSetup>` node.
-/// The raw XML string remains the writer's source of truth; this is an
-/// additive parse for consumers that need typed access. Missing
-/// attributes keep the struct defaults. `fit_to_page` is set separately
-/// from `<sheetPr><pageSetUpPr>`.
-void ApplyStructuredPageSetup(const pugi::xml_node& page_setup, PageSetup& out) {
-  if (pugi::xml_attribute attr = page_setup.attribute("orientation"); attr) {
-    const std::string_view value = attr.value();
-    if (value == "portrait") {
-      out.orientation = Orientation::kPortrait;
-    } else if (value == "landscape") {
-      out.orientation = Orientation::kLandscape;
-    } else {
-      out.orientation = Orientation::kDefault;
-    }
-  }
-  if (pugi::xml_attribute attr = page_setup.attribute("paperSize"); attr) {
-    out.paper_size = static_cast<std::uint32_t>(attr.as_uint(out.paper_size));
-  }
-  if (pugi::xml_attribute attr = page_setup.attribute("scale"); attr) {
-    out.scale = static_cast<std::uint32_t>(attr.as_uint(out.scale));
-  }
-  if (pugi::xml_attribute attr = page_setup.attribute("fitToWidth"); attr) {
-    out.fit_to_width = static_cast<std::uint32_t>(attr.as_uint(out.fit_to_width));
-  }
-  if (pugi::xml_attribute attr = page_setup.attribute("fitToHeight"); attr) {
-    out.fit_to_height = static_cast<std::uint32_t>(attr.as_uint(out.fit_to_height));
-  }
-}
-
-/// Populates the structured `PageMargins` fields from a `<pageMargins>`
-/// node. Additive alongside the raw XML string; missing attributes keep
-/// the struct defaults.
-///
-/// A margin outside the shared non-negative-double lexical space keeps the
-/// default too. The paginator subtracts the margins from the paper to get
-/// the printable body, so an infinite or NaN one collapses that body and
-/// breaks a page before every single track; a negative one inflates the
-/// body past the paper. Neither is a margin, and the raw XML string is
-/// re-emitted verbatim regardless, so nothing the file states is lost.
-void ApplyStructuredPageMargins(const pugi::xml_node& page_margins, PageMargins& out) {
-  const auto margin = [&page_margins](const char* name, double& field) {
-    double value = 0.0;
-    if (parse_xsd_nonneg_double(attr_str(page_margins, name), &value)) {
-      field = value;
-    }
-  };
-  margin("left", out.left);
-  margin("right", out.right);
-  margin("top", out.top);
-  margin("bottom", out.bottom);
-  margin("header", out.header);
-  margin("footer", out.footer);
-}
-
-/// Reads the `<brk>` children of a `<rowBreaks>` / `<colBreaks>` node
-/// into `out`. OOXML stores the break index 1-based in the `id`
-/// attribute; this normalises to 0-based (clamping at 0). The
-/// `count` / `manualBreakCount` wrapper attributes are ignored — only
-/// the `<brk>` entries themselves are honoured.
-void ReadManualBreaks(const pugi::xml_node& breaks_node, std::vector<ManualBreak>& out) {
-  if (!breaks_node) {
-    return;
-  }
-  for (pugi::xml_node brk = breaks_node.child("brk"); brk; brk = brk.next_sibling("brk")) {
-    ManualBreak entry;
-    const unsigned int raw_id = brk.attribute("id").as_uint(0);
-    entry.id = raw_id > 0U ? raw_id - 1U : 0U;
-    entry.min = static_cast<std::uint32_t>(brk.attribute("min").as_uint(0));
-    entry.max = static_cast<std::uint32_t>(brk.attribute("max").as_uint(0));
-    // `man` defaults to false (ECMA-376 §18.3.1.1): a break without it is
-    // automatic and must not be re-emitted as a user break.
-    entry.manual = read_xsd_bool(brk, "man", false);
-    out.push_back(entry);
-  }
-}
+// The structured `PageSetup` / `PageMargins` / `ManualBreak` derivations
+// live in `io/ooxml/print_settings_parse.h`: the C-ABI print setters
+// re-derive them from a freshly written raw fragment, and both sides must
+// agree on what the XML means.
+using ooxml::apply_structured_page_margins;
+using ooxml::apply_structured_page_setup;
+using ooxml::read_fit_to_page;
+using ooxml::read_manual_breaks;
 
 /// Returns a copy of `sheet_xml` with the `<sheetData>` element's children
 /// removed (the open / close tags are kept as an empty element). This lets
@@ -307,18 +240,16 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
     // `<sheetPr>` entirely on save. The structured `fit_to_page` view is
     // populated additionally when `<pageSetUpPr>` is present.
     print.sheet_pr_xml = raw_xml(sheet_pr);
-    if (pugi::xml_node page_setup_pr = sheet_pr.child("pageSetUpPr"); page_setup_pr) {
-      print.page_setup.fit_to_page = page_setup_pr.attribute("fitToPage").as_bool(false);
-    }
+    print.page_setup.fit_to_page = read_fit_to_page(sheet_pr);
   }
   if (pugi::xml_node page_margins = worksheet.child("pageMargins")) {
     print.page_margins_xml = raw_xml(page_margins);
-    ApplyStructuredPageMargins(page_margins, print.page_margins);
+    apply_structured_page_margins(page_margins, print.page_margins);
   }
   if (pugi::xml_node page_setup = worksheet.child("pageSetup")) {
     print.page_setup_xml = raw_xml(page_setup);
     print.printer_settings_rid = ooxml::relationship_ref_id(page_setup);
-    ApplyStructuredPageSetup(page_setup, print.page_setup);
+    apply_structured_page_setup(page_setup, print.page_setup);
   }
   if (pugi::xml_node print_options = worksheet.child("printOptions")) {
     print.print_options_xml = raw_xml(print_options);
@@ -345,8 +276,8 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
   // re-emitted (mirrors the workbook-root handling; keeps the output
   // well-formed).
   wb.sheet(i).set_root_extra_ns_attrs(capture_root_extra_ns_attrs(worksheet));
-  ReadManualBreaks(worksheet.child("rowBreaks"), print.manual_row_breaks);
-  ReadManualBreaks(worksheet.child("colBreaks"), print.manual_col_breaks);
+  read_manual_breaks(worksheet.child("rowBreaks"), print.manual_row_breaks);
+  read_manual_breaks(worksheet.child("colBreaks"), print.manual_col_breaks);
   return Expected<void, Error>::Ok();
 }
 

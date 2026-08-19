@@ -2,6 +2,7 @@
 // C ABI - styles surface (cell xf bindings, fonts, fills, borders, num
 // formats, cell styles, dedup-on-insert helpers).
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -18,7 +19,9 @@
 #include "cell.h"
 #include "io/styles_reader.h"
 #include "io/styles_writer.h"
+#include "sheet.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_sheet_u32;
@@ -87,6 +90,40 @@ extern "C" fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, u
   auto r = wb->workbook().set_cell_xf_index(sheet, row, col, xf_index);
   if (!r) {
     return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t first_row,
+                                                   uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                                   uint32_t xf_index) {
+  static constexpr const char* kFn = "fm_sheet_set_range_xf_index";
+  clear_last_error();
+  if (auto rc = check_sheet_u32(wb, sheet, kFn); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t row_lo = std::min(first_row, last_row);
+  const std::uint32_t row_hi = std::max(first_row, last_row);
+  const std::uint32_t col_lo = std::min(first_col, last_col);
+  const std::uint32_t col_hi = std::max(first_col, last_col);
+  if (row_hi >= formulon::Sheet::kMaxRows || col_hi >= formulon::Sheet::kMaxCols) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, kFn,
+                             "last_row=" + std::to_string(row_hi) + " last_col=" + std::to_string(col_hi));
+  }
+  const std::uint64_t cells =
+      (static_cast<std::uint64_t>(row_hi - row_lo) + 1U) * (static_cast<std::uint64_t>(col_hi - col_lo) + 1U);
+  if (cells > formulon::kMaxStyledRangeCells) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kPreconditionFailed, kFn,
+        "cells=" + std::to_string(cells) + " limit=" + std::to_string(formulon::kMaxStyledRangeCells));
+  }
+  for (std::uint32_t row = row_lo; row <= row_hi; ++row) {
+    for (std::uint32_t col = col_lo; col <= col_hi; ++col) {
+      auto r = wb->workbook().set_cell_xf_index(sheet, row, col, xf_index);
+      if (!r) {
+        return set_last_error(r.error());
+      }
+    }
   }
   return 0;
 }

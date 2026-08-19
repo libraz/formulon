@@ -93,6 +93,7 @@ if(FM_WASM_VARIANT STREQUAL "embind")
     src/wasm/parts/workbook_core.cpp
     src/wasm/parts/workbook_misc.cpp
     src/wasm/parts/workbook_pivot.cpp
+    src/wasm/parts/workbook_print.cpp
     src/wasm/parts/workbook_sheet_layout.cpp
     src/wasm/parts/workbook_styles.cpp
     src/wasm/parts/workbook_ui.cpp

@@ -1959,6 +1959,339 @@ FM_API size_t fm_pagination_vertical_break_count(const fm_pagination_t* paginati
 /** @brief Reads a 0-based column index that a vertical break precedes. */
 FM_API fm_status_t fm_pagination_vertical_break_at(const fm_pagination_t* pagination, size_t index, uint32_t* out_col);
 
+/* -------------------------------------------------------------------------- */
+/* Print settings - raw XML                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Reads a worksheet print-settings element as raw XML.
+ *
+ * The engine stores these five elements verbatim and re-emits them on save,
+ * so what comes back is what the file stated (or what the matching setter
+ * last stored), not a re-serialisation of a partial model. A sheet that
+ * declares no such element yields an empty string, never NULL.
+ *
+ * The returned pointer follows the standard scratch contract: valid until
+ * the next successful scratch-backed read, any mutation, or handle
+ * destruction on the same handle.
+ */
+FM_API fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
+
+/**
+ * @brief Replaces a worksheet print-settings element with raw XML.
+ *
+ * `xml` must be exactly one well-formed element whose root name matches the
+ * entry point (`pageSetup` here). A prefixed root (`<x:pageSetup/>`) is
+ * rejected: the fragment is spliced into the worksheet unchanged, and a
+ * prefix lifted out of its original namespace context would not bind there.
+ * Content the engine does not model is preserved as-is.
+ *
+ * An empty string removes the element and resets the structured views it
+ * feeds (orientation / paper size / scale / fit-to-width / fit-to-height)
+ * to their ECMA-376 defaults. Otherwise the structured views are re-derived
+ * from the new fragment immediately, so a `fm_workbook_paginate` that
+ * follows observes the new settings.
+ *
+ * `fitToPage` is NOT part of `<pageSetup>` - it lives in
+ * `<sheetPr><pageSetUpPr>`; use `fm_sheet_set_fit_to_page`.
+ *
+ * Returns `kInvalidArgument` (5) when the fragment is malformed, carries
+ * more than one top-level element, or names the wrong root; and when it
+ * declares an `r:id` on a sheet that has no printer-settings part, which
+ * would leave a dangling relationship that makes Excel repair the file.
+ * Returns `kPreconditionFailed` (6) when the fragment exceeds 4 KiB.
+ */
+FM_API fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
+
+/** @brief Reads `<pageMargins>` as raw XML. See
+ *         `fm_sheet_get_page_setup_xml` for the shared contract. */
+FM_API fm_status_t fm_sheet_get_page_margins_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
+
+/** @brief Replaces `<pageMargins>`. Re-derives the structured margins; an
+ *         empty string removes the element and restores the defaults.
+ *         Fragment ceiling 4 KiB. */
+FM_API fm_status_t fm_sheet_set_page_margins_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
+
+/** @brief Reads `<printOptions>` as raw XML. */
+FM_API fm_status_t fm_sheet_get_print_options_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
+
+/** @brief Replaces `<printOptions>`. This element has no structured view;
+ *         the raw fragment is the whole model. Fragment ceiling 4 KiB. */
+FM_API fm_status_t fm_sheet_set_print_options_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
+
+/** @brief Reads `<headerFooter>` as raw XML. */
+FM_API fm_status_t fm_sheet_get_header_footer_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
+
+/** @brief Replaces `<headerFooter>`. No structured view. Fragment ceiling
+ *         64 KiB, which is wider than the other elements because six
+ *         sections of formatting codes (and header images) live here.
+ *
+ * Header and footer text uses `&` as its formatting-code introducer
+ * (`&P` = page number, `&D` = date). Those codes live in XML element text,
+ * so a caller composing this fragment writes them escaped - Excel's own
+ * output is `<oddHeader>&amp;C...</oddHeader>`, and a raw `&` would make
+ * the fragment ill-formed. `fm_sheet_set_header_footer` takes the decoded
+ * text instead and handles the escaping. */
+FM_API fm_status_t fm_sheet_set_header_footer_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
+
+/** @brief Reads `<sheetPr>` as raw XML.
+ *
+ * `<sheetPr>` is not print-only: it also carries `tabColor` (sheet tab
+ * colour) and `codeName` (VBA binding). Replacing it wholesale to toggle
+ * `fitToPage` would drop those; `fm_sheet_set_fit_to_page` exists to avoid
+ * exactly that. */
+FM_API fm_status_t fm_sheet_get_sheet_pr_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
+
+/** @brief Replaces `<sheetPr>`. Re-derives `fitToPage` from
+ *         `<pageSetUpPr>`; absent means false. Fragment ceiling 8 KiB. */
+FM_API fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
+
+/**
+ * @brief Sets or clears `<sheetPr><pageSetUpPr fitToPage>` without
+ *        disturbing any other `<sheetPr>` content.
+ *
+ * Creates `<sheetPr>` and `<pageSetUpPr>` when absent; `enabled == 0`
+ * removes the `fitToPage` attribute but keeps both elements and everything
+ * else they carry (`tabColor`, `codeName`, `<outlinePr>`, ...).
+ *
+ * `fitToPage` alone does not scale anything: it selects the fit-to-page
+ * mode, and `<pageSetup fitToWidth= fitToHeight=>` states the target. Set
+ * both - "fit onto one page" is `fm_sheet_set_fit_to_page(wb, s, 1)` plus
+ * `fit_to_width = 1` and `fit_to_height = 1`.
+ */
+FM_API fm_status_t fm_sheet_set_fit_to_page(fm_workbook_t* wb, size_t sheet_index, int32_t enabled);
+
+/* -------------------------------------------------------------------------- */
+/* Print settings - print area and titles                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Writes the sheet-scoped `_xlnm.Print_Area` defined name.
+ *
+ * `ranges_a1` accepts one or more comma-separated A1 ranges, with or
+ * without `$` anchors: `"A1:F8"`, `"A1:B10,D5:E20"`, `"A:D"`, `"1:50"`.
+ * Every corner is absolutised and each area is qualified with the sheet's
+ * own name, quoted per Excel's rules, so the stored formula matches what
+ * Excel writes. Area order is preserved - Excel prints them in the stated
+ * order.
+ *
+ * An empty string removes the defined name. Returns `kPrintInvalidArea`
+ * (9002) when any area fails to parse.
+ */
+FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index, const char* ranges_a1);
+
+/**
+ * @brief Reads the print area back as unqualified A1 ranges, or an empty
+ *        string when the sheet declares none.
+ *
+ * Whole-axis areas come back expanded to explicit corners (`"A:D"` reads
+ * back as `"A1:D1048576"`): the resolver normalises them to rectangles for
+ * the paginator, and this getter reports the resolved form rather than
+ * re-deriving the authored shape.
+ *
+ * Returns `kPrintInvalidArea` (9002) when the defined name exists but does
+ * not parse, so a malformed one is never mistaken for "no print area".
+ */
+FM_API fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t sheet_index, const char** out_ranges_a1);
+
+/**
+ * @brief Writes the sheet-scoped `_xlnm.Print_Titles` defined name.
+ *
+ * `repeat_rows` is a row span (`"1:2"`), `repeat_cols` a column span
+ * (`"A:A"`); either may be empty or NULL. Both empty removes the defined
+ * name. The stored formula lists rows before columns, matching Excel.
+ *
+ * Returns `kPrintInvalidArea` (9002) when either span is present but not a
+ * whole-row / whole-column span of the right shape.
+ */
+FM_API fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet_index, const char* repeat_rows,
+                                             const char* repeat_cols);
+
+/**
+ * @brief Reads the repeat rows / columns back as `"1:2"` / `"A:A"`, each
+ *        an empty string when that axis is unset.
+ *
+ * Both output pointers stay valid together until the next scratch-backed
+ * read on the handle.
+ */
+FM_API fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t sheet_index, const char** out_repeat_rows,
+                                             const char** out_repeat_cols);
+
+/* -------------------------------------------------------------------------- */
+/* Print settings - manual page breaks                                        */
+/* -------------------------------------------------------------------------- */
+
+/** @brief One manual page break as the worksheet declares it. */
+typedef struct {
+  uint32_t id;    /* 0-based row / column index the break precedes */
+  uint32_t min;   /* span start on the perpendicular axis */
+  uint32_t max;   /* span end on the perpendicular axis */
+  int32_t manual; /* 0 = automatic (`man` absent), 1 = user break */
+} fm_page_break_t;
+
+/**
+ * @brief Upserts a row break before `row`.
+ *
+ * The perpendicular span defaults to the whole sheet (`min = 0`,
+ * `max = 16383`), which is what Excel writes for a break inserted with no
+ * active selection. Re-adding an existing index replaces its span and
+ * `manual` flag rather than duplicating it; the vector stays sorted
+ * ascending by index.
+ *
+ * Returns `kInvalidArgument` (5) for a row past the grid, and
+ * `kPreconditionFailed` (6) once the axis holds 1026 breaks - Excel's own
+ * ceiling.
+ */
+FM_API fm_status_t fm_sheet_add_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t manual);
+
+/** @brief Upserts a column break before `col`. Whole-sheet perpendicular
+ *         span is `min = 0`, `max = 1048575`. See `fm_sheet_add_row_break`. */
+FM_API fm_status_t fm_sheet_add_col_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t manual);
+
+/** @brief Removes the row break at `row`. Absent is a successful no-op. */
+FM_API fm_status_t fm_sheet_remove_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row);
+
+/** @brief Removes the column break at `col`. Absent is a successful no-op. */
+FM_API fm_status_t fm_sheet_remove_col_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col);
+
+/** @brief Removes every manual break on both axes. */
+FM_API fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_index);
+
+/** @brief Number of row breaks declared on the sheet, or zero on any
+ *         argument error. */
+FM_API size_t fm_sheet_row_break_count(const fm_workbook_t* wb, size_t sheet_index);
+
+/** @brief Copies the row break at `index` (ascending by row). */
+FM_API fm_status_t fm_sheet_row_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
+                                         fm_page_break_t* out);
+
+/** @brief Number of column breaks declared on the sheet, or zero on any
+ *         argument error. */
+FM_API size_t fm_sheet_col_break_count(const fm_workbook_t* wb, size_t sheet_index);
+
+/** @brief Copies the column break at `index` (ascending by column). */
+FM_API fm_status_t fm_sheet_col_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
+                                         fm_page_break_t* out);
+
+/* -------------------------------------------------------------------------- */
+/* Print settings - typed patch setters                                       */
+/* -------------------------------------------------------------------------- */
+
+#define FM_ORIENTATION_DEFAULT 0u
+#define FM_ORIENTATION_PORTRAIT 1u
+#define FM_ORIENTATION_LANDSCAPE 2u
+
+/**
+ * @brief Partial `<pageSetup>` update.
+ *
+ * Each field is applied only when its `_engaged` companion is non-zero, so
+ * a caller states the two or three attributes it cares about and leaves
+ * everything else - including attributes the engine does not model, such as
+ * `r:id`, `horizontalDpi` and `copies` - exactly as the file had them.
+ *
+ * On the read path `_engaged` means "the attribute is present in the XML";
+ * the value field always carries the effective value, so a caller can tell
+ * an explicit setting from an inherited default.
+ */
+typedef struct {
+  int32_t orientation_engaged;
+  uint32_t orientation; /* FM_ORIENTATION_* */
+  int32_t paper_size_engaged;
+  uint32_t paper_size; /* OOXML paperSize code; 9 = A4 */
+  int32_t scale_engaged;
+  uint32_t scale; /* percent, [10, 400] */
+  int32_t fit_to_width_engaged;
+  uint32_t fit_to_width;
+  int32_t fit_to_height_engaged;
+  uint32_t fit_to_height;
+  int32_t fit_to_page_engaged;
+  int32_t fit_to_page; /* routed to <sheetPr><pageSetUpPr>, not <pageSetup> */
+} fm_page_setup_t;
+
+/** @brief Partial `<pageMargins>` update, in inches. Same `_engaged`
+ *         semantics as `fm_page_setup_t`. */
+typedef struct {
+  int32_t left_engaged;
+  double left;
+  int32_t right_engaged;
+  double right;
+  int32_t top_engaged;
+  double top;
+  int32_t bottom_engaged;
+  double bottom;
+  int32_t header_engaged;
+  double header;
+  int32_t footer_engaged;
+  double footer;
+} fm_page_margins_t;
+
+/** @brief Partial `<printOptions>` update. Same `_engaged` semantics. */
+typedef struct {
+  int32_t grid_lines_engaged;
+  int32_t grid_lines;
+  int32_t headings_engaged;
+  int32_t headings;
+  int32_t horizontal_centered_engaged;
+  int32_t horizontal_centered;
+  int32_t vertical_centered_engaged;
+  int32_t vertical_centered;
+} fm_print_options_t;
+
+/**
+ * @brief Partial `<headerFooter>` update.
+ *
+ * Each section pointer is tri-state: NULL leaves that section untouched, an
+ * empty string clears it, and any other value replaces it.
+ *
+ * Section text is the decoded string, so Excel's formatting codes are
+ * written plainly: `"&C&\"MS Gothic\"Report &P/&N"`. The engine applies XML
+ * escaping on the way out, which is what turns the leading `&` of each code
+ * into the `&amp;` Excel itself stores.
+ */
+typedef struct {
+  const char* odd_header;
+  const char* odd_footer;
+  const char* even_header;
+  const char* even_footer;
+  const char* first_header;
+  const char* first_footer;
+  int32_t different_odd_even_engaged;
+  int32_t different_odd_even;
+  int32_t different_first_engaged;
+  int32_t different_first;
+  int32_t scale_with_doc_engaged;
+  int32_t scale_with_doc;
+  int32_t align_with_margins_engaged;
+  int32_t align_with_margins;
+} fm_header_footer_t;
+
+/**
+ * @brief Applies a partial `<pageSetup>` update.
+ *
+ * `scale` outside [10, 400] is rejected with `kInvalidArgument` (5) rather
+ * than clamped. `fm_sheet_set_zoom` clamps its own input because an
+ * out-of-range screen zoom is harmless, but a mis-stated print scale lands
+ * on paper, so silently rounding it would hide the mistake.
+ */
+FM_API fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_index, const fm_page_setup_t* setup);
+
+/** @brief Applies a partial `<pageMargins>` update. A negative, infinite or
+ *         NaN margin is rejected with `kInvalidArgument` (5). */
+FM_API fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet_index, const fm_page_margins_t* margins);
+
+/** @brief Applies a partial `<printOptions>` update. */
+FM_API fm_status_t fm_sheet_set_print_options(fm_workbook_t* wb, size_t sheet_index, const fm_print_options_t* options);
+
+/** @brief Applies a partial `<headerFooter>` update. */
+FM_API fm_status_t fm_sheet_set_header_footer(fm_workbook_t* wb, size_t sheet_index, const fm_header_footer_t* hf);
+
+/** @brief Reads the effective page setup. Every `_engaged` flag reports
+ *         whether the attribute is stated in the XML. */
+FM_API fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t sheet_index, fm_page_setup_t* out);
+
+/** @brief Reads the effective page margins, in inches. */
+FM_API fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t sheet_index, fm_page_margins_t* out);
+
 /**
  * @brief Opaque handle for a CF range evaluation result.
  *
@@ -3992,6 +4325,28 @@ FM_API fm_status_t fm_cell_get_xf_index(fm_workbook_t* wb, uint32_t sheet, uint3
  */
 FM_API fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                         uint32_t xf_index);
+
+/**
+ * @brief Stores `xf_index` on every cell in the inclusive rectangle
+ *        `[(first_row, first_col), (last_row, last_col)]`.
+ *
+ * Cells that do not exist yet are materialised as blanks carrying only the
+ * style, which is what makes an empty ruled box render. Swapped corners are
+ * normalised.
+ *
+ * Ruling a report means writing one xf across a rectangle; doing that a
+ * cell at a time costs one ABI crossing per cell, which dominates the work
+ * on any binding that marshals arguments.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` or a corner is out of range;
+ *         `kPreconditionFailed` when the rectangle exceeds the per-call
+ *         cell ceiling.
+ */
+FM_API fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t first_row,
+                                               uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                               uint32_t xf_index);
 
 /**
  * @brief Reads the `xf_index`-th `<xf>` record from the workbook's

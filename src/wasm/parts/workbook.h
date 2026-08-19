@@ -156,6 +156,57 @@ class JsWorkbook {
   /// `{ status, printArea, horizontalBreaks, verticalBreaks, pageCount }`.
   emscripten::val paginate(uint32_t sheet) const;
 
+  // ---- Print settings -----------------------------------------------------
+  //
+  // Three surfaces over the same model, from most to least raw. Each
+  // getter returns `{ status, ... }` so a bad sheet index is
+  // distinguishable from an absent setting.
+
+  /// Raw print-settings fragments. `{ status, xml }`; `xml` is the empty
+  /// string when the sheet declares no such element.
+  emscripten::val getSheetPageSetupXml(uint32_t sheet) const;
+  JsStatus setSheetPageSetupXml(uint32_t sheet, const std::string& xml);
+  emscripten::val getSheetPageMarginsXml(uint32_t sheet) const;
+  JsStatus setSheetPageMarginsXml(uint32_t sheet, const std::string& xml);
+  emscripten::val getSheetPrintOptionsXml(uint32_t sheet) const;
+  JsStatus setSheetPrintOptionsXml(uint32_t sheet, const std::string& xml);
+  emscripten::val getSheetHeaderFooterXml(uint32_t sheet) const;
+  JsStatus setSheetHeaderFooterXml(uint32_t sheet, const std::string& xml);
+  emscripten::val getSheetSheetPrXml(uint32_t sheet) const;
+  JsStatus setSheetSheetPrXml(uint32_t sheet, const std::string& xml);
+
+  /// Toggles `<sheetPr><pageSetUpPr fitToPage>` without touching anything
+  /// else `<sheetPr>` carries. Pair with `fitToWidth` / `fitToHeight` on
+  /// the page setup to state the target.
+  JsStatus setSheetFitToPage(uint32_t sheet, bool enabled);
+
+  /// Print area as comma-separated A1 ranges. `{ status, ranges }`.
+  emscripten::val getSheetPrintArea(uint32_t sheet) const;
+  JsStatus setSheetPrintArea(uint32_t sheet, const std::string& rangesA1);
+
+  /// Repeat rows / columns. `{ status, repeatRows, repeatCols }`.
+  emscripten::val getSheetPrintTitles(uint32_t sheet) const;
+  JsStatus setSheetPrintTitles(uint32_t sheet, const std::string& repeatRows, const std::string& repeatCols);
+
+  /// Manual page breaks. The enumerators return the whole array rather
+  /// than a count + getter pair, matching the rest of this surface.
+  JsStatus addSheetRowBreak(uint32_t sheet, uint32_t row, bool manual);
+  JsStatus addSheetColBreak(uint32_t sheet, uint32_t col, bool manual);
+  JsStatus removeSheetRowBreak(uint32_t sheet, uint32_t row);
+  JsStatus removeSheetColBreak(uint32_t sheet, uint32_t col);
+  JsStatus clearSheetBreaks(uint32_t sheet);
+  emscripten::val getSheetRowBreaks(uint32_t sheet) const;
+  emscripten::val getSheetColBreaks(uint32_t sheet) const;
+
+  /// Typed patch setters. Only the keys present on the input object are
+  /// applied; every other attribute in the stored XML is left alone.
+  JsStatus setSheetPageSetup(uint32_t sheet, emscripten::val setup);
+  JsStatus setSheetPageMargins(uint32_t sheet, emscripten::val margins);
+  JsStatus setSheetPrintOptions(uint32_t sheet, emscripten::val options);
+  JsStatus setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFooter);
+  emscripten::val getSheetPageSetup(uint32_t sheet) const;
+  emscripten::val getSheetPageMargins(uint32_t sheet) const;
+
   // ---- Sheet view / layout ------------------------------------------------
 
   JsSheetViewResult getSheetView(uint32_t sheet) const;
@@ -190,6 +241,10 @@ class JsWorkbook {
 
   emscripten::val getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const;
   JsStatus setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index);
+  /// Applies one xf across an inclusive rectangle, materialising blank
+  /// cells so an empty ruled box renders. Saves one ABI crossing per cell.
+  JsStatus setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow, uint32_t lastCol,
+                           uint32_t xf_index);
   emscripten::val getCellXf(uint32_t xf_index) const;
   emscripten::val getFont(uint32_t font_index) const;
   emscripten::val getFill(uint32_t fill_index) const;

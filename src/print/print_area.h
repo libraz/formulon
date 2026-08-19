@@ -45,6 +45,21 @@ struct PrintTitles {
   std::optional<std::pair<std::uint32_t, std::uint32_t>> repeat_cols;
 };
 
+/// Parses one print-area token into a normalised rectangle.
+///
+/// `token` is a single area with no sheet qualifier: a full `A1:H80`
+/// range, a degenerate single cell `A1`, or a whole-column (`A:D`) /
+/// whole-row (`1:50`) span. `$` anchors are tolerated. Endpoints are
+/// normalised (swapped corners are ordered) and clamped to Excel's grid, so
+/// an over-large reference cannot drive a runaway track vector downstream.
+///
+/// Exposed so the authoring API validates a caller-supplied area against the
+/// exact grammar the resolver will apply to it later; a token this accepts
+/// is one `resolve_print_area` can read back.
+///
+/// Returns false when the token is not one of those shapes.
+bool parse_area_token(std::string_view token, CellRange* out_range);
+
 /// Resolves the print area for sheet `sheet_index` (0-based).
 ///
 /// Scans the workbook's defined names for `_xlnm.Print_Area` scoped to

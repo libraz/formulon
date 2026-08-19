@@ -91,6 +91,38 @@ inline constexpr std::uint64_t kMaxRegexMatchSlots = kMaxDynamicArrayCells;
 /// count could never be reported faithfully.
 inline constexpr std::uint64_t kMaxPaginationPages = 16777216U;  // 2^24
 
+/// Ceilings on a caller-authored print-settings XML fragment, in bytes.
+///
+/// The raw-XML print setters store whatever the caller hands them for
+/// re-emission on save, so an unbounded fragment is an unbounded worksheet
+/// part. Excel's own output for these elements is a few hundred bytes;
+/// `<sheetPr>` gets more room because it can carry `<outlinePr>` plus a
+/// `tabColor` theme reference, and `<headerFooter>` much more because it
+/// holds six sections that each accept a long formatting-code string (and,
+/// on files with header images, `&G` alongside their `<legacyDrawingHF>`
+/// counterpart). Every limit is orders of magnitude past what Excel writes,
+/// so only a runaway or hostile caller trips one.
+inline constexpr std::size_t kMaxPrintFragmentBytes = 4096U;
+inline constexpr std::size_t kMaxSheetPrFragmentBytes = 8192U;
+inline constexpr std::size_t kMaxHeaderFooterFragmentBytes = 65536U;
+
+/// Ceiling on the cells one range-wide style application may touch.
+///
+/// `fm_sheet_set_range_xf_index` materialises a blank cell for every
+/// address in the rectangle, so `A1:XFD1048576` would allocate the entire
+/// grid from a four-argument call. 2^20 cells is a 1024-column by
+/// 1024-row block - far past any report layout - and bounds the allocation
+/// a single call can request.
+inline constexpr std::uint64_t kMaxStyledRangeCells = 1048576U;  // 2^20
+
+/// Ceiling on manual page breaks per axis.
+///
+/// Excel refuses to insert more than 1026 horizontal page breaks on a
+/// sheet and applies the same bound to the vertical axis. Matching it
+/// keeps a workbook this engine authors openable, and keeps the break
+/// vectors small enough that the paginator's per-break scan stays trivial.
+inline constexpr std::size_t kMaxManualBreaksPerAxis = 1026U;
+
 /// Ceiling on the arena backing one evaluation, in bytes.
 ///
 /// The evaluator's arena is reset between cells and every allocation site

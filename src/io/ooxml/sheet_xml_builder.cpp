@@ -313,8 +313,14 @@ std::string PageSetupWithRelationshipId(std::string page_setup_xml, std::string_
 /// Emits a `<rowBreaks>` or `<colBreaks>` block for the given manual
 /// breaks. Returns an empty string when `breaks` is empty so the caller
 /// adds no bytes. The stored 0-based break index is converted back to
-/// OOXML's 1-based form; `count` and `manualBreakCount` mirror the entry
-/// count.
+/// OOXML's 1-based form.
+///
+/// `count` is every `<brk>` child; `manualBreakCount` is only those
+/// carrying `man="1"`. A sheet can hold both kinds at once - Excel records
+/// the automatic breaks it computed alongside the ones the user placed -
+/// and the two attributes coincide only when every break is manual.
+/// Overstating `manualBreakCount` makes Excel's page-break preview draw
+/// solid user-break lines where the file declares computed ones.
 std::string BuildPageBreaksXml(std::string_view element, const std::vector<ManualBreak>& breaks) {
   if (breaks.empty()) {
     return {};
@@ -325,13 +331,18 @@ std::string BuildPageBreaksXml(std::string_view element, const std::vector<Manua
   constexpr std::size_t kPerBreakReserveBytes = 48U;
   std::string out;
   out.reserve(kBreaksWrapperReserveBytes + breaks.size() * kPerBreakReserveBytes);
-  const std::string count = std::to_string(breaks.size());
+  std::size_t manual_count = 0;
+  for (const ManualBreak& brk : breaks) {
+    if (brk.manual) {
+      ++manual_count;
+    }
+  }
   out.push_back('<');
   out.append(element);
   out.append(" count=\"");
-  out.append(count);
+  out.append(std::to_string(breaks.size()));
   out.append("\" manualBreakCount=\"");
-  out.append(count);
+  out.append(std::to_string(manual_count));
   out.append("\">");
   for (const ManualBreak& brk : breaks) {
     out.append("<brk id=\"");

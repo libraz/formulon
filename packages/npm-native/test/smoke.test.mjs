@@ -385,6 +385,168 @@ test('paginate exposes a status envelope and page geometry', async () => {
   assert.deepEqual(result.verticalBreaks, []);
 });
 
+test('print settings: raw XML round-trips and rejects malformed fragments', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // An absent element reads back as the empty string, never null.
+  assert.equal(wb.getSheetPageSetupXml(0).xml, '');
+
+  const fragment = '<pageSetup paperSize="9" orientation="portrait" scale="85"/>';
+  assert.ok(wb.setSheetPageSetupXml(0, fragment).ok);
+  assert.equal(wb.getSheetPageSetupXml(0).xml, fragment);
+
+  // Two top-level elements, the wrong root name, and a truncated fragment
+  // are all rejected at set time rather than producing a file Excel repairs.
+  for (const bad of ['<pageSetup/><pageSetup/>', '<pageMargins left="1"/>', '<pageSetup orientation="portrait"']) {
+    const rejected = wb.setSheetPageSetupXml(0, bad);
+    assert.equal(rejected.ok, false, `expected rejection for ${bad}`);
+  }
+  assert.equal(wb.getSheetPageSetupXml(0).xml, fragment);
+
+  // The empty string removes the element and restores the defaults.
+  assert.ok(wb.setSheetPageSetupXml(0, '').ok);
+  assert.equal(wb.getSheetPageSetupXml(0).xml, '');
+  const cleared = wb.getSheetPageSetup(0);
+  assert.ok(cleared.status.ok);
+  assert.equal(cleared.scale, 100);
+  assert.equal(cleared.scaleStated, false);
+});
+
+test('print settings: typed patch touches only the keys it states', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(
+    wb.setSheetPageSetupXml(0, '<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>').ok,
+  );
+  assert.ok(wb.setSheetPageSetup(0, { orientation: 2 }).ok);
+
+  const xml = wb.getSheetPageSetupXml(0).xml;
+  assert.match(xml, /orientation="landscape"/);
+  // Attributes the engine does not model must survive a patch.
+  assert.match(xml, /horizontalDpi="600"/);
+  assert.match(xml, /copies="3"/);
+  assert.match(xml, /paperSize="9"/);
+
+  const read = wb.getSheetPageSetup(0);
+  assert.ok(read.status.ok);
+  assert.equal(read.orientation, 2);
+  assert.equal(read.paperSize, 9);
+  assert.equal(read.orientationStated, true);
+
+  assert.ok(wb.setSheetPageMargins(0, { left: 0.25, top: 1.5 }).ok);
+  const margins = wb.getSheetPageMargins(0);
+  assert.ok(margins.status.ok);
+  assert.equal(margins.left, 0.25);
+  assert.equal(margins.leftStated, true);
+  // An unstated margin reports the OOXML default with its flag clear.
+  assert.equal(margins.right, 0.7);
+  assert.equal(margins.rightStated, false);
+});
+
+test('print settings: fitToPage keeps the rest of sheetPr', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setSheetSheetPrXml(0, '<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>').ok);
+  assert.ok(wb.setSheetFitToPage(0, true).ok);
+  const xml = wb.getSheetSheetPrXml(0).xml;
+  assert.match(xml, /codeName="Sheet1"/);
+  assert.match(xml, /<tabColor rgb="FFFF0000"\/>/);
+  assert.match(xml, /fitToPage="true"/);
+});
+
+test('print settings: header/footer sections take decoded text', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setSheetHeaderFooter(0, { oddHeader: '&C\u5e33\u7968', oddFooter: '&R&P / &N' }).ok);
+  // The codes reach the file escaped; a parser hands back `&C...`.
+  assert.equal(
+    wb.getSheetHeaderFooterXml(0).xml,
+    '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader><oddFooter>&amp;R&amp;P / &amp;N</oddFooter></headerFooter>',
+  );
+
+  // Omitting a key leaves that section alone; an empty string clears it.
+  assert.ok(wb.setSheetHeaderFooter(0, { oddFooter: '' }).ok);
+  assert.equal(
+    wb.getSheetHeaderFooterXml(0).xml,
+    '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader></headerFooter>',
+  );
+});
+
+test('print settings: print area, titles and manual breaks', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setSheetPrintArea(0, 'A1:F8').ok);
+  assert.equal(wb.getSheetPrintArea(0).ranges, 'A1:F8');
+  assert.equal(wb.setSheetPrintArea(0, 'not-a-range').ok, false);
+  assert.equal(wb.getSheetPrintArea(0).ranges, 'A1:F8');
+  assert.ok(wb.setSheetPrintArea(0, '').ok);
+  assert.equal(wb.getSheetPrintArea(0).ranges, '');
+
+  assert.ok(wb.setSheetPrintTitles(0, '1:2', 'A:A').ok);
+  const titles = wb.getSheetPrintTitles(0);
+  assert.equal(titles.repeatRows, '1:2');
+  assert.equal(titles.repeatCols, 'A:A');
+
+  assert.ok(wb.addSheetRowBreak(0, 40, true).ok);
+  assert.ok(wb.addSheetRowBreak(0, 10, true).ok);
+  const breaks = wb.getSheetRowBreaks(0);
+  assert.ok(breaks.status.ok);
+  // Kept sorted by index regardless of insertion order.
+  assert.deepEqual(
+    breaks.breaks.map((b) => b.id),
+    [10, 40],
+  );
+  assert.equal(breaks.breaks[0].max, 16383);
+  assert.equal(breaks.breaks[0].manual, true);
+
+  assert.ok(wb.removeSheetRowBreak(0, 10).ok);
+  assert.equal(wb.getSheetRowBreaks(0).breaks.length, 1);
+  assert.ok(wb.clearSheetBreaks(0).ok);
+  assert.equal(wb.getSheetRowBreaks(0).breaks.length, 0);
+});
+
+test('print settings: a change is visible to paginate without a save cycle', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  for (let row = 0; row < 200; row += 1) {
+    for (let col = 0; col < 20; col += 1) {
+      assert.ok(wb.setNumber(0, row, col, 1).ok);
+    }
+  }
+  const portrait = wb.paginate(0).pageCount;
+  assert.ok(wb.setSheetPageSetup(0, { orientation: 2 }).ok);
+  assert.notEqual(wb.paginate(0).pageCount, portrait);
+});
+
+test('setRangeXfIndex applies one xf across a rectangle', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const border = wb.addBorder({
+    left: { style: 1, colorArgb: 0xff000000 },
+    right: { style: 1, colorArgb: 0xff000000 },
+    top: { style: 1, colorArgb: 0xff000000 },
+    bottom: { style: 1, colorArgb: 0xff000000 },
+    diagonal: { style: 0, colorArgb: 0 },
+    diagonalUp: false,
+    diagonalDown: false,
+  });
+  assert.ok(border.status.ok);
+  const xf = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: border.index, numFmtId: 0 });
+  assert.ok(xf.status.ok);
+
+  assert.ok(wb.setRangeXfIndex(0, 0, 0, 2, 2, xf.index).ok);
+  // Every cell in the rectangle is materialised, including ones that held
+  // no value, so the box renders.
+  for (const [row, col] of [
+    [0, 0],
+    [1, 1],
+    [2, 2],
+  ]) {
+    assert.equal(wb.getCellXfIndex(0, row, col).xfIndex, xf.index);
+  }
+  assert.equal(wb.getCellXfIndex(0, 3, 3).xfIndex, 0);
+});
+
 test('pivotCount + pivotLayout expose PivotTable projection status', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -845,11 +1007,14 @@ test('setCellXfIndex + getCellXfIndex round-trip the xf id', async () => {
 test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  // A fresh workbook starts with empty styles tables.
-  assert.equal(wb.fontCount(), 0);
-  assert.equal(wb.fillCount(), 0);
-  assert.equal(wb.borderCount(), 0);
-  assert.equal(wb.xfCount(), 0);
+  // A fresh workbook seeds Excel's minimum style table: one default font,
+  // one empty border, one default xf, and the two fills Excel reserves at
+  // the front of every file (`none`, `gray125`). A caller's first record
+  // therefore lands after them instead of displacing `none`.
+  assert.equal(wb.fontCount(), 1);
+  assert.equal(wb.fillCount(), 2);
+  assert.equal(wb.borderCount(), 1);
+  assert.equal(wb.xfCount(), 1);
 
   const fontResult = wb.addFont({
     name: 'Arial',
@@ -872,7 +1037,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     colorArgb: 0xff112233,
   });
   assert.equal(fontDup.index, fontResult.index);
-  assert.equal(wb.fontCount(), 1);
+  assert.equal(wb.fontCount(), 2);
 
   const fill = wb.addFill({ pattern: 1, fgArgb: 0xffff0000, bgArgb: 0xff000000 });
   assert.ok(fill.status.ok);

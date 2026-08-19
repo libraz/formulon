@@ -276,6 +276,10 @@ bool ParseTitleToken(std::string_view token, PrintTitles* out_titles) {
 
 }  // namespace
 
+bool parse_area_token(std::string_view token, CellRange* out_range) {
+  return ParseRangeToken(StripAnchors(token), out_range);
+}
+
 Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, std::uint32_t sheet_index) {
   std::vector<CellRange> ranges;
   const std::string* formula = FindSheetScopedFormula(wb, sheet_index, kPrintAreaName);

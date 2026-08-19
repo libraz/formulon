@@ -611,6 +611,94 @@ EXTERNAL_LINK_RECORD = Struct(
     ],
 )
 
+PAGE_BREAK = Struct(
+    "fm_page_break_t",
+    [
+        ("id", U32),
+        ("min", U32),
+        ("max", U32),
+        ("manual", I32),
+    ],
+)
+
+# The three print patch structs pair every value field with an
+# ``*_engaged`` flag: on the write path the flag selects which attributes
+# the engine touches, on the read path it reports whether the attribute is
+# stated in the XML at all. Field order must match the C declaration
+# exactly -- ``Struct`` derives offsets from declaration order, so a
+# reordering here silently mis-decodes rather than failing.
+PAGE_SETUP = Struct(
+    "fm_page_setup_t",
+    [
+        ("orientation_engaged", I32),
+        ("orientation", U32),
+        ("paper_size_engaged", I32),
+        ("paper_size", U32),
+        ("scale_engaged", I32),
+        ("scale", U32),
+        ("fit_to_width_engaged", I32),
+        ("fit_to_width", U32),
+        ("fit_to_height_engaged", I32),
+        ("fit_to_height", U32),
+        ("fit_to_page_engaged", I32),
+        ("fit_to_page", I32),
+    ],
+)
+
+# `double` is 8-aligned, so each `I32` flag is followed by four bytes of
+# padding. `Struct` inserts it from the declared alignments.
+PAGE_MARGINS = Struct(
+    "fm_page_margins_t",
+    [
+        ("left_engaged", I32),
+        ("left", F64),
+        ("right_engaged", I32),
+        ("right", F64),
+        ("top_engaged", I32),
+        ("top", F64),
+        ("bottom_engaged", I32),
+        ("bottom", F64),
+        ("header_engaged", I32),
+        ("header", F64),
+        ("footer_engaged", I32),
+        ("footer", F64),
+    ],
+)
+
+PRINT_OPTIONS = Struct(
+    "fm_print_options_t",
+    [
+        ("grid_lines_engaged", I32),
+        ("grid_lines", I32),
+        ("headings_engaged", I32),
+        ("headings", I32),
+        ("horizontal_centered_engaged", I32),
+        ("horizontal_centered", I32),
+        ("vertical_centered_engaged", I32),
+        ("vertical_centered", I32),
+    ],
+)
+
+HEADER_FOOTER = Struct(
+    "fm_header_footer_t",
+    [
+        ("odd_header", PTR),
+        ("odd_footer", PTR),
+        ("even_header", PTR),
+        ("even_footer", PTR),
+        ("first_header", PTR),
+        ("first_footer", PTR),
+        ("different_odd_even_engaged", I32),
+        ("different_odd_even", I32),
+        ("different_first_engaged", I32),
+        ("different_first", I32),
+        ("scale_with_doc_engaged", I32),
+        ("scale_with_doc", I32),
+        ("align_with_margins_engaged", I32),
+        ("align_with_margins", I32),
+    ],
+)
+
 CELL_STYLE_BUILTIN_ID_NONE = 0xFFFFFFFF
 
 
