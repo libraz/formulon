@@ -313,6 +313,7 @@ if(FORMULON_ORACLE_VARIANTS)
   add_executable(formulon_workbook_oracle_variant_tests
     json_reader.cpp
     oracle_runner.cpp
+    roundtrip_authoring.cpp
     workbook_builder.cpp
     workbook_oracle_runner.cpp
     workbook_oracle_test.cpp
