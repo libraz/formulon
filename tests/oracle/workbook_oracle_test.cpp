@@ -11,12 +11,15 @@
 // is empty and gtest registers the suite with zero instantiations, so the
 // build stays green.
 //
-// Both verifiers are implemented: a pivot case is rebuilt, evaluated and
-// laid out, then its rendered grid is diffed against `expect.pivot.grid`;
-// a print case is rebuilt and paginated, then the `PaginationResult` is
-// diffed against `expect.print`. With `golden_wb/` empty the parameter
-// vector is empty, so the suite registers zero cases and the build stays
-// green; feature-less cases are skipped.
+// All three verifiers are implemented: a pivot case is rebuilt, evaluated
+// and laid out, then its rendered grid is diffed against
+// `expect.pivot.grid`; a print case is rebuilt and paginated, then the
+// `PaginationResult` is diffed against `expect.print`; a round-trip case
+// is re-authored, saved, and what the saved package states is diffed
+// against what Excel read out of the same fixture
+// (`tests/oracle/roundtrip_authoring.h`). With `golden_wb/` empty the
+// parameter vector is empty, so the suite registers zero cases and the
+// build stays green; feature-less cases are skipped.
 
 #include <algorithm>
 #include <cstdint>
@@ -34,6 +37,7 @@
 #include "print/pagination.h"
 #include "print/print_area.h"
 #include "tests/oracle/json_reader.h"
+#include "tests/oracle/roundtrip_authoring.h"
 #include "tests/oracle/workbook_builder.h"
 #include "tests/oracle/workbook_oracle_runner.h"
 #include "value.h"
@@ -214,6 +218,159 @@ std::vector<std::uint32_t> golden_index_array(const JsonValue* arr) {
 }
 
 // ---------------------------------------------------------------------------
+// Round-trip comparison
+// ---------------------------------------------------------------------------
+
+// Reassembles the golden's three captured sections into the single string
+// Excel's formatting codes spell.
+//
+// The capture reads `LeftHeader` / `CenterHeader` / `RightHeader`, which is
+// Excel's own split of the stored `&L...&C...&R...` string; reassembling it
+// is a one-line inverse. Splitting the model's string here instead would
+// mean re-implementing that parse in the verifier -- test logic elaborate
+// enough to be wrong on its own, and wrong in a way that looks like a
+// product bug. An empty section contributes nothing, which is how Excel
+// stores one.
+std::string reassemble_header_footer(const JsonValue& hf, const char* prefix) {
+  static constexpr std::pair<const char*, const char*> kSections[] = {
+      {"_left", "&L"}, {"_center", "&C"}, {"_right", "&R"}};
+  std::string out;
+  for (const auto& [suffix, code] : kSections) {
+    const JsonValue* section = hf.find(std::string(prefix) + suffix);
+    if (section != nullptr && section->is_string() && !section->as_string().empty()) {
+      out += code;
+      out += section->as_string();
+    }
+  }
+  return out;
+}
+
+// Compares a golden boolean against an observed one, naming the field.
+void expect_golden_bool(const JsonValue& block, const char* field, bool got) {
+  const JsonValue* want = block.find(field);
+  ASSERT_TRUE(want != nullptr && want->is_bool()) << "golden roundtrip block has no boolean '" << field << "'";
+  EXPECT_EQ(got, want->as_bool()) << "roundtrip '" << field << "' differs from what Excel read";
+}
+
+void expect_golden_string(const JsonValue& block, const char* field, const std::string& got) {
+  const JsonValue* want = block.find(field);
+  ASSERT_TRUE(want != nullptr && want->is_string()) << "golden roundtrip block has no string '" << field << "'";
+  EXPECT_EQ(got, want->as_string()) << "roundtrip '" << field << "' differs from what Excel read";
+}
+
+// Diffs one observation against the golden's `expect.roundtrip` block.
+//
+// Only attributes the authored file actually *states* are compared. An
+// attribute the case never authored is absent from the XML, and Excel then
+// answers from the printer's defaults (Letter paper on the capture host)
+// rather than from anything we wrote -- comparing those would pin the
+// capture host's printer, not our writer.
+void verify_roundtrip(const RoundtripObservation& got, const JsonValue& expect) {
+  const JsonValue* setup = expect.find("page_setup");
+  ASSERT_TRUE(setup != nullptr && setup->is_object()) << "golden roundtrip has no 'page_setup' block";
+
+  if (got.paper_size_stated) {
+    const JsonValue* want = setup->find("paper_size");
+    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_setup has no numeric 'paper_size'";
+    EXPECT_EQ(got.paper_size, static_cast<std::uint32_t>(want->as_number())) << "paperSize differs from Excel's read";
+  }
+  if (got.orientation_stated) {
+    // FM_ORIENTATION_* and Excel's XlPageOrientation agree on 1 = portrait,
+    // 2 = landscape, so the golden needs no translation.
+    const JsonValue* want = setup->find("orientation");
+    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_setup has no numeric 'orientation'";
+    EXPECT_EQ(got.orientation, static_cast<std::uint32_t>(want->as_number()))
+        << "orientation differs from Excel's read";
+  }
+
+  // Excel reports `Zoom` as False whenever fit-to-page is engaged, and as
+  // the integer percent otherwise; the golden records whichever it got.
+  if (const JsonValue* zoom = setup->find("zoom"); zoom != nullptr) {
+    if (zoom->is_bool()) {
+      EXPECT_FALSE(zoom->as_bool()) << "Excel reports Zoom as False or a percent, never True";
+      EXPECT_TRUE(got.fit_to_page) << "Excel read the sheet as fit-to-page but the file does not say so";
+    } else if (zoom->is_number() && got.scale_stated) {
+      EXPECT_EQ(got.scale, static_cast<std::uint32_t>(zoom->as_number())) << "print scale differs from Excel's read";
+      EXPECT_FALSE(got.fit_to_page) << "Excel reported a zoom percent, so fit-to-page must be off";
+    }
+  }
+  if (got.fit_to_width_stated) {
+    const JsonValue* want = setup->find("fit_to_pages_wide");
+    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_setup has no numeric 'fit_to_pages_wide'";
+    EXPECT_EQ(got.fit_to_width, static_cast<std::uint32_t>(want->as_number()))
+        << "fitToWidth differs from Excel's read";
+  }
+  if (got.fit_to_height_stated) {
+    const JsonValue* want = setup->find("fit_to_pages_tall");
+    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_setup has no numeric 'fit_to_pages_tall'";
+    EXPECT_EQ(got.fit_to_height, static_cast<std::uint32_t>(want->as_number()))
+        << "fitToHeight differs from Excel's read";
+  }
+
+  // Margins are inches on both sides: the capture converts COM's points,
+  // the attribute is already in inches. The tolerance absorbs that division
+  // and nothing else -- 1e-6 inch is far below any margin Excel can express.
+  const JsonValue* margins = expect.find("page_margins");
+  ASSERT_TRUE(margins != nullptr && margins->is_object()) << "golden roundtrip has no 'page_margins' block";
+  static constexpr double kMarginTolerance = 1e-6;
+  const std::pair<const char*, double> margin_fields[] = {
+      {"left", got.margin_left},     {"right", got.margin_right},   {"top", got.margin_top},
+      {"bottom", got.margin_bottom}, {"header", got.margin_header}, {"footer", got.margin_footer}};
+  for (const auto& [field, value] : margin_fields) {
+    const JsonValue* want = margins->find(field);
+    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_margins has no numeric '" << field << "'";
+    EXPECT_NEAR(value, want->as_number(), kMarginTolerance) << "margin '" << field << "' differs from Excel's read";
+  }
+
+  const JsonValue* options = expect.find("print_options");
+  ASSERT_TRUE(options != nullptr && options->is_object()) << "golden roundtrip has no 'print_options' block";
+  expect_golden_bool(*options, "grid_lines", got.grid_lines);
+  expect_golden_bool(*options, "headings", got.headings);
+  expect_golden_bool(*options, "horizontal_centered", got.horizontal_centered);
+  expect_golden_bool(*options, "vertical_centered", got.vertical_centered);
+
+  const JsonValue* hf = expect.find("header_footer");
+  ASSERT_TRUE(hf != nullptr && hf->is_object()) << "golden roundtrip has no 'header_footer' block";
+  expect_golden_bool(*hf, "different_odd_even", got.header_footer.different_odd_even);
+  expect_golden_bool(*hf, "different_first", got.header_footer.different_first);
+  expect_golden_bool(*hf, "scale_with_doc", got.header_footer.scale_with_doc);
+  expect_golden_bool(*hf, "align_with_margins", got.header_footer.align_with_margins);
+  const std::pair<const char*, const std::string*> sections[] = {
+      {"odd_header", &got.header_footer.odd_header},     {"odd_footer", &got.header_footer.odd_footer},
+      {"even_header", &got.header_footer.even_header},   {"even_footer", &got.header_footer.even_footer},
+      {"first_header", &got.header_footer.first_header}, {"first_footer", &got.header_footer.first_footer}};
+  for (const auto& [name, value] : sections) {
+    EXPECT_EQ(*value, reassemble_header_footer(*hf, name))
+        << "header/footer section '" << name << "' differs from what Excel read";
+  }
+
+  expect_golden_string(expect, "print_area", got.print_area);
+  expect_golden_string(expect, "print_title_rows", got.print_title_rows);
+  expect_golden_string(expect, "print_title_cols", got.print_title_cols);
+
+  // Manual breaks are the one field where a symmetric reader/writer error
+  // cancels out inside Formulon, so Excel's column is the only witness.
+  EXPECT_EQ(got.manual_row_breaks, golden_index_array(expect.find("manual_row_breaks")))
+      << "manual row breaks differ from the ones Excel read out of our file";
+  EXPECT_EQ(got.manual_col_breaks, golden_index_array(expect.find("manual_col_breaks")))
+      << "manual column breaks differ from the ones Excel read out of our file";
+
+  // The golden names the artefact Excel opened by length and digest. The
+  // digest is not reproducible here -- the zip stamps every entry with the
+  // wall clock -- but the length is content-determined, so a mismatch means
+  // the writer no longer emits the file this golden describes and the suite
+  // needs re-capturing on an Excel host.
+  if (const JsonValue* bytes = expect.find("xlsx_bytes"); bytes != nullptr && bytes->is_number()) {
+    EXPECT_EQ(got.xlsx_bytes, static_cast<std::size_t>(bytes->as_number()))
+        << "the authored xlsx is no longer the size of the one Excel read (sha256 "
+        << (expect.find("xlsx_sha256") != nullptr && expect.find("xlsx_sha256")->is_string()
+                ? expect.find("xlsx_sha256")->as_string()
+                : std::string("unknown"))
+        << "); re-capture the suite";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Fixture
 // ---------------------------------------------------------------------------
 
@@ -240,11 +397,29 @@ TEST_P(WorkbookOracleTest, Matches) {
 
   const bool has_pivot = param.spec.find("pivot") != nullptr;
   const bool has_print = param.spec.find("print") != nullptr;
+  const bool has_roundtrip = param.spec.find("roundtrip") != nullptr;
 
-  // A case with neither feature block is nothing this verifier can pin.
-  if (!has_pivot && !has_print) {
-    GTEST_SKIP() << "case carries no pivot/print block to verify";
+  // A case with no feature block is nothing this verifier can pin.
+  if (!has_pivot && !has_print && !has_roundtrip) {
+    GTEST_SKIP() << "case carries no pivot/print/roundtrip block to verify";
     return;
+  }
+
+  // --- round-trip path -----------------------------------------------------
+  // Author the same fixture the capture authored, save it, read those bytes
+  // back, and diff what Formulon resolved them to against what Excel
+  // resolved the same file to.
+  if (has_roundtrip) {
+    const JsonValue* expect = param.expect.find("roundtrip");
+    ASSERT_NE(expect, nullptr) << "golden 'expect' has no 'roundtrip' block";
+    auto observed_or = observe_roundtrip_from_spec(param.spec);
+    ASSERT_TRUE(static_cast<bool>(observed_or))
+        << "observe_roundtrip_from_spec failed: " << observed_or.error().message;
+    verify_roundtrip(observed_or.value(), *expect);
+
+    if (!has_pivot && !has_print) {
+      return;
+    }
   }
 
   // --- print path ----------------------------------------------------------

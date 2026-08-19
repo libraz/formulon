@@ -412,6 +412,7 @@ gtest_discover_tests(formulon_cf_oracle_tests
 add_executable(formulon_workbook_oracle_tests
   json_reader.cpp
   oracle_runner.cpp
+  roundtrip_authoring.cpp
   workbook_builder.cpp
   workbook_oracle_runner.cpp
   workbook_oracle_test.cpp

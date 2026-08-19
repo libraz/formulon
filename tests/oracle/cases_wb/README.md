@@ -320,9 +320,25 @@ Microsoft 365 capture opts in through `PROVENANCE.json`,
 `workbook_oracle_test.cpp` registers zero golden cases and the build stays
 green. The local builder and formula-probe unit tests remain active.
 
-`print_roundtrip` is at the same stage on the capture side and one step
-behind on the verifier side. The authoring half, the case schema and the
-`books.open` capture mode are in place and the suite validates; the
-golden and the C++ comparison against it both wait on a capture from a
-Windows host, since there is nothing for a verifier to diff until one
-exists.
+`print_roundtrip` is complete on both sides. The golden is captured, and
+`tests/oracle/roundtrip_authoring.cpp` re-authors each fixture through
+the same C ABI the binding wraps, saves it, and diffs what the saved
+package states against what Excel reported.
+
+That verifier reads the settings out of the saved xlsx directly rather
+than loading it back through Formulon's own reader, which is the one
+design point worth remembering here. A reader that undoes a writer
+mistake hands back the model the case started from, and the resulting
+agreement is evidence about nothing: the manual page break `id` was
+written one too high and read one too low for exactly as long as no
+Formulon-only test could tell. Only what the bytes literally say is
+comparable with what Excel read.
+
+Two consequences follow. Attributes a case does not author are absent
+from the file, so Excel answers for them from the capture host's printer
+(Letter paper, not the OOXML default) -- the verifier compares an
+attribute only when the file states it. And the golden's `xlsx_sha256`
+is recorded but not asserted: the zip stamps every entry with the wall
+clock, so the digest cannot be reproduced. The recorded byte length is
+content-determined and is compared, which is what flags a golden that
+predates a change in what the writer emits.
