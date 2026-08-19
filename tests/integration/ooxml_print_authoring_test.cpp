@@ -190,7 +190,10 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
             "&C\xE6\x9C\x88\xE6\xAC\xA1\xE5\xA0\xB1\xE5\x91\x8A");
   EXPECT_STREQ(worksheet.child("rowBreaks").attribute("count").value(), "1");
   EXPECT_STREQ(worksheet.child("rowBreaks").attribute("manualBreakCount").value(), "1");
-  EXPECT_STREQ(worksheet.child("rowBreaks").child("brk").attribute("id").value(), "40");
+  // The break was authored before 0-based row 39; OOXML stores that index
+  // as-is, which is how Excel writes it (`id="39"` == the page ends after
+  // 39 rows). Emitting 40 put the break one row late in Excel.
+  EXPECT_STREQ(worksheet.child("rowBreaks").child("brk").attribute("id").value(), "39");
 
   // --- Reloading it -------------------------------------------------
   WorkbookGuard reloaded;

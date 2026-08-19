@@ -327,7 +327,10 @@ TEST(SheetPrintGeometry, SheetFormatPrDefaultsSurviveWriteReadCycle) {
 // ---------------------------------------------------------------------------
 
 TEST(SheetPrintGeometry, ManualBreaksReadFromWorksheetXml) {
-  // OOXML stores break ids 1-based; the reader normalises to 0-based.
+  // OOXML's `id` is the 0-based index the break precedes, which is what
+  // the model stores -- the reader passes it through. Excel 365 writes
+  // `id="20"` for a break placed before row 21, so an `id="10"` here means
+  // the page ends after ten rows and the next starts at 0-based row 10.
   const std::string_view sheet_xml =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
@@ -346,12 +349,12 @@ TEST(SheetPrintGeometry, ManualBreaksReadFromWorksheetXml) {
   ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
   const SheetPrintSettings& print = result_or.value().workbook.sheet(0).print_settings();
   ASSERT_EQ(print.manual_row_breaks.size(), 2U);
-  EXPECT_EQ(print.manual_row_breaks[0].id, 9U);
+  EXPECT_EQ(print.manual_row_breaks[0].id, 10U);
   EXPECT_EQ(print.manual_row_breaks[0].max, kLastColumnIndex);
   EXPECT_TRUE(print.manual_row_breaks[0].manual);
-  EXPECT_EQ(print.manual_row_breaks[1].id, 19U);
+  EXPECT_EQ(print.manual_row_breaks[1].id, 20U);
   ASSERT_EQ(print.manual_col_breaks.size(), 1U);
-  EXPECT_EQ(print.manual_col_breaks[0].id, 4U);
+  EXPECT_EQ(print.manual_col_breaks[0].id, 5U);
   EXPECT_EQ(print.manual_col_breaks[0].max, kLastRowIndex);
 }
 

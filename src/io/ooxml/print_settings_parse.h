@@ -44,9 +44,9 @@ void apply_structured_page_setup(const pugi::xml_node& page_setup, PageSetup& ou
 void apply_structured_page_margins(const pugi::xml_node& page_margins, PageMargins& out);
 
 /// Appends the `<brk>` children of a `<rowBreaks>` / `<colBreaks>` node to
-/// `out`. OOXML stores the break index 1-based in the `id` attribute; this
-/// normalises to 0-based (clamping at 0). The `count` / `manualBreakCount`
-/// wrapper attributes are ignored — only the `<brk>` entries are honoured.
+/// `out`. OOXML's `id` is already the 0-based index the break precedes, so
+/// it is carried over unchanged. The `count` / `manualBreakCount` wrapper
+/// attributes are ignored — only the `<brk>` entries are honoured.
 void read_manual_breaks(const pugi::xml_node& breaks_node, std::vector<ManualBreak>& out);
 
 /// Reads `<sheetPr><pageSetUpPr fitToPage>`. Returns false when either

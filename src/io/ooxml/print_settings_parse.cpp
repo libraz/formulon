@@ -61,8 +61,15 @@ void read_manual_breaks(const pugi::xml_node& breaks_node, std::vector<ManualBre
   }
   for (pugi::xml_node brk = breaks_node.child("brk"); brk; brk = brk.next_sibling("brk")) {
     ManualBreak entry;
-    const unsigned int raw_id = brk.attribute("id").as_uint(0);
-    entry.id = raw_id > 0U ? raw_id - 1U : 0U;
+    // `id` is already the 0-based index the break precedes: Excel writes
+    // `<brk id="20"/>` for a break placed before row 21, i.e. the count of
+    // rows on the page the break ends. Subtracting one here moved every
+    // manual break in an Excel-authored file one track early, and the
+    // writer's matching increment put it back on save -- so a Formulon
+    // read/write cycle looked clean while Formulon and Excel disagreed
+    // about where the page ended. Measured against Excel 365: authoring a
+    // manual break before row 21 / column D produces `id="20"` / `id="3"`.
+    entry.id = static_cast<std::uint32_t>(brk.attribute("id").as_uint(0));
     entry.min = static_cast<std::uint32_t>(brk.attribute("min").as_uint(0));
     entry.max = static_cast<std::uint32_t>(brk.attribute("max").as_uint(0));
     // `man` defaults to false (ECMA-376 §18.3.1.1): a break without it is

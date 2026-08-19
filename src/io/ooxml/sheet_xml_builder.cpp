@@ -312,8 +312,9 @@ std::string PageSetupWithRelationshipId(std::string page_setup_xml, std::string_
 
 /// Emits a `<rowBreaks>` or `<colBreaks>` block for the given manual
 /// breaks. Returns an empty string when `breaks` is empty so the caller
-/// adds no bytes. The stored 0-based break index is converted back to
-/// OOXML's 1-based form.
+/// adds no bytes. The stored index is emitted as-is: OOXML's `id` is the
+/// same 0-based index the break precedes, not a 1-based one (Excel 365
+/// writes `id="20"` for a break before row 21).
 ///
 /// `count` is every `<brk>` child; `manualBreakCount` is only those
 /// carrying `man="1"`. A sheet can hold both kinds at once - Excel records
@@ -346,7 +347,7 @@ std::string BuildPageBreaksXml(std::string_view element, const std::vector<Manua
   out.append("\">");
   for (const ManualBreak& brk : breaks) {
     out.append("<brk id=\"");
-    out.append(std::to_string(static_cast<std::uint64_t>(brk.id) + 1U));
+    out.append(std::to_string(static_cast<std::uint64_t>(brk.id)));
     out.append("\" min=\"");
     out.append(std::to_string(brk.min));
     out.append("\" max=\"");

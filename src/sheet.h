@@ -363,8 +363,9 @@ struct SheetFormatDefaults {
 ///
 /// Mirrors the OOXML `<brk id="..." min="..." max="..." man="..."/>` element
 /// inside `<rowBreaks>` / `<colBreaks>`. `id` is the 0-based row or column
-/// index the break sits *before* (OOXML stores it 1-based; the reader
-/// normalises to 0-based). `min` / `max` bound the span the break applies to.
+/// index the break sits *before*, which is what OOXML stores too -- Excel
+/// writes `id="20"` for a break placed before row 21. `min` / `max` bound
+/// the span the break applies to.
 struct ManualBreak {
   std::uint32_t id = 0;   ///< 0-based row/column index the break precedes.
   std::uint32_t min = 0;  ///< Span start (0-based).
