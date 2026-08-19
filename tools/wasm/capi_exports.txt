@@ -284,7 +284,7 @@ fm_error_display_name
 fm_set_log_min_level
 fm_set_log_sink
 
-# -- Print pagination -------------------------------------------------------------
+# -- Print settings / pagination ---------------------------------------------------
 fm_workbook_paginate
 fm_pagination_destroy
 fm_pagination_page_count
@@ -294,6 +294,37 @@ fm_pagination_horizontal_break_count
 fm_pagination_horizontal_break_at
 fm_pagination_vertical_break_count
 fm_pagination_vertical_break_at
+fm_sheet_get_page_setup_xml
+fm_sheet_set_page_setup_xml
+fm_sheet_get_page_margins_xml
+fm_sheet_set_page_margins_xml
+fm_sheet_get_print_options_xml
+fm_sheet_set_print_options_xml
+fm_sheet_get_header_footer_xml
+fm_sheet_set_header_footer_xml
+fm_sheet_get_sheet_pr_xml
+fm_sheet_set_sheet_pr_xml
+fm_sheet_set_fit_to_page
+fm_sheet_get_print_area
+fm_sheet_set_print_area
+fm_sheet_get_print_titles
+fm_sheet_set_print_titles
+fm_sheet_add_row_break
+fm_sheet_add_col_break
+fm_sheet_remove_row_break
+fm_sheet_remove_col_break
+fm_sheet_clear_breaks
+fm_sheet_row_break_count
+fm_sheet_row_break_at
+fm_sheet_col_break_count
+fm_sheet_col_break_at
+fm_sheet_set_page_setup
+fm_sheet_set_page_margins
+fm_sheet_set_print_options
+fm_sheet_set_header_footer
+fm_sheet_get_page_setup
+fm_sheet_get_page_margins
+fm_sheet_set_range_xf_index
 
 # -- Version ---------------------------------------------------------------------
 fm_version_string
