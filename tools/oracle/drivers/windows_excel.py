@@ -354,6 +354,7 @@ class WindowsExcelOracle(OracleDriver):
         self._app.screen_updating = False
         self._app.display_alerts = False
         self._printer_pinned = False
+        self._printer_warned = False
 
     def __enter__(self) -> "WindowsExcelOracle":
         return self
@@ -736,8 +737,8 @@ class WindowsExcelOracle(OracleDriver):
         location, and the physical page count.
         """
 
-        self._ensure_printer_pinned()
         wb = self._app.books.add()
+        self._ensure_printer_pinned()
         try:
             self._build_workbook_sheets(wb, case)
             return {"print": _apply_and_read_print(wb, print_spec)}
@@ -767,11 +768,20 @@ class WindowsExcelOracle(OracleDriver):
         suffix; the port differs per machine, so a bare name is tried
         against the usual ports. Leaving the variable unset keeps whatever
         the host defaults to.
+
+        ``ActivePrinter`` is workbook-gated in the same way as the
+        ``Calculation`` / ``EnableIterativeCalculation`` properties
+        `__init__` documents: assigning to it while no book is open raises
+        "cannot set the ActivePrinter property of the Application class",
+        no matter how the device is spelled. Callers must therefore pin
+        *after* `books.add()`, and the success flag is set only once a
+        device actually took -- a failed attempt that latched the flag is
+        what silently paginated every print suite against the host's
+        default network device.
         """
 
         if self._printer_pinned:
             return
-        self._printer_pinned = True
         requested = os.environ.get(_PRINTER_ENV_VAR, "").strip()
         explicit = bool(requested)
         if not explicit:
@@ -782,6 +792,7 @@ class WindowsExcelOracle(OracleDriver):
                 self._app.api.ActivePrinter = candidate
             except Exception:
                 continue
+            self._printer_pinned = True
             return
         if explicit:
             raise RuntimeError(
@@ -791,12 +802,15 @@ class WindowsExcelOracle(OracleDriver):
             )
         # An unset variable is a preference, not an instruction: capture
         # against whatever the host defaults to, but say so, because the
-        # goldens then carry that device's metrics.
-        print(
-            f"  ! {_DEFAULT_PRINTER} is unavailable; paginating against "
-            f"{self._app.api.ActivePrinter!r}, whose driver metrics the goldens will carry",
-            file=sys.stderr,
-        )
+        # goldens then carry that device's metrics. The flag stays unset
+        # so a later case retries -- only a device that took pins the run.
+        if not self._printer_warned:
+            self._printer_warned = True
+            print(
+                f"  ! {_DEFAULT_PRINTER} is unavailable; paginating against "
+                f"{self._app.api.ActivePrinter!r}, whose driver metrics the goldens will carry",
+                file=sys.stderr,
+            )
 
     def _build_workbook_sheets(self, wb, case: Dict[str, Any]) -> None:
         """Materialises the declarative ``sheets`` block into ``wb``.
@@ -1179,6 +1193,8 @@ _PRINT_ORIENTATIONS = {
     "landscape": _XL_LANDSCAPE,
 }
 
+_PRINT_ORIENTATION_NAMES = {value: name for name, value in _PRINT_ORIENTATIONS.items()}
+
 # `GET.DOCUMENT(50)` is the Excel-4 macro that returns the page count;
 # used as a fallback when `PageSetup.Pages.Count` is unavailable.
 _GET_DOCUMENT_PAGE_COUNT = 50
@@ -1490,6 +1506,8 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
     # follow-up matrix (see print_matrix.FOLLOWUP.HANDOFF.md, removed
     # once the second round of goldens landed).
     applied: Dict[str, Any] = {
+        "orientation": _read_orientation_value(page_setup),
+        "paper": _read_paper_value(page_setup),
         "zoom": _read_zoom_value(page_setup),
         "fit_to_width": _read_fit_value(page_setup, "FitToPagesWide"),
         "fit_to_height": _read_fit_value(page_setup, "FitToPagesTall"),
@@ -1502,11 +1520,11 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
         "v_breaks": v_breaks,
         "pages": pages,
         "applied_page_setup": applied,
-        "applied_geometry": _read_applied_geometry(sht, resolved_area, page_setup),
+        "applied_geometry": _read_applied_geometry(sht, resolved_area),
     }
 
 
-def _read_applied_geometry(sht, resolved_area: str, page_setup) -> Dict[str, Any]:
+def _read_applied_geometry(sht, resolved_area: str) -> Dict[str, Any]:
     """Records the physical sizes Excel resolved, in points.
 
     Break positions alone cannot say *why* a page broke where it did: they
@@ -1551,10 +1569,19 @@ def _read_applied_geometry(sht, resolved_area: str, page_setup) -> Dict[str, Any
         if first_row is not None and last_row - first_row < _GEOMETRY_TRACK_CAP:
             out["row_heights_pt"] = [points(lambda r=row: ws.Rows(r).Height) for row in range(first_row, last_row + 1)]
 
-    # The printable body Excel paginated against, so a margin / paper /
-    # printer-metric disagreement is separable from a track-size one.
-    for key, prop in (("page_width_pt", "PageWidth"), ("page_height_pt", "PageHeight")):
-        out[key] = points(lambda p=prop: getattr(page_setup, p))
+    # The device the breaks were measured on. Excel paginates against the
+    # active printer driver's metrics, not the paper size alone, so a
+    # golden captured on another device is not comparable -- recording the
+    # name is what lets that be seen from the golden instead of inferred
+    # from a break that moved. (`PageSetup.PageWidth` / `PageHeight` stood
+    # here and always read as null: they are Word properties, absent from
+    # Excel's object model, so the printable-body diagnostic they were
+    # meant to provide never existed. The applied orientation and paper in
+    # `applied_page_setup` carry that separation instead.)
+    try:
+        out["printer"] = str(sht.book.app.api.ActivePrinter)
+    except Exception:
+        pass
     # The Normal style font is what makes a character-unit width physical;
     # recording it is what says whether _pin_normal_font took effect.
     try:
@@ -1581,6 +1608,37 @@ def _split_a1(addr: str) -> Tuple[int, int]:
     for ch in addr[:i]:
         col = col * 26 + (ord(ch.upper()) - ord("A") + 1)
     return int(addr[i:]), col
+
+
+def _read_orientation_value(page_setup) -> Any:
+    """Returns the post-apply Orientation as `"portrait"` / `"landscape"`.
+
+    Load-bearing rather than cosmetic: the pagination read can answer from
+    a page geometry the case never asked for (a portrait case coming back
+    with the preceding landscape case's breaks), and without the applied
+    orientation beside the breaks that is indistinguishable from Excel
+    genuinely disagreeing with the C++ paginator. An unreadable or
+    unrecognised value is reported as-is rather than guessed at.
+    """
+
+    try:
+        value = int(page_setup.Orientation)
+    except Exception:
+        return None
+    return _PRINT_ORIENTATION_NAMES.get(value, value)
+
+
+def _read_paper_value(page_setup) -> Any:
+    """Returns the post-apply `PaperSize` as the `XlPaperSize` int.
+
+    The companion to the orientation read: paper and orientation together
+    are what fix the page the breaks were measured on.
+    """
+
+    try:
+        return int(page_setup.PaperSize)
+    except Exception:
+        return None
 
 
 def _read_zoom_value(page_setup) -> Any:

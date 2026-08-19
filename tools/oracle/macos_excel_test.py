@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import unittest
 from unittest.mock import patch
@@ -744,11 +745,20 @@ class WindowsAxisSizeTest(unittest.TestCase):
 
 
 class _FakePrinterApi:
-    """`Application` as far as the printer pin is concerned."""
+    """`Application` as far as the printer pin is concerned.
 
-    def __init__(self, accepted, current: str = "FUJIFILM Apeos C2360 on Ne01:") -> None:
+    Models the workbook gate Excel enforces: assigning `ActivePrinter`
+    while no book is open raises "cannot set the ActivePrinter property
+    of the Application class" regardless of how the device is spelled.
+    Without that gate a fake accepts a pin the real Application refuses,
+    which is exactly how the print track came to capture every suite
+    against the host's default device while its tests stayed green.
+    """
+
+    def __init__(self, accepted, current: str = "FUJIFILM Apeos C2360 on Ne01:", *, books_open: int = 1) -> None:
         self._accepted = set(accepted)
         self._current = current
+        self.books_open = books_open
         self.attempts: list = []
 
     @property
@@ -758,6 +768,8 @@ class _FakePrinterApi:
     @ActivePrinter.setter
     def ActivePrinter(self, value: str) -> None:  # noqa: N802 - COM property name
         self.attempts.append(value)
+        if not self.books_open:
+            raise RuntimeError("Cannot set the ActivePrinter property of the Application class")
         if value not in self._accepted:
             raise RuntimeError(f"Excel rejects {value}")
         self._current = value
@@ -772,10 +784,11 @@ class WindowsPrinterPinTest(unittest.TestCase):
     moves the breaks between two otherwise identical runs.
     """
 
-    def _oracle(self, accepted, **env):
+    def _oracle(self, accepted, *, books_open: int = 1, **env):
         oracle = object.__new__(windows_excel.WindowsExcelOracle)
         oracle._printer_pinned = False
-        oracle._app = type("_App", (), {"api": _FakePrinterApi(accepted)})()
+        oracle._printer_warned = False
+        oracle._app = type("_App", (), {"api": _FakePrinterApi(accepted, books_open=books_open)})()
         self._env = patch.dict(os.environ, env, clear=False)
         self._env.start()
         self.addCleanup(self._env.stop)
@@ -820,6 +833,66 @@ class WindowsPrinterPinTest(unittest.TestCase):
         oracle._ensure_printer_pinned()
 
         self.assertEqual(len(oracle._app.api.attempts), before)
+
+    def test_a_pin_no_workbook_gated_away_is_retried(self) -> None:
+        """A failed attempt must not count as a pinned session.
+
+        `ActivePrinter` is workbook-gated, so a pin attempted before
+        `books.add()` fails for every candidate. Latching the "pinned"
+        flag on the attempt rather than on a device that took is what let
+        that failure stand for a whole capture: the fallback warning
+        printed once and every subsequent print case paginated against
+        the host default without retrying.
+        """
+
+        oracle = self._oracle({"Microsoft Print to PDF on Ne00:"}, books_open=0)
+
+        oracle._ensure_printer_pinned()
+        self.assertFalse(oracle._printer_pinned)
+        self.assertEqual(oracle._app.api.ActivePrinter, "FUJIFILM Apeos C2360 on Ne01:")
+
+        oracle._app.api.books_open = 1
+        oracle._ensure_printer_pinned()
+
+        self.assertTrue(oracle._printer_pinned)
+        self.assertEqual(oracle._app.api.ActivePrinter, "Microsoft Print to PDF on Ne00:")
+
+    def test_a_print_case_pins_after_it_has_opened_its_workbook(self) -> None:
+        """Ordering, not just retry: the gate makes `books.add()` a prerequisite.
+
+        `_run_print_case` used to pin before opening its workbook, so the
+        pin could never take on any host -- the capture ran against the
+        default device and said so only on a stderr channel the WSL
+        bridge swallowed.
+        """
+
+        oracle = self._oracle({"Microsoft Print to PDF on Ne00:"}, books_open=0)
+        api = oracle._app.api
+
+        class _FakeBooks:
+            @staticmethod
+            def add():
+                api.books_open += 1
+                return type("_Wb", (), {"close": staticmethod(lambda: None)})()
+
+        oracle._app.books = _FakeBooks()
+
+        with (
+            patch.object(windows_excel.WindowsExcelOracle, "_build_workbook_sheets", lambda self, wb, case: None),
+            patch.object(windows_excel, "_apply_and_read_print", lambda wb, spec: {"pages": 1}),
+        ):
+            oracle._run_print_case({"id": "c"}, {"sheet": "Sheet1"})
+
+        self.assertEqual(api.ActivePrinter, "Microsoft Print to PDF on Ne00:")
+
+    def test_the_fallback_warning_is_not_repeated_per_case(self) -> None:
+        oracle = self._oracle(set())
+
+        with patch("sys.stderr", new_callable=io.StringIO) as err:
+            oracle._ensure_printer_pinned()
+            oracle._ensure_printer_pinned()
+
+        self.assertEqual(err.getvalue().count("is unavailable"), 1)
 
 
 class _FakeBreakCollection:

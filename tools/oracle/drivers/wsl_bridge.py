@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import platform
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -167,9 +168,22 @@ class WSLBridgeOracle(OracleDriver):
             self._proc = None
 
     def _drain_stderr(self) -> None:
+        """Buffers the Windows side's stderr and echoes it as it arrives.
+
+        The buffer alone only ever reaches an operator through
+        `_stderr_dump`, which runs on subprocess death or a `type: error`
+        reply -- so a warning from a run that *succeeded* was invisible.
+        That is how every print suite came to paginate against the host's
+        default network printer without a word: the driver's
+        "Microsoft Print to PDF is unavailable" notice went into this
+        buffer and stayed there. A capture's warnings belong on the
+        operator's terminal, so the line is echoed too.
+        """
+
         assert self._proc is not None and self._proc.stderr is not None
         for line in self._proc.stderr:
             self._stderr_buf.append(line)
+            print(line.rstrip("\n"), file=sys.stderr, flush=True)
 
     def _stderr_dump(self) -> str:
         return "".join(self._stderr_buf).strip()
