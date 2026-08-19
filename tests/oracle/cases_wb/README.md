@@ -236,6 +236,78 @@ local verification (wide table -> vertical break, tall table ->
 horizontal break, manual break honored, fit-to-width collapse) even
 before any golden exists.
 
+## Round-trip suite
+
+Every suite above builds its workbook *inside* Excel with `books.add()`
+and COM calls. That measures how Excel behaves; it never puts a byte
+Formulon wrote in front of Excel. `print_roundtrip` is the suite that
+does, and it is the only evidence that a report Formulon authors opens
+as the report that was asked for.
+
+The capture has two halves:
+
+1. `tools/oracle/print_roundtrip.py` drives Formulon's print-authoring
+   API from the case's `roundtrip` block and saves an xlsx. It runs on
+   the repo side, where the binding lives.
+2. The Windows driver opens those bytes with `books.open` and reports
+   what Excel resolved them to.
+
+The fixture crosses to the driver base64-encoded inside the case
+payload. That keeps the Formulon dependency off the Excel host and needs
+no path translation through the WSL bridge.
+
+A `roundtrip` block states exactly what a caller would call, one member
+per print-authoring entry point:
+
+```yaml
+roundtrip:
+  sheet: Sheet1                       # REQUIRED: sheet the settings apply to
+  page_setup:                         # optional; all fields optional
+    orientation: 2                    # 0 default / 1 portrait / 2 landscape
+    paper_size: 9                     # OOXML paperSize code (9 == A4)
+    scale: 75                         # percentage
+    fit_to_page: true                 # <sheetPr><pageSetUpPr>
+    fit_to_width: 1                   # pages
+    fit_to_height: 1                  # pages
+  page_margins: {left: 0.5, ...}      # optional; inches
+  print_options: {grid_lines: true, ...}     # optional; four booleans
+  header_footer:                      # optional; six sections + four flags
+    odd_header: '&C&"MS Gothic"Report &P/&N'
+  print_area: A1:F40                  # optional
+  print_titles: {repeat_rows: '1:2', repeat_cols: A:A}   # optional
+  row_breaks: [21]                    # optional; 1-based Excel row numbers
+  col_breaks: [D]                     # optional; column letters
+```
+
+Unknown keys are rejected rather than ignored. A misspelled sub-block
+would author nothing at all, and the capture would then record Excel
+resolving the file's defaults -- a golden that reads as a clean pass
+while testing none of what the case describes.
+
+Two escaping layers stack in `header_footer` and a case has to get both
+right. A literal ampersand is spelled `&&`, which is Excel's own header
+syntax and the caller's business; the engine then XML-escapes every
+ampersand on the way to the file, which is ours.
+
+What the golden records, per case: `PageSetup.PaperSize` /
+`.Orientation` / `.Zoom` / `.FitToPagesWide` / `.FitToPagesTall`, all six
+margins converted from COM points to inches, the four `printOptions`
+booleans, the header/footer sections split the way COM exposes them
+(left / center / right per odd / even / first), the resolved
+`PrintArea` / `PrintTitleRows` / `PrintTitleColumns`, and the row and
+column breaks whose `Type` is manual. It also records the fixture's
+sha256, without which a stale golden could not be told from a current
+one.
+
+What it deliberately does **not** record is whether Excel showed a
+repair dialog. Automation suppresses alerts, so a repaired file opens
+silently and reads back like a healthy one; leaving alerts on just hangs
+the automation. That judgement stays with the mechanical checks on our
+side -- ECMA-376 child-element order, relationship resolution, schema
+validation -- plus a one-off manual open before a release. The same
+conclusion was reached for the pivot `<location>` case in
+`backup/oracle-capture-windows.md`.
+
 ## Status
 
 The pivot and print scaffolding and verifiers are in place: schema
@@ -247,3 +319,10 @@ are historical and marked `reference-only`; until a product-verified
 Microsoft 365 capture opts in through `PROVENANCE.json`,
 `workbook_oracle_test.cpp` registers zero golden cases and the build stays
 green. The local builder and formula-probe unit tests remain active.
+
+`print_roundtrip` is at the same stage on the capture side and one step
+behind on the verifier side. The authoring half, the case schema and the
+`books.open` capture mode are in place and the suite validates; the
+golden and the C++ comparison against it both wait on a capture from a
+Windows host, since there is nothing for a verifier to diff until one
+exists.

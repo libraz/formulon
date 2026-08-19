@@ -1,0 +1,171 @@
+{
+  "suite": "print_roundtrip",
+  "kind": "workbook",
+  "description": "Print-settings round trip: Formulon authors the settings and writes the xlsx, Excel opens those bytes, and the golden records what Excel resolved them to. Every other workbook suite builds its workbook inside Excel, so this is the only track where our writer's output is the thing under test. Cases are grouped by the part of the print surface they exercise -- page setup and the fit-to-page pair, margins with print options, the six header/footer sections, print area with print titles, and manual page breaks that must read back as manual rather than as re-derived automatic ones.",
+  "cases": [
+    {
+      "id": "a4_landscape_fit_one_page",
+      "description": "fitToPage with an explicit 1x1 fitToWidth / fitToHeight pair. Excel reports Zoom as False and both FitToPages axes as 1 only when the sheetPr flag and the pageSetup attributes agree; writing one without the other is the failure this case pins.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "Header"
+          },
+          "H60": {
+            "kind": "text",
+            "value": "End"
+          }
+        }
+      },
+      "roundtrip": {
+        "sheet": "Sheet1",
+        "page_setup": {
+          "orientation": 2,
+          "paper_size": 9,
+          "fit_to_page": true,
+          "fit_to_width": 1,
+          "fit_to_height": 1
+        }
+      }
+    },
+    {
+      "id": "portrait_scale_75",
+      "description": "An explicit scale with fitToPage off. Zoom reads back as the integer percent and both FitToPages axes stay unconstrained.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "Header"
+          },
+          "F40": {
+            "kind": "text",
+            "value": "End"
+          }
+        }
+      },
+      "roundtrip": {
+        "sheet": "Sheet1",
+        "page_setup": {
+          "orientation": 1,
+          "paper_size": 9,
+          "scale": 75,
+          "fit_to_page": false
+        }
+      }
+    },
+    {
+      "id": "margins_and_print_options",
+      "description": "All six margins plus the four printOptions booleans. COM reports margins in points and the golden converts to inches, so a unit slip on either side of the round trip shows up as a factor of 72.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "Header"
+          },
+          "D20": {
+            "kind": "text",
+            "value": "End"
+          }
+        }
+      },
+      "roundtrip": {
+        "sheet": "Sheet1",
+        "page_margins": {
+          "left": 0.5,
+          "right": 0.5,
+          "top": 0.9,
+          "bottom": 0.9,
+          "header": 0.25,
+          "footer": 0.25
+        },
+        "print_options": {
+          "grid_lines": true,
+          "headings": true,
+          "horizontal_centered": true,
+          "vertical_centered": false
+        }
+      }
+    },
+    {
+      "id": "header_footer_six_sections",
+      "description": "All three page classes with distinct text, including a literal ampersand and a page-number field. Two escaping layers stack here and the case pins both. Excel's header syntax spells a literal ampersand as a doubled \"&&\", which is the caller's business; the engine then XML-escapes every ampersand on the way to the file, which is ours. A section that comes back with the wrong number of ampersands says which of the two layers is wrong.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "Header"
+          },
+          "C10": {
+            "kind": "text",
+            "value": "End"
+          }
+        }
+      },
+      "roundtrip": {
+        "sheet": "Sheet1",
+        "header_footer": {
+          "different_odd_even": true,
+          "different_first": true,
+          "odd_header": "&L売上 && 原価&C月次レポート&R&P/&N",
+          "odd_footer": "&C-&P-",
+          "even_header": "&L偶数ページ&R&D",
+          "even_footer": "&Cverso",
+          "first_header": "&C表紙",
+          "first_footer": "&Rrecto"
+        }
+      }
+    },
+    {
+      "id": "print_area_and_titles",
+      "description": "A print area with repeating rows and columns. Excel reports all three fully qualified and anchored; the golden strips the sheet prefix and the anchors so both sides compare the same shape.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "Header"
+          },
+          "F40": {
+            "kind": "text",
+            "value": "End"
+          }
+        }
+      },
+      "roundtrip": {
+        "sheet": "Sheet1",
+        "print_area": "A1:F40",
+        "print_titles": {
+          "repeat_rows": "1:2",
+          "repeat_cols": "A:A"
+        }
+      }
+    },
+    {
+      "id": "manual_breaks_stay_manual",
+      "description": "Manual row and column breaks. The golden keeps only breaks whose Type is manual, so a break Excel discarded and re-derived at the same position cannot pass for the one we wrote.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "Header"
+          },
+          "H60": {
+            "kind": "text",
+            "value": "End"
+          }
+        }
+      },
+      "roundtrip": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H60",
+        "row_breaks": [
+          21,
+          41
+        ],
+        "col_breaks": [
+          "D"
+        ]
+      }
+    }
+  ]
+}
