@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Worksheet print settings can now be authored, not only read back. Page
+  setup, margins, print options, print area, print titles, header/footer
+  and manual page breaks each reach the C ABI as a typed setter beside the
+  getter that already existed, and all of them are exposed through WASM,
+  the native Node addon and Python. A header/footer is set from decoded
+  section strings — the caller spells a literal ampersand the way Excel's
+  header syntax does, as `&&`, and the engine escapes it for the file — so
+  no caller has to assemble XML to change one section. Every setter has a
+  raw-XML counterpart for the parts this engine does not model, and a
+  fragment handed to one of those is validated as well-formed and bounded
+  before it is stored, so a malformed fragment is rejected at the call
+  rather than on save. A style table is now seeded when a workbook is
+  created, which keeps a caller-appended font, fill or border off the
+  index slots Excel reserves.
+
+### Fixed
+
+- A manual page break written to an xlsx landed one row or column late
+  when the file was opened in Excel, and a break read from an
+  Excel-authored file paginated one track early. OOXML's `<brk id>` is
+  already the zero-based index the break precedes, but the reader
+  subtracted one from it and the writer added one back. The two errors
+  cancelled inside a read/write cycle, so only pagination results and
+  Excel disagreed with the model.
+
 ### Changed
 
 - The WASM size report's soft ceilings moved to 2.75 MiB uncompressed and
