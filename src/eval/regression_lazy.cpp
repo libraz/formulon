@@ -31,6 +31,7 @@
 #include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/numeric_pairs.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -41,78 +42,17 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Paired (x, y) numeric samples distilled from the two resolved array
-// arguments.
-struct NumericPairs {
-  std::vector<double> x;
-  std::vector<double> y;
-};
-
-// Resolves both array arguments, enforces shape match, propagates
-// errors in row-major scan order (y-array first, then x-array, matching
-// Excel's left-to-right rule), and collects every pair whose *both*
-// cells are numeric. If either cell in a pair is non-numeric the whole
-// pair is dropped — the dropping rule must not misalign the two
-// sequences.
+// Paired collection for the regression family. Excel accepts a row-vs-column
+// pairing here (e.g. A1:A3 against `{1,2,3}`) as long as the total cell counts
+// match, so the transpose is permitted; the hypothesis family is stricter.
 //
-// Returns the error `Value` to propagate on the left side of the
-// variant; otherwise a populated `NumericPairs` on the right.
-std::variant<Value, NumericPairs> collect_numeric_pairs(const parser::AstNode& y_arg, const parser::AstNode& x_arg,
-                                                        Arena& arena, const FunctionRegistry& registry,
-                                                        const EvalContext& ctx) {
-  auto y_resolved = resolve_array_arg_na(y_arg, arena, registry, ctx);
-  if (!y_resolved) {
-    return Value{Value::error(y_resolved.error())};
-  }
-  RangeResult y_arr = std::move(y_resolved.value());
-  auto x_resolved = resolve_array_arg_na(x_arg, arena, registry, ctx);
-  if (!x_resolved) {
-    return Value{Value::error(x_resolved.error())};
-  }
-  RangeResult x_arr = std::move(x_resolved.value());
-
-  // Shape mismatch — the regression family uses #N/A (unlike
-  // SUMPRODUCT, which reports #VALUE!). Excel accepts a row-vs-column
-  // pairing (e.g. A1:A3 vs `{1,2,3}`) when the total cell counts match:
-  // the two arrays are effectively 1-D sequences paired in row-major
-  // scan order, and the transpose is implicit.
-  const std::size_t y_total = static_cast<std::size_t>(y_arr.rows) * y_arr.cols;
-  const std::size_t x_total = static_cast<std::size_t>(x_arr.rows) * x_arr.cols;
-  if (y_total != x_total) {
-    return Value{Value::error(ErrorCode::NA)};
-  }
-
-  // Error propagation runs over every cell in both arrays, even cells
-  // that would be dropped by the text-pair rule. Scan y first then x
-  // so the leftmost-argument error wins, matching Excel's precedence.
-  for (const Value& v : y_arr.cells) {
-    if (v.is_error()) {
-      return v;
-    }
-  }
-  for (const Value& v : x_arr.cells) {
-    if (v.is_error()) {
-      return v;
-    }
-  }
-
-  NumericPairs pairs;
-  const std::size_t n = y_arr.cells.size();
-  pairs.x.reserve(n);
-  pairs.y.reserve(n);
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& y = y_arr.cells[i];
-    const Value& x = x_arr.cells[i];
-    // Drop the pair if either side is non-numeric. Blank / Bool / Text
-    // are all treated as "not a numeric sample" — matches Excel's
-    // CORREL / COVAR / SLOPE behaviour on mixed ranges.
-    if (!y.is_number() || !x.is_number()) {
-      continue;
-    }
-    pairs.y.push_back(y.as_number());
-    pairs.x.push_back(x.as_number());
-  }
-  return pairs;
+// The arguments stay in source order — `pairs.first` therefore carries the
+// leading argument, which for SLOPE / INTERCEPT / RSQ / STEYX is the known-y
+// series and for the LINEST-style drivers is known-x.
+std::variant<Value, NumericPairs> collect_regression_pairs(const parser::AstNode& lead_arg,
+                                                           const parser::AstNode& trail_arg, Arena& arena,
+                                                           const FunctionRegistry& registry, const EvalContext& ctx) {
+  return collect_numeric_pairs(lead_arg, trail_arg, arena, registry, ctx, /*allow_transpose=*/true);
 }
 
 // Mean and the three sums-of-deviations the regression functions need:
@@ -128,7 +68,7 @@ struct RegressionStats {
 };
 
 RegressionStats compute_regression_stats(const NumericPairs& p) noexcept {
-  const std::size_t n = p.x.size();
+  const std::size_t n = p.second.size();
   RegressionStats s{};
   if (n == 0) {
     return s;
@@ -136,15 +76,15 @@ RegressionStats compute_regression_stats(const NumericPairs& p) noexcept {
   double sum_x = 0.0;
   double sum_y = 0.0;
   for (std::size_t i = 0; i < n; ++i) {
-    sum_x += p.x[i];
-    sum_y += p.y[i];
+    sum_x += p.second[i];
+    sum_y += p.first[i];
   }
   const double dn = static_cast<double>(n);
   s.mean_x = sum_x / dn;
   s.mean_y = sum_y / dn;
   for (std::size_t i = 0; i < n; ++i) {
-    const double dx = p.x[i] - s.mean_x;
-    const double dy = p.y[i] - s.mean_y;
+    const double dx = p.second[i] - s.mean_x;
+    const double dy = p.first[i] - s.mean_y;
     s.sum_xx += dx * dx;
     s.sum_yy += dy * dy;
     s.sum_xy += dx * dy;
@@ -169,7 +109,7 @@ std::variant<Value, NumericPairs> prepare_pairs(const parser::AstNode& call, Are
   if (call.as_call_arity() != 2U) {
     return Value{Value::error(ErrorCode::Value)};
   }
-  return collect_numeric_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
+  return collect_regression_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
 }
 
 // Computes slope / intercept together since INTERCEPT is just
@@ -177,7 +117,7 @@ std::variant<Value, NumericPairs> prepare_pairs(const parser::AstNode& call, Are
 // (n < 2 or sum_xx == 0) with `#DIV/0!` written to `*out_err`;
 // otherwise writes the slope / intercept and returns `true`.
 bool compute_slope_intercept(const NumericPairs& pairs, double* out_slope, double* out_intercept, Value* out_err) {
-  if (pairs.x.size() < 2U) {
+  if (pairs.second.size() < 2U) {
     *out_err = Value::error(ErrorCode::Div0);
     return false;
   }
@@ -204,7 +144,7 @@ Value eval_correl_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Pearson correlation is undefined for fewer than two points (the
   // sample variances collapse to zero) and when either marginal
   // variance is exactly zero (the denominator would be zero).
-  if (pairs.x.size() < 2U) {
+  if (pairs.second.size() < 2U) {
     return Value::error(ErrorCode::Div0);
   }
   const RegressionStats s = compute_regression_stats(pairs);
@@ -223,11 +163,11 @@ Value eval_covariance_p_lazy(const parser::AstNode& call, Arena& arena, const Fu
   const NumericPairs& pairs = std::get<NumericPairs>(prepared);
   // Population covariance is defined for any n >= 1 (variance of a
   // single point is zero); only n == 0 is degenerate.
-  if (pairs.x.empty()) {
+  if (pairs.second.empty()) {
     return Value::error(ErrorCode::Div0);
   }
   const RegressionStats s = compute_regression_stats(pairs);
-  return finite_number(s.sum_xy / static_cast<double>(pairs.x.size()));
+  return finite_number(s.sum_xy / static_cast<double>(pairs.second.size()));
 }
 
 Value eval_covariance_s_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -238,11 +178,11 @@ Value eval_covariance_s_lazy(const parser::AstNode& call, Arena& arena, const Fu
   }
   const NumericPairs& pairs = std::get<NumericPairs>(prepared);
   // Sample covariance uses divisor (n - 1); a single point yields 0/0.
-  if (pairs.x.size() < 2U) {
+  if (pairs.second.size() < 2U) {
     return Value::error(ErrorCode::Div0);
   }
   const RegressionStats s = compute_regression_stats(pairs);
-  return finite_number(s.sum_xy / static_cast<double>(pairs.x.size() - 1U));
+  return finite_number(s.sum_xy / static_cast<double>(pairs.second.size() - 1U));
 }
 
 Value eval_slope_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -284,7 +224,7 @@ Value eval_rsq_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     return std::get<Value>(prepared);
   }
   const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  if (pairs.x.size() < 2U) {
+  if (pairs.second.size() < 2U) {
     return Value::error(ErrorCode::Div0);
   }
   const RegressionStats s = compute_regression_stats(pairs);
@@ -307,7 +247,7 @@ Value eval_steyx_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   // Residual standard error has (n - 2) degrees of freedom, so we need at
   // least 3 pairs. A collinear x-vector (sum_xx == 0) also makes the
   // regression undefined.
-  if (pairs.x.size() < 3U) {
+  if (pairs.second.size() < 3U) {
     return Value::error(ErrorCode::Div0);
   }
   const RegressionStats s = compute_regression_stats(pairs);
@@ -318,7 +258,7 @@ Value eval_steyx_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   // Floating-point subtraction can produce a tiny negative when the fit
   // is essentially exact; clamp to zero before taking the root.
   const double clamped = residual_ss < 0.0 ? 0.0 : residual_ss;
-  return finite_number(std::sqrt(clamped / static_cast<double>(pairs.x.size() - 2U)));
+  return finite_number(std::sqrt(clamped / static_cast<double>(pairs.second.size() - 2U)));
 }
 
 namespace {
@@ -329,7 +269,7 @@ namespace {
 // reuse `prepare_pairs` directly. Error propagation must still run in
 // Excel's left-to-right order (array_x first), so we pass the arguments
 // to `collect_numeric_pairs` in their declared order; that leaves
-// array_x's cells in `pairs.y` and array_y's cells in `pairs.x`. The
+// array_x's cells in `pairs.first` and array_y's cells in `pairs.second`. The
 // caller unpacks both fields with explicit local names to keep the
 // subsequent arithmetic readable.
 std::variant<Value, NumericPairs> prepare_sumx_pairs(const parser::AstNode& call, Arena& arena,
@@ -337,7 +277,7 @@ std::variant<Value, NumericPairs> prepare_sumx_pairs(const parser::AstNode& call
   if (call.as_call_arity() != 2U) {
     return Value{Value::error(ErrorCode::Value)};
   }
-  return collect_numeric_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
+  return collect_regression_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
 }
 
 }  // namespace
@@ -350,10 +290,10 @@ Value eval_sumx2py2_lazy(const parser::AstNode& call, Arena& arena, const Functi
   }
   const NumericPairs& pairs = std::get<NumericPairs>(prepared);
   // Unpack with Excel-facing names: the first argument (array_x) lives in
-  // `pairs.y`, and the second (array_y) lives in `pairs.x`. See
+  // `pairs.first`, and the second (array_y) lives in `pairs.second`. See
   // `prepare_sumx_pairs` for the reason.
-  const std::vector<double>& x = pairs.y;
-  const std::vector<double>& y = pairs.x;
+  const std::vector<double>& x = pairs.first;
+  const std::vector<double>& y = pairs.second;
   if (x.empty()) {
     return Value::error(ErrorCode::NA);
   }
@@ -371,8 +311,8 @@ Value eval_sumx2my2_lazy(const parser::AstNode& call, Arena& arena, const Functi
     return std::get<Value>(prepared);
   }
   const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  const std::vector<double>& x = pairs.y;
-  const std::vector<double>& y = pairs.x;
+  const std::vector<double>& x = pairs.first;
+  const std::vector<double>& y = pairs.second;
   if (x.empty()) {
     return Value::error(ErrorCode::NA);
   }
@@ -390,8 +330,8 @@ Value eval_sumxmy2_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return std::get<Value>(prepared);
   }
   const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  const std::vector<double>& x = pairs.y;
-  const std::vector<double>& y = pairs.x;
+  const std::vector<double>& x = pairs.first;
+  const std::vector<double>& y = pairs.second;
   if (x.empty()) {
     return Value::error(ErrorCode::NA);
   }
@@ -423,7 +363,7 @@ Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const
   }
   const double x = x_val.as_number();
 
-  const auto prepared = collect_numeric_pairs(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx);
+  const auto prepared = collect_regression_pairs(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx);
   if (std::holds_alternative<Value>(prepared)) {
     return std::get<Value>(prepared);
   }

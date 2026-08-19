@@ -6,7 +6,7 @@
 // via `resolve_array_arg_na` (in `eval/range_args.{h,cpp}`), which walks a
 // `Ref` / `RangeOp` / `ArrayLiteral` / scalar subtree into a `RangeResult`
 // (remapping the non-array rejection to `#N/A` to match Excel's
-// hypothesis-test conventions). `collect_numeric_pairs` pairs two resolved
+// hypothesis-test conventions). `collect_paired_samples` pairs two resolved
 // arrays for the shape-matched paths (T.TEST type==1, CHISQ.TEST, PROB);
 // the independent-collection paths (T.TEST types 2 and 3, F.TEST, Z.TEST)
 // use `collect_single_array_numeric`, which does NOT shape-match and
@@ -26,6 +26,7 @@
 
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/numeric_pairs.h"
 #include "eval/range_args.h"
 #include "eval/stats/special_functions.h"
 #include "parser/ast.h"
@@ -37,64 +38,13 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Paired (x, y) numeric samples distilled from two resolved arrays.
-struct NumericPairs {
-  std::vector<double> x;
-  std::vector<double> y;
-};
-
-// Resolves both array arguments, enforces shape match, propagates errors
-// in row-major scan order (first-argument array first), and collects
-// every pair whose *both* cells are numeric. If either cell in a pair is
-// non-numeric the whole pair is dropped — used by T.TEST's paired mode
-// and by PROB.
-//
-// Returns the error `Value` to propagate on the left side of the variant;
-// otherwise a populated `NumericPairs` on the right.
-std::variant<Value, NumericPairs> collect_numeric_pairs(const parser::AstNode& a_arg, const parser::AstNode& b_arg,
-                                                        Arena& arena, const FunctionRegistry& registry,
-                                                        const EvalContext& ctx) {
-  auto a_resolved = resolve_array_arg_na(a_arg, arena, registry, ctx);
-  if (!a_resolved) {
-    return Value{Value::error(a_resolved.error())};
-  }
-  RangeResult a = std::move(a_resolved.value());
-  auto b_resolved = resolve_array_arg_na(b_arg, arena, registry, ctx);
-  if (!b_resolved) {
-    return Value{Value::error(b_resolved.error())};
-  }
-  RangeResult b = std::move(b_resolved.value());
-  if (a.rows != b.rows || a.cols != b.cols) {
-    return Value{Value::error(ErrorCode::NA)};
-  }
-  // Error propagation runs over every cell in both arrays, even cells
-  // that would be dropped by the text-pair rule. Scan the first argument
-  // first so the leftmost-argument error wins.
-  for (const Value& v : a.cells) {
-    if (v.is_error()) {
-      return v;
-    }
-  }
-  for (const Value& v : b.cells) {
-    if (v.is_error()) {
-      return v;
-    }
-  }
-  NumericPairs pairs;
-  const std::size_t n = a.cells.size();
-  pairs.x.reserve(n);
-  pairs.y.reserve(n);
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& av = a.cells[i];
-    const Value& bv = b.cells[i];
-    if (!av.is_number() || !bv.is_number()) {
-      continue;
-    }
-    // `pairs.x` carries the first argument, `pairs.y` the second.
-    pairs.x.push_back(av.as_number());
-    pairs.y.push_back(bv.as_number());
-  }
-  return pairs;
+// Paired collection for the shape-matched paths. The hypothesis family
+// requires both dimensions to agree, so the transpose the regression family
+// tolerates is refused here.
+std::variant<Value, NumericPairs> collect_paired_samples(const parser::AstNode& a_arg, const parser::AstNode& b_arg,
+                                                         Arena& arena, const FunctionRegistry& registry,
+                                                         const EvalContext& ctx) {
+  return collect_numeric_pairs(a_arg, b_arg, arena, registry, ctx, /*allow_transpose=*/false);
 }
 
 // Resolves a single array argument and returns the numeric cells
@@ -243,15 +193,15 @@ Value eval_t_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (type == 1) {
     // Paired t-test: require shape match, then compute on pairwise
     // differences for every (a, b) pair where both sides are numeric.
-    auto prepared = collect_numeric_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
+    auto prepared = collect_paired_samples(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
     if (std::holds_alternative<Value>(prepared)) {
       return std::get<Value>(prepared);
     }
     const NumericPairs& pairs = std::get<NumericPairs>(prepared);
     std::vector<double> diffs;
-    diffs.reserve(pairs.x.size());
-    for (std::size_t i = 0; i < pairs.x.size(); ++i) {
-      diffs.push_back(pairs.x[i] - pairs.y[i]);
+    diffs.reserve(pairs.first.size());
+    for (std::size_t i = 0; i < pairs.first.size(); ++i) {
+      diffs.push_back(pairs.first[i] - pairs.second[i]);
     }
     double mean_d = 0.0;
     double var_d = 0.0;
@@ -494,17 +444,17 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
   // Paired collection enforces shape match + shared error-scan order
   // (x_range first, then prob_range).
-  auto prepared = collect_numeric_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
+  auto prepared = collect_paired_samples(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
   if (std::holds_alternative<Value>(prepared)) {
     return std::get<Value>(prepared);
   }
   const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  // `pairs.x` holds the x-values (first arg), `pairs.y` the probs.
-  if (pairs.x.empty()) {
+  // `pairs.first` holds the x-values (first arg), `pairs.second` the probs.
+  if (pairs.first.empty()) {
     return Value::error(ErrorCode::NA);
   }
   double prob_sum = 0.0;
-  for (double p : pairs.y) {
+  for (double p : pairs.second) {
     if (p < 0.0 || p > 1.0) {
       return Value::error(ErrorCode::Num);
     }
@@ -534,9 +484,9 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     // Upper omitted: degenerate single-point probability — sum of the
     // prob cells whose matched x equals the lower_limit exactly.
     double total = 0.0;
-    for (std::size_t i = 0; i < pairs.x.size(); ++i) {
-      if (pairs.x[i] == lower) {
-        total += pairs.y[i];
+    for (std::size_t i = 0; i < pairs.first.size(); ++i) {
+      if (pairs.first[i] == lower) {
+        total += pairs.second[i];
       }
     }
     return finite_number(total);
@@ -556,10 +506,10 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::number(0.0);
   }
   double total = 0.0;
-  for (std::size_t i = 0; i < pairs.x.size(); ++i) {
-    const double xi = pairs.x[i];
+  for (std::size_t i = 0; i < pairs.first.size(); ++i) {
+    const double xi = pairs.first[i];
     if (xi >= lower && xi <= upper) {
-      total += pairs.y[i];
+      total += pairs.second[i];
     }
   }
   return finite_number(total);
