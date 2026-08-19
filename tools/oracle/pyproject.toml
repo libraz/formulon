@@ -7,6 +7,12 @@ dependencies = [
     "xlwings>=0.30.0",
     "pyyaml>=6.0",
     "openpyxl>=3.1.5",
+    # The print round-trip suite authors its fixture through Formulon's
+    # Python binding (see tools/oracle/print_roundtrip.py) instead of
+    # building it inside Excel, because our writer's bytes are what that
+    # suite puts under test. The binding is pure Python over a bundled
+    # WebAssembly module, so the capture needs a wasm runtime.
+    "wasmtime>=47.0.1",
 ]
 
 [tool.rye]
