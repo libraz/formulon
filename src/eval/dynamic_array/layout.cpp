@@ -160,10 +160,11 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
   return true;
 }
 
-}  // namespace
-
-Value eval_tocol_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx) {
+/// TOCOL / TOROW. Identical apart from the orientation the kept cells are
+/// finally laid out in; the ignore mask and scan order are arguments, not
+/// properties of the spelling.
+Value eval_to_vector(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, bool as_column) {
   const std::uint32_t arity = call.as_call_arity();
   if (arity < 1U || arity > 3U) {
     return Value::error(ErrorCode::Value);
@@ -197,54 +198,18 @@ Value eval_tocol_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (kept.empty()) {
     return Value::error(ErrorCode::Calc);
   }
-  ArrayValue* out = dynamic_array::materialise_vector(std::move(kept), /*as_column=*/true, arena);
+  ArrayValue* out = dynamic_array::materialise_vector(std::move(kept), as_column, arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   return Value::array(out);
 }
 
-Value eval_torow_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 1U || arity > 3U) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = nullptr;
-  Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
-    return err;
-  }
-
-  std::int64_t ignore_mask = 0;
-  bool scan_by_column = false;
-  if (!resolve_tocol_torow_options(call, arity, arena, registry, ctx, ignore_mask, scan_by_column, err)) {
-    return err;
-  }
-
-  // Same overflow guard as TOCOL above: bounds the reserve against a 32-bit
-  // `size_t` wrap from attacker-shaped dimensions.
-  auto reserve_or = checked_mul_size_t(array->rows, array->cols);
-  if (!reserve_or) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::vector<Value> kept;
-  kept.reserve(reserve_or.value());
-  if (!collect_tocol_torow_cells(*array, ignore_mask, scan_by_column, kept, err)) {
-    return err;
-  }
-  if (kept.empty()) {
-    return Value::error(ErrorCode::Calc);
-  }
-  ArrayValue* out = dynamic_array::materialise_vector(std::move(kept), /*as_column=*/false, arena);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::array(out);
-}
-
-Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx) {
+/// WRAPROWS / WRAPCOLS. `by_row` decides which axis the wrap count sizes and,
+/// with it, whether the source vector is read straight through (row-major fill)
+/// or transposed as it is written (column-major fill).
+Value eval_wrap(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                bool by_row) {
   const std::uint32_t arity = call.as_call_arity();
   const ArrayValue* vector_arr = nullptr;
   std::uint32_t wrap_count = 0;
@@ -257,14 +222,15 @@ Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // both for a row vector (1xN) and a column vector (Nx1) — both have
   // their cells already laid out left-to-right / top-to-bottom in
   // `cells` (since rows or cols == 1). Total cell count is rows * cols.
-  const std::size_t n = static_cast<std::size_t>(vector_arr->rows) * static_cast<std::size_t>(vector_arr->cols);
+  const std::size_t count = static_cast<std::size_t>(vector_arr->rows) * static_cast<std::size_t>(vector_arr->cols);
   // Excel does not extend the final shape beyond the source length when the
   // requested wrap count exceeds the vector length.
   const std::uint32_t effective_wrap =
-      static_cast<std::uint32_t>(std::min<std::size_t>(static_cast<std::size_t>(wrap_count), n));
-  const std::uint32_t out_cols = effective_wrap;
-  const std::uint32_t out_rows =
-      static_cast<std::uint32_t>((n + static_cast<std::size_t>(effective_wrap) - 1) / effective_wrap);
+      static_cast<std::uint32_t>(std::min<std::size_t>(static_cast<std::size_t>(wrap_count), count));
+  const auto wrapped =
+      static_cast<std::uint32_t>((count + static_cast<std::size_t>(effective_wrap) - 1) / effective_wrap);
+  const std::uint32_t out_rows = by_row ? wrapped : effective_wrap;
+  const std::uint32_t out_cols = by_row ? effective_wrap : wrapped;
   const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
   Value* buffer = nullptr;
   ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
@@ -272,42 +238,34 @@ Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const Functi
     return Value::error(ErrorCode::Num);
   }
   for (std::size_t i = 0; i < total; ++i) {
-    buffer[i] = (i < n) ? vector_arr->cells[i] : pad;
+    // WRAPCOLS fills down each column first, so the source index walks the
+    // output in column-major order.
+    const std::size_t flat = by_row ? i : ((i % out_cols) * out_rows) + (i / out_cols);
+    buffer[i] = (flat < count) ? vector_arr->cells[flat] : pad;
   }
   return Value::array(out);
 }
 
+}  // namespace
+
+Value eval_tocol_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  return eval_to_vector(call, arena, registry, ctx, /*as_column=*/true);
+}
+
+Value eval_torow_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  return eval_to_vector(call, arena, registry, ctx, /*as_column=*/false);
+}
+
+Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  return eval_wrap(call, arena, registry, ctx, /*by_row=*/true);
+}
+
 Value eval_wrapcols_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  const ArrayValue* vector_arr = nullptr;
-  std::uint32_t wrap_count = 0;
-  Value pad = Value::error(ErrorCode::NA);
-  Value err = Value::error(ErrorCode::Value);
-  if (!resolve_wrap_args(call, arity, arena, registry, ctx, vector_arr, wrap_count, pad, err)) {
-    return err;
-  }
-  const std::size_t n = static_cast<std::size_t>(vector_arr->rows) * static_cast<std::size_t>(vector_arr->cols);
-  // Excel does not extend the final shape beyond the source length when the
-  // requested wrap count exceeds the vector length.
-  const std::uint32_t effective_wrap =
-      static_cast<std::uint32_t>(std::min<std::size_t>(static_cast<std::size_t>(wrap_count), n));
-  const std::uint32_t out_rows = effective_wrap;
-  const std::uint32_t out_cols =
-      static_cast<std::uint32_t>((n + static_cast<std::size_t>(effective_wrap) - 1) / effective_wrap);
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  for (std::size_t i = 0; i < total; ++i) {
-    const std::size_t r = i / out_cols;
-    const std::size_t c = i % out_cols;
-    const std::size_t flat = c * out_rows + r;
-    buffer[i] = (flat < n) ? vector_arr->cells[flat] : pad;
-  }
-  return Value::array(out);
+  return eval_wrap(call, arena, registry, ctx, /*by_row=*/false);
 }
 
 }  // namespace eval
