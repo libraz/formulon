@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -396,11 +397,10 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
   const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
 
-  // Mirror the `@`-operator (NodeKind::ImplicitIntersection) projection
-  // logic in `tree_walker.cpp`: for a static `RangeOp(Ref, Ref)` arg, project
-  // the formula cell's row (single-column range) or column (single-row range)
-  // onto the range. 2-D ranges and out-of-axis formula cells surface
-  // `#VALUE!`, matching the `@` operator's documented behaviour.
+  // Share the `@`-operator (NodeKind::ImplicitIntersection) projection: for a
+  // static `RangeOp(Ref, Ref)` arg, project the formula cell onto the range.
+  // Out-of-axis formula cells surface `#VALUE!`, matching the `@` operator's
+  // documented behaviour.
   if (arg.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = arg.as_range_lhs();
     const parser::AstNode& rhs_ast = arg.as_range_rhs();
@@ -411,38 +411,12 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
       // Without a bound formula cell there is no row/col to project onto.
       return Value::error(ErrorCode::Value);
     }
-    const parser::Reference& lhs_ref = lhs_ast.as_ref();
-    const parser::Reference& rhs_ref = rhs_ast.as_ref();
-    const std::uint32_t r1 = std::min(lhs_ref.row, rhs_ref.row);
-    const std::uint32_t r2 = std::max(lhs_ref.row, rhs_ref.row);
-    const std::uint32_t c1 = std::min(lhs_ref.col, rhs_ref.col);
-    const std::uint32_t c2 = std::max(lhs_ref.col, rhs_ref.col);
-    const std::uint32_t fr = ctx.formula_row();
-    const std::uint32_t fc = ctx.formula_col();
-    parser::Reference target{};
-    target.sheet = lhs_ref.sheet;
-    if (c1 == c2) {
-      // Single-column range: project formula row.
-      if (fr < r1 || fr > r2) {
-        return Value::error(ErrorCode::Value);
-      }
-      target.row = fr;
-      target.col = c1;
-    } else if (r1 == r2) {
-      // Single-row range: project formula column.
-      if (fc < c1 || fc > c2) {
-        return Value::error(ErrorCode::Value);
-      }
-      target.row = r1;
-      target.col = fc;
-    } else {
-      if (fr < r1 || fr > r2 || fc < c1 || fc > c2) {
-        return Value::error(ErrorCode::Value);
-      }
-      target.row = fr;
-      target.col = fc;
+    const std::optional<parser::Reference> target =
+        project_implicit_intersection(lhs_ast.as_ref(), rhs_ast.as_ref(), ctx.formula_row(), ctx.formula_col());
+    if (!target.has_value()) {
+      return Value::error(ErrorCode::Value);
     }
-    return ctx.resolve_ref(target, arena, registry);
+    return ctx.resolve_ref(*target, arena, registry);
   }
 
   // Calls, spill references, and other non-range array expressions do not

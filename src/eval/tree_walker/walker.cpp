@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -520,42 +521,12 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
           // only fires for parser-driven smoke tests.
           return eval_node(operand, arena, registry, ctx);
         }
-        const auto& lhs_ref = lhs_ast.as_ref();
-        const auto& rhs_ref = rhs_ast.as_ref();
-        const std::uint32_t r1 = std::min(lhs_ref.row, rhs_ref.row);
-        const std::uint32_t r2 = std::max(lhs_ref.row, rhs_ref.row);
-        const std::uint32_t c1 = std::min(lhs_ref.col, rhs_ref.col);
-        const std::uint32_t c2 = std::max(lhs_ref.col, rhs_ref.col);
-        const std::uint32_t fr = ctx.formula_row();
-        const std::uint32_t fc = ctx.formula_col();
-        parser::Reference target{};
-        target.sheet = lhs_ref.sheet;
-        if (c1 == c2) {
-          // Single-column range: project formula row.
-          if (fr < r1 || fr > r2) {
-            return Value::error(ErrorCode::Value);
-          }
-          target.row = fr;
-          target.col = c1;
-        } else if (r1 == r2) {
-          // Single-row range: project formula column.
-          if (fc < c1 || fc > c2) {
-            return Value::error(ErrorCode::Value);
-          }
-          target.row = r1;
-          target.col = fc;
-        } else {
-          // 2D range: Excel intersects the range with the formula cell's row
-          // AND column. When the formula cell falls inside both spans the
-          // result is the single cell at (formula_row, formula_col); any
-          // other position yields #VALUE!.
-          if (fr < r1 || fr > r2 || fc < c1 || fc > c2) {
-            return Value::error(ErrorCode::Value);
-          }
-          target.row = fr;
-          target.col = fc;
+        const std::optional<parser::Reference> target =
+            project_implicit_intersection(lhs_ast.as_ref(), rhs_ast.as_ref(), ctx.formula_row(), ctx.formula_col());
+        if (!target.has_value()) {
+          return Value::error(ErrorCode::Value);
         }
-        return ctx.resolve_ref(target, arena, registry);
+        return ctx.resolve_ref(*target, arena, registry);
       }
       // Dynamic arrays produced by a call, spill reference, or expression no
       // longer retain static range coordinates. Excel's `@` takes their
