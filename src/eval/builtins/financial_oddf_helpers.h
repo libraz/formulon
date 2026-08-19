@@ -125,6 +125,30 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
                                                                  double first_coupon, int frequency,
                                                                  int basis) noexcept;
 
+/// The scalar arguments ODDFPRICE and ODDFYIELD share. Slot 5 is the one
+/// argument whose meaning differs between the two — `yld` for the price
+/// spelling, `pr` for the yield spelling — so it is carried unnamed.
+struct OddFirstArgs {
+  double rate;        ///< args[4], annual coupon rate.
+  double slot5;       ///< args[5]: yld for ODDFPRICE, pr for ODDFYIELD.
+  double redemption;  ///< args[6], per 100 face.
+  double freq_d;      ///< args[7] as a double.
+};
+
+/// Reads and validates the nine-slot ODDF argument list and builds the coupon
+/// schedule into `sched_out`, leaving only the closed form or the iteration to
+/// the caller.
+///
+/// Validation order is PRICE's: date ordering -> frequency -> basis -> rate
+/// sign -> slot-5 sign -> redemption sign, plus the odd-first constraint
+/// `issue < settlement < first_coupon < maturity`.
+/// `slot5_must_be_positive` is the one difference between the two spellings:
+/// ODDFPRICE accepts a zero `yld`, while ODDFYIELD rejects a non-positive `pr`
+/// because a zero price implies an infinite yield. Any failure surfaces as
+/// `ErrorCode::Num`, and `sched_out` is untouched on failure.
+Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::uint32_t arity,
+                                                        bool slot5_must_be_positive, OddFirstSchedule& sched_out);
+
 /// Computes the ODDFPRICE clean price per 100 face. Performs the same
 /// argument validation order as PRICE / ODDLPRICE (date ordering ->
 /// frequency domain -> basis domain -> rate / yld sign -> redemption

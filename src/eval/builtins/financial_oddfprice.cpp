@@ -317,7 +317,8 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
   return out;
 }
 
-Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity) {
+Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::uint32_t arity,
+                                                        bool slot5_must_be_positive, OddFirstSchedule& sched_out) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
@@ -338,9 +339,9 @@ Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uin
   if (!rate) {
     return rate.error();
   }
-  auto yld = read_required_number(args, 5);
-  if (!yld) {
-    return yld.error();
+  auto slot5 = read_required_number(args, 5);
+  if (!slot5) {
+    return slot5.error();
   }
   auto redemption = read_required_number(args, 6);
   if (!redemption) {
@@ -356,8 +357,8 @@ Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uin
   }
 
   // Validation order mirrors PRICE / ODDLPRICE: date ordering ->
-  // frequency -> basis -> rate / yld signs -> redemption sign.
-  // ODDFPRICE has the strict ordering constraint
+  // frequency -> basis -> rate / slot-5 signs -> redemption sign.
+  // The odd-first family has the strict ordering constraint
   // `issue < settlement < first_coupon < maturity` -- the issue date
   // must precede settlement (the holder is past the issue at trade
   // time), settlement must precede the first coupon (hence "first"
@@ -378,7 +379,7 @@ Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uin
   if (rate.value() < 0.0) {
     return ErrorCode::Num;
   }
-  if (yld.value() < 0.0) {
+  if (slot5_must_be_positive ? (slot5.value() <= 0.0) : (slot5.value() < 0.0)) {
     return ErrorCode::Num;
   }
   if (redemption.value() <= 0.0) {
@@ -390,11 +391,27 @@ Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uin
   if (!sched_e) {
     return sched_e.error();
   }
-  const OddFirstSchedule& sched = sched_e.value();
+  sched_out = sched_e.value();
 
-  const double freq_d = static_cast<double>(frequency);
-  const double cf = 100.0 * rate.value() / freq_d;
-  const double v_denom = 1.0 + yld.value() / freq_d;
+  OddFirstArgs out{};
+  out.rate = rate.value();
+  out.slot5 = slot5.value();
+  out.redemption = redemption.value();
+  out.freq_d = static_cast<double>(frequency);
+  return out;
+}
+
+Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity) {
+  OddFirstSchedule sched{};
+  auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/false, sched);
+  if (!in) {
+    return in.error();
+  }
+  const double redemption_v = in.value().redemption;
+
+  const double freq_d = in.value().freq_d;
+  const double cf = 100.0 * in.value().rate / freq_d;
+  const double v_denom = 1.0 + in.value().slot5 / freq_d;
   if (v_denom == 0.0) {
     return ErrorCode::Num;
   }
@@ -435,7 +452,7 @@ Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uin
   if (std::isnan(red_disc) || std::isinf(red_disc)) {
     return ErrorCode::Num;
   }
-  const double redemption_pv = redemption.value() * red_disc;
+  const double redemption_pv = redemption_v * red_disc;
 
   // Accrued interest: cf * sum_i (a[i] / nl[i]).
   double ai_units = 0.0;

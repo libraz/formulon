@@ -101,84 +101,19 @@ Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arit
 }  // namespace
 
 Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t arity) {
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return settlement.error();
-  }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return maturity.error();
-  }
-  auto issue = read_financial_date(args, 2);
-  if (!issue) {
-    return issue.error();
-  }
-  auto first_coupon = read_financial_date(args, 3);
-  if (!first_coupon) {
-    return first_coupon.error();
-  }
-  auto rate = read_required_number(args, 4);
-  if (!rate) {
-    return rate.error();
-  }
-  auto pr = read_required_number(args, 5);
-  if (!pr) {
-    return pr.error();
-  }
-  auto redemption = read_required_number(args, 6);
-  if (!redemption) {
-    return redemption.error();
-  }
-  auto frequency_e = read_coupon_frequency(args, 7);
-  if (!frequency_e) {
-    return frequency_e.error();
-  }
-  auto basis_e = read_day_count_basis(args, arity, 8);
-  if (!basis_e) {
-    return basis_e.error();
+  // The schedule is built once here for the initial-guess heuristic. The
+  // Newton iterate calls `price_at` (which rebuilds the schedule each time)
+  // -- the schedule's structure is independent of yld so recomputing it per
+  // iteration is cheap relative to the sum-of-powers in the price kernel.
+  OddFirstSchedule sched{};
+  auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/true, sched);
+  if (!in) {
+    return in.error();
   }
 
-  // Validation order mirrors ODDFPRICE: date ordering -> frequency ->
-  // basis -> rate sign -> pr sign (replaces yld) -> redemption sign.
-  // The `pr <= 0` check is the YIELD-family-specific addition;
-  // ODDFPRICE accepts a zero yld but ODDFYIELD rejects a non-positive
-  // market price (zero would imply infinite yield).
-  if (issue.value() >= settlement.value()) {
-    return ErrorCode::Num;
-  }
-  if (settlement.value() >= first_coupon.value()) {
-    return ErrorCode::Num;
-  }
-  if (first_coupon.value() >= maturity.value()) {
-    return ErrorCode::Num;
-  }
-  const int frequency = frequency_e.value();
-  const int basis = basis_e.value();
-  if (rate.value() < 0.0) {
-    return ErrorCode::Num;
-  }
-  if (pr.value() <= 0.0) {
-    return ErrorCode::Num;
-  }
-  if (redemption.value() <= 0.0) {
-    return ErrorCode::Num;
-  }
-
-  // Build the schedule once for the initial-guess heuristic. The
-  // Newton iterate calls `price_at` (which rebuilds the schedule
-  // each time) -- the schedule's structure is independent of yld so
-  // recomputing it per iteration is cheap relative to the
-  // sum-of-powers in the price kernel.
-  auto sched_e = compute_odd_first_schedule(settlement.value(), maturity.value(), issue.value(), first_coupon.value(),
-                                            frequency, basis);
-  if (!sched_e) {
-    return sched_e.error();
-  }
-  const OddFirstSchedule& sched = sched_e.value();
-
-  const double freq_d = static_cast<double>(frequency);
-  const double red = redemption.value();
-  const double pr_v = pr.value();
+  const double freq_d = in.value().freq_d;
+  const double red = in.value().redemption;
+  const double pr_v = in.value().slot5;
 
   // Initial guess: Microsoft's documented approximate-yield formula.
   // `n_total` is the total period count from settlement to maturity
@@ -190,7 +125,7 @@ Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t 
   if (avg_capital == 0.0 || n_total <= 0.0) {
     return ErrorCode::Num;
   }
-  double yld = ((100.0 * rate.value() + (red - pr_v) / n_total) / avg_capital) * freq_d;
+  double yld = ((100.0 * in.value().rate + (red - pr_v) / n_total) / avg_capital) * freq_d;
   if (std::isnan(yld) || std::isinf(yld)) {
     return ErrorCode::Num;
   }

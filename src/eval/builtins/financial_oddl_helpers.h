@@ -90,6 +90,32 @@ struct OddLastSchedule {
 Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement, double maturity, double last_interest,
                                                                int frequency, int basis) noexcept;
 
+/// Everything ODDLPRICE and ODDLYIELD read and derive before their closed
+/// forms diverge. Slot 4 is the one argument whose meaning differs between the
+/// two — `yld` for the price spelling, `pr` for the yield spelling — so it is
+/// carried unnamed.
+struct OddLastInputs {
+  double slot4;       ///< args[4]: yld for ODDLPRICE, pr for ODDLYIELD.
+  double redemption;  ///< args[5], per 100 face.
+  double cf;          ///< Irregular final coupon per 100 face.
+  double ai;          ///< Accrued interest per 100 face.
+  double dsc;         ///< Basis-adjusted days from settlement to maturity.
+  double e;           ///< Normal coupon-period length in basis-adjusted days.
+  double freq_d;      ///< Coupon frequency as a double.
+};
+
+/// Reads and validates the eight-slot ODDL argument list and walks the coupon
+/// schedule, leaving only the closed form itself to the caller.
+///
+/// Validation order is PRICE's: date ordering -> frequency -> basis -> rate
+/// sign -> slot-4 sign -> redemption sign, plus the odd-last constraint
+/// `last_interest < settlement`. `slot4_must_be_positive` is the one
+/// difference between the two spellings: ODDLPRICE accepts a zero `yld`, while
+/// ODDLYIELD rejects a non-positive `pr` because a zero price implies an
+/// infinite yield. Any failure surfaces as `ErrorCode::Num`.
+Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::uint32_t arity,
+                                                        bool slot4_must_be_positive);
+
 /// Computes the ODDLPRICE clean price per 100 face. Performs the same
 /// argument validation order as PRICE (date ordering -> frequency domain
 /// -> basis domain -> rate / yld sign -> redemption sign), additionally

@@ -155,7 +155,8 @@ Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement
   return out;
 }
 
-Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uint32_t arity) {
+Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::uint32_t arity,
+                                                        bool slot4_must_be_positive) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
@@ -172,9 +173,9 @@ Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uin
   if (!rate) {
     return rate.error();
   }
-  auto yld = read_required_number(args, 4);
-  if (!yld) {
-    return yld.error();
+  auto slot4 = read_required_number(args, 4);
+  if (!slot4) {
+    return slot4.error();
   }
   auto redemption = read_required_number(args, 5);
   if (!redemption) {
@@ -190,7 +191,7 @@ Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uin
   }
 
   // Validation order mirrors PRICE: date ordering -> frequency -> basis
-  // -> rate / yld signs -> redemption sign. ODDLPRICE has the extra
+  // -> rate / slot-4 signs -> redemption sign. The odd-last family adds the
   // ordering constraint `last_interest < settlement` (the bond's last
   // regular coupon must precede settlement).
   if (last_interest.value() >= settlement.value()) {
@@ -204,7 +205,7 @@ Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uin
   if (rate.value() < 0.0) {
     return ErrorCode::Num;
   }
-  if (yld.value() < 0.0) {
+  if (slot4_must_be_positive ? (slot4.value() <= 0.0) : (slot4.value() < 0.0)) {
     return ErrorCode::Num;
   }
   if (redemption.value() <= 0.0) {
@@ -215,19 +216,29 @@ Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uin
   if (!sched) {
     return sched.error();
   }
-  const double dc = sched.value().dc_total;
-  const double a = sched.value().a_total;
-  const double dsc = sched.value().dsc;
-  const double e = sched.value().e;
 
   const double freq_d = static_cast<double>(frequency);
-  const double cf = 100.0 * rate.value() / freq_d * (dc / e);
-  const double ai = 100.0 * rate.value() / freq_d * (a / e);
-  const double disc = 1.0 + dsc * yld.value() / freq_d / e;
+  OddLastInputs out{};
+  out.slot4 = slot4.value();
+  out.redemption = redemption.value();
+  out.dsc = sched.value().dsc;
+  out.e = sched.value().e;
+  out.freq_d = freq_d;
+  out.cf = 100.0 * rate.value() / freq_d * (sched.value().dc_total / out.e);
+  out.ai = 100.0 * rate.value() / freq_d * (sched.value().a_total / out.e);
+  return out;
+}
+
+Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uint32_t arity) {
+  auto in = read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/false);
+  if (!in) {
+    return in.error();
+  }
+  const double disc = 1.0 + in.value().dsc * in.value().slot4 / in.value().freq_d / in.value().e;
   if (disc == 0.0) {
     return ErrorCode::Num;
   }
-  const double price = (redemption.value() + cf) / disc - ai;
+  const double price = (in.value().redemption + in.value().cf) / disc - in.value().ai;
   if (std::isnan(price) || std::isinf(price)) {
     return ErrorCode::Num;
   }
