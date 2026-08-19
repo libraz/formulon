@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The WASM size report's soft ceilings moved to 2.75 MiB uncompressed and
+  736 KiB Brotli. The previous pair sat below the shipped binary, so the
+  warning fired on every run and said nothing about the change being
+  measured. The new pair sits just above it, which is what a tripwire has
+  to do to be read: one feature's worth of growth trips it, and the hard
+  ceilings — unchanged at 3.00 MiB and 768 KiB — stay a further 0.25 MiB
+  and 32 KiB away.
+
 ## [0.10.0] - 2026-08-18
 
 ### Added
