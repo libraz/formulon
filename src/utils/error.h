@@ -130,6 +130,11 @@ enum class FormulonErrorCode : int32_t {
 
   // ===== 4000-4999: Dependency graph / Recalc =====
   kGraphCycleDetected = 4000,
+  /// Allocated but not currently produced. The iterative solver does not
+  /// infer divergence from residual growth: Excel has no residual-growth
+  /// cutoff either, so exhausting the iteration budget retains the last
+  /// approximation instead of failing. The slot stays allocated because
+  /// the C API promises numeric identity with this enum.
   kGraphIterativeDiverged = 4001,
   kGraphInvalidNodeRef = 4002,
   kGraphScheduleFailed = 4003,
@@ -205,7 +210,18 @@ enum class FormulonErrorCode : int32_t {
   /// Allocated but not currently produced. See `kCryptoAgileNotSupported`.
   kCryptoKeyDerivationFailed = 6004,
   kSecResourceLimit = 6005,
+  /// Allocated but not currently produced. The engine does refuse
+  /// cross-workbook references, but it does so while parsing the formula:
+  /// the refusal surfaces as `ParseErrorCode::UnsupportedConstruct`, which
+  /// belongs to a separate enum and never reaches an `Error`. That
+  /// diagnostic is also shared with other unsupported spellings, so it
+  /// does not identify an external reference on its own. The slot stays
+  /// allocated because the C API promises numeric identity with this enum.
   kSecExternalNotAllowed = 6006,
+  /// Allocated but not currently produced. There is no policy engine that
+  /// could refuse an operation on configuration grounds; every refusal the
+  /// engine performs has a more specific code. See
+  /// `kSecExternalNotAllowed` for why the slot stays allocated.
   kSecPolicyBlocked = 6007,
 
   // ===== 7000-7999: Bindings / C API =====
