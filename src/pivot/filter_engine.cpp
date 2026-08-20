@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -124,7 +125,7 @@ bool label_filter_passes(const PivotFilter& f, std::string_view label) {
     case FilterType::LabelDate:
       // Value-axis filters: handled later by the post-aggregation pass.
       // `LabelDate` is dispatched through `label_date_filter_passes` above
-      // by `record_passes_manual_filter`; this branch is unreachable for
+      // by `PreparedRecordFilter::passes`; this branch is unreachable for
       // it but kept exhaustive for the switch.
       return true;
   }
@@ -320,15 +321,16 @@ AxisScores score_axis(const PivotResult& result, ScoreAxis score_axis, std::size
 
 }  // namespace
 
-bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record,
-                                 const PivotFilterEnv& env) {
+PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotCache& cache, const PivotFilterEnv& env)
+    : cache_(&cache), table_(&table) {
+  // A field with no hidden item filters nothing, so it never reaches the
+  // record loop at all. Excel writes an `items[]` list for every field it
+  // places on an axis, which is why presence of the list cannot stand in for
+  // presence of a filter.
   for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
-    const PivotField& field = table.fields()[fi];
-    if (field.items.empty()) {
-      continue;
-    }
-    const Value v = cell_value(cache, record, fi);
-    for (const PivotItem& item : field.items) {
+    HiddenItems hidden;
+    hidden.field_index = fi;
+    for (const PivotItem& item : table.fields()[fi].items) {
       if (item.visible) {
         continue;
       }
@@ -341,22 +343,77 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
         // would hide that value too. An item whose binding does not resolve is
         // merely malformed and must not filter anything.
         const Value* bound = item_cache_value(cache, fi, item);
-        if (bound != nullptr && bound->is_blank() && v.is_blank()) {
-          return false;
+        if (bound != nullptr && bound->is_blank()) {
+          hidden.hides_blank = true;
         }
         continue;
       }
-      if (with_display_string(v, [&](std::string_view name) { return item.name == name; })) {
-        return false;
-      }
+      hidden.labels.insert(std::string_view{item.name});
     }
+    if (hidden.labels.empty() && !hidden.hides_blank) {
+      continue;
+    }
+    hidden_items_.push_back(std::move(hidden));
   }
+  // An axis filter names its field under the shared resolution rule; one that
+  // resolves to nothing is dropped here instead of re-resolving — and
+  // re-failing — for every record.
   for (const PivotFilter& f : table.active_filters()) {
-    auto fi_or = resolve_field_by_any_name(table, f.field_name);
+    const auto fi_or = resolve_field_by_any_name(table, f.field_name);
     if (!fi_or) {
       continue;
     }
-    const Value v = cell_value(cache, record, *fi_or);
+    label_filters_.push_back(ResolvedFilter{*fi_or, &f});
+  }
+  // A relative period resolves to an ordinary inclusive window once it has a
+  // clock reading, and the reading is taken once: an evaluation spanning
+  // midnight would otherwise filter its early records against one day and its
+  // later ones against the next.
+  if (!table.authored_period_filters().empty()) {
+    const eval::date_time::CivilTime now =
+        env.pinned_now.has_value() ? *env.pinned_now : eval::date_time::host_civil_time();
+    for (const AuthoredPeriodFilter& f : table.authored_period_filters()) {
+      if (f.field_index >= table.fields().size()) {
+        continue;
+      }
+      period_windows_.push_back(ResolvedPeriod{f.field_index, resolve_relative_period(f.period, now, env.date1904)});
+    }
+  }
+}
+
+bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
+  const PivotCache& cache = *cache_;
+  const PivotTable& table = *table_;
+  for (const HiddenItems& hidden : hidden_items_) {
+    const Value v = cell_value(cache, record, hidden.field_index);
+    if (v.is_blank()) {
+      // A blank renders to the empty label, which no named item can spell:
+      // the unlabelled item's rule is the only one that can hide it.
+      if (hidden.hides_blank) {
+        return false;
+      }
+      continue;
+    }
+    if (hidden.labels.empty()) {
+      continue;  // Hides only the blank, and this record is not blank.
+    }
+    // A hidden item matches the label the grid draws for the record's value.
+    // Text is its own label and is looked up without building a string; every
+    // other kind renders once per field here rather than once per item.
+    if (v.is_text()) {
+      if (hidden.labels.count(v.as_text()) != 0) {
+        return false;
+      }
+      continue;
+    }
+    const std::string rendered = display_string(v);
+    if (hidden.labels.count(std::string_view{rendered}) != 0) {
+      return false;
+    }
+  }
+  for (const ResolvedFilter& resolved : label_filters_) {
+    const PivotFilter& f = *resolved.filter;
+    const Value v = cell_value(cache, record, resolved.field_index);
     if (f.type == FilterType::LabelDate) {
       // Date-range filters need the underlying numeric serial; the
       // rendered label string would lose precision and locale.
@@ -405,24 +462,14 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
   // Authored relative-period entries. Once resolved against the clock they
   // are ordinary inclusive date windows, so they prune here alongside the
   // absolute `dateBetween` family above.
-  if (!table.authored_period_filters().empty()) {
-    // `evaluate` resolves the reading once before the record loop, so the
-    // fallback here only serves a caller invoking this directly.
-    const eval::date_time::CivilTime now =
-        env.pinned_now.has_value() ? *env.pinned_now : eval::date_time::host_civil_time();
-    for (const AuthoredPeriodFilter& f : table.authored_period_filters()) {
-      if (f.field_index >= table.fields().size()) {
-        continue;
-      }
-      const Value v = cell_value(cache, record, f.field_index);
-      if (!v.is_number()) {
-        continue;  // Non-numeric cells are outside the date domain.
-      }
-      const DateWindow window = resolve_relative_period(f.period, now, env.date1904);
-      const double serial = v.as_number();
-      if (serial < window.low || serial > window.high) {
-        return false;
-      }
+  for (const ResolvedPeriod& resolved : period_windows_) {
+    const Value v = cell_value(cache, record, resolved.field_index);
+    if (!v.is_number()) {
+      continue;  // Non-numeric cells are outside the date domain.
+    }
+    const double serial = v.as_number();
+    if (serial < resolved.window.low || serial > resolved.window.high) {
+      return false;
     }
   }
   return true;

@@ -186,18 +186,22 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
 
   // 2. Filter records.
   //
-  // The clock is read once here rather than per record. Reading it inside
-  // the loop would cost a syscall per record, and worse, an evaluation
-  // spanning midnight would filter its early records against one day and
-  // its later ones against the next.
+  // Everything the filter derives from the table alone — which items each
+  // field hides, which field an axis filter names, which window a relative
+  // period spans — is derived once here rather than per record. That is what
+  // keeps the pass linear in the record count instead of scaling with the
+  // item lists too, and it is also what makes the clock reading single: an
+  // evaluation spanning midnight would otherwise filter its early records
+  // against one day and its later ones against the next.
   PivotFilterEnv resolved_env = env;
   if (!resolved_env.pinned_now.has_value()) {
     resolved_env.pinned_now = eval::date_time::host_civil_time();
   }
+  const PreparedRecordFilter record_filter(table, cache, resolved_env);
   std::vector<std::size_t> surviving;
   surviving.reserve(cache.records().size());
   for (std::size_t i = 0; i < cache.records().size(); ++i) {
-    if (record_passes_manual_filter(table, cache, cache.records()[i], resolved_env)) {
+    if (record_filter.passes(cache.records()[i])) {
       surviving.push_back(i);
     }
   }

@@ -3,10 +3,9 @@
 //
 // Two filter passes live here:
 //
-//   * Pre-aggregation, per-record: `record_passes_manual_filter` runs
-//     the manual `items[]` visibility check on every field that declares
-//     one, then applies axis-level label / date filters from
-//     `active_filters`.
+//   * Pre-aggregation, per-record: `PreparedRecordFilter` runs the manual
+//     `items[]` visibility check on every field that hides something, then
+//     applies axis-level label / date filters from `active_filters`.
 //
 //   * Post-aggregation, per-leaf: `score_*_axis` + `build_value_filter_keep`
 //     score each axis leaf for the active value filter and produce a
@@ -20,6 +19,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "eval/date_time.h"
@@ -60,25 +61,80 @@ struct DateWindow {
 /// instead of only through a filtered pivot.
 DateWindow resolve_relative_period(RelativePeriod period, const eval::date_time::CivilTime& now, bool date1904);
 
-/// True iff `record` survives the manual `items[]` filter on every
-/// field that declares one, AND the axis-level label filters in
-/// `active_filters`. Empty `items` lists match all values (Excel default
-/// — items[] is only authored when the user has hidden at least one
-/// value).
+/// The pre-aggregation filter pass with everything that depends only on the
+/// table hoisted out of the per-record decision.
 ///
-/// A hidden item normally matches records by its label. The blank item is the
-/// exception: it has no label of its own, so it is matched by the cache value
-/// it binds to (`shared_items[cache_index]`, the same binding
-/// `resolve_pivot_names` reads) being blank. Identifying it by the placeholder
-/// the grid draws instead would also hide any genuine text value spelled the
-/// same way. An item that is unlabelled *and* binds to nothing resolvable is
-/// malformed and filters nothing.
+/// Which items a field hides, which field a named axis filter designates, and
+/// which date window a relative period spans are all properties of the table,
+/// not of a record. Deriving them inside the record loop costs
+/// O(records x fields x items), and Excel authors an `items[]` list for every
+/// field it places on an axis, so that product is paid whether or not anything
+/// is actually hidden. Worse, matching an item by label re-renders the record's
+/// value once per item, so a field with a few thousand distinct values turns
+/// the pass into tens of millions of number formatting calls.
 ///
-/// An axis filter names its field under the shared resolution rule
-/// (`resolve_field_by_any_name`); a name that resolves to nothing is skipped
-/// here because the public mutators already reject one on entry.
-bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record,
-                                 const PivotFilterEnv& env = PivotFilterEnv{});
+/// Built once, a record costs one hash lookup per field that hides something,
+/// and renders its label at most once per such field.
+///
+/// Borrows `table` and `cache`: neither may be destroyed, and `table` may not
+/// be mutated, while the filter is alive — the hidden-label set holds views
+/// into `PivotItem::name`.
+class PreparedRecordFilter {
+ public:
+  PreparedRecordFilter(const PivotTable& table, const PivotCache& cache, const PivotFilterEnv& env);
+
+  /// True iff `record` survives the manual `items[]` filter on every field
+  /// that hides something, AND the axis-level label / date filters in
+  /// `active_filters`, AND the authored `<filters>` entries decided per
+  /// record. An `items[]` list with nothing hidden matches every value (Excel
+  /// authors the list for any field it places on an axis, hidden items or
+  /// not).
+  ///
+  /// A hidden item normally matches records by its label. The blank item is
+  /// the exception: it has no label of its own, so it is matched by the cache
+  /// value it binds to (`shared_items[cache_index]`, the same binding
+  /// `resolve_pivot_names` reads) being blank. Identifying it by the
+  /// placeholder the grid draws instead would also hide any genuine text value
+  /// spelled the same way. An item that is unlabelled *and* binds to nothing
+  /// resolvable is malformed and filters nothing.
+  ///
+  /// An axis filter names its field under the shared resolution rule
+  /// (`resolve_field_by_any_name`); a name that resolves to nothing filters
+  /// nothing, because the public mutators already reject one on entry.
+  bool passes(const PivotCacheRecord& record) const;
+
+ private:
+  /// The labels one field hides, keyed for O(1) membership. `hides_blank` is
+  /// the unlabelled item's rule, resolved through its cache binding at build
+  /// time; an unlabelled item that binds to nothing resolvable is malformed
+  /// and contributes neither.
+  struct HiddenItems {
+    std::size_t field_index = 0;
+    std::unordered_set<std::string_view> labels;
+    bool hides_blank = false;
+  };
+
+  /// An `active_filters` entry whose field name already resolved. Entries
+  /// naming nothing are dropped at build time rather than re-resolved — and
+  /// re-failing — per record.
+  struct ResolvedFilter {
+    std::size_t field_index = 0;
+    const PivotFilter* filter = nullptr;
+  };
+
+  /// A relative-period entry with its window already resolved against the
+  /// clock reading the pass was built with.
+  struct ResolvedPeriod {
+    std::size_t field_index = 0;
+    DateWindow window;
+  };
+
+  const PivotCache* cache_ = nullptr;
+  const PivotTable* table_ = nullptr;
+  std::vector<HiddenItems> hidden_items_;
+  std::vector<ResolvedFilter> label_filters_;
+  std::vector<ResolvedPeriod> period_windows_;
+};
 
 /// Projects an authored `<filters>` value entry onto the `PivotFilter`
 /// shape the post-aggregation pass already consumes.
@@ -86,7 +142,7 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
 /// A file names only the field, so the axis is recovered here from that
 /// field's membership in `row_field_order()` / `col_field_order()`.
 /// Returns `nullopt` when the entry is not a value family (a date entry
-/// is applied pre-aggregation by `record_passes_manual_filter`) or when
+/// is applied pre-aggregation by `PreparedRecordFilter`) or when
 /// the field sits on neither axis, leaving nothing to prune.
 std::optional<PivotFilter> authored_value_filter_as_pivot_filter(const PivotTable& table,
                                                                  const AuthoredValueFilter& authored);

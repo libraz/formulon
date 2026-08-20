@@ -85,7 +85,7 @@ class PivotTable {
   // only for a table that never carried one.
   //
   // Selection is not a filter: a page field's hidden items already prune
-  // records through `record_passes_manual_filter`, which keys off
+  // records through `PreparedRecordFilter`, which keys off
   // `PivotField::items` on every axis alike. What this list adds is the
   // report order and the explicit single-item selection, neither of which
   // is recoverable from `<pivotFields>`.

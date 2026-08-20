@@ -9,6 +9,7 @@
 #include "pivot/pivot_evaluator.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -2430,6 +2431,186 @@ TEST(PivotEvaluator, LabelContainsFilterMatchesNumericItemLabel) {
   ASSERT_EQ(r.rows.size(), 1U);
   EXPECT_EQ(r.rows[0].label, "South");
   EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1e20);
+}
+
+// Excel authors an `items[]` list for every field it places on an axis, so the
+// list's presence says nothing about whether a filter is set. A list that hides
+// nothing must leave the result exactly as it was.
+TEST(PivotEvaluator, AnItemListThatHidesNothingDoesNotChangeTheResult) {
+  PivotCache cache = build_basic_cache();
+  PivotTable unfiltered = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  unfiltered.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  auto baseline_or = evaluate(unfiltered, cache);
+  ASSERT_TRUE(static_cast<bool>(baseline_or)) << baseline_or.error().message;
+
+  PivotTable listed = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  listed.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  // Far more items than the field has values, none of them hidden.
+  for (std::size_t i = 0; i < 500; ++i) {
+    listed.mutable_fields()[0].items.push_back(PivotItem{"item_" + std::to_string(i), /*visible=*/true});
+  }
+  listed.mutable_fields()[0].items.push_back(PivotItem{"North", /*visible=*/true});
+  listed.mutable_fields()[0].items.push_back(PivotItem{"South", /*visible=*/true});
+  auto listed_or = evaluate(listed, cache);
+  ASSERT_TRUE(static_cast<bool>(listed_or)) << listed_or.error().message;
+
+  const PivotResult& baseline = baseline_or.value();
+  const PivotResult& with_list = listed_or.value();
+  ASSERT_EQ(with_list.rows.size(), baseline.rows.size());
+  for (std::size_t i = 0; i < baseline.rows.size(); ++i) {
+    EXPECT_EQ(with_list.rows[i].label, baseline.rows[i].label);
+    EXPECT_DOUBLE_EQ(with_list.values[i][0][0].as_number(), baseline.values[i][0][0].as_number());
+  }
+}
+
+// One field can hide the blank and a named value at once. The two are decided
+// by different rules — the blank by the cache value its unlabelled item binds
+// to, a named item by the label the grid draws — so a field carrying both has
+// to apply both.
+TEST(PivotEvaluator, OneFieldHidesTheBlankAndANamedItemTogether) {
+  PivotCache cache = build_shared_region_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  PivotItem hidden_blank;
+  hidden_blank.visible = false;
+  hidden_blank.has_cache_index = true;
+  hidden_blank.cache_index = kSharedRegionBlank;
+  table.mutable_fields()[0].items.push_back(hidden_blank);
+  table.mutable_fields()[0].items.push_back(PivotItem{"North", /*visible=*/false});
+  resolve_pivot_names(table, cache);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Only the text value spelled like the placeholder survives.
+  const PivotLayoutOptions defaults;
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, defaults.blank_item_label);
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 7.0);
+}
+
+// The blank rule keys off the binding, not off the missing label: an unlabelled
+// hidden item bound to a value that is not blank hides nothing at all. A record
+// carrying that value stays, and so does a blank one.
+TEST(PivotEvaluator, AnUnlabelledHiddenItemBoundToAValueHidesNothing) {
+  PivotCache cache = build_shared_region_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  PivotItem unlabelled;
+  unlabelled.visible = false;
+  unlabelled.has_cache_index = true;
+  unlabelled.cache_index = 0U;  // "North", a value that renders to a label.
+  table.mutable_fields()[0].items.push_back(std::move(unlabelled));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // All three groups survive: the blank one, the text one spelled like the
+  // placeholder, and North. The first two draw the same label, so they are
+  // counted through the total rather than looked up by it.
+  ASSERT_EQ(r.rows.size(), 3U);
+  double total = 0.0;
+  for (std::size_t i = 0; i < r.rows.size(); ++i) {
+    total += r.values[i][0][0].as_number();
+  }
+  EXPECT_DOUBLE_EQ(total, 100.0 + 10.0 + 7.0);
+  EXPECT_DOUBLE_EQ(r.values[row_index(r, "North")][0][0].as_number(), 100.0);
+}
+
+// A hidden numeric item is matched by the label the grid draws for it, and that
+// stays true when the field's item list is long: the record's value is rendered
+// against the set of hidden labels, not against each item in turn.
+TEST(PivotEvaluator, ManualFilterMatchesANumericLabelAmongManyItems) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  // 2,000 visible numeric items the cache has no record for, plus the one that
+  // matches. Only the last one may prune anything.
+  for (std::size_t i = 1000; i < 3000; ++i) {
+    table.mutable_fields()[2].items.push_back(PivotItem{std::to_string(i), /*visible=*/true});
+  }
+  table.mutable_fields()[2].items.push_back(PivotItem{"300", /*visible=*/false});
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  const std::size_t south = row_index(r, "South");
+  ASSERT_NE(south, static_cast<std::size_t>(-1));
+  // South loses its 300 record and keeps the 200 one.
+  EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), 200.0);
+}
+
+// What a field hides is a property of the table, so deciding one record costs
+// one lookup per field that hides something — never one comparison per item.
+//
+// Pinned by comparing two evaluations that differ only in how long the item
+// list is. Both do the same hierarchy and aggregation work, so the difference
+// between them is the filter pass alone, and reading it as a ratio keeps the
+// assertion independent of how fast the host is. Matching each record against
+// each item would render every record's label once per item, which is three
+// orders of magnitude more work on the long list; building the hidden-label set
+// once is paid per table, so the two runs stay within a small factor.
+TEST(PivotEvaluator, ManualFilterCostDoesNotFollowTheItemListLength) {
+  constexpr std::size_t kRecords = 10000;
+
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Serial", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  for (std::size_t i = 0; i < kRecords; ++i) {
+    PivotCacheRecord rec;
+    // Non-integral so the label goes through the general numeric rendering.
+    rec.cells = {Value::number(static_cast<double>(i) + 0.25), Value::number(1.0)};
+    cache.mutable_records().push_back(std::move(rec));
+  }
+
+  // Every item is hidden and none of them names a value any record carries, so
+  // the item list prunes nothing however long it is.
+  const auto build = [](std::size_t item_count) {
+    PivotTable table;
+    table.set_pivot_cache_id(1);
+    PivotField serial_field;
+    serial_field.source_name = "Serial";
+    serial_field.axis = PivotAxis::Row;
+    for (std::size_t i = 0; i < item_count; ++i) {
+      serial_field.items.push_back(
+          PivotItem{display_string(Value::number(-static_cast<double>(i) - 0.5)), /*visible=*/false});
+    }
+    table.mutable_fields().push_back(std::move(serial_field));
+    PivotField amount_field;
+    amount_field.source_name = "Amount";
+    amount_field.axis = PivotAxis::Value;
+    table.mutable_fields().push_back(std::move(amount_field));
+    PivotDataField count;
+    count.name = "Count of Amount";
+    count.field_index = 1;
+    count.aggregation = Aggregation::Count;
+    table.mutable_data_fields().push_back(std::move(count));
+    table.mutable_row_field_order() = {0};
+    table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+    return table;
+  };
+  const PivotTable short_list = build(20);
+  const PivotTable long_list = build(20000);
+
+  const auto timed = [&](const PivotTable& table) {
+    const auto started = std::chrono::steady_clock::now();
+    auto r_or = evaluate(table, cache);
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    EXPECT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+    EXPECT_EQ(r_or.value().rows.size(), kRecords);
+    return seconds;
+  };
+  const double short_seconds = timed(short_list);
+  const double long_seconds = timed(long_list);
+
+  // The allowance is deliberately loose — a factor of ten plus half a second —
+  // because it is separating a constant from a thousandfold, not measuring the
+  // machine.
+  EXPECT_LT(long_seconds, short_seconds * 10.0 + 0.5)
+      << "short list " << short_seconds << "s, long list " << long_seconds << "s";
 }
 
 // ---------------------------------------------------------------------------
