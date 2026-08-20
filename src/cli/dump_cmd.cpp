@@ -8,6 +8,10 @@
 // Iteration order is sheet index ASC, then cell `(row, col)` ASC. The
 // C ABI's `fm_workbook_cell_at` enumerates cells in a stable order
 // matching this ordering, so the CLI does not need to sort here.
+//
+// Anything the load could not represent is warned about on stderr before
+// the snapshot is written, so a diff is never taken on a workbook that
+// quietly lost content.
 
 #include <cerrno>
 #include <cstddef>
@@ -21,6 +25,7 @@
 
 #include "c_api/formulon_c.h"
 #include "cli/cli.h"
+#include "cli/diagnostics.h"
 #include "cli/file_io.h"
 #include "cli/render.h"
 #include "utils/error.h"
@@ -222,10 +227,10 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
     if (!options_ended && (a == "-h" || a == "--help")) {
       print_dump_usage(out);
-      return 0;
+      return flush_output(out, err, "dump");
     }
     if (!options_ended && a == "--version") {
-      return print_version(out);
+      return print_version(out, err);
     }
     if (!options_ended && a == "--formulas") {
       if (!select_mode(DumpMode::kFormulas, a)) {
@@ -277,6 +282,14 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   WorkbookGuard wb;
   if (auto rc = fm_workbook_load(bytes.data(), bytes.size(), &wb.handle); rc != 0) {
+    emit_last_error(err, "dump");
+    return rc;
+  }
+
+  // A snapshot the user diffs against another snapshot has to say what the
+  // load could not carry across, or the diff is taken on a silently
+  // incomplete workbook.
+  if (auto rc = emit_read_diagnostics(wb.handle, err, "dump"); rc != 0) {
     emit_last_error(err, "dump");
     return rc;
   }

@@ -10,6 +10,7 @@
 
 #include "cli/cli.h"
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <sys/stat.h>
@@ -19,6 +20,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <ios>
 #include <iterator>
@@ -27,6 +29,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "cli/file_io.h"
 #include "io/defined_names.h"
 #include "io/format_detect.h"
 #include "support/ooxml_package_fixture.h"
@@ -65,6 +68,51 @@ std::string sh_quote(const std::string& s) {
   return out;
 }
 
+// Prefix every temp fixture in this file is built from.
+//
+// The paths are derived from the pid rather than fixed, so two runs of
+// this binary -- a `ctest -j` fan-out, or a rerun started while an
+// earlier one is still finishing -- never share a fixture and never fail
+// on each other's leftovers. `TMPDIR` is honoured where the platform
+// sets one, falling back to `/tmp`.
+const std::string& temp_prefix() {
+  static const std::string prefix = [] {
+    const char* configured = std::getenv("TMPDIR");
+    std::string dir = (configured != nullptr && configured[0] != '\0') ? configured : "/tmp";
+    if (dir.back() != '/') {
+      dir.push_back('/');
+    }
+    return dir + "fm_cli_" + std::to_string(::getpid()) + "_";
+  }();
+  return prefix;
+}
+
+// Absolute path of a temp fixture named `name`, unique to this process.
+std::string temp_path(std::string_view name) {
+  return temp_prefix() + std::string(name);
+}
+
+// Entries of `dir` excluding `.` and `..`, sorted so a comparison against
+// an expected listing is stable. An unreadable directory yields an empty
+// listing, which reads the same as "nothing was left behind" -- callers
+// that care assert on the readable case.
+std::vector<std::string> list_directory(const std::string& dir) {
+  std::vector<std::string> entries;
+  DIR* handle = ::opendir(dir.c_str());
+  if (handle == nullptr) {
+    return entries;
+  }
+  while (const dirent* entry = ::readdir(handle)) {
+    const std::string name(entry->d_name);
+    if (name != "." && name != "..") {
+      entries.push_back(name);
+    }
+  }
+  ::closedir(handle);
+  std::sort(entries.begin(), entries.end());
+  return entries;
+}
+
 // Spawns the CLI with `args` (each argument is sh-quoted before being
 // joined into a single command line). When `merge_streams` is true,
 // stderr is folded into stdout via `2>&1`; otherwise stderr is
@@ -81,8 +129,8 @@ CliRun run_cli(const std::vector<std::string>& args, bool merge_streams = false,
   // without ambiguity. The shell's `>` redirect is portable on macOS
   // and Linux. We append rather than truncate so the temp file is
   // self-contained per call.
-  char tmpl[] = "/tmp/fm_cli_stderr_XXXXXX";
-  const int fd = mkstemp(tmpl);
+  std::string tmpl = temp_path("stderr_XXXXXX");
+  const int fd = mkstemp(tmpl.data());
   if (fd < 0) {
     out.exit_code = -2;
     return out;
@@ -101,7 +149,7 @@ CliRun run_cli(const std::vector<std::string>& args, bool merge_streams = false,
   FILE* pipe = popen(cmd.c_str(), "r");
   if (pipe == nullptr) {
     out.exit_code = -3;
-    std::remove(tmpl);
+    std::remove(tmpl.c_str());
     return out;
   }
   char buf[4096];
@@ -128,7 +176,7 @@ CliRun run_cli(const std::vector<std::string>& args, bool merge_streams = false,
       }
     }
   }
-  std::remove(tmpl);
+  std::remove(tmpl.c_str());
   return out;
 }
 
@@ -145,6 +193,66 @@ struct PathGuard {
     }
   }
 };
+
+// Removes a directory and its contents on destruction, restoring write
+// permission first.
+//
+// Tests that make a directory unwritable have to put it back on every
+// exit path, not just the one where all the assertions passed: a failed
+// `ASSERT_*` returns from the middle of the test, and a mode-0500
+// directory with a file inside would then survive to the next run and
+// make it fail during setup instead of at the behaviour under test.
+struct DirGuard {
+  std::string path;
+  explicit DirGuard(std::string p) : path(std::move(p)) {}
+  DirGuard(const DirGuard&) = delete;
+  DirGuard& operator=(const DirGuard&) = delete;
+  ~DirGuard() {
+    ::chmod(path.c_str(), 0700);
+    for (const std::string& entry : list_directory(path)) {
+      const std::string full = path + "/" + entry;
+      if (std::remove(full.c_str()) != 0) {
+        ::rmdir(full.c_str());
+      }
+    }
+    ::rmdir(path.c_str());
+  }
+};
+
+// The load-diagnostic warning lines in `text`, with the
+// `formulon: <subcommand>: ` prefix stripped so reports emitted by
+// different subcommands compare equal. Save-side warnings are left out:
+// only the command that writes a workbook produces those.
+std::vector<std::string> read_diagnostic_lines(const std::string& text) {
+  std::vector<std::string> lines;
+  std::size_t start = 0;
+  while (start < text.size()) {
+    const std::size_t end = text.find('\n', start);
+    const std::string line = text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+    const std::size_t marker = line.find("warning: ");
+    if (marker != std::string::npos && line.find("read diagnostics") != std::string::npos) {
+      lines.push_back(line.substr(marker));
+    }
+    if (end == std::string::npos) {
+      break;
+    }
+    start = end + 1;
+  }
+  return lines;
+}
+
+// Number of descriptors this process currently holds open. Only the
+// delta across a call matters, so scanning a fixed low range is enough:
+// the tests below open a handful of files and never approach the cap.
+int open_descriptor_count() {
+  int count = 0;
+  for (int fd = 0; fd < 256; ++fd) {
+    if (::fcntl(fd, F_GETFD) != -1) {
+      ++count;
+    }
+  }
+  return count;
+}
 
 // Builds a tiny `.xlsx` workbook in memory via the C ABI and writes
 // it to `path`. Used by `recalc` and `dump` tests that need a fixture
@@ -432,6 +540,29 @@ TEST(FormulonCli, HelpExitsZero) {
   EXPECT_NE(r.stdout_text.find("Usage"), std::string::npos);
 }
 
+TEST(FormulonCli, VersionAndHelpFailWhenTheirOutputCannotBeWritten) {
+  // A release script doing `ver=$(formulon --version)` must not be handed
+  // an empty string with a success status, so the version and usage
+  // banners go through the same flush check `dump` and `eval` use for
+  // their results.
+  for (const char* flag : {"--version", "--help"}) {
+    CliRun r = run_cli({flag}, /*merge_streams=*/false, /*close_stdout=*/true);
+    EXPECT_EQ(r.exit_code, 1) << flag;
+    EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos) << flag << " stderr=" << r.stderr_text;
+  }
+}
+
+TEST(FormulonCli, SubcommandVersionAndHelpFailWhenTheirOutputCannotBeWritten) {
+  for (const char* subcommand : {"eval", "recalc", "dump", "paginate"}) {
+    for (const char* flag : {"--version", "--help"}) {
+      CliRun r = run_cli({subcommand, flag}, /*merge_streams=*/false, /*close_stdout=*/true);
+      EXPECT_EQ(r.exit_code, 1) << subcommand << ' ' << flag;
+      EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos)
+          << subcommand << ' ' << flag << " stderr=" << r.stderr_text;
+    }
+  }
+}
+
 TEST(FormulonCli, VersionIsAcceptedBySubcommandsLikeHelp) {
   // The usage banner lists `--version` under the same "Common options"
   // heading as `-h`, so every subcommand must accept it and print the
@@ -456,7 +587,7 @@ TEST(FormulonCli, RecalcHelpDocumentsActualSuccessStatus) {
 }
 
 TEST(FormulonCli, PaginatePrintsResolvedGeometry) {
-  const std::string path = "/tmp/fm_cli_paginate.xlsx";
+  const std::string path = temp_path("paginate.xlsx");
   PathGuard guard(path);
   ASSERT_TRUE(write_fixture_workbook(path));
 
@@ -466,7 +597,7 @@ TEST(FormulonCli, PaginatePrintsResolvedGeometry) {
 }
 
 TEST(FormulonCli, PaginateWriteFailureReturnsOutputError) {
-  const std::string path = "/tmp/fm_cli_paginate_write_failure.xlsx";
+  const std::string path = temp_path("paginate_write_failure.xlsx");
   PathGuard guard(path);
   ASSERT_TRUE(write_fixture_workbook(path));
 
@@ -523,11 +654,38 @@ TEST(FormulonCli, EvalCellLevelErrorIsStillExitZero) {
   EXPECT_EQ(r.stdout_text, "1\n");
 }
 
-TEST(FormulonCli, EvalSyntaxErrorFailsInsteadOfReturningNameError) {
+TEST(FormulonCli, EvalMalformedSyntaxYieldsTheSameNameErrorEveryBindingReturns) {
+  // The ad-hoc evaluator resolves a parser recovery placeholder to a
+  // cell-level `#NAME?`. That is what the WASM, Node and Python bindings
+  // return over the same C ABI entry point, so the CLI returns it too:
+  // a formula prototyped here has to behave identically when it is moved
+  // into a script driving one of the other surfaces.
+  for (const char* formula : {"=1+", "=1+*2"}) {
+    CliRun r = run_cli({"eval", formula});
+    EXPECT_EQ(r.exit_code, 0) << formula << " stderr=" << r.stderr_text;
+    EXPECT_EQ(r.stdout_text, "#NAME?\n") << formula;
+  }
+}
+
+TEST(FormulonCli, EvalMalformedSyntaxMatchesTheAdHocCApiEntryPoint) {
+  // Same formula, same C ABI call the CLI makes, in-process: a future
+  // pre-parse gate on either side would break this comparison.
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_create_empty(&wb), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb, "Sheet1"), 0);
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb, 0, 0, 0, "=1+", &rows, &cols), 0);
+  EXPECT_EQ(rows, 1U);
+  EXPECT_EQ(cols, 1U);
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb, 0, &value), 0);
+  EXPECT_EQ(value.kind, FM_VAL_ERROR);
+  fm_workbook_destroy(wb);
+
   CliRun r = run_cli({"eval", "=1+"});
-  EXPECT_EQ(r.exit_code, 1);
-  EXPECT_TRUE(r.stdout_text.empty());
-  EXPECT_NE(r.stderr_text.find("invalid formula syntax"), std::string::npos);
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "#NAME?\n");
 }
 
 TEST(FormulonCli, EvalUnknownFunctionRemainsCellLevelNameError) {
@@ -540,6 +698,38 @@ TEST(FormulonCli, EvalDynamicArrayPrintsWholeGrid) {
   CliRun r = run_cli({"eval", "=SEQUENCE(2,3)"});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   EXPECT_EQ(r.stdout_text, "1\t2\t3\n4\t5\t6\n");
+}
+
+TEST(FormulonCli, EvalPlainGridKeepsItsShapeWhenCellsCarryTabsAndNewlines) {
+  // Plain output is a TAB-separated grid, so a cell holding a TAB or a
+  // newline would add fields and rows that a `cut`/`awk`/TSV consumer
+  // reads as real ones. Exactly `rows` lines of `cols` fields must
+  // survive any payload.
+  CliRun r = run_cli({"eval", "=HSTACK(CHAR(9),CHAR(10),\"tail\")"});
+  ASSERT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "\\t\t\\n\ttail\n");
+
+  const auto field_count = [](const std::string& line) {
+    return 1 + static_cast<int>(std::count(line.begin(), line.end(), '\t'));
+  };
+  std::vector<std::string> lines;
+  for (std::size_t start = 0; start < r.stdout_text.size();) {
+    const std::size_t end = r.stdout_text.find('\n', start);
+    ASSERT_NE(end, std::string::npos) << "grid output must be newline-terminated";
+    lines.push_back(r.stdout_text.substr(start, end - start));
+    start = end + 1;
+  }
+  ASSERT_EQ(lines.size(), 1U);
+  EXPECT_EQ(field_count(lines[0]), 3);
+}
+
+TEST(FormulonCli, EvalPlainGridEscapesMultiRowPayloadsToo) {
+  // The two-row case pins the row count as well: an unescaped newline in
+  // the first row would make the result look like three rows.
+  CliRun r = run_cli({"eval", "=VSTACK(HSTACK(CHAR(10),1),HSTACK(2,3))"});
+  ASSERT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "\\n\t1\n2\t3\n");
+  EXPECT_EQ(std::count(r.stdout_text.begin(), r.stdout_text.end(), '\n'), 2);
 }
 
 TEST(FormulonCli, EvalDynamicArrayJsonPrintsNestedArrays) {
@@ -594,6 +784,28 @@ TEST(FormulonCli, EvalRepeatRunsMultipleTimes) {
   EXPECT_NE(r.stderr_text.find("3 iterations"), std::string::npos);
 }
 
+TEST(FormulonCli, EvalRepeatReportsTimingForEveryAcceptedCount) {
+  // `--repeat` is an explicit request to measure. Every count the flag
+  // accepts gets the report, including the smallest one -- a user timing
+  // a single evaluation must not be answered with silence and status 0.
+  for (const char* count : {"1", "2", "5"}) {
+    CliRun r = run_cli({"eval", "--repeat", count, "=1"});
+    EXPECT_EQ(r.exit_code, 0) << count << " stderr=" << r.stderr_text;
+    EXPECT_EQ(r.stdout_text, "1\n") << count;
+    EXPECT_NE(r.stderr_text.find(std::string(count) + " iterations in"), std::string::npos)
+        << count << " stderr=" << r.stderr_text;
+  }
+}
+
+TEST(FormulonCli, EvalWithoutRepeatFlagReportsNoTiming) {
+  // Only the default single evaluation is silent, and it stays silent
+  // even though it runs the same one pass `--repeat 1` runs.
+  CliRun r = run_cli({"eval", "=1"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "1\n");
+  EXPECT_EQ(r.stderr_text.find("iterations"), std::string::npos) << "stderr=" << r.stderr_text;
+}
+
 TEST(FormulonCli, EvalWriteFailureReturnsOutputError) {
   CliRun r = run_cli({"eval", "=SUM(1,2,3)"}, /*merge_streams=*/false, /*close_stdout=*/true);
   EXPECT_EQ(r.exit_code, 1);
@@ -629,8 +841,8 @@ TEST(FormulonCli, EvalRepeatHighCountStillCorrect) {
 
 TEST(FormulonCli, RecalcRoundTripsFormulae) {
   // Build a fixture in /tmp.
-  std::string in = "/tmp/fm_cli_in.xlsx";
-  std::string out_path = "/tmp/fm_cli_out.xlsx";
+  std::string in = temp_path("in.xlsx");
+  std::string out_path = temp_path("out.xlsx");
   PathGuard g_in(in);
   PathGuard g_out(out_path);
   ASSERT_TRUE(write_fixture_workbook(in));
@@ -662,8 +874,8 @@ TEST(FormulonCli, RecalcRoundTripsFormulae) {
 }
 
 TEST(FormulonCli, RecalcWithoutThreadsKeepsSerialStatusShape) {
-  const std::string input = "/tmp/fm_cli_default_recalc_input.xlsx";
-  const std::string output = "/tmp/fm_cli_default_recalc_output.xlsx";
+  const std::string input = temp_path("default_recalc_input.xlsx");
+  const std::string output = temp_path("default_recalc_output.xlsx");
   PathGuard input_guard(input);
   PathGuard output_guard(output);
   ASSERT_TRUE(write_fixture_workbook(input));
@@ -676,8 +888,8 @@ TEST(FormulonCli, RecalcWithoutThreadsKeepsSerialStatusShape) {
 }
 
 TEST(FormulonCli, RecalcThreadsUsesParallelSchedulerAndSavesWideDag) {
-  const std::string input = "/tmp/fm_cli_parallel_recalc_input.xlsx";
-  const std::string output = "/tmp/fm_cli_parallel_recalc_output.xlsx";
+  const std::string input = temp_path("parallel_recalc_input.xlsx");
+  const std::string output = temp_path("parallel_recalc_output.xlsx");
   PathGuard input_guard(input);
   PathGuard output_guard(output);
   ASSERT_TRUE(write_wide_recalc_fixture(input));
@@ -706,8 +918,8 @@ TEST(FormulonCli, RecalcThreadsUsesParallelSchedulerAndSavesWideDag) {
 }
 
 TEST(FormulonCli, RecalcThreadsOneStartsNoWorkers) {
-  const std::string input = "/tmp/fm_cli_serial_threads_input.xlsx";
-  const std::string output = "/tmp/fm_cli_serial_threads_output.xlsx";
+  const std::string input = temp_path("serial_threads_input.xlsx");
+  const std::string output = temp_path("serial_threads_output.xlsx");
   PathGuard input_guard(input);
   PathGuard output_guard(output);
   ASSERT_TRUE(write_fixture_workbook(input));
@@ -720,8 +932,8 @@ TEST(FormulonCli, RecalcThreadsOneStartsNoWorkers) {
 }
 
 TEST(FormulonCli, RecalcThreadsRejectsInvalidValuesBeforeWriting) {
-  const std::string input = "/tmp/fm_cli_invalid_threads_input.xlsx";
-  const std::string output = "/tmp/fm_cli_invalid_threads_output.xlsx";
+  const std::string input = temp_path("invalid_threads_input.xlsx");
+  const std::string output = temp_path("invalid_threads_output.xlsx");
   PathGuard input_guard(input);
   PathGuard output_guard(output);
   ASSERT_TRUE(write_fixture_workbook(input));
@@ -737,8 +949,8 @@ TEST(FormulonCli, RecalcThreadsRejectsInvalidValuesBeforeWriting) {
 }
 
 TEST(FormulonCli, RecalcLossWarningsAreNonfatalAndNotSuppressedByQuiet) {
-  const std::string input = "/tmp/fm_cli_lossy_input.xlsx";
-  const std::string output = "/tmp/fm_cli_lossy_output.xlsb";
+  const std::string input = temp_path("lossy_input.xlsx");
+  const std::string output = temp_path("lossy_output.xlsb");
   PathGuard input_guard(input);
   PathGuard output_guard(output);
   ASSERT_TRUE(write_lossy_xlsx_fixture(input));
@@ -752,8 +964,8 @@ TEST(FormulonCli, RecalcLossWarningsAreNonfatalAndNotSuppressedByQuiet) {
 }
 
 TEST(FormulonCli, RecalcReportsOoxmlReadDiagnosticsSeparatelyFromXlsbOnes) {
-  const std::string input = "/tmp/fm_cli_lossy_ooxml_input.xlsx";
-  const std::string output = "/tmp/fm_cli_lossy_ooxml_output.xlsx";
+  const std::string input = temp_path("lossy_ooxml_input.xlsx");
+  const std::string output = temp_path("lossy_ooxml_output.xlsx");
   PathGuard input_guard(input);
   PathGuard output_guard(output);
   ASSERT_TRUE(write_lossy_ooxml_fixture(input));
@@ -771,8 +983,8 @@ TEST(FormulonCli, RecalcReportsOoxmlReadDiagnosticsSeparatelyFromXlsbOnes) {
 }
 
 TEST(FormulonCli, RecalcDroppedPartWarningIsNonfatalAndQuietStillReportsIt) {
-  const std::string input = "/tmp/fm_cli_dropped_input.xlsb";
-  const std::string output = "/tmp/fm_cli_dropped_output.xlsx";
+  const std::string input = temp_path("dropped_input.xlsb");
+  const std::string output = temp_path("dropped_output.xlsx");
   PathGuard input_guard(input);
   PathGuard output_guard(output);
   ASSERT_TRUE(write_dropped_xlsb_fixture(input));
@@ -783,11 +995,60 @@ TEST(FormulonCli, RecalcDroppedPartWarningIsNonfatalAndQuietStillReportsIt) {
   EXPECT_NE(r.stderr_text.find("warning: XLSB read diagnostics"), std::string::npos);
 }
 
+TEST(FormulonCli, DumpAndPaginateReportLoadLossesTheWayRecalcDoes) {
+  // Whoever reads a `dump` snapshot or a `paginate` geometry treats it as
+  // a faithful account of the input file, so both have to say what the
+  // load could not carry across -- in the same words `recalc` uses, since
+  // the counters come from one emitter.
+  const std::string ooxml = temp_path("shared_read_diag_ooxml.xlsx");
+  const std::string xlsb = temp_path("shared_read_diag.xlsb");
+  const std::string recalc_output = temp_path("shared_read_diag_out.xlsx");
+  PathGuard g_ooxml(ooxml);
+  PathGuard g_xlsb(xlsb);
+  PathGuard g_output(recalc_output);
+  ASSERT_TRUE(write_lossy_ooxml_fixture(ooxml));
+  ASSERT_TRUE(write_dropped_xlsb_fixture(xlsb));
+
+  for (const std::string& fixture : {ooxml, xlsb}) {
+    const CliRun recalc = run_cli({"recalc", "--quiet", fixture, "-o", recalc_output});
+    ASSERT_EQ(recalc.exit_code, 0) << fixture << " stderr=" << recalc.stderr_text;
+    const std::vector<std::string> expected = read_diagnostic_lines(recalc.stderr_text);
+    ASSERT_FALSE(expected.empty()) << "fixture loads losslessly: " << fixture;
+
+    const CliRun dump = run_cli({"dump", "--sheets", fixture});
+    EXPECT_EQ(dump.exit_code, 0) << fixture << " stderr=" << dump.stderr_text;
+    EXPECT_EQ(read_diagnostic_lines(dump.stderr_text), expected) << fixture;
+    EXPECT_NE(dump.stderr_text.find("formulon: dump: warning:"), std::string::npos) << dump.stderr_text;
+
+    const CliRun paginate = run_cli({"paginate", fixture});
+    EXPECT_EQ(paginate.exit_code, 0) << fixture << " stderr=" << paginate.stderr_text;
+    EXPECT_EQ(read_diagnostic_lines(paginate.stderr_text), expected) << fixture;
+    EXPECT_NE(paginate.stderr_text.find("formulon: paginate: warning:"), std::string::npos) << paginate.stderr_text;
+  }
+}
+
+TEST(FormulonCli, DumpReportsUndecodedCountsBeforeItsSnapshot) {
+  // The warning has to precede the snapshot on the wire, not trail it:
+  // a user piping stdout into `diff` still needs to see the caveat while
+  // the comparison is being set up.
+  const std::string fixture = temp_path("dump_read_diag.xlsb");
+  PathGuard guard(fixture);
+  ASSERT_TRUE(write_dropped_xlsb_fixture(fixture));
+
+  const CliRun merged = run_cli({"dump", "--sheets", fixture}, /*merge_streams=*/true);
+  ASSERT_EQ(merged.exit_code, 0) << merged.stdout_text;
+  const std::size_t warning = merged.stdout_text.find("undecoded_part_count=1");
+  const std::size_t snapshot = merged.stdout_text.find("Sheet1");
+  ASSERT_NE(warning, std::string::npos) << merged.stdout_text;
+  ASSERT_NE(snapshot, std::string::npos) << merged.stdout_text;
+  EXPECT_LT(warning, snapshot);
+}
+
 TEST(FormulonCli, RecalcInPlaceOverwritesSamePathAndLeavesNoTemp) {
   // Input and output are the same path: the atomic write must serialize the
   // recalculated workbook fully before replacing the original, and must not
   // leave its sibling temp file behind on success.
-  std::string path = "/tmp/fm_cli_inplace.xlsx";
+  std::string path = temp_path("inplace.xlsx");
   std::string tmp_sidecar = path + ".formulon-tmp";
   PathGuard g_path(path);
   PathGuard g_tmp(tmp_sidecar);
@@ -824,8 +1085,8 @@ TEST(FormulonCli, RecalcInPlaceOverwritesSamePathAndLeavesNoTemp) {
 }
 
 TEST(FormulonCli, RecalcDoesNotReusePredictableLegacyTempPath) {
-  const std::string input = "/tmp/fm_cli_safe_temp_in.xlsx";
-  const std::string output = "/tmp/fm_cli_safe_temp_out.xlsx";
+  const std::string input = temp_path("safe_temp_in.xlsx");
+  const std::string output = temp_path("safe_temp_out.xlsx");
   const std::string legacy_temp = output + ".formulon-tmp";
   PathGuard g_input(input);
   PathGuard g_output(output);
@@ -851,9 +1112,9 @@ TEST(FormulonCli, RecalcThroughSymlinkUpdatesTargetAndKeepsLink) {
   // rename onto the link path would replace the link with a regular
   // file and leave the real workbook holding stale values -- the same
   // silent-loss shape the atomic write exists to prevent.
-  const std::string input = "/tmp/fm_cli_symlink_in.xlsx";
-  const std::string target = "/tmp/fm_cli_symlink_target.xlsx";
-  const std::string link = "/tmp/fm_cli_symlink_link.xlsx";
+  const std::string input = temp_path("symlink_in.xlsx");
+  const std::string target = temp_path("symlink_target.xlsx");
+  const std::string link = temp_path("symlink_link.xlsx");
   PathGuard g_input(input);
   PathGuard g_target(target);
   PathGuard g_link(link);
@@ -886,13 +1147,13 @@ TEST(FormulonCli, RecalcThroughSymlinkUpdatesTargetAndKeepsLink) {
 TEST(FormulonCli, RecalcDanglingSymlinkIsReplacedInPlace) {
   // A link with no target has nothing to preserve, so the write lands
   // on the link path itself rather than failing.
-  const std::string input = "/tmp/fm_cli_dangling_in.xlsx";
-  const std::string link = "/tmp/fm_cli_dangling_link.xlsx";
+  const std::string input = temp_path("dangling_in.xlsx");
+  const std::string link = temp_path("dangling_link.xlsx");
   PathGuard g_input(input);
   PathGuard g_link(link);
   ASSERT_TRUE(write_fixture_workbook(input));
   std::remove(link.c_str());
-  ASSERT_EQ(::symlink("/tmp/fm_cli_dangling_absent.xlsx", link.c_str()), 0);
+  ASSERT_EQ(::symlink(temp_path("dangling_absent.xlsx").c_str(), link.c_str()), 0);
 
   CliRun r = run_cli({"recalc", input, "-o", link, "--quiet"});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
@@ -906,13 +1167,13 @@ TEST(FormulonCli, RecalcLeavesOutputIntactWhenTheWriteCannotStart) {
   // Stand-in for a disk-full failure: an unwritable directory makes the
   // temp file impossible to create. The pre-existing output must be left
   // exactly as it was, with no partial content and no sidecar.
-  const std::string dir = "/tmp/fm_cli_readonly_dir";
-  const std::string input = "/tmp/fm_cli_readonly_in.xlsx";
+  const std::string dir = temp_path("readonly_dir");
+  const std::string input = temp_path("readonly_in.xlsx");
   const std::string output = dir + "/out.xlsx";
   PathGuard g_input(input);
   ASSERT_TRUE(write_fixture_workbook(input));
-  ::rmdir(dir.c_str());
-  ASSERT_EQ(::mkdir(dir.c_str(), 0700), 0);
+  ASSERT_EQ(::mkdir(dir.c_str(), 0700), 0) << dir << ": " << std::strerror(errno);
+  DirGuard g_dir(dir);
   ASSERT_TRUE(write_fixture_workbook(output));
 
   std::vector<std::uint8_t> before;
@@ -927,7 +1188,8 @@ TEST(FormulonCli, RecalcLeavesOutputIntactWhenTheWriteCannotStart) {
   CliRun r = run_cli({"recalc", input, "-o", output, "--quiet"});
   EXPECT_NE(r.exit_code, 0) << "write into an unwritable directory should fail";
 
-  // Restore write permission so the fixture can be inspected and removed.
+  // Restore write permission so the fixture can be inspected; `g_dir`
+  // removes it either way.
   ASSERT_EQ(::chmod(dir.c_str(), 0700), 0);
   std::vector<std::uint8_t> after;
   {
@@ -937,13 +1199,15 @@ TEST(FormulonCli, RecalcLeavesOutputIntactWhenTheWriteCannotStart) {
   }
   EXPECT_EQ(before, after) << "existing output was modified by a failed write";
 
-  std::remove(output.c_str());
-  ::rmdir(dir.c_str());
+  // "Unchanged" covers the whole directory, not just the output's bytes:
+  // a sidecar the failed write forgot to clean up would still be sitting
+  // next to it.
+  EXPECT_EQ(list_directory(dir), std::vector<std::string>{"out.xlsx"});
 }
 
 TEST(FormulonCli, RecalcPreservesExistingOutputPermissions) {
-  std::string in = "/tmp/fm_cli_mode_in.xlsx";
-  std::string out_path = "/tmp/fm_cli_mode_out.xlsx";
+  std::string in = temp_path("mode_in.xlsx");
+  std::string out_path = temp_path("mode_out.xlsx");
   PathGuard g_in(in);
   PathGuard g_out(out_path);
   ASSERT_TRUE(write_fixture_workbook(in));
@@ -963,9 +1227,9 @@ TEST(FormulonCli, RecalcCreatesNewOutputWithUmaskDefaultPermissions) {
   // creation would produce, not the private mode the atomic-write
   // temporary is created with. The reference file below is created the
   // ordinary way, so the expectation follows whatever umask is in effect.
-  std::string in = "/tmp/fm_cli_newmode_in.xlsx";
-  std::string out_path = "/tmp/fm_cli_newmode_out.xlsx";
-  std::string reference = "/tmp/fm_cli_newmode_reference";
+  std::string in = temp_path("newmode_in.xlsx");
+  std::string out_path = temp_path("newmode_out.xlsx");
+  std::string reference = temp_path("newmode_reference");
   PathGuard g_in(in);
   PathGuard g_out(out_path);
   PathGuard g_reference(reference);
@@ -996,8 +1260,8 @@ TEST(FormulonCli, RecalcCreatesNewOutputWithUmaskDefaultPermissions) {
 }
 
 TEST(FormulonCli, RecalcIterativePreservesExistingIterationSettings) {
-  std::string in = "/tmp/fm_cli_iterative_in.xlsx";
-  std::string out_path = "/tmp/fm_cli_iterative_out.xlsx";
+  std::string in = temp_path("iterative_in.xlsx");
+  std::string out_path = temp_path("iterative_out.xlsx");
   PathGuard g_in(in);
   PathGuard g_out(out_path);
   ASSERT_TRUE(write_fixture_workbook(in, {}, /*iterative=*/true, /*max_iterations=*/500, /*max_change=*/0.01));
@@ -1029,8 +1293,8 @@ TEST(FormulonCli, RecalcIterativePreservesExistingIterationSettings) {
 TEST(FormulonCli, RecalcXlsbOutputExtensionWritesXlsbContainer) {
   // `-o out.xlsb` must select the MS-XLSB writer, not silently emit an
   // OOXML package under an `.xlsb` name.
-  std::string in = "/tmp/fm_cli_in_for_xlsb.xlsx";
-  std::string out_path = "/tmp/fm_cli_out.xlsb";
+  std::string in = temp_path("in_for_xlsb.xlsx");
+  std::string out_path = temp_path("out.xlsb");
   PathGuard g_in(in);
   PathGuard g_out(out_path);
   ASSERT_TRUE(write_fixture_workbook(in));
@@ -1064,20 +1328,39 @@ TEST(FormulonCli, RecalcXlsbOutputExtensionWritesXlsbContainer) {
 }
 
 TEST(FormulonCli, RecalcMissingOutputExits64) {
-  std::string in = "/tmp/fm_cli_in_missing_o.xlsx";
+  std::string in = temp_path("in_missing_o.xlsx");
   PathGuard g_in(in);
   ASSERT_TRUE(write_fixture_workbook(in));
   CliRun r = run_cli({"recalc", in});
   EXPECT_EQ(r.exit_code, 64);
 }
 
+TEST(FormulonCli, RecalcEmptyOutputPathIsDiagnosedApartFromAMissingOne) {
+  // `-o "$OUT"` with an unset variable supplies the flag and an empty
+  // value. Reporting that as a missing flag sends the user looking at the
+  // wrong line of their script, so the two states get their own wording.
+  std::string in = temp_path("empty_output_flag.xlsx");
+  PathGuard g_in(in);
+  ASSERT_TRUE(write_fixture_workbook(in));
+
+  CliRun empty = run_cli({"recalc", in, "-o", ""});
+  EXPECT_EQ(empty.exit_code, 64);
+  EXPECT_NE(empty.stderr_text.find("non-empty path"), std::string::npos) << empty.stderr_text;
+
+  CliRun missing = run_cli({"recalc", in});
+  EXPECT_EQ(missing.exit_code, 64);
+  EXPECT_NE(missing.stderr_text.find("missing -o/--output"), std::string::npos) << missing.stderr_text;
+
+  EXPECT_NE(empty.stderr_text, missing.stderr_text);
+}
+
 TEST(FormulonCli, RecalcMissingInputExits64) {
-  CliRun r = run_cli({"recalc", "-o", "/tmp/fm_cli_unused.xlsx"});
+  CliRun r = run_cli({"recalc", "-o", temp_path("unused.xlsx")});
   EXPECT_EQ(r.exit_code, 64);
 }
 
 TEST(FormulonCli, RecalcNonexistentFileFailsCleanly) {
-  CliRun r = run_cli({"recalc", "/tmp/this_path_does_not_exist_abc123.xlsx", "-o", "/tmp/fm_cli_unused.xlsx"});
+  CliRun r = run_cli({"recalc", temp_path("absent_input.xlsx"), "-o", temp_path("unused.xlsx")});
   EXPECT_EQ(r.exit_code, 1);
   EXPECT_EQ(r.stderr_text.find("warning:"), std::string::npos);
 }
@@ -1147,7 +1430,7 @@ TEST(FormulonCli, RecalcAcceptsDoubleDashAsOutputPathValue) {
 }
 
 TEST(FormulonCli, OptionTerminatorRequiresExactlyOnePositional) {
-  const std::string output = "/tmp/fm_cli_terminator_recalc_output.xlsx";
+  const std::string output = temp_path("terminator_recalc_output.xlsx");
   PathGuard output_guard(output);
 
   for (const std::vector<std::string>& args : {
@@ -1184,7 +1467,7 @@ TEST(FormulonCli, OptionTerminatorRequiresExactlyOnePositional) {
 // ---------------------------------------------------------------------------
 
 TEST(FormulonCli, DumpSheetsListsInOrder) {
-  std::string in = "/tmp/fm_cli_dump_sheets.xlsx";
+  std::string in = temp_path("dump_sheets.xlsx");
   PathGuard g_in(in);
   ASSERT_TRUE(write_fixture_workbook(in));
   CliRun r = run_cli({"dump", "--sheets", in});
@@ -1193,7 +1476,7 @@ TEST(FormulonCli, DumpSheetsListsInOrder) {
 }
 
 TEST(FormulonCli, DumpFormulasListsFormulaCells) {
-  std::string in = "/tmp/fm_cli_dump_formulas.xlsx";
+  std::string in = temp_path("dump_formulas.xlsx");
   PathGuard g_in(in);
   ASSERT_TRUE(write_fixture_workbook(in));
   CliRun r = run_cli({"dump", "--formulas", in});
@@ -1204,7 +1487,7 @@ TEST(FormulonCli, DumpFormulasListsFormulaCells) {
 }
 
 TEST(FormulonCli, DumpMetadataPrintsSectionHeaders) {
-  std::string in = "/tmp/fm_cli_dump_metadata.xlsx";
+  std::string in = temp_path("dump_metadata.xlsx");
   PathGuard g_in(in);
   ASSERT_TRUE(write_fixture_workbook(in));
   CliRun r = run_cli({"dump", "--metadata", in});
@@ -1215,7 +1498,7 @@ TEST(FormulonCli, DumpMetadataPrintsSectionHeaders) {
 }
 
 TEST(FormulonCli, DumpWriteFailureReturnsOutputError) {
-  std::string in = "/tmp/fm_cli_dump_write_failure.xlsx";
+  std::string in = temp_path("dump_write_failure.xlsx");
   PathGuard guard(in);
   ASSERT_TRUE(write_fixture_workbook(in));
   CliRun r = run_cli({"dump", "--sheets", in}, /*merge_streams=*/false, /*close_stdout=*/true);
@@ -1224,7 +1507,7 @@ TEST(FormulonCli, DumpWriteFailureReturnsOutputError) {
 }
 
 TEST(FormulonCli, DumpValuesEscapesEmbeddedNewlines) {
-  std::string in = "/tmp/fm_cli_dump_escaped.xlsx";
+  std::string in = temp_path("dump_escaped.xlsx");
   PathGuard guard(in);
   ASSERT_TRUE(write_fixture_workbook(in, "first\nsecond"));
   CliRun r = run_cli({"dump", "--values", in});
@@ -1274,7 +1557,7 @@ TEST(FormulonCli, SecondLiteralTerminatorIsAnExtraPositional) {
 }
 
 TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
-  std::string in = "/tmp/fm_cli_dump_metadata_scoped.xlsx";
+  std::string in = temp_path("dump_metadata_scoped.xlsx");
   PathGuard g_in(in);
 
   fm_workbook_t* wb = nullptr;
@@ -1302,7 +1585,7 @@ TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
 }
 
 TEST(FormulonCli, DumpMetadataRecoversFromOutOfRangeDefinedNameScope) {
-  std::string in = "/tmp/fm_cli_dump_metadata_out_of_range_scope.xlsx";
+  std::string in = temp_path("dump_metadata_out_of_range_scope.xlsx");
   PathGuard guard(in);
   ASSERT_TRUE(write_out_of_range_defined_names_fixture(in));
 
@@ -1340,6 +1623,57 @@ TEST(FormulonCli, PaginatePostTerminatorHelpIsAnInputPath) {
   EXPECT_EQ(result.exit_code, 1);
   EXPECT_TRUE(result.stdout_text.empty());
   EXPECT_NE(result.stderr_text.find("cannot read"), std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// file_io
+//
+// Called in-process rather than through the binary: a descriptor leak is
+// invisible from outside a one-shot process that exits straight after the
+// write.
+// ---------------------------------------------------------------------------
+
+TEST(FormulonCliFileIo, AtomicWriteLeavesNoDescriptorOrTemporaryBehind) {
+  const std::string dir = temp_path("atomic_write_dir");
+  ASSERT_EQ(::mkdir(dir.c_str(), 0700), 0) << dir << ": " << std::strerror(errno);
+  DirGuard guard(dir);
+  const std::string output = dir + "/out.bin";
+  const std::vector<std::uint8_t> payload{'f', 'o', 'r', 'm'};
+
+  const int baseline = open_descriptor_count();
+  for (int attempt = 0; attempt < 8; ++attempt) {
+    ASSERT_EQ(formulon::cli::write_file_atomically(output, payload.data(), payload.size()), 0) << attempt;
+  }
+  EXPECT_EQ(open_descriptor_count(), baseline) << "successful writes leaked a descriptor";
+  EXPECT_EQ(list_directory(dir), std::vector<std::string>{"out.bin"});
+
+  // A destination that is a directory runs the whole sequence -- create,
+  // write, sync, close -- and only then fails, at the rename. Repeating
+  // it makes a per-call leak visible as growth rather than as a single
+  // descriptor that could be noise, and the temporary it created has to
+  // be gone from the parent directory afterwards.
+  const std::string occupied = dir + "/sub";
+  ASSERT_EQ(::mkdir(occupied.c_str(), 0700), 0) << occupied << ": " << std::strerror(errno);
+  for (int attempt = 0; attempt < 8; ++attempt) {
+    EXPECT_NE(formulon::cli::write_file_atomically(occupied, payload.data(), payload.size()), 0) << attempt;
+  }
+  EXPECT_EQ(open_descriptor_count(), baseline) << "failed writes leaked a descriptor";
+  EXPECT_EQ(list_directory(dir), (std::vector<std::string>{"out.bin", "sub"}));
+
+  // An unwritable directory covers the other end: the failure happens
+  // before anything is created at all.
+  ASSERT_EQ(::chmod(dir.c_str(), 0500), 0);
+  for (int attempt = 0; attempt < 8; ++attempt) {
+    EXPECT_NE(formulon::cli::write_file_atomically(output, payload.data(), payload.size()), 0) << attempt;
+  }
+  EXPECT_EQ(open_descriptor_count(), baseline) << "failed writes leaked a descriptor";
+  ASSERT_EQ(::chmod(dir.c_str(), 0700), 0);
+  EXPECT_EQ(list_directory(dir), (std::vector<std::string>{"out.bin", "sub"}));
+
+  std::ifstream written(output, std::ios::binary);
+  ASSERT_TRUE(written);
+  const std::vector<std::uint8_t> contents((std::istreambuf_iterator<char>(written)), std::istreambuf_iterator<char>());
+  EXPECT_EQ(contents, payload);
 }
 
 TEST(FormulonCli, PaginateConsumesTerminatorAsSheetValue) {

@@ -86,6 +86,39 @@ const mode_t kProcessUmask = [] {
   return previous;
 }();
 
+/// Owns an open descriptor for the rest of its scope.
+///
+/// The write sequence below has several failure points between `mkstemp`
+/// and the final `close`, and every one of them returns early. Tying the
+/// close to the scope rather than to each `return` is what keeps a new
+/// failure branch from leaking the descriptor the way a hand-written
+/// close on each path eventually does.
+class FdGuard {
+ public:
+  explicit FdGuard(int fd) : fd_(fd) {}
+  FdGuard(const FdGuard&) = delete;
+  FdGuard& operator=(const FdGuard&) = delete;
+  ~FdGuard() {
+    if (fd_ >= 0) {
+      ::close(fd_);
+    }
+  }
+
+  int get() const { return fd_; }
+
+  /// Hands ownership back so the caller can close explicitly and inspect
+  /// the result: a failing `close` is sometimes the first report of a
+  /// write error, and the destructor cannot report anything.
+  int release() {
+    const int owned = fd_;
+    fd_ = -1;
+    return owned;
+  }
+
+ private:
+  int fd_;
+};
+
 }  // namespace
 
 fm_status_t write_file_atomically(const std::string& link_or_path, const std::uint8_t* bytes, std::size_t len) {
@@ -93,15 +126,14 @@ fm_status_t write_file_atomically(const std::string& link_or_path, const std::ui
   struct stat target_stat {};
   const bool preserve_existing_mode = ::stat(path.c_str(), &target_stat) == 0;
   std::string tmp_path = path + ".formulon-tmp.XXXXXX";
-  const int fd = ::mkstemp(tmp_path.data());
-  if (fd < 0) {
+  FdGuard tmp_fd(::mkstemp(tmp_path.data()));
+  if (tmp_fd.get() < 0) {
     return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
   }
 
-  const auto fail = [&](bool close_fd) {
-    if (close_fd) {
-      ::close(fd);
-    }
+  // Removing the temp is all a failure path has to do by hand; `tmp_fd`
+  // closes the descriptor when the function returns.
+  const auto fail = [&] {
     std::remove(tmp_path.c_str());
     return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
   };
@@ -112,28 +144,33 @@ fm_status_t write_file_atomically(const std::string& link_or_path, const std::ui
   const mode_t result_mode = preserve_existing_mode
                                  ? static_cast<mode_t>(target_stat.st_mode & 0777U)
                                  : static_cast<mode_t>(0666U & ~static_cast<unsigned int>(kProcessUmask));
-  if (::fchmod(fd, result_mode) != 0) {
-    return fail(/*close_fd=*/true);
+  if (::fchmod(tmp_fd.get(), result_mode) != 0) {
+    return fail();
   }
 
   std::size_t written = 0;
   while (written < len) {
     const std::size_t remaining = len - written;
     const std::size_t chunk = std::min(remaining, static_cast<std::size_t>(std::numeric_limits<ssize_t>::max()));
-    const ssize_t count = ::write(fd, bytes + written, chunk);
+    const ssize_t count = ::write(tmp_fd.get(), bytes + written, chunk);
     if (count < 0) {
       if (errno == EINTR) {
         continue;
       }
-      return fail(/*close_fd=*/true);
+      return fail();
     }
     if (count == 0) {
-      return fail(/*close_fd=*/true);
+      return fail();
     }
     written += static_cast<std::size_t>(count);
   }
-  if (::fsync(fd) != 0 || ::close(fd) != 0) {
-    return fail(/*close_fd=*/false);
+  if (::fsync(tmp_fd.get()) != 0) {
+    return fail();
+  }
+  // POSIX leaves the descriptor's state unspecified after a failed
+  // `close`, so ownership is given up before the call either way.
+  if (::close(tmp_fd.release()) != 0) {
+    return fail();
   }
 
   if (std::rename(tmp_path.c_str(), path.c_str()) != 0) {

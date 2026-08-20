@@ -6,8 +6,10 @@
 // the formula through the C ABI's side-effect-free array surface. Cell-level
 // errors (`#NAME?`, `#DIV/0!`, …) are *not*
 // process-level failures: the cell value just happens to be an
-// `FM_VAL_ERROR`, and we print its display name. Only structural
-// failures (NULL handle, parser refusal, save/load) bubble out.
+// `FM_VAL_ERROR`, and we print its display name. That includes malformed
+// syntax, which the evaluator resolves to `#NAME?`: gating it here would
+// make the CLI answer differently from every other binding over the same
+// C ABI. Only structural failures (NULL handle, save/load) bubble out.
 //
 // `--repeat N` re-evaluates the same formula `N` times through the ad-hoc
 // evaluator. Timing is reported on stderr without changing the stdout payload.
@@ -16,6 +18,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -23,8 +26,6 @@
 #include "c_api/formulon_c.h"
 #include "cli/cli.h"
 #include "cli/render.h"
-#include "parser/parser.h"
-#include "utils/error.h"
 
 namespace formulon {
 namespace cli {
@@ -81,22 +82,6 @@ long parse_repeat(const ArgList& args, std::size_t& idx) {
   return n;
 }
 
-// The evaluator intentionally turns parser recovery placeholders into
-// cell-level `#NAME?` values so a workbook can retain invalid formulas for
-// repair. A one-off CLI expression is different: reject malformed syntax
-// before evaluation, while still letting a syntactically valid unknown
-// function produce Excel's ordinary `#NAME?` value.
-bool validate_formula_syntax(std::string_view formula, std::ostream& err) {
-  Arena arena;
-  parser::Parser parser(formula, arena);
-  (void)parser.parse();
-  if (parser.errors().empty()) {
-    return true;
-  }
-  err << "formulon: eval: invalid formula syntax: " << parser.errors().front().message << '\n';
-  return false;
-}
-
 int render_eval_result(const fm_workbook_t* wb, uint32_t rows, uint32_t cols, bool want_json, std::ostream& out,
                        std::ostream& err) {
   if (want_json && rows == 1 && cols == 1) {
@@ -128,7 +113,10 @@ int render_eval_result(const fm_workbook_t* wb, uint32_t rows, uint32_t cols, bo
       if (col != 0) {
         out << (want_json ? ',' : '\t');
       }
-      out << (want_json ? render_value_json(value) : render_value(value));
+      // The plain grid is TAB-separated and newline-terminated, so a cell
+      // carrying either character would add fields and rows a consumer
+      // reads as real ones. `dump` escapes for the same reason.
+      out << (want_json ? render_value_json(value) : escape_single_line(render_value(value)));
     }
     if (want_json) {
       out << ']';
@@ -146,7 +134,11 @@ int render_eval_result(const fm_workbook_t* wb, uint32_t rows, uint32_t cols, bo
 
 int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   bool want_json = false;
-  long repeat = 1;
+  // Engaged only when `--repeat` was actually given. The iteration count
+  // and the decision to report timing are the same fact, so they live in
+  // one value; holding the count in a plain `long` invites keying the
+  // report off its magnitude, which reports nothing for an explicit 1.
+  std::optional<long> repeat;
   std::string_view formula;
   bool formula_seen = false;
   bool options_ended = false;
@@ -159,10 +151,10 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
     if (!options_ended && (a == "-h" || a == "--help")) {
       print_eval_usage(out);
-      return 0;
+      return flush_output(out, err, "eval");
     }
     if (!options_ended && a == "--version") {
-      return print_version(out);
+      return print_version(out, err);
     }
     if (!options_ended && a == "--json") {
       want_json = true;
@@ -215,16 +207,15 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   // Evaluate ad hoc at A1. This keeps evaluation side-effect free: `=A1+1`
   // sees the empty cell instead of creating a circular A1 formula.
   std::string formula_str(formula);
-  if (!validate_formula_syntax(formula_str, err)) {
-    return static_cast<int>(FormulonErrorCode::kParserUnexpectedToken);
-  }
 
-  // `--repeat N` invokes the complete ad-hoc evaluator for every pass.
+  // `--repeat N` invokes the complete ad-hoc evaluator for every pass;
+  // without the flag the formula is still evaluated exactly once.
   using Clock = std::chrono::steady_clock;
+  const long passes = repeat.value_or(1);
   uint32_t result_rows = 0;
   uint32_t result_cols = 0;
   const auto t0 = Clock::now();
-  for (long i = 0; i < repeat; ++i) {
+  for (long i = 0; i < passes; ++i) {
     if (auto rc =
             fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, formula_str.c_str(), &result_rows, &result_cols);
         rc != 0) {
@@ -242,9 +233,12 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     return rc;
   }
 
-  if (repeat > 1) {
+  // Asking for a measurement is what selects the report, not how large the
+  // measurement turned out to be: every count `parse_repeat` accepts gets
+  // the same timing line.
+  if (repeat.has_value()) {
     const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
-    err << "formulon: eval: " << repeat << " iterations in " << micros << "us\n";
+    err << "formulon: eval: " << *repeat << " iterations in " << micros << "us\n";
   }
   return 0;
 }

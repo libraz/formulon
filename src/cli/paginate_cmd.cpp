@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "cli/cli.h"
+#include "cli/diagnostics.h"
 #include "cli/file_io.h"
 
 namespace formulon::cli {
@@ -67,10 +68,10 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
     if (!options_ended && (arg == "-h" || arg == "--help")) {
       print_paginate_usage(out);
-      return 0;
+      return flush_output(out, err, "paginate");
     }
     if (!options_ended && arg == "--version") {
-      return print_version(out);
+      return print_version(out, err);
     }
     if (!options_ended && arg == "--sheet") {
       if (i + 1 == args.size() || !parse_sheet_index(args[i + 1], sheet_index)) {
@@ -104,6 +105,13 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
   WorkbookGuard workbook;
   if (const auto status = fm_workbook_load(bytes.data(), bytes.size(), &workbook.handle); status != 0) {
+    emit_last_error(err);
+    return exit_code_for_status(status);
+  }
+  // Geometry resolved from a workbook that lost content on load is the
+  // geometry of a different workbook, so the losses are reported before
+  // any of it is written.
+  if (const auto status = emit_read_diagnostics(workbook.handle, err, "paginate"); status != 0) {
     emit_last_error(err);
     return exit_code_for_status(status);
   }

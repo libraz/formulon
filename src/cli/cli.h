@@ -69,14 +69,18 @@ inline int flush_output(std::ostream& out, std::ostream& err, std::string_view s
   return static_cast<int>(FormulonErrorCode::kCliOutputFailed);
 }
 
-/// Prints the engine version line to `out` and returns `0`. The usage
-/// banner lists `--version` alongside `-h | --help` as a common option, so
-/// every handler short-circuits on it through this helper and the flag
-/// means the same thing wherever it appears.
-inline int print_version(std::ostream& out) {
+/// Prints the engine version line to `out`. The usage banner lists
+/// `--version` alongside `-h | --help` as a common option, so every handler
+/// short-circuits on it through this helper and the flag means the same
+/// thing wherever it appears.
+///
+/// The version line is this invocation's primary output, so it goes through
+/// `flush_output` like any other: a script reading `$(formulon --version)`
+/// must not receive an empty string together with a success status.
+inline int print_version(std::ostream& out, std::ostream& err) {
   const char* version = fm_version_string();
   out << (version != nullptr ? version : "") << '\n';
-  return 0;
+  return flush_output(out, err, "version");
 }
 
 /// `eval` handler: evaluate a single formula on a fresh empty workbook.
@@ -85,8 +89,17 @@ inline int print_version(std::ostream& out) {
 /// is the formula text (with or without a leading `=`).
 ///
 /// Supported flags: `--json`, `--repeat N` (re-evaluate `N` times and
-/// report timing on stderr), `-h | --help`, and `--` to end option
-/// parsing before a formula beginning with `-`.
+/// report timing on stderr for every `N` the flag accepts, including 1),
+/// `-h | --help`, and `--` to end option parsing before a formula
+/// beginning with `-`.
+///
+/// Malformed syntax is not a handler failure: the evaluator turns parser
+/// recovery placeholders into a cell-level `#NAME?`, and `eval` prints
+/// that value and exits `0` like every other binding over the same C ABI.
+///
+/// Plain output is a TAB-separated grid of exactly `rows` lines with
+/// `cols` fields each, so cell payloads are escaped the way `dump`
+/// escapes them and an embedded newline or TAB cannot forge a record.
 ///
 /// `--json` has two shapes, selected by the result's dimensions: a single
 /// `{"kind": ..., "value": ...}` object when the result is exactly one row
@@ -124,8 +137,10 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err);
 /// `--` to end option parsing before an input path.
 int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err);
 
-/// Prints the top-level usage banner to `out` and returns `0`.
-int print_usage(std::ostream& out);
+/// Prints the top-level usage banner to `out`. Requested help is a
+/// primary output too, so the banner is flushed through `flush_output`
+/// and a closed stdout fails the invocation instead of exiting `0`.
+int print_usage(std::ostream& out, std::ostream& err);
 
 }  // namespace cli
 }  // namespace formulon

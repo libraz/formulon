@@ -39,9 +39,9 @@ void print_top_usage(std::ostream& out) {
 namespace formulon {
 namespace cli {
 
-int print_usage(std::ostream& out) {
+int print_usage(std::ostream& out, std::ostream& err) {
   print_top_usage(out);
-  return 0;
+  return flush_output(out, err, "help");
 }
 
 }  // namespace cli
@@ -56,11 +56,10 @@ int main(int argc, char** argv) {
   const std::string_view cmd(argv[1]);
 
   if (cmd == "-h" || cmd == "--help") {
-    print_top_usage(std::cout);
-    return 0;
+    return formulon::cli::exit_code_for_status(formulon::cli::print_usage(std::cout, std::cerr));
   }
   if (cmd == "--version") {
-    return formulon::cli::print_version(std::cout);
+    return formulon::cli::exit_code_for_status(formulon::cli::print_version(std::cout, std::cerr));
   }
 
   // Pack the post-subcommand args into a `string_view` vector so the

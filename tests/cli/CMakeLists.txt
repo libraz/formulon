@@ -7,6 +7,10 @@
 
 set(FORMULON_CLI_TEST_SOURCES
   cli_test.cpp
+  # `cli/file_io.cpp`: the atomic-write helper ships only in the CLI
+  # binary, and a leaked descriptor cannot be observed from outside a
+  # one-shot process, so it is compiled in and called directly.
+  ${CMAKE_SOURCE_DIR}/src/cli/file_io.cpp
 )
 
 add_executable(formulon_cli_tests ${FORMULON_CLI_TEST_SOURCES})

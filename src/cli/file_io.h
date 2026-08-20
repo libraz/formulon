@@ -25,6 +25,10 @@ fm_status_t read_file(const std::string& path, std::vector<std::uint8_t>& out);
 /// the file the link names and the link itself survives. A dangling link
 /// is replaced as-is: there is no target to keep.
 ///
+/// No exit path leaves an open descriptor or a leftover temporary behind:
+/// on failure the temporary is unlinked and `path` keeps whatever content
+/// it already had.
+///
 /// Permissions on success: an existing `path` keeps its own mode, and a
 /// path created by this call gets `0666` masked by the process umask, the
 /// same mode a plain `open(path, O_CREAT|O_WRONLY, 0666)` would produce.

@@ -31,8 +31,8 @@
 
 #include "c_api/formulon_c.h"
 #include "cli/cli.h"
+#include "cli/diagnostics.h"
 #include "cli/file_io.h"
-#include "utils/error.h"
 
 namespace formulon {
 namespace cli {
@@ -124,65 +124,6 @@ fm_workbook_format_t format_from_extension(const std::string& path) {
   return ext == "xlsb" ? FM_WORKBOOK_FORMAT_XLSB : FM_WORKBOOK_FORMAT_XLSX;
 }
 
-// Appends `; name=value` for a counter that is actually non-zero. A zero
-// counter is the normal case and printing it would bury the one number
-// the user needs to act on.
-void emit_counter(std::ostream& err, const char* name, std::uint32_t value) {
-  if (value != 0U) {
-    err << "; " << name << '=' << value;
-  }
-}
-
-// The XLSB half of the load counters: lossy Ptg recovery and parts the
-// reader could not decode. Zero for every `.xlsx` load.
-void emit_read_diagnostics(std::ostream& err, const fm_read_diagnostics_t& d) {
-  if (d.undecoded_formula_count == 0U && d.undecoded_defined_name_count == 0U && d.undecoded_part_count == 0U) {
-    return;
-  }
-  err << "formulon: recalc: warning: XLSB read diagnostics";
-  emit_counter(err, "undecoded_formula_count", d.undecoded_formula_count);
-  emit_counter(err, "undecoded_defined_name_count", d.undecoded_defined_name_count);
-  emit_counter(err, "undecoded_part_count", d.undecoded_part_count);
-  err << '\n';
-}
-
-// The OOXML half of the same load counters: presentation-overlay entries
-// dropped for an unusable reference, and an unrecognised workbook content
-// type. Zero for every `.xlsb` load.
-void emit_ooxml_read_diagnostics(std::ostream& err, const fm_read_diagnostics_t& d) {
-  if (d.skipped_feature_count == 0U && d.unknown_content_type_count == 0U) {
-    return;
-  }
-  err << "formulon: recalc: warning: OOXML read diagnostics";
-  emit_counter(err, "skipped_feature_count", d.skipped_feature_count);
-  emit_counter(err, "unknown_content_type_count", d.unknown_content_type_count);
-  err << '\n';
-}
-
-// Save counters. Three of the five are produced by both writers, so the
-// line is labelled by the container actually written rather than split
-// into a per-format emitter.
-void emit_write_diagnostics(std::ostream& err, fm_workbook_format_t format, const fm_save_diagnostics_t& d) {
-  if (d.downgraded_formula_count == 0U && d.deferred_feature_count == 0U && d.dropped_part_count == 0U &&
-      d.dropped_relationship_count == 0U && d.renumbered_part_count == 0U) {
-    return;
-  }
-  err << "formulon: recalc: warning: " << (format == FM_WORKBOOK_FORMAT_XLSB ? "XLSB" : "OOXML")
-      << " write diagnostics";
-  emit_counter(err, "downgraded_formula_count", d.downgraded_formula_count);
-  emit_counter(err, "deferred_feature_count", d.deferred_feature_count);
-  emit_counter(err, "dropped_part_count", d.dropped_part_count);
-  emit_counter(err, "dropped_relationship_count", d.dropped_relationship_count);
-  emit_counter(err, "renumbered_part_count", d.renumbered_part_count);
-  // A dropped part also drops the relationship pointing at it, so the two
-  // numbers above can describe one loss twice. Say so rather than leaving
-  // the reader to add them up.
-  if (d.dropped_part_count != 0U && d.dropped_relationship_count != 0U) {
-    err << " (a dropped part also drops its relationship; these may describe the same loss)";
-  }
-  err << '\n';
-}
-
 }  // namespace
 
 int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
@@ -193,6 +134,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   bool parallel = false;
   std::uint32_t thread_count = 0U;
   bool input_seen = false;
+  bool output_seen = false;
   bool options_ended = false;
 
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -203,10 +145,10 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
     if (!options_ended && (a == "-h" || a == "--help")) {
       print_recalc_usage(out);
-      return 0;
+      return flush_output(out, err, "recalc");
     }
     if (!options_ended && a == "--version") {
-      return print_version(out);
+      return print_version(out, err);
     }
     if (!options_ended && a == "--iterative") {
       iterative = true;
@@ -235,6 +177,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
         return kExitUsage;
       }
       output_path.assign(args[i + 1]);
+      output_seen = true;
       ++i;
       continue;
     }
@@ -255,8 +198,16 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     print_recalc_usage(err);
     return kExitUsage;
   }
-  if (output_path.empty()) {
+  // "Never supplied" and "supplied as an empty string" are different
+  // defects — the second usually means an unset shell variable expanded
+  // into the value slot — so they do not share one sentinel. `--threads`
+  // already draws the same distinction.
+  if (!output_seen) {
     err << "formulon: recalc: missing -o/--output PATH\n";
+    return kExitUsage;
+  }
+  if (output_path.empty()) {
+    err << "formulon: recalc: -o/--output requires a non-empty path\n";
     return kExitUsage;
   }
 
@@ -272,13 +223,10 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     return rc;
   }
 
-  fm_read_diagnostics_t read_diagnostics{};
-  if (auto rc = fm_workbook_read_diagnostics(wb.handle, &read_diagnostics); rc != 0) {
+  if (auto rc = emit_read_diagnostics(wb.handle, err, "recalc"); rc != 0) {
     emit_last_error(err, "recalc");
     return rc;
   }
-  emit_read_diagnostics(err, read_diagnostics);
-  emit_ooxml_read_diagnostics(err, read_diagnostics);
 
   if (iterative) {
     if (auto rc = fm_workbook_set_iterative_enabled(wb.handle, 1); rc != 0) {
@@ -307,7 +255,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     emit_last_error(err, "recalc");
     return rc;
   }
-  emit_write_diagnostics(err, format, save_diagnostics);
+  emit_write_diagnostics(err, "recalc", format, save_diagnostics);
 
   if (auto rc = write_file_atomically(output_path, buf.data, buf.len); rc != 0) {
     err << "formulon: recalc: cannot write '" << output_path << "': " << std::strerror(errno) << '\n';
