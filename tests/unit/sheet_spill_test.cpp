@@ -6,6 +6,8 @@
 // `resolve_cell_value` is the spill-aware reader.
 
 #include <algorithm>
+#include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -14,6 +16,7 @@
 #include "cell.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
+#include "utils/arena.h"
 #include "value.h"
 
 namespace formulon {
@@ -445,6 +448,27 @@ TEST(SheetSpillTest, MismatchedCellsLengthIsRejected) {
   EXPECT_EQ(s.spill_region_at_anchor(0U, 0U), nullptr);
 }
 
+TEST(SheetSpillTest, FootprintOverTheDynamicArrayCellCeilingIsRejected) {
+  Sheet s("Sheet1");
+  // A whole-column rectangle is 1,048,576 cells and commits. A hundred of
+  // them side by side is past the ceiling the evaluator's array allocator
+  // applies, and the sheet refuses it on its own rather than trusting the
+  // caller to have checked.
+  //
+  // This asserts the refusal, not which check produced it: a payload
+  // matching a shape that large cannot be built in a test, so the refusal
+  // here is indistinguishable from the payload-length one. The assertion
+  // that separates them is the death test below, which matches the message,
+  // and it is the debug build that runs it.
+  EXPECT_TRUE(s.commit_spill(0U, 0U, Sheet::kMaxRows, 1U, std::vector<Value>(Sheet::kMaxRows, Value::number(1.0))));
+  EXPECT_FALSE(s.commit_spill(0U, 1U, Sheet::kMaxRows, 100U, std::vector<Value>{}));
+  EXPECT_EQ(s.spill_region_at_anchor(0U, 1U), nullptr);
+  // Nor is the refusal recorded as a blocked footprint to retry: the shape
+  // can never become admissible, so there is nothing for the release path
+  // to wake up.
+  EXPECT_TRUE(s.blocked_spill_footprints().empty());
+}
+
 TEST(SheetSpillTest, FootprintOverflowingSheetBoundsIsRejected) {
   Sheet s("Sheet1");
   // Anchor at the last row, height 2 — footprint extends past kMaxRows.
@@ -474,6 +498,12 @@ TEST(SheetSpillDeathTest, MismatchedCellsLengthAborts) {
   Sheet s("Sheet1");
   std::vector<Value> wrong_size = {Value::number(1.0), Value::number(2.0)};
   EXPECT_DEATH(s.commit_spill(0U, 0U, 3U, 1U, std::move(wrong_size)), "does not match");
+}
+
+TEST(SheetSpillDeathTest, FootprintOverTheDynamicArrayCellCeilingAborts) {
+  Sheet s("Sheet1");
+  EXPECT_DEATH(s.commit_spill(0U, 0U, Sheet::kMaxRows, 100U, std::vector<Value>{}),
+               "exceeds the dynamic-array cell ceiling");
 }
 
 TEST(SheetSpillDeathTest, FootprintOverflowsRowsAborts) {
@@ -615,9 +645,10 @@ TEST(SheetReadRange, MatchesResolveCellValueOverLiteralsAndGaps) {
   s.set_cell_value(1U, 3U, Value::number(2.0));
   s.set_cell_value(3U, 2U, Value::text("x"));
 
+  Arena arena;
   std::vector<Value> bulk;
   std::vector<std::size_t> formula_indices;
-  s.read_range(0U, 4U, 0U, 4U, bulk, formula_indices);
+  s.read_range(0U, 4U, 0U, 4U, arena, bulk, formula_indices);
 
   ASSERT_EQ(bulk.size(), 25U);
   EXPECT_TRUE(formula_indices.empty());
@@ -634,9 +665,10 @@ TEST(SheetReadRange, SurfacesSpillPhantomValues) {
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
+  Arena arena;
   std::vector<Value> bulk;
   std::vector<std::size_t> formula_indices;
-  s.read_range(0U, 2U, 0U, 0U, bulk, formula_indices);
+  s.read_range(0U, 2U, 0U, 0U, arena, bulk, formula_indices);
 
   ASSERT_EQ(bulk.size(), 3U);
   EXPECT_TRUE(formula_indices.empty());
@@ -650,9 +682,10 @@ TEST(SheetReadRange, ReportsFormulaCoordinatesInsteadOfEvaluatingThem) {
   s.set_cell_value(0U, 0U, Value::number(5.0));
   s.set_cell_formula(0U, 1U, "=A1*2");
 
+  Arena arena;
   std::vector<Value> bulk;
   std::vector<std::size_t> formula_indices;
-  s.read_range(0U, 0U, 0U, 1U, bulk, formula_indices);
+  s.read_range(0U, 0U, 0U, 1U, arena, bulk, formula_indices);
 
   ASSERT_EQ(bulk.size(), 2U);
   ASSERT_EQ(formula_indices.size(), 1U);
@@ -666,9 +699,10 @@ TEST(SheetReadRange, AppendsToTheCallersBufferAndIndexesAbsolutely) {
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=1");
 
+  Arena arena;
   std::vector<Value> bulk = {Value::number(99.0)};
   std::vector<std::size_t> formula_indices;
-  s.read_range(0U, 0U, 0U, 0U, bulk, formula_indices);
+  s.read_range(0U, 0U, 0U, 0U, arena, bulk, formula_indices);
 
   ASSERT_EQ(bulk.size(), 2U);
   EXPECT_EQ(bulk[0], Value::number(99.0));
@@ -680,15 +714,238 @@ TEST(SheetReadRange, ReversedOrOutOfRangeRectangleAppendsNothing) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(1.0));
 
+  Arena arena;
   std::vector<Value> bulk;
   std::vector<std::size_t> formula_indices;
-  s.read_range(2U, 1U, 0U, 0U, bulk, formula_indices);
-  s.read_range(0U, 0U, 2U, 1U, bulk, formula_indices);
-  s.read_range(0U, Sheet::kMaxRows, 0U, 0U, bulk, formula_indices);
-  s.read_range(0U, 0U, 0U, Sheet::kMaxCols, bulk, formula_indices);
+  s.read_range(2U, 1U, 0U, 0U, arena, bulk, formula_indices);
+  s.read_range(0U, 0U, 2U, 1U, arena, bulk, formula_indices);
+  s.read_range(0U, Sheet::kMaxRows, 0U, 0U, arena, bulk, formula_indices);
+  s.read_range(0U, 0U, 0U, Sheet::kMaxCols, arena, bulk, formula_indices);
 
   EXPECT_TRUE(bulk.empty());
   EXPECT_TRUE(formula_indices.empty());
+}
+
+// ---------------------------------------------------------------------------
+// Text lifetime across the reads that copy values out of the sheet
+// ---------------------------------------------------------------------------
+//
+// A Text `Value` is a view, and inside the sheet it views bytes the sheet
+// owns and frees. A copy handed to a caller therefore has to be re-pointed at
+// storage the caller controls before the lock is released; otherwise the copy
+// looks self-contained while depending on a sheet mutation not happening.
+// These tests assert both halves: the read does not alias sheet storage, and
+// the value it produced still reads correctly after the mutation that frees
+// what it came from.
+
+// Overwrites enough unrelated cells to make an allocator hand the freed bytes
+// out again, so a stale view is unlikely to still find its old contents.
+void ChurnTextAllocations(Sheet& sheet) {
+  for (std::uint32_t row = 100U; row < 200U; ++row) {
+    sheet.set_cell_text(row, 0U, "filler payload of about the same length as the original");
+  }
+}
+
+TEST(SheetReadRange, TextOutlivesTheWriteThatFreesTheCellsOwnBytes) {
+  Sheet s("Sheet1");
+  const std::string original = "a text payload long enough to live on the heap";
+  s.set_cell_text(0U, 0U, original);
+
+  Arena arena;
+  std::vector<Value> bulk;
+  std::vector<std::size_t> formula_indices;
+  s.read_range(0U, 0U, 0U, 0U, arena, bulk, formula_indices);
+  ASSERT_EQ(bulk.size(), 1U);
+  ASSERT_TRUE(bulk[0].is_text());
+
+  const Cell* cell = s.cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  ASSERT_NE(cell->cached_text_owned, nullptr);
+  EXPECT_NE(bulk[0].as_text().data(), cell->cached_text_owned->data())
+      << "the read handed back a view into the cell's own allocation";
+
+  // The next cached write replaces that allocation.
+  s.set_cell_cached_value(0U, 0U, Value::text("a replacement payload of a comparable length"));
+  ChurnTextAllocations(s);
+  EXPECT_EQ(bulk[0].as_text(), original);
+}
+
+TEST(SheetReadRange, TextOutlivesTheClearThatFreesTheSpillRegionsBytes) {
+  Sheet s("Sheet1");
+  const std::string original = "a spilled text payload long enough to live on the heap";
+  std::vector<Value> cells = {Value::number(1.0), Value::text(original)};
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 2U, 1U, std::move(cells)));
+
+  Arena arena;
+  std::vector<Value> bulk;
+  std::vector<std::size_t> formula_indices;
+  s.read_range(0U, 1U, 0U, 0U, arena, bulk, formula_indices);
+  ASSERT_EQ(bulk.size(), 2U);
+  ASSERT_TRUE(bulk[1].is_text());
+
+  const SpillRegion* region = s.spill_region_at_anchor(0U, 0U);
+  ASSERT_NE(region, nullptr);
+  ASSERT_EQ(region->owned_strings.size(), 1U);
+  EXPECT_NE(bulk[1].as_text().data(), region->owned_strings.front().data())
+      << "the read handed back a view into the region's own storage";
+
+  s.clear_spill(0U, 0U);
+  ChurnTextAllocations(s);
+  EXPECT_EQ(bulk[1].as_text(), original);
+}
+
+TEST(SheetSpillTest, ReadSpillRegionAtAnchorOutlivesTheRegionItCopied) {
+  Sheet s("Sheet1");
+  const std::string original = "a spilled text payload long enough to live on the heap";
+  std::vector<Value> cells = {Value::number(1.0), Value::text(original)};
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 2U, 1U, std::move(cells)));
+
+  Arena arena;
+  std::vector<Value> copied;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ASSERT_TRUE(s.read_spill_region_at_anchor(0U, 0U, arena, copied, &rows, &cols));
+  EXPECT_EQ(rows, 2U);
+  EXPECT_EQ(cols, 1U);
+  ASSERT_EQ(copied.size(), 2U);
+  EXPECT_EQ(copied[0], Value::number(1.0));
+  ASSERT_TRUE(copied[1].is_text());
+
+  s.clear_spill(0U, 0U);
+  ChurnTextAllocations(s);
+  EXPECT_EQ(copied[1].as_text(), original);
+
+  // A coordinate that anchors nothing appends nothing and says so.
+  EXPECT_FALSE(s.read_spill_region_at_anchor(9U, 9U, arena, copied, &rows, &cols));
+  EXPECT_EQ(copied.size(), 2U);
+}
+
+// ---------------------------------------------------------------------------
+// Cost characteristics
+// ---------------------------------------------------------------------------
+//
+// Both of these are about the shape of the work, not its duration, so they
+// compare two shapes against each other rather than against a clock. An
+// absolute bound would only say how loaded the machine is; a ratio says
+// whether the cost follows the thing it must not follow. Each shape is timed
+// several times and the fastest run is kept, which is the measurement least
+// disturbed by whatever else is running.
+
+/// Fastest of `kTrials` runs of `work`, in nanoseconds.
+template <typename Fn>
+double FastestRunNanos(Fn&& work) {
+  constexpr int kTrials = 5;
+  double best = 0.0;
+  for (int trial = 0; trial < kTrials; ++trial) {
+    const auto start = std::chrono::steady_clock::now();
+    work();
+    const double elapsed = std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - start).count();
+    if (trial == 0 || elapsed < best) {
+      best = elapsed;
+    }
+  }
+  return best;
+}
+
+/// How much slower the loaded shape may be before the cost is following the
+/// wrong quantity. The shapes below differ by two orders of magnitude in the
+/// quantity under test, so anything near 1 passes and a linear dependence
+/// fails by a wide margin — the gap is what keeps this from flaking.
+constexpr double kMaxCostRatio = 10.0;
+
+TEST(SheetReadRange, CostDoesNotFollowTheNumberOfSpillRegionsOnTheSheet) {
+  // A rectangle of empty cells, read on two sheets that differ only in how
+  // many spill regions sit far away from it. Consulting the spill table per
+  // coordinate makes the second sheet hundreds of times slower for a result
+  // that is identical.
+  constexpr std::uint32_t kLastRow = 199U;
+  constexpr std::uint32_t kLastCol = 99U;
+  constexpr std::uint32_t kManyRegions = 400U;
+
+  const auto build = [](std::uint32_t regions) {
+    Sheet sheet("Sheet1");
+    for (std::uint32_t i = 0; i < regions; ++i) {
+      // Parked well below and to the right of the read rectangle.
+      EXPECT_TRUE(sheet.commit_spill(1000U + i, 500U, 1U, 1U, {Value::number(i)}));
+    }
+    return sheet;
+  };
+  Sheet few = build(1U);
+  Sheet many = build(kManyRegions);
+
+  const auto read = [&](Sheet& sheet) {
+    return [&sheet]() {
+      Arena arena;
+      std::vector<Value> out;
+      std::vector<std::size_t> formula_indices;
+      sheet.read_range(0U, kLastRow, 0U, kLastCol, arena, out, formula_indices);
+      EXPECT_EQ(out.size(), static_cast<std::size_t>(kLastRow + 1U) * (kLastCol + 1U));
+    };
+  };
+
+  const double one_region = FastestRunNanos(read(few));
+  const double many_regions = FastestRunNanos(read(many));
+  EXPECT_LT(many_regions, one_region * kMaxCostRatio)
+      << "read_range cost follows the spill-table size: " << one_region << "ns with one region, " << many_regions
+      << "ns with " << kManyRegions;
+}
+
+TEST(SheetSpillTest, CellCountDoesNotFollowTheSpillArea) {
+  // A spill is one rectangle with one payload, so counting the coordinates it
+  // covers is arithmetic. Walking them instead puts a lookup per spilled cell
+  // under the sheet lock, which a whole-column spill turns into a million.
+  constexpr std::uint32_t kSmallSide = 4U;
+  constexpr std::uint32_t kLargeSide = 400U;
+
+  const auto build = [](std::uint32_t side) {
+    Sheet sheet("Sheet1");
+    std::vector<Value> cells;
+    cells.reserve(static_cast<std::size_t>(side) * side);
+    for (std::size_t i = 0; i < static_cast<std::size_t>(side) * side; ++i) {
+      cells.push_back(Value::number(static_cast<double>(i)));
+    }
+    EXPECT_TRUE(sheet.commit_spill(0U, 0U, side, side, std::move(cells)));
+    return sheet;
+  };
+  Sheet small = build(kSmallSide);
+  Sheet large = build(kLargeSide);
+
+  EXPECT_EQ(small.cell_count(), static_cast<std::size_t>(kSmallSide) * kSmallSide);
+  EXPECT_EQ(large.cell_count(), static_cast<std::size_t>(kLargeSide) * kLargeSide);
+
+  const auto count = [](Sheet& sheet) {
+    return [&sheet]() {
+      for (int i = 0; i < 20; ++i) {
+        EXPECT_GT(sheet.cell_count(), 0U);
+      }
+    };
+  };
+
+  const double small_area = FastestRunNanos(count(small));
+  const double large_area = FastestRunNanos(count(large));
+  EXPECT_LT(large_area, small_area * kMaxCostRatio)
+      << "cell_count cost follows the spill area: " << small_area << "ns over " << kSmallSide * kSmallSide << " cells, "
+      << large_area << "ns over " << kLargeSide * kLargeSide;
+}
+
+TEST(SheetSpillTest, CellCountKeepsCountingPhantomsThatShareAMaterialisedSlot) {
+  Sheet s("Sheet1");
+  // Writing A1 and then E1 materialises the whole run A1..E1, three of them
+  // implicitly blank. A spill over A1:C1 then covers slots that the stored
+  // count already includes.
+  s.set_cell_value(0U, 0U, Value::blank());
+  s.set_cell_value(0U, 4U, Value::number(9.0));
+  ASSERT_EQ(s.cell_count(), 5U);
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 1U, 3U, {Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
+  EXPECT_EQ(s.cell_count(), 5U) << "phantoms that coincide with materialised slots must not be counted twice";
+
+  // A spill running past the end of the row's materialised run adds only the
+  // coordinates that are not already slots.
+  Sheet t("Sheet1");
+  ASSERT_TRUE(t.commit_spill(
+      0U, 0U, 1U, 5U,
+      {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0), Value::number(5.0)}));
+  EXPECT_EQ(t.cell_count(), 5U);
 }
 
 // ---------------------------------------------------------------------------
@@ -756,6 +1013,38 @@ TEST(SheetSpillTest, ProbeRefusesAFullWidthRectangleOnABlockedRow) {
   // would hold whatever the scan does, which is worth less than no assertion
   // because it reads like coverage. The bound that does discriminate is in
   // `ProbeFindsABlockerFarOutsideThePopulatedData`.
+}
+
+TEST(SheetSpillTest, WouldCollideIsTheProbeVerdictInBooleanForm) {
+  // The two refusal paths must agree on every input, which they do by both
+  // being the same body. Pin that over a sheet carrying each kind of blocker
+  // and over shapes that hit every branch: clear, blocked by a literal, by a
+  // merge, by another region, degenerate, and off the grid.
+  Sheet s("Sheet1");
+  s.set_cell_value(4U, 4U, Value::number(1.0));
+  s.mutable_merges().push_back(MergeRange{8U, 0U, 9U, 1U});
+  ASSERT_TRUE(s.commit_spill(12U, 0U, 2U, 2U,
+                             {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0)}));
+
+  const std::vector<SpillFootprint> shapes = {
+      {0U, 0U, 1U, 1U},                    // clear
+      {4U, 0U, 1U, 6U},                    // crosses the literal
+      {7U, 0U, 3U, 1U},                    // crosses the merge
+      {11U, 0U, 3U, 1U},                   // crosses the committed region
+      {12U, 0U, 2U, 2U},                   // the committed region's own anchor
+      {0U, 0U, 0U, 4U},                    // degenerate
+      {0U, 0U, 4U, 0U},                    // degenerate
+      {1U, 0U, Sheet::kMaxRows, 1U},       // off the bottom edge
+      {0U, 1U, 1U, Sheet::kMaxCols},       // off the right edge
+      {Sheet::kMaxRows - 1U, 0U, 1U, 1U},  // last row, in grid
+  };
+  for (const SpillFootprint& shape : shapes) {
+    const bool collides = s.spill_would_collide(shape.anchor_row, shape.anchor_col, shape.rows, shape.cols);
+    const Sheet::SpillAdmission admission =
+        s.probe_spill_footprint(shape.anchor_row, shape.anchor_col, shape.rows, shape.cols);
+    EXPECT_EQ(collides, admission != Sheet::SpillAdmission::kAdmissible)
+        << "at (" << shape.anchor_row << "," << shape.anchor_col << ") " << shape.rows << "x" << shape.cols;
+  }
 }
 
 TEST(SheetSpillTest, ProbeLeavesTheSheetUnchanged) {

@@ -251,9 +251,15 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(cons
   // `rows()`. Merge them so the flat enumeration surfaces spilled cells, then
   // sort + unique: a phantom that coincides with an implicitly default-
   // constructed slot must appear only once.
-  for (const formulon::CellAddress& addr : sheet.spill_phantom_addresses()) {
-    out.emplace_back(addr.row, addr.col);
-  }
+  //
+  // Streamed rather than collected first: a phantom set is a spill
+  // rectangle's whole area, so `=SEQUENCE(1048576)` would otherwise build an
+  // eight-megabyte vector only to append it to this one.
+  sheet.for_each_spill_phantom(
+      [](formulon::CellAddress address, void* ctx) {
+        static_cast<std::vector<std::pair<std::uint32_t, std::uint32_t>>*>(ctx)->emplace_back(address.row, address.col);
+      },
+      &out);
   std::sort(out.begin(), out.end());
   out.erase(std::unique(out.begin(), out.end()), out.end());
   return out;

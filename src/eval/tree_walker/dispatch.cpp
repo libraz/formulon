@@ -469,8 +469,11 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         values.push_back(err);
         continue;
       }
-      const SpillRegion* region = target->spill_region_at_anchor(sr.row, sr.col);
-      if (region == nullptr) {
+      // Copied out under the sheet lock, with Text payloads re-homed into
+      // `arena`: the flattened values feed the whole call and outlive the
+      // region they came from.
+      std::vector<Value> region_cells;
+      if (!target->read_spill_region_at_anchor(sr.row, sr.col, arena, region_cells, nullptr, nullptr)) {
         const Value err = Value::error(ErrorCode::Ref);
         if (def->propagate_errors) {
           return err;
@@ -479,7 +482,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         continue;
       }
       Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, region->cells.data(), region->cells.size(), &values, &range_err)) {
+      if (!append_range_sourced_values(*def, region_cells.data(), region_cells.size(), &values, &range_err)) {
         return range_err;
       }
       continue;

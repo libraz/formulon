@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 #include <utility>
@@ -19,6 +20,7 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/shape_ops_lazy.h"
+#include "eval/special_forms_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -32,6 +34,14 @@ namespace formulon {
 namespace eval {
 namespace {
 
+// `propagate_errors = false` is what lets `COUNT` / `IS*` inspect an error
+// argument instead of inheriting it, and it has a consequence worth stating
+// where the filter applies it: an error that reached the value list because
+// an *expansion* failed is indistinguishable here from one that was in the
+// data, and both are simply dropped as "not a number". A function with this
+// flag therefore converts a failed argument expansion into a plausible wrong
+// count rather than into a visible error, so a gap in the expanders surfaces
+// as silence on exactly these functions.
 bool filter_range_sourced_value(const FunctionDef& def, const Value& value, Value* out, bool* keep, Value* out_err) {
   if (def.propagate_errors && value.is_error()) {
     *out_err = value;
@@ -171,6 +181,34 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
           if (cond.is_error()) {
             *out_err_code = cond.as_error();
             return false;
+          }
+          if (cond.is_array()) {
+            // An array condition picks per cell instead of short-circuiting,
+            // which is what makes `SUMPRODUCT(IF(A1:A5<=3, A1:A5, 0))` and
+            // `COUNT(IF(...))` aggregate the masked column rather than fail
+            // to coerce a rectangle to one bool. The broadcast belongs to the
+            // lazy `IF` seam and is shared rather than repeated here, so this
+            // path and a bare `IF(cond, a, b)` cannot answer differently for
+            // one formula. `expand_if_call` routes to the same helper.
+            const Value result = eval_if_array_cond_lazy(arg_node, cond, arena, registry, ctx);
+            if (result.is_error()) {
+              *out_err_code = result.as_error();
+              return false;
+            }
+            if (!result.is_array()) {
+              *out_err_code = ErrorCode::Value;
+              return false;
+            }
+            const ArrayValue* array = result.as_array();
+            const std::size_t count = static_cast<std::size_t>(array->rows) * array->cols;
+            out_cells->assign(array->cells, array->cells + count);
+            if (out_rows != nullptr) {
+              *out_rows = array->rows;
+            }
+            if (out_cols != nullptr) {
+              *out_cols = array->cols;
+            }
+            return true;
           }
           auto coerced = coerce_to_bool(cond);
           if (!coerced) {
@@ -384,21 +422,12 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
       *out_err_code = ErrorCode::Ref;
       return false;
     }
-    const SpillRegion* region = target->spill_region_at_anchor(sr.row, sr.col);
-    if (region == nullptr) {
+    // The copied cells outlive the region, so the read re-homes any Text
+    // payload into `arena` while the sheet lock is held.
+    out_cells->clear();
+    if (!target->read_spill_region_at_anchor(sr.row, sr.col, arena, *out_cells, out_rows, out_cols)) {
       *out_err_code = ErrorCode::Ref;
       return false;
-    }
-    out_cells->clear();
-    out_cells->reserve(region->cells.size());
-    for (const Value& v : region->cells) {
-      out_cells->push_back(v);
-    }
-    if (out_rows != nullptr) {
-      *out_rows = region->rows;
-    }
-    if (out_cols != nullptr) {
-      *out_cols = region->cols;
     }
     return true;
   }

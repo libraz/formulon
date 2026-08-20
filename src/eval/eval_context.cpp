@@ -372,9 +372,10 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   // per cell. The sheet was already resolved above, and every coordinate is
   // in bounds, so this reproduces what a per-cell `resolve_ref` would return
   // for literal, phantom and absent cells. Formula cells come back as their
-  // cached value and are re-resolved below.
+  // cached value and are re-resolved below. Text payloads land in `arena`,
+  // the same lifetime the scalar path promises.
   std::vector<std::size_t> formula_indices;
-  target_sheet->read_range(r_min, r_max, c_min, c_max, out, formula_indices);
+  target_sheet->read_range(r_min, r_max, c_min, c_max, arena, out, formula_indices);
   const std::uint32_t width = c_max - c_min + 1U;
   for (const std::size_t index : formula_indices) {
     parser::Reference cell_ref{};

@@ -16,6 +16,7 @@
 #ifndef FORMULON_SHEET_H_
 #define FORMULON_SHEET_H_
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -32,6 +33,8 @@
 #include "value.h"
 
 namespace formulon {
+
+class Arena;
 
 namespace cf {
 struct ConditionalFormat;
@@ -630,6 +633,12 @@ struct CellAddressHash {
 /// content — at 88 bytes per `Cell` a single far-right cell costs kilobytes
 /// per row. Carrying the run's own origin removes the leading gap.
 ///
+/// Only the leading gap. A gap *inside* the run is materialised: `ensure()`
+/// resizes through every slot between the run's current end and the column
+/// being written, so a row holding A1 and XFD1 costs 16,384 `Cell`s. The
+/// worst case is `populated_rows * kMaxCols * sizeof(Cell)`, not
+/// `populated_cells * sizeof(Cell)`.
+///
 /// Reads stay in absolute coordinates. `size()` is one past the highest
 /// stored column and `operator[]` accepts any column below it, answering the
 /// leading gap with a shared blank cell, so a consumer that walks
@@ -698,13 +707,39 @@ class RowCells {
 // declared in `Sheet` needs to know it exists.
 struct SpillTable;
 
+/// A counter that mutators bump under a lock and observers read without one.
+///
+/// `std::atomic` alone would do, except that it is neither copyable nor
+/// movable, and `Sheet`'s move members are defaulted on purpose so a member
+/// added later cannot be forgotten by a hand-written list. Moving a sheet
+/// concurrently with a read is already undefined, so the move members here
+/// are plain relaxed transfers.
+class EnumerationRevision {
+ public:
+  EnumerationRevision() = default;
+  EnumerationRevision(EnumerationRevision&& other) noexcept : value_(other.get()) {}
+  EnumerationRevision& operator=(EnumerationRevision&& other) noexcept {
+    value_.store(other.get(), std::memory_order_relaxed);
+    return *this;
+  }
+
+  std::uint64_t get() const noexcept { return value_.load(std::memory_order_relaxed); }
+  void bump() noexcept { value_.fetch_add(1U, std::memory_order_relaxed); }
+
+ private:
+  std::atomic<std::uint64_t> value_{0};
+};
+
 /// A single worksheet inside a `Workbook`.
 ///
 /// Owns the worksheet's display name and its cell store. The cell store is
-/// a `unordered_map<row, vector<Cell>>` where the inner vector is grown on
-/// demand to cover the highest column touched in that row; columns not yet
-/// touched are absent from the vector. Rows that have never been touched
-/// are absent from the map.
+/// an `unordered_map<row, RowCells>`; each `RowCells` is one contiguous run
+/// that begins at the row's lowest touched column. Rows that have never been
+/// touched are absent from the map, and columns before a row's first touched
+/// one are never materialised — but columns *between* the run's endpoints
+/// are, because growing the run to reach a later column materialises every
+/// slot it passes over. A row's memory therefore follows the distance
+/// between its extreme columns, not its number of populated cells.
 class Sheet {
  public:
   /// Excel 365 maximum row count (rows are addressable as 0..kMaxRows-1).
@@ -940,10 +975,19 @@ class Sheet {
   /// Callers that need the spill-aware effective value should use
   /// `resolve_cell_value` instead.
   ///
-  /// The returned pointer is invalidated by any mutation that grows the
-  /// row's vector or rehashes the row map (i.e. by any subsequent
-  /// `set_cell_value` / `set_cell_formula` call); callers must not retain
-  /// it across mutations.
+  /// The returned pointer is invalidated by reallocation of the row's `run_`
+  /// — `RowCells::ensure` growing it to reach a column outside the run, and
+  /// the resize / erase that `insert_cols` and `delete_cols` perform — and by
+  /// anything that drops the row itself (`delete_rows`, or an insert that
+  /// pushes it past `kMaxRows`). Every `set_cell_*` entry point can reach
+  /// `ensure`, so in practice a caller must not retain the pointer across any
+  /// mutation of that row.
+  ///
+  /// A rehash of `rows_` is not one of the hazards: `std::unordered_map`
+  /// keeps pointers and references to its elements valid across a rehash, so
+  /// neither the `RowCells` object nor the heap buffer its cells live in
+  /// moves. Naming the rehash would send a caller to guard the one operation
+  /// that is safe while leaving `ensure` — the one that is not — unguarded.
   const Cell* cell_at(std::uint32_t row, std::uint32_t col) const noexcept;
 
   /// Convenience predicate equivalent to `cell_at(row, col) != nullptr`.
@@ -975,13 +1019,27 @@ class Sheet {
   /// Monotonically changes whenever the flat stored-cell / spill-phantom
   /// address set changes. C-ABI iteration uses it to invalidate its
   /// per-handle sorted-address cache after any sheet mutation.
-  std::uint64_t cell_enumeration_revision() const noexcept { return cell_enumeration_revision_; }
+  ///
+  /// Read without taking `spill_mutex_`, which is why the counter is atomic:
+  /// a cache-validity check must not be a data race against the mutators
+  /// that bump it. Relaxed ordering is enough — the value orders nothing,
+  /// it only has to differ once a mutation has happened.
+  std::uint64_t cell_enumeration_revision() const noexcept { return cell_enumeration_revision_.get(); }
 
   /// Read-only access to the underlying row map.
   ///
   /// Exposed so consumers (e.g. the OOXML writer) can iterate populated
-  /// rows in their own order without paying for an intermediate copy. The
-  /// reference is invalidated by mutating Sheet operations.
+  /// rows in their own order without paying for an intermediate copy. A
+  /// mutating `Sheet` operation invalidates iterators into the map, and a
+  /// `Cell` reached through it carries exactly the lifetime `cell_at`
+  /// documents.
+  ///
+  /// This is the one deliberate escape hatch from `spill_mutex_`: it hands
+  /// out the guarded map itself, so the caller — not the sheet — is
+  /// responsible for there being no concurrent mutation for as long as the
+  /// reference is used. Callers that cannot guarantee that must read through
+  /// `read_range` / `read_formula_cell` / `resolve_cell_value`, which take
+  /// the lock and return copies.
   const std::unordered_map<std::uint32_t, RowCells>& rows() const noexcept { return rows_; }
 
   // ---------------------------------------------------------------------------
@@ -997,6 +1055,10 @@ class Sheet {
   /// anchors and phantoms), and *any* merged range intersecting the footprint
   /// collide; a merge at the requested anchor is not exempt. The sheet lock
   /// is held for the complete read.
+  ///
+  /// This is the boolean face of `probe_spill_footprint` and is computed by
+  /// it: `would_collide == (probe != kAdmissible)`. The two verdicts cannot
+  /// disagree because there is only one body.
   bool spill_would_collide(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
                            std::uint32_t cols) const noexcept;
 
@@ -1060,6 +1122,14 @@ class Sheet {
   /// no region is anchored there. The returned pointer is valid until the
   /// next mutating call to the spill API (`commit_spill`, `clear_spill`)
   /// or to a cell-mutating call that triggers eager invalidation.
+  ///
+  /// That lifetime governs the region's `Value`s as well, not just the
+  /// pointer: a Text cell in `cells` views bytes inside the region's own
+  /// `owned_strings`, so a copy of such a `Value` dangles the moment the
+  /// region is cleared even though the copy itself looks self-contained.
+  /// A caller whose values outlive the region — anything that stages them
+  /// for later evaluation — must use `read_spill_region_at_anchor`, which
+  /// re-homes the bytes while the lock is held.
   const SpillRegion* spill_region_at_anchor(std::uint32_t row, std::uint32_t col) const noexcept;
 
   /// Returns the spill region whose phantom area covers `(row, col)`, or
@@ -1067,7 +1137,32 @@ class Sheet {
   /// region's anchor cell itself: only phantom coordinates match. Lookup
   /// scans the registered spill rectangles, avoiding a per-phantom index.
   /// Use `spill_region_at_anchor` to look up by anchor.
+  ///
+  /// That scan is linear in the number of committed spill anchors, and it
+  /// runs once per coordinate: every scalar read and every write that has to
+  /// check for spill invalidation pays it, so a sheet with many anchors makes
+  /// each of those O(anchors) and a full flat enumeration O(cells x anchors).
+  /// The cost follows the anchor count rather than any rectangle's area,
+  /// which is what keeps it slow rather than pathological; `read_range`
+  /// amortises it over a rectangle, and there is nothing to amortise for a
+  /// single coordinate short of indexing the spill table spatially.
+  ///
+  /// Carries the same borrowed-Text lifetime as `spill_region_at_anchor`.
   const SpillRegion* spill_region_covering(std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// Appends the row-major cells of the region anchored at `(row, col)` to
+  /// `out_cells` and reports the region's shape through `out_rows` /
+  /// `out_cols` (either may be null). Returns false, appending nothing, when
+  /// no region is anchored there.
+  ///
+  /// This is the read for callers whose values outlive the region. Every
+  /// Text payload is copied into `text_arena` inside the same critical
+  /// section that read it, so the appended values depend on the arena's
+  /// lifetime instead of the sheet's — the same trade `read_formula_cell`
+  /// makes for a single cell.
+  bool read_spill_region_at_anchor(std::uint32_t row, std::uint32_t col, Arena& text_arena,
+                                   std::vector<Value>& out_cells, std::uint32_t* out_rows,
+                                   std::uint32_t* out_cols) const;
 
   /// Returns the coordinates of every phantom cell across all registered
   /// spill regions on this sheet. Each region's anchor is excluded because
@@ -1080,7 +1175,22 @@ class Sheet {
   /// Exposed so flat-enumeration consumers (cell iteration, used-range
   /// computation) can surface spill phantoms alongside the stored cells;
   /// a phantom's effective value is read back through `resolve_cell_value`.
+  ///
+  /// The vector is proportional to the phantom count, which is a spill
+  /// rectangle's whole area: `=SEQUENCE(1048576)` materialises eight
+  /// megabytes here. A consumer that only feeds the addresses into another
+  /// container should call `for_each_spill_phantom` and skip the
+  /// intermediate copy.
   std::vector<CellAddress> spill_phantom_addresses() const;
+
+  /// Invokes `visit(address, ctx)` once per phantom coordinate, in
+  /// unspecified order, while the sheet lock is held. Same coordinate set as
+  /// `spill_phantom_addresses` without materialising it.
+  ///
+  /// `visit` must not call back into this sheet: the lock is non-recursive.
+  /// A plain function pointer plus context rather than `std::function`,
+  /// which would cost binary size for one call site.
+  void for_each_spill_phantom(void (*visit)(CellAddress address, void* ctx), void* ctx) const;
 
   /// Returns every anchor whose last attempted spill footprint intersects the
   /// supplied rectangle.  The returned coordinates are copies, so callers
@@ -1149,9 +1259,17 @@ class Sheet {
   /// and would deadlock on the non-recursive lock, so the caller re-resolves
   /// those positions itself after this returns.
   ///
+  /// Text payloads are copied into `text_arena` under the same lock, so the
+  /// appended values keep the arena's lifetime rather than the sheet's. A
+  /// cell's Text bytes live in the cell's own allocation (freed by the next
+  /// `set_cell_cached_value`) or in a spill region's `owned_strings` (freed
+  /// when the region is cleared); pushing those views into `out` would leave
+  /// the caller holding them across exactly the mutations a rectangle-wide
+  /// read is meant to be insulated from.
+  ///
   /// A reversed or out-of-range rectangle appends nothing.
   void read_range(std::uint32_t first_row, std::uint32_t last_row, std::uint32_t first_col, std::uint32_t last_col,
-                  std::vector<Value>& out, std::vector<std::size_t>& formula_indices) const;
+                  Arena& text_arena, std::vector<Value>& out, std::vector<std::size_t>& formula_indices) const;
 
   /// Copies `(row, col)`'s formula text and effective value into `out`
   /// under a single acquisition of the sheet lock.
@@ -1193,8 +1311,12 @@ class Sheet {
   ///     phantoms are registered and only the anchor's `cached_value` is
   ///     written.
   ///   * Returns `false` (without side effect on the spill table) when
-  ///     `rows == 0 || cols == 0`, when `cells.size() != rows * cols`, or
-  ///     when the footprint would overflow `kMaxRows` / `kMaxCols`.
+  ///     `rows == 0 || cols == 0`, when `cells.size() != rows * cols`, when
+  ///     the footprint would overflow `kMaxRows` / `kMaxCols`, or when its
+  ///     area exceeds `kMaxRangeExpansionCells` — the same ceiling the
+  ///     evaluator's array allocator applies, restated here so a caller that
+  ///     builds its payload some other way cannot hand the sheet a region
+  ///     whose phantom enumeration would exhaust a 32-bit host.
   bool commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows, std::uint32_t cols,
                     std::vector<Value> cells);
 
@@ -1398,6 +1520,10 @@ class Sheet {
   /// Mutable access for the OOXML reader.
   SheetPrintSettings& mutable_print_settings() noexcept { return print_settings_; }
 
+  /// Retention is byte-verbatim, so a row/column insert or delete does not
+  /// remap coordinates inside these elements. A retained child that names
+  /// cells (a `ref`, an `sqref`, a formula) keeps pointing at the
+  /// pre-edit coordinates while the model-owned structures beside it move.
   const WorksheetRawExtensions& raw_extensions() const noexcept { return raw_extensions_; }
   WorksheetRawExtensions& mutable_raw_extensions() noexcept { return raw_extensions_; }
 
@@ -1435,6 +1561,13 @@ class Sheet {
   /// criteria yet; the element round-trips verbatim so the filter range
   /// and any column criteria survive a save cycle. The writer re-emits it
   /// in ECMA-376 order (after `<sheetProtection>`, before `<mergeCells>`).
+  ///
+  /// A row/column edit rewrites the `ref` rectangle, because a stale `ref`
+  /// leaves the filter attached to the wrong cells. Nothing else inside the
+  /// element moves: a `<filterColumn colId="N">` is an offset from `ref`'s
+  /// first column, so an insert or delete *inside* the filtered span leaves
+  /// its criteria one column off. Excel remaps those offsets; modelling the
+  /// criteria is what it would take to match.
   const std::string& auto_filter_xml() const noexcept { return auto_filter_xml_; }
 
   /// Sets the raw `<autoFilter>` element. Plain metadata.
@@ -1448,6 +1581,14 @@ class Sheet {
   /// these extensions; the block round-trips verbatim so the extended
   /// formatting survives a save cycle. Re-emitted at the worksheet tail
   /// (after `<tableParts>`) per ECMA-376 element order.
+  ///
+  /// A row/column edit does not remap the coordinates inside it, so an
+  /// `<xm:sqref>` here keeps its pre-edit rectangle while the `cfRule` it
+  /// extends moves with `conditional_formats()`. Excel resolves the
+  /// mismatch by dropping the extension, which silently reverts an extended
+  /// DataBar to its legacy rendering. Fixing it means deciding what an
+  /// `xm:sqref` means for each extension the block can carry, which is more
+  /// than a coordinate rewrite.
   const std::string& ext_lst_xml() const noexcept { return ext_lst_xml_; }
 
   /// Sets the raw worksheet-level `<extLst>` element. Plain metadata.
@@ -1525,6 +1666,16 @@ class Sheet {
   /// Applies `edit` to every sheet-attached structure other than the cells
   /// themselves (which each public edit method moves first, since the cell
   /// storage differs per axis).
+  ///
+  /// Three sheet-attached structures are deliberately absent from it, and
+  /// naming them here is the point: a reader checking the enumeration for
+  /// what moves would otherwise discharge that check against a list that
+  /// silently omits the fields most likely to hold stale coordinates.
+  /// `ext_lst_xml_`, `raw_extensions_` and `xlsb_tail_` are retained
+  /// byte-verbatim, so a `ref`, an `sqref` or a formula inside them keeps
+  /// its pre-edit rectangle. Each field's own declaration states what that
+  /// costs; `auto_filter_xml_` is the one raw field that *is* shifted, and
+  /// only its `ref` attribute is.
   void shift_sheet_metadata(const StructuralEdit& edit);
 
   // ---------------------------------------------------------------------------
@@ -1546,9 +1697,14 @@ class Sheet {
   /// `spill_region_covering` body; assumes `spill_mutex_` is held.
   const SpillRegion* spill_region_covering_locked(std::uint32_t row, std::uint32_t col) const noexcept;
 
-  /// `spill_would_collide` body; assumes `spill_mutex_` is held.
-  bool spill_would_collide_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
-                                  std::uint32_t cols) const noexcept;
+  /// Number of materialised `Cell` slots inside the half-open rectangle
+  /// `[row_begin, row_end) x [col_begin, col_end)`, counting the implicitly
+  /// default-constructed ones a row's run holds between its endpoints.
+  /// Walks the stored rows or probes the rectangle's rows, whichever set is
+  /// smaller, so a grid-axis-sized rectangle costs what the sheet stores
+  /// rather than what the rectangle spans. Caller must hold `spill_mutex_`.
+  std::size_t materialised_cells_in_rect_locked(std::uint32_t row_begin, std::uint64_t row_end, std::uint32_t col_begin,
+                                                std::uint64_t col_end) const noexcept;
 
   /// `probe_spill_footprint` body; assumes `spill_mutex_` is held.
   SpillAdmission probe_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
@@ -1584,11 +1740,14 @@ class Sheet {
   std::string opaque_ooxml_part_path_;
   std::string opaque_ooxml_relationship_type_;
   std::unordered_map<std::uint32_t, RowCells> rows_;
-  std::uint64_t cell_enumeration_revision_ = 0;
+  // Bumped by every mutator while `spill_mutex_` is held, but read without
+  // it (see `cell_enumeration_revision()`), so the type carries the
+  // synchronisation the accessor cannot.
+  EnumerationRevision cell_enumeration_revision_;
   // Lazily allocated: most sheets do not host any spill regions, so the
   // table is only materialised on the first `commit_spill` call.
   std::unique_ptr<SpillTable> spill_table_;
-  // Guards every access to `spill_table_` and `rows_` so that parallel
+  // Guards `spill_table_` and `rows_` against concurrent access so that parallel
   // recalc workers committing dynamic-array spills on the same sheet (each
   // running outside the scheduler's write lock) cannot tear the underlying
   // maps. This is the innermost link of the one workbook-wide lock order,
@@ -1600,6 +1759,10 @@ class Sheet {
   // scheduler calls under its `write_mutex` and which then takes
   // `spill_mutex_` internally. `mutable` because const observers
   // (`resolve_cell_value`, `cell_at`, `spill_region_*`) must lock it too.
+  // Every mutator and every value-returning observer goes through it; the
+  // two accessors that do not are `rows()`, which hands the guarded map
+  // straight to the caller under the precondition stated there, and
+  // `cell_enumeration_revision()`, whose counter carries its own atomicity.
   // Heap ownership makes the lock movable with its sheet, so Sheet's
   // out-of-line defaulted move members cannot omit future metadata fields.
   mutable std::unique_ptr<std::mutex> spill_mutex_;

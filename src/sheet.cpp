@@ -20,7 +20,11 @@
 
 #include "cell.h"
 #include "cf/cf_types.h"
+#include "io/a1_ref.h"
 #include "pivot/pivot_table.h"
+#include "utils/a1_column.h"
+#include "utils/arena.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 
 namespace formulon {
@@ -44,14 +48,36 @@ struct SpillTable {
 
 namespace {
 
+/// True when two half-open rectangles share at least one coordinate.
+///
+/// Every rectangle in this file arrives as an origin plus an extent, and the
+/// ends are widened to 64 bits so a rectangle touching the last row or column
+/// cannot wrap. Written once because the spill table, the merge list, the
+/// blocked-footprint table and the bulk read all need the same test, and a
+/// hand-rolled copy per caller is a place for one comparison to drift.
+bool RectsIntersect(std::uint64_t a_row_begin, std::uint64_t a_row_end, std::uint64_t a_col_begin,
+                    std::uint64_t a_col_end, std::uint64_t b_row_begin, std::uint64_t b_row_end,
+                    std::uint64_t b_col_begin, std::uint64_t b_col_end) noexcept {
+  return a_row_begin < b_row_end && b_row_begin < a_row_end && a_col_begin < b_col_end && b_col_begin < a_col_end;
+}
+
+/// `RectsIntersect` for a spill-table rectangle, which is always an anchor
+/// plus a `rows` x `cols` extent.
+template <typename Rect>
+bool RectIntersectsSpan(const Rect& rect, std::uint64_t row_begin, std::uint64_t row_end, std::uint64_t col_begin,
+                        std::uint64_t col_end) noexcept {
+  return RectsIntersect(row_begin, row_end, col_begin, col_end, rect.anchor_row,
+                        static_cast<std::uint64_t>(rect.anchor_row) + rect.rows, rect.anchor_col,
+                        static_cast<std::uint64_t>(rect.anchor_col) + rect.cols);
+}
+
 /// Returns the anchors of every rectangle in `table` that overlaps
 /// `[first_row, first_row + rows) x [first_col, first_col + cols)`.
 ///
 /// Both anchor tables carry the same four rectangle fields under different
-/// payload types, so the walk is shared and only the map type varies. Widening
-/// to 64 bits keeps the end coordinates from wrapping on an anchor sitting at
-/// the last row or column. `table` may be null when the sheet has no spill
-/// table yet; callers hold the spill mutex.
+/// payload types, so the walk is shared and only the map type varies. `table`
+/// may be null when the sheet has no spill table yet; callers hold the spill
+/// mutex.
 template <typename AnchorMap>
 std::vector<CellAddress> collect_anchors_intersecting(const AnchorMap* table, std::uint32_t first_row,
                                                       std::uint32_t first_col, std::uint32_t rows, std::uint32_t cols) {
@@ -63,10 +89,7 @@ std::vector<CellAddress> collect_anchors_intersecting(const AnchorMap* table, st
   const std::uint64_t col_end = static_cast<std::uint64_t>(first_col) + cols;
   out.reserve(table->size());
   for (const auto& [address, rect] : *table) {
-    const std::uint64_t rect_row_end = static_cast<std::uint64_t>(rect.anchor_row) + rect.rows;
-    const std::uint64_t rect_col_end = static_cast<std::uint64_t>(rect.anchor_col) + rect.cols;
-    if (static_cast<std::uint64_t>(first_row) < rect_row_end && static_cast<std::uint64_t>(rect.anchor_row) < row_end &&
-        static_cast<std::uint64_t>(first_col) < rect_col_end && static_cast<std::uint64_t>(rect.anchor_col) < col_end) {
+    if (RectIntersectsSpan(rect, first_row, row_end, first_col, col_end)) {
       out.push_back(address);
     }
   }
@@ -130,6 +153,21 @@ Cell& RowCells::ensure(std::uint32_t col) {
 }
 
 namespace {
+
+// Returns `value` with any Text payload copied into `arena`.
+//
+// A Text `Value` read out of sheet storage is a view into bytes the sheet
+// owns and frees: a cell's `cached_text_owned`, replaced by the next cached
+// write, or a spill region's `owned_strings`, freed when the region is
+// cleared. Re-homing the bytes under the same lock that read them is what
+// lets the copy leave the critical section; the caller's arena decides how
+// long it stays readable. Non-Text values carry no pointer.
+Value AdoptText(const Value& value, Arena& arena) {
+  if (!value.is_text()) {
+    return value;
+  }
+  return Value::text(arena.intern(value.as_text()));
+}
 
 // Returns true when `c` is "occupied" for the purposes of a spill collision
 // check: a non-default cell (literal value or formula) lives there. The
@@ -207,7 +245,7 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   slot.formula_text.clear();
   slot.phonetic_text.clear();
   slot.cached_value = v;
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view text) {
@@ -230,7 +268,7 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
   auto owned = std::make_unique<std::string>(text);
   slot.cached_value = Value::text(*owned);
   slot.cached_text_owned = std::move(owned);
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string formula) {
@@ -253,7 +291,7 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   slot.formula_text = std::move(formula);
   slot.phonetic_text.clear();
   slot.cached_value = Value::blank();
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v) {
@@ -306,7 +344,7 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
     // unconditionally.
     slot.cached_value = v;
   }
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::set_cell_cached_value_borrowed(std::uint32_t row, std::uint32_t col, Value v) {
@@ -322,7 +360,7 @@ void Sheet::set_cell_cached_value_borrowed(std::uint32_t row, std::uint32_t col,
   Cell& slot = row_cells.ensure(col);
   slot.cached_text_owned.reset();
   slot.cached_value = v;
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_view phonetic) {
@@ -340,7 +378,7 @@ void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.phonetic_text.assign(phonetic.begin(), phonetic.end());
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index) {
@@ -353,7 +391,7 @@ void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.xf_index = xf_index;
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 const Cell* Sheet::cell_at(std::uint32_t row, std::uint32_t col) const noexcept {
@@ -385,19 +423,63 @@ std::size_t Sheet::cell_count() const noexcept {
   // already counted above, so only phantoms absent from `rows_` add to the
   // total. This keeps the count aligned with the flat enumeration exposed
   // through the C ABI, which surfaces phantoms via `resolve_cell_value`.
+  //
+  // Derived from each region's area rather than walked cell by cell: a spill
+  // is one rectangle, and a whole-column one is 1,048,576 coordinates whose
+  // individual hash lookups would run under this lock while every other
+  // reader of the sheet waits.
   if (spill_table_ != nullptr) {
     for (const auto& kv : spill_table_->by_anchor) {
       const SpillRegion& region = kv.second;
-      for (std::uint32_t r = 0; r < region.rows; ++r) {
-        for (std::uint32_t c = 0; c < region.cols; ++c) {
-          if (r == 0U && c == 0U) {
-            continue;  // Anchor already occupies a real slot in `rows_`.
-          }
-          if (cell_at_locked(region.anchor_row + r, region.anchor_col + c) == nullptr) {
-            ++total;
-          }
-        }
+      const std::uint64_t row_end = static_cast<std::uint64_t>(region.anchor_row) + region.rows;
+      const std::uint64_t col_end = static_cast<std::uint64_t>(region.anchor_col) + region.cols;
+      const std::size_t area = static_cast<std::size_t>(region.rows) * static_cast<std::size_t>(region.cols);
+      const std::size_t materialised =
+          materialised_cells_in_rect_locked(region.anchor_row, row_end, region.anchor_col, col_end);
+      // Materialised slots inside the rectangle are already in `total`, so
+      // only the remainder is new. `commit_spill` materialises the anchor, so
+      // subtracting the materialised count also removes the anchor the
+      // phantom set excludes; a region whose anchor slot is somehow absent
+      // needs that exclusion applied by hand.
+      total += area - materialised;
+      if (cell_at_locked(region.anchor_row, region.anchor_col) == nullptr) {
+        --total;
       }
+    }
+  }
+  return total;
+}
+
+std::size_t Sheet::materialised_cells_in_rect_locked(std::uint32_t row_begin, std::uint64_t row_end,
+                                                     std::uint32_t col_begin, std::uint64_t col_end) const noexcept {
+  // A row's materialised slots are one contiguous run, so its contribution is
+  // the length of the run's overlap with the column span — no per-column
+  // probing.
+  const auto overlap = [&](const RowCells& cells) noexcept -> std::size_t {
+    if (cells.empty()) {
+      return 0U;
+    }
+    const std::uint64_t first = std::max<std::uint64_t>(col_begin, cells.first_col());
+    const std::uint64_t last = std::min<std::uint64_t>(col_end, cells.size());
+    return first < last ? static_cast<std::size_t>(last - first) : 0U;
+  };
+
+  // Same choice `footprint_holds_occupied_cell_locked` makes: whichever of
+  // the stored rows and the rectangle's rows is the smaller set.
+  std::size_t total = 0;
+  if (static_cast<std::uint64_t>(rows_.size()) <= row_end - row_begin) {
+    for (const auto& [row, cells] : rows_) {
+      if (static_cast<std::uint64_t>(row) < row_begin || static_cast<std::uint64_t>(row) >= row_end) {
+        continue;
+      }
+      total += overlap(cells);
+    }
+    return total;
+  }
+  for (std::uint64_t row = row_begin; row < row_end; ++row) {
+    const auto it = rows_.find(static_cast<std::uint32_t>(row));
+    if (it != rows_.end()) {
+      total += overlap(it->second);
     }
   }
   return total;
@@ -472,11 +554,13 @@ std::optional<Sheet::PopulatedExtent> Sheet::populated_extent(std::uint32_t firs
   return extent;
 }
 
-std::vector<CellAddress> Sheet::spill_phantom_addresses() const {
-  std::vector<CellAddress> out;
+void Sheet::for_each_spill_phantom(void (*visit)(CellAddress address, void* ctx), void* ctx) const {
+  if (visit == nullptr) {
+    return;
+  }
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   if (spill_table_ == nullptr) {
-    return out;
+    return;
   }
   for (const auto& kv : spill_table_->by_anchor) {
     const SpillRegion& region = kv.second;
@@ -485,10 +569,16 @@ std::vector<CellAddress> Sheet::spill_phantom_addresses() const {
         if (r == 0U && c == 0U) {
           continue;  // Exclude the anchor; it has a real slot in `rows_`.
         }
-        out.push_back(CellAddress{region.anchor_row + r, region.anchor_col + c});
+        visit(CellAddress{region.anchor_row + r, region.anchor_col + c}, ctx);
       }
     }
   }
+}
+
+std::vector<CellAddress> Sheet::spill_phantom_addresses() const {
+  std::vector<CellAddress> out;
+  for_each_spill_phantom(
+      [](CellAddress address, void* ctx) { static_cast<std::vector<CellAddress>*>(ctx)->push_back(address); }, &out);
   return out;
 }
 
@@ -542,9 +632,8 @@ std::optional<BlockedSpillFootprint> Sheet::committed_spill_footprint_covering(s
   }
   for (const auto& [unused, region] : spill_table_->by_anchor) {
     (void)unused;
-    if (row < region.anchor_row || col < region.anchor_col ||
-        static_cast<std::uint64_t>(row) >= static_cast<std::uint64_t>(region.anchor_row) + region.rows ||
-        static_cast<std::uint64_t>(col) >= static_cast<std::uint64_t>(region.anchor_col) + region.cols) {
+    if (!RectIntersectsSpan(region, row, static_cast<std::uint64_t>(row) + 1U, col,
+                            static_cast<std::uint64_t>(col) + 1U)) {
       continue;
     }
     return BlockedSpillFootprint{region.anchor_row, region.anchor_col, region.rows, region.cols};
@@ -649,9 +738,8 @@ const SpillRegion* Sheet::spill_region_covering_locked(std::uint32_t row, std::u
   }
   for (const auto& entry : spill_table_->by_anchor) {
     const SpillRegion& region = entry.second;
-    if (row < region.anchor_row || col < region.anchor_col ||
-        static_cast<std::uint64_t>(row) >= static_cast<std::uint64_t>(region.anchor_row) + region.rows ||
-        static_cast<std::uint64_t>(col) >= static_cast<std::uint64_t>(region.anchor_col) + region.cols) {
+    if (!RectIntersectsSpan(region, row, static_cast<std::uint64_t>(row) + 1U, col,
+                            static_cast<std::uint64_t>(col) + 1U)) {
       continue;
     }
     if (row == region.anchor_row && col == region.anchor_col) {
@@ -665,64 +753,8 @@ const SpillRegion* Sheet::spill_region_covering_locked(std::uint32_t row, std::u
 bool Sheet::spill_would_collide(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
                                 std::uint32_t cols) const noexcept {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  return spill_would_collide_locked(anchor_row, anchor_col, rows, cols);
-}
-
-bool Sheet::spill_would_collide_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
-                                       std::uint32_t cols) const noexcept {
-  // Treat malformed shapes and arithmetic that would leave the grid as a
-  // collision. Keep the rectangle ends widened so uint32_t coordinates cannot
-  // wrap at the bottom or right edge of the sheet.
-  if (rows == 0U || cols == 0U || !coord_in_grid(anchor_row, anchor_col)) {
-    return true;
-  }
-  const std::uint64_t row_end = static_cast<std::uint64_t>(anchor_row) + rows;
-  const std::uint64_t col_end = static_cast<std::uint64_t>(anchor_col) + cols;
-  if (row_end > kMaxRows || col_end > kMaxCols) {
-    return true;
-  }
-
-  // A pre-existing region at this anchor is the producer's own spill. It is
-  // ignored wholesale: ad-hoc evaluation is read-only and cannot clear it,
-  // while commit_spill clears it before reaching this predicate.
-  if (spill_table_ != nullptr) {
-    for (const auto& entry : spill_table_->by_anchor) {
-      const SpillRegion& region = entry.second;
-      if (region.anchor_row == anchor_row && region.anchor_col == anchor_col) {
-        continue;
-      }
-      const std::uint64_t region_row_end = static_cast<std::uint64_t>(region.anchor_row) + region.rows;
-      const std::uint64_t region_col_end = static_cast<std::uint64_t>(region.anchor_col) + region.cols;
-      if (static_cast<std::uint64_t>(anchor_row) < region_row_end &&
-          static_cast<std::uint64_t>(region.anchor_row) < row_end &&
-          static_cast<std::uint64_t>(anchor_col) < region_col_end &&
-          static_cast<std::uint64_t>(region.anchor_col) < col_end) {
-        return true;
-      }
-    }
-  }
-
-  // Merged cells occupy their complete rectangle even when only the
-  // top-left coordinate has a stored Cell. Any intersection is a blocker,
-  // including a merge whose top-left cell is the requested spill anchor.
-  for (const MergeRange& merge : merges_) {
-    if (merge.first_row > merge.last_row || merge.first_col > merge.last_col) {
-      continue;
-    }
-    const std::uint64_t merge_row_end = static_cast<std::uint64_t>(merge.last_row) + 1U;
-    const std::uint64_t merge_col_end = static_cast<std::uint64_t>(merge.last_col) + 1U;
-    if (static_cast<std::uint64_t>(anchor_row) < merge_row_end &&
-        static_cast<std::uint64_t>(merge.first_row) < row_end &&
-        static_cast<std::uint64_t>(anchor_col) < merge_col_end &&
-        static_cast<std::uint64_t>(merge.first_col) < col_end) {
-      return true;
-    }
-  }
-
-  // Scan stored cells last so a blank/default slot created by row growth does
-  // not become a blocker. Formula cells and non-blank cached values remain
-  // blockers, preserving the existing commit_spill semantics and metadata.
-  return footprint_holds_occupied_cell_locked(anchor_row, anchor_col, row_end, col_end, /*scan_steps=*/nullptr);
+  return probe_spill_footprint_locked(anchor_row, anchor_col, rows, cols, /*scan_steps=*/nullptr) !=
+         SpillAdmission::kAdmissible;
 }
 
 bool Sheet::footprint_holds_occupied_cell_locked(std::uint32_t anchor_row, std::uint32_t anchor_col,
@@ -814,32 +846,31 @@ Sheet::SpillAdmission Sheet::probe_spill_footprint_locked(std::uint32_t anchor_r
   // Spill rectangles and merged ranges are rectangle-intersection tests over
   // their own tables, so they already cost their table size rather than the
   // footprint's area; only the stored-cell sweep needed the sparse walk.
+  //
+  // A pre-existing region at this anchor is the producer's own spill. It is
+  // ignored wholesale: ad-hoc evaluation is read-only and cannot clear it,
+  // while commit_spill clears it before reaching this predicate.
   if (spill_table_ != nullptr) {
     for (const auto& entry : spill_table_->by_anchor) {
       const SpillRegion& region = entry.second;
       if (region.anchor_row == anchor_row && region.anchor_col == anchor_col) {
         continue;
       }
-      const std::uint64_t region_row_end = static_cast<std::uint64_t>(region.anchor_row) + region.rows;
-      const std::uint64_t region_col_end = static_cast<std::uint64_t>(region.anchor_col) + region.cols;
-      if (static_cast<std::uint64_t>(anchor_row) < region_row_end &&
-          static_cast<std::uint64_t>(region.anchor_row) < row_end &&
-          static_cast<std::uint64_t>(anchor_col) < region_col_end &&
-          static_cast<std::uint64_t>(region.anchor_col) < col_end) {
+      if (RectIntersectsSpan(region, anchor_row, row_end, anchor_col, col_end)) {
         return SpillAdmission::kBlocked;
       }
     }
   }
+  // Merged cells occupy their complete rectangle even when only the top-left
+  // coordinate has a stored Cell. Any intersection is a blocker, including a
+  // merge whose top-left cell is the requested spill anchor.
   for (const MergeRange& merge : merges_) {
     if (merge.first_row > merge.last_row || merge.first_col > merge.last_col) {
       continue;
     }
-    const std::uint64_t merge_row_end = static_cast<std::uint64_t>(merge.last_row) + 1U;
-    const std::uint64_t merge_col_end = static_cast<std::uint64_t>(merge.last_col) + 1U;
-    if (static_cast<std::uint64_t>(anchor_row) < merge_row_end &&
-        static_cast<std::uint64_t>(merge.first_row) < row_end &&
-        static_cast<std::uint64_t>(anchor_col) < merge_col_end &&
-        static_cast<std::uint64_t>(merge.first_col) < col_end) {
+    if (RectsIntersect(anchor_row, row_end, anchor_col, col_end, merge.first_row,
+                       static_cast<std::uint64_t>(merge.last_row) + 1U, merge.first_col,
+                       static_cast<std::uint64_t>(merge.last_col) + 1U)) {
       return SpillAdmission::kBlocked;
     }
   }
@@ -872,7 +903,7 @@ void Sheet::reject_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_
   // anchor once the blocker goes away; dropping it strands the #SPILL!.
   spill_table_->blocked_by_anchor[CellAddress{anchor_row, anchor_col}] =
       BlockedSpillFootprint{anchor_row, anchor_col, rows, cols};
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 Value Sheet::resolve_cell_value(std::uint32_t row, std::uint32_t col) const noexcept {
@@ -932,11 +963,38 @@ void Sheet::read_formula_cell(std::uint32_t row, std::uint32_t col, CellRead& ou
 }
 
 void Sheet::read_range(std::uint32_t first_row, std::uint32_t last_row, std::uint32_t first_col, std::uint32_t last_col,
-                       std::vector<Value>& out, std::vector<std::size_t>& formula_indices) const {
+                       Arena& text_arena, std::vector<Value>& out, std::vector<std::size_t>& formula_indices) const {
   if (first_row > last_row || first_col > last_col || last_row >= kMaxRows || last_col >= kMaxCols) {
     return;
   }
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
+
+  // Narrow the spill table to the regions this rectangle can actually reach,
+  // once. `spill_region_covering_locked` is a linear scan of every registered
+  // anchor, and calling it per coordinate makes the read cost area x table
+  // size — the opposite of the amortisation this method exists for.
+  std::vector<const SpillRegion*> regions;
+  if (spill_table_ != nullptr) {
+    const std::uint64_t row_end = static_cast<std::uint64_t>(last_row) + 1U;
+    const std::uint64_t col_end = static_cast<std::uint64_t>(last_col) + 1U;
+    for (const auto& entry : spill_table_->by_anchor) {
+      if (RectIntersectsSpan(entry.second, first_row, row_end, first_col, col_end)) {
+        regions.push_back(&entry.second);
+      }
+    }
+  }
+  const auto covering = [&regions](std::uint32_t row, std::uint32_t col) noexcept -> const SpillRegion* {
+    for (const SpillRegion* region : regions) {
+      if (!RectIntersectsSpan(*region, row, static_cast<std::uint64_t>(row) + 1U, col,
+                              static_cast<std::uint64_t>(col) + 1U)) {
+        continue;
+      }
+      // The anchor reads as its own stored cell, matching the scalar path.
+      return (row == region->anchor_row && col == region->anchor_col) ? nullptr : region;
+    }
+    return nullptr;
+  };
+
   for (std::uint32_t row = first_row; row <= last_row; ++row) {
     const auto row_it = rows_.find(row);
     const RowCells* stored = row_it != rows_.end() ? &row_it->second : nullptr;
@@ -946,18 +1004,43 @@ void Sheet::read_range(std::uint32_t first_row, std::uint32_t last_row, std::uin
       // a covering spill region, which in turn wins over a stored literal.
       if (cell != nullptr && !cell->formula_text.empty()) {
         formula_indices.push_back(out.size());
-        out.push_back(cell->cached_value);
+        out.push_back(AdoptText(cell->cached_value, text_arena));
         continue;
       }
-      if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
-        const std::size_t index = static_cast<std::size_t>(row - covering->anchor_row) * covering->cols +
-                                  static_cast<std::size_t>(col - covering->anchor_col);
-        out.push_back(covering->cells[index]);
+      if (const SpillRegion* region = covering(row, col); region != nullptr) {
+        const std::size_t index = static_cast<std::size_t>(row - region->anchor_row) * region->cols +
+                                  static_cast<std::size_t>(col - region->anchor_col);
+        out.push_back(AdoptText(region->cells[index], text_arena));
         continue;
       }
-      out.push_back(cell != nullptr ? cell->cached_value : Value::blank());
+      out.push_back(cell != nullptr ? AdoptText(cell->cached_value, text_arena) : Value::blank());
     }
   }
+}
+
+bool Sheet::read_spill_region_at_anchor(std::uint32_t row, std::uint32_t col, Arena& text_arena,
+                                        std::vector<Value>& out_cells, std::uint32_t* out_rows,
+                                        std::uint32_t* out_cols) const {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  if (spill_table_ == nullptr) {
+    return false;
+  }
+  const auto it = spill_table_->by_anchor.find(CellAddress{row, col});
+  if (it == spill_table_->by_anchor.end()) {
+    return false;
+  }
+  const SpillRegion& region = it->second;
+  out_cells.reserve(out_cells.size() + region.cells.size());
+  for (const Value& value : region.cells) {
+    out_cells.push_back(AdoptText(value, text_arena));
+  }
+  if (out_rows != nullptr) {
+    *out_rows = region.rows;
+  }
+  if (out_cols != nullptr) {
+    *out_cols = region.cols;
+  }
+  return true;
 }
 
 bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows, std::uint32_t cols,
@@ -967,6 +1050,19 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // remain memory-safe.
   if (rows == 0U || cols == 0U) {
     assert(false && "commit_spill: zero-sized spill region");
+    return false;
+  }
+  // Area first, in 64-bit, and before the payload length is derived from it:
+  // this is the same ceiling the evaluator's array allocator applies to the
+  // result it would spill, and every producer that reaches here has already
+  // passed it, so it rejects nothing the engine can build. It exists so the
+  // sheet does not depend on its caller having checked — a region this large
+  // costs a `Value` per cell here plus one enumerated coordinate per phantom
+  // in the C ABI, which is where a 32-bit host runs out of address space.
+  // Establishing it first also keeps `rows * cols` from wrapping `size_t` on
+  // such a host, which would let a short payload match a huge shape.
+  if (static_cast<std::uint64_t>(rows) * cols > kMaxRangeExpansionCells) {
+    assert(false && "commit_spill: footprint exceeds the dynamic-array cell ceiling");
     return false;
   }
   const std::size_t expected_size = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
@@ -999,7 +1095,8 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // Admission is shared with the read-only/ad-hoc evaluation path and with
   // producers that probe before materialising, so a refusal here and a
   // refusal there record the same thing.
-  if (spill_would_collide_locked(anchor_row, anchor_col, rows, cols)) {
+  if (probe_spill_footprint_locked(anchor_row, anchor_col, rows, cols, /*scan_steps=*/nullptr) !=
+      SpillAdmission::kAdmissible) {
     reject_spill_footprint_locked(anchor_row, anchor_col, rows, cols);
     return false;
   }
@@ -1032,7 +1129,7 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   RowCells& row_cells = rows_[anchor_row];
   Cell& anchor_slot = row_cells.ensure(anchor_col);
   anchor_slot.cached_value = first_cell;
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
   return true;
 }
 
@@ -1233,6 +1330,89 @@ void ShiftRowLayouts(std::vector<RowLayout>& rows, std::uint32_t index, std::uin
   ShiftRowAnchored(rows, index, count, is_delete);
 }
 
+/// Renders `[first_row..last_row] x [first_col..last_col]` as an OOXML
+/// `ref` rectangle, collapsing a single-cell rectangle to one address the
+/// way Excel writes it. Returns false when a coordinate is outside the grid.
+bool AppendRefRectangle(std::string& out, const MergeRange& rect) {
+  const auto append_cell = [&out](std::uint32_t row, std::uint32_t col) {
+    if (!a1::append_column_letters(out, col)) {
+      return false;
+    }
+    out += std::to_string(static_cast<std::uint64_t>(row) + 1U);
+    return true;
+  };
+  if (!append_cell(rect.first_row, rect.first_col)) {
+    return false;
+  }
+  if (rect.first_row == rect.last_row && rect.first_col == rect.last_col) {
+    return true;
+  }
+  out += ':';
+  return append_cell(rect.last_row, rect.last_col);
+}
+
+/// Rewrites the `ref` rectangle of a raw `<autoFilter>` element through the
+/// same span rules the modelled rectangles follow, and clears the element
+/// when the edit consumed its whole rectangle.
+///
+/// The element is retained verbatim, so this is the one coordinate inside it
+/// that moves. It is also the one that decides which cells the filter is
+/// attached to: leaving it behind points the filter at whatever occupies the
+/// old rectangle after the edit. The `colId` offsets on any `<filterColumn>`
+/// children are relative to this rectangle's first column and are not
+/// remapped — see the field's declaration for what that costs.
+void ShiftAutoFilterRef(std::string& xml, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis) {
+  if (xml.empty()) {
+    return;
+  }
+  // Confine the search to the start tag: only the `<autoFilter>` element
+  // itself carries the rectangle.
+  const std::size_t tag_end = xml.find('>');
+  const std::size_t attr = xml.find("ref=\"");
+  if (tag_end == std::string::npos || attr == std::string::npos || attr > tag_end) {
+    return;
+  }
+  const std::size_t value_begin = attr + 5U;
+  const std::size_t value_end = xml.find('"', value_begin);
+  if (value_end == std::string::npos || value_end > tag_end) {
+    return;
+  }
+
+  const std::string_view value(xml.data() + value_begin, value_end - value_begin);
+  const std::size_t colon = value.find(':');
+  MergeRange rect;
+  if (!io::parse_a1_ref(value.substr(0, colon), &rect.first_row, &rect.first_col)) {
+    return;  // Not a plain A1 rectangle; leave the element untouched.
+  }
+  if (colon == std::string_view::npos) {
+    rect.last_row = rect.first_row;
+    rect.last_col = rect.first_col;
+  } else if (!io::parse_a1_ref(value.substr(colon + 1U), &rect.last_row, &rect.last_col)) {
+    return;
+  }
+  if (rect.first_row > rect.last_row || rect.first_col > rect.last_col) {
+    return;
+  }
+
+  bool drop = false;
+  if (row_axis) {
+    ShiftRowRange(rect, index, count, is_delete, &drop);
+  } else {
+    ShiftColRange(rect, index, count, is_delete, &drop);
+  }
+  if (drop) {
+    // Every filtered cell was deleted, which is what Excel resolves by
+    // removing the filter rather than by keeping an empty one.
+    xml.clear();
+    return;
+  }
+  std::string replacement;
+  if (!AppendRefRectangle(replacement, rect)) {
+    return;
+  }
+  xml.replace(value_begin, value_end - value_begin, replacement);
+}
+
 void ShiftColumnLayouts(std::vector<ColumnLayout>& columns, std::uint32_t index, std::uint32_t count, bool is_delete) {
   std::vector<ColumnLayout> retained;
   retained.reserve(columns.size());
@@ -1326,6 +1506,7 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
     ShiftBreaks(print_settings_.manual_col_breaks, index, count, is_delete, Sheet::kMaxCols);
   }
   ShiftPivotAnchors(pivot_tables_, index, count, is_delete, row_axis);
+  ShiftAutoFilterRef(auto_filter_xml_, index, count, is_delete, row_axis);
 }
 
 void Sheet::shift_blocked_spills_locked(const StructuralEdit& edit) {
@@ -1390,7 +1571,7 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
   const StructuralEdit edit{row, count, /*is_delete=*/false, /*row_axis=*/true};
   shift_blocked_spills_locked(edit);
   shift_sheet_metadata(edit);
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
@@ -1422,7 +1603,7 @@ void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
   const StructuralEdit edit{row, count, /*is_delete=*/true, /*row_axis=*/true};
   shift_blocked_spills_locked(edit);
   shift_sheet_metadata(edit);
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
@@ -1482,7 +1663,7 @@ void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
   const StructuralEdit edit{col, count, /*is_delete=*/false, /*row_axis=*/false};
   shift_blocked_spills_locked(edit);
   shift_sheet_metadata(edit);
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
@@ -1517,7 +1698,7 @@ void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
   const StructuralEdit edit{col, count, /*is_delete=*/true, /*row_axis=*/false};
   shift_blocked_spills_locked(edit);
   shift_sheet_metadata(edit);
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::clear_spill(std::uint32_t anchor_row, std::uint32_t anchor_col) noexcept {
@@ -1530,7 +1711,7 @@ void Sheet::clear_all_spills() noexcept {
   clear_committed_spills_locked();
   if (spill_table_ != nullptr && !spill_table_->blocked_by_anchor.empty()) {
     spill_table_->blocked_by_anchor.clear();
-    ++cell_enumeration_revision_;
+    cell_enumeration_revision_.bump();
   }
 }
 
@@ -1550,7 +1731,7 @@ void Sheet::clear_spill_locked(std::uint32_t anchor_row, std::uint32_t anchor_co
   if (blocked_it != spill_table_->blocked_by_anchor.end()) {
     spill_table_->blocked_by_anchor.erase(blocked_it);
   }
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 void Sheet::clear_committed_spills_locked() noexcept {
@@ -1558,7 +1739,7 @@ void Sheet::clear_committed_spills_locked() noexcept {
     return;
   }
   spill_table_->by_anchor.clear();
-  ++cell_enumeration_revision_;
+  cell_enumeration_revision_.bump();
 }
 
 }  // namespace formulon

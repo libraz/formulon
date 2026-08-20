@@ -5,6 +5,8 @@
 #include "eval/spill_anchor.h"
 
 #include <cstddef>
+#include <cstdint>
+#include <vector>
 
 #include "eval/array_alloc.h"
 #include "eval/eval_context.h"
@@ -38,20 +40,24 @@ ArrayValue* project_spill_at_anchor(std::string_view sheet, std::uint32_t row, s
     *out_err = ErrorCode::Ref;
     return nullptr;
   }
-  const SpillRegion* region = target->spill_region_at_anchor(row, col);
-  if (region == nullptr) {
+  // Copy out under the sheet lock: the projected array outlives the region,
+  // so its Text payloads have to be re-homed into `arena` before the lock is
+  // released rather than left pointing at the region's own storage.
+  std::vector<Value> cells;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  if (!target->read_spill_region_at_anchor(row, col, arena, cells, &rows, &cols)) {
     *out_err = ErrorCode::Ref;
     return nullptr;
   }
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(region->rows, region->cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
   if (arr == nullptr) {
     *out_err = ErrorCode::Num;
     return nullptr;
   }
-  const std::size_t cells = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
-  for (std::size_t i = 0; i < cells; ++i) {
-    buffer[i] = region->cells[i];
+  for (std::size_t i = 0; i < cells.size(); ++i) {
+    buffer[i] = cells[i];
   }
   return arr;
 }

@@ -16,11 +16,12 @@
 // layout, manual page breaks, pivot anchors, and the dependency graph
 // (observed through a recalc rather than by inspecting the graph directly).
 //
-// Eight of those — hyperlinks, comments, merges, validation ranges,
-// conditional-format sqref, row/column layout, manual breaks, and pivot
-// anchors — are exactly what `Sheet::shift_sheet_metadata` enumerates, and
-// each is asserted under all four operations. Adding a structure there
-// without adding it here puts the header's coverage claim back out of date.
+// Nine of those — hyperlinks, comments, merges, validation ranges,
+// conditional-format sqref, row/column layout, manual breaks, pivot anchors,
+// and the raw auto-filter's `ref` rectangle — are exactly what
+// `Sheet::shift_sheet_metadata` enumerates, and each is asserted under all
+// four operations. Adding a structure there without adding it here puts the
+// header's coverage claim back out of date.
 //
 // Sheet axis (rename / move / remove): the structures keyed by sheet name or
 // sheet index rather than by coordinate.
@@ -147,6 +148,11 @@ Workbook MakeWorkbook() {
   col_break.manual = true;
   sheet.mutable_print_settings().manual_col_breaks.push_back(col_break);
 
+  // The auto-filter element is retained as raw XML, but its `ref` rectangle
+  // decides which cells the filter is attached to and so has to move with
+  // them. Same rectangle as the merge above.
+  sheet.set_auto_filter_xml("<autoFilter ref=\"D6:E7\"><filterColumn colId=\"0\"/></autoFilter>");
+
   auto pivot = std::make_unique<pivot::PivotTable>();
   pivot->set_anchor(kAnchorRow, kAnchorCol, /*rows=*/2, /*cols=*/2);
   sheet.mutable_pivot_tables().push_back(std::move(pivot));
@@ -165,6 +171,13 @@ Workbook MakeWorkbook() {
 /// The single conditional-format range on the sheet.
 const cf::CFCellRange& OnlyCfRange(const Workbook& wb) {
   return wb.sheet(0).conditional_formats().at(0).sqref.at(0);
+}
+
+/// The auto-filter element, with its `ref` rectangle rewritten to
+/// `expected_ref` and everything else left verbatim.
+void ExpectAutoFilterRef(const Sheet& sheet, const std::string& expected_ref) {
+  EXPECT_EQ(sheet.auto_filter_xml(),
+            "<autoFilter ref=\"" + expected_ref + "\"><filterColumn colId=\"0\"/></autoFilter>");
 }
 
 /// Post-edit coordinates of the three rectangle/anchor structures after a
@@ -222,7 +235,7 @@ void ExpectColEditMovedRectangles(const Sheet& sheet, std::uint32_t moved_col) {
 Workbook MakeCrossSheetWorkbook() {
   Workbook wb = MakeWorkbook();
 
-  Sheet& other = wb.add_sheet("Sheet2");
+  Sheet& other = wb.sheet(wb.add_sheet("Sheet2"));
 
   cf::ConditionalFormat cross_sheet_format;
   cf::CFCellRange cross_sheet_range;
@@ -340,11 +353,14 @@ TEST(StructuralEditMatrix, InsertRowsMovesEveryRowAnchoredStructure) {
   ASSERT_EQ(sheet.pivot_tables().size(), 1U);
   EXPECT_EQ(sheet.pivot_tables().at(0)->anchor_row(), moved);
 
-  // 8. Table ref.
+  // 8. Auto-filter ref.
+  ExpectAutoFilterRef(sheet, "D7:E8");
+
+  // 9. Table ref.
   ASSERT_EQ(wb.tables().size(), 1U);
   EXPECT_EQ(wb.tables().at(0).ref, "D7:D8");
 
-  // 9. Dependency graph: writing to a shifted cell must reach the formula.
+  // 10. Dependency graph: writing to a shifted cell must reach the formula.
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, moved, kAnchorCol, Value::number(1.0))));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 21.0);
@@ -387,6 +403,8 @@ TEST(StructuralEditMatrix, DeleteRowsMovesEveryRowAnchoredStructure) {
 
   ASSERT_EQ(sheet.pivot_tables().size(), 1U);
   EXPECT_EQ(sheet.pivot_tables().at(0)->anchor_row(), moved);
+
+  ExpectAutoFilterRef(sheet, "D5:E6");
 
   EXPECT_EQ(wb.tables().at(0).ref, "D5:D6");
 
@@ -445,6 +463,8 @@ TEST(StructuralEditMatrix, InsertColsMovesEveryColumnAnchoredStructure) {
   ASSERT_EQ(sheet.pivot_tables().size(), 1U);
   EXPECT_EQ(sheet.pivot_tables().at(0)->anchor_col(), moved);
 
+  ExpectAutoFilterRef(sheet, "E6:F7");
+
   EXPECT_EQ(wb.tables().at(0).ref, "E6:E7");
 
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, kAnchorRow, moved, Value::number(1.0))));
@@ -490,11 +510,52 @@ TEST(StructuralEditMatrix, DeleteColsMovesEveryColumnAnchoredStructure) {
   ASSERT_EQ(sheet.pivot_tables().size(), 1U);
   EXPECT_EQ(sheet.pivot_tables().at(0)->anchor_col(), moved);
 
+  ExpectAutoFilterRef(sheet, "C6:D7");
+
   EXPECT_EQ(wb.tables().at(0).ref, "C6:C7");
 
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, kAnchorRow, moved, Value::number(1.0))));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 21.0);
+}
+
+TEST(StructuralEditMatrix, DeleteRowsShrinksTheAutoFilterRef) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_auto_filter_xml("<autoFilter ref=\"D6:E8\"/>");
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 7, 1)));
+  EXPECT_EQ(wb.sheet(0).auto_filter_xml(), "<autoFilter ref=\"D6:E7\"/>");
+}
+
+TEST(StructuralEditMatrix, DeleteRowsDropsAnAutoFilterWhoseRangeIsFullyConsumed) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_auto_filter_xml("<autoFilter ref=\"D6:E7\"><filterColumn colId=\"0\"/></autoFilter>");
+
+  // Deleting every filtered row leaves no rectangle to attach the filter to,
+  // which Excel resolves by dropping the element rather than keeping an
+  // empty one.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 5, 2)));
+  EXPECT_TRUE(wb.sheet(0).auto_filter_xml().empty());
+}
+
+TEST(StructuralEditMatrix, InsertColsKeepsASingleCellAutoFilterRefSingleCell) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_auto_filter_xml("<autoFilter ref=\"D6\"/>");
+
+  // A one-cell `ref` is written without the `:` form, and stays that way.
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, 1, 2)));
+  EXPECT_EQ(wb.sheet(0).auto_filter_xml(), "<autoFilter ref=\"F6\"/>");
+}
+
+TEST(StructuralEditMatrix, EditsLeaveAnUnparsableAutoFilterRefAlone) {
+  Workbook wb = Workbook::create();
+  // A `ref` this layer cannot decode is retained verbatim rather than
+  // rewritten from a guess.
+  const std::string original = "<autoFilter ref=\"Sheet1!D6:E7\"/>";
+  wb.sheet(0).set_auto_filter_xml(original);
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 1, 1)));
+  EXPECT_EQ(wb.sheet(0).auto_filter_xml(), original);
 }
 
 TEST(StructuralEditMatrix, DeleteRowsShrinksHyperlinkRange) {
