@@ -23,8 +23,11 @@ constexpr const char* kIdA = "{11111111-1111-1111-1111-111111111111}";
 constexpr const char* kIdB = "{22222222-2222-2222-2222-222222222222}";
 
 /// One `<ext>` block carrying two dataBar `<x14:cfRule>` entries (ids A
-/// and B) in a single `<x14:conditionalFormatting>`, in the shape Excel
-/// emits (uri + x14/xm namespace declarations, xm:sqref trailer).
+/// and B) in a single `<x14:conditionalFormatting>`, in the shape this
+/// engine's writer emits (uri + x14/xm namespace declarations, xm:sqref
+/// trailer). No Excel-authored capture of an x14 overlay exists in this
+/// repository, so what Excel writes here is unobserved; these tests
+/// exercise reconciliation against our own emission.
 std::string OverlayWithRules(std::initializer_list<const char*> ids) {
   std::string rules;
   for (const char* id : ids) {

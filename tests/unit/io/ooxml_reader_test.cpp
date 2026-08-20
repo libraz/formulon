@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -22,6 +23,7 @@
 #include "io/ooxml/package_validator.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "sheet.h"
 #include "utils/error.h"
 #include "utils/structured_log.h"
 #include "value.h"
@@ -493,6 +495,100 @@ TEST(OoxmlReader, WellFormedIterateDeltaIsHonoured) {
   auto loaded_or = read_ooxml(SpanOf(mutated));
   ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
   EXPECT_DOUBLE_EQ(loaded_or.value().workbook.iterative_options().max_change, 0.25);
+}
+
+// The file decides how much work the first `recalc()` performs, and the
+// solver has no wall-clock limit and no default cancellation hook. Paired
+// with `iterateDelta="0"` — a threshold no finite residual can satisfy —
+// an unclamped count is an unrecoverable hang, so the reader saturates at
+// Excel's own limit for the setting.
+TEST(OoxmlReader, OversizedIterateCountIsClampedToExcelsLimit) {
+  for (const std::string_view spelling : {"32768", "65536", "4294967295", "9999999999999"}) {
+    const std::string workbook_xml =
+        std::string(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+            "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+            "<calcPr iterate=\"1\" iterateDelta=\"0\" iterateCount=\"")
+            .append(spelling)
+            .append(
+                "\"/>"
+                "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+                "</workbook>");
+    const std::vector<std::uint8_t> mutated =
+        RebuildArchiveReplacing(SaveOrDie(Workbook::create()), "xl/workbook.xml", workbook_xml);
+
+    auto loaded_or = read_ooxml(SpanOf(mutated));
+    ASSERT_TRUE(static_cast<bool>(loaded_or)) << spelling << ": " << loaded_or.error().message;
+    const eval::IterativeOptions& opts = loaded_or.value().workbook.iterative_options();
+    EXPECT_TRUE(opts.enabled) << spelling;
+    EXPECT_EQ(opts.max_iterations, eval::kMaxIterationsCap) << spelling;
+  }
+}
+
+// The clamp must not move a count Excel itself would accept.
+TEST(OoxmlReader, IterateCountAtExcelsLimitIsUnchanged) {
+  constexpr std::string_view kWorkbookXml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<calcPr iterate=\"1\" iterateCount=\"32767\"/>"
+      "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+      "</workbook>";
+  const std::vector<std::uint8_t> mutated =
+      RebuildArchiveReplacing(SaveOrDie(Workbook::create()), "xl/workbook.xml", kWorkbookXml);
+
+  auto loaded_or = read_ooxml(SpanOf(mutated));
+  ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
+  EXPECT_EQ(loaded_or.value().workbook.iterative_options().max_iterations, eval::kMaxIterationsCap);
+}
+
+// `spinCount` is carried verbatim, so a value wider than the model's
+// `uint32_t` must saturate rather than wrap. Wrapping is not merely a
+// wrong number: a value that wraps to exactly 0 is then dropped by the
+// writer's non-zero guard, and the saved file keeps the hash and salt with
+// no iteration count at all.
+TEST(OoxmlReader, OversizedSpinCountSaturatesInsteadOfWrapping) {
+  struct Case {
+    std::string_view spelling;
+    std::uint32_t expected;
+  };
+  const Case cases[] = {
+      // Exactly 2^32: the value that used to wrap to 0 and vanish.
+      {"4294967296", std::numeric_limits<std::uint32_t>::max()},
+      // 2^32 + 100: used to round-trip as 100.
+      {"4294967396", std::numeric_limits<std::uint32_t>::max()},
+      // The largest representable count is not clamped.
+      {"4294967295", std::numeric_limits<std::uint32_t>::max()},
+      {"100000", 100000U},
+  };
+  for (const Case& c : cases) {
+    const std::string sheet_xml =
+        std::string(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+            "<sheetData><row r=\"1\"><c r=\"A1\"><v>42</v></c></row></sheetData>"
+            "<sheetProtection algorithmName=\"SHA-512\" hashValue=\"deadbeef==\" saltValue=\"saltsalt==\" "
+            "spinCount=\"")
+            .append(c.spelling)
+            .append("\" sheet=\"1\"/></worksheet>");
+    const std::vector<std::uint8_t> mutated =
+        RebuildArchiveReplacing(SaveOrDie(Workbook::create()), "xl/worksheets/sheet1.xml", sheet_xml);
+
+    auto loaded_or = read_ooxml(SpanOf(mutated));
+    ASSERT_TRUE(static_cast<bool>(loaded_or)) << c.spelling << ": " << loaded_or.error().message;
+    const SheetProtection& p = loaded_or.value().workbook.sheet(0).protection();
+    EXPECT_TRUE(p.enabled) << c.spelling;
+    EXPECT_EQ(p.spin_count, c.expected) << c.spelling;
+
+    // The count must also survive back out to the file, which is the half
+    // the writer's non-zero guard used to lose.
+    auto resaved = loaded_or.value().workbook.save();
+    ASSERT_TRUE(static_cast<bool>(resaved)) << c.spelling << ": " << resaved.error().message;
+    auto reloaded_or = read_ooxml(SpanOf(resaved.value()));
+    ASSERT_TRUE(static_cast<bool>(reloaded_or)) << c.spelling << ": " << reloaded_or.error().message;
+    EXPECT_EQ(reloaded_or.value().workbook.sheet(0).protection().spin_count, c.expected) << c.spelling;
+  }
 }
 
 // A `frozenSplit` pane must open frozen, and the freeze must survive a

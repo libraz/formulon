@@ -7,8 +7,9 @@
 // third-party summary):
 //
 //   BrtFmt   (44): u16 ifmt, u32 cch, cch x UTF-16LE code units.
-//   BrtXF    (47): 8 x u16 — [xfId_or_parent, numFmtId, fontId, fillId,
-//                  borderId, reserved, alignmentFlags, applyFlags].
+//   BrtXF    (47): 8 x u16 — [ixfeParent, numFmtId, fontId, fillId,
+//                  borderId, trot|indent, flags, xfGrbitAtr]; the two
+//                  bit fields are laid out in `io/xlsb/xf_flags.h`.
 //                  Appears once per entry in both the `<cellStyleXfs>`
 //                  block (bracketed by BrtBeginCellStyleXFs /
 //                  BrtEndCellStyleXFs) and the `<cellXfs>` block
@@ -31,8 +32,8 @@
 //
 // Every one of these is decoded into the shared `io::StylesTable`, so a
 // `.xlsb`-sourced workbook hands its consumers the same font / fill /
-// border attributes an `.xlsx`-sourced one does. The record layouts are
-// symmetric with `io/xlsb/styles_writer.cpp`, which emits them.
+// border / alignment attributes an `.xlsx`-sourced one does. The record
+// layouts are symmetric with `io/xlsb/styles_writer.cpp`, which emits them.
 
 #include "io/xlsb/styles_reader.h"
 
@@ -41,6 +42,7 @@
 #include <utility>
 
 #include "io/xlsb/record.h"
+#include "io/xlsb/xf_flags.h"
 
 namespace formulon {
 namespace io {
@@ -311,14 +313,12 @@ Expected<void, Error> DecodeFmt(ByteSpan payload, StylesTable& table) {
 
 Expected<void, Error> DecodeXf(ByteSpan payload, XfTarget target, StylesTable& table) {
   ByteSpan p = payload;
-  // 8 x u16: [xfId_or_parent, numFmtId, fontId, fillId, borderId,
-  // reserved, alignmentFlags, applyFlags]. Only the format/font/fill/
-  // border fields are consumed here; alignment and apply-flags are
-  // round-tripped via the raw `xl/styles.bin` passthrough copy instead
-  // of being modelled in `CellXf`.
-  auto skip_parent = read_u16(p);
-  if (!skip_parent) {
-    return skip_parent.error();
+  // 8 x u16: [ixfeParent, numFmtId, fontId, fillId, borderId,
+  // trot|indent, flags, xfGrbitAtr]. Field positions are in
+  // `io/xlsb/xf_flags.h`, shared with the writer.
+  auto parent_or = read_u16(p);
+  if (!parent_or) {
+    return parent_or.error();
   }
   auto num_fmt_id_or = read_u16(p);
   if (!num_fmt_id_or) {
@@ -336,16 +336,70 @@ Expected<void, Error> DecodeXf(ByteSpan payload, XfTarget target, StylesTable& t
   if (!border_id_or) {
     return border_id_or.error();
   }
+  auto text_rotation_or = read_u8(p);
+  if (!text_rotation_or) {
+    return text_rotation_or.error();
+  }
+  auto indent_or = read_u8(p);
+  if (!indent_or) {
+    return indent_or.error();
+  }
+  auto flags_or = read_u16(p);
+  if (!flags_or) {
+    return flags_or.error();
+  }
+  auto apply_or = read_u16(p);
+  if (!apply_or) {
+    return apply_or.error();
+  }
+  const std::uint16_t flags = flags_or.value();
+  const std::uint16_t apply = apply_or.value();
   CellXf xf;
   xf.num_fmt_id = num_fmt_id_or.value();
   xf.font_index = font_id_or.value();
   xf.fill_index = fill_id_or.value();
   xf.border_index = border_id_or.value();
+  // A `BrtXF` states every field unconditionally, so the OOXML presence
+  // bits are derived from the value rather than read: a field holding its
+  // schema default is what Excel writes as an omitted attribute, and the
+  // `Has*` predicates in `io/styles_reader.h` apply the same rule to the
+  // four attributes whose default is indistinguishable from their value.
+  // Reproducing it is what makes a converted `.xlsx` carry the same `<xf>`
+  // Excel's own `.xlsx` export of the workbook does.
+  xf.horizontal_align = static_cast<std::uint8_t>(flags & kXfHorizontalAlignMask);
+  xf.vertical_align = static_cast<std::uint8_t>((flags & kXfVerticalAlignMask) >> kXfVerticalAlignShift);
+  xf.wrap_text = (flags & kXfWrapText) != 0U;
+  xf.justify_last_line = (flags & kXfJustifyLastLine) != 0U;
+  xf.shrink_to_fit = (flags & kXfShrinkToFit) != 0U;
+  xf.has_shrink_to_fit = xf.shrink_to_fit;
+  xf.reading_order = (flags & kXfReadingOrderMask) >> kXfReadingOrderShift;
+  xf.has_reading_order = xf.reading_order != 0U;
+  xf.text_rotation = text_rotation_or.value();
+  xf.has_text_rotation = xf.text_rotation != 0U;
+  xf.indent = indent_or.value();
+  xf.has_indent = xf.indent != 0U;
+  xf.quote_prefix = (flags & kXfQuotePrefix) != 0U;
+  xf.locked = (flags & kXfLocked) != 0U;
+  xf.hidden = (flags & kXfHidden) != 0U;
+  // `<protection>` is absent exactly when both halves hold their schema
+  // default (locked, not hidden); anything else has to be spelled out.
+  xf.has_protection = !xf.locked || xf.hidden;
+  xf.apply_number_format = (apply & kXfApplyNumberFormat) != 0U;
+  xf.apply_font = (apply & kXfApplyFont) != 0U;
+  xf.apply_fill = (apply & kXfApplyFill) != 0U;
+  xf.apply_border = (apply & kXfApplyBorder) != 0U;
+  xf.apply_alignment = (apply & kXfApplyAlignment) != 0U;
+  xf.apply_protection = (apply & kXfApplyProtection) != 0U;
   switch (target) {
     case XfTarget::kCellStyleXfs:
+      // `ixfeParent` on a named-style xf names no record; OOXML omits
+      // `xfId` there, which the model spells as the default 0.
       table.cell_style_xfs.push_back(xf);
       break;
     case XfTarget::kCellXfs:
+      if (parent_or.value() != kXfNoParent) {
+        xf.xf_id = parent_or.value();
+      }
       table.cell_xfs.push_back(xf);
       break;
     case XfTarget::kNone:

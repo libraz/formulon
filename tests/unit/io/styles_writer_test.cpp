@@ -178,6 +178,24 @@ TEST(StylesWriter, EmitsFontFields) {
   EXPECT_NE(xml.find("<name val=\"Meiryo\""), std::string::npos);
 }
 
+TEST(StylesWriter, FontSizeAndTintUseTheShortestRoundTripSpelling) {
+  // Format metrics share the cell path's number spelling. Neither 10.5 nor
+  // -0.25 exposes the difference (both are exact binary fractions), so this
+  // uses the values that do: a fixed 17-significant-digit format would spell
+  // them 8.0999999999999996 and 0.34999999999999998.
+  StylesTable table;
+  FontRecord f;
+  f.size = 8.1;
+  f.color.kind = ColorSpec::Kind::kTheme;
+  f.color.theme = 3U;
+  f.color.tint = 0.35;
+  table.fonts.push_back(f);
+
+  const std::string xml = write_styles(table);
+  EXPECT_NE(xml.find("<sz val=\"8.1\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("tint=\"0.35\""), std::string::npos) << xml;
+}
+
 TEST(StylesWriter, EmitsFillsAndBorders) {
   StylesTable table;
   FillRecord fill;

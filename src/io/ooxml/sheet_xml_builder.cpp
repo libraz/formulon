@@ -8,7 +8,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -533,25 +532,20 @@ std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults) {
       defaults.base_col_width == ooxml_defaults::kBaseColWidthChars) {
     return std::string();
   }
-  auto append_double = [](std::string& out, double value) {
-    char buf[64];
-    std::snprintf(buf, sizeof(buf), "%.17g", value);
-    out.append(buf);
-  };
   std::string out("<sheetFormatPr");
   if (defaults.base_col_width != ooxml_defaults::kBaseColWidthChars) {
     out.append(" baseColWidth=\"");
-    append_double(out, defaults.base_col_width);
+    append_xml_number(out, defaults.base_col_width);
     out.push_back('"');
   }
   if (defaults.has_default_col_width) {
     out.append(" defaultColWidth=\"");
-    append_double(out, defaults.default_col_width);
+    append_xml_number(out, defaults.default_col_width);
     out.push_back('"');
   }
   if (defaults.has_default_row_height) {
     out.append(" defaultRowHeight=\"");
-    append_double(out, defaults.default_row_height);
+    append_xml_number(out, defaults.default_row_height);
     out.push_back('"');
   }
   out.append("/>");
@@ -654,11 +648,10 @@ std::string BuildColsXml(const SheetLayout& layout) {
     const bool has_width = HasExplicitColumnWidth(col);
     if (has_width) {
       out.append(" width=\"");
-      char buf[32];
-      // %.17g is round-trip safe under IEEE 754, so a recalc-save does
-      // not drift the column metric. Matches the row-height writer.
-      std::snprintf(buf, sizeof(buf), "%.17g", col.width);
-      out.append(buf);
+      // Shortest round-trip spelling, the same one cell values use: a
+      // recalc-save neither drifts the column metric nor respells 8.7 as
+      // 8.6999999999999993. Matches the row-height writer.
+      append_xml_number(out, col.width);
       // Excel emits `customWidth="1"` whenever an explicit `width` is
       // present so a reload preserves the column metric.
       out.append("\" customWidth=\"1\"");

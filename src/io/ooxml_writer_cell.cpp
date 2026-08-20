@@ -24,7 +24,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -384,11 +383,10 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
   if (layout.has_height || layout.height > 0.0) {
     out.append(" ht=\"");
-    char buf[32];
-    // %.17g is round-trip safe under IEEE 754, so a recalc-save does not
-    // drift the row metric. Matches the column-width writer.
-    std::snprintf(buf, sizeof(buf), "%.17g", layout.height);
-    out.append(buf);
+    // Shortest round-trip spelling, the same one cell values use: a
+    // recalc-save neither drifts the row metric nor respells 13.2 as
+    // 13.199999999999999. Matches the column-width writer.
+    append_xml_number(out, layout.height);
     out.append("\" customHeight=\"1\"");
   }
   if (layout.hidden) {

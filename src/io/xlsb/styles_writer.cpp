@@ -10,6 +10,7 @@
 
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/xf_flags.h"
 
 namespace formulon {
 namespace io {
@@ -137,36 +138,52 @@ void EmitBorder(std::vector<std::uint8_t>& out, const BorderRecord& border) {
 
 void EmitXf(std::vector<std::uint8_t>& out, const CellXf& xf, bool is_style_xf) {
   std::vector<std::uint8_t> payload;
-  emit_u16(payload, is_style_xf ? 0xFFFFU : ClampIndex(xf.xf_id));
+  emit_u16(payload, is_style_xf ? kXfNoParent : ClampIndex(xf.xf_id));
   emit_u16(payload, xf.num_fmt_id);
   emit_u16(payload, ClampIndex(xf.font_index));
   emit_u16(payload, ClampIndex(xf.fill_index));
   emit_u16(payload, ClampIndex(xf.border_index));
-  emit_u8(payload, 0U);  // text rotation
-  emit_u8(payload, 0U);  // indentation
-  emit_u8(payload, static_cast<std::uint8_t>((xf.horizontal_align & 0x07U) | ((xf.vertical_align & 0x07U) << 3U) |
-                                             (xf.wrap_text ? 0x40U : 0U)));
-  std::uint8_t protection = 0U;
+  // `trot` and `indent` are u8 fields; the OOXML reader already rejects an
+  // out-of-range `textRotation` / `indent`, so the clamp only guards an xf
+  // built in memory.
+  emit_u8(payload, static_cast<std::uint8_t>(std::min<std::uint32_t>(xf.text_rotation, 255U)));
+  emit_u8(payload, static_cast<std::uint8_t>(std::min<std::uint32_t>(xf.indent, 255U)));
+  // Every field of the flags word is unconditional on the wire, so the
+  // effective value is emitted whether or not the source `<xf>` spelled it
+  // out: `CellXf`'s `has_*` bits record how OOXML wrote a value, not
+  // whether the value applies.
+  std::uint16_t flags = static_cast<std::uint16_t>(
+      (static_cast<std::uint16_t>(xf.horizontal_align) & kXfHorizontalAlignMask) |
+      ((static_cast<std::uint16_t>(xf.vertical_align) << kXfVerticalAlignShift) & kXfVerticalAlignMask) |
+      ((std::min<std::uint32_t>(xf.reading_order, 3U) << kXfReadingOrderShift) & kXfReadingOrderMask));
+  if (xf.wrap_text)
+    flags |= kXfWrapText;
+  if (xf.justify_last_line)
+    flags |= kXfJustifyLastLine;
+  if (xf.shrink_to_fit)
+    flags |= kXfShrinkToFit;
+  // An absent `<protection>` means the schema defaults apply, so a locked,
+  // non-hidden cell is what the wire has to say.
   if (!xf.has_protection || xf.locked)
-    protection |= 0x10U;
+    flags |= kXfLocked;
   if (xf.has_protection && xf.hidden)
-    protection |= 0x20U;
+    flags |= kXfHidden;
   if (xf.quote_prefix)
-    protection |= 0x80U;
-  emit_u8(payload, protection);
+    flags |= kXfQuotePrefix;
+  emit_u16(payload, flags);
   std::uint16_t apply = 0U;
   if (xf.apply_number_format)
-    apply |= 0x0001U;
+    apply |= kXfApplyNumberFormat;
   if (xf.apply_font)
-    apply |= 0x0002U;
+    apply |= kXfApplyFont;
   if (xf.apply_alignment)
-    apply |= 0x0004U;
+    apply |= kXfApplyAlignment;
   if (xf.apply_border)
-    apply |= 0x0008U;
+    apply |= kXfApplyBorder;
   if (xf.apply_fill)
-    apply |= 0x0010U;
+    apply |= kXfApplyFill;
   if (xf.apply_protection)
-    apply |= 0x0020U;
+    apply |= kXfApplyProtection;
   emit_u16(payload, apply);
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtXF), payload);
 }

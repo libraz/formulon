@@ -462,6 +462,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // consistent with the `[Content_Types].xml` declaration we observed.
   Workbook wb = Workbook::create_empty();
   wb.set_kind(workbook_kind);
+  // The package's style table is authoritative, including when the package
+  // has none: back-filling the factory's seeded defaults would invent style
+  // records the file never carried and change how a dangling `s=` resolves.
+  wb.set_styles(StylesTable{});
 
   // Capture the `<workbook>` root's extra namespace declarations (and
   // `mc:Ignorable`) so the writer can re-emit them. The raw `<bookViews>`
@@ -585,7 +589,16 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     }
     if (pugi::xml_attribute count = calc_pr.attribute("iterateCount"); count) {
       const long long parsed = count.as_llong(static_cast<long long>(eval::kDefaultMaxIterations));
-      opts.max_iterations = parsed < 1 ? 1U : static_cast<std::uint32_t>(parsed);
+      // Clamp into Excel's own dialog range. The upper bound matters more
+      // than the lower one: the file decides how much work the first
+      // `recalc()` performs, the solver has no wall-clock limit, and the
+      // cancellation callback is null unless the host opted in. Without
+      // this, `iterateCount="4294967295"` on a two-cell cycle is an
+      // unrecoverable hang rather than a slow load.
+      opts.max_iterations = parsed < 1 ? 1U
+                            : parsed > static_cast<long long>(eval::kMaxIterationsCap)
+                                ? eval::kMaxIterationsCap
+                                : static_cast<std::uint32_t>(parsed);
     }
     // The solver stops once the largest change falls below `max_change`.
     // A NaN tolerance makes that comparison false forever, so the workbook

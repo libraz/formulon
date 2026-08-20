@@ -15,6 +15,7 @@
 
 #include "io/styles_reader.h"
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 
 namespace formulon {
 namespace io {
@@ -192,7 +193,8 @@ constexpr std::array<const char*, 164> kBuiltinNumFmts = {
     /*162 */ "",
     /*163 */ ""};
 
-constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+// The XML declaration comes from `xml_utils.h`, which every part writer
+// shares so the prologue stays byte-identical across the package.
 constexpr std::string_view kXmlNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
 void AppendUint(std::string& out, std::uint64_t v) {
@@ -204,15 +206,6 @@ void AppendUint(std::string& out, std::uint64_t v) {
 void AppendInt(std::string& out, std::int64_t v) {
   char buf[24];
   std::snprintf(buf, sizeof(buf), "%lld", static_cast<long long>(v));
-  out.append(buf);
-}
-
-void AppendDouble(std::string& out, double v) {
-  char buf[32];
-  // %.17g is round-trip safe under IEEE 754, so a font size such as 10.5
-  // survives a recalc-save unchanged. Matches the row-height / column-
-  // width writers in the worksheet builder.
-  std::snprintf(buf, sizeof(buf), "%.17g", v);
   out.append(buf);
 }
 
@@ -240,7 +233,7 @@ void AppendColor(std::string& out, const char* tag, const ColorSpec& spec, std::
       out.append("\"");
       if (spec.tint != 0.0) {
         out.append(" tint=\"");
-        AppendDouble(out, spec.tint);
+        append_xml_number(out, spec.tint);
         out.append("\"");
       }
       break;
@@ -543,7 +536,7 @@ void AppendFonts(std::string& out, const StylesTable& table) {
       }
       AppendVertAlign(out, f.vert_align);
       out.append("<sz val=\"");
-      AppendDouble(out, f.size);
+      append_xml_number(out, f.size);
       out.append("\"/>");
       AppendColor(out, "color", f.color, f.color_argb);
       if (!f.name.empty()) {
@@ -808,7 +801,7 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
   }
   AppendVertAlign(out, f.vert_align);
   out.append("<sz val=\"");
-  AppendDouble(out, f.size);
+  append_xml_number(out, f.size);
   out.append("\"/>");
   AppendColor(out, "color", f.color, f.color_argb);
   if (!f.name.empty()) {

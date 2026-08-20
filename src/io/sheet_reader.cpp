@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cstring>
 #include <deque>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -1167,8 +1168,17 @@ SheetProtection read_sheet_protection(const pugi::xml_node& worksheet) {
   out.hash_value.assign(attr_str(node, "hashValue"));
   out.salt_value.assign(attr_str(node, "saltValue"));
   if (pugi::xml_attribute sc = node.attribute("spinCount"); sc) {
+    // Saturate at both ends rather than truncating. A `static_cast` of a
+    // value above 2^32-1 wraps, and a value that wraps to exactly 0 is then
+    // dropped by the writer's non-zero guard, so the saved file would carry
+    // a hash and salt with no iteration count at all. This surface promises
+    // verbatim round-trip, so an unrepresentable count must degrade to the
+    // nearest representable one instead of disappearing.
     const long long parsed = sc.as_llong(0);
-    out.spin_count = parsed < 0 ? 0U : static_cast<std::uint32_t>(parsed);
+    out.spin_count = parsed < 0 ? 0U
+                     : parsed > static_cast<long long>(std::numeric_limits<std::uint32_t>::max())
+                         ? std::numeric_limits<std::uint32_t>::max()
+                         : static_cast<std::uint32_t>(parsed);
   }
   out.legacy_password.assign(attr_str(node, "password"));
 

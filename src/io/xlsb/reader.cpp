@@ -38,6 +38,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/styles_reader.h"
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
@@ -993,8 +994,12 @@ void AppendTabColor(std::string& out, const ColorSpec& spec, std::uint32_t argb)
       std::snprintf(buf, sizeof(buf), "<tabColor theme=\"%u\"", spec.theme);
       out.append(buf);
       if (spec.tint != 0.0) {
-        std::snprintf(buf, sizeof(buf), " tint=\"%.17g\"", spec.tint);
-        out.append(buf);
+        // Shortest round-trip spelling, matching the styles writer: the
+        // same tint must not be spelled two ways depending on whether the
+        // sheet came in as XLSB or XLSX.
+        out.append(" tint=\"");
+        append_xml_number(out, spec.tint);
+        out.push_back('"');
       }
       out.append("/>");
       break;
@@ -2321,6 +2326,10 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
 
   // 5. Build the workbook bottom-up.
   Workbook wb = Workbook::create_empty();
+  // The package's style table is authoritative, including when the package
+  // has none: back-filling the factory's seeded defaults would invent style
+  // records the file never carried and add an unwanted styles part on write.
+  wb.set_styles(StylesTable{});
   wb.set_date1904(workbook_info.date1904);
   std::vector<std::string> sheet_part_paths;
   sheet_part_paths.reserve(bundle.size());

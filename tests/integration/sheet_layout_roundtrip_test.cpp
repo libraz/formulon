@@ -487,6 +487,38 @@ TEST(SheetLayoutRoundTrip, ColumnWidthAndRowHeightPreserveFullPrecision) {
   EXPECT_DOUBLE_EQ(loaded.layout().row_overrides[0].height, kPreciseHeight);
 }
 
+TEST(SheetLayoutRoundTrip, GeometryMetricsUseTheShortestRoundTripSpelling) {
+  // Geometry shares the cell path's number spelling: the shortest decimal
+  // that reads back as the same double. None of these three values is
+  // exactly representable in binary, so a fixed 17-significant-digit format
+  // spells them 8.4299999999999997 / 13.199999999999999 /
+  // 18.600000000000001 -- round-trip safe, but not what Excel writes, and
+  // not what the cell and pivot-cache writers produce for the same double.
+  // 8.43 is Excel's own default column width, so the difference is visible
+  // on an untouched workbook.
+  Workbook src = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0, 3U, 0U, Value::number(1.0))));
+  Sheet& sheet = src.sheet(0);
+  SheetLayout& layout = sheet.mutable_layout();
+  ColumnLayout col;
+  col.first = 0U;
+  col.last = 0U;
+  col.width = 8.43;
+  layout.columns.push_back(col);
+  RowLayout row;
+  row.row = 3U;
+  row.height = 13.2;
+  layout.row_overrides.push_back(row);
+  SheetFormatDefaults& defaults = sheet.mutable_format_defaults();
+  defaults.has_default_row_height = true;
+  defaults.default_row_height = 18.6;
+
+  const std::string xml = ReadSheet1Xml(SaveOrDie(src));
+  EXPECT_NE(xml.find("width=\"8.43\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("ht=\"13.2\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("defaultRowHeight=\"18.6\""), std::string::npos) << xml;
+}
+
 TEST(SheetLayoutRoundTrip, ZoomDefaultsAreOmittedFromOutput) {
   // A pristine workbook should not surface a `<sheetView>` block in
   // the saved sheet XML; the read-back should still report the

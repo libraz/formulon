@@ -5,16 +5,21 @@
 // the font / fill / border tables (`BrtFont` / `BrtFill` / `BrtBorder`)
 // and the `<cellXfs>` / `<cellStyleXfs>` tables (`BrtXF`).
 //
-// Decoding the font / fill / border tables rather than counting them is
-// what keeps a `.xlsb`-sourced workbook honest on the two paths raw-byte
-// passthrough of `xl/styles.bin` cannot cover: the styles introspection
-// API, which reads the in-memory table directly, and conversion to
-// `.xlsx`, which serialises that table into `xl/styles.xml`.
+// Decoding the records rather than counting them is what keeps a
+// `.xlsb`-sourced workbook honest on the two paths raw-byte passthrough of
+// `xl/styles.bin` cannot cover: the styles introspection API, which reads
+// the in-memory table directly, and conversion to `.xlsx`, which
+// serialises that table into `xl/styles.xml`. Neither path can consult the
+// retained bytes, so every field `CellXf` can hold is decoded here,
+// including the alignment, protection and `apply*` groups.
 //
-// Two `BrtXF` fields have no `CellXf` equivalent and are consumed without
-// being modelled: the text rotation / indentation pair and the theme font
-// scheme. They survive an `.xlsb` -> `.xlsb` cycle through the raw
-// passthrough copy of the part.
+// Three record fields have no shared-model equivalent and are consumed
+// without being modelled: `BrtFont`'s theme font scheme, and `BrtXF`'s
+// `fMergeCell` / `fSxButton`, which state a sheet-level condition rather
+// than a cell format and have no `<xf>` attribute to carry them. They
+// survive an `.xlsb` -> `.xlsb` cycle through the raw passthrough copy of
+// the part. The gap runs the other way too: `CellXf::relative_indent` has
+// no `BrtXF` field at all, so it does not reach an `.xlsb` save.
 
 #ifndef FORMULON_IO_XLSB_STYLES_READER_H_
 #define FORMULON_IO_XLSB_STYLES_READER_H_
