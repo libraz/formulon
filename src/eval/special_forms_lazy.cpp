@@ -195,17 +195,10 @@ Value eval_and_or_lazy(const parser::AstNode& call, Arena& arena, const Function
   return Value::boolean(result);
 }
 
-// IF over an Array condition (Excel 365 dynamic-array spill). Unlike the
-// scalar path there is NO short-circuit: Excel evaluates BOTH branches,
-// broadcasts cond / then / else to the common `max` shape using the same
-// rules as the binary operators (shared `ArrayView` helpers from
-// `tree_walker/broadcast.h`), and per output cell coerces the condition
-// cell to bool and picks the matching branch cell. Errors (a condition cell
-// that is or coerces to an error, or a picked branch cell holding an error)
-// land in that output cell only; a position an operand cannot supply is
-// `#N/A`, exactly as `broadcast_binop` fills it.
-Value eval_if_array(const parser::AstNode& call, const Value& cond, Arena& arena, const FunctionRegistry& registry,
-                    const EvalContext& ctx) {
+}  // namespace
+
+Value eval_if_array_cond_lazy(const parser::AstNode& call, const Value& cond, Arena& arena,
+                              const FunctionRegistry& registry, const EvalContext& ctx) {
   const Value then_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
   const Value else_val =
       call.as_call_arity() == 3 ? eval_node(call.as_call_arg(2), arena, registry, ctx) : Value::boolean(false);
@@ -250,12 +243,10 @@ Value eval_if_array(const parser::AstNode& call, const Value& cond, Arena& arena
   return Value::array(out);
 }
 
-}  // namespace
-
 // IF(cond, then, else?) - then is evaluated iff cond coerces to true; else
 // is evaluated iff cond coerces to false. When the third argument is
 // omitted Excel returns the boolean `FALSE` for the falsey path. An Array
-// condition instead spills element-wise via `eval_if_array` above.
+// condition instead spills element-wise via `eval_if_array_cond_lazy`.
 Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                    const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -267,7 +258,7 @@ Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegi
     return cond;
   }
   if (cond.is_array()) {
-    return eval_if_array(call, cond, arena, registry, ctx);
+    return eval_if_array_cond_lazy(call, cond, arena, registry, ctx);
   }
   auto coerced = coerce_to_bool(cond);
   if (!coerced) {
@@ -409,6 +400,95 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 // The coercion uses the host-aware `logical_coerce_for_host`, the same seam
 // AND / OR route through, so a text condition is judged consistently with
 // the rest of the logical family under the active Excel profile.
+// IFS from the first array condition onward. `first` is the argument index
+// of that condition and `first_cond` its already-evaluated value; every
+// earlier condition was a scalar that tested false, so none of them can win
+// in any cell and none needs revisiting.
+//
+// From here there is no short-circuit: different cells take different
+// branches, so every remaining condition and value is evaluated exactly once
+// and broadcast. Each output cell walks the pairs in source order and takes
+// the first condition that carries a true value, falling through to `#N/A` —
+// the scalar rule applied cellwise, including its treatment of blank and
+// empty-text conditions as false rather than as errors.
+Value eval_ifs_array_cond(const parser::AstNode& call, std::uint32_t first, const Value& first_cond, Arena& arena,
+                          const FunctionRegistry& registry, const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  const std::size_t arm_count = static_cast<std::size_t>(arity - first);
+  // `arm_slots` backs the views of the scalar arms, so it is sized before
+  // any view is taken: an `ArrayView` over a scalar points into its slot and
+  // a reallocation would leave those views dangling.
+  std::vector<Value> arm_values;
+  arm_values.reserve(arm_count);
+  arm_values.push_back(first_cond);
+  for (std::uint32_t i = first + 1U; i < arity; ++i) {
+    arm_values.push_back(eval_node(call.as_call_arg(i), arena, registry, ctx));
+  }
+  std::vector<Value> arm_slots(arm_count, Value::blank());
+  std::vector<ArrayView> arms;
+  arms.reserve(arm_count);
+  for (std::size_t i = 0; i < arm_count; ++i) {
+    arms.push_back(as_array_view(arm_values[i], &arm_slots[i]));
+  }
+
+  std::uint32_t out_rows = 1U;
+  std::uint32_t out_cols = 1U;
+  for (const ArrayView& arm : arms) {
+    out_rows = out_rows > arm.rows ? out_rows : arm.rows;
+    out_cols = out_cols > arm.cols ? out_cols : arm.cols;
+  }
+
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::size_t i = 0;
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c, ++i) {
+      Value picked = Value::error(ErrorCode::NA);
+      bool decided = false;
+      for (std::size_t arm = 0; arm + 1U < arm_count && !decided; arm += 2U) {
+        const Value* cond_cell = broadcast_cell(arms[arm], r, c);
+        if (cond_cell == nullptr) {
+          decided = true;
+          continue;
+        }
+        if (cond_cell->is_error()) {
+          picked = *cond_cell;
+          decided = true;
+          continue;
+        }
+        bool truth = false;
+        ErrorCode err = ErrorCode::Value;
+        const LogicalCoerce lc = logical_coerce_for_host(*cond_cell, ctx, &truth, &err);
+        if (lc == LogicalCoerce::Error) {
+          picked = Value::error(err);
+          decided = true;
+          continue;
+        }
+        if (lc == LogicalCoerce::HasValue && truth) {
+          const Value* value_cell = broadcast_cell(arms[arm + 1U], r, c);
+          picked = value_cell == nullptr ? Value::error(ErrorCode::NA) : *value_cell;
+          decided = true;
+        }
+      }
+      // A trailing unpaired condition has no value to return, so it cannot
+      // win the cell — but an error inside it still reaches that cell,
+      // matching the scalar path's evaluate-for-error-propagation rule.
+      // Otherwise an exhausted walk keeps the `#N/A` initialiser.
+      if (!decided && (arm_count % 2U) == 1U) {
+        const Value* trailing = broadcast_cell(arms[arm_count - 1U], r, c);
+        if (trailing != nullptr && trailing->is_error()) {
+          picked = *trailing;
+        }
+      }
+      buf[i] = picked;
+    }
+  }
+  return Value::array(out);
+}
+
 Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -422,6 +502,12 @@ Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     const Value cond = eval_node(call.as_call_arg(i), arena, registry, ctx);
     if (cond.is_error()) {
       return cond;
+    }
+    if (cond.is_array()) {
+      // The scan stays lazy until an array condition is actually reached,
+      // so a scalar condition that already won never causes the later arms
+      // to be evaluated.
+      return eval_ifs_array_cond(call, i, cond, arena, registry, ctx);
     }
     bool truth = false;
     ErrorCode err = ErrorCode::Value;
@@ -479,11 +565,101 @@ bool switch_equal(const Value& lhs, const Value& rhs) {
   }
 }
 
+// SWITCH over an Array subject. Like the array-condition `IF`, there is NO
+// short-circuit: an array subject selects a different arm per cell, so
+// every case, value and default subtree is evaluated exactly once and then
+// broadcast against the subject with the binary operators' rules. Each
+// output cell walks the (case, value) pairs in source order and takes the
+// first `switch_equal` hit, falling back to the trailing default and then
+// to `#N/A`, which is the scalar path's rule applied cellwise. A subject or
+// case cell holding an error lands in that output cell only; a position an
+// operand cannot supply is `#N/A`, exactly as `broadcast_binop` fills it.
+Value eval_switch_array_subject(const parser::AstNode& call, const Value& subject, Arena& arena,
+                                const FunctionRegistry& registry, const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  const std::size_t arm_count = static_cast<std::size_t>(arity) - 1U;
+  // `arm_slots` backs the views of the scalar arms, so both vectors are
+  // sized up front: an `ArrayView` of a scalar points into its slot, and a
+  // reallocation would leave those views dangling.
+  std::vector<Value> arm_values;
+  arm_values.reserve(arm_count);
+  for (std::uint32_t i = 1; i < arity; ++i) {
+    arm_values.push_back(eval_node(call.as_call_arg(i), arena, registry, ctx));
+  }
+  std::vector<Value> arm_slots(arm_count, Value::blank());
+  std::vector<ArrayView> arms;
+  arms.reserve(arm_count);
+  for (std::size_t i = 0; i < arm_count; ++i) {
+    arms.push_back(as_array_view(arm_values[i], &arm_slots[i]));
+  }
+
+  Value subject_slot = Value::blank();
+  const ArrayView sv = as_array_view(subject, &subject_slot);
+  std::uint32_t out_rows = sv.rows;
+  std::uint32_t out_cols = sv.cols;
+  for (const ArrayView& arm : arms) {
+    out_rows = out_rows > arm.rows ? out_rows : arm.rows;
+    out_cols = out_cols > arm.cols ? out_cols : arm.cols;
+  }
+
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::size_t i = 0;
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c, ++i) {
+      const Value* subject_cell = broadcast_cell(sv, r, c);
+      if (subject_cell == nullptr) {
+        buf[i] = Value::error(ErrorCode::NA);
+        continue;
+      }
+      if (subject_cell->is_error()) {
+        buf[i] = *subject_cell;
+        continue;
+      }
+      Value picked = Value::error(ErrorCode::NA);
+      bool decided = false;
+      std::size_t arm = 0;
+      while (arm + 1U < arm_count) {
+        const Value* case_cell = broadcast_cell(arms[arm], r, c);
+        if (case_cell == nullptr) {
+          picked = Value::error(ErrorCode::NA);
+          decided = true;
+          break;
+        }
+        if (case_cell->is_error()) {
+          picked = *case_cell;
+          decided = true;
+          break;
+        }
+        if (switch_equal(*subject_cell, *case_cell)) {
+          const Value* value_cell = broadcast_cell(arms[arm + 1U], r, c);
+          picked = value_cell == nullptr ? Value::error(ErrorCode::NA) : *value_cell;
+          decided = true;
+          break;
+        }
+        arm += 2U;
+      }
+      // An odd number of arms leaves a trailing default; an even number
+      // leaves nothing, and the `#N/A` initialiser stands.
+      if (!decided && arm < arm_count) {
+        const Value* default_cell = broadcast_cell(arms[arm], r, c);
+        picked = default_cell == nullptr ? Value::error(ErrorCode::NA) : *default_cell;
+      }
+      buf[i] = picked;
+    }
+  }
+  return Value::array(out);
+}
+
 // SWITCH(expr, case1, val1, ..., [default]) - first case that equals
 // `expr` wins; only that branch's value subtree is evaluated. An extra
 // trailing argument (odd arity after expr) is the default. No match and
 // no default -> #N/A. Errors in `expr` or in any evaluated case expression
-// propagate.
+// propagate. An Array `expr` instead spills element-wise via
+// `eval_switch_array_subject` above, which cannot short-circuit.
 Value eval_switch_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -496,6 +672,9 @@ Value eval_switch_lazy(const parser::AstNode& call, Arena& arena, const Function
   const Value expr = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (expr.is_error()) {
     return expr;
+  }
+  if (expr.is_array()) {
+    return eval_switch_array_subject(call, expr, arena, registry, ctx);
   }
   // Walk (case, value) pairs starting at index 1. If a trailing single
   // argument remains at the end it is the default.

@@ -110,9 +110,11 @@ bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionReg
 /// `*out_err_code`. `*out_cols` is always 1.
 ///
 /// Used by aggregator-family callers (SUM, AVERAGE, SUMPRODUCT, …) so
-/// `=SUM(ROW(A1:A5))` aggregates `{1;2;3;4;5}` to 15. The `eval_row_lazy`
-/// scalar path is intentionally left collapsing to the first row, matching
-/// Mac Excel's scalar-context output for a bare `=ROW(A1:A5)`.
+/// `=SUM(ROW(A1:A5))` aggregates `{1;2;3;4;5}` to 15. The rectangle is
+/// derived exactly as `eval_row_lazy` derives it — through `declared_rect`,
+/// so a whole-column argument projects all `Sheet::kMaxRows` indices rather
+/// than the row its endpoint never named — and the two seams must keep
+/// answering with the same rectangle for the same argument.
 bool expand_row_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                      std::uint32_t* out_rows, std::uint32_t* out_cols);

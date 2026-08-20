@@ -28,6 +28,19 @@ class EvalContext;
 class FunctionRegistry;
 
 Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
+/// Evaluates an array-condition `IF` after its condition has already been
+/// materialised. There is no short-circuit here: Excel evaluates both
+/// branches, broadcasts condition / then / else to the common shape with the
+/// binary operators' rules, and picks per output cell. Callers must pass an
+/// Array-valued condition.
+///
+/// Shared by the lazy evaluator and the range-aware `IF` expander, the same
+/// way `eval_choose_array_index_lazy` is shared: an aggregator that resolved
+/// the condition itself must reach the identical broadcast rather than
+/// re-deriving one, or `SUM(IF(cond, a, b))` and a bare `IF(cond, a, b)`
+/// disagree about the same formula.
+Value eval_if_array_cond_lazy(const parser::AstNode& call, const Value& cond, Arena& arena,
+                              const FunctionRegistry& registry, const EvalContext& ctx);
 Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);
 Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

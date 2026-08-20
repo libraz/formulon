@@ -16,6 +16,7 @@
 #include <string_view>
 
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/reference/common.h"
@@ -290,22 +291,26 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
     }
     return true;
   }
-  if (node.kind() == parser::NodeKind::Ref) {
-    const parser::Reference& reference = node.as_ref();
-    if (reference.is_full_col) {
-      *out_sheet = reference.sheet;
-      *out_top_row = 0;
-      *out_left_col = reference.col;
-      *out_bottom_row = Sheet::kMaxRows - 1U;
-      *out_right_col = reference.col;
-      return true;
-    }
-    if (reference.is_full_row) {
-      *out_sheet = reference.sheet;
-      *out_top_row = reference.row;
-      *out_left_col = 0;
-      *out_bottom_row = reference.row;
-      *out_right_col = Sheet::kMaxCols - 1U;
+  // A full-axis endpoint carries a meaningful coordinate only on its bounded
+  // axis, so its rectangle comes from the shared derivation rather than from
+  // the endpoints' raw row/col fields. Both spellings reach here: the single
+  // `Ref` the parser folds `A:A` / `1:1` into, and the `RangeOp` over two
+  // same-axis whole `Ref`s that `A:C` produces. The latter is a valid
+  // intersect operand in Excel (`A:C B:B`) that the endpoint-union path below
+  // cannot express, because a full-axis endpoint has no bounded corner to
+  // union. Every other shape — a bounded pair, or one the derivation names no
+  // rectangle for — falls through to its existing resolution.
+  const parser::Reference* rect_lhs = nullptr;
+  const parser::Reference* rect_rhs = nullptr;
+  if (declared_rect_endpoints(node, &rect_lhs, &rect_rhs)) {
+    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*rect_lhs, *rect_rhs);
+    if (rect && rect.value().whole_axis) {
+      // The parser keeps the sheet qualifier on the left endpoint.
+      *out_sheet = rect_lhs->sheet;
+      *out_top_row = rect.value().row_first;
+      *out_left_col = rect.value().col_first;
+      *out_bottom_row = rect.value().row_last;
+      *out_right_col = rect.value().col_last;
       return true;
     }
   }

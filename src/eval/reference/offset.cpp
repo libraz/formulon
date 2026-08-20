@@ -10,7 +10,6 @@
 
 #include "eval/reference/offset.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -19,6 +18,7 @@
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -28,6 +28,7 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/reference/common.h"
+#include "eval/special_forms_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -235,6 +236,32 @@ bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionReg
     *out_err_code = cond.as_error();
     return false;
   }
+  if (cond.is_array()) {
+    // An array condition picks per cell rather than short-circuiting, which
+    // is what makes `SUM(IF(A1:A5<=3, A1:A5, 0))` aggregate the masked
+    // column instead of failing to coerce a rectangle to one bool. The
+    // broadcast belongs to the lazy `IF` seam; expanding it here would be a
+    // second copy of Excel's rule.
+    const Value result = eval_if_array_cond_lazy(call, cond, arena, registry, ctx);
+    if (result.is_error()) {
+      *out_err_code = result.as_error();
+      return false;
+    }
+    if (!result.is_array()) {
+      *out_err_code = ErrorCode::Value;
+      return false;
+    }
+    const ArrayValue* array = result.as_array();
+    const std::size_t count = static_cast<std::size_t>(array->rows) * array->cols;
+    out_cells->assign(array->cells, array->cells + count);
+    if (out_rows != nullptr) {
+      *out_rows = array->rows;
+    }
+    if (out_cols != nullptr) {
+      *out_cols = array->cols;
+    }
+    return true;
+  }
   auto coerced = coerce_to_bool(cond);
   if (!coerced) {
     *out_err_code = coerced.error();
@@ -340,25 +367,27 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
   bool resolved_rect = false;
 
   const parser::NodeKind k = arg.kind();
-  if (k == parser::NodeKind::Ref) {
-    const parser::Reference& r = arg.as_ref();
-    top = bottom = r.row;
-    left = right = r.col;
-    resolved_rect = true;
-  } else if (k == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs_ast = arg.as_range_lhs();
-    const parser::AstNode& rhs_ast = arg.as_range_rhs();
-    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
-      *out_err_code = ErrorCode::Value;
+  const parser::Reference* rect_lhs = nullptr;
+  const parser::Reference* rect_rhs = nullptr;
+  if (declared_rect_endpoints(arg, &rect_lhs, &rect_rhs)) {
+    // Same derivation the scalar seam in `shape_ops_lazy.cpp` uses: a
+    // full-axis endpoint names a coordinate only on its bounded axis, so
+    // the rectangle cannot come from the endpoints' raw row/col fields.
+    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*rect_lhs, *rect_rhs);
+    if (!rect) {
+      *out_err_code = rect.error();
       return false;
     }
-    const parser::Reference& lhs = lhs_ast.as_ref();
-    const parser::Reference& rhs = rhs_ast.as_ref();
-    top = std::min(lhs.row, rhs.row);
-    bottom = std::max(lhs.row, rhs.row);
-    left = std::min(lhs.col, rhs.col);
-    right = std::max(lhs.col, rhs.col);
+    top = rect.value().row_first;
+    bottom = rect.value().row_last;
+    left = rect.value().col_first;
+    right = rect.value().col_last;
     resolved_rect = true;
+  } else if (k == parser::NodeKind::RangeOp) {
+    // A `RangeOp` whose endpoints are not both bare references names no
+    // rectangle until it is evaluated, which this seam does not do.
+    *out_err_code = ErrorCode::Value;
+    return false;
   } else if (k == parser::NodeKind::Call) {
     std::string_view sheet;
     bool is_range = false;

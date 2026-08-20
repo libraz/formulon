@@ -4,6 +4,8 @@
 // a formula source, evaluates the AST through the default registry, and
 // asserts the resulting Value.
 
+#include <array>
+#include <cstdint>
 #include <string_view>
 
 #include "eval/tree_walker.h"
@@ -676,6 +678,239 @@ TEST(BuiltinsSwitch, TextMatchIsCaseInsensitive) {
   const Value v = EvalSource("=SWITCH(\"a\", \"A\", \"casehit\", \"other\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "casehit");
+}
+
+// ---------------------------------------------------------------------------
+// SWITCH over an array subject selects per cell. There is no branch to
+// short-circuit onto when different cells take different arms, so every arm
+// is evaluated once and broadcast — the scalar rule applied cellwise,
+// including the trailing default and the `#N/A` a subject matching nothing
+// receives.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// A workbook whose A1:A5 holds 1..5, the subject the array cases select on.
+Workbook AscendingColumn() {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t row = 0; row < 5U; ++row) {
+    wb.sheet(0).set_cell_value(row, 0, Value::number(static_cast<double>(row + 1U)));
+  }
+  return wb;
+}
+
+/// Asserts `v` is a 5x1 numeric column equal to `expected`.
+void ExpectColumn(const Value& v, const std::array<double, 5>& expected) {
+  ASSERT_TRUE(v.is_array()) << "kind=" << static_cast<int>(v.kind());
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  for (std::uint32_t i = 0; i < 5U; ++i) {
+    const Value& cell = v.as_array()->cells[i];
+    ASSERT_TRUE(cell.is_number()) << "cell " << i << " kind=" << static_cast<int>(cell.kind());
+    EXPECT_EQ(cell.as_number(), expected[i]) << "cell " << i;
+  }
+}
+
+}  // namespace
+
+TEST(BuiltinsSwitch, ArraySubjectSelectsPerCell) {
+  Workbook wb = AscendingColumn();
+  ExpectColumn(EvalSourceIn("=SWITCH(A1:A5,1,10,0)", wb, wb.sheet(0)), {10.0, 0.0, 0.0, 0.0, 0.0});
+  ExpectColumn(EvalSourceIn("=SWITCH(A1:A5,1,10,2,20,0)", wb, wb.sheet(0)), {10.0, 20.0, 0.0, 0.0, 0.0});
+}
+
+TEST(BuiltinsSwitch, ArraySubjectBroadcastsAnArrayArm) {
+  // A value arm may itself be a rectangle, in which case the picked cell
+  // comes from the matching position rather than from the arm's first cell.
+  Workbook wb = AscendingColumn();
+  ExpectColumn(EvalSourceIn("=SWITCH(A1:A5,1,A1:A5,0)", wb, wb.sheet(0)), {1.0, 0.0, 0.0, 0.0, 0.0});
+}
+
+TEST(BuiltinsSwitch, ArraySubjectWithoutDefaultIsPerCellNotAvailable) {
+  // The scalar form answers `#N/A` when nothing matches and no default is
+  // given. Cellwise, that lands only in the cells that matched nothing.
+  Workbook wb = AscendingColumn();
+  const Value v = EvalSourceIn("=SWITCH(A1:A5,1,10)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << "kind=" << static_cast<int>(v.kind());
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  ASSERT_TRUE(v.as_array()->cells[0].is_number());
+  EXPECT_EQ(v.as_array()->cells[0].as_number(), 10.0);
+  for (std::uint32_t i = 1; i < 5U; ++i) {
+    const Value& cell = v.as_array()->cells[i];
+    ASSERT_TRUE(cell.is_error()) << "cell " << i << " kind=" << static_cast<int>(cell.kind());
+    EXPECT_EQ(cell.as_error(), ErrorCode::NA) << "cell " << i;
+  }
+}
+
+TEST(BuiltinsSwitch, ArraySubjectAggregatesWhatTheBareFormSpills) {
+  // SWITCH is not a range-shaped call, so an aggregator consumes exactly
+  // the array the bare form produces. Deriving the expectation from that
+  // array rather than writing it out keeps the two from drifting.
+  Workbook wb = AscendingColumn();
+
+  const Value spilled = EvalSourceIn("=SWITCH(A1:A5,1,10,0)", wb, wb.sheet(0));
+  ASSERT_TRUE(spilled.is_array()) << "kind=" << static_cast<int>(spilled.kind());
+  double total = 0.0;
+  double numeric_cells = 0.0;
+  for (std::uint32_t i = 0; i < spilled.as_array_rows(); ++i) {
+    const Value& cell = spilled.as_array()->cells[i];
+    ASSERT_TRUE(cell.is_number()) << "cell " << i;
+    total += cell.as_number();
+    numeric_cells += 1.0;
+  }
+
+  const Value summed = EvalSourceIn("=SUM(SWITCH(A1:A5,1,10,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(summed.is_number()) << "kind=" << static_cast<int>(summed.kind());
+  EXPECT_EQ(summed.as_number(), total);
+
+  const Value counted = EvalSourceIn("=COUNT(SWITCH(A1:A5,1,10,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(counted.is_number()) << "kind=" << static_cast<int>(counted.kind());
+  EXPECT_EQ(counted.as_number(), numeric_cells);
+}
+
+TEST(BuiltinsSwitch, ScalarSubjectStillShortCircuits) {
+  // Admitting the array path must not cost the scalar path its
+  // short-circuit. SWITCH has more untaken arms than IF does — every
+  // unmatched value plus the default — so a division by zero is parked in
+  // each position in turn.
+  const Value unmatched_default = EvalSource("=SWITCH(1,1,10,1/0)");
+  ASSERT_TRUE(unmatched_default.is_number()) << "kind=" << static_cast<int>(unmatched_default.kind());
+  EXPECT_EQ(unmatched_default.as_number(), 10.0) << "the default is not evaluated once a case matches";
+
+  const Value unmatched_value = EvalSource("=SWITCH(2,1,1/0,0)");
+  ASSERT_TRUE(unmatched_value.is_number()) << "kind=" << static_cast<int>(unmatched_value.kind());
+  EXPECT_EQ(unmatched_value.as_number(), 0.0) << "an unmatched case's value is not evaluated";
+
+  const Value later_case = EvalSource("=SWITCH(1,1,10,2,1/0,0)");
+  ASSERT_TRUE(later_case.is_number()) << "kind=" << static_cast<int>(later_case.kind());
+  EXPECT_EQ(later_case.as_number(), 10.0) << "arms past the match are not evaluated";
+}
+
+// ---------------------------------------------------------------------------
+// IFS over an array condition decides per cell. Conditions are still scanned
+// lazily, so a scalar condition that wins outright never causes a later arm
+// to be evaluated; the cellwise walk begins only at the first array
+// condition actually reached, and every arm from there is evaluated once.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsIfs, ArrayConditionSelectsPerCell) {
+  Workbook wb = AscendingColumn();
+  ExpectColumn(EvalSourceIn("=IFS(A1:A5<=3,A1:A5,TRUE,0)", wb, wb.sheet(0)), {1.0, 2.0, 3.0, 0.0, 0.0});
+  // Several array conditions in a row: each cell takes the first that holds.
+  ExpectColumn(EvalSourceIn("=IFS(A1:A5<=2,10,A1:A5<=4,20,TRUE,30)", wb, wb.sheet(0)), {10.0, 10.0, 20.0, 20.0, 30.0});
+}
+
+TEST(BuiltinsIfs, ScalarConditionsBeforeAnArrayConditionAreStillSkipped) {
+  // A leading scalar FALSE contributes nothing and must not disturb the
+  // rectangle the later array condition establishes.
+  Workbook wb = AscendingColumn();
+  ExpectColumn(EvalSourceIn("=IFS(FALSE,0,A1:A5<=3,A1:A5,TRUE,99)", wb, wb.sheet(0)), {1.0, 2.0, 3.0, 99.0, 99.0});
+}
+
+TEST(BuiltinsIfs, ArrayConditionWithoutCatchallIsPerCellNotAvailable) {
+  // The scalar rule "no condition held -> #N/A" applied cellwise: only the
+  // cells that matched nothing carry it. A trailing unpaired condition has
+  // no value to return, so it cannot win a cell either.
+  Workbook wb = AscendingColumn();
+  for (std::string_view src : {"=IFS(A1:A5<=3,A1:A5)", "=IFS(A1:A5<=3,A1:A5,TRUE)"}) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_array()) << src << " kind=" << static_cast<int>(v.kind());
+    ASSERT_EQ(v.as_array_rows(), 5U) << src;
+    for (std::uint32_t i = 0; i < 3U; ++i) {
+      ASSERT_TRUE(v.as_array()->cells[i].is_number()) << src << " cell " << i;
+      EXPECT_EQ(v.as_array()->cells[i].as_number(), static_cast<double>(i + 1U)) << src << " cell " << i;
+    }
+    for (std::uint32_t i = 3; i < 5U; ++i) {
+      const Value& cell = v.as_array()->cells[i];
+      ASSERT_TRUE(cell.is_error()) << src << " cell " << i << " kind=" << static_cast<int>(cell.kind());
+      EXPECT_EQ(cell.as_error(), ErrorCode::NA) << src << " cell " << i;
+    }
+  }
+}
+
+TEST(BuiltinsIfs, ArrayConditionAggregatesWhatTheBareFormSpills) {
+  // IFS is not a range-shaped call, so an aggregator consumes exactly the
+  // array the bare form produced; deriving the expectation from that array
+  // keeps the two from drifting.
+  Workbook wb = AscendingColumn();
+
+  const Value spilled = EvalSourceIn("=IFS(A1:A5<=3,A1:A5,TRUE,0)", wb, wb.sheet(0));
+  ASSERT_TRUE(spilled.is_array()) << "kind=" << static_cast<int>(spilled.kind());
+  double total = 0.0;
+  double numeric_cells = 0.0;
+  for (std::uint32_t i = 0; i < spilled.as_array_rows(); ++i) {
+    const Value& cell = spilled.as_array()->cells[i];
+    ASSERT_TRUE(cell.is_number()) << "cell " << i;
+    total += cell.as_number();
+    numeric_cells += 1.0;
+  }
+
+  const Value summed = EvalSourceIn("=SUM(IFS(A1:A5<=3,A1:A5,TRUE,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(summed.is_number()) << "kind=" << static_cast<int>(summed.kind());
+  EXPECT_EQ(summed.as_number(), total);
+
+  const Value counted = EvalSourceIn("=COUNT(IFS(A1:A5<=3,A1:A5,TRUE,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(counted.is_number()) << "kind=" << static_cast<int>(counted.kind());
+  EXPECT_EQ(counted.as_number(), numeric_cells);
+}
+
+TEST(BuiltinsIfs, ScalarConditionStillShortCircuits) {
+  // The untaken arms are still never evaluated when a scalar condition
+  // decides the call.
+  const Value first = EvalSource("=IFS(TRUE,1,FALSE,1/0)");
+  ASSERT_TRUE(first.is_number()) << "kind=" << static_cast<int>(first.kind());
+  EXPECT_EQ(first.as_number(), 1.0);
+
+  const Value second = EvalSource("=IFS(FALSE,1/0,TRUE,2)");
+  ASSERT_TRUE(second.is_number()) << "kind=" << static_cast<int>(second.kind());
+  EXPECT_EQ(second.as_number(), 2.0) << "an unmatched condition's value is not evaluated";
+}
+
+TEST(BuiltinsIfs, ScalarWinBeforeAnArrayConditionKeepsTheScalarResult) {
+  // The load-bearing case for the lazy scan: a scalar condition that wins
+  // must decide the call before any later array condition is even reached,
+  // so the arms past it stay unevaluated and the result stays scalar. If
+  // the scan stopped being lazy this would surface the `1/0`.
+  Workbook wb = AscendingColumn();
+  const Value v = EvalSourceIn("=IFS(TRUE,1,A1:A5<=3,1/0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "kind=" << static_cast<int>(v.kind());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsIfs, ArrayConditionLandsArmErrorsPerCell) {
+  // Once the cellwise walk starts there is no branch to short-circuit onto,
+  // so every arm is evaluated and an erroring one reaches only the cells
+  // that select it.
+  Workbook wb = AscendingColumn();
+  const Value v = EvalSourceIn("=IFS(A1:A5<=3,1/0,TRUE,0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << "kind=" << static_cast<int>(v.kind());
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    const Value& cell = v.as_array()->cells[i];
+    ASSERT_TRUE(cell.is_error()) << "cell " << i << " kind=" << static_cast<int>(cell.kind());
+    EXPECT_EQ(cell.as_error(), ErrorCode::Div0) << "cell " << i;
+  }
+  for (std::uint32_t i = 3; i < 5U; ++i) {
+    const Value& cell = v.as_array()->cells[i];
+    ASSERT_TRUE(cell.is_number()) << "cell " << i << " kind=" << static_cast<int>(cell.kind());
+    EXPECT_EQ(cell.as_number(), 0.0) << "cell " << i;
+  }
+}
+
+TEST(BuiltinsSwitch, ArraySubjectLandsArmErrorsPerCell) {
+  // With no branch to short-circuit onto, every arm is evaluated — so an
+  // erroring arm reaches only the cells that select it.
+  Workbook wb = AscendingColumn();
+  const Value v = EvalSourceIn("=SWITCH(A1:A5,1,1/0,0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << "kind=" << static_cast<int>(v.kind());
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  ASSERT_TRUE(v.as_array()->cells[0].is_error());
+  EXPECT_EQ(v.as_array()->cells[0].as_error(), ErrorCode::Div0);
+  for (std::uint32_t i = 1; i < 5U; ++i) {
+    const Value& cell = v.as_array()->cells[i];
+    ASSERT_TRUE(cell.is_number()) << "cell " << i << " kind=" << static_cast<int>(cell.kind());
+    EXPECT_EQ(cell.as_number(), 0.0) << "cell " << i;
+  }
 }
 
 }  // namespace

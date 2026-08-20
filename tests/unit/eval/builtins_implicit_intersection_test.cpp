@@ -407,6 +407,42 @@ TEST(IntersectOp, WholeAxisOverlapBehindOperatorKeepsAnchorProjection) {
   EXPECT_EQ(v.as_number(), 8.0);
 }
 
+TEST(IntersectOp, MultiSpanWholeAxisOperandIntersects) {
+  // `A:C` is a whole-axis operand spelled as a `RangeOp` over two full-column
+  // endpoints rather than as the single `Ref` `A:A` folds into. It names the
+  // three-column grid band, which Excel accepts on either side of the
+  // operator; the endpoint-union path cannot express it, because a full-axis
+  // endpoint has no bounded corner to union.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));  // A1
+  sheet.set_cell_value(0, 1, Value::number(2.0));  // B1
+  sheet.set_cell_value(0, 2, Value::number(3.0));  // C1
+  sheet.set_cell_value(1, 0, Value::number(4.0));  // A2
+  sheet.set_cell_value(1, 1, Value::number(5.0));  // B2
+  sheet.set_cell_value(1, 2, Value::number(6.0));  // C2
+
+  const Value column = EvalSourceIn("=SUM(A:C B:B)", wb, sheet);
+  ASSERT_TRUE(column.is_number()) << "kind=" << static_cast<int>(column.kind());
+  EXPECT_EQ(column.as_number(), 7.0) << "column B alone";
+
+  const Value row = EvalSourceIn("=SUM(A:C 2:2)", wb, sheet);
+  ASSERT_TRUE(row.is_number()) << "kind=" << static_cast<int>(row.kind());
+  EXPECT_EQ(row.as_number(), 15.0) << "row 2 clipped to columns A:C";
+
+  const Value bounded = EvalSourceIn("=SUM(A:C B1:B2)", wb, sheet);
+  ASSERT_TRUE(bounded.is_number()) << "kind=" << static_cast<int>(bounded.kind());
+  EXPECT_EQ(bounded.as_number(), 7.0) << "bounded operand still bounds the band";
+
+  const Value mirrored = EvalSourceIn("=SUM(B:B A:C)", wb, sheet);
+  ASSERT_TRUE(mirrored.is_number()) << "kind=" << static_cast<int>(mirrored.kind());
+  EXPECT_EQ(mirrored.as_number(), 7.0) << "the operator is symmetric in its operands";
+
+  const Value band = EvalSourceIn("=SUM(A:C 1:2)", wb, sheet);
+  ASSERT_TRUE(band.is_number()) << "kind=" << static_cast<int>(band.kind());
+  EXPECT_EQ(band.as_number(), 21.0) << "two multi-span whole-axis operands cross to a band";
+}
+
 TEST(IntersectOp, BlockedFootprintIsSpill) {
   // The spilling position weighs the rectangle against the anchor footprint,
   // so an occupied cell below the anchor blocks it like any other spill.

@@ -273,18 +273,22 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   }
   const auto index_array = [&](std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
                                std::uint32_t right) -> Value {
-    const std::uint32_t rows = bottom - top + 1U;
-    const std::uint32_t cols = right - left + 1U;
-    if (rows == 1U && cols == 1U) {
-      return Value::number(static_cast<double>((want_row ? top : left) + 1U));
+    // Only the requested axis is projected: the other one collapses, so a
+    // rectangle wider than it is tall still yields a single column of row
+    // indices. A one-long projection is the scalar Excel reports, whatever
+    // the rectangle's other dimension.
+    const std::uint32_t base = want_row ? top : left;
+    const std::uint32_t span = want_row ? (bottom - top + 1U) : (right - left + 1U);
+    if (span == 1U) {
+      return Value::number(static_cast<double>(base + 1U));
     }
-    const std::uint32_t out_rows = want_row ? rows : 1U;
-    const std::uint32_t out_cols = want_row ? 1U : cols;
     std::vector<Value> cells;
-    cells.reserve(static_cast<std::size_t>(out_rows) * out_cols);
-    for (std::uint32_t i = 0; i < (want_row ? rows : cols); ++i) {
-      cells.push_back(Value::number(static_cast<double>((want_row ? top : left) + i + 1U)));
+    cells.reserve(span);
+    for (std::uint32_t i = 0; i < span; ++i) {
+      cells.push_back(Value::number(static_cast<double>(base + i + 1U)));
     }
+    const std::uint32_t out_rows = want_row ? span : 1U;
+    const std::uint32_t out_cols = want_row ? 1U : span;
     return array_value_or_num_error(make_array_value(arena, out_rows, out_cols, cells));
   };
   const parser::AstNode& raw_arg = call.as_call_arg(0);
@@ -303,24 +307,24 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   }
   const parser::AstNode& arg = *effective;
   const parser::NodeKind k = arg.kind();
-  if (k == parser::NodeKind::Ref) {
-    const parser::Reference& r = arg.as_ref();
-    const std::uint32_t idx = want_row ? r.row : r.col;
-    return Value::number(static_cast<double>(idx + 1U));
+  const parser::Reference* rect_lhs = nullptr;
+  const parser::Reference* rect_rhs = nullptr;
+  if (declared_rect_endpoints(arg, &rect_lhs, &rect_rhs)) {
+    // A full-axis endpoint carries a meaningful coordinate only on its
+    // bounded axis, so the rectangle comes from the shared derivation
+    // rather than from the endpoints' raw row/col fields. Reading those
+    // directly is what made `ROW(A:A)` answer 1 — the structure default
+    // for the row a whole-column reference never names.
+    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*rect_lhs, *rect_rhs);
+    if (!rect) {
+      return Value::error(rect.error());
+    }
+    return index_array(rect.value().row_first, rect.value().col_first, rect.value().row_last, rect.value().col_last);
   }
   if (k == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs_ast = arg.as_range_lhs();
-    const parser::AstNode& rhs_ast = arg.as_range_rhs();
-    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
-      return Value::error(ErrorCode::Value);
-    }
-    const parser::Reference& lhs = lhs_ast.as_ref();
-    const parser::Reference& rhs = rhs_ast.as_ref();
-    const std::uint32_t top = std::min(lhs.row, rhs.row);
-    const std::uint32_t left = std::min(lhs.col, rhs.col);
-    const std::uint32_t bottom = std::max(lhs.row, rhs.row);
-    const std::uint32_t right = std::max(lhs.col, rhs.col);
-    return index_array(top, left, bottom, right);
+    // A `RangeOp` whose endpoints are not both bare references names no
+    // rectangle until it is evaluated, which this seam does not do.
+    return Value::error(ErrorCode::Value);
   }
   if (k == parser::NodeKind::Call) {
     // Reference-returning builtins (INDIRECT, OFFSET) nested inside

@@ -13,6 +13,8 @@
 #include <cstdint>
 #include <string_view>
 
+#include "cell.h"
+#include "eval/cell_evaluator.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
@@ -260,6 +262,130 @@ TEST(BuiltinsColumn, RangeOpReturnsColumnVector) {
   ASSERT_EQ(v.as_array_cols(), 3U);
   EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 2.0);
   EXPECT_DOUBLE_EQ(v.as_array()->cells[2].as_number(), 4.0);
+}
+
+// ---------------------------------------------------------------------------
+// ROW / COLUMN over a whole-axis reference project the declared rectangle,
+// the same one ROWS / COLUMNS measure. A full-axis endpoint names a
+// coordinate only on its bounded axis, so the projection cannot be read off
+// the endpoint's raw row / col fields: `A:A` leaves `row` at its structure
+// default, which is why the whole grid height used to collapse to 1.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsRow, WholeColumnProjectsEveryGridRow) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROW(A:A)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << "kind=" << static_cast<int>(v.kind());
+  EXPECT_EQ(v.as_array_rows(), Sheet::kMaxRows);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[Sheet::kMaxRows - 1U].as_number(), static_cast<double>(Sheet::kMaxRows));
+}
+
+TEST(BuiltinsRow, WholeColumnSpanProjectsEveryGridRow) {
+  // A multi-column band is still one column of row indices: only the
+  // requested axis is projected.
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROW(A:C)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << "kind=" << static_cast<int>(v.kind());
+  EXPECT_EQ(v.as_array_rows(), Sheet::kMaxRows);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+}
+
+TEST(BuiltinsColumn, WholeRowProjectsEveryGridColumn) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=COLUMN(1:1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << "kind=" << static_cast<int>(v.kind());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), Sheet::kMaxCols);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[Sheet::kMaxCols - 1U].as_number(), static_cast<double>(Sheet::kMaxCols));
+}
+
+TEST(BuiltinsColumn, WholeRowSpanProjectsEveryGridColumn) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=COLUMN(1:3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << "kind=" << static_cast<int>(v.kind());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), Sheet::kMaxCols);
+}
+
+TEST(BuiltinsRow, WholeAxisOffAxisProjectionStaysScalar) {
+  // The axis a whole-axis reference bounds still projects to one index:
+  // `ROW(1:1)` is row 1, `COLUMN(A:A)` is column 1. These are the two
+  // spellings that were already right, and they must stay scalar rather
+  // than becoming one-element arrays.
+  Workbook wb = Workbook::create();
+  const Value row = EvalSourceIn("=ROW(1:1)", wb, wb.sheet(0));
+  ASSERT_TRUE(row.is_number()) << "kind=" << static_cast<int>(row.kind());
+  EXPECT_DOUBLE_EQ(row.as_number(), 1.0);
+
+  const Value column = EvalSourceIn("=COLUMN(A:A)", wb, wb.sheet(0));
+  ASSERT_TRUE(column.is_number()) << "kind=" << static_cast<int>(column.kind());
+  EXPECT_DOUBLE_EQ(column.as_number(), 1.0);
+}
+
+TEST(BuiltinsRow, WholeAxisSpanOffAxisProjectsItsSpan) {
+  // `ROW(1:3)` and `COLUMN(A:C)` project the bounded axis, so they keep
+  // reporting the span rather than the grid.
+  Workbook wb = Workbook::create();
+  const Value row = EvalSourceIn("=ROW(1:3)", wb, wb.sheet(0));
+  ASSERT_TRUE(row.is_array()) << "kind=" << static_cast<int>(row.kind());
+  EXPECT_EQ(row.as_array_rows(), 3U);
+  EXPECT_EQ(row.as_array_cols(), 1U);
+
+  const Value column = EvalSourceIn("=COLUMN(A:C)", wb, wb.sheet(0));
+  ASSERT_TRUE(column.is_array()) << "kind=" << static_cast<int>(column.kind());
+  EXPECT_EQ(column.as_array_rows(), 1U);
+  EXPECT_EQ(column.as_array_cols(), 3U);
+}
+
+TEST(BuiltinsRow, WholeAxisProjectionAggregates) {
+  // The aggregator seam expands the same rectangle: these are the closed
+  // forms of 1..1048576 and 1..16384, so a projection that silently
+  // clamped to the populated extent could not produce them.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+
+  const Value rows = EvalSourceIn("=SUM(ROW(A:A))", wb, wb.sheet(0));
+  ASSERT_TRUE(rows.is_number()) << "kind=" << static_cast<int>(rows.kind());
+  const double n_rows = static_cast<double>(Sheet::kMaxRows);
+  EXPECT_DOUBLE_EQ(rows.as_number(), n_rows * (n_rows + 1.0) / 2.0);
+
+  const Value cols = EvalSourceIn("=SUM(COLUMN(1:1))", wb, wb.sheet(0));
+  ASSERT_TRUE(cols.is_number()) << "kind=" << static_cast<int>(cols.kind());
+  const double n_cols = static_cast<double>(Sheet::kMaxCols);
+  EXPECT_DOUBLE_EQ(cols.as_number(), n_cols * (n_cols + 1.0) / 2.0);
+}
+
+TEST(BuiltinsRow, WholeColumnSpillsFromTheTopRowOnly) {
+  // A grid-height projection fits the sheet only when it is anchored at
+  // row 1; anywhere else it runs off the bottom and Excel reports #SPILL!.
+  // The committed region is a descriptor, not a million materialised
+  // cells, so the sheet-side cost does not follow the projection's size.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Cell anchored;
+  anchored.formula_text = "=ROW(A:A)";
+  Arena arena;
+  const Value at_top = evaluate_cell_for_recalc(wb, sheet, anchored, 0U, 0U, default_registry(), arena);
+  ASSERT_TRUE(at_top.is_number()) << "kind=" << static_cast<int>(at_top.kind());
+  EXPECT_DOUBLE_EQ(at_top.as_number(), 1.0);
+  ASSERT_NE(sheet.spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(sheet.cell_at(Sheet::kMaxRows - 1U, 0U), nullptr) << "the region is a descriptor, not stored cells";
+
+  const Value mid = EvalSourceIn("=A500000", wb, sheet);
+  ASSERT_TRUE(mid.is_number()) << "kind=" << static_cast<int>(mid.kind());
+  EXPECT_DOUBLE_EQ(mid.as_number(), 500000.0) << "read back out of the committed region";
+
+  Workbook lower = Workbook::create();
+  Sheet& lower_sheet = lower.sheet(0);
+  Cell below;
+  below.formula_text = "=ROW(A:A)";
+  Arena lower_arena;
+  const Value off_top = evaluate_cell_for_recalc(lower, lower_sheet, below, 5U, 3U, default_registry(), lower_arena);
+  ASSERT_TRUE(off_top.is_error()) << "kind=" << static_cast<int>(off_top.kind());
+  EXPECT_EQ(off_top.as_error(), ErrorCode::Spill);
 }
 
 TEST(BuiltinsRow, ArrayLiteralIsValue) {
