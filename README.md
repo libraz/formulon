@@ -60,7 +60,7 @@ These are **permanent** non-goals, not "not yet." The scope is finite on purpose
 |---------|------|-------|
 | npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 22+, browsers, workers. |
 | PyPI | `formulon` | Python 3.9+ `py3-none-any` wheel that bundles `formulon_capi.wasm` plus a pure-Python wrapper. `pip` resolves the platform-specific `wasmtime` runtime. |
-| GitHub Releases | `formulon-cli-<platform-arch>` | Standalone CLI binaries (`eval`, `recalc`, `dump`, `paginate`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
+| GitHub Releases | `formulon-<version>-<platform-arch>.tar.gz` | Standalone CLI binaries (`eval`, `recalc`, `dump`, `paginate`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
 
 Every surface computes the same results from the same input. One
 deliberate difference is worth knowing before you size a workload: the
