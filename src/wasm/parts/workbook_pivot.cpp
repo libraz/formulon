@@ -78,22 +78,26 @@ JsStatus JsWorkbook::pivotCacheRemove(uint32_t cacheId) {
   return status_from_rc(rc);
 }
 
+// The typed getters here emit their whole declared payload on every exit
+// path; only `status.ok` and the values differ. See the same note in
+// `parts/workbook_styles.cpp`.
+
 emscripten::val JsWorkbook::pivotCacheGetWorksheetSource(uint32_t cacheId) const {
   emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   int32_t present = 0;
   const char* ref = nullptr;
   const char* sheet = nullptr;
   const char* name = nullptr;
-  fm_status_t rc = fm_workbook_pivot_cache_get_worksheet_source(handle_, cacheId, &present, &ref, &sheet, &name);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_pivot_cache_get_worksheet_source(handle_, cacheId, &present, &ref, &sheet, &name)
+                         : 7000;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+    present = 0;
+    ref = nullptr;
+    sheet = nullptr;
+    name = nullptr;
   }
-  o.set("status", ok_status());
+  o.set("status", status_from_rc(rc));
   o.set("present", present != 0);
   o.set("ref", std::string(ref != nullptr ? ref : ""));
   o.set("sheet", std::string(sheet != nullptr ? sheet : ""));
@@ -366,17 +370,12 @@ JsStatus JsWorkbook::pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool
 
 emscripten::val JsWorkbook::pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const {
   emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   fm_pivot_layout_t layout = FM_PIVOT_LAYOUT_COMPACT;
-  fm_status_t rc = fm_workbook_pivot_get_layout(handle_, sheet, pivotIdx, &layout);
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_get_layout(handle_, sheet, pivotIdx, &layout) : 7000;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+    layout = FM_PIVOT_LAYOUT_COMPACT;
   }
-  o.set("status", ok_status());
+  o.set("status", status_from_rc(rc));
   o.set("layout", static_cast<uint32_t>(layout));
   return o;
 }
@@ -718,17 +717,13 @@ JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripte
 
 emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx) const {
   emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   fm_pivot_filter_spec_t spec{};
-  fm_status_t rc = fm_workbook_pivot_filter_at(handle_, sheet, pivotIdx, filterIdx, &spec);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_pivot_filter_at(handle_, sheet, pivotIdx, filterIdx, &spec) : 7000;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+    spec = fm_pivot_filter_spec_t{};
   }
-  o.set("status", ok_status());
+  o.set("status", status_from_rc(rc));
   o.set("axis", static_cast<int32_t>(spec.axis));
   o.set("fieldName", std::string(spec.field_name != nullptr ? spec.field_name : ""));
   o.set("type", static_cast<int32_t>(spec.type));

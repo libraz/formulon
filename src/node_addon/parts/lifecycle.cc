@@ -355,12 +355,20 @@ Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
+  (void)TakeIterativeProgressThrew();
   fm_status_t rc = fm_workbook_recalc(handle_);
+  const bool callback_threw = TakeIterativeProgressThrew();
   // A full recalc is the coarsest boundary the binding has and the one
   // after which the footprint has most likely moved (spilled arrays,
   // newly cached text), so the external-memory figure is refreshed here
   // rather than on every cell write.
   SyncExternalMemory(env);
+  // An engine failure wins: it carries its own diagnostic and is the more
+  // specific answer. Otherwise a throwing progress callback, which the
+  // engine only saw as a cancellation, becomes the reported failure.
+  if (rc == 0 && callback_threw) {
+    return MakeErrorStatus(env, kBindingCallbackException);
+  }
   return MakeStatus(env, rc);
 }
 
@@ -382,7 +390,16 @@ Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
     return MakeParallelRecalcResult(env, status, stats);
   }
 
+  (void)TakeIterativeProgressThrew();
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, thread_count, &stats);
+  const bool callback_threw = TakeIterativeProgressThrew();
+  if (rc == 0 && callback_threw) {
+    // Same shape as an engine failure: the pass did not finish, so the
+    // counters are not reported.
+    stats = fm_parallel_recalc_stats{};
+    SyncExternalMemory(env);
+    return MakeParallelRecalcResult(env, MakeErrorStatus(env, kBindingCallbackException), stats);
+  }
   Napi::Object status = MakeStatus(env, rc);
   // Parallel recalc can change cached values and spill geometry just like the
   // serial entry point, so keep V8's external-memory estimate in sync before
@@ -407,9 +424,14 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
     vp.last_col = vpobj.Get("lastCol").ToNumber().Uint32Value();
   }
   uint32_t recomputed = 0;
+  (void)TakeIterativeProgressThrew();
   fm_status_t rc = fm_workbook_partial_recalc(handle_, &vp, &recomputed);
+  const bool callback_threw = TakeIterativeProgressThrew();
   if (rc != 0) {
     return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "recomputed", 0);
+  }
+  if (callback_threw) {
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, kBindingCallbackException), "recomputed", 0);
   }
   return MakeNumberFieldResult(env, MakeOkStatus(env), "recomputed", recomputed);
 }
@@ -466,7 +488,11 @@ int32_t Workbook::IterativeProgressTrampoline(uint32_t iteration, double max_res
   });
   workbook->in_iterative_progress_callback_ = false;
   if (env.IsExceptionPending()) {
+    // Abort the solve and leave the reason behind for the recalc entry
+    // point: without it the throw is indistinguishable from a deliberate
+    // cancel and `recalc()` reports success over a half-solved workbook.
     (void)env.GetAndClearPendingException();
+    workbook->iterative_progress_threw_ = true;
     return 0;
   }
   return (ret.IsUndefined() || ret.IsNull() || ret.ToBoolean().Value()) ? 1 : 0;

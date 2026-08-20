@@ -6,21 +6,76 @@
 // `parts/bindings_register.cpp`.
 
 #include <emscripten/bind.h>
+#include <emscripten/em_js.h>
 #include <emscripten/val.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
+// The JS half of `call_js_callback`. The returned ordinals are the
+// `JsCallbackOutcome` enumerators, spelled as literals because the body is
+// a string handed to the JS glue generator rather than compiled C++.
+// `Reflect.apply` rather than `fn.apply` so an object that shadows `apply`
+// cannot redirect the call, and a non-callable argument surfaces as a
+// TypeError this handler classifies like any other throw. The body carries
+// no `//` comments: it is stringified onto a single line. `clang-format`
+// is off over it for the same reason -- it reads the body as C++ and
+// splits JavaScript's `===` into `== =`.
+//
+// FORMULON-ALLOW: the try / catch below is JavaScript source, not C++. It
+// is the only place a JS exception can be intercepted in a binary linked
+// -fno-exceptions -sDISABLE_EXCEPTION_CATCHING=1, where an escaping
+// exception would tear down C++ frames without running their destructors.
+// clang-format off
+EM_JS(int32_t, fm_wasm_invoke_js_callback, (emscripten::EM_VAL fn_handle, emscripten::EM_VAL args_handle), {
+  var fn = Emval.toValue(fn_handle);
+  var args = Emval.toValue(args_handle);
+  try {
+    var result = Reflect.apply(fn, undefined, args);
+    if (result === undefined || result === null) {
+      return 2;
+    }
+    return result ? 1 : 0;
+  } catch (e) {
+    return -1;
+  }
+});
+// clang-format on
+
+EM_JS_DEPS(fm_wasm_js_callback, "$Emval");
+
 namespace formulon {
 namespace wasm {
 namespace parts {
+
+JsCallbackOutcome call_js_callback(const emscripten::val& fn, const emscripten::val& args) {
+  // Both handles stay owned by the arguments; the JS side only reads them.
+  return static_cast<JsCallbackOutcome>(fm_wasm_invoke_js_callback(fn.as_handle(), args.as_handle()));
+}
+
+namespace {
+
+/// The envelope a throwing progress callback produces. Built by hand
+/// rather than through `error_status`: the engine never saw a failure, so
+/// there is no thread-local C-ABI diagnostic to copy out.
+JsStatus progress_callback_threw_status() {
+  JsStatus s;
+  s.ok = false;
+  s.status = kBindingCallbackException;
+  s.message = "the iterative progress callback threw; the solve was aborted";
+  s.context = "Workbook.setIterativeProgress";
+  return s;
+}
+
+}  // namespace
 
 JsWorkbook::~JsWorkbook() {
   if (handle_ != nullptr) {
@@ -29,8 +84,15 @@ JsWorkbook::~JsWorkbook() {
   }
 }
 
-JsWorkbook::JsWorkbook(JsWorkbook&& other) noexcept : handle_(other.handle_) {
+JsWorkbook::JsWorkbook(JsWorkbook&& other) noexcept
+    : handle_(other.handle_),
+      progress_callback_(std::move(other.progress_callback_)),
+      progress_callback_threw_(other.progress_callback_threw_) {
   other.handle_ = nullptr;
+  other.progress_callback_ = emscripten::val::null();
+  other.progress_callback_threw_ = false;
+  // The engine holds the address the callback was registered from.
+  rebind_progress_callback();
 }
 
 JsWorkbook& JsWorkbook::operator=(JsWorkbook&& other) noexcept {
@@ -39,7 +101,12 @@ JsWorkbook& JsWorkbook::operator=(JsWorkbook&& other) noexcept {
       fm_workbook_destroy(handle_);
     }
     handle_ = other.handle_;
+    progress_callback_ = std::move(other.progress_callback_);
+    progress_callback_threw_ = other.progress_callback_threw_;
     other.handle_ = nullptr;
+    other.progress_callback_ = emscripten::val::null();
+    other.progress_callback_threw_ = false;
+    rebind_progress_callback();
   }
   return *this;
 }
@@ -257,7 +324,16 @@ JsStatus JsWorkbook::recalc() {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
+  progress_callback_threw_ = false;
   fm_status_t rc = fm_workbook_recalc(handle_);
+  const bool callback_threw = progress_callback_threw_;
+  progress_callback_threw_ = false;
+  // An engine failure wins: it carries its own diagnostic and is the more
+  // specific answer. Otherwise a throwing progress callback, which the
+  // engine only saw as a cancellation, becomes the reported failure.
+  if (rc == 0 && callback_threw) {
+    return progress_callback_threw_status();
+  }
   return status_from_rc(rc);
 }
 
@@ -280,11 +356,20 @@ JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
 
   fm_parallel_recalc_stats stats{};
   const uint32_t native_thread_count = is_valid ? static_cast<uint32_t>(requested) : 9U;
+  progress_callback_threw_ = false;
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, native_thread_count, &stats);
+  const bool callback_threw = progress_callback_threw_;
+  progress_callback_threw_ = false;
   if (rc != 0) {
     // The C ABI guarantees zeroed stats on every failure. Keep the result's
     // default-zero payload as the binding-level equivalent of that contract.
     r.status = error_status(rc);
+    return r;
+  }
+  if (callback_threw) {
+    // Same shape as an engine failure: the pass did not finish, so the
+    // counters are not reported.
+    r.status = progress_callback_threw_status();
     return r;
   }
 
@@ -399,9 +484,17 @@ emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
   vp.first_col = viewport["firstCol"].as<uint32_t>();
   vp.last_col = viewport["lastCol"].as<uint32_t>();
   uint32_t recomputed = 0;
+  progress_callback_threw_ = false;
   fm_status_t rc = fm_workbook_partial_recalc(handle_, &vp, &recomputed);
+  const bool callback_threw = progress_callback_threw_;
+  progress_callback_threw_ = false;
   if (rc != 0) {
     o.set("status", error_status(rc));
+    o.set("recomputed", static_cast<uint32_t>(0));
+    return o;
+  }
+  if (callback_threw) {
+    o.set("status", progress_callback_threw_status());
     o.set("recomputed", static_cast<uint32_t>(0));
     return o;
   }
@@ -412,32 +505,39 @@ emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
 
 // ---- Iterative-progress callback bridge --------------------------------
 //
-// The wrapper holds the JS callable in a function-local static slot for
-// the lifetime of this WASM module. We do not pass `user_data` through
-// the C ABI: the JS layer does not need it because the closure captures
-// whatever state the JS caller wants. As a consequence, only ONE JS
-// progress callback can be active at a time across all workbook handles
-// in this WASM instance -- installing a new one displaces any previous
-// registration. This matches the typical UI workflow (a single
-// "calculation in progress" dialog) without requiring per-handle
-// thread-local storage.
-
-emscripten::val& JsWorkbook::js_progress_callback() {
-  static emscripten::val cb = emscripten::val::null();
-  return cb;
-}
+// The callback belongs to the wrapper, not to the module: the C ABI
+// carries a `user_data` pointer and this binding passes `this` through it,
+// so two workbooks driven from one page keep their own callbacks. The Node
+// addon has always worked this way, and `packages/npm-native/README.md`
+// claims the two surfaces behave alike for every shared method.
 
 int32_t JsWorkbook::iterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
-                                                void* /*user_data*/) {
-  emscripten::val& cb = js_progress_callback();
-  if (cb.isNull() || cb.isUndefined()) {
+                                                void* user_data) {
+  auto* const self = static_cast<JsWorkbook*>(user_data);
+  if (self == nullptr || self->progress_callback_.isNull() || self->progress_callback_.isUndefined()) {
     return 1;
   }
-  emscripten::val ret = cb(iteration, max_residual, max_iterations);
-  if (ret.isUndefined() || ret.isNull()) {
-    return 1;
+  emscripten::val args = emscripten::val::array();
+  args.set(0, iteration);
+  args.set(1, max_residual);
+  args.set(2, max_iterations);
+  const JsCallbackOutcome outcome = call_js_callback(self->progress_callback_, args);
+  if (outcome == JsCallbackOutcome::kThrew) {
+    // Abort the solve so every frame between here and the recalc entry
+    // point unwinds the ordinary way, and leave the reason behind for it.
+    self->progress_callback_threw_ = true;
+    return 0;
   }
-  return ret.as<bool>() ? 1 : 0;
+  // Returning nothing means "keep going"; anything else is read the way
+  // JavaScript itself would read it.
+  return outcome == JsCallbackOutcome::kFalsy ? 0 : 1;
+}
+
+void JsWorkbook::rebind_progress_callback() {
+  if (handle_ == nullptr || progress_callback_.isNull() || progress_callback_.isUndefined()) {
+    return;
+  }
+  (void)fm_workbook_set_iterative_progress(handle_, &JsWorkbook::iterativeProgressTrampoline, this);
 }
 
 JsStatus JsWorkbook::setIterativeProgress(emscripten::val cb) {
@@ -445,12 +545,12 @@ JsStatus JsWorkbook::setIterativeProgress(emscripten::val cb) {
     return error_status(7000);
   }
   if (cb.isNull() || cb.isUndefined()) {
-    js_progress_callback() = emscripten::val::null();
+    progress_callback_ = emscripten::val::null();
     fm_status_t rc = fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
     return status_from_rc(rc);
   }
-  js_progress_callback() = cb;
-  fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &JsWorkbook::iterativeProgressTrampoline, nullptr);
+  progress_callback_ = cb;
+  fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &JsWorkbook::iterativeProgressTrampoline, this);
   return status_from_rc(rc);
 }
 
@@ -524,7 +624,12 @@ void log_sink_trampoline(const char* record, std::size_t len, void* /*user_data*
   }
   // The record is a length-delimited byte range, never NUL-terminated;
   // hand the JS side a view over exactly `len` bytes.
-  sink(emscripten::val(emscripten::typed_memory_view(len, reinterpret_cast<const std::uint8_t*>(record))));
+  emscripten::val args = emscripten::val::array();
+  args.set(0, emscripten::val(emscripten::typed_memory_view(len, reinterpret_cast<const std::uint8_t*>(record))));
+  // A throwing sink is dropped. Records are emitted from arbitrary depth
+  // inside the engine and a log write has no return path to report on, so
+  // the only contract worth keeping is that it cannot damage the caller.
+  (void)call_js_callback(sink, args);
 }
 
 }  // namespace

@@ -835,6 +835,46 @@ TEST(FormulonCApiPivot, ScalarEnumMutatorsRejectRawValuesWithoutMutation) {
   EXPECT_EQ(std::vector<std::uint8_t>(after.data, after.data + after.len), snapshot);
 }
 
+TEST(FormulonCApiPivot, StructEnumMutatorsRejectRawValuesWithoutMutation) {
+  // The struct-taking twins of the scalar mutators above must enforce the
+  // same domains. Without that, an out-of-domain `axis` collapses onto
+  // `PivotAxis::Row` and an out-of-domain `show_as` onto `Normal`, and
+  // the call reports success on a pivot that means something else.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  BufferGuard before;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &before.data, &before.len), 0) << fm_last_error_message();
+  const std::vector<std::uint8_t> snapshot(before.data, before.data + before.len);
+  const fm_status_t expected = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+
+  fm_pivot_field_spec_t field_spec{};
+  field_spec.source_name = "Region";
+  field_spec.axis = RawEnumValue<fm_pivot_axis_t>(99);
+  std::size_t field_idx = 99U;
+  EXPECT_EQ(fm_workbook_pivot_field_add(wb.handle, 0, pivot_idx, &field_spec, &field_idx), expected);
+
+  fm_pivot_data_field_spec_t df_spec{};
+  df_spec.name = "Total";
+  df_spec.field_index = 1;
+  df_spec.aggregation = RawEnumValue<fm_pivot_aggregation_t>(99);
+  std::size_t df_idx = 99U;
+  EXPECT_EQ(fm_workbook_pivot_data_field_add(wb.handle, 0, pivot_idx, &df_spec, &df_idx), expected);
+  EXPECT_EQ(fm_workbook_pivot_data_field_set(wb.handle, 0, pivot_idx, 0, &df_spec), expected);
+
+  df_spec.aggregation = FM_PIVOT_AGG_SUM;
+  df_spec.show_as = RawEnumValue<fm_pivot_show_as_t>(99);
+  EXPECT_EQ(fm_workbook_pivot_data_field_add(wb.handle, 0, pivot_idx, &df_spec, &df_idx), expected);
+  EXPECT_EQ(fm_workbook_pivot_data_field_set(wb.handle, 0, pivot_idx, 0, &df_spec), expected);
+
+  BufferGuard after;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &after.data, &after.len), 0) << fm_last_error_message();
+  EXPECT_EQ(std::vector<std::uint8_t>(after.data, after.data + after.len), snapshot);
+}
+
 TEST(FormulonCApiPivot, PivotProjectionUsesWorkbookLocaleAndReportLayout) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

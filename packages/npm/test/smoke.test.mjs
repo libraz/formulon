@@ -152,6 +152,39 @@ test('a registered sink receives records only once the threshold admits them', a
   }
 });
 
+test('a throwing log sink is dropped and leaves the engine usable', async () => {
+  const Module = await getModule();
+  const mod = await loadStagedModule();
+  let calls = 0;
+  assert.ok(
+    Module.setLogSink(() => {
+      calls += 1;
+      throw new Error('sink failure');
+    }).ok,
+  );
+  try {
+    assert.ok(Module.setLogMinLevel(mod.LogLevel.Warn).ok);
+    // The sink runs from deep inside the writer. If its exception reached
+    // the C++ frames it would tear them down without running a single
+    // destructor, because the binary is linked without exception support.
+    emitXlsbWarning(Module, mod.WorkbookFormat.Xlsb);
+    assert.ok(calls > 0, 'expected the sink to be invoked');
+  } finally {
+    assert.ok(Module.setLogMinLevel(mod.LogLevel.Off).ok);
+    assert.ok(Module.setLogSink(null).ok);
+  }
+
+  const wb = Module.Workbook.createDefault();
+  try {
+    assert.ok(wb.setFormula(0, 0, 0, '=1+1').ok);
+    const after = wb.recalc();
+    assert.ok(after.ok, `recalc after a throwing sink: ${JSON.stringify(after)}`);
+    assert.equal(wb.getValue(0, 0, 0).value.number, 2);
+  } finally {
+    wb.delete();
+  }
+});
+
 // One-shot evaluation is anchored at Sheet1!A1 and read-only on every
 // shipped surface, so these must agree value-for-value with the WASM
 // package and the Python wheel. The anchor-referencing cases are the ones
@@ -689,5 +722,278 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
     }
   } finally {
     wb.delete();
+  }
+});
+
+// Status ordinals the callback contract is stated in terms of; see
+// `src/utils/error.h`. Spelled out here because the binding does not
+// export a status enum.
+const STATUS = Object.freeze({
+  RECALC_REENTRANT: 4005,
+  CALLBACK_EXCEPTION: 7003,
+});
+
+// A self-referential average: from a blank A1 the iterative solver walks
+// towards 10, and the progress callback fires after every sweep.
+function makeIterativeWorkbook(Module) {
+  const wb = Module.Workbook.createDefault();
+  assert.ok(wb.setIterative(true, 100, 0.0001).ok);
+  assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+  return wb;
+}
+
+test('a throwing iterative progress callback aborts the solve and reports a status', async () => {
+  const Module = await getModule();
+  const wb = makeIterativeWorkbook(Module);
+  try {
+    let calls = 0;
+    assert.ok(
+      wb.setIterativeProgress(() => {
+        calls += 1;
+        throw new Error('callback failure');
+      }).ok,
+    );
+
+    // The binding never lets an exception cross back into WASM, where no
+    // landing pad exists to restore the engine's RAII state: the throw
+    // comes back as a status on the same envelope every other call uses.
+    const aborted = wb.recalc();
+    assert.equal(aborted.ok, false, `expected a failure envelope: ${JSON.stringify(aborted)}`);
+    assert.equal(aborted.status, STATUS.CALLBACK_EXCEPTION);
+    assert.equal(calls, 1, 'the solve must stop at the first throw');
+
+    // The workbook is still readable, and the recalc re-entry guard was
+    // released on the way out.
+    const mid = wb.getValue(0, 0, 0);
+    assert.ok(mid.status.ok, JSON.stringify(mid.status));
+    assert.equal(mid.value.kind, VAL.NUMBER);
+
+    const second = wb.recalc();
+    assert.notEqual(second.status, STATUS.RECALC_REENTRANT, 'the re-entry flag stayed set');
+
+    assert.ok(wb.setIterativeProgress(null).ok);
+    assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+    const recovered = wb.recalc();
+    assert.ok(recovered.ok, `recalc after the throwing callback: ${JSON.stringify(recovered)}`);
+    const converged = wb.getValue(0, 0, 0);
+    assert.ok(converged.status.ok, JSON.stringify(converged.status));
+    assert.equal(converged.value.kind, VAL.NUMBER);
+    assert.ok(Math.abs(converged.value.number - 10) < 0.001, `A1=${converged.value.number}`);
+  } finally {
+    wb.setIterativeProgress(null);
+    wb.delete();
+  }
+});
+
+test('an iterative progress callback returning a non-boolean is read by truthiness', async () => {
+  const Module = await getModule();
+  for (const [returned, expectedSweeps] of [
+    ['keep going', 0],
+    [0, 1],
+    [undefined, 0],
+  ]) {
+    const wb = makeIterativeWorkbook(Module);
+    try {
+      let calls = 0;
+      assert.ok(
+        wb.setIterativeProgress(() => {
+          calls += 1;
+          return returned;
+        }).ok,
+      );
+      assert.ok(wb.recalc().ok);
+      // A falsy return aborts after the first sweep; anything else lets
+      // the solve run to convergence.
+      if (expectedSweeps === 1) {
+        assert.equal(calls, 1, `returned=${String(returned)}`);
+      } else {
+        assert.ok(calls > 1, `returned=${String(returned)}, calls=${calls}`);
+      }
+    } finally {
+      wb.setIterativeProgress(null);
+      wb.delete();
+    }
+  }
+});
+
+// ---- Result-envelope key sets ------------------------------------------
+//
+// A result type whose payload key is declared non-optional must carry that
+// key on every exit path, or `r.name.toUpperCase()` type-checks and then
+// throws at runtime for a caller who skipped the status check. The probe
+// table below is checked for completeness against the declaration file, so
+// a new result type cannot be added without a failure-path probe.
+
+function interfaceBody(dts, name) {
+  const m = dts.match(new RegExp(`^export interface ${name}\\b[^{]*\\{`, 'm'));
+  if (!m) return null;
+  let depth = 0;
+  const open = dts.indexOf('{', m.index);
+  for (let i = open; i < dts.length; i += 1) {
+    if (dts[i] === '{') depth += 1;
+    else if (dts[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return dts.slice(open + 1, i);
+    }
+  }
+  return null;
+}
+
+function interfaceBases(dts, name) {
+  const m = dts.match(new RegExp(`^export interface ${name}\\b([^{]*)\\{`, 'm'));
+  if (!m) return [];
+  const clause = m[1].trim();
+  if (!clause.startsWith('extends')) return [];
+  return clause
+    .slice('extends'.length)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// [name, required] for every member, following `extends`.
+function interfaceMembers(dts, name, seen = new Set()) {
+  if (seen.has(name)) return [];
+  seen.add(name);
+  const body = interfaceBody(dts, name);
+  if (body === null) return [];
+  const out = [];
+  for (const base of interfaceBases(dts, name)) out.push(...interfaceMembers(dts, base, seen));
+  for (const m of body.matchAll(/^ {2}(?:readonly\s+)?([A-Za-z_$][\w$]*)(\??)\s*:/gm)) {
+    out.push([m[1], m[2] === '']);
+  }
+  return out;
+}
+
+// Every declared result type that carries a `status` plus at least one
+// required payload key. `Status` itself is the envelope, not a result.
+function resultTypesWithRequiredPayload(dts) {
+  const out = new Map();
+  for (const m of dts.matchAll(/^export interface ([A-Za-z0-9_]+)/gm)) {
+    const name = m[1];
+    if (name === 'Status') continue;
+    const members = interfaceMembers(dts, name);
+    if (!members.some(([key]) => key === 'status')) continue;
+    const required = members.filter(([key, req]) => req && key !== 'status').map(([key]) => key);
+    if (required.length > 0) out.set(name, required);
+  }
+  return out;
+}
+
+// One failing (or, where no failure is reachable, succeeding) call per
+// result type. `fails: false` marks a call whose only failure path is a
+// destroyed handle, which `delete()` makes unusable to probe.
+function envelopeProbes(wb) {
+  return [
+    ['ParallelRecalcResult', true, () => wb.recalcParallel(9)],
+    ['CellResult', true, () => wb.getValue(99, 0, 0)],
+    ['EvalResult', true, () => wb.evaluateFormulaText(99, 0, 0, '=1')],
+    ['EvalArrayResult', true, () => wb.evaluateFormulaArray(99, 0, 0, '=1')],
+    ['SaveResult', true, () => wb.saveAs(99)],
+    ['SaveDiagnosticsResult', true, () => wb.saveWithDiagnostics(99)],
+    ['ReadDiagnosticsResult', false, () => wb.readDiagnostics()],
+    ['StringResult', true, () => wb.sheetName(99)],
+    ['PivotLayoutResult', true, () => wb.pivotLayout(99, 0)],
+    ['PivotWorksheetSourceResult', true, () => wb.pivotCacheGetWorksheetSource(9999)],
+    ['PivotReportLayoutResult', true, () => wb.pivotGetLayout(99, 0)],
+    ['PivotFilterResult', true, () => wb.pivotFilterAt(99, 0, 0)],
+    ['CfRangeResult', true, () => wb.evaluateCfRange(99, 0, 0, 1, 1, Number.NaN)],
+    ['PaginationResult', true, () => wb.paginate(99)],
+    ['SheetViewResult', true, () => wb.getSheetView(99)],
+    ['SheetProtectionResult', true, () => wb.getSheetProtection(99)],
+    ['ColumnsResult', true, () => wb.getSheetColumns(99)],
+    ['RowsResult', true, () => wb.getSheetRowOverrides(99)],
+    ['CommentResult', true, () => wb.getCommentResult(99, 0, 0)],
+    ['CellXfIndexResult', true, () => wb.getCellXfIndex(99, 0, 0)],
+    ['CellXfResult', true, () => wb.getCellXf(9999)],
+    ['FontResult', true, () => wb.getFont(9999)],
+    ['FillResult', true, () => wb.getFill(9999)],
+    ['BorderResult', true, () => wb.getBorder(9999)],
+    ['NumFmtResult', true, () => wb.getNumFmt(59999)],
+    ['LambdaTextResult', true, () => wb.getLambdaText(99, 0, 0)],
+    ['CellStyleResult', true, () => wb.getCellStyle(9999)],
+    ['AddStyleResult', true, () => wb.addXf({ fontIndex: 9999 })],
+    ['AddNumFmtResult', false, () => wb.addNumFmt('0.00')],
+    [
+      'PartialRecalcResult',
+      true,
+      () => wb.partialRecalc({ sheet: 99, firstRow: 0, lastRow: 1, firstCol: 0, lastCol: 1 }),
+    ],
+    ['SheetAutoFilterXmlResult', true, () => wb.getSheetAutoFilterXml(99)],
+    ['SheetPrintXmlResult', true, () => wb.getSheetPageSetupXml(99)],
+    ['SheetPrintAreaResult', true, () => wb.getSheetPrintArea(99)],
+    ['SheetPrintTitlesResult', true, () => wb.getSheetPrintTitles(99)],
+    // `getSheetRowBreaks` / `getSheetColBreaks` answer an out-of-range
+    // sheet with an empty list rather than an error, unlike every sibling
+    // print getter, so no failure path is reachable from here.
+    ['SheetPageBreaksResult', false, () => wb.getSheetRowBreaks(99)],
+    ['SheetPageSetupResult', true, () => wb.getSheetPageSetup(99)],
+    ['SheetPageMarginsResult', true, () => wb.getSheetPageMargins(99)],
+  ];
+}
+
+test('every declared result type is probed for its key set', async () => {
+  const dts = await readFile(path.join(pkgRoot, 'dist', 'formulon.d.ts'), 'utf8');
+  const declared = resultTypesWithRequiredPayload(dts);
+  const probed = new Set(envelopeProbes({}).map(([name]) => name));
+  const unprobed = [...declared.keys()].filter((name) => !probed.has(name));
+  assert.deepEqual(unprobed, [], 'result types with no failure-path probe');
+  const stale = [...probed].filter((name) => !declared.has(name));
+  assert.deepEqual(stale, [], 'probes for result types that no longer declare a required payload');
+});
+
+test('result envelopes keep their declared keys on failure paths', async () => {
+  const Module = await getModule();
+  const dts = await readFile(path.join(pkgRoot, 'dist', 'formulon.d.ts'), 'utf8');
+  const declared = resultTypesWithRequiredPayload(dts);
+  const wb = Module.Workbook.createDefault();
+  try {
+    for (const [typeName, expectFailure, call] of envelopeProbes(wb)) {
+      const r = call();
+      if (expectFailure) {
+        assert.equal(r.status.ok, false, `${typeName}: probe was expected to fail`);
+      }
+      const missing = declared.get(typeName).filter((key) => !(key in r));
+      assert.deepEqual(missing, [], `${typeName} dropped declared keys`);
+    }
+  } finally {
+    wb.delete();
+  }
+});
+
+test('iterative progress callbacks are per Workbook, not per module', async () => {
+  const Module = await getModule();
+  const first = makeIterativeWorkbook(Module);
+  const second = makeIterativeWorkbook(Module);
+  try {
+    let firstCalls = 0;
+    let secondCalls = 0;
+    assert.ok(
+      first.setIterativeProgress(() => {
+        firstCalls += 1;
+        return true;
+      }).ok,
+    );
+    // Installing on `second` must not displace the registration on `first`.
+    assert.ok(
+      second.setIterativeProgress(() => {
+        secondCalls += 1;
+        return true;
+      }).ok,
+    );
+
+    assert.ok(first.recalc().ok);
+    assert.ok(firstCalls > 0, 'the first workbook kept its own callback');
+    assert.equal(secondCalls, 0);
+
+    firstCalls = 0;
+    assert.ok(second.recalc().ok);
+    assert.ok(secondCalls > 0);
+    assert.equal(firstCalls, 0);
+  } finally {
+    first.setIterativeProgress(null);
+    second.setIterativeProgress(null);
+    first.delete();
+    second.delete();
   }
 });

@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 
 #include "c_api/formulon_c.h"
@@ -18,6 +19,7 @@
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
 #include "workbook.h"
 
 namespace {
@@ -372,6 +374,117 @@ TEST(FormulonCApiPrintSettings, BreaksUpsertStaySortedAndReplaceInPlace) {
   ASSERT_EQ(fm_sheet_row_break_at(wb.handle, 0, 1, &brk), 0);
   EXPECT_EQ(brk.id, 25U);
   EXPECT_EQ(brk.manual, 1);
+}
+
+TEST(FormulonCApiPrintSettings, LoadedBreaksAreNormalisedBeforeTheAbiObservesThem) {
+  // A third-party writer is free to spell `<brk>` in authoring order and
+  // to repeat an index. The mutation API binary-searches these vectors
+  // and the enumeration API documents ascending order, so a document
+  // that arrives unsorted would make `fm_sheet_remove_col_break` match
+  // nothing and an upsert append a duplicate index.
+  formulon::Workbook source = formulon::Workbook::create();
+  formulon::SheetPrintSettings& print = source.sheet(0).mutable_print_settings();
+  for (const std::uint32_t id : {5U, 30U, 12U, 30U}) {
+    formulon::ManualBreak entry;
+    entry.id = id;
+    entry.max = formulon::Sheet::kMaxCols - 1U;
+    entry.manual = true;
+    print.manual_col_breaks.push_back(entry);
+  }
+  const auto bytes = source.save();
+  ASSERT_TRUE(bytes.has_value());
+
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), &wb.handle), 0);
+
+  // The duplicate is gone and what remains is strictly increasing.
+  ASSERT_EQ(fm_sheet_col_break_count(wb.handle, 0), 3U);
+  fm_page_break_t brk{};
+  std::uint32_t previous = 0;
+  for (std::size_t i = 0; i < 3U; ++i) {
+    ASSERT_EQ(fm_sheet_col_break_at(wb.handle, 0, i, &brk), 0);
+    if (i > 0) {
+      EXPECT_GT(brk.id, previous);
+    }
+    previous = brk.id;
+  }
+  ASSERT_EQ(fm_sheet_col_break_at(wb.handle, 0, 1, &brk), 0);
+  EXPECT_EQ(brk.id, 12U);
+
+  // The mutators now find what the enumeration reports.
+  EXPECT_EQ(fm_sheet_remove_col_break(wb.handle, 0, 12), 0);
+  EXPECT_EQ(fm_sheet_col_break_count(wb.handle, 0), 2U);
+  ASSERT_EQ(fm_sheet_add_col_break(wb.handle, 0, 12, 1), 0);
+  EXPECT_EQ(fm_sheet_col_break_count(wb.handle, 0), 3U);
+  ASSERT_EQ(fm_sheet_col_break_at(wb.handle, 0, 1, &brk), 0);
+  EXPECT_EQ(brk.id, 12U);
+}
+
+TEST(FormulonCApiPrintSettings, LoadedBreakCountStaysWithinTheAuthoringCap) {
+  // Reading a file must not leave a sheet holding more breaks than
+  // `fm_sheet_add_*_break` accepts, or adding one break to a loaded
+  // workbook would fail where the same edit on a fresh sheet succeeds.
+  formulon::Workbook source = formulon::Workbook::create();
+  formulon::SheetPrintSettings& print = source.sheet(0).mutable_print_settings();
+  const std::size_t over_cap = formulon::kMaxManualBreaksPerAxis + 8U;
+  for (std::size_t i = 0; i < over_cap; ++i) {
+    formulon::ManualBreak entry;
+    entry.id = static_cast<std::uint32_t>(over_cap - i);  // descending
+    entry.max = formulon::Sheet::kMaxCols - 1U;
+    entry.manual = true;
+    print.manual_row_breaks.push_back(entry);
+  }
+  const auto bytes = source.save();
+  ASSERT_TRUE(bytes.has_value());
+
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), &wb.handle), 0);
+  EXPECT_EQ(fm_sheet_row_break_count(wb.handle, 0), formulon::kMaxManualBreaksPerAxis);
+
+  // An index already present is an in-place replacement, so it is
+  // accepted at the cap; a new one is what the cap refuses.
+  fm_page_break_t brk{};
+  ASSERT_EQ(fm_sheet_row_break_at(wb.handle, 0, 0, &brk), 0);
+  EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 0, brk.id, 0), 0);
+  EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 0, formulon::Sheet::kMaxRows - 1U, 1), kPreconditionFailed);
+}
+
+TEST(FormulonCApiPrintSettings, BreakCountSignalsARejectedSheetThroughTheDiagnostic) {
+  // `size_t` leaves no room for a status, so a rejected count and an empty
+  // axis both read as zero. A caller enumerating breaks as
+  // count-then-`_at` never reaches the `_at` call that would surface the
+  // rejection, so the diagnostic is the only thing that separates the two
+  // and it has to be reliable in both directions.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const std::size_t sheet_count = fm_workbook_sheet_count(wb.handle);
+
+  // Empty axis: zero, and no diagnostic.
+  EXPECT_EQ(fm_sheet_row_break_count(wb.handle, 0), 0U);
+  EXPECT_STREQ(fm_last_error_message(), "");
+  EXPECT_EQ(fm_sheet_col_break_count(wb.handle, 0), 0U);
+  EXPECT_STREQ(fm_last_error_message(), "");
+
+  // Sheet past the end: zero, and a diagnostic naming the entry point.
+  EXPECT_EQ(fm_sheet_row_break_count(wb.handle, sheet_count), 0U);
+  EXPECT_STRNE(fm_last_error_message(), "");
+  EXPECT_EQ(fm_sheet_col_break_count(wb.handle, sheet_count), 0U);
+  EXPECT_STRNE(fm_last_error_message(), "");
+
+  // NULL handle takes the same path.
+  EXPECT_EQ(fm_sheet_row_break_count(nullptr, 0), 0U);
+  EXPECT_STRNE(fm_last_error_message(), "");
+
+  // A populated axis clears the previous rejection rather than inheriting
+  // it, so the empty message stays a trustworthy success signal.
+  ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 10, 1), 0);
+  EXPECT_EQ(fm_sheet_row_break_count(wb.handle, 0), 1U);
+  EXPECT_STREQ(fm_last_error_message(), "");
+
+  // The indexed reader rejects the same sheet outright.
+  fm_page_break_t brk{};
+  EXPECT_EQ(fm_sheet_row_break_at(wb.handle, sheet_count, 0, &brk), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_col_break_at(wb.handle, sheet_count, 0, &brk), kInvalidArgument);
 }
 
 TEST(FormulonCApiPrintSettings, ColumnBreaksSpanEveryRow) {

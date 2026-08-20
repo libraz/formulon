@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/borrowed_arena.h"
 #include "node_addon/parts/workbook_class.h"
 
 namespace formulon_node {
@@ -25,13 +26,12 @@ fm_cf_color_t PullCfColor(const Napi::Object& spec) {
   return out;
 }
 
-fm_cfvo_t PullCfvo(const Napi::Object& spec, std::vector<std::string>* strings) {
+fm_cfvo_t PullCfvo(const Napi::Object& spec, formulon::c_api::BorrowedStringArena* strings) {
   fm_cfvo_t out{};
   out.type = static_cast<uint8_t>(SpecPullU32(spec, "type", 0U) & 0xFFU);
   out.gte = SpecPullBool(spec, "gte", true) ? 1 : 0;
   if (SpecHas(spec, "value")) {
-    strings->push_back(spec.Get("value").ToString().Utf8Value());
-    out.value = strings->back().c_str();
+    out.value = strings->emplace(spec.Get("value").ToString().Utf8Value());
   }
   return out;
 }
@@ -197,6 +197,46 @@ fm_border_record PullBorderRecord(const Napi::Object& record) {
   return out;
 }
 
+/// Builds the JS mirror of a cell format. Shared by `getCellXf` and
+/// `getCellStyleXf`; a zero-initialised `xf` yields the all-default record
+/// those two return on their failure paths. `xfId` is deliberately absent:
+/// only `getCellXf` carries one.
+Napi::Object CellXfToJs(Napi::Env env, const fm_cell_xf& xf) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("fontIndex", Napi::Number::New(env, xf.font_index));
+  out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
+  out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
+  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
+  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.horizontal_align)));
+  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.vertical_align)));
+  out.Set("wrapText", Napi::Boolean::New(env, xf.wrap_text != 0));
+  out.Set("justifyLastLine", Napi::Boolean::New(env, xf.justify_last_line != 0));
+  out.Set("hasAlignment", Napi::Boolean::New(env, xf.has_alignment != 0));
+  out.Set("hasHorizontalAlign", Napi::Boolean::New(env, xf.has_horizontal_align != 0));
+  out.Set("hasVerticalAlign", Napi::Boolean::New(env, xf.has_vertical_align != 0));
+  out.Set("hasWrapText", Napi::Boolean::New(env, xf.has_wrap_text != 0));
+  out.Set("hasJustifyLastLine", Napi::Boolean::New(env, xf.has_justify_last_line != 0));
+  return out;
+}
+
+void SetCellXfAlignment(Napi::Env env, const fm_cell_xf& xf, Napi::Object* out) {
+  if (xf.has_text_rotation != 0) {
+    out->Set("textRotation", Napi::Number::New(env, xf.text_rotation));
+  }
+  if (xf.has_indent != 0) {
+    out->Set("indent", Napi::Number::New(env, xf.indent));
+  }
+  if (xf.has_relative_indent != 0) {
+    out->Set("relativeIndent", Napi::Number::New(env, xf.relative_indent));
+  }
+  if (xf.has_shrink_to_fit != 0) {
+    out->Set("shrinkToFit", Napi::Boolean::New(env, xf.shrink_to_fit != 0));
+  }
+  if (xf.has_reading_order != 0) {
+    out->Set("readingOrder", Napi::Number::New(env, xf.reading_order));
+  }
+}
+
 }  // namespace
 
 // ---- Cell-XF index --------------------------------------------------
@@ -241,127 +281,77 @@ Napi::Value Workbook::SetRangeXfIndex(const Napi::CallbackInfo& info) {
 
 // ---- Style getters --------------------------------------------------
 
+// Every getter below emits its declared payload keys on all three exit
+// paths -- dead handle, non-zero rc, success -- so `status.ok` is the only
+// thing a caller has to branch on, and the WASM binding does the same for
+// the same call. A key present only on success makes the TypeScript
+// declaration a lie and turns a missed status check into a `TypeError`.
+
 Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   const uint32_t xf_index = ArgU32(info, 0);
   fm_cell_xf xf{};
-  fm_status_t rc = fm_styles_get_cell_xf(handle_, xf_index, &xf);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_xf(handle_, xf_index, &xf) : kBindingInvalidHandle;
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    xf = fm_cell_xf{};
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("fontIndex", Napi::Number::New(env, xf.font_index));
-  out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
-  out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
-  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
-  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.horizontal_align)));
-  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.vertical_align)));
-  out.Set("wrapText", Napi::Boolean::New(env, xf.wrap_text != 0));
-  out.Set("justifyLastLine", Napi::Boolean::New(env, xf.justify_last_line != 0));
-  out.Set("hasAlignment", Napi::Boolean::New(env, xf.has_alignment != 0));
-  out.Set("hasHorizontalAlign", Napi::Boolean::New(env, xf.has_horizontal_align != 0));
-  out.Set("hasVerticalAlign", Napi::Boolean::New(env, xf.has_vertical_align != 0));
-  out.Set("hasWrapText", Napi::Boolean::New(env, xf.has_wrap_text != 0));
-  out.Set("hasJustifyLastLine", Napi::Boolean::New(env, xf.has_justify_last_line != 0));
+  Napi::Object out = CellXfToJs(env, xf);
+  out.Set("status", MakeStatus(env, rc));
   out.Set("xfId", Napi::Number::New(env, xf.xf_id));
-  if (xf.has_text_rotation != 0) {
-    out.Set("textRotation", Napi::Number::New(env, xf.text_rotation));
-  }
-  if (xf.has_indent != 0) {
-    out.Set("indent", Napi::Number::New(env, xf.indent));
-  }
-  if (xf.has_relative_indent != 0) {
-    out.Set("relativeIndent", Napi::Number::New(env, xf.relative_indent));
-  }
-  if (xf.has_shrink_to_fit != 0) {
-    out.Set("shrinkToFit", Napi::Boolean::New(env, xf.shrink_to_fit != 0));
-  }
-  if (xf.has_reading_order != 0) {
-    out.Set("readingOrder", Napi::Number::New(env, xf.reading_order));
-  }
+  SetCellXfAlignment(env, xf, &out);
   return out;
 }
 
 Napi::Value Workbook::GetFont(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   const uint32_t font_index = ArgU32(info, 0);
   fm_font_record f{};
-  fm_status_t rc = fm_styles_get_font(handle_, font_index, &f);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_font(handle_, font_index, &f) : kBindingInvalidHandle;
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    f = fm_font_record{};
   }
-  out = FontRecordToJs(env, f);
-  out.Set("status", MakeOkStatus(env));
+  Napi::Object out = FontRecordToJs(env, f);
+  out.Set("status", MakeStatus(env, rc));
   return out;
 }
 
 Napi::Value Workbook::GetFill(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   const uint32_t fill_index = ArgU32(info, 0);
   fm_fill_record f{};
-  fm_status_t rc = fm_styles_get_fill(handle_, fill_index, &f);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_fill(handle_, fill_index, &f) : kBindingInvalidHandle;
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    f = fm_fill_record{};
   }
-  out = FillRecordToJs(env, f);
-  out.Set("status", MakeOkStatus(env));
+  Napi::Object out = FillRecordToJs(env, f);
+  out.Set("status", MakeStatus(env, rc));
   return out;
 }
 
 Napi::Value Workbook::GetBorder(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   const uint32_t border_index = ArgU32(info, 0);
   fm_border_record b{};
-  fm_status_t rc = fm_styles_get_border(handle_, border_index, &b);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_border(handle_, border_index, &b) : kBindingInvalidHandle;
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    b = fm_border_record{};
   }
-  out = BorderRecordToJs(env, b);
-  out.Set("status", MakeOkStatus(env));
+  Napi::Object out = BorderRecordToJs(env, b);
+  out.Set("status", MakeStatus(env, rc));
   return out;
 }
 
 Napi::Value Workbook::GetNumFmt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   const uint32_t num_fmt_id = ArgU32(info, 0);
   const char* s = nullptr;
-  fm_status_t rc = fm_styles_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s);
-  if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
-  }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("numFmtId", Napi::Number::New(env, num_fmt_id));
-  out.Set("formatCode", Napi::String::New(env, s != nullptr ? s : ""));
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_styles_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s)
+                             : kBindingInvalidHandle;
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("numFmtId", Napi::Number::New(env, rc == 0 ? num_fmt_id : 0U));
+  out.Set("formatCode", Napi::String::New(env, rc == 0 && s != nullptr ? s : ""));
   return out;
 }
 
@@ -698,18 +688,13 @@ Napi::Value Workbook::CellStyleXfCount(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   const uint32_t index = ArgU32(info, 0);
   fm_cell_style_record_t cs{};
-  fm_status_t rc = fm_styles_get_cell_style(handle_, index, &cs);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style(handle_, index, &cs) : kBindingInvalidHandle;
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    cs = fm_cell_style_record_t{};
   }
-  out.Set("status", MakeOkStatus(env));
+  out.Set("status", MakeStatus(env, rc));
   out.Set("name", Napi::String::New(env, cs.name != nullptr ? cs.name : ""));
   out.Set("xfId", Napi::Number::New(env, cs.xf_id));
   out.Set("builtinId", Napi::Number::New(env, cs.builtin_id));
@@ -721,47 +706,15 @@ Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   const uint32_t index = ArgU32(info, 0);
   fm_cell_xf xf{};
-  fm_status_t rc = fm_styles_get_cell_style_xf(handle_, index, &xf);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style_xf(handle_, index, &xf) : kBindingInvalidHandle;
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    xf = fm_cell_xf{};
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("fontIndex", Napi::Number::New(env, xf.font_index));
-  out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
-  out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
-  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
-  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.horizontal_align)));
-  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.vertical_align)));
-  out.Set("wrapText", Napi::Boolean::New(env, xf.wrap_text != 0));
-  out.Set("justifyLastLine", Napi::Boolean::New(env, xf.justify_last_line != 0));
-  out.Set("hasAlignment", Napi::Boolean::New(env, xf.has_alignment != 0));
-  out.Set("hasHorizontalAlign", Napi::Boolean::New(env, xf.has_horizontal_align != 0));
-  out.Set("hasVerticalAlign", Napi::Boolean::New(env, xf.has_vertical_align != 0));
-  out.Set("hasWrapText", Napi::Boolean::New(env, xf.has_wrap_text != 0));
-  out.Set("hasJustifyLastLine", Napi::Boolean::New(env, xf.has_justify_last_line != 0));
-  if (xf.has_text_rotation != 0) {
-    out.Set("textRotation", Napi::Number::New(env, xf.text_rotation));
-  }
-  if (xf.has_indent != 0) {
-    out.Set("indent", Napi::Number::New(env, xf.indent));
-  }
-  if (xf.has_relative_indent != 0) {
-    out.Set("relativeIndent", Napi::Number::New(env, xf.relative_indent));
-  }
-  if (xf.has_shrink_to_fit != 0) {
-    out.Set("shrinkToFit", Napi::Boolean::New(env, xf.shrink_to_fit != 0));
-  }
-  if (xf.has_reading_order != 0) {
-    out.Set("readingOrder", Napi::Number::New(env, xf.reading_order));
-  }
+  Napi::Object out = CellXfToJs(env, xf);
+  out.Set("status", MakeStatus(env, rc));
+  SetCellXfAlignment(env, xf, &out);
   return out;
 }
 
@@ -771,18 +724,20 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return arr;
+    return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
-  if (fm_sheet_cf_count(handle_, sheet, &count) != 0) {
-    return arr;
+  fm_status_t rc = fm_sheet_cf_count(handle_, sheet, &count);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
   }
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_cf_rule_t rule{};
-    if (fm_sheet_cf_get_at(handle_, sheet, i, &rule) != 0) {
-      continue;
+    rc = fm_sheet_cf_get_at(handle_, sheet, i, &rule);
+    if (rc != 0) {
+      return FinishListResult(env, arr, rc);
     }
     Napi::Object item = Napi::Object::New(env);
     item.Set("id", Napi::String::New(env, rule.id != nullptr ? rule.id : ""));
@@ -892,7 +847,7 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
     arr.Set(static_cast<uint32_t>(emitted), item);
     ++emitted;
   }
-  return arr;
+  return FinishListResult(env, arr, 0);
 }
 
 Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
@@ -909,12 +864,15 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
 
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until
-  // `fm_sheet_cf_add_rule` returns.
+  // `fm_sheet_cf_add_rule` returns. Threshold value strings go into an
+  // arena rather than a vector: the colorScale, dataBar and iconSet
+  // branches below all feed the same store, and a vector would relocate
+  // the earlier strings as the later branches add theirs.
   std::vector<fm_cf_cell_range_t> ranges_buf;
   std::vector<fm_cfvo_t> color_scale_thresholds;
   std::vector<fm_cf_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
-  std::vector<std::string> cfvo_strings;
+  formulon::c_api::BorrowedStringArena cfvo_strings;
   if (v.Has("sqref")) {
     Napi::Value sqref_js = v.Get("sqref");
     if (sqref_js.IsArray()) {

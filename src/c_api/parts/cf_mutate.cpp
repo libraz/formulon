@@ -31,15 +31,16 @@
 #include "utils/error.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::check_range_count;
+using formulon::c_api::BorrowedArrayArena;
+using formulon::c_api::BorrowedStringArena;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
-using formulon::c_api::parts::TextStore;
+using formulon::c_api::parts::validate;
 
-// `fm_cf_cell_range_t` mirrors `cf::CFCellRange` so the OOXML reader's
-// pre-allocated vector buffer can be handed back as a borrowed
-// `const fm_cf_cell_range_t*` view without per-call repacking.
+// `fm_cf_cell_range_t` mirrors `cf::CFCellRange`, so the model's range
+// vector copies into the getter's arena as one memcpy and the wire type
+// needs no per-field repacking.
 static_assert(sizeof(fm_cf_cell_range_t) == sizeof(formulon::cf::CFCellRange),
               "fm_cf_cell_range_t / cf::CFCellRange size mismatch");
 static_assert(alignof(fm_cf_cell_range_t) == alignof(formulon::cf::CFCellRange),
@@ -69,41 +70,61 @@ bool resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat>& bloc
   return false;
 }
 
-// Materialises a `cf::CFRule` view onto the wire-format `fm_cf_rule_t`.
+// Materialises a `cf::CFRule` onto the wire-format `fm_cf_rule_t`.
 // All non-engaged variant fields are zero-initialised first so callers
-// observe deterministic defaults. String views borrow the engine's
-// storage; the contract documented in the header is "valid until the
-// next CF mutation".
+// observe deterministic defaults.
+//
+// Every pointer field points into the handle's CF arenas, never into the
+// model. Pointing at the model would tie the record's lifetime to the
+// block, and the ABI's only edit path removes that block while the caller
+// still holds the record. Copying costs one pass over a rule's strings and
+// ranges; it buys a record that only the next `fm_sheet_cf_get_at`
+// invalidates. Each array is adopted as one finished block whose address
+// does not move as later payloads are adopted, so a rule engaging more
+// than one visual payload cannot invalidate a pointer already written
+// into `*out`.
 fm_cf_color_t from_cf_color(formulon::cf::Color color) {
   return fm_cf_color_t{color.r, color.g, color.b, color.a};
 }
 
-fm_cfvo_t from_cfvo(const formulon::cf::CfValueObject& src, TextStore& text_store) {
+fm_cfvo_t from_cfvo(const formulon::cf::CfValueObject& src, BorrowedStringArena& text_arena) {
   fm_cfvo_t out{};
   out.type = static_cast<std::uint8_t>(src.type);
   out.gte = src.gte ? 1 : 0;
   if (!src.value.empty()) {
-    text_store.push_back(src.value);
-    out.value = text_store.back().c_str();
+    out.value = text_arena.emplace(src.value);
   }
   return out;
 }
 
-void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf::CFRule& rule, TextStore& text_store,
-               std::vector<fm_cfvo_t>& cfvo_scratch, std::vector<fm_cf_color_t>& color_scratch, fm_cf_rule_t* out) {
+void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf::CFRule& rule, std::size_t dxf_count,
+               BorrowedStringArena& text_arena, BorrowedArrayArena<fm_cf_cell_range_t>& range_arena,
+               BorrowedArrayArena<fm_cfvo_t>& cfvo_arena, BorrowedArrayArena<fm_cf_color_t>& color_arena,
+               fm_cf_rule_t* out) {
   *out = fm_cf_rule_t{};
-  out->id = rule.id.c_str();
+  out->id = text_arena.emplace(rule.id);
   out->type = static_cast<std::uint8_t>(rule.type);
   out->priority = rule.priority;
   out->stop_if_true = rule.stop_if_true ? 1 : 0;
-  if (rule.dxf_id.has_value()) {
+  // A `dxf_id` the styles table cannot resolve is reported as absent
+  // rather than handed out. The header calls this field an index into
+  // `styles.dxfs[]`, so surfacing an unresolvable one would give the
+  // caller a value `fm_styles_get_dxf` rejects and break the only edit
+  // path the ABI offers - get a rule, remove it, add the amended record
+  // back - since `fm_sheet_cf_add_rule` refuses the same index.
+  if (rule.dxf_id.has_value() && static_cast<std::size_t>(*rule.dxf_id) < dxf_count) {
     out->dxf_id_engaged = 1;
     out->dxf_id = *rule.dxf_id;
   }
-  out->sqref = block.sqref.empty() ? nullptr : reinterpret_cast<const fm_cf_cell_range_t*>(block.sqref.data());
+  // `cf::CFCellRange` and `fm_cf_cell_range_t` are layout-identical (see the
+  // static_asserts above), so the block's ranges copy across as one memcpy.
+  if (!block.sqref.empty()) {
+    const auto* first = reinterpret_cast<const fm_cf_cell_range_t*>(block.sqref.data());
+    out->sqref = range_arena.adopt(std::vector<fm_cf_cell_range_t>(first, first + block.sqref.size()));
+  }
   out->sqref_count = static_cast<std::uint32_t>(block.sqref.size());
-  out->formula1 = rule.formula1.has_value() ? rule.formula1->c_str() : nullptr;
-  out->formula2 = rule.formula2.has_value() ? rule.formula2->c_str() : nullptr;
+  out->formula1 = rule.formula1.has_value() ? text_arena.emplace(*rule.formula1) : nullptr;
+  out->formula2 = rule.formula2.has_value() ? text_arena.emplace(*rule.formula2) : nullptr;
   if (rule.op.has_value()) {
     out->op_engaged = 1;
     out->op = static_cast<std::uint8_t>(*rule.op);
@@ -120,7 +141,7 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
     out->std_dev_engaged = 1;
     out->std_dev = *rule.std_dev;
   }
-  out->text = rule.text.has_value() ? rule.text->c_str() : nullptr;
+  out->text = rule.text.has_value() ? text_arena.emplace(*rule.text) : nullptr;
   if (rule.time_period.has_value()) {
     out->time_period_engaged = 1;
     out->time_period = static_cast<std::uint8_t>(*rule.time_period);
@@ -128,23 +149,23 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
   if (rule.color_scale.has_value()) {
     const auto& spec = *rule.color_scale;
     const std::size_t count = std::min(spec.thresholds.size(), spec.colors.size());
-    cfvo_scratch.reserve(cfvo_scratch.size() + count);
-    color_scratch.reserve(color_scratch.size() + count);
-    const std::size_t threshold_start = cfvo_scratch.size();
-    const std::size_t color_start = color_scratch.size();
+    std::vector<fm_cfvo_t> thresholds;
+    std::vector<fm_cf_color_t> colors;
+    thresholds.reserve(count);
+    colors.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {
-      cfvo_scratch.push_back(from_cfvo(spec.thresholds[i], text_store));
-      color_scratch.push_back(from_cf_color(spec.colors[i]));
+      thresholds.push_back(from_cfvo(spec.thresholds[i], text_arena));
+      colors.push_back(from_cf_color(spec.colors[i]));
     }
-    out->color_scale_thresholds = count == 0 ? nullptr : cfvo_scratch.data() + threshold_start;
-    out->color_scale_colors = count == 0 ? nullptr : color_scratch.data() + color_start;
+    out->color_scale_thresholds = cfvo_arena.adopt(std::move(thresholds));
+    out->color_scale_colors = color_arena.adopt(std::move(colors));
     out->color_scale_count = static_cast<std::uint32_t>(count);
   }
   if (rule.data_bar.has_value()) {
     const auto& spec = *rule.data_bar;
     out->data_bar_engaged = 1;
-    out->data_bar_min = from_cfvo(spec.min, text_store);
-    out->data_bar_max = from_cfvo(spec.max, text_store);
+    out->data_bar_min = from_cfvo(spec.min, text_arena);
+    out->data_bar_max = from_cfvo(spec.max, text_arena);
     out->data_bar_fill = from_cf_color(spec.fill);
     out->data_bar_show_value = spec.show_value ? 1 : 0;
     out->data_bar_min_length_pct = spec.min_length_pct;
@@ -172,14 +193,14 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
   }
   if (rule.icon_set.has_value()) {
     const auto& spec = *rule.icon_set;
-    cfvo_scratch.reserve(cfvo_scratch.size() + spec.thresholds.size());
-    const std::size_t threshold_start = cfvo_scratch.size();
+    std::vector<fm_cfvo_t> thresholds;
+    thresholds.reserve(spec.thresholds.size());
     for (const auto& threshold : spec.thresholds) {
-      cfvo_scratch.push_back(from_cfvo(threshold, text_store));
+      thresholds.push_back(from_cfvo(threshold, text_arena));
     }
     out->icon_set_engaged = 1;
     out->icon_set_name = static_cast<std::uint8_t>(spec.name);
-    out->icon_set_thresholds = spec.thresholds.empty() ? nullptr : cfvo_scratch.data() + threshold_start;
+    out->icon_set_thresholds = cfvo_arena.adopt(std::move(thresholds));
     out->icon_set_threshold_count = static_cast<std::uint32_t>(spec.thresholds.size());
     out->icon_set_reverse = spec.reverse ? 1 : 0;
     out->icon_set_show_value = spec.show_value ? 1 : 0;
@@ -199,10 +220,11 @@ formulon::cf::CfValueObject to_cfvo(const fm_cfvo_t& src) {
   return out;
 }
 
-bool is_valid_cfvo_type(std::uint8_t type) {
-  return type <= static_cast<std::uint8_t>(formulon::cf::CfvoType::AutoMax);
-}
-
+// The three payload copiers below check payload *shape* only - counts,
+// pointers, and the length ordering the bar geometry needs. Every enum
+// domain a payload carries (`fm_cfvo_t::type`, `icon_set_name`,
+// `data_bar_axis_position`) is checked by `validate(rule, ...)`, which
+// `fm_sheet_cf_add_rule` runs before it reaches here.
 bool copy_color_scale_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
   if (rule.color_scale_count < 2 || rule.color_scale_count > 3 || rule.color_scale_thresholds == nullptr ||
       rule.color_scale_colors == nullptr) {
@@ -212,9 +234,6 @@ bool copy_color_scale_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* ou
   spec.thresholds.reserve(rule.color_scale_count);
   spec.colors.reserve(rule.color_scale_count);
   for (std::uint32_t i = 0; i < rule.color_scale_count; ++i) {
-    if (!is_valid_cfvo_type(rule.color_scale_thresholds[i].type)) {
-      return false;
-    }
     spec.thresholds.push_back(to_cfvo(rule.color_scale_thresholds[i]));
     spec.colors.push_back(to_cf_color(rule.color_scale_colors[i]));
   }
@@ -223,13 +242,8 @@ bool copy_color_scale_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* ou
 }
 
 bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
-  if (rule.data_bar_engaged == 0 || !is_valid_cfvo_type(rule.data_bar_min.type) ||
-      !is_valid_cfvo_type(rule.data_bar_max.type) || rule.data_bar_min_length_pct > 100 ||
-      rule.data_bar_max_length_pct > 100 || rule.data_bar_min_length_pct > rule.data_bar_max_length_pct) {
-    return false;
-  }
-  if (rule.data_bar_axis_position_engaged != 0 &&
-      rule.data_bar_axis_position > static_cast<std::uint8_t>(formulon::cf::DataBarAxisPosition::None)) {
+  if (rule.data_bar_engaged == 0 || rule.data_bar_min_length_pct > 100 || rule.data_bar_max_length_pct > 100 ||
+      rule.data_bar_min_length_pct > rule.data_bar_max_length_pct) {
     return false;
   }
   // Start from the model defaults and override only what the caller
@@ -263,18 +277,13 @@ bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
 }
 
 bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
-  if (rule.icon_set_engaged == 0 ||
-      rule.icon_set_name > static_cast<std::uint8_t>(formulon::cf::IconSetName::Five_Quarters) ||
-      (rule.icon_set_threshold_count > 0 && rule.icon_set_thresholds == nullptr)) {
+  if (rule.icon_set_engaged == 0 || (rule.icon_set_threshold_count > 0 && rule.icon_set_thresholds == nullptr)) {
     return false;
   }
   formulon::cf::IconSetSpec spec;
   spec.name = static_cast<formulon::cf::IconSetName>(rule.icon_set_name);
   spec.thresholds.reserve(rule.icon_set_threshold_count);
   for (std::uint32_t i = 0; i < rule.icon_set_threshold_count; ++i) {
-    if (!is_valid_cfvo_type(rule.icon_set_thresholds[i].type)) {
-      return false;
-    }
     spec.thresholds.push_back(to_cfvo(rule.icon_set_thresholds[i]));
   }
   spec.reverse = rule.icon_set_reverse != 0;
@@ -318,12 +327,17 @@ extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t s
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_cf_get_at: idx out of range",
                              "idx=" + std::to_string(idx));
   }
+  // The CF arenas are refreshed here and nowhere else, so the record stays
+  // readable across CF mutations and across unrelated reads that recycle
+  // `read_scratch`. Only a successful get reaches this point, so a rejected
+  // call leaves the previous rule's storage intact.
   fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
-  mutable_wb->read_scratch.clear();
+  mutable_wb->cf_text_scratch.clear();
+  mutable_wb->cf_range_scratch.clear();
   mutable_wb->cfvo_scratch.clear();
   mutable_wb->cf_color_scratch.clear();
-  fill_rule(blocks[b], blocks[b].rules[r], mutable_wb->read_scratch, mutable_wb->cfvo_scratch,
-            mutable_wb->cf_color_scratch, out);
+  fill_rule(blocks[b], blocks[b].rules[r], wb->workbook().styles().dxfs.size(), mutable_wb->cf_text_scratch,
+            mutable_wb->cf_range_scratch, mutable_wb->cfvo_scratch, mutable_wb->cf_color_scratch, out);
   return 0;
 }
 
@@ -337,20 +351,8 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_add_rule"); rc != 0) {
     return rc;
   }
-  if (rule.sqref_count == 0) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_cf_add_rule: sqref_count must be >= 1");
-  }
-  if (rule.sqref == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_cf_add_rule: sqref is NULL while sqref_count > 0");
-  }
-  if (!check_range_count(rule.sqref_count, "fm_sheet_cf_add_rule")) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  }
-  if (rule.type > static_cast<std::uint8_t>(formulon::cf::RuleType::UniqueValues)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_cf_add_rule: unknown rule type",
-                             "type=" + std::to_string(rule.type));
+  if (auto rc = validate(rule, "fm_sheet_cf_add_rule"); rc != 0) {
+    return rc;
   }
 
   formulon::cf::ConditionalFormat new_block;
@@ -391,6 +393,7 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
     out_rule.dxf_id = rule.dxf_id;
   }
   if (rule.id != nullptr && rule.id[0] != '\0') {
+    // Already checked against the `ST_Guid` shape by `validate` above.
     out_rule.id = rule.id;
   } else {
     // The id reaches the file as `<x14:cfRule id="...">`, whose schema

@@ -10,6 +10,11 @@
 // of throwing across the JS boundary. Static factories (`createDefault`,
 // `createEmpty`, `loadBytes`) return `JsWorkbook*` allocated on the
 // heap; JS callers manage lifetime via embind's `.delete()`.
+//
+// The contract holds in the callback direction too: the JS the binding
+// calls back into runs behind `call_js_callback`, so a callback that
+// throws is reported as a status instead of unwinding C++ frames that
+// have no landing pads. See `parts/embind_common.h`.
 
 #ifndef FORMULON_WASM_PARTS_WORKBOOK_H_
 #define FORMULON_WASM_PARTS_WORKBOOK_H_
@@ -127,6 +132,10 @@ class JsWorkbook {
   std::string excelProfileId() const;
   JsStatus setExcelProfileId(const std::string& profile_id);
   emscripten::val partialRecalc(emscripten::val viewport);
+  /// Installs the JS callback the iterative solver invokes after each
+  /// sweep, or clears it when `cb` is null / undefined. A callback that
+  /// throws aborts the solve, and the recalc that ran it reports
+  /// `kBindingCallbackException`.
   JsStatus setIterativeProgress(emscripten::val cb);
 
   // ---- Iteration / metadata accessors ------------------------------------
@@ -415,20 +424,30 @@ class JsWorkbook {
   static void build_data_field_spec(emscripten::val spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
                                     std::string& nfmt_buf, bool& has_nfmt);
 
-  // Holder for the currently-installed JS progress callback. The
-  // function-local static keeps the slot alive for the WASM module's
-  // lifetime without needing a global variable; embind's `val` type is
-  // not safe to default-initialise at static-init time.
-  static emscripten::val& js_progress_callback();
+  // Re-points the engine's `user_data` at this wrapper. Called after a
+  // move, which leaves the C ABI holding the address of the object the
+  // callback was registered from.
+  void rebind_progress_callback();
 
-  // C-ABI compatible trampoline that forwards to the held JS callback.
-  // Returning `false` from the JS side aborts the iterative solve. The
-  // return type matches `fm_iterative_progress_cb`: the header-wide
-  // wide-POD boolean convention (`int32_t`, `0` = abort), not a C `bool`.
+  // C-ABI compatible trampoline that forwards to the JS callback held by
+  // the `JsWorkbook` in `user_data`, through `call_js_callback`, so a
+  // callback that throws aborts the solve instead of unwinding the
+  // engine. Returning `false` from the JS side aborts it too, and the two
+  // are told apart on the way out of `recalc`. The return type matches
+  // `fm_iterative_progress_cb`: the header-wide wide-POD boolean
+  // convention (`int32_t`, `0` = abort), not a C `bool`.
   static int32_t iterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
                                              void* user_data);
 
   fm_workbook_t* handle_ = nullptr;
+  // The JS progress callback installed on this workbook, or null. Held per
+  // wrapper rather than per module so two workbooks driven from one page
+  // keep their own callbacks; the Node addon has always behaved this way
+  // and `packages/npm-native/README.md` claims the two surfaces agree.
+  emscripten::val progress_callback_ = emscripten::val::null();
+  // Set when `progress_callback_` threw during the pass that is still
+  // unwinding. Consumed by the recalc entry points.
+  bool progress_callback_threw_ = false;
 };
 
 // ---- Free helpers ------------------------------------------------------

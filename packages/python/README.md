@@ -237,6 +237,25 @@ hidden / outline variants), `get_sheet_protection` /
 `set_sheet_protection`, `calc_mode` / `set_calc_mode`, `excel_profile_id`
 / `set_excel_profile_id`, plus `get_external_links()`.
 
+**Print layout & pagination** -- author page setup, print area/titles and
+manual page breaks, then resolve them into printed pages:
+
+```python
+wb.set_print_area(0, "A1:F20")
+wb.set_print_titles(0, repeat_rows="1:2")
+wb.add_row_break(0, 20)
+wb.set_print_options(0, grid_lines=True)
+result = wb.paginate(0)  # -> PaginationResult(page_count, print_area, ...)
+```
+
+`get_print_area` / `get_print_titles`, `add_col_break` /
+`remove_row_break` / `remove_col_break` / `clear_breaks`,
+`get_row_breaks` / `get_col_breaks` and `set_header_footer` round out the
+group. `set_range_xf_index(sheet, first_row, first_col, last_row,
+last_col, xf_index)` stores one style index across a rectangle of cells
+in a single call, which is what rules a report's border without one call
+per cell.
+
 ### Values and errors
 
 `Value` exposes `kind`, `number`, `boolean`, `text`, `error_code`, plus
@@ -251,6 +270,12 @@ lookup is `get_comment`, which returns `None` (not an error) when no
 comment is anchored at the requested cell.
 
 ### Not exposed
+
+The scalar `fm_workbook_evaluate_formula` (`evaluateFormulaText` in the
+npm bindings) is not bound. `evaluate_formula_array` covers the same
+evaluate-without-mutating use case; a scalar result comes back as a 1x1
+array, so index `[0][0]` in place of the reduced top-left element the
+scalar call would have returned.
 
 `recalc()` is always serial in this no-pthread WASM wheel: the parallel
 scheduler requires a pthread runtime that wasmtime does not provide.

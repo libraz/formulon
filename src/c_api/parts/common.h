@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/borrowed_arena.h"
 #include "c_api/formulon_c.h"
 #include "utils/error.h"
 #include "value.h"
@@ -95,6 +96,80 @@ constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
 // bogus reservation.
 bool check_range_count(std::uint32_t n, const char* api);
 
+// --- Input validation ------------------------------------------------
+//
+// Every C-ABI entry point that copies a caller-supplied aggregate into
+// the model runs the matching `validate` overload below exactly once,
+// before it touches any model state. That is what makes validation
+// coverage a property of the argument type instead of a property of the
+// call site: an entry point cannot accept `fm_cf_rule_t` without
+// admitting the checks that type carries, and adding a field to a
+// struct puts its check in the one place every surface picks up.
+//
+// The three primitives are what the overloads are built from. They are
+// also called directly by the scalar entry points, which take the same
+// values as loose arguments and have to reject the same domains.
+//
+// All three return `0` on success and `kInvalidArgument` otherwise,
+// having already populated the thread-local diagnostic; callers just
+// propagate the returned code. `api` names the entry point and `field`
+// the struct member, so the context string identifies the argument
+// without the caller assembling a message.
+
+// Rejects a rectangle that is inverted or reaches outside Excel's grid.
+// Structured entry points that copy a caller-supplied rectangle into the
+// model run this first, so downstream writers never observe a range they
+// cannot encode. Mirrors the per-coordinate check the scalar coordinate
+// entry points apply.
+fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                             std::uint32_t last_col, const char* api);
+
+// Rejects an ordinal outside `[0, max]`. `max` is the last declared
+// enumerator of the model enum the field mirrors, so extending that enum
+// widens the domain at the same time. A value past it would otherwise be
+// `static_cast` into the enum and collapse onto whichever case the
+// consuming switch treats as its default, which the caller observes as a
+// silently different rule rather than as a rejected one.
+fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* api, const char* field);
+
+// Rejects a string that is not GUID-shaped, i.e. not
+// `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}` with hexadecimal digits and
+// the braces present. `text` may be NULL or empty, which passes: an
+// absent id is not a malformed one, and the entry point synthesizes one.
+// Applied wherever a caller-supplied string reaches an XML attribute
+// whose schema type is `ST_Guid` — Excel repairs (and so discards) the
+// whole block when such an attribute holds anything else.
+fm_status_t check_guid(const char* text, const char* api, const char* field);
+
+// Validates a conditional-formatting rule record: sqref shape and every
+// rectangle in it, plus the `type` / `op` / `time_period` /
+// `icon_set_name` / `data_bar_axis_position` / `fm_cfvo_t::type` domains
+// and the GUID shape of `id`. Checks that need the workbook (the
+// `dxf_id` bound) stay with the entry point.
+fm_status_t validate(const fm_cf_rule_t& rule, const char* api);
+
+// Validates a data-validation record: range shape and rectangles, plus
+// the `type` / `op` / `error_style` domains.
+fm_status_t validate(const fm_data_validation& v, const char* api);
+
+// Validates a pivot field spec: required strings and the `axis` domain.
+fm_status_t validate(const fm_pivot_field_spec_t& spec, const char* api);
+
+// Validates a pivot data-field spec: required strings and the
+// `aggregation` / `show_as` domains.
+fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api);
+
+// Validates a pivot filter spec: the `axis` / `type` domains. The
+// payload-variant and data-field checks need the pivot table and stay
+// with the entry point.
+fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api);
+
+// Validates a viewport rectangle. A collapsed rectangle is allowed (it
+// recalculates nothing, as the header states), so only the sheet index
+// is constrained here; the bound against `sheet_count` needs the
+// workbook and stays with the entry point.
+fm_status_t validate(const fm_viewport& viewport, const char* api);
+
 // Translates a `Value` into a C-side `fm_value_t`. For text variants the
 // payload is appended to `store` and the returned pointer is a stable,
 // NUL-terminated `c_str()` into it. Read-path callers pass the per-handle
@@ -162,14 +237,24 @@ struct fm_workbook {
   };
   mutable CellEnumerationCache cell_enumeration_cache;
 
-  // Scratch buffers for `fm_sheet_cf_get_at` visual payload arrays. They are
-  // separate from `read_scratch`: after argument/model validation, only a
-  // successful `fm_sheet_cf_get_at` clears and refreshes these vectors;
-  // textual producers do not touch them. Validation-rejected CF calls leave
-  // them untouched. Returned pointers are valid until the next successful CF
-  // getter, mutation, or handle destruction on this handle.
-  std::vector<fm_cfvo_t> cfvo_scratch;
-  std::vector<fm_cf_color_t> cf_color_scratch;
+  // Storage behind every borrowed field `fm_sheet_cf_get_at` fills. They are
+  // separate from `read_scratch` on purpose: only a successful
+  // `fm_sheet_cf_get_at` clears and refreshes them, so neither an unrelated
+  // read nor a CF mutation can invalidate a rule the caller is still holding.
+  // That is what makes the ABI's only edit path - get, remove, add back -
+  // safe to execute as documented. Validation-rejected CF calls leave them
+  // untouched.
+  //
+  // The getter copies the rule out of the model rather than pointing at it:
+  // a model-backed view would die with the block the caller is about to
+  // remove. Each payload is handed to the arenas as one finished array, whose
+  // address does not move as later payloads are adopted, so a rule engaging
+  // several visual payloads cannot invalidate the pointers already written
+  // for the earlier ones.
+  formulon::c_api::BorrowedStringArena cf_text_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_cf_cell_range_t> cf_range_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_cfvo_t> cfvo_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_cf_color_t> cf_color_scratch;
 
   // Result of the most recent `fm_workbook_evaluate_formula_array`. Owns its
   // own text storage so cells stay readable via

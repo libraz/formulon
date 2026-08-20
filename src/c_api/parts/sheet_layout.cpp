@@ -345,7 +345,17 @@ extern "C" fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_tab_hidden"); rc != 0) {
     return rc;
   }
-  wb->workbook().sheet(sheet_index).mutable_view().tab_hidden = (hidden != 0);
+  formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
+  if (hidden != 0) {
+    // A sheet already loaded as very-hidden stays that way: this bool
+    // cannot express the difference, so asking for "hidden" on a sheet
+    // that is hidden says nothing new and must not quietly demote it.
+    view.tab_hidden = true;
+  } else {
+    // Showing a sheet has to clear both bits, or the workbook would save
+    // a state the caller just asked to leave.
+    view.set_visibility(formulon::SheetVisibility::kVisible);
+  }
   return 0;
 }
 

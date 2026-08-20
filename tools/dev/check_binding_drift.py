@@ -40,6 +40,22 @@ Checks:
                   registered in src/node_addon/parts/workbook_class.cc
                   and src/node_addon/addon.cc. It also enforces the exact
                   intentional WASM-only / Node-only method allowlists.
+  dts-shared-shapes
+                  The two published declaration files agree on the *shape*
+                  of everything they both declare, not merely on the names:
+                  a method present in both `Workbook` (or `WorkbookCtor`)
+                  interfaces declares the same return type, and a record
+                  type present in both declares the same field set, with
+                  optionality counted as part of the field. A type declared
+                  on one surface only needs an entry in
+                  `_DTS_SURFACE_ONLY_TYPES`; a deliberately divergent return
+                  type needs one in `_DTS_RETURN_TYPE_EXEMPT_METHODS`.
+  pure-js-helpers Helpers with no native entry point behind them
+                  (`NODE_PURE_JS_FREE_FUNCTIONS`) are exported by both npm
+                  packages' `index.mjs`, declared in both declaration files,
+                  and implemented with identical source. The two packages
+                  share no module, so this is the only thing holding the
+                  copies together.
   readme-counts   The instance-method count quoted in
                   packages/npm-native/README.md matches the actual count
                   registered in workbook_class.cc and its shared/WASM-only
@@ -1245,6 +1261,224 @@ def check_dts_node() -> List[str]:
 
 
 # ---------------------------------------------------------------------------
+# Check 2c: shared `.d.ts` shapes -- return types and record field sets.
+#
+# `dts-wasm` and `dts-node` compare method *names* only. That is enough to
+# notice a method that exists on one surface and not the other, and nothing
+# else: a shared method whose two declarations disagree about what comes back,
+# or a record type that grew a field on one side, passes both of them. The
+# README's parity claim is about the shapes, not the names, so this check
+# compares the shapes.
+#
+# Types declared in only one of the two published declaration files. Each has
+# to be reachable only from that surface's own method allowlist -- a type that
+# becomes one-sided for any other reason is a missing declaration, and listing
+# it here is the deliberate act that says otherwise.
+# ---------------------------------------------------------------------------
+
+_DTS_SURFACE_ONLY_TYPES = {
+    # The embind module factory and its options: there is no equivalent on a
+    # native addon, which is `require`d rather than instantiated.
+    ("wasm", "FormulonModule"),
+    ("wasm", "FormulonModuleOptions"),
+    # Reachable only from `getSheetAutoFilterXml` / `createTable` /
+    # `updateTable`, all of which are in WASM_ONLY_METHODS.
+    ("wasm", "SheetAutoFilterXmlResult"),
+    ("wasm", "TableInput"),
+    ("wasm", "TableUpdateInput"),
+}
+
+# Shared methods whose two declarations are allowed to differ, with the
+# reason. Empty by design: a difference that is not worth an entry here is a
+# difference that should not exist.
+_DTS_RETURN_TYPE_EXEMPT_METHODS: dict[str, str] = {}
+
+# Top-level members of an exported interface are indented exactly two spaces;
+# anything deeper belongs to a nested object type and is compared as part of
+# its parent's field text, not on its own.
+_TS_MEMBER_NAME_RE = re.compile(r"^ {2}([A-Za-z_$][A-Za-z0-9_$]*)\s*\(", re.MULTILINE)
+_TS_MEMBER_FIELD_RE = re.compile(r"^ {2}(?:readonly\s+)?([A-Za-z_$][A-Za-z0-9_$]*)(\??)\s*:", re.MULTILINE)
+
+
+def _ts_return_types(body: str) -> dict[str, str]:
+    """Maps each method in an interface body to its declared return type.
+
+    The parameter list is skipped by bracket balancing so a wrapped or
+    generic signature is read the same as a single-line one; whitespace in
+    the return type is collapsed so formatting differences do not register
+    as drift.
+    """
+    out: dict[str, str] = {}
+    for match in _TS_MEMBER_NAME_RE.finditer(body):
+        open_paren = body.index("(", match.start())
+        depth = 0
+        close_paren = -1
+        for i in range(open_paren, len(body)):
+            char = body[i]
+            if char in "(<[":
+                depth += 1
+            elif char in ")>]":
+                depth -= 1
+                if depth == 0 and char == ")":
+                    close_paren = i
+                    break
+        if close_paren < 0:
+            continue
+        rest = body[close_paren + 1 :]
+        if ";" not in rest:
+            continue
+        declared = rest[: rest.index(";")].strip()
+        if declared.startswith(":"):
+            declared = declared[1:]
+        out[match.group(1)] = " ".join(declared.split())
+    return out
+
+
+def _ts_interface_declaration(text: str, name: str, source: Path) -> tuple[str, str]:
+    """Returns an interface's `extends` clause (may be empty) and its body.
+
+    Unlike `_find_interface_body` this tolerates `extends`, which matters
+    here: a record type that inherits its fields declares none of them
+    locally, so the base list is part of the shape being compared.
+    """
+    match = re.search(r"^export interface %s\b([^{]*)\{" % re.escape(name), text, re.MULTILINE)
+    if not match:
+        print(f"check_binding_drift: interface {name!r} not found in {source}", file=sys.stderr)
+        sys.exit(2)
+    return " ".join(match.group(1).split()), _extract_braced_block(text, match.end())
+
+
+def _ts_field_set(body: str) -> Set[str]:
+    """Field names of an interface body, each suffixed with `?` when optional.
+
+    Optionality is part of the compared shape on purpose: "present only on
+    success" is how both declaration files spell a payload key the runtime
+    drops, so a required declaration on one side and an optional one on the
+    other is a real disagreement about what a caller may dereference.
+    """
+    return {name + optional for name, optional in _TS_MEMBER_FIELD_RE.findall(body)}
+
+
+def check_dts_shared_shapes() -> List[str]:
+    problems: List[str] = []
+    wasm_dts = _read(WASM_DTS)
+    node_dts = _read(NODE_DTS)
+    wasm_label = str(WASM_DTS.relative_to(REPO_ROOT))
+    node_label = str(NODE_DTS.relative_to(REPO_ROOT))
+
+    for interface in ("Workbook", "WorkbookCtor"):
+        wasm_returns = _ts_return_types(_find_interface_body(wasm_dts, interface, WASM_DTS))
+        node_returns = _ts_return_types(_find_interface_body(node_dts, interface, NODE_DTS))
+        for name in sorted(set(wasm_returns) & set(node_returns)):
+            if wasm_returns[name] == node_returns[name]:
+                if name in _DTS_RETURN_TYPE_EXEMPT_METHODS:
+                    problems.append(
+                        f"dts-shared-shapes: {name} is listed as a deliberate return-type "
+                        "difference but both surfaces now declare the same type; drop the entry"
+                    )
+                continue
+            if name in _DTS_RETURN_TYPE_EXEMPT_METHODS:
+                continue
+            problems.append(
+                f"dts-shared-shapes: {interface}.{name} returns a different type on each surface:\n"
+                f"  {wasm_label}: {wasm_returns[name]}\n"
+                f"  {node_label}: {node_returns[name]}"
+            )
+
+    wasm_types = set(re.findall(r"^export interface ([A-Za-z0-9_]+)", wasm_dts, re.MULTILINE))
+    node_types = set(re.findall(r"^export interface ([A-Za-z0-9_]+)", node_dts, re.MULTILINE))
+    surface_only = {("wasm", name) for name in wasm_types - node_types}
+    surface_only |= {("node", name) for name in node_types - wasm_types}
+    undeclared = surface_only - _DTS_SURFACE_ONLY_TYPES
+    if undeclared:
+        problems.append(
+            "dts-shared-shapes: type declared on one surface only, without an entry in "
+            f"_DTS_SURFACE_ONLY_TYPES: {sorted(undeclared)}"
+        )
+    stale = _DTS_SURFACE_ONLY_TYPES - surface_only
+    if stale:
+        problems.append(f"dts-shared-shapes: stale _DTS_SURFACE_ONLY_TYPES entries: {sorted(stale)}")
+
+    for name in sorted(wasm_types & node_types):
+        if name in ("Workbook", "WorkbookCtor"):
+            continue
+        wasm_extends, wasm_body = _ts_interface_declaration(wasm_dts, name, WASM_DTS)
+        node_extends, node_body = _ts_interface_declaration(node_dts, name, NODE_DTS)
+        if wasm_extends != node_extends:
+            problems.append(
+                f"dts-shared-shapes: {name} inherits differently on each surface:\n"
+                f"  {wasm_label}: {wasm_extends or '(nothing)'}\n"
+                f"  {node_label}: {node_extends or '(nothing)'}"
+            )
+        diff = _format_diff(
+            f"{name} in {wasm_label}",
+            _ts_field_set(wasm_body) - _ts_field_set(node_body),
+            f"{name} in {node_label}",
+            _ts_field_set(node_body) - _ts_field_set(wasm_body),
+        )
+        if diff:
+            problems.append(f"dts-shared-shapes: {name} field set mismatch:\n" + "\n".join(diff))
+
+    return problems
+
+
+# ---------------------------------------------------------------------------
+# Check 2d: pure-JS helpers shipped by both npm packages.
+#
+# A helper with no native entry point behind it has to be written out once per
+# package, because the two packages share no module. Nothing then holds the
+# copies together, and nothing notices when one package documents a helper it
+# does not ship -- which is how the WASM declaration file came to send its
+# readers to a package that is not published. Both halves are checked here:
+# the helper is exported and declared by both packages, and the two
+# implementations are the same text.
+# ---------------------------------------------------------------------------
+
+
+def _js_exported_function_source(text: str, name: str) -> Optional[str]:
+    """Whitespace-normalised body of `export function <name>(...) { ... }`."""
+    match = re.search(r"^export function %s\s*\(" % re.escape(name), text, re.MULTILINE)
+    if not match:
+        return None
+    body_open = text.index("{", match.end())
+    return " ".join(_extract_braced_block(text, body_open + 1).split())
+
+
+def check_pure_js_helpers() -> List[str]:
+    problems: List[str] = []
+    sources = {
+        "npm": (NPM_INDEX_MJS, WASM_DTS),
+        "npm-native": (NODE_INDEX_MJS, NODE_DTS),
+    }
+
+    for name in sorted(NODE_PURE_JS_FREE_FUNCTIONS):
+        bodies: dict[str, str] = {}
+        for package, (mjs_path, dts_path) in sources.items():
+            body = _js_exported_function_source(_read(mjs_path), name)
+            if body is None:
+                problems.append(
+                    f"pure-js-helpers: {mjs_path.relative_to(REPO_ROOT)} does not export a "
+                    f"`{name}` function. A helper only one package ships cannot be named in a "
+                    "declaration file both packages publish."
+                )
+            else:
+                bodies[package] = body
+            if not re.search(r"^export function %s\s*\(" % re.escape(name), _read(dts_path), re.MULTILINE):
+                problems.append(
+                    f"pure-js-helpers: {dts_path.relative_to(REPO_ROOT)} does not declare `export function {name}`"
+                )
+        if len(bodies) == len(sources) and len(set(bodies.values())) != 1:
+            problems.append(
+                f"pure-js-helpers: the `{name}` implementations have diverged between "
+                f"{NPM_INDEX_MJS.relative_to(REPO_ROOT)} and {NODE_INDEX_MJS.relative_to(REPO_ROOT)}. "
+                "The two packages share no module, so the copies are held together here or not "
+                "at all."
+            )
+
+    return problems
+
+
+# ---------------------------------------------------------------------------
 # Check 3: README instance-method count <-> actual registration count.
 # ---------------------------------------------------------------------------
 
@@ -1843,6 +2077,8 @@ CHECKS = {
     "python-inline-structs": check_python_inline_structs,
     "dts-wasm": check_dts_wasm,
     "dts-node": check_dts_node,
+    "dts-shared-shapes": check_dts_shared_shapes,
+    "pure-js-helpers": check_pure_js_helpers,
     "readme-counts": check_readme_counts,
     "dts-enums": check_dts_enums,
     "style-record-fields": check_style_record_fields,

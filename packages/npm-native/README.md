@@ -132,13 +132,15 @@ Top-level: evalFormula, version, versionString, lastErrorMessage,
 Every top-level function is available both as a named export and on the
 default export object.
 
-Prebuilt binaries are shipped per supported OS/arch slot under
-`dist/prebuilds/`; from a source checkout, build with the steps below.
+The `prebuild` CI workflow stages a build per supported OS/arch slot into
+`dist/prebuilds/` as a workflow artifact for npm-publish staging; it is not
+attached to the GitHub release page or pushed to the npm registry. From a
+source checkout, build with the steps below.
 
 ## Building from source
 
-The published package ships a prebuilt `.node` binary; from a source
-checkout you build it via:
+A source checkout does not include a prebuilt `.node` binary; build it
+via:
 
 ```bash
 make node-native     # cmake -B build -DFM_BUILD_NODE_ADDON=ON, build

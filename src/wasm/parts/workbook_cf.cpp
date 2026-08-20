@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/borrowed_arena.h"
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
@@ -31,13 +32,12 @@ fm_cf_color_t js_pull_cf_color(emscripten::val v) {
   return out;
 }
 
-fm_cfvo_t js_pull_cfvo(emscripten::val v, std::vector<std::string>* strings) {
+fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* strings) {
   fm_cfvo_t out{};
   out.type = js_pull_u8(v, "type", 0U);
   out.gte = js_pull_bool(v, "gte", true) ? 1 : 0;
   if (!v["value"].isUndefined() && !v["value"].isNull()) {
-    strings->push_back(v["value"].as<std::string>());
-    out.value = strings->back().c_str();
+    out.value = strings->emplace(v["value"].as<std::string>());
   }
   return out;
 }
@@ -254,12 +254,15 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   }
   // Pull every JS field into local storage; the C ABI receives
   // borrowed `const char*` views that must stay valid for the
-  // duration of the call.
+  // duration of the call. Threshold value strings go into an arena
+  // rather than a vector: the colorScale, dataBar and iconSet branches
+  // below all feed the same store, and a vector would relocate the
+  // earlier strings as the later branches add theirs.
   std::vector<fm_cf_cell_range_t> ranges_buf;
   std::vector<fm_cfvo_t> color_scale_thresholds;
   std::vector<fm_cf_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
-  std::vector<std::string> cfvo_strings;
+  formulon::c_api::BorrowedStringArena cfvo_strings;
   if (v.hasOwnProperty("sqref")) {
     emscripten::val sqref_js = v["sqref"];
     if (sqref_js.isArray()) {

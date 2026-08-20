@@ -101,3 +101,43 @@ export const ErrorCode = Object.freeze({
 export const CalcMode = Object.freeze({ Auto: 0, Manual: 1, AutoNoTable: 2 });
 export const ExternalLinkKind = Object.freeze({ Unknown: 0, ExternalBook: 1, Ole: 2, Dde: 3 });
 export const LogLevel = Object.freeze({ Debug: 0, Info: 1, Warn: 2, Error: 3, Off: 4 });
+
+/**
+ * Merge a host-supplied metadata entry over the engine's structural
+ * `functionMetadata()` result.
+ *
+ * This is a pure, side-effect-free helper: it does not touch the engine.
+ * The engine returns `signatureTemplate` / `description` as
+ * `undefined`; a host injects display metadata (see
+ * `docs/function-metadata-schema.md`) and merges it here at display time.
+ * The metadata is display-only and never affects formula parsing or
+ * evaluation.
+ *
+ * Field precedence (first non-nullish wins):
+ *   - signatureTemplate: `entry.localized[locale].signature` ->
+ *     `entry.signature` -> `base.signatureTemplate`
+ *   - description: `entry.localized[locale].description` ->
+ *     `entry.description` -> `base.description`
+ *   - localizedName: `entry.aliases[locale]` -> `base.name`
+ *
+ * @param {object} base A `FunctionMetadataResult` from `functionMetadata()`.
+ * @param {object|undefined} entry The provider's `functions[NAME]` entry, or
+ *   `undefined`/`null` to leave `base` unchanged (signature/description
+ *   stay `undefined`).
+ * @param {string} locale A BCP-47 display locale tag (e.g. `"fr-FR"`),
+ *   matching the keys in `aliases` / `localized`. Independent of the numeric
+ *   locale code passed to `functionMetadata()`.
+ * @returns {object} The merged metadata (a new object), or `base` verbatim
+ *   when `entry` is absent.
+ */
+export function mergeFunctionMetadata(base, entry, locale) {
+  if (entry === undefined || entry === null) {
+    return base;
+  }
+  const localized = (entry.localized && entry.localized[locale]) || {};
+  const signatureTemplate = localized.signature ?? entry.signature ?? base.signatureTemplate;
+  const description = localized.description ?? entry.description ?? base.description;
+  const aliasName = entry.aliases && entry.aliases[locale];
+  const localizedName = aliasName ?? base.name;
+  return { ...base, signatureTemplate, description, localizedName };
+}

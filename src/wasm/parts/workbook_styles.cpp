@@ -169,6 +169,29 @@ emscripten::val js_border_record(const fm_border_record& b) {
   return o;
 }
 
+/// Builds the JS mirror of a cell format. Shared by `getCellXf` and
+/// `getCellStyleXf`; a zero-initialised `xf` yields the all-default record
+/// those two return on their failure paths, so the key set a caller sees
+/// does not depend on whether the read succeeded. `xfId` is deliberately
+/// absent: only `getCellXf` carries one.
+emscripten::val js_cell_xf_record(const fm_cell_xf& xf) {
+  emscripten::val o = emscripten::val::object();
+  o.set("fontIndex", xf.font_index);
+  o.set("fillIndex", xf.fill_index);
+  o.set("borderIndex", xf.border_index);
+  o.set("numFmtId", static_cast<uint32_t>(xf.num_fmt_id));
+  o.set("horizontalAlign", static_cast<uint32_t>(xf.horizontal_align));
+  o.set("verticalAlign", static_cast<uint32_t>(xf.vertical_align));
+  o.set("wrapText", xf.wrap_text != 0);
+  o.set("justifyLastLine", xf.justify_last_line != 0);
+  o.set("hasAlignment", xf.has_alignment != 0);
+  o.set("hasHorizontalAlign", xf.has_horizontal_align != 0);
+  o.set("hasVerticalAlign", xf.has_vertical_align != 0);
+  o.set("hasWrapText", xf.has_wrap_text != 0);
+  o.set("hasJustifyLastLine", xf.has_justify_last_line != 0);
+  return o;
+}
+
 void js_set_cell_xf_alignment(const fm_cell_xf& xf, emscripten::val* object) {
   if (xf.has_text_rotation != 0) {
     object->set("textRotation", xf.text_rotation);
@@ -191,20 +214,23 @@ void js_set_cell_xf_alignment(const fm_cell_xf& xf, emscripten::val* object) {
 
 // ---- Per-cell xf index get/set -----------------------------------------
 
+// Every getter below emits its declared payload keys on all three exit
+// paths -- dead handle, non-zero rc, success -- so `status.ok` is the only
+// thing a caller has to branch on. A key that is present only on success
+// makes the TypeScript declaration a lie and turns a missed status check
+// into a `TypeError` instead of a wrong-but-typed value.
+
 emscripten::val JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
   emscripten::val o = emscripten::val::object();
+  uint32_t xf = 0;
   if (handle_ == nullptr) {
     o.set("status", error_status(7000));
+    o.set("xfIndex", xf);
     return o;
   }
-  uint32_t xf = 0;
   fm_status_t rc = fm_cell_get_xf_index(handle_, sheet, row, col, &xf);
-  if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
-  }
-  o.set("status", ok_status());
-  o.set("xfIndex", xf);
+  o.set("status", status_from_rc(rc));
+  o.set("xfIndex", rc == 0 ? xf : 0U);
   return o;
 }
 
@@ -227,102 +253,59 @@ JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t
 // ---- Style record getters ----------------------------------------------
 
 emscripten::val JsWorkbook::getCellXf(uint32_t xf_index) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   fm_cell_xf xf{};
-  fm_status_t rc = fm_styles_get_cell_xf(handle_, xf_index, &xf);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_xf(handle_, xf_index, &xf) : 7000;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+    xf = fm_cell_xf{};
   }
-  o.set("status", ok_status());
-  o.set("fontIndex", xf.font_index);
-  o.set("fillIndex", xf.fill_index);
-  o.set("borderIndex", xf.border_index);
-  o.set("numFmtId", static_cast<uint32_t>(xf.num_fmt_id));
-  o.set("horizontalAlign", static_cast<uint32_t>(xf.horizontal_align));
-  o.set("verticalAlign", static_cast<uint32_t>(xf.vertical_align));
-  o.set("wrapText", xf.wrap_text != 0);
-  o.set("justifyLastLine", xf.justify_last_line != 0);
-  o.set("hasAlignment", xf.has_alignment != 0);
-  o.set("hasHorizontalAlign", xf.has_horizontal_align != 0);
-  o.set("hasVerticalAlign", xf.has_vertical_align != 0);
-  o.set("hasWrapText", xf.has_wrap_text != 0);
-  o.set("hasJustifyLastLine", xf.has_justify_last_line != 0);
+  emscripten::val o = js_cell_xf_record(xf);
+  o.set("status", status_from_rc(rc));
   o.set("xfId", xf.xf_id);
   js_set_cell_xf_alignment(xf, &o);
   return o;
 }
 
 emscripten::val JsWorkbook::getFont(uint32_t font_index) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   fm_font_record f{};
-  fm_status_t rc = fm_styles_get_font(handle_, font_index, &f);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_font(handle_, font_index, &f) : 7000;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+    f = fm_font_record{};
   }
-  o = js_font_record(f);
-  o.set("status", ok_status());
+  emscripten::val o = js_font_record(f);
+  o.set("status", status_from_rc(rc));
   return o;
 }
 
 emscripten::val JsWorkbook::getFill(uint32_t fill_index) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   fm_fill_record f{};
-  fm_status_t rc = fm_styles_get_fill(handle_, fill_index, &f);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_fill(handle_, fill_index, &f) : 7000;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+    f = fm_fill_record{};
   }
-  o = js_fill_record(f);
-  o.set("status", ok_status());
+  emscripten::val o = js_fill_record(f);
+  o.set("status", status_from_rc(rc));
   return o;
 }
 
 emscripten::val JsWorkbook::getBorder(uint32_t border_index) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   fm_border_record b{};
-  fm_status_t rc = fm_styles_get_border(handle_, border_index, &b);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_border(handle_, border_index, &b) : 7000;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+    b = fm_border_record{};
   }
-  o = js_border_record(b);
-  o.set("status", ok_status());
+  emscripten::val o = js_border_record(b);
+  o.set("status", status_from_rc(rc));
   return o;
 }
 
 emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
   emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   const char* s = nullptr;
-  fm_status_t rc = fm_styles_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s);
-  if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
-  }
-  o.set("status", ok_status());
-  o.set("numFmtId", num_fmt_id);
-  o.set("formatCode", std::string(s != nullptr ? s : ""));
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_styles_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s) : 7000;
+  o.set("status", status_from_rc(rc));
+  o.set("numFmtId", rc == 0 ? num_fmt_id : 0U);
+  o.set("formatCode", std::string(rc == 0 && s != nullptr ? s : ""));
   return o;
 }
 
@@ -568,17 +551,12 @@ uint32_t JsWorkbook::cellStyleXfCount() const {
 
 emscripten::val JsWorkbook::getCellStyle(uint32_t index) const {
   emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   fm_cell_style_record_t cs{};
-  fm_status_t rc = fm_styles_get_cell_style(handle_, index, &cs);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style(handle_, index, &cs) : 7000;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+    cs = fm_cell_style_record_t{};
   }
-  o.set("status", ok_status());
+  o.set("status", status_from_rc(rc));
   o.set("name", std::string(cs.name != nullptr ? cs.name : ""));
   o.set("xfId", cs.xf_id);
   o.set("builtinId", cs.builtin_id);
@@ -589,31 +567,13 @@ emscripten::val JsWorkbook::getCellStyle(uint32_t index) const {
 }
 
 emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    return o;
-  }
   fm_cell_xf xf{};
-  fm_status_t rc = fm_styles_get_cell_style_xf(handle_, index, &xf);
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style_xf(handle_, index, &xf) : 7000;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+    xf = fm_cell_xf{};
   }
-  o.set("status", ok_status());
-  o.set("fontIndex", xf.font_index);
-  o.set("fillIndex", xf.fill_index);
-  o.set("borderIndex", xf.border_index);
-  o.set("numFmtId", static_cast<uint32_t>(xf.num_fmt_id));
-  o.set("horizontalAlign", static_cast<uint32_t>(xf.horizontal_align));
-  o.set("verticalAlign", static_cast<uint32_t>(xf.vertical_align));
-  o.set("wrapText", xf.wrap_text != 0);
-  o.set("justifyLastLine", xf.justify_last_line != 0);
-  o.set("hasAlignment", xf.has_alignment != 0);
-  o.set("hasHorizontalAlign", xf.has_horizontal_align != 0);
-  o.set("hasVerticalAlign", xf.has_vertical_align != 0);
-  o.set("hasWrapText", xf.has_wrap_text != 0);
-  o.set("hasJustifyLastLine", xf.has_justify_last_line != 0);
+  emscripten::val o = js_cell_xf_record(xf);
+  o.set("status", status_from_rc(rc));
   js_set_cell_xf_alignment(xf, &o);
   return o;
 }

@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/borrowed_arena.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "cf/cf_types.h"
@@ -561,11 +562,13 @@ TEST(FormulonCApiCfMutate, RemoveAtFlattensIndices) {
   ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 2U);
 
+  // A record's storage belongs to the handle and the next get takes it
+  // back, so each rule is read before the following one is fetched.
   fm_cf_rule_t out0{};
-  fm_cf_rule_t out1{};
   ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out0), 0);
-  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 1, &out1), 0);
   EXPECT_STREQ(out0.formula1, "A1");
+  fm_cf_rule_t out1{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 1, &out1), 0);
   EXPECT_STREQ(out1.formula1, "A3");
 }
 
@@ -802,9 +805,11 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsReachTheModelWhenEngaged) {
 
 TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
   // The only way to edit a CF rule through this ABI is get -> remove ->
-  // add, so that path has to be an identity on the rule model. Before the
-  // extension fields existed it silently reset axis, gradient and the
-  // negative colours to their defaults.
+  // add, so that path has to be an identity on the rule model, and the
+  // record has to stay readable across the removal without the caller
+  // copying anything out of it. Before the extension fields existed the
+  // sequence silently reset axis, gradient and the negative colours to
+  // their defaults.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   fm_cf_cell_range_t sqref{0, 0, 9, 0};
@@ -855,6 +860,70 @@ TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
   EXPECT_EQ(spec.axis_color.g, 55U);
 }
 
+TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
+  // The record the getter fills has to outlive the mutations of the ABI's
+  // own edit procedure, and unrelated reads that recycle the handle's text
+  // scratch must not disturb it either. Only the next successful CF get
+  // takes the storage back.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 5, 5, "unrelated"), 0);
+
+  fm_cf_cell_range_t sqref[2]{{0, 0, 9, 0}, {4, 3, 14, 3}};
+  fm_cf_rule_t seed{};
+  seed.id = "{AB000000-0000-0000-0000-000000000001}";
+  seed.type = 2;  // ColorScale
+  seed.sqref = sqref;
+  seed.sqref_count = 2;
+  seed.formula1 = "SEEDFORMULA";
+  fm_cfvo_t thresholds[2]{};
+  thresholds[0].type = 0;  // Number
+  thresholds[0].value = "11";
+  thresholds[1].type = 0;
+  thresholds[1].value = "33";
+  fm_cf_color_t colors[2]{{255, 0, 0, 255}, {0, 255, 0, 255}};
+  seed.color_scale_thresholds = thresholds;
+  seed.color_scale_colors = colors;
+  seed.color_scale_count = 2;
+  std::size_t seed_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, seed, &seed_index), 0) << fm_last_error_message();
+
+  fm_cf_rule_t held{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &held), 0);
+  ASSERT_NE(held.sqref, nullptr);
+  ASSERT_EQ(held.sqref_count, 2U);
+  ASSERT_EQ(held.color_scale_count, 2U);
+
+  // A removal frees the block the rule lived in.
+  ASSERT_EQ(fm_sheet_cf_remove_at(wb.handle, 0, 0), 0);
+  std::size_t remaining = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &remaining), 0);
+  ASSERT_EQ(remaining, 0U);
+  EXPECT_STREQ(held.id, "{AB000000-0000-0000-0000-000000000001}");
+  EXPECT_STREQ(held.formula1, "SEEDFORMULA");
+  EXPECT_EQ(held.sqref[1].first_col, 3U);
+  EXPECT_EQ(held.sqref[1].last_row, 14U);
+  EXPECT_STREQ(held.color_scale_thresholds[1].value, "33");
+
+  // An unrelated text read recycles `read_scratch`.
+  fm_value_t unrelated{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 5, 5, &unrelated), 0);
+  EXPECT_STREQ(held.id, "{AB000000-0000-0000-0000-000000000001}");
+  EXPECT_STREQ(held.color_scale_thresholds[0].value, "11");
+
+  // Feeding the held record straight back is the documented edit path; it
+  // must not need a caller-side copy of anything.
+  std::size_t rewritten_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, held, &rewritten_index), 0) << fm_last_error_message();
+  const auto& blocks = wb.handle->workbook().sheet(0).conditional_formats();
+  ASSERT_EQ(blocks.size(), 1U);
+  ASSERT_EQ(blocks[0].sqref.size(), 2U);
+  EXPECT_EQ(blocks[0].sqref[1], MakeRange(4, 3, 14, 3));
+  EXPECT_EQ(blocks[0].rules[0].id, "{AB000000-0000-0000-0000-000000000001}");
+  ASSERT_TRUE(blocks[0].rules[0].color_scale.has_value());
+  EXPECT_EQ(blocks[0].rules[0].color_scale->thresholds[1].value, "33");
+}
+
 TEST(FormulonCApiCfMutate, DataBarRejectsInvertedLengthsAndUnknownAxisPosition) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -879,6 +948,179 @@ TEST(FormulonCApiCfMutate, DataBarRejectsInvertedLengthsAndUnknownAxisPosition) 
   stale_axis.data_bar_axis_position = 3;
   ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, stale_axis, &rule_index), 0) << fm_last_error_message();
   EXPECT_EQ(OnlyDataBarSpec(wb.handle).axis_position, formulon::cf::DataBarAxisPosition::Automatic);
+}
+
+TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) {
+  // Mirrors what the JS bindings do for a rule object that carries more
+  // than one payload key: every threshold string is pulled into one
+  // caller-side store, and the record keeps a borrowed view of each. The
+  // store must therefore not relocate bytes an earlier pull already
+  // published into the record - which is what a growing vector does on
+  // the second short string it holds.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  formulon::c_api::BorrowedStringArena strings;
+
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 2;  // ColorScale
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+
+  fm_cfvo_t thresholds[3]{};
+  const char* const kThresholdValues[3] = {"11", "22", "33"};
+  for (std::size_t i = 0; i < 3; ++i) {
+    thresholds[i].type = 0;  // Number
+    thresholds[i].gte = 1;
+    thresholds[i].value = strings.emplace(kThresholdValues[i]);
+  }
+  fm_cf_color_t colors[3]{{255, 0, 0, 255}, {255, 255, 0, 255}, {0, 255, 0, 255}};
+  rule.color_scale_thresholds = thresholds;
+  rule.color_scale_colors = colors;
+  rule.color_scale_count = 3;
+
+  // The same JS object also carried `dataBar` and `iconSet` keys, so the
+  // binding pulls their threshold strings into the same store after the
+  // colorScale views are already in the record.
+  rule.data_bar_engaged = 1;
+  rule.data_bar_min.type = 0;
+  rule.data_bar_min.value = strings.emplace("5");
+  rule.data_bar_max.type = 0;
+  rule.data_bar_max.value = strings.emplace("95");
+  fm_cfvo_t icon_thresholds[2]{};
+  icon_thresholds[0].type = 1;  // Percent
+  icon_thresholds[0].value = strings.emplace("40");
+  icon_thresholds[1].type = 1;
+  icon_thresholds[1].value = strings.emplace("80");
+  rule.icon_set_engaged = 1;
+  rule.icon_set_thresholds = icon_thresholds;
+  rule.icon_set_threshold_count = 2;
+
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+
+  const auto& blocks = wb.handle->workbook().sheet(0).conditional_formats();
+  ASSERT_EQ(blocks.size(), 1U);
+  ASSERT_TRUE(blocks[0].rules[0].color_scale.has_value());
+  const auto& stored = blocks[0].rules[0].color_scale->thresholds;
+  ASSERT_EQ(stored.size(), 3U);
+  EXPECT_EQ(stored[0].value, "11");
+  EXPECT_EQ(stored[1].value, "22");
+  EXPECT_EQ(stored[2].value, "33");
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_GT(saved.len, 0U);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  const auto& reloaded_blocks = reloaded.handle->workbook().sheet(0).conditional_formats();
+  ASSERT_EQ(reloaded_blocks.size(), 1U);
+  ASSERT_TRUE(reloaded_blocks[0].rules[0].color_scale.has_value());
+  const auto& reloaded_thresholds = reloaded_blocks[0].rules[0].color_scale->thresholds;
+  ASSERT_EQ(reloaded_thresholds.size(), 3U);
+  EXPECT_EQ(reloaded_thresholds[0].value, "11");
+  EXPECT_EQ(reloaded_thresholds[1].value, "22");
+  EXPECT_EQ(reloaded_thresholds[2].value, "33");
+}
+
+TEST(FormulonCApiCfMutate, RuleEngagingSeveralVisualPayloadsSurfacesLivePointers) {
+  // `cf::CFRule` declares the three visual payloads mutually exclusive,
+  // but a rule can only be trusted to honour that once every producer
+  // does. The getter must keep every pointer it writes into the record
+  // valid until it returns, including for a rule that engages two.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  auto& sheet = wb.handle->workbook().sheet(0);
+  formulon::cf::ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 9, 0));
+  formulon::cf::CFRule rule;
+  rule.type = formulon::cf::RuleType::ColorScale;
+  rule.priority = 1;
+  formulon::cf::ColorScaleSpec color_scale;
+  for (const char* value : {"11", "22", "33"}) {
+    formulon::cf::CfValueObject cfvo;
+    cfvo.type = formulon::cf::CfvoType::Number;
+    cfvo.value = value;
+    color_scale.thresholds.push_back(cfvo);
+    color_scale.colors.push_back(formulon::cf::Color{255, 0, 0, 255});
+  }
+  rule.color_scale = std::move(color_scale);
+  formulon::cf::IconSetSpec icon_set;
+  for (const char* value : {"40", "80"}) {
+    formulon::cf::CfValueObject cfvo;
+    cfvo.type = formulon::cf::CfvoType::Percent;
+    cfvo.value = value;
+    icon_set.thresholds.push_back(cfvo);
+  }
+  rule.icon_set = std::move(icon_set);
+  block.rules.push_back(std::move(rule));
+  sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  fm_cf_rule_t out{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out), 0);
+  ASSERT_EQ(out.color_scale_count, 3U);
+  ASSERT_NE(out.color_scale_thresholds, nullptr);
+  ASSERT_NE(out.color_scale_colors, nullptr);
+  // Read after the iconSet payload was filled: the colorScale array must
+  // not have moved out from under the pointer already in the record.
+  EXPECT_STREQ(out.color_scale_thresholds[0].value, "11");
+  EXPECT_STREQ(out.color_scale_thresholds[2].value, "33");
+  EXPECT_EQ(out.color_scale_colors[0].r, 255U);
+  ASSERT_EQ(out.icon_set_threshold_count, 2U);
+  ASSERT_NE(out.icon_set_thresholds, nullptr);
+  EXPECT_STREQ(out.icon_set_thresholds[1].value, "80");
+}
+
+TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
+  // An out-of-grid rectangle has no A1 spelling, so letting one into the
+  // model leaves the save path with a reference it cannot write.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_rule_t rule{};
+  rule.type = 0;  // Expression
+  rule.formula1 = "TRUE";
+  rule.sqref_count = 1;
+  std::size_t rule_index = 0;
+
+  // One past the last column, on a whole-column range.
+  fm_cf_cell_range_t past_last_col{0, formulon::Sheet::kMaxCols, formulon::Sheet::kMaxRows - 1U,
+                                   formulon::Sheet::kMaxCols};
+  rule.sqref = &past_last_col;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  // One past the last row.
+  fm_cf_cell_range_t past_last_row{0, 0, formulon::Sheet::kMaxRows, 0};
+  rule.sqref = &past_last_row;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  // Inverted rectangle.
+  fm_cf_cell_range_t inverted{5, 0, 1, 0};
+  rule.sqref = &inverted;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  // A rejected range leaves no block behind, and the rejection is
+  // reported rather than aborting the process at save time.
+  EXPECT_TRUE(wb.handle->workbook().sheet(0).conditional_formats().empty());
+  BufferGuard rejected_save;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &rejected_save.data, &rejected_save.len), 0);
+
+  // The widest legal whole-column range still round-trips.
+  fm_cf_cell_range_t whole_col{0, 0, formulon::Sheet::kMaxRows - 1U, 0};
+  rule.sqref = &whole_col;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_GT(saved.len, 0U);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  const auto& blocks = reloaded.handle->workbook().sheet(0).conditional_formats();
+  ASSERT_EQ(blocks.size(), 1U);
+  ASSERT_EQ(blocks[0].sqref.size(), 1U);
+  EXPECT_EQ(blocks[0].sqref[0], MakeRange(0, 0, formulon::Sheet::kMaxRows - 1U, 0));
 }
 
 TEST(FormulonCApiCfMutate, EmptySqrefRejected) {
@@ -918,6 +1160,165 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
   std::size_t after = 0;
   ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &after), 0);
   EXPECT_EQ(before, after);
+}
+
+TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
+  // A package can carry a `dxfId` past the end of its own `<dxfs>`, and
+  // the loader keeps the rule. Surfacing that index would hand the caller
+  // a value `fm_styles_get_dxf` rejects and `fm_sheet_cf_add_rule`
+  // refuses, so the get / remove / add-back edit path would not close.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  SeedDxfs(wb.handle, 2);
+
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 1;  // CellIs
+  rule.op_engaged = 1;
+  rule.op = 5;  // GreaterThan
+  rule.formula1 = "50";
+  rule.dxf_id_engaged = 1;
+  rule.dxf_id = 1;
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+
+  // Shrink the table under the rule, the way a package whose styles part
+  // and worksheet part disagree arrives.
+  wb.handle->workbook().mutable_styles().dxfs.resize(1);
+
+  fm_cf_rule_t out{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out), 0) << fm_last_error_message();
+  EXPECT_EQ(out.dxf_id_engaged, 0);
+
+  // The record still feeds straight back in, which is what the disengage
+  // buys: with the raw index it would be rejected.
+  std::size_t reinserted = 0;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, out, &reinserted), 0) << fm_last_error_message();
+
+  // A resolvable index is still reported.
+  SeedDxfs(wb.handle, 2);
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.dxf_id_engaged, 1);
+  EXPECT_EQ(out.dxf_id, 1U);
+}
+
+TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
+  // The id becomes an `ST_Guid`-typed attribute in the saved package, so
+  // a host key like "sales-databar" would make Excel repair the workbook
+  // and drop every conditional format in it.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 0;  // Expression
+  rule.formula1 = "TRUE";
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+
+  std::size_t rule_index = 99U;
+  for (const char* rejected : {"sales-databar", "{}", "FC000000-0000-0000-0000-000000000001",
+                               "{FC000000-0000-0000-0000-00000000000}", "{GC000000-0000-0000-0000-000000000001}"}) {
+    rule.id = rejected;
+    EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index),
+              static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
+        << rejected;
+  }
+
+  std::size_t count = 99U;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+
+  // A GUID-shaped id is accepted and comes back verbatim.
+  rule.id = "{3B4F1C22-0000-4000-8000-0123456789AB}";
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  fm_cf_rule_t out{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_STREQ(out.id, "{3B4F1C22-0000-4000-8000-0123456789AB}");
+
+  // An absent id is the "synthesize one for me" request, not a malformed
+  // one, and the id it produces is itself GUID-shaped.
+  rule.id = "";
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, rule_index, &out), 0);
+  ASSERT_NE(out.id, nullptr);
+  const std::string synthesized(out.id);
+  EXPECT_EQ(synthesized.size(), 38U);
+  EXPECT_EQ(synthesized.front(), '{');
+  EXPECT_EQ(synthesized.back(), '}');
+}
+
+TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
+  // Each of these would otherwise be `static_cast` into its enum and
+  // collapse onto the consuming switch's default: an unknown `op` writes
+  // `operator="equal"`, an unknown `time_period` writes `today`. The
+  // caller sees `kOk` and a rule that means something else.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t base{};
+  base.formula1 = "TRUE";
+  base.sqref = &sqref;
+  base.sqref_count = 1;
+
+  const auto expect_rejected = [&wb](fm_cf_rule_t rule, const char* what) {
+    std::size_t rule_index = 99U;
+    EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index),
+              static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
+        << what;
+  };
+
+  fm_cf_rule_t unknown_type = base;
+  unknown_type.type = static_cast<std::uint8_t>(formulon::cf::RuleType::UniqueValues) + 1U;
+  expect_rejected(unknown_type, "type");
+
+  fm_cf_rule_t unknown_op = base;
+  unknown_op.type = 1;  // CellIs
+  unknown_op.op_engaged = 1;
+  unknown_op.op = static_cast<std::uint8_t>(formulon::cf::CellIsOperator::NotBetween) + 1U;
+  expect_rejected(unknown_op, "op");
+
+  fm_cf_rule_t unknown_period = base;
+  unknown_period.type = 15;  // TimePeriod
+  unknown_period.time_period_engaged = 1;
+  unknown_period.time_period = static_cast<std::uint8_t>(formulon::cf::TimePeriod::NextMonth) + 1U;
+  expect_rejected(unknown_period, "time_period");
+
+  fm_cfvo_t icon_thresholds[3]{};
+  icon_thresholds[1].type = static_cast<std::uint8_t>(formulon::cf::CfvoType::AutoMax) + 1U;
+  fm_cf_rule_t unknown_cfvo = base;
+  unknown_cfvo.type = 4;  // IconSet
+  unknown_cfvo.icon_set_engaged = 1;
+  unknown_cfvo.icon_set_thresholds = icon_thresholds;
+  unknown_cfvo.icon_set_threshold_count = 3;
+  expect_rejected(unknown_cfvo, "icon_set_thresholds[].type");
+
+  fm_cfvo_t legal_thresholds[3]{};
+  fm_cf_rule_t unknown_icon_set = base;
+  unknown_icon_set.type = 4;  // IconSet
+  unknown_icon_set.icon_set_engaged = 1;
+  unknown_icon_set.icon_set_name = static_cast<std::uint8_t>(formulon::cf::IconSetName::Five_Quarters) + 1U;
+  unknown_icon_set.icon_set_thresholds = legal_thresholds;
+  unknown_icon_set.icon_set_threshold_count = 3;
+  expect_rejected(unknown_icon_set, "icon_set_name");
+
+  fm_cfvo_t color_thresholds[2]{};
+  fm_cf_color_t colors[2]{};
+  color_thresholds[0].type = static_cast<std::uint8_t>(formulon::cf::CfvoType::AutoMax) + 1U;
+  fm_cf_rule_t unknown_color_cfvo = base;
+  unknown_color_cfvo.type = 2;  // ColorScale
+  unknown_color_cfvo.color_scale_thresholds = color_thresholds;
+  unknown_color_cfvo.color_scale_colors = colors;
+  unknown_color_cfvo.color_scale_count = 2;
+  expect_rejected(unknown_color_cfvo, "color_scale_thresholds[].type");
+
+  // Every rejection left the sheet as it was.
+  std::size_t count = 99U;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
 }
 
 TEST(FormulonCApiCfMutate, OutOfRangeIndexReturnsInvalidArgument) {

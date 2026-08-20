@@ -462,21 +462,19 @@ Napi::Value Workbook::PivotFilterCount(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  // The payload is emitted on every exit path, matching the WASM binding;
+  // only `status.ok` and the values differ.
   Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t filter_idx = static_cast<std::size_t>(ArgU32(info, 2));
   fm_pivot_filter_spec_t spec{};
-  fm_status_t rc = fm_workbook_pivot_filter_at(handle_, sheet, pivot_idx, filter_idx, &spec);
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_filter_at(handle_, sheet, pivot_idx, filter_idx, &spec)
+                                            : kBindingInvalidHandle;
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    spec = fm_pivot_filter_spec_t{};
   }
-  out.Set("status", MakeOkStatus(env));
+  out.Set("status", MakeStatus(env, rc));
   out.Set("axis", Napi::Number::New(env, static_cast<int32_t>(spec.axis)));
   out.Set("fieldName", Napi::String::New(env, spec.field_name != nullptr ? spec.field_name : ""));
   out.Set("type", Napi::Number::New(env, static_cast<int32_t>(spec.type)));

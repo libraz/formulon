@@ -53,6 +53,9 @@ constexpr fm_status_t kBindingInvalidHandle = 7000;
 /// The C ABI's NULL-pointer / wrong-argument-shape code, reused when a
 /// binding entry point rejects a JS argument before any C call.
 constexpr fm_status_t kBindingNullPointer = 7001;
+/// A JS callable handed to the binding threw. Reported on the envelope of
+/// the call that ran it.
+constexpr fm_status_t kBindingCallbackException = 7003;
 
 // ---------------------------------------------------------------------
 // Status / Value envelope builders
@@ -68,6 +71,18 @@ Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code);
 
 /// Converts a C-ABI status code into the shared JS Status envelope.
 Napi::Object MakeStatus(Napi::Env env, fm_status_t code);
+
+/// Stamps a list getter's `status` property onto the array it returns and
+/// hands the array back.
+///
+/// The list getters return `ListResult<T>` -- an array that also carries a
+/// `status`, which is legal because a JS array is an object. Without it a
+/// caller cannot tell an empty sheet from a sheet it could not read, and
+/// `merges.status.ok` is a `TypeError` rather than a check. Element reads
+/// stop at the first failure and report it, so a partially enumerated list
+/// always arrives with `status.ok === false`; both bindings behave this
+/// way and the parity claim in `packages/npm-native/README.md` rests on it.
+Napi::Array FinishListResult(Napi::Env env, Napi::Array items, fm_status_t code);
 
 /// Translates an `fm_value_t` into the JS Value shape.
 Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v);

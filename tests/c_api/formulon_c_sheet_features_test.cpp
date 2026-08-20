@@ -505,6 +505,35 @@ TEST_F(FormulonCApiSheetFeatures, ValidationCoversEveryTypeAndOpEnum) {
   EXPECT_EQ(got.op, 7);
 }
 
+TEST_F(FormulonCApiSheetFeatures, ValidationRejectsEnumOrdinalsPastTheirDomain) {
+  // The writer emits an absent attribute for an ordinal it does not
+  // recognise, so a mistyped `type` would save as "no validation at all"
+  // and the author would only notice on opening the file in Excel.
+  const auto expect_rejected = [this](fm_data_validation v, const char* what) {
+    EXPECT_EQ(fm_sheet_add_validation(wb_, 0, v),
+              static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
+        << what;
+  };
+
+  fm_data_validation unknown_type{};
+  unknown_type.type = 8;
+  expect_rejected(unknown_type, "type");
+
+  fm_data_validation unknown_op{};
+  unknown_op.type = 1;
+  unknown_op.op = 8;
+  expect_rejected(unknown_op, "op");
+
+  fm_data_validation unknown_error_style{};
+  unknown_error_style.type = 1;
+  unknown_error_style.error_style = 3;
+  expect_rejected(unknown_error_style, "error_style");
+
+  std::uint32_t count = 99U;
+  ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
 TEST_F(FormulonCApiSheetFeatures, ValidationGetAtOutOfRange) {
   fm_data_validation got{};
   EXPECT_NE(fm_sheet_get_validation_at(wb_, 0, 99, &got), 0);

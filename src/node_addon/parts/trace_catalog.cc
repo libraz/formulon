@@ -104,17 +104,19 @@ Napi::Value Workbook::GetExternalLinks(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return arr;
+    return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   uint32_t count = 0;
-  if (fm_workbook_external_link_count(handle_, &count) != 0) {
-    return arr;
+  fm_status_t rc = fm_workbook_external_link_count(handle_, &count);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
   }
   std::size_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_external_link_record_t rec{};
-    if (fm_workbook_external_link_at(handle_, i, &rec) != 0) {
-      continue;
+    rc = fm_workbook_external_link_at(handle_, i, &rec);
+    if (rc != 0) {
+      return FinishListResult(env, arr, rc);
     }
     Napi::Object item = Napi::Object::New(env);
     item.Set("index", Napi::Number::New(env, rec.index));
@@ -126,7 +128,7 @@ Napi::Value Workbook::GetExternalLinks(const Napi::CallbackInfo& info) {
     arr.Set(static_cast<uint32_t>(emitted), item);
     ++emitted;
   }
-  return arr;
+  return FinishListResult(env, arr, 0);
 }
 
 // ---- Function catalog -----------------------------------------------

@@ -67,22 +67,24 @@ Napi::Value Workbook::PivotCacheRemove(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotCacheGetWorksheetSource(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  // The payload is emitted on every exit path, matching the WASM binding;
+  // only `status.ok` and the values differ.
   Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   const uint32_t cache_id = ArgU32(info, 0);
   int32_t present = 0;
   const char* ref = nullptr;
   const char* sheet = nullptr;
   const char* name = nullptr;
-  fm_status_t rc = fm_workbook_pivot_cache_get_worksheet_source(handle_, cache_id, &present, &ref, &sheet, &name);
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_cache_get_worksheet_source(handle_, cache_id, &present,
+                                                                                           &ref, &sheet, &name)
+                                            : kBindingInvalidHandle;
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    present = 0;
+    ref = nullptr;
+    sheet = nullptr;
+    name = nullptr;
   }
-  out.Set("status", MakeOkStatus(env));
+  out.Set("status", MakeStatus(env, rc));
   out.Set("present", Napi::Boolean::New(env, present != 0));
   out.Set("ref", Napi::String::New(env, ref != nullptr ? ref : ""));
   out.Set("sheet", Napi::String::New(env, sheet != nullptr ? sheet : ""));

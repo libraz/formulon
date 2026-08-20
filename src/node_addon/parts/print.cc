@@ -241,8 +241,7 @@ Napi::Value Workbook::SetSheetPageSetup(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   if (info.Length() < 2 || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "setSheetPageSetup expects (sheet:number, setup:object)")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "setSheetPageSetup expects (sheet:number, setup:object)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const Napi::Object spec = info[1].As<Napi::Object>();
@@ -349,20 +348,20 @@ Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
   return MakeStatus(env, fm_sheet_set_header_footer(handle_, ArgU32(info, 0), &out));
 }
 
+// Both typed getters below emit their whole declared payload on every exit
+// path, as the WASM binding does for the same calls; only `status.ok` and
+// the values differ.
+
 Napi::Value Workbook::GetSheetPageSetup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object result = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    result.Set("status", NullHandleError(env));
-    return result;
-  }
   fm_page_setup_t setup{};
-  const fm_status_t rc = fm_sheet_get_page_setup(handle_, ArgU32(info, 0), &setup);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_page_setup(handle_, ArgU32(info, 0), &setup) : kBindingInvalidHandle;
   if (rc != 0) {
-    result.Set("status", MakeErrorStatus(env, rc));
-    return result;
+    setup = fm_page_setup_t{};
   }
-  result.Set("status", MakeOkStatus(env));
+  result.Set("status", MakeStatus(env, rc));
   result.Set("orientation", Napi::Number::New(env, setup.orientation));
   result.Set("paperSize", Napi::Number::New(env, setup.paper_size));
   result.Set("scale", Napi::Number::New(env, setup.scale));
@@ -381,17 +380,13 @@ Napi::Value Workbook::GetSheetPageSetup(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetSheetPageMargins(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object result = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    result.Set("status", NullHandleError(env));
-    return result;
-  }
   fm_page_margins_t margins{};
-  const fm_status_t rc = fm_sheet_get_page_margins(handle_, ArgU32(info, 0), &margins);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_page_margins(handle_, ArgU32(info, 0), &margins) : kBindingInvalidHandle;
   if (rc != 0) {
-    result.Set("status", MakeErrorStatus(env, rc));
-    return result;
+    margins = fm_page_margins_t{};
   }
-  result.Set("status", MakeOkStatus(env));
+  result.Set("status", MakeStatus(env, rc));
   result.Set("left", Napi::Number::New(env, margins.left));
   result.Set("right", Napi::Number::New(env, margins.right));
   result.Set("top", Napi::Number::New(env, margins.top));

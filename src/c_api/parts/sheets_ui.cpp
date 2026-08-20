@@ -14,10 +14,11 @@
 #include "utils/error.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::check_range_count;
+using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::validate;
 
 namespace {
 
@@ -27,16 +28,6 @@ fm_status_t check_sheet_coord(std::uint32_t row, std::uint32_t col, const char* 
   }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, fn,
                            "row=" + std::to_string(row) + " col=" + std::to_string(col));
-}
-
-fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
-                             std::uint32_t last_col, const char* fn) {
-  if (formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
-    return 0;
-  }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, fn,
-                           "first_row=" + std::to_string(first_row) + " first_col=" + std::to_string(first_col) +
-                               " last_row=" + std::to_string(last_row) + " last_col=" + std::to_string(last_col));
 }
 
 }  // namespace
@@ -50,9 +41,7 @@ extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::uint32_t s
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_add_hyperlink"); rc != 0) {
     return rc;
   }
-  if (auto rc =
-          check_sheet_rect(hl.row, hl.col, hl.last_row, hl.last_col, "fm_sheet_add_hyperlink: rectangle out of grid");
-      rc != 0) {
+  if (auto rc = check_sheet_rect(hl.row, hl.col, hl.last_row, hl.last_col, "fm_sheet_add_hyperlink"); rc != 0) {
     return rc;
   }
   formulon::Hyperlink out;
@@ -163,9 +152,7 @@ extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::uint32_t sheet
   m.first_col = (merge.first_col < merge.last_col) ? merge.first_col : merge.last_col;
   m.last_row = (merge.first_row < merge.last_row) ? merge.last_row : merge.first_row;
   m.last_col = (merge.first_col < merge.last_col) ? merge.last_col : merge.first_col;
-  if (auto rc = check_sheet_rect(m.first_row, m.first_col, m.last_row, m.last_col,
-                                 "fm_sheet_add_merge: rectangle out of grid");
-      rc != 0) {
+  if (auto rc = check_sheet_rect(m.first_row, m.first_col, m.last_row, m.last_col, "fm_sheet_add_merge"); rc != 0) {
     return rc;
   }
   const auto result = wb->workbook().add_merge(sheet, m);
@@ -435,21 +422,8 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_add_validation"); rc != 0) {
     return rc;
   }
-  if (v.range_count > 0 && v.ranges == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_add_validation: ranges is NULL but range_count > 0",
-                             "range_count=" + std::to_string(v.range_count));
-  }
-  if (!check_range_count(v.range_count, "fm_sheet_add_validation")) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  }
-  for (std::uint32_t i = 0; i < v.range_count; ++i) {
-    const fm_merge_range& range = v.ranges[i];
-    if (auto rc = check_sheet_rect(range.first_row, range.first_col, range.last_row, range.last_col,
-                                   "fm_sheet_add_validation: range out of grid");
-        rc != 0) {
-      return rc;
-    }
+  if (auto rc = validate(v, "fm_sheet_add_validation"); rc != 0) {
+    return rc;
   }
   formulon::DataValidation out;
   out.ranges.reserve(v.range_count);

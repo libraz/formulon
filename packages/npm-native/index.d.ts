@@ -156,35 +156,35 @@ export interface StringResult {
 /** Return type of `Workbook.cellAt(sheet, idx)`. */
 export interface CellEntry {
   status: Status;
-  row: number;
-  col: number;
+  row?: number;
+  col?: number;
   /** Raw formula text, or `null` for pure literals. */
-  formula: string | null;
-  value: Value;
+  formula?: string | null;
+  value?: Value;
 }
 
 /** Return type of `Workbook.definedNameAt(idx)`. */
 export interface DefinedNameEntry {
   status: Status;
-  name: string;
-  formula: string;
+  name?: string;
+  formula?: string;
   /** -1 for workbook scope; otherwise a 0-based sheet index. */
-  localSheetId: number;
+  localSheetId?: number;
 }
 
 /** Return type of `Workbook.tableAt(idx)`. */
 export interface TableEntry {
   status: Status;
-  name: string;
-  displayName: string;
-  ref: string;
-  sheetIndex: number;
+  name?: string;
+  displayName?: string;
+  ref?: string;
+  sheetIndex?: number;
 }
 
 /** Return type of `Workbook.passthroughAt(idx)`. */
 export interface PassthroughEntry {
   status: Status;
-  path: string;
+  path?: string;
 }
 
 /** PivotTable layout cell kind. Mirrors `fm_pivot_cell_kind_t`. */
@@ -885,6 +885,9 @@ export interface DataValidationEntry {
   readonly allowBlank: boolean;
   readonly showInputMessage: boolean;
   readonly showErrorMessage: boolean;
+  /** Whether the in-cell dropdown arrow is shown (`list` type only).
+   *  Defaults to `true`, matching Excel's default. */
+  readonly showDropDown: boolean;
   readonly formula1: string;
   readonly formula2: string;
   readonly errorTitle: string;
@@ -905,6 +908,9 @@ export interface DataValidationInput {
   allowBlank?: boolean;
   showInputMessage?: boolean;
   showErrorMessage?: boolean;
+  /** Whether the in-cell dropdown arrow is shown (`list` type only).
+   *  Defaults to `true`, matching Excel's default. */
+  showDropDown?: boolean;
   formula1?: string;
   formula2?: string;
   errorTitle?: string;
@@ -1454,10 +1460,19 @@ export interface ParallelRecalcResult {
   stats: ParallelRecalcStats;
 }
 
+/** A JS array with the status of the list enumeration that produced it. */
+export type ListResult<T> = ReadonlyArray<T> & { readonly status: Status };
+
 /** Iterative-solver progress callback. Receives the current
  *  iteration number, the maximum residual seen, and the configured
  *  iteration cap. Returning `false` (or any falsy value) aborts the
- *  solve; returning `true` (or `undefined`) continues. */
+ *  solve; returning `true` (or `undefined`) continues.
+ *
+ *  Throwing also aborts the solve, and the exception does not reach the
+ *  caller: the recalc that ran the callback returns `{ok: false}` with
+ *  status 7003 (`kBindingCallbackException`) instead. Cells committed by
+ *  the sweeps that already ran keep their values, and the workbook stays
+ *  usable. */
 export type IterativeProgressCallback = (
   iteration: number,
   maxResidual: number,
@@ -1535,6 +1550,10 @@ export interface Workbook {
   getLambdaText(sheet: number, row: number, col: number): LambdaTextResult;
 
   // Recalc + save.
+  /** Recalculates all dirty cells serially on the caller thread.
+   *
+   *  Reports status 7003 (`kBindingCallbackException`) when an installed
+   *  `IterativeProgressCallback` threw during the pass. */
   recalc(): Status;
   /**
    * Recalculates the workbook through the parallel SCC scheduler and returns
@@ -1543,9 +1562,13 @@ export interface Workbook {
    * caller thread, and 2..8 select that worker cap. Missing, fractional,
    * non-finite, negative, or above-8 values return an error status and zero
    * telemetry.
+   * As with `recalc`, a throwing `IterativeProgressCallback` is reported as
+   * status 7003 with the counters left at zero.
    */
   recalcParallel(threadCount: number): ParallelRecalcResult;
-  /** Recalculates only cells touched by the supplied viewport. */
+  /** Recalculates only cells touched by the supplied viewport. Reports
+   *  status 7003 with `recomputed` at zero when a throwing
+   *  `IterativeProgressCallback` cut the pass short. */
   partialRecalc(viewport: RecalcViewport): PartialRecalcResult;
   setIterative(enabled: boolean, maxIterations: number, maxChange: number): Status;
   /** Installs (or, when passed `null`, clears) this workbook's JS callback
@@ -2017,14 +2040,14 @@ export interface Workbook {
   /** Drops every merge on `sheet`. */
   clearMerges(sheet: number): Status;
   /** Returns every merge range on `sheet` as a JS array. */
-  getMerges(sheet: number): ReadonlyArray<MergeRange>;
+  getMerges(sheet: number): ListResult<MergeRange>;
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
   getComment(sheet: number, row: number, col: number): CommentEntry | null;
   /** Returns a comment lookup result that distinguishes absence from an invalid sheet or handle. */
   getCommentResult(sheet: number, row: number, col: number): CommentResult;
   /** Returns every comment on `sheet`, including comments anchored on
    *  cells that carry no value. */
-  getComments(sheet: number): ReadonlyArray<SheetCommentEntry>;
+  getComments(sheet: number): ListResult<SheetCommentEntry>;
   /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
   setComment(sheet: number, row: number, col: number, author: string, text: string): Status;
   /** Appends a hyperlink to `sheet`. For an in-workbook link, pass an empty
@@ -2058,9 +2081,9 @@ export interface Workbook {
   /** Drops every hyperlink on `sheet`. */
   clearHyperlinks(sheet: number): Status;
   /** Returns every hyperlink on `sheet` as a JS array. */
-  getHyperlinks(sheet: number): ReadonlyArray<HyperlinkEntry>;
+  getHyperlinks(sheet: number): ListResult<HyperlinkEntry>;
   /** Returns every data-validation rule on `sheet` in storage order. */
-  getValidations(sheet: number): ReadonlyArray<DataValidationEntry>;
+  getValidations(sheet: number): ListResult<DataValidationEntry>;
   /** Appends a data-validation rule to `sheet`. */
   addValidation(sheet: number, validation: DataValidationInput): Status;
   /** Removes the validation rule at `index`. Returns `kInvalidArgument`
@@ -2073,7 +2096,7 @@ export interface Workbook {
   /** Returns every CF rule on `sheet` in flattened priority order. The
    *  returned entries borrow rule ids from the engine's storage; treat
    *  them as immutable view objects. */
-  getConditionalFormats(sheet: number): ReadonlyArray<ConditionalFormatEntry>;
+  getConditionalFormats(sheet: number): ListResult<ConditionalFormatEntry>;
   /** Appends a new single-rule `<conditionalFormatting>` block to
    *  `sheet`, including visual rules when their payload object is supplied.
    *  `index` is the new rule's position in the sheet's flattened CF rule
@@ -2117,7 +2140,7 @@ export interface Workbook {
   /** Returns every external-link record carried by the workbook in
    *  `<externalReferences>` document order. Empty for fresh workbooks
    *  and packages with no `<externalReferences>` block. */
-  getExternalLinks(): ReadonlyArray<ExternalLinkRecord>;
+  getExternalLinks(): ListResult<ExternalLinkRecord>;
 
   // Dynamic-array spill.
   /** Returns dynamic-array spill info for `(sheet, row, col)`. When the

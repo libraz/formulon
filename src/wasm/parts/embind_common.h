@@ -45,6 +45,10 @@ namespace parts {
 /// `kBindingNullPointer` argument-validation error.
 constexpr int32_t kBindingInvalidHandle = 7000;
 
+/// A JS callable handed to the binding threw. Reported on the envelope of
+/// the call that ran it; see `call_js_callback` below.
+constexpr int32_t kBindingCallbackException = 7003;
+
 // ---- Value-object mirrors -----------------------------------------------
 //
 // Every cross-boundary record is reflected through a POD struct so embind
@@ -256,6 +260,39 @@ JsStatus error_status(int32_t code);
 
 /// Bridges a `fm_status_t` into a `JsStatus` envelope.
 JsStatus status_from_rc(fm_status_t rc);
+
+// ---- Guarded JS callback invocation -------------------------------------
+//
+// Every path that calls back into caller-supplied JavaScript from inside
+// an engine frame MUST go through `call_js_callback`, and no part TU may
+// invoke an `emscripten::val` callable directly. An exception thrown out
+// of a JS callback unwinds the intervening WASM frames without running a
+// single C++ destructor: the binary is linked `-fno-exceptions` /
+// `-sDISABLE_EXCEPTION_CATCHING=1`, so there is no landing pad to restore
+// RAII state such as the recalc re-entry flag or the engine's write
+// mutex, and the damage outlives the call. The helper moves the `try` /
+// `catch` to the JS side, where it is expressible, and hands the throw
+// back as a value the C++ caller can act on while unwinding normally.
+//
+// Its definition lives in `workbook_core.cpp` rather than
+// `embind_common.cpp`: it is backed by an `EM_JS` shim, and `EM_JS` emits
+// a non-static descriptor symbol that may exist in exactly one
+// translation unit.
+
+/// Outcome of a guarded JS callback invocation. The truthy / falsy split
+/// mirrors JavaScript's own coercion, so a callback returning an
+/// unexpected type is classified rather than cast (and cannot throw a
+/// second time on the way out).
+enum class JsCallbackOutcome : int32_t {
+  kThrew = -1,   ///< Threw, or was not callable at all.
+  kFalsy = 0,    ///< Returned a value JavaScript coerces to `false`.
+  kTruthy = 1,   ///< Returned a value JavaScript coerces to `true`.
+  kNoValue = 2,  ///< Returned `undefined` or `null`.
+};
+
+/// Invokes `fn` with the JS array `args`, catching anything it throws.
+/// Never propagates a JS exception into the calling C++ frame.
+JsCallbackOutcome call_js_callback(const emscripten::val& fn, const emscripten::val& args);
 
 // ---- Translation helpers -----------------------------------------------
 

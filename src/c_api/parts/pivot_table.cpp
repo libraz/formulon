@@ -22,6 +22,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
@@ -36,6 +37,7 @@ using formulon::c_api::parts::pivot_subtotal_from_fm;
 using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::validate;
 
 namespace {
 
@@ -61,15 +63,6 @@ formulon::pivot::PivotLayout pivot_layout_from_fm(std::int32_t layout) {
     default:
       return formulon::pivot::PivotLayout::Compact;
   }
-}
-
-fm_status_t reject_invalid_pivot_enum(const char* fn, const char* name, std::int32_t value, std::int32_t max) {
-  if (value >= 0 && value <= max) {
-    return 0;
-  }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           (std::string(fn) + ": invalid " + name).c_str(),
-                           name + std::string("=") + std::to_string(value));
 }
 
 std::optional<fm_pivot_axis_t> pivot_axis_to_fm(formulon::pivot::PivotAxis axis) {
@@ -285,9 +278,8 @@ extern "C" fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, std::size_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_field_add: NULL argument");
   }
-  if (spec->source_name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_add: spec->source_name is NULL");
+  if (auto rc = validate(*spec, "fm_workbook_pivot_field_add"); rc != 0) {
+    return rc;
   }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_field_add");
   if (table == nullptr) {
@@ -357,7 +349,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, std::
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_field_set_axis: wb is NULL");
   }
-  fm_status_t enum_status = reject_invalid_pivot_enum("fm_workbook_pivot_field_set_axis", "axis", axis, 3);
+  fm_status_t enum_status = check_enum_domain(axis, 3, "fm_workbook_pivot_field_set_axis", "axis");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -411,8 +403,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_add_aggregation(fm_workbook_t* wb
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_field_add_aggregation: wb is NULL");
   }
-  fm_status_t enum_status =
-      reject_invalid_pivot_enum("fm_workbook_pivot_field_add_aggregation", "aggregation", agg, 10);
+  fm_status_t enum_status = check_enum_domain(agg, 10, "fm_workbook_pivot_field_add_aggregation", "aggregation");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -527,8 +518,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_add_subtotal_fn(fm_workbook_t* wb
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_field_add_subtotal_fn: wb is NULL");
   }
-  fm_status_t enum_status =
-      reject_invalid_pivot_enum("fm_workbook_pivot_field_add_subtotal_fn", "aggregation", agg, 10);
+  fm_status_t enum_status = check_enum_domain(agg, 10, "fm_workbook_pivot_field_add_subtotal_fn", "aggregation");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -567,12 +557,11 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb,
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_field_set_date_group: wb is NULL");
   }
-  fm_status_t enum_status =
-      reject_invalid_pivot_enum("fm_workbook_pivot_field_set_date_group", "granularity", granularity, 7);
+  fm_status_t enum_status = check_enum_domain(granularity, 7, "fm_workbook_pivot_field_set_date_group", "granularity");
   if (enum_status != 0) {
     return enum_status;
   }
-  enum_status = reject_invalid_pivot_enum("fm_workbook_pivot_field_set_date_group", "calendar", calendar, 1);
+  enum_status = check_enum_domain(calendar, 1, "fm_workbook_pivot_field_set_date_group", "calendar");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -701,15 +690,10 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_count(const fm_workbook_t* w
 
 namespace {
 
-// Materialises a `fm_pivot_data_field_spec_t` into a `PivotDataField`,
-// validating the required string fields. On failure writes the binding
-// error and returns false.
-bool fill_data_field(const fm_pivot_data_field_spec_t& spec, formulon::pivot::PivotDataField* out, const char* fn) {
-  if (spec.name == nullptr) {
-    set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                      (std::string(fn) + ": spec->name is NULL").c_str());
-    return false;
-  }
+// Materialises a `fm_pivot_data_field_spec_t` into a `PivotDataField`.
+// The spec is already validated by `validate(*spec, api)` at the entry
+// point, so this only copies.
+void fill_data_field(const fm_pivot_data_field_spec_t& spec, formulon::pivot::PivotDataField* out) {
   out->name = spec.name;
   out->field_index = spec.field_index;
   out->aggregation = pivot_agg_from_fm(spec.aggregation);
@@ -725,7 +709,6 @@ bool fill_data_field(const fm_pivot_data_field_spec_t& spec, formulon::pivot::Pi
   } else {
     out->show_as_base_item.reset();
   }
-  return true;
 }
 
 }  // namespace
@@ -738,14 +721,15 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, std::
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_data_field_add: NULL argument");
   }
+  if (auto rc = validate(*spec, "fm_workbook_pivot_data_field_add"); rc != 0) {
+    return rc;
+  }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_data_field_add");
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   formulon::pivot::PivotDataField df;
-  if (!fill_data_field(*spec, &df, "fm_workbook_pivot_data_field_add")) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
-  }
+  fill_data_field(*spec, &df);
   table->mutable_data_fields().push_back(std::move(df));
   *out_idx = table->data_fields().size() - 1U;
   invalidate_pivot_result(*table);
@@ -776,6 +760,9 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, std::
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_data_field_set: NULL argument");
   }
+  if (auto rc = validate(*spec, "fm_workbook_pivot_data_field_set"); rc != 0) {
+    return rc;
+  }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_data_field_set");
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
@@ -786,9 +773,7 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, std::
                              "data_field_idx=" + std::to_string(data_field_idx));
   }
   formulon::pivot::PivotDataField df;
-  if (!fill_data_field(*spec, &df, "fm_workbook_pivot_data_field_set")) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
-  }
+  fill_data_field(*spec, &df);
   table->mutable_data_fields()[data_field_idx] = std::move(df);
   invalidate_pivot_result(*table);
   return 0;
@@ -810,13 +795,8 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              (std::string(api) + ": spec->field_name is NULL").c_str());
   }
-  fm_status_t enum_status = reject_invalid_pivot_enum(api, "axis", static_cast<std::int32_t>(spec->axis), 3);
-  if (enum_status != 0) {
-    return enum_status;
-  }
-  enum_status = reject_invalid_pivot_enum(api, "type", static_cast<std::int32_t>(spec->type), 5);
-  if (enum_status != 0) {
-    return enum_status;
+  if (auto rc = validate(*spec, api); rc != 0) {
+    return rc;
   }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, api);
   if (table == nullptr) {

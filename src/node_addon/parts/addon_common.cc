@@ -29,6 +29,11 @@ Napi::Object MakeStatus(Napi::Env env, fm_status_t code) {
   return code == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, code);
 }
 
+Napi::Array FinishListResult(Napi::Env env, Napi::Array items, fm_status_t code) {
+  items.Set("status", MakeStatus(env, code));
+  return items;
+}
+
 Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("kind", Napi::Number::New(env, static_cast<int32_t>(v.kind)));

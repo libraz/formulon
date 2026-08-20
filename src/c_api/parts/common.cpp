@@ -1,6 +1,7 @@
 
 #include "c_api/parts/common.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -8,6 +9,8 @@
 #include <utility>
 
 #include "c_api/formulon_c.h"
+#include "cf/cf_types.h"
+#include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -84,6 +87,220 @@ bool check_range_count(std::uint32_t n, const char* api) {
     return false;
   }
   return true;
+}
+
+fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                             std::uint32_t last_col, const char* api) {
+  if (formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell rectangle out of range",
+                           std::string(api) + ": first_row=" + std::to_string(first_row) +
+                               " first_col=" + std::to_string(first_col) + " last_row=" + std::to_string(last_row) +
+                               " last_col=" + std::to_string(last_col));
+}
+
+fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* api, const char* field) {
+  if (value >= 0 && value <= max) {
+    return 0;
+  }
+  return set_binding_error(
+      formulon::FormulonErrorCode::kInvalidArgument, "enum ordinal out of range",
+      std::string(api) + ": " + field + "=" + std::to_string(value) + " max=" + std::to_string(max));
+}
+
+fm_status_t check_guid(const char* text, const char* api, const char* field) {
+  if (text == nullptr || text[0] == '\0') {
+    return 0;
+  }
+  // `{8-4-4-4-12}`: 32 hexadecimal digits, four hyphens, two braces.
+  static constexpr std::string_view kShape = "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}";
+  const std::string_view value(text);
+  bool shaped = value.size() == kShape.size();
+  for (std::size_t i = 0; shaped && i < kShape.size(); ++i) {
+    switch (kShape[i]) {
+      case 'X':
+        shaped = (value[i] >= '0' && value[i] <= '9') || (value[i] >= 'a' && value[i] <= 'f') ||
+                 (value[i] >= 'A' && value[i] <= 'F');
+        break;
+      default:
+        shaped = value[i] == kShape[i];
+        break;
+    }
+  }
+  if (shaped) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value is not a GUID",
+                           std::string(api) + ": " + field + "=" + std::string(value));
+}
+
+namespace {
+
+// Runs `check_enum_domain` over every `fm_cfvo_t` in a threshold array.
+// The array bound is the caller's, so an entry point that has not yet
+// established `count` against its pointer must not reach here.
+fm_status_t check_cfvo_types(const fm_cfvo_t* thresholds, std::uint32_t count, const char* api, const char* field) {
+  for (std::uint32_t i = 0; i < count; ++i) {
+    if (auto rc = check_enum_domain(thresholds[i].type, static_cast<std::int64_t>(cf::CfvoType::AutoMax), api, field);
+        rc != 0) {
+      return rc;
+    }
+  }
+  return 0;
+}
+
+}  // namespace
+
+fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
+  if (rule.sqref_count == 0) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "sqref_count must be >= 1",
+                             std::string(api) + ": sqref_count=0");
+  }
+  if (rule.sqref == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "sqref is NULL while sqref_count > 0",
+                             std::string(api));
+  }
+  if (!check_range_count(rule.sqref_count, api)) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  for (std::uint32_t i = 0; i < rule.sqref_count; ++i) {
+    // A range the A1 encoder cannot spell reaches the writer as an empty
+    // reference, which Excel reads as a broken conditional-formatting
+    // block. Rejecting it here names the offending rectangle at set time
+    // instead of losing the format at save time.
+    if (auto rc = check_sheet_rect(rule.sqref[i].first_row, rule.sqref[i].first_col, rule.sqref[i].last_row,
+                                   rule.sqref[i].last_col, api);
+        rc != 0) {
+      return rc;
+    }
+  }
+  if (auto rc = check_enum_domain(rule.type, static_cast<std::int64_t>(cf::RuleType::UniqueValues), api, "type");
+      rc != 0) {
+    return rc;
+  }
+  if (rule.op_engaged != 0) {
+    if (auto rc = check_enum_domain(rule.op, static_cast<std::int64_t>(cf::CellIsOperator::NotBetween), api, "op");
+        rc != 0) {
+      return rc;
+    }
+  }
+  if (rule.time_period_engaged != 0) {
+    if (auto rc = check_enum_domain(rule.time_period, static_cast<std::int64_t>(cf::TimePeriod::NextMonth), api,
+                                    "time_period");
+        rc != 0) {
+      return rc;
+    }
+  }
+  if (rule.data_bar_engaged != 0) {
+    if (auto rc = check_cfvo_types(&rule.data_bar_min, 1U, api, "data_bar_min.type"); rc != 0) {
+      return rc;
+    }
+    if (auto rc = check_cfvo_types(&rule.data_bar_max, 1U, api, "data_bar_max.type"); rc != 0) {
+      return rc;
+    }
+    if (rule.data_bar_axis_position_engaged != 0) {
+      if (auto rc =
+              check_enum_domain(rule.data_bar_axis_position, static_cast<std::int64_t>(cf::DataBarAxisPosition::None),
+                                api, "data_bar_axis_position");
+          rc != 0) {
+        return rc;
+      }
+    }
+  }
+  // The colour-scale scan is bounded by the array shape the entry point
+  // accepts, so a record that declares more thresholds than the schema
+  // allows is rejected there rather than scanned here.
+  if (rule.color_scale_thresholds != nullptr && rule.color_scale_count >= 2U && rule.color_scale_count <= 3U) {
+    if (auto rc =
+            check_cfvo_types(rule.color_scale_thresholds, rule.color_scale_count, api, "color_scale_thresholds[].type");
+        rc != 0) {
+      return rc;
+    }
+  }
+  if (rule.icon_set_engaged != 0) {
+    if (auto rc = check_enum_domain(rule.icon_set_name, static_cast<std::int64_t>(cf::IconSetName::Five_Quarters), api,
+                                    "icon_set_name");
+        rc != 0) {
+      return rc;
+    }
+    if (rule.icon_set_thresholds != nullptr) {
+      if (auto rc = check_cfvo_types(rule.icon_set_thresholds, rule.icon_set_threshold_count, api,
+                                     "icon_set_thresholds[].type");
+          rc != 0) {
+        return rc;
+      }
+    }
+  }
+  // The id reaches the file as `<x14:cfRule id="...">` and `<x14:id>`,
+  // both of schema type `ST_Guid`. Excel repairs a workbook whose
+  // extension block holds anything else, and repairing means dropping
+  // every conditional format in it.
+  return check_guid(rule.id, api, "id");
+}
+
+fm_status_t validate(const fm_data_validation& v, const char* api) {
+  if (v.range_count > 0 && v.ranges == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "ranges is NULL while range_count > 0",
+                             std::string(api) + ": range_count=" + std::to_string(v.range_count));
+  }
+  if (!check_range_count(v.range_count, api)) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  for (std::uint32_t i = 0; i < v.range_count; ++i) {
+    if (auto rc = check_sheet_rect(v.ranges[i].first_row, v.ranges[i].first_col, v.ranges[i].last_row,
+                                   v.ranges[i].last_col, api);
+        rc != 0) {
+      return rc;
+    }
+  }
+  // The three domains the writer's attribute tables spell out
+  // (`sheet_xml_builder.cpp`): a value past them is emitted as an absent
+  // attribute, so a mistyped `type` saves as "no validation at all".
+  if (auto rc = check_enum_domain(v.type, 7, api, "type"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(v.op, 7, api, "op"); rc != 0) {
+    return rc;
+  }
+  return check_enum_domain(v.error_style, 2, api, "error_style");
+}
+
+fm_status_t validate(const fm_pivot_field_spec_t& spec, const char* api) {
+  if (spec.source_name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "spec->source_name is NULL",
+                             std::string(api));
+  }
+  return check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, api, "axis");
+}
+
+fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api) {
+  if (spec.name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "spec->name is NULL", std::string(api));
+  }
+  if (auto rc = check_enum_domain(spec.aggregation, FM_PIVOT_AGG_VARP, api, "aggregation"); rc != 0) {
+    return rc;
+  }
+  return check_enum_domain(spec.show_as, FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT, api, "show_as");
+}
+
+fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api) {
+  if (auto rc = check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, api, "axis"); rc != 0) {
+    return rc;
+  }
+  return check_enum_domain(spec.type, FM_PIVOT_FILTER_LABEL_DATE, api, "type");
+}
+
+fm_status_t validate(const fm_viewport& viewport, const char* api) {
+  // `SheetCellRange::sheet_id` is `std::uint16_t`; reject the narrowing
+  // path so a caller-supplied sheet > 0xFFFF does not silently address a
+  // different sheet (or wrap to 0). Excel's own cap is far below 0xFFFF.
+  if (viewport.sheet > 0xFFFFU) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "viewport->sheet exceeds 16-bit sheet id range",
+                             std::string(api) + ": sheet=" + std::to_string(viewport.sheet));
+  }
+  return 0;
 }
 
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {

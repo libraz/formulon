@@ -223,10 +223,18 @@ def _uint(value: int, name: str, bits: int = 32) -> int:
     engine's own grid bounds cannot catch that: they see only the wrapped
     value.
 
+    The same applies to an integer packed into a struct the ABI reads
+    through a pointer, with a different failure: ``struct.pack`` rejects
+    the value outright and raises ``struct.error``, which is not the
+    exception this API documents and not one a caller catches. Both routes
+    go through here so the diagnosis is the same either way.
+
     Args:
       value: the caller-supplied index, count, or length.
-      name: the C ABI parameter name, used in the error message.
-      bits: width of the C parameter (32 for ``uint32_t`` / ``size_t``).
+      name: the C ABI parameter or struct field name, used in the message.
+      bits: width of the destination (32 for ``uint32_t`` / ``size_t``,
+        16 and 8 for the narrower struct fields, which overflow well
+        before an ``i32`` does).
 
     Returns:
       ``value`` as an ``int``, unchanged.
@@ -244,8 +252,9 @@ def _sint(value: int, name: str, bits: int = 32) -> int:
     """Validate ``value`` as a signed WASM argument of ``bits`` width.
 
     Signed counterpart of :func:`_uint`, for the ``int32_t`` parameters
-    (enum selectors, iteration caps, the ``-1`` sentinels of the pivot
-    date-group API) where a negative value is meaningful.
+    and struct fields (enum selectors, iteration caps, the ``-1``
+    sentinels of the pivot date-group and show-as APIs) where a negative
+    value is meaningful.
 
     Raises:
       ValueError: when ``value`` does not fit a signed ``bits``-wide int.
@@ -1164,11 +1173,11 @@ def _pack_color(ptr: int, spec: ColorSpec) -> None:
         LIB,
         ptr,
         {
-            "kind": int(spec.kind),
-            "rgb": int(spec.rgb),
-            "theme": int(spec.theme),
+            "kind": _uint(spec.kind, "kind", 8),
+            "rgb": _uint(spec.rgb, "rgb"),
+            "theme": _uint(spec.theme, "theme"),
             "tint": float(spec.tint),
-            "indexed": int(spec.indexed),
+            "indexed": _uint(spec.indexed, "indexed"),
         },
     )
 
@@ -1201,19 +1210,19 @@ def _pack_font(ptr: int, record: FontRecord, owned: List[int]) -> None:
         ptr,
         {
             "size": float(record.size),
-            "color_argb": int(record.color_argb),
+            "color_argb": _uint(record.color_argb, "color_argb"),
             "bold": 1 if record.bold else 0,
             "italic": 1 if record.italic else 0,
             "strike": 1 if record.strike else 0,
             "has_bold": 1 if record.has_bold else 0,
             "has_italic": 1 if record.has_italic else 0,
             "has_strike": 1 if record.has_strike else 0,
-            "underline": int(record.underline),
-            "vert_align": int(record.vert_align),
+            "underline": _uint(record.underline, "underline", 8),
+            "vert_align": _uint(record.vert_align, "vert_align", 8),
             "has_family": 1 if record.has_family else 0,
-            "family": int(record.family),
+            "family": _uint(record.family, "family", 8),
             "has_charset": 1 if record.has_charset else 0,
-            "charset": int(record.charset),
+            "charset": _uint(record.charset, "charset", 8),
         },
     )
     _pack_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color)
@@ -1236,9 +1245,9 @@ def _pack_fill(ptr: int, record: FillRecord) -> None:
         LIB,
         ptr,
         {
-            "pattern": int(record.pattern),
-            "fg_argb": int(record.fg_argb),
-            "bg_argb": int(record.bg_argb),
+            "pattern": _uint(record.pattern, "pattern", 8),
+            "fg_argb": _uint(record.fg_argb, "fg_argb"),
+            "bg_argb": _uint(record.bg_argb, "bg_argb"),
         },
     )
     _pack_color(ptr + S.FILL_RECORD.offsets["fg"][1], record.fg)
@@ -1276,7 +1285,10 @@ def _pack_border_record(ptr: int, sides: Dict[str, object]) -> None:
         S.BORDER_SIDE.pack(
             LIB,
             side_ptr,
-            {"style": int(spec.get("style", 0)), "color_argb": int(spec.get("color_argb", 0))},
+            {
+                "style": _uint(spec.get("style", 0), "style", 8),
+                "color_argb": _uint(spec.get("color_argb", 0), "color_argb"),
+            },
         )
         _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.get("color") or ColorSpec())
 
@@ -1390,28 +1402,28 @@ def _cell_xf_fields(record: CellXf) -> Dict[str, object]:
     lives in one place.
     """
     return {
-        "font_index": int(record.font_index),
-        "fill_index": int(record.fill_index),
-        "border_index": int(record.border_index),
-        "num_fmt_id": int(record.num_fmt_id),
-        "horizontal_align": int(record.horizontal_align),
-        "vertical_align": int(record.vertical_align),
+        "font_index": _uint(record.font_index, "font_index"),
+        "fill_index": _uint(record.fill_index, "fill_index"),
+        "border_index": _uint(record.border_index, "border_index"),
+        "num_fmt_id": _uint(record.num_fmt_id, "num_fmt_id", 16),
+        "horizontal_align": _uint(record.horizontal_align, "horizontal_align", 8),
+        "vertical_align": _uint(record.vertical_align, "vertical_align", 8),
         "wrap_text": 1 if record.wrap_text else 0,
         "has_alignment": 1
         if (record.has_alignment if record.has_alignment is not None else _cell_xf_has_alignment(record))
         else 0,
         "justify_last_line": 1 if record.justify_last_line else 0,
-        "xf_id": int(record.xf_id),
+        "xf_id": _uint(record.xf_id, "xf_id"),
         "has_text_rotation": 1 if record.text_rotation is not None else 0,
-        "text_rotation": int(record.text_rotation or 0),
+        "text_rotation": _uint(record.text_rotation or 0, "text_rotation"),
         "has_indent": 1 if record.indent is not None else 0,
-        "indent": int(record.indent or 0),
+        "indent": _uint(record.indent or 0, "indent"),
         "has_relative_indent": 1 if record.relative_indent is not None else 0,
-        "relative_indent": int(record.relative_indent or 0),
+        "relative_indent": _sint(record.relative_indent or 0, "relative_indent"),
         "has_shrink_to_fit": 1 if record.shrink_to_fit is not None else 0,
         "shrink_to_fit": 1 if record.shrink_to_fit else 0,
         "has_reading_order": 1 if record.reading_order is not None else 0,
-        "reading_order": int(record.reading_order or 0),
+        "reading_order": _uint(record.reading_order or 0, "reading_order"),
         "has_horizontal_align": 1
         if (record.has_horizontal_align if record.has_horizontal_align is not None else record.horizontal_align != 0)
         else 0,
@@ -1483,10 +1495,10 @@ def _pack_merge_array(ranges: Sequence[MergeRange], owned: List[int]) -> int:
             LIB,
             ptr + i * size,
             {
-                "first_row": r.first_row,
-                "first_col": r.first_col,
-                "last_row": r.last_row,
-                "last_col": r.last_col,
+                "first_row": _uint(r.first_row, "first_row"),
+                "first_col": _uint(r.first_col, "first_col"),
+                "last_row": _uint(r.last_row, "last_row"),
+                "last_col": _uint(r.last_col, "last_col"),
             },
         )
     return ptr
@@ -2489,11 +2501,11 @@ class Workbook:
                 LIB,
                 vp,
                 {
-                    "sheet": int(sheet),
-                    "first_row": int(first_row),
-                    "last_row": int(last_row),
-                    "first_col": int(first_col),
-                    "last_col": int(last_col),
+                    "sheet": _uint(sheet, "sheet"),
+                    "first_row": _uint(first_row, "first_row"),
+                    "last_row": _uint(last_row, "last_row"),
+                    "first_col": _uint(first_col, "first_col"),
+                    "last_col": _uint(last_col, "last_col"),
                 },
             )
             _check(
@@ -2563,7 +2575,7 @@ class Workbook:
     def merge_count(self, sheet: int) -> int:
         """Return the number of merge ranges on ``sheet``."""
         h = self._require()
-        return _read_count(LIB.fm_sheet_get_merge_count, h, int(sheet))
+        return _read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet"))
 
     def get_merges(self, sheet: int) -> List[MergeRange]:
         """Return every merge range on ``sheet``."""
@@ -2612,10 +2624,10 @@ class Workbook:
                 LIB,
                 ptr,
                 {
-                    "row": int(row),
-                    "col": int(col),
-                    "last_row": int(row),
-                    "last_col": int(col),
+                    "row": _uint(row, "row"),
+                    "col": _uint(col, "col"),
+                    "last_row": _uint(row, "row"),
+                    "last_col": _uint(col, "col"),
                 },
             )
             S.write_str_field(LIB, ptr, S.HYPERLINK, "target", target, owned)
@@ -2649,10 +2661,10 @@ class Workbook:
                 LIB,
                 ptr,
                 {
-                    "row": int(row),
-                    "col": int(col),
-                    "last_row": int(last_row),
-                    "last_col": int(last_col),
+                    "row": _uint(row, "row"),
+                    "col": _uint(col, "col"),
+                    "last_row": _uint(last_row, "last_row"),
+                    "last_col": _uint(last_col, "last_col"),
                 },
             )
             S.write_str_field(LIB, ptr, S.HYPERLINK, "target", target, owned)
@@ -2689,7 +2701,7 @@ class Workbook:
     def hyperlink_count(self, sheet: int) -> int:
         """Return the number of hyperlinks on ``sheet``."""
         h = self._require()
-        return _read_count(LIB.fm_sheet_get_hyperlink_count, h, int(sheet))
+        return _read_count(LIB.fm_sheet_get_hyperlink_count, h, _uint(sheet, "sheet"))
 
     def get_hyperlinks(self, sheet: int) -> List[Hyperlink]:
         """Return every hyperlink on ``sheet``."""
@@ -2760,7 +2772,7 @@ class Workbook:
     def comment_count(self, sheet: int) -> int:
         """Return the number of comments on ``sheet``."""
         h = self._require()
-        return _read_count(LIB.fm_sheet_get_comment_count, h, int(sheet))
+        return _read_count(LIB.fm_sheet_get_comment_count, h, _uint(sheet, "sheet"))
 
     def get_comments(self, sheet: int) -> List[CommentEntry]:
         """Return every comment on ``sheet`` in storage order.
@@ -2789,7 +2801,7 @@ class Workbook:
     def validation_count(self, sheet: int) -> int:
         """Return the number of data-validation rules on ``sheet``."""
         h = self._require()
-        return _read_count(LIB.fm_sheet_get_validation_count, h, int(sheet))
+        return _read_count(LIB.fm_sheet_get_validation_count, h, _uint(sheet, "sheet"))
 
     def get_validation_at(self, sheet: int, index: int) -> DataValidation:
         """Read the ``index``-th data-validation rule on ``sheet``."""
@@ -2852,9 +2864,9 @@ class Workbook:
                 LIB,
                 ptr,
                 {
-                    "type": int(validation.type),
-                    "op": int(validation.op),
-                    "error_style": int(validation.error_style),
+                    "type": _uint(validation.type, "type", 8),
+                    "op": _uint(validation.op, "op", 8),
+                    "error_style": _uint(validation.error_style, "error_style", 8),
                     "allow_blank": 1 if validation.allow_blank else 0,
                     "show_input_message": 1 if validation.show_input_message else 0,
                     "show_error_message": 1 if validation.show_error_message else 0,
@@ -2954,7 +2966,7 @@ class Workbook:
         try:
             values: Dict[str, int] = {
                 "enabled": 1 if protection.enabled else 0,
-                "spin_count": int(protection.spin_count),
+                "spin_count": _uint(protection.spin_count, "spin_count"),
             }
             for flag in self._PROTECT_FLAGS:
                 values[flag] = 1 if getattr(protection, flag) else 0
@@ -3622,7 +3634,7 @@ class Workbook:
     def get_sheet_columns(self, sheet: int) -> List[ColumnLayout]:
         """Return the column-layout overrides on ``sheet``."""
         h = self._require()
-        n = _read_count(LIB.fm_sheet_get_column_count, h, int(sheet))
+        n = _read_count(LIB.fm_sheet_get_column_count, h, _uint(sheet, "sheet_index"))
         out: List[ColumnLayout] = []
         # One scratch block for the whole walk; see iter_defined_names.
         ptr = S.alloc_struct(LIB, S.COLUMN_LAYOUT)
@@ -3683,7 +3695,7 @@ class Workbook:
     def get_sheet_row_overrides(self, sheet: int) -> List[RowLayout]:
         """Return the row-layout overrides on ``sheet``."""
         h = self._require()
-        n = _read_count(LIB.fm_sheet_get_row_override_count, h, int(sheet))
+        n = _read_count(LIB.fm_sheet_get_row_override_count, h, _uint(sheet, "sheet_index"))
         out: List[RowLayout] = []
         # One scratch block for the whole walk; see iter_defined_names.
         ptr = S.alloc_struct(LIB, S.ROW_LAYOUT)
@@ -3865,13 +3877,22 @@ class Workbook:
 
     @staticmethod
     def _write_cfvo(ptr: int, value: CfValueObject, owned: List[int]) -> None:
-        S.CFVO.pack(LIB, ptr, {"type": int(value.type), "gte": 1 if value.gte else 0})
+        S.CFVO.pack(LIB, ptr, {"type": _uint(value.type, "type", 8), "gte": 1 if value.gte else 0})
         if value.value is not None:
             S.write_str_field(LIB, ptr, S.CFVO, "value", value.value, owned)
 
     @staticmethod
     def _write_cf_color(ptr: int, color: CfColor) -> None:
-        S.CF_COLOR.pack(LIB, ptr, {"r": int(color.r), "g": int(color.g), "b": int(color.b), "a": int(color.a)})
+        S.CF_COLOR.pack(
+            LIB,
+            ptr,
+            {
+                "r": _uint(color.r, "r", 8),
+                "g": _uint(color.g, "g", 8),
+                "b": _uint(color.b, "b", 8),
+                "a": _uint(color.a, "a", 8),
+            },
+        )
 
     def get_conditional_format_at(self, sheet: int, index: int) -> ConditionalFormat:
         """Read the ``index``-th CF rule on ``sheet`` (flattened order)."""
@@ -3988,16 +4009,16 @@ class Workbook:
                 LIB,
                 ptr,
                 {
-                    "type": int(rule.type),
-                    "op": int(rule.op),
-                    "time_period": int(rule.time_period),
-                    "priority": int(rule.priority),
+                    "type": _uint(rule.type, "type", 8),
+                    "op": _uint(rule.op, "op", 8),
+                    "time_period": _uint(rule.time_period, "time_period", 8),
+                    "priority": _sint(rule.priority, "priority"),
                     "stop_if_true": 1 if rule.stop_if_true else 0,
                     "dxf_id_engaged": 1 if rule.dxf_id_engaged else 0,
-                    "dxf_id": int(rule.dxf_id),
+                    "dxf_id": _uint(rule.dxf_id, "dxf_id"),
                     "op_engaged": 1 if rule.op_engaged else 0,
                     "rank_engaged": 1 if rule.rank_engaged else 0,
-                    "rank": int(rule.rank),
+                    "rank": _sint(rule.rank, "rank"),
                     "percent": 1 if rule.percent else 0,
                     "bottom": 1 if rule.bottom else 0,
                     "above_average": 1 if rule.above_average else 0,
@@ -4017,10 +4038,10 @@ class Workbook:
                         LIB,
                         sqref_ptr + i * rsize,
                         {
-                            "first_row": r.first_row,
-                            "first_col": r.first_col,
-                            "last_row": r.last_row,
-                            "last_col": r.last_col,
+                            "first_row": _uint(r.first_row, "first_row"),
+                            "first_col": _uint(r.first_col, "first_col"),
+                            "last_row": _uint(r.last_row, "last_row"),
+                            "last_col": _uint(r.last_col, "last_col"),
                         },
                     )
             ro = S.CF_RULE.offsets
@@ -4406,7 +4427,7 @@ class Workbook:
                     "fill_engaged": 1 if record.fill is not None else 0,
                     "border_engaged": 1 if record.border is not None else 0,
                     "num_fmt_engaged": 1 if record.num_fmt_id is not None else 0,
-                    "num_fmt_id": int(record.num_fmt_id or 0),
+                    "num_fmt_id": _uint(record.num_fmt_id or 0, "num_fmt_id", 16),
                 },
             )
             offsets = S.DXF_RECORD.offsets
@@ -4656,7 +4677,7 @@ class Workbook:
     def pivot_cache_field_count(self, cache_id: int) -> int:
         """Return the number of fields on the cache."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_pivot_cache_field_count, h, int(cache_id))
+        return _read_count(LIB.fm_workbook_pivot_cache_field_count, h, _uint(cache_id, "cache_id"))
 
     def pivot_cache_field_name(self, cache_id: int, field_idx: int) -> str:
         """Read the name of cache field ``field_idx``."""
@@ -4702,8 +4723,8 @@ class Workbook:
         return _read_count(
             LIB.fm_workbook_pivot_cache_field_shared_item_count,
             h,
-            int(cache_id),
-            int(field_idx),
+            _uint(cache_id, "cache_id"),
+            _uint(field_idx, "field_idx"),
         )
 
     def pivot_cache_field_add_shared_item_number(self, cache_id: int, field_idx: int, value: float) -> None:
@@ -4773,7 +4794,7 @@ class Workbook:
     def pivot_cache_record_count(self, cache_id: int) -> int:
         """Return the number of records on the cache."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_pivot_cache_record_count, h, int(cache_id))
+        return _read_count(LIB.fm_workbook_pivot_cache_record_count, h, _uint(cache_id, "cache_id"))
 
     def pivot_cache_record_add(self, cache_id: int) -> int:
         """Append an empty record to the cache; return its index."""
@@ -4974,7 +4995,9 @@ class Workbook:
     def pivot_field_count(self, sheet: int, pivot_index: int) -> int:
         """Return the number of fields configured on the pivot."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_pivot_field_count, h, int(sheet), int(pivot_index))
+        return _read_count(
+            LIB.fm_workbook_pivot_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+        )
 
     def pivot_field_add(self, sheet: int, pivot_index: int, spec: PivotFieldSpec) -> int:
         """Append a field to the pivot; return its index."""
@@ -4987,7 +5010,7 @@ class Workbook:
                 LIB,
                 ptr,
                 {
-                    "axis": int(spec.axis),
+                    "axis": _sint(spec.axis, "axis"),
                     "subtotal_top": 1 if spec.subtotal_top else 0,
                 },
             )
@@ -5266,11 +5289,21 @@ class Workbook:
 
     def pivot_set_row_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
         """Replace the row-axis field order with ``indices``."""
-        self._pivot_set_field_order(LIB.fm_workbook_pivot_set_row_field_order, sheet, pivot_index, indices)
+        self._pivot_set_field_order(
+            LIB.fm_workbook_pivot_set_row_field_order,
+            _uint(sheet, "sheet_index"),
+            _uint(pivot_index, "pivot_index"),
+            indices,
+        )
 
     def pivot_set_col_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
         """Replace the column-axis field order with ``indices``."""
-        self._pivot_set_field_order(LIB.fm_workbook_pivot_set_col_field_order, sheet, pivot_index, indices)
+        self._pivot_set_field_order(
+            LIB.fm_workbook_pivot_set_col_field_order,
+            _uint(sheet, "sheet_index"),
+            _uint(pivot_index, "pivot_index"),
+            indices,
+        )
 
     def _pivot_set_field_order(self, fn, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
         h = self._require()
@@ -5291,7 +5324,9 @@ class Workbook:
     def pivot_data_field_count(self, sheet: int, pivot_index: int) -> int:
         """Return the number of ``<dataField>`` entries on the pivot."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_pivot_data_field_count, h, int(sheet), int(pivot_index))
+        return _read_count(
+            LIB.fm_workbook_pivot_data_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+        )
 
     def pivot_data_field_add(self, sheet: int, pivot_index: int, spec: PivotDataFieldSpec) -> int:
         """Append a data-field entry; return its index."""
@@ -5347,11 +5382,11 @@ class Workbook:
             LIB,
             ptr,
             {
-                "field_index": int(spec.field_index),
-                "aggregation": int(spec.aggregation),
-                "show_as": int(spec.show_as),
-                "show_as_base_field": int(spec.show_as_base_field),
-                "show_as_base_item": int(spec.show_as_base_item),
+                "field_index": _uint(spec.field_index, "field_index"),
+                "aggregation": _sint(spec.aggregation, "aggregation"),
+                "show_as": _sint(spec.show_as, "show_as"),
+                "show_as_base_field": _sint(spec.show_as_base_field, "show_as_base_field"),
+                "show_as_base_item": _sint(spec.show_as_base_item, "show_as_base_item"),
             },
         )
         S.write_str_field(LIB, ptr, S.PIVOT_DATA_FIELD_SPEC, "name", spec.name, owned)
@@ -5380,7 +5415,9 @@ class Workbook:
         :meth:`pivot_filter_at` for why.
         """
         h = self._require()
-        return _read_count(LIB.fm_workbook_pivot_filter_count, h, int(sheet), int(pivot_index))
+        return _read_count(
+            LIB.fm_workbook_pivot_filter_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+        )
 
     def pivot_filter_at(self, sheet: int, pivot_index: int, filter_idx: int) -> PivotFilterSpec:
         """Read the active filter at ``filter_idx`` without mutating it.
@@ -5439,14 +5476,14 @@ class Workbook:
                 LIB,
                 ptr,
                 {
-                    "axis": int(spec.axis),
-                    "type": int(spec.type),
-                    "data_field_index": int(spec.data_field_index),
-                    "value_kind": int(spec.value_kind),
-                    "value_int": int(spec.value_int),
+                    "axis": _sint(spec.axis, "axis"),
+                    "type": _sint(spec.type, "type"),
+                    "data_field_index": _uint(spec.data_field_index, "data_field_index"),
+                    "value_kind": _sint(spec.value_kind, "value_kind"),
+                    "value_int": _sint(spec.value_int, "value_int"),
                     "value_double": float(spec.value_double),
-                    "value_high_kind": int(spec.value_high_kind),
-                    "value_high_int": int(spec.value_high_int),
+                    "value_high_kind": _sint(spec.value_high_kind, "value_high_kind"),
+                    "value_high_int": _sint(spec.value_high_int, "value_high_int"),
                     "value_high_double": float(spec.value_high_double),
                 },
             )
@@ -5484,11 +5521,23 @@ class Workbook:
     # -- Dependency-graph trace --------------------------------------------
     def precedents(self, sheet: int, row: int, col: int, depth: int = 1) -> List[CellNode]:
         """Return the cells ``(sheet, row, col)`` reads (up to ``depth``)."""
-        return self._trace(LIB.fm_workbook_precedents, sheet, row, col, depth)
+        return self._trace(
+            LIB.fm_workbook_precedents,
+            _uint(sheet, "sheet"),
+            _uint(row, "row"),
+            _uint(col, "col"),
+            _uint(depth, "depth"),
+        )
 
     def dependents(self, sheet: int, row: int, col: int, depth: int = 1) -> List[CellNode]:
         """Return the cells that read ``(sheet, row, col)`` (up to ``depth``)."""
-        return self._trace(LIB.fm_workbook_dependents, sheet, row, col, depth)
+        return self._trace(
+            LIB.fm_workbook_dependents,
+            _uint(sheet, "sheet"),
+            _uint(row, "row"),
+            _uint(col, "col"),
+            _uint(depth, "depth"),
+        )
 
     def _trace(self, fn, sheet: int, row: int, col: int, depth: int) -> List[CellNode]:
         h = self._require()

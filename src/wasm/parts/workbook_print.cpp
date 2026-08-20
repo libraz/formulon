@@ -350,19 +350,18 @@ JsStatus JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val header
   return status_from_rc(fm_sheet_set_header_footer(handle_, sheet, &out));
 }
 
+// Both typed getters below emit their whole declared payload on every exit
+// path; only `status.ok` and the values differ. See the same note in
+// `parts/workbook_styles.cpp`.
+
 emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
   emscripten::val out = emscripten::val::object();
-  if (handle_ == nullptr) {
-    out.set("status", error_status(7000));
-    return out;
-  }
   fm_page_setup_t setup{};
-  const fm_status_t rc = fm_sheet_get_page_setup(handle_, sheet, &setup);
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_page_setup(handle_, sheet, &setup) : 7000;
   if (rc != 0) {
-    out.set("status", error_status(rc));
-    return out;
+    setup = fm_page_setup_t{};
   }
-  out.set("status", ok_status());
+  out.set("status", status_from_rc(rc));
   out.set("orientation", setup.orientation);
   out.set("paperSize", setup.paper_size);
   out.set("scale", setup.scale);
@@ -382,17 +381,12 @@ emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
 
 emscripten::val JsWorkbook::getSheetPageMargins(uint32_t sheet) const {
   emscripten::val out = emscripten::val::object();
-  if (handle_ == nullptr) {
-    out.set("status", error_status(7000));
-    return out;
-  }
   fm_page_margins_t margins{};
-  const fm_status_t rc = fm_sheet_get_page_margins(handle_, sheet, &margins);
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_page_margins(handle_, sheet, &margins) : 7000;
   if (rc != 0) {
-    out.set("status", error_status(rc));
-    return out;
+    margins = fm_page_margins_t{};
   }
-  out.set("status", ok_status());
+  out.set("status", status_from_rc(rc));
   out.set("left", margins.left);
   out.set("right", margins.right);
   out.set("top", margins.top);

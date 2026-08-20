@@ -399,9 +399,16 @@ void erase_break(std::vector<ManualBreak>& breaks, std::uint32_t index) {
   }
 }
 
-std::size_t break_count(const fm_workbook_t* wb, std::size_t sheet_index, bool rows) {
+// Counts one axis. The `size_t` return has no room for a status, so an
+// argument error is reported as `0` plus a populated thread-local
+// diagnostic; `clear_last_error` above is what makes the empty message a
+// reliable "this zero means the axis is empty" signal. Callers that
+// enumerate by count-then-`break_at` must consult the diagnostic, since
+// the `break_at` loop that would otherwise surface the status never runs
+// on a zero count.
+std::size_t break_count(const fm_workbook_t* wb, std::size_t sheet_index, bool rows, const char* fn) {
   clear_last_error();
-  if (check_sheet_index(wb, sheet_index, "fm_sheet_break_count") != 0) {
+  if (check_sheet_index(wb, sheet_index, fn) != 0) {
     return 0;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
@@ -746,7 +753,7 @@ extern "C" fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_ind
 }
 
 extern "C" size_t fm_sheet_row_break_count(const fm_workbook_t* wb, size_t sheet_index) {
-  return break_count(wb, sheet_index, /*rows=*/true);
+  return break_count(wb, sheet_index, /*rows=*/true, "fm_sheet_row_break_count");
 }
 
 extern "C" fm_status_t fm_sheet_row_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
@@ -755,7 +762,7 @@ extern "C" fm_status_t fm_sheet_row_break_at(const fm_workbook_t* wb, size_t she
 }
 
 extern "C" size_t fm_sheet_col_break_count(const fm_workbook_t* wb, size_t sheet_index) {
-  return break_count(wb, sheet_index, /*rows=*/false);
+  return break_count(wb, sheet_index, /*rows=*/false, "fm_sheet_col_break_count");
 }
 
 extern "C" fm_status_t fm_sheet_col_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
@@ -833,6 +840,11 @@ extern "C" fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet
     int32_t engaged;
     double value;
   };
+  // Only the engaged fields are stored. ECMA-376 requires all six on the
+  // saved element, but completing it here would report every margin as
+  // engaged on the next read and erase the caller's ability to tell a
+  // stated margin from a defaulted one. The OOXML writer fills the gap
+  // when it emits the element instead.
   const MarginField fields[] = {
       {"left", margins->left_engaged, margins->left},       {"right", margins->right_engaged, margins->right},
       {"top", margins->top_engaged, margins->top},          {"bottom", margins->bottom_engaged, margins->bottom},

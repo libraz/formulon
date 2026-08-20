@@ -870,9 +870,8 @@ export interface MergedFunctionMetadataResult extends FunctionMetadataResult {
   readonly localizedName?: string;
 }
 
-/** Signature of the pure `mergeFunctionMetadata` helper that merges a
- *  host-supplied {@link FunctionMetadataEntry} over the engine's structural
- *  `functionMetadata()` result.
+/** Merges a host-supplied {@link FunctionMetadataEntry} over the engine's
+ *  structural `functionMetadata()` result.
  *
  *  Field precedence (first non-nullish wins):
  *    - `signatureTemplate`: `entry.localized[locale].signature` ->
@@ -881,19 +880,22 @@ export interface MergedFunctionMetadataResult extends FunctionMetadataResult {
  *      `entry.description` -> `base.description`
  *    - `localizedName`: `entry.aliases[locale]` -> `base.name`
  *
- *  When `entry` is `undefined`, `base` is returned verbatim. `locale` is a
- *  BCP-47 display tag matching the keys in `aliases` / `localized`.
+ *  When `entry` is `undefined`, `base` is returned verbatim (signature /
+ *  description stay `undefined`). `locale` is a BCP-47 display tag matching
+ *  the keys in `aliases` / `localized`, independent of the numeric locale
+ *  passed to `functionMetadata()`. See `docs/function-metadata-schema.md`.
  *
- *  NOTE: this is a **type only**. The WASM module's runtime JS is generated
- *  and does not export a `mergeFunctionMetadata` function. The helper is a
- *  pure function whose canonical implementation ships in
- *  `@libraz/formulon-native`; a host should import it from there or
- *  reimplement it per `docs/function-metadata-schema.md`. */
-export type MergeFunctionMetadata = (
+ *  A pure host-side helper: it touches no WASM state and is exported from
+ *  this package's hand-written entry point rather than the generated module
+ *  glue. `@libraz/formulon-native` exports the same function. */
+export function mergeFunctionMetadata(
   base: FunctionMetadataResult,
   entry: FunctionMetadataEntry | undefined,
   locale: string,
-) => MergedFunctionMetadataResult;
+): MergedFunctionMetadataResult;
+
+/** Signature of {@link mergeFunctionMetadata}. */
+export type MergeFunctionMetadata = typeof mergeFunctionMetadata;
 
 /** Spill region info returned by `spillInfo(sheet, row, col)`. */
 export interface SpillInfo {
@@ -1529,7 +1531,14 @@ export interface HeaderFooterInput {
 /** Iterative-solver progress callback. Receives the current
  *  iteration number, the maximum residual seen, and the configured
  *  iteration cap. Returning `false` (or any falsy value) aborts the
- *  solve; returning `true` (or `undefined`) continues. */
+ *  solve; returning `true` (or `undefined`) continues.
+ *
+ *  Throwing also aborts the solve, and the exception does not reach the
+ *  caller: the recalc that ran the callback returns `{ok: false}` with
+ *  status 7003 (`kBindingCallbackException`) instead. Cells committed by
+ *  the sweeps that already ran keep their values, and the workbook stays
+ *  usable — the next recalc behaves as if the aborted one had been
+ *  cancelled deliberately. */
 export type IterativeProgressCallback = (
   iteration: number,
   maxResidual: number,
@@ -1612,7 +1621,10 @@ export interface Workbook {
   /** Returns the cell's OOXML phonetic guide (`<rPh>`), or an empty string. */
   getCellPhonetic(sheet: number, row: number, col: number): StringResult;
 
-  /** Recalculates all dirty cells serially on the caller thread. */
+  /** Recalculates all dirty cells serially on the caller thread.
+   *
+   *  Reports status 7003 (`kBindingCallbackException`) when an installed
+   *  `IterativeProgressCallback` threw during the pass. */
   recalc(): Status;
   /**
    * Recalculates all dirty cells using the parallel SCC scheduler and returns
@@ -1624,15 +1636,23 @@ export interface Workbook {
    * `kInvalidArgument`.
    * The `uint64_t` counters in `stats` are JavaScript numbers and are exact
    * through `Number.MAX_SAFE_INTEGER` (2^53 - 1).
+   * As with `recalc`, a throwing `IterativeProgressCallback` is reported as
+   * status 7003 with the counters left at zero.
    */
   recalcParallel(threadCount: number): ParallelRecalcResult;
-  /** Recalculates only cells touched by the supplied viewport. */
+  /** Recalculates only cells touched by the supplied viewport. Reports
+   *  status 7003 with `recomputed` at zero when a throwing
+   *  `IterativeProgressCallback` cut the pass short. */
   partialRecalc(viewport: RecalcViewport): PartialRecalcResult;
 
   setIterative(enabled: boolean, maxIterations: number, maxChange: number): Status;
   /** Installs (or, when passed `null`, clears) a JS callback invoked
-   *  after each Gauss-Seidel sweep. Only one callback can be active per
-   *  WASM instance — installing a new one displaces the previous. */
+   *  after each Gauss-Seidel sweep. The callback belongs to this
+   *  `Workbook`: installing one on another instance leaves this one's
+   *  registration alone.
+   *
+   *  A value that is not callable is accepted here and reported when the
+   *  solver tries to use it, the same way a throwing callback is. */
   setIterativeProgress(callback: IterativeProgressCallback | null): Status;
 
   /**
@@ -2295,7 +2315,11 @@ export interface FormulonModule {
    *  hands the binding a length-delimited range, never a NUL-terminated
    *  string. The view is only valid for the duration of the call; copy it
    *  (`new Uint8Array(record)`) or decode it (`new TextDecoder().decode(
-   *  record)`) before returning. */
+   *  record)`) before returning.
+   *
+   *  A sink that throws has its exception dropped and the record lost;
+   *  the call that emitted it is unaffected. Records come from arbitrary
+   *  depth inside the engine, so there is nowhere to report it. */
   setLogSink(sink: ((record: Uint8Array) => void) | null): Status;
 }
 

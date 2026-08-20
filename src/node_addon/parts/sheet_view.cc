@@ -67,16 +67,15 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
+  // `protection` is emitted on every exit path, as `view` already is above
+  // and as the WASM binding does for both -- a value object there cannot
+  // omit a field. A caller that skips the status check then reads a
+  // defaulted record rather than tripping over a missing key.
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   fm_sheet_protection_t p{};
-  fm_status_t rc = fm_sheet_get_protection(handle_, sheet, &p);
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_protection(handle_, sheet, &p) : kBindingInvalidHandle;
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    p = fm_sheet_protection_t{};
   }
   Napi::Object pr = Napi::Object::New(env);
   pr.Set("enabled", Napi::Number::New(env, p.enabled));
@@ -101,7 +100,7 @@ Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
   pr.Set("sort", Napi::Number::New(env, p.sort));
   pr.Set("autoFilter", Napi::Number::New(env, p.auto_filter));
   pr.Set("pivotTables", Napi::Number::New(env, p.pivot_tables));
-  out.Set("status", MakeOkStatus(env));
+  out.Set("status", MakeStatus(env, rc));
   out.Set("protection", pr);
   return out;
 }
@@ -484,18 +483,20 @@ Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return arr;
+    return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   const uint32_t sheet = ArgU32(info, 0);
   uint32_t count = 0;
-  if (fm_sheet_get_merge_count(handle_, sheet, &count) != 0) {
-    return arr;
+  fm_status_t rc = fm_sheet_get_merge_count(handle_, sheet, &count);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
   }
   std::size_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_merge_range m{};
-    if (fm_sheet_get_merge_at(handle_, sheet, i, &m) != 0) {
-      continue;
+    rc = fm_sheet_get_merge_at(handle_, sheet, i, &m);
+    if (rc != 0) {
+      return FinishListResult(env, arr, rc);
     }
     Napi::Object item = Napi::Object::New(env);
     item.Set("firstRow", Napi::Number::New(env, m.first_row));
@@ -505,7 +506,7 @@ Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
     arr.Set(static_cast<uint32_t>(emitted), item);
     ++emitted;
   }
-  return arr;
+  return FinishListResult(env, arr, 0);
 }
 
 // ---- Comments -------------------------------------------------------
@@ -558,18 +559,20 @@ Napi::Value Workbook::GetComments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return arr;
+    return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   const uint32_t sheet = ArgU32(info, 0);
   uint32_t count = 0;
-  if (fm_sheet_get_comment_count(handle_, sheet, &count) != 0) {
-    return arr;
+  fm_status_t rc = fm_sheet_get_comment_count(handle_, sheet, &count);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
   }
   std::size_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_comment c{};
-    if (fm_sheet_get_comment_at_index(handle_, sheet, i, &c) != 0) {
-      continue;
+    rc = fm_sheet_get_comment_at_index(handle_, sheet, i, &c);
+    if (rc != 0) {
+      return FinishListResult(env, arr, rc);
     }
     Napi::Object item = Napi::Object::New(env);
     item.Set("row", Napi::Number::New(env, c.row));
@@ -579,7 +582,7 @@ Napi::Value Workbook::GetComments(const Napi::CallbackInfo& info) {
     arr.Set(static_cast<uint32_t>(emitted), item);
     ++emitted;
   }
-  return arr;
+  return FinishListResult(env, arr, 0);
 }
 
 Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
@@ -677,18 +680,20 @@ Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return arr;
+    return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   const uint32_t sheet = ArgU32(info, 0);
   uint32_t count = 0;
-  if (fm_sheet_get_hyperlink_count(handle_, sheet, &count) != 0) {
-    return arr;
+  fm_status_t rc = fm_sheet_get_hyperlink_count(handle_, sheet, &count);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
   }
   std::size_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_hyperlink h{};
-    if (fm_sheet_get_hyperlink_at(handle_, sheet, i, &h) != 0) {
-      continue;
+    rc = fm_sheet_get_hyperlink_at(handle_, sheet, i, &h);
+    if (rc != 0) {
+      return FinishListResult(env, arr, rc);
     }
     Napi::Object item = Napi::Object::New(env);
     item.Set("row", Napi::Number::New(env, h.row));
@@ -702,7 +707,7 @@ Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
     arr.Set(static_cast<uint32_t>(emitted), item);
     ++emitted;
   }
-  return arr;
+  return FinishListResult(env, arr, 0);
 }
 
 Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
@@ -744,18 +749,20 @@ Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return arr;
+    return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   const uint32_t sheet = ArgU32(info, 0);
   uint32_t count = 0;
-  if (fm_sheet_get_validation_count(handle_, sheet, &count) != 0) {
-    return arr;
+  fm_status_t rc = fm_sheet_get_validation_count(handle_, sheet, &count);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
   }
   std::size_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_data_validation v{};
-    if (fm_sheet_get_validation_at(handle_, sheet, i, &v) != 0) {
-      continue;
+    rc = fm_sheet_get_validation_at(handle_, sheet, i, &v);
+    if (rc != 0) {
+      return FinishListResult(env, arr, rc);
     }
     Napi::Object item = Napi::Object::New(env);
     Napi::Array ranges = Napi::Array::New(env);
@@ -784,7 +791,7 @@ Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
     arr.Set(static_cast<uint32_t>(emitted), item);
     ++emitted;
   }
-  return arr;
+  return FinishListResult(env, arr, 0);
 }
 
 Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {

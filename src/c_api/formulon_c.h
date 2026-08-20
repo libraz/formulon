@@ -1421,9 +1421,11 @@ FM_API fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, uint32_t sheet,
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range or
- *         `v.range_count > 0 && v.ranges == NULL`, or any supplied range is
- *         outside the Excel grid.
+ *         `kInvalidArgument` when `sheet` is out of range, when
+ *         `v.range_count > 0 && v.ranges == NULL` or `v.range_count`
+ *         exceeds the per-call range cap, when any supplied range is
+ *         outside the Excel grid, or when `v.type`, `v.op` or
+ *         `v.error_style` is outside the domain listed above.
  */
 FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, uint32_t sheet, fm_data_validation v);
 
@@ -1823,6 +1825,8 @@ typedef int32_t (*fm_iterative_progress_cb)(uint32_t iteration, double max_resid
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` or `viewport` is NULL;
+ *         `kInvalidArgument` when `viewport->sheet` is past the last
+ *           sheet, or exceeds the 16-bit range a sheet id is stored in;
  *         a `kEval*` / `kGraph*` code on engine failure.
  */
 FM_API fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_viewport* viewport,
@@ -1995,11 +1999,11 @@ FM_API fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t s
  * `fitToPage` is NOT part of `<pageSetup>` - it lives in
  * `<sheetPr><pageSetUpPr>`; use `fm_sheet_set_fit_to_page`.
  *
- * Returns `kInvalidArgument` (5) when the fragment is malformed, carries
+ * Returns `kInvalidArgument` (2) when the fragment is malformed, carries
  * more than one top-level element, or names the wrong root; and when it
  * declares an `r:id` on a sheet that has no printer-settings part, which
  * would leave a dangling relationship that makes Excel repair the file.
- * Returns `kPreconditionFailed` (6) when the fragment exceeds 4 KiB.
+ * Returns `kPreconditionFailed` (9) when the fragment exceeds 4 KiB.
  */
 FM_API fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -2138,14 +2142,27 @@ typedef struct {
  * `manual` flag rather than duplicating it; the vector stays sorted
  * ascending by index.
  *
- * Returns `kInvalidArgument` (5) for a row past the grid, and
- * `kPreconditionFailed` (6) once the axis holds 1026 breaks - Excel's own
- * ceiling.
+ * Returns `kInvalidArgument` (2) for a row past the grid, and
+ * `kPreconditionFailed` (9) once the axis holds 1026 breaks. A row break
+ * divides the page horizontally, and 1026 is the limit Excel publishes
+ * for horizontal page breaks.
  */
 FM_API fm_status_t fm_sheet_add_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t manual);
 
-/** @brief Upserts a column break before `col`. Whole-sheet perpendicular
- *         span is `min = 0`, `max = 1048575`. See `fm_sheet_add_row_break`. */
+/**
+ * @brief Upserts a column break before `col`.
+ *
+ * Whole-sheet perpendicular span is `min = 0`, `max = 1048575`.
+ * Upsert-replaces-in-place and the ascending-order guarantee match
+ * `fm_sheet_add_row_break`.
+ *
+ * Returns `kInvalidArgument` (2) for a column past the grid, and
+ * `kPreconditionFailed` (9) once the axis holds 1026 breaks. A column
+ * break divides the page vertically, and Excel publishes no separate
+ * figure for vertical page breaks; the horizontal limit is applied here
+ * as a conservative bound rather than leaving the axis unbounded, so
+ * this ceiling is Formulon's, not a documented Excel one.
+ */
 FM_API fm_status_t fm_sheet_add_col_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t manual);
 
 /** @brief Removes the row break at `row`. Absent is a successful no-op. */
@@ -2157,19 +2174,50 @@ FM_API fm_status_t fm_sheet_remove_col_break(fm_workbook_t* wb, size_t sheet_ind
 /** @brief Removes every manual break on both axes. */
 FM_API fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_index);
 
-/** @brief Number of row breaks declared on the sheet, or zero on any
- *         argument error. */
+/**
+ * @brief Number of row breaks declared on the sheet, or zero on any
+ *        argument error.
+ *
+ * The return type carries no status, so zero is ambiguous: it is both
+ * "this axis holds no breaks" and "`wb` is `NULL` or `sheet_index` is
+ * past the last sheet". The two are told apart by the thread-local
+ * diagnostic, which this call clears on entry and populates only on
+ * rejection - `fm_last_error_message()` is the empty string after a
+ * successful count and non-empty after a rejected one.
+ *
+ * A caller enumerating breaks as count-then-`fm_sheet_row_break_at` must
+ * check that message after the count. The `_at` loop is what would
+ * otherwise surface `kInvalidArgument`, and on a zero count it never
+ * runs, so a bad sheet index reads back as an empty break list.
+ */
 FM_API size_t fm_sheet_row_break_count(const fm_workbook_t* wb, size_t sheet_index);
 
-/** @brief Copies the row break at `index` (ascending by row). */
+/**
+ * @brief Copies the row break at `index` (ascending by row).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `index` is out of
+ *           range.
+ */
 FM_API fm_status_t fm_sheet_row_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
                                          fm_page_break_t* out);
 
-/** @brief Number of column breaks declared on the sheet, or zero on any
- *         argument error. */
+/**
+ * @brief Number of column breaks declared on the sheet, or zero on any
+ *        argument error. Same zero-is-ambiguous contract as
+ *        `fm_sheet_row_break_count`.
+ */
 FM_API size_t fm_sheet_col_break_count(const fm_workbook_t* wb, size_t sheet_index);
 
-/** @brief Copies the column break at `index` (ascending by column). */
+/**
+ * @brief Copies the column break at `index` (ascending by column).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `index` is out of
+ *           range.
+ */
 FM_API fm_status_t fm_sheet_col_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
                                          fm_page_break_t* out);
 
@@ -2268,7 +2316,7 @@ typedef struct {
 /**
  * @brief Applies a partial `<pageSetup>` update.
  *
- * `scale` outside [10, 400] is rejected with `kInvalidArgument` (5) rather
+ * `scale` outside [10, 400] is rejected with `kInvalidArgument` (2) rather
  * than clamped. `fm_sheet_set_zoom` clamps its own input because an
  * out-of-range screen zoom is harmless, but a mis-stated print scale lands
  * on paper, so silently rounding it would hide the mistake.
@@ -2276,7 +2324,7 @@ typedef struct {
 FM_API fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_index, const fm_page_setup_t* setup);
 
 /** @brief Applies a partial `<pageMargins>` update. A negative, infinite or
- *         NaN margin is rejected with `kInvalidArgument` (5). */
+ *         NaN margin is rejected with `kInvalidArgument` (2). */
 FM_API fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet_index, const fm_page_margins_t* margins);
 
 /** @brief Applies a partial `<printOptions>` update. */
@@ -2560,14 +2608,26 @@ FM_API fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, size_t sheet_index
 /**
  * @brief Reads the `idx`-th CF rule (in flattened order) into `out`.
  *
- * Model-backed string and sqref-array views in `*out` remain valid until the
- * next CF mutation on the same sheet (`fm_sheet_cf_add_rule`,
- * `fm_sheet_cf_remove_at`, `fm_sheet_cf_clear`), any reader/writer
- * round-trip, or handle destruction. Visual threshold arrays and their
- * value strings are read-scratch-backed and may also be invalidated by the
- * next successful scratch-backed read on the same handle. A
- * validation-rejected call does not refresh the scratch storage. Copy every
- * field that must survive another call.
+ * Every pointer in `*out` - `id`, `sqref`, `formula1`, `formula2`, `text`,
+ * the visual threshold and colour arrays, and the threshold value strings -
+ * addresses storage owned by `wb`, not the workbook model. That storage is
+ * released only by the next successful `fm_sheet_cf_get_at` on the same
+ * handle, or by handle destruction. CF mutations
+ * (`fm_sheet_cf_add_rule`, `fm_sheet_cf_remove_at`, `fm_sheet_cf_clear`),
+ * unrelated reads, and save / load calls all leave the record readable, so
+ * the edit procedure this API provides - get a rule, remove it, add the
+ * amended record back - is safe to execute without copying any field out
+ * first. A validation-rejected call does not refresh the storage, so the
+ * previously read rule stays valid. Copy any field that must survive the
+ * next get.
+ *
+ * `out->dxf_id` is reported engaged only when it resolves against the
+ * workbook's `<dxfs>` table. A rule whose stored index reaches past that
+ * table - which a third-party package can carry - reads back with
+ * `dxf_id_engaged == 0` rather than surfacing an index
+ * `fm_styles_get_dxf` would reject and `fm_sheet_cf_add_rule` would
+ * refuse. The record therefore always feeds straight back into
+ * `fm_sheet_cf_add_rule`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -2608,9 +2668,16 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  *         `kBindingNullPointer` when `wb` or `out_index` is `NULL`, or
  *           `rule.sqref` is `NULL` while `rule.sqref_count > 0`;
  *         `kInvalidArgument` when `sheet_index` is out of range, when
- *           `rule.sqref_count == 0`, when `rule.dxf_id` is engaged but
- *           past the end of the workbook's `<dxfs>` table, or when a
- *           visual payload is missing / malformed.
+ *           `rule.sqref_count == 0` or exceeds the per-call range cap,
+ *           when any `rule.sqref` entry is inverted (`first` past
+ *           `last`) or reaches outside the grid (`row >= 1048576`,
+ *           `col >= 16384`) and therefore has no A1 spelling, when
+ *           `rule.id` is non-empty but not GUID-shaped, when `rule.type`
+ *           / `rule.op` / `rule.time_period` / `rule.icon_set_name` /
+ *           `rule.data_bar_axis_position` or any engaged `fm_cfvo_t`
+ *           `type` names no declared enumerator, when `rule.dxf_id` is
+ *           engaged but past the end of the workbook's `<dxfs>` table,
+ *           or when a visual payload is missing / malformed.
  */
 FM_API fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, size_t sheet_index, fm_cf_rule_t rule, size_t* out_index);
 
@@ -3219,6 +3286,12 @@ FM_API fm_status_t fm_workbook_pivot_field_count(const fm_workbook_t* wb, size_t
  * @brief Appends a new field to the pivot. `spec->source_name` must be
  *        non-NULL; the other string fields are nullable. `out_field_idx`
  *        receives the new field's index.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `spec`, `out_field_idx` or
+ *           `spec->source_name` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `pivot_index` is out
+ *           of range, or `spec->axis` names no declared enumerator.
  */
 FM_API fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                const fm_pivot_field_spec_t* spec, size_t* out_field_idx);
@@ -3350,14 +3423,32 @@ FM_API fm_status_t fm_workbook_pivot_set_col_field_order(fm_workbook_t* wb, size
 FM_API fm_status_t fm_workbook_pivot_data_field_count(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                       size_t* out_count);
 
-/** @brief Appends a new data-field entry. `spec->name` must be non-NULL. */
+/**
+ * @brief Appends a new data-field entry. `spec->name` must be non-NULL.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `spec`, `out_idx` or
+ *           `spec->name` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `pivot_index` is out
+ *           of range, or `spec->aggregation` / `spec->show_as` names no
+ *           declared enumerator.
+ */
 FM_API fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     const fm_pivot_data_field_spec_t* spec, size_t* out_idx);
 
 /** @brief Drops every data-field entry from the pivot. */
 FM_API fm_status_t fm_workbook_pivot_data_field_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
 
-/** @brief Replaces the data-field entry at `data_field_idx` in place. */
+/**
+ * @brief Replaces the data-field entry at `data_field_idx` in place.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `spec` or `spec->name` is
+ *           `NULL`;
+ *         `kInvalidArgument` when `sheet_index`, `pivot_index` or
+ *           `data_field_idx` is out of range, or `spec->aggregation` /
+ *           `spec->show_as` names no declared enumerator.
+ */
 FM_API fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     size_t data_field_idx, const fm_pivot_data_field_spec_t* spec);
 
@@ -3876,6 +3967,13 @@ FM_API fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, ui
 /**
  * @brief Sets the sheet's tab-hidden flag. Non-zero hides the sheet
  *        tab; zero shows it.
+ *
+ * A workbook can also state the stronger `veryHidden` visibility, which
+ * keeps a sheet out of Excel's "Unhide" dialog. This flag reports and
+ * sets plain hidden, so a very-hidden sheet reads back as hidden and
+ * passing non-zero leaves it very-hidden rather than demoting it; zero
+ * makes the sheet visible from either state. A very-hidden sheet loaded
+ * from a file keeps that visibility on save unless this call shows it.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;

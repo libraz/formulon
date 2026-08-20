@@ -34,9 +34,11 @@
 #include "utils/error.h"
 #include "value.h"
 
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::validate;
 
 namespace {
 
@@ -985,13 +987,15 @@ extern "C" fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_vi
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_partial_recalc: NULL argument");
   }
-  // SheetCellRange::sheet_id is std::uint16_t; reject the narrowing path so
-  // a caller-supplied sheet > 0xFFFF does not silently address a different
-  // sheet (or wrap to 0). Excel's hard cap is far below 0xFFFF anyway.
-  if (viewport->sheet > 0xFFFFU) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_partial_recalc: viewport->sheet exceeds 16-bit sheet id range",
-                             "sheet=" + std::to_string(viewport->sheet));
+  // A sheet index past the end reaches the engine as a closure that
+  // matches nothing, so the call would report a successful no-op recalc
+  // and the caller would keep rendering stale values. Every other entry
+  // point that takes a sheet rejects the same input.
+  if (auto rc = check_sheet_index(wb, viewport->sheet, "fm_workbook_partial_recalc"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = validate(*viewport, "fm_workbook_partial_recalc"); rc != 0) {
+    return rc;
   }
   formulon::eval::SheetCellRange range;
   range.sheet_id = static_cast<std::uint16_t>(viewport->sheet);

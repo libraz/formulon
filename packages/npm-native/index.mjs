@@ -54,8 +54,8 @@ export const setLogSink = native.setLogSink;
  * Merge a host-supplied metadata entry over the engine's structural
  * `functionMetadata()` result.
  *
- * This is a pure, side-effect-free helper: it does not touch the native
- * addon. The engine returns `signatureTemplate` / `description` as
+ * This is a pure, side-effect-free helper: it does not touch the engine.
+ * The engine returns `signatureTemplate` / `description` as
  * `undefined`; a host injects display metadata (see
  * `docs/function-metadata-schema.md`) and merges it here at display time.
  * The metadata is display-only and never affects formula parsing or

@@ -89,6 +89,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/writer_test.cpp
   unit/io/xlsb_fidelity_test.cpp
   unit/io/xlsb_pivot_fixture_test.cpp
+  unit/io/xlsb_reader_contract_test.cpp
+  unit/io/ooxml_output_contract_test.cpp
   unit/parser/tokenizer_test.cpp
   unit/parser/ast_test.cpp
   unit/parser/ast_dump_test.cpp
@@ -139,6 +141,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_text3_test.cpp
   unit/eval/builtins_width_test.cpp
   unit/eval/text_format_number_test.cpp
+  unit/eval/text_format_rounding_test.cpp
   unit/eval/text_format_date_test.cpp
   unit/eval/value_numbervalue_test.cpp
   unit/eval/builtins_info_test.cpp
@@ -206,6 +209,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_sumx_test.cpp
   unit/eval/builtins_series_sum_test.cpp
   unit/eval/builtins_rank_test.cpp
+  unit/eval/lazy_range_arg_shapes_test.cpp
   unit/eval/builtins_regex_test.cpp
   unit/eval/builtins_distributions_ext2_test.cpp
   unit/eval/builtins_math5_test.cpp
@@ -385,6 +389,21 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME binding_drift_dts_node
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-node
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # The two `dts-*` checks above compare method names only. These compare
+  # what the two surfaces say about shapes: the return type of every shared
+  # method, the field set of every shared record type, and the presence and
+  # source text of the helpers that have no native entry point behind them
+  # and so exist once per package.
+  add_test(
+    NAME binding_drift_dts_shared_shapes
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-shared-shapes
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME binding_drift_pure_js_helpers
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py pure-js-helpers
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(

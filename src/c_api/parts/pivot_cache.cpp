@@ -541,7 +541,11 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_set_text(fm_workbook_t* wb
   if (rec == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  rec->cells[field_idx] = intern_cache_text(*cache, std::string_view(utf8));
+  // Overwrite-aware: the cache reuses this coordinate's existing storage
+  // slot, so repeated writes to one cell do not grow the text store.
+  if (!cache->set_record_text(record_idx, field_idx, std::string_view(utf8))) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
   return 0;
 }
 

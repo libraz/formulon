@@ -91,6 +91,40 @@ TEST(FormulonCApiPartialRecalc, NullArgumentsRejected) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
+TEST(FormulonCApiPartialRecalc, SheetIndexPastTheLastSheetRejected) {
+  // Without the bound the engine takes an unmatched sheet id as an empty
+  // closure and reports a successful no-op, so an off-by-one viewport
+  // from a UI leaves stale values on screen with nothing to notice.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 5.0), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=A1+1"), 0);
+
+  const size_t sheet_count = fm_workbook_sheet_count(wb.handle);
+  ASSERT_GT(sheet_count, 0U);
+
+  fm_viewport vp{};
+  vp.first_col = 1;
+  vp.last_col = 1;
+  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  for (const uint32_t sheet : {static_cast<uint32_t>(sheet_count), 0x10000U, 0xFFFFFFFFU}) {
+    vp.sheet = sheet;
+    uint32_t recomputed = 99U;
+    EXPECT_EQ(fm_workbook_partial_recalc(wb.handle, &vp, &recomputed), invalid) << sheet;
+  }
+
+  // B1 stayed dirty rather than being reported as recomputed.
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 1, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_BLANK);
+
+  // The last valid sheet index still works.
+  vp.sheet = static_cast<uint32_t>(sheet_count) - 1U;
+  uint32_t recomputed = 0;
+  ASSERT_EQ(fm_workbook_partial_recalc(wb.handle, &vp, &recomputed), 0) << fm_last_error_message();
+  EXPECT_EQ(recomputed, 1U);
+}
+
 TEST(FormulonCApiPartialRecalc, OutCountOptional) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

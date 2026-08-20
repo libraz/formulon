@@ -353,9 +353,24 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// footprint. Destroying the handle reports the whole amount back.
   void SyncExternalMemory(Napi::Env env);
 
+  /// Clears the record of a throwing progress callback and reports whether
+  /// it was set. The solver is only told "abort", which is
+  /// indistinguishable from a deliberate cancel, so the recalc entry
+  /// points consume this on the way out and report the throw instead of
+  /// returning success. The WASM binding reports the same status for the
+  /// same event.
+  bool TakeIterativeProgressThrew() {
+    const bool threw = iterative_progress_threw_;
+    iterative_progress_threw_ = false;
+    return threw;
+  }
+
   fm_workbook_t* handle_ = nullptr;
   Napi::FunctionReference iterative_progress_callback_;
   bool in_iterative_progress_callback_ = false;
+  /// Set when the installed progress callback threw during the pass that
+  /// is still unwinding. Consumed by the recalc entry points.
+  bool iterative_progress_threw_ = false;
   /// Bytes currently attributed to this wrapper in V8's external-memory
   /// accounting; the baseline `SyncExternalMemory` computes its delta
   /// against.
