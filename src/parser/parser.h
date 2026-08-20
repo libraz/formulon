@@ -74,9 +74,18 @@ struct ParserOptions {
   /// `tests/divergence.yaml`'s `left_associative_chain_default_depth_cap`
   /// entry). The cap stays shared because the recursive downstream
   /// consumers (`ast_format::FormatNode`, `ast_shift`, the XLSB
-  /// `ptg_reader` decode-time check) walk the same tree and must not
-  /// overflow the native stack; raising it here alone would reopen that
-  /// stack-safety hole.
+  /// `ptg_reader` decode-time check) walk the same tree, so raising it here
+  /// alone would reopen the stack-safety hole for all of them.
+  ///
+  /// Two different stacks have to hold. On native builds it is the thread
+  /// stack, which is megabytes wide and never the binding constraint. On
+  /// WASM it is the shadow stack, whose size is a link-time constant: the
+  /// deepest tree this cap admits costs a little under 100 KiB to parse, so
+  /// `cmake/FormulonWasm.cmake` pins `STACK_SIZE` from that measurement
+  /// rather than inheriting Emscripten's 64 KiB default. Raising the cap
+  /// means re-measuring and re-pinning that flag, not just editing this
+  /// number -- an overflow there is untrappable, and the engine is built
+  /// with exceptions off, so there is nothing to catch it with either way.
   std::uint32_t max_parse_depth = kMaxFormulaAstDepth;
 };
 

@@ -49,6 +49,10 @@
 # * `INITIAL_MEMORY=33554432` (32 MiB) is the runtime heap, separate
 #   from the `.wasm` code-size budget. `ALLOW_MEMORY_GROWTH=1` lets
 #   large workbooks expand the heap up to the 4 GiB limit.
+#
+# * `STACK_SIZE` is set explicitly on both variants rather than left to
+#   Emscripten's default. See the shared block below for the measurement
+#   the value comes from; it is not a round number picked for comfort.
 
 if(NOT FM_BUILD_WASM)
   return()
@@ -135,6 +139,36 @@ else()
   set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")
 endif()
 
+# Shadow-stack size, pinned rather than inherited.
+#
+# The engine's recursive formula walkers are bounded by one shared constant,
+# `parser::kMaxFormulaAstDepth` (128): the Pratt parser counts its own
+# recursion against it, and `ast_format`, `ast_shift` and the XLSB
+# `ptg_reader` re-check the finished tree against the same number before
+# walking it. That constant is only a stack-safety guarantee if the stack it
+# is sized against is known, and under Emscripten it is not known by default
+# -- the default is 64 KiB, small enough that the parser blows through it
+# well inside the depth the cap permits.
+#
+# The deepest tree the cap admits costs a little under 100 KiB to parse,
+# which is the worst of the walkers -- parsing a nested call is several times
+# more expensive per level than formatting or shifting one, and evaluation
+# does not exceed it. tests/wasm/stack_probe.cpp measures all of them on
+# every WASM build and prints the current figures, so the numbers live there
+# rather than in this comment where they would rot.
+#
+# 320 KiB is a little over 3x that worst case. The margin matters more than
+# usual here: the engine is built -fno-exceptions, and a shadow-stack
+# overflow is not a C++-level failure in any case. Under the release link (`ASSERTIONS=0`, so
+# `STACK_OVERFLOW_CHECK` is 0) the stack pointer simply walks past the limit
+# into the data segment below it -- silent corruption for the first tens of
+# KiB, then an untrappable out-of-bounds access. Neither outcome is
+# reportable through `Expected`, so the size has to be right up front.
+#
+# Growing this does not grow the code section; it shifts the linear-memory
+# layout, which moves the Brotli figure by a few hundred bytes.
+set(_FM_WASM_STACK_SIZE 327680)
+
 if(FM_WASM_VARIANT STREQUAL "embind")
   # Threads (parallel recalc scheduler): -pthread is required at both
   # compile and link time under Emscripten. The link side additionally
@@ -162,9 +196,16 @@ if(FM_WASM_VARIANT STREQUAL "embind")
     "-sDYNAMIC_EXECUTION=0"
     "-sWASM_BIGINT=0"
     "-sMALLOC=emmalloc"
+    "-sSTACK_SIZE=${_FM_WASM_STACK_SIZE}"
     "-pthread"
     "-sUSE_PTHREADS=1"
     "-sPTHREAD_POOL_SIZE=8"
+    # Worker stacks would follow STACK_SIZE implicitly; state it so the
+    # coupling survives a toolchain whose default changes. The recalc
+    # workers evaluate the same trees the main thread parses. This reserves
+    # PTHREAD_POOL_SIZE x 320 KiB (2.5 MiB) of the runtime heap up front,
+    # which is heap, not artifact size.
+    "-sDEFAULT_PTHREAD_STACK_SIZE=${_FM_WASM_STACK_SIZE}"
     "--closure=0"
   )
 
@@ -196,6 +237,12 @@ if(FM_WASM_VARIANT STREQUAL "embind")
   # builds do not need a special flag -- Threads::Threads propagates the
   # host pthread requirements.
   target_compile_options(formulon_core PRIVATE -pthread)
+
+  # formulon_core is compiled -pthread under this variant, so anything linking
+  # the archive has to agree with it. The probe runs single-threaded, hence a
+  # pool of zero.
+  set(_FM_WASM_PROBE_THREAD_FLAGS -pthread)
+  set(_FM_WASM_PROBE_THREAD_LINK_FLAGS "-pthread" "-sUSE_PTHREADS=1" "-sPTHREAD_POOL_SIZE=0")
 else()
   # capi variant: standalone reactor-style WASM. No JS glue, no embind,
   # no pthread. The scheduler's std::thread calls compile but run
@@ -235,6 +282,7 @@ else()
     "-sSUPPORT_LONGJMP=0"
     "-sWASM_BIGINT=0"
     "-sMALLOC=emmalloc"
+    "-sSTACK_SIZE=${_FM_WASM_STACK_SIZE}"
     "-sEXPORTED_FUNCTIONS=${_FM_WASM_CAPI_EXPORTS}"
     "--closure=0"
   )
@@ -244,7 +292,57 @@ else()
     -fno-exceptions
     -fno-rtti
   )
+
+  set(_FM_WASM_PROBE_THREAD_FLAGS)
+  set(_FM_WASM_PROBE_THREAD_LINK_FLAGS)
 endif()
+
+# Shadow-stack guard.
+#
+# tests/wasm/stack_probe.cpp measures what `parser::kMaxFormulaAstDepth`
+# costs the recursive walkers and fails if that has drifted past what the
+# link reserves. It needs its own executable because peak stack usage is not
+# observable through the binding surface, and it links with the shipped
+# optimisation level and stack size so the numbers describe shipped codegen.
+#
+# `make wasm` builds it, `make test-wasm` runs it. It is deliberately not
+# part of `formulon_wasm`'s link: it is a second artifact next to the shipped
+# one, and nothing stages it into a package. `make wasm-debug` does not build
+# it either -- the budget it asserts is a statement about release codegen, and
+# -O0 frames are several times wider.
+add_executable(formulon_wasm_stack_probe tests/wasm/stack_probe.cpp)
+target_include_directories(formulon_wasm_stack_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(formulon_wasm_stack_probe PRIVATE formulon_static)
+target_compile_definitions(formulon_wasm_stack_probe PRIVATE
+  FORMULON_WASM_EXPECTED_STACK_SIZE=${_FM_WASM_STACK_SIZE}
+)
+target_compile_options(formulon_wasm_stack_probe PRIVATE
+  ${_FM_WASM_OPT_FLAGS}
+  -fno-exceptions
+  -fno-rtti
+  ${_FM_WASM_PROBE_THREAD_FLAGS}
+)
+# No embind, no MODULARIZE: the probe has a main() and reports through its
+# exit status. Everything that shapes codegen or the memory layout is taken
+# from the shipped link.
+target_link_options(formulon_wasm_stack_probe PRIVATE
+  ${_FM_WASM_OPT_FLAGS}
+  ${_FM_WASM_LINK_OPT_FLAGS}
+  "-sSTACK_SIZE=${_FM_WASM_STACK_SIZE}"
+  "-sINITIAL_MEMORY=33554432"
+  "-sALLOW_MEMORY_GROWTH=1"
+  "-sENVIRONMENT=node"
+  "-sFILESYSTEM=0"
+  "-sDISABLE_EXCEPTION_CATCHING=1"
+  "-sSUPPORT_LONGJMP=0"
+  "-sMALLOC=emmalloc"
+  "-sEXIT_RUNTIME=1"
+  ${_FM_WASM_PROBE_THREAD_LINK_FLAGS}
+)
+set_target_properties(formulon_wasm_stack_probe PROPERTIES
+  OUTPUT_NAME "stack_probe"
+  SUFFIX ".js"
+)
 
 # Define FORMULON_WASM for every TU under the WASM build. The
 # read_ooxml SAX/DOM dispatch consults this macro: WASM builds get

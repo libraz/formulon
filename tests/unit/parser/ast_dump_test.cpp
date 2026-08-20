@@ -502,6 +502,30 @@ TEST(AstDumpComposite, RangeUnionInsideSum) {
   EXPECT_EQ(dump_sexpr(*n), "(call SUM (union (range (ref A1) (ref B2)) (range (ref C1) (ref D2))))");
 }
 
+// A tree deeper than the shared AST depth cap is refused instead of walked,
+// so a dumper caller cannot drive the recursion into a stack overflow.
+TEST(AstDumpDepth, TooDeepTreeIsRefused) {
+  Arena a;
+  AstNode* node = make_literal(a, Value::number(1));
+  for (std::uint32_t depth = 1; depth <= kMaxFormulaAstDepth; ++depth) {
+    node = make_unary_op(a, UnaryOp::Plus, node);
+    ASSERT_NE(node, nullptr);
+  }
+  ASSERT_FALSE(ast_depth_within_limit(*node, kMaxFormulaAstDepth));
+  EXPECT_EQ(dump_sexpr(*node), "(too-deep)");
+}
+
+TEST(AstDumpDepth, TreeAtTheCapIsStillDumped) {
+  Arena a;
+  AstNode* node = make_literal(a, Value::number(1));
+  for (std::uint32_t depth = 1; depth < kMaxFormulaAstDepth; ++depth) {
+    node = make_unary_op(a, UnaryOp::Plus, node);
+    ASSERT_NE(node, nullptr);
+  }
+  ASSERT_TRUE(ast_depth_within_limit(*node, kMaxFormulaAstDepth));
+  EXPECT_NE(dump_sexpr(*node), "(too-deep)");
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

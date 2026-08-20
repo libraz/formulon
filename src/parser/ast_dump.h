@@ -22,6 +22,8 @@ namespace parser {
 /// Recursively dumps `node` as a single-line S-expression.
 ///
 /// Output is deterministic and contains no leading or trailing whitespace.
+/// A tree deeper than `kMaxFormulaAstDepth` is refused rather than walked,
+/// yielding the literal `(too-deep)`.
 std::string dump_sexpr(const AstNode& node);
 
 }  // namespace parser

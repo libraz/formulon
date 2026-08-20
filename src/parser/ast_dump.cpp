@@ -347,6 +347,13 @@ void DumpInto(const AstNode& node, std::string& out) {
 }  // namespace
 
 std::string dump_sexpr(const AstNode& node) {
+  // `DumpInto` recurses once per AST level, so a tree deeper than the
+  // parser's own cap would overflow the stack. Every other recursive walker
+  // over `AstNode` refuses such a tree rather than descending into it; this
+  // one reports the refusal in its own output alphabet.
+  if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
+    return "(too-deep)";
+  }
   std::string out;
   out.reserve(64);
   DumpInto(node, out);
