@@ -31,6 +31,14 @@ TEST(SheetNameNeedsQuoting, NumericAndCellReferenceNamesRequireQuotes) {
   EXPECT_FALSE(sheet_name_needs_quoting("S0"));
 }
 
+TEST(SheetNameNeedsQuoting, DigitLeadingNamesRequireQuotes) {
+  // Unquoted, the tokenizer reads the leading digits as a numeric literal and
+  // never reaches the `!`, so these names are only writable quoted.
+  EXPECT_TRUE(sheet_name_needs_quoting("3S1"));
+  EXPECT_TRUE(sheet_name_needs_quoting("1abc"));
+  EXPECT_TRUE(sheet_name_needs_quoting("0"));
+}
+
 TEST(SheetNameNeedsQuoting, UnderscoreAndDotAllowed) {
   EXPECT_FALSE(sheet_name_needs_quoting("My_Sheet.1"));
 }

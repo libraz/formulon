@@ -736,8 +736,13 @@ bool sheet_name_needs_quoting(std::string_view name) noexcept {
   if (name.empty()) {
     return true;
   }
+  // A bare sheet name cannot open with a digit: the tokenizer reads the run
+  // as a numeric literal and never reaches the `!`, so `3Q!A1` is not a
+  // reference at all. Quoting is the only way to write such a name.
+  if (name.front() >= '0' && name.front() <= '9') {
+    return true;
+  }
 
-  bool all_digits = true;
   std::size_t i = 0;
   while (i < name.size() && ((name[i] >= 'A' && name[i] <= 'Z') || (name[i] >= 'a' && name[i] <= 'z'))) {
     ++i;
@@ -750,10 +755,6 @@ bool sheet_name_needs_quoting(std::string_view name) noexcept {
     if (!bare_name_char) {
       return true;
     }
-    all_digits = all_digits && c >= '0' && c <= '9';
-  }
-  if (all_digits) {
-    return true;
   }
   if (!cell_ref_prefix) {
     return false;

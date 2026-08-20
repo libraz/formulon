@@ -50,6 +50,7 @@
 #include "parser/token.h"
 #include "parser/tokenizer.h"
 #include "utils/arena.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -419,6 +420,16 @@ AstNode* Parser::parse() {
     return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::LParen ||
            k == TokenKind::RParen || k == TokenKind::RBracket || k == TokenKind::Number;
   };
+  // A cell-shaped lexeme that is also an Excel function name. The two forms
+  // overlap only where a function name matches the cell-reference pattern
+  // `[A-Za-z]{1,3}[0-9]{1,7}` within the A1..XFD1048576 grid, which across
+  // the whole Excel catalogue is `LOG10` alone. The parser resolves no names
+  // at parse time -- that is what lets a LAMBDA parameter shadow a function
+  // name at eval time -- so this cannot be a registry lookup and is instead
+  // pinned to the exhaustive list.
+  auto is_cellref_shaped_function_name = [](std::string_view lexeme) noexcept {
+    return strings::case_insensitive_eq(lexeme, "LOG10");
+  };
   // Walk `raw` with a sliding window over the most recent non-whitespace
   // token and the next non-whitespace token after each whitespace run. If
   // both bracket the whitespace as reference-shaped, keep it; otherwise drop.
@@ -438,11 +449,15 @@ AstNode* Parser::parse() {
     }
     // Find the previous non-whitespace token already pushed onto `tokens_`.
     TokenKind prev_kind = tokens_.empty() ? TokenKind::Eof : tokens_.back().kind;
-    // A cell-shaped token followed by a spaced opening parenthesis is a
-    // function name such as `LOG10 (100)`, unless it closes a range tail
-    // (`A1:A3 (B1:D1)`). The former must retain the legacy function-call
-    // disambiguation; the latter is Excel's intersection operator.
+    // A cell-shaped token followed by a spaced opening parenthesis is
+    // ambiguous at the token level: `LOG10 (100)` is a function call, while
+    // `A1 (B1:C5)` and `A1:A3 (B1:D1)` are Excel's intersection operator.
+    // Only a lexeme that is genuinely a function name takes the call
+    // reading; every other cell-shaped lexeme keeps the whitespace so the
+    // Pratt loop can promote it to an intersection. A cell-shaped token
+    // closing a range tail is never a function name either way.
     const bool cellref_call_space = next_kind == TokenKind::LParen && prev_kind == TokenKind::CellRef &&
+                                    is_cellref_shaped_function_name(tokens_.back().lexeme) &&
                                     (tokens_.size() < 2 || tokens_[tokens_.size() - 2].kind != TokenKind::Colon);
     if (is_ref_left_candidate(prev_kind) && is_ref_right_candidate(next_kind) && !cellref_call_space) {
       tokens_.push_back(t);
@@ -830,7 +845,8 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     if (kind == TokenKind::Whitespace) {
       const NodeKind lk = lhs->kind();
       const bool lhs_ref_shaped = lk == NodeKind::Ref || lk == NodeKind::RangeOp || lk == NodeKind::NameRef ||
-                                  lk == NodeKind::StructuredRef || lk == NodeKind::Call || lk == NodeKind::IntersectOp;
+                                  lk == NodeKind::StructuredRef || lk == NodeKind::Call ||
+                                  lk == NodeKind::IntersectOp || lk == NodeKind::UnionOp;
       if (!lhs_ref_shaped) {
         // Treat the retained whitespace as layout: drop it and continue.
         advance();
@@ -873,12 +889,15 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       node = make_range_op(arena_, lhs, rhs);
     } else if (kind == TokenKind::Whitespace) {
       // Space-as-intersection. The LHS shape was already validated above.
-      // Validate the RHS shape with the same rules used for `:`; a non-
-      // reference RHS records `InvalidRange` but we still wrap the children
-      // so siblings keep parsing.
+      // Validate the RHS shape with the same rules used for `:`, widened by
+      // `UnionOp`: a parenthesised comma list is a reference and therefore a
+      // legal intersection operand (`A1 (B1,C1)`) even though it cannot
+      // close a `:` range. A non-reference RHS records `InvalidRange` but we
+      // still wrap the children so siblings keep parsing.
       const NodeKind rk = rhs->kind();
       if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp &&
-          rk != NodeKind::Call && rk != NodeKind::IntersectOp && rk != NodeKind::ErrorPlaceholder) {
+          rk != NodeKind::Call && rk != NodeKind::IntersectOp && rk != NodeKind::UnionOp &&
+          rk != NodeKind::ErrorPlaceholder) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_intersect_op(arena_, lhs, rhs);

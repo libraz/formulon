@@ -175,6 +175,14 @@ TEST(AstFormat, ThreeDRangeTail) {
 TEST(AstFormat, ThreeDRangeTailQuotedSpan) {
   ExpectRoundTripsToSame("=SUM('Data:S2'!A1:B2)");
 }
+// A sheet name opening with a digit is only writable in quoted form -- the
+// tokenizer would otherwise read the leading run as a numeric literal.
+TEST(AstFormat, ThreeDSpanWithDigitLeadingSheetName) {
+  ExpectRoundTripsToSame("=SUM('3S1:Daa'!A1)");
+}
+TEST(AstFormat, RefWithDigitLeadingSheetName) {
+  ExpectRoundTripsToSame("=SUM('3S1'!A1)");
+}
 TEST(AstFormat, ThreeDRangeTailAbsolute) {
   ExpectRoundTripsToSame("=SUM(Sheet1:Sheet3!$A$1:$B$2)");
 }
@@ -210,7 +218,7 @@ TEST(AstFormat, AddMulPrecedence) {
 TEST(AstFormat, ParenthesisedAddMul) {
   ExpectRoundTripsToSame("=(1+2)*3");
 }
-TEST(AstFormat, RightAssociativePower) {
+TEST(AstFormat, PowerChain) {
   ExpectRoundTripsToSame("=2^3^4");
 }
 TEST(AstFormat, PowerLhsParen) {
@@ -242,8 +250,115 @@ TEST(AstFormat, RangeOpInsideSum) {
 TEST(AstFormat, UnionInsideSum) {
   ExpectRoundTripsToSame("=SUM((A1:B2,C1:D2))");
 }
+// `A:C` is two bare column identifiers joined by `:`, so a `:` endpoint that
+// is a defined name or a LAMBDA parameter spelled like a column has to be
+// held apart from its neighbour or the pair reads back as a whole-column
+// range instead of two operands.
+TEST(AstFormat, RangeBetweenColumnShapedNames) {
+  ExpectRoundTripsToSame("=SUM((RO):(r))");
+  Arena a;
+  Parser p("=SUM((RO):(r))", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_EQ(format_formula(*root), "SUM((RO):r)");
+}
+TEST(AstFormat, RangeFromColumnShapedNameToCall) {
+  ExpectRoundTripsToSame("=LE:(NA())");
+  Arena a;
+  Parser p("=LE:(NA())", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_EQ(format_formula(*root), "(LE):NA()");
+}
+// Ordinary ranges and a name that is too long to be a column keep the plain
+// join.
+TEST(AstFormat, RangeEndpointsThatCannotFoldStayBare) {
+  ExpectRoundTripsToSame("=A1:B2");
+  ExpectRoundTripsToSame("=A:C");
+  ExpectRoundTripsToSame("=LAMBDA(x,x:B2)");
+  ExpectRoundTripsToSame("=A1:OFFSET(A1,1,1)");
+}
+
+// The whole-axis splice turns `RangeOp(A:A, C:C)` into the compact `A:C`.
+// It must not fire when both endpoints sit on the same axis: `A:A` reads
+// back as one whole-column reference rather than as the pair, so the pair
+// the source spelled out would be lost. Anchoring does not separate them
+// either -- `$A:A` is also a single token.
+TEST(AstFormat, WholeAxisPairOnOneColumnKeepsBothEndpoints) {
+  ExpectRoundTripsToSame("=A:A:A:A");
+  ExpectRoundTripsToSame("=$A:$A:A:A");
+  ExpectRoundTripsToSame("=A:A:A:A:A:A");
+  Arena a;
+  Parser p("=A:A:A:A", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_EQ(format_formula(*root), "A:A:A:A");
+}
+TEST(AstFormat, WholeAxisPairOnOneRowKeepsBothEndpoints) {
+  ExpectRoundTripsToSame("=1:1:1:1");
+  ExpectRoundTripsToSame("=1:1:$1:1");
+  ExpectRoundTripsToSame("=1:1:1:1:3:3");
+}
+// A chain whose inner pair is a single axis is where the loss became visible
+// in the emitted text: the inner pair compacted to one reference, and the
+// enclosing range then compacted again on the next pass.
+TEST(AstFormat, ChainedWholeAxisRangeIsStable) {
+  ExpectRoundTripsToSame("=h:h:h:h:e:e");
+  ExpectRoundTripsToSame("=SUM(h:h:h:h:e:e)");
+  Arena a;
+  Parser p("=h:h:h:h:e:e", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_EQ(format_formula(*root), "H:H:H:H:E:E");
+}
+// Endpoints on different axes still compact, which is the whole point of the
+// splice: without it these would emit `A:A:C:C` and `1:1:3:3`.
+TEST(AstFormat, WholeAxisPairOnDifferentAxesStillCompacts) {
+  Arena a;
+  Parser cols("=A:C", a);
+  AstNode* cols_root = cols.parse();
+  ASSERT_NE(cols_root, nullptr);
+  EXPECT_EQ(format_formula(*cols_root), "A:C");
+  Parser rows("=1:3", a);
+  AstNode* rows_root = rows.parse();
+  ASSERT_NE(rows_root, nullptr);
+  EXPECT_EQ(format_formula(*rows_root), "1:3");
+  Parser sheet("=Sheet1!A:C", a);
+  AstNode* sheet_root = sheet.parse();
+  ASSERT_NE(sheet_root, nullptr);
+  EXPECT_EQ(format_formula(*sheet_root), "Sheet1!A:C");
+}
+// A round trip must not re-anchor a reference: the pair `$A:$A` with `A:A`
+// widens under a one-column fill, the single `$A:$A` it used to compact to
+// does not.
+TEST(AstFormat, WholeAxisPairKeepsPerEndpointAnchoring) {
+  Arena a;
+  Parser p("=$A:$A:A:A", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  const std::string text = format_formula(*root);
+  Arena b;
+  Parser reparse(text, b);
+  AstNode* reparsed = reparse.parse();
+  ASSERT_NE(reparsed, nullptr);
+  ASSERT_TRUE(reparse.errors().empty());
+  EXPECT_EQ(dump_sexpr(*reparsed), "(range (ref $A:$A) (ref A:A))");
+}
+
 TEST(AstFormat, IntersectOp) {
   ExpectRoundTripsToSame("=A1:A10 A2:A20");
+}
+// A bare cell reference on the left of an intersection formats without any
+// bracketing token between it and the right operand, so the re-parse has to
+// read `A1 (...)` as an intersection rather than a call.
+TEST(AstFormat, IntersectOpWithBareRefLhs) {
+  ExpectRoundTripsToSame("=A1 (B1:C5)");
+}
+TEST(AstFormat, IntersectOpWithUnionRhs) {
+  ExpectRoundTripsToSame("=A1 (B1,C1)");
+}
+TEST(AstFormat, IntersectOpWithUnionLhs) {
+  ExpectRoundTripsToSame("=(A1,B1) C1:D1");
 }
 TEST(AstFormat, ImplicitIntersection) {
   ExpectRoundTripsToSame("=@A1");
@@ -281,6 +396,14 @@ TEST(AstFormat, ArrayLiteralMatrix) {
 }
 TEST(AstFormat, ArrayLiteralWithText) {
   ExpectRoundTripsToSame("={\"a\",\"b\";\"c\",\"d\"}");
+}
+// The array parser folds a leading sign into the element value, and Excel's
+// array-constant grammar has no room for the parenthesisation used in
+// operator slots, so a negative element must come back out with a bare sign.
+TEST(AstFormat, ArrayLiteralNegativeElements) {
+  ExpectRoundTripsToSame("={-1,2}");
+  ExpectRoundTripsToSame("={1,-2;3,-4}");
+  ExpectRoundTripsToSame("={\"a\",-1}");
 }
 
 // ---------------------------------------------------------------------------

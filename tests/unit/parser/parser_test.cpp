@@ -391,6 +391,37 @@ TEST(ParserIntersect, FunctionCallNotAffected) {
   EXPECT_EQ(ParseToSexpr("=SUM(A1:A5)"), "(call SUM (range (ref A1) (ref A5)))");
 }
 
+// A bare cell reference in front of a spaced `(` is the left operand of the
+// intersection operator, not a function name. Only a cell-shaped lexeme that
+// is genuinely an Excel function name (`LOG10`) takes the call reading.
+TEST(ParserIntersect, BareCellRefBeforeSpacedParenIsIntersect) {
+  EXPECT_EQ(ParseToSexpr("=A1 (B1:C5)"), "(intersect (ref A1) (range (ref B1) (ref C5)))");
+}
+
+TEST(ParserIntersect, BareCellRefBeforeSpacedParenWithSingleOperand) {
+  EXPECT_EQ(ParseToSexpr("=B2 (A1:C5)"), "(intersect (ref B2) (range (ref A1) (ref C5)))");
+}
+
+// A parenthesised comma list is a reference union, and a union is a legal
+// intersection operand on either side.
+TEST(ParserIntersect, BareCellRefBeforeSpacedUnion) {
+  EXPECT_EQ(ParseToSexpr("=A1 (B1,C1)"), "(intersect (ref A1) (union (ref B1) (ref C1)))");
+}
+
+TEST(ParserIntersect, UnionLeftOperand) {
+  EXPECT_EQ(ParseToSexpr("=(A1,B1) A1"), "(intersect (union (ref A1) (ref B1)) (ref A1))");
+}
+
+// The cell-shaped-name carve-out is case-insensitive and matches the whole
+// lexeme, so a neighbouring cell reference is unaffected.
+TEST(ParserIntersect, LowercaseLog10BeforeSpacedParenStaysCall) {
+  EXPECT_EQ(ParseToSexpr("=log10 (100)"), "(call log10 (num 100))");
+}
+
+TEST(ParserIntersect, Log11BeforeSpacedParenIsIntersect) {
+  EXPECT_EQ(ParseToSexpr("=LOG11 (B1:C5)"), "(intersect (ref LOG11) (range (ref B1) (ref C5)))");
+}
+
 // ---------------------------------------------------------------------------
 // Unary operators
 // ---------------------------------------------------------------------------

@@ -97,13 +97,17 @@ int BinOpBp(BinOp op) noexcept {
 // the rendered text in `(...)`.
 void FormatNode(const AstNode& node, std::string& out, int min_bp);
 
-void FormatNumberLiteral(const Value& v, std::string& out) {
-  // Negative numerics are written as a unary minus by the parser, so they
-  // never appear inside a Literal payload coming from real source. We still
-  // handle the sign here defensively for hand-built ASTs (the test suite
-  // does this for completeness).
+// Renders a Number payload. Outside an array constant a negative value is
+// parenthesised so its leading `-` cannot glue onto an adjacent operator;
+// `parenthesise_negative` turns that off for slots where Excel's grammar
+// forbids parentheses.
+//
+// The parser writes a negative numeric as a unary minus over a positive
+// literal everywhere except inside an array constant, where the sign is
+// folded into the element value.
+void FormatNumberLiteral(const Value& v, std::string& out, bool parenthesise_negative) {
   const double n = v.as_number();
-  if (n < 0.0) {
+  if (n < 0.0 && parenthesise_negative) {
     out.push_back('(');
     format_double(out, n);
     out.push_back(')');
@@ -124,7 +128,7 @@ void FormatTextLiteral(std::string_view s, std::string& out) {
   out.push_back('"');
 }
 
-void FormatLiteral(const Value& v, std::string& out) {
+void FormatLiteral(const Value& v, std::string& out, bool parenthesise_negative = true) {
   switch (v.kind()) {
     case ValueKind::Blank:
       // A Blank literal represents an omitted argument. Its surrounding
@@ -133,7 +137,7 @@ void FormatLiteral(const Value& v, std::string& out) {
       // many Excel functions distinguish an omitted argument from empty text.
       return;
     case ValueKind::Number:
-      FormatNumberLiteral(v, out);
+      FormatNumberLiteral(v, out, parenthesise_negative);
       return;
     case ValueKind::Bool:
       out.append(v.as_boolean() ? "TRUE" : "FALSE");
@@ -326,6 +330,49 @@ void FormatBinary(const AstNode& node, std::string& out, int min_bp) {
   }
 }
 
+// True when `name` on its own is a bare column token -- one to three ASCII
+// letters naming a column inside Excel's grid.
+bool IsBareColumnToken(std::string_view name) noexcept {
+  if (name.empty() || name.size() > 3) {
+    return false;
+  }
+  std::uint32_t column = 0;
+  for (char c : name) {
+    if (!detail::IsAsciiLetter(c)) {
+      return false;
+    }
+    const char upper = (c >= 'a' && c <= 'z') ? static_cast<char>(c - ('a' - 'A')) : c;
+    column = column * 26U + static_cast<std::uint32_t>(upper - 'A') + 1U;
+  }
+  return column <= detail::kMaxColumn;
+}
+
+// The identifier a `:` endpoint opens with, when the endpoint is written as a
+// bare identifier rather than as a reference. A call contributes its name
+// because the parser sees the name before the argument list.
+std::string_view LeadingIdentifier(const AstNode& node) noexcept {
+  switch (node.kind()) {
+    case NodeKind::NameRef:
+      return node.as_name();
+    case NodeKind::Call:
+      return node.as_call_name();
+    default:
+      return {};
+  }
+}
+
+// `A:C` is written as two bare column identifiers, so the parser folds
+// `<Ident>:<Ident>` into a single whole-column range whenever both sides name
+// a column. A defined name or a LAMBDA parameter spelled like a column takes
+// part in that fold as well: `RangeOp(NameRef RO, NameRef r)` emitted as
+// `RO:r` reads back as the whole-column range RO:R, and `RangeOp(NameRef LE,
+// Call NA())` emitted as `LE:NA()` reads back as a range with a stray `()`.
+// Parenthesising the left endpoint keeps the two operands apart.
+bool ColonEndpointsWouldFold(const AstNode& lhs, const AstNode& rhs) noexcept {
+  return lhs.kind() == NodeKind::NameRef && IsBareColumnToken(lhs.as_name()) &&
+         IsBareColumnToken(LeadingIdentifier(rhs));
+}
+
 void FormatRangeOp(const AstNode& node, std::string& out, int min_bp) {
   const bool wrap = kBpRange < min_bp;
   if (wrap) {
@@ -338,10 +385,23 @@ void FormatRangeOp(const AstNode& node, std::string& out, int min_bp) {
   // `format_a1` output duplicates its own axis (`A:A`, `C:C`), so a naive
   // `<lhs>:<rhs>` join would emit `A:A:C:C`. Splice the two endpoints at
   // their leading axis token to reproduce the compact `A:C` / `1:3` form.
+  //
+  // Two endpoints sitting on the same axis are the one case the splice must
+  // not touch. `RangeOp(A:A, A:A)` would splice to `A:A`, and `A:A` reads
+  // back as the single whole-column Ref rather than as the pair it came
+  // from. Anchoring does not rescue it -- `$A:A` is likewise one token, not
+  // two -- so the test is on the axis index, not on the rendered text. The
+  // parser only builds this shape from text that already spelled the pair
+  // out (`=A:A:A:A`, `=$A:$A:A:A`), so compacting it discards what was
+  // written; left unspliced the pair joins to text that reads back as
+  // itself.
   if (lhs.kind() == NodeKind::Ref && rhs.kind() == NodeKind::Ref) {
     const Reference& lr = lhs.as_ref();
     const Reference& rr = rhs.as_ref();
-    if ((lr.is_full_col && rr.is_full_col) || (lr.is_full_row && rr.is_full_row)) {
+    const bool both_full_col = lr.is_full_col && rr.is_full_col;
+    const bool both_full_row = lr.is_full_row && rr.is_full_row;
+    const bool same_axis = (both_full_col && lr.col == rr.col) || (both_full_row && lr.row == rr.row);
+    if ((both_full_col || both_full_row) && !same_axis) {
       const std::string lhs_str = format_a1(lr);
       const std::string rhs_str = format_a1(rr);
       out.append(lhs_str, 0, lhs_str.find(':'));
@@ -353,7 +413,14 @@ void FormatRangeOp(const AstNode& node, std::string& out, int min_bp) {
       return;
     }
   }
+  const bool split_endpoints = ColonEndpointsWouldFold(lhs, rhs);
+  if (split_endpoints) {
+    out.push_back('(');
+  }
   FormatNode(lhs, out, kBpRange);
+  if (split_endpoints) {
+    out.push_back(')');
+  }
   out.push_back(':');
   FormatNode(rhs, out, kBpRange + 1);
   if (wrap) {
@@ -416,6 +483,17 @@ void FormatCall(const AstNode& node, std::string& out) {
   out.push_back(')');
 }
 
+// An Excel array constant admits only literal constants: no parentheses and
+// no expressions. A negative element therefore has to be written with a bare
+// sign, or the emitted text is text Excel -- and this parser -- rejects.
+void FormatArrayElement(const AstNode& node, std::string& out) {
+  if (node.kind() == NodeKind::Literal) {
+    FormatLiteral(node.as_literal(), out, /*parenthesise_negative=*/false);
+    return;
+  }
+  FormatNode(node, out, 0);
+}
+
 void FormatArrayLiteral(const AstNode& node, std::string& out) {
   out.push_back('{');
   const std::uint32_t rows = node.as_array_rows();
@@ -428,7 +506,7 @@ void FormatArrayLiteral(const AstNode& node, std::string& out) {
       if (c > 0) {
         out.push_back(',');
       }
-      FormatNode(node.as_array_element(r, c), out, 0);
+      FormatArrayElement(node.as_array_element(r, c), out);
     }
   }
   out.push_back('}');
@@ -733,7 +811,14 @@ struct StorageEmitter {
       out.push_back('(');
     }
     if (node.kind() == NodeKind::RangeOp) {
+      const bool split_endpoints = ColonEndpointsWouldFold(node.as_range_lhs(), node.as_range_rhs());
+      if (split_endpoints) {
+        out.push_back('(');
+      }
       emit(node.as_range_lhs(), out, bp);
+      if (split_endpoints) {
+        out.push_back(')');
+      }
       out.push_back(sep);
       emit(node.as_range_rhs(), out, bp + 1);
     } else {
@@ -783,7 +868,11 @@ struct StorageEmitter {
         if (c > 0) {
           out.push_back(',');
         }
-        emit(node.as_array_element(r, c), out, 0);
+        if (node.as_array_element(r, c).kind() == NodeKind::Literal) {
+          FormatLiteral(node.as_array_element(r, c).as_literal(), out, /*parenthesise_negative=*/false);
+        } else {
+          emit(node.as_array_element(r, c), out, 0);
+        }
       }
     }
     out.push_back('}');
