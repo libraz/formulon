@@ -5,6 +5,7 @@
 
 #include "pivot/pivot_layout.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -341,6 +342,22 @@ const PivotCell* find_cell(const PivotCells& cells, std::uint32_t row, std::uint
   return nullptr;
 }
 
+/// Rows the row/subtotal projection emits, in grid order — leaf rows and
+/// subtotal rows alike. Each one carries a label cell of the matching kind
+/// in the leftmost row-header column, which the bottom grand-total row
+/// (kind `GrandTotal`) and the header block do not.
+std::vector<std::uint32_t> projected_row_entry_rows(const PivotCells& cells) {
+  std::vector<std::uint32_t> rows;
+  for (const PivotCell& cell : cells.cells) {
+    if (cell.col == cells.left && (cell.kind == PivotCellKind::RowLabel || cell.kind == PivotCellKind::RowSubtotal)) {
+      rows.push_back(cell.row);
+    }
+  }
+  std::sort(rows.begin(), rows.end());
+  rows.erase(std::unique(rows.begin(), rows.end()), rows.end());
+  return rows;
+}
+
 TEST(PivotLayout, ProjectsOneRowOneColumnPivotToAbsoluteGrid) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_table(/*row=*/{0}, /*col=*/{1});
@@ -478,6 +495,142 @@ TEST(PivotLayout, InsertsRowSubtotalRowsWhenEvaluatorProvidesMetadata) {
   EXPECT_EQ(south_subtotal_value->kind, PivotCellKind::RowSubtotal);
   ASSERT_TRUE(south_subtotal_value->value.is_number());
   EXPECT_DOUBLE_EQ(south_subtotal_value->value.as_number(), 500.0);
+}
+
+// The right-hand total strip covers subtotal rows too. A subtotal row's
+// total is `RowSubtotal::values[df]` -- the group aggregated across the
+// whole column axis -- and leaving it out empties the total column on every
+// subtotal row of a report with a two-level row hierarchy, which is the
+// default configuration (`grand_totals(rows=true)`, subtotals on).
+TEST(PivotLayout, TotalColumnCoversSubtotalRowsAndKeepsLeafTotals) {
+  PivotCache cache = build_region_year_quarter_cache();
+  PivotTable table = build_region_quarter_by_year_table();
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const PivotResult& result = result_or.value();
+  ASSERT_EQ(result.row_subtotals.size(), 2U);
+
+  auto cells_or = layout(table, result);
+  ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
+  const PivotCells& cells = cells_or.value();
+
+  // One data field, so the total strip is the last column.
+  const std::uint32_t total_col = cells.left + static_cast<std::uint32_t>(cells.cols) - 1U;
+  auto cells_at = [&cells](std::uint32_t row, std::uint32_t col) {
+    std::size_t found = 0;
+    for (const PivotCell& cell : cells.cells) {
+      if (cell.row == row && cell.col == col) {
+        ++found;
+      }
+    }
+    return found;
+  };
+
+  // Subtotal rows are the ones carrying a subtotal label, in grid order. A
+  // row may hold more than one label cell (one per row-header column), so
+  // the rows are deduplicated.
+  std::vector<std::uint32_t> subtotal_rows;
+  for (const PivotCell& cell : cells.cells) {
+    if (cell.kind == PivotCellKind::RowSubtotal && cell.value.is_text()) {
+      subtotal_rows.push_back(cell.row);
+    }
+  }
+  std::sort(subtotal_rows.begin(), subtotal_rows.end());
+  subtotal_rows.erase(std::unique(subtotal_rows.begin(), subtotal_rows.end()), subtotal_rows.end());
+  ASSERT_EQ(subtotal_rows.size(), 2U);
+
+  // North = 10 + 20 + 30, South = 40 + 50 + 60: each group across both years.
+  const double kExpectedSubtotals[] = {60.0, 150.0};
+  for (std::size_t i = 0; i < subtotal_rows.size(); ++i) {
+    EXPECT_EQ(cells_at(subtotal_rows[i], total_col), 1U) << "subtotal row " << subtotal_rows[i];
+    const PivotCell* total = find_cell(cells, subtotal_rows[i], total_col);
+    ASSERT_NE(total, nullptr) << "subtotal row " << subtotal_rows[i] << " has no total-column cell";
+    EXPECT_EQ(total->kind, PivotCellKind::RowSubtotal);
+    ASSERT_TRUE(total->value.is_number());
+    EXPECT_DOUBLE_EQ(total->value.as_number(), kExpectedSubtotals[i]);
+    EXPECT_DOUBLE_EQ(total->value.as_number(), result.row_subtotals[i].values[0].as_number());
+  }
+
+  // Leaf rows keep their own totals: the subtotal rows must not shift the
+  // leaf cursor the strip walks. North/Q1 = 10 + 30, North/Q2 = 20,
+  // South/Q1 = 40 + 60, South/Q2 = 50.
+  std::vector<double> leaf_totals;
+  for (const PivotCell& cell : cells.cells) {
+    if (cell.col == total_col && cell.kind == PivotCellKind::GrandTotal && cell.value.is_number()) {
+      leaf_totals.push_back(cell.value.as_number());
+    }
+  }
+  std::sort(leaf_totals.begin(), leaf_totals.end());
+  // The bottom grand-total row contributes the report total as well.
+  EXPECT_EQ(leaf_totals, (std::vector<double>{20.0, 40.0, 50.0, 100.0, 210.0}));
+
+  // Whatever the row's kind, the strip states a total for it: every row the
+  // row/subtotal projection emits holds exactly one cell in the total
+  // column, so the column has no holes.
+  for (std::uint32_t row : projected_row_entry_rows(cells)) {
+    EXPECT_EQ(cells_at(row, total_col), 1U) << "row " << row;
+  }
+}
+
+// The strip is one column per data field, and each of them covers every
+// projected row. Two value fields make the per-field indexing observable:
+// a strip that walked only leaf rows, or only the first field, leaves a
+// hole that a single-field fixture cannot distinguish from a shifted cursor.
+TEST(PivotLayout, TotalStripCoversEveryRowForEveryDataField) {
+  PivotCache cache = build_region_year_quarter_cache();
+  PivotTable table = build_region_quarter_by_year_table();
+  table.mutable_row_field_order() = {0, 2};
+  table.mutable_col_field_order() = {};
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+  PivotDataField count_amount;
+  count_amount.name = "Count of Amount";
+  count_amount.field_index = 3;
+  count_amount.aggregation = Aggregation::CountNumbers;
+  table.mutable_data_fields().push_back(std::move(count_amount));
+
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const PivotResult& result = result_or.value();
+  ASSERT_EQ(result.row_subtotals.size(), 2U);
+
+  auto cells_or = layout(table, result);
+  ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
+  const PivotCells& cells = cells_or.value();
+
+  // Two data fields, so the strip is the last two columns.
+  const std::uint32_t total_left = cells.left + static_cast<std::uint32_t>(cells.cols) - 2U;
+  const std::vector<std::uint32_t> rows = projected_row_entry_rows(cells);
+  ASSERT_EQ(rows.size(), 6U);  // 4 leaf rows + 2 region subtotals.
+
+  for (std::uint32_t row : rows) {
+    for (std::uint32_t df = 0; df < 2U; ++df) {
+      std::size_t found = 0;
+      for (const PivotCell& cell : cells.cells) {
+        if (cell.row == row && cell.col == total_left + df) {
+          ++found;
+        }
+      }
+      EXPECT_EQ(found, 1U) << "row " << row << " data field " << df;
+      const PivotCell* total = find_cell(cells, row, total_left + df);
+      ASSERT_NE(total, nullptr) << "row " << row << " data field " << df;
+      EXPECT_TRUE(total->value.is_number()) << "row " << row << " data field " << df;
+    }
+  }
+
+  // Sum then CountNumbers, read down the strip: the four leaf rows carry
+  // their own totals and the two region subtotals carry the group's.
+  std::vector<double> sums;
+  std::vector<double> counts;
+  for (std::uint32_t row : rows) {
+    sums.push_back(find_cell(cells, row, total_left)->value.as_number());
+    counts.push_back(find_cell(cells, row, total_left + 1U)->value.as_number());
+  }
+  std::sort(sums.begin(), sums.end());
+  std::sort(counts.begin(), counts.end());
+  EXPECT_EQ(sums, (std::vector<double>{20.0, 40.0, 50.0, 60.0, 100.0, 150.0}));
+  EXPECT_EQ(counts, (std::vector<double>{1.0, 1.0, 2.0, 2.0, 3.0, 3.0}));
 }
 
 TEST(PivotLayout, CompactLayoutHonorsFieldSubtotalTop) {

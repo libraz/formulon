@@ -1,5 +1,6 @@
 //
-// Implementation of `append_rich_text`. See header for the contract.
+// Implementation of the shared OOXML XML helpers. See header for the
+// contracts.
 
 #include "io/xml_utils.h"
 
@@ -15,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "double-conversion/double-conversion.h"
 #include "io/xml_escape.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -37,6 +39,35 @@ void append_xml_attr_uint(std::string& out, std::string_view name, std::uint32_t
   out.append("=\"");
   out.append(std::to_string(value));
   out.append("\"");
+}
+
+void append_xml_number(std::string& out, double value) {
+  if (value == 0.0) {
+    out.push_back('0');
+    return;
+  }
+  using DC = double_conversion::DoubleToStringConverter;
+  // Built once at first call; the converter is stateless and thread-safe.
+  static const DC kConv(
+      /*flags=*/DC::UNIQUE_ZERO | DC::EMIT_POSITIVE_EXPONENT_SIGN,
+      /*infinity_symbol=*/nullptr,
+      /*nan_symbol=*/nullptr,
+      /*exponent_character=*/'E',
+      /*decimal_in_shortest_low=*/-6,
+      /*decimal_in_shortest_high=*/21,
+      /*max_leading_padding_zeroes_in_precision_mode=*/0,
+      /*max_trailing_padding_zeroes_in_precision_mode=*/0);
+  // 32 bytes covers every shortest output: kMaxCharsEcmaScriptShortest
+  // (25) plus the trailing NUL plus a comfortable margin.
+  char buf[32];
+  double_conversion::StringBuilder builder(buf, sizeof(buf));
+  // ToShortest() only fails for NaN/Inf when no special-value symbol is
+  // configured; the caller pre-screens those, so success is guaranteed
+  // here. The return value is deliberately left unchecked: the project
+  // builds with -fno-exceptions, and an assert or log on this
+  // unreachable branch would cost more bytes than it earns.
+  (void)kConv.ToShortest(value, &builder);
+  out.append(buf, static_cast<std::size_t>(builder.position()));
 }
 
 std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t default_value) {

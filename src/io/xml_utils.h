@@ -47,6 +47,38 @@ void append_xml_attr(std::string& out, std::string_view name, std::string_view v
 /// because the rendered digits are always XML-safe.
 void append_xml_attr_uint(std::string& out, std::string_view name, std::uint32_t value);
 
+/// Appends a double in the shape Excel writes numbers into OOXML: the
+/// shortest decimal form that round-trips back to the same IEEE 754
+/// double (Grisu3, via double-conversion), with `E`-style exponents.
+///
+/// This is the single spelling of a number for every part Formulon
+/// emits. It has to be shared rather than reimplemented per writer,
+/// because the alternative is not a matter of taste: `printf("%.17g")`
+/// also round-trips, but renders `0.1` as `0.10000000000000001`, so a
+/// workbook whose cells came through one writer and whose pivot cache
+/// came through the other disagrees with itself — and with Excel — about
+/// how the same value is spelled.
+///
+/// Shape details, chosen to match Excel-authored XLSX:
+///
+///   * Uppercase `E` as the exponent character (ECMAScript and
+///     `printf("%g")` use lowercase).
+///   * A `+` sign on positive exponents (`1E+100`); negative exponents
+///     carry only the `-` (`1E-3`).
+///   * `-0.0` collapses to `0`. The zero fast path skips the converter
+///     entirely for the overwhelmingly common literal zero.
+///   * The decimal / scientific crossover is the ECMAScript band
+///     (-6 / 21). Excel-authored files switch shape inside this band in
+///     a way that tracks display formatting rather than the value, so
+///     the ECMAScript defaults are the most defensible reading.
+///
+/// NaN and the infinities are NOT handled: callers must screen them out
+/// upstream (a cell holds an Error value instead; a pivot-cache record
+/// holds `<e>`). The converter carries no special-value symbols, so a
+/// stray one surfaces as a conversion failure rather than as `nan` /
+/// `inf` text that no reader would take back.
+void append_xml_number(std::string& out, double value);
+
 /// Parses a non-negative decimal integer attribute body. Missing, empty,
 /// malformed, signed, or out-of-range input returns `default_value` so a
 /// stray optional OOXML attribute does not reject the whole part.

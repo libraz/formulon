@@ -1,16 +1,20 @@
 //
-// `xl/styles.bin` reader. Decodes the subset of the MS-XLSB styles part
-// the engine needs to resolve a cell's number format: custom `<numFmt>`
-// entries (`BrtFmt`) and the `<cellXfs>` / `<cellStyleXfs>` tables
-// (`BrtXF`), reusing `io::StylesTable` so both the OOXML and XLSB
-// readers hand the same shape to `Workbook::set_styles`.
+// `xl/styles.bin` reader. Decodes the MS-XLSB styles part into
+// `io::StylesTable` so both the OOXML and XLSB readers hand the same
+// shape to `Workbook::set_styles`: custom `<numFmt>` entries (`BrtFmt`),
+// the font / fill / border tables (`BrtFont` / `BrtFill` / `BrtBorder`)
+// and the `<cellXfs>` / `<cellStyleXfs>` tables (`BrtXF`).
 //
-// Fonts, fills, and borders are recorded as count-matched placeholder
-// entries (so `CellXf::font_index` / `fill_index` / `border_index` stay
-// valid, bounds-checkable indices) rather than fully decoded — the raw
-// `xl/styles.bin` bytes round-trip separately via the passthrough-part
-// mechanism, so a read-modify-write cycle never loses font/fill/border
-// detail even though this reader does not model it in-memory.
+// Decoding the font / fill / border tables rather than counting them is
+// what keeps a `.xlsb`-sourced workbook honest on the two paths raw-byte
+// passthrough of `xl/styles.bin` cannot cover: the styles introspection
+// API, which reads the in-memory table directly, and conversion to
+// `.xlsx`, which serialises that table into `xl/styles.xml`.
+//
+// Two `BrtXF` fields have no `CellXf` equivalent and are consumed without
+// being modelled: the text rotation / indentation pair and the theme font
+// scheme. They survive an `.xlsb` -> `.xlsb` cycle through the raw
+// passthrough copy of the part.
 
 #ifndef FORMULON_IO_XLSB_STYLES_READER_H_
 #define FORMULON_IO_XLSB_STYLES_READER_H_
@@ -32,10 +36,14 @@ namespace xlsb {
 /// with none of `BrtFmt` / `BrtFont` / `BrtFill` / `BrtBorder` / `BrtXF`
 /// yields a table whose `fonts` / `fills` / `borders` / `cell_xfs` each
 /// contain a single default record so `xf_index = 0` always resolves.
+/// That synthesised row is the only default-valued entry the result can
+/// contain: every entry backed by a source record carries decoded
+/// content, or the load fails.
 ///
 /// Errors:
 ///   * `kIoXlsbRecordTruncated` — a record's payload would overrun the
-///     part.
+///     part, or a `BrtFont` / `BrtFill` / `BrtBorder` payload is shorter
+///     than its fixed-size fields require.
 ///   * `kIoXlsbCorrupt` — a `BrtFmt` / `BrtXF` payload is shorter than
 ///     its fixed-size fields require.
 Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes);

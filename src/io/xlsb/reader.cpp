@@ -14,9 +14,11 @@
 #include "io/xlsb/reader.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <deque>
 #include <string>
@@ -35,6 +37,7 @@
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/styles_reader.h"
+#include "io/xml_escape.h"
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
@@ -342,10 +345,11 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
 struct SheetBundleEntry {
   std::string name;
   std::string rid;
-  /// True when the sheet's `hsState` is hidden or very-hidden. The Sheet
-  /// model carries a single `tab_hidden` bit (mirroring the OOXML path),
-  /// so both XLSB visibility states fold to "hidden" here.
-  bool hidden = false;
+  /// The sheet's `hsState`, which shares its numbering with
+  /// `SheetVisibility` and so is carried across whole. Very-hidden stays
+  /// distinct from hidden: it is the state that keeps a sheet out of
+  /// Excel's "Unhide" dialog.
+  SheetVisibility visibility = SheetVisibility::kVisible;
 };
 
 /// Workbook-global fields needed while constructing the model.
@@ -406,7 +410,21 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
     SheetBundleEntry entry;
     entry.rid = std::move(rid_or.value());
     entry.name = std::move(name_or.value());
-    entry.hidden = hs_state_or.value() != 0U;
+    // An hsState outside the three defined values is not a visibility this
+    // model can name; treat anything non-zero it cannot place as plain
+    // hidden, which is the conservative direction (the sheet stays out of
+    // sight rather than appearing unbidden).
+    switch (hs_state_or.value()) {
+      case 0U:
+        entry.visibility = SheetVisibility::kVisible;
+        break;
+      case 2U:
+        entry.visibility = SheetVisibility::kVeryHidden;
+        break;
+      default:
+        entry.visibility = SheetVisibility::kHidden;
+        break;
+    }
     info.sheets.push_back(std::move(entry));
   }
   if (info.sheets.empty()) {
@@ -467,6 +485,37 @@ bool ReadFixedWideString(ByteSpan& cursor, std::uint32_t units, std::string& out
   return true;
 }
 
+/// True when `name` carries one of Excel's hidden storage prefixes, i.e.
+/// the record is a `_xlfn.<FN>` future-function or `_xlpm.<param>`
+/// LET / LAMBDA-parameter placeholder rather than a user-visible defined
+/// name. Matched case-insensitively, the same way `ptg_reader.cpp`
+/// resolves these names during Ptg decode.
+///
+/// This is deliberately NOT the `fHidden` bit: Excel sets `fHidden` on
+/// the placeholders, but it also sets it on an ordinary defined name the
+/// user chose to hide from the Name Manager, and both this reader's
+/// writer counterpart and Excel itself store the two the same way.
+bool IsStoragePlaceholderName(std::string_view name) {
+  constexpr std::string_view kPrefixes[] = {"_xlfn.", "_xlpm."};
+  for (const std::string_view prefix : kPrefixes) {
+    if (name.size() < prefix.size()) {
+      continue;
+    }
+    bool match = true;
+    for (std::size_t i = 0; i < prefix.size(); ++i) {
+      const char lhs = static_cast<char>(std::tolower(static_cast<unsigned char>(name[i])));
+      if (lhs != prefix[i]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// Decodes the workbook-scope `BrtName` table from `xl/workbook.bin`:
 /// ordinary defined names and the hidden `_xlfn.*` / `_xlpm.*`
 /// future-function / LET-parameter placeholders `PtgName` resolves by
@@ -525,10 +574,11 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
 /// vector) to a `(itabFirst, itabLast)` sheet-index range. Byte layout
 /// verified against a real Excel-365-produced `xl/workbook.bin`: u32
 /// count, followed by `count` entries of `(iSupBook, itabFirst,
-/// itabLast)` as 3 x i32 each. `iSupBook` is not consulted — external-
-/// workbook 3-D references (a non-zero `iSupBook`) are out of scope;
-/// only the internal (`iSupBook == 0`, "this workbook") case is
-/// resolved. A workbook with no qualified references at all carries no
+/// itabLast)` as 3 x i32 each. `iSupBook` is retained on each entry so
+/// `decode_ptgs` can tell an internal range (`iSupBook == 0`, "this
+/// workbook") from an external-workbook one, whose sheet indices index
+/// the supporting book rather than this workbook's `sheet_names`.
+/// A workbook with no qualified references at all carries no
 /// `BrtExternSheet` record, so an empty result is a normal outcome, not
 /// an error.
 Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector<std::uint8_t>& body) {
@@ -569,9 +619,8 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
       if (!last_or) {
         return last_or.error();
       }
-      (void)sup_book_or;
-      ranges.push_back(
-          XlsbSheetRange{static_cast<std::int32_t>(first_or.value()), static_cast<std::int32_t>(last_or.value())});
+      ranges.push_back(XlsbSheetRange{static_cast<std::int32_t>(first_or.value()),
+                                      static_cast<std::int32_t>(last_or.value()), sup_book_or.value()});
     }
     break;  // Exactly one BrtExternSheet record per workbook.
   }
@@ -615,6 +664,20 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(const std:
   return entries;
 }
 
+/// True when `ptgs` is the placeholder Excel stores in a cell whose real
+/// tokens live in a separate record: a lone `PtgExp` (`0x01`) naming the
+/// owning anchor. Both the anchor and the phantoms of an array or
+/// dynamic-array formula carry it, and `BrtArrFmla` supplies the tokens
+/// out-of-band, so the shell is the expected encoding rather than a Ptg
+/// the decoder failed on.
+///
+/// `PtgExp` is only ever the whole stream — it takes no operands and
+/// cannot combine with another token — so testing the first byte
+/// classifies the record.
+bool IsAnchorShellFormula(ByteSpan ptgs) {
+  return ptgs.size != 0U && ptgs.data[0] == 0x01U;
+}
+
 /// Attempts to decode the `rgce` Ptg byte stream into an Excel formula
 /// text (with a leading `=`). Returns the formula text on success, or an
 /// empty string when the stream uses a token outside the supported set
@@ -622,10 +685,21 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(const std:
 /// path the caller PRESERVES the cell's cached value and stores no
 /// formula, so the cell still displays the correct cached result instead
 /// of a fabricated formula that would recalc to `#NAME?`.
+///
+/// An anchor shell returns empty as well, but neither logs nor counts:
+/// `undecoded_formula_count` states that the reader could not recover a
+/// formula the source carried, and for a shell there is no formula at
+/// that position to recover. The record that does carry the tokens is
+/// decoded on its own. A shell whose owning record the reader does not
+/// model instead surfaces through that record's own disposition, so the
+/// loss is still reported — just not as a decode failure here.
 std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vector<std::string>& sheet_names,
                               const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
                               std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                               std::uint32_t* undecoded_formula_count) {
+  if (IsAnchorShellFormula(ptg_bytes)) {
+    return {};
+  }
   Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
   auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges);
   if (!ast_or) {
@@ -646,16 +720,18 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
   return out;
 }
 
-/// Registers every non-hidden `BrtName` entry as a workbook defined
+/// Registers every user-visible `BrtName` entry as a workbook defined
 /// name via a single bulk `Workbook::set_defined_names` call (mirroring
 /// the OOXML reader's `ooxml_reader.cpp` pattern -- a load-time
 /// population pass, not the incremental single-name edit API
 /// `set_defined_name_scoped` guards with dedup/dep-graph-rebuild logic
-/// that only matters for post-load mutation). Hidden entries (the
-/// `_xlfn.*` / `_xlpm.*` future-function and LET/LAMBDA-parameter
-/// placeholders `PtgName` resolves during Ptg decode — see
+/// that only matters for post-load mutation). Only the storage
+/// placeholders (the `_xlfn.*` / `_xlpm.*` future-function and
+/// LET/LAMBDA-parameter names `PtgName` resolves during Ptg decode — see
 /// `name_table`) are skipped; they are not user-visible names and never
-/// carry a Name Manager comment. Walks `xl/workbook.bin`'s `BrtName`
+/// carry a Name Manager comment. A name Excel merely hides from the Name
+/// Manager keeps its `fHidden` bit on the produced `io::DefinedName` and
+/// is registered like any other. Walks `xl/workbook.bin`'s `BrtName`
 /// records a second time (after `DecodeWorkbookNames` has already built
 /// the complete `name_table`), decoding each entry's own formula body so
 /// a qualified or name-referencing formula (e.g. `Rate` defined as a
@@ -686,7 +762,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     }
     const XlsbName& entry = name_table[name_index];
     ++name_index;
-    if (entry.hidden) {
+    if (IsStoragePlaceholderName(entry.name)) {
       continue;
     }
     ByteSpan p = rec.payload;
@@ -764,7 +840,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     dn.name = entry.name;
     dn.formula = parser::format_formula(*ast_or.value());
     dn.local_sheet_id = entry.itab;
-    dn.hidden = false;
+    dn.hidden = entry.hidden;
     dn.comment = std::move(comment_or.value());
     out.push_back(std::move(dn));
   }
@@ -808,7 +884,69 @@ struct SheetDecodeState {
   /// records are model-owned and are never retained, but this marker keeps
   /// unrelated records after them in the correct post-hyperlink buffer.
   bool hyperlinks_seen = false;
+  /// Source records this sheet could not carry whole (see
+  /// `RecordDisposition::kAccounted`).
+  std::uint32_t dropped_records = 0;
 };
+
+/// What became of one source record. The four values are exhaustive: a
+/// record is decoded into the model, kept verbatim for re-emission,
+/// left to the writer to re-derive, or reported as content this load
+/// could not carry. There is no fifth outcome, and in particular no
+/// outcome that discards a record without saying so.
+///
+/// `[[nodiscard]]` is deliberate. The defect this classification exists
+/// to prevent is a record reaching the end of the dispatch with nothing
+/// done to it, so the dispatch's answer must not be droppable either.
+enum class [[nodiscard]] RecordDisposition {
+  /// Decoded into the `Workbook` / `Sheet` model. Also covers a record
+  /// whose content the reader took responsibility for and whose partial
+  /// loss it reported through a more specific counter -- a formula whose
+  /// Ptg stream fell outside the supported set is counted once, as an
+  /// undecoded formula, not twice.
+  kModelled,
+  /// Kept verbatim in `XlsbSheetTail` and re-emitted byte-for-byte.
+  kRetained,
+  /// Not kept, because the writer emits an equivalent record of its own
+  /// from the model. The membership test is
+  /// `IsWriterRegeneratedSheetRecord`.
+  kRegenerated,
+  /// Neither decoded nor preserved: the content is reported through
+  /// `XlsbReadResult::dropped_record_count` and a structured warning.
+  /// A record decoded only in part resolves here too, so the residue is
+  /// visible rather than implied.
+  kAccounted,
+};
+
+/// True for a record the sheet writer produces from the model, so keeping
+/// the source copy would emit it twice. Every entry is a record
+/// `sheet_writer.cpp`'s `emit_sheet` writes; adding one here is an
+/// assertion that the writer covers it, and is the only way to make a
+/// record vanish without the load saying so.
+bool IsWriterRegeneratedSheetRecord(XlsbRecordType type) {
+  switch (type) {
+    case XlsbRecordType::BrtBeginSheet:
+    case XlsbRecordType::BrtEndSheet:
+    case XlsbRecordType::BrtWsDim:
+    case XlsbRecordType::BrtBeginWsViews:
+    case XlsbRecordType::BrtEndWsView:
+    case XlsbRecordType::BrtEndWsViews:
+    case XlsbRecordType::BrtBeginColInfos:
+    case XlsbRecordType::BrtEndColInfos:
+    case XlsbRecordType::BrtBeginSheetData:
+    case XlsbRecordType::BrtEndSheetData:
+    case XlsbRecordType::BrtBeginMergeCells:
+    case XlsbRecordType::BrtEndMergeCells:
+    // Re-derived for every spilled dynamic array from the sheet's spill
+    // regions, keyed to the workbook's own XLDAPR metadata entry. The
+    // entry travels with the workbook, so a package that carried these
+    // records carries the metadata part that makes them meaningful.
+    case XlsbRecordType::BrtCellMeta:
+      return true;
+    default:
+      return false;
+  }
+}
 
 constexpr std::uint32_t kMaxHyperlinkRelIdUnits = 32767U;
 constexpr std::uint32_t kMaxHyperlinkLocationUnits = 2083U;
@@ -829,6 +967,141 @@ Expected<std::string, Error> ReadHyperlinkWideString(ByteSpan& cursor, const cha
                       "context=xlsb_reader cch=" + std::to_string(cch));
   }
   return read_xlwidestring(cursor);
+}
+
+/// The `BrtWsProp` fields `sheet_writer.cpp`'s `EmitWorksheetProperties`
+/// writes for a sheet with no source record of its own. A source record
+/// matching them carries nothing beyond what the writer will re-derive;
+/// one that differs carries flags (dialog-sheet, fit-to-page, outline
+/// direction, filter mode, sync anchors) the model has no field for.
+constexpr std::uint16_t kDefaultWsPropFlags = 0x04C9U;
+constexpr std::uint8_t kDefaultWsPropFlags2 = 0x02U;
+constexpr std::uint32_t kWsPropSyncUnused = 0xFFFFFFFFU;
+
+/// Appends `<tabColor .../>` for the decoded `BrtColor`, or nothing when
+/// the colour is automatic -- Excel writes no `<tabColor>` for the
+/// default tab, and an explicit `auto="1"` would make the two containers
+/// disagree on an otherwise identical sheet.
+void AppendTabColor(std::string& out, const ColorSpec& spec, std::uint32_t argb) {
+  char buf[32];
+  switch (spec.kind) {
+    case ColorSpec::Kind::kRgb:
+      std::snprintf(buf, sizeof(buf), "<tabColor rgb=\"%08X\"/>", argb);
+      out.append(buf);
+      break;
+    case ColorSpec::Kind::kTheme:
+      std::snprintf(buf, sizeof(buf), "<tabColor theme=\"%u\"", spec.theme);
+      out.append(buf);
+      if (spec.tint != 0.0) {
+        std::snprintf(buf, sizeof(buf), " tint=\"%.17g\"", spec.tint);
+        out.append(buf);
+      }
+      out.append("/>");
+      break;
+    case ColorSpec::Kind::kIndexed:
+      std::snprintf(buf, sizeof(buf), "<tabColor indexed=\"%u\"/>", spec.indexed);
+      out.append(buf);
+      break;
+    case ColorSpec::Kind::kAuto:
+    case ColorSpec::Kind::kNone:
+      break;
+  }
+}
+
+/// Decodes `BrtWsProp` ([MS-XLSB] §2.4.858) into the sheet's raw
+/// `<sheetPr>` fragment. Layout, verified against a real
+/// Excel-365-produced `xl/worksheets/sheetN.bin` and symmetric with
+/// `sheet_writer.cpp`: three flag bytes, an 8-byte `BrtColor` tab colour,
+/// `rwSync` and `colSync`, then the VBA `CodeName` as an XLWideString.
+///
+/// The record reaches the model as XML rather than as typed fields
+/// because `<sheetPr>` is what `SheetPrintSettings` stores and what the
+/// introspection API hands back: routing the XLSB form through the same
+/// string makes a `.xlsb`-loaded sheet answer exactly as its `.xlsx` twin
+/// does. A sheet with neither a code name nor a tab colour produces no
+/// fragment at all, which is also what the OOXML reader records for a
+/// worksheet with no `<sheetPr>` element.
+///
+/// Returns `false` when the record carried flag or sync fields the model
+/// has no room for, so the caller can report the residue.
+Expected<bool, Error> DecodeWorksheetProperties(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index) {
+  ByteSpan p = rec.payload;
+  auto flags_or = read_u16(p);
+  auto flags2_or = read_u8(p);
+  auto color_flags_or = read_u8(p);
+  auto color_index_or = read_u8(p);
+  auto color_tint_or = read_u16(p);
+  auto red_or = read_u8(p);
+  auto green_or = read_u8(p);
+  auto blue_or = read_u8(p);
+  auto alpha_or = read_u8(p);
+  auto rw_sync_or = read_u32(p);
+  auto col_sync_or = read_u32(p);
+  if (!flags_or || !flags2_or || !color_flags_or || !color_index_or || !color_tint_or || !red_or || !green_or ||
+      !blue_or || !alpha_or || !rw_sync_or || !col_sync_or) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsProp fields truncated",
+                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
+  }
+  auto code_name_or = read_xlwidestring(p);
+  if (!code_name_or) {
+    return code_name_or.error();
+  }
+
+  const std::uint32_t argb =
+      (static_cast<std::uint32_t>(alpha_or.value()) << 24U) | (static_cast<std::uint32_t>(red_or.value()) << 16U) |
+      (static_cast<std::uint32_t>(green_or.value()) << 8U) | static_cast<std::uint32_t>(blue_or.value());
+  ColorSpec tab;
+  switch (static_cast<std::uint32_t>(color_flags_or.value() >> 1U)) {
+    case 1U:
+      tab.kind = ColorSpec::Kind::kIndexed;
+      tab.indexed = color_index_or.value();
+      break;
+    case 2U:
+      tab.kind = ColorSpec::Kind::kRgb;
+      tab.rgb = argb;
+      break;
+    case 3U:
+      tab.kind = ColorSpec::Kind::kTheme;
+      tab.theme = color_index_or.value();
+      tab.tint = static_cast<double>(static_cast<std::int16_t>(color_tint_or.value())) / 32767.0;
+      break;
+    default:
+      tab.kind = ColorSpec::Kind::kAuto;
+      break;
+  }
+  // Excel marks the default tab with the automatic palette slot rather
+  // than the automatic colour type, so both spellings mean "no tab
+  // colour" and neither produces a `<tabColor>` element.
+  constexpr std::uint8_t kAutomaticPaletteIndex = 0x40U;
+  if (tab.kind == ColorSpec::Kind::kIndexed && color_index_or.value() == kAutomaticPaletteIndex) {
+    tab.kind = ColorSpec::Kind::kAuto;
+  }
+
+  std::string sheet_pr;
+  const std::string& code_name = code_name_or.value();
+  std::string body;
+  AppendTabColor(body, tab, argb);
+  if (!code_name.empty() || !body.empty()) {
+    sheet_pr.append("<sheetPr");
+    if (!code_name.empty()) {
+      sheet_pr.append(" codeName=\"");
+      AppendXmlAttrEscaped(sheet_pr, code_name);
+      sheet_pr.push_back('"');
+    }
+    if (body.empty()) {
+      sheet_pr.append("/>");
+    } else {
+      sheet_pr.push_back('>');
+      sheet_pr.append(body);
+      sheet_pr.append("</sheetPr>");
+    }
+  }
+  if (!sheet_pr.empty()) {
+    sheet.mutable_print_settings().sheet_pr_xml = std::move(sheet_pr);
+  }
+
+  return flags_or.value() == kDefaultWsPropFlags && flags2_or.value() == kDefaultWsPropFlags2 &&
+         rw_sync_or.value() == kWsPropSyncUnused && col_sync_or.value() == kWsPropSyncUnused;
 }
 
 /// Decodes the fixed-width worksheet default-format record. The model only
@@ -1007,28 +1280,10 @@ bool IsAfterHyperlinks(XlsbRecordType type) {
   }
 }
 
-/// True for a tail record the writer re-emits from the model, which must
-/// therefore not also be retained verbatim (or it would be emitted twice).
-bool IsModelOwnedTailRecord(XlsbRecordType type) {
-  switch (type) {
-    case XlsbRecordType::BrtEndSheet:
-    case XlsbRecordType::BrtBeginMergeCells:
-    case XlsbRecordType::BrtMergeCell:
-    case XlsbRecordType::BrtEndMergeCells:
-    case XlsbRecordType::BrtHLink:
-      return true;
-    default:
-      return false;
-  }
-}
-
 /// Appends the framed bytes of one worksheet-tail record to the grammar slot
 /// represented by `XlsbSheetTail`. `framed` spans the record header *and*
 /// payload, so re-emission is a plain byte copy rather than a re-encode.
 void RetainTailRecord(SheetDecodeState& state, XlsbRecordType type, const std::uint8_t* framed, std::size_t size) {
-  if (IsModelOwnedTailRecord(type)) {
-    return;
-  }
   std::vector<std::uint8_t>* dst = &state.tail.before_merges;
   if (state.hyperlinks_seen || IsAfterHyperlinks(type)) {
     dst = &state.tail.after_hyperlinks;
@@ -1036,6 +1291,33 @@ void RetainTailRecord(SheetDecodeState& state, XlsbRecordType type, const std::u
     dst = &state.tail.after_merges_before_hyperlinks;
   }
   dst->insert(dst->end(), framed, framed + size);
+}
+
+/// Decides what happens to a record the dispatch did not decode. This is
+/// the whole of the fallback: retention where the writer has a slot for
+/// the bytes, silence only where the writer produces the record itself,
+/// and a counted warning otherwise.
+///
+/// Verbatim retention is available for the worksheet tail alone, because
+/// `emit_sheet` re-derives the entire prefix (properties, dimensions,
+/// views, column layout) and offers no position to splice foreign bytes
+/// into. A record before `BrtEndSheetData` therefore has to be decoded to
+/// survive; one that is not lands in the counted bucket rather than
+/// disappearing.
+RecordDisposition ResolveUnmodelledRecord(SheetDecodeState& state, XlsbRecordType type, const std::uint8_t* framed,
+                                          std::size_t size) {
+  if (IsWriterRegeneratedSheetRecord(type)) {
+    return RecordDisposition::kRegenerated;
+  }
+  if (state.in_tail) {
+    RetainTailRecord(state, type, framed, size);
+    return RecordDisposition::kRetained;
+  }
+  StructuredLog("xlsb.record.dropped")
+      .field("record_type", static_cast<std::int64_t>(type))
+      .field("bytes", static_cast<std::int64_t>(size))
+      .warn();
+  return RecordDisposition::kAccounted;
 }
 
 /// Reads every entry of a worksheet's `.rels` part, keeping the original
@@ -1229,6 +1511,678 @@ Expected<void, Error> RegisterArraySpills(Workbook& wb, std::size_t sheet_index,
   return Expected<void, Error>::Ok();
 }
 
+/// Classifies and decodes one worksheet record.
+///
+/// The switch below has no fall-through exit: every arm ends in a
+/// `RecordDisposition`, and the `default` arm hands the record to
+/// `ResolveUnmodelledRecord`. Because the function returns by value on
+/// every path, an arm that ends without producing a disposition does not
+/// compile, which is what keeps "decoded, retained, regenerated or
+/// counted" exhaustive as records are added.
+Expected<RecordDisposition, Error> DispatchSheetRecord(
+    const XlsbRecord& rec, XlsbRecordType type, const std::uint8_t* framed, std::size_t framed_size,
+    SheetDecodeState& state, std::size_t sheet_index, Workbook& wb, const std::vector<std::string_view>& sst_entries,
+    std::deque<std::string>& text_storage, const std::vector<std::string>& sheet_names,
+    const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
+    std::uint32_t* undecoded_formula_count) {
+  switch (type) {
+    case XlsbRecordType::BrtBeginWsView: {
+      // BrtBeginWsView ([MS-XLSB] §2.4.141) stores the SheetView fields
+      // modelled by Formulon in its flags word and wScale.  Other viewport
+      // state is intentionally not represented by SheetView yet.
+      ByteSpan p = rec.payload;
+      auto flags_or = read_u16(p);
+      auto skip_view = read_u32(p);
+      auto skip_top = read_u32(p);
+      auto skip_left = read_u32(p);
+      auto skip_color = read_u8(p);
+      auto skip_reserved8 = read_u8(p);
+      auto skip_reserved16 = read_u16(p);
+      auto zoom_or = read_u16(p);
+      if (!flags_or || !skip_view || !skip_top || !skip_left || !skip_color || !skip_reserved8 || !skip_reserved16 ||
+          !zoom_or) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtBeginWsView truncated",
+                          "context=xlsb_reader");
+      }
+      SheetView& view = wb.sheet(sheet_index).mutable_view();
+      const std::uint16_t flags = flags_or.value();
+      view.show_grid_lines = (flags & 0x0004U) != 0U;
+      view.show_row_col_headers = (flags & 0x0008U) != 0U;
+      view.show_zeros = (flags & 0x0010U) != 0U;
+      view.right_to_left = (flags & 0x0020U) != 0U;
+      view.tab_selected = (flags & 0x0040U) != 0U;
+      if (zoom_or.value() >= 10U && zoom_or.value() <= 400U) {
+        view.zoom_scale = zoom_or.value();
+      }
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtWsProp: {
+      auto complete_or = DecodeWorksheetProperties(rec, wb.sheet(sheet_index), sheet_index);
+      if (!complete_or) {
+        return complete_or.error();
+      }
+      if (!complete_or.value()) {
+        StructuredLog("xlsb.record.dropped")
+            .field("record_type", static_cast<std::int64_t>(type))
+            .field("bytes", static_cast<std::int64_t>(framed_size))
+            .field("reason", std::string_view("sheet properties outside <sheetPr>"))
+            .warn();
+        return RecordDisposition::kAccounted;
+      }
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtWsFmtInfo: {
+      auto format_status = DecodeWorksheetFormatInfo(rec, wb.sheet(sheet_index), sheet_index);
+      if (!format_status) {
+        return format_status.error();
+      }
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtPane: {
+      // BrtPane ([MS-XLSB] §2.4.723): two Xnum split positions, then
+      // the lower-right pane's top-left cell and the frozen-state flags.
+      // In a frozen pane the Xnum fields are integral row/column counts.
+      ByteSpan p = rec.payload;
+      if (p.size < 29U) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane truncated", "context=xlsb_reader");
+      }
+      double rows = 0.0;
+      double cols = 0.0;
+      std::memcpy(&rows, p.data, sizeof(rows));
+      std::memcpy(&cols, p.data + sizeof(rows), sizeof(cols));
+      p.data += 16U;
+      p.size -= 16U;
+      auto top_row_or = read_u32(p);
+      auto left_col_or = read_u32(p);
+      auto active_pane_or = read_u32(p);
+      auto flags_or = read_u8(p);
+      if (!top_row_or || !left_col_or || !active_pane_or || !flags_or) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane fields truncated",
+                          "context=xlsb_reader");
+      }
+      const std::uint8_t frozen_flags = static_cast<std::uint8_t>(flags_or.value() & 0x03U);
+      if (frozen_flags == 0U) {
+        return RecordDisposition::kAccounted;
+      }
+      if (frozen_flags == 0x03U || !std::isfinite(rows) || !std::isfinite(cols) || rows < 0.0 || cols < 0.0 ||
+          std::trunc(rows) != rows || std::trunc(cols) != cols || rows >= Sheet::kMaxRows || cols >= Sheet::kMaxCols) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtPane frozen counts invalid",
+                          "context=xlsb_reader");
+      }
+      SheetView& view = wb.sheet(sheet_index).mutable_view();
+      view.freeze_rows = static_cast<std::uint32_t>(rows);
+      view.freeze_cols = static_cast<std::uint32_t>(cols);
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtRowHdr: {
+      // BrtRowHdr ([MS-XLSB] §2.4.770): rw, ixfe, miyRw, two flag
+      // bytes, fPhShow, then ccolspan. flags2 bit 0x40 (fGhostDirty) is
+      // the sole row-style presence signal; ixfe is ignored without it.
+      // Older minimal producers may provide only rw, which remains enough
+      // for cell decoding.
+      ByteSpan p = rec.payload;
+      auto row_or = read_u32(p);
+      if (!row_or) {
+        return row_or.error();
+      }
+      if (row_or.value() >= Sheet::kMaxRows) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtRowHdr row out of range",
+                          "context=xlsb_reader");
+      }
+      state.current_row = row_or.value();
+      state.row_seen = true;
+      if (p.size >= 9U) {
+        auto row_style_xf_or = read_u32(p);
+        auto height_or = read_u16(p);
+        auto flags1_or = read_u8(p);
+        auto flags2_or = read_u8(p);
+        auto skip_phonetic_show = read_u8(p);
+        if (!row_style_xf_or || !height_or || !flags1_or || !flags2_or || !skip_phonetic_show) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtRowHdr layout truncated",
+                            "context=xlsb_reader");
+        }
+        const std::uint8_t flags = flags2_or.value();
+        const bool has_style = (flags & 0x40U) != 0U;
+        // flags2 bit 0x20 (fUnsynced) is the sole custom-height signal.
+        // Excel stores the rendered height in `miyRw` for every row,
+        // including rows left at the sheet default, so a non-zero `miyRw`
+        // says nothing about whether the source made the height custom.
+        // Mirrors the OOXML reader, where the override follows `ht`
+        // presence rather than the `customHeight` attribute.
+        const bool has_height = (flags & 0x20U) != 0U;
+        if (has_height || (flags & 0x10U) != 0U || (flags & 0x07U) != 0U || has_style) {
+          RowLayout layout;
+          layout.row = state.current_row;
+          if (has_height) {
+            layout.height = static_cast<double>(height_or.value()) / 20.0;
+            layout.has_height = true;
+          }
+          layout.hidden = (flags & 0x10U) != 0U;
+          layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);
+          layout.has_style = has_style;
+          layout.style_xf = has_style ? row_style_xf_or.value() : 0U;
+          wb.sheet(sheet_index).mutable_layout().row_overrides.push_back(std::move(layout));
+        }
+      }
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtColInfo: {
+      // BrtColInfo ([MS-XLSB] §2.4.336): colFirst, colLast, coldx,
+      // ixfe, flags(u16). coldx is in 1/256 standard digits.
+      ByteSpan p = rec.payload;
+      auto first_or = read_u32(p);
+      auto last_or = read_u32(p);
+      auto width_or = read_u32(p);
+      auto style_xf_or = read_u32(p);
+      auto flags_or = read_u16(p);
+      if (!first_or || !last_or || !width_or || !style_xf_or || !flags_or) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtColInfo truncated",
+                          "context=xlsb_reader");
+      }
+      if (first_or.value() >= Sheet::kMaxCols || last_or.value() >= Sheet::kMaxCols ||
+          first_or.value() > last_or.value()) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtColInfo range out of bounds",
+                          "context=xlsb_reader");
+      }
+      ColumnLayout layout;
+      layout.first = first_or.value();
+      layout.last = last_or.value();
+      layout.width = static_cast<double>(width_or.value()) / 256.0;
+      layout.has_width = width_or.value() != 0U || (flags_or.value() & 0x0002U) != 0U;
+      // BrtColInfo always carries ixfe; unlike OOXML there is no separate
+      // style-presence bit. Treat the mandatory value as an effective style
+      // (including ixfe=0), so an XLSB round-trip may canonicalize a
+      // width/hidden-only span to explicit style 0 without changing its
+      // rendering semantics.
+      layout.has_style = true;
+      layout.style_xf = style_xf_or.value();
+      layout.hidden = (flags_or.value() & 0x0001U) != 0U;
+      layout.outline_level = static_cast<std::uint8_t>((flags_or.value() >> 8U) & 0x07U);
+      wb.sheet(sheet_index).mutable_layout().columns.push_back(std::move(layout));
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtMergeCell: {
+      // BrtMergeCell ([MS-XLSB] §2.4.713): RfX = first/last row and
+      // first/last column, all u32.  Containers are structural only; a
+      // record may appear after sheet data and therefore must not depend on
+      // the active BrtRowHdr state.
+      ByteSpan p = rec.payload;
+      auto first_row_or = read_u32(p);
+      auto last_row_or = read_u32(p);
+      auto first_col_or = read_u32(p);
+      auto last_col_or = read_u32(p);
+      if (!first_row_or || !last_row_or || !first_col_or || !last_col_or) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtMergeCell truncated",
+                          "context=xlsb_reader");
+      }
+      if (first_row_or.value() >= Sheet::kMaxRows || last_row_or.value() >= Sheet::kMaxRows ||
+          first_col_or.value() >= Sheet::kMaxCols || last_col_or.value() >= Sheet::kMaxCols ||
+          first_row_or.value() > last_row_or.value() || first_col_or.value() > last_col_or.value()) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtMergeCell range out of bounds",
+                          "context=xlsb_reader");
+      }
+      wb.sheet(sheet_index)
+          .mutable_merges()
+          .push_back(MergeRange{first_row_or.value(), first_col_or.value(), last_row_or.value(), last_col_or.value()});
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtHLink: {
+      // BrtHLink ([MS-XLSB] §2.4.494): RfX followed by a non-null
+      // relationship id and three XLWideStrings (location, tooltip,
+      // display). A present-but-empty relationship id is the internal
+      // hyperlink form; external links must resolve that id through the
+      // sheet relationship part after the record stream is decoded.
+      ByteSpan p = rec.payload;
+      auto first_row_or = read_u32(p);
+      auto last_row_or = read_u32(p);
+      auto first_col_or = read_u32(p);
+      auto last_col_or = read_u32(p);
+      if (!first_row_or || !last_row_or || !first_col_or || !last_col_or) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtHLink range truncated",
+                          "context=xlsb_reader");
+      }
+      if (!Sheet::rect_in_grid(first_row_or.value(), first_col_or.value(), last_row_or.value(), last_col_or.value())) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink range out of bounds",
+                          "context=xlsb_reader");
+      }
+      // `read_xlnullablewidestring` intentionally maps both a null value
+      // and a present empty value to `""`; inspect the sentinel first so a
+      // null RelID cannot be mistaken for the required internal form.
+      if (p.size < 4U) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtHLink relationship id truncated",
+                          "context=xlsb_reader");
+      }
+      const std::uint32_t rel_len =
+          static_cast<std::uint32_t>(p.data[0]) | (static_cast<std::uint32_t>(p.data[1]) << 8U) |
+          (static_cast<std::uint32_t>(p.data[2]) << 16U) | (static_cast<std::uint32_t>(p.data[3]) << 24U);
+      if (rel_len == 0xFFFFFFFFU) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink relationship id is null",
+                          "context=xlsb_reader");
+      }
+      if (rel_len > kMaxHyperlinkRelIdUnits) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink relationship id exceeds string limit",
+                          "context=xlsb_reader cch=" + std::to_string(rel_len));
+      }
+      auto rid_or = read_xlnullablewidestring(p);
+      if (!rid_or) {
+        return rid_or.error();
+      }
+      auto location_or = ReadHyperlinkWideString(p, "location", kMaxHyperlinkLocationUnits);
+      if (!location_or) {
+        return location_or.error();
+      }
+      auto tooltip_or = ReadHyperlinkWideString(p, "tooltip", kMaxHyperlinkTooltipUnits);
+      if (!tooltip_or) {
+        return tooltip_or.error();
+      }
+      auto display_or = ReadHyperlinkWideString(p, "display", kMaxHyperlinkDisplayUnits);
+      if (!display_or) {
+        return display_or.error();
+      }
+      if (p.size != 0U) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink has trailing bytes",
+                          "context=xlsb_reader trailing=" + std::to_string(p.size));
+      }
+      Hyperlink hyperlink;
+      hyperlink.row = first_row_or.value();
+      hyperlink.col = first_col_or.value();
+      hyperlink.last_row = last_row_or.value();
+      hyperlink.last_col = last_col_or.value();
+      hyperlink.rid = std::move(rid_or.value());
+      hyperlink.location = std::move(location_or.value());
+      hyperlink.tooltip = std::move(tooltip_or.value());
+      hyperlink.display = std::move(display_or.value());
+      wb.sheet(sheet_index).mutable_hyperlinks().push_back(std::move(hyperlink));
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtCellBlank: {
+      if (!state.row_seen) {
+        return RecordDisposition::kAccounted;
+      }
+      ByteSpan p = rec.payload;
+      auto col_or = ReadCellHeader(p);
+      if (!col_or) {
+        return col_or.error();
+      }
+      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::blank());
+      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+        return r.error();
+      }
+      ++state.cells_decoded;
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtCellRk: {
+      if (!state.row_seen) {
+        return RecordDisposition::kAccounted;
+      }
+      ByteSpan p = rec.payload;
+      auto col_or = ReadCellHeader(p);
+      if (!col_or) {
+        return col_or.error();
+      }
+      auto rk_or = read_u32(p);
+      if (!rk_or) {
+        return rk_or.error();
+      }
+      const double v = decode_rk_number(rk_or.value());
+      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::number(v));
+      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+        return r.error();
+      }
+      ++state.cells_decoded;
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtCellReal: {
+      if (!state.row_seen) {
+        return RecordDisposition::kAccounted;
+      }
+      ByteSpan p = rec.payload;
+      auto col_or = ReadCellHeader(p);
+      if (!col_or) {
+        return col_or.error();
+      }
+      if (p.size < 8) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtCellReal payload truncated",
+                          "context=xlsb_reader");
+      }
+      double v;
+      std::memcpy(&v, p.data, sizeof(v));
+      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::number(v));
+      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+        return r.error();
+      }
+      ++state.cells_decoded;
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtCellBool: {
+      if (!state.row_seen) {
+        return RecordDisposition::kAccounted;
+      }
+      ByteSpan p = rec.payload;
+      auto col_or = ReadCellHeader(p);
+      if (!col_or) {
+        return col_or.error();
+      }
+      auto b_or = read_u8(p);
+      if (!b_or) {
+        return b_or.error();
+      }
+      wb.sheet(sheet_index)
+          .set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::boolean(b_or.value() != 0));
+      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+        return r.error();
+      }
+      ++state.cells_decoded;
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtCellError: {
+      if (!state.row_seen) {
+        return RecordDisposition::kAccounted;
+      }
+      ByteSpan p = rec.payload;
+      auto col_or = ReadCellHeader(p);
+      if (!col_or) {
+        return col_or.error();
+      }
+      auto code_or = read_u8(p);
+      if (!code_or) {
+        return code_or.error();
+      }
+      // Map the OOXML wire code to `ErrorCode` via the single
+      // `kErrorTable`-backed lookup shared with the writer, so this
+      // path stays symmetric with `ooxml_code()` (see
+      // `error_from_ooxml_code` in `value.h`).
+      const ErrorCode ec = error_from_ooxml_code(static_cast<std::int32_t>(code_or.value()));
+      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::error(ec));
+      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+        return r.error();
+      }
+      ++state.cells_decoded;
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtCellSt: {
+      if (!state.row_seen) {
+        return RecordDisposition::kAccounted;
+      }
+      ByteSpan p = rec.payload;
+      auto col_or = ReadCellHeader(p);
+      if (!col_or) {
+        return col_or.error();
+      }
+      auto str_or = read_xlwidestring(p);
+      if (!str_or) {
+        return str_or.error();
+      }
+      text_storage.push_back(std::move(str_or.value()));
+      wb.sheet(sheet_index)
+          .set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::text(text_storage.back()));
+      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+        return r.error();
+      }
+      ++state.cells_decoded;
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtCellIsst: {
+      if (!state.row_seen) {
+        return RecordDisposition::kAccounted;
+      }
+      ByteSpan p = rec.payload;
+      auto col_or = ReadCellHeader(p);
+      if (!col_or) {
+        return col_or.error();
+      }
+      auto idx_or = read_u32(p);
+      if (!idx_or) {
+        return idx_or.error();
+      }
+      if (idx_or.value() >= sst_entries.size()) {
+        std::string ctx("context=xlsb_reader sheet_index=");
+        ctx.append(std::to_string(sheet_index));
+        ctx.append(" row=").append(std::to_string(state.current_row));
+        ctx.append(" col=").append(std::to_string(col_or.value().col));
+        ctx.append(" sst_index=").append(std::to_string(idx_or.value()));
+        ctx.append(" sst_size=").append(std::to_string(sst_entries.size()));
+        return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb sst index out of range", std::move(ctx));
+      }
+      wb.sheet(sheet_index)
+          .set_cell_cached_value_borrowed(state.current_row, col_or.value().col,
+                                          Value::text(sst_entries[idx_or.value()]));
+      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+        return r.error();
+      }
+      ++state.cells_decoded;
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtFmlaNum:
+    case XlsbRecordType::BrtFmlaString:
+    case XlsbRecordType::BrtFmlaBool:
+    case XlsbRecordType::BrtFmlaError: {
+      if (!state.row_seen) {
+        return RecordDisposition::kAccounted;
+      }
+      // All four formula records share the same prefix:
+      //   cell-header (8 bytes)
+      //   value       (8 bytes for Num, XLWideString for String, 2
+      //                bytes for Bool/Error: u8 result + u8 flags)
+      //   flags       (u16 grbitFlags)
+      //   ptgs        (CellParsedFormula = u32 cce + cce bytes of
+      //                 Rgce + ... we just slice the remainder as
+      //                 opaque bytes for now)
+      ByteSpan p = rec.payload;
+      auto col_or = ReadCellHeader(p);
+      if (!col_or) {
+        return col_or.error();
+      }
+      // Decode the formula's cached result so we can PRESERVE it on the
+      // cell even when the Ptg stream cannot be decoded to a formula.
+      Value cached = Value::blank();
+      switch (type) {
+        case XlsbRecordType::BrtFmlaNum: {
+          if (p.size < 8) {
+            return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtFmlaNum value truncated",
+                              "context=xlsb_reader");
+          }
+          double v;
+          std::memcpy(&v, p.data, sizeof(v));
+          cached = Value::number(v);
+          p.data += 8;
+          p.size -= 8;
+          break;
+        }
+        case XlsbRecordType::BrtFmlaString: {
+          auto s = read_xlwidestring(p);
+          if (!s) {
+            return s.error();
+          }
+          text_storage.push_back(std::move(s.value()));
+          cached = Value::text(text_storage.back());
+          break;
+        }
+        case XlsbRecordType::BrtFmlaBool: {
+          auto b = read_u8(p);
+          if (!b) {
+            return b.error();
+          }
+          cached = Value::boolean(b.value() != 0);
+          break;
+        }
+        case XlsbRecordType::BrtFmlaError: {
+          auto b = read_u8(p);
+          if (!b) {
+            return b.error();
+          }
+          // Same `kErrorTable`-backed lookup the literal path uses.
+          cached = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(b.value())));
+          break;
+        }
+        default:
+          break;
+      }
+      // grbitFlags (u16).
+      if (p.size < 2) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula flags truncated",
+                          "context=xlsb_reader");
+      }
+      p.data += 2;
+      p.size -= 2;
+      // CellParsedFormula: u32 cce (rgce byte length) + cce bytes of
+      // Ptg stream + u32 cb + cb bytes of rgcb (the array-constant
+      // extra-data area `PtgArray` consumes; empty for formulas with
+      // no array literals).
+      auto cce_or = read_u32(p);
+      if (!cce_or) {
+        return cce_or.error();
+      }
+      const std::uint32_t cce = cce_or.value();
+      if (cce > p.size) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula rgce length exceeds payload",
+                          "context=xlsb_reader");
+      }
+      ByteSpan rgce{p.data, cce};
+      p.data += cce;
+      p.size -= cce;
+      ByteSpan rgcb{};
+      if (p.size >= 4) {
+        auto cb_or = read_u32(p);
+        if (!cb_or) {
+          return cb_or.error();
+        }
+        const std::uint32_t cb = cb_or.value();
+        if (cb > p.size) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula rgcb length exceeds payload",
+                            "context=xlsb_reader");
+        }
+        rgcb = ByteSpan{p.data, cb};
+      }
+      const std::string formula_text =
+          DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, sheet_index, state.current_row,
+                            col_or.value().col, undecoded_formula_count);
+      if (!formula_text.empty()) {
+        // Register the real formula via the workbook-level entry so the
+        // dep graph tracks it (matching the OOXML reader). The cached
+        // value is preserved separately below.
+        auto wf = wb.set_cell_formula(sheet_index, state.current_row, col_or.value().col, formula_text);
+        if (!wf) {
+          return wf.error();
+        }
+      }
+      // Always preserve the cached value (for undecodable formulas this
+      // is the only correct datum the cell carries; for decoded ones it
+      // matches Excel's stored result until the next recalc).
+      if (!cached.is_blank()) {
+        wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, cached);
+      }
+      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+        return r.error();
+      }
+      ++state.cells_decoded;
+      return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtArrFmla: {
+      if (!state.row_seen) {
+        return RecordDisposition::kAccounted;
+      }
+      // BrtArrFmla ([MS-XLSB], verified against a real Excel-produced
+      // `xl/worksheets/sheetN.bin`): RfX (4 x u32: rwFirst, rwLast,
+      // colFirst, colLast) + 1 reserved/flag byte + CellParsedFormula
+      // (u32 cce + cce bytes rgce + u32 cb + cb bytes rgcb). This
+      // record supplies the REAL Ptg tokens for a CSE / dynamic-array
+      // formula whose anchor cell's own formula-result "shell" record
+      // (BrtFmlaNum/String/Bool/Error, processed above) carries only a
+      // `PtgExp` placeholder. Only the anchor cell (`rwFirst`,
+      // `colFirst`) gets a formula string; the rest of the array range
+      // (if any) has no formula of its own — matching the OOXML
+      // reader's treatment of `t="array"` / dynamic-array spill
+      // formulas, where only the anchor cell stores `<f>`.
+      ByteSpan p = rec.payload;
+      auto rw_first_or = read_u32(p);
+      if (!rw_first_or) {
+        return rw_first_or.error();
+      }
+      auto rw_last_or = read_u32(p);
+      if (!rw_last_or) {
+        return rw_last_or.error();
+      }
+      auto col_first_or = read_u32(p);
+      if (!col_first_or) {
+        return col_first_or.error();
+      }
+      auto col_last_or = read_u32(p);
+      if (!col_last_or) {
+        return col_last_or.error();
+      }
+      // The RfX rect must lie inside the grid and be well-ordered on
+      // BOTH axes before any of it is used: the anchor guard below is
+      // an OR, so a rect reversed on only one axis would otherwise
+      // still be recorded and wrap the size math in
+      // `RegisterArraySpills`.
+      if (rw_first_or.value() >= Sheet::kMaxRows || rw_last_or.value() >= Sheet::kMaxRows ||
+          col_first_or.value() >= Sheet::kMaxCols || col_last_or.value() >= Sheet::kMaxCols ||
+          rw_last_or.value() < rw_first_or.value() || col_last_or.value() < col_first_or.value()) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtArrFmla range out of bounds",
+                          "context=xlsb_reader");
+      }
+      if (p.size < 1) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla flag truncated",
+                          "context=xlsb_reader");
+      }
+      p.data += 1;
+      p.size -= 1;
+      auto cce_or = read_u32(p);
+      if (!cce_or) {
+        return cce_or.error();
+      }
+      const std::uint32_t cce = cce_or.value();
+      if (cce > p.size) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla rgce length exceeds payload",
+                          "context=xlsb_reader");
+      }
+      ByteSpan rgce{p.data, cce};
+      p.data += cce;
+      p.size -= cce;
+      ByteSpan rgcb{};
+      if (p.size >= 4) {
+        auto cb_or = read_u32(p);
+        if (!cb_or) {
+          return cb_or.error();
+        }
+        const std::uint32_t cb = cb_or.value();
+        if (cb > p.size) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla rgcb length exceeds payload",
+                            "context=xlsb_reader");
+        }
+        rgcb = ByteSpan{p.data, cb};
+      }
+      const std::string formula_text =
+          DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, sheet_index, rw_first_or.value(),
+                            col_first_or.value(), undecoded_formula_count);
+      if (formula_text.empty()) {
+        return RecordDisposition::kModelled;
+      }
+      auto wf = wb.set_cell_formula(sheet_index, rw_first_or.value(), col_first_or.value(), formula_text);
+      if (!wf) {
+        return wf.error();
+      }
+      // Record the footprint for a second pass after the whole sheet
+      // has been decoded (see `RegisterArraySpills`, called at the end
+      // of this function). `BrtArrFmla` for the anchor `(rwFirst,
+      // colFirst)` appears within the anchor's OWN row group in the
+      // record stream, i.e. BEFORE the non-anchor rows' own cell
+      // records (`rwLast > rwFirst` spans into rows not yet decoded).
+      // Registering the spill immediately here would have those later
+      // records' `set_cell_cached_value` calls silently repopulate the
+      // phantom cells with their raw literal payload, which a
+      // subsequent recalc's spill-commit would then see as "already
+      // occupied" and surface `#SPILL!` instead of the real result.
+      state.array_anchors.push_back(
+          ArrayAnchor{rw_first_or.value(), col_first_or.value(), rw_last_or.value(), col_last_or.value()});
+      return RecordDisposition::kModelled;
+    }
+    default:
+      return ResolveUnmodelledRecord(state, type, framed, framed_size);
+  }
+}
+
 /// Decodes one sheet binary part. Cells (literal + formula) flow into
 /// `wb.sheet(sheet_index)`. SST indices are resolved against
 /// `sst_entries`; out-of-range indices are returned as
@@ -1250,663 +2204,28 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
     }
     const XlsbRecord& rec = rec_or.value();
     const auto type = static_cast<XlsbRecordType>(rec.type);
+    const auto framed_size = static_cast<std::size_t>(cursor.data - framed);
     if (type == XlsbRecordType::BrtHLink) {
       state.hyperlinks_seen = true;
     }
-    // Retain worksheet-tail records before dispatching: the tail carries the
-    // sheet-level features the model does not express, and the sheet part is
-    // consumed whole so package passthrough cannot rescue them.
-    if (state.in_tail) {
-      RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
+    // Every record resolves to a disposition; the result is consumed rather
+    // than discarded so that no record can pass through unclassified.
+    auto disposition_or =
+        DispatchSheetRecord(rec, type, framed, framed_size, state, sheet_index, wb, sst_entries, text_storage,
+                            sheet_names, name_table, sheet_ranges, undecoded_formula_count);
+    if (!disposition_or) {
+      return disposition_or.error();
     }
+    if (disposition_or.value() == RecordDisposition::kAccounted) {
+      ++state.dropped_records;
+    }
+    // Grammar phase advances after the record has been dispatched, so the
+    // marker itself belongs to the phase it closes rather than the one it
+    // opens.
     if (type == XlsbRecordType::BrtEndSheetData) {
       state.in_tail = true;
     } else if (type == XlsbRecordType::BrtEndMergeCells) {
       state.merges_seen = true;
-    }
-    switch (type) {
-      case XlsbRecordType::BrtBeginWsView: {
-        // BrtBeginWsView ([MS-XLSB] §2.4.141) stores the SheetView fields
-        // modelled by Formulon in its flags word and wScale.  Other viewport
-        // state is intentionally not represented by SheetView yet.
-        ByteSpan p = rec.payload;
-        auto flags_or = read_u16(p);
-        auto skip_view = read_u32(p);
-        auto skip_top = read_u32(p);
-        auto skip_left = read_u32(p);
-        auto skip_color = read_u8(p);
-        auto skip_reserved8 = read_u8(p);
-        auto skip_reserved16 = read_u16(p);
-        auto zoom_or = read_u16(p);
-        if (!flags_or || !skip_view || !skip_top || !skip_left || !skip_color || !skip_reserved8 || !skip_reserved16 ||
-            !zoom_or) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtBeginWsView truncated",
-                            "context=xlsb_reader");
-        }
-        SheetView& view = wb.sheet(sheet_index).mutable_view();
-        const std::uint16_t flags = flags_or.value();
-        view.show_grid_lines = (flags & 0x0004U) != 0U;
-        view.show_row_col_headers = (flags & 0x0008U) != 0U;
-        view.show_zeros = (flags & 0x0010U) != 0U;
-        view.right_to_left = (flags & 0x0020U) != 0U;
-        view.tab_selected = (flags & 0x0040U) != 0U;
-        if (zoom_or.value() >= 10U && zoom_or.value() <= 400U) {
-          view.zoom_scale = zoom_or.value();
-        }
-        break;
-      }
-      case XlsbRecordType::BrtWsFmtInfo: {
-        auto format_status = DecodeWorksheetFormatInfo(rec, wb.sheet(sheet_index), sheet_index);
-        if (!format_status) {
-          return format_status.error();
-        }
-        break;
-      }
-      case XlsbRecordType::BrtPane: {
-        // BrtPane ([MS-XLSB] §2.4.723): two Xnum split positions, then
-        // the lower-right pane's top-left cell and the frozen-state flags.
-        // In a frozen pane the Xnum fields are integral row/column counts.
-        ByteSpan p = rec.payload;
-        if (p.size < 29U) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane truncated", "context=xlsb_reader");
-        }
-        double rows = 0.0;
-        double cols = 0.0;
-        std::memcpy(&rows, p.data, sizeof(rows));
-        std::memcpy(&cols, p.data + sizeof(rows), sizeof(cols));
-        p.data += 16U;
-        p.size -= 16U;
-        auto top_row_or = read_u32(p);
-        auto left_col_or = read_u32(p);
-        auto active_pane_or = read_u32(p);
-        auto flags_or = read_u8(p);
-        if (!top_row_or || !left_col_or || !active_pane_or || !flags_or) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane fields truncated",
-                            "context=xlsb_reader");
-        }
-        const std::uint8_t frozen_flags = static_cast<std::uint8_t>(flags_or.value() & 0x03U);
-        if (frozen_flags == 0U) {
-          break;
-        }
-        if (frozen_flags == 0x03U || !std::isfinite(rows) || !std::isfinite(cols) || rows < 0.0 || cols < 0.0 ||
-            std::trunc(rows) != rows || std::trunc(cols) != cols || rows >= Sheet::kMaxRows ||
-            cols >= Sheet::kMaxCols) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtPane frozen counts invalid",
-                            "context=xlsb_reader");
-        }
-        SheetView& view = wb.sheet(sheet_index).mutable_view();
-        view.freeze_rows = static_cast<std::uint32_t>(rows);
-        view.freeze_cols = static_cast<std::uint32_t>(cols);
-        break;
-      }
-      case XlsbRecordType::BrtRowHdr: {
-        // BrtRowHdr ([MS-XLSB] §2.4.770): rw, ixfe, miyRw, two flag
-        // bytes, fPhShow, then ccolspan. flags2 bit 0x40 (fGhostDirty) is
-        // the sole row-style presence signal; ixfe is ignored without it.
-        // Older minimal producers may provide only rw, which remains enough
-        // for cell decoding.
-        ByteSpan p = rec.payload;
-        auto row_or = read_u32(p);
-        if (!row_or) {
-          return row_or.error();
-        }
-        if (row_or.value() >= Sheet::kMaxRows) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtRowHdr row out of range",
-                            "context=xlsb_reader");
-        }
-        state.current_row = row_or.value();
-        state.row_seen = true;
-        if (p.size >= 9U) {
-          auto row_style_xf_or = read_u32(p);
-          auto height_or = read_u16(p);
-          auto flags1_or = read_u8(p);
-          auto flags2_or = read_u8(p);
-          auto skip_phonetic_show = read_u8(p);
-          if (!row_style_xf_or || !height_or || !flags1_or || !flags2_or || !skip_phonetic_show) {
-            return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtRowHdr layout truncated",
-                              "context=xlsb_reader");
-          }
-          const std::uint8_t flags = flags2_or.value();
-          const bool has_style = (flags & 0x40U) != 0U;
-          if (height_or.value() != 0U || (flags & 0x10U) != 0U || (flags & 0x07U) != 0U || has_style) {
-            RowLayout layout;
-            layout.row = state.current_row;
-            layout.height = static_cast<double>(height_or.value()) / 20.0;
-            layout.has_height = height_or.value() != 0U || (flags & 0x20U) != 0U;
-            layout.hidden = (flags & 0x10U) != 0U;
-            layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);
-            layout.has_style = has_style;
-            layout.style_xf = has_style ? row_style_xf_or.value() : 0U;
-            wb.sheet(sheet_index).mutable_layout().row_overrides.push_back(std::move(layout));
-          }
-        }
-        break;
-      }
-      case XlsbRecordType::BrtColInfo: {
-        // BrtColInfo ([MS-XLSB] §2.4.336): colFirst, colLast, coldx,
-        // ixfe, flags(u16). coldx is in 1/256 standard digits.
-        ByteSpan p = rec.payload;
-        auto first_or = read_u32(p);
-        auto last_or = read_u32(p);
-        auto width_or = read_u32(p);
-        auto style_xf_or = read_u32(p);
-        auto flags_or = read_u16(p);
-        if (!first_or || !last_or || !width_or || !style_xf_or || !flags_or) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtColInfo truncated",
-                            "context=xlsb_reader");
-        }
-        if (first_or.value() >= Sheet::kMaxCols || last_or.value() >= Sheet::kMaxCols ||
-            first_or.value() > last_or.value()) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtColInfo range out of bounds",
-                            "context=xlsb_reader");
-        }
-        ColumnLayout layout;
-        layout.first = first_or.value();
-        layout.last = last_or.value();
-        layout.width = static_cast<double>(width_or.value()) / 256.0;
-        layout.has_width = width_or.value() != 0U || (flags_or.value() & 0x0002U) != 0U;
-        // BrtColInfo always carries ixfe; unlike OOXML there is no separate
-        // style-presence bit. Treat the mandatory value as an effective style
-        // (including ixfe=0), so an XLSB round-trip may canonicalize a
-        // width/hidden-only span to explicit style 0 without changing its
-        // rendering semantics.
-        layout.has_style = true;
-        layout.style_xf = style_xf_or.value();
-        layout.hidden = (flags_or.value() & 0x0001U) != 0U;
-        layout.outline_level = static_cast<std::uint8_t>((flags_or.value() >> 8U) & 0x07U);
-        wb.sheet(sheet_index).mutable_layout().columns.push_back(std::move(layout));
-        break;
-      }
-      case XlsbRecordType::BrtMergeCell: {
-        // BrtMergeCell ([MS-XLSB] §2.4.713): RfX = first/last row and
-        // first/last column, all u32.  Containers are structural only; a
-        // record may appear after sheet data and therefore must not depend on
-        // the active BrtRowHdr state.
-        ByteSpan p = rec.payload;
-        auto first_row_or = read_u32(p);
-        auto last_row_or = read_u32(p);
-        auto first_col_or = read_u32(p);
-        auto last_col_or = read_u32(p);
-        if (!first_row_or || !last_row_or || !first_col_or || !last_col_or) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtMergeCell truncated",
-                            "context=xlsb_reader");
-        }
-        if (first_row_or.value() >= Sheet::kMaxRows || last_row_or.value() >= Sheet::kMaxRows ||
-            first_col_or.value() >= Sheet::kMaxCols || last_col_or.value() >= Sheet::kMaxCols ||
-            first_row_or.value() > last_row_or.value() || first_col_or.value() > last_col_or.value()) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtMergeCell range out of bounds",
-                            "context=xlsb_reader");
-        }
-        wb.sheet(sheet_index)
-            .mutable_merges()
-            .push_back(
-                MergeRange{first_row_or.value(), first_col_or.value(), last_row_or.value(), last_col_or.value()});
-        break;
-      }
-      case XlsbRecordType::BrtHLink: {
-        // BrtHLink ([MS-XLSB] §2.4.494): RfX followed by a non-null
-        // relationship id and three XLWideStrings (location, tooltip,
-        // display). A present-but-empty relationship id is the internal
-        // hyperlink form; external links must resolve that id through the
-        // sheet relationship part after the record stream is decoded.
-        ByteSpan p = rec.payload;
-        auto first_row_or = read_u32(p);
-        auto last_row_or = read_u32(p);
-        auto first_col_or = read_u32(p);
-        auto last_col_or = read_u32(p);
-        if (!first_row_or || !last_row_or || !first_col_or || !last_col_or) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtHLink range truncated",
-                            "context=xlsb_reader");
-        }
-        if (!Sheet::rect_in_grid(first_row_or.value(), first_col_or.value(), last_row_or.value(),
-                                 last_col_or.value())) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink range out of bounds",
-                            "context=xlsb_reader");
-        }
-        // `read_xlnullablewidestring` intentionally maps both a null value
-        // and a present empty value to `""`; inspect the sentinel first so a
-        // null RelID cannot be mistaken for the required internal form.
-        if (p.size < 4U) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtHLink relationship id truncated",
-                            "context=xlsb_reader");
-        }
-        const std::uint32_t rel_len =
-            static_cast<std::uint32_t>(p.data[0]) | (static_cast<std::uint32_t>(p.data[1]) << 8U) |
-            (static_cast<std::uint32_t>(p.data[2]) << 16U) | (static_cast<std::uint32_t>(p.data[3]) << 24U);
-        if (rel_len == 0xFFFFFFFFU) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink relationship id is null",
-                            "context=xlsb_reader");
-        }
-        if (rel_len > kMaxHyperlinkRelIdUnits) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
-                            "xlsb BrtHLink relationship id exceeds string limit",
-                            "context=xlsb_reader cch=" + std::to_string(rel_len));
-        }
-        auto rid_or = read_xlnullablewidestring(p);
-        if (!rid_or) {
-          return rid_or.error();
-        }
-        auto location_or = ReadHyperlinkWideString(p, "location", kMaxHyperlinkLocationUnits);
-        if (!location_or) {
-          return location_or.error();
-        }
-        auto tooltip_or = ReadHyperlinkWideString(p, "tooltip", kMaxHyperlinkTooltipUnits);
-        if (!tooltip_or) {
-          return tooltip_or.error();
-        }
-        auto display_or = ReadHyperlinkWideString(p, "display", kMaxHyperlinkDisplayUnits);
-        if (!display_or) {
-          return display_or.error();
-        }
-        if (p.size != 0U) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink has trailing bytes",
-                            "context=xlsb_reader trailing=" + std::to_string(p.size));
-        }
-        Hyperlink hyperlink;
-        hyperlink.row = first_row_or.value();
-        hyperlink.col = first_col_or.value();
-        hyperlink.last_row = last_row_or.value();
-        hyperlink.last_col = last_col_or.value();
-        hyperlink.rid = std::move(rid_or.value());
-        hyperlink.location = std::move(location_or.value());
-        hyperlink.tooltip = std::move(tooltip_or.value());
-        hyperlink.display = std::move(display_or.value());
-        wb.sheet(sheet_index).mutable_hyperlinks().push_back(std::move(hyperlink));
-        break;
-      }
-      case XlsbRecordType::BrtCellBlank: {
-        if (!state.row_seen) {
-          break;
-        }
-        ByteSpan p = rec.payload;
-        auto col_or = ReadCellHeader(p);
-        if (!col_or) {
-          return col_or.error();
-        }
-        wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::blank());
-        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
-            !r) {
-          return r.error();
-        }
-        ++state.cells_decoded;
-        break;
-      }
-      case XlsbRecordType::BrtCellRk: {
-        if (!state.row_seen) {
-          break;
-        }
-        ByteSpan p = rec.payload;
-        auto col_or = ReadCellHeader(p);
-        if (!col_or) {
-          return col_or.error();
-        }
-        auto rk_or = read_u32(p);
-        if (!rk_or) {
-          return rk_or.error();
-        }
-        const double v = decode_rk_number(rk_or.value());
-        wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::number(v));
-        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
-            !r) {
-          return r.error();
-        }
-        ++state.cells_decoded;
-        break;
-      }
-      case XlsbRecordType::BrtCellReal: {
-        if (!state.row_seen) {
-          break;
-        }
-        ByteSpan p = rec.payload;
-        auto col_or = ReadCellHeader(p);
-        if (!col_or) {
-          return col_or.error();
-        }
-        if (p.size < 8) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtCellReal payload truncated",
-                            "context=xlsb_reader");
-        }
-        double v;
-        std::memcpy(&v, p.data, sizeof(v));
-        wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::number(v));
-        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
-            !r) {
-          return r.error();
-        }
-        ++state.cells_decoded;
-        break;
-      }
-      case XlsbRecordType::BrtCellBool: {
-        if (!state.row_seen) {
-          break;
-        }
-        ByteSpan p = rec.payload;
-        auto col_or = ReadCellHeader(p);
-        if (!col_or) {
-          return col_or.error();
-        }
-        auto b_or = read_u8(p);
-        if (!b_or) {
-          return b_or.error();
-        }
-        wb.sheet(sheet_index)
-            .set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::boolean(b_or.value() != 0));
-        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
-            !r) {
-          return r.error();
-        }
-        ++state.cells_decoded;
-        break;
-      }
-      case XlsbRecordType::BrtCellError: {
-        if (!state.row_seen) {
-          break;
-        }
-        ByteSpan p = rec.payload;
-        auto col_or = ReadCellHeader(p);
-        if (!col_or) {
-          return col_or.error();
-        }
-        auto code_or = read_u8(p);
-        if (!code_or) {
-          return code_or.error();
-        }
-        // Map the OOXML wire code to `ErrorCode` via the single
-        // `kErrorTable`-backed lookup shared with the writer, so this
-        // path stays symmetric with `ooxml_code()` (see
-        // `error_from_ooxml_code` in `value.h`).
-        const ErrorCode ec = error_from_ooxml_code(static_cast<std::int32_t>(code_or.value()));
-        wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::error(ec));
-        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
-            !r) {
-          return r.error();
-        }
-        ++state.cells_decoded;
-        break;
-      }
-      case XlsbRecordType::BrtCellSt: {
-        if (!state.row_seen) {
-          break;
-        }
-        ByteSpan p = rec.payload;
-        auto col_or = ReadCellHeader(p);
-        if (!col_or) {
-          return col_or.error();
-        }
-        auto str_or = read_xlwidestring(p);
-        if (!str_or) {
-          return str_or.error();
-        }
-        text_storage.push_back(std::move(str_or.value()));
-        wb.sheet(sheet_index)
-            .set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::text(text_storage.back()));
-        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
-            !r) {
-          return r.error();
-        }
-        ++state.cells_decoded;
-        break;
-      }
-      case XlsbRecordType::BrtCellIsst: {
-        if (!state.row_seen) {
-          break;
-        }
-        ByteSpan p = rec.payload;
-        auto col_or = ReadCellHeader(p);
-        if (!col_or) {
-          return col_or.error();
-        }
-        auto idx_or = read_u32(p);
-        if (!idx_or) {
-          return idx_or.error();
-        }
-        if (idx_or.value() >= sst_entries.size()) {
-          std::string ctx("context=xlsb_reader sheet_index=");
-          ctx.append(std::to_string(sheet_index));
-          ctx.append(" row=").append(std::to_string(state.current_row));
-          ctx.append(" col=").append(std::to_string(col_or.value().col));
-          ctx.append(" sst_index=").append(std::to_string(idx_or.value()));
-          ctx.append(" sst_size=").append(std::to_string(sst_entries.size()));
-          return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb sst index out of range", std::move(ctx));
-        }
-        wb.sheet(sheet_index)
-            .set_cell_cached_value_borrowed(state.current_row, col_or.value().col,
-                                            Value::text(sst_entries[idx_or.value()]));
-        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
-            !r) {
-          return r.error();
-        }
-        ++state.cells_decoded;
-        break;
-      }
-      case XlsbRecordType::BrtFmlaNum:
-      case XlsbRecordType::BrtFmlaString:
-      case XlsbRecordType::BrtFmlaBool:
-      case XlsbRecordType::BrtFmlaError: {
-        if (!state.row_seen) {
-          break;
-        }
-        // All four formula records share the same prefix:
-        //   cell-header (8 bytes)
-        //   value       (8 bytes for Num, XLWideString for String, 2
-        //                bytes for Bool/Error: u8 result + u8 flags)
-        //   flags       (u16 grbitFlags)
-        //   ptgs        (CellParsedFormula = u32 cce + cce bytes of
-        //                 Rgce + ... we just slice the remainder as
-        //                 opaque bytes for now)
-        ByteSpan p = rec.payload;
-        auto col_or = ReadCellHeader(p);
-        if (!col_or) {
-          return col_or.error();
-        }
-        // Decode the formula's cached result so we can PRESERVE it on the
-        // cell even when the Ptg stream cannot be decoded to a formula.
-        Value cached = Value::blank();
-        switch (type) {
-          case XlsbRecordType::BrtFmlaNum: {
-            if (p.size < 8) {
-              return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtFmlaNum value truncated",
-                                "context=xlsb_reader");
-            }
-            double v;
-            std::memcpy(&v, p.data, sizeof(v));
-            cached = Value::number(v);
-            p.data += 8;
-            p.size -= 8;
-            break;
-          }
-          case XlsbRecordType::BrtFmlaString: {
-            auto s = read_xlwidestring(p);
-            if (!s) {
-              return s.error();
-            }
-            text_storage.push_back(std::move(s.value()));
-            cached = Value::text(text_storage.back());
-            break;
-          }
-          case XlsbRecordType::BrtFmlaBool: {
-            auto b = read_u8(p);
-            if (!b) {
-              return b.error();
-            }
-            cached = Value::boolean(b.value() != 0);
-            break;
-          }
-          case XlsbRecordType::BrtFmlaError: {
-            auto b = read_u8(p);
-            if (!b) {
-              return b.error();
-            }
-            // Same `kErrorTable`-backed lookup the literal path uses.
-            cached = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(b.value())));
-            break;
-          }
-          default:
-            break;
-        }
-        // grbitFlags (u16).
-        if (p.size < 2) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula flags truncated",
-                            "context=xlsb_reader");
-        }
-        p.data += 2;
-        p.size -= 2;
-        // CellParsedFormula: u32 cce (rgce byte length) + cce bytes of
-        // Ptg stream + u32 cb + cb bytes of rgcb (the array-constant
-        // extra-data area `PtgArray` consumes; empty for formulas with
-        // no array literals).
-        auto cce_or = read_u32(p);
-        if (!cce_or) {
-          return cce_or.error();
-        }
-        const std::uint32_t cce = cce_or.value();
-        if (cce > p.size) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula rgce length exceeds payload",
-                            "context=xlsb_reader");
-        }
-        ByteSpan rgce{p.data, cce};
-        p.data += cce;
-        p.size -= cce;
-        ByteSpan rgcb{};
-        if (p.size >= 4) {
-          auto cb_or = read_u32(p);
-          if (!cb_or) {
-            return cb_or.error();
-          }
-          const std::uint32_t cb = cb_or.value();
-          if (cb > p.size) {
-            return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula rgcb length exceeds payload",
-                              "context=xlsb_reader");
-          }
-          rgcb = ByteSpan{p.data, cb};
-        }
-        const std::string formula_text =
-            DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, sheet_index, state.current_row,
-                              col_or.value().col, undecoded_formula_count);
-        if (!formula_text.empty()) {
-          // Register the real formula via the workbook-level entry so the
-          // dep graph tracks it (matching the OOXML reader). The cached
-          // value is preserved separately below.
-          auto wf = wb.set_cell_formula(sheet_index, state.current_row, col_or.value().col, formula_text);
-          if (!wf) {
-            return wf.error();
-          }
-        }
-        // Always preserve the cached value (for undecodable formulas this
-        // is the only correct datum the cell carries; for decoded ones it
-        // matches Excel's stored result until the next recalc).
-        if (!cached.is_blank()) {
-          wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, cached);
-        }
-        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
-            !r) {
-          return r.error();
-        }
-        ++state.cells_decoded;
-        break;
-      }
-      case XlsbRecordType::BrtArrFmla: {
-        if (!state.row_seen) {
-          break;
-        }
-        // BrtArrFmla ([MS-XLSB], verified against a real Excel-produced
-        // `xl/worksheets/sheetN.bin`): RfX (4 x u32: rwFirst, rwLast,
-        // colFirst, colLast) + 1 reserved/flag byte + CellParsedFormula
-        // (u32 cce + cce bytes rgce + u32 cb + cb bytes rgcb). This
-        // record supplies the REAL Ptg tokens for a CSE / dynamic-array
-        // formula whose anchor cell's own formula-result "shell" record
-        // (BrtFmlaNum/String/Bool/Error, processed above) carries only a
-        // `PtgExp` placeholder. Only the anchor cell (`rwFirst`,
-        // `colFirst`) gets a formula string; the rest of the array range
-        // (if any) has no formula of its own — matching the OOXML
-        // reader's treatment of `t="array"` / dynamic-array spill
-        // formulas, where only the anchor cell stores `<f>`.
-        ByteSpan p = rec.payload;
-        auto rw_first_or = read_u32(p);
-        if (!rw_first_or) {
-          return rw_first_or.error();
-        }
-        auto rw_last_or = read_u32(p);
-        if (!rw_last_or) {
-          return rw_last_or.error();
-        }
-        auto col_first_or = read_u32(p);
-        if (!col_first_or) {
-          return col_first_or.error();
-        }
-        auto col_last_or = read_u32(p);
-        if (!col_last_or) {
-          return col_last_or.error();
-        }
-        // The RfX rect must lie inside the grid and be well-ordered on
-        // BOTH axes before any of it is used: the anchor guard below is
-        // an OR, so a rect reversed on only one axis would otherwise
-        // still be recorded and wrap the size math in
-        // `RegisterArraySpills`.
-        if (rw_first_or.value() >= Sheet::kMaxRows || rw_last_or.value() >= Sheet::kMaxRows ||
-            col_first_or.value() >= Sheet::kMaxCols || col_last_or.value() >= Sheet::kMaxCols ||
-            rw_last_or.value() < rw_first_or.value() || col_last_or.value() < col_first_or.value()) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtArrFmla range out of bounds",
-                            "context=xlsb_reader");
-        }
-        if (p.size < 1) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla flag truncated",
-                            "context=xlsb_reader");
-        }
-        p.data += 1;
-        p.size -= 1;
-        auto cce_or = read_u32(p);
-        if (!cce_or) {
-          return cce_or.error();
-        }
-        const std::uint32_t cce = cce_or.value();
-        if (cce > p.size) {
-          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla rgce length exceeds payload",
-                            "context=xlsb_reader");
-        }
-        ByteSpan rgce{p.data, cce};
-        p.data += cce;
-        p.size -= cce;
-        ByteSpan rgcb{};
-        if (p.size >= 4) {
-          auto cb_or = read_u32(p);
-          if (!cb_or) {
-            return cb_or.error();
-          }
-          const std::uint32_t cb = cb_or.value();
-          if (cb > p.size) {
-            return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla rgcb length exceeds payload",
-                              "context=xlsb_reader");
-          }
-          rgcb = ByteSpan{p.data, cb};
-        }
-        const std::string formula_text =
-            DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, sheet_index, rw_first_or.value(),
-                              col_first_or.value(), undecoded_formula_count);
-        if (formula_text.empty()) {
-          break;
-        }
-        auto wf = wb.set_cell_formula(sheet_index, rw_first_or.value(), col_first_or.value(), formula_text);
-        if (!wf) {
-          return wf.error();
-        }
-        // Record the footprint for a second pass after the whole sheet
-        // has been decoded (see `RegisterArraySpills`, called at the end
-        // of this function). `BrtArrFmla` for the anchor `(rwFirst,
-        // colFirst)` appears within the anchor's OWN row group in the
-        // record stream, i.e. BEFORE the non-anchor rows' own cell
-        // records (`rwLast > rwFirst` spans into rows not yet decoded).
-        // Registering the spill immediately here would have those later
-        // records' `set_cell_cached_value` calls silently repopulate the
-        // phantom cells with their raw literal payload, which a
-        // subsequent recalc's spill-commit would then see as "already
-        // occupied" and surface `#SPILL!` instead of the real result.
-        state.array_anchors.push_back(
-            ArrayAnchor{rw_first_or.value(), col_first_or.value(), rw_last_or.value(), col_last_or.value()});
-        break;
-      }
-      default:
-        break;
     }
   }
   auto spills = RegisterArraySpills(wb, sheet_index, state.array_anchors);
@@ -2036,8 +2355,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
                         "workbook.bin: BrtBundleSh name is invalid or collides with an earlier sheet",
                         "context=xlsb_reader sheet=\"" + b.name + "\"");
     }
-    if (b.hidden) {
-      wb.sheet(wb.sheet_count() - 1U).mutable_view().tab_hidden = true;
+    if (b.visibility != SheetVisibility::kVisible) {
+      wb.sheet(wb.sheet_count() - 1U).mutable_view().set_visibility(b.visibility);
     }
     sheet_part_paths.push_back(it->second);
   }
@@ -2105,6 +2424,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
 
   // 7. Each sheet binary.
   std::uint32_t cells_read = 0;
+  std::uint32_t dropped_record_count = 0;
   std::unordered_set<std::string> consumed_parts;
   consumed_parts.insert("[Content_Types].xml");
   consumed_parts.insert("_rels/.rels");
@@ -2131,6 +2451,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       return state_or.error();
     }
     cells_read += state_or.value().cells_decoded;
+    dropped_record_count += state_or.value().dropped_records;
     consumed_parts.insert(sheet_path);
 
     // The sheet's own rels file resolves the relationship ids carried by the
@@ -2267,8 +2588,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   wb.set_unknown_package_rels(std::move(package_rels_or.value()));
   wb.set_unknown_workbook_rels(std::move(wb_rels_or.value().unknown_rels));
 
-  XlsbReadResult result{std::move(wb), cells_read, undecoded_formula_count, undecoded_defined_name_count,
-                        dropped_part_count};
+  XlsbReadResult result{std::move(wb),      cells_read,          undecoded_formula_count, undecoded_defined_name_count,
+                        dropped_part_count, dropped_record_count};
   return result;
 }
 

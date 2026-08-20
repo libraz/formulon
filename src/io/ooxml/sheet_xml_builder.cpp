@@ -28,6 +28,8 @@
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/double_format.h"
+#include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
@@ -276,25 +278,102 @@ std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::stri
   return out;
 }
 
+/// Completes a `<pageMargins>` element with the attributes ECMA-376
+/// §18.3.1.62 makes required.
+///
+/// All six margins are mandatory, and Excel opens a package whose element
+/// omits any of them in repair mode. The model deliberately stores only
+/// the margins something actually stated -- that is what lets a caller
+/// tell "0.7 because the file says so" from "0.7 because nothing says
+/// otherwise" -- so the completion happens here, on the way out, where it
+/// costs that distinction nothing. It also covers a source file that
+/// arrived incomplete, which no authoring-side fix would reach.
+std::string PageMarginsWithRequiredAttributes(std::string page_margins_xml) {
+  if (page_margins_xml.empty()) {
+    return page_margins_xml;
+  }
+  struct RequiredMargin {
+    std::string_view attr;
+    double schema_default;
+  };
+  static constexpr RequiredMargin kRequired[] = {
+      {"left", ooxml_defaults::kPageMarginSideInches},
+      {"right", ooxml_defaults::kPageMarginSideInches},
+      {"top", ooxml_defaults::kPageMarginTopBottomInches},
+      {"bottom", ooxml_defaults::kPageMarginTopBottomInches},
+      {"header", ooxml_defaults::kPageMarginHeaderFooterInches},
+      {"footer", ooxml_defaults::kPageMarginHeaderFooterInches},
+  };
+  std::string missing;
+  for (const RequiredMargin& required : kRequired) {
+    const std::string needle = std::string(" ") + std::string(required.attr) + "=\"";
+    if (page_margins_xml.find(needle) != std::string::npos) {
+      continue;
+    }
+    missing.push_back(' ');
+    missing.append(required.attr);
+    missing.append("=\"");
+    formulon::format_double(missing, required.schema_default);
+    missing.push_back('"');
+  }
+  if (missing.empty()) {
+    return page_margins_xml;
+  }
+  const std::size_t self_closing = page_margins_xml.rfind("/>");
+  const std::size_t pos = self_closing != std::string::npos ? self_closing : page_margins_xml.rfind('>');
+  if (pos == std::string::npos) {
+    return page_margins_xml;
+  }
+  page_margins_xml.insert(pos, missing);
+  return page_margins_xml;
+}
+
+/// Points `<pageSetup>`'s relationship id at `rid`, or removes the
+/// attribute entirely when `rid` is empty.
+///
+/// An empty `rid` means this save writes no printer-settings
+/// relationship for the sheet, so a `r:id` carried over from the source
+/// element would name an id the sheet rels file does not declare. That
+/// dangles exactly like a relationship with no part, so the attribute
+/// goes rather than being left behind.
 std::string PageSetupWithRelationshipId(std::string page_setup_xml, std::string_view rid) {
-  if (page_setup_xml.empty() || rid.empty()) {
+  if (page_setup_xml.empty()) {
     return page_setup_xml;
   }
-  auto replace_attr = [&](std::string_view attr_name) {
+  auto find_attr = [&page_setup_xml](std::string_view attr_name, std::size_t& value_start, std::size_t& value_end) {
     const std::string needle = std::string(attr_name) + "=\"";
     const std::size_t pos = page_setup_xml.find(needle);
     if (pos == std::string::npos) {
+      return std::string::npos;
+    }
+    value_start = pos + needle.size();
+    value_end = page_setup_xml.find('"', value_start);
+    return value_end == std::string::npos ? std::string::npos : pos;
+  };
+  auto patch_attr = [&](std::string_view attr_name) {
+    std::size_t value_start = 0;
+    std::size_t value_end = 0;
+    const std::size_t attr_start = find_attr(attr_name, value_start, value_end);
+    if (attr_start == std::string::npos) {
       return false;
     }
-    const std::size_t value_start = pos + needle.size();
-    const std::size_t value_end = page_setup_xml.find('"', value_start);
-    if (value_end == std::string::npos) {
-      return false;
+    if (rid.empty()) {
+      // Take the separating whitespace with the attribute so removing the
+      // only one does not leave `<pageSetup />`.
+      std::size_t erase_from = attr_start;
+      while (erase_from > 0U && page_setup_xml[erase_from - 1U] == ' ') {
+        --erase_from;
+      }
+      page_setup_xml.erase(erase_from, value_end + 1U - erase_from);
+      return true;
     }
     page_setup_xml.replace(value_start, value_end - value_start, rid);
     return true;
   };
-  if (replace_attr("r:id") || replace_attr("id")) {
+  if (patch_attr("r:id") || patch_attr("id")) {
+    return page_setup_xml;
+  }
+  if (rid.empty()) {
     return page_setup_xml;
   }
   const std::size_t insert_pos = page_setup_xml.rfind("/>");
@@ -608,34 +687,45 @@ std::string BuildColsXml(const SheetLayout& layout) {
 /// `<sheetViews>`; some readers (and Excel's Name Box) use it to seed the
 /// used range, so an accurate box avoids a divergent used-range guess.
 ///
-/// A cell counts as populated when it carries a formula or a non-blank
-/// cached value, mirroring the pagination engine's used-range walk. An
-/// empty sheet emits `<dimension ref="A1"/>` (Excel's convention for a
-/// sheet with no content).
+/// The box covers exactly what the same save writes into `<sheetData>`,
+/// which is two populations rather than one. A stored cell contributes
+/// whenever `AppendCellXml` would emit a `<c>` for it -- the shared
+/// predicate below, which includes a blank cell carrying only a style
+/// index, since that ships as `<c s="N"/>`. A dynamic-array formula
+/// contributes its whole spill footprint: the anchor is a stored cell,
+/// but its phantoms live only in the spill table, and the anchor's
+/// `<f t="array" ref="...">` already declares the full rectangle.
+/// An empty sheet emits `<dimension ref="A1"/>` (Excel's convention for
+/// a sheet with no content).
 std::string BuildDimensionXml(const Sheet& sheet) {
   bool any = false;
   std::uint32_t min_row = 0;
   std::uint32_t min_col = 0;
   std::uint32_t max_row = 0;
   std::uint32_t max_col = 0;
+  const auto include = [&](std::uint32_t row_index, std::uint32_t col_index) {
+    if (!any) {
+      min_row = max_row = row_index;
+      min_col = max_col = col_index;
+      any = true;
+      return;
+    }
+    min_row = std::min(min_row, row_index);
+    max_row = std::max(max_row, row_index);
+    min_col = std::min(min_col, col_index);
+    max_col = std::max(max_col, col_index);
+  };
   for (const auto& [row_index, cells] : sheet.rows()) {
     for (std::size_t c = 0; c < cells.size(); ++c) {
       const Cell& cell = cells[c];
-      if (cell.formula_text.empty() && cell.cached_value.is_blank()) {
+      if (!CellIsEmitted(cell)) {
         continue;
       }
-      const auto col_index = static_cast<std::uint32_t>(c);
-      if (!any) {
-        min_row = max_row = row_index;
-        min_col = max_col = col_index;
-        any = true;
-        continue;
-      }
-      min_row = std::min(min_row, row_index);
-      max_row = std::max(max_row, row_index);
-      min_col = std::min(min_col, col_index);
-      max_col = std::max(max_col, col_index);
+      include(row_index, static_cast<std::uint32_t>(c));
     }
+  }
+  for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {
+    include(phantom.row, phantom.col);
   }
   std::string out;
   out.append("<dimension ref=\"");
@@ -692,12 +782,25 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // well-formed; mirrors the workbook-root handling).
   out.append(sheet.root_extra_ns_attrs());
   out.append(">\n");
-  // ECMA-376 element order: sheetPr -> dimension -> sheetViews ->
-  // sheetFormatPr -> cols -> sheetData -> conditionalFormatting ->
-  // pageMargins -> pageSetup -> rowBreaks -> colBreaks -> tableParts.
-  // We currently emit a subset; the helpers stay quiet when their
-  // underlying field is at default values so absent metadata yields no
-  // extra bytes.
+  // Children go out in the ECMA-376 §18.3.1.99 order. The generated
+  // elements below appear in that order already; `flush_raw_before`
+  // interleaves the retained source children between them, driven by the
+  // slot each one recorded at read time. A single forward cursor is
+  // enough because the retained list is sorted by slot.
+  std::size_t raw_cursor = 0;
+  const auto flush_raw_upto = [&](std::size_t slot) {
+    while (raw_cursor < raw_extensions.size() && raw_extensions[raw_cursor].slot < slot) {
+      out.append("  ");
+      out.append(raw_extensions[raw_cursor].xml);
+      out.push_back('\n');
+      ++raw_cursor;
+    }
+  };
+  const auto flush_raw_before = [&](std::string_view element_name) {
+    flush_raw_upto(worksheet_child::slot_of(element_name));
+  };
+  // The helpers stay quiet when their underlying field is at default
+  // values so absent metadata yields no extra bytes.
   if (!sheet_pr_xml.empty()) {
     out.append("  ");
     out.append(sheet_pr_xml);
@@ -727,6 +830,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // <sheetProtection> sits between <sheetData> and <mergeCells> per
   // ECMA-376 document order. Helper returns "" when protection is
   // disabled, leaving no trailing whitespace in that case.
+  flush_raw_before("sheetProtection");
   {
     const std::string sp_xml = BuildSheetProtectionXml(sheet.protection());
     if (!sp_xml.empty()) {
@@ -735,55 +839,41 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
       out.push_back('\n');
     }
   }
-  if (!raw_extensions.protected_ranges_xml.empty()) {
-    out.append("  ");
-    out.append(raw_extensions.protected_ranges_xml);
-    out.push_back('\n');
-  }
-  if (!raw_extensions.scenarios_xml.empty()) {
-    out.append("  ");
-    out.append(raw_extensions.scenarios_xml);
-    out.push_back('\n');
-  }
   // <autoFilter> sits between <sheetProtection>/<scenarios> and
   // <mergeCells> in ECMA-376 document order. Round-tripped verbatim.
+  flush_raw_before("autoFilter");
   if (!sheet.auto_filter_xml().empty()) {
     out.append("  ");
     out.append(sheet.auto_filter_xml());
     out.push_back('\n');
   }
-  if (!raw_extensions.custom_sheet_views_xml.empty()) {
-    out.append("  ");
-    out.append(raw_extensions.custom_sheet_views_xml);
-    out.push_back('\n');
-  }
   // Merge cells precede CF in ECMA-376 document order.
+  flush_raw_before("mergeCells");
   if (!merges_xml.empty()) {
     out.append("  ");
     out.append(merges_xml);
     out.push_back('\n');
   }
-  if (!raw_extensions.phonetic_pr_xml.empty()) {
-    out.append("  ");
-    out.append(raw_extensions.phonetic_pr_xml);
-    out.push_back('\n');
-  }
+  flush_raw_before("conditionalFormatting");
   if (!cf_xml.empty()) {
     out.append("  ");
     out.append(cf_xml);
     out.push_back('\n');
   }
+  flush_raw_before("dataValidations");
   if (!dv_xml.empty()) {
     out.append("  ");
     out.append(dv_xml);
     out.push_back('\n');
   }
+  flush_raw_before("hyperlinks");
   if (!hl_xml.empty()) {
     out.append("  ");
     out.append(hl_xml);
     out.push_back('\n');
   }
   // <printOptions> sits between <hyperlinks> and <pageMargins>.
+  flush_raw_before("printOptions");
   if (!print.print_options_xml.empty()) {
     out.append("  ");
     out.append(print.print_options_xml);
@@ -791,15 +881,17 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   }
   if (!print.page_margins_xml.empty()) {
     out.append("  ");
-    out.append(print.page_margins_xml);
+    out.append(PageMarginsWithRequiredAttributes(print.page_margins_xml));
     out.push_back('\n');
   }
+  flush_raw_before("pageSetup");
   if (!page_setup_xml.empty()) {
     out.append("  ");
     out.append(page_setup_xml);
     out.push_back('\n');
   }
   // <headerFooter> follows <pageSetup> and precedes <rowBreaks>.
+  flush_raw_before("headerFooter");
   if (!print.header_footer_xml.empty()) {
     out.append("  ");
     out.append(print.header_footer_xml);
@@ -808,12 +900,14 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // Manual page breaks. ECMA-376 places <rowBreaks>/<colBreaks> after
   // <pageSetup> and before drawing parts / <tableParts>.
   {
+    flush_raw_before("rowBreaks");
     const std::string row_breaks_xml = BuildPageBreaksXml("rowBreaks", print.manual_row_breaks);
     if (!row_breaks_xml.empty()) {
       out.append("  ");
       out.append(row_breaks_xml);
       out.push_back('\n');
     }
+    flush_raw_before("colBreaks");
     const std::string col_breaks_xml = BuildPageBreaksXml("colBreaks", print.manual_col_breaks);
     if (!col_breaks_xml.empty()) {
       out.append("  ");
@@ -821,44 +915,22 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
       out.push_back('\n');
     }
   }
-  if (!raw_extensions.ignored_errors_xml.empty()) {
-    out.append("  ");
-    out.append(raw_extensions.ignored_errors_xml);
-    out.push_back('\n');
-  }
   // <drawing> precedes <tableParts> in ECMA-376 worksheet element order.
   // The referenced DrawingML part round-trips through passthrough; here
   // we only re-emit the reference so the part stays reachable.
+  flush_raw_before("drawing");
   if (!drawing_rid.empty()) {
     out.append("  <drawing r:id=\"");
     out.append(drawing_rid);
     out.append("\"/>\n");
   }
+  flush_raw_before("legacyDrawing");
   if (!legacy_drawing_rid.empty()) {
     out.append("  <legacyDrawing r:id=\"");
     out.append(legacy_drawing_rid);
     out.append("\"/>\n");
   }
-  if (!raw_extensions.legacy_drawing_hf_xml.empty()) {
-    out.append("  ");
-    out.append(raw_extensions.legacy_drawing_hf_xml);
-    out.push_back('\n');
-  }
-  if (!raw_extensions.picture_xml.empty()) {
-    out.append("  ");
-    out.append(raw_extensions.picture_xml);
-    out.push_back('\n');
-  }
-  if (!raw_extensions.ole_objects_xml.empty()) {
-    out.append("  ");
-    out.append(raw_extensions.ole_objects_xml);
-    out.push_back('\n');
-  }
-  if (!raw_extensions.controls_xml.empty()) {
-    out.append("  ");
-    out.append(raw_extensions.controls_xml);
-    out.push_back('\n');
-  }
+  flush_raw_before("tableParts");
   if (!sheet_tables.empty()) {
     out.append("  <tableParts count=\"");
     out.append(std::to_string(sheet_tables.size()));
@@ -880,19 +952,38 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // ECMA-376 order (after `<tableParts>`). Re-emit the captured block
   // verbatim so 2010+ extension data (x14 conditional formatting, etc.)
   // survives the round trip.
+  flush_raw_before("extLst");
   if (!ext_lst_xml.empty()) {
     out.append("  ");
     out.append(ext_lst_xml);
     out.push_back('\n');
   }
+  // Anything the cursor has not reached -- an unplaceable element that
+  // trailed the last schema child in the source -- still goes out rather
+  // than being dropped at the end of the sweep.
+  flush_raw_upto(worksheet_child::kCount + 1U);
   out.append("</worksheet>\n");
   return out;
 }
 
 SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                                const std::vector<EmissionPlan::PivotTablePlan>& sheet_pivot_tables,
-                               const EmissionPlan::CommentsPlan& comments_plan, const EmissionPlan& plan) {
+                               const EmissionPlan::CommentsPlan& comments_plan, const EmissionPlan& plan,
+                               WriteDiagnostics* diagnostics) {
   SheetRelsResult res;
+  // One place records an internal relationship the package cannot honour,
+  // so the log line and the counter can never disagree about how many
+  // were dropped.
+  const auto drop_rel = [&](std::string_view type, std::string_view target) {
+    StructuredLog("ooxml_writer.sheet_rel_skipped")
+        .field("reason", std::string_view("target_part_absent"))
+        .field("type", type)
+        .field("target", target)
+        .warn();
+    if (diagnostics != nullptr) {
+      ++diagnostics->dropped_relationship_count;
+    }
+  };
   std::string& out = res.xml;
   out.reserve(256 + (sheet_tables.size() + sheet_pivot_tables.size() + sheet.hyperlinks().size()) * 192);
   out.append(kXmlDecl);
@@ -975,20 +1066,40 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   }
   const SheetPrintSettings& print = sheet.print_settings();
   if (!print.printer_settings_path.empty()) {
-    if (!print.printer_settings_rid.empty() && used_rids.count(print.printer_settings_rid) == 0U) {
-      res.printer_settings_rid = print.printer_settings_rid;
-      used_rids.insert(res.printer_settings_rid);
+    // The reader records the path from the source sheet rels whether or
+    // not the archive actually carried the part, so a truncated package
+    // reaches here naming a `printerSettings*.bin` this save will not
+    // write. Leaving `res.printer_settings_rid` empty also keeps the
+    // `<pageSetup>` element from referencing the id.
+    if (!HasPassthroughPart(plan, print.printer_settings_path)) {
+      drop_rel(kRelPrinterSettings, print.printer_settings_path);
     } else {
-      res.printer_settings_rid = next_unique_rid();
+      if (!print.printer_settings_rid.empty() && used_rids.count(print.printer_settings_rid) == 0U) {
+        res.printer_settings_rid = print.printer_settings_rid;
+        used_rids.insert(res.printer_settings_rid);
+      } else {
+        res.printer_settings_rid = next_unique_rid();
+      }
+      add_rel(res.printer_settings_rid, kRelPrinterSettings, TargetRelativeToWorksheet(print.printer_settings_path));
     }
-    add_rel(res.printer_settings_rid, kRelPrinterSettings, TargetRelativeToWorksheet(print.printer_settings_path));
   }
   // Drawing (DrawingML) relationship. The part body, its own rels, and
   // any anchored media round-trip through passthrough; here we re-mint a
   // fresh rId so the worksheet's `<drawing r:id>` element resolves.
+  //
+  // Same rule as the printer settings above, for the same reason: the
+  // reader records the target from the source sheet rels without checking
+  // the archive carried it, so a truncated package arrives naming a
+  // `drawingN.xml` this save does not write. An empty `res.drawing_rid`
+  // also suppresses the `<drawing>` element, so neither half of the
+  // reference outlives the part.
   if (!sheet.drawing_rel_target().empty()) {
-    res.drawing_rid = next_unique_rid();
-    add_rel(res.drawing_rid, kRelDrawing, TargetRelativeToWorksheet(sheet.drawing_rel_target()));
+    if (!HasPassthroughPart(plan, sheet.drawing_rel_target())) {
+      drop_rel(kRelDrawing, sheet.drawing_rel_target());
+    } else {
+      res.drawing_rid = next_unique_rid();
+      add_rel(res.drawing_rid, kRelDrawing, TargetRelativeToWorksheet(sheet.drawing_rel_target()));
+    }
   }
   // Comments + VML relationships when the sheet has comments. The
   // comments rel comes first; the VML rel follows so the two ids are
@@ -1005,8 +1116,12 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     // corresponding passthrough payload survived collision handling. A
     // generated part at the same path is not a substitute: it may have a
     // different type or schema from the source edge's target.
-    if (relationship.id.empty() || (!relationship.target_external &&
-                                    (relationship.target.empty() || !HasPassthroughPart(plan, relationship.target)))) {
+    if (relationship.id.empty()) {
+      continue;
+    }
+    if (!relationship.target_external &&
+        (relationship.target.empty() || !HasPassthroughPart(plan, relationship.target))) {
+      drop_rel(relationship.type, relationship.target);
       continue;
     }
     const std::string target =

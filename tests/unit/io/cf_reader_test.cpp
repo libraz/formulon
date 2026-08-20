@@ -898,5 +898,66 @@ TEST(CFReader, UpperCaseColumnLettersAreAcceptedInEveryTokenShape) {
   }
 }
 
+TEST(CFReader, RuleWithSeveralVisualChildrenEngagesOnlyTheOneItsTypeNames) {
+  // `cf::CFRule` declares colorScale / dataBar / iconSet mutually
+  // exclusive, and every consumer reads it that way. A third-party file
+  // spelling more than one in a single `<cfRule>` must not produce a
+  // rule that engages two.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A1:A10">
+        <cfRule type="iconSet" priority="1">
+          <colorScale>
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FFFF0000"/>
+            <color rgb="FF00FF00"/>
+          </colorScale>
+          <iconSet iconSet="3Arrows">
+            <cfvo type="percent" val="0"/>
+            <cfvo type="percent" val="33"/>
+            <cfvo type="percent" val="67"/>
+          </iconSet>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 1u);
+  const auto& r = cfs.value()[0].rules[0];
+  EXPECT_FALSE(r.color_scale.has_value());
+  EXPECT_FALSE(r.data_bar.has_value());
+  ASSERT_TRUE(r.icon_set.has_value());
+  // The floor `<cfvo>` is not a threshold, so three of them describe two.
+  EXPECT_EQ(r.icon_set->thresholds.size(), 2u);
+}
+
+TEST(CFReader, RuleWhoseTypeNamesNoVisualChildKeepsTheFirstOnePresent) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A1:A10">
+        <cfRule type="expression" priority="1">
+          <colorScale>
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FFFF0000"/>
+            <color rgb="FF00FF00"/>
+          </colorScale>
+          <dataBar>
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FF638EC6"/>
+          </dataBar>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.color_scale.has_value());
+  EXPECT_FALSE(r.data_bar.has_value());
+  EXPECT_FALSE(r.icon_set.has_value());
+}
+
 }  // namespace
 }  // namespace formulon::io

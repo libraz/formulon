@@ -493,11 +493,25 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     std::string rels_path = ooxml::rels_path_for_part(e.record->part_path);
     // Same rule as the passthrough parts below: `part_path` can reach the
     // model without passing the reader's traversal check, and this is the
-    // only other place a model field becomes a zip entry name.
+    // only other place a model field becomes a zip entry name. This is a
+    // judgement about the name itself, so it precedes any decision about
+    // whether the part is worth writing -- a traversal-shaped path must
+    // fail the save whichever way that decision goes.
     if (!ooxml::is_safe_part_name(rels_path)) {
       return make_error(FormulonErrorCode::kIoZipSlip,
                         "external link rels path escapes package root; refusing to write",
                         "context=write_ooxml part=" + rels_path);
+    }
+    // A rels part describes the part it is named after, so writing one
+    // for a body that is not in this package leaves an orphan: OPC has no
+    // reading of `xl/externalLinks/_rels/externalLink1.xml.rels` when
+    // `xl/externalLinks/externalLink1.xml` is absent. The workbook rels
+    // and the `<externalReference>` are gated on the same answer, so this
+    // is the third face of one decision, and it already reported itself
+    // there -- counting the loss again here would make one missing link
+    // look like several.
+    if (!HasPassthroughPart(plan, e.record->part_path)) {
+      continue;
     }
     auto result = AddPart(writer.get(), rels_path, rels_xml, &written_paths);
     if (!result) {

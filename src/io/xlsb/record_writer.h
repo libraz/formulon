@@ -74,7 +74,9 @@ void emit_xlnullablewidestring(std::vector<std::uint8_t>& dst, std::optional<std
 ///     the bare integer encoding could carry (used for currency-style
 ///     values like `123.45`). We only opt into x100 when `value` is
 ///     not already an exact integer — otherwise the bare integer form
-///     is shorter and cleaner.
+///     is shorter and cleaner. The form is not lossless for every
+///     value it accepts: `value * 100.0` can round to an integer that
+///     divides back to a different double.
 ///   * IEEE 754 form otherwise: the upper 32 bits of the double's bit
 ///     pattern are masked with the low two bits cleared. This is
 ///     lossy unless the lower 34 bits of the double's bit pattern are
@@ -88,9 +90,15 @@ void emit_xlnullablewidestring(std::vector<std::uint8_t>& dst, std::optional<std
 /// before choosing between `BrtCellRk` and `BrtCellReal`.
 void emit_rk_number(std::vector<std::uint8_t>& dst, double value);
 
-/// Returns `true` when `value` can be encoded as an `RkNumber`
-/// without precision loss (integer form or x100 form, or an IEEE 754
-/// representation whose lower 34 bits are zero).
+/// Returns `true` when `emit_rk_number(value)` decodes back to the
+/// identical IEEE 754 bit pattern. The answer is obtained by decoding
+/// the encoding this writer would actually emit, so no form can be
+/// accepted on a proxy test that the encoding then fails to honour.
+///
+/// Non-finite values and negative zero always answer `false`: they have
+/// no `RkNumber` spelling the cell writer should reach for, so they are
+/// routed to `BrtCellReal` regardless of what the bit comparison would
+/// say.
 bool rk_round_trips_value(double value);
 
 /// Appends one framed record to `dst`:

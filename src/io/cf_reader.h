@@ -16,6 +16,7 @@
 #ifndef FORMULON_IO_CF_READER_H_
 #define FORMULON_IO_CF_READER_H_
 
+#include <cstddef>
 #include <vector>
 
 #include "cf/cf_types.h"
@@ -61,6 +62,27 @@ namespace formulon::io {
 /// log still learns the load was lossy. Passing NULL discards the count.
 Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet,
                                                                              ReadDiagnostics* diagnostics = nullptr);
+
+/// Disengages every `CFRule::dxf_id` in `formats` that does not address an
+/// entry of a `dxf_count`-sized `<dxfs>` table.
+///
+/// The attribute is read verbatim, so a third-party writer's stale index
+/// -- or a `dxfId="-1"`, which arrives as `0xFFFFFFFF` -- reaches the
+/// model naming a record that is not there. Callers are entitled to
+/// assume a stored index resolves: that is the same promise
+/// `NormalizeStyleIndices` keeps for the `<xf>` tables, and without it a
+/// workbook that loaded cleanly hands out a `dxf_id` its own styles getter
+/// then rejects.
+///
+/// Unlike an `<xf>` index this disengages rather than clamping to record
+/// 0. A CF rule with no `dxfId` is an ordinary, meaningful state (every
+/// data-bar, colour-scale and icon-set rule is one), whereas record 0 is
+/// a formatting choice the author never made. `dxf_count` of 0 therefore
+/// disengages every rule rather than being a special case.
+///
+/// The styles table has to be loaded before this runs; the OOXML reader
+/// sequences it that way.
+void normalize_cf_dxf_ids(std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count);
 
 }  // namespace formulon::io
 

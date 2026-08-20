@@ -414,16 +414,16 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   out.append("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n");
   auto append_default = [&out](std::string_view extension, std::string_view content_type) {
     out.append("  <Default Extension=\"");
-    AppendXmlEscaped(out, extension);
+    AppendXmlAttrEscaped(out, extension);
     out.append("\" ContentType=\"");
-    AppendXmlEscaped(out, content_type);
+    AppendXmlAttrEscaped(out, content_type);
     out.append("\"/>\n");
   };
   auto append_override = [&out](std::string_view path, std::string_view content_type) {
     out.append("  <Override PartName=\"/");
-    AppendXmlEscaped(out, path);
+    AppendXmlAttrEscaped(out, path);
     out.append("\" ContentType=\"");
-    AppendXmlEscaped(out, content_type);
+    AppendXmlAttrEscaped(out, content_type);
     out.append("\"/>\n");
   };
   std::string_view rels_default = kCtPackageRels;
@@ -453,7 +453,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   }
   if (plan.workbook_bin_override) {
     out.append("  <Override PartName=\"/xl/workbook.bin\" ContentType=\"");
-    AppendXmlEscaped(out, kCtWorkbookXlsb);
+    AppendXmlAttrEscaped(out, kCtWorkbookXlsb);
     out.append("\"/>\n");
   }
   // A source `rels` Default may use a vendor-specific type. Generated
@@ -515,9 +515,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
       continue;
     }
     out.append("  <Override PartName=\"/");
-    AppendXmlEscaped(out, part->path);
+    AppendXmlAttrEscaped(out, part->path);
     out.append("\" ContentType=\"");
-    AppendXmlEscaped(out, part->content_type);
+    AppendXmlAttrEscaped(out, part->content_type);
     out.append("\"/>\n");
   }
   out.append("</Types>\n");
@@ -530,9 +530,11 @@ void AppendRelationship(std::string& out, std::size_t* next_rid, std::string_vie
   out.append("  <Relationship Id=\"rId");
   out.append(std::to_string((*next_rid)++));
   out.append("\" Type=\"");
-  AppendXmlEscaped(out, type);
+  AppendXmlAttrEscaped(out, type);
   out.append("\" Target=\"");
-  AppendXmlEscaped(out, target);
+  // `Target` is an `xsd:anyURI` the rels reader takes verbatim from the
+  // parser, so it gets the attribute rule and no OOXML escaping.
+  AppendXmlAttrEscaped(out, target);
   if (target_external) {
     out.append("\" TargetMode=\"External\"/>\n");
   } else {
@@ -613,11 +615,11 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, WriteDi
     }
     const std::string target = rel.target_external ? rel.target : TargetRelativeToWorksheet(rel.target);
     entries.append("  <Relationship Id=\"");
-    AppendXmlEscaped(entries, rel.id);
+    AppendXmlAttrEscaped(entries, rel.id);
     entries.append("\" Type=\"");
-    AppendXmlEscaped(entries, rel.type);
+    AppendXmlAttrEscaped(entries, rel.type);
     entries.append("\" Target=\"");
-    AppendXmlEscaped(entries, target);
+    AppendXmlAttrEscaped(entries, target);
     if (rel.target_external) {
       entries.append("\" TargetMode=\"External\"/>\n");
     } else {
@@ -636,11 +638,11 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, WriteDi
       continue;
     }
     entries.append("  <Relationship Id=\"");
-    AppendXmlEscaped(entries, hyperlink_rids[i]);
+    AppendXmlAttrEscaped(entries, hyperlink_rids[i]);
     entries.append("\" Type=\"");
-    AppendXmlEscaped(entries, kRelHyperlink);
+    AppendXmlAttrEscaped(entries, kRelHyperlink);
     entries.append("\" Target=\"");
-    AppendXmlEscaped(entries, hyperlink.target);
+    AppendXmlAttrEscaped(entries, hyperlink.target);
     entries.append("\" TargetMode=\"External\"/>\n");
   }
   if (entries.empty()) {
@@ -739,19 +741,24 @@ void CollectNamesFromFormula(std::string_view formula, std::vector<std::string>&
   collect_ptg_names(*root, names, seen);
 }
 
-/// Builds the `PtgName` table for the whole workbook: every genuine
-/// defined name (`Workbook::defined_names()`, in declaration order) is
-/// registered first, then every future-function callee / `NameRef`
-/// `collect_ptg_names` discovers across defined-name and sheet formulas (in
-/// first-encounter order) that is not already a defined name. Returns
-/// the ordered name list (index `i` <-> 1-based `ilbl` `i + 1`) and the
-/// name -> ilbl map `encode_ptgs` consults.
-void BuildNameTable(const Workbook& wb, std::vector<std::string>& ordered_names, NameTable& name_table) {
+/// Builds the workbook's `BrtName` record order: every genuine defined
+/// name (`Workbook::defined_names()`, in declaration order) occupies the
+/// leading slots, followed by every future-function callee / `NameRef`
+/// `collect_ptg_names` discovers across defined-name and sheet formulas
+/// (in first-encounter order) that is not already a defined name. Slot
+/// `i` is the record a `PtgName` reaches with `ilbl == i + 1`.
+///
+/// Defined names take one slot each, duplicate name text included:
+/// `Workbook::set_defined_name_scoped` deliberately admits a
+/// workbook-scoped and a sheet-local name spelling the same text, and
+/// each needs its own `BrtName` record for the emission pass (which
+/// walks `wb.defined_names()` by the same index) to stay aligned with
+/// the `ilbl` values encoded into formulas.
+void BuildOrderedNames(const Workbook& wb, std::vector<std::string>& ordered_names) {
   std::unordered_set<std::string> seen;
   for (const io::DefinedName& dn : wb.defined_names()) {
-    if (seen.insert(dn.name).second) {
-      ordered_names.push_back(dn.name);
-    }
+    ordered_names.push_back(dn.name);
+    seen.insert(dn.name);
   }
   for (const io::DefinedName& dn : wb.defined_names()) {
     CollectNamesFromFormula(dn.formula, ordered_names, seen);
@@ -767,9 +774,54 @@ void BuildNameTable(const Workbook& wb, std::vector<std::string>& ordered_names,
       }
     }
   }
+}
+
+/// Builds the `name -> ilbl` map `encode_ptgs` consults for a formula
+/// that lives in `scope_sheet_id` (a 0-based sheet index for a cell
+/// formula or a sheet-local defined name, `-1` for a workbook-scoped
+/// defined name).
+///
+/// A `PtgName` token carries no scope of its own — it is a bare ordinal
+/// into the `BrtName` table — so the scope has to be resolved here, at
+/// encode time, exactly as Excel resolves it when reading the file back:
+/// a sheet-local name shadows a workbook-scoped one of the same text for
+/// formulas on that sheet, and the workbook-scoped name is reached only
+/// where no local one exists. Encoding a single workbook-wide ordinal
+/// per name text would silently re-point one of the two.
+///
+/// The three passes are layered by precedence and rely on `emplace`
+/// leaving an entry that is already present alone:
+///   1. names local to `scope_sheet_id` — these shadow everything;
+///   2. workbook-scoped names, filling any text no local one claimed;
+///   3. every remaining slot in declaration order. This covers the
+///      hidden `_xlfn.*` / `_xlpm.*` placeholders (which have no scope)
+///      and, as a fallback, a text that exists only as another sheet's
+///      local name. Excel resolves that reference to `#NAME?` and so
+///      does the reader — which re-resolves by name text, not by
+///      ordinal — so pointing at the out-of-scope record keeps the
+///      formula intact instead of failing the whole save.
+NameTable BuildNameTableForScope(const Workbook& wb, const std::vector<std::string>& ordered_names,
+                                 std::int32_t scope_sheet_id) {
+  const std::vector<io::DefinedName>& defined = wb.defined_names();
+  const std::size_t defined_count = std::min(defined.size(), ordered_names.size());
+  NameTable name_table;
+  name_table.reserve(ordered_names.size());
+  if (scope_sheet_id >= 0) {
+    for (std::size_t i = 0; i < defined_count; ++i) {
+      if (defined[i].local_sheet_id == scope_sheet_id) {
+        name_table.emplace(defined[i].name, static_cast<std::uint32_t>(i + 1));
+      }
+    }
+  }
+  for (std::size_t i = 0; i < defined_count; ++i) {
+    if (defined[i].local_sheet_id < 0) {
+      name_table.emplace(defined[i].name, static_cast<std::uint32_t>(i + 1));
+    }
+  }
   for (std::size_t i = 0; i < ordered_names.size(); ++i) {
     name_table.emplace(ordered_names[i], static_cast<std::uint32_t>(i + 1));
   }
+  return name_table;
 }
 
 // ---------------------------------------------------------------------------
@@ -943,7 +995,6 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
 
 Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
                                                             const std::vector<std::string>& ordered_names,
-                                                            const NameTable& name_table,
                                                             const SheetRangeTable& sheet_ranges,
                                                             const std::vector<std::string>& sheet_names) {
   std::vector<std::uint8_t> body;
@@ -982,15 +1033,14 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginBundleShs), ByteSpan{});
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     // BrtBundleSh ([MS-XLSB] §2.4.304):
-    //   hsState    : u32 (0 = visible, 1 = hidden)
+    //   hsState    : u32 (0 = visible, 1 = hidden, 2 = very hidden)
     //   iTabID     : u32 (sheet id; 1-based)
     //   strRelID   : XLNullableWideString
     //   strName    : XLWideString
     std::vector<std::uint8_t> p;
-    // The Sheet model tracks a single `tab_hidden` bit (mirroring the
-    // OOXML `state="hidden"` path), so a hidden sheet emits hsState=1.
-    // Very-hidden (hsState=2) is not separately modelled and folds to 1.
-    const std::uint32_t hs_state = wb.sheet(i).view().tab_hidden ? 1U : 0U;
+    // `SheetVisibility` is numbered to match `hsState`, so the model state
+    // is the field value.
+    const auto hs_state = static_cast<std::uint32_t>(wb.sheet(i).view().visibility());
     emit_u32(p, hs_state);                            // hsState
     emit_u32(p, static_cast<std::uint32_t>(i + 1U));  // iTabID
     const std::string rid = std::string("rId") + std::to_string(i + 1U);
@@ -1023,21 +1073,40 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   // `hidden` flag) followed by every future-function callee / defined
   // name `collect_ptg_names` needed a `PtgName` reference for that
   // wasn't already a defined name (always hidden — these are never
-  // user-visible). `ordered_names` / `name_table` are built once by
-  // `BuildNameTable` and shared with every sheet's cell encoder so
-  // `ilbl` assignments stay consistent workbook-wide.
+  // user-visible). `ordered_names` is built once by `BuildOrderedNames`
+  // and shared with every sheet's cell encoder so `ilbl` assignments
+  // stay consistent workbook-wide. The leading `defined_count` slots are
+  // `wb.defined_names()` element-for-element, so every defined name
+  // emits exactly one record at the `ilbl` the encoder assigned it.
+  //
+  // A name's own formula resolves other names from the scope the name
+  // itself lives in, the same rule a cell formula follows, so each entry
+  // encodes against a table built for its `local_sheet_id`. The tables
+  // are memoized per scope: workbooks routinely carry many names in the
+  // same scope and each table is a full pass over the name list.
   const std::size_t defined_count = wb.defined_names().size();
+  std::unordered_map<std::int32_t, NameTable> scoped_tables;
+  auto table_for_scope = [&](std::int32_t scope_sheet_id) -> const NameTable& {
+    auto it = scoped_tables.find(scope_sheet_id);
+    if (it == scoped_tables.end()) {
+      it = scoped_tables.emplace(scope_sheet_id, BuildNameTableForScope(wb, ordered_names, scope_sheet_id)).first;
+    }
+    return it->second;
+  };
   for (std::size_t i = 0; i < ordered_names.size(); ++i) {
     if (i < defined_count) {
       const io::DefinedName& dn = wb.defined_names()[i];
       if (auto r = EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, dn.comment, sheet_names,
-                            sheet_ranges, name_table);
+                            sheet_ranges, table_for_scope(dn.local_sheet_id));
           !r) {
         return r.error();
       }
     } else {
+      // Hidden placeholders carry no formula body, so the table they are
+      // handed is never consulted; the workbook-scope one keeps the call
+      // uniform.
       if (auto r = EmitName(body, ordered_names[i], /*formula=*/{}, /*itab=*/-1, /*hidden=*/true,
-                            /*comment=*/{}, sheet_names, sheet_ranges, name_table);
+                            /*comment=*/{}, sheet_names, sheet_ranges, table_for_scope(-1));
           !r) {
         return r.error();
       }
@@ -1069,13 +1138,15 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     sheet_names.push_back(workbook.sheet(i).name());
   }
 
-  // PtgName table: every genuine defined name plus every future-function
-  // callee / `NameRef` any cell's formula needs, built once so `ilbl`
-  // assignments are shared between the sheet bodies below and the
-  // `BrtName` table `BuildWorkbookBin` emits into `xl/workbook.bin`.
+  // PtgName record order: every genuine defined name plus every
+  // future-function callee / `NameRef` any cell's formula needs, built
+  // once so `ilbl` assignments are shared between the sheet bodies below
+  // and the `BrtName` table `BuildWorkbookBin` emits into
+  // `xl/workbook.bin`. The name -> `ilbl` map itself is per sheet: which
+  // record a bare name resolves to depends on the sheet the formula sits
+  // on (see `BuildNameTableForScope`).
   std::vector<std::string> ordered_names;
-  NameTable name_table;
-  BuildNameTable(workbook, ordered_names, name_table);
+  BuildOrderedNames(workbook, ordered_names);
 
   // ExternSheet table: every distinct sheet-qualified reference span
   // (single- or multi-sheet) any cell or defined-name formula needs an
@@ -1092,7 +1163,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   std::vector<std::vector<std::uint8_t>> sheet_bodies;
   sheet_bodies.reserve(sheet_count);
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, name_table,
+    const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
+    auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table,
                                     &downgraded_formula_count, dynamic_array.ifmd);
     if (!sheet_body_or) {
       return sheet_body_or.error();
@@ -1131,7 +1203,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   // 4. xl/workbook.bin
   {
-    auto wb_bytes_or = BuildWorkbookBin(workbook, ordered_names, name_table, sheet_ranges, sheet_names);
+    auto wb_bytes_or = BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names);
     if (!wb_bytes_or) {
       return wb_bytes_or.error();
     }

@@ -26,6 +26,7 @@
 //   J1 = 1/0 -> #DIV/0!, J2 = NA() -> #N/A
 // `S2` sheet: A1 = 7.
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -37,6 +38,7 @@
 #include "gtest/gtest.h"
 #include "io/defined_names.h"
 #include "io/format_detect.h"
+#include "io/ooxml_reader.h"
 #include "io/styles_reader.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
@@ -54,6 +56,10 @@ namespace {
 
 std::string FixturePath() {
   return std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_fidelity_base.xlsb";
+}
+
+std::string XlsxTwinPath() {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_fidelity_base.xlsx";
 }
 
 std::vector<std::uint8_t> ReadFileBytes(const std::string& path) {
@@ -389,6 +395,140 @@ TEST(XlsbFidelity, StylesSurviveLoad) {
   ASSERT_NE(d5, nullptr);
   ASSERT_LT(d5->xf_index, styles.cell_xfs.size());
   EXPECT_EQ(NumFmtStringFor(styles, styles.cell_xfs[d5->xf_index].num_fmt_id), "0.0%");
+}
+
+/// Loads the `.xlsx` twin of the same workbook through the OOXML reader.
+/// The two fixtures were saved from one Excel session, so any attribute
+/// that differs between the tables they produce is a reader divergence
+/// rather than an authoring difference.
+Workbook LoadXlsxTwin() {
+  const std::vector<std::uint8_t> bytes = ReadFileBytes(XlsxTwinPath());
+  if (bytes.empty()) {
+    return Workbook::create_empty();
+  }
+  auto result_or = io::read_ooxml(SpanOf(bytes));
+  EXPECT_TRUE(static_cast<bool>(result_or)) << "read_ooxml failed: " << (result_or ? "" : result_or.error().message);
+  if (!result_or) {
+    return Workbook::create_empty();
+  }
+  return std::move(result_or.value().workbook);
+}
+
+testing::AssertionResult FontsMatch(const io::FontRecord& lhs, const io::FontRecord& rhs) {
+  if (lhs.name != rhs.name) {
+    return testing::AssertionFailure() << "name: " << lhs.name << " vs " << rhs.name;
+  }
+  if (lhs.size != rhs.size) {
+    return testing::AssertionFailure() << "size: " << lhs.size << " vs " << rhs.size;
+  }
+  if (lhs.bold != rhs.bold || lhs.italic != rhs.italic || lhs.strike != rhs.strike || lhs.underline != rhs.underline ||
+      lhs.vert_align != rhs.vert_align) {
+    return testing::AssertionFailure() << "toggles differ for font " << lhs.name;
+  }
+  if (lhs.has_family != rhs.has_family || lhs.family != rhs.family || lhs.has_charset != rhs.has_charset ||
+      lhs.charset != rhs.charset) {
+    return testing::AssertionFailure() << "family/charset differ for font " << lhs.name;
+  }
+  if (lhs.color.kind != rhs.color.kind || lhs.color_argb != rhs.color_argb || lhs.color.theme != rhs.color.theme ||
+      lhs.color.indexed != rhs.color.indexed) {
+    return testing::AssertionFailure() << "colour differs for font " << lhs.name;
+  }
+  return testing::AssertionSuccess();
+}
+
+// The font, fill and border tables a `.xlsb` load produces carry the
+// source's own attributes, so the styles introspection API and an
+// `.xlsx` conversion see what Excel wrote rather than a placeholder.
+// Compared against the `.xlsx` twin because that is the form the same
+// attributes have to take once converted.
+
+TEST(XlsbFidelity, FontTableMatchesTheXlsxTwin) {
+  const Workbook from_binary = LoadFixture();
+  const Workbook from_xml = LoadXlsxTwin();
+  const io::StylesTable& binary = from_binary.styles();
+  const io::StylesTable& xml = from_xml.styles();
+  ASSERT_EQ(binary.fonts.size(), xml.fonts.size());
+  for (std::size_t i = 0; i < binary.fonts.size(); ++i) {
+    EXPECT_TRUE(FontsMatch(binary.fonts[i], xml.fonts[i])) << "font index " << i;
+  }
+
+  // The workbook's own authoring intent, restated so the comparison above
+  // cannot pass by both sides being empty: D3 is bold and red.
+  bool saw_bold_red = false;
+  for (const io::FontRecord& font : binary.fonts) {
+    if (font.bold && font.color.kind == io::ColorSpec::Kind::kRgb && font.color_argb == 0xFFFF0000U) {
+      saw_bold_red = true;
+    }
+  }
+  EXPECT_TRUE(saw_bold_red) << "the bold red font behind D3 did not survive the load";
+}
+
+TEST(XlsbFidelity, FillTableMatchesTheXlsxTwin) {
+  const Workbook from_binary = LoadFixture();
+  const Workbook from_xml = LoadXlsxTwin();
+  const io::StylesTable& binary = from_binary.styles();
+  const io::StylesTable& xml = from_xml.styles();
+  ASSERT_EQ(binary.fills.size(), xml.fills.size());
+  for (std::size_t i = 0; i < binary.fills.size(); ++i) {
+    EXPECT_EQ(binary.fills[i].pattern, xml.fills[i].pattern) << "fill index " << i;
+    EXPECT_EQ(static_cast<int>(binary.fills[i].fg.kind), static_cast<int>(xml.fills[i].fg.kind)) << "fill index " << i;
+    EXPECT_EQ(binary.fills[i].fg_argb, xml.fills[i].fg_argb) << "fill index " << i;
+    EXPECT_EQ(static_cast<int>(binary.fills[i].bg.kind), static_cast<int>(xml.fills[i].bg.kind)) << "fill index " << i;
+    EXPECT_EQ(binary.fills[i].bg.indexed, xml.fills[i].bg.indexed) << "fill index " << i;
+  }
+
+  bool saw_yellow_solid = false;
+  for (const io::FillRecord& fill : binary.fills) {
+    if (fill.pattern == 1U && fill.fg.kind == io::ColorSpec::Kind::kRgb && fill.fg_argb == 0xFFFFFF00U) {
+      saw_yellow_solid = true;
+    }
+  }
+  EXPECT_TRUE(saw_yellow_solid) << "the yellow solid fill behind D4 did not survive the load";
+}
+
+TEST(XlsbFidelity, BorderTableMatchesTheXlsxTwin) {
+  const Workbook from_binary = LoadFixture();
+  const Workbook from_xml = LoadXlsxTwin();
+  const io::StylesTable& binary = from_binary.styles();
+  const io::StylesTable& xml = from_xml.styles();
+  ASSERT_EQ(binary.borders.size(), xml.borders.size());
+  for (std::size_t i = 0; i < binary.borders.size(); ++i) {
+    const io::BorderRecord& lhs = binary.borders[i];
+    const io::BorderRecord& rhs = xml.borders[i];
+    EXPECT_EQ(lhs.diagonal_up, rhs.diagonal_up) << "border index " << i;
+    EXPECT_EQ(lhs.diagonal_down, rhs.diagonal_down) << "border index " << i;
+    EXPECT_EQ(lhs.left.style, rhs.left.style) << "border index " << i;
+    EXPECT_EQ(lhs.right.style, rhs.right.style) << "border index " << i;
+    EXPECT_EQ(lhs.top.style, rhs.top.style) << "border index " << i;
+    EXPECT_EQ(lhs.bottom.style, rhs.bottom.style) << "border index " << i;
+    EXPECT_EQ(lhs.diagonal.style, rhs.diagonal.style) << "border index " << i;
+  }
+}
+
+// A dynamic-array spill is stored as a `PtgExp` shell in every cell of
+// its footprint, with the real tokens in the anchor's `BrtArrFmla`. That
+// is the expected encoding, so it must not present as a formula the
+// reader failed to recover: `undecoded_formula_count` reports genuine
+// loss and a caller cannot tell the two apart if a spill inflates it.
+
+TEST(XlsbFidelity, SpillFootprintDoesNotCountAsUndecodedFormulas) {
+  const std::vector<std::uint8_t> bytes = ReadFileBytes(FixturePath());
+  ASSERT_FALSE(bytes.empty());
+  auto result_or = io::xlsb::read_xlsb(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  EXPECT_EQ(result_or.value().undecoded_formula_count, 0U);
+
+  // F6 = SEQUENCE(3): the anchor keeps its formula and the footprint is
+  // reconstructed, which is what makes the count above a true zero rather
+  // than a suppressed one.
+  const Sheet& data = result_or.value().workbook.sheet(0);
+  const Cell* f6 = data.cell_at(5U, 5U);
+  ASSERT_NE(f6, nullptr);
+  EXPECT_EQ(f6->formula_text, "=SEQUENCE(3)");
+  const SpillRegion* region = data.spill_region_at_anchor(5U, 5U);
+  ASSERT_NE(region, nullptr);
+  EXPECT_EQ(region->rows, 3U);
+  EXPECT_EQ(region->cols, 1U);
 }
 
 TEST(XlsbFidelity, StylesBinSurvivesAsPassthroughPart) {

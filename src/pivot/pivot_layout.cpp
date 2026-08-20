@@ -831,10 +831,24 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
     const std::uint32_t total_left = data_left + static_cast<std::uint32_t>(data_cols);
     std::size_t total_r_leaf = 0;
     for (std::size_t r_entry = 0; r_entry < row_entries.size(); ++r_entry) {
+      const std::uint32_t row = data_top + static_cast<std::uint32_t>(r_entry);
       if (row_entries[r_entry].subtotal) {
+        // A subtotal row states a total here too, and the evaluator has
+        // already computed it: `RowSubtotal::values[df]` aggregates that
+        // group across the whole column axis, which is exactly what this
+        // strip means. Leaving the cell out emptied the total column on
+        // every subtotal row of a default-configuration report with a
+        // two-level row hierarchy.
+        const RowSubtotal& subtotal = result.row_subtotals[row_entries[r_entry].subtotal_index];
+        for (std::size_t df = 0; df < data_field_count; ++df) {
+          const Value total = df < subtotal.values.size() ? reify_value(cells, subtotal.values[df]) : Value::blank();
+          append_cell(cells, row, total_left + static_cast<std::uint32_t>(df), total, PivotCellKind::RowSubtotal, 0,
+                      data_field_name(table, df), data_field_format(table, df));
+        }
+        // `total_r_leaf` walks leaf rows only, so a subtotal row must not
+        // advance it -- the next leaf row still reads its own totals.
         continue;
       }
-      const std::uint32_t row = data_top + static_cast<std::uint32_t>(r_entry);
       for (std::size_t df = 0; df < data_field_count; ++df) {
         // Use the evaluator's per-row-leaf re-aggregation rather than
         // summing this row's per-column cells: a non-additive function
@@ -850,25 +864,33 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           }
         }
         double sum = 0.0;
-        bool numeric = true;
+        bool summable = true;
+        const Value* source_error = nullptr;
         for (std::size_t c_leaf = 0; c_leaf < col_leaves.size(); ++c_leaf) {
           const Value& v = result.values[total_r_leaf][c_leaf][df];
           if (v.is_error()) {
-            append_cell(cells, row, total_left + static_cast<std::uint32_t>(df), reify_value(cells, v),
-                        PivotCellKind::GrandTotal, 0, data_field_name(table, df), data_field_format(table, df));
-            numeric = false;
+            source_error = &v;
             break;
           }
           if (v.is_number()) {
             sum += v.as_number();
           } else if (!v.is_blank()) {
-            numeric = false;
+            summable = false;
           }
         }
-        if (numeric) {
-          append_cell(cells, row, total_left + static_cast<std::uint32_t>(df), Value::number(sum),
-                      PivotCellKind::GrandTotal, 0, data_field_name(table, df), data_field_format(table, df));
+        // Every row of this strip states a total for every data field, so
+        // the cell is emitted on all three outcomes: a source error wins,
+        // an all-numeric row sums, and a row holding an aggregate that
+        // cannot be summed reports blank rather than dropping out of the
+        // grid and leaving a hole in the total column.
+        Value total = Value::blank();
+        if (source_error != nullptr) {
+          total = reify_value(cells, *source_error);
+        } else if (summable) {
+          total = Value::number(sum);
         }
+        append_cell(cells, row, total_left + static_cast<std::uint32_t>(df), total, PivotCellKind::GrandTotal, 0,
+                    data_field_name(table, df), data_field_format(table, df));
       }
       ++total_r_leaf;
     }

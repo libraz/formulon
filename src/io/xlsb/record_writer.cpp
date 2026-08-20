@@ -12,6 +12,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/xlsb/record.h"
 #include "io/zip_reader.h"
 
 namespace formulon {
@@ -41,6 +42,57 @@ void EmitVarInt(std::vector<std::uint8_t>& dst, std::uint32_t value, std::size_t
   if (!dst.empty()) {
     dst.back() &= 0x7FU;
   }
+}
+
+/// Returns the 4-byte `RkNumber` encoding of `value` ([MS-XLSB]
+/// §2.5.121). The single place the three candidate forms are ranked, so
+/// `emit_rk_number` and `rk_round_trips_value` can never disagree about
+/// which one a given value takes.
+std::uint32_t EncodeRkNumber(double value) {
+  constexpr double kMin = -static_cast<double>(1 << 29);
+  constexpr double kMax = static_cast<double>((1 << 29) - 1);
+  // 1) Integer form: shortest representation when applicable. Negative
+  // zero is excluded because the integer payload cannot carry its sign.
+  if (value != 0.0 || !std::signbit(value)) {
+    if (value == std::trunc(value) && value >= kMin && value <= kMax) {
+      const std::int32_t signed_payload = static_cast<std::int32_t>(value);
+      // Pack the 30-bit signed integer into the upper 30 bits with
+      // the low two bits as flags. The reader decodes by arithmetic-
+      // shifting `static_cast<int32_t>(payload) >> 2`, which we mirror
+      // here by shifting the signed value left by 2 (UB-free for
+      // values in `[-(1<<29), (1<<29)-1]`, which is what we just
+      // checked).
+      const std::uint32_t shifted = static_cast<std::uint32_t>(signed_payload)
+                                    << 2;      // wraps for negatives, decoded via arithmetic shift
+      return (shifted & 0xFFFFFFFCU) | 0x02U;  // fInt=1, fX100=0
+    }
+  }
+
+  // 2) x100 form: integer * 0.01 in the 30-bit range. Note we only
+  // reach here when the integer form did not apply (which means
+  // `value` is not already an exact integer in the 30-bit range);
+  // this avoids preferring the longer `123 * 100` form over the
+  // bare integer `123`. Negative zero is also rejected here because
+  // the integer-form path already declined it (sign bit is lost).
+  // `scaled` may have rounded, so the form is only lossless when
+  // dividing back by 100 lands on `value` again — `rk_round_trips_value`
+  // is what tells callers whether that held.
+  if (value != 0.0 || !std::signbit(value)) {
+    const double scaled = value * 100.0;
+    if (scaled == std::trunc(scaled) && scaled >= kMin && scaled <= kMax) {
+      const std::int32_t signed_payload = static_cast<std::int32_t>(scaled);
+      const std::uint32_t shifted = static_cast<std::uint32_t>(signed_payload) << 2;
+      return (shifted & 0xFFFFFFFCU) | 0x03U;  // fInt=1, fX100=1
+    }
+  }
+
+  // 3) IEEE 754 form: store the upper 32 bits with the low two bits
+  // cleared. Lossy unless the lower 34 bits of the bit pattern were
+  // already zero — callers that need lossless output must use
+  // BrtCellReal instead (see `rk_round_trips_value`).
+  std::uint64_t bits = 0;
+  std::memcpy(&bits, &value, sizeof(value));
+  return static_cast<std::uint32_t>(bits >> 32) & 0xFFFFFFFCU;  // fInt=0, fX100=0
 }
 
 /// Appends one UTF-16LE code unit to `dst`.
@@ -154,92 +206,36 @@ void emit_xlnullablewidestring(std::vector<std::uint8_t>& dst, std::optional<std
   emit_xlwidestring(dst, text.value());
 }
 
+void emit_rk_number(std::vector<std::uint8_t>& dst, double value) {
+  emit_u32(dst, EncodeRkNumber(value));
+}
+
 bool rk_round_trips_value(double value) {
+  // Non-finite values have no `RkNumber` spelling: the IEEE form would
+  // carry the exponent through, but a NaN payload is not a value the
+  // cell writer should be routing into a 4-byte encoding at all.
   if (std::isnan(value) || std::isinf(value)) {
     return false;
   }
-  // Integer form covers any exact integer in the 30-bit signed range,
-  // excluding negative zero (which loses its sign in the integer
-  // representation).
+  // Negative zero survives the IEEE form bit-for-bit, but the writer
+  // still prefers `BrtCellReal` for it so the sign never depends on
+  // which of the three encodings was picked.
   if (value == 0.0 && std::signbit(value)) {
     return false;
   }
-  if (value == std::trunc(value)) {
-    constexpr double kMin = -static_cast<double>(1 << 29);
-    constexpr double kMax = static_cast<double>((1 << 29) - 1);
-    if (value >= kMin && value <= kMax) {
-      return true;
-    }
-  }
-  // Scaled-x100 form: `value * 100` is an exact integer in the
-  // 30-bit range. This catches typical currency-style values.
-  const double scaled = value * 100.0;
-  if (scaled == std::trunc(scaled)) {
-    constexpr double kMin = -static_cast<double>(1 << 29);
-    constexpr double kMax = static_cast<double>((1 << 29) - 1);
-    if (scaled >= kMin && scaled <= kMax) {
-      return true;
-    }
-  }
-  // IEEE 754 form is exact only when the lower 34 bits of the bit
-  // pattern are zero; otherwise we'd lose precision on the round-trip.
-  std::uint64_t bits = 0;
-  std::memcpy(&bits, &value, sizeof(value));
-  return (bits & 0x3FFFFFFFFULL) == 0ULL;
-}
-
-void emit_rk_number(std::vector<std::uint8_t>& dst, double value) {
-  // 1) Integer form: shortest representation when applicable.
-  if (value != 0.0 || !std::signbit(value)) {
-    if (value == std::trunc(value)) {
-      constexpr double kMin = -static_cast<double>(1 << 29);
-      constexpr double kMax = static_cast<double>((1 << 29) - 1);
-      if (value >= kMin && value <= kMax) {
-        const std::int32_t signed_payload = static_cast<std::int32_t>(value);
-        // Pack the 30-bit signed integer into the upper 30 bits with
-        // the low two bits as flags. The reader decodes by arithmetic-
-        // shifting `static_cast<int32_t>(payload) >> 2`, which we mirror
-        // here by shifting the signed value left by 2 (UB-free for
-        // values in `[-(1<<29), (1<<29)-1]`, which is what we just
-        // checked).
-        const std::uint32_t shifted = static_cast<std::uint32_t>(signed_payload)
-                                      << 2;                        // wraps for negatives, decoded via arithmetic shift
-        const std::uint32_t rk = (shifted & 0xFFFFFFFCU) | 0x02U;  // fInt=1, fX100=0
-        emit_u32(dst, rk);
-        return;
-      }
-    }
-  }
-
-  // 2) x100 form: integer * 0.01 in the 30-bit range. Note we only
-  // reach here when the integer form did not apply (which means
-  // `value` is not already an exact integer in the 30-bit range);
-  // this avoids preferring the longer `123 * 100` form over the
-  // bare integer `123`. Negative zero is also rejected here because
-  // the integer-form path already declined it (sign bit is lost).
-  if (value != 0.0 || !std::signbit(value)) {
-    const double scaled = value * 100.0;
-    if (scaled == std::trunc(scaled)) {
-      constexpr double kMin = -static_cast<double>(1 << 29);
-      constexpr double kMax = static_cast<double>((1 << 29) - 1);
-      if (scaled >= kMin && scaled <= kMax) {
-        const std::int32_t signed_payload = static_cast<std::int32_t>(scaled);
-        const std::uint32_t shifted = static_cast<std::uint32_t>(signed_payload) << 2;
-        const std::uint32_t rk = (shifted & 0xFFFFFFFCU) | 0x03U;  // fInt=1, fX100=1
-        emit_u32(dst, rk);
-        return;
-      }
-    }
-  }
-
-  // 3) IEEE 754 form: store the upper 32 bits with the low two bits
-  // cleared. Lossy unless the lower 34 bits of the bit pattern were
-  // already zero — callers that need lossless output must use
-  // BrtCellReal instead (see `rk_round_trips_value`).
-  std::uint64_t bits = 0;
-  std::memcpy(&bits, &value, sizeof(value));
-  const std::uint32_t high = static_cast<std::uint32_t>(bits >> 32) & 0xFFFFFFFCU;
-  emit_u32(dst, high);  // fInt=0, fX100=0
+  // Everything else is answered by the encoder itself: whether the
+  // chosen form reproduces `value` is a property of `EncodeRkNumber`'s
+  // output, not of a predicate that re-derives the form selection. A
+  // value like `3611469.5700000003` passes the `value * 100.0`
+  // integrality test only because the multiplication rounds, and the
+  // decode then yields a different double; comparing bit patterns is
+  // the only test that rejects it.
+  const double decoded = decode_rk_number(EncodeRkNumber(value));
+  std::uint64_t value_bits = 0;
+  std::uint64_t decoded_bits = 0;
+  std::memcpy(&value_bits, &value, sizeof(value));
+  std::memcpy(&decoded_bits, &decoded, sizeof(decoded));
+  return value_bits == decoded_bits;
 }
 
 void emit_record(std::vector<std::uint8_t>& dst, std::uint16_t type, ByteSpan payload) {

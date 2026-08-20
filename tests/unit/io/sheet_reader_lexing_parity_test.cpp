@@ -1,12 +1,15 @@
 //
-// DOM / SAX parity over malformed numeric attributes.
+// DOM / SAX parity over attribute lexing and document node shape.
 //
 // `read_ooxml` chooses between `read_sheet_data` (pugixml DOM) and
 // `read_sheet_data_sax` (streaming) by sheet size alone, so the two must
 // turn any byte sequence — including values no producer should have
 // written — into the same workbook and the same success / failure. The
 // corpus parity gate covers well-formed input; the fixtures here pin the
-// attribute values whose lexing used to differ between the paths, so a
+// attribute values whose lexing used to differ between the paths, plus the
+// document shapes -- quoted attribute delimiters, CDATA / comments /
+// processing instructions in a text body, stray character data, the root
+// element's name -- where the two used to disagree on the node tree. So a
 // sheet crossing `kSaxThresholdBytes` cannot change what it means.
 //
 // Each test asserts the concrete decoded result as well as the equality,
@@ -25,6 +28,7 @@
 #include "cell.h"
 #include "gtest/gtest.h"
 #include "io/sheet_reader.h"
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
@@ -98,7 +102,12 @@ Workbook MakeStylelessHost() {
 LoadResult LoadDom(std::string_view sheet_xml) {
   LoadResult result;
   pugi::xml_document doc;
-  if (!doc.load_buffer(sheet_xml.data(), sheet_xml.size())) {
+  // `load_xml_buffer` is the loader every part reader goes through, and it
+  // adds `parse_ws_pcdata_single` to the defaults. Parsing these fixtures
+  // any other way would compare the streaming path against a parser
+  // configuration that never runs.
+  const std::vector<std::uint8_t> bytes(sheet_xml.begin(), sheet_xml.end());
+  if (!load_xml_buffer(doc, bytes, "sheet_reader_parity", "sheet.xml")) {
     result.code = FormulonErrorCode::kIoXmlParse;
     return result;
   }
@@ -437,6 +446,295 @@ TEST(SheetReaderLexingParity, NonFiniteCellValueFailsBothPaths) {
   const LoadResult sax = LoadSax(xml);
   EXPECT_FALSE(dom.ok);
   EXPECT_FALSE(sax.ok);
+  EXPECT_EQ(dom.code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_EQ(sax.code, FormulonErrorCode::kIoSheetCorrupt);
+}
+
+// ---------------------------------------------------------------------------
+// Node shape. The cases above vary the *bytes* of an attribute value; these
+// vary the *structure* of the document, which the lexing fixtures never
+// reach. XML 1.0 permits a literal `>` inside an attribute value (only `<`
+// and `&` are forbidden there), and permits CDATA / comments / processing
+// instructions wherever character data may appear.
+// ---------------------------------------------------------------------------
+
+/// Wraps `body` in a worksheet whose root carries `extra_root_markup`
+/// before `<sheetData>`, so a start tag ahead of the cell data can be
+/// varied independently of the cells themselves.
+std::string WrapSheetWithPrefix(std::string_view extra_root_markup, std::string_view body) {
+  return std::string("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">")
+      .append(extra_root_markup)
+      .append("<sheetData>")
+      .append(body)
+      .append("</sheetData></worksheet>");
+}
+
+TEST(SheetReaderNodeShapeParity, GreaterThanInAttributeBeforeSheetDataKeepsTheCells) {
+  // A literal `>` is legal in an attribute value. Treating it as the end of
+  // the start tag makes the rest of `<sheetPr .../>` look like character
+  // data, and the recovery scan then swallows `<sheetData>` whole -- so the
+  // sheet reads as empty and still reports success.
+  const std::string xml =
+      WrapSheetWithPrefix("<sheetPr codeName=\"a&gt;b\"/>", "<row r=\"1\"><c r=\"A1\"><v>1</v></c></row>");
+  const std::string literal =
+      WrapSheetWithPrefix("<sheetPr codeName=\"a>b\"/>", "<row r=\"1\"><c r=\"A1\"><v>1</v></c></row>");
+  const LoadResult dom = LoadDom(literal);
+  const LoadResult sax = LoadSax(literal);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  // The escaped spelling is the same document; both must agree with it too.
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_EQ(LoadDom(xml).cells.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 1.0);
+}
+
+TEST(SheetReaderNodeShapeParity, GreaterThanInAttributeInsideSheetDataKeepsTheCells) {
+  const std::string xml = WrapSheet("<row r=\"1\" spans=\"1:2>\"><c r=\"A1\"><v>7</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 7.0);
+}
+
+TEST(SheetReaderNodeShapeParity, GreaterThanInSingleQuotedAttributeKeepsTheCells) {
+  // Both quote characters delimit an attribute value, so tracking only the
+  // double quote would leave this shape truncating the tag.
+  const std::string xml = WrapSheet("<row r='1' spans='1:2>'><c r='A1'><v>9</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 9.0);
+}
+
+TEST(SheetReaderNodeShapeParity, SlashInsideAttributeDoesNotSelfCloseTheTag) {
+  // `/` only closes a tag as `/>` outside a quoted value; inside one it is
+  // an ordinary character, as in a path or URL.
+  const std::string xml = WrapSheet("<row r=\"1\" spans=\"a/>b\"><c r=\"A1\"><v>3</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 3.0);
+}
+
+TEST(SheetReaderNodeShapeParity, UnterminatedAttributeQuoteFailsBothPaths) {
+  const std::string xml = WrapSheet("<row r=\"1\"><c r=\"A1\" s=\"0><v>1</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  EXPECT_FALSE(dom.ok);
+  EXPECT_FALSE(sax.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+}
+
+TEST(SheetReaderNodeShapeParity, CdataInsideValueAgrees) {
+  const std::string xml = WrapSheet("<row r=\"1\"><c r=\"A1\"><v><![CDATA[42]]></v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 42.0);
+}
+
+TEST(SheetReaderNodeShapeParity, CommentAndProcessingInstructionInsideValueAgree) {
+  // `parse_default` keeps neither node type, so the surviving character
+  // data is the whole value.
+  for (const char* markup : {"<!--note-->", "<?php echo 1;?>"}) {
+    const std::string xml =
+        WrapSheet(std::string("<row r=\"1\"><c r=\"A1\"><v>").append(markup).append("42</v></c></row>"));
+    const LoadResult dom = LoadDom(xml);
+    const LoadResult sax = LoadSax(xml);
+    ASSERT_TRUE(dom.ok) << markup;
+    EXPECT_TRUE(SameOutcome(dom, sax)) << markup;
+    ASSERT_EQ(dom.cells.size(), 1U) << markup;
+    EXPECT_DOUBLE_EQ(dom.cells[0].number, 42.0) << markup;
+  }
+}
+
+TEST(SheetReaderNodeShapeParity, CdataInsideInlineStringAgrees) {
+  const std::string xml =
+      WrapSheet("<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t><![CDATA[a<b&c]]></t></is></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  // CDATA content is not entity-decoded and may carry XML-critical bytes.
+  EXPECT_EQ(dom.cells[0].text, "a<b&c");
+}
+
+TEST(SheetReaderNodeShapeParity, CommentAndProcessingInstructionInsideInlineStringAgree) {
+  for (const char* markup : {"<!--note-->", "<?php echo 1;?>"}) {
+    const std::string xml = WrapSheet(std::string("<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>")
+                                          .append(markup)
+                                          .append("hello</t></is></c></row>"));
+    const LoadResult dom = LoadDom(xml);
+    const LoadResult sax = LoadSax(xml);
+    ASSERT_TRUE(dom.ok) << markup;
+    EXPECT_TRUE(SameOutcome(dom, sax)) << markup;
+    ASSERT_EQ(dom.cells.size(), 1U) << markup;
+    EXPECT_EQ(dom.cells[0].text, "hello") << markup;
+  }
+}
+
+TEST(SheetReaderNodeShapeParity, TextRunEndsAtTheFirstNonCharacterNode) {
+  // pugixml exposes the first PCDATA-or-CDATA child, and a comment, a
+  // processing instruction or a CDATA section all end the run that precedes
+  // them. So the contribution here is "4", not "42" -- the streaming path
+  // has to reproduce that, not the concatenation the spec might suggest.
+  for (const char* markup : {"<!--x-->", "<?pi x?>", "<![CDATA[2]]>"}) {
+    const std::string xml =
+        WrapSheet(std::string("<row r=\"1\"><c r=\"A1\"><v>4").append(markup).append("2</v></c></row>"));
+    const LoadResult dom = LoadDom(xml);
+    const LoadResult sax = LoadSax(xml);
+    ASSERT_TRUE(dom.ok) << markup;
+    EXPECT_TRUE(SameOutcome(dom, sax)) << markup;
+    ASSERT_EQ(dom.cells.size(), 1U) << markup;
+    EXPECT_DOUBLE_EQ(dom.cells[0].number, 4.0) << markup;
+  }
+}
+
+TEST(SheetReaderNodeShapeParity, WhitespaceOnlyRunBeforeCdataIsDropped) {
+  // Whitespace-only character data forms no node under `parse_default`, so
+  // the CDATA section that follows it is still the first one.
+  const std::string xml = WrapSheet("<row r=\"1\"><c r=\"A1\"><v>\n  <![CDATA[42]]>\n</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 42.0);
+}
+
+TEST(SheetReaderNodeShapeParity, ChildElementInsideValueAgrees) {
+  // An element child is not part of the OOXML vocabulary here, but pugixml
+  // accepts it and still reports the first character-data node, so the
+  // streaming path may not reject the sheet over it.
+  const std::string xml = WrapSheet("<row r=\"1\"><c r=\"A1\"><v><b/>42</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 42.0);
+}
+
+TEST(SheetReaderNodeShapeParity, WhitespaceOnlyRunSurvivesOnlyAsTheSoleChild) {
+  // `parse_ws_pcdata_single` keeps a whitespace-only run when it is the
+  // element's only child and drops it otherwise, so an inline string reads
+  // as a space in the first shape and as empty in the second.
+  const std::string alone = WrapSheet("<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t> </t></is></c></row>");
+  const LoadResult alone_dom = LoadDom(alone);
+  ASSERT_TRUE(alone_dom.ok);
+  EXPECT_TRUE(SameOutcome(alone_dom, LoadSax(alone)));
+  ASSERT_EQ(alone_dom.cells.size(), 1U);
+  EXPECT_EQ(alone_dom.cells[0].text, " ");
+
+  const std::string with_sibling =
+      WrapSheet("<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t> <!--x--></t></is></c></row>");
+  const LoadResult sibling_dom = LoadDom(with_sibling);
+  ASSERT_TRUE(sibling_dom.ok);
+  EXPECT_TRUE(SameOutcome(sibling_dom, LoadSax(with_sibling)));
+  ASSERT_EQ(sibling_dom.cells.size(), 1U);
+  EXPECT_EQ(sibling_dom.cells[0].text, "");
+}
+
+TEST(SheetReaderNodeShapeParity, CdataTakesEolConversionButNotEntityDecoding) {
+  // Inside a CDATA section `&amp;` is five characters, while the
+  // end-of-line conversion still applies to the raw bytes.
+  const std::string xml =
+      WrapSheet("<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t><![CDATA[&amp;\r\nx]]></t></is></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_EQ(dom.cells[0].text, "&amp;\nx");
+}
+
+TEST(SheetReaderNodeShapeParity, CdataInsideFormulaAgrees) {
+  const std::string xml = WrapSheet("<row r=\"1\"><c r=\"A1\"><f><![CDATA[1+1]]></f><v>2</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_EQ(dom.cells[0].formula, "=1+1");
+}
+
+TEST(SheetReaderNodeShapeParity, UnterminatedCdataFailsBothPaths) {
+  const std::string xml = WrapSheet("<row r=\"1\"><c r=\"A1\"><v><![CDATA[42</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  EXPECT_FALSE(dom.ok);
+  EXPECT_FALSE(sax.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+}
+
+TEST(SheetReaderNodeShapeParity, GreaterThanInAttributeAfterSheetDataKeepsTheCells) {
+  // The same truncation one element later: here it is `</sheetData>` that
+  // has already closed, so the damage lands on the metadata sibling rather
+  // than on the cells -- both paths must still read the row.
+  const std::string xml =
+      std::string("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>")
+          .append("<row r=\"1\"><c r=\"A1\"><v>1</v></c></row>")
+          .append("</sheetData><mergeCells count=\"1>\"><mergeCell ref=\"B1:C1\"/></mergeCells></worksheet>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 1.0);
+}
+
+TEST(SheetReaderNodeShapeParity, GreaterThanInRootAttributeKeepsTheCells) {
+  const std::string xml =
+      "<worksheet codeName=\"a>b\"><sheetData><row r=\"1\"><c r=\"A1\"><v>1</v></c></row></sheetData></worksheet>";
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 1.0);
+}
+
+TEST(SheetReaderNodeShapeParity, StrayCharacterDataBetweenChildrenIsIgnored) {
+  // The DOM path reaches `<row>`, `<c>` and `<v>` by name, so a text node
+  // sitting between them contributes nothing there. Rejecting it on the
+  // streaming path would fail a workbook the DOM path opens.
+  const struct {
+    const char* label;
+    const char* body;
+  } kCases[] = {
+      {"under sheetData", "junk<row r=\"1\"><c r=\"A1\"><v>1</v></c></row>"},
+      {"under row", "<row r=\"1\">junk<c r=\"A1\"><v>1</v></c></row>"},
+      {"under c", "<row r=\"1\"><c r=\"A1\">junk<v>1</v></c></row>"},
+  };
+  for (const auto& c : kCases) {
+    const std::string xml = WrapSheet(c.body);
+    const LoadResult dom = LoadDom(xml);
+    const LoadResult sax = LoadSax(xml);
+    ASSERT_TRUE(dom.ok) << c.label;
+    EXPECT_TRUE(SameOutcome(dom, sax)) << c.label;
+    ASSERT_EQ(dom.cells.size(), 1U) << c.label;
+    EXPECT_DOUBLE_EQ(dom.cells[0].number, 1.0) << c.label;
+  }
+}
+
+TEST(SheetReaderNodeShapeParity, CellsUnderAForeignRootAreNotRead) {
+  // `read_sheet_data` resolves the cells through the document's
+  // `<worksheet>` child, so a differently named root is a corrupt sheet
+  // there. The streaming path used to stream the grid out of it anyway.
+  const std::string xml = "<foo><sheetData><row r=\"1\"><c r=\"A1\"><v>1</v></c></row></sheetData></foo>";
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  EXPECT_FALSE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
   EXPECT_EQ(dom.code, FormulonErrorCode::kIoSheetCorrupt);
   EXPECT_EQ(sax.code, FormulonErrorCode::kIoSheetCorrupt);
 }

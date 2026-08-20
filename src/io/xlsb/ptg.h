@@ -27,14 +27,26 @@ namespace xlsb {
 /// Implementation status of a Ptg in the v1.0 reader/writer.
 ///
 ///   * `Full`             — round-trips Reader + Writer (Ptg ↔ AST).
+///   * `Partial`          — round-trips for part of the token's payload
+///                          domain and is rejected for the rest. Both
+///                          directions reject the same subset, so a
+///                          stream this reader accepts is one this writer
+///                          can re-emit; the rejected subset surfaces as
+///                          `kIoXlsbUnsupportedPtg` at the point the
+///                          payload is examined, not at dispatch.
 ///   * `PreserveOnly`     — Reader reads opaque bytes, Writer must
 ///                          re-emit them verbatim (no AST round-trip).
 ///   * `Unsupported`      — Reader surfaces `#NAME?` + structured-log
 ///                          diagnostic; Writer never emits.
+///
+/// Only `Unsupported` is a dispatch-time gate (`decode_ptgs` refuses the
+/// token on sight). `Partial` has to be decided from the payload, so it
+/// cannot be one.
 enum class PtgStatus : std::uint8_t {
   Full = 0,
   PreserveOnly = 1,
   Unsupported = 2,
+  Partial = 3,
 };
 
 /// Class mark carried by class-marked Ptgs (`0x20`/`0x40`/`0x60` trio).
@@ -164,14 +176,15 @@ inline constexpr std::size_t kPtgInfoCount = 51;
 inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     // ---- Operators (no class mark) -----------------------------------------
     // `Exp` (shared/array-formula shell): the reader does not decode this
-    // token directly -- `decode_ptgs` has no `PtgKind::Exp` case, so a
-    // cell whose `rgce` is a bare `PtgExp` logs
-    // `xlsb.formula.not_decoded` and keeps its cached value only. The
-    // *cell*-level workaround (`DecodeSheetBin`'s `BrtArrFmla` handling,
-    // which supplies the array/CSE formula's real Ptg tokens out-of-band
-    // and registers the spill) recovers the correct formula text and
-    // value despite this, but that is a record-layer mechanism, not a
-    // `PtgKind::Exp` decode.
+    // token directly -- `decode_ptgs` has no `PtgKind::Exp` case. The
+    // token is handled a layer up instead: `reader.cpp` recognises a bare
+    // `PtgExp` stream as the placeholder it is and leaves the cell without
+    // a formula, while `DecodeSheetBin`'s `BrtArrFmla` handling supplies
+    // the array / dynamic-array formula's real tokens out-of-band and
+    // registers the spill. Because the shell is the expected encoding and
+    // not a decode failure, it is neither logged nor counted as an
+    // undecoded formula; a shell whose owning record the reader does not
+    // model is reported through that record's own disposition.
     {PtgKind::Exp, 0x01, "Exp", PtgStatus::Unsupported},
     {PtgKind::Tbl, 0x02, "Tbl", PtgStatus::Unsupported},
     {PtgKind::Add, 0x03, "Add", PtgStatus::Full},
@@ -213,7 +226,14 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::Num, 0x1F, "Num", PtgStatus::Full},
 
     // ---- Class-marked Ptgs (Reference-class base bytes 0x20..0x3D) --------
-    {PtgKind::Array, 0x20, "Array", PtgStatus::Full},
+    // `Array` (inline array constant): the element tag byte that precedes
+    // each value in the `RgbExtra` area has only been verified against
+    // real Excel output for `0x00` (number). `decode_ptgs` returns
+    // `kIoXlsbUnsupportedPtg` for any other tag rather than guessing at a
+    // layout, and `encode_ptgs` refuses a non-numeric element for the
+    // same reason, so `={1,"a"}` does not round-trip in either direction.
+    // Numeric constants such as `=SUM({1,2;3,4})` do.
+    {PtgKind::Array, 0x20, "Array", PtgStatus::Partial},
     {PtgKind::Func, 0x21, "Func", PtgStatus::Full},
     {PtgKind::FuncVar, 0x22, "FuncVar", PtgStatus::Full},
     {PtgKind::Name, 0x23, "Name", PtgStatus::Full},

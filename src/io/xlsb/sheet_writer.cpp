@@ -7,9 +7,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -20,6 +22,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sst_writer.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -113,23 +116,92 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout) 
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndColInfos), ByteSpan{});
 }
 
+/// The two `<sheetPr>` members `BrtWsProp` carries: the VBA code name and
+/// the tab colour, in the wire form the record wants them.
+///
+/// `color_type` is the `XColorType` selector; `0` is automatic, which
+/// together with the automatic palette index is the "no tab colour" state
+/// Excel writes for an untinted tab.
+struct WorksheetProperties {
+  std::string code_name;
+  std::uint8_t color_type = 0U;
+  std::uint8_t color_index = 0x40U;
+  std::int16_t color_tint = 0;
+  std::uint32_t color_argb = 0U;
+};
+
+/// Reads the sheet's retained `<sheetPr>` fragment back into the fields
+/// `BrtWsProp` can express. The fragment is the same string the OOXML
+/// writer emits and the XLSB reader synthesises, so this is the inverse of
+/// `reader.cpp`'s `DecodeWorksheetProperties` and the two containers agree
+/// on a sheet's code name and tab colour whichever one it was loaded from.
+///
+/// Members `<sheetPr>` can carry that `BrtWsProp` has no field for --
+/// `<outlinePr>`, `<pageSetUpPr>`, `filterMode` -- stay in the fragment
+/// and reach an `.xlsx` save unchanged; they are simply not part of what
+/// this record emits.
+WorksheetProperties ParseSheetProperties(std::string_view raw) {
+  WorksheetProperties out;
+  if (raw.empty()) {
+    return out;
+  }
+  pugi::xml_document doc;
+  if (!doc.load_buffer(raw.data(), raw.size())) {
+    return out;
+  }
+  const pugi::xml_node sheet_pr = doc.document_element();
+  if (!sheet_pr || std::string_view(sheet_pr.name()) != "sheetPr") {
+    return out;
+  }
+  out.code_name = sheet_pr.attribute("codeName").value();
+  const pugi::xml_node tab = sheet_pr.child("tabColor");
+  if (!tab) {
+    return out;
+  }
+  if (const pugi::xml_attribute rgb = tab.attribute("rgb")) {
+    out.color_type = 2U;
+    out.color_index = 0U;
+    out.color_argb = static_cast<std::uint32_t>(std::strtoul(rgb.value(), nullptr, 16));
+    return out;
+  }
+  if (const pugi::xml_attribute theme = tab.attribute("theme")) {
+    out.color_type = 3U;
+    out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(theme.as_uint(0U), 0xFFU));
+    const double tint = std::clamp(std::round(tab.attribute("tint").as_double(0.0) * 32767.0), -32767.0, 32767.0);
+    out.color_tint = static_cast<std::int16_t>(tint);
+    return out;
+  }
+  if (const pugi::xml_attribute indexed = tab.attribute("indexed")) {
+    out.color_type = 1U;
+    out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(indexed.as_uint(0U), 0xFFU));
+    return out;
+  }
+  return out;
+}
+
 /// Emits the worksheet-properties record which starts the mandatory worksheet
 /// prefix. `BrtWsDim` must follow this record before the view collection.
-void EmitWorksheetProperties(std::vector<std::uint8_t>& dst) {
+void EmitWorksheetProperties(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
+  const WorksheetProperties properties_model = ParseSheetProperties(sheet.print_settings().sheet_pr_xml);
   std::vector<std::uint8_t> properties;
   emit_u16(properties, 0x04C9U);  // page breaks, publish, outline defaults
   emit_u8(properties, 0x02U);     // evaluate conditional formatting
-  // BrtColor: automatic tab color (type=automatic, index=0x40).
-  emit_u8(properties, 0U);
-  emit_u8(properties, 0x40U);
-  emit_u16(properties, 0U);
-  emit_u8(properties, 0U);
-  emit_u8(properties, 0U);
-  emit_u8(properties, 0U);
-  emit_u8(properties, 0U);
+  // BrtColor. An automatic type with the automatic palette index is the
+  // untinted tab; any other selector sets fValidRGB alongside it, matching
+  // how the styles writer spells the same structure.
+  emit_u8(properties,
+          properties_model.color_type == 0U
+              ? std::uint8_t{0}
+              : static_cast<std::uint8_t>((static_cast<unsigned>(properties_model.color_type) << 1U) | 0x01U));
+  emit_u8(properties, properties_model.color_index);
+  emit_u16(properties, static_cast<std::uint16_t>(properties_model.color_tint));
+  emit_u8(properties, static_cast<std::uint8_t>((properties_model.color_argb >> 16U) & 0xFFU));
+  emit_u8(properties, static_cast<std::uint8_t>((properties_model.color_argb >> 8U) & 0xFFU));
+  emit_u8(properties, static_cast<std::uint8_t>(properties_model.color_argb & 0xFFU));
+  emit_u8(properties, static_cast<std::uint8_t>((properties_model.color_argb >> 24U) & 0xFFU));
   emit_u32(properties, 0xFFFFFFFFU);  // rwSync: unused
   emit_u32(properties, 0xFFFFFFFFU);  // colSync: unused
-  emit_u32(properties, 0U);           // empty CodeName
+  emit_xlwidestring(properties, properties_model.code_name);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsProp), properties);
 }
 
@@ -430,7 +502,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
   // BrtEndSheet.
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheet), ByteSpan{});
-  EmitWorksheetProperties(body);
+  EmitWorksheetProperties(body, sheet);
   EmitWorksheetDimensions(body, sheet);
   EmitWorksheetViewsAndFormatting(body, sheet.view(), sheet.format_defaults());
   EmitColumnInfos(body, sheet.layout());

@@ -47,6 +47,13 @@ void apply_structured_page_margins(const pugi::xml_node& page_margins, PageMargi
 /// `out`. OOXML's `id` is already the 0-based index the break precedes, so
 /// it is carried over unchanged. The `count` / `manualBreakCount` wrapper
 /// attributes are ignored — only the `<brk>` entries are honoured.
+///
+/// `out` is left strictly increasing by `id` and no longer than
+/// `kMaxManualBreaksPerAxis`, which is the shape every consumer of the
+/// break vectors assumes and the shape the mutation API maintains. A
+/// document is free to spell its `<brk>` children in any order and to
+/// repeat an `id`; the first entry for each `id` wins, and any excess
+/// past the axis cap is dropped.
 void read_manual_breaks(const pugi::xml_node& breaks_node, std::vector<ManualBreak>& out);
 
 /// Reads `<sheetPr><pageSetUpPr fitToPage>`. Returns false when either

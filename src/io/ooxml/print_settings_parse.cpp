@@ -1,6 +1,7 @@
 
 #include "io/ooxml/print_settings_parse.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -10,6 +11,7 @@
 #include "io/xsd_double.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/resource_budget.h"
 
 namespace formulon {
 namespace io {
@@ -76,6 +78,29 @@ void read_manual_breaks(const pugi::xml_node& breaks_node, std::vector<ManualBre
     // automatic and must not be re-emitted as a user break.
     entry.manual = read_xsd_bool(brk, "man", false);
     out.push_back(entry);
+  }
+  // Every other producer of these vectors - the C ABI's upsert / erase
+  // pair, and the break shifting that follows a structural edit - keeps
+  // them strictly increasing by `id`, and the consumers rely on it: the
+  // mutators binary-search, the paginator scans forward, and the
+  // enumeration API documents ascending order. A file is under no such
+  // obligation, and a third-party writer emitting `<brk>` in authoring
+  // order rather than sheet order would leave a loaded workbook where
+  // `fm_sheet_remove_col_break` silently matches nothing and an upsert
+  // appends a duplicate index. Normalising here makes the invariant hold
+  // for the load path too, at the cost of the document order of a list
+  // whose order carries no meaning.
+  // Stable, so a repeated `id` keeps the span the document stated first
+  // rather than an arbitrary one of the duplicates.
+  std::stable_sort(out.begin(), out.end(), [](const ManualBreak& a, const ManualBreak& b) { return a.id < b.id; });
+  out.erase(
+      std::unique(out.begin(), out.end(), [](const ManualBreak& a, const ManualBreak& b) { return a.id == b.id; }),
+      out.end());
+  // The loader must not accept more breaks than the authoring API does,
+  // or reading a file and adding one break to it would fail where the
+  // same edit on a freshly built sheet succeeds.
+  if (out.size() > kMaxManualBreaksPerAxis) {
+    out.resize(kMaxManualBreaksPerAxis);
   }
 }
 

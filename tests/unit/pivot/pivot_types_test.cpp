@@ -6,6 +6,10 @@
 
 #include "pivot/pivot_types.h"
 
+#include <cstddef>
+#include <string>
+#include <utility>
+
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
@@ -103,6 +107,61 @@ TEST(PivotCache, MutableFieldsAndRecords) {
   EXPECT_EQ(cache.fields().size(), 1u);
   EXPECT_EQ(cache.fields()[0].name, "region");
   EXPECT_EQ(cache.records().size(), 1u);
+}
+
+TEST(PivotCache, SetRecordTextRoundTrips) {
+  PivotCache cache;
+  cache.mutable_fields().push_back(PivotCacheField{"region", {}});
+  PivotCacheRecord record;
+  record.cells.assign(1u, Value::blank());
+  cache.mutable_records().push_back(std::move(record));
+
+  ASSERT_TRUE(cache.set_record_text(0u, 0u, "north"));
+  ASSERT_TRUE(cache.records()[0].cells[0].is_text());
+  EXPECT_EQ(cache.records()[0].cells[0].as_text(), "north");
+
+  ASSERT_TRUE(cache.set_record_text(0u, 0u, "a much longer region name"));
+  ASSERT_TRUE(cache.records()[0].cells[0].is_text());
+  EXPECT_EQ(cache.records()[0].cells[0].as_text(), "a much longer region name");
+}
+
+// Text storage is bounded by the cells that hold text, not by how many
+// times they were written. Appending a fresh entry per write instead makes
+// a live editor's memory grow with its edit count.
+TEST(PivotCache, RepeatedRecordTextOverwritesReuseOneStorageSlot) {
+  PivotCache cache;
+  cache.mutable_fields().push_back(PivotCacheField{"region", {}});
+  PivotCacheRecord record;
+  record.cells.assign(2u, Value::blank());
+  cache.mutable_records().push_back(std::move(record));
+
+  ASSERT_TRUE(cache.set_record_text(0u, 0u, "north"));
+  const std::size_t after_first_write = cache.text_storage().size();
+  EXPECT_EQ(after_first_write, 1u);
+
+  for (int i = 0; i < 200; ++i) {
+    ASSERT_TRUE(cache.set_record_text(0u, 0u, "region-" + std::to_string(i)));
+  }
+  EXPECT_EQ(cache.text_storage().size(), after_first_write);
+  ASSERT_TRUE(cache.records()[0].cells[0].is_text());
+  EXPECT_EQ(cache.records()[0].cells[0].as_text(), "region-199");
+
+  // A second cell is a second live value, so it takes a slot of its own.
+  ASSERT_TRUE(cache.set_record_text(0u, 1u, "south"));
+  EXPECT_EQ(cache.text_storage().size(), after_first_write + 1u);
+  EXPECT_EQ(cache.records()[0].cells[0].as_text(), "region-199");
+  EXPECT_EQ(cache.records()[0].cells[1].as_text(), "south");
+}
+
+TEST(PivotCache, SetRecordTextRejectsOutOfRangeCoordinates) {
+  PivotCache cache;
+  PivotCacheRecord record;
+  record.cells.assign(1u, Value::blank());
+  cache.mutable_records().push_back(std::move(record));
+
+  EXPECT_FALSE(cache.set_record_text(1u, 0u, "x"));
+  EXPECT_FALSE(cache.set_record_text(0u, 1u, "x"));
+  EXPECT_TRUE(cache.text_storage().empty());
 }
 
 TEST(PivotResult, Defaults) {

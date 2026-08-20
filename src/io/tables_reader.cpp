@@ -21,25 +21,6 @@ namespace formulon {
 namespace io {
 namespace {
 
-void AppendEscapedAttributeValue(std::string& out, std::string_view value) {
-  for (char c : value) {
-    switch (c) {
-      case '&':
-        out.append("&amp;");
-        break;
-      case '<':
-        out.append("&lt;");
-        break;
-      case '"':
-        out.append("&quot;");
-        break;
-      default:
-        out.push_back(c);
-        break;
-    }
-  }
-}
-
 std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
   std::string out;
   for (pugi::xml_attribute attr : node.attributes()) {
@@ -52,11 +33,10 @@ std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
     if ((root && is_known_root) || (!root && (is_known_column || is_namespace))) {
       continue;
     }
-    out.push_back(' ');
-    out.append(name);
-    out.append("=\"");
-    AppendEscapedAttributeValue(out, attr.value());
-    out.push_back('"');
+    // Verbatim-retained attributes go through the same escape rule as
+    // modelled ones, so a captured value cannot be written in a weaker form
+    // than the tag it is spliced into.
+    append_xml_attr(out, name, attr.value());
   }
   return out;
 }

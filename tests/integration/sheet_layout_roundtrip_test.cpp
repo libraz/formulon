@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/reader.h"
@@ -33,14 +34,19 @@ std::vector<std::uint8_t> SaveOrDie(const Workbook& wb) {
   return save_or.value();
 }
 
-/// Extracts `xl/worksheets/sheet1.xml` from a saved package as a string.
-std::string ReadSheet1Xml(const std::vector<std::uint8_t>& bytes) {
+/// Extracts one part of a saved package as a string.
+std::string ReadPartText(const std::vector<std::uint8_t>& bytes, const char* part) {
   io::ZipReader zip;
   EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
-  auto entry_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  auto entry_or = zip.read_entry(part);
   EXPECT_TRUE(static_cast<bool>(entry_or)) << "read_entry: " << entry_or.error().message;
   const std::vector<std::uint8_t>& body = entry_or.value();
   return std::string(reinterpret_cast<const char*>(body.data()), body.size());
+}
+
+/// Extracts `xl/worksheets/sheet1.xml` from a saved package as a string.
+std::string ReadSheet1Xml(const std::vector<std::uint8_t>& bytes) {
+  return ReadPartText(bytes, "xl/worksheets/sheet1.xml");
 }
 
 TEST(SheetLayoutRoundTrip, DimensionReflectsPopulatedBoundingBox) {
@@ -78,6 +84,133 @@ TEST(SheetLayoutRoundTrip, ViewStateZoomFreezeAndTabHidden) {
   EXPECT_EQ(loaded.view().freeze_rows, 3U);
   EXPECT_EQ(loaded.view().freeze_cols, 2U);
   EXPECT_TRUE(loaded.view().tab_hidden);
+}
+
+// ---------------------------------------------------------------------------
+// Tab visibility is three states, not two.
+// ---------------------------------------------------------------------------
+//
+// `veryHidden` is the state that keeps a sheet out of Excel's "Unhide"
+// dialog, so a workbook hiding its settings or lookup sheets that way
+// relies on it surviving. Saving it as plain `hidden` would put those
+// sheets back within a user's reach without anyone asking. Both container
+// formats spell the state, so both have to carry it.
+
+/// Saves `src` and returns the `state` attribute the first sheet's
+/// `<sheet>` entry in `xl/workbook.xml` carries, or "" when there is none.
+std::string SavedSheetState(const Workbook& src) {
+  const std::string workbook_xml = ReadPartText(SaveOrDie(src), "xl/workbook.xml");
+  const std::size_t entry = workbook_xml.find("<sheet ");
+  EXPECT_NE(entry, std::string::npos) << workbook_xml;
+  const std::size_t entry_end = workbook_xml.find('>', entry);
+  const std::size_t attr = workbook_xml.find("state=\"", entry);
+  if (attr == std::string::npos || attr > entry_end) {
+    return std::string();
+  }
+  const std::size_t value = attr + std::string("state=\"").size();
+  return workbook_xml.substr(value, workbook_xml.find('"', value) - value);
+}
+
+TEST(SheetVisibility, EveryStateReachesTheSavedWorkbookPart) {
+  Workbook visible = Workbook::create();
+  EXPECT_EQ(SavedSheetState(visible), "") << "`visible` is the schema default and Excel omits it";
+
+  Workbook hidden = Workbook::create();
+  hidden.sheet(0).mutable_view().set_visibility(SheetVisibility::kHidden);
+  EXPECT_EQ(SavedSheetState(hidden), "hidden");
+
+  Workbook very_hidden = Workbook::create();
+  very_hidden.sheet(0).mutable_view().set_visibility(SheetVisibility::kVeryHidden);
+  EXPECT_EQ(SavedSheetState(very_hidden), "veryHidden");
+}
+
+TEST(SheetVisibility, VeryHiddenSurvivesTheOoxmlRoundTrip) {
+  Workbook src = Workbook::create();
+  src.add_sheet("Config");
+  src.sheet(1).mutable_view().set_visibility(SheetVisibility::kVeryHidden);
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0, 0U, 0U, Value::number(1.0))));
+
+  auto result_or = io::read_ooxml(SpanOf(SaveOrDie(src)));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const Workbook& dst = result_or.value().workbook;
+  ASSERT_EQ(dst.sheet_count(), 2U);
+  EXPECT_EQ(dst.sheet(0).view().visibility(), SheetVisibility::kVisible);
+  EXPECT_EQ(dst.sheet(1).view().visibility(), SheetVisibility::kVeryHidden);
+  // The single bit every binding reads still answers "hidden", so a
+  // consumer that never learned the third state is not misled.
+  EXPECT_TRUE(dst.sheet(1).view().tab_hidden);
+}
+
+TEST(SheetVisibility, VeryHiddenSurvivesTheXlsbRoundTrip) {
+  Workbook src = Workbook::create();
+  src.add_sheet("Config");
+  src.sheet(1).mutable_view().set_visibility(SheetVisibility::kVeryHidden);
+
+  auto xlsb_or = io::xlsb::write_xlsb(src);
+  ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
+  auto read_or = io::xlsb::read_xlsb(SpanOf(xlsb_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  ASSERT_EQ(read_or.value().workbook.sheet_count(), 2U);
+  EXPECT_EQ(read_or.value().workbook.sheet(0).view().visibility(), SheetVisibility::kVisible);
+  EXPECT_EQ(read_or.value().workbook.sheet(1).view().visibility(), SheetVisibility::kVeryHidden);
+}
+
+TEST(SheetVisibility, VeryHiddenCrossesFromXlsbToOoxml) {
+  // The documented `.xlsb -> .xlsx` conversion runs the state through both
+  // a binary reader and an XML writer, which is where a two-valued model
+  // would lose it.
+  Workbook src = Workbook::create();
+  src.add_sheet("Config");
+  src.sheet(1).mutable_view().set_visibility(SheetVisibility::kVeryHidden);
+
+  auto xlsb_or = io::xlsb::write_xlsb(src);
+  ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
+  auto read_or = io::xlsb::read_xlsb(SpanOf(xlsb_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+
+  const std::string workbook_xml = ReadPartText(SaveOrDie(read_or.value().workbook), "xl/workbook.xml");
+  EXPECT_NE(workbook_xml.find("state=\"veryHidden\""), std::string::npos) << workbook_xml;
+}
+
+/// Loads `bytes` through the C API, applies `hidden` with the bool setter,
+/// saves again, and returns the resulting `<sheet state>` value.
+std::string StateAfterSettingTabHidden(const std::vector<std::uint8_t>& bytes, int32_t hidden) {
+  fm_workbook_t* handle = nullptr;
+  EXPECT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &handle), 0);
+  if (handle == nullptr) {
+    return std::string();
+  }
+  EXPECT_EQ(fm_sheet_set_tab_hidden(handle, 0, hidden), 0);
+  std::uint8_t* saved = nullptr;
+  std::size_t saved_len = 0;
+  EXPECT_EQ(fm_workbook_save(handle, &saved, &saved_len), 0);
+  std::vector<std::uint8_t> package;
+  if (saved != nullptr) {
+    package.assign(saved, saved + saved_len);
+    fm_buffer_free(saved);
+  }
+  fm_workbook_destroy(handle);
+  const std::string workbook_xml = ReadPartText(package, "xl/workbook.xml");
+  const std::size_t attr = workbook_xml.find("state=\"");
+  if (attr == std::string::npos) {
+    return std::string();
+  }
+  const std::size_t value = attr + std::string("state=\"").size();
+  return workbook_xml.substr(value, workbook_xml.find('"', value) - value);
+}
+
+TEST(SheetVisibility, ShowingASheetThroughTheBoolSetterClearsVeryHidden) {
+  // `fm_sheet_set_tab_hidden` cannot name the third state. Asking for
+  // hidden on a very-hidden sheet therefore says nothing new and must not
+  // demote it, while asking for visible has to clear the state outright --
+  // saving `veryHidden` after a caller showed the sheet would ignore the
+  // call.
+  Workbook src = Workbook::create();
+  src.sheet(0).mutable_view().set_visibility(SheetVisibility::kVeryHidden);
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+
+  EXPECT_EQ(StateAfterSettingTabHidden(bytes, 1), "veryHidden");
+  EXPECT_EQ(StateAfterSettingTabHidden(bytes, 0), "");
 }
 
 TEST(SheetLayoutRoundTrip, ReShowingSheetRemovesLegacySheetPrTabHidden) {

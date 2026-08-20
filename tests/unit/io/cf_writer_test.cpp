@@ -693,5 +693,32 @@ TEST(CFWriter, ExtensionEntryReusesTheRuleExtLstWhenTheRuleAlreadyHasOne) {
   EXPECT_NE(legacy.find("<x14:id>{FC000000-0000-0000-0000-000000000001}</x14:id>"), std::string::npos) << legacy;
 }
 
+TEST(CFWriter, RangeWithNoA1SpellingIsDroppedFromTheSqref) {
+  // The mutation API rejects an out-of-grid rectangle at set time. This
+  // is the defensive half: `write_conditional_formattings` is reached
+  // from the public save entry point, so a model assembled in-process
+  // that still carries one must produce a well-formed reference for the
+  // ranges that do have a spelling rather than halting the host process
+  // or emitting an empty token.
+  cf::ConditionalFormat input;
+  input.sqref.push_back(cf::CFCellRange({{0, cf::kCfMaxCols}, {9, cf::kCfMaxCols}}));
+  input.sqref.push_back(cf::CFCellRange({{0, 0}, {9, 0}}));
+  input.sqref.push_back(cf::CFCellRange({{0, 0}, {cf::kCfMaxRows, 0}}));
+  input.sqref.push_back(cf::CFCellRange({{9, 0}, {0, 0}}));
+  cf::CFRule rule;
+  rule.type = cf::RuleType::Expression;
+  rule.priority = 1;
+  rule.formula1 = "TRUE";
+  input.rules.push_back(std::move(rule));
+
+  const std::string xml = write_conditional_formattings({input}, kDxfCount);
+  EXPECT_NE(xml.find("sqref=\"A1:A10\""), std::string::npos) << xml;
+
+  const auto out = RoundTrip({input});
+  ASSERT_EQ(out.size(), 1u);
+  ASSERT_EQ(out[0].sqref.size(), 1u);
+  EXPECT_EQ(out[0].sqref[0], cf::CFCellRange({{0, 0}, {9, 0}}));
+}
+
 }  // namespace
 }  // namespace formulon::io

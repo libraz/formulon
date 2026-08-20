@@ -118,19 +118,33 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, bool attribute)
       }
       continue;
     }
-    std::uint16_t ignored = 0;
-    if (IsOoxmlEscape(in, i, &ignored)) {
-      out.append("_x005F_");
-      continue;
+    if (!attribute) {
+      // Only element text is decoded by `AppendOoxmlTextUnescaped` on the way
+      // back in, so only element text may carry the OOXML notation -- and
+      // there it must protect a literal `_xHHHH_` spelling behind
+      // `_x005F_`. Attribute values are read straight off the parser, so
+      // emitting either form there would leave the escape text itself in the
+      // value and grow it by six bytes on every save.
+      std::uint16_t ignored = 0;
+      if (IsOoxmlEscape(in, i, &ignored)) {
+        out.append("_x005F_");
+        continue;
+      }
     }
     // TAB / LF / CR are legal XML 1.0 characters, so `_xHHHH_` is wrong for
     // them: Excel reserves that notation for characters XML cannot carry at
     // all. They still need handling because XML normalises them depending on
     // context, which the `switch` below does. Every other C0 control is
-    // XML-illegal and takes the OOXML escape.
+    // XML-illegal: element text spells it with the OOXML escape, while an
+    // attribute value -- having no reader that would decode one -- replaces
+    // it, exactly as an invalid UTF-8 byte is replaced above.
     const bool xml_legal_control = raw == '\t' || raw == '\n' || raw == '\r';
     if (byte < 0x20U && !xml_legal_control) {
-      AppendOoxmlEscape(out, byte);
+      if (attribute) {
+        out.append("\xEF\xBF\xBD");
+      } else {
+        AppendOoxmlEscape(out, byte);
+      }
       continue;
     }
     switch (raw) {

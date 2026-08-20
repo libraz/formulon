@@ -7,9 +7,11 @@
 #ifndef FORMULON_PIVOT_PIVOT_CACHE_H_
 #define FORMULON_PIVOT_PIVOT_CACHE_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -124,9 +126,22 @@ struct WorksheetSource {
 /// cache (C API, tests) that does not populate it — consumers fall back
 /// to inferring the encoding from the field's `shared_items` being
 /// non-empty, preserving the legacy behaviour.
+/// `cell_text_slot` entry for a cell whose Text payload this cache does not
+/// own — either the cell is not Text, or its bytes come from somewhere else
+/// (the reader's own append, the workbook shared-string table, ...).
+inline constexpr std::size_t kNoCacheTextSlot = static_cast<std::size_t>(-1);
+
 struct PivotCacheRecord {
   std::vector<Value> cells;
   std::vector<bool> cell_is_index;
+  /// Per-cell index into `PivotCache::text_storage()` for the entry that
+  /// backs this cell's Text payload, or `kNoCacheTextSlot`.
+  ///
+  /// Only `PivotCache::set_record_text` populates this; the reader leaves
+  /// it empty and consumers that never overwrite a cell never look at it.
+  /// Recording the slot is what lets an overwrite reuse the storage the
+  /// previous write allocated instead of stranding it.
+  std::vector<std::size_t> cell_text_slot;
 };
 
 /// Owning container for the cache definition + records. Held by the
@@ -168,6 +183,42 @@ class PivotCache {
   /// they want the cache to own a literal string.
   std::deque<std::string>& mutable_text_storage() { return text_storage_; }
   const std::deque<std::string>& text_storage() const { return text_storage_; }
+
+  /// Writes `utf8` into record `record_idx`'s cell `field_idx` as a Text
+  /// value backed by this cache, reusing the storage a previous write to
+  /// the same coordinate allocated. Returns false — leaving the cache
+  /// untouched — when the coordinate is out of range.
+  ///
+  /// Appending a fresh `text_storage_` entry per write is right for
+  /// `shared_items`, which only ever grows, and wrong for a record cell:
+  /// overwriting one that way strands the replaced string in the deque
+  /// forever, so a live editor's memory tracks how many times the source
+  /// was edited rather than how much data it holds. One storage slot per
+  /// written coordinate bounds the store by the cells that exist.
+  bool set_record_text(std::size_t record_idx, std::size_t field_idx, std::string_view utf8) {
+    if (record_idx >= records_.size()) {
+      return false;
+    }
+    PivotCacheRecord& record = records_[record_idx];
+    if (field_idx >= record.cells.size()) {
+      return false;
+    }
+    if (record.cell_text_slot.size() < record.cells.size()) {
+      record.cell_text_slot.resize(record.cells.size(), kNoCacheTextSlot);
+    }
+    std::size_t& slot = record.cell_text_slot[field_idx];
+    if (slot == kNoCacheTextSlot) {
+      slot = text_storage_.size();
+      text_storage_.emplace_back(utf8);
+    } else {
+      // `std::deque` keeps the element at a stable address, so replacing the
+      // string's contents in place does not disturb any other slot; the
+      // `Value` rebuilt below is the only view of these bytes.
+      text_storage_[slot].assign(utf8);
+    }
+    record.cells[field_idx] = Value::text(text_storage_[slot]);
+    return true;
+  }
 
   /// The `<worksheetSource>` reference under `<cacheSource>`. Preserved so
   /// Excel's Refresh can locate the source range / defined name.

@@ -62,6 +62,13 @@ struct XlsbName {
 struct XlsbSheetRange {
   std::int32_t itab_first = -1;
   std::int32_t itab_last = -1;
+  /// `BrtExternSheet`'s `iSupBook`: the supporting-book table index this
+  /// entry's sheet range belongs to. `0` is this workbook; any other
+  /// value qualifies a sheet of an *external* workbook, whose sheet
+  /// indices are unrelated to `sheet_names`. `decode_ptgs` refuses to
+  /// resolve such an entry rather than binding the reference to a
+  /// same-numbered local sheet.
+  std::uint32_t sup_book = 0;
 };
 
 /// Decodes the `rgce` Ptg byte stream `ptgs` into a `parser::AstNode`
@@ -111,11 +118,16 @@ struct XlsbSheetRange {
 /// direct 0-based index into `sheet_names`, matching pre-ExternSheet-
 /// aware behaviour. When an index is out of range for either table the
 /// decoder emits `#REF!` for the reference (Excel's own behaviour for a
-/// dangling sheet index) rather than failing the whole formula.
+/// dangling sheet index) rather than failing the whole formula. An entry
+/// with a non-zero `sup_book` qualifies a sheet of another workbook; the
+/// decoder reports `kIoXlsbUnsupportedPtg` for it so the caller keeps
+/// Excel's cached value instead of silently rebinding the reference to
+/// a same-numbered local sheet.
 ///
 /// Errors:
 ///   * `kIoXlsbUnsupportedPtg` — a token outside the supported set
-///     (PtgTbl/PtgNameX/PtgMemFunc materialisation/...).
+///     (PtgTbl/PtgNameX/PtgMemFunc materialisation/...), or a 3-D
+///     reference whose ExternSheet entry names an external workbook.
 ///   * `kIoXlsbRecordTruncated` — a token's payload would overrun
 ///     `ptgs` or `rgcb`.
 ///   * `kIoXlsbCorrupt` — the operand stack is unbalanced (too few

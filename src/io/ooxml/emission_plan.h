@@ -177,6 +177,31 @@ std::string NumberedPartPath(std::string_view prefix, std::uint32_t id, std::str
 /// calcChain, sharedStrings, ...).
 bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path);
 
+/// True when `content_type` names a part whose body is a stream of
+/// MS-XLSB binary records rather than XML.
+///
+/// Every such type sits under the `application/vnd.ms-excel.` vendor
+/// space and, unlike its XML-bodied siblings there (the `.xlsm` /
+/// `.xltm` main workbook types, `controlProperties`, the slicer parts,
+/// ...), carries no `+xml` suffix. `+xml` is the discriminator OPC
+/// itself defines for "this body is XML", so it is what the decision
+/// keys on instead of an enumeration of part names.
+///
+/// The OOXML emission pipeline is the only correct place to apply this.
+/// A workbook loaded from `.xlsb` must keep these parts on
+/// `passthrough_parts()`, and its `<Default>` registry must keep the
+/// matching extension entry, because `write_xlsb` fails with
+/// `kIoContentTypeInvalid` for a Default-typed passthrough part whose
+/// extension has no Default registration. Dropping either at read time
+/// therefore turns a working `.xlsb` save into an error; dropping them
+/// here affects only the OOXML package, whose generated parts already
+/// carry the same content as XML.
+///
+/// Both surfaces that can leak an XLSB declaration into an OOXML
+/// package — the passthrough-part filter in `BuildEmissionPlan` and the
+/// `<Default>` loop in `BuildContentTypes` — share this one predicate.
+bool IsXlsbBinaryContentType(std::string_view content_type);
+
 }  // namespace io
 }  // namespace formulon
 

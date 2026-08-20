@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "cf/cf_types.h"
 #include "eval/dep_graph.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -658,6 +659,85 @@ TEST(OoxmlReader, RejectsEncryptedCdfv2ContainerWithEncryptedDiagnostic) {
   auto result_or = read_ooxml(SpanOf(encrypted));
   ASSERT_FALSE(static_cast<bool>(result_or));
   EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoZipEncrypted);
+}
+
+/// A worksheet whose CF block names `<dxfs>` entries that are not there:
+/// a stale index past the end of the table, and the `-1` a writer emits
+/// for "no format", which the attribute's int32 lexical space allows and
+/// an unchecked read turns into `0xFFFFFFFF`. The third rule is in range
+/// and must be left alone.
+constexpr std::string_view kSheetWithUnresolvableDxfIds =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+    "<sheetData><row r=\"1\"><c r=\"A1\"><v>1</v></c></row></sheetData>"
+    "<conditionalFormatting sqref=\"A1:A3\">"
+    "<cfRule type=\"cellIs\" priority=\"1\" operator=\"greaterThan\" dxfId=\"7\"><formula>1</formula></cfRule>"
+    "<cfRule type=\"cellIs\" priority=\"2\" operator=\"lessThan\" dxfId=\"-1\"><formula>0</formula></cfRule>"
+    "<cfRule type=\"cellIs\" priority=\"3\" operator=\"equal\" dxfId=\"0\"><formula>5</formula></cfRule>"
+    "</conditionalFormatting>"
+    "</worksheet>";
+
+TEST(OoxmlReader, UnresolvableCfDxfIdIsDisengagedOnLoad) {
+  // A stored style index is supposed to resolve -- that is the promise
+  // `NormalizeStyleIndices` keeps for the `<xf>` tables, and the reason a
+  // getter may assume it. Reading `dxfId` verbatim broke it for CF alone:
+  // a workbook that loaded without error handed out an index its own
+  // styles table rejects, so a get / modify / put round trip through any
+  // binding could not complete.
+  Workbook src = Workbook::create();
+  src.mutable_styles().dxfs.resize(1);
+  const std::vector<std::uint8_t> base = SaveOrDie(src);
+  const std::vector<std::uint8_t> mutated =
+      RebuildArchiveReplacing(base, "xl/worksheets/sheet1.xml", kSheetWithUnresolvableDxfIds);
+
+  auto result_or = read_ooxml(SpanOf(mutated));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const Workbook& wb = result_or.value().workbook;
+  ASSERT_EQ(wb.styles().dxfs.size(), 1U);
+  ASSERT_EQ(wb.sheet(0).conditional_formats().size(), 1U);
+  const std::vector<cf::CFRule>& rules = wb.sheet(0).conditional_formats()[0].rules;
+  ASSERT_EQ(rules.size(), 3U);
+  EXPECT_FALSE(rules[0].dxf_id.has_value()) << "dxfId=\"7\" against a one-entry table";
+  EXPECT_FALSE(rules[1].dxf_id.has_value()) << "dxfId=\"-1\" wraps to 0xFFFFFFFF";
+  ASSERT_TRUE(rules[2].dxf_id.has_value()) << "an in-range index must survive untouched";
+  EXPECT_EQ(*rules[2].dxf_id, 0U);
+
+  // The invariant itself, stated over the whole loaded workbook: no
+  // surface can be handed a `dxf_id` the styles table would reject, which
+  // is the only way `fm_styles_get_dxf` can fail on a workbook that
+  // loaded.
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (const cf::ConditionalFormat& cfmt : wb.sheet(s).conditional_formats()) {
+      for (const cf::CFRule& rule : cfmt.rules) {
+        if (rule.dxf_id.has_value()) {
+          EXPECT_LT(static_cast<std::size_t>(*rule.dxf_id), wb.styles().dxfs.size());
+        }
+      }
+    }
+  }
+}
+
+TEST(OoxmlReader, DisengagedCfDxfIdIsNotReEmitted) {
+  // Normalising on read is what stops the dangling index being written
+  // back out, so the defect does not survive a round trip through us.
+  Workbook src = Workbook::create();
+  src.mutable_styles().dxfs.resize(1);
+  const std::vector<std::uint8_t> mutated =
+      RebuildArchiveReplacing(SaveOrDie(src), "xl/worksheets/sheet1.xml", kSheetWithUnresolvableDxfIds);
+
+  auto result_or = read_ooxml(SpanOf(mutated));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const std::vector<std::uint8_t> resaved = SaveOrDie(result_or.value().workbook);
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(resaved))));
+  auto entry_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(entry_or)) << entry_or.error().message;
+  const std::string sheet_xml(reinterpret_cast<const char*>(entry_or.value().data()), entry_or.value().size());
+  EXPECT_EQ(sheet_xml.find("dxfId=\"7\""), std::string::npos) << sheet_xml;
+  EXPECT_EQ(sheet_xml.find("dxfId=\"-1\""), std::string::npos) << sheet_xml;
+  EXPECT_EQ(sheet_xml.find("dxfId=\"4294967295\""), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("dxfId=\"0\""), std::string::npos) << sheet_xml;
 }
 
 TEST(OoxmlReader, EmptyWorkbookFactoryProducesZeroSheets) {

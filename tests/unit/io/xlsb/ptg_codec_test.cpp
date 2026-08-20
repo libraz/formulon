@@ -337,6 +337,44 @@ TEST(XlsbPtgCodec, PtgArrayDecodesRowsBeforeColsFromRawWireBytes) {
   EXPECT_EQ(parser::format_formula(*decoded.value()), "{1,2,3}");
 }
 
+TEST(XlsbPtgCodec, PtgArrayCoversNumericElementsOnlyAndSaysSoBothWays) {
+  // The element tag preceding each `SerAr` value has only been verified
+  // for `0x00` (number). Guessing at the string / bool / error layouts
+  // would risk a silently wrong array constant, so both directions
+  // refuse them -- and refuse the same set, which is what makes the
+  // classification a `Partial` round-trip rather than a one-sided gap.
+  const std::vector<std::uint8_t> rgce = {
+      0x60,                                                  // PtgArray (array-class)
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 14-byte placeholder
+      0x00, 0x00, 0x00, 0x00, 0x00,
+  };
+  std::vector<std::uint8_t> rgcb;
+  emit_u32(rgcb, 1U);    // DRw
+  emit_u32(rgcb, 1U);    // DCol
+  rgcb.push_back(0x01);  // SerAr string tag: not verified, not decoded
+  emit_u32(rgcb, 1U);
+  rgcb.push_back('a');
+  rgcb.push_back(0x00);
+
+  Arena arena;
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, {}, {}, {});
+  ASSERT_FALSE(static_cast<bool>(decoded));
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
+
+  Arena enc_arena;
+  parser::Parser parser_with_text("{1,\"a\"}", enc_arena);
+  parser::AstNode* root = parser_with_text.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(parser_with_text.errors().empty());
+  auto encoded = encode_ptgs(*root, {}, {}, {});
+  ASSERT_FALSE(static_cast<bool>(encoded));
+  EXPECT_EQ(encoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
+
+  // The covered half is genuinely covered: an all-numeric constant still
+  // round-trips, so the classification is partial and not unsupported.
+  EXPECT_EQ(RoundTrip("SUM({1,2;3,4})"), "SUM({1,2;3,4})");
+}
+
 TEST(XlsbPtgCodec, PtgRefRowAtGridBoundIsRecordCorrupt) {
   // PtgRef (0x24) with row == Sheet::kMaxRows, one past the last valid
   // row (1048575). A crafted/corrupt row must be rejected at the Ref

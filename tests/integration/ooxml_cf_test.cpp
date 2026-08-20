@@ -61,7 +61,22 @@ TEST(OoxmlCF, PackageWithConditionalFormattingLoads) {
       "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\n"
       "  <Override PartName=\"/xl/worksheets/sheet1.xml\" "
       "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+      "  <Override PartName=\"/xl/styles.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>\n"
       "</Types>\n";
+
+  // The `cellIs` rule below names `dxfId="0"`, so the package has to
+  // carry the `<dxfs>` entry that index addresses. A CF rule pointing
+  // into a table the package does not ship is a different scenario --
+  // the reader disengages such an index rather than handing out one its
+  // own styles table would reject -- and it is covered on its own.
+  const std::string_view styles_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+      "  <dxfs count=\"1\">\n"
+      "    <dxf><fill><patternFill><bgColor rgb=\"FFFFC7CE\"/></patternFill></fill></dxf>\n"
+      "  </dxfs>\n"
+      "</styleSheet>\n";
 
   const std::string_view package_rels =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
@@ -86,6 +101,9 @@ TEST(OoxmlCF, PackageWithConditionalFormattingLoads) {
       "  <Relationship Id=\"rId1\" "
       "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
       "Target=\"worksheets/sheet1.xml\"/>\n"
+      "  <Relationship Id=\"rId2\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" "
+      "Target=\"styles.xml\"/>\n"
       "</Relationships>\n";
 
   // Sheet1 carries two CF blocks: one cellIs > 50 over A1:A10, and one
@@ -120,12 +138,14 @@ TEST(OoxmlCF, PackageWithConditionalFormattingLoads) {
       {"xl/workbook.xml", workbook_xml},
       {"xl/_rels/workbook.xml.rels", workbook_rels},
       {"xl/worksheets/sheet1.xml", sheet1_xml},
+      {"xl/styles.xml", styles_xml},
   });
 
   auto result_or = io::read_ooxml(SpanOf(bytes));
   ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
   const Workbook& wb = result_or.value().workbook;
   ASSERT_GT(wb.sheet_count(), 0U);
+  ASSERT_EQ(wb.styles().dxfs.size(), 1U);
   const Sheet& s1 = wb.sheet(0);
   const auto& cfs = s1.conditional_formats();
   ASSERT_EQ(cfs.size(), 2U);

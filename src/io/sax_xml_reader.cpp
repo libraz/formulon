@@ -180,9 +180,26 @@ bool ParseTagHeader(const char* begin, const char* end, const char** p, TagHeade
   out->name = std::string_view(name_begin, static_cast<std::size_t>(*p - name_begin));
 
   // Attribute span (or whitespace-then-close) up to the closing > / />.
+  // XML forbids only `<` and `&` inside an attribute value, so a literal
+  // `>` or `/` there is ordinary text and must not end the tag. Track the
+  // active quote character -- either delimiter is legal -- and recognise a
+  // delimiter only outside one.
   const char* attrs_begin = *p;
+  char quote = '\0';
   while (*p < end) {
     const char c = **p;
+    if (quote != '\0') {
+      if (c == quote) {
+        quote = '\0';
+      }
+      ++(*p);
+      continue;
+    }
+    if (c == '"' || c == '\'') {
+      quote = c;
+      ++(*p);
+      continue;
+    }
     if (c == '>') {
       out->raw_attrs = std::string_view(attrs_begin, static_cast<std::size_t>(*p - attrs_begin));
       out->self_closing = false;
@@ -199,16 +216,22 @@ bool ParseTagHeader(const char* begin, const char* end, const char** p, TagHeade
     }
     ++(*p);
   }
-  *err = MakeXmlParseError(base, "unterminated tag (no closing '>' / '/>')");
+  *err = MakeXmlParseError(base,
+                           quote != '\0' ? "unterminated attribute value" : "unterminated tag (no closing '>' / '/>')");
   return false;
 }
 
-/// Decodes entities and applies pugixml's `parse_default` end-of-line
-/// conversion to PCDATA: literal CR and CRLF become one LF. Character
-/// references are decoded after this distinction, so `&#13;` remains a
-/// character-reference newline rather than being treated as literal XML
-/// whitespace.
-void DecodePcdataInto(std::string_view src, std::string* out);
+/// Which kind of node the returned text run came from. A CDATA run is
+/// normalized for end-of-line but never entity-decoded.
+enum class TextRunKind : std::uint8_t { kPcdata, kCdata };
+
+/// Decodes a character-data run into `out`. A PCDATA run has its
+/// entities decoded and pugixml's `parse_default` end-of-line conversion
+/// applied (literal CR and CRLF become one LF); character references are
+/// decoded after that distinction, so `&#13;` stays a character-reference
+/// newline rather than literal XML whitespace. A CDATA run takes the
+/// end-of-line conversion only.
+void DecodeTextRunInto(std::string_view src, TextRunKind kind, std::string* out);
 
 /// Decodes entities and applies pugixml's `parse_wconv_attribute` conversion:
 /// literal TAB/LF/CR become spaces, with CRLF counted as one space. Character
@@ -332,55 +355,131 @@ std::string_view AttrOfDecoded(const TagHeader& header, std::string_view name, s
 // Text decoding.
 // ---------------------------------------------------------------------------
 
+/// Defined below; `ScanTextContent` uses it to discard a child element
+/// that follows the character-data run it returns.
+bool SkipUntilClose(const char* begin, const char* end, const char** p, std::string_view name, Error* err);
+
 /// Extracts the text content of an element whose opening tag has just
-/// been parsed (`*p` points at the first byte after `>`). Returns the
-/// raw byte slice of the content (possibly with entities), advances
-/// `*p` to the byte after `</name>`, and sets `needs_processing` when the
-/// slice contains at least one entity reference or literal CR that requires
-/// pugixml-compatible PCDATA normalization.
+/// been parsed (`*p` points at the first byte after `>`). Returns the raw
+/// byte slice of the element's first character-data node (possibly with
+/// entities), reports through `kind` whether that node was PCDATA or a
+/// CDATA section, advances `*p` to the byte after `</name>`, and sets
+/// `needs_processing` when the slice needs entity decoding or
+/// pugixml-compatible end-of-line normalization.
 ///
 /// Caller decides whether to decode / normalize the text (cheap path: if
 /// `needs_processing` is false, the slice can be returned verbatim as a
 /// `string_view` into the input).
 bool ScanTextContent(const char* begin, const char* end, const char** p, std::string_view tag_name,
-                     std::string_view* raw_content, bool* needs_processing, Error* err) {
-  const char* content_begin = *p;
+                     std::string_view* raw_content, bool* needs_processing, TextRunKind* kind, Error* err) {
+  *raw_content = std::string_view();
   *needs_processing = false;
+  *kind = TextRunKind::kPcdata;
+  // The DOM path reads an element's text as the value of its first
+  // PCDATA-or-CDATA child, so a CDATA section, a comment, a processing
+  // instruction or a child element all end the character-data run before
+  // them and everything past the first run is discarded. Comments and
+  // processing instructions form no node under `parse_default`; CDATA and
+  // elements do, which is what decides the fate of a whitespace-only run
+  // below.
+  bool captured = false;
+  bool any_node = false;
+  const char* run_begin = *p;
+  // Classified while scanning rather than by re-walking the run: this is
+  // the streaming reader's hot loop, and it exists for sheets large enough
+  // that a second pass over every text payload would show.
+  bool run_has_non_space = false;
+  bool run_has_special = false;
   while (*p < end) {
-    if (**p == '<') {
-      *raw_content = std::string_view(content_begin, static_cast<std::size_t>(*p - content_begin));
-      // Expect `</tag_name>`.
-      ++(*p);  // past '<'
-      if (*p < end && **p == '/') {
-        ++(*p);  // past '/'
-        const char* close_name_begin = *p;
-        while (*p < end && **p != '>' && !IsXmlSpace(**p)) {
-          ++(*p);
-        }
-        const std::string_view close_name(close_name_begin, static_cast<std::size_t>(*p - close_name_begin));
-        if (close_name != tag_name) {
-          *err = MakeXmlParseError(static_cast<std::size_t>(close_name_begin - begin), "unexpected close tag");
-          return false;
-        }
-        SkipSpace(end, p);
-        if (*p >= end || **p != '>') {
-          *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated close tag");
-          return false;
-        }
-        ++(*p);  // past '>'
-        return true;
+    const char c = **p;
+    if (c != '<') {
+      run_has_non_space = run_has_non_space || !IsXmlSpace(c);
+      run_has_special = run_has_special || c == '&' || c == '\r';
+      ++(*p);
+      continue;
+    }
+    const std::string_view run(run_begin, static_cast<std::size_t>(*p - run_begin));
+    const std::size_t lt_off = static_cast<std::size_t>(*p - begin);
+    ++(*p);  // past '<'
+    const bool at_close = (*p < end && **p == '/');
+    // `parse_ws_pcdata_single` keeps a whitespace-only run only when it
+    // ends up being the element's sole child, so it survives exactly when
+    // the parent's close tag terminates it and nothing has been emitted
+    // before it.
+    const bool run_is_node = !run.empty() && (run_has_non_space || (at_close && !any_node));
+    if (run_is_node) {
+      if (!captured) {
+        *raw_content = run;
+        *needs_processing = run_has_special;
+        captured = true;
       }
-      // Anything other than `</...>` inside a `<v>` / `<t>` body is
-      // unsupported in our recognised vocabulary. Surface as parse error.
-      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unexpected child element inside text content");
+      any_node = true;
+    }
+
+    if (at_close) {
+      ++(*p);  // past '/'
+      const char* close_name_begin = *p;
+      while (*p < end && **p != '>' && !IsXmlSpace(**p)) {
+        ++(*p);
+      }
+      const std::string_view close_name(close_name_begin, static_cast<std::size_t>(*p - close_name_begin));
+      if (close_name != tag_name) {
+        *err = MakeXmlParseError(static_cast<std::size_t>(close_name_begin - begin), "unexpected close tag");
+        return false;
+      }
+      SkipSpace(end, p);
+      if (*p >= end || **p != '>') {
+        *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated close tag");
+        return false;
+      }
+      ++(*p);  // past '>'
+      return true;
+    }
+
+    if (*p < end && (**p == '!' || **p == '?')) {
+      // Classify before skipping: the same bound `SkipMarkupNonElement`
+      // uses, so the two agree on what a CDATA section is.
+      const char* markup = *p;
+      const bool is_cdata = (end - markup) > 8 && std::memcmp(markup, "![CDATA[", 8) == 0;
+      if (!SkipMarkupNonElement(end, p, lt_off, err)) {
+        return false;
+      }
+      if (is_cdata) {
+        const char* body_begin = markup + 8;
+        const char* body_end = *p - 3;  // before the closing "]]>"
+        if (!captured && body_end >= body_begin) {
+          *raw_content = std::string_view(body_begin, static_cast<std::size_t>(body_end - body_begin));
+          *needs_processing = raw_content->find('\r') != std::string_view::npos;
+          *kind = TextRunKind::kCdata;
+          captured = true;
+        }
+        any_node = true;
+      }
+      run_begin = *p;
+      run_has_non_space = false;
+      run_has_special = false;
+      continue;
+    }
+
+    // A child element contributes no character data of its own, but it is
+    // a node, so it ends the preceding run and is skipped whole.
+    TagHeader child;
+    if (!ParseTagHeader(begin, end, p, &child, err)) {
       return false;
     }
-    if (**p == '&' || **p == '\r') {
-      *needs_processing = true;
+    if (child.is_end_tag) {
+      *err = MakeXmlParseError(lt_off, "unexpected close tag");
+      return false;
     }
-    ++(*p);
+    if (!child.self_closing && !SkipUntilClose(begin, end, p, child.name, err)) {
+      return false;
+    }
+    any_node = true;
+    run_begin = *p;
+    run_has_non_space = false;
+    run_has_special = false;
   }
-  *err = MakeXmlParseError(static_cast<std::size_t>(content_begin - begin), "unterminated text content");
+  *err = MakeXmlParseError(static_cast<std::size_t>(run_begin - begin), "unterminated text content");
   return false;
 }
 
@@ -427,14 +526,17 @@ bool AppendUtf8(std::uint32_t cp, std::string* out) {
 /// numeric refs, and some hand-rolled fixtures use entity-encoded
 /// attribute values that the attribute iterator now plumbs through this
 /// helper.
-enum class XmlNormalization : std::uint8_t { kPcdata, kAttribute };
+/// `kCdata` shares PCDATA's end-of-line conversion but performs no
+/// entity decoding: inside a CDATA section `&amp;` is five characters,
+/// not one.
+enum class XmlNormalization : std::uint8_t { kPcdata, kAttribute, kCdata };
 
 void DecodeXmlInto(std::string_view src, std::string* out, XmlNormalization normalization) {
   out->clear();
   out->reserve(src.size());
   for (std::size_t i = 0; i < src.size();) {
     const char c = src[i];
-    if (normalization == XmlNormalization::kPcdata && c == '\r') {
+    if ((normalization == XmlNormalization::kPcdata || normalization == XmlNormalization::kCdata) && c == '\r') {
       out->push_back('\n');
       ++i;
       if (i < src.size() && src[i] == '\n') {
@@ -457,7 +559,7 @@ void DecodeXmlInto(std::string_view src, std::string* out, XmlNormalization norm
         continue;
       }
     }
-    if (c != '&') {
+    if (c != '&' || normalization == XmlNormalization::kCdata) {
       out->push_back(c);
       ++i;
       continue;
@@ -553,12 +655,12 @@ void DecodeXmlInto(std::string_view src, std::string* out, XmlNormalization norm
   }
 }
 
-void DecodePcdataInto(std::string_view src, std::string* out) {
-  DecodeXmlInto(src, out, XmlNormalization::kPcdata);
-}
-
 void DecodeAttributeInto(std::string_view src, std::string* out) {
   DecodeXmlInto(src, out, XmlNormalization::kAttribute);
+}
+
+void DecodeTextRunInto(std::string_view src, TextRunKind kind, std::string* out) {
+  DecodeXmlInto(src, out, kind == TextRunKind::kCdata ? XmlNormalization::kCdata : XmlNormalization::kPcdata);
 }
 
 // ---------------------------------------------------------------------------
@@ -617,21 +719,18 @@ bool SkipUntilClose(const char* begin, const char* end, const char** p, std::str
 }
 
 /// Reads the next child element header inside an already-open parent.
-/// Whitespace and non-element markup are consumed transparently; text
-/// directly under the parent is treated as malformed input, matching the
-/// previous per-parent scanner behavior.
+/// Character data and non-element markup between the children are consumed
+/// transparently: the DOM path reaches `<row>` / `<c>` / `<v>` by name, so
+/// a stray text node under one of their parents contributes nothing there
+/// and may not fail the sheet here either.
 bool ReadChildHeader(const char* begin, const char* end, const char** p, Error* err, TagHeader* out,
                      std::size_t* lt_off) {
   while (true) {
-    while (*p < end && IsXmlSpace(**p)) {
+    while (*p < end && **p != '<') {
       ++(*p);
     }
     if (*p >= end) {
       *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated parent element");
-      return false;
-    }
-    if (**p != '<') {
-      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unexpected text inside parent element");
       return false;
     }
     *lt_off = static_cast<std::size_t>(*p - begin);
@@ -754,13 +853,14 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
     if (header.name == "t") {
       std::string_view raw;
       bool needs_processing = false;
-      if (!ScanTextContent(begin, end, p, "t", &raw, &needs_processing, err)) {
+      TextRunKind kind = TextRunKind::kPcdata;
+      if (!ScanTextContent(begin, end, p, "t", &raw, &needs_processing, &kind, err)) {
         return false;
       }
       std::string* dest = in_rph ? &scratch->inline_string_phonetic : &scratch->inline_string;
       if (needs_processing) {
         std::string tmp;
-        DecodePcdataInto(raw, &tmp);
+        DecodeTextRunInto(raw, kind, &tmp);
         dest->append(tmp);
       } else {
         dest->append(raw.data(), raw.size());
@@ -840,13 +940,14 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       }
       std::string_view raw;
       bool needs_processing = false;
-      if (!ScanTextContent(begin, end, p, "f", &raw, &needs_processing, err)) {
+      TextRunKind kind = TextRunKind::kPcdata;
+      if (!ScanTextContent(begin, end, p, "f", &raw, &needs_processing, &kind, err)) {
         return false;
       }
       if (needs_processing) {
         // Decode / normalize first, then strip the leading '='. This order
         // matters for formula bodies such as `&#61;1+1`.
-        DecodePcdataInto(raw, &scratch->decoded_formula);
+        DecodeTextRunInto(raw, kind, &scratch->decoded_formula);
         std::string_view decoded(scratch->decoded_formula);
         if (!decoded.empty() && decoded.front() == '=') {
           decoded.remove_prefix(1);
@@ -865,11 +966,12 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       }
       std::string_view raw;
       bool needs_processing = false;
-      if (!ScanTextContent(begin, end, p, "v", &raw, &needs_processing, err)) {
+      TextRunKind kind = TextRunKind::kPcdata;
+      if (!ScanTextContent(begin, end, p, "v", &raw, &needs_processing, &kind, err)) {
         return false;
       }
       if (needs_processing) {
-        DecodePcdataInto(raw, &scratch->decoded_value);
+        DecodeTextRunInto(raw, kind, &scratch->decoded_value);
         record->value = std::string_view(scratch->decoded_value);
       } else {
         record->value = raw;
@@ -1033,11 +1135,15 @@ Expected<void, Error> scan_sheet_data(ByteSpan xml, const SheetSaxCallbacks& cal
   CellScratch scratch;
 
   // Walk the document until we find <sheetData>, descending into the
-  // wrapper element (<worksheet> in well-formed Excel output) rather
-  // than skipping it. Non-<sheetData> siblings (dimension, sheetViews,
-  // cols, mergeCells, hyperlinks, conditionalFormatting, ...) are
-  // skipped opaquely with `SkipUntilClose`, which never invokes the
-  // callbacks.
+  // <worksheet> root rather than skipping it. Non-<sheetData> siblings
+  // (dimension, sheetViews, cols, mergeCells, hyperlinks,
+  // conditionalFormatting, ...) are skipped opaquely with
+  // `SkipUntilClose`, which never invokes the callbacks.
+  //
+  // The root's name is checked because the DOM path reaches the cells
+  // through `sheet_doc.child("worksheet")`: under any other root it reads
+  // no cells and reports `kIoSheetCorrupt`, so streaming the same bytes
+  // must not quietly succeed with a full grid instead.
   bool descended_into_wrapper = false;
   while (p < end) {
     while (p < end && p[0] != '<') {
@@ -1061,8 +1167,20 @@ Expected<void, Error> scan_sheet_data(ByteSpan xml, const SheetSaxCallbacks& cal
       return parse_err;
     }
     if (header.is_end_tag) {
-      // Close of the wrapper element (e.g. </worksheet>): done.
+      // Close of the root element (e.g. </worksheet>): done.
       return Expected<void, Error>::Ok();
+    }
+    if (!descended_into_wrapper) {
+      // The first open element is the document root.
+      if (header.name != "worksheet") {
+        return make_error(FormulonErrorCode::kIoSheetCorrupt, "sax: missing <worksheet> root",
+                          "context=sax_xml_reader");
+      }
+      descended_into_wrapper = true;
+      if (header.self_closing) {
+        return Expected<void, Error>::Ok();  // <worksheet/>: no cells to stream
+      }
+      continue;  // walk into the root's children
     }
     if (header.name == "sheetData") {
       Error sub{};
@@ -1070,24 +1188,20 @@ Expected<void, Error> scan_sheet_data(ByteSpan xml, const SheetSaxCallbacks& cal
         return sub;
       }
       // Continue: there may be siblings (mergeCells, etc.) we just
-      // skip past; eventually the wrapper close tag ends the scan.
+      // skip past; eventually the root's close tag ends the scan.
       continue;
     }
-    // Either the document root wrapper (descend) or a non-sheetData
-    // sibling (skip). We descend exactly once: the outermost open
-    // element is the wrapper.
+    // A non-sheetData sibling of <sheetData>: opaquely skip past it.
     if (header.self_closing) {
       continue;
     }
-    if (!descended_into_wrapper) {
-      descended_into_wrapper = true;
-      continue;  // walk into the wrapper's children
-    }
-    // A non-sheetData sibling of <sheetData>: opaquely skip past it.
     Error sub{};
     if (!SkipUntilClose(begin, end, &p, header.name, &sub)) {
       return sub;
     }
+  }
+  if (!descended_into_wrapper) {
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "sax: missing <worksheet> root", "context=sax_xml_reader");
   }
   return Expected<void, Error>::Ok();
 }

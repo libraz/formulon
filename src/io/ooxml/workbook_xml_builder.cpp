@@ -108,6 +108,19 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
   out.append("  </definedNames>\n");
 }
 
+/// True when the external-link part `link` names will actually be present
+/// in the package this plan produces.
+///
+/// The body part rides through passthrough, so a source package that never
+/// carried it (or lost it to collision handling) leaves nothing for the
+/// reference to resolve against. Both halves of the reference are gated on
+/// this one answer -- `<externalReference r:id>` in `workbook.xml` and the
+/// matching workbook-rels `<Relationship>` -- because either surviving
+/// alone is a dangling edge that opens the package in repair mode.
+bool ExternalLinkPartIsWritten(const EmissionPlan& plan, const EmissionPlan::ExternalLinkPlan& link) {
+  return link.record != nullptr && HasPassthroughPart(plan, link.record->part_path);
+}
+
 }  // namespace
 
 std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
@@ -148,8 +161,15 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // per-part `<Override>`. Without re-emitting them, the Default-typed
   // passthrough parts we preserve would have no resolvable content type
   // and Excel would open the package in "needs repair" mode.
+  // A registration naming an MS-XLSB binary part type is the exception:
+  // it travels on a workbook read from `.xlsb`, where the extension it
+  // claims (`bin`) belongs to that container's record streams, none of
+  // which are emitted here.
   for (const DefaultContentType& def : wb.default_content_types()) {
     if (def.extension.empty() || def.content_type.empty()) {
+      continue;
+    }
+    if (IsXlsbBinaryContentType(def.content_type)) {
       continue;
     }
     if (!emitted_default_extensions.insert(def.extension).second) {
@@ -313,9 +333,18 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     // `state` attribute. We OR-merge that with `<sheetPr><tabHidden/>`
     // on the worksheet part inside `BuildWorksheetXml`, so either
     // path round-trips correctly. Keeping the workbook-side emission
-    // here mirrors what Excel writes by default.
-    if (wb.sheet(i).view().tab_hidden) {
-      out.append(" state=\"hidden\"");
+    // here mirrors what Excel writes by default. `visible` is the
+    // schema default and Excel omits it, so only the two hidden states
+    // produce an attribute.
+    switch (wb.sheet(i).view().visibility()) {
+      case SheetVisibility::kVisible:
+        break;
+      case SheetVisibility::kHidden:
+        out.append(" state=\"hidden\"");
+        break;
+      case SheetVisibility::kVeryHidden:
+        out.append(" state=\"veryHidden\"");
+        break;
     }
     out.append("/>\n");
   }
@@ -324,14 +353,21 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   // order (sheets, functionGroups, externalReferences, definedNames,
   // ...). Emit only when the workbook actually carries cross-workbook
   // references so freshly-created files stay diff-friendly.
-  if (!plan.external_links.empty()) {
-    out.append("  <externalReferences>\n");
+  {
+    std::string external_refs;
     for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
-      out.append("    <externalReference r:id=\"rId");
-      out.append(std::to_string(e.workbook_rid));
-      out.append("\"/>\n");
+      if (!ExternalLinkPartIsWritten(plan, e)) {
+        continue;
+      }
+      external_refs.append("    <externalReference r:id=\"rId");
+      external_refs.append(std::to_string(e.workbook_rid));
+      external_refs.append("\"/>\n");
     }
-    out.append("  </externalReferences>\n");
+    if (!external_refs.empty()) {
+      out.append("  <externalReferences>\n");
+      out.append(external_refs);
+      out.append("  </externalReferences>\n");
+    }
   }
   // <definedNames> sits between <sheets> and <calcPr>/end-of-workbook
   // per OOXML schema (cf. ECMA-376 sheet ordering).
@@ -422,7 +458,23 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   }
   // External link relationships. Same `xl/` prefix stripping as pivot
   // caches above; targets land as `Target="externalLinks/externalLink1.xml"`.
+  // The body part rides through passthrough, so it is subject to the same
+  // "target must actually be written" rule the unknown relationships below
+  // follow: a source package whose `externalLink1.xml` never arrived would
+  // otherwise leave a dangling edge and Excel would open the result in
+  // repair mode.
   for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
+    if (!ExternalLinkPartIsWritten(plan, e)) {
+      StructuredLog("ooxml_writer.workbook_rel_skipped")
+          .field("reason", std::string_view("target_part_absent"))
+          .field("type", std::string_view(kRelExternalLink))
+          .field("target", e.record == nullptr ? std::string() : e.record->part_path)
+          .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_relationship_count;
+      }
+      continue;
+    }
     AppendRelationship(out, e.workbook_rid, kRelExternalLink, WithoutXlPrefix(e.record->part_path),
                        /*target_external=*/false, /*escape_target=*/true);
   }

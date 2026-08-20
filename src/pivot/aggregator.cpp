@@ -82,11 +82,14 @@ Value AggregateSum(const std::vector<Value>& values) {
 }
 
 // Excel's pivot `Count` mirrors COUNTA: any non-blank cell counts,
-// including text and booleans.
+// including text, booleans and errors.
+//
+// The COUNT family classifies cells rather than coercing their values, so
+// an error in the group is a cell like any other and never becomes the
+// result. A single `#N/A` left by a failed lookup in the value column
+// would otherwise turn the group's count, its subtotal and the grand
+// total into `#N/A`, where Excel reports the count.
 Value AggregateCount(const std::vector<Value>& values) {
-  if (const Value* err = first_error(values); err != nullptr) {
-    return *err;
-  }
   double count = 0.0;
   for (const auto& v : values) {
     if (!v.is_blank()) {
@@ -97,11 +100,9 @@ Value AggregateCount(const std::vector<Value>& values) {
 }
 
 // Excel's pivot `CountNumbers` mirrors COUNT: only numeric cells
-// (booleans included, per Excel).
+// (booleans included, per Excel). Errors are cells that do not qualify,
+// not a result -- the same classification rule `AggregateCount` follows.
 Value AggregateCountNumbers(const std::vector<Value>& values) {
-  if (const Value* err = first_error(values); err != nullptr) {
-    return *err;
-  }
   double count = 0.0;
   for (const auto& v : values) {
     if (v.is_number() || v.is_boolean()) {

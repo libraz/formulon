@@ -1,8 +1,12 @@
 //
 // Pivot aggregation primitives.
 //
-// Each aggregator ignores `Blank`. Errors propagate: the first error in
-// the input dominates the output, matching `SUM(#DIV/0!, 1) -> #DIV/0!`.
+// Each aggregator ignores `Blank`. Errors propagate through the
+// arithmetic aggregations: the first error in the input dominates the
+// output, matching `SUM(#DIV/0!, 1) -> #DIV/0!`. `Count` and
+// `CountNumbers` are the exception -- they classify cells instead of
+// coercing values, so an error is counted (COUNTA) or passed over
+// (COUNT) but never becomes the result, which is what Excel reports.
 // Booleans coerce numerically (TRUE=1, FALSE=0) for arithmetic
 // aggregations; for `Count`, booleans are non-blank so they count, which
 // also matches Excel's COUNTA on a boolean column.
@@ -30,8 +34,9 @@ namespace formulon::pivot {
 using RecordBuckets = std::vector<std::vector<std::vector<std::size_t>>>;
 
 /// Applies the named aggregation to `values`. The dispatch handles
-/// blank-skip, error-propagation, and the Excel-specific empty-set
-/// semantics (e.g. MAX over an all-text group returns 0).
+/// blank-skip, error-propagation (arithmetic aggregations only, see
+/// above), and the Excel-specific empty-set semantics (e.g. MAX over an
+/// all-text group returns 0).
 Value apply_aggregation(Aggregation agg, const std::vector<Value>& values);
 
 /// Numeric coercion of a single aggregate cell. Returns the underlying

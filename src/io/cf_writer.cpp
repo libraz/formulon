@@ -14,7 +14,6 @@
 #include "io/ooxml_writer_cell.h"
 #include "io/xml_escape.h"
 #include "utils/a1_column.h"
-#include "utils/expected.h"
 
 namespace formulon::io {
 namespace {
@@ -171,43 +170,64 @@ std::string_view TimePeriodToString(cf::TimePeriod p) {
   return "today";
 }
 
-/// Formats one `CFCellRange` as A1 (single cell) or A1:B5 (range). The
+/// Appends one `CFCellRange` as A1 (single cell) or A1:B5 (range). The
 /// reader accepts both `A1:A1` and `A1` for a single cell; the writer
 /// prefers the shorter `A1` form so the round-trip output matches what
 /// Excel emits. Whole-column / whole-row ranges re-emit the compact
 /// `A:A` / `1:1` form Excel authors.
-std::string EncodeA1Range(const cf::CFCellRange& r) {
+///
+/// Returns `false` and leaves `out` untouched for an inverted range or
+/// one reaching outside the grid, which has no A1 spelling. The mutation
+/// API rejects such a rectangle at set time; this is the defensive half,
+/// so a model assembled in-process still cannot make the writer emit a
+/// reference Excel reads as a broken block.
+bool AppendA1Range(std::string& out, const cf::CFCellRange& r) {
+  if (r.first.row > r.last.row || r.first.col > r.last.col || r.last.row >= cf::kCfMaxRows ||
+      r.last.col >= cf::kCfMaxCols) {
+    return false;
+  }
+  std::string encoded;
   if (r.is_full_col()) {
-    std::string out;
-    FM_CHECK(a1::append_column_letters(out, r.first.col), "conditional-format column is outside Excel's grid");
-    out.push_back(':');
-    FM_CHECK(a1::append_column_letters(out, r.last.col), "conditional-format column is outside Excel's grid");
-    return out;
+    if (!a1::append_column_letters(encoded, r.first.col)) {
+      return false;
+    }
+    encoded.push_back(':');
+    if (!a1::append_column_letters(encoded, r.last.col)) {
+      return false;
+    }
+  } else if (r.is_full_row()) {
+    encoded = std::to_string(r.first.row + 1U);
+    encoded.push_back(':');
+    encoded.append(std::to_string(r.last.row + 1U));
+  } else {
+    encoded = EncodeA1(r.first.row, r.first.col);
+    if (encoded.empty()) {
+      return false;
+    }
+    if (r.first != r.last) {
+      const std::string last = EncodeA1(r.last.row, r.last.col);
+      if (last.empty()) {
+        return false;
+      }
+      encoded.push_back(':');
+      encoded.append(last);
+    }
   }
-  if (r.is_full_row()) {
-    std::string out = std::to_string(r.first.row + 1U);
-    out.push_back(':');
-    out.append(std::to_string(r.last.row + 1U));
-    return out;
-  }
-  std::string a = EncodeA1(r.first.row, r.first.col);
-  if (r.first == r.last) {
-    return a;
-  }
-  std::string b = EncodeA1(r.last.row, r.last.col);
-  a.push_back(':');
-  a.append(b);
-  return a;
+  out.append(encoded);
+  return true;
 }
 
 std::string EncodeSqref(const std::vector<cf::CFCellRange>& ranges) {
   std::string out;
   out.reserve(ranges.size() * 12);
-  for (std::size_t i = 0; i < ranges.size(); ++i) {
-    if (i != 0) {
+  for (const auto& range : ranges) {
+    const std::size_t mark = out.size();
+    if (!out.empty()) {
       out.push_back(' ');
     }
-    out.append(EncodeA1Range(ranges[i]));
+    if (!AppendA1Range(out, range)) {
+      out.resize(mark);
+    }
   }
   return out;
 }

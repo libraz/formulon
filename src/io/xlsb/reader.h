@@ -24,6 +24,15 @@
 // the already-decoded cached value is preserved instead of a fabricated
 // formula that would recalc to `#NAME?`.
 //
+// A worksheet part is consumed whole, so package-level passthrough cannot
+// rescue what its records carry. Every record therefore resolves to one of
+// four outcomes: decoded into the model, retained verbatim in
+// `Sheet::xlsb_tail()`, left to the writer to re-derive, or counted in
+// `XlsbReadResult::dropped_record_count` and logged. Retention is available
+// for the worksheet tail only -- the writer re-derives the whole prefix and
+// has no position to splice foreign bytes into -- so a prefix record has to
+// be decoded to survive, and is counted when it is not.
+//
 // Parts the reader does not model use the same passthrough contract as the
 // OOXML reader. Override-listed parts retain their explicit content type;
 // parts resolved through a `<Default>` entry carry an empty
@@ -81,6 +90,17 @@ struct XlsbReadResult {
   /// they cannot be emitted safely; a non-zero count means the load was
   /// lossy.
   std::uint32_t dropped_part_count = 0;
+  /// Worksheet records this load could not carry: neither decoded into the
+  /// model nor retained verbatim for re-emission. A record decoded only in
+  /// part counts once, so the residue is visible rather than implied.
+  ///
+  /// This is the counted half of the reader's standing contract that no
+  /// source record is discarded silently -- a record is decoded, retained,
+  /// re-derived by the writer, or counted here and logged under
+  /// `xlsb.record.dropped`. A non-zero count is normal for a file Excel
+  /// wrote: worksheet selection state, for one, has no model field and no
+  /// slot in the emitted sheet prefix.
+  std::uint32_t dropped_record_count = 0;
 };
 
 /// Reads a `.xlsb` package from in-memory bytes.

@@ -31,10 +31,19 @@ void AppendXmlEscaped(std::string& out, std::string_view in);
 // XML-critical characters as `AppendXmlEscaped`, but attribute-value
 // normalisation turns a literal TAB / LF / CR into a space, so those three
 // are written as the `&#9;` / `&#10;` / `&#13;` character references a
-// conforming parser restores verbatim. `_xHHHH_` is reserved here for the
-// C0 controls XML cannot represent at all: using it for a legal character
-// would leave the escape text itself in the value on reload, because
-// attribute readers see the parser's output rather than OOXML text.
+// conforming parser restores verbatim.
+//
+// No OOXML `_xHHHH_` notation is produced. Attribute readers take the
+// parser's output directly and never call `AppendOoxmlTextUnescaped`, so an
+// escape spelled here would survive into the value on reload and gain
+// another six bytes on the next save. Reading an attribute raw is therefore
+// the exact inverse of this function: every string an XML 1.0 attribute can
+// carry round-trips byte for byte. The bytes it cannot carry -- the C0
+// controls other than TAB / LF / CR, and invalid UTF-8 -- are replaced with
+// U+FFFD, which makes a second pass a fixed point.
+//
+// This is also the escaper for `Relationship/@Target`: an `xsd:anyURI` must
+// not gain OOXML escapes, and this function emits none.
 void AppendXmlAttrEscaped(std::string& out, std::string_view in);
 
 // Appends `in` after decoding OOXML `_xHHHH_` escapes. This is for text

@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/default_content_type.h"
 #include "io/external_links.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
@@ -47,6 +48,17 @@ bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path) {
     }
   }
   return false;
+}
+
+bool IsXlsbBinaryContentType(std::string_view content_type) {
+  constexpr std::string_view kVendorPrefix = "application/vnd.ms-excel.";
+  constexpr std::string_view kXmlSuffix = "+xml";
+  if (content_type.size() <= kVendorPrefix.size() ||
+      content_type.compare(0, kVendorPrefix.size(), kVendorPrefix) != 0) {
+    return false;
+  }
+  return content_type.size() < kXmlSuffix.size() ||
+         content_type.compare(content_type.size() - kXmlSuffix.size(), kXmlSuffix.size(), kXmlSuffix) != 0;
 }
 
 namespace {
@@ -118,6 +130,28 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
     }
   }
   return paths;
+}
+
+/// Resolves the content type a passthrough part will actually be served
+/// under: its own `<Override>` type when it has one, otherwise the
+/// source `<Default>` registration for its extension. Default-typed
+/// parts deliberately carry an empty `content_type` (the registry
+/// travels separately on the Workbook), so the two must be recombined
+/// before any decision keyed on the type.
+std::string_view EffectiveContentType(const Workbook& wb, const PassthroughPart& part) {
+  if (!part.content_type.empty()) {
+    return part.content_type;
+  }
+  const std::string extension = ooxml::extension_of_part(part.path);
+  if (extension.empty()) {
+    return {};
+  }
+  for (const DefaultContentType& def : wb.default_content_types()) {
+    if (ooxml::lowercase_extension(def.extension) == extension) {
+      return def.content_type;
+    }
+  }
+  return {};
 }
 
 }  // namespace
@@ -317,6 +351,25 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
       }
       continue;
     }
+    // A workbook read from `.xlsb` still carries that package's binary
+    // parts (`xl/styles.bin`, `xl/calcChain.bin`, `xl/metadata.bin`,
+    // `xl/worksheets/binaryIndex*.bin`, ...). None of them belongs in an
+    // OOXML package: the modelled content is re-emitted as XML by the
+    // generated parts, and every downstream consumer of
+    // `passthrough_kept` — the `<Override>` list, workbook rels and
+    // sheet rels — drops with them, so the output matches what saving
+    // the same model from an `.xlsx` source produces.
+    if (IsXlsbBinaryContentType(EffectiveContentType(wb, part))) {
+      StructuredLog("ooxml_writer.passthrough_dropped")
+          .field("path", part.path)
+          .field("content_type", part.content_type)
+          .field("reason", std::string_view("xlsb_binary_part"))
+          .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_part_count;
+      }
+      continue;
+    }
     plan.passthrough_kept.push_back(&part);
   }
 
@@ -331,7 +384,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
       continue;
     }
     plan.sheet_rels[i] = BuildSheetRels(wb.sheet(i), plan.tables_by_sheet[i], plan.pivot_tables_by_sheet[i],
-                                        plan.comments_by_sheet[i], plan);
+                                        plan.comments_by_sheet[i], plan, diagnostics);
   }
 
   return plan;

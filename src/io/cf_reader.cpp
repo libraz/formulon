@@ -598,6 +598,22 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
 
   // Children: <formula>, <colorScale>, <dataBar>, <iconSet> (mutually
   // exclusive at the visual-payload level).
+  //
+  // `cf::CFRule` declares at most one of the three visual payloads
+  // engaged, and its consumers rely on that. A document spelling several
+  // in one `<cfRule>` therefore keeps the payload the rule's `type`
+  // names, or the first one present when `type` names none of them.
+  bool visual_engaged = false;
+  const auto engage_visual = [&out, &visual_engaged](cf::RuleType kind) {
+    if (visual_engaged && out.type != kind) {
+      return false;
+    }
+    out.color_scale.reset();
+    out.data_bar.reset();
+    out.icon_set.reset();
+    visual_engaged = true;
+    return true;
+  };
   std::size_t formula_idx = 0;
   for (pugi::xml_node child = rule.first_child(); child; child = child.next_sibling()) {
     const std::string_view name = child.name();
@@ -614,17 +630,23 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
       }
       ++formula_idx;
     } else if (name == "colorScale") {
-      cf::ColorScaleSpec spec;
-      ReadColorScale(child, &spec);
-      out.color_scale = std::move(spec);
+      if (engage_visual(cf::RuleType::ColorScale)) {
+        cf::ColorScaleSpec spec;
+        ReadColorScale(child, &spec);
+        out.color_scale = std::move(spec);
+      }
     } else if (name == "dataBar") {
-      cf::DataBarSpec spec;
-      ReadDataBar(child, &spec);
-      out.data_bar = std::move(spec);
+      if (engage_visual(cf::RuleType::DataBar)) {
+        cf::DataBarSpec spec;
+        ReadDataBar(child, &spec);
+        out.data_bar = std::move(spec);
+      }
     } else if (name == "iconSet") {
-      cf::IconSetSpec spec;
-      ReadIconSet(child, &spec);
-      out.icon_set = std::move(spec);
+      if (engage_visual(cf::RuleType::IconSet)) {
+        cf::IconSetSpec spec;
+        ReadIconSet(child, &spec);
+        out.icon_set = std::move(spec);
+      }
     }
   }
 
@@ -695,6 +717,21 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
     out.push_back(std::move(cfmt));
   }
   return out;
+}
+
+void normalize_cf_dxf_ids(std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count) {
+  for (cf::ConditionalFormat& cfmt : formats) {
+    for (cf::CFRule& rule : cfmt.rules) {
+      if (!rule.dxf_id.has_value() || static_cast<std::size_t>(*rule.dxf_id) < dxf_count) {
+        continue;
+      }
+      StructuredLog("io.cf.dxf_id_unresolved")
+          .field("dxf_id", static_cast<std::int64_t>(*rule.dxf_id))
+          .field("dxf_count", static_cast<std::int64_t>(dxf_count))
+          .warn();
+      rule.dxf_id.reset();
+    }
+  }
 }
 
 }  // namespace formulon::io

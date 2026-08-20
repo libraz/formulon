@@ -264,7 +264,12 @@ TEST(OoxmlPassthroughRels, UnknownSheetRelationshipsAndTargetsRoundTrip) {
   EXPECT_EQ(relationship.id, "rId9");
   EXPECT_EQ(relationship.type, "urn:example:relationships/control");
   EXPECT_EQ(relationship.target, "xl/controls/control1.xml");
-  EXPECT_NE(load_or.value().workbook.sheet(0).raw_extensions().controls_xml.find("r:id=\"rId9\""), std::string::npos);
+  const WorksheetRawExtensions& raw = load_or.value().workbook.sheet(0).raw_extensions();
+  const auto controls = std::find_if(raw.begin(), raw.end(), [](const WorksheetRawChild& child) {
+    return child.slot == worksheet_child::slot_of("controls");
+  });
+  ASSERT_NE(controls, raw.end());
+  EXPECT_NE(controls->xml.find("r:id=\"rId9\""), std::string::npos);
 
   auto save_or = load_or.value().workbook.save();
   ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;

@@ -44,12 +44,19 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, comments / VML, and
-/// surviving unknown relationships. Internal unknown relationships are
-/// emitted only when their target is present in `plan.passthrough_kept`;
-/// external relationships remain eligible without a local payload.
+/// surviving unknown relationships.
+///
+/// Every relationship with an internal target is emitted only when that
+/// target is present in `plan.passthrough_kept`; external relationships
+/// remain eligible without a local payload. A relationship dropped by
+/// that rule bumps `diagnostics->dropped_relationship_count`, which is
+/// the only signal a caller gets that the saved sheet references less
+/// than the source did. `diagnostics` may be NULL, which discards the
+/// counts and changes nothing else.
 SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                                const std::vector<EmissionPlan::PivotTablePlan>& sheet_pivot_tables,
-                               const EmissionPlan::CommentsPlan& comments_plan, const EmissionPlan& plan);
+                               const EmissionPlan::CommentsPlan& comments_plan, const EmissionPlan& plan,
+                               WriteDiagnostics* diagnostics);
 
 }  // namespace io
 }  // namespace formulon

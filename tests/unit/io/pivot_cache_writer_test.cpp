@@ -284,6 +284,29 @@ TEST(PivotCacheWriter, NumberFormatRoundTrips) {
   EXPECT_DOUBLE_EQ(parsed.fields()[0].shared_items[4].as_number(), 0.0);
 }
 
+// The spelling, not just the value: the cache writer shares its dtoa with
+// the sheet writer, so a number reads the same wherever in the package it
+// lands -- and the same way Excel writes it. `%.17g` also round-trips,
+// which is why the value assertions above cannot see the difference, but
+// it renders 0.1 as "0.10000000000000001".
+TEST(PivotCacheWriter, NumbersUseTheShortestRoundTripForm) {
+  pivot::PivotCache cache;
+  pivot::PivotCacheField nums;
+  nums.name = "N";
+  nums.shared_items.push_back(Value::number(0.1));
+  nums.shared_items.push_back(Value::number(1.0 / 3.0));
+  nums.shared_items.push_back(Value::number(1e-7));
+  nums.shared_items.push_back(Value::number(-0.0));
+  cache.mutable_fields().push_back(std::move(nums));
+
+  const std::string xml = write_pivot_cache_definition(cache);
+  EXPECT_NE(xml.find("<n v=\"0.1\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<n v=\"0.3333333333333333\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<n v=\"1E-7\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<n v=\"0\"/>"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("0.10000000000000001"), std::string::npos) << xml;
+}
+
 // ---------------------------------------------------------------------------
 // XML escaping
 // ---------------------------------------------------------------------------

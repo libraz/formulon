@@ -671,28 +671,6 @@ void ReadCellStyles(const pugi::xml_node& root, StylesTable& table) {
   }
 }
 
-std::string EscapeXmlAttribute(std::string_view value) {
-  std::string out;
-  out.reserve(value.size());
-  for (char c : value) {
-    switch (c) {
-      case '&':
-        out.append("&amp;");
-        break;
-      case '<':
-        out.append("&lt;");
-        break;
-      case '"':
-        out.append("&quot;");
-        break;
-      default:
-        out.push_back(c);
-        break;
-    }
-  }
-  return out;
-}
-
 std::string CaptureRootExtraAttrs(const pugi::xml_node& root) {
   std::string out;
   for (pugi::xml_attribute attr : root.attributes()) {
@@ -700,11 +678,10 @@ std::string CaptureRootExtraAttrs(const pugi::xml_node& root) {
     if (name == "xmlns" || (name.rfind("xmlns:", 0U) != 0U && name != "mc:Ignorable")) {
       continue;
     }
-    out.push_back(' ');
-    out.append(name);
-    out.append("=\"");
-    out.append(EscapeXmlAttribute(attr.value()));
-    out.push_back('"');
+    // Verbatim-retained attributes go through the same escape rule as
+    // modelled ones, so a captured value cannot be written in a weaker form
+    // than the tag it is spliced into.
+    append_xml_attr(out, name, attr.value());
   }
   return out;
 }

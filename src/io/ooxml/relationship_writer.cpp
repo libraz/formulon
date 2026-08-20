@@ -36,7 +36,7 @@ std::string TargetRelativeToWorksheet(std::string_view package_path) {
 void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path) {
   out.append("  <Override PartName=\"/");
   if (escape_path) {
-    AppendXmlEscaped(out, path);
+    AppendXmlAttrEscaped(out, path);
   } else {
     out.append(path.data(), path.size());
   }
@@ -48,12 +48,14 @@ void AppendOverride(std::string& out, std::string_view path, std::string_view ct
 void AppendRelationship(std::string& out, std::string_view id, std::string_view type, std::string_view target,
                         bool target_external, bool escape_target) {
   out.append("  <Relationship Id=\"");
-  AppendXmlEscaped(out, id);
+  AppendXmlAttrEscaped(out, id);
   out.append("\" Type=\"");
   out.append(type);
   out.append("\" Target=\"");
   if (escape_target) {
-    AppendXmlEscaped(out, target);
+    // `Target` is an `xsd:anyURI` the rels reader takes verbatim from the
+    // parser, so it gets the attribute rule and no OOXML escaping.
+    AppendXmlAttrEscaped(out, target);
   } else {
     out.append(target);
   }

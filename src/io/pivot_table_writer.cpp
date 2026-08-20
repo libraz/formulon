@@ -441,7 +441,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
     span_rows = span_rows > rendered_span->rows ? span_rows : rendered_span->rows;
     span_cols = span_cols > rendered_span->cols ? span_cols : rendered_span->cols;
   }
-  AppendXmlEscaped(out, EncodeA1Range(table.anchor_row(), table.anchor_col(), span_rows, span_cols));
+  AppendXmlAttrEscaped(out, EncodeA1Range(table.anchor_row(), table.anchor_col(), span_rows, span_cols));
   out.append("\"");
   // ECMA-376 requires firstHeaderRow / firstDataRow / firstDataCol. Preserve
   // authored values, including explicit zero, while supplying the schema's

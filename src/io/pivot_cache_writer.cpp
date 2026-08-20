@@ -5,10 +5,8 @@
 
 #include "io/pivot_cache_writer.h"
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <string>
 #include <string_view>
 
@@ -22,24 +20,6 @@ namespace {
 
 constexpr std::string_view kPivotNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 constexpr std::string_view kRelsNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-
-/// Appends a double using `%.17g` (round-trip safe under IEEE 754) with a
-/// fast-path for zero so positive and negative zero render identically.
-/// NaN / infinities should never reach this writer (the reader rejects
-/// non-numeric `<n v=...>` payloads via strtod) and are deliberately not
-/// special-cased here -- they would emit "nan"/"inf" which would fail to
-/// round-trip back through the reader's `ParseDouble`. Callers that wish
-/// to preserve such payloads must encode them as Error values upstream.
-/// This mirrors `AppendNumberValue` in `ooxml_writer_cell.cpp`.
-void AppendNumber(std::string& out, double v) {
-  if (v == 0.0) {
-    out.push_back('0');
-    return;
-  }
-  char buf[32];
-  std::snprintf(buf, sizeof(buf), "%.17g", v);
-  out.append(buf);
-}
 
 /// Emits one of `<s>`, `<n>`, `<b>`, `<m/>`, `<e>` for the given value.
 /// Mirrors `DecodeTypedValue` in `pivot_cache_reader.cpp`. Anything other
@@ -55,7 +35,12 @@ void AppendInlineTypedValue(std::string& out, const Value& v) {
   }
   if (v.is_number()) {
     out.append("<n v=\"");
-    AppendNumber(out, v.as_number());
+    // Shared with the sheet writer so a value is spelled the same way
+    // wherever it lands in the package. NaN / infinities never reach
+    // here: the reader rejects non-numeric `<n v=...>` payloads, and a
+    // caller wanting to keep such a payload has to encode it as an
+    // Error value upstream.
+    append_xml_number(out, v.as_number());
     out.append("\"/>");
     return;
   }

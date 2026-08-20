@@ -179,6 +179,64 @@ std::vector<std::uint8_t> BuildWorksheetShellBytes(const std::vector<std::uint8_
   return out;
 }
 
+/// True when some part of the model already carries `name`'s content, so
+/// a save rebuilds the element rather than replaying the source bytes.
+///
+/// This is the complement of `WorksheetRawChild`: every `<worksheet>`
+/// child not listed here is preserved verbatim. Adding model support for
+/// an element means adding its name here, which is also what stops the
+/// same content being written twice.
+bool WorksheetChildIsModelled(std::string_view name) {
+  // `dimension`, `drawing`, `legacyDrawing` and `tableParts` are absent
+  // from the model proper but are still regenerated on save -- from the
+  // cell bounding box and from the relationship ids the writer mints --
+  // so replaying the source copy would duplicate them.
+  static constexpr std::string_view kModelled[] = {
+      "sheetPr",         "dimension",       "sheetViews",   "sheetFormatPr", "cols",
+      "sheetData",       "sheetProtection", "autoFilter",   "mergeCells",    "conditionalFormatting",
+      "dataValidations", "hyperlinks",      "printOptions", "pageMargins",   "pageSetup",
+      "headerFooter",    "rowBreaks",       "colBreaks",    "drawing",       "legacyDrawing",
+      "tableParts",      "extLst",
+  };
+  for (const std::string_view modelled : kModelled) {
+    if (modelled == name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Captures every `<worksheet>` child the model does not fold in, tagged
+/// with the schema slot the writer must put it back at.
+///
+/// The sweep is by exclusion, so an element no release has modelled yet
+/// still survives a round trip. A name outside the schema sequence takes
+/// the slot of the child before it, keeping it between the same two
+/// siblings. The result is stable-sorted by slot so the writer can emit
+/// it with a single forward cursor, which also repairs a source whose
+/// children were not in schema order.
+void CaptureUnconsumedWorksheetChildren(const pugi::xml_node& worksheet, WorksheetRawExtensions& out) {
+  out.clear();
+  std::size_t previous_slot = 0;
+  for (pugi::xml_node child = worksheet.first_child(); child; child = child.next_sibling()) {
+    if (child.type() != pugi::node_element) {
+      continue;
+    }
+    const std::string_view name = child.name();
+    const std::size_t slot = worksheet_child::slot_of(name);
+    if (slot != worksheet_child::kCount) {
+      previous_slot = slot;
+    }
+    if (WorksheetChildIsModelled(name)) {
+      continue;
+    }
+    out.push_back(WorksheetRawChild{static_cast<std::uint32_t>(slot == worksheet_child::kCount ? previous_slot : slot),
+                                    raw_xml(child)});
+  }
+  std::stable_sort(out.begin(), out.end(),
+                   [](const WorksheetRawChild& a, const WorksheetRawChild& b) { return a.slot < b.slot; });
+}
+
 /// Reads every non-cell worksheet element (siblings of `<sheetData>`) from
 /// `doc` into sheet `i`: conditional formats, view / layout, merges,
 /// hyperlinks, data validations, sheet protection, and the raw print
@@ -195,6 +253,12 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
   if (!cfs_or) {
     return cfs_or.error();
   }
+  // The `<dxfs>` table is loaded before any sheet, so this is the first
+  // point where a rule's `dxfId` can be checked against it. Both the DOM
+  // and the SAX path reach the model through here, which is what makes
+  // "a loaded workbook holds no unresolvable dxf_id" hold for the reader
+  // as a whole rather than for one of its two paths.
+  normalize_cf_dxf_ids(cfs_or.value(), wb.styles().dxfs.size());
   wb.sheet(i).mutable_conditional_formats() = std::move(cfs_or.value());
   auto view_layout_or = read_sheet_view_and_layout(doc, i, wb);
   if (!view_layout_or) {
@@ -216,22 +280,7 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
   }
   wb.sheet(i).mutable_validations() = std::move(dvs_or.value());
   wb.sheet(i).mutable_protection() = read_sheet_protection(worksheet);
-  WorksheetRawExtensions& raw_extensions = wb.sheet(i).mutable_raw_extensions();
-  auto capture_raw_extension = [&worksheet](const char* name) -> std::string {
-    if (const pugi::xml_node node = worksheet.child(name)) {
-      return raw_xml(node);
-    }
-    return {};
-  };
-  raw_extensions.protected_ranges_xml = capture_raw_extension("protectedRanges");
-  raw_extensions.scenarios_xml = capture_raw_extension("scenarios");
-  raw_extensions.custom_sheet_views_xml = capture_raw_extension("customSheetViews");
-  raw_extensions.phonetic_pr_xml = capture_raw_extension("phoneticPr");
-  raw_extensions.ignored_errors_xml = capture_raw_extension("ignoredErrors");
-  raw_extensions.legacy_drawing_hf_xml = capture_raw_extension("legacyDrawingHF");
-  raw_extensions.picture_xml = capture_raw_extension("picture");
-  raw_extensions.ole_objects_xml = capture_raw_extension("oleObjects");
-  raw_extensions.controls_xml = capture_raw_extension("controls");
+  CaptureUnconsumedWorksheetChildren(worksheet, wb.sheet(i).mutable_raw_extensions());
 
   SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
   if (pugi::xml_node sheet_pr = worksheet.child("sheetPr"); sheet_pr) {
@@ -464,14 +513,18 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       return make_error(FormulonErrorCode::kIoRelationshipBroken,
                         "workbook.xml: r:id has no matching workbook relationship", std::move(ctx));
     }
-    // Workbook-side `<sheet state="hidden">` (or `state="veryHidden"`)
-    // attribute — Excel records sheet visibility here, not on the
-    // worksheet part. Mirror it onto `Sheet::view().tab_hidden` so
-    // either signal flips the bit at load time. The worksheet-side
-    // `<sheetPr><tabHidden/>` form is handled by the per-sheet reader
-    // call below; the merge across both paths is OR-style.
+    // Workbook-side `<sheet state="...">` attribute — Excel records sheet
+    // visibility here, not on the worksheet part. All three `ST_SheetState`
+    // values are carried across, because `veryHidden` is what keeps a sheet
+    // out of Excel's "Unhide" dialog and folding it to `hidden` would put
+    // it back within a user's reach. The worksheet-side
+    // `<sheetPr><tabHidden/>` form is handled by the per-sheet reader call
+    // below; the merge across both paths is OR-style, and only ever
+    // strengthens the state the workbook part stated.
     const std::string_view state = sn.attribute("state").value();
-    const bool workbook_hides = (state == "hidden") || (state == "veryHidden");
+    const SheetVisibility workbook_visibility = state == "veryHidden" ? SheetVisibility::kVeryHidden
+                                                : state == "hidden"   ? SheetVisibility::kHidden
+                                                                      : SheetVisibility::kVisible;
     // Validate the name at the boundary instead of trusting it. Sheet
     // lookup resolves to the first match, so a workbook carrying two
     // sheets whose names Unicode-simple-fold together would answer every reference from
@@ -490,8 +543,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       return make_error(FormulonErrorCode::kIoSheetCorrupt,
                         "workbook.xml: <sheet> name is invalid or collides with an earlier sheet", std::move(ctx));
     }
-    if (workbook_hides) {
-      wb.sheet(wb.sheet_count() - 1U).mutable_view().tab_hidden = true;
+    if (workbook_visibility != SheetVisibility::kVisible) {
+      wb.sheet(wb.sheet_count() - 1U).mutable_view().set_visibility(workbook_visibility);
     }
     const ooxml::WorkbookRels::SheetTarget& target = it->second;
     if (target.relationship_type != kRelWorksheet) {

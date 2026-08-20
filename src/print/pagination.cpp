@@ -219,8 +219,18 @@ std::uint32_t WalkAxis(const AxisInput& axis, std::vector<std::uint32_t>* out_br
 /// unconstrained). Otherwise the `<pageSetup scale>` percentage is used.
 /// The factor multiplies every cell's point size: a factor below 1.0
 /// shrinks cells so more fit per page.
+///
+/// `area` is the full printable body, before any print-title
+/// reservation: repeated titles scale with the data, so they are
+/// accounted for in the demand rather than deducted from the supply.
+/// `title_*_pt` are their unscaled model sizes, and each page of a
+/// multi-page fit reprints them -- so `N` pages carry `N` copies, which
+/// is what puts the page count on the title term. With that denominator
+/// the resulting factor satisfies `content * factor <= N * (area -
+/// title * factor)` exactly, which is the same comparison the axis walk
+/// then performs.
 double ComputeScaleFactor(const PageSetup& setup, const PrintableArea& area, double total_width_pt,
-                          double total_height_pt) {
+                          double total_height_pt, double title_width_pt, double title_height_pt) {
   if (!setup.fit_to_page) {
     constexpr double kPercentDivisor = 100.0;
     return std::max(kMinScaleFactor, static_cast<double>(setup.scale) / kPercentDivisor);
@@ -228,12 +238,14 @@ double ComputeScaleFactor(const PageSetup& setup, const PrintableArea& area, dou
 
   double factor = 1.0;
   if (setup.fit_to_width > 0 && total_width_pt > 0.0 && area.width_pt > 0.0) {
-    const double allowed = area.width_pt * static_cast<double>(setup.fit_to_width);
-    factor = std::min(factor, allowed / total_width_pt);
+    const double pages = static_cast<double>(setup.fit_to_width);
+    const double allowed = area.width_pt * pages;
+    factor = std::min(factor, allowed / (total_width_pt + title_width_pt * pages));
   }
   if (setup.fit_to_height > 0 && total_height_pt > 0.0 && area.height_pt > 0.0) {
-    const double allowed = area.height_pt * static_cast<double>(setup.fit_to_height);
-    factor = std::min(factor, allowed / total_height_pt);
+    const double pages = static_cast<double>(setup.fit_to_height);
+    const double allowed = area.height_pt * pages;
+    factor = std::min(factor, allowed / (total_height_pt + title_height_pt * pages));
   }
   // A fit factor only ever shrinks; Excel never enlarges to fill pages.
   return std::max(kMinScaleFactor, std::min(1.0, factor));
@@ -278,24 +290,6 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
       return result;
     }
     effective_areas.push_back(used_box);
-  } else if (!has_used_range) {
-    // Explicit print area on an otherwise-empty sheet: Excel still
-    // paginates a *bounded* declared geometry (the area defines the page
-    // grid even when no cell carries content). A whole-column (`$A:$A`) or
-    // whole-row (`$1:$1`) print area, however, has no content to paginate
-    // and must not walk the full 1,048,576-row / 16,384-column grid (which
-    // would also reserve a multi-megabyte track vector below). Drop the
-    // unbounded rectangles; if none remain the sheet produces no pages.
-    constexpr std::uint32_t kMaxRowIndex = Sheet::kMaxRows - 1U;
-    constexpr std::uint32_t kMaxColIndex = Sheet::kMaxCols - 1U;
-    for (const CellRange& r : result.print_area) {
-      if (r.last_row < kMaxRowIndex && r.last_col < kMaxColIndex) {
-        effective_areas.push_back(r);
-      }
-    }
-    if (effective_areas.empty()) {
-      return result;
-    }
   } else {
     // An explicit print area paginates as declared. Intersecting it with
     // the populated box used to look right on cases whose content reaches
@@ -303,8 +297,43 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     // (content in column A only, print area A1:H30) shows Excel breaking
     // at the same columns as the dense case: the declared geometry drives
     // the page grid, not where the cells happen to be.
+    //
+    // An edge declared at the grid limit is the one exception. A
+    // whole-column (`$A:$A`) or whole-row (`$1:$1`) area names no
+    // geometry on that axis, and honouring it literally would size the
+    // track vectors below -- and the per-area walk that follows them --
+    // to all 1,048,576 rows / 16,384 columns. That is multiple megabytes
+    // of transient allocation on a routine print area, and
+    // `kMaxPaginationPages` cannot hold it back because that check runs
+    // after the walk it would have to prevent. Excel trims such an edge
+    // to the content, so clip it to the populated box; on a sheet with
+    // no populated cell there is nothing to trim to and the rectangle
+    // drops out entirely. A rectangle left empty by the clip (its
+    // declared start lies past the content) contributes no pages, and a
+    // sheet whose rectangles all drop out produces none.
+    constexpr std::uint32_t kMaxRowIndex = Sheet::kMaxRows - 1U;
+    constexpr std::uint32_t kMaxColIndex = Sheet::kMaxCols - 1U;
     for (const CellRange& r : result.print_area) {
-      effective_areas.push_back(r);
+      CellRange clipped = r;
+      if (r.last_row >= kMaxRowIndex) {
+        if (!has_used_range) {
+          continue;
+        }
+        clipped.last_row = used_box.last_row;
+      }
+      if (r.last_col >= kMaxColIndex) {
+        if (!has_used_range) {
+          continue;
+        }
+        clipped.last_col = used_box.last_col;
+      }
+      if (clipped.first_row > clipped.last_row || clipped.first_col > clipped.last_col) {
+        continue;
+      }
+      effective_areas.push_back(clipped);
+    }
+    if (effective_areas.empty()) {
+      return result;
     }
   }
 
@@ -369,17 +398,16 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
 
   // Print titles (repeat-rows / repeat-columns) are reprinted on every
   // page, so they steal body extent that is otherwise available for
-  // data rows / columns. Subtract their summed sizes once: pagination
-  // walks the (full) print area, and the smaller body limit naturally
-  // forces a break sooner.
+  // data rows / columns. Their sizes are summed here in model points and
+  // converted below, once the scale is known.
   auto titles_or = resolve_print_titles(wb, sheet_index);
   if (!titles_or) {
     return titles_or.error();
   }
   const PrintTitles& titles = titles_or.value();
+  double title_height = 0.0;
   if (titles.repeat_rows.has_value()) {
     const auto [first, last] = *titles.repeat_rows;
-    double title_height = 0.0;
     for (std::uint32_t row = first; row <= last; ++row) {
       title_height += row_height(row);
     }
@@ -389,22 +417,24 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     // on A1:D40 all break at h=[39], so the subtraction cannot be the
     // raw title_height (which would yield 15 / 45 / 75 pt). Using a
     // 5-default-row floor reproduces the observed h=[39] for all three.
+    // The floor is a model-space quantity like the row heights it
+    // stands in for, so it is applied before the scale conversion.
     constexpr double kMinTitleReserveRows = 5.0;
     title_height = std::max(title_height, kMinTitleReserveRows * default_row_h);
-    body.height_pt = std::max(0.0, body.height_pt - title_height);
   }
+  double title_width = 0.0;
   if (titles.repeat_cols.has_value()) {
     const auto [first, last] = *titles.repeat_cols;
-    double title_width = 0.0;
     for (std::uint32_t col = first; col <= last; ++col) {
       title_width += ColumnCharsToPoints(col_width(col));
     }
-    body.width_pt = std::max(0.0, body.width_pt - title_width);
   }
 
   // 3. The model scale factor is shared across every effective area:
   // Excel applies a single sheet-wide `<pageSetup scale>` / `fitToPage`
   // factor, so we size the factor against the union bounding box.
+  // Repeated titles are part of what gets scaled onto the page, so a
+  // fit factor has to accommodate them alongside the data.
   double union_total_width = 0.0;
   for (double width : col_widths) {
     union_total_width += ColumnCharsToPoints(width);
@@ -413,7 +443,18 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   for (double height : row_heights) {
     union_total_height += height;
   }
-  const double scale = ComputeScaleFactor(settings.page_setup, body, union_total_width, union_total_height);
+  const double scale =
+      ComputeScaleFactor(settings.page_setup, body, union_total_width, union_total_height, title_width, title_height);
+
+  // The body is physical page space (paper minus margins); a track is a
+  // model size that reaches the page multiplied by `scale`. Repeated
+  // titles are printed content and shrink with everything else, so the
+  // space they claim on the page is their scaled size. Subtracting the
+  // raw model size instead would reserve `1 / scale` times too much
+  // band and push data onto later pages -- at scale=50 a five-row title
+  // block would claim the page space of ten.
+  body.height_pt = std::max(0.0, body.height_pt - title_height * scale);
+  body.width_pt = std::max(0.0, body.width_pt - title_width * scale);
 
   // 4. Paginate each rectangle independently and aggregate the breaks.
   // Excel's `HPageBreaks` / `VPageBreaks` collections report the union

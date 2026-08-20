@@ -2565,6 +2565,121 @@ TEST(PivotEvaluator, ErrorPropagatesThroughSum) {
 }
 
 // ---------------------------------------------------------------------------
+// 14b. Count / CountNumbers classify cells, so a source error never becomes
+//      the count -- at the leaf, at the subtotal, or at the grand total
+// ---------------------------------------------------------------------------
+
+// Builds a Group x Sub hierarchy over a value column that carries one
+// error, so a single `#N/A` reaches the leaf cell, its group's subtotal and
+// the grand total through the same aggregation.
+PivotTable build_count_over_error_table(PivotCache& cache, Aggregation aggregation) {
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Group", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Sub", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+
+  auto add = [&](const char* group, const char* sub, Value v) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, group));
+    rec.cells.push_back(owned_text(cache, sub));
+    rec.cells.push_back(v);
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("A", "x", Value::number(10.0));
+  add("A", "x", Value::error(ErrorCode::NA));  // e.g. a lookup that missed
+  add("A", "y", Value::number(20.0));
+  add("B", "x", Value::number(30.0));
+
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  PivotField group_f;
+  group_f.source_name = "Group";
+  group_f.axis = PivotAxis::Row;
+  group_f.subtotal_top = true;
+  PivotField sub_f;
+  sub_f.source_name = "Sub";
+  sub_f.axis = PivotAxis::Row;
+  PivotField amount_f;
+  amount_f.source_name = "Amount";
+  amount_f.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(group_f));
+  table.mutable_fields().push_back(std::move(sub_f));
+  table.mutable_fields().push_back(std::move(amount_f));
+  table.mutable_row_field_order() = {0, 1};
+  PivotDataField df;
+  df.name = "Count of Amount";
+  df.field_index = 2;
+  df.aggregation = aggregation;
+  table.mutable_data_fields().push_back(std::move(df));
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+  return table;
+}
+
+TEST(PivotEvaluator, CountCountsAnErrorCellInsteadOfReturningIt) {
+  PivotCache cache;
+  PivotTable table = build_count_over_error_table(cache, Aggregation::Count);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Row leaves are A/x, A/y, B/x in hierarchy order; A/x is the one
+  // holding a number and the error, and COUNTA counts both.
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_EQ(r.rows[0].label, "A");
+  ASSERT_EQ(r.values.size(), 3U);
+  ASSERT_TRUE(r.values[0][0][0].is_number()) << "Count returned " << r.values[0][0][0].debug_to_string();
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 2.0);
+
+  // The group subtotal and the grand total run the same aggregation over a
+  // wider record set, so they must not turn into the error either.
+  ASSERT_EQ(r.row_subtotals.size(), 2U);
+  ASSERT_TRUE(r.row_subtotals[0].values[0].is_number());
+  EXPECT_DOUBLE_EQ(r.row_subtotals[0].values[0].as_number(), 3.0);
+  ASSERT_FALSE(r.grand_totals.empty());
+  ASSERT_TRUE(r.grand_totals[0].is_number());
+  EXPECT_DOUBLE_EQ(r.grand_totals[0].as_number(), 4.0);
+}
+
+TEST(PivotEvaluator, CountNumbersPassesOverAnErrorCellInsteadOfReturningIt) {
+  PivotCache cache;
+  PivotTable table = build_count_over_error_table(cache, Aggregation::CountNumbers);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // COUNT admits only numeric cells, so the error is passed over rather
+  // than counted -- and still never becomes the result.
+  ASSERT_EQ(r.values.size(), 3U);
+  ASSERT_TRUE(r.values[0][0][0].is_number()) << "CountNumbers returned " << r.values[0][0][0].debug_to_string();
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
+
+  ASSERT_EQ(r.row_subtotals.size(), 2U);
+  ASSERT_TRUE(r.row_subtotals[0].values[0].is_number());
+  EXPECT_DOUBLE_EQ(r.row_subtotals[0].values[0].as_number(), 2.0);
+  ASSERT_FALSE(r.grand_totals.empty());
+  ASSERT_TRUE(r.grand_totals[0].is_number());
+  EXPECT_DOUBLE_EQ(r.grand_totals[0].as_number(), 3.0);
+}
+
+// The arithmetic aggregations keep the short-circuit: the same fixture
+// under SUM still reports the error, so the change above is scoped to the
+// COUNT family rather than to error handling in general.
+TEST(PivotEvaluator, SumOverTheSameFixtureStillPropagatesTheError) {
+  PivotCache cache;
+  PivotTable table = build_count_over_error_table(cache, Aggregation::Sum);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.values.size(), 3U);
+  ASSERT_TRUE(r.values[0][0][0].is_error());
+  EXPECT_EQ(r.values[0][0][0].as_error(), ErrorCode::NA);
+}
+
+// ---------------------------------------------------------------------------
 // Bonus: subtotal at Region level when subtotal_top is set
 // ---------------------------------------------------------------------------
 

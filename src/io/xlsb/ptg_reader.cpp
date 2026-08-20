@@ -302,6 +302,17 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     return n;
   };
 
+  // True when `ixti` names an ExternSheet entry belonging to a
+  // supporting book other than this one. Such an entry's `itabFirst` /
+  // `itabLast` index the external workbook's own sheet list, so
+  // resolving them against `sheet_names` would rebind the reference to
+  // an unrelated local sheet (or, out of range, degrade it to an
+  // unqualified same-sheet reference). Both outcomes change the value
+  // silently, so the token is surfaced as undecodable instead.
+  auto ixti_is_external = [&sheet_ranges](std::uint32_t ixti) -> bool {
+    return ixti < sheet_ranges.size() && sheet_ranges[ixti].sup_book != 0U;
+  };
+
   // Single-sheet resolution for `ixti`: prefers the `BrtExternSheet`
   // table's `itabFirst` when present, falling back to treating `ixti`
   // as a direct 0-based `sheet_names` index when the workbook carries
@@ -753,6 +764,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // the single-sheet form. Build a `Ref3D` node when the range is
         // genuinely multi-sheet; otherwise the plain qualified `Ref`
         // this token already produced.
+        if (ixti_is_external(ixti_or.value())) {
+          return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                            "PtgRef3d qualifies a sheet of an external workbook", "context=xlsb_ptg_reader");
+        }
         std::string_view begin_sheet;
         std::string_view end_sheet;
         if (sheet_range_for_ixti(ixti_or.value(), begin_sheet, end_sheet)) {
@@ -800,6 +815,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // `Sheet1:Sheet2!A1:B2`) decodes into a range-tail `Ref3D`. A
         // single-sheet qualified area (`Sheet2!A1:B2`) keeps the plain
         // `RangeOp` of two qualified refs.
+        if (ixti_is_external(ixti_or.value())) {
+          return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                            "PtgArea3d qualifies a sheet of an external workbook", "context=xlsb_ptg_reader");
+        }
         std::string_view begin_sheet;
         std::string_view end_sheet;
         if (sheet_range_for_ixti(ixti_or.value(), begin_sheet, end_sheet)) {

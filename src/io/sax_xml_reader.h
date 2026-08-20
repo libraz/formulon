@@ -29,9 +29,18 @@
 // normalized. Values that need no decoding or normalization remain
 // zero-copy views into the input buffer.
 //
+// Character data may be interrupted by non-element markup wherever XML
+// permits it. A comment or processing instruction forms no node under
+// `parse_default`, a CDATA section and a child element each form one, and
+// an element's text is its first character-data node — so the scanner
+// reports the same single run pugixml would expose, with a CDATA run
+// end-of-line-normalized but never entity-decoded.
+//
 // On a malformed stream the scanner returns `kIoXmlParse` with an
 // indicative offset / message; it never throws and never reads past the
-// supplied buffer.
+// supplied buffer. Only input pugixml itself rejects is reported that
+// way: the scanner is the alternate reader for the same bytes, so it may
+// not turn a document the DOM path loads into a load failure.
 
 #ifndef FORMULON_IO_SAX_XML_READER_H_
 #define FORMULON_IO_SAX_XML_READER_H_

@@ -7,12 +7,14 @@
 
 #include "print/pagination.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
 
 #include "gtest/gtest.h"
 #include "io/defined_names.h"
+#include "print/page_setup.h"
 #include "print/print_area.h"
 #include "sheet.h"
 #include "value.h"
@@ -30,6 +32,15 @@ io::DefinedName PrintArea(std::string formula, std::int32_t sheet_id) {
   return dn;
 }
 
+// A sheet-scoped built-in name (`_xlnm.Print_Titles` and friends).
+io::DefinedName SheetScopedName(std::string name, std::string formula, std::int32_t sheet_id) {
+  io::DefinedName dn;
+  dn.name = std::move(name);
+  dn.formula = std::move(formula);
+  dn.local_sheet_id = sheet_id;
+  return dn;
+}
+
 // Sets a uniform column width (in OOXML character units) for [first, last].
 void SetColumnWidth(Sheet* sheet, std::uint32_t first, std::uint32_t last, double width) {
   ColumnLayout span;
@@ -37,6 +48,12 @@ void SetColumnWidth(Sheet* sheet, std::uint32_t first, std::uint32_t last, doubl
   span.last = last;
   span.width = width;
   sheet->mutable_layout().columns.push_back(span);
+}
+
+// Returns the furthest track index any break precedes, or 0 when there
+// are no breaks.
+std::uint32_t MaxBreak(const std::vector<std::uint32_t>& breaks) {
+  return breaks.empty() ? 0U : *std::max_element(breaks.begin(), breaks.end());
 }
 
 // Sets the height (in points) of a single row.
@@ -134,6 +151,220 @@ TEST(PaginationTest, EmptySheetWithFullRowPrintAreaProducesNoPages) {
   auto result = paginate(wb, 0);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().page_count, 0U);
+}
+
+// A whole-column print area on a sheet that *does* carry content is the
+// ordinary case, and it must be bounded by the content just as the
+// empty-sheet case is. The row track vector and the per-area walk are
+// both sized from the effective rectangle, so a rectangle that still
+// claims all 1,048,576 rows costs megabytes of transient allocation and
+// a walk to match -- and the page-count limit cannot intervene, because
+// it is only consulted after that walk. Every break index landing
+// inside the populated extent is the observable form of that bound: a
+// walk that ran past the content would report breaks past it.
+TEST(PaginationTest, FullColumnPrintAreaOnPopulatedSheetWalksOnlyThePopulatedRows) {
+  const auto build = [](const char* area) {
+    Workbook wb = Workbook::create();
+    Sheet& sheet = wb.sheet(0);
+    for (std::uint32_t row = 0; row < 10U; ++row) {
+      SetRowHeight(&sheet, row, 100.0);  // ~7 rows to an A4 body
+      for (std::uint32_t col = 0; col < 4U; ++col) {
+        sheet.set_cell_value(row, col, Value::number(1.0));
+      }
+    }
+    wb.set_defined_names({PrintArea(area, 0)});
+    return wb;
+  };
+  Workbook unbounded = build("Sheet1!$A:$D");
+  Workbook bounded = build("Sheet1!$A$1:$D$10");
+
+  auto result = paginate(unbounded, 0);
+  auto control = paginate(bounded, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_TRUE(static_cast<bool>(control)) << control.error().message;
+
+  // No track outside the populated 10 rows was walked. Asserted on the
+  // furthest break rather than per break: a walk over the whole grid
+  // produces breaks in the six figures, and one bound states it as well
+  // as a hundred thousand identical failures would.
+  EXPECT_LT(MaxBreak(result.value().h_breaks), 10U) << "break reported past the populated extent";
+  EXPECT_LE(result.value().h_breaks.size(), 10U);
+  EXPECT_LE(result.value().page_count, 10U);
+  // Clipping the unbounded edge to the content is exactly the bounded
+  // declaration, breaks included.
+  EXPECT_EQ(result.value().page_count, control.value().page_count);
+  EXPECT_EQ(result.value().h_breaks, control.value().h_breaks);
+  EXPECT_EQ(result.value().v_breaks, control.value().v_breaks);
+  // The reported print area still mirrors what the workbook declared:
+  // the clip drives pagination only, it is not a reporting change.
+  ASSERT_EQ(result.value().print_area.size(), 1U);
+  EXPECT_EQ(result.value().print_area.front().last_row, Sheet::kMaxRows - 1U);
+}
+
+TEST(PaginationTest, FullRowPrintAreaOnPopulatedSheetWalksOnlyThePopulatedColumns) {
+  const auto build = [](const char* area) {
+    Workbook wb = Workbook::create();
+    Sheet& sheet = wb.sheet(0);
+    SetColumnWidth(&sheet, 0U, 3U, 60.0);  // ~315 pt each, ~1 column to a body
+    for (std::uint32_t row = 0; row < 2U; ++row) {
+      for (std::uint32_t col = 0; col < 4U; ++col) {
+        sheet.set_cell_value(row, col, Value::number(1.0));
+      }
+    }
+    wb.set_defined_names({PrintArea(area, 0)});
+    return wb;
+  };
+  Workbook unbounded = build("Sheet1!$1:$2");
+  Workbook bounded = build("Sheet1!$A$1:$D$2");
+
+  auto result = paginate(unbounded, 0);
+  auto control = paginate(bounded, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_TRUE(static_cast<bool>(control)) << control.error().message;
+
+  EXPECT_LT(MaxBreak(result.value().v_breaks), 4U) << "break reported past the populated extent";
+  EXPECT_LE(result.value().v_breaks.size(), 4U);
+  EXPECT_EQ(result.value().page_count, control.value().page_count);
+  EXPECT_EQ(result.value().v_breaks, control.value().v_breaks);
+}
+
+TEST(PaginationTest, FullColumnPrintAreaStartingPastTheContentProducesNoPages) {
+  // The clip leaves this rectangle empty (content ends at row 10, the
+  // area starts at row 100), so it contributes no pages rather than
+  // paginating a million blank rows.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  for (std::uint32_t row = 0; row < 10U; ++row) {
+    sheet.set_cell_value(row, 0U, Value::number(1.0));
+  }
+  wb.set_defined_names({PrintArea("Sheet1!$A$100:$D$1048576", 0)});
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().page_count, 0U);
+  EXPECT_TRUE(result.value().h_breaks.empty());
+}
+
+// Repeated print titles are printed content: `<pageSetup scale>` shrinks
+// them exactly as it shrinks the data. The body they are deducted from
+// is physical page space, so the deduction has to be their scaled size.
+// Deducting the raw model size reserves `1 / scale` times too much band
+// and pushes data onto later pages.
+//
+// The expected break is derived here rather than hardcoded: the body
+// comes from the same `compute_printable_area` the engine uses, and the
+// arithmetic below *is* the invariant -- reserve = title height x scale,
+// with the data rows scaled by the same factor.
+TEST(PaginationTest, PrintTitleReservationIsScaledLikeTheDataItCompetesWith) {
+  constexpr double kRowHeightPt = 30.0;
+  constexpr std::uint32_t kScalePercent = 50U;
+  constexpr double kScale = kScalePercent / 100.0;
+  // Five title rows, which is also the engine's minimum reserve band, so
+  // the floor and the actual title height agree and neither can mask the
+  // other.
+  constexpr double kTitleRows = 5.0;
+
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.mutable_format_defaults().has_default_row_height = true;
+  sheet.mutable_format_defaults().default_row_height = kRowHeightPt;
+  for (std::uint32_t row = 0; row < 200U; ++row) {
+    sheet.set_cell_value(row, 0U, Value::number(1.0));
+  }
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$200", 0), SheetScopedName("_xlnm.Print_Titles", "Sheet1!$1:$5", 0)});
+  sheet.mutable_print_settings().page_setup.scale = kScalePercent;
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_FALSE(result.value().h_breaks.empty());
+
+  const PrintableArea body =
+      compute_printable_area(sheet.print_settings().page_setup, sheet.print_settings().page_margins);
+  const double reserved_pt = kTitleRows * kRowHeightPt * kScale;
+  const double printed_row_pt = kRowHeightPt * kScale;
+  const auto rows_per_page = static_cast<std::uint32_t>((body.height_pt - reserved_pt) / printed_row_pt);
+  EXPECT_EQ(result.value().h_breaks.front(), rows_per_page);
+}
+
+// The other half of the scale contract. `fitToPage` derives the factor
+// instead of reading it, and repeated titles are part of what has to
+// fit: every one of the N pages reprints them, so N pages carry N title
+// bands. A factor that charged for the titles only once would come out
+// too large and leave the last page spilling onto another.
+//
+// Asserted against the same request without titles rather than against
+// the requested number outright: an exact fit lands mid-track, and the
+// walk only breaks on whole rows, so a request can round to one page
+// more. That rounding is a property of the fit itself and applies with
+// or without titles -- comparing the two isolates the title accounting
+// from it. `fitToHeight=1` has no such ambiguity and is pinned exactly.
+TEST(PaginationTest, FitToPageAccommodatesRepeatedTitlesOnEveryPage) {
+  const auto build = [](std::uint32_t pages_tall, bool with_titles) {
+    Workbook wb = Workbook::create();
+    Sheet& sheet = wb.sheet(0);
+    sheet.mutable_format_defaults().has_default_row_height = true;
+    sheet.mutable_format_defaults().default_row_height = 30.0;
+    for (std::uint32_t row = 0; row < 200U; ++row) {
+      sheet.set_cell_value(row, 0U, Value::number(1.0));
+    }
+    std::vector<io::DefinedName> names{PrintArea("Sheet1!$A$1:$A$200", 0)};
+    if (with_titles) {
+      names.push_back(SheetScopedName("_xlnm.Print_Titles", "Sheet1!$1:$5", 0));
+    }
+    wb.set_defined_names(std::move(names));
+    sheet.mutable_print_settings().page_setup.fit_to_page = true;
+    sheet.mutable_print_settings().page_setup.fit_to_width = 1;
+    sheet.mutable_print_settings().page_setup.fit_to_height = pages_tall;
+    return wb;
+  };
+
+  for (const std::uint32_t pages_tall : {1U, 2U, 3U}) {
+    Workbook titled = build(pages_tall, true);
+    Workbook plain = build(pages_tall, false);
+    auto titled_result = paginate(titled, 0);
+    auto plain_result = paginate(plain, 0);
+    ASSERT_TRUE(static_cast<bool>(titled_result)) << titled_result.error().message;
+    ASSERT_TRUE(static_cast<bool>(plain_result)) << plain_result.error().message;
+    EXPECT_EQ(titled_result.value().page_count, plain_result.value().page_count)
+        << "repeated titles cost a page at fit_to_height=" << pages_tall;
+  }
+
+  Workbook single = build(1U, true);
+  auto single_result = paginate(single, 0);
+  ASSERT_TRUE(static_cast<bool>(single_result)) << single_result.error().message;
+  EXPECT_EQ(single_result.value().page_count, 1U);
+  EXPECT_TRUE(single_result.value().h_breaks.empty());
+}
+
+TEST(PaginationTest, BoundedPrintAreaIsNotClippedToTheContent) {
+  // The clip applies only to an edge declared at the grid limit. A
+  // declared rectangle that names real geometry drives the page grid
+  // whether or not the cells inside it are populated, so a sparse sheet
+  // and a dense one break identically under the same declaration.
+  const auto build = [](bool dense) {
+    Workbook wb = Workbook::create();
+    Sheet& sheet = wb.sheet(0);
+    SetColumnWidth(&sheet, 0U, 7U, 60.0);
+    for (std::uint32_t row = 0; row < 30U; ++row) {
+      for (std::uint32_t col = 0; col < (dense ? 8U : 1U); ++col) {
+        sheet.set_cell_value(row, col, Value::number(1.0));
+      }
+    }
+    wb.set_defined_names({PrintArea("Sheet1!$A$1:$H$30", 0)});
+    return wb;
+  };
+  Workbook sparse = build(false);
+  Workbook dense = build(true);
+
+  auto sparse_result = paginate(sparse, 0);
+  auto dense_result = paginate(dense, 0);
+  ASSERT_TRUE(static_cast<bool>(sparse_result)) << sparse_result.error().message;
+  ASSERT_TRUE(static_cast<bool>(dense_result)) << dense_result.error().message;
+
+  EXPECT_FALSE(sparse_result.value().v_breaks.empty());
+  EXPECT_EQ(sparse_result.value().v_breaks, dense_result.value().v_breaks);
+  EXPECT_EQ(sparse_result.value().h_breaks, dense_result.value().h_breaks);
+  EXPECT_EQ(sparse_result.value().page_count, dense_result.value().page_count);
 }
 
 TEST(PaginationTest, HiddenRowsAreExcludedFromPaginationExtent) {
