@@ -32,31 +32,18 @@ namespace formulon {
 namespace eval {
 namespace stats_detail {
 
-namespace {
-
-double midpoint_without_overflow(double low, double high) {
-  if (std::signbit(low) == std::signbit(high)) {
-    return low + (high - low) * 0.5;
-  }
-  return low * 0.5 + high * 0.5;
-}
-
-}  // namespace
-
 // MEDIAN(value, ...) - median of numeric values. Non-numerics are skipped;
 // an empty collection yields `#NUM!`. For an even count the result is the
-// arithmetic mean of the two middle elements.
+// arithmetic mean of the two middle elements. The arithmetic and the
+// error-code surface live in `aggregate_kernels::run_median`, which
+// AGGREGATE function 12 shares, so the two spellings of this aggregate
+// cannot drift apart.
 Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
+  auto result = aggregate_kernels::run_median(collect_numerics(args, arity));
+  if (!result) {
+    return Value::error(result.error());
   }
-  std::sort(xs.begin(), xs.end());
-  const std::size_t n = xs.size();
-  if ((n % 2u) == 1u) {
-    return Value::number(xs[n / 2u]);
-  }
-  return Value::number(midpoint_without_overflow(xs[n / 2u - 1u], xs[n / 2u]));
+  return Value::number(result.value());
 }
 
 // MODE / MODE.SNGL(value, ...) - most-frequent numeric value. Ties resolve

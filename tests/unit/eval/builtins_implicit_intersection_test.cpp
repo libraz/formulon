@@ -236,6 +236,189 @@ TEST(ImplicitIntersection, AtBindsTighterThanMultiply) {
   EXPECT_EQ(out_row.as_error(), ErrorCode::Value);
 }
 
+// ---------------------------------------------------------------------------
+// `@` on a whole-axis reference. `A:A` / `1:1` parse as a single `Ref` and
+// `A:C` / `1:3` as a `RangeOp` over two of them; both declare a rectangle
+// spanning a grid axis and project exactly like a bounded one.
+// ---------------------------------------------------------------------------
+
+TEST(ImplicitIntersection, WholeColumnSingleRefProjectsFormulaRow) {
+  // `=@C:C` at Z4 reads C4. Every formula row is inside a whole column, so
+  // this form never runs out of span.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(3, 2, Value::number(34.0));  // C4
+  const Value v = EvalSourceAt("=@C:C", wb, wb.sheet(0), 3U, 25U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 34.0);
+}
+
+TEST(ImplicitIntersection, WholeRowSingleRefProjectsFormulaColumn) {
+  // `=@2:2` at D9 reads D2.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 3, Value::number(42.0));  // D2
+  const Value v = EvalSourceAt("=@2:2", wb, wb.sheet(0), 8U, 3U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 42.0);
+}
+
+TEST(ImplicitIntersection, WholeColumnSpanIntersectsOnBothAxes) {
+  // `=@A:C` declares columns A..C over the whole grid height, so it is a 2-D
+  // rectangle: inside the column span it reads (formula row, formula col).
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(4, 1, Value::number(52.0));  // B5
+  const Value inside = EvalSourceAt("=@A:C", wb, wb.sheet(0), 4U, 1U);
+  ASSERT_TRUE(inside.is_number());
+  EXPECT_EQ(inside.as_number(), 52.0);
+}
+
+TEST(ImplicitIntersection, WholeColumnSpanOutsideColumnsIsValue) {
+  // Formula at Z5: column 25 is outside A..C, so the intersection is empty.
+  // The pre-fix code read the structure-default row of a full-column
+  // endpoint and answered #VALUE! for row 1 alone.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(4, 1, Value::number(52.0));
+  const Value v = EvalSourceAt("=@A:C", wb, wb.sheet(0), 4U, 25U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ImplicitIntersection, WholeRowSpanIntersectsOnBothAxes) {
+  // `=@1:3` declares rows 1..3 over the whole grid width.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(2, 4, Value::number(35.0));  // E3
+  const Value inside = EvalSourceAt("=@1:3", wb, wb.sheet(0), 2U, 4U);
+  ASSERT_TRUE(inside.is_number());
+  EXPECT_EQ(inside.as_number(), 35.0);
+
+  const Value outside = EvalSourceAt("=@1:3", wb, wb.sheet(0), 9U, 4U);
+  ASSERT_TRUE(outside.is_error());
+  EXPECT_EQ(outside.as_error(), ErrorCode::Value);
+}
+
+TEST(ImplicitIntersection, SyntacticFormsOfOneRectangleAgree) {
+  // The three spellings that declare a rectangle — bounded `Ref:Ref`,
+  // full-axis `Ref:Ref`, and the single `Ref` the parser folds `A:A` into —
+  // must select the same cell from the same formula position whenever they
+  // cover it. B4 is inside all three of A1:B6, A:B and B:B.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(3, 1, Value::number(64.0));  // B4
+  const Value bounded = EvalSourceAt("=@A1:B6", wb, wb.sheet(0), 3U, 1U);
+  const Value whole_span = EvalSourceAt("=@A:B", wb, wb.sheet(0), 3U, 1U);
+  const Value whole_single = EvalSourceAt("=@B:B", wb, wb.sheet(0), 3U, 1U);
+  ASSERT_TRUE(bounded.is_number());
+  ASSERT_TRUE(whole_span.is_number());
+  ASSERT_TRUE(whole_single.is_number());
+  EXPECT_EQ(bounded.as_number(), 64.0);
+  EXPECT_EQ(whole_span.as_number(), 64.0);
+  EXPECT_EQ(whole_single.as_number(), 64.0);
+}
+
+TEST(ImplicitIntersection, SingleMatchesAtForWholeAxisForms) {
+  // `_xlfn.SINGLE` shares the `@` projection, so neither spelling may keep
+  // its own idea of which operand shapes project.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(3, 2, Value::number(34.0));  // C4
+  wb.sheet(0).set_cell_value(3, 1, Value::number(24.0));  // B4
+
+  const Value at_single = EvalSourceAt("=@C:C", wb, wb.sheet(0), 3U, 25U);
+  const Value fn_single = EvalSourceAt("=_xlfn.SINGLE(C:C)", wb, wb.sheet(0), 3U, 25U);
+  ASSERT_TRUE(at_single.is_number());
+  ASSERT_TRUE(fn_single.is_number());
+  EXPECT_EQ(fn_single.as_number(), at_single.as_number());
+
+  const Value at_span = EvalSourceAt("=@A:C", wb, wb.sheet(0), 3U, 1U);
+  const Value fn_span = EvalSourceAt("=_xlfn.SINGLE(A:C)", wb, wb.sheet(0), 3U, 1U);
+  ASSERT_TRUE(at_span.is_number());
+  ASSERT_TRUE(fn_span.is_number());
+  EXPECT_EQ(fn_span.as_number(), at_span.as_number());
+}
+
+TEST(ImplicitIntersection, BoundedSingleRefStaysScalar) {
+  // `=@A1` is not a rectangle to project: it must read A1 from any formula
+  // position rather than demanding the formula sit in row 1.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(11.0));
+  const Value v = EvalSourceAt("=@A1", wb, wb.sheet(0), 9U, 25U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 11.0);
+}
+
+// ---------------------------------------------------------------------------
+// Intersect operator: a genuinely multi-cell overlap is a range and
+// materialises wherever `RangeOp` does.
+// ---------------------------------------------------------------------------
+
+TEST(IntersectOp, MultiCellOverlapSpills) {
+  // C1:D3 and D1:E2 overlap on D1:D2 — a 2x1 rectangle, not a scalar.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 3, Value::number(41.0));  // D1
+  wb.sheet(0).set_cell_value(1, 3, Value::number(42.0));  // D2
+  const Value v = EvalSourceIn("=C1:D3 D1:E2", wb, wb.sheet(0));
+  ExpectNumberArray(v, 2U, 1U, {41.0, 42.0});
+}
+
+TEST(IntersectOp, MultiCellOverlapSpillsFromAnchoredFormula) {
+  // The rectangle does not depend on where the formula sits: an anchored
+  // formula inside the overlap's row band no longer collapses onto it.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 1, Value::number(12.0));  // B1
+  wb.sheet(0).set_cell_value(1, 1, Value::number(22.0));  // B2
+  wb.sheet(0).set_cell_value(2, 1, Value::number(32.0));  // B3
+  // Formula at Z2 -> row 1, col 25. A1:C3 intersect B1:B5 = B1:B3.
+  const Value v = EvalSourceAt("=A1:C3 B1:B5", wb, wb.sheet(0), 1U, 25U);
+  ExpectNumberArray(v, 3U, 1U, {12.0, 22.0, 32.0});
+}
+
+TEST(IntersectOp, SingleCellOverlapStaysScalar) {
+  // A 1x1 overlap degrades to its scalar exactly as `A1:A1` does.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::number(55.0));  // B2
+  const Value v = EvalSourceAt("=A1:C3 B2:B2", wb, wb.sheet(0), 0U, 25U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 55.0);
+}
+
+TEST(IntersectOp, DisjointOperandsAreNull) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceAt("=A1:A3 C1:C3", wb, wb.sheet(0), 0U, 25U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Null);
+}
+
+TEST(IntersectOp, MultiCellOverlapBroadcastsThroughOperator) {
+  // The rectangle materialises in a nested position too, so an operator
+  // broadcasts over it instead of receiving a collapsed scalar.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 3, Value::number(1.0));  // D1
+  wb.sheet(0).set_cell_value(1, 3, Value::number(2.0));  // D2
+  const Value v = EvalSourceIn("=(C1:D3 D1:E2)*10", wb, wb.sheet(0));
+  ExpectNumberArray(v, 2U, 1U, {10.0, 20.0});
+}
+
+TEST(IntersectOp, WholeAxisOverlapBehindOperatorKeepsAnchorProjection) {
+  // `A1:B1048576 B:B` overlaps on the whole of column B. Only the spilling
+  // position materialises a grid-axis rectangle; an operand keeps the
+  // top-left anchor projection, exactly as a bare `A:C` does, so an operator
+  // cannot conjure a million cells per side.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 1, Value::number(7.0));  // B1
+  const Value v = EvalSourceIn("=(A1:B1048576 B:B)+1", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 8.0);
+}
+
+TEST(IntersectOp, BlockedFootprintIsSpill) {
+  // The spilling position weighs the rectangle against the anchor footprint,
+  // so an occupied cell below the anchor blocks it like any other spill.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 3, Value::number(41.0));   // D1
+  wb.sheet(0).set_cell_value(1, 3, Value::number(42.0));   // D2
+  wb.sheet(0).set_cell_value(1, 25, Value::number(99.0));  // Z2 blocks Z1:Z2.
+  const Value v = EvalSourceAt("=C1:D3 D1:E2", wb, wb.sheet(0), 0U, 25U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Spill);
+}
+
 TEST(ImplicitIntersection, DynamicArrayCallCollapsesToTopLeft) {
   Workbook wb = Workbook::create();
   const Value at = EvalSourceAt("=@SEQUENCE(3,1)", wb, wb.sheet(0), 0U, 0U);

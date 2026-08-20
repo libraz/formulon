@@ -70,7 +70,8 @@ gtest_discover_tests(formulon_concurrency_stress_tests
 # These tests target the contract edges that the topology tests do not
 # touch: workbook destruction after recalc, concurrent reads on disjoint
 # cells during recalc, registry first-use safety, iterative-solver
-# thread-safety, and dep-graph read-during-recalc safety.
+# thread-safety, dep-graph read-during-recalc safety, and the cells a pass
+# reads through a dynamic reference that no dependency edge describes.
 #
 # The label `TSAN` opts every test into the dedicated ThreadSanitizer CI
 # job (`tools/ci/run_tsan.sh`) and excludes them from the default fast
@@ -81,6 +82,7 @@ set(FORMULON_CONCURRENCY_TSAN_SOURCES
   recalc_lifetime_test.cpp
   registry_thread_safety_test.cpp
   iterative_solver_thread_test.cpp
+  parallel_dynamic_ref_test.cpp
   pivot_getpivotdata_test.cpp
   recalc_engine_internal_test.cpp
   recalc_engine_thread_safety_test.cpp

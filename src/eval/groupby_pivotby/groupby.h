@@ -15,8 +15,11 @@
 //     independently; the output preserves one aggregated column per input
 //     column.
 //   * `function` is one of three accepted shapes:
-//       - Form A: an inline `LAMBDA(v, ...)` literal of arity 1.
-//       - Form B: a name-bound LAMBDA value from a surrounding `LET`.
+//       - Form A: an inline `LAMBDA(v, ...)` literal callable with one
+//         argument. Trailing `[optional]` params are allowed and bind to
+//         the sentinel `ISOMITTED` detects.
+//       - Form B: a name-bound LAMBDA value from a surrounding `LET`,
+//         under the same callability rule.
 //       - Form C: a bare function name (`SUM`, `AVERAGE`, `COUNT`, ...) —
 //         resolved against the eval-time `FunctionRegistry` and invoked with
 //         the group's column slice as a single Value-array argument. No

@@ -478,10 +478,101 @@ TEST(GroupBy, NonLambdaNonNameAggregatorYieldsValueError) {
 }
 
 TEST(GroupBy, LambdaWrongArityYieldsValueError) {
-  // GROUPBY requires a 1-arg lambda; a 2-arg lambda surfaces #VALUE!.
+  // GROUPBY calls the aggregator with one argument; a lambda that requires
+  // two cannot be called and surfaces #VALUE!.
   const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, LAMBDA(a, b, a+b), 0, 0, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// Optional (`[name]`) params on the aggregator lambda
+//
+// GROUPBY supplies exactly one argument per group, so a lambda is callable
+// when `param_count - optional_count <= 1 <= param_count`. The params it
+// does not supply bind to the sentinel `ISOMITTED` detects.
+// ---------------------------------------------------------------------------
+
+TEST(GroupBy, LambdaWithTrailingOptionalIsAccepted) {
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, LAMBDA(v, [u], SUM(v)), 0, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "A");
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 40.0);
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "B");
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 20.0);
+}
+
+TEST(GroupBy, OptionalParamLambdaMatchesPlainLambda) {
+  // `EvalSrc` resets the shared arenas per call, so the first result is
+  // copied out as plain doubles before the second formula runs.
+  double plain[2] = {0.0, 0.0};
+  {
+    const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, LAMBDA(v, SUM(v)), 0, 0)");
+    ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+    ASSERT_EQ(v.as_array_rows(), 2U);
+    plain[0] = Cell(v, 0, 1).as_number();
+    plain[1] = Cell(v, 1, 1).as_number();
+  }
+  const Value with_opt = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, LAMBDA(v, [u], SUM(v)), 0, 0)");
+  ASSERT_TRUE(with_opt.is_array()) << with_opt.debug_to_string();
+  ASSERT_EQ(with_opt.as_array_rows(), 2U);
+  EXPECT_DOUBLE_EQ(plain[0], Cell(with_opt, 0, 1).as_number());
+  EXPECT_DOUBLE_EQ(plain[1], Cell(with_opt, 1, 1).as_number());
+}
+
+TEST(GroupBy, OmittedParamIsBoundForIsomitted) {
+  // The unsupplied `[u]` must read as omitted inside the body, not merely
+  // be tolerated at the call boundary.
+  const Value v =
+      EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, LAMBDA(v, [u], IF(ISOMITTED(u), SUM(v), -1)), 0, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 40.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 20.0);
+}
+
+TEST(GroupBy, RangeShapedBindingSurvivesWithOptional) {
+  // `SUM(v)` must still see the group slice as a range, not an opaque
+  // array, when the lambda also declares an optional param.
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"A\";\"B\"}, {10;30;20}, LAMBDA(v, [u], AVERAGE(v)), 0, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 20.0);
+}
+
+TEST(GroupBy, LetBoundLambdaWithOptionalIsAccepted) {
+  // Form B resolves the aggregator through the name environment, a
+  // separate branch from the inline literal; it must agree on callability.
+  const Value v = EvalSrc("=LET(f, LAMBDA(v, [u], SUM(v)), GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, f, 0, 0))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 40.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 20.0);
+}
+
+TEST(GroupBy, LetBoundLambdaBelowRequiredArityStillRejected) {
+  // `LAMBDA(a, b, a+b)` requires two args through Form B as well.
+  const Value v = EvalSrc("=LET(f, LAMBDA(a, b, a+b), GROUPBY({\"A\";\"B\"}, {1;2}, f, 0, 0))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(GroupBy, ZeroParamLambdaStillRejected) {
+  // The other edge: GROUPBY supplies one argument, so a lambda declaring
+  // no params at all cannot take it.
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, LAMBDA(42), 0, 0)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(GroupBy, AllOptionalSingleParamLambdaIsAccepted) {
+  // `LAMBDA([v], ...)` has required = 0 and param_count = 1, so the single
+  // supplied argument sits inside the window and binds normally.
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, LAMBDA([v], SUM(v)), 0, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 40.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 20.0);
 }
 
 // ---------------------------------------------------------------------------

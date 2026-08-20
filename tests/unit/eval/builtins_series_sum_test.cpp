@@ -64,6 +64,40 @@ TEST(BuiltinsSeriesSum, CoefficientsFromRange) {
   EXPECT_DOUBLE_EQ(v.as_number(), 17.0);
 }
 
+// The coefficients slot splits on provenance: a directly supplied scalar
+// is coerced and rejects non-numeric input, while a range-sourced cell of
+// the wrong type is skipped. The two rules must not leak into each other.
+
+TEST(BuiltinsSeriesSum, DirectNonNumericScalarCoefficientIsValue) {
+  // A lone text coefficient is coerced, not dropped: answering 0 here
+  // would be a plausible-looking number computed from no terms at all.
+  const Value v = EvalSource("=SERIESSUM(2, 0, 1, \"x\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsSeriesSum, DirectNumericScalarCoefficientCoerces) {
+  const Value number = EvalSource("=SERIESSUM(2, 0, 1, 5)");
+  ASSERT_TRUE(number.is_number());
+  EXPECT_DOUBLE_EQ(number.as_number(), 5.0);
+
+  const Value numeric_text = EvalSource("=SERIESSUM(2, 0, 1, \"5\")");
+  ASSERT_TRUE(numeric_text.is_number()) << "kind=" << static_cast<int>(numeric_text.kind());
+  EXPECT_DOUBLE_EQ(numeric_text.as_number(), 5.0);
+}
+
+TEST(BuiltinsSeriesSum, RangeSourcedNonNumericCellIsSkipped) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("x"));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
+  // The text cell contributes no term but still consumes its power index:
+  // 1·2^0 + 3·2^2 = 1 + 12 = 13.
+  const Value v = EvalSourceIn("=SERIESSUM(2, 0, 1, A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 13.0);
+}
+
 TEST(BuiltinsSeriesSum, NonNumericXIsValue) {
   const Value v = EvalSource("=SERIESSUM(\"abc\", 0, 1, {1;1})");
   ASSERT_TRUE(v.is_error());

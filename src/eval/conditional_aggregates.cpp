@@ -33,16 +33,51 @@ namespace {
 // ---------------------------------------------------------------------------
 //
 // The five multi-criteria aggregators share the shape "N parallel (range,
-// criterion) pairs, each range the same size". Size mismatches are
+// criterion) pairs, each range the same shape". Shape mismatches are
 // `#VALUE!` in Excel 365 — stricter than SUMIF's clamp-to-min behaviour,
 // which we also match here.
 
+/// The shape every range in one `*IFS` call has to agree on.
+///
+/// Cell count alone does not decide it: a 3x1 column and a 1x3 row hold the
+/// same three cells, and Excel rejects that pair rather than zipping the
+/// two by position. `rows` / `cols` are only comparable when they account
+/// for every cell the resolver produced — a range-shaped call that was
+/// flattened on the way out reports dimensions that do not multiply back to
+/// `size`, and comparing those would reject pairs Excel accepts — so
+/// `rectangular` records whether this shape can support the dimension test.
+struct CriteriaShape {
+  std::size_t size = 0;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  bool rectangular = false;
+
+  static CriteriaShape of(const RangeResult& resolved) {
+    CriteriaShape shape;
+    shape.size = resolved.cells.size();
+    shape.rows = resolved.rows;
+    shape.cols = resolved.cols;
+    shape.rectangular = static_cast<std::size_t>(resolved.rows) * static_cast<std::size_t>(resolved.cols) == shape.size;
+    return shape;
+  }
+
+  bool agrees_with(const CriteriaShape& other) const {
+    if (size != other.size) {
+      return false;
+    }
+    if (rectangular && other.rectangular) {
+      return rows == other.rows && cols == other.cols;
+    }
+    return true;
+  }
+};
+
 /// Resolves `pair_count` consecutive (range, criterion) pairs starting at
 /// argument index `first_pair_index` in `call`. Each criteria range is
-/// resolved through `resolve_range_arg` and must have exactly
-/// `expected_size` cells; otherwise the helper fails with `#VALUE!`.
-/// Each criterion sub-expression is evaluated once; an error Value
-/// propagates.
+/// resolved through `resolve_range_arg` and must agree with `expected`
+/// under `CriteriaShape::agrees_with`; otherwise the helper fails with
+/// `#VALUE!`. Each criterion sub-expression is evaluated once; an error
+/// Value propagates.
 ///
 /// On success, appends the resolved cell vectors (in pair order) to
 /// `*out_cell_arrays` and appends the parsed criteria to `*out_parsed`,
@@ -57,7 +92,7 @@ namespace {
 /// `ParsedCriterion::rhs_storage` string is never relocated after parse
 /// and its `rhs_text` `string_view` stays stable across vector growth.
 bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pair_index, std::uint32_t pair_count,
-                            std::size_t expected_size, Arena& arena, const FunctionRegistry& registry,
+                            const CriteriaShape& expected, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::vector<std::vector<Value>>* out_cell_arrays,
                             std::vector<std::unique_ptr<ParsedCriterion>>* out_parsed, Value* out_err_value) {
   out_cell_arrays->reserve(out_cell_arrays->size() + pair_count);
@@ -70,11 +105,11 @@ bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pai
       *out_err_value = Value::error(resolved.error());
       return false;
     }
-    std::vector<Value> cells = std::move(resolved.value().cells);
-    if (cells.size() != expected_size) {
+    if (!CriteriaShape::of(resolved.value()).agrees_with(expected)) {
       *out_err_value = Value::error(ErrorCode::Value);
       return false;
     }
+    std::vector<Value> cells = std::move(resolved.value().cells);
     // An error-valued criterion is NOT propagated: Excel's *IFS functions
     // accept an error criterion as a filter over error cells with the
     // matching code (see `parse_criterion` ValueKind::Error branch).
@@ -152,11 +187,12 @@ bool resolve_ifs_inputs(const parser::AstNode& call, Arena& arena, const Functio
     *out_err_value = Value::error(value_resolved.error());
     return false;
   }
+  const CriteriaShape expected = CriteriaShape::of(value_resolved.value());
   out->value_cells = std::move(value_resolved.value().cells);
-  out->expected_size = out->value_cells.size();
+  out->expected_size = expected.size;
 
   const std::uint32_t pair_count = (call.as_call_arity() - 1U) / 2U;
-  return resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, out->expected_size, arena, registry, ctx,
+  return resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected, arena, registry, ctx,
                                 &out->criteria_cells, &out->parsed, out_err_value);
 }
 
@@ -430,24 +466,26 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
 // COUNTIFS(range1, crit1 [, range2, crit2, ...])
 //
 // Counts cells where every `(range_k[i], crit_k)` pair matches in lockstep.
-// Arity must be even and >= 2. All criteria ranges must have the same cell
-// count; Excel 365 raises `#VALUE!` on shape mismatch (stricter than
-// SUMIF's clamp-to-min behaviour) and we match that.
+// Arity must be even and >= 2. All criteria ranges must have the same
+// shape, not merely the same cell count: Excel 365 raises `#VALUE!` when a
+// column range is paired with a row range of equal length, and is stricter
+// throughout than SUMIF's clamp-to-min behaviour.
 Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
   if (arity < 2 || (arity % 2) != 0) {
     return Value::error(ErrorCode::Value);
   }
-  // Resolve the first criteria range to fix the expected size.
+  // Resolve the first criteria range to fix the expected shape.
   std::vector<std::vector<Value>> criteria_cells;
   std::vector<std::unique_ptr<ParsedCriterion>> parsed;
   auto first_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
   if (!first_resolved) {
     return Value::error(first_resolved.error());
   }
+  const CriteriaShape expected = CriteriaShape::of(first_resolved.value());
   std::vector<Value> first_cells = std::move(first_resolved.value().cells);
-  const std::size_t expected_size = first_cells.size();
+  const std::size_t expected_size = expected.size;
   // Error criterion is NOT propagated; it filters error cells (see
   // `parse_criterion` ValueKind::Error).
   const Value first_crit = eval_node(call.as_call_arg(1), arena, registry, ctx);
@@ -457,7 +495,7 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
   const std::uint32_t remaining_pairs = (arity - 2) / 2;
   if (remaining_pairs > 0) {
     Value err = Value::number(0.0);
-    if (!resolve_criteria_pairs(call, /*first_pair_index=*/2, remaining_pairs, expected_size, arena, registry, ctx,
+    if (!resolve_criteria_pairs(call, /*first_pair_index=*/2, remaining_pairs, expected, arena, registry, ctx,
                                 &criteria_cells, &parsed, &err)) {
       return err;
     }

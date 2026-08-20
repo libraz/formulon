@@ -17,6 +17,20 @@
 namespace formulon {
 namespace eval {
 namespace aggregate_kernels {
+namespace {
+
+// Mean of the two middle elements, computed so that a pair whose sum
+// overflows still lands on a finite midpoint. Same-sign operands use
+// `low + (high - low) / 2` (the difference cannot overflow); opposite-sign
+// operands halve first, where no overflow is possible either.
+double midpoint_without_overflow(double low, double high) {
+  if (std::signbit(low) == std::signbit(high)) {
+    return low + (high - low) * 0.5;
+  }
+  return low * 0.5 + high * 0.5;
+}
+
+}  // namespace
 
 Expected<double, ErrorCode> run_sum(const std::vector<double>& xs) {
   double total = 0.0;
@@ -183,6 +197,19 @@ Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_
     return ErrorCode::Num;
   }
   return interpolated;
+}
+
+Expected<double, ErrorCode> run_median(std::vector<double> xs) {
+  if (xs.empty()) {
+    return ErrorCode::Num;
+  }
+  std::sort(xs.begin(), xs.end());
+  const std::size_t n = xs.size();
+  const double m = (n % 2U) == 1U ? xs[n / 2U] : midpoint_without_overflow(xs[n / 2U - 1U], xs[n / 2U]);
+  if (!std::isfinite(m)) {
+    return ErrorCode::Num;
+  }
+  return m;
 }
 
 Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs) {

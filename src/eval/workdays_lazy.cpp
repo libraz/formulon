@@ -35,27 +35,37 @@ namespace formulon {
 namespace eval {
 namespace {
 
-constexpr double kExcelMaxSerial = 2958465.0;  // 9999-12-31
-
-bool is_valid_workday_serial(double value) noexcept {
-  return std::isfinite(value) && value >= 0.0 && value <= kExcelMaxSerial;
+// Upper bound of the Excel serial range, 9999-12-31. Under the 1904 date
+// system every serial denotes a calendar day 1462 days later, so the
+// bound shifts with the epoch rather than being a single constant.
+double max_workday_serial(bool date1904) noexcept {
+  return date_time::serial_from_ymd(9999, 12, 31, date1904);
 }
 
-bool is_valid_workday_count(double value) noexcept {
-  return std::isfinite(value) && std::fabs(std::trunc(value)) <= kExcelMaxSerial;
+bool is_valid_workday_serial(double value, bool date1904) noexcept {
+  return std::isfinite(value) && value >= 0.0 && value <= max_workday_serial(date1904);
 }
 
-// Returns true when `serial_floor` (an integer Excel serial) falls on a
-// day marked as weekend by `weekend_mask`. The mask is a 7-bit value:
-// bit 0 = Monday, ..., bit 6 = Sunday. The standard Sat+Sun weekend is
-// `0x60` (bits 5 and 6 set).
+bool is_valid_workday_count(double value, bool date1904) noexcept {
+  return std::isfinite(value) && std::fabs(std::trunc(value)) <= max_workday_serial(date1904);
+}
+
+// Returns true when `serial_floor` (an integer Excel serial, interpreted
+// under the workbook's `date1904` epoch) falls on a day marked as
+// weekend by `weekend_mask`. The mask is a 7-bit value: bit 0 = Monday,
+// ..., bit 6 = Sunday. The standard Sat+Sun weekend is `0x60` (bits 5
+// and 6 set).
+//
+// The epoch matters: the 1900/1904 offset of 1462 days is not a multiple
+// of 7, so reading a 1904 serial as a 1900 one shifts the weekday by two
+// days and silently changes every weekend decision.
 //
 // The ISO Mon=0 weekday index is derived from the `(days + 4) mod 7`
 // Sun=0 form used by WEEKDAY: subtracting one and wrapping gives Mon=0,
 // i.e. `(days + 3) mod 7`. 2024-01-01 is a Monday, so `(days(2024,1,1) +
 // 3) % 7 == 0` is the canonical cross-check.
-bool is_weekend_masked(double serial_floor, std::uint8_t weekend_mask) noexcept {
-  const date_time::YMD ymd = date_time::ymd_from_serial(serial_floor);
+bool is_weekend_masked(double serial_floor, std::uint8_t weekend_mask, bool date1904) noexcept {
+  const date_time::YMD ymd = date_time::ymd_from_serial(serial_floor, date1904);
   const std::int64_t days = date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
   const int mon0 = static_cast<int>(((days + 3) % 7 + 7) % 7);
   return (weekend_mask & (1U << mon0)) != 0U;
@@ -64,8 +74,8 @@ bool is_weekend_masked(double serial_floor, std::uint8_t weekend_mask) noexcept 
 // Thin wrapper retained so the original NETWORKDAYS / WORKDAY call sites
 // keep their self-documenting name. Saturday + Sunday is `0x60` in the
 // Mon=0..Sun=6 bit convention.
-bool is_weekend(double serial_floor) noexcept {
-  return is_weekend_masked(serial_floor, 0x60U);
+bool is_weekend(double serial_floor, bool date1904) noexcept {
+  return is_weekend_masked(serial_floor, 0x60U, date1904);
 }
 
 // Decodes the Excel `weekend` argument into a 7-bit Mon=0..Sun=6 mask.
@@ -131,12 +141,10 @@ bool parse_weekend_arg(const Value& arg_val, std::uint8_t* out_mask, ErrorCode* 
   return false;
 }
 
-// Collects holiday serials from a single AST argument node. Accepts four
-// shapes:
-//
-//   * RangeOp / Ref (resolved via resolve_range_arg)
-//   * ArrayLiteral  (evaluated cell by cell)
-//   * scalar expression (evaluated as a 1-element vector)
+// Collects holiday serials from a single AST argument node. Every shape
+// `resolve_range_arg` resolves is accepted — `Ref` / `RangeOp` /
+// `SpillRef` / `ArrayLiteral` and dynamic-array producers such as
+// `SEQUENCE` — and a bare scalar collapses to a 1-element set.
 //
 // Each non-error, non-blank cell is coerced to a number and floored to
 // the date component. Blank cells in a range are skipped silently (Excel
@@ -149,29 +157,12 @@ bool parse_weekend_arg(const Value& arg_val, std::uint8_t* out_mask, ErrorCode* 
 bool collect_holidays_from_arg(const parser::AstNode& hol_arg, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, std::vector<double>* out_holidays, Value* out_err) {
   out_holidays->clear();
-  const parser::NodeKind k = hol_arg.kind();
-  std::vector<Value> cells;
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    auto resolved = resolve_range_arg(hol_arg, arena, registry, ctx);
-    if (!resolved) {
-      *out_err = Value::error(resolved.error());
-      return false;
-    }
-    cells = std::move(resolved.value().cells);
-  } else if (k == parser::NodeKind::ArrayLiteral) {
-    const std::uint32_t rows = hol_arg.as_array_rows();
-    const std::uint32_t cols = hol_arg.as_array_cols();
-    cells.reserve(static_cast<std::size_t>(rows) * cols);
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      for (std::uint32_t c = 0; c < cols; ++c) {
-        cells.push_back(eval_node(hol_arg.as_array_element(r, c), arena, registry, ctx));
-      }
-    }
-  } else {
-    // Scalar argument -- evaluate and treat as a 1-element set. Errors
-    // propagate via the `is_error` check below.
-    cells.push_back(eval_node(hol_arg, arena, registry, ctx));
+  auto resolved = resolve_range_arg(hol_arg, arena, registry, ctx);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
+    return false;
   }
+  const std::vector<Value> cells = std::move(resolved.value().cells);
   for (const Value& v : cells) {
     if (v.is_error()) {
       *out_err = v;
@@ -270,7 +261,8 @@ Value eval_networkdays_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (!end_n) {
     return Value::error(end_n.error());
   }
-  if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_serial(end_n.value())) {
+  const bool date1904 = ctx.date1904();
+  if (!is_valid_workday_serial(start_n.value(), date1904) || !is_valid_workday_serial(end_n.value(), date1904)) {
     return Value::error(ErrorCode::Num);
   }
   std::vector<double> holidays;
@@ -293,7 +285,7 @@ Value eval_networkdays_lazy(const parser::AstNode& call, Arena& arena, const Fun
   }
   long long count = 0;
   for (double d = s; d <= e; d += 1.0) {
-    if (is_weekend(d)) {
+    if (is_weekend(d, date1904)) {
       continue;
     }
     if (is_holiday_sorted(d, holidays)) {
@@ -326,7 +318,8 @@ Value eval_workday_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (!days_n) {
     return Value::error(days_n.error());
   }
-  if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_count(days_n.value())) {
+  const bool date1904 = ctx.date1904();
+  if (!is_valid_workday_serial(start_n.value(), date1904) || !is_valid_workday_count(days_n.value(), date1904)) {
     return Value::error(ErrorCode::Num);
   }
   std::vector<double> holidays;
@@ -350,10 +343,10 @@ Value eval_workday_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
   while (remaining > 0) {
     cur += step;
-    if (cur < 0.0 || cur > kExcelMaxSerial) {
+    if (cur < 0.0 || cur > max_workday_serial(date1904)) {
       return Value::error(ErrorCode::Num);
     }
-    if (is_weekend(cur)) {
+    if (is_weekend(cur, date1904)) {
       continue;
     }
     if (is_holiday_sorted(cur, holidays)) {
@@ -386,7 +379,8 @@ Value eval_networkdays_intl_lazy(const parser::AstNode& call, Arena& arena, cons
   if (!end_n) {
     return Value::error(end_n.error());
   }
-  if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_serial(end_n.value())) {
+  const bool date1904 = ctx.date1904();
+  if (!is_valid_workday_serial(start_n.value(), date1904) || !is_valid_workday_serial(end_n.value(), date1904)) {
     return Value::error(ErrorCode::Num);
   }
   std::uint8_t mask = 0;
@@ -406,7 +400,7 @@ Value eval_networkdays_intl_lazy(const parser::AstNode& call, Arena& arena, cons
   }
   long long count = 0;
   for (double d = s; d <= e; d += 1.0) {
-    if (is_weekend_masked(d, mask)) {
+    if (is_weekend_masked(d, mask, date1904)) {
       continue;
     }
     if (is_holiday_sorted(d, holidays)) {
@@ -439,7 +433,8 @@ Value eval_workday_intl_lazy(const parser::AstNode& call, Arena& arena, const Fu
   if (!days_n) {
     return Value::error(days_n.error());
   }
-  if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_count(days_n.value())) {
+  const bool date1904 = ctx.date1904();
+  if (!is_valid_workday_serial(start_n.value(), date1904) || !is_valid_workday_count(days_n.value(), date1904)) {
     return Value::error(ErrorCode::Num);
   }
   std::uint8_t mask = 0;
@@ -460,10 +455,10 @@ Value eval_workday_intl_lazy(const parser::AstNode& call, Arena& arena, const Fu
   }
   while (remaining > 0) {
     cur += step;
-    if (cur < 0.0 || cur > kExcelMaxSerial) {
+    if (cur < 0.0 || cur > max_workday_serial(date1904)) {
       return Value::error(ErrorCode::Num);
     }
-    if (is_weekend_masked(cur, mask)) {
+    if (is_weekend_masked(cur, mask, date1904)) {
       continue;
     }
     if (is_holiday_sorted(cur, holidays)) {

@@ -420,7 +420,7 @@ TEST(RegexReplace, InvalidPatternIsValueError) {
 }
 
 // ---------------------------------------------------------------------------
-// REGEXREPLACE — backreferences (extended substitute syntax)
+// REGEXREPLACE — capture-group references
 // ---------------------------------------------------------------------------
 
 TEST(RegexReplace, BackreferenceDollar1) {
@@ -706,6 +706,200 @@ TEST(RegexTest, ArrayBroadcastCompilesThePatternOncePerCall) {
   ASSERT_EQ(large.as_array_rows(), 1000U);
   EXPECT_TRUE(large.as_array_cells()[999].as_boolean());
   EXPECT_EQ(regex_compile_count() - before_large, 1U) << "compilation must not scale with the subject count";
+}
+
+// ---------------------------------------------------------------------------
+// REGEXREPLACE — replacement dialect
+// ---------------------------------------------------------------------------
+//
+// Only `$n`, `${name}` and `$$` are special. Every other byte reaches the
+// output verbatim, and a `$` that begins none of those forms is a literal
+// dollar rather than an error.
+
+TEST(RegexReplace, TrailingDollarIsLiteral) {
+  const Value v = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"USD$\")");
+  ASSERT_TRUE(v.is_text()) << "a trailing dollar must not be a malformed reference";
+  EXPECT_EQ(v.as_text(), "USD$");
+}
+
+TEST(RegexReplace, BackslashesAreVerbatim) {
+  const Value v = EvalSource("=REGEXREPLACE(\"p\", \"p\", \"C:\\Users\\name\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "C:\\Users\\name");
+}
+
+TEST(RegexReplace, CaseForcingEscapesAreNotInterpreted) {
+  // `\U` / `\l` / `\Q...\E` are PCRE2 extended-dialect directives that Excel
+  // does not have; they must survive as text.
+  const Value upper = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"\\Uabc\")");
+  ASSERT_TRUE(upper.is_text());
+  EXPECT_EQ(upper.as_text(), "\\Uabc");
+
+  const Value quoted = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"\\Qa$b\\E\")");
+  ASSERT_TRUE(quoted.is_text());
+  EXPECT_EQ(quoted.as_text(), "\\Qa$b\\E");
+}
+
+TEST(RegexReplace, DollarBeforeNonReferenceIsLiteral) {
+  const Value spaced = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"$ 5\")");
+  ASSERT_TRUE(spaced.is_text());
+  EXPECT_EQ(spaced.as_text(), "$ 5");
+
+  const Value dashed = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"$-\")");
+  ASSERT_TRUE(dashed.is_text());
+  EXPECT_EQ(dashed.as_text(), "$-");
+}
+
+TEST(RegexReplace, UnbracedNameIsLiteral) {
+  // Excel spells a named reference `${name}`; the unbraced form PCRE2 would
+  // accept is not part of the dialect.
+  const Value v = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"$name\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "$name");
+}
+
+TEST(RegexReplace, MalformedBraceIsLiteral) {
+  const Value unclosed = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"${abc\")");
+  ASSERT_TRUE(unclosed.is_text());
+  EXPECT_EQ(unclosed.as_text(), "${abc");
+
+  const Value empty_name = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"${}\")");
+  ASSERT_TRUE(empty_name.is_text());
+  EXPECT_EQ(empty_name.as_text(), "${}");
+}
+
+TEST(RegexReplace, DollarZeroIsWholeMatch) {
+  const Value v = EvalSource("=REGEXREPLACE(\"abc\", \"b\", \"[$0]\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "a[b]c");
+}
+
+TEST(RegexReplace, NthOccurrenceUsesTheSameDialect) {
+  const Value v = EvalSource("=REGEXREPLACE(\"aa\", \"a\", \"$\", 2)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "a$");
+}
+
+TEST(RegexReplace, BroadcastUsesTheSameDialect) {
+  const Value v = EvalSource("=REGEXREPLACE({\"x\";\"y\"}, \"[xy]\", \"C:\\d$\")");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_text());
+  ASSERT_TRUE(v.as_array_cells()[1].is_text());
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "C:\\d$");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "C:\\d$");
+}
+
+// ---------------------------------------------------------------------------
+// Leftmost-error rule
+// ---------------------------------------------------------------------------
+//
+// When more than one argument evaluates to an error, the one that surfaces is
+// the leftmost in the declared signature — an option argument never pre-empts
+// an error in text, pattern or replacement.
+
+TEST(RegexCrossCutting, RegextestReturnsTheLeftmostError) {
+  const Value v = EvalSource("=REGEXTEST(NA(), \"a\", 1/0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(RegexCrossCutting, RegexextractReturnsTheLeftmostError) {
+  const Value text_first = EvalSource("=REGEXEXTRACT(NA(), \"a\", 1/0)");
+  ASSERT_TRUE(text_first.is_error());
+  EXPECT_EQ(text_first.as_error(), ErrorCode::NA);
+
+  const Value pattern_first = EvalSource("=REGEXEXTRACT(\"a\", NA(), 1/0)");
+  ASSERT_TRUE(pattern_first.is_error());
+  EXPECT_EQ(pattern_first.as_error(), ErrorCode::NA);
+}
+
+TEST(RegexCrossCutting, RegexreplaceReturnsTheLeftmostError) {
+  const Value text_first = EvalSource("=REGEXREPLACE(NA(), \"a\", \"b\", 1/0)");
+  ASSERT_TRUE(text_first.is_error());
+  EXPECT_EQ(text_first.as_error(), ErrorCode::NA);
+
+  const Value pattern_first = EvalSource("=REGEXREPLACE(\"a\", NA(), \"b\", 1/0)");
+  ASSERT_TRUE(pattern_first.is_error());
+  EXPECT_EQ(pattern_first.as_error(), ErrorCode::NA);
+
+  const Value replacement_first = EvalSource("=REGEXREPLACE(\"a\", \"a\", NA(), 1/0)");
+  ASSERT_TRUE(replacement_first.is_error());
+  EXPECT_EQ(replacement_first.as_error(), ErrorCode::NA);
+}
+
+TEST(RegexCrossCutting, OptionErrorStillSurfacesWhenItIsTheOnlyOne) {
+  const Value v = EvalSource("=REGEXTEST(\"a\", \"a\", 1/0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(RegexCrossCutting, OptionDomainCheckSurvivesTheReordering) {
+  const Value v = EvalSource("=REGEXTEST(\"a\", \"a\", 5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// Broadcast follows the value, not the AST kind
+// ---------------------------------------------------------------------------
+
+TEST(RegexTest, BroadcastsOverAComputedArray) {
+  const Value sorted = EvalSource("=REGEXTEST(SORT({\"cd\";\"ab\"}), \"b\")");
+  ASSERT_TRUE(sorted.is_array()) << "a call returning an array must broadcast";
+  ASSERT_EQ(sorted.as_array_rows(), 2U);
+  ASSERT_EQ(sorted.as_array_cols(), 1U);
+  EXPECT_TRUE(sorted.as_array_cells()[0].as_boolean());
+  EXPECT_FALSE(sorted.as_array_cells()[1].as_boolean());
+
+  const Value uniq = EvalSource("=REGEXTEST(UNIQUE({\"ab\";\"cd\";\"ab\"}), \"b\")");
+  ASSERT_TRUE(uniq.is_array());
+  ASSERT_EQ(uniq.as_array_rows(), 2U);
+  EXPECT_TRUE(uniq.as_array_cells()[0].as_boolean());
+  EXPECT_FALSE(uniq.as_array_cells()[1].as_boolean());
+}
+
+TEST(RegexTest, BroadcastsOverAnArithmeticArray) {
+  const Value v = EvalSource("=REGEXTEST({\"a\";\"b\"}&\"1\", \"1\")");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  EXPECT_TRUE(v.as_array_cells()[0].as_boolean());
+  EXPECT_TRUE(v.as_array_cells()[1].as_boolean());
+}
+
+TEST(RegexTest, SingleCellComputedArrayCollapsesToAScalar) {
+  const Value v = EvalSource("=REGEXTEST(UNIQUE({\"ab\"}), \"b\")");
+  ASSERT_TRUE(v.is_boolean()) << "a 1x1 broadcast collapses to a scalar result";
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(RegexTest, ScalarCallStaysScalar) {
+  const Value v = EvalSource("=REGEXTEST(UPPER(\"ab\"), \"B\")");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(RegexExtract, BroadcastsOverAComputedArray) {
+  const Value v = EvalSource("=REGEXEXTRACT(UNIQUE({\"a1\";\"b2\";\"a1\"}), \"\\d\")");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "1");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "2");
+}
+
+TEST(RegexReplace, BroadcastsOverAComputedArray) {
+  const Value v = EvalSource("=REGEXREPLACE(SORT({\"b1\";\"a2\"}), \"\\d\", \"#\")");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "a#");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "b#");
+}
+
+TEST(RegexTest, ComputedArrayBroadcastStillCompilesOnce) {
+  const std::uint64_t before = regex_compile_count();
+  const Value v = EvalSource("=REGEXTEST(SORT({\"a1\";\"b2\";\"c3\"}), \"\\d\")");
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(regex_compile_count() - before, 1U);
 }
 
 TEST(RegexReplace, NthOccurrenceBroadcastCompilesThePatternOncePerCall) {

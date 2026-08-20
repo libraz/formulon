@@ -296,8 +296,15 @@ TEST(VmParity, LazyOnlyFamiliesDoNotAbortUnderParity) {
     // The parity hook (when compiled in) runs inside evaluate(); a successful
     // return means the skip path fired rather than asserting on a mismatch.
     const Value v = evaluate(*root, arena);
-    (void)v;
-    SUCCEED() << "evaluated without abort: " << src;
+    // A lazy-only family is registered solely in the lazy-dispatch table
+    // `tree_walker_lazy_table.cpp` consults; the eager `FunctionRegistry`
+    // has no entry for it. `#NAME?` is what the eager path returns for an
+    // unregistered function, so seeing it here means the formula fell
+    // through to the eager registry instead of the lazy table (or the
+    // parity skip path misfired) — the exact failure this test exists to
+    // catch, not a value any of these four formulas can produce on their
+    // own terms.
+    EXPECT_FALSE(v.is_error() && v.as_error() == ErrorCode::Name) << src;
   }
 }
 

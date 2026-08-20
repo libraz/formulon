@@ -26,6 +26,12 @@
 //     #NUM!; lambda arity mismatch -> #VALUE!; multi-cell lambda return
 //     -> #CALC!.
 //
+//   * All six — a lambda declaring trailing `[optional]` params is accepted
+//     whenever the helper's fixed arity falls in
+//     `[param_count - optional_count, param_count]`, the unsupplied slots
+//     bind to the sentinel `ISOMITTED` detects, and both edges of that
+//     window still reject.
+//
 // All cases drive the parser front-end through `Parser::Parse` so the
 // formulas stay readable and exercise the dispatch path lazily — the
 // helpers belong to the `kLazyDispatch` table in `tree_walker.cpp`.
@@ -571,6 +577,200 @@ TEST(LambdaHelpersMakeArray, LambdaErrorFillsEachCell) {
     ASSERT_TRUE(v.as_array_cells()[i].is_error());
     EXPECT_EQ(v.as_array_cells()[i].as_error(), ErrorCode::Div0);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Optional (`[name]`) lambda parameters
+//
+// A lambda is callable with `param_count - optional_count <= arity <=
+// param_count` arguments; the trailing slots the caller does not supply bind
+// to the omitted sentinel that `ISOMITTED` detects. Every helper supplies a
+// fixed arity set by its own contract, so a lambda that declares extra
+// trailing optionals must still be accepted — and must behave exactly like
+// the same lambda invoked directly.
+// ---------------------------------------------------------------------------
+
+TEST(LambdaHelpersOptionalParams, MapAcceptsTrailingOptional) {
+  const Value v = EvalSrc("=MAP({1,2}, LAMBDA(x, [u], x*2))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 4.0);
+}
+
+TEST(LambdaHelpersOptionalParams, MapMatchesDirectInvocation) {
+  // The same lambda called directly and through MAP must agree cell for
+  // cell — the helper path and the LambdaCall path share one arity rule.
+  // `EvalSrc` resets the shared arenas per call; the direct result is a
+  // plain number, so copying it out keeps it valid across the second call.
+  double direct = 0.0;
+  {
+    const Value v = EvalSrc("=LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y))(5)");
+    ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+    direct = v.as_number();
+  }
+  EXPECT_DOUBLE_EQ(direct, 5.0);
+  const Value mapped = EvalSrc("=MAP({5}, LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y)))");
+  ASSERT_TRUE(mapped.is_array()) << mapped.debug_to_string();
+  ASSERT_TRUE(mapped.as_array_cells()[0].is_number());
+  EXPECT_DOUBLE_EQ(mapped.as_array_cells()[0].as_number(), direct);
+}
+
+TEST(LambdaHelpersOptionalParams, ByRowAcceptsTrailingOptional) {
+  const Value v = EvalSrc("=BYROW({1,2;3,4}, LAMBDA(r, [u], SUM(r)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 7.0);
+}
+
+TEST(LambdaHelpersOptionalParams, ByColAcceptsTrailingOptional) {
+  const Value v = EvalSrc("=BYCOL({1,2;3,4}, LAMBDA(c, [u], SUM(c)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 6.0);
+}
+
+TEST(LambdaHelpersOptionalParams, ReduceAcceptsTrailingOptional) {
+  const Value v = EvalSrc("=REDUCE(0, {1,2,3}, LAMBDA(a, b, [u], a+b))");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+}
+
+TEST(LambdaHelpersOptionalParams, ScanAcceptsTrailingOptional) {
+  const Value v = EvalSrc("=SCAN(0, {1,2,3}, LAMBDA(a, b, [u], a+b))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 6.0);
+}
+
+TEST(LambdaHelpersOptionalParams, MakeArrayAcceptsTrailingOptional) {
+  const Value v = EvalSrc("=MAKEARRAY(2, 2, LAMBDA(r, c, [u], r*10+c))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[3].as_number(), 22.0);
+}
+
+// The omitted slot must actually be bound to the sentinel, not merely
+// tolerated: `ISOMITTED` inside the body has to see it as omitted in every
+// helper.
+
+TEST(LambdaHelpersOptionalParams, MapBindsOmittedSentinel) {
+  const Value v = EvalSrc("=MAP({1,2}, LAMBDA(x, [y], IF(ISOMITTED(y), x*100, x)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 100.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 200.0);
+}
+
+TEST(LambdaHelpersOptionalParams, ByRowBindsOmittedSentinel) {
+  const Value v = EvalSrc("=BYROW({1,2;3,4}, LAMBDA(r, [u], IF(ISOMITTED(u), SUM(r), 0)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 7.0);
+}
+
+TEST(LambdaHelpersOptionalParams, ByColBindsOmittedSentinel) {
+  const Value v = EvalSrc("=BYCOL({1,2;3,4}, LAMBDA(c, [u], IF(ISOMITTED(u), SUM(c), 0)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 6.0);
+}
+
+TEST(LambdaHelpersOptionalParams, ReduceBindsOmittedSentinel) {
+  const Value v = EvalSrc("=REDUCE(0, {1,2,3}, LAMBDA(a, b, [u], IF(ISOMITTED(u), a+b, a)))");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+}
+
+TEST(LambdaHelpersOptionalParams, ScanBindsOmittedSentinel) {
+  const Value v = EvalSrc("=SCAN(0, {1,2,3}, LAMBDA(a, b, [u], IF(ISOMITTED(u), a+b, a)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 6.0);
+}
+
+TEST(LambdaHelpersOptionalParams, MakeArrayBindsOmittedSentinel) {
+  const Value v = EvalSrc("=MAKEARRAY(1, 2, LAMBDA(r, c, [u], IF(ISOMITTED(u), c*10, c)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 20.0);
+}
+
+// Several trailing optionals in a row: the helper still supplies its fixed
+// arity and every unsupplied slot binds to the sentinel.
+TEST(LambdaHelpersOptionalParams, MultipleTrailingOptionalsAllBind) {
+  const Value v = EvalSrc("=MAP({1,2}, LAMBDA(x, [y], [z], IF(AND(ISOMITTED(y), ISOMITTED(z)), x*3, 0)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 6.0);
+}
+
+// A supplied optional is a normal binding: MAP over two arrays fills both
+// slots of a `LAMBDA(a, [b], ...)`, so ISOMITTED must report FALSE.
+TEST(LambdaHelpersOptionalParams, SuppliedOptionalIsNotOmitted) {
+  const Value v = EvalSrc("=MAP({1,2}, {10,20}, LAMBDA(a, [b], IF(ISOMITTED(b), -1, a+b)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 22.0);
+}
+
+// The window has two hard edges, and widening it must not open either one.
+
+TEST(LambdaHelpersOptionalParams, BelowRequiredArityStillRejected) {
+  // MAKEARRAY supplies 2 args; the lambda requires 3. `2 < 3` -> #VALUE!.
+  const Value v = EvalSrc("=MAKEARRAY(2, 2, LAMBDA(r, c, d, r))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(LambdaHelpersOptionalParams, AboveDeclaredArityStillRejected) {
+  // REDUCE supplies 2 args; the lambda declares 1 (optional or not).
+  // `2 > 1` -> #VALUE!.
+  const Value v = EvalSrc("=REDUCE(0, {1,2,3}, LAMBDA([a], 1))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(LambdaHelpersOptionalParams, RejectionIsScalarNotPerCell) {
+  // A lambda the helper can never call is a whole-call #VALUE!, not an
+  // array whose every cell carries it.
+  const Value v = EvalSrc("=MAP({1,2;3,4}, LAMBDA(a, b, c, a))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// The range-shaped binding BYROW / BYCOL rely on survives the shared
+// invocation path: `SUM(r)` must still flatten the slice rather than see an
+// opaque array, even when the lambda also declares an optional param.
+TEST(LambdaHelpersOptionalParams, ByRowKeepsRangeShapedBindingWithOptional) {
+  // `EvalSrc` resets the shared arenas per call, so the first result is
+  // copied out as plain doubles before the second formula runs.
+  double plain_rows[2] = {0.0, 0.0};
+  {
+    const Value plain = EvalSrc("=BYROW({1,2,3;4,5,6}, LAMBDA(r, SUM(r)))");
+    ASSERT_TRUE(plain.is_array()) << plain.debug_to_string();
+    ASSERT_EQ(plain.as_array_rows(), 2U);
+    plain_rows[0] = plain.as_array_cells()[0].as_number();
+    plain_rows[1] = plain.as_array_cells()[1].as_number();
+  }
+  const Value with_opt = EvalSrc("=BYROW({1,2,3;4,5,6}, LAMBDA(r, [u], SUM(r)))");
+  ASSERT_TRUE(with_opt.is_array()) << with_opt.debug_to_string();
+  ASSERT_EQ(with_opt.as_array_rows(), 2U);
+  EXPECT_DOUBLE_EQ(with_opt.as_array_cells()[0].as_number(), 6.0);
+  EXPECT_DOUBLE_EQ(with_opt.as_array_cells()[1].as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(plain_rows[0], with_opt.as_array_cells()[0].as_number());
+  EXPECT_DOUBLE_EQ(plain_rows[1], with_opt.as_array_cells()[1].as_number());
 }
 
 }  // namespace

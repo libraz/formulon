@@ -143,7 +143,8 @@ struct Section {
   int fraction_pad_digits = 0;
   bool has_point = false;
   bool has_percent = false;
-  // Count of `,` tokens adjacent to the decimal point (trailing commas);
+  // Count of `,` tokens that follow the section's last digit placeholder,
+  // whether that placeholder is in the integer or in the fractional part;
   // each divides the scaled value by 1000.
   int trailing_comma_scale = 0;
   // Whether any `,` appears between two digit tokens in the integer part

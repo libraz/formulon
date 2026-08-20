@@ -26,17 +26,21 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Collects the numeric cash flows from IRR's first argument. Accepts:
+// Collects the numeric cash flows from IRR's first argument. Every shape
+// `resolve_range_arg` understands is accepted — `Ref` / `RangeOp` /
+// `SpillRef` / `ArrayLiteral` and dynamic-array producers such as
+// `SEQUENCE` — while a bare scalar is rejected with #VALUE!, mirroring
+// Excel's requirement that IRR's first argument be a reference or array.
 //
-//   - RangeOp / Ref   -> resolved via resolve_range_arg; Text / Bool /
-//                         Blank cells are silently skipped (Excel rule).
-//   - ArrayLiteral    -> walked cell by cell; each element is evaluated
-//                         and coerced to a number. Non-numeric elements
-//                         yield #VALUE! (literals are treated as direct
-//                         scalars, not filtered like range cells).
-//   - anything else   -> rejected with #VALUE!, mirroring Excel's
-//                         requirement that IRR's first argument be a
-//                         reference or array.
+// The per-cell rule then splits on where the cells came from:
+//
+//   - inline `ArrayLiteral` -> each element is coerced to a number and a
+//                              non-numeric element yields #VALUE!
+//                              (literals are direct scalars, not
+//                              range-sourced cells);
+//   - everything else       -> Text / Bool / Blank cells are silently
+//                              skipped, matching SUM / AVERAGE on
+//                              range-sourced inputs.
 //
 // Returns `true` on success with the cash flows written to `*out_flows`.
 // On failure writes an Excel error into `*out_err` and returns `false`.
@@ -45,51 +49,31 @@ namespace {
 bool collect_cash_flows(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<double>* out_flows, Value* out_err) {
   out_flows->clear();
-  const parser::NodeKind k = arg.kind();
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    auto resolved = resolve_range_arg(arg, arena, registry, ctx);
-    if (!resolved) {
-      *out_err = Value::error(resolved.error());
+  auto resolved = resolve_range_arg_no_scalar(arg, arena, registry, ctx, ErrorCode::Value);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
+    return false;
+  }
+  const bool literal = arg.kind() == parser::NodeKind::ArrayLiteral;
+  for (const Value& v : resolved.value().cells) {
+    if (v.is_error()) {
+      *out_err = v;
       return false;
     }
-    for (const Value& v : resolved.value().cells) {
-      if (v.is_error()) {
-        *out_err = v;
-        return false;
+    if (!literal) {
+      if (v.is_number()) {
+        out_flows->push_back(v.as_number());
       }
-      // Excel IRR silently skips non-numeric cells inside a range
-      // (matches SUM / AVERAGE behaviour on range-sourced inputs).
-      if (!v.is_number()) {
-        continue;
-      }
-      out_flows->push_back(v.as_number());
+      continue;
     }
-    return true;
-  }
-  if (k == parser::NodeKind::ArrayLiteral) {
-    const std::uint32_t rows = arg.as_array_rows();
-    const std::uint32_t cols = arg.as_array_cols();
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      for (std::uint32_t c = 0; c < cols; ++c) {
-        const Value v = eval_node(arg.as_array_element(r, c), arena, registry, ctx);
-        if (v.is_error()) {
-          *out_err = v;
-          return false;
-        }
-        auto coerced = coerce_to_number(v);
-        if (!coerced) {
-          *out_err = Value::error(coerced.error());
-          return false;
-        }
-        out_flows->push_back(coerced.value());
-      }
+    auto coerced = coerce_to_number(v);
+    if (!coerced) {
+      *out_err = Value::error(coerced.error());
+      return false;
     }
-    return true;
+    out_flows->push_back(coerced.value());
   }
-  // Any other shape (a scalar literal, a function call, etc.) is not a
-  // valid IRR values argument.
-  *out_err = Value::error(ErrorCode::Value);
-  return false;
+  return true;
 }
 
 struct CashFlowSigns {
@@ -461,37 +445,22 @@ namespace {
 // additionally enforces a rate >= 0 check upstream.
 enum class XFinKind { Xirr, Xnpv };
 
-// Row-major flatten of a single range/Ref/ArrayLiteral argument into a
-// vector of cells. `out_cells` is cleared on entry; on failure returns
-// false with the Excel-visible error written to `*out_err`.
+// Row-major flatten of a single range-shaped argument into a vector of
+// cells, accepting everything `resolve_range_arg` resolves (`Ref` /
+// `RangeOp` / `SpillRef` / `ArrayLiteral` / dynamic-array producers). A
+// bare scalar is not a valid XIRR / XNPV range argument and surfaces
+// #VALUE!. `out_cells` is cleared on entry; on failure returns false
+// with the Excel-visible error written to `*out_err`.
 bool collect_range_cells(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err) {
   out_cells->clear();
-  const parser::NodeKind k = arg.kind();
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    auto resolved = resolve_range_arg(arg, arena, registry, ctx);
-    if (!resolved) {
-      *out_err = Value::error(resolved.error());
-      return false;
-    }
-    *out_cells = std::move(resolved.value().cells);
-    return true;
+  auto resolved = resolve_range_arg_no_scalar(arg, arena, registry, ctx, ErrorCode::Value);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
+    return false;
   }
-  if (k == parser::NodeKind::ArrayLiteral) {
-    const std::uint32_t rows = arg.as_array_rows();
-    const std::uint32_t cols = arg.as_array_cols();
-    out_cells->reserve(static_cast<std::size_t>(rows) * cols);
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      for (std::uint32_t c = 0; c < cols; ++c) {
-        out_cells->push_back(eval_node(arg.as_array_element(r, c), arena, registry, ctx));
-      }
-    }
-    return true;
-  }
-  // Any other shape (scalar literal, arithmetic expression, etc.) is
-  // not a valid XIRR / XNPV range argument.
-  *out_err = Value::error(ErrorCode::Value);
-  return false;
+  *out_cells = std::move(resolved.value().cells);
+  return true;
 }
 
 // Collects filtered (value, date) pairs from the two parallel ranges

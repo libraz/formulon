@@ -137,6 +137,36 @@ TEST(BuiltinsCountIfs, RangeSizeMismatchIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// A column and a row of equal length hold the same number of cells, so a
+// cell-count gate lets a transposed argument through and zips the two by
+// position — a plausible-looking number where Excel raises #VALUE!. The
+// gate compares dimensions.
+TEST(BuiltinsCountIfs, TransposedRangeIsValueError) {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    wb.sheet(0).set_cell_value(i, 0, Value::number(1.0));       // A1:A3, a column
+    wb.sheet(0).set_cell_value(0, 1U + i, Value::number(1.0));  // B1:D1, a row
+  }
+  const Value v = EvalSourceIn("=COUNTIFS(A1:A3, \">0\", B1:D1, \">0\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsSumIfs, TransposedArrayLiteralIsValueError) {
+  // `{1;2;3}` is 3x1 and `{1,2,3}` is 1x3. Same three cells, different
+  // shapes: Excel refuses the pair rather than summing 5.
+  const Value v = EvalSource("=SUMIFS({1;2;3}, {1,2,3}, \">1\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsSumIfs, MatchingShapeStillAggregates) {
+  // The dimension gate must not reject the ordinary same-shape case.
+  const Value v = EvalSource("=SUMIFS({1;2;3}, {1;2;3}, \">1\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
+}
+
 TEST(BuiltinsCountIfs, OddArityIsValueError) {
   // Must be an even number of args (>= 2). Three args is invalid.
   Workbook wb = Workbook::create();

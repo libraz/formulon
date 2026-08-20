@@ -75,8 +75,30 @@ std::size_t utf16_to_byte_offset(std::string_view text, std::uint32_t units_offs
   return text.size();
 }
 
+std::size_t utf16_to_byte_offset_floor(std::string_view text, std::uint32_t units_offset) noexcept {
+  if (units_offset == 0) {
+    return 0;
+  }
+  std::uint32_t units = 0;
+  std::size_t i = 0;
+  while (i < text.size()) {
+    const Step step = next_step(text, i);
+    if (units + step.unit_len > units_offset) {
+      // The target sits inside this codepoint (a surrogate-pair midpoint).
+      // Rounding down keeps the whole codepoint inside the slice.
+      return i;
+    }
+    units += step.unit_len;
+    i += step.byte_len;
+    if (units == units_offset) {
+      return i;
+    }
+  }
+  return text.size();
+}
+
 std::string utf16_substring(std::string_view text, std::uint32_t start_units, std::uint32_t length_units) {
-  const std::size_t start_byte = utf16_to_byte_offset(text, start_units);
+  const std::size_t start_byte = utf16_to_byte_offset_floor(text, start_units);
   // Saturating add on `start_units + length_units` to avoid overflow when the
   // caller passes very large bounds (e.g. a text-length-derived end).
   std::uint32_t end_units = start_units + length_units;

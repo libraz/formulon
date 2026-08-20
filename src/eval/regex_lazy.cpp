@@ -351,11 +351,11 @@ Value text_from_span(std::string_view subject, std::size_t start, std::size_t en
 
 // --- Text argument resolution --------------------------------------------
 //
-// REGEX* functions accept Range / Ref / ArrayLiteral as `text`, in
-// which case the result is array-shaped (one regex evaluation per
-// cell). This helper materialises the arg as either a scalar string
-// (when it's a literal / arithmetic / function call producing a
-// scalar) or an Array of cells.
+// The result shape of a REGEX* call follows the *value* of its `text`
+// argument, not the AST kind that produced it: a range, an array literal,
+// an arithmetic broadcast and a function call that returns an array all
+// broadcast cellwise. This helper materialises the arg as either a scalar
+// string or an Array of cells.
 //
 // On error, sets `out_err` to the error sentinel and returns false.
 
@@ -371,67 +371,51 @@ struct TextArg {
 
 bool resolve_text_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, TextArg& out, Value& out_err) {
-  // Inspect the AST shape to decide between scalar and array contexts.
-  // Range / Ref / ArrayLiteral go through `eval_node_as_array` so the
-  // (rows, cols) shape is preserved; everything else evaluates as a
-  // scalar via `eval_node`. This mirrors the convention used by the
-  // shape-preserving lazy impls (TEXTSPLIT / FILTER / TRIMRANGE).
-  const parser::NodeKind k = node.kind();
-  const bool array_shape =
-      k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::ArrayLiteral;
-  if (array_shape) {
-    const Value v = eval_node_as_array(node, arena, registry, ctx);
-    if (v.is_error()) {
-      out_err = v;
-      return false;
-    }
-    if (!v.is_array()) {
-      // Defensive fallback: eval_node_as_array always wraps to at
-      // least 1x1, but if it ever returned a raw scalar we'd treat
-      // that as the scalar path.
-      auto t = coerce_to_text(v);
-      if (!t) {
-        out_err = Value::error(t.error());
-        return false;
-      }
-      out.is_array = false;
-      out.scalar = std::move(t.value());
-      return true;
-    }
-    out.is_array = true;
-    out.array = v.as_array();
-    // 1x1 degenerates to a scalar so the result is also scalar (matches
-    // Mac Excel: a single-cell range broadcast collapses to a scalar
-    // outcome).
-    if (out.array->rows == 1U && out.array->cols == 1U) {
-      const Value& cell = out.array->cells[0];
-      if (cell.is_error()) {
-        out_err = cell;
-        return false;
-      }
-      auto t = coerce_to_text(cell);
-      if (!t) {
-        out_err = Value::error(t.error());
-        return false;
-      }
-      out.is_array = false;
-      out.scalar = std::move(t.value());
-      out.array = nullptr;
-    }
-    return true;
-  }
-  const Value v = eval_node(node, arena, registry, ctx);
+  // `eval_node_as_array` is the shape-preserving seam shared with the other
+  // broadcast-aware lazy impls (TEXTSPLIT / FILTER / TRIMRANGE). It handles
+  // every AST kind: ranges and array literals keep their (rows, cols), an
+  // arithmetic broadcast is evaluated cellwise, a call that returns an array
+  // (UNIQUE / SORT / FILTER ...) is forwarded, and anything scalar comes back
+  // wrapped as 1x1. Gating on the node kind here would make the result shape
+  // depend on how the value was spelled rather than on the value itself.
+  const Value v = eval_node_as_array(node, arena, registry, ctx);
   if (v.is_error()) {
     out_err = v;
     return false;
   }
-  auto t = coerce_to_text(v);
-  if (!t) {
-    out_err = Value::error(t.error());
-    return false;
+  if (!v.is_array()) {
+    // Defensive fallback: eval_node_as_array always wraps to at
+    // least 1x1, but if it ever returned a raw scalar we'd treat
+    // that as the scalar path.
+    auto t = coerce_to_text(v);
+    if (!t) {
+      out_err = Value::error(t.error());
+      return false;
+    }
+    out.is_array = false;
+    out.scalar = std::move(t.value());
+    return true;
   }
-  out.is_array = false;
-  out.scalar = std::move(t.value());
+  out.is_array = true;
+  out.array = v.as_array();
+  // 1x1 degenerates to a scalar so the result is also scalar (matches
+  // Mac Excel: a single-cell range broadcast collapses to a scalar
+  // outcome).
+  if (out.array->rows == 1U && out.array->cols == 1U) {
+    const Value& cell = out.array->cells[0];
+    if (cell.is_error()) {
+      out_err = cell;
+      return false;
+    }
+    auto t = coerce_to_text(cell);
+    if (!t) {
+      out_err = Value::error(t.error());
+      return false;
+    }
+    out.is_array = false;
+    out.scalar = std::move(t.value());
+    out.array = nullptr;
+  }
   return true;
 }
 
@@ -558,9 +542,90 @@ Value extract_dispatch(const KernelResult& kr, std::string_view subject, long lo
 
 // --- REGEXREPLACE substitution -------------------------------------------
 //
-// pcre2_substitute does the heavy lifting. We always pass
-// PCRE2_SUBSTITUTE_EXTENDED so Excel's `$1`, `${name}`, `$$`, and `\n`
-// escapes work; we add PCRE2_SUBSTITUTE_GLOBAL only when occurrence == 0.
+// pcre2_substitute does the heavy lifting. The dialect Excel accepts in a
+// replacement string is exactly three forms:
+//
+//   `$n` / `${name}`   insert capture group n / the named group
+//   `$$`               a literal `$`
+//
+// Every other byte, backslashes included, appears in the output verbatim.
+//
+// That is pcre2_substitute's *base* behaviour, so no option selects it.
+// `PCRE2_SUBSTITUTE_EXTENDED` is deliberately NOT passed: it turns backslash
+// into an escape character (`\U` / `\L` / `\u` / `\l` case forcing, `\Q...\E`
+// literal spans, `\n` / `\t` / `\x`) and adds the `${name:-default}` and
+// `${name:+if:else}` conditional forms. None of those are Excel grammar, and
+// with the option on a Windows path replacement `C:\Users\name` is silently
+// rewritten to `C:SERS\nAME`.
+//
+// The one place the base behaviour is stricter than Excel is a `$` that
+// starts no reference at all: a trailing `$`, `$ `, or `$-` each yield
+// PCRE2_ERROR_BADREPLACEMENT, and an unbraced `$name` is read as a named
+// reference that then fails to resolve. `normalize_replacement` folds those
+// back to literal dollars before the string reaches PCRE2, so a legitimate
+// Excel replacement can never surface `#VALUE!`. A `$n` that names a group
+// the pattern does not have still errors — that is a malformed reference,
+// not literal text.
+//
+// We add PCRE2_SUBSTITUTE_GLOBAL only when occurrence == 0.
+
+// True for the bytes pcre2_substitute accepts inside a group name.
+bool is_ascii_word_byte(char c) noexcept {
+  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+// Longest group name pcre2_substitute will read; one byte more and the
+// reference is rejected outright rather than resolved.
+constexpr std::size_t kMaxGroupNameBytes = 32U;
+
+// Rewrites an Excel replacement string into the equivalent pcre2_substitute
+// replacement: every `$` that does not begin `$<digits>`, `${name}` or `$$`
+// is doubled, which is how the base dialect spells a literal dollar. The
+// three documented forms pass through untouched, so `$$$1` stays `$$$1`.
+std::string normalize_replacement(std::string_view replacement) {
+  std::string out;
+  out.reserve(replacement.size());
+  for (std::size_t i = 0; i < replacement.size();) {
+    const char c = replacement[i];
+    if (c != '$') {
+      out.push_back(c);
+      ++i;
+      continue;
+    }
+    if (i + 1U >= replacement.size()) {
+      out.append("$$");  // Trailing `$`: a literal dollar.
+      ++i;
+      continue;
+    }
+    const char next = replacement[i + 1U];
+    if (next == '$') {
+      out.append("$$");  // Already an escaped dollar; keep the spelling.
+      i += 2U;
+      continue;
+    }
+    if (next >= '0' && next <= '9') {
+      out.push_back('$');  // `$<digits>`: a numbered reference.
+      ++i;
+      continue;
+    }
+    if (next == '{') {
+      std::size_t end = i + 2U;
+      std::size_t name_bytes = 0;
+      while (end < replacement.size() && name_bytes <= kMaxGroupNameBytes && is_ascii_word_byte(replacement[end])) {
+        ++end;
+        ++name_bytes;
+      }
+      if (name_bytes > 0 && name_bytes <= kMaxGroupNameBytes && end < replacement.size() && replacement[end] == '}') {
+        out.append(replacement.substr(i, end + 1U - i));  // `${name}` reference.
+        i = end + 1U;
+        continue;
+      }
+    }
+    out.append("$$");  // Anything else after `$`: a literal dollar.
+    ++i;
+  }
+  return out;
+}
 
 // Runs one pcre2_substitute call with caller-selected global/single flags,
 // reusing the caller's already-compiled program.
@@ -620,8 +685,7 @@ Value substitute_with_flags(const CompiledPattern& program, std::string_view sub
 
 Value substitute_global(const CompiledPattern& program, std::string_view subject, std::string_view replacement,
                         Arena& arena) {
-  return substitute_with_flags(program, subject, replacement, /*start_offset=*/0U,
-                               PCRE2_SUBSTITUTE_EXTENDED | PCRE2_SUBSTITUTE_GLOBAL, arena);
+  return substitute_with_flags(program, subject, replacement, /*start_offset=*/0U, PCRE2_SUBSTITUTE_GLOBAL, arena);
 }
 
 // Replaces only the N-th match (occurrence == N > 0). Strategy: run the
@@ -643,7 +707,8 @@ Value substitute_nth(const CompiledPattern& program, std::string_view subject, s
   }
 
   const std::size_t target_start = kr.matches[static_cast<std::size_t>(occurrence - 1)].whole_start;
-  return substitute_with_flags(program, subject, replacement, target_start, PCRE2_SUBSTITUTE_EXTENDED, arena);
+  // No GLOBAL: substituting from the N-th match's offset replaces just it.
+  return substitute_with_flags(program, subject, replacement, target_start, /*sub_flags=*/0U, arena);
 }
 
 }  // namespace
@@ -662,13 +727,30 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return Value::error(ErrorCode::Value);
   }
 
+  // Arguments are evaluated in signature order so the leftmost error wins,
+  // as the rest of the lazy families do. The option arguments feed the
+  // compiled program but sit rightmost in the signature, so they are
+  // evaluated last and cannot pre-empt an error in text or pattern.
+  Value err = Value::error(ErrorCode::Value);
+
+  // Text (scalar or array). Array shape -> per-cell broadcast.
+  TextArg text_arg;
+  if (!resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err)) {
+    return err;
+  }
+
+  // Pattern (scalar text).
+  std::string pattern;
+  if (!resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err)) {
+    return err;
+  }
+
   // Optional case_sensitivity (third arg). Coerce + bound to {0, 1};
   // out-of-range -> #VALUE!. Mac Excel 365 convention (matching MS docs):
   // 0/FALSE (default) = case-sensitive; 1/TRUE = case-insensitive.
   bool case_insensitive = false;
   if (arity == 3) {
     long long cs = 0;
-    Value err = Value::error(ErrorCode::Value);
     if (!coerce_int_arg(call.as_call_arg(2), arena, registry, ctx, cs, err)) {
       return err;
     }
@@ -676,19 +758,6 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
       return Value::error(ErrorCode::Value);
     }
     case_insensitive = (cs == 1);
-  }
-
-  // Pattern (scalar text).
-  std::string pattern;
-  Value err = Value::error(ErrorCode::Value);
-  if (!resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err)) {
-    return err;
-  }
-
-  // Text (scalar or array). Array shape -> per-cell broadcast.
-  TextArg text_arg;
-  if (!resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err)) {
-    return err;
   }
 
   // Compile once for the whole call: the pattern and the case flag are
@@ -745,9 +814,21 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return Value::error(ErrorCode::Value);
   }
 
+  // Signature order, so the leftmost error wins (see eval_regextest_lazy).
+  Value err = Value::error(ErrorCode::Value);
+
+  TextArg text_arg;
+  if (!resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err)) {
+    return err;
+  }
+
+  std::string pattern;
+  if (!resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err)) {
+    return err;
+  }
+
   // return_mode (third arg, default 0).
   long long mode = 0;
-  Value err = Value::error(ErrorCode::Value);
   if (arity >= 3) {
     if (!coerce_int_arg(call.as_call_arg(2), arena, registry, ctx, mode, err)) {
       return err;
@@ -769,16 +850,6 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
       return Value::error(ErrorCode::Value);
     }
     case_insensitive = (cs == 1);
-  }
-
-  std::string pattern;
-  if (!resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err)) {
-    return err;
-  }
-
-  TextArg text_arg;
-  if (!resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err)) {
-    return err;
   }
 
   // For modes 1 and 3 a single match already yields an array — so
@@ -857,12 +928,30 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return Value::error(ErrorCode::Value);
   }
 
+  // Signature order, so the leftmost error wins (see eval_regextest_lazy).
+  Value err = Value::error(ErrorCode::Value);
+
+  TextArg text_arg;
+  if (!resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err)) {
+    return err;
+  }
+
+  std::string pattern;
+  if (!resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err)) {
+    return err;
+  }
+  std::string replacement;
+  if (!resolve_pattern(call.as_call_arg(2), arena, registry, ctx, replacement, err)) {
+    return err;
+  }
+  // Excel's replacement dialect, spelled the way pcre2_substitute reads it.
+  const std::string pcre2_replacement = normalize_replacement(replacement);
+
   // occurrence (fourth arg, default 0). Mac Excel 365 is permissive on
   // negative values: REGEXREPLACE("abc", "a", "x", -1) returns "xbc"
   // (one substitution), matching the global behavior on this single-
   // match input. Clamp negative occurrence to 0 (global) to match Mac.
   long long occurrence = 0;
-  Value err = Value::error(ErrorCode::Value);
   if (arity >= 4) {
     if (!coerce_int_arg(call.as_call_arg(3), arena, registry, ctx, occurrence, err)) {
       return err;
@@ -886,29 +975,15 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
     case_insensitive = (cs == 1);
   }
 
-  std::string pattern;
-  if (!resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err)) {
-    return err;
-  }
-  std::string replacement;
-  if (!resolve_pattern(call.as_call_arg(2), arena, registry, ctx, replacement, err)) {
-    return err;
-  }
-
-  TextArg text_arg;
-  if (!resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err)) {
-    return err;
-  }
-
   // Compile once for the whole call; every subject reuses the program,
   // including the kernel scan an occurrence-N replace runs first.
   const CompiledPattern program(pattern, case_insensitive);
 
   auto run_one = [&](std::string_view subject) -> Value {
     if (occurrence == 0) {
-      return substitute_global(program, subject, replacement, arena);
+      return substitute_global(program, subject, pcre2_replacement, arena);
     }
-    return substitute_nth(program, subject, replacement, occurrence, arena);
+    return substitute_nth(program, subject, pcre2_replacement, occurrence, arena);
   };
 
   if (!text_arg.is_array) {

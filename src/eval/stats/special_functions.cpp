@@ -35,12 +35,49 @@ namespace eval {
 namespace stats {
 namespace {
 
+// Absolute ceiling on iterations for any of the three recursions below,
+// whatever the shape parameters ask for. The budgets grow with those
+// parameters, and a shape large enough to want more work than this has
+// already lost more precision in its prefactor than the extra iterations
+// could recover -- so the honest result there is NaN rather than a long
+// wait for a value nobody should trust. It also keeps the run time a
+// property of the recursion rather than of the caller's arguments, and
+// keeps the `int` conversions below well defined for any finite double.
+constexpr int kMaxCfIterations = 2000000;
+
+// Clamps a computed iteration budget into `[1000, kMaxCfIterations]`. The
+// floor covers small shapes, where the budget formula would otherwise
+// allow fewer steps than an ordinary case needs. Written so a NaN budget
+// lands on the ceiling instead of converting out of range.
+int clamp_iterations(double budget) noexcept {
+  if (!(budget < static_cast<double>(kMaxCfIterations))) {
+    return kMaxCfIterations;
+  }
+  return std::max(1000, static_cast<int>(budget));
+}
+
 // The gamma series and continued fraction need materially more work for a
 // large shape parameter around their transition boundary. Never return a
 // partial sum silently: callers receive NaN on a genuine non-convergence and
 // convert it to Excel's #NUM!.
 int max_gamma_iterations(double a) noexcept {
-  return std::max(1000, static_cast<int>(10.0 * std::sqrt(a) + 200.0));
+  return clamp_iterations(10.0 * std::sqrt(a) + 200.0);
+}
+
+// Iteration budget for the beta continued fraction, which follows a
+// different law from the gamma pair and so needs its own.
+//
+// The slowest configuration is `x` at the reflection point with `a` close
+// to `b`; there the step count tracks the cube root of `a + b` (about
+// 4.3 * cbrt(a + b) for moderate shapes, easing to ~3.3 by a + b = 1e15).
+// Twenty times the cube root holds roughly a five-fold margin over that
+// across the whole range. Skewed shapes converge in about ten steps at
+// any magnitude, so this budget only ever binds near `a == b`.
+//
+// The same "never return a partial sum silently" rule as the gamma pair
+// applies: exhausting this budget yields NaN, not the running value.
+int max_beta_iterations(double a, double b) noexcept {
+  return clamp_iterations(20.0 * std::cbrt(a + b) + 200.0);
 }
 
 // Relative convergence threshold. Tightening this past ~1e-15 runs into
@@ -51,16 +88,19 @@ constexpr double kEps = 1e-15;
 // by zero when a continued-fraction term vanishes exactly.
 constexpr double kFpMin = 1e-300;
 
-// Series expansion for `P(a, x)` valid for `x < a + 1`.
-// γ(a, x) / Γ(a) = e^(-x) * x^a / Γ(a) * Σ_{n=0..∞} x^n / (a*(a+1)*...*(a+n))
-// which is written iteratively as sum_{n} del_n where del_0 = 1/a and
-// del_{n+1} = del_n * x / (a + n + 1). Early-out when |del| < |sum| * eps.
-struct GammaResult {
+// Result of one series / continued-fraction evaluation. `converged` is
+// what keeps a truncated run identifiable at the call site: every
+// recursion here reports it, and no caller may read `value` without it.
+struct CfResult {
   double value;
   bool converged;
 };
 
-GammaResult p_gamma_series(double a, double x) noexcept {
+// Series expansion for `P(a, x)` valid for `x < a + 1`.
+// γ(a, x) / Γ(a) = e^(-x) * x^a / Γ(a) * Σ_{n=0..∞} x^n / (a*(a+1)*...*(a+n))
+// which is written iteratively as sum_{n} del_n where del_0 = 1/a and
+// del_{n+1} = del_n * x / (a + n + 1). Early-out when |del| < |sum| * eps.
+CfResult p_gamma_series(double a, double x) noexcept {
   double ap = a;
   double sum = 1.0 / a;
   double del = sum;
@@ -79,7 +119,7 @@ GammaResult p_gamma_series(double a, double x) noexcept {
 // Γ(a, x) / Γ(a) = e^(-x) * x^a / Γ(a) * (1 / (x + 1 - a - ...))
 // evaluated via the standard Lentz recursion on partial numerators
 // `an = -i * (i - a)` and partial denominators `b = x + 2i + 1 - a`.
-GammaResult q_gamma_cf(double a, double x) noexcept {
+CfResult q_gamma_cf(double a, double x) noexcept {
   double b = x + 1.0 - a;
   double c = 1.0 / kFpMin;
   double d = 1.0 / b;
@@ -115,7 +155,7 @@ GammaResult q_gamma_cf(double a, double x) noexcept {
 //   aa = m * (b - m) * x / ((a + 2m - 1) * (a + 2m))           (even step)
 //   aa = -(a + m) * (a + b + m) * x / ((a + 2m) * (a + 2m + 1)) (odd step)
 // interleaved inside a single iteration of Lentz's scheme.
-double beta_cf(double a, double b, double x) noexcept {
+CfResult beta_cf(double a, double b, double x) noexcept {
   const double qab = a + b;
   const double qap = a + 1.0;
   const double qam = a - 1.0;
@@ -126,7 +166,8 @@ double beta_cf(double a, double b, double x) noexcept {
   }
   d = 1.0 / d;
   double h = d;
-  for (int m = 1; m <= 200; ++m) {
+  const int max_iterations = max_beta_iterations(a, b);
+  for (int m = 1; m <= max_iterations; ++m) {
     const double dm = static_cast<double>(m);
     const double m2 = 2.0 * dm;
     // Even step of Lentz's recursion.
@@ -155,10 +196,10 @@ double beta_cf(double a, double b, double x) noexcept {
     const double del = d * c;
     h *= del;
     if (std::abs(del - 1.0) < kEps) {
-      break;
+      return {h, true};
     }
   }
-  return h;
+  return {std::numeric_limits<double>::quiet_NaN(), false};
 }
 
 }  // namespace
@@ -174,7 +215,7 @@ double p_gamma(double a, double x) noexcept {
     return p_gamma_series(a, x).value;
   }
   // Continued-fraction branch computes Q; return 1 - Q.
-  const GammaResult q = q_gamma_cf(a, x);
+  const CfResult q = q_gamma_cf(a, x);
   return q.converged ? 1.0 - q.value : q.value;
 }
 
@@ -186,7 +227,7 @@ double q_gamma(double a, double x) noexcept {
     return 1.0;
   }
   if (x < a + 1.0) {
-    const GammaResult p = p_gamma_series(a, x);
+    const CfResult p = p_gamma_series(a, x);
     return p.converged ? 1.0 - p.value : p.value;
   }
   return q_gamma_cf(a, x).value;
@@ -205,15 +246,37 @@ double regularized_incomplete_beta(double a, double b, double x) noexcept {
   // Shared prefactor: (x^a * (1-x)^b) / (a * B(a, b)), computed in log
   // space to stay stable for large a / b. This is the factor outside the
   // continued fraction in Numerical Recipes eq. (6.4.5).
-  const double bt =
-      std::exp(std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) + a * std::log(x) + b * std::log(1.0 - x));
+  const double lg_ab = std::lgamma(a + b);
+  const double lg_a = std::lgamma(a);
+  const double lg_b = std::lgamma(b);
+  const double a_log_x = a * std::log(x);
+  const double b_log_1mx = b * std::log(1.0 - x);
+  // Those five terms are individually huge for large shapes and cancel
+  // almost entirely, so the round-off left in their sum is set by the
+  // largest of them rather than by the result. Exponentiating a log that
+  // is uncertain by `d` gives a prefactor with relative error about `d`,
+  // so once `d` reaches order 1 the result is not a probability at all --
+  // and it arrives with no other sign of trouble, because the continued
+  // fraction itself converged. Refuse instead: the same rule as a
+  // truncated recursion, applied to the other half of the computation.
+  const double log_magnitude =
+      std::abs(lg_ab) + std::abs(lg_a) + std::abs(lg_b) + std::abs(a_log_x) + std::abs(b_log_1mx);
+  if (!(std::numeric_limits<double>::epsilon() * log_magnitude < 1.0)) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  const double bt = std::exp(lg_ab - lg_a - lg_b + a_log_x + b_log_1mx);
   // Reflection point (a+1)/(a+b+2) is the approximate maximum of the
   // integrand; call `beta_cf` on whichever branch keeps x on the fast
   // side, and use the `I_x(a,b) = 1 - I_{1-x}(b,a)` identity otherwise.
+  // A truncated continued fraction propagates as NaN rather than as a
+  // partial value: past its budget the recursion is nowhere near the
+  // answer, and the running value is not a probability at all.
   if (x < (a + 1.0) / (a + b + 2.0)) {
-    return bt * beta_cf(a, b, x) / a;
+    const CfResult cf = beta_cf(a, b, x);
+    return cf.converged ? bt * cf.value / a : cf.value;
   }
-  return 1.0 - bt * beta_cf(b, a, 1.0 - x) / b;
+  const CfResult cf = beta_cf(b, a, 1.0 - x);
+  return cf.converged ? 1.0 - bt * cf.value / b : cf.value;
 }
 
 }  // namespace stats

@@ -31,8 +31,10 @@ class FunctionRegistry;
 /// a parenthesised comma-union such as `AREAS((A1:B2, C3:D4))` returns 2.
 /// Any non-reference argument (a literal, an arithmetic expression, a
 /// function call) surfaces `#VALUE!`. The impl is lazy so the argument's
-/// AST shape (specifically `UnionOp` / `RangeOp` / `Ref`) is preserved
-/// through dispatch.
+/// AST shape (specifically `UnionOp` / `RangeOp` / `Ref` / `SpillRef`) is
+/// preserved through dispatch. A spilled-range reference `A1#` is one
+/// rectangle, matching every other consumer that treats it as a single
+/// contiguous block.
 Value eval_areas_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx);
 

@@ -42,6 +42,44 @@ using text_detail::read_optional_int_arg;
 // guard.
 constexpr std::uint64_t kExcelTextCapUnits = 32767u;
 
+// Longest UTF-8 sequence, and therefore the most trailing bytes of a buffer
+// whose decoding a later append can still change.
+constexpr std::size_t kMaxUtf8SequenceBytes = 4u;
+
+// Running UTF-16 unit count for a buffer that is appended to repeatedly.
+//
+// `utf16_units_in` walks the whole buffer, so calling it after every append
+// costs O(n^2) in the accumulated length. Summing the pieces' own counts
+// instead would be O(1) but not the same number: a truncated sequence at
+// the end of one piece counts as one malformed unit per byte until the
+// continuation bytes arrive, at which point the same bytes decode as a
+// single codepoint. Since the cap decides whether TEXTJOIN returns text or
+// `#VALUE!`, that difference is Excel-observable.
+//
+// So the count is committed only for the prefix a later append can no
+// longer affect — everything up to the last `kMaxUtf8SequenceBytes` — and
+// the short tail is re-decoded each round. `units_of` returns exactly what
+// `utf16_units_in` would, at O(1) amortised cost per append.
+class RunningUtf16Units {
+ public:
+  std::uint64_t units_of(std::string_view buffer) {
+    while (committed_bytes_ + kMaxUtf8SequenceBytes <= buffer.size()) {
+      std::size_t step = 0;
+      const std::uint32_t cp = decode_utf8_step(buffer, committed_bytes_, &step);
+      if (step == 0) {
+        break;  // Defensive: the decoder only reports 0 past the end.
+      }
+      committed_units_ += cp > 0xFFFFu ? 2u : 1u;
+      committed_bytes_ += step;
+    }
+    return committed_units_ + utf16_units_in(buffer.substr(committed_bytes_));
+  }
+
+ private:
+  std::size_t committed_bytes_ = 0;
+  std::uint64_t committed_units_ = 0;
+};
+
 // UPPER(text) / LOWER(text) - ASCII case fold. Multi-byte UTF-8 bytes are
 // preserved verbatim (see `text_ops::to_upper_ascii` for the contract).
 Value Upper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -442,6 +480,7 @@ Value TextJoin(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   std::string out;
   bool first = true;
+  RunningUtf16Units counter;
   for (std::uint32_t i = 2; i < arity; ++i) {
     auto piece = coerce_to_text(args[i]);
     if (!piece) {
@@ -455,10 +494,12 @@ Value TextJoin(const Value* args, std::uint32_t arity, Arena& arena) {
     }
     out.append(piece.value());
     first = false;
-    // Early-out cap check: once the byte length exceeds the byte upper bound
-    // for the cap (4 bytes per UTF-16 unit pessimistically), the UTF-16 unit
-    // count must also exceed the cap. Definitive check below.
-    if (utf16_units_in(out) > kExcelTextCapUnits) {
+    // Cap check after each appended piece, on the joined result rather than
+    // on the piece: the cap is a property of the whole string, and the first
+    // piece that carries it over is the one that fails the call. The counter
+    // carries the count forward instead of re-walking `out`, and reports the
+    // same number a full walk would.
+    if (counter.units_of(out) > kExcelTextCapUnits) {
       return Value::error(ErrorCode::Value);
     }
   }

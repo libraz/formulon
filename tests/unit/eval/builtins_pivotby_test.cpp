@@ -950,6 +950,84 @@ TEST(PivotBy, LambdaWrongArityYieldsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// ---------------------------------------------------------------------------
+// Optional (`[name]`) params on the aggregator lambda
+//
+// PIVOTBY shares GROUPBY's aggregator resolution and per-group invocation,
+// so the same callability window applies: one supplied argument, trailing
+// `[optional]` params bound to the sentinel `ISOMITTED` detects.
+// ---------------------------------------------------------------------------
+
+TEST(PivotBy, LambdaWithTrailingOptionalIsAccepted) {
+  // Same fixture as `BasicTwoByTwoLambdaAggregatorSum`, with an optional
+  // param added to the aggregator.
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"R\";\"A\";\"A\";\"B\";\"B\"}, {\"C\";\"X\";\"Y\";\"X\";\"Y\"},"
+      "         {\"V\";1;2;3;4}, LAMBDA(v, [u], SUM(v)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 4U);
+  EXPECT_EQ(v.as_array_cols(), 4U);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
+}
+
+TEST(PivotBy, OptionalParamLambdaMatchesPlainLambda) {
+  // `EvalSrc` resets the shared arenas per call, so the first result is
+  // copied out as plain doubles before the second formula runs.
+  double plain[4] = {0.0, 0.0, 0.0, 0.0};
+  {
+    const Value v = EvalSrc(
+        "=PIVOTBY({\"R\";\"A\";\"A\";\"B\";\"B\"}, {\"C\";\"X\";\"Y\";\"X\";\"Y\"},"
+        "         {\"V\";1;2;3;4}, LAMBDA(v, SUM(v)))");
+    ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+    ASSERT_EQ(v.as_array_rows(), 4U);
+    plain[0] = Cell(v, 1, 1).as_number();
+    plain[1] = Cell(v, 1, 2).as_number();
+    plain[2] = Cell(v, 2, 1).as_number();
+    plain[3] = Cell(v, 2, 2).as_number();
+  }
+  const Value with_opt = EvalSrc(
+      "=PIVOTBY({\"R\";\"A\";\"A\";\"B\";\"B\"}, {\"C\";\"X\";\"Y\";\"X\";\"Y\"},"
+      "         {\"V\";1;2;3;4}, LAMBDA(v, [u], SUM(v)))");
+  ASSERT_TRUE(with_opt.is_array()) << with_opt.debug_to_string();
+  ASSERT_EQ(with_opt.as_array_rows(), 4U);
+  EXPECT_DOUBLE_EQ(plain[0], Cell(with_opt, 1, 1).as_number());
+  EXPECT_DOUBLE_EQ(plain[1], Cell(with_opt, 1, 2).as_number());
+  EXPECT_DOUBLE_EQ(plain[2], Cell(with_opt, 2, 1).as_number());
+  EXPECT_DOUBLE_EQ(plain[3], Cell(with_opt, 2, 2).as_number());
+}
+
+TEST(PivotBy, OmittedParamIsBoundForIsomitted) {
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"R\";\"A\";\"A\";\"B\";\"B\"}, {\"C\";\"X\";\"Y\";\"X\";\"Y\"},"
+      "         {\"V\";1;2;3;4}, LAMBDA(v, [u], IF(ISOMITTED(u), SUM(v), -1)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
+}
+
+TEST(PivotBy, LetBoundLambdaWithOptionalIsAccepted) {
+  // Form B resolves the aggregator through the name environment, a
+  // separate branch from the inline literal.
+  const Value v = EvalSrc(
+      "=LET(f, LAMBDA(v, [u], SUM(v)),"
+      "     PIVOTBY({\"R\";\"A\";\"A\";\"B\";\"B\"}, {\"C\";\"X\";\"Y\";\"X\";\"Y\"},"
+      "             {\"V\";1;2;3;4}, f))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
+}
+
+TEST(PivotBy, ZeroParamLambdaStillRejected) {
+  // The other edge: PIVOTBY supplies one argument, so a lambda declaring
+  // no params at all cannot take it.
+  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, LAMBDA(42), 0, 0,, 0)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(PivotBy, RowSortOrderAbsTwoYieldsValueError) {
   // First-commit scope: only ±1 / 0 are supported on the sort orders.
   const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 2, 0)");

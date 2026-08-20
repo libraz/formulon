@@ -346,6 +346,88 @@ TEST(BuiltinsPoissonDist, NegativeMeanIsNum) {
 }
 
 // ---------------------------------------------------------------------------
+// Run time bounded by the size of the input, not its value
+//
+// The cumulative branches used to step once per unit of their argument, so
+// the cost of an answer tracked the magnitude a caller happened to type:
+// these cases ran for seconds at 1E8 and past the life of the process at
+// 1E12. Past a fixed ceiling on summed terms they now take a closed form
+// instead, and refuse only where that closed form cannot hold the
+// family's tolerance -- which depends on how balanced the beta shapes
+// are, not on how large the argument is. Either way the call returns
+// promptly.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsDistributionBounds, PoissonCdfAnswersFarPastTheTermCeiling) {
+  // Every term beyond a handful is negligible against mean = 1, so the
+  // CDF is 1 to within double precision. The point is that it comes back
+  // at all: this argument is 1e12 terms of summation.
+  const Value v = EvalSource("=POISSON.DIST(1E12, 1, TRUE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsDistributionBounds, PoissonCdfClosedFormAgreesWithTheSummation) {
+  // Straddle the ceiling where the implementation switches from summing
+  // terms to the closed form: the two sides must differ by exactly the
+  // one PMF term between them, or the switch-over is visible to callers.
+  const Value below = EvalSource("=POISSON.DIST(1048575, 1048576, TRUE)");
+  const Value above = EvalSource("=POISSON.DIST(1048576, 1048576, TRUE)");
+  const Value term = EvalSource("=POISSON.DIST(1048576, 1048576, FALSE)");
+  ASSERT_TRUE(below.is_number());
+  ASSERT_TRUE(above.is_number());
+  ASSERT_TRUE(term.is_number());
+  EXPECT_NEAR(above.as_number() - below.as_number(), term.as_number(), 1e-9);
+}
+
+TEST(BuiltinsDistributionBounds, BinomCdfAnswersPastTheTermCeiling) {
+  // 1e8 trials is a hundred times the summation ceiling, so this is the
+  // closed form answering. The median of Binomial(n, 0.5) sits at n/2,
+  // and the exact value there is 0.5 by symmetry for odd n.
+  const Value v = EvalSource("=BINOM.DIST(50000000, 100000001, 0.5, TRUE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.5, 1e-6);
+}
+
+TEST(BuiltinsDistributionBounds, BinomCdfFullSupportIsExactlyOne) {
+  // `number_s == trials` is the whole support at any magnitude and needs
+  // no beta evaluation, so it answers regardless of the shape bound.
+  const Value v = EvalSource("=BINOM.DIST(1E12, 1E12, 0.5, TRUE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsDistributionBounds, BinomCdfUnresolvableShapeIsNum) {
+  // Balanced shapes this large cannot be held to the family's tolerance:
+  // the closed form's prefactor cancels in log space and what comes back
+  // is off by more than the oracle tolerance. Refused rather than
+  // answered with a number we cannot stand behind -- and refused
+  // promptly, rather than summed for hours.
+  const Value v = EvalSource("=BINOM.DIST(5E11, 1E12, 0.5, TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsDistributionBounds, BinomPmfIsUnaffectedByTheCeiling) {
+  // The ceiling is on summed terms. A point query does one evaluation at
+  // any magnitude, so it must keep answering.
+  const Value v = EvalSource("=BINOM.DIST(1E12, 1E12, 0.5, FALSE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GE(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsDistributionBounds, BinomCdfJustBelowTheCeilingStillSums) {
+  // The boundary is exclusive: one term short of the ceiling is still
+  // answered by summation, which is what keeps the ordinary range intact.
+  // The full support sums to 1 only to within the round-off a million
+  // added terms accumulate -- which is itself why the ceiling sits here
+  // rather than further out.
+  const Value v = EvalSource("=BINOM.DIST(1048575, 1048575, 0.5, TRUE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1.0, 1e-8);
+}
+
+// ---------------------------------------------------------------------------
 // EXPON.DIST
 // ---------------------------------------------------------------------------
 

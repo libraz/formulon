@@ -1,8 +1,10 @@
 //
 // Implementation of the `AREAS` lazy impl. The structural count of
 // rectangles in a reference argument is computed by recursing over the
-// AST: `UnionOp` children sum, `RangeOp` / `Ref` contribute 1, anything
-// else is `#VALUE!`. See `eval/areas_lazy.h` for the dispatch contract.
+// AST: `UnionOp` children sum, `RangeOp` / `Ref` / `SpillRef` contribute
+// 1, a LET-bound `NameRef` is looked through to its source AST, and
+// anything else is `#VALUE!`. See `eval/areas_lazy.h` for the dispatch
+// contract.
 //
 // Reference-returning function calls are handled in three ways. CHOOSE and
 // IF return one of their reference branches, so AREAS recurses into the
@@ -22,6 +24,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -65,8 +68,23 @@ bool returns_single_reference(std::string_view name) noexcept {
 std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, ErrorCode* propagated) noexcept {
   const parser::NodeKind k = n.kind();
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
+  // Every node kind the engine treats as a single rectangular reference
+  // counts as exactly one area. `SpillRef` (`A1#`) belongs here for the
+  // same reason `resolve_range_arg` expands it into one rectangle: the
+  // spill region an anchor names is a single contiguous block.
+  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef) {
     return 1;
+  }
+  // A LET binding is transparent to the structural count, so
+  // `=LET(s, A1#, AREAS(s))` and `=LET(r, CHOOSE(2, A1:B2, (C1,D1)),
+  // AREAS(r))` see the bound reference shape rather than the opaque
+  // NameRef. Bindings that carry no AST (scalar / Value-only) pass through
+  // unchanged and fall to the `#VALUE!` tail below.
+  if (k == parser::NodeKind::NameRef) {
+    const parser::AstNode& bound = resolve_name_ast(n, ctx.name_env());
+    if (&bound != &n) {
+      return count_areas(bound, arena, registry, ctx, propagated);
+    }
   }
   if (k == parser::NodeKind::UnionOp) {
     std::int64_t total = 0;

@@ -22,6 +22,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -58,22 +59,31 @@ const parser::AstNode* build_array_literal_for_slice(const ArrayValue* arr, Aren
   return parser::make_array_literal(arena, arr->rows, arr->cols, children);
 }
 
-// Invokes a Lambda aggregator for one group. Mirrors `invoke_lambda_with_values`
-// in `lambda_helpers_lazy.cpp` but lives here so we can opt into the per-group
-// error-isolation path (the helper there is shape-mismatch driven and short-
-// circuits the whole call on the first error). The returned Value is whatever
-// the lambda body produced — including errors, which the caller stores
-// verbatim in the cell.
-Value invoke_lambda_for_group(const LambdaValue* lv, const ArrayValue* slice, const parser::AstNode* slice_ast,
-                              Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
-  NameEnv env;
-  if (lv->captured_env != nullptr) {
-    env = *lv->captured_env;
+// Number of arguments a Lambda aggregator receives per group: the group's
+// value slice, and nothing else.
+constexpr std::uint32_t kAggregatorCallArity = 1U;
+
+// Checks that `lv` can be called as a per-group aggregator, writing the
+// matching scalar error to `*out_err` when it cannot.
+//
+// Acceptance is the single rule published on `LambdaValue`:
+// `param_count - optional_count <= kAggregatorCallArity <= param_count`.
+// A lambda declaring trailing `[optional]` params therefore qualifies, and
+// the params GROUPBY / PIVOTBY do not supply bind to the sentinel
+// `ISOMITTED` detects. Checking here rather than only at invocation time
+// keeps a rejection one scalar error for the whole call instead of one per
+// output cell.
+bool check_aggregator_lambda(const LambdaValue* lv, Value* out_err) {
+  const std::uint32_t required = lv->param_count - lv->optional_count;
+  if (kAggregatorCallArity < required || kAggregatorCallArity > lv->param_count) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
   }
-  const Value slice_v = Value::array(slice);
-  env = env.extend(lv->params[0], slice_v, slice_ast, arena);
-  const EvalContext body_ctx = ctx.with_name_env(&env);
-  return eval_node(*lv->body, arena, registry, body_ctx);
+  if (lv->body == nullptr) {
+    *out_err = Value::error(ErrorCode::Name);
+    return false;
+  }
+  return true;
 }
 
 // Invokes a registry-backed aggregator (Form C) for one group. The slice is
@@ -159,15 +169,18 @@ OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std
 // Resolution order:
 //   1. If the raw arg AST is a `NameRef`, try the name environment first.
 //      A bound name shadows any registry function with the same identifier.
-//      If the binding evaluates to a Lambda of arity 1, that is Form B.
+//      If the binding evaluates to a callable Lambda, that is Form B.
 //   2. If still unresolved AND the raw arg AST is a `NameRef`, look the
 //      name up in the registry. A hit is Form C.
 //   3. Otherwise (LAMBDA literal, LET-bound lambda the parser surfaced via
 //      something other than NameRef, or any other expression), evaluate the
-//      arg via `eval_node`. A Lambda value of arity 1 is Form A. Anything
+//      arg via `eval_node`. A callable Lambda value is Form A. Anything
 //      else surfaces `#VALUE!`.
 //
-// A Lambda whose `param_count != 1` surfaces `#VALUE!` regardless of form.
+// "Callable" is `check_aggregator_lambda`: the Lambda must accept exactly
+// one argument, counting trailing `[optional]` params as satisfiable. Both
+// Lambda forms go through that one check, so Form A and Form B cannot
+// disagree about which aggregators are legal.
 bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, AggregatorRef* out, Value* out_err) {
   // Step 1 + 2: NameRef short-circuit. A name bound in scope evaluates as the
@@ -187,8 +200,7 @@ bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const Function
         return false;
       }
       const LambdaValue* lv = bound->as_lambda();
-      if (lv->param_count != 1U) {
-        *out_err = Value::error(ErrorCode::Value);
+      if (!check_aggregator_lambda(lv, out_err)) {
         return false;
       }
       out->kind = AggregatorRef::Kind::Lambda;
@@ -216,8 +228,7 @@ bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const Function
     return false;
   }
   const LambdaValue* lv = v.as_lambda();
-  if (lv->param_count != 1U) {
-    *out_err = Value::error(ErrorCode::Value);
+  if (!check_aggregator_lambda(lv, out_err)) {
     return false;
   }
   out->kind = AggregatorRef::Kind::Lambda;
@@ -505,7 +516,13 @@ Value invoke_aggregator_for_group(const AggregatorRef& agg, const ArrayValue* sl
     if (slice_ast == nullptr) {
       return Value::error(ErrorCode::Num);
     }
-    res = invoke_lambda_for_group(agg.lambda, slice, slice_ast, arena, registry, ctx);
+    // The slice is bound with both its Value and a synthetic ArrayLiteral
+    // AST so a body written as `SUM(v)` flattens it through the
+    // dispatcher's ArrayLiteral branch. Errors are not filtered: whatever
+    // the body produced — including an error — lands in this group's cell.
+    const Value slice_v = Value::array(slice);
+    const parser::AstNode* ast_args[1] = {slice_ast};
+    res = invoke_lambda_values_with_ast(agg.lambda, kAggregatorCallArity, &slice_v, ast_args, arena, registry, ctx);
   } else {
     res = invoke_function_for_group(agg.function_def, slice, arena);
   }

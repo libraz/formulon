@@ -1398,6 +1398,94 @@ TEST(DateTime1904, WeekdayMatchesCalendarDateUnder1904) {
   EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
 }
 
+TEST(DateTime1904, NetworkdaysCountsTheSameCalendarSpanUnderBothEpochs) {
+  // 2024-01-01 (Mon) .. 2024-01-12 (Fri) is 10 business days regardless of
+  // the workbook epoch. The 1900/1904 offset of 1462 days is not a multiple
+  // of 7, so reading a 1904 serial as a 1900 one moves every weekend by two
+  // days and the span answers 9 instead.
+  const Value v1900 = EvalSource("=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,12))");
+  ASSERT_TRUE(v1900.is_number());
+  EXPECT_DOUBLE_EQ(v1900.as_number(), 10.0);
+
+  const Value v1904 = EvalSource1904("=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,12))");
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_DOUBLE_EQ(v1904.as_number(), 10.0);
+}
+
+TEST(DateTime1904, NetworkdaysIntlWeekendMaskFollowsTheWorkbookEpoch) {
+  // Weekend selector 11 is "Sunday only", so 2024-01-01 .. 2024-01-13
+  // (Mon .. Sat) drops just 2024-01-07 and leaves 12 working days. Under an
+  // epoch-blind weekday test the mask lands on the Saturdays instead and the
+  // span answers 11.
+  const Value v1900 = EvalSource("=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,13),11)");
+  ASSERT_TRUE(v1900.is_number());
+  EXPECT_DOUBLE_EQ(v1900.as_number(), 12.0);
+
+  const Value v1904 = EvalSource1904("=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,13),11)");
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_DOUBLE_EQ(v1904.as_number(), 12.0);
+}
+
+TEST(DateTime1904, WorkdayLandsOnTheSameCalendarDateUnderBothEpochs) {
+  // One working day after 2024-01-05 (Fri) is 2024-01-08 (Mon): the weekend
+  // in between must be recognised in the workbook's own epoch.
+  const Value v1900 = EvalSource("=WORKDAY(DATE(2024,1,5),1)");
+  ASSERT_TRUE(v1900.is_number());
+  const Value expected_1900 = EvalSource("=DATE(2024,1,8)");
+  ASSERT_TRUE(expected_1900.is_number());
+  EXPECT_DOUBLE_EQ(v1900.as_number(), expected_1900.as_number());
+
+  const Value v1904 = EvalSource1904("=WORKDAY(DATE(2024,1,5),1)");
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_DOUBLE_EQ(v1904.as_number(), v1900.as_number() - 1462.0);
+}
+
+TEST(DateTime1904, WorkdayIntlWeekendMaskFollowsTheWorkbookEpoch) {
+  // Weekend selector 11 is "Sunday only", so the day after 2024-01-05 (Fri)
+  // is the working Saturday 2024-01-06.
+  const Value v1900 = EvalSource("=WORKDAY.INTL(DATE(2024,1,5),1,11)");
+  ASSERT_TRUE(v1900.is_number());
+  const Value expected_1900 = EvalSource("=DATE(2024,1,6)");
+  ASSERT_TRUE(expected_1900.is_number());
+  EXPECT_DOUBLE_EQ(v1900.as_number(), expected_1900.as_number());
+
+  const Value v1904 = EvalSource1904("=WORKDAY.INTL(DATE(2024,1,5),1,11)");
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_DOUBLE_EQ(v1904.as_number(), v1900.as_number() - 1462.0);
+}
+
+TEST(DateTime1904, WorkdayHolidaysAreReadInTheWorkbookEpoch) {
+  // 2024-01-08 (Mon) as a holiday pushes the result to 2024-01-09, and the
+  // holiday serial itself is expressed in the workbook's epoch.
+  const Value v1900 = EvalSource("=WORKDAY(DATE(2024,1,5),1,DATE(2024,1,8))");
+  ASSERT_TRUE(v1900.is_number());
+  const Value expected_1900 = EvalSource("=DATE(2024,1,9)");
+  ASSERT_TRUE(expected_1900.is_number());
+  EXPECT_DOUBLE_EQ(v1900.as_number(), expected_1900.as_number());
+
+  const Value v1904 = EvalSource1904("=WORKDAY(DATE(2024,1,5),1,DATE(2024,1,8))");
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_DOUBLE_EQ(v1904.as_number(), v1900.as_number() - 1462.0);
+}
+
+TEST(DateTime1904, WorkdayUpperEndpointIsEpochSpecific) {
+  // 9999-12-31 is serial 2957003 under the 1904 system, so walking forward
+  // from 2957000 runs off the calendar. The same serial is an ordinary day
+  // under the 1900 system and the walk succeeds there.
+  const Value over = EvalSource1904("=WORKDAY(2957000,10)");
+  ASSERT_TRUE(over.is_error());
+  EXPECT_EQ(over.as_error(), ErrorCode::Num);
+
+  const Value within = EvalSource("=WORKDAY(2957000,10)");
+  ASSERT_TRUE(within.is_number());
+}
+
+TEST(DateTime1904, NetworkdaysRejectsSerialsPastTheEpochUpperEndpoint) {
+  const Value v = EvalSource1904("=NETWORKDAYS(1,2957004)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 TEST(DateTime1904, DefaultSystemUnaffected) {
   // Sanity: the 1900 default path is unchanged (YEAR of the 1900 serial).
   const Value v = EvalSource("=YEAR(43831)");

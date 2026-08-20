@@ -130,12 +130,25 @@ double BinomPmf(double k, double n, double prob) {
   return std::exp(log_pmf);
 }
 
+// Closed-form binomial CDF. See the declaration in `stats_helpers.h` for
+// the contract; the identity is `P(X <= k) = I_{1-p}(n - k, k + 1)`.
+double BinomCdf(double k, double n, double prob) noexcept {
+  // `k == n` is the whole support, and the identity's first shape
+  // parameter `n - k` would be 0, which is outside the beta domain.
+  if (k >= n) {
+    return 1.0;
+  }
+  return stats::regularized_incomplete_beta(n - k, k + 1.0, 1.0 - prob);
+}
+
 // BINOM.DIST(number_s, trials, probability_s, cumulative) - binomial
 // distribution PMF or CDF. `number_s` and `trials` are floored toward
 // negative infinity (Excel truncates non-integer inputs before the
 // domain check). Any negative count, `number_s > trials`, or probability
-// outside [0, 1] yields `#NUM!`. The CDF sums PMFs from 0 to number_s;
-// this is O(trials) but matches Excel's approach for moderate n.
+// outside [0, 1] yields `#NUM!`. The CDF sums PMFs from 0 to number_s up
+// to `kMaxCumulativeTerms` terms, then switches to the closed form so the
+// cost never tracks the value of the input; shapes the closed form cannot
+// resolve to the family's tolerance are refused with `#NUM!`.
 Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto input = read_number_triple(args, 0, 1, 2);
   if (!input) {
@@ -153,12 +166,19 @@ Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   double r;
   if (cum.value()) {
-    // CDF: sum pmf(i) for i in [0, k]. Loop count fits in size_t because
-    // k >= 0 and k <= n, and n is a finite double bounded by the caller.
-    r = 0.0;
-    const auto k_int = static_cast<std::uint64_t>(k);
-    for (std::uint64_t i = 0; i <= k_int; ++i) {
-      r += BinomPmf(static_cast<double>(i), n, p);
+    if (k >= kMaxCumulativeTerms) {
+      if (!beta_shapes_are_resolvable(n - k, k + 1.0)) {
+        return Value::error(ErrorCode::Num);
+      }
+      r = BinomCdf(k, n, p);
+    } else {
+      // CDF: sum pmf(i) for i in [0, k]. The cast is safe because the
+      // branch above bounds `k` well inside the integer range.
+      r = 0.0;
+      const auto k_int = static_cast<std::uint64_t>(k);
+      for (std::uint64_t i = 0; i <= k_int; ++i) {
+        r += BinomPmf(static_cast<double>(i), n, p);
+      }
     }
   } else {
     r = BinomPmf(k, n, p);
@@ -173,11 +193,19 @@ static double PoissonPmf(double k, double mean) {
   return std::exp(log_pmf);
 }
 
+// Closed-form Poisson CDF. See the declaration in `stats_helpers.h`; the
+// identity is `P(X <= k) = Q(k + 1, mean)`.
+double PoissonCdf(double k, double mean) noexcept {
+  return stats::q_gamma(k + 1.0, mean);
+}
+
 // POISSON.DIST(x, mean, cumulative) - Poisson distribution PMF or CDF.
 // `x` is floored toward negative infinity. `x < 0` or `mean < 0` yields
 // `#NUM!`. `mean == 0` is the degenerate point mass at 0: PMF(0) = 1,
 // PMF(k) = 0 for k > 0, CDF(k) = 1 for k >= 0. Matches Mac Excel 365.
-// CDF is the O(x) partial sum of PMFs.
+// CDF is a partial sum of PMFs up to `kMaxCumulativeTerms` terms and the
+// closed form beyond it, so the cost never tracks the value of `x`. The
+// two agree to well within Excel's reported precision at the switch-over.
 Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto input = read_number_pair(args, 0, 1);
   if (!input) {
@@ -203,10 +231,14 @@ Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   }
   double r;
   if (cum.value()) {
-    r = 0.0;
-    const auto x_int = static_cast<std::uint64_t>(x);
-    for (std::uint64_t i = 0; i <= x_int; ++i) {
-      r += PoissonPmf(static_cast<double>(i), mean);
+    if (x >= kMaxCumulativeTerms) {
+      r = PoissonCdf(x, mean);
+    } else {
+      r = 0.0;
+      const auto x_int = static_cast<std::uint64_t>(x);
+      for (std::uint64_t i = 0; i <= x_int; ++i) {
+        r += PoissonPmf(static_cast<double>(i), mean);
+      }
     }
   } else {
     r = PoissonPmf(x, mean);

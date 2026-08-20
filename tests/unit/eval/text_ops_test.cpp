@@ -54,6 +54,24 @@ TEST(TextOpsUtf16ToByteOffset, SupplementaryOffsetsRoundUpAtMidpoint) {
   EXPECT_EQ(utf16_to_byte_offset(kEmojiPopper, 2u), 4u);
 }
 
+TEST(TextOpsUtf16ToByteOffsetFloor, AgreesOnCodepointBoundaries) {
+  const std::string_view s = "hello";
+  EXPECT_EQ(utf16_to_byte_offset_floor(s, 0u), 0u);
+  EXPECT_EQ(utf16_to_byte_offset_floor(s, 1u), 1u);
+  EXPECT_EQ(utf16_to_byte_offset_floor(s, 5u), 5u);
+  EXPECT_EQ(utf16_to_byte_offset_floor(s, 99u), 5u);
+  EXPECT_EQ(utf16_to_byte_offset_floor(kAiu, 2u), 6u);
+}
+
+TEST(TextOpsUtf16ToByteOffsetFloor, SupplementaryMidpointRoundsDown) {
+  // Unit 1 splits the emoji's surrogate pair. Where `utf16_to_byte_offset`
+  // returns the position past the codepoint, the floor variant returns the
+  // position before it, so a slice starting there keeps the codepoint.
+  EXPECT_EQ(utf16_to_byte_offset(kEmojiPopper, 1u), 4u);
+  EXPECT_EQ(utf16_to_byte_offset_floor(kEmojiPopper, 1u), 0u);
+  EXPECT_EQ(utf16_to_byte_offset_floor(kEmojiPopper, 2u), 4u);
+}
+
 TEST(TextOpsUtf16Substring, EmptyText) {
   EXPECT_EQ(utf16_substring(std::string_view{}, 0u, 5u), "");
 }
@@ -89,6 +107,26 @@ TEST(TextOpsUtf16Substring, SupplementaryMidpointRoundsUp) {
   std::string two_emojis(kEmojiPopper);
   two_emojis += kEmojiConfetti;
   EXPECT_EQ(utf16_substring(two_emojis, 0u, 1u), kEmojiPopper);
+}
+
+TEST(TextOpsUtf16Substring, SupplementaryStartMidpointRoundsDown) {
+  // Starting at unit 1 also splits the first emoji. The start rounds down,
+  // so the slice widens to the whole codepoint instead of skipping past it
+  // and collapsing to the empty string.
+  std::string two_emojis(kEmojiPopper);
+  two_emojis += kEmojiConfetti;
+  EXPECT_EQ(utf16_substring(two_emojis, 1u, 1u), kEmojiPopper);
+  EXPECT_EQ(utf16_substring(two_emojis, 3u, 1u), kEmojiConfetti);
+}
+
+TEST(TextOpsUtf16Substring, NonEmptyTextNeverYieldsEmptySlice) {
+  // A slice that asks for at least one unit inside a non-empty text always
+  // carries a whole codepoint out, whichever unit it starts at.
+  std::string mixed = "ab";
+  mixed += kEmojiPopper;
+  for (std::uint32_t start = 0; start < 4u; ++start) {
+    EXPECT_FALSE(utf16_substring(mixed, start, 1u).empty()) << "start=" << start;
+  }
 }
 
 TEST(TextOpsCaseFold, AsciiLower) {

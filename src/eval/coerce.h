@@ -120,6 +120,9 @@ bool strtod_full(std::string_view s, double* out) noexcept;
 ///
 /// * `POWER(0, 0)` yields `#NUM!` — Excel treats it as indeterminate,
 ///   diverging from IEEE-754 `std::pow` (which returns 1).
+/// * `POWER(0, negative)` yields `#DIV/0!`, not `#NUM!`: the expression is
+///   `1 / 0^|exp|`, and Excel reports it with the same code as `/` by a
+///   zero divisor. IEEE-754 `std::pow` would return `+Inf` here.
 /// * Negative base with a non-integer exponent yields `#NUM!` (NaN from pow).
 /// * Overflow / underflow to Inf yields `#NUM!`.
 Expected<double, ErrorCode> apply_pow(double base, double exp);

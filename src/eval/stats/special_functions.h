@@ -53,6 +53,17 @@ double q_gamma(double a, double x) noexcept;
 /// IEEE-754 quiet NaN. At the endpoints returns `0` (x == 0) and `1`
 /// (x == 1) exactly.
 ///
+/// Like the gamma pair, this returns either a converged value or NaN on
+/// every exit path -- a truncated continued fraction is never returned as
+/// a result. The iteration budget scales with `a + b`, so the shapes the
+/// Excel distribution family reaches converge rather than truncate.
+///
+/// Accuracy degrades with the shape parameters even when the recursion
+/// converges, because the prefactor is evaluated in log space: the
+/// absolute error stays below 1e-6 up to roughly `a + b == 1e9` and grows
+/// past it. Callers needing 1-bit agreement beyond that magnitude cannot
+/// get it from this helper.
+///
 /// The T / F Excel distribution family routes through this helper; the
 /// caller translates NaN into `#NUM!`.
 double regularized_incomplete_beta(double a, double b, double x) noexcept;

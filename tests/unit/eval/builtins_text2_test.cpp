@@ -135,6 +135,42 @@ TEST(BuiltinsText2TextJoin, JustAtCapIsAllowed) {
   EXPECT_EQ(v.as_text().size(), 32767u);
 }
 
+// One unit past the cap is the first input that fails, so the accept /
+// reject boundary is pinned from both sides: 32,767 units is text (above),
+// 32,768 is `#VALUE!`.
+TEST(BuiltinsText2TextJoin, OneUnitOverCapIsValueError) {
+  const Value v = EvalSource("=TEXTJOIN(\",\", TRUE, REPT(\"a\", 16383), REPT(\"b\", 16384))");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// The cap counts UTF-16 units, not bytes. 16,383 supplementary-plane
+// codepoints are 32,766 units but 65,532 bytes, so a byte-based cap would
+// reject this and a unit-based one accepts it.
+TEST(BuiltinsText2TextJoin, SupplementaryPlaneJustAtCapIsAllowed) {
+  const Value v = EvalSource("=TEXTJOIN(\"\", TRUE, REPT(\"\xF0\x9F\x99\x82\", 16383), \"a\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text().size(), 65533u);
+}
+
+TEST(BuiltinsText2TextJoin, SupplementaryPlaneOneUnitOverCapIsValueError) {
+  const Value v = EvalSource("=TEXTJOIN(\"\", TRUE, REPT(\"\xF0\x9F\x99\x82\", 16383), \"ab\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// The cap is reached by the accumulated result, not by any single piece, so
+// a long run of small pieces has to fail at the same total as one big one.
+TEST(BuiltinsText2TextJoin, CapIsReachedAcrossManySmallPieces) {
+  const Value at_cap = EvalSource("=TEXTJOIN(\"\", TRUE, REPT(\"a\", 16000), REPT(\"b\", 16000), REPT(\"c\", 767))");
+  ASSERT_TRUE(at_cap.is_text());
+  EXPECT_EQ(at_cap.as_text().size(), 32767u);
+
+  const Value over_cap = EvalSource("=TEXTJOIN(\"\", TRUE, REPT(\"a\", 16000), REPT(\"b\", 16000), REPT(\"c\", 768))");
+  ASSERT_TRUE(over_cap.is_error());
+  EXPECT_EQ(over_cap.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsText2TextJoin, TooFewArgsIsArityError) {
   // Two args (delimiter, ignore_empty) but no text values - registry rejects
   // because min_arity = 3.

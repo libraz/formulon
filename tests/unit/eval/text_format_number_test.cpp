@@ -131,6 +131,77 @@ TEST(NumberFormatScale, DoubleTrailingCommaDividesByMillion) {
   EXPECT_EQ(Render(2700000.0, "0,,"), "3");
 }
 
+TEST(NumberFormatScale, TrailingCommaAfterFractionDigits) {
+  // The scaling comma sits behind the fractional placeholder, so it follows
+  // the last digit placeholder rather than the decimal point.
+  EXPECT_EQ(Render(1234567.0, "0.0,"), "1234.6");
+}
+
+TEST(NumberFormatScale, DoubleTrailingCommaAfterFractionDigits) {
+  EXPECT_EQ(Render(1234567.0, "0.00,,"), "1.23");
+}
+
+TEST(NumberFormatScale, TrailingCommaKeepsGroupSeparator) {
+  // The leading `#,##` still groups; only the comma past the last digit
+  // placeholder scales.
+  EXPECT_EQ(Render(1234567.0, "#,##0.0,"), "1,234.6");
+}
+
+TEST(NumberFormatScale, TrailingCommaBeforeLiteralSuffix) {
+  EXPECT_EQ(Render(1234567.0, "#,##0.0,\"K\""), "1,234.6K");
+}
+
+TEST(NumberFormatScale, GroupSeparatorWithFractionIsNotScaled) {
+  // A group separator inside the integer part never scales the value.
+  EXPECT_EQ(Render(1234567.891, "#,##0.00"), "1,234,567.89");
+}
+
+// ---------------------------------------------------------------------------
+// Decimal ties (rounded on Excel's 15-significant-digit decimal view)
+// ---------------------------------------------------------------------------
+
+TEST(NumberFormatTies, HalfAwayFromZeroBelowBinaryValue) {
+  // 1.005 is stored just under its decimal value; Excel still rounds up.
+  EXPECT_EQ(Render(1.005, "0.00"), "1.01");
+}
+
+TEST(NumberFormatTies, HalfAwayFromZeroNegative) {
+  EXPECT_EQ(Render(-1.005, "0.00"), "-1.01");
+}
+
+TEST(NumberFormatTies, HalfAwayFromZeroCarriesIntoIntegerPart) {
+  EXPECT_EQ(Render(9.995, "0.00"), "10.00");
+  EXPECT_EQ(Render(99.995, "0.00"), "100.00");
+}
+
+TEST(NumberFormatTies, HalfAwayFromZeroMoreTies) {
+  EXPECT_EQ(Render(2.675, "0.00"), "2.68");
+  EXPECT_EQ(Render(8.835, "0.00"), "8.84");
+  EXPECT_EQ(Render(0.045, "0.00"), "0.05");
+}
+
+TEST(NumberFormatTies, BelowTieStillRoundsDown) {
+  // Only genuine 15-digit ties move: 1.0049999 is short of the boundary.
+  EXPECT_EQ(Render(1.0049999, "0.00"), "1.00");
+  EXPECT_EQ(Render(0.0449, "0.00"), "0.04");
+}
+
+TEST(NumberFormatTies, BinaryResidueIsRemoved) {
+  // 0.1 + 0.2 == 0.30000000000000004; the 15-digit view is a flat 0.3.
+  EXPECT_EQ(Render(0.1 + 0.2, "0.00"), "0.30");
+  EXPECT_EQ(Render(0.1 + 0.2, "0.00000000000000000"), "0.30000000000000000");
+}
+
+TEST(NumberFormatTies, LargeIntegerIsNotNudged) {
+  // The tie correction must not perturb magnitudes whose ULP exceeds 0.5.
+  EXPECT_EQ(Render(9.0e15, "0"), "9000000000000000");
+}
+
+TEST(NumberFormatTies, ScaledTieUsesScaledValue) {
+  // 1005 / 1000 = 1.005, which then ties away from zero.
+  EXPECT_EQ(Render(1005.0, "0.00,"), "1.01");
+}
+
 // ---------------------------------------------------------------------------
 // Scientific notation
 // ---------------------------------------------------------------------------

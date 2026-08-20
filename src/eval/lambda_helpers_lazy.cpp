@@ -14,6 +14,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
 #include "eval/shape_ops_lazy.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -92,53 +93,24 @@ const parser::AstNode* build_array_literal_for(const ArrayValue* arr, Arena& are
   return parser::make_array_literal(arena, rows, cols, children);
 }
 
-// Invokes `lv` with the pre-evaluated `args` values, binding each into a
-// fresh frame rooted at the lambda's captured environment. Mirrors the
-// AST-driven `invoke_lambda` in `tree_walker.cpp` but takes already-
-// computed `Value`s rather than argument AST nodes — the per-cell helpers
-// have no AST for their cell values, just the cell payload itself.
-//
-// `ast_args` is an optional parallel array of AST nodes (length `arity`)
-// to record alongside each binding. When non-null, the AST node lets
-// range-aware consumers inside the lambda body see the binding as a
-// range-shaped expression (matching the LET-binding-passthrough seam used
-// throughout the eager dispatcher and the lazy lookup family). Pass
-// `nullptr` to fall back to scalar bindings.
-//
-// Strict arity match (Excel's `#VALUE!` policy). Argument errors are NOT
-// short-circuited here and no caller filters them either: every helper
-// hands an errored cell to the body so an `IFERROR`-guarded lambda can
-// recover, and an unguarded one returns the error into that output slot
-// alone. The lambda body is evaluated in the
-// caller's `EvalContext` with the caller-supplied `NameEnv` swapped for
-// the freshly extended frame.
-Value invoke_lambda_with_values(const LambdaValue* lv, const Value* args, const parser::AstNode* const* ast_args,
-                                std::uint32_t arity, Arena& arena, const FunctionRegistry& registry,
-                                const EvalContext& ctx) {
-  if (arity != lv->param_count) {
-    return Value::error(ErrorCode::Value);
-  }
-  NameEnv env;
-  if (lv->captured_env != nullptr) {
-    env = *lv->captured_env;
-  }
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode* expr = (ast_args != nullptr) ? ast_args[i] : nullptr;
-    env = env.extend(lv->params[i], args[i], expr, arena);
-  }
-  const EvalContext body_ctx = ctx.with_name_env(&env);
-  return eval_node(*lv->body, arena, registry, body_ctx);
-}
-
 // Evaluates a single argument as a `LambdaValue*` closure. Returns nullptr
 // and writes a scalar error to `*out_err` on failure paths:
 //   * argument error -> propagate verbatim;
-//   * argument is not a Lambda -> `#VALUE!`.
-// `expected_arity` is the lambda parameter count required by the caller.
-// `expected_arity == 0` means "any" (only used by MAP, which determines
-// the required arity from the number of array arguments). Otherwise
-// arity mismatch surfaces `#VALUE!`.
-const LambdaValue* eval_lambda_arg(const parser::AstNode& node, std::uint32_t expected_arity, Arena& arena,
+//   * argument is not a Lambda -> `#VALUE!`;
+//   * the lambda cannot accept `call_arity` arguments -> `#VALUE!`;
+//   * the lambda has no body -> `#NAME?`.
+//
+// `call_arity` is the number of arguments the helper's own contract will
+// supply per invocation (1 for BYROW / BYCOL, the array count for MAP, 2
+// for REDUCE / SCAN / MAKEARRAY). Acceptance follows the single rule
+// published on `LambdaValue`: `param_count - optional_count <= call_arity
+// <= param_count`, so a lambda declaring trailing `[optional]` params is
+// accepted and those params bind to the omitted sentinel inside the body.
+//
+// `invoke_lambda_values_with_ast` re-checks the same conditions per call;
+// checking here as well keeps a rejection a scalar error for the whole
+// helper rather than an array whose every cell holds that error.
+const LambdaValue* eval_lambda_arg(const parser::AstNode& node, std::uint32_t call_arity, Arena& arena,
                                    const FunctionRegistry& registry, const EvalContext& ctx, Value* out_err) {
   const Value v = eval_node(node, arena, registry, ctx);
   if (v.is_error()) {
@@ -150,8 +122,13 @@ const LambdaValue* eval_lambda_arg(const parser::AstNode& node, std::uint32_t ex
     return nullptr;
   }
   const LambdaValue* lv = v.as_lambda();
-  if (expected_arity != 0U && lv->param_count != expected_arity) {
+  const std::uint32_t required = lv->param_count - lv->optional_count;
+  if (call_arity < required || call_arity > lv->param_count) {
     *out_err = Value::error(ErrorCode::Value);
+    return nullptr;
+  }
+  if (lv->body == nullptr) {
+    *out_err = Value::error(ErrorCode::Name);
     return nullptr;
   }
   return lv;
@@ -222,7 +199,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   if (in == nullptr) {
     return err;
   }
-  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(1), /*expected_arity=*/1U, arena, registry, ctx, &err);
+  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(1), /*call_arity=*/1U, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }
@@ -273,7 +250,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
       return Value::error(ErrorCode::Num);
     }
     const parser::AstNode* ast_args[1] = {slice_ast};
-    const Value res = invoke_lambda_with_values(lv, &arg, ast_args, 1U, arena, registry, ctx);
+    const Value res = invoke_lambda_values_with_ast(lv, 1U, &arg, ast_args, arena, registry, ctx);
     if (res.is_error()) {
       // Each row / column is reduced independently, so an error lands in
       // that slice's output cell only. Short-circuiting the whole call here
@@ -342,10 +319,11 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     cols = std::max(cols, arrays[i]->cols);
   }
 
-  // The lambda is the last positional argument. Its parameter count must
-  // equal the number of array arguments; mismatch surfaces #VALUE!.
+  // The lambda is the last positional argument. It must be able to accept
+  // one argument per array — required params no more than `array_count`,
+  // declared params no fewer; anything else surfaces #VALUE!.
   const LambdaValue* lv =
-      eval_lambda_arg(call.as_call_arg(arity - 1U), /*expected_arity=*/array_count, arena, registry, ctx, &err);
+      eval_lambda_arg(call.as_call_arg(arity - 1U), /*call_arity=*/array_count, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }
@@ -382,7 +360,7 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     // MAP per-cell args are scalars from the input arrays; no AST hint
     // needed because range-aware functions inside the lambda body would
     // see a single cell either way.
-    const Value res = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, array_count, arena, registry, ctx);
+    const Value res = invoke_lambda_values(lv, array_count, args, arena, registry, ctx);
     if (res.is_error()) {
       out_cells[idx] = res;
       continue;
@@ -414,7 +392,7 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (in == nullptr) {
     return err;
   }
-  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*expected_arity=*/2U, arena, registry, ctx, &err);
+  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }
@@ -437,7 +415,7 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
     // REDUCE feeds scalar (accumulator, current) per call. The accumulator
     // can be any Value but is consumed inside the body via the parameter
     // name lookup, not as a range-aware seam, so no AST hint is required.
-    acc = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
+    acc = invoke_lambda_values(lv, 2U, args, arena, registry, ctx);
   }
   return acc;
 }
@@ -456,7 +434,7 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (in == nullptr) {
     return err;
   }
-  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*expected_arity=*/2U, arena, registry, ctx, &err);
+  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }
@@ -487,7 +465,7 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     //
     // SCAN feeds scalar (accumulator, current) per call. No AST hint is
     // needed; the body sees both bindings as scalar Values.
-    const Value res = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
+    const Value res = invoke_lambda_values(lv, 2U, args, arena, registry, ctx);
     if (res.is_error()) {
       acc = res;
       out_cells[i] = res;
@@ -524,7 +502,7 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxSequenceCells) {
     return Value::error(ErrorCode::Num);
   }
-  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*expected_arity=*/2U, arena, registry, ctx, &err);
+  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }
@@ -543,7 +521,7 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
       args[1] = Value::number(static_cast<double>(c) + 1.0);
       // MAKEARRAY feeds scalar (row_index, col_index) numbers; no AST
       // hint is needed because no consumer would ever see them as a range.
-      const Value res = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
+      const Value res = invoke_lambda_values(lv, 2U, args, arena, registry, ctx);
       if (res.is_error()) {
         out_cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) + c] = res;
         continue;

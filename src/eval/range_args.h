@@ -53,10 +53,19 @@ bool filter_range_sourced_values(const FunctionDef& def, const Value* cells, std
 /// `rows = cols = 1`; a `RangeOp` produces the computed shape; a flattened
 /// `Value::Array` from a dynamic-array producer carries the array's own
 /// dimensions.
+///
+/// `from_scalar` records provenance: it is true only when the argument was
+/// a bare scalar expression that collapsed to a 1x1 range, and false for
+/// every genuine rectangle (including a 1-cell `Ref`). Excel distinguishes
+/// the two — a directly supplied scalar is coerced and rejects non-numeric
+/// input, while a range-sourced cell of the wrong type is skipped — so
+/// families implementing that rule read this rather than re-inspecting the
+/// AST node kind.
 struct RangeResult {
   std::vector<Value> cells;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
+  bool from_scalar = false;
 };
 
 /// Resolves `arg_node` to a `RangeResult`, expanding `RangeOp` / `Ref` /
@@ -77,6 +86,17 @@ struct RangeResult {
 Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_node, Arena& arena,
                                                    const FunctionRegistry& registry, const EvalContext& ctx);
 
+/// Resolution variant for argument slots documented as a reference or an
+/// array (`IRR` / `XIRR` / `RANK` / the regression family, …). Every shape
+/// `resolve_range_arg` handles is accepted — including dynamic-array
+/// producers such as `SEQUENCE` and spilled-range references — but a
+/// subtree that collapses to a bare scalar is rejected with
+/// `scalar_error` instead of becoming a 1x1 range, because Excel does not
+/// walk a lone value as a sequence.
+Expected<RangeResult, ErrorCode> resolve_range_arg_no_scalar(const parser::AstNode& arg_node, Arena& arena,
+                                                             const FunctionRegistry& registry, const EvalContext& ctx,
+                                                             ErrorCode scalar_error);
+
 /// Materialises an AST argument as an `ArrayValue` via the standard
 /// `eval_node_as_array` seam. Scalar inputs wrap to a 1x1 array. On
 /// failure writes the propagating error into `*out_err` and returns
@@ -95,10 +115,9 @@ bool resolve_array_value(const parser::AstNode& arg, Arena& arena, const Functio
                          const EvalContext& ctx, const ArrayValue** out, Value* out_err);
 
 /// Resolution variant for the regression and hypothesis-test families.
-/// Accepts `Ref` / `RangeOp` (delegated to `resolve_range_arg`),
-/// `ArrayLiteral` (each element is evaluated), and any other subtree
-/// (a pre-evaluated error propagates verbatim; otherwise the call is
-/// rejected with `#N/A`).
+/// Thin `#N/A` remap over `resolve_range_arg_no_scalar`: every range,
+/// array literal and dynamic-array shape resolves, a bare scalar is
+/// rejected, and a pre-evaluated error propagates verbatim.
 ///
 /// Excel uses `#N/A` rather than `#VALUE!` as the shape-error vocabulary
 /// for these families, so any `#VALUE!` from `resolve_range_arg`'s

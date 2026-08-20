@@ -15,13 +15,18 @@
 // TU keeps the central dispatch table thin and lets the per-cell
 // invocation pipeline live in one place.
 //
-// All six impls require the lambda argument to evaluate to a Lambda and
-// to declare the expected parameter count for that helper:
-//   * BYROW / BYCOL   — 1 param.
-//   * MAP             — N params, where N is the number of array args.
-//   * REDUCE / SCAN   — 2 params (accumulator, current).
-//   * MAKEARRAY       — 2 params (row_index, col_index).
-// Wrong type / wrong arity surfaces `#VALUE!`.
+// All six impls require the lambda argument to evaluate to a Lambda and to
+// be callable with the argument count that helper supplies per invocation:
+//   * BYROW / BYCOL   — 1 arg (the row / column slice).
+//   * MAP             — N args, where N is the number of array args.
+//   * REDUCE / SCAN   — 2 args (accumulator, current).
+//   * MAKEARRAY       — 2 args (row_index, col_index).
+// "Callable with A args" is the one rule published on `LambdaValue`:
+// `param_count - optional_count <= A <= param_count`. A lambda declaring
+// trailing `[optional]` params is therefore accepted, and the params the
+// helper does not supply bind to the sentinel `ISOMITTED` detects. Wrong
+// type or an uncallable arity surfaces `#VALUE!`; a bodyless lambda is
+// `#NAME?`.
 //
 // Per-cell error handling: any error returned from the lambda is propagated
 // as the helper's whole result (Mac Excel: a single error short-circuits
@@ -55,8 +60,8 @@ class FunctionRegistry;
 /// `array`. Each call receives a horizontal `1 x cols` sub-array slice; the
 /// output is a vertical `rows x 1` array of per-row results. A lambda that
 /// returns an array (multi-cell result) for any row surfaces `#CALC!`. An
-/// empty input (`rows == 0` or `cols == 0`) surfaces `#CALC!`. Lambda arity
-/// other than 1 surfaces `#VALUE!`.
+/// empty input (`rows == 0` or `cols == 0`) surfaces `#CALC!`. A lambda
+/// that cannot be called with 1 argument surfaces `#VALUE!`.
 Value eval_byrow_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx);
 
@@ -68,8 +73,8 @@ Value eval_bycol_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 
 /// `MAP(array1, [array2, ...], function)` — applies the N-arg `function`
 /// elementwise across all `N` input arrays. All arrays must share an
-/// identical `(rows, cols)` shape; mismatch surfaces `#N/A`. Lambda arity
-/// must equal the number of array arguments; mismatch surfaces `#VALUE!`.
+/// identical `(rows, cols)` shape; mismatch surfaces `#N/A`. A lambda that
+/// cannot be called with one argument per array surfaces `#VALUE!`.
 /// A lambda that returns an array for any cell surfaces `#CALC!`.
 Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx);
@@ -79,9 +84,9 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
 /// accumulator is seeded with `initial_value` and threaded through every
 /// call; the helper returns the final accumulator. The accumulator is not
 /// constrained to a scalar shape — any `Value` (including arrays) flows
-/// through. An empty input array returns `initial_value` unchanged. Lambda
-/// arity other than 2 surfaces `#VALUE!`. The first error returned by the
-/// lambda short-circuits the fold.
+/// through. An empty input array returns `initial_value` unchanged. A
+/// lambda that cannot be called with 2 arguments surfaces `#VALUE!`. The
+/// first error returned by the lambda short-circuits the fold.
 Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 
@@ -89,8 +94,8 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
 /// intermediate accumulator. The output has the same `(rows, cols)` shape
 /// as `array`; cell `(r, c)` is the accumulator value AFTER processing
 /// the corresponding input cell. An empty input surfaces `#CALC!` (no spill
-/// shape to emit). Lambda arity other than 2 surfaces `#VALUE!`. The first
-/// error returned by the lambda short-circuits the scan.
+/// shape to emit). A lambda that cannot be called with 2 arguments surfaces
+/// `#VALUE!`. The first error returned by the lambda short-circuits the scan.
 Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
 
@@ -100,7 +105,8 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 /// integers; values below 1 surface `#NUM!`, and shapes that exceed
 /// Excel's worksheet grid (`rows > 1048576` or `cols > 16384`) also
 /// surface `#NUM!`. A lambda that returns an array for any cell surfaces
-/// `#CALC!`. Lambda arity other than 2 surfaces `#VALUE!`.
+/// `#CALC!`. A lambda that cannot be called with 2 arguments surfaces
+/// `#VALUE!`.
 Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
 

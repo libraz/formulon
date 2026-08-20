@@ -98,9 +98,17 @@ bool lookup_range_shaped_kind(std::string_view name, RangeShapedKind* out) {
 // helpers — which are not yet migrated. The public `resolve_range_arg`
 // below is a thin Expected-returning wrapper around this. Once the
 // rest of the family migrates, this helper folds away.
+//
+// `out_scalar` — when non-null — reports whether the result came from the
+// bare-scalar collapse at the bottom of the function rather than from a
+// genuine rectangle. Families whose argument slot documents a reference
+// or array need that distinction to keep rejecting `=IRR(5)`.
 bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                            std::uint32_t* out_rows, std::uint32_t* out_cols) {
+                            std::uint32_t* out_rows, std::uint32_t* out_cols, bool* out_scalar = nullptr) {
+  if (out_scalar != nullptr) {
+    *out_scalar = false;
+  }
   // LET-binding passthrough: when a caller wrote `VLOOKUP(key, t, 2, FALSE)`
   // with `t` bound to a RangeOp / OFFSET-call / ArrayLiteral via LET, the
   // shape decisions below need the original AST, not the NameRef. Single-
@@ -175,7 +183,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
           }
           const std::uint32_t pick = coerced.value() ? 1U : 2U;
           const parser::AstNode& chosen = arg_node.as_call_arg(pick);
-          return resolve_range_arg_into(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+          return resolve_range_arg_into(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols,
+                                        out_scalar);
         }
       }
     }
@@ -448,6 +457,9 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   // Scalar value (Number / Bool / Text / Blank / Lambda): treat as a 1x1
   // range so single-argument aggregators (`=SUM(7)`, `=AVERAGE(A1+1)`)
   // behave as Excel does instead of failing.
+  if (out_scalar != nullptr) {
+    *out_scalar = true;
+  }
   out_cells->clear();
   out_cells->push_back(result);
   if (out_rows != nullptr) {
@@ -505,10 +517,24 @@ Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_no
                                                    const FunctionRegistry& registry, const EvalContext& ctx) {
   RangeResult result;
   ErrorCode err = ErrorCode::Value;
-  if (!resolve_range_arg_into(arg_node, arena, registry, ctx, &result.cells, &err, &result.rows, &result.cols)) {
+  if (!resolve_range_arg_into(arg_node, arena, registry, ctx, &result.cells, &err, &result.rows, &result.cols,
+                              &result.from_scalar)) {
     return err;
   }
   return result;
+}
+
+Expected<RangeResult, ErrorCode> resolve_range_arg_no_scalar(const parser::AstNode& arg_node, Arena& arena,
+                                                             const FunctionRegistry& registry, const EvalContext& ctx,
+                                                             ErrorCode scalar_error) {
+  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+  if (!resolved) {
+    return resolved.error();
+  }
+  if (resolved.value().from_scalar) {
+    return scalar_error;
+  }
+  return std::move(resolved.value());
 }
 
 bool resolve_array_value(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
@@ -528,29 +554,17 @@ bool resolve_array_value(const parser::AstNode& arg, Arena& arena, const Functio
 
 Expected<RangeResult, ErrorCode> resolve_array_arg_na(const parser::AstNode& arg_node, Arena& arena,
                                                       const FunctionRegistry& registry, const EvalContext& ctx) {
-  const parser::NodeKind k = arg_node.kind();
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
-    if (!resolved) {
-      // `resolve_range_arg` reports `#VALUE!` for non-Ref / non-RangeOp
-      // shapes and `#REF!` for expansion failures. The regression and
-      // hypothesis-test families use `#N/A` for shape errors, so remap
-      // the shape-rejection case while letting `#REF!` pass through.
-      const ErrorCode err_code = resolved.error();
-      return err_code == ErrorCode::Value ? ErrorCode::NA : err_code;
-    }
-    return std::move(resolved.value());
+  auto resolved = resolve_range_arg_no_scalar(arg_node, arena, registry, ctx, ErrorCode::NA);
+  if (!resolved) {
+    // `resolve_range_arg` reports `#VALUE!` for a subtree it cannot turn
+    // into a rectangle and `#REF!` for expansion failures. The regression
+    // and hypothesis-test families use `#N/A` for shape errors, so remap
+    // the shape-rejection case while letting every other code (`#REF!`,
+    // a propagated `#DIV/0!`, …) pass through.
+    const ErrorCode err_code = resolved.error();
+    return err_code == ErrorCode::Value ? ErrorCode::NA : err_code;
   }
-  if (k == parser::NodeKind::ArrayLiteral) {
-    return resolve_range_arg(arg_node, arena, registry, ctx);
-  }
-  // Scalar / arithmetic / Call subtree. Evaluate so any pre-existing
-  // error propagates with its real code; otherwise reject with `#N/A`.
-  const Value v = eval_node(arg_node, arena, registry, ctx);
-  if (v.is_error()) {
-    return v.as_error();
-  }
-  return ErrorCode::NA;
+  return std::move(resolved.value());
 }
 
 }  // namespace eval

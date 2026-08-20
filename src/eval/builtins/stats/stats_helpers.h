@@ -173,10 +173,76 @@ Value percentile_exc_sorted(const std::vector<double>& xs, double k);
 // should surface `#NUM!` before calling in.
 double InverseStandardNormal(double p);
 
+// Ceiling on how many probability-mass terms a discrete cumulative
+// builtin may add up one at a time. Every such builtin steps once per
+// unit of its argument, so `=BINOM.DIST(1E12, 1E12, 0.5, TRUE)` would run
+// for longer than the process will live: the cost tracks the *value* of
+// the input rather than its size. One Excel column's worth of terms is
+// the same ceiling the depreciation schedules use, and is already far
+// past any summation whose accumulated round-off is worth trusting.
+//
+// A request that needs more terms than this is answered by a closed form
+// in constant time where one is accurate enough to stand behind, and
+// refused with `#NUM!` where it is not. The Poisson CDF goes through
+// `stats::q_gamma`; the binomial family goes through
+// `stats::regularized_incomplete_beta`, subject to
+// `beta_shapes_are_resolvable` below.
+//
+// Term-by-term summation is kept below the ceiling so results in the
+// ordinary range stay bit-for-bit what they were, and so a single-point
+// `BINOM.DIST.RANGE` keeps agreeing exactly with `BinomPmf`.
+inline constexpr double kMaxCumulativeTerms = 1048576.0;
+
+// Largest value of `min(a, b)` for which the closed-form beta CDF is
+// accurate enough to answer with, rather than refuse.
+//
+// `stats::regularized_incomplete_beta` evaluates its prefactor in log
+// space, where five large terms cancel; the precision left in the result
+// therefore falls away as the shapes grow. The loss is worst when the two
+// shapes are balanced, so `min(a, b)` -- not their sum -- is what predicts
+// it: a skewed pair such as `(5, 1e12)` stays exact, while a balanced one
+// does not.
+//
+// Measured against the symmetric median, whose exact value is 0.5, the
+// absolute error is 6.7e-7 at `min(a, b) == 3e8` and 1.17e-6 at 5e8. The
+// oracle suite compares this family at a tolerance of 1e-6, so the bound
+// sits at the last measured point comfortably inside it. Raising it means
+// re-measuring, not rounding up.
+inline constexpr double kMaxBalancedBetaShape = 3.0e8;
+
+// Whether the closed-form beta CDF can stand behind a result for the
+// shape pair `(a, b)`. Callers that get `false` refuse with `#NUM!`
+// rather than return a number outside the tolerance above.
+//
+// The helper itself independently returns NaN when its recursion cannot
+// converge or its prefactor has lost all meaning, which `#NUM!` also
+// surfaces; this bound is the tighter, accuracy-driven half of the same
+// question.
+inline bool beta_shapes_are_resolvable(double a, double b) noexcept {
+  return std::fmin(a, b) <= kMaxBalancedBetaShape;
+}
+
 // Probability mass function of Binomial(n, p) at k. Shared between
 // BINOM.DIST (in `stats_distributions.cpp`) and BINOM.INV /
 // BINOM.DIST.RANGE (in `stats_distributions_misc.cpp`).
 double BinomPmf(double k, double n, double prob);
+
+// Cumulative distribution function of Binomial(n, p) at k, in closed form
+// via the regularized incomplete beta identity
+// `P(X <= k) = I_{1-p}(n - k, k + 1)`. Assumes the caller has validated
+// `0 <= k <= n` and `0 <= p <= 1`, and has checked the shapes with
+// `beta_shapes_are_resolvable`. Constant time regardless of `n`; returns
+// NaN when the underlying recursion cannot produce a value, which callers
+// surface as `#NUM!`.
+double BinomCdf(double k, double n, double prob) noexcept;
+
+// Cumulative distribution function of Poisson(mean) at k, in closed form
+// via `P(X <= k) = Q(k + 1, mean)` (the regularized upper incomplete
+// gamma). Assumes `k >= 0` and `mean > 0`; the degenerate `mean == 0`
+// point mass is handled by the caller. Constant time regardless of `k`,
+// and NaN when the underlying series cannot converge, which callers
+// surface as `#NUM!`.
+double PoissonCdf(double k, double mean) noexcept;
 
 // Newton-Raphson inverter for Student's t CDF. Shared between T.INV /
 // T.INV.2T (in `stats_distributions.cpp`) and CONFIDENCE.T (in

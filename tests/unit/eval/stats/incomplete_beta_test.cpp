@@ -117,6 +117,88 @@ TEST(RegularizedIncompleteBetaLargeShape, NoOverflow) {
   EXPECT_LT(tail, 0.01);
 }
 
+// Either a converged value or NaN -- never a partial one
+//
+// The continued fraction used to stop after a fixed number of steps and
+// return whatever it had reached, with no way for the caller to tell.
+// Large shapes need materially more steps than small ones, so the shapes
+// that need the most work were exactly the ones answered with a running
+// value: at a == b == 5e11 that value was -86.6, which is not a
+// probability. Two guards keep every exit path honest now -- the
+// iteration budget scales with the shapes, and the log-space prefactor
+// refuses once its own cancellation has swamped the result.
+
+// The Beta(s, s) median is 0.5 exactly at every scale, which makes it the
+// reference these cases are pinned against. It is also the slowest
+// configuration for the recursion, so it is where truncation showed up.
+TEST(RegularizedIncompleteBetaLargeShape, SymmetricMedianIsHalfAcrossScales) {
+  struct Case {
+    double shape;
+    double tolerance;
+  };
+  // The tolerance widens with the shape because the prefactor is summed
+  // in log space, where the terms cancel more violently as they grow.
+  // Each one is roughly ten times the error actually observed, so a real
+  // regression trips it while ordinary round-off does not.
+  for (const Case& c : {Case{1.0e3, 1e-12}, Case{1.0e4, 1e-10}, Case{1.0e5, 1e-9}, Case{1.0e6, 1e-8}, Case{1.0e7, 1e-7},
+                        Case{1.0e8, 1e-6}, Case{1.0e9, 1e-5}, Case{1.0e10, 1e-4}}) {
+    const double got = regularized_incomplete_beta(c.shape, c.shape, 0.5);
+    EXPECT_NEAR(got, 0.5, c.tolerance) << "shape=" << c.shape;
+  }
+}
+
+// A shape large enough to need more work than the budget allows, or to
+// lose the prefactor entirely, has to come back as NaN. Returning a
+// number here is the defect: the caller cannot tell it apart from an
+// answer, and it is not even inside [0, 1].
+TEST(RegularizedIncompleteBetaLargeShape, UncomputableShapeIsNaN) {
+  for (double shape : {1.0e14, 1.0e15, 1.0e17}) {
+    const double got = regularized_incomplete_beta(shape, shape, 0.5);
+    EXPECT_TRUE(std::isnan(got)) << "shape=" << shape << " returned " << got;
+  }
+}
+
+// Whatever the shapes, a non-NaN result is a probability. This is the
+// property the truncated recursion broke most visibly.
+TEST(RegularizedIncompleteBetaLargeShape, AnyFiniteResultIsAProbability) {
+  for (double shape : {1.0e2, 1.0e4, 1.0e6, 1.0e8, 1.0e10, 1.0e12, 1.0e14, 1.0e16}) {
+    for (double x : {0.25, 0.5, 0.75}) {
+      const double got = regularized_incomplete_beta(shape, shape, x);
+      if (std::isnan(got)) {
+        continue;  // Refusal is the documented alternative.
+      }
+      EXPECT_GE(got, 0.0) << "shape=" << shape << " x=" << x;
+      EXPECT_LE(got, 1.0) << "shape=" << shape << " x=" << x;
+    }
+  }
+}
+
+// Skewed shapes converge in a handful of steps at any magnitude, so the
+// budget must not refuse them just because `a + b` is large. This is what
+// keeps T.DIST answering at its documented df ceiling, where the shapes
+// are `(df/2, 1/2)`.
+TEST(RegularizedIncompleteBetaLargeShape, SkewedShapesStillResolve) {
+  for (double shape : {1.0e6, 1.0e8, 1.0e10}) {
+    const double got = regularized_incomplete_beta(shape, 0.5, 0.5);
+    ASSERT_FALSE(std::isnan(got)) << "shape=" << shape;
+    EXPECT_GE(got, 0.0);
+    EXPECT_LE(got, 1.0);
+  }
+}
+
+// The reflection identity has to survive at scale too: both branches read
+// the same prefactor, so a guard that fired on one side only would break
+// the pairing rather than surface as a wrong number.
+TEST(RegularizedIncompleteBetaLargeShape, ReflectionHoldsAtScale) {
+  for (double shape : {1.0e4, 1.0e6, 1.0e8}) {
+    const double lo = regularized_incomplete_beta(shape, shape, 0.4);
+    const double hi = regularized_incomplete_beta(shape, shape, 0.6);
+    ASSERT_FALSE(std::isnan(lo)) << "shape=" << shape;
+    ASSERT_FALSE(std::isnan(hi)) << "shape=" << shape;
+    EXPECT_NEAR(lo, 1.0 - hi, 1e-9) << "shape=" << shape;
+  }
+}
+
 }  // namespace
 }  // namespace stats
 }  // namespace eval

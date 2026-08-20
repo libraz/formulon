@@ -440,6 +440,53 @@ TEST(BuiltinsTranspose, MacHostTransposeRangeArg) {
   EXPECT_EQ(cells[3], Value::number(4.0));
 }
 
+TEST(BuiltinsTranspose, BlankReferenceCellsBecomeOccupiedArrayCells) {
+  // A blank copied out of a worksheet reference stays excluded from COUNTA
+  // until an array materialiser lands it in a value array; from there it is
+  // an occupied array cell. TRANSPOSE is such a materialiser, so an empty
+  // A1:D1 must count 4 through it — and agree with every other route out of
+  // the same source range.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value transposed = EvalNoDispatch("=COUNTA(TRANSPOSE(A1:D1))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(transposed.is_number());
+  EXPECT_DOUBLE_EQ(transposed.as_number(), 4.0);
+
+  Arena filter_parse_arena;
+  Arena filter_eval_arena;
+  const Value filtered =
+      EvalNoDispatch("=COUNTA(FILTER(A1:D1,{1,1,1,1}))", &filter_parse_arena, &filter_eval_arena, ctx);
+  ASSERT_TRUE(filtered.is_number());
+  EXPECT_DOUBLE_EQ(transposed.as_number(), filtered.as_number());
+}
+
+TEST(BuiltinsTranspose, BlankReferenceCellsStayBlankThroughTranspose) {
+  // Promotion changes a blank's provenance, not its kind. Only COUNTA reads
+  // the provenance bit, so every other consumer must see the transposed
+  // cells exactly as it saw the source range's: blank, and not a number.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value counted = EvalNoDispatch("=COUNT(TRANSPOSE(A1:D1))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(counted.is_number());
+  EXPECT_DOUBLE_EQ(counted.as_number(), 0.0);
+
+  Arena sum_parse_arena;
+  Arena sum_eval_arena;
+  const Value summed = EvalNoDispatch("=SUM(TRANSPOSE(A1:D1))", &sum_parse_arena, &sum_eval_arena, ctx);
+  ASSERT_TRUE(summed.is_number());
+  EXPECT_DOUBLE_EQ(summed.as_number(), 0.0);
+}
+
 TEST(BuiltinsTranspose, Transpose_Scalar) {
   // `=TRANSPOSE(42)` -> 1x1 array with the scalar wrapped. Mac Excel
   // returns the same scalar; the engine wraps it in a degenerate 1x1

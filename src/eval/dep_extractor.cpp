@@ -6,12 +6,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
 #include <vector>
 
+#include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/dep_graph.h"
 #include "eval/formula_text_utils.h"
@@ -129,56 +129,6 @@ void add_three_d_span_dep(WalkState& state, std::size_t sheet_first, std::size_t
   }
 }
 
-/// Canonical inclusive rectangle for one dependency shape. Full-axis
-/// endpoints carry a meaningful coordinate only on their bounded axis (the
-/// parser's other coordinate is intentionally unspecified), so normalization
-/// must branch on the axis before validating bounds. Mixed-axis pairs are not
-/// rectangles and are rejected rather than silently shrinking to one row or
-/// column.
-struct NormalizedDependencyRange {
-  std::uint32_t row_first = 0;
-  std::uint32_t row_last = 0;
-  std::uint32_t col_first = 0;
-  std::uint32_t col_last = 0;
-  bool whole_axis = false;
-};
-
-std::optional<NormalizedDependencyRange> normalize_dependency_range(const parser::Reference& lhs,
-                                                                    const parser::Reference& rhs) noexcept {
-  if ((lhs.is_full_col && lhs.is_full_row) || (rhs.is_full_col && rhs.is_full_row)) {
-    return std::nullopt;
-  }
-
-  const bool full_col = lhs.is_full_col || rhs.is_full_col;
-  const bool full_row = lhs.is_full_row || rhs.is_full_row;
-  if (full_col && full_row) {
-    return std::nullopt;
-  }
-
-  if (full_col) {
-    if (!lhs.is_full_col || !rhs.is_full_col || lhs.col >= Sheet::kMaxCols || rhs.col >= Sheet::kMaxCols) {
-      return std::nullopt;
-    }
-    return NormalizedDependencyRange{0U, Sheet::kMaxRows - 1U, std::min(lhs.col, rhs.col), std::max(lhs.col, rhs.col),
-                                     true};
-  }
-
-  if (full_row) {
-    if (!lhs.is_full_row || !rhs.is_full_row || lhs.row >= Sheet::kMaxRows || rhs.row >= Sheet::kMaxRows) {
-      return std::nullopt;
-    }
-    return NormalizedDependencyRange{std::min(lhs.row, rhs.row), std::max(lhs.row, rhs.row), 0U, Sheet::kMaxCols - 1U,
-                                     true};
-  }
-
-  if (lhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols || rhs.row >= Sheet::kMaxRows ||
-      rhs.col >= Sheet::kMaxCols) {
-    return std::nullopt;
-  }
-  return NormalizedDependencyRange{std::min(lhs.row, rhs.row), std::max(lhs.row, rhs.row), std::min(lhs.col, rhs.col),
-                                   std::max(lhs.col, rhs.col), false};
-}
-
 // Flattens the rectangle [lhs, rhs] into per-cell dependencies. Both
 // endpoints must be plain `Ref` nodes; complex ranges (OFFSET-based,
 // INDIRECT, etc.) are silently ignored — dynamic shapes cannot be statically
@@ -209,22 +159,22 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
     return;
   }
 
-  const auto normalized = normalize_dependency_range(lhs, rhs);
-  if (!normalized.has_value()) {
+  const auto normalized = declared_rect(lhs, rhs);
+  if (!normalized) {
     // The evaluator reports malformed or mixed-axis references as an error;
     // static extraction simply omits a shape it cannot model safely.
     return;
   }
-  const std::uint32_t r_min = normalized->row_first;
-  const std::uint32_t r_max = normalized->row_last;
-  const std::uint32_t c_min = normalized->col_first;
-  const std::uint32_t c_max = normalized->col_last;
+  const std::uint32_t r_min = normalized.value().row_first;
+  const std::uint32_t r_max = normalized.value().row_last;
+  const std::uint32_t c_min = normalized.value().col_first;
+  const std::uint32_t c_max = normalized.value().col_last;
 
   // Every rectangle leaves here as either at most
   // `kMaxMaterializedDependencyCells` per-cell edges or exactly one compact
   // rectangle; no shape registers nothing.
   const std::uint64_t area = static_cast<std::uint64_t>(r_max - r_min + 1U) * (c_max - c_min + 1U);
-  if (normalized->whole_axis || area > kMaxMaterializedDependencyCells) {
+  if (normalized.value().whole_axis || area > kMaxMaterializedDependencyCells) {
     add_range_dep(state, CellRangeDependency{target_sheet_id, r_min, r_max, c_min, c_max});
     return;
   }
@@ -446,17 +396,17 @@ void walk(const parser::AstNode& node, WalkState& state) {
 
     case parser::NodeKind::Ref: {
       const parser::Reference& ref = node.as_ref();
-      const auto normalized = normalize_dependency_range(ref, ref);
-      if (!normalized.has_value()) {
+      const auto normalized = declared_rect(ref, ref);
+      if (!normalized) {
         return;
       }
       std::uint16_t sheet_id = state.current_sheet_id;
       if (!resolve_sheet_id(ref, state, &sheet_id)) {
         return;  // Unknown sheet: skip silently.
       }
-      if (normalized->whole_axis) {
-        add_range_dep(state, CellRangeDependency{sheet_id, normalized->row_first, normalized->row_last,
-                                                 normalized->col_first, normalized->col_last});
+      if (normalized.value().whole_axis) {
+        add_range_dep(state, CellRangeDependency{sheet_id, normalized.value().row_first, normalized.value().row_last,
+                                                 normalized.value().col_first, normalized.value().col_last});
         return;
       }
       add_cell_dep(state, CellNodeId{sheet_id, ref.row, ref.col});
@@ -492,8 +442,8 @@ void walk(const parser::AstNode& node, WalkState& state) {
       const parser::Reference& cell = node.as_ref3d_cell();
       const bool is_range = node.as_ref3d_is_range();
       const parser::Reference& cell_end = node.as_ref3d_cell_end();
-      const auto normalized = normalize_dependency_range(cell, is_range ? cell_end : cell);
-      if (!normalized.has_value()) {
+      const auto normalized = declared_rect(cell, is_range ? cell_end : cell);
+      if (!normalized) {
         return;
       }
       if (state.workbook == nullptr) {
@@ -510,17 +460,19 @@ void walk(const parser::AstNode& node, WalkState& state) {
       // The shared rectangle is read once per sheet in the span, so the
       // graph-footprint ceiling is applied to it before the span multiplies
       // the cost.
-      const std::uint64_t area = (static_cast<std::uint64_t>(normalized->row_last - normalized->row_first) + 1U) *
-                                 (static_cast<std::uint64_t>(normalized->col_last - normalized->col_first) + 1U);
-      const bool compact = normalized->whole_axis || area > kMaxMaterializedDependencyCells;
+      const std::uint64_t area =
+          (static_cast<std::uint64_t>(normalized.value().row_last - normalized.value().row_first) + 1U) *
+          (static_cast<std::uint64_t>(normalized.value().col_last - normalized.value().col_first) + 1U);
+      const bool compact = normalized.value().whole_axis || area > kMaxMaterializedDependencyCells;
       for (std::size_t s = lo; s <= hi; ++s) {
         if (compact) {
-          add_range_dep(state, CellRangeDependency{static_cast<std::uint16_t>(s), normalized->row_first,
-                                                   normalized->row_last, normalized->col_first, normalized->col_last});
+          add_range_dep(state, CellRangeDependency{static_cast<std::uint16_t>(s), normalized.value().row_first,
+                                                   normalized.value().row_last, normalized.value().col_first,
+                                                   normalized.value().col_last});
           continue;
         }
-        for (std::uint32_t r = normalized->row_first; r <= normalized->row_last; ++r) {
-          for (std::uint32_t c = normalized->col_first; c <= normalized->col_last; ++c) {
+        for (std::uint32_t r = normalized.value().row_first; r <= normalized.value().row_last; ++r) {
+          for (std::uint32_t c = normalized.value().col_first; c <= normalized.value().col_last; ++c) {
             add_cell_dep(state, CellNodeId{static_cast<std::uint16_t>(s), r, c});
           }
         }
@@ -676,17 +628,15 @@ void walk(const parser::AstNode& node, WalkState& state) {
         // volatile calls are genuine dependencies that must reach the graph.
         walk_invoked_lambda_body(callee, state);
       } else {
-        // Named / computed callee: walk it generically so embedded refs
-        // and volatile calls still surface.
-        //
-        // A workbook-scoped name holding a lambda (`=MyLambda(5)` where
-        // `MyLambda` is `LAMBDA(x, x+A1)`) does not arrive here at all:
-        // `Name(args)` parses as a `Call`, and the evaluator resolves a
-        // callee name against the lexical `NameEnv` only, so a defined
-        // name holding a lambda is never invoked. Tracking A1 as a
-        // dependency of such a call would describe an evaluation that
-        // does not happen; the gap to close first is on the evaluator
-        // side, not here.
+        // The only callee kind that reaches here is a nested `LambdaCall`
+        // (currying, e.g. `LAMBDA(x, LAMBDA(y, x+y))(3)(4)`): the parser
+        // gates this postfix `(` to a `Lambda` or `LambdaCall` LHS, so a
+        // named callee (`=MyLambda(5)`) always parses as a `Call` and is
+        // handled by the `Call` case above instead, including invocation
+        // of a workbook-scoped defined name that holds a lambda. Walking
+        // generically here recurses back into this same `case` (or into
+        // `Lambda`, at the base of the curry chain), which is what still
+        // surfaces the chain's embedded refs and volatile calls.
         walk(callee, state);
       }
       const std::uint32_t arity = node.as_lambda_call_arity();

@@ -14,6 +14,8 @@
 #include <string>
 #include <string_view>
 
+#include "cell.h"
+#include "eval/cell_evaluator.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
@@ -607,6 +609,41 @@ TEST(BuiltinsAreas, DisjointRangesIsNullError) {
   const Value v = EvalSource("=AREAS(A1:B2 C3:D4)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Null);
+}
+
+// A spilled-range reference names one contiguous block, so it counts the
+// same as the `RangeOp` that would cover it — directly and through a LET
+// binding. Guards `=IF(AREAS(A1#)=1, ...)` style shape checks against
+// surfacing `#VALUE!`.
+TEST(BuiltinsAreas, SpilledRangeReferenceIsOneArea) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Cell cell;
+  cell.formula_text = "=SEQUENCE(3)";
+  Arena arena;
+  const Value anchor = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena);
+  ASSERT_TRUE(anchor.is_number());
+  ASSERT_NE(sheet.spill_region_at_anchor(0U, 0U), nullptr);
+
+  const Value direct = EvalSourceIn("=AREAS(A1#)", wb, sheet);
+  ASSERT_TRUE(direct.is_number()) << "kind=" << static_cast<int>(direct.kind());
+  EXPECT_EQ(direct.as_number(), 1.0);
+
+  const Value bound = EvalSourceIn("=LET(s, A1#, AREAS(s))", wb, sheet);
+  ASSERT_TRUE(bound.is_number()) << "kind=" << static_cast<int>(bound.kind());
+  EXPECT_EQ(bound.as_number(), 1.0);
+}
+
+// A LET binding is transparent to the structural count: the bound source AST
+// decides the answer, not the opaque `NameRef` wrapper.
+TEST(BuiltinsAreas, LetBoundRangeCountsItsSourceShape) {
+  const Value single = EvalSource("=LET(r, A1:B2, AREAS(r))");
+  ASSERT_TRUE(single.is_number()) << "kind=" << static_cast<int>(single.kind());
+  EXPECT_EQ(single.as_number(), 1.0);
+
+  const Value picked = EvalSource("=LET(r, CHOOSE(2, A1:B2, (C1,D1)), AREAS(r))");
+  ASSERT_TRUE(picked.is_number()) << "kind=" << static_cast<int>(picked.kind());
+  EXPECT_EQ(picked.as_number(), 2.0);
 }
 
 }  // namespace

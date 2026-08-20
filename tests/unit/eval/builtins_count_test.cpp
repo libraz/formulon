@@ -586,6 +586,76 @@ TEST(BuiltinsCount, CountaUnionWithOverlapDoubleCounts) {
   EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
 }
 
+// ---------------------------------------------------------------------------
+// Range provenance across argument shapes. COUNT's answer depends on the
+// argument's provenance, not on the AST node kind that produced it: every
+// shape resolving to the same rectangle must skip the Bool / Text / Blank
+// cells the bare range skips.
+// ---------------------------------------------------------------------------
+
+// A1:A4 = 1, TRUE, "x", 2. Only the two numbers count under range provenance;
+// direct-argument provenance would additionally count the Bool.
+void PopulateMixedColumn(Sheet& sheet) {
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::boolean(true));
+  sheet.set_cell_value(2, 0, Value::text("x"));
+  sheet.set_cell_value(3, 0, Value::number(2.0));
+}
+
+TEST(BuiltinsCount, RangeProvenanceHoldsAcrossArgumentShapes) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  PopulateMixedColumn(sheet);
+
+  const Value bare = EvalSourceIn("=COUNT(A1:A4)", wb, sheet);
+  ASSERT_TRUE(bare.is_number());
+  EXPECT_DOUBLE_EQ(bare.as_number(), 2.0);
+
+  for (const char* src : {"=COUNT(IF(TRUE,A1:A4,A1:A1))", "=COUNT(CHOOSE(1,A1:A4))", "=COUNT(OFFSET(A1,0,0,4,1))",
+                          "=COUNT(A1:A4 A1:A4)", "=LET(r, A1:A4, COUNT(r))"}) {
+    const Value v = EvalSourceIn(src, wb, sheet);
+    ASSERT_TRUE(v.is_number()) << src << " kind=" << static_cast<int>(v.kind());
+    EXPECT_DOUBLE_EQ(v.as_number(), bare.as_number()) << src;
+  }
+}
+
+TEST(BuiltinsCount, SpilledRangeCarriesRangeProvenance) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Cell cell;
+  cell.formula_text = "=SEQUENCE(3)";
+  Arena arena;
+  const Value anchor = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena);
+  ASSERT_TRUE(anchor.is_number());
+  ASSERT_NE(sheet.spill_region_at_anchor(0U, 0U), nullptr);
+
+  const Value direct = EvalSourceIn("=COUNT(A1#)", wb, sheet);
+  ASSERT_TRUE(direct.is_number()) << "kind=" << static_cast<int>(direct.kind());
+  EXPECT_DOUBLE_EQ(direct.as_number(), 3.0);
+
+  const Value bound = EvalSourceIn("=LET(s, A1#, COUNT(s))", wb, sheet);
+  ASSERT_TRUE(bound.is_number()) << "kind=" << static_cast<int>(bound.kind());
+  EXPECT_DOUBLE_EQ(bound.as_number(), direct.as_number());
+}
+
+// AND / OR read the same buckets: a range-sourced Text cell is skipped while
+// the same text supplied directly surfaces `#VALUE!`.
+TEST(BuiltinsCount, AndOrRangeProvenanceSkipsTextCells) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  PopulateMixedColumn(sheet);
+
+  for (const char* src : {"=AND(A1:A4)", "=AND(IF(TRUE,A1:A4,A1:A1))", "=LET(r, A1:A4, AND(r))"}) {
+    const Value v = EvalSourceIn(src, wb, sheet);
+    ASSERT_TRUE(v.is_boolean()) << src << " kind=" << static_cast<int>(v.kind());
+    EXPECT_TRUE(v.as_boolean()) << src;
+  }
+
+  const Value direct_text = EvalSourceIn("=AND(\"x\")", wb, sheet);
+  ASSERT_TRUE(direct_text.is_error());
+  EXPECT_EQ(direct_text.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -4,8 +4,8 @@
 // PERCENTRANK.INC, PERCENTRANK.EXC.
 //
 // Every function shares the same front-end work: resolve the array
-// argument — which may be a `Ref`, a `RangeOp`, or an inline
-// `ArrayLiteral` — into a flat vector of `Value`s, propagate any error
+// argument — any range, spilled range, array literal or dynamic-array
+// expression — into a flat vector of `Value`s, propagate any error
 // cell in scan order, then filter down to the numeric cells only
 // (Text / Bool / Blank are skipped, matching MEDIAN / LARGE / SMALL
 // semantics in `src/eval/builtins/stats.cpp`). The scalar arguments
@@ -45,49 +45,23 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Resolves the array / Ref / RangeOp / ArrayLiteral argument into a
-// vector of raw `Value`s in row-major order. Accepts any shape accepted
-// by `resolve_range_arg` plus inline ArrayLiterals; on an unsupported
-// shape (bare scalar, function call other than OFFSET, arithmetic) we
-// evaluate the subtree to allow its own error to propagate and
-// otherwise surface `#VALUE!`. Returns `true` on success; on failure
+// Resolves the array argument into a vector of raw `Value`s in row-major
+// order. Accepts every shape `resolve_range_arg` resolves — `Ref` /
+// `RangeOp` / `SpillRef` / `ArrayLiteral` and dynamic-array producers
+// such as `SEQUENCE`. A subtree that collapses to a bare scalar is
+// rejected with `#VALUE!` because a lone value is not a valid array
+// argument for RANK / PERCENTRANK; an error inside the subtree
+// propagates with its own code. Returns `true` on success; on failure
 // writes the Excel error into `*out_err` and returns `false`.
 bool resolve_array_cells(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err) {
-  const parser::NodeKind k = arg_node.kind();
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
-    if (!resolved) {
-      *out_err = Value::error(resolved.error());
-      return false;
-    }
-    *out_cells = std::move(resolved.value().cells);
-    return true;
-  }
-  if (k == parser::NodeKind::ArrayLiteral) {
-    const std::uint32_t rows = arg_node.as_array_rows();
-    const std::uint32_t cols = arg_node.as_array_cols();
-    const std::size_t total = static_cast<std::size_t>(rows) * cols;
-    out_cells->clear();
-    out_cells->reserve(total);
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      for (std::uint32_t c = 0; c < cols; ++c) {
-        out_cells->push_back(eval_node(arg_node.as_array_element(r, c), arena, registry, ctx));
-      }
-    }
-    return true;
-  }
-  // Scalar / call / arithmetic subtree: evaluate so a genuine error
-  // inside the subtree propagates with its real code; otherwise reject
-  // with `#VALUE!` because a bare scalar is not a valid array argument
-  // for RANK / PERCENTRANK.
-  const Value v = eval_node(arg_node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
+  auto resolved = resolve_range_arg_no_scalar(arg_node, arena, registry, ctx, ErrorCode::Value);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
     return false;
   }
-  *out_err = Value::error(ErrorCode::Value);
-  return false;
+  *out_cells = std::move(resolved.value().cells);
+  return true;
 }
 
 // Collects the numeric cells of the resolved array in scan order,

@@ -25,8 +25,17 @@
 //   layer N -> super-nodes whose dependencies live in layers < N.
 //
 // Within a single layer no two super-nodes share a dependency edge with
-// one another, so they may be evaluated concurrently. A pool of OS
-// workers drains a per-layer queue; each worker holds its
+// one another, so they may be evaluated concurrently — with one exception.
+// A volatile formula is the case where the recorded edges do not describe
+// the formula's reads: `INDIRECT` / `OFFSET` compute their target at
+// evaluation time, so no edge is registered for it and the target may sit
+// in the same layer as its reader. A super-node holding a volatile cell is
+// therefore evaluated on the calling thread after the rest of its layer has
+// drained, so it reads a cell store no worker is writing. Only registered
+// volatile cells lose parallelism; a workbook with none is scheduled
+// exactly as the layering describes.
+//
+// A pool of OS workers drains a per-layer queue; each worker holds its
 // own `EvalContext` (the type carries no globals — it is a non-owning
 // view of `Workbook` + `Sheet` + `EvalState`). The `Workbook`'s cell
 // store is mutated through a single `std::mutex`; the lock is held only
@@ -102,8 +111,11 @@ struct SchedulerStats {
   /// Layers dispatched on the worker pool (i.e. layer size >= 2 AND the
   /// pool was successfully spawned).
   std::uint64_t parallel_steps = 0;
-  /// Layers processed serially on the calling thread because the layer
-  /// had <= 1 super-node or the caller selected one worker.
+  /// Serial batches processed on the calling thread: a whole layer that
+  /// had <= 1 poolable super-node or ran under a one-worker cap, plus the
+  /// volatile-bearing tail of any layer that was otherwise dispatched to
+  /// the pool. A layer can therefore contribute to this counter and to
+  /// `parallel_steps` at once.
   std::uint64_t serial_fallback_steps = 0;
   /// Number of cyclic SCCs successfully resolved by the iterative solver
   /// (excluding `#REF!`-fallback components).

@@ -34,9 +34,27 @@ namespace eval {
 /// rare case a slice would split a surrogate pair.
 std::size_t utf16_to_byte_offset(std::string_view text, std::uint32_t units_offset) noexcept;
 
+/// The rounding-down counterpart of `utf16_to_byte_offset`: when
+/// `units_offset` falls between the two halves of a surrogate pair, the
+/// returned byte offset is positioned BEFORE the full codepoint. Otherwise
+/// the two agree.
+///
+/// This is the rounding a slice's *start* needs. Rounding a start up skips
+/// the split codepoint entirely, and when the requested slice is the tail of
+/// the text there is nothing left after it — `RIGHT("abc\U0001F642", 1)`
+/// would be the empty string rather than the emoji. Rounding the start down
+/// and the end up means a slice that would split a surrogate pair always
+/// widens to whole codepoints instead of collapsing.
+std::size_t utf16_to_byte_offset_floor(std::string_view text, std::uint32_t units_offset) noexcept;
+
 /// Returns a substring of `text` covering UTF-16 units [start_units, start_units + length_units).
 /// Both bounds are clamped to the text's UTF-16 length. Returns an owned `std::string`
 /// because the result may differ in byte length from any view into `text`.
+///
+/// The start rounds down and the end rounds up, so LEFT / MID / RIGHT all
+/// widen a surrogate-splitting slice to whole codepoints in the same
+/// direction. A non-empty `text` with `length_units >= 1` and an in-range
+/// start therefore never yields an empty result.
 std::string utf16_substring(std::string_view text, std::uint32_t start_units, std::uint32_t length_units);
 
 /// In-place ASCII case folding. Bytes 'A'..'Z' map to 'a'..'z' (and vice versa

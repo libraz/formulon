@@ -78,6 +78,17 @@ Expected<double, ErrorCode> percentile_sorted_inc(const std::vector<double>& xs_
 /// elements.
 Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_sorted, double k);
 
+/// MEDIAN kernel: the middle element of `xs` by value, or the mean of the
+/// two middle elements when the count is even. `xs` is sorted internally,
+/// so callers must not pre-sort and may `std::move` their vector in.
+/// Returns `#NUM!` for an empty slice and for a non-finite midpoint.
+///
+/// Shared between MEDIAN (`stats/stats_order.cpp`) and AGGREGATE function
+/// 12 (`aggregate_lazy.cpp`). Excel treats the two spellings as
+/// interchangeable, so a single definition is what keeps them from
+/// reporting different error codes for the same filtered input.
+Expected<double, ErrorCode> run_median(std::vector<double> xs);
+
 /// MODE.SNGL kernel: the value tied for the highest frequency that
 /// appears *first* in the input order. Excel exact-double equality is
 /// used for tie-breaking. Returns `#N/A` when the slice is empty or no

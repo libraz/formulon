@@ -397,26 +397,26 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
   const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
 
-  // Share the `@`-operator (NodeKind::ImplicitIntersection) projection: for a
-  // static `RangeOp(Ref, Ref)` arg, project the formula cell onto the range.
-  // Out-of-axis formula cells surface `#VALUE!`, matching the `@` operator's
-  // documented behaviour.
-  if (arg.kind() == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs_ast = arg.as_range_lhs();
-    const parser::AstNode& rhs_ast = arg.as_range_rhs();
-    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
-      return Value::error(ErrorCode::Value);
+  // Share the `@`-operator (NodeKind::ImplicitIntersection) projection so the
+  // two spellings cannot drift on which operand shapes project or on which
+  // cell they land: every reference that declares a rectangle — bounded
+  // `Ref:Ref`, full-axis `Ref:Ref`, and the single `Ref` the parser folds
+  // `A:A` / `1:1` into — goes through one projection. Out-of-axis formula
+  // cells surface `#VALUE!`, matching the `@` operator's documented
+  // behaviour.
+  if (ctx.has_formula_cell()) {
+    parser::Reference target{};
+    switch (project_implicit_intersection(arg, ctx.formula_row(), ctx.formula_col(), &target)) {
+      case IntersectionProjection::kCell:
+        return ctx.resolve_ref(target, arena, registry);
+      case IntersectionProjection::kNoCell:
+        return Value::error(ErrorCode::Value);
+      case IntersectionProjection::kNotStaticReference:
+        break;
     }
-    if (!ctx.has_formula_cell()) {
-      // Without a bound formula cell there is no row/col to project onto.
-      return Value::error(ErrorCode::Value);
-    }
-    const std::optional<parser::Reference> target =
-        project_implicit_intersection(lhs_ast.as_ref(), rhs_ast.as_ref(), ctx.formula_row(), ctx.formula_col());
-    if (!target.has_value()) {
-      return Value::error(ErrorCode::Value);
-    }
-    return ctx.resolve_ref(*target, arena, registry);
+  } else if (arg.kind() == parser::NodeKind::RangeOp) {
+    // Without a bound formula cell there is no row/col to project onto.
+    return Value::error(ErrorCode::Value);
   }
 
   // Calls, spill references, and other non-range array expressions do not

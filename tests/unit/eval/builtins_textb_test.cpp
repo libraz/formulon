@@ -175,6 +175,13 @@ TEST(TextLeftb, CountExceedsLength) {
   EXPECT_EQ(v.as_text(), "ab");
 }
 
+TEST(TextLeftb, HugeCountBeyondIntRangeReturnsWholeText) {
+  // 1E+15 overflows int32; the clamp-before-cast must be host-independent.
+  const Value v = EvalSource("=LEFTB(\"ab\", 1E+15)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "ab");
+}
+
 TEST(TextLeftb, MixedAsciiHiragana) {
   // "aあb" = 'a' (1) + 'あ' (2) + 'b' (1) = 4 bytes.
   // LEFTB(...,2) consumes 'a' (1) then tries 'あ' (2); 1 byte remaining,

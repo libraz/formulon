@@ -284,6 +284,43 @@ TEST(BuiltinsText3TextBefore, EmptyDelimiterIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// The "delimiter cannot fit in text" guard measures length in Excel's own
+// unit, not in UTF-8 bytes. "あ" is one character but three bytes, so a byte
+// comparison would call it impossible against the two-character "ab" and
+// return #VALUE! where Excel reports the ordinary not-found #N/A — which is
+// what `if_not_found` and IFNA are there to catch.
+TEST(BuiltinsText3TextBefore, MultiByteDelimiterFitsIsNotFound) {
+  const Value v = EvalSource("=TEXTBEFORE(\"ab\", \"\xE3\x81\x82\", 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsText3TextBefore, MultiByteDelimiterFitsHonoursIfNotFound) {
+  const Value v = EvalSource("=TEXTBEFORE(\"ab\", \"\xE3\x81\x82\", 1, 0, 0, \"NA\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "NA");
+}
+
+// The guard still fires when the delimiter is genuinely longer: "xy" is two
+// characters against the one-character "あ".
+TEST(BuiltinsText3TextBefore, DelimiterLongerThanTextIsValueError) {
+  const Value v = EvalSource("=TEXTBEFORE(\"\xE3\x81\x82\", \"xy\", 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsText3TextAfter, MultiByteDelimiterFitsIsNotFound) {
+  const Value v = EvalSource("=TEXTAFTER(\"ab\", \"\xE3\x81\x82\", 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsText3TextAfter, DelimiterLongerThanTextIsValueError) {
+  const Value v = EvalSource("=TEXTAFTER(\"\xE3\x81\x82\", \"xy\", 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 // ---------------------------------------------------------------------------
 // TEXTAFTER
 // ---------------------------------------------------------------------------

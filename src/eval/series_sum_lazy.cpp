@@ -8,9 +8,10 @@
 
 #include <cmath>
 #include <cstddef>
-#include <cstdint>
+#include <utility>
 #include <vector>
 
+#include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
@@ -43,51 +44,27 @@ bool eval_scalar_numeric(const parser::AstNode& arg_node, Arena& arena, const Fu
   return true;
 }
 
-// Resolves the coefficients argument. Accepts `Ref`, `RangeOp`, and
-// `ArrayLiteral` in the same style as `regression_lazy.cpp`'s
-// `resolve_array_arg`, but we do not need the rectangle shape because
-// SERIESSUM treats the coefficient list as a flat 1-D sequence in
-// row-major order.
+// Resolves the coefficients argument through the canonical
+// `resolve_range_arg`, which covers `Ref` / `RangeOp` / `SpillRef` /
+// `ArrayLiteral` and dynamic-array producers such as `SEQUENCE`. The
+// rectangle shape is discarded because SERIESSUM treats the coefficient
+// list as a flat 1-D sequence in row-major order, and a bare scalar is
+// accepted as a 1x1 range: Excel treats `=SERIESSUM(2, 0, 1, 5)` as a
+// single-coefficient series.
 //
-// Returns `true` on success and writes the flat cell vector to `*out`.
-// On failure writes the Excel error to `*out_err` and returns `false`.
+// Returns `true` on success and writes the flat cell vector to `*out`,
+// with `*out_direct_scalar` recording whether the slot held a directly
+// supplied scalar rather than a rectangle. On failure writes the Excel
+// error to `*out_err` and returns `false`.
 bool resolve_coefficients(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
-                          const EvalContext& ctx, std::vector<Value>* out, Value* out_err) {
-  const parser::NodeKind k = arg_node.kind();
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
-    if (!resolved) {
-      *out_err = Value::error(resolved.error());
-      return false;
-    }
-    *out = std::move(resolved.value().cells);
-    return true;
-  }
-  if (k == parser::NodeKind::ArrayLiteral) {
-    const std::uint32_t rows = arg_node.as_array_rows();
-    const std::uint32_t cols = arg_node.as_array_cols();
-    const std::size_t total = static_cast<std::size_t>(rows) * cols;
-    out->clear();
-    out->reserve(total);
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      for (std::uint32_t c = 0; c < cols; ++c) {
-        Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
-        out->push_back(v);
-      }
-    }
-    return true;
-  }
-  // A bare scalar in the coefficients slot is acceptable: Excel treats
-  // `=SERIESSUM(2, 0, 1, 5)` as a single-coefficient series. Evaluate the
-  // subtree and wrap the result in a 1-element vector, propagating any
-  // error.
-  const Value v = eval_node(arg_node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
+                          const EvalContext& ctx, std::vector<Value>* out, bool* out_direct_scalar, Value* out_err) {
+  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
     return false;
   }
-  out->clear();
-  out->push_back(v);
+  *out_direct_scalar = resolved.value().from_scalar;
+  *out = std::move(resolved.value().cells);
   return true;
 }
 
@@ -116,7 +93,8 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
   }
 
   std::vector<Value> coefficients;
-  if (!resolve_coefficients(call.as_call_arg(3), arena, registry, ctx, &coefficients, &err)) {
+  bool direct_scalar = false;
+  if (!resolve_coefficients(call.as_call_arg(3), arena, registry, ctx, &coefficients, &direct_scalar, &err)) {
     return err;
   }
   if (coefficients.empty()) {
@@ -131,10 +109,24 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
     }
   }
 
-  // Accumulate Σᵢ coeff_i · x^(n + i·m) for i = 0..k-1. Non-numeric cells
-  // (Blank, Bool, Text) are skipped; the power index still advances so
-  // the i-th numeric coefficient is always paired with the i-th term,
-  // matching Excel's 1-based enumeration (first coefficient gets x^n).
+  // A directly supplied scalar coefficient (`=SERIESSUM(2, 0, 1, 5)`) is
+  // coerced, so a non-numeric one is #VALUE! rather than a term silently
+  // dropped from the series. Range-sourced cells keep the opposite rule
+  // below. This is the same direct-scalar / range-cell split IRR applies
+  // to its cash flows.
+  if (direct_scalar) {
+    auto coerced = coerce_to_number(coefficients.front());
+    if (!coerced) {
+      return Value::error(coerced.error());
+    }
+    coefficients.front() = Value::number(coerced.value());
+  }
+
+  // Accumulate Σᵢ coeff_i · x^(n + i·m) for i = 0..k-1. Range-sourced
+  // cells that are not numbers (Blank, Bool, Text) are skipped, matching
+  // Excel's tolerance of mixed columns; the power index still advances so
+  // the i-th coefficient is always paired with the i-th term, matching
+  // Excel's 1-based enumeration (first coefficient gets x^n).
   double total = 0.0;
   for (std::size_t i = 0; i < coefficients.size(); ++i) {
     const Value& v = coefficients[i];

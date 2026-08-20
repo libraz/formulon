@@ -26,7 +26,7 @@
 //                   filter. Codes 0..3 *also* skip nested SUBTOTAL/AGGREGATE
 //                   results inside the range; codes 4..7 do not.
 //
-// Two intentional simplifications relative to Mac Excel 365 (the same
+// One intentional simplification relative to Mac Excel 365 (the same
 // shortfall SUBTOTAL has documented in `eval/builtins/subtotal.cpp`):
 //
 //   * Nested-SUBTOTAL/AGGREGATE filtering: Excel ignores cells whose source
@@ -36,17 +36,24 @@
 //     filter is omitted. The nested-call bit is therefore unobservable and
 //     options codes 0/4, 1/5, 2/6, 3/7 each collapse to one pair of
 //     behaviors.
-//   * Hidden-row filtering: codes 1, 3, 5, 7 fold to the same treatment as
-//     0, 2, 4, 6 respectively because Formulon has no row-visibility state
-//     to consult.
 //
-// What we *do* honor today is the error-ignore bit (mask 2):
+// What we honor today is the hidden-row bit (mask 1) and the error-ignore
+// bit (mask 2):
 //
+//   * options ∈ {1, 3, 5, 7} -> cells sitting on a row whose `RowLayout`
+//     carries `hidden = true` are dropped before the aggregator runs. Only
+//     an argument that still names its sheet rows (a `Ref` or a `Ref:Ref`
+//     rectangle) carries that provenance; a literal array, a computed array
+//     and a spilled-range reference contribute every cell.
 //   * options ∈ {2, 3, 6, 7} -> range-sourced error cells are silently
 //     dropped before the aggregator runs.
 //   * options ∈ {0, 1, 4, 5} -> the first range-sourced error short-
 //     circuits to that error (canonical row-major scan order, matching
 //     SUBTOTAL).
+//
+// SUBTOTAL's lazy front-end lives here too: it shares the same argument
+// walk and hidden-row filter, then hands the surviving cells to the mode
+// dispatch in `eval/builtins/subtotal.cpp`.
 //
 // AGGREGATE is registered through the central `kLazyDispatch` table in
 // `tree_walker.cpp` rather than via `FunctionRegistry::register_function`.
@@ -90,7 +97,8 @@ class FunctionRegistry;
 ///     data range(s). Each may be a range, a Ref, an inline `{...}` array
 ///     literal, or a direct scalar. Per-cell provenance: range-sourced
 ///     non-numeric cells are dropped (except for code 3, COUNTA, which
-///     counts every non-blank).
+///     counts every non-blank), and range-sourced cells on a hidden row
+///     are dropped when the hidden-row bit is set.
 ///   * For `function_num` 14..19: exactly one data argument, followed by a
 ///     trailing scalar `k` / probability / quart. Excess args yield
 ///     `#VALUE!`. The constraints on `k` are per-mode:
@@ -109,12 +117,29 @@ class FunctionRegistry;
 Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
 
+/// `SUBTOTAL(function_num, ref1, [ref2], ...)` — the lazy front-end that
+/// gives SUBTOTAL access to row visibility.
+///
+/// Arguments:
+///   * `function_num` (required): 1..11, or 101..111 for the same
+///     aggregator with hidden rows excluded. Anything else is `#VALUE!`.
+///   * The remaining positional args are data. Each may be a range, a Ref,
+///     an inline `{...}` array literal, or a direct scalar.
+///
+/// Codes 101..111 drop the cells of a reference-shaped argument that sit on
+/// a row whose `RowLayout` carries `hidden = true`; arguments with no row
+/// provenance contribute every cell. The surviving cells are handed to
+/// `subtotal_apply`, which owns the mode semantics for both windows.
+Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx);
+
 // Compile-time guard: `eval_aggregate_lazy` must convert implicitly to
 // the shared `LazyImpl` function-pointer type published in
 // `eval/lazy_impls.h`, otherwise the dispatch table in `tree_walker.cpp`
 // would silently break. Witness flagged at the header so a parameter
 // drift surfaces here, not five files away.
 inline constexpr LazyImpl kAggregateLazySignatureWitness = &eval_aggregate_lazy;
+inline constexpr LazyImpl kSubtotalLazySignatureWitness = &eval_subtotal_lazy;
 
 }  // namespace eval
 }  // namespace formulon

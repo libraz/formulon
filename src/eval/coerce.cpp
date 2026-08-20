@@ -209,6 +209,14 @@ Expected<double, ErrorCode> apply_pow(double base, double exp) {
   if (base == 0.0 && exp == 0.0) {
     return ErrorCode::Num;
   }
+  // A zero base with a negative exponent is `1 / 0^|exp|`, and Excel reports
+  // it the way it reports any division by zero — `#DIV/0!`, matching the `/`
+  // operator and MOD / QUOTIENT rather than the `#NUM!` that std::pow's
+  // `+Inf` would otherwise be folded into below. The distinction is
+  // load-bearing for `IFERROR` / `ISERR` / `ERROR.TYPE` routing.
+  if (base == 0.0 && exp < 0.0) {
+    return ErrorCode::Div0;
+  }
   // For all other cases Excel matches std::pow: negative base with a
   // non-integer exponent yields NaN -> #NUM!, and overflow / underflow to
   // Inf also yields #NUM!.

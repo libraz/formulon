@@ -176,6 +176,26 @@ ThreadArenas make_thread_arenas(std::size_t count, std::size_t max_arena_bytes) 
   return arenas;
 }
 
+// Copies the formula cell at `(row, col)` out of `sheet` and stages it for
+// `evaluate_cell_for_recalc`. Returns false when the coordinate holds no
+// formula, in which case `staged` is left untouched.
+//
+// `Sheet::cell_at` hands back a raw `Cell*` and releases the sheet lock, so
+// a worker that kept one across an evaluation would read `formula_text`
+// while a peer's `set_cell_cached_value` rewrites the same slot — and a
+// spill commit that grows the row's storage relocates the slot outright.
+// The staged copy owns the only field the evaluator reads, so neither
+// reaches it.
+bool stage_formula_cell(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Cell& staged) {
+  Sheet::CellRead read;
+  sheet.read_formula_cell(row, col, read);
+  if (!read.is_formula()) {
+    return false;
+  }
+  staged.formula_text.assign(read.formula_text());
+  return true;
+}
+
 // Evaluates a single dirty SCC and writes the result(s) back into `wb`.
 // Holds `write_mutex` only across the per-cell `set_cell_cached_value`
 // call so concurrent evaluators on other SCCs of the same layer do not
@@ -222,13 +242,18 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
     // before returning. Concurrent SCC processors operate on disjoint
     // cells (different SCCs by construction), so the cell-store mutex
     // only ever contends inside `commit`.
+    // Hoisted out of `evaluate_one` so a staged formula's bytes stay live
+    // exactly as long as the arena contents of the same call: a string
+    // literal inside the formula surfaces in the returned Value as a view
+    // into this buffer, and the solver consumes each result before asking
+    // for the next one (which resets the arena).
+    Cell staged;
     auto evaluate_one = [&](CellNodeId c) -> Value {
       if (c.sheet_id >= sheet_count) {
         return Value::error(ErrorCode::Ref);
       }
       Sheet& sheet = wb.sheet(c.sheet_id);
-      const Cell* cell_data = sheet.cell_at(c.row, c.col);
-      if (cell_data == nullptr || cell_data->formula_text.empty()) {
+      if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
         return Value::blank();
       }
       arena.reset();
@@ -236,7 +261,7 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       opts.iterative_mode = true;
       opts.spill_release_callback = release_callback;
       opts.spill_release_user_data = release_user_data;
-      return evaluate_cell_for_recalc(wb, sheet, *cell_data, c.row, c.col, registry, arena, opts);
+      return evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
     };
     auto commit = [&](CellNodeId c, Value v) {
       if (c.sheet_id >= sheet_count) {
@@ -266,15 +291,18 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
     return out;
   }
   Sheet& sheet = wb.sheet(only.sheet_id);
-  const Cell* cell_data = sheet.cell_at(only.row, only.col);
-  if (cell_data == nullptr || cell_data->formula_text.empty()) {
+  // `staged` must outlive the commit below: a formula whose result is a
+  // string literal returns a view into its own source text, and
+  // `set_cell_cached_value` is what deep-copies those bytes into the cell.
+  Cell staged;
+  if (!stage_formula_cell(sheet, only.row, only.col, staged)) {
     return out;
   }
   arena.reset();
   EvaluateCellOptions opts;
   opts.spill_release_callback = release_callback;
   opts.spill_release_user_data = release_user_data;
-  Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, only.row, only.col, registry, arena, opts);
+  Value result = evaluate_cell_for_recalc(wb, sheet, staged, only.row, only.col, registry, arena, opts);
   if (arena.exhausted()) {
     out.arena_exhausted = true;
     return out;
@@ -652,7 +680,35 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         }
       }
 
-      bool run_serial = layer.size() <= 1U || configured_worker_count <= 1U || callback_cycle;
+      // Split the layer into the super-nodes the pool may drain concurrently
+      // and the ones that have to run with every worker parked.
+      //
+      // "Same layer => no shared dependency edge => safe to run together" is
+      // a statement about the edges the graph records, and a volatile
+      // formula is precisely the case where those edges do not describe the
+      // reads. `INDIRECT` / `OFFSET` compute their target at evaluation
+      // time, so `dep_extractor` registers nothing for it and nothing stops
+      // that target from sitting in the same layer as its reader — where a
+      // peer worker would be committing it as it is read. Volatile-bearing
+      // super-nodes therefore run on the calling thread once the layer's
+      // edge-scheduled work has drained, against a quiescent cell store.
+      // Only cells the workbook actually registered as volatile lose
+      // parallelism; a workbook with none is scheduled exactly as before.
+      std::vector<std::size_t> pooled;
+      std::vector<std::size_t> isolated;
+      pooled.reserve(layer.size());
+      for (const std::size_t scc_id : layer) {
+        bool volatile_bearing = false;
+        for (const CellNodeId member : idx.components[scc_id]) {
+          if (engine.volatiles_.contains(member)) {
+            volatile_bearing = true;
+            break;
+          }
+        }
+        (volatile_bearing ? isolated : pooled).push_back(scc_id);
+      }
+
+      bool run_serial = pooled.size() <= 1U || configured_worker_count <= 1U || callback_cycle;
       if (!run_serial && worker_pool == nullptr) {
         // The pool is lazy so a no-op / serial-only recalc starts no OS
         // workers merely because the caller selected a parallel cap. Once
@@ -690,7 +746,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       // barrier for the next layer after draining this queue.
       std::vector<SccOutcome> outcomes;
       LayerWork work;
-      work.tasks = &layer;
+      work.tasks = &pooled;
       work.components = &idx.components;
       work.wb = &wb;
       work.graph = &engine.graph_;
@@ -714,6 +770,24 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         cycle_recoveries += o.cycle_recoveries;
       }
       ++parallel_steps;
+
+      // `run()` returned, so every worker is back at the barrier and the
+      // cell store is quiescent. This is where the layer's volatile-bearing
+      // super-nodes run.
+      if (!isolated.empty()) {
+        ++serial_fallback_steps;
+        Arena& arena = *arenas[0U];
+        for (const std::size_t scc_id : isolated) {
+          const SccOutcome o =
+              process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena, progress_cb,
+                          progress_user_data, write_mutex, release_callback, &release_queue);
+          if (o.arena_exhausted) {
+            return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+          }
+          cells_evaluated += o.cells_evaluated;
+          cycle_recoveries += o.cycle_recoveries;
+        }
+      }
     }
 
     // Phase 4b: standalone-dirty cells (no graph edges, e.g. `=NOW()`).
@@ -733,15 +807,15 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
           continue;
         }
         Sheet& sheet = wb.sheet(c.sheet_id);
-        const Cell* cell_data = sheet.cell_at(c.row, c.col);
-        if (cell_data == nullptr || cell_data->formula_text.empty()) {
+        Cell staged;
+        if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
           continue;
         }
         arena.reset();
         EvaluateCellOptions opts;
         opts.spill_release_callback = release_callback;
         opts.spill_release_user_data = &release_queue;
-        Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, c.row, c.col, registry, arena, opts);
+        Value result = evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
         if (arena.exhausted()) {
           return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
         }

@@ -300,6 +300,26 @@ TEST(MathPower, ZeroPowZeroIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+// A zero base with a negative exponent is a division by zero, and Excel
+// reports it with the `/` operator's code rather than the `#NUM!` that
+// std::pow's `+Inf` would collapse into. `IFERROR` / `ERROR.TYPE` routing
+// depends on the distinction, so both spellings are pinned.
+TEST(MathPower, ZeroPowNegativeIsDiv0) {
+  for (const std::string_view source : {"=POWER(0, -1)", "=POWER(0, -0.5)", "=POWER(0, -2)"}) {
+    const Value v = EvalSource(source);
+    ASSERT_TRUE(v.is_error()) << source;
+    EXPECT_EQ(v.as_error(), ErrorCode::Div0) << source;
+  }
+}
+
+TEST(MathPower, BinaryOpZeroPowNegativeIsDiv0) {
+  for (const std::string_view source : {"=0^-1", "=0^-2", "=0^-0.5"}) {
+    const Value v = EvalSource(source);
+    ASSERT_TRUE(v.is_error()) << source;
+    EXPECT_EQ(v.as_error(), ErrorCode::Div0) << source;
+  }
+}
+
 TEST(MathPower, NegativeBaseFractionalExpYieldsNum) {
   const Value v = EvalSource("=POWER(-1, 0.5)");
   ASSERT_TRUE(v.is_error());

@@ -160,6 +160,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
   bool has_digit_after_comma = false;
   int trailing_commas = 0;
   int last_digit_index = -1;
+  int last_integer_digit_index = -1;
 
   auto is_digit_tok = [](Tok k) { return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad; };
 
@@ -202,6 +203,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
       last_digit_index = static_cast<int>(i);
       const bool in_integer = !saw_sci && ((point_index < 0) || (static_cast<int>(i) < point_index));
       if (in_integer) {
+        last_integer_digit_index = static_cast<int>(i);
         if (tk.kind == Tok::DigitZero) {
           ++int_zero;
         }
@@ -229,27 +231,29 @@ void classify(Section& section, std::string_view fmt) noexcept {
       }
     }
   }
-  // Count trailing commas between last integer digit and either `.` or
-  // end-of-integer. Each such comma divides by 1000.
+  // Count the scaling commas: every `,` that follows the section's last digit
+  // placeholder, whether that placeholder sits in the integer or in the
+  // fractional part. `#,##0.0,` scales by 1e3 exactly like `#,##0,` does.
+  // Each such comma divides by 1000.
   if (last_digit_index >= 0) {
-    std::size_t end = point_index >= 0 ? static_cast<std::size_t>(point_index) : section.tokens.size();
-    for (std::size_t i = static_cast<std::size_t>(last_digit_index) + 1; i < end; ++i) {
+    for (std::size_t i = static_cast<std::size_t>(last_digit_index) + 1; i < section.tokens.size(); ++i) {
       if (section.tokens[i].kind == Tok::Comma) {
         ++trailing_commas;
       }
     }
-    // Thousands-separator test: any `,` between two digit tokens triggers it.
+  }
+  // Thousands-separator test: any `,` between two integer digit tokens
+  // triggers it. Bounded by the integer part so a scaling comma placed after
+  // the fraction cannot be mistaken for a group separator.
+  if (last_integer_digit_index >= 0) {
     bool seen_digit = false;
-    for (std::size_t i = 0; i <= static_cast<std::size_t>(last_digit_index); ++i) {
+    for (std::size_t i = 0; i <= static_cast<std::size_t>(last_integer_digit_index); ++i) {
       const Token& tk = section.tokens[i];
       if (is_digit_tok(tk.kind)) {
-        if (seen_digit) {
-          // Already had a digit; look backward for a `,` between.
-        }
         seen_digit = true;
       } else if (tk.kind == Tok::Comma && seen_digit) {
         // Peek forward to confirm another digit follows.
-        for (std::size_t j = i + 1; j <= static_cast<std::size_t>(last_digit_index); ++j) {
+        for (std::size_t j = i + 1; j <= static_cast<std::size_t>(last_integer_digit_index); ++j) {
           if (is_digit_tok(section.tokens[j].kind)) {
             has_digit_after_comma = true;
             break;

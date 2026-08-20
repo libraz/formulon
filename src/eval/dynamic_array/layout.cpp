@@ -11,7 +11,6 @@
 #include "eval/dynamic_array/common.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
-#include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/checked_mul.h"
@@ -111,16 +110,10 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
     error_out = Value::error(ErrorCode::Value);
     return false;
   }
-  const Value v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (v.is_error()) {
-    error_out = v;
+  const ArrayValue* arr = nullptr;
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &arr, &error_out)) {
     return false;
   }
-  if (!v.is_array()) {
-    error_out = Value::error(ErrorCode::Value);
-    return false;
-  }
-  const ArrayValue* arr = v.as_array();
   // `vector` must be 1D in either orientation; a 2D rectangle is rejected
   // here (the WRAP family is for vectors only).
   if (arr->rows != 1U && arr->cols != 1U) {
@@ -237,11 +230,16 @@ Value eval_wrap(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
+  // Generated pad cells get the direct-grid zero projection, while a source
+  // cell copied out of the input vector is promoted so a blank that came from
+  // a worksheet reference counts as an occupied cell of the new array.
+  const Value pad_cell = pad.is_blank() ? Value::blank(BlankGridProjection::kValueArrayZero)
+                                        : pad.promote_reference_blank_to_value_array();
   for (std::size_t i = 0; i < total; ++i) {
     // WRAPCOLS fills down each column first, so the source index walks the
     // output in column-major order.
     const std::size_t flat = by_row ? i : ((i % out_cols) * out_rows) + (i / out_cols);
-    buffer[i] = (flat < count) ? vector_arr->cells[flat] : pad;
+    buffer[i] = (flat < count) ? vector_arr->cells[flat].promote_reference_blank_to_value_array() : pad_cell;
   }
   return Value::array(out);
 }

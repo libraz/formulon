@@ -14,11 +14,22 @@
 //  10 / 110  VAR    (sample)
 //  11 / 111  VARP   (population)
 //
-// The 100+ variants nominally "ignore manually-hidden rows"; Formulon does
-// not yet model row visibility, so the two ranges produce identical results.
-// The semantic shortfall is observable only when a workbook actually carries
-// hidden rows; with our oracle corpus it surfaces as a deliberate gap rather
-// than a wrong answer.
+// The 100+ variants ignore manually-hidden rows. Row visibility lives on the
+// sheet, which an eager builtin cannot reach, so the cells that reach
+// `subtotal_apply` have already been filtered: the lazy front-end
+// `eval_subtotal_lazy` (in `eval/aggregate_lazy.cpp`) resolves each data
+// argument, drops the cells sitting on a `RowLayout` with `hidden = true`
+// when the code is 101..111, and calls this dispatch with what survives.
+// This file therefore owns the mode semantics only, and the 100+ fold below
+// is correct precisely because the filtering happened upstream.
+//
+// The lazy entry precedes the eager one in `dispatch_call`, so the tree
+// walker always takes the filtered path. The eager registration at the
+// bottom stays for the bytecode VM, which has no call AST and so reaches
+// this impl through the registry with unfiltered cells. That path cannot
+// honour row visibility — the same IR limitation already documented for the
+// range-aware aggregators — and it is diagnostic only: the VM runs behind
+// `FORMULON_VM_PARITY_CHECK`, never in production recalc.
 //
 // SUBTOTAL is registered with `accepts_ranges = true` and an explicit opt-out
 // of the dispatcher's `range_filter_numeric_only` flag: code 3 (COUNTA) needs
@@ -29,14 +40,12 @@
 // aggregator before we can decide whether to count it (COUNTA does count
 // errors; the numeric branches do not).
 //
-// Two intentional simplifications relative to Mac Excel 365:
+// One intentional simplification relative to Mac Excel 365:
 //   * Nested-SUBTOTAL filtering: Excel ignores cells whose source formula is
 //     itself a SUBTOTAL call so a column of subtotals can be summed without
 //     double-counting. We do not yet have access to per-cell formula text
 //     from inside a builtin, so the filter is omitted. None of the IronCalc
 //     fixtures exercise it.
-//   * Hidden-row filtering: codes 101..111 fold to the same treatment as
-//     1..11 because Formulon has no visibility state to consult.
 
 #include "eval/builtins/subtotal.h"
 
@@ -214,7 +223,9 @@ Value run_stdev(const Value* args, std::uint32_t arity, bool population) {
   return lift_kernel_result(aggregate_kernels::run_stdev(xs, /*sample=*/!population));
 }
 
-Value Subtotal(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+}  // namespace
+
+Value subtotal_apply(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (arity < 2u) {
     // arity == 0 cannot happen (registry enforces min_arity = 2), but the
     // bound is also enforced here so a future caller cannot violate the
@@ -263,11 +274,9 @@ Value Subtotal(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::error(ErrorCode::Value);
 }
 
-}  // namespace
-
 void register_subtotal_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"SUBTOTAL", 2u, kVariadic, &Subtotal, false, true},
+      {"SUBTOTAL", 2u, kVariadic, &subtotal_apply, false, true},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

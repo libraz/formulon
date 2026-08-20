@@ -6,10 +6,15 @@
 //   * REGEXREPLACE(text, pattern, replacement, [occurrence],
 //     [case_sensitivity]) -> text
 //
-// They ride the lazy seam because their `text` argument may be a
-// Range / Ref / ArrayLiteral that must reach the impl with its (rows,
-// cols) shape preserved (matches Mac Excel: a range hands back an
-// array-shaped result, broadcasting cellwise).
+// They ride the lazy seam because their `text` argument must reach the
+// impl with its (rows, cols) shape preserved (matches Mac Excel: an
+// array-valued `text` hands back an array-shaped result, broadcasting
+// cellwise). The result shape follows the argument's *value*, so a range,
+// an array literal, an arithmetic broadcast and a call returning an array
+// (UNIQUE / SORT / FILTER ...) all broadcast alike.
+//
+// All three evaluate their arguments in signature order, so when more
+// than one argument is in error the leftmost one surfaces.
 //
 // Compile + match runs through a single shared kernel in
 // `regex_lazy.cpp`; see that file for the option set, error mapping,
@@ -63,6 +68,10 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
 /// fold to global replacement. When `occurrence` exceeds the number of
 /// matches the original `text` is returned unchanged. Resource
 /// exhaustion yields `#CALC!`.
+///
+/// Inside `replacement` only `$n`, `${name}` and `$$` are special; every
+/// other byte, backslashes included, is emitted verbatim. A `$` that
+/// begins none of those three forms is a literal dollar.
 Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);
 

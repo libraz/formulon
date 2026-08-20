@@ -16,6 +16,7 @@
 #include "eval/builtins/text_detail.h"
 #include "eval/coerce.h"
 #include "eval/text_ops.h"
+#include "eval/utf8_length.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -208,7 +209,13 @@ Value TextBefore_(const Value* args, std::uint32_t arity, Arena& arena) {
   // (`TEXTBEFORE(text, delim)`) treats an impossible delimiter as a
   // regular "not found" and returns #N/A. Observed in Excel 365 /
   // IronCalc; K19 / J19 in TEXTBEFORE_TEXTAFTER_Sheet1 pin this split.
-  if (arity >= 3 && delimiter.value().size() > text.value().size()) {
+  //
+  // The comparison is a length test, not a shape test, so it uses Excel's
+  // own length unit. A raw byte comparison makes any non-ASCII delimiter
+  // look impossible against a shorter-in-bytes ASCII text — `TEXTBEFORE(
+  // "ab", "あ", 1)` would be `#VALUE!` instead of the not-found `#N/A`
+  // that `if_not_found` / `IFNA` are meant to catch.
+  if (arity >= 3 && utf16_units_in(delimiter.value()) > utf16_units_in(text.value())) {
     return Value::error(ErrorCode::Value);
   }
   bool arg_err = false;
@@ -248,10 +255,11 @@ Value TextAfter_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!opts) {
     return Value::error(opts.error());
   }
-  // Same domain guard as TEXTBEFORE — delimiter > text is #VALUE! once
-  // any optional argument has been provided; the 2-arg form treats the
-  // same input as a regular not-found and returns #N/A.
-  if (arity >= 3 && delimiter.value().size() > text.value().size()) {
+  // Same domain guard as TEXTBEFORE, in the same units — delimiter longer
+  // than text is #VALUE! once any optional argument has been provided; the
+  // 2-arg form treats the same input as a regular not-found and returns
+  // #N/A.
+  if (arity >= 3 && utf16_units_in(delimiter.value()) > utf16_units_in(text.value())) {
     return Value::error(ErrorCode::Value);
   }
   bool arg_err = false;

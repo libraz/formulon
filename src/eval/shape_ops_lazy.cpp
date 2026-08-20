@@ -17,6 +17,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
@@ -44,6 +45,14 @@ namespace {
 // broadcast rule (where "broadcast" here means only "a scalar is 1x1",
 // not the full v-array broadcasting Excel 365 implements for `--`).
 //
+// A static reference is measured, never expanded: the shape reported for
+// `A:A` is the declared 1,048,576 rows on an empty sheet as much as on a
+// full one, because `ROWS` asks what the reference names, not what the
+// sheet holds. Expanding it would answer with `expand_range`'s used-range
+// clamp, which exists to keep value enumeration affordable and is not a
+// shape. The dynamic shapes below (OFFSET / INDIRECT / a dynamic-array
+// producer) have no declared rectangle to read and must be resolved.
+//
 // For an `ArrayLiteral` both dimensions come from the AST directly. For
 // any other kind we simply evaluate it to determine whether it is an
 // error (and propagate if so); the shape is 1x1 otherwise.
@@ -64,6 +73,20 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
   const parser::AstNode& arg_node = *effective;
   const parser::NodeKind k = arg_node.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
+    const parser::Reference* lhs = nullptr;
+    const parser::Reference* rhs = nullptr;
+    if (declared_rect_endpoints(arg_node, &lhs, &rhs)) {
+      const auto rect = ctx.declared_range_rect(*lhs, *rhs);
+      if (!rect) {
+        *out_err = Value::error(rect.error());
+        return false;
+      }
+      *out_rows = rect.value().rows();
+      *out_cols = rect.value().cols();
+      return true;
+    }
+    // A `RangeOp` composed from reference-returning calls (`A1:OFFSET(...)`)
+    // has no static rectangle; its shape comes out of the expansion.
     auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
     if (!resolved) {
       *out_err = Value::error(resolved.error());
@@ -675,9 +698,18 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // Row-major fill: dst[c * src->rows + r] = src[r * src->cols + c]. The
   // scalar 1x1 case is degenerate (both dimensions are 1) so the loop runs
   // once and yields the same single cell back, consistent with Mac Excel.
+  //
+  // This is the copy that lands a worksheet cell in a derived array, so it
+  // is where a blank's provenance changes: a blank read out of a range is
+  // excluded from COUNTA, and a blank owned by a value array is an occupied
+  // array cell (`BlankGridProjection`). Without the promotion
+  // `COUNTA(TRANSPOSE(A1:D1))` and `COUNTA(FILTER(A1:D1, ...))` disagree
+  // about the same empty source range. The call is idempotent and a no-op
+  // for every non-blank cell.
   for (std::uint32_t r = 0; r < src->rows; ++r) {
     for (std::uint32_t c = 0; c < src->cols; ++c) {
-      buffer[static_cast<std::size_t>(c) * src->rows + r] = src->cells[static_cast<std::size_t>(r) * src->cols + c];
+      buffer[static_cast<std::size_t>(c) * src->rows + r] =
+          src->cells[static_cast<std::size_t>(r) * src->cols + c].promote_reference_blank_to_value_array();
     }
   }
   return Value::array(arr);

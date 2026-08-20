@@ -92,6 +92,93 @@ TEST(BuiltinsColumns, SingleCellRefIsOne) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
+// ---------------------------------------------------------------------------
+// Whole-axis references report the rectangle they declare, not the target
+// sheet's populated extent. `expand_range` clamps the unbounded axis so
+// enumerating the values stays affordable; that clamp is not a shape.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsRows, WholeColumnIsGridHeightOnEmptySheet) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROWS(A:A)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), static_cast<double>(Sheet::kMaxRows));
+}
+
+TEST(BuiltinsRows, WholeColumnIsGridHeightOnPopulatedSheet) {
+  // The same answer with content in the column: the declared rectangle does
+  // not depend on what the sheet holds.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(4, 0, Value::number(5.0));
+  const Value v = EvalSourceIn("=ROWS(A:A)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), static_cast<double>(Sheet::kMaxRows));
+}
+
+TEST(BuiltinsColumns, WholeColumnSpanIsSpanWidth) {
+  Workbook wb = Workbook::create();
+  const Value empty = EvalSourceIn("=COLUMNS(A:C)", wb, wb.sheet(0));
+  ASSERT_TRUE(empty.is_number());
+  EXPECT_DOUBLE_EQ(empty.as_number(), 3.0);
+
+  wb.sheet(0).set_cell_value(0, 1, Value::number(7.0));
+  const Value populated = EvalSourceIn("=COLUMNS(A:C)", wb, wb.sheet(0));
+  ASSERT_TRUE(populated.is_number());
+  EXPECT_DOUBLE_EQ(populated.as_number(), 3.0);
+}
+
+TEST(BuiltinsRows, WholeColumnSpanIsGridHeight) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROWS(A:C)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), static_cast<double>(Sheet::kMaxRows));
+}
+
+TEST(BuiltinsColumns, WholeRowIsGridWidth) {
+  Workbook wb = Workbook::create();
+  const Value empty = EvalSourceIn("=COLUMNS(1:1)", wb, wb.sheet(0));
+  ASSERT_TRUE(empty.is_number());
+  EXPECT_DOUBLE_EQ(empty.as_number(), static_cast<double>(Sheet::kMaxCols));
+
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  const Value populated = EvalSourceIn("=COLUMNS(1:1)", wb, wb.sheet(0));
+  ASSERT_TRUE(populated.is_number());
+  EXPECT_DOUBLE_EQ(populated.as_number(), static_cast<double>(Sheet::kMaxCols));
+}
+
+TEST(BuiltinsRows, WholeRowSpanIsSpanHeight) {
+  Workbook wb = Workbook::create();
+  const Value empty = EvalSourceIn("=ROWS(1:3)", wb, wb.sheet(0));
+  ASSERT_TRUE(empty.is_number());
+  EXPECT_DOUBLE_EQ(empty.as_number(), 3.0);
+
+  wb.sheet(0).set_cell_value(1, 0, Value::number(7.0));
+  const Value populated = EvalSourceIn("=ROWS(1:3)", wb, wb.sheet(0));
+  ASSERT_TRUE(populated.is_number());
+  EXPECT_DOUBLE_EQ(populated.as_number(), 3.0);
+}
+
+TEST(BuiltinsRows, WholeAxisShapeIsAtLeastOne) {
+  // Excel never answers 0 for a valid full-axis reference; the used-range
+  // clamp used to make an empty sheet do exactly that.
+  Workbook wb = Workbook::create();
+  for (std::string_view src : {"=ROWS(A:A)", "=COLUMNS(A:A)", "=ROWS(1:1)", "=COLUMNS(1:1)", "=ROWS(A:C)",
+                               "=COLUMNS(A:C)", "=ROWS(1:3)", "=COLUMNS(1:3)"}) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << src;
+    EXPECT_GE(v.as_number(), 1.0) << src;
+  }
+}
+
+TEST(BuiltinsRows, UnknownSheetQualifierIsRef) {
+  // Measuring a rectangle still requires the reference to resolve.
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROWS(NoSuchSheet!A1:B3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
 TEST(BuiltinsRows, ArrayLiteralColumnShape) {
   // `{1;2;3}` is a 3x1 column literal (semicolons separate rows).
   const Value v = EvalSource("=ROWS({1;2;3})");

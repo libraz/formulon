@@ -167,6 +167,21 @@ struct SpillFootprint {
 /// Backwards-compatible name for the blocked-spill reverse-index record.
 using BlockedSpillFootprint = SpillFootprint;
 
+/// Tab visibility, i.e. OOXML `ST_SheetState` (ECMA-376 §18.18.68) and
+/// the `hsState` field of the XLSB `BrtBundleSh` record.
+///
+/// The two containers spell the same three states, and the enumerator
+/// values are the `hsState` numbering so the binary path needs no table.
+/// `kVeryHidden` differs from `kHidden` in that Excel leaves such a sheet
+/// out of the "Unhide" dialog, which is how a workbook keeps a settings
+/// or lookup sheet out of a user's reach; collapsing it to `kHidden`
+/// weakens that on the author's behalf.
+enum class SheetVisibility : std::uint8_t {
+  kVisible = 0,
+  kHidden = 1,
+  kVeryHidden = 2,
+};
+
 /// Per-sheet view state (zoom, frozen panes, tab visibility).
 ///
 /// Mirrors the OOXML `<sheetView>` and `<sheetPr>` attributes that survive
@@ -181,6 +196,14 @@ struct SheetView {
   std::uint32_t freeze_rows = 0;  // 0 = no row freeze
   std::uint32_t freeze_cols = 0;  // 0 = no column freeze
   bool tab_hidden = false;
+  /// Refines `tab_hidden` to OOXML `veryHidden`. Visibility is three
+  /// states but `tab_hidden` is the one bit every binding reads, so the
+  /// third state rides alongside it instead of replacing it: a caller
+  /// that knows only the bool still sees a very-hidden sheet as hidden.
+  /// Never read this field on its own — `visibility()` resolves the pair
+  /// to exactly one state, including the combination no writer should
+  /// produce.
+  bool tab_very_hidden = false;
   // `<sheetView>` display attributes. Names mirror the OOXML attributes;
   // the values shown are the ECMA-376 §18.3.1.87 schema defaults, so a
   // freshly created sheet round-trips without emitting them. Losing these
@@ -194,6 +217,26 @@ struct SheetView {
   /// `view` mode: empty (== "normal"), "pageBreakPreview", or
   /// "pageLayout". Stored verbatim so unknown future values round-trip.
   std::string view_mode;
+
+  /// The one visibility state the two bits stand for.
+  ///
+  /// `tab_very_hidden` decides first, so a caller that set it without
+  /// `tab_hidden` still gets `kVeryHidden` rather than a sheet that
+  /// silently became visible. Every writer goes through here, which is
+  /// what keeps the saved state equal to the loaded one for all three
+  /// values.
+  SheetVisibility visibility() const noexcept {
+    if (tab_very_hidden) {
+      return SheetVisibility::kVeryHidden;
+    }
+    return tab_hidden ? SheetVisibility::kHidden : SheetVisibility::kVisible;
+  }
+
+  /// Sets both bits from one state, so they cannot drift apart.
+  void set_visibility(SheetVisibility state) noexcept {
+    tab_hidden = state != SheetVisibility::kVisible;
+    tab_very_hidden = state == SheetVisibility::kVeryHidden;
+  }
 };
 
 /// Mirror of OOXML `<sheetProtection>` (ECMA-376 §18.3.1.85). Stored as
@@ -434,21 +477,97 @@ struct SheetPrintSettings {
   std::vector<ManualBreak> manual_col_breaks;  ///< `<colBreaks>` entries, 0-based ids.
 };
 
-/// Worksheet children which the calculation model does not interpret but
-/// which must retain their schema position to avoid silently damaging an
-/// Excel-authored sheet. Each member is a complete XML element captured
-/// verbatim from the source worksheet.
-struct WorksheetRawExtensions {
-  std::string protected_ranges_xml;
-  std::string scenarios_xml;
-  std::string custom_sheet_views_xml;
-  std::string phonetic_pr_xml;
-  std::string ignored_errors_xml;
-  std::string legacy_drawing_hf_xml;
-  std::string picture_xml;
-  std::string ole_objects_xml;
-  std::string controls_xml;
+/// The ECMA-376 §18.3.1.99 `CT_Worksheet` child sequence, and the
+/// position lookup a serializer needs to place an element in it.
+///
+/// The sequence is ordered, and a worksheet whose children appear out of
+/// that order is invalid, so "where does this element go" has exactly one
+/// answer and it is this table.
+namespace worksheet_child {
+
+/// Every `<worksheet>` child name, in schema order. Index into this array
+/// is the slot number `WorksheetRawChild::slot` records.
+inline constexpr std::string_view kOrder[] = {
+    "sheetPr",
+    "dimension",
+    "sheetViews",
+    "sheetFormatPr",
+    "cols",
+    "sheetData",
+    "sheetCalcPr",
+    "sheetProtection",
+    "protectedRanges",
+    "scenarios",
+    "autoFilter",
+    "sortState",
+    "dataConsolidate",
+    "customSheetViews",
+    "mergeCells",
+    "phoneticPr",
+    "conditionalFormatting",
+    "dataValidations",
+    "hyperlinks",
+    "printOptions",
+    "pageMargins",
+    "pageSetup",
+    "headerFooter",
+    "rowBreaks",
+    "colBreaks",
+    "customProperties",
+    "cellWatches",
+    "ignoredErrors",
+    "smartTags",
+    "drawing",
+    "legacyDrawing",
+    "legacyDrawingHF",
+    "drawingHF",
+    "picture",
+    "oleObjects",
+    "controls",
+    "webPublishItems",
+    "tableParts",
+    "extLst",
 };
+
+/// Number of names in `kOrder`, and the value `slot_of` returns for a
+/// name outside the sequence.
+inline constexpr std::size_t kCount = sizeof(kOrder) / sizeof(kOrder[0]);
+
+/// Slot of `name` in `kOrder`, or `kCount` when the schema has no such
+/// child. A caller must decide what an unplaceable element means for it;
+/// this function does not guess.
+inline std::size_t slot_of(std::string_view name) noexcept {
+  for (std::size_t i = 0; i < kCount; ++i) {
+    if (kOrder[i] == name) {
+      return i;
+    }
+  }
+  return kCount;
+}
+
+}  // namespace worksheet_child
+
+/// One `<worksheet>` child the calculation model does not interpret,
+/// captured verbatim together with the position it must be written back
+/// at.
+///
+/// `slot` indexes `worksheet_child::kOrder`. An element whose name is not
+/// in that table takes the slot of the child that preceded it in the
+/// source document, so it lands between the same two siblings on the way
+/// out without the table having to be exhaustive.
+struct WorksheetRawChild {
+  std::uint32_t slot = 0;
+  std::string xml;
+};
+
+/// Every `<worksheet>` child the calculation model does not fold in,
+/// ordered by `slot`.
+///
+/// The list is a sweep of what the reader did not consume, not an
+/// allowlist of anticipated names: an element nobody has modelled yet is
+/// preserved by default rather than dropped, which is what keeps a save
+/// from silently damaging an Excel-authored sheet.
+using WorksheetRawExtensions = std::vector<WorksheetRawChild>;
 
 /// Worksheet records captured verbatim from an `.xlsb` sheet part that the
 /// calculation model does not express: conditional formatting, data
@@ -603,6 +722,50 @@ class Sheet {
     std::uint32_t first_col = 0;
     std::uint32_t last_row = 0;
     std::uint32_t last_col = 0;
+  };
+
+  /// A cell's formula text and effective value, copied out of storage by
+  /// `read_formula_cell` while the sheet lock was held.
+  ///
+  /// Everything the reader needs is owned by this object, so no `Cell`
+  /// reference outlives the lock and a concurrent writer may replace the
+  /// cell's formula, its `cached_value`, or its `cached_text_owned`
+  /// allocation without invalidating what the reader already holds.
+  class CellRead {
+   public:
+    CellRead() = default;
+
+    // Neither copyable nor movable: `value()` and `formula_text()` hand
+    // out views into this object's own buffers, and a small-string
+    // payload relocates with the object. Fill one through
+    // `read_formula_cell` and read it where it sits.
+    CellRead(const CellRead&) = delete;
+    CellRead& operator=(const CellRead&) = delete;
+
+    /// Whether a cell is stored at the coordinate at all. A false reading
+    /// still carries `Value::blank()`.
+    bool exists() const noexcept { return exists_; }
+
+    /// Whether the stored cell carries non-empty formula text.
+    bool is_formula() const noexcept { return !formula_text_.empty(); }
+
+    /// The cell's `formula_text`, verbatim (leading `=` not stripped).
+    /// The view is backed by this object and stays valid for its lifetime.
+    std::string_view formula_text() const noexcept { return formula_text_; }
+
+    /// The coordinate's effective value, as `resolve_cell_value` defines
+    /// it. A Text payload is re-pointed at this object's own copy of the
+    /// bytes, so it never aliases sheet storage.
+    Value value() const noexcept { return is_text_ ? Value::text(text_payload_) : value_; }
+
+   private:
+    friend class Sheet;
+
+    bool exists_ = false;
+    bool is_text_ = false;
+    std::string formula_text_;
+    std::string text_payload_;
+    Value value_ = Value::blank();
   };
 
   /// True when `(row, col)` addresses a cell inside the Excel grid.
@@ -989,6 +1152,23 @@ class Sheet {
   /// A reversed or out-of-range rectangle appends nothing.
   void read_range(std::uint32_t first_row, std::uint32_t last_row, std::uint32_t first_col, std::uint32_t last_col,
                   std::vector<Value>& out, std::vector<std::size_t>& formula_indices) const;
+
+  /// Copies `(row, col)`'s formula text and effective value into `out`
+  /// under a single acquisition of the sheet lock.
+  ///
+  /// This is the read every evaluator path must use when it needs a cell's
+  /// formula: `cell_at` hands back a raw `Cell*` and releases the lock, so
+  /// its caller then reads `formula_text` and `cached_value` while another
+  /// thread may be inside `set_cell_cached_value` rewriting exactly those
+  /// fields — and, for a Text result, freeing the buffer the previous
+  /// `cached_value` pointed at. Taking both fields inside the one critical
+  /// section and handing back owned copies removes the window entirely; the
+  /// reader's copies stay valid however the cell is subsequently rewritten.
+  ///
+  /// The value follows `resolve_cell_value`, so a spill phantom reads as
+  /// its region's cell and an out-of-grid coordinate reads as blank. A
+  /// coordinate with no stored cell yields `out.exists() == false`.
+  void read_formula_cell(std::uint32_t row, std::uint32_t col, CellRead& out) const;
 
   /// Registers a spill region anchored at `(anchor_row, anchor_col)` with
   /// the given dimensions and row-major cell payload.

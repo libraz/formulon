@@ -5,14 +5,13 @@
 
 #include "eval/eval_context.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
 #include <vector>
 
-#include "cell.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_state.h"
 #include "eval/formula_text_utils.h"
 #include "eval/function_registry.h"
@@ -89,39 +88,17 @@ void set_shape(std::uint32_t* out_rows, std::uint32_t* out_cols, std::uint32_t r
   }
 }
 
-// Result of the shared preamble executed by both `resolve_ref` overloads.
-// The `value` field carries either the short-circuit Value (literal cell,
-// absent cell, or Excel error sentinel) or a valid pointer to the formula
-// cell whose `formula_text` needs evaluation. `target_sheet` is the resolved
-// owning sheet for formula cells (equal to `current_sheet` for unqualified
-// refs, or the workbook-looked-up sheet for qualified refs).
-struct ResolvePrefix {
-  enum class Kind : std::uint8_t {
-    /// Preamble produced a definitive Value (error, blank, or literal cache)
-    /// and the caller should return it unchanged.
-    Terminal,
-    /// Preamble found a formula cell; the caller decides whether to recurse.
-    Formula,
-  };
-  Kind kind = Kind::Terminal;
-  // Populated when kind == Terminal.
-  Value value = Value::blank();
-  // Populated when kind == Formula.
-  const Cell* cell = nullptr;
-  const Sheet* target_sheet = nullptr;
-  std::uint32_t row = 0;
-  std::uint32_t col = 0;
-};
-
 // Common short-circuit checks shared by both overloads: unbound context,
-// cross-sheet lookup, full-column / full-row, out-of-bounds, absent cell,
-// literal cell. A formula-cell hit is returned as `Kind::Formula` so each
-// caller can decide whether (and how) to evaluate the formula.
-ResolvePrefix resolve_prefix(const Sheet* current_sheet, const Workbook* workbook, const parser::Reference& ref) {
-  ResolvePrefix out;
+// cross-sheet lookup, full-column / full-row, out-of-bounds. On success the
+// resolved owning sheet is returned (equal to `current_sheet` for
+// unqualified refs, or the workbook-looked-up sheet for qualified ones); on
+// any short circuit the function returns `nullptr` and writes the Excel
+// error sentinel the caller must return into `*out_value`.
+const Sheet* resolve_ref_target(const Sheet* current_sheet, const Workbook* workbook, const parser::Reference& ref,
+                                Value* out_value) {
   if (current_sheet == nullptr) {
-    out.value = Value::error(ErrorCode::Name);
-    return out;
+    *out_value = Value::error(ErrorCode::Name);
+    return nullptr;
   }
   // Cross-sheet resolution: without a workbook or a known target sheet,
   // `#REF!`. With a match, the target becomes the current sheet for the
@@ -129,52 +106,94 @@ ResolvePrefix resolve_prefix(const Sheet* current_sheet, const Workbook* workboo
   ErrorCode sheet_err = ErrorCode::Ref;
   const Sheet* target = resolve_target_sheet(ref.sheet, current_sheet, workbook, &sheet_err);
   if (target == nullptr) {
-    out.value = Value::error(sheet_err);
-    return out;
+    *out_value = Value::error(sheet_err);
+    return nullptr;
   }
   if (ref.is_full_col || ref.is_full_row) {
     // Whole-column / whole-row references are ranges; in scalar context they
     // degrade to #VALUE! until array evaluation lands.
-    out.value = Value::error(ErrorCode::Value);
-    return out;
+    *out_value = Value::error(ErrorCode::Value);
+    return nullptr;
   }
   if (ref.row >= Sheet::kMaxRows || ref.col >= Sheet::kMaxCols) {
-    out.value = Value::error(ErrorCode::Ref);
-    return out;
+    *out_value = Value::error(ErrorCode::Ref);
+    return nullptr;
   }
-  const Cell* cell = target->cell_at(ref.row, ref.col);
-  // Phantom-aware read: a cell that is either absent, or stored as a literal,
-  // is fed through `resolve_cell_value` so that phantom cells of a committed
-  // spill region are visible to cross-cell references. The formula branch
-  // below still requires the stored cell because we need `formula_text`.
-  if (cell == nullptr || cell->formula_text.empty()) {
-    out.value = target->resolve_cell_value(ref.row, ref.col);
-    return out;
+  return target;
+}
+
+// Effective sheet qualifier for a rectangle.
+//
+// The parser retains the `:` operator's qualifier on the LHS in practice, so
+// `Sheet2!A1:B2` parses as RangeOp(Ref{sheet=Sheet2}, Ref{sheet=""}) — the RHS
+// must inherit. Defensive symmetry is kept for the opposite shape. When both
+// endpoints carry a qualifier they must agree under locale-independent Unicode
+// simple case folding or the range is `#REF!`. An empty result means the
+// context's own sheet.
+Expected<std::string_view, ErrorCode> effective_range_sheet(const parser::Reference& lhs,
+                                                            const parser::Reference& rhs) {
+  if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
+    if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
+      return ErrorCode::Ref;
+    }
+    return lhs.sheet;
   }
-  out.kind = ResolvePrefix::Kind::Formula;
-  out.cell = cell;
-  out.target_sheet = target;
-  out.row = ref.row;
-  out.col = ref.col;
-  return out;
+  if (!lhs.sheet.empty()) {
+    return lhs.sheet;
+  }
+  return rhs.sheet;
+}
+
+// Re-homes a Text payload into `arena`.
+//
+// A `Sheet::CellRead` owns its bytes only for as long as the snapshot
+// object lives, and the snapshot is a local of `resolve_ref`. The arena is
+// the lifetime the overload already promises its callers, so anything
+// derived from a snapshot has to be copied into it before it is returned.
+// Non-Text values carry no pointer and pass through untouched.
+Value adopt_into_arena(Arena& arena, Value value) {
+  if (!value.is_text()) {
+    return value;
+  }
+  return Value::text(arena.intern(value.as_text()));
 }
 
 }  // namespace
 
 Value EvalContext::resolve_ref(const parser::Reference& ref) const {
-  const ResolvePrefix prefix = resolve_prefix(current_sheet_, workbook_, ref);
-  if (prefix.kind == ResolvePrefix::Kind::Terminal) {
-    return prefix.value;
+  Value short_circuit = Value::blank();
+  const Sheet* target = resolve_ref_target(current_sheet_, workbook_, ref, &short_circuit);
+  if (target == nullptr) {
+    return short_circuit;
   }
-  // Formula cell, non-recursive path: mirror the historical behaviour by
-  // returning whatever is currently cached (typically blank).
-  return prefix.cell->cached_value;
+  // Non-recursive path: a formula cell yields whatever is currently cached
+  // (typically blank), which is exactly what the spill-aware read returns
+  // for it — a formula cell is either an ordinary cell or a spill anchor,
+  // and an anchor's `cached_value` tracks its region's first cell. Reading
+  // through the sheet keeps the whole lookup inside one lock acquisition
+  // and hands no `Cell*` back to this layer.
+  return target->resolve_cell_value(ref.row, ref.col);
 }
 
 Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const FunctionRegistry& registry) const {
-  const ResolvePrefix prefix = resolve_prefix(current_sheet_, workbook_, ref);
-  if (prefix.kind == ResolvePrefix::Kind::Terminal) {
-    return prefix.value;
+  Value short_circuit = Value::blank();
+  const Sheet* target = resolve_ref_target(current_sheet_, workbook_, ref, &short_circuit);
+  if (target == nullptr) {
+    return short_circuit;
+  }
+
+  // One lock acquisition covers "is this a formula cell" and both fields a
+  // formula cell is read for. Holding a `Cell*` past the lock instead would
+  // let a concurrent `set_cell_cached_value` rewrite `formula_text` and
+  // `cached_value` — and free the Text buffer `cached_value` points at —
+  // underneath the reads below.
+  Sheet::CellRead read;
+  target->read_formula_cell(ref.row, ref.col, read);
+  if (!read.is_formula()) {
+    // Phantom-aware read: an absent or literal cell resolves through the
+    // spill table so phantom cells of a committed region are visible to
+    // cross-cell references.
+    return adopt_into_arena(arena, read.value());
   }
 
   // Same-sheet mutable references are dispatched through SpillCommitter and
@@ -182,20 +201,21 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   // scalarize an ordinary formula reference itself. A cross-sheet reference
   // from a mutable context remains an uncommitted Array for the outer formula
   // owner; this preserves the existing no-cross-sheet-spill contract.
-  const bool mutable_target = mutable_sheet_ != nullptr && prefix.target_sheet == mutable_sheet_;
+  const bool mutable_target = mutable_sheet_ != nullptr && target == mutable_sheet_;
   const bool scalarize_result = mutable_sheet_ == nullptr || mutable_target;
 
   // Formula cell. If no recursive state is bound, fall back to the
   // non-recursive behaviour so the two overloads agree.
   if (state_ == nullptr) {
-    return scalarize_result ? scalarize_formula_ref(prefix.cell->cached_value) : prefix.cell->cached_value;
+    const Value cached = adopt_into_arena(arena, read.value());
+    return scalarize_result ? scalarize_formula_ref(cached) : cached;
   }
 
-  if (const Value* memo = state_->lookup_memo(prefix.target_sheet, prefix.row, prefix.col); memo != nullptr) {
+  if (const Value* memo = state_->lookup_memo(target, ref.row, ref.col); memo != nullptr) {
     return scalarize_result ? scalarize_formula_ref(*memo) : *memo;
   }
 
-  if (!state_->push_cell(prefix.target_sheet, prefix.row, prefix.col)) {
+  if (!state_->push_cell(target, ref.row, ref.col)) {
     // Direct or indirect cycle (possibly spanning sheets). With Excel's
     // "Enable iterative calculation" option on, a back-edge inside a cycle
     // resolves to the cell's last computed value (the iterative-calc driver
@@ -205,7 +225,8 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     // shows 0 plus a circular-reference warning banner, which Formulon has
     // no surface for yet.
     if (workbook_ != nullptr && workbook_->iterative_options().enabled) {
-      return scalarize_result ? scalarize_formula_ref(prefix.cell->cached_value) : prefix.cell->cached_value;
+      const Value cached = adopt_into_arena(arena, read.value());
+      return scalarize_result ? scalarize_formula_ref(cached) : cached;
     }
     return Value::error(ErrorCode::Ref);
   }
@@ -216,7 +237,12 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   // so it may carry the leading `=` from external readers or hand-written
   // callers. Strip it through the shared helper so this resolver agrees
   // bit-for-bit with `recalc_engine.cpp` / `scheduler.cpp`.
-  parser::AstNode* root = parser::parse_strict(strip_formula_prefix(prefix.cell->formula_text), arena);
+  //
+  // The source is interned first: the AST keeps views into it, a string
+  // literal in the formula surfaces in `result` as a view into the same
+  // bytes, and both outlive the snapshot the text was copied out of.
+  const std::string_view source = arena.intern(strip_formula_prefix(read.formula_text()));
+  parser::AstNode* root = parser::parse_strict(source, arena);
 
   Value result = Value::blank();
   if (root == nullptr) {
@@ -229,7 +255,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     // inside the referenced formula return the referenced cell's coordinates
     // rather than inheriting the caller's anchor. The new context inherits
     // `mutable_sheet_` (regular member, copied by `with_formula_cell`).
-    const EvalContext child_ctx = this->with_formula_cell(prefix.row, prefix.col);
+    const EvalContext child_ctx = this->with_formula_cell(ref.row, ref.col);
     result = evaluate(*root, arena, registry, child_ctx);
 
     // Route every mutable recursive result through SpillCommitter. Arrays are
@@ -246,8 +272,8 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     }
   }
 
-  state_->pop_cell(prefix.target_sheet, prefix.row, prefix.col);
-  state_->memoize(prefix.target_sheet, prefix.row, prefix.col, result);
+  state_->pop_cell(target, ref.row, ref.col);
+  state_->memoize(target, ref.row, ref.col, result);
   return result;
 }
 
@@ -272,23 +298,11 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
     return ErrorCode::Name;
   }
 
-  // Infer the effective sheet qualifier for the rectangle. The parser
-  // retains the `:` operator's qualifier on the LHS in practice, so
-  // `Sheet2!A1:B2` parses as RangeOp(Ref{sheet=Sheet2}, Ref{sheet=""}) —
-  // the RHS must inherit. Defensive symmetry is kept for the opposite
-  // shape. When both endpoints carry a qualifier they must agree under
-  // locale-independent Unicode simple case folding or the range is `#REF!`.
-  std::string_view effective_sheet_name;
-  if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
-    if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
-      return ErrorCode::Ref;
-    }
-    effective_sheet_name = lhs.sheet;
-  } else if (!lhs.sheet.empty()) {
-    effective_sheet_name = lhs.sheet;
-  } else if (!rhs.sheet.empty()) {
-    effective_sheet_name = rhs.sheet;
+  auto effective_sheet = effective_range_sheet(lhs, rhs);
+  if (!effective_sheet) {
+    return effective_sheet.error();
   }
+  const std::string_view effective_sheet_name = effective_sheet.value();
 
   ErrorCode sheet_err = ErrorCode::Ref;
   const Sheet* target_sheet = resolve_target_sheet(effective_sheet_name, current_sheet_, workbook_, &sheet_err);
@@ -296,69 +310,43 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
     return sheet_err;
   }
 
-  std::uint32_t r_min = 0;
-  std::uint32_t r_max = 0;
-  std::uint32_t c_min = 0;
-  std::uint32_t c_max = 0;
-  if (lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row) {
-    // Whole-column (`A:A` / `A:C`) and whole-row (`1:1` / `1:3`) references
-    // are expanded against the target sheet's used range: the unbounded
-    // axis is clamped to the sheet's populated extent so the expansion
-    // never physically walks all `kMaxRows` / `kMaxCols` cells, while the
-    // bounded axis keeps its natural origin (row 0 for a column, column 0
-    // for a row) so positional consumers (INDEX / VLOOKUP column offsets)
-    // see the reference's true top-left. A sheet with no content in range
-    // yields an empty expansion, so `SUM(A:A)` on an empty sheet is 0
-    // without any per-row work.
+  // The rectangle the endpoints declare, derived where every other consumer
+  // of a static reference derives it. Endpoint ordering is normalised there,
+  // so A3:A1 describes the same rectangle as A1:A3.
+  const auto declared = declared_rect(lhs, rhs);
+  if (!declared) {
+    return declared.error();
+  }
+  std::uint32_t r_min = declared.value().row_first;
+  std::uint32_t r_max = declared.value().row_last;
+  std::uint32_t c_min = declared.value().col_first;
+  std::uint32_t c_max = declared.value().col_last;
+  if (declared.value().whole_axis) {
+    // Enumeration-only narrowing. A whole-column (`A:A` / `A:C`) or
+    // whole-row (`1:1` / `1:3`) reference declares a whole grid axis; the
+    // values worth walking end at the target sheet's populated extent, so
+    // the unbounded axis is clamped to it and the expansion never physically
+    // touches all `kMaxRows` / `kMaxCols` cells. `SUM(A:A)` on an empty
+    // sheet is 0 without any per-row work.
     //
-    // Only same-axis whole references compose (`A:C`, `1:3`); a mixed
-    // whole-column / whole-row pair has no bounded rectangle and degrades
-    // to #VALUE!, matching the pre-existing scalar degradation.
-    const bool col_range = lhs.is_full_col && rhs.is_full_col;
-    const bool row_range = lhs.is_full_row && rhs.is_full_row;
-    if (!col_range && !row_range) {
-      return ErrorCode::Value;
+    // The bounded axis keeps its natural origin (row 0 for a column, column
+    // 0 for a row) so positional consumers (INDEX / VLOOKUP column offsets)
+    // see the reference's true top-left.
+    //
+    // The clamp is invisible to a consumer of the values — the cells it
+    // drops are empty — and must stay invisible to everything else. It is
+    // not the reference's shape, and `declared_range_rect` exists so that no
+    // caller needing a shape has to reach for it.
+    const std::optional<Sheet::PopulatedExtent> extent = target_sheet->populated_extent(r_min, c_min, r_max, c_max);
+    if (!extent.has_value()) {
+      set_shape(out_rows, out_cols, 0, 0);
+      return std::vector<Value>{};
     }
-    if (col_range) {
-      c_min = std::min(lhs.col, rhs.col);
-      c_max = std::max(lhs.col, rhs.col);
-      if (c_max >= Sheet::kMaxCols) {
-        return ErrorCode::Ref;
-      }
-      const std::optional<Sheet::PopulatedExtent> extent =
-          target_sheet->populated_extent(0U, c_min, Sheet::kMaxRows - 1U, c_max);
-      if (!extent.has_value()) {
-        set_shape(out_rows, out_cols, 0, 0);
-        return std::vector<Value>{};
-      }
-      r_min = 0;
+    if (declared.value().rows() == Sheet::kMaxRows) {
       r_max = extent->last_row;
     } else {
-      r_min = std::min(lhs.row, rhs.row);
-      r_max = std::max(lhs.row, rhs.row);
-      if (r_max >= Sheet::kMaxRows) {
-        return ErrorCode::Ref;
-      }
-      const std::optional<Sheet::PopulatedExtent> extent =
-          target_sheet->populated_extent(r_min, 0U, r_max, Sheet::kMaxCols - 1U);
-      if (!extent.has_value()) {
-        set_shape(out_rows, out_cols, 0, 0);
-        return std::vector<Value>{};
-      }
-      c_min = 0;
       c_max = extent->last_col;
     }
-  } else {
-    if (lhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols || rhs.row >= Sheet::kMaxRows ||
-        rhs.col >= Sheet::kMaxCols) {
-      return ErrorCode::Ref;
-    }
-    // Normalise endpoint ordering: A3:A1 describes the same rectangle as
-    // A1:A3.
-    r_min = std::min(lhs.row, rhs.row);
-    r_max = std::max(lhs.row, rhs.row);
-    c_min = std::min(lhs.col, rhs.col);
-    c_max = std::max(lhs.col, rhs.col);
   }
 
   // Accepted divergence: callers such as SUM / AVERAGE coerce every
@@ -413,6 +401,25 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   }
   set_shape(out_rows, out_cols, r_max - r_min + 1U, c_max - c_min + 1U);
   return out;
+}
+
+Expected<DeclaredRect, ErrorCode> EvalContext::declared_range_rect(const parser::Reference& lhs,
+                                                                   const parser::Reference& rhs) const {
+  if (current_sheet_ == nullptr) {
+    return ErrorCode::Name;
+  }
+  auto effective_sheet = effective_range_sheet(lhs, rhs);
+  if (!effective_sheet) {
+    return effective_sheet.error();
+  }
+  // The rectangle itself is sheet-independent, but a qualifier naming a
+  // sheet the workbook does not hold is still `#REF!` — a shape must not be
+  // reported for a reference that cannot be resolved at all.
+  ErrorCode sheet_err = ErrorCode::Ref;
+  if (resolve_target_sheet(effective_sheet.value(), current_sheet_, workbook_, &sheet_err) == nullptr) {
+    return sheet_err;
+  }
+  return declared_rect(lhs, rhs);
 }
 
 }  // namespace eval

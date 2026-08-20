@@ -27,6 +27,7 @@
 
 #include "eval/compat.h"
 #include "eval/date_time.h"
+#include "eval/declared_rect.h"
 #include "eval/spill_committer.h"
 #include "parser/reference.h"
 #include "utils/error.h"
@@ -161,9 +162,15 @@ class EvalContext {
   ///   4. Recursively evaluate the AST with `registry` and this context.
   ///   5. Pop the stack frame and memoise the result on `state_`.
   ///
-  /// The Sheet is NOT mutated; `cell->cached_value` is left alone. Text
-  /// values returned from recursion reference storage in `arena`, so the
-  /// caller's evaluation arena must outlive the returned `Value`.
+  /// The Sheet is NOT mutated; the target cell's `cached_value` is left
+  /// alone.
+  ///
+  /// Every cell field this overload reads is copied out of the sheet under
+  /// a single lock acquisition (`Sheet::read_formula_cell`), and any Text
+  /// payload it returns — cached value or recursion result alike — lives in
+  /// `arena` rather than in sheet storage. The caller's evaluation arena
+  /// must therefore outlive the returned `Value`; in exchange the result
+  /// does not dangle when another thread rewrites the referenced cell.
   Value resolve_ref(const parser::Reference& ref, Arena& arena, const FunctionRegistry& registry) const;
 
   /// Expands the rectangle `[lhs : rhs]` into a flat list of cell values in
@@ -200,10 +207,12 @@ class EvalContext {
   /// vector. Only same-axis whole references compose; a mixed
   /// whole-column / whole-row pair degrades to `#VALUE!`.
   ///
-  /// When non-null, `out_rows` / `out_cols` receive the concrete expanded
-  /// shape (both `0` for an empty whole-reference expansion). They are the
-  /// only reliable source of shape for whole-reference inputs, whose
-  /// clamped dimensions cannot be recovered from the endpoint `Reference`s.
+  /// When non-null, `out_rows` / `out_cols` receive the concrete *expanded*
+  /// shape — the dimensions of the returned vector, `0` for an empty
+  /// whole-reference expansion. For a whole-axis reference that is the
+  /// clamped extent, not what the reference declares, so it is not a shape
+  /// any caller may report to a formula: `ROWS(A:A)` is 1,048,576 on an
+  /// empty sheet. `declared_range_rect` answers that question.
   ///
   /// Short-circuit error mapping (first match wins):
   ///
@@ -220,6 +229,24 @@ class EvalContext {
                                                        Arena& arena, const FunctionRegistry& registry,
                                                        std::uint32_t* out_rows = nullptr,
                                                        std::uint32_t* out_cols = nullptr) const;
+
+  /// Resolves the rectangle `[lhs : rhs]` *declares*, without reading a
+  /// single cell.
+  ///
+  /// This is the shape half of `expand_range`: it runs the same sheet
+  /// resolution, derives the rectangle through the same `declared_rect`, and
+  /// stops there. Nothing it returns is narrowed to the target sheet's
+  /// populated extent — a declared rectangle does not depend on what the
+  /// sheet contains. `expand_range` clamps the unbounded axis of a
+  /// whole-axis reference so enumerating its values stays affordable; that
+  /// clamp is an enumeration decision and never a shape.
+  ///
+  /// The error mapping is `expand_range`'s, minus the rows that only an
+  /// expansion can reach: `#NAME?` for an unbound context, `#REF!` for a
+  /// mismatched / missing sheet qualifier or an out-of-grid coordinate, and
+  /// `#VALUE!` for an endpoint pair that declares no rectangle.
+  Expected<DeclaredRect, ErrorCode> declared_range_rect(const parser::Reference& lhs,
+                                                        const parser::Reference& rhs) const;
 
   /// Returns the sheet this context is bound to, or `nullptr` when the
   /// context was default-constructed.

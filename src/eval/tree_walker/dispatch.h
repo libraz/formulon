@@ -14,6 +14,10 @@
 //
 // `invoke_lambda` is shared between the `LambdaCall` AST case (handled
 // in walker.cpp) and the name-bound dispatch path (in dispatch.cpp).
+// Its already-evaluated-arguments siblings `invoke_lambda_values` /
+// `invoke_lambda_values_with_ast` are the single lambda-invocation entry
+// point for the bytecode VM and the lazy lambda helpers, so the arity and
+// omitted-parameter rules are stated once.
 //
 // This header is internal to the tree-walker family and is not part of
 // the public evaluator surface — production callers reach the evaluator
@@ -69,13 +73,31 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
 
 /// Invokes an AST-backed runtime lambda with arguments that have already
 /// been evaluated. This is the safe bridge used by the bytecode VM when a
-/// direct `Call` names a workbook-defined LAMBDA: VM argument values are
-/// copied into the lambda environment and the AST body is then evaluated by
-/// the tree walker. The helper deliberately accepts only the normal
+/// direct `Call` names a workbook-defined LAMBDA, and by the lazy lambda
+/// helpers (`MAP` / `BYROW` / `BYCOL` / `REDUCE` / `SCAN` / `MAKEARRAY`),
+/// which have cell payloads rather than argument AST nodes. Argument values
+/// are copied into the lambda environment and the AST body is then evaluated
+/// by the tree walker. The helper deliberately accepts only the normal
 /// AST-backed LambdaValue representation; VM-internal closure records never
 /// pass through this interface.
+///
+/// Arity follows the one rule published on `LambdaValue`:
+/// `param_count - optional_count <= arity <= param_count`. Trailing params
+/// the caller did not supply are bound to the omitted sentinel, so
+/// `ISOMITTED` inside the body sees them. Anything outside that window is
+/// `#VALUE!`; a null `body` is `#NAME?`.
 Value invoke_lambda_values(const LambdaValue* lv, std::uint32_t arity, const Value* args, Arena& arena,
                            const FunctionRegistry& registry, const EvalContext& ctx);
+
+/// `invoke_lambda_values` with an optional parallel array of AST nodes
+/// (length `arity`) recorded alongside each binding. When non-null, the AST
+/// node lets range-aware consumers inside the lambda body see the binding as
+/// a range-shaped expression — the seam `BYROW` / `BYCOL` need so `SUM(r)`
+/// flattens a row slice instead of receiving an opaque `Value::Array`. Pass
+/// `nullptr` for scalar-only bindings.
+Value invoke_lambda_values_with_ast(const LambdaValue* lv, std::uint32_t arity, const Value* args,
+                                    const parser::AstNode* const* ast_args, Arena& arena,
+                                    const FunctionRegistry& registry, const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

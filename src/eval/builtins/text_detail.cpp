@@ -7,6 +7,7 @@
 #include "eval/builtins/text_detail.h"
 
 #include <cmath>
+#include <limits>
 #include <utility>
 
 #include "eval/coerce.h"
@@ -25,7 +26,28 @@ Expected<int, ErrorCode> read_int_arg(const Value& v) {
   if (std::isnan(d) || std::isinf(d)) {
     return ErrorCode::Num;
   }
-  return static_cast<int>(std::trunc(d));
+  // Converting a double outside `int`'s range is undefined, and the two
+  // architectures disagree on what they produce: x86-64 yields INT_MIN
+  // while WASM's `--enable-nontrapping-float-to-int` saturates to
+  // INT_MAX. A count like `1E+15` (a routine LEFT/MID/RIGHT/REPT/
+  // SUBSTITUTE/REPLACE argument, not an attack input) would therefore
+  // read as a huge negative on one target and a huge positive on the
+  // other, so `LEFT("text",1E+15)` returns `#VALUE!` on native and
+  // `"text"` on WASM. Every caller already treats "past the end of the
+  // text" the same way it treats "the whole text", so saturating before
+  // the cast carries the same meaning as the real magnitude and keeps
+  // the result identical across targets. Mirrors `read_digits` in
+  // `eval/builtins/math.cpp`.
+  const double truncated = std::trunc(d);
+  constexpr double kIntMax = 2147483647.0;
+  constexpr double kIntMin = -2147483648.0;
+  if (truncated >= kIntMax) {
+    return std::numeric_limits<int>::max();
+  }
+  if (truncated <= kIntMin) {
+    return std::numeric_limits<int>::min();
+  }
+  return static_cast<int>(truncated);
 }
 
 Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,

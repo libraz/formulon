@@ -110,8 +110,9 @@ bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode
 
 namespace {
 
-Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, const Value* args, Arena& arena,
-                                const FunctionRegistry& registry, const EvalContext& ctx) {
+Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, const Value* args,
+                                const parser::AstNode* const* ast_args, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx) {
   const std::uint32_t required = lv->param_count - lv->optional_count;
   if (arity < required || arity > lv->param_count) {
     return Value::error(ErrorCode::Value);
@@ -124,7 +125,8 @@ Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, cons
     env = *lv->captured_env;
   }
   for (std::uint32_t i = 0; i < arity; ++i) {
-    env = env.extend(lv->params[i], args[i], arena);
+    const parser::AstNode* expr = (ast_args != nullptr) ? ast_args[i] : nullptr;
+    env = env.extend(lv->params[i], args[i], expr, arena);
   }
   for (std::uint32_t i = arity; i < lv->param_count; ++i) {
     env = env.extend_omitted(lv->params[i], arena);
@@ -137,6 +139,12 @@ Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, cons
 
 Value invoke_lambda_values(const LambdaValue* lv, std::uint32_t arity, const Value* args, Arena& arena,
                            const FunctionRegistry& registry, const EvalContext& ctx) {
+  return invoke_lambda_values_with_ast(lv, arity, args, /*ast_args=*/nullptr, arena, registry, ctx);
+}
+
+Value invoke_lambda_values_with_ast(const LambdaValue* lv, std::uint32_t arity, const Value* args,
+                                    const parser::AstNode* const* ast_args, Arena& arena,
+                                    const FunctionRegistry& registry, const EvalContext& ctx) {
   if (lv == nullptr || (arity != 0U && args == nullptr)) {
     return Value::error(ErrorCode::Value);
   }
@@ -147,7 +155,7 @@ Value invoke_lambda_values(const LambdaValue* lv, std::uint32_t arity, const Val
   if (lambda_guard.exceeded()) {
     return Value::error(ErrorCode::Calc);
   }
-  return invoke_lambda_values_impl(lv, arity, args, arena, registry, ctx);
+  return invoke_lambda_values_impl(lv, arity, args, ast_args, arena, registry, ctx);
 }
 
 Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
@@ -171,7 +179,8 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   for (std::uint32_t i = 0; i < arity; ++i) {
     args.push_back(eval_node(*call_args[i], arena, registry, ctx));
   }
-  return invoke_lambda_values_impl(lv, arity, args.empty() ? nullptr : args.data(), arena, registry, ctx);
+  return invoke_lambda_values_impl(lv, arity, args.empty() ? nullptr : args.data(), /*ast_args=*/nullptr, arena,
+                                   registry, ctx);
 }
 
 namespace {

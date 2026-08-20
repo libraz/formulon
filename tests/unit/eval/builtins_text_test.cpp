@@ -156,6 +156,67 @@ TEST(TextTrim, CollapsesIdeographicWithAscii) {
   EXPECT_EQ(v.as_text(), "a b");
 }
 
+// The interior rule for U+3000 on its own, without an ASCII space in the
+// run to carry the result: a run of ideographic spaces between two
+// non-space characters becomes exactly one U+0020, so the trimmed text is
+// shorter in both bytes and UTF-16 units than the input. This is the
+// ja-JP everyday case, and it is what makes a later FIND / MID position
+// land where the caller expects.
+TEST(TextTrim, SingleInteriorIdeographicSpaceBecomesAsciiSpace) {
+  // "あ　い" -> "あ い"
+  const Value v = EvalSource("=TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "\xE3\x81\x82 \xE3\x81\x84");
+
+  const Value len = EvalSource("=LEN(TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84\"))");
+  ASSERT_TRUE(len.is_number());
+  EXPECT_DOUBLE_EQ(len.as_number(), 3.0);
+}
+
+TEST(TextTrim, RepeatedInteriorIdeographicSpacesCollapseToOne) {
+  // "あ　　い" -> "あ い"
+  const Value v = EvalSource("=TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x80\x80\xE3\x81\x84\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "\xE3\x81\x82 \xE3\x81\x84");
+}
+
+TEST(TextTrim, EdgeAndInteriorIdeographicSpacesTogether) {
+  // "　　あ　　い　　" -> "あ い": the edge runs go away entirely and the
+  // interior one becomes a single ASCII space.
+  const Value v = EvalSource(
+      "=TRIM(\"\xE3\x80\x80\xE3\x80\x80\xE3\x81\x82\xE3\x80\x80\xE3\x80\x80\xE3\x81\x84\xE3\x80\x80\xE3\x80\x80\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "\xE3\x81\x82 \xE3\x81\x84");
+}
+
+// A byte that merely looks space-adjacent is not one. Tabs and newlines
+// survive verbatim, and a trimmable space next to one is still collapsed
+// rather than deleted, because the run ends at the tab.
+TEST(TextTrim, TabAndNewlineArePreservedVerbatim) {
+  const Value tabbed = EvalSource("=TRIM(\"a\tb\")");
+  ASSERT_TRUE(tabbed.is_text());
+  EXPECT_EQ(tabbed.as_text(), "a\tb");
+
+  const Value newlined = EvalSource("=TRIM(\"a\nb\")");
+  ASSERT_TRUE(newlined.is_text());
+  EXPECT_EQ(newlined.as_text(), "a\nb");
+
+  const Value leading_tab = EvalSource("=TRIM(\"\ta\")");
+  ASSERT_TRUE(leading_tab.is_text());
+  EXPECT_EQ(leading_tab.as_text(), "\ta");
+}
+
+TEST(TextTrim, IdeographicSpaceAdjacentToTabIsStillCollapsed) {
+  // "a　\t　b" -> "a \t b". The tab ends the run, so the ideographic space
+  // on either side of it is interior and collapses to one ASCII space each
+  // rather than being deleted.
+  const Value v = EvalSource(
+      "=TRIM(\"a\xE3\x80\x80\t\xE3\x80\x80"
+      "b\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "a \t b");
+}
+
 TEST(TextTrim, DoesNotStripNbsp) {
   // NBSP (U+00A0, CHAR(160)) is NOT trimmable in Excel. The output must
   // retain both leading and trailing NBSPs verbatim.
@@ -197,6 +258,22 @@ TEST(TextLeft, NGreaterThanLengthClamps) {
 
 TEST(TextLeft, NegativeNIsValueError) {
   const Value v = EvalSource("=LEFT(\"hello\", -1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(TextLeft, HugeNBeyondIntRangeReturnsWholeText) {
+  // 1E+15 overflows int32; the same clamp-before-cast must apply on every
+  // target, so the result is the whole string regardless of host.
+  const Value v = EvalSource("=LEFT(\"text\", 1E+15)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "text");
+}
+
+TEST(TextLeft, HugeNegativeNBeyondIntRangeIsValueError) {
+  // -1E+15 saturates to INT_MIN, which the negative-n guard still rejects
+  // the same way it rejects any negative n.
+  const Value v = EvalSource("=LEFT(\"text\", -1E+15)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -262,6 +339,34 @@ TEST(TextRight, MultiByte) {
   EXPECT_EQ(v.as_text(), "\xE3\x81\x84\xE3\x81\x86");
 }
 
+// A supplementary-plane codepoint is 2 UTF-16 units, so asking for the last
+// 1 unit lands in the middle of a surrogate pair. The slice widens to the
+// whole codepoint the same way LEFT's end bound does; collapsing to the
+// empty string instead would silently break `=IF(RIGHT(A1,1)="。",...)`.
+TEST(TextRight, SupplementaryPlaneTailReturnsWholeCodepoint) {
+  const Value v = EvalSource("=RIGHT(\"abc\xF0\x9F\x99\x82\", 1)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "\xF0\x9F\x99\x82");
+}
+
+TEST(TextRight, SupplementaryPlaneOnlyTextIsNeverEmpty) {
+  const Value v = EvalSource("=RIGHT(\"\xF0\x9F\x99\x82\", 1)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "\xF0\x9F\x99\x82");
+}
+
+// LEFT and RIGHT round a surrogate-splitting bound to the same side of the
+// codepoint: whichever end is asked for, the whole codepoint survives.
+TEST(TextRight, SurrogateRoundingAgreesWithLeft) {
+  const Value left = EvalSource("=LEFT(\"\xF0\x9F\x99\x82\x61\x62\", 1)");
+  ASSERT_TRUE(left.is_text());
+  EXPECT_EQ(left.as_text(), "\xF0\x9F\x99\x82");
+
+  const Value right = EvalSource("=RIGHT(\"\x61\x62\xF0\x9F\x99\x82\", 1)");
+  ASSERT_TRUE(right.is_text());
+  EXPECT_EQ(right.as_text(), "\xF0\x9F\x99\x82");
+}
+
 // ---------------------------------------------------------------------------
 // MID
 // ---------------------------------------------------------------------------
@@ -308,6 +413,14 @@ TEST(TextMid, MultiByteSlice) {
   const Value v = EvalSource("=MID(\"\xE3\x81\x82\xE3\x81\x84\xE3\x81\x86\xE3\x81\x88\xE3\x81\x8A\", 2, 3)");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "\xE3\x81\x84\xE3\x81\x86\xE3\x81\x88");
+}
+
+TEST(TextMid, HugeNumCharsBeyondIntRangeReturnsRestOfText) {
+  // num_chars = 1E+15 overflows int32 in the same way LEFT's n does; the
+  // result must be identical across x86-64, arm64, and WASM.
+  const Value v = EvalSource("=MID(\"text\", 2, 1E+15)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "ext");
 }
 
 // ---------------------------------------------------------------------------

@@ -890,6 +890,47 @@ Value Sheet::resolve_cell_value(std::uint32_t row, std::uint32_t col) const noex
   return Value::blank();
 }
 
+void Sheet::read_formula_cell(std::uint32_t row, std::uint32_t col, CellRead& out) const {
+  out.exists_ = false;
+  out.is_text_ = false;
+  out.formula_text_.clear();
+  out.text_payload_.clear();
+  out.value_ = Value::blank();
+  if (!coord_in_grid(row, col)) {
+    return;
+  }
+
+  // Everything below runs inside the one critical section, and nothing but
+  // copies leaves it.
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const Cell* cell = cell_at_locked(row, col);
+  out.exists_ = cell != nullptr;
+
+  Value value = Value::blank();
+  if (cell != nullptr && !cell->formula_text.empty()) {
+    // Formula cell. A formula cell is never a spill phantom — it is either
+    // an ordinary cell or a spill anchor, and `commit_spill` keeps an
+    // anchor's `cached_value` equal to its region's first cell.
+    out.formula_text_ = cell->formula_text;
+    value = cell->cached_value;
+  } else if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
+    const std::size_t index = static_cast<std::size_t>(row - covering->anchor_row) * covering->cols +
+                              static_cast<std::size_t>(col - covering->anchor_col);
+    value = covering->cells[index];
+  } else if (cell != nullptr) {
+    value = cell->cached_value;
+  }
+
+  // A Text payload is a view into storage the writer owns; copy the bytes
+  // so the reading thread stops depending on that allocation's lifetime.
+  if (value.is_text()) {
+    out.is_text_ = true;
+    out.text_payload_ = value.as_text();
+  } else {
+    out.value_ = value;
+  }
+}
+
 void Sheet::read_range(std::uint32_t first_row, std::uint32_t last_row, std::uint32_t first_col, std::uint32_t last_col,
                        std::vector<Value>& out, std::vector<std::size_t>& formula_indices) const {
   if (first_row > last_row || first_col > last_col || last_row >= kMaxRows || last_col >= kMaxCols) {

@@ -20,11 +20,11 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <optional>
 #include <string_view>
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -205,52 +205,23 @@ bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* to
                               parser::Reference* bottom_right) {
   const parser::Reference* lhs = nullptr;
   const parser::Reference* rhs = nullptr;
-  if (node.kind() == parser::NodeKind::Ref) {
-    lhs = &node.as_ref();
-    rhs = lhs;
-  } else if (node.kind() == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs_ast = node.as_range_lhs();
-    const parser::AstNode& rhs_ast = node.as_range_rhs();
-    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
-      return false;
-    }
-    lhs = &lhs_ast.as_ref();
-    rhs = &rhs_ast.as_ref();
-  } else {
+  if (!declared_rect_endpoints(node, &lhs, &rhs)) {
     return false;
   }
-
-  const bool full_col = lhs->is_full_col && rhs->is_full_col;
-  const bool full_row = lhs->is_full_row && rhs->is_full_row;
-  // Same-axis pairs only. A reference flagged on both axes is malformed and
-  // an axis mismatch has no rectangle; either way this is not our shape.
-  if (full_col == full_row) {
+  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*lhs, *rhs);
+  if (!rect || !rect.value().whole_axis) {
     return false;
   }
-
   parser::Reference first{};
   parser::Reference last{};
   // The parser keeps the sheet qualifier on the left endpoint, matching how
   // `Sheet1!A1:B2` parses; `expand_range` inherits it for the rectangle.
   first.sheet = lhs->sheet;
   first.sheet_quoted = lhs->sheet_quoted;
-  if (full_col) {
-    if (lhs->col >= Sheet::kMaxCols || rhs->col >= Sheet::kMaxCols) {
-      return false;
-    }
-    first.row = 0U;
-    first.col = std::min(lhs->col, rhs->col);
-    last.row = Sheet::kMaxRows - 1U;
-    last.col = std::max(lhs->col, rhs->col);
-  } else {
-    if (lhs->row >= Sheet::kMaxRows || rhs->row >= Sheet::kMaxRows) {
-      return false;
-    }
-    first.row = std::min(lhs->row, rhs->row);
-    first.col = 0U;
-    last.row = std::max(lhs->row, rhs->row);
-    last.col = Sheet::kMaxCols - 1U;
-  }
+  first.row = rect.value().row_first;
+  first.col = rect.value().col_first;
+  last.row = rect.value().row_last;
+  last.col = rect.value().col_last;
   *top_left = first;
   *bottom_right = last;
   return true;
@@ -275,25 +246,13 @@ bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_l
   if (node.kind() != parser::NodeKind::RangeOp) {
     return false;
   }
-  const parser::AstNode& lhs_ast = node.as_range_lhs();
-  const parser::AstNode& rhs_ast = node.as_range_rhs();
-  if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
+  const parser::Reference* lhs = nullptr;
+  const parser::Reference* rhs = nullptr;
+  if (!declared_rect_endpoints(node, &lhs, &rhs)) {
     return false;
   }
-  const parser::Reference& lhs = lhs_ast.as_ref();
-  const parser::Reference& rhs = rhs_ast.as_ref();
-  if (lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row) {
-    return false;
-  }
-  if (lhs.row >= Sheet::kMaxRows || rhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols ||
-      rhs.col >= Sheet::kMaxCols) {
-    return false;
-  }
-  const std::uint32_t r1 = std::min(lhs.row, rhs.row);
-  const std::uint32_t r2 = std::max(lhs.row, rhs.row);
-  const std::uint32_t c1 = std::min(lhs.col, rhs.col);
-  const std::uint32_t c2 = std::max(lhs.col, rhs.col);
-  if (r1 == r2 && c1 == c2) {
+  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*lhs, *rhs);
+  if (!rect || rect.value().whole_axis || rect.value().single_cell()) {
     return false;
   }
   parser::Reference first{};
@@ -301,14 +260,14 @@ bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_l
   // `eval_node` carries the left endpoint's qualifier onto both corners, and
   // `expand_range` lets the right corner inherit it either way; reproducing
   // it keeps the two entry points describing one rectangle.
-  first.sheet = lhs.sheet;
-  first.sheet_quoted = lhs.sheet_quoted;
-  first.row = r1;
-  first.col = c1;
-  last.sheet = lhs.sheet;
-  last.sheet_quoted = lhs.sheet_quoted;
-  last.row = r2;
-  last.col = c2;
+  first.sheet = lhs->sheet;
+  first.sheet_quoted = lhs->sheet_quoted;
+  first.row = rect.value().row_first;
+  first.col = rect.value().col_first;
+  last.sheet = lhs->sheet;
+  last.sheet_quoted = lhs->sheet_quoted;
+  last.row = rect.value().row_last;
+  last.col = rect.value().col_last;
   *top_left = first;
   *bottom_right = last;
   return true;
@@ -403,6 +362,61 @@ Value evaluate_bare_range_spill(const parser::Reference& top_left, const parser:
       target->reject_spill_footprint(anchor_row, anchor_col, rows, cols);
     }
     return Value::error(ErrorCode::Spill);
+  }
+  return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
+}
+
+// Evaluates the space-as-intersection operator: `A1:C3 B2:D4` denotes the
+// overlapping rectangle (here B2:C3), and non-overlapping operands are
+// `#NULL!`.
+//
+// The overlap is a reference like any other, so it materialises wherever
+// `RangeOp` does. A 1x1 overlap degrades to its scalar exactly as `A1:A1`
+// does; anything larger is the rectangle, which is what makes
+// `=C1:D3 D1:E2` a 3x1 array rather than the single cell at its top-left.
+//
+// `spill_position` says whether the caller is the whole-formula position.
+// There the rectangle is weighed against the anchor's footprint before it is
+// built, and a refusal is recorded for the release machinery — the same
+// treatment a bare range gets, for the same reason. Circularity is left to
+// `resolve_ref` to report per cell: an intersection rectangle is bounded by
+// its operands and has no whole-axis spelling Excel would canonicalise it
+// into, so it is in the class that keeps the per-cell route.
+//
+// A nested position also keeps the `RangeOp` case's one exception: an
+// overlap that still spans a whole grid axis (`A:C B:B`) collapses to its
+// top-left there, so an operator cannot conjure a million cells per side.
+Value eval_intersect_op(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, bool spill_position) {
+  std::string_view sheet;
+  std::uint32_t r1 = 0;
+  std::uint32_t c1 = 0;
+  std::uint32_t r2 = 0;
+  std::uint32_t c2 = 0;
+  bool disjoint = false;
+  ErrorCode err = ErrorCode::Value;
+  if (!compute_intersect_rect(node.as_intersect_lhs(), node.as_intersect_rhs(), arena, registry, ctx, &sheet, &r1, &c1,
+                              &r2, &c2, &disjoint, &err)) {
+    return Value::error(err);
+  }
+  if (disjoint) {
+    return Value::error(ErrorCode::Null);
+  }
+  parser::Reference top_left{};
+  top_left.sheet = sheet;
+  top_left.row = r1;
+  top_left.col = c1;
+  const bool full_height = r1 == 0U && r2 == Sheet::kMaxRows - 1U;
+  const bool full_width = c1 == 0U && c2 == Sheet::kMaxCols - 1U;
+  if ((r1 == r2 && c1 == c2) || (!spill_position && (full_height || full_width))) {
+    return ctx.resolve_ref(top_left, arena, registry);
+  }
+  parser::Reference bottom_right{};
+  bottom_right.sheet = sheet;
+  bottom_right.row = r2;
+  bottom_right.col = c2;
+  if (spill_position) {
+    return evaluate_bare_range_spill(top_left, bottom_right, arena, registry, ctx, /*settle_circularity=*/false);
   }
   return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
 }
@@ -504,29 +518,28 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 
     case parser::NodeKind::ImplicitIntersection: {
       const auto& operand = node.as_implicit_intersection_operand();
-      if (operand.kind() == parser::NodeKind::RangeOp) {
-        // Implicit intersection on a range: project onto the formula cell's
-        // row or column. Single-column range -> requires formula row in
-        // range; single-row range -> requires formula col in range. 2D
-        // ranges and any non-aligned cases return #VALUE!.
-        const auto& lhs_ast = operand.as_range_lhs();
-        const auto& rhs_ast = operand.as_range_rhs();
-        if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
-          return Value::error(ErrorCode::Value);
+      // Implicit intersection on a reference: project the formula cell onto
+      // the declared rectangle. All three spellings that declare one —
+      // bounded `Ref:Ref`, full-axis `Ref:Ref`, and the single `Ref` the
+      // parser folds `A:A` / `1:1` into — go through the projection shared
+      // with `_xlfn.SINGLE`, so `=@A:B` and `=@A1:B3` agree wherever they
+      // denote the same rectangle.
+      if (ctx.has_formula_cell()) {
+        parser::Reference target{};
+        switch (project_implicit_intersection(operand, ctx.formula_row(), ctx.formula_col(), &target)) {
+          case IntersectionProjection::kCell:
+            return ctx.resolve_ref(target, arena, registry);
+          case IntersectionProjection::kNoCell:
+            return Value::error(ErrorCode::Value);
+          case IntersectionProjection::kNotStaticReference:
+            break;
         }
-        if (!ctx.has_formula_cell()) {
-          // No formula-cell context (top-level evaluator entry) -> degrade to
-          // top-left, matching the bare-range fallback. Production calls
-          // through Workbook always supply a formula cell, so this branch
-          // only fires for parser-driven smoke tests.
-          return eval_node(operand, arena, registry, ctx);
-        }
-        const std::optional<parser::Reference> target =
-            project_implicit_intersection(lhs_ast.as_ref(), rhs_ast.as_ref(), ctx.formula_row(), ctx.formula_col());
-        if (!target.has_value()) {
-          return Value::error(ErrorCode::Value);
-        }
-        return ctx.resolve_ref(*target, arena, registry);
+      } else if (operand.kind() == parser::NodeKind::RangeOp) {
+        // No formula-cell context (top-level evaluator entry) -> degrade to
+        // top-left, matching the bare-range fallback. Production calls
+        // through Workbook always supply a formula cell, so this branch
+        // only fires for parser-driven smoke tests.
+        return eval_node(operand, arena, registry, ctx);
       }
       // Dynamic arrays produced by a call, spill reference, or expression no
       // longer retain static range coordinates. Excel's `@` takes their
@@ -755,9 +768,12 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       // Hand off to the shared invoker. Argument-AST accessors differ
       // between the `LambdaCall` case (here) and the name-bound dispatch
       // path in `dispatch_call`, so we materialise a flat pointer array
-      // before invoking. ISOMITTED would change the eager-evaluation
-      // contract once it lands (currently a service stub), but every
-      // non-omitted argument case matches Excel.
+      // before invoking.
+      //
+      // Only the arguments the call actually writes are passed. Trailing
+      // optional parameters the call omits are bound to the omitted
+      // sentinel by `invoke_lambda` itself, which is what `ISOMITTED` reads
+      // inside the body; nothing about omission is decided here.
       const std::uint32_t arity = node.as_lambda_call_arity();
       std::vector<const parser::AstNode*> argv;
       argv.reserve(arity);
@@ -767,52 +783,11 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       return invoke_lambda(callee.as_lambda(), arity, argv.empty() ? nullptr : argv.data(), arena, registry, ctx);
     }
 
-    case parser::NodeKind::IntersectOp: {
-      // Excel's space-as-intersection operator: `A1:C3 B2:D4` -> the
-      // overlapping rectangle (here B2:C3). When the operands do not
-      // overlap, Excel returns `#NULL!`. In scalar context (no formula
-      // cell binding, or 2-D intersection rectangle) we collapse to the
-      // top-left of the intersection rectangle, mirroring the RangeOp
-      // case above.
-      std::string_view sheet;
-      std::uint32_t r1 = 0;
-      std::uint32_t c1 = 0;
-      std::uint32_t r2 = 0;
-      std::uint32_t c2 = 0;
-      bool disjoint = false;
-      ErrorCode err = ErrorCode::Value;
-      if (!compute_intersect_rect(node.as_intersect_lhs(), node.as_intersect_rhs(), arena, registry, ctx, &sheet, &r1,
-                                  &c1, &r2, &c2, &disjoint, &err)) {
-        return Value::error(err);
-      }
-      if (disjoint) {
-        return Value::error(ErrorCode::Null);
-      }
-      // Implicit-intersection style alignment when the formula cell sits
-      // inside the intersection rectangle's row or column band; otherwise
-      // the spill anchor (top-left). Mirrors the RangeOp scalar policy.
-      if (ctx.has_formula_cell()) {
-        const std::uint32_t fr = ctx.formula_row();
-        const std::uint32_t fc = ctx.formula_col();
-        parser::Reference target{};
-        target.sheet = sheet;
-        if (c1 == c2 && fr >= r1 && fr <= r2) {
-          target.row = fr;
-          target.col = c1;
-          return ctx.resolve_ref(target, arena, registry);
-        }
-        if (r1 == r2 && fc >= c1 && fc <= c2) {
-          target.row = r1;
-          target.col = fc;
-          return ctx.resolve_ref(target, arena, registry);
-        }
-      }
-      parser::Reference top_left{};
-      top_left.sheet = sheet;
-      top_left.row = r1;
-      top_left.col = c1;
-      return ctx.resolve_ref(top_left, arena, registry);
-    }
+    case parser::NodeKind::IntersectOp:
+      // A nested position, so the rectangle is materialised rather than
+      // weighed against a spill footprint — the same split the `RangeOp`
+      // case above draws against `evaluate()`.
+      return eval_intersect_op(node, arena, registry, ctx, /*spill_position=*/false);
 
     case parser::NodeKind::ArrayLiteral: {
       // A brace literal is a first-class dynamic array in modern Excel. The
@@ -867,9 +842,10 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
     ctx_with_counters = ctx_with_counters.with_depth_counters(&eval_depth, &lambda_depth);
   }
 
-  // The value of the whole formula is produced by exactly one of three
-  // branches: the bare-range spilling position, the iterative-calculation
-  // driver, or the ordinary single-pass walk.
+  // The value of the whole formula is produced by exactly one of four
+  // branches: the bare-range spilling position, the intersect operator's
+  // spilling position, the iterative-calculation driver, or the ordinary
+  // single-pass walk.
   //
   // A bare range standing as the entire formula — whole-axis (`=A:A`,
   // `=A:C`, `=1:2`) or bounded (`=A1:C10`) — is a spilling expression: its
@@ -928,6 +904,12 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
     const bool full_width = bare_range_top.col == 0U && bare_range_bottom.col == Sheet::kMaxCols - 1U;
     v = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
                                   /*settle_circularity=*/full_height || full_width);
+  } else if (is_top_level && node.kind() == parser::NodeKind::IntersectOp) {
+    // The intersect operator names a rectangle just as `:` does, so the
+    // spelling that produces one is intercepted here for the same reason:
+    // this is the only position it can spill from, and therefore the only
+    // one that may weigh the rectangle against the anchor's footprint.
+    v = eval_intersect_op(node, arena, registry, ctx_with_counters, /*spill_position=*/true);
   } else if (is_top_level && !ctx.iterative_driver_suppressed() && ctx.has_formula_cell() &&
              ctx.current_sheet() != nullptr && ctx.workbook() != nullptr &&
              ctx.workbook()->iterative_options().enabled) {

@@ -8,6 +8,9 @@
 //     sensible k.
 //   * The error-ignore bit (mask 2 of `options`) toggles "propagate vs
 //     drop" for range-sourced errors.
+//   * The hidden-row bit (mask 1 of `options`) toggles whether range cells
+//     sitting on a hidden row reach the aggregator, independently of the
+//     nested-call bit (mask 4).
 //   * function_num truncation: 9.7 -> SUM, etc.
 //   * function_num / options out-of-range surface `#VALUE!`.
 //   * k-arg constraints: PERCENTILE.EXC with too-small p, QUARTILE.* with
@@ -48,6 +51,15 @@ Workbook MakeOneToFive() {
     wb.sheet(0).set_cell_value(i, 0, Value::number(static_cast<double>(i + 1)));
   }
   return wb;
+}
+
+// Marks `row` (0-based) hidden on `sheet`, the same shape the OOXML reader
+// and `fm_sheet_set_row_hidden` produce.
+void HideRow(Sheet& sheet, std::uint32_t row) {
+  RowLayout layout;
+  layout.row = row;
+  layout.hidden = true;
+  sheet.mutable_layout().row_overrides.push_back(layout);
 }
 
 // ---------------------------------------------------------------------------
@@ -456,6 +468,129 @@ TEST(BuiltinsAggregateFn, LargeOverEmptyRangeIsNum) {
   const Value v = EvalSourceIn("=AGGREGATE(14,0,A1:A3,1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+// Excel treats `AGGREGATE(code, ...)` and its standalone twin as two
+// spellings of one aggregate, so the pair has to agree on every input —
+// including on which error code an empty slice produces, which is the thing
+// an `IFERROR` / `ERROR.TYPE` branch reads. Comparing the two results
+// against each other rather than against a hand-written expectation table
+// is what makes the assertion the invariant itself.
+TEST(BuiltinsAggregateFn, EmptySliceAgreesWithStandaloneTwin) {
+  struct Twin {
+    std::uint32_t code;
+    std::string_view standalone;
+  };
+  static constexpr Twin kTwins[] = {
+      {1u, "AVERAGE"}, {2u, "COUNT"},   {3u, "COUNTA"},     {4u, "MAX"}, {5u, "MIN"},
+      {6u, "PRODUCT"}, {7u, "STDEV.S"}, {8u, "STDEV.P"},    {9u, "SUM"}, {10u, "VAR.S"},
+      {11u, "VAR.P"},  {12u, "MEDIAN"}, {13u, "MODE.SNGL"},
+  };
+  for (const Twin& twin : kTwins) {
+    Workbook wb = Workbook::create();
+    const std::string aggregate_src = "=AGGREGATE(" + std::to_string(twin.code) + ",0,A1:A3)";
+    const std::string standalone_src = "=" + std::string(twin.standalone) + "(A1:A3)";
+    const Value from_aggregate = EvalSourceIn(aggregate_src, wb, wb.sheet(0));
+    const Value from_standalone = EvalSourceIn(standalone_src, wb, wb.sheet(0));
+    EXPECT_EQ(from_aggregate, from_standalone) << aggregate_src << " vs " << standalone_src;
+  }
+}
+
+TEST(BuiltinsAggregateFn, MedianOverEmptyRangeIsNum) {
+  Workbook wb = Workbook::create();
+  const Value from_aggregate = EvalSourceIn("=AGGREGATE(12,0,A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(from_aggregate.is_error());
+  EXPECT_EQ(from_aggregate.as_error(), ErrorCode::Num);
+
+  const Value from_standalone = EvalSourceIn("=MEDIAN(A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(from_standalone.is_error());
+  EXPECT_EQ(from_standalone.as_error(), ErrorCode::Num);
+}
+
+// ---------------------------------------------------------------------------
+// Hidden-row bit (mask 1)
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsAggregateFn, OptionsOneExcludesHiddenRows) {
+  Workbook wb = MakeOneToFive();
+  HideRow(wb.sheet(0), 1);  // A2 = 2
+  HideRow(wb.sheet(0), 3);  // A4 = 4
+  const Value included = EvalSourceIn("=AGGREGATE(9,0,A1:A5)", wb, wb.sheet(0));
+  const Value excluded = EvalSourceIn("=AGGREGATE(9,1,A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(included.is_number());
+  ASSERT_TRUE(excluded.is_number());
+  EXPECT_DOUBLE_EQ(included.as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(excluded.as_number(), 9.0);  // 1 + 3 + 5
+}
+
+TEST(BuiltinsAggregateFn, HiddenRowBitIsIndependentOfNestedCallBit) {
+  // The public encoding pairs (0,4), (1,5), (2,6), (3,7); only the low two
+  // bits are observable, so each pair must agree on row visibility.
+  Workbook wb = MakeOneToFive();
+  HideRow(wb.sheet(0), 0);  // A1 = 1
+  struct Case {
+    const char* source;
+    double expected;
+  };
+  static constexpr Case kCases[] = {
+      {"=AGGREGATE(9,0,A1:A5)", 15.0}, {"=AGGREGATE(9,4,A1:A5)", 15.0}, {"=AGGREGATE(9,1,A1:A5)", 14.0},
+      {"=AGGREGATE(9,5,A1:A5)", 14.0}, {"=AGGREGATE(9,2,A1:A5)", 15.0}, {"=AGGREGATE(9,6,A1:A5)", 15.0},
+      {"=AGGREGATE(9,3,A1:A5)", 14.0}, {"=AGGREGATE(9,7,A1:A5)", 14.0},
+  };
+  for (const Case& c : kCases) {
+    const Value v = EvalSourceIn(c.source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << c.source;
+    EXPECT_DOUBLE_EQ(v.as_number(), c.expected) << c.source;
+  }
+}
+
+TEST(BuiltinsAggregateFn, HiddenErrorCellDroppedWithoutErrorBit) {
+  // The hidden-row filter runs before the error filter, so options=1 alone
+  // is enough to keep an error on a hidden row from short-circuiting.
+  Workbook wb = MakeOneToFive();
+  wb.sheet(0).set_cell_value(2, 0, Value::error(ErrorCode::NA));
+  HideRow(wb.sheet(0), 2);
+  const Value propagated = EvalSourceIn("=AGGREGATE(9,0,A1:A5)", wb, wb.sheet(0));
+  const Value filtered = EvalSourceIn("=AGGREGATE(9,1,A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(propagated.is_error());
+  EXPECT_EQ(propagated.as_error(), ErrorCode::NA);
+  ASSERT_TRUE(filtered.is_number());
+  EXPECT_DOUBLE_EQ(filtered.as_number(), 12.0);  // 1 + 2 + 4 + 5
+}
+
+TEST(BuiltinsAggregateFn, HiddenRowBitAppliesToKArgCodes) {
+  Workbook wb = MakeOneToFive();
+  HideRow(wb.sheet(0), 4);  // A5 = 5, the largest
+  const Value included = EvalSourceIn("=AGGREGATE(14,0,A1:A5,1)", wb, wb.sheet(0));
+  const Value excluded = EvalSourceIn("=AGGREGATE(14,1,A1:A5,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(included.is_number());
+  ASSERT_TRUE(excluded.is_number());
+  EXPECT_DOUBLE_EQ(included.as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(excluded.as_number(), 4.0);
+}
+
+TEST(BuiltinsAggregateFn, HiddenRowBitShrinksKArgDomain) {
+  // Dropping a hidden cell shrinks n, so a k that was in range becomes
+  // #NUM! — the filter really runs before the k bound check.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  HideRow(wb.sheet(0), 1);
+  const Value included = EvalSourceIn("=AGGREGATE(15,0,A1:A2,2)", wb, wb.sheet(0));
+  const Value excluded = EvalSourceIn("=AGGREGATE(15,1,A1:A2,2)", wb, wb.sheet(0));
+  ASSERT_TRUE(included.is_number());
+  EXPECT_DOUBLE_EQ(included.as_number(), 2.0);
+  ASSERT_TRUE(excluded.is_error());
+  EXPECT_EQ(excluded.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsAggregateFn, ArrayLiteralIgnoresRowVisibility) {
+  Workbook wb = MakeOneToFive();
+  HideRow(wb.sheet(0), 0);
+  HideRow(wb.sheet(0), 1);
+  const Value v = EvalSourceIn("=AGGREGATE(9,1,{1;2;3})", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
 }
 
 // ---------------------------------------------------------------------------

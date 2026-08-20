@@ -19,7 +19,6 @@
 #include "eval/lazy_impls.h"
 #include "eval/logical_coerce.h"
 #include "eval/name_env.h"
-#include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
@@ -71,84 +70,67 @@ struct LazyAggArg {
   ErrorCode range_error = ErrorCode::Value;
 };
 
-// Resolves a COUNT / AND / OR argument to its provenance bucket, unifying
-// the range-argument gate across the family. LET `NameRef` bindings are
-// looked through to their range-shaped source AST; `RangeOp` / single-cell
-// `Ref` / `SpillRef` route through the shared `resolve_range_arg`; an array
-// constant `{...}` is expanded element-wise (`eval_node` alone surfaces
-// `#VALUE!` for a bare ArrayLiteral); and any other subtree is evaluated
-// once so a dynamic-array producer (`SEQUENCE`, `FILTER`, `MUNIT`, a lambda
-// helper, ...) carries range provenance while a plain scalar keeps
-// direct-argument provenance.
+// Resolves a COUNT / AND / OR argument to its provenance bucket.
+//
+// Every shape but one is delegated to `resolve_range_arg`, the engine's
+// single range-argument resolver: it looks through LET `NameRef` bindings,
+// expands `RangeOp` / single-cell `Ref` / `SpillRef` / `IntersectOp` and the
+// range-shaped calls (`OFFSET` / `CHOOSE` / `IF` / `ROW` / `COLUMN`),
+// evaluates an array constant `{...}` element-wise, and unwraps the
+// `Value::Array` a dynamic-array producer (`SEQUENCE`, `FILTER`, `MUNIT`, a
+// lambda helper, ...) returns. Its `from_scalar` flag is exactly the
+// provenance distinction this family needs, so an argument shape taught to
+// the resolver reaches COUNT / AND / OR without a change here.
+//
+// The exception is a reference union `(A1:A2, B1:B2)`, which denotes several
+// rectangles and therefore has no `RangeResult` the resolver can return; its
+// areas are concatenated below.
 LazyAggArg resolve_lazy_agg_arg(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
                                 const EvalContext& ctx) {
   LazyAggArg out;
-  const parser::AstNode* effective = &raw_arg;
-  if (raw_arg.kind() == parser::NodeKind::NameRef) {
-    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-    if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
-      effective = &resolved;
-    }
-  }
-  const parser::NodeKind kind = effective->kind();
-  if (kind == parser::NodeKind::RangeOp || kind == parser::NodeKind::Ref || kind == parser::NodeKind::SpillRef) {
+  if (raw_arg.kind() == parser::NodeKind::UnionOp) {
+    // Areas concatenate in order WITHOUT de-duplication, so an overlapping
+    // area is counted twice (`COUNT((A1:A2, A1:A2))` doubles). Mirrors the
+    // eager dispatcher's union handling: a failed area contributes a single
+    // error cell, which COUNT skips (`propagate_errors = false`) and AND / OR
+    // propagate. A LET binding never carries a union AST, so the passthrough
+    // the resolver performs cannot reach this shape.
     out.shape = LazyArgShape::Range;
-    auto resolved = resolve_range_arg(*effective, arena, registry, ctx);
-    if (!resolved) {
-      out.range_failed = true;
-      out.range_error = resolved.error();
-      return out;
-    }
-    out.cells = std::move(resolved.value().cells);
-    return out;
-  }
-  if (kind == parser::NodeKind::ArrayLiteral) {
-    out.shape = LazyArgShape::Range;
-    const std::uint32_t rows = effective->as_array_rows();
-    const std::uint32_t cols = effective->as_array_cols();
-    out.cells.reserve(static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols));
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      for (std::uint32_t c = 0; c < cols; ++c) {
-        out.cells.push_back(eval_node(effective->as_array_element(r, c), arena, registry, ctx));
-      }
-    }
-    return out;
-  }
-  if (kind == parser::NodeKind::UnionOp) {
-    // A reference union `(A1:A2, B1:B2)` concatenates each area in order
-    // WITHOUT de-duplication, so an overlapping area is counted twice
-    // (`COUNT((A1:A2, A1:A2))` doubles). Mirrors the eager dispatcher's union
-    // handling: a failed area contributes a single error cell, which COUNT
-    // skips (`propagate_errors = false`) and AND / OR propagate.
-    out.shape = LazyArgShape::Range;
-    const std::uint32_t area_count = effective->as_union_arity();
+    const std::uint32_t area_count = raw_arg.as_union_arity();
     for (std::uint32_t area = 0; area < area_count; ++area) {
-      auto resolved = resolve_range_arg(effective->as_union_child(area), arena, registry, ctx);
-      if (!resolved) {
-        out.cells.push_back(Value::error(resolved.error()));
+      auto area_result = resolve_range_arg(raw_arg.as_union_child(area), arena, registry, ctx);
+      if (!area_result) {
+        out.cells.push_back(Value::error(area_result.error()));
         continue;
       }
-      std::vector<Value>& area_cells = resolved.value().cells;
+      std::vector<Value>& area_cells = area_result.value().cells;
       out.cells.insert(out.cells.end(), std::make_move_iterator(area_cells.begin()),
                        std::make_move_iterator(area_cells.end()));
     }
     return out;
   }
-  const Value v = eval_node(*effective, arena, registry, ctx);
-  if (v.is_array()) {
+
+  auto resolved = resolve_range_arg(raw_arg, arena, registry, ctx);
+  if (!resolved) {
+    // A shape the resolver rejects and a propagated cell error arrive the
+    // same way; both consumers treat them alike (COUNT skips, AND / OR
+    // surface the code), so they share the one failure bucket.
     out.shape = LazyArgShape::Range;
-    const std::uint32_t rows = v.as_array_rows();
-    const std::uint32_t cols = v.as_array_cols();
-    const Value* src = v.as_array_cells();
-    const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-    out.cells.reserve(total);
-    for (std::size_t i = 0; i < total; ++i) {
-      out.cells.push_back(src[i]);
-    }
+    out.range_failed = true;
+    out.range_error = resolved.error();
     return out;
   }
-  out.shape = LazyArgShape::Scalar;
-  out.scalar = v;
+  RangeResult& result = resolved.value();
+  // A bare scalar expression keeps direct-argument provenance. The resolver
+  // guarantees a single cell alongside `from_scalar`; an empty rectangle
+  // falls through to the range bucket, where it contributes nothing.
+  if (result.from_scalar && !result.cells.empty()) {
+    out.shape = LazyArgShape::Scalar;
+    out.scalar = result.cells.front();
+    return out;
+  }
+  out.shape = LazyArgShape::Range;
+  out.cells = std::move(result.cells);
   return out;
 }
 

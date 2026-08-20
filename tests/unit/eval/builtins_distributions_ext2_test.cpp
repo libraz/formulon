@@ -319,6 +319,102 @@ TEST(BuiltinsBinomDistRange, SuccessBeyondTrialsIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+// ---------------------------------------------------------------------------
+// Run time bounded by the size of the input, not its value
+//
+// These three walk one probability-mass term per unit of an argument, so
+// a large enough argument used to run past the life of the process. The
+// walk now stops at a fixed ceiling and hands over to a closed form,
+// which answers in constant time. Whether it can answer depends on how
+// balanced the beta shapes are rather than on how large the argument is:
+// a small `number_s` against a huge `number_f` stays exact, while two
+// large shapes lose the prefactor to cancellation and are refused.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsDistributionBounds, NegBinomCdfAnswersPastTheTermCeiling) {
+  // The usual shape: a handful of successes against a huge failure count.
+  // The beta pair is `(5, number_f + 1)`, wildly skewed, which the closed
+  // form resolves exactly however large `number_f` gets. Every failure
+  // count is far past 5 successes, so the CDF is 1.
+  for (const char* src : {"=NEGBINOM.DIST(1E8, 5, 0.25, TRUE)", "=NEGBINOM.DIST(1E12, 5, 0.25, TRUE)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_number()) << src;
+    EXPECT_NEAR(v.as_number(), 1.0, 1e-9) << src;
+  }
+}
+
+TEST(BuiltinsDistributionBounds, NegBinomCdfBalancedShapesAreNum) {
+  // A `number_s` as large as `number_f` makes the pair balanced, where
+  // the closed form can no longer hold the family's tolerance. Refused
+  // rather than answered outside it.
+  const Value v = EvalSource("=NEGBINOM.DIST(1E12, 1E12, 0.25, TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsDistributionBounds, NegBinomPmfIsUnaffectedByTheCeiling) {
+  // A point query costs one evaluation at any magnitude.
+  const Value v = EvalSource("=NEGBINOM.DIST(1E12, 5, 0.25, FALSE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GE(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsDistributionBounds, BinomInvAnswersPastTheTermCeiling) {
+  // Past the walk's ceiling the quantile is bisected on the closed-form
+  // CDF. The median of Binomial(n, 0.5) is exactly n/2, which is what
+  // makes this a usable reference rather than a range check.
+  const Value v = EvalSource("=BINOM.INV(1E8, 0.5, 0.5)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 5.0e7);
+}
+
+TEST(BuiltinsDistributionBounds, BinomInvUnresolvableShapeIsNum) {
+  // The bisection reads the CDF near the middle of the support, where the
+  // shapes are balanced and the closed form cannot hold the tolerance --
+  // there it would land a step or more away from the true quantile.
+  const Value v = EvalSource("=BINOM.INV(1E12, 0.5, 0.5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsDistributionBounds, BinomInvBoundsTermsRatherThanTrials) {
+  // The ceiling counts the terms actually consumed, not `trials`. A huge
+  // trial count whose quantile still lands in the first few terms is
+  // answered normally -- refusing on `trials` alone would reject a
+  // question the walk can reach in microseconds.
+  const Value v = EvalSource("=BINOM.INV(1E12, 1E-9, 0.5)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GE(v.as_number(), 0.0);
+  EXPECT_LE(v.as_number(), 10000.0);
+}
+
+TEST(BuiltinsDistributionBounds, BinomDistRangeFullSupportIsOne) {
+  // A span this wide is far past the summation ceiling, so it becomes a
+  // difference of closed-form CDFs. Over the whole support that is
+  // exactly 1, and neither endpoint needs a balanced beta pair.
+  const Value v = EvalSource("=BINOM.DIST.RANGE(1E12, 0.5, 0, 1E12)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsDistributionBounds, BinomDistRangeUnresolvableEndpointIsNum) {
+  // The upper endpoint sits mid-support, where the shapes are balanced
+  // and the closed form cannot hold the family's tolerance. One
+  // unresolvable endpoint decides the difference, so the whole query is
+  // refused rather than answered from a term we cannot stand behind.
+  const Value v = EvalSource("=BINOM.DIST.RANGE(1E12, 0.5, 0, 5E11)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsDistributionBounds, BinomDistRangeNarrowSpanAtHugeTrialsAnswers) {
+  // The ceiling is on the span, not on `trials`: a two-term window inside
+  // a huge trial count is two evaluations and must still be answered.
+  const Value v = EvalSource("=BINOM.DIST.RANGE(1E12, 0.5, 1E11, 1E11)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GE(v.as_number(), 0.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
