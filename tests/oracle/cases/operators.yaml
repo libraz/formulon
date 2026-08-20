@@ -239,7 +239,7 @@ cases:
 
   # -- Power operator edges -----------------------------------------------
   - id: power_zero_to_zero
-    description: "0^0 — IEEE returns 1; Excel agrees"
+    description: "0^0 — Excel treats it as indeterminate and returns #NUM!; IEEE-754 pow returns 1"
     formula: "=0^0"
 
   - id: power_chain_left_assoc_2_3_2

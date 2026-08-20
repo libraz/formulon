@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,8 +36,8 @@ class IsPendingStampTest(unittest.TestCase):
     def test_prose_wrapped_build_is_pending(self) -> None:
         # The build number is real, but wrapping it in prose defeats the
         # allowlist on purpose: divergence.yaml entries must record the
-        # bare stamp so a future numeric-threshold stale check works
-        # without a format migration.
+        # bare stamp, because that is what `is_stale_stamp` compares
+        # numerically against the accepted build floor.
         self.assertTrue(divergence_check.is_pending_stamp("Excel 365 (Mac, ja-JP, 16.111.2)"))
 
     def test_date_instead_of_build_is_pending(self) -> None:
@@ -53,6 +54,81 @@ class IsPendingStampTest(unittest.TestCase):
         self.assertTrue(divergence_check.is_pending_stamp(None))
         self.assertTrue(divergence_check.is_pending_stamp(""))
         self.assertTrue(divergence_check.is_pending_stamp("   "))
+
+
+class IsStaleStampTest(unittest.TestCase):
+    """A real but old build is evidence of what Excel did, not of what it does.
+
+    `is_pending_stamp` cannot carry this: it also decides whether a fresh
+    capture may be promoted, and a capture taken on an older build is
+    still a genuine capture. So staleness is a second predicate, and only
+    the divergence registry applies it.
+    """
+
+    def test_build_below_its_floor_is_stale(self) -> None:
+        for stamp in ("16.108.1", "16.108.2", "16.109"):
+            self.assertTrue(divergence_check.is_stale_stamp(stamp), stamp)
+
+    def test_build_at_or_above_its_floor_is_not_stale(self) -> None:
+        for stamp in ("16.110", "16.111.2", "16.112"):
+            self.assertFalse(divergence_check.is_stale_stamp(stamp), stamp)
+
+    def test_windows_build_is_compared_against_the_windows_floor(self) -> None:
+        # `Application.Version` is pinned at the Office major on Windows,
+        # so its builds read as 16.0.<n> and are not on the macOS number
+        # line -- comparing them against the macOS floor would call every
+        # Windows capture stale.
+        self.assertFalse(divergence_check.is_stale_stamp("16.0.20228"))
+        self.assertTrue(divergence_check.is_stale_stamp("16.0.18025"))
+
+    def test_pending_stamps_are_not_reported_as_stale(self) -> None:
+        for stamp in (None, "", "16.0", "unknown", "16.xx.x (Build 24021522)"):
+            self.assertFalse(divergence_check.is_stale_stamp(stamp), stamp)
+
+
+class StaleStampGateTest(unittest.TestCase):
+    """`--strict` fails on a stale stamp, and the tally leaves it out."""
+
+    def _run(self, body: str, *, strict: bool) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "divergence.yaml"
+            path.write_text(body, encoding="utf-8")
+            out = io.StringIO()
+            err = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                status = divergence_check.validate(path, strict=strict)
+            return status, out.getvalue() + err.getvalue()
+
+    BODY = (
+        "entries:\n"
+        "  - id: volatile_now_clock\n"
+        "    mode: skip-oracle\n"
+        "    cause: excel-no-value\n"
+        '    reason: "r"\n'
+        "    prefer: formulon\n"
+        '    last_verified_excel_version: "16.108.1"\n'
+    )
+
+    def test_strict_fails_on_a_stale_stamp(self) -> None:
+        status, output = self._run(self.BODY, strict=True)
+        self.assertEqual(status, 1)
+        self.assertIn("STALE volatile_now_clock", output)
+
+    def test_non_strict_reports_but_does_not_fail(self) -> None:
+        status, output = self._run(self.BODY, strict=False)
+        self.assertEqual(status, 0)
+        self.assertIn("STALE volatile_now_clock", output)
+
+    def test_stale_entry_is_not_tallied_under_its_cause(self) -> None:
+        _, output = self._run(self.BODY, strict=False)
+        self.assertIn("excel-no-value: 0", output)
+        self.assertIn("not tallied: 1", output)
+
+    def test_current_stamp_is_tallied(self) -> None:
+        status, output = self._run(self.BODY.replace("16.108.1", "16.112"), strict=True)
+        self.assertEqual(status, 0)
+        self.assertIn("excel-no-value: 1", output)
+        self.assertIn("not tallied: 0", output)
 
 
 class SkipCauseTest(unittest.TestCase):
@@ -149,6 +225,93 @@ class SkipCauseTest(unittest.TestCase):
         )
         self.assertEqual(status, 0)
         self.assertIn("skipped cases by cause: 0 total", output)
+
+
+class IronCalcRegistryTest(unittest.TestCase):
+    """The IronCalc skip registry is held to the same three properties.
+
+    Every entry resolves to a case that still exists, carries a
+    machine-checkable reason for not running, and is tallied in cases
+    against the corpus it is removed from. Without the first, a renamed
+    suite turns a skip into a permanent no-op that hides whatever
+    regression later lands on the id.
+    """
+
+    GOLDEN = {"suite": "ironcalc_demo_Sheet1", "cases": [{"id": "A1"}, {"id": "A2"}]}
+    PROBE = {"suite": "demo_probes", "cases": [{"id": "demo_case"}]}
+
+    def _run(self, body: str) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            golden_dir = root / "ironcalc"
+            probe_dir = root / "probes"
+            golden_dir.mkdir()
+            probe_dir.mkdir()
+            (golden_dir / "demo__Sheet1.golden.json").write_text(json.dumps(self.GOLDEN), encoding="utf-8")
+            (probe_dir / "demo_probes.golden.json").write_text(json.dumps(self.PROBE), encoding="utf-8")
+            path = root / "ironcalc_divergence.yaml"
+            path.write_text(body, encoding="utf-8")
+            out = io.StringIO()
+            err = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                status = divergence_check.validate_ironcalc(path, golden_dir=golden_dir, probe_dir=probe_dir)
+            return status, out.getvalue() + err.getvalue()
+
+    def _entry(self, **overrides: str) -> str:
+        fields = {
+            "id": "ironcalc_demo_Sheet1.A1",
+            "reason": '"IronCalc caches a stale value. Probe: demo_probes."',
+            "prefer": "mac",
+            "first_noted": "2026-05-02",
+        }
+        fields.update(overrides)
+        body = "".join(f"    {key}: {value}\n" for key, value in fields.items() if key != "id")
+        return f"entries:\n  - id: {fields['id']}\n{body}"
+
+    def test_probe_backed_entry_is_accepted_and_tallied(self) -> None:
+        status, output = self._run(self._entry())
+        self.assertEqual(status, 0, output)
+        self.assertIn("mac-probe: 1", output)
+        self.assertIn("2 imported cases in 1 goldens", output)
+
+    def test_orphan_id_fails(self) -> None:
+        status, output = self._run(self._entry(id="ironcalc_demo_Sheet1.Z99"))
+        self.assertEqual(status, 1)
+        self.assertIn("orphan id", output)
+
+    def test_probe_that_names_no_golden_fails(self) -> None:
+        status, output = self._run(self._entry(reason='"Probe: gone_probes."'))
+        self.assertEqual(status, 1)
+        self.assertIn("names no golden", output)
+
+    def test_entry_without_a_probe_needs_a_cause(self) -> None:
+        status, output = self._run(self._entry(reason='"Formulon and IronCalc simply differ."'))
+        self.assertEqual(status, 1)
+        self.assertIn("needs a `cause`", output)
+
+    def test_declared_cause_stands_in_for_a_probe(self) -> None:
+        status, output = self._run(
+            self._entry(reason='"Single-sheet flatten drops the tab index."', cause="importer-flatten")
+        )
+        self.assertEqual(status, 0, output)
+        self.assertIn("importer-flatten: 1", output)
+
+    def test_unknown_cause_fails(self) -> None:
+        status, output = self._run(self._entry(cause="because"))
+        self.assertEqual(status, 1)
+        self.assertIn("cause must be one of", output)
+
+    def test_explicit_probe_key_is_honoured(self) -> None:
+        status, output = self._run(self._entry(reason='"No prose citation here."', probe="demo_probes"))
+        self.assertEqual(status, 0, output)
+        self.assertIn("mac-probe: 1", output)
+
+    def test_committed_registry_is_clean(self) -> None:
+        out = io.StringIO()
+        err = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            status = divergence_check.validate_ironcalc(divergence_check.IRONCALC_DIVERGENCE)
+        self.assertEqual(status, 0, out.getvalue() + err.getvalue())
 
 
 if __name__ == "__main__":

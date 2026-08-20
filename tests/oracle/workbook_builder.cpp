@@ -100,6 +100,11 @@ Expected<Value, Error> value_from_record(const JsonValue& rec, Workbook* workboo
 
 /// Builds the case's workbook from the `sheets` block. Each sheet's cell
 /// map is written via `Sheet::set_cell_value`.
+///
+/// Sheets are added in the block's declaration order, not by name: the
+/// capture side builds the same fixture in the order the case states, so
+/// ordering by name here would give the two halves different sheet indices
+/// and the golden diff would compare the wrong sheet.
 Expected<std::unique_ptr<Workbook>, Error> build_workbook(const JsonValue& spec) {
   auto workbook = std::make_unique<Workbook>(Workbook::create_empty());
 
@@ -107,12 +112,13 @@ Expected<std::unique_ptr<Workbook>, Error> build_workbook(const JsonValue& spec)
   if (sheets_v == nullptr || !sheets_v->is_object()) {
     return invalid("spec is missing a 'sheets' object");
   }
-  for (const auto& [sheet_name, cells] : sheets_v->as_object()) {
+  for (const std::string& sheet_name : sheets_v->object_keys()) {
+    const JsonValue* cells = sheets_v->find(sheet_name);
     Sheet& sheet = workbook->add_sheet(sheet_name);
-    if (!cells.is_object()) {
+    if (cells == nullptr || !cells->is_object()) {
       return invalid("sheets/" + sheet_name + ": expected an A1 -> value object");
     }
-    for (const auto& [addr, rec] : cells.as_object()) {
+    for (const auto& [addr, rec] : cells->as_object()) {
       std::uint32_t row = 0;
       std::uint32_t col = 0;
       if (!a1_to_row_col(addr, &row, &col)) {

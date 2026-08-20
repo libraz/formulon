@@ -149,26 +149,42 @@ Expected<void, Error> write_cell(fm_workbook_t* wb, std::uint32_t sheet, const s
 }
 
 /// Materialises the `sheets` block, returning sheet name -> index.
+///
+/// The walk follows the block's declaration order, not its names: the
+/// capture side enumerates the same JSON object as `json.loads` handed it,
+/// so a case declaring `Report` before `Data` must put `Report` at index 0
+/// on both halves. Ordering by name here would author the settings onto one
+/// sheet and inspect the other, and a field that happens to match the
+/// printer default would still compare equal.
 Expected<std::map<std::string, std::uint32_t>, Error> apply_sheets(fm_workbook_t* wb, const JsonValue& spec) {
   std::map<std::string, std::uint32_t> indices;
   const JsonValue* sheets = spec.find("sheets");
-  if (sheets == nullptr || !sheets->is_object()) {
-    return indices;
-  }
-  std::uint32_t position = 0;
-  for (const auto& [name, cells] : sheets->as_object()) {
-    if (position == 0) {
-      RETURN_IF_ERROR(checked(fm_workbook_rename_sheet(wb, 0, name.c_str()), "fm_workbook_rename_sheet"));
-    } else {
-      RETURN_IF_ERROR(checked(fm_workbook_add_sheet(wb, name.c_str()), "fm_workbook_add_sheet"));
-    }
-    indices[name] = position;
-    if (cells.is_object()) {
-      for (const auto& [addr, rec] : cells.as_object()) {
-        RETURN_IF_ERROR(write_cell(wb, position, addr, rec));
+  if (sheets != nullptr && sheets->is_object()) {
+    std::uint32_t position = 0;
+    for (const std::string& name : sheets->object_keys()) {
+      const JsonValue* cells = sheets->find(name);
+      if (position == 0) {
+        RETURN_IF_ERROR(checked(fm_workbook_rename_sheet(wb, 0, name.c_str()), "fm_workbook_rename_sheet"));
+      } else {
+        RETURN_IF_ERROR(checked(fm_workbook_add_sheet(wb, name.c_str()), "fm_workbook_add_sheet"));
       }
+      indices[name] = position;
+      if (cells != nullptr && cells->is_object()) {
+        for (const auto& [addr, rec] : cells->as_object()) {
+          RETURN_IF_ERROR(write_cell(wb, position, addr, rec));
+        }
+      }
+      ++position;
     }
-    ++position;
+  }
+  if (indices.empty()) {
+    // A case that declares no sheets still authors onto the workbook's
+    // default sheet, under whatever name that sheet already carries. The
+    // capture half does the same, so `roundtrip.sheet` resolves identically
+    // on both halves.
+    const char* default_name = nullptr;
+    RETURN_IF_ERROR(checked(fm_workbook_sheet_name(wb, 0, &default_name), "fm_workbook_sheet_name"));
+    indices[default_name != nullptr ? default_name : ""] = 0;
   }
   return indices;
 }
@@ -560,6 +576,13 @@ Expected<RoundtripObservation, Error> observe_saved_bytes(const std::uint8_t* by
 }
 
 }  // namespace
+
+Expected<std::map<std::string, std::uint32_t>, Error> roundtrip_sheet_indices(const JsonValue& spec) {
+  fm_workbook_t* raw = nullptr;
+  RETURN_IF_ERROR(checked(fm_workbook_create(&raw), "fm_workbook_create"));
+  WorkbookHandle wb(raw);
+  return apply_sheets(wb.get(), spec);
+}
 
 Expected<RoundtripObservation, Error> observe_roundtrip_from_spec(const JsonValue& spec) {
   if (!spec.is_object()) {

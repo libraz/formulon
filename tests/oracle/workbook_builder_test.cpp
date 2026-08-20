@@ -595,6 +595,33 @@ TEST(WorkbookBuilderPrint, RejectsUnknownSheet) {
   EXPECT_FALSE(static_cast<bool>(built_or));
 }
 
+// Sheet indices follow the `sheets` block's declaration order. The capture
+// side builds the same fixture in the order the case states, so a builder
+// that ordered by name would hand the golden diff a different sheet -- and
+// a comparison against a field that happens to match the default would
+// pass anyway. The spec is parsed from text rather than assembled through
+// `jobj`, because that is what gives it a declaration order distinct from
+// its name order.
+TEST(WorkbookBuilder, SheetIndicesFollowDeclarationOrderNotSheetName) {
+  auto spec_or = parse_json(R"json({
+    "sheets": {
+      "Report": {},
+      "Data": {"A1": {"kind": "text", "value": "Region"}}
+    },
+    "print": {"sheet": "Data"}
+  })json");
+  ASSERT_TRUE(spec_or.has_value()) << spec_or.error().message;
+
+  auto built_or = build_print_from_spec(spec_or.value());
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const BuiltPrint& built = built_or.value();
+
+  ASSERT_EQ(built.workbook->sheet_count(), 2U);
+  EXPECT_EQ(built.workbook->sheet(0).name(), "Report");
+  EXPECT_EQ(built.workbook->sheet(1).name(), "Data");
+  EXPECT_EQ(built.sheet_index, 1U);
+}
+
 }  // namespace
 }  // namespace oracle
 }  // namespace tests

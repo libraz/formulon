@@ -149,7 +149,7 @@ cases:
     formula: "=POWER(-2,3)"
 
   - id: power_zero_to_zero
-    description: "Excel returns 1 for POWER(0,0) (IEEE pow convention)"
+    description: "Excel treats POWER(0,0) as indeterminate -> #NUM!, diverging from IEEE-754 pow (which returns 1)"
     formula: "=POWER(0,0)"
 
   - id: power_negative_base_fractional_exp_is_num

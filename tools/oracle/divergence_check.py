@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the provenance and review state of ``tests/divergence.yaml``.
+"""Validate the provenance and review state of the skip registries.
 
 Each divergence record must be backed by an oracle case, an explicit alias
 to a current oracle case, or a non-oracle scope with repository-local
@@ -7,9 +7,18 @@ evidence.  The latter is for intentionally non-oracle surfaces such as C
 API shape choices and binary-fixture limitations; it prevents a free-form
 ``id`` from silently becoming a permanent skip.
 
-By default structural problems fail and entries awaiting a fresh Excel
-probe are reported as warnings.  ``--strict`` also fails for those pending
-records, making it suitable for a reprobe-completion gate.
+By default structural problems fail, and entries awaiting a fresh Excel
+probe or riding on a build older than ``MIN_VERIFIED_BUILD`` are reported
+as warnings.  ``--strict`` also fails for those pending and stale records,
+making it suitable for a reprobe-completion gate.
+
+``tests/ironcalc_divergence.yaml`` is a second registry with its own
+schema, and ``--input`` accepts it too: its entries name imported IronCalc
+cases rather than Formulon oracle cases, and their evidence is a Mac-side
+probe golden rather than an Excel version stamp.  Both registries are
+checked the same way in the ways that matter -- every entry resolves to a
+live case, carries a machine-checkable reason for not running, and is
+tallied in cases so the removed population is visible.
 """
 
 from __future__ import annotations
@@ -27,6 +36,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FORMULA_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
 WORKBOOK_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_wb"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
+IRONCALC_DIVERGENCE = REPO_ROOT / "tests" / "ironcalc_divergence.yaml"
+GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden"
+IRONCALC_GOLDEN_DIR = GOLDEN_DIR / "ironcalc"
 VARIANTS_DIR = REPO_ROOT / "tests" / "oracle" / "variants"
 NON_ORACLE_SCOPES = {
     "api-contract",
@@ -218,6 +230,24 @@ def cross_file_prefer_conflicts(paths: list[Path] | None = None) -> list[str]:
 _PLACEHOLDER_VERSION_RE = re.compile(r"16\.xx\.x", re.IGNORECASE)
 _M365_BUILD_RE = re.compile(r"16\.\d+(\.\d+)?")
 
+# Oldest build whose observation still counts as current evidence, keyed
+# by the release train the stamp comes from. An entry stamped below its
+# train's floor is stale: Excel may have changed under it since, and
+# nothing re-reads the reason string. Raise a value here once a reprobe
+# pass has moved the entries it covers.
+#
+# The two trains do not share a number line, so one number cannot gate
+# both: macOS Microsoft 365 ships `16.<build>[.<patch>]` (16.112), while
+# Windows Microsoft 365 ships `16.0.<build>` (16.0.20228) because
+# `Application.Version` there is pinned at the Office major. A stamp is
+# read as Windows when its second component is 0 -- macOS 365 has no
+# 16.0 build, and the bare `16.0` string is rejected outright by
+# `is_pending_stamp` as naming no particular Excel.
+MIN_VERIFIED_BUILD: dict[str, tuple[int, ...]] = {
+    "mac": (16, 110),
+    "windows": (16, 0, 20228),
+}
+
 
 def is_pending_stamp(value: Any) -> bool:
     """Return whether the supplied stamp says it still needs live Excel.
@@ -254,6 +284,38 @@ def is_pending_stamp(value: Any) -> bool:
     return _M365_BUILD_RE.fullmatch(normalized) is None
 
 
+def _parse_build(value: str) -> "tuple[str, tuple[int, ...]] | None":
+    """Split a verified stamp into its release train and numeric build.
+
+    Returns ``None`` for anything `is_pending_stamp` would reject, so the
+    two never disagree about which strings carry a comparable build.
+    """
+
+    if is_pending_stamp(value):
+        return None
+    numbers = tuple(int(part) for part in value.strip().split("."))
+    train = "windows" if len(numbers) > 1 and numbers[1] == 0 else "mac"
+    return train, numbers
+
+
+def is_stale_stamp(value: Any) -> bool:
+    """Return whether a verified stamp predates its train's floor.
+
+    A pending stamp is not stale -- it carries no build to compare, and
+    `is_pending_stamp` already reports it. Keeping the two separate is
+    what lets a capture be promoted on an older-but-real build while the
+    divergence registry still demands a recent one.
+    """
+
+    if not isinstance(value, str):
+        return False
+    parsed = _parse_build(value)
+    if parsed is None:
+        return False
+    train, numbers = parsed
+    return numbers < MIN_VERIFIED_BUILD[train]
+
+
 def validate(path: Path, *, strict: bool) -> int:
     try:
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -273,6 +335,7 @@ def validate(path: Path, *, strict: bool) -> int:
 
     errors: list[str] = []
     pending: list[str] = []
+    stale: list[str] = []
     documented = 0
     aliases = 0
     seen: set[str] = set()
@@ -280,6 +343,11 @@ def validate(path: Path, *, strict: bool) -> int:
     # removes three cases from the denominator, and the tally is only
     # meaningful in the same unit the pass rate is counted in.
     cause_counts: dict[str, int] = {cause: 0 for cause in sorted(SKIP_CAUSES)}
+    # Cases whose skip is not currently backed by a build we accept. They
+    # stay out of the per-cause tally -- a skip on a stamp Excel has moved
+    # past is not evidence of anything -- and are reported on their own
+    # line so the population is not quietly smaller than it looks.
+    unverified_cases = 0
     for index, entry in enumerate(entries):
         where = f"entries[{index}]"
         if not isinstance(entry, dict):
@@ -358,6 +426,10 @@ def validate(path: Path, *, strict: bool) -> int:
                 f"{case_id}: orphan id; add case_alias or a scope from {sorted(NON_ORACLE_SCOPES)} with evidence"
             )
 
+        stamp = entry.get("last_verified_excel_version")
+        stamp_pending = is_pending_stamp(stamp)
+        stamp_stale = is_stale_stamp(stamp)
+
         if entry.get("mode") == "skip-oracle":
             cause = entry.get("cause")
             if cause not in SKIP_CAUSES:
@@ -365,11 +437,15 @@ def validate(path: Path, *, strict: bool) -> int:
                     f"{case_id}: skip-oracle needs `cause` from {sorted(SKIP_CAUSES)}; got {cause!r}. "
                     "Only excel-no-value may leave the release-gate denominator."
                 )
+            elif stamp_pending or stamp_stale:
+                unverified_cases += selected_cases
             else:
                 cause_counts[cause] += selected_cases
 
-        if is_pending_stamp(entry.get("last_verified_excel_version")):
+        if stamp_pending:
             pending.append(case_id)
+        elif stamp_stale:
+            stale.append(f"{case_id}: {stamp}")
 
     # Cross-registry consistency is a property of the tree rather than of
     # one file, so it is reported on whichever registry is being checked.
@@ -382,16 +458,22 @@ def validate(path: Path, *, strict: bool) -> int:
         note = observations.get(case_id)
         detail = f"; Excel answered, see {note}" if note else ""
         print(f"PENDING {case_id}: needs a verified Excel version stamp{detail}", file=sys.stderr)
+    floors = ", ".join(
+        f"{train} {'.'.join(str(part) for part in build)}" for train, build in MIN_VERIFIED_BUILD.items()
+    )
+    for detail in stale:
+        print(f"STALE {detail}: older than the accepted build floor ({floors})", file=sys.stderr)
 
     print(
         f"divergence records: {len(entries)} entries, {len(case_ids)} oracle case IDs, "
-        f"{aliases} aliases, {documented} documented non-oracle entries, {len(pending)} pending reprobes"
+        f"{aliases} aliases, {documented} documented non-oracle entries, "
+        f"{len(pending)} pending reprobes, {len(stale)} stale stamps"
     )
     # The pass-rate denominator is decided here and nowhere else in the
     # tree: no tool computes the release gate's 99.5%, so this tally is the
     # only artefact that says what the skipped cases actually are.
     skipped_cases = sum(cause_counts.values())
-    print(f"skipped cases by cause: {skipped_cases} total")
+    print(f"skipped cases by cause: {skipped_cases} total (entries on an accepted build only)")
     notes = {
         "excel-no-value": " (outside the release-gate denominator)",
         "non-identifiable": " (both engines answer; the quantity has no unique value)",
@@ -399,9 +481,210 @@ def validate(path: Path, *, strict: bool) -> int:
     }
     for cause in sorted(cause_counts):
         print(f"  {cause}: {cause_counts[cause]}{notes.get(cause, '')}")
-    if errors or (strict and pending):
+    print(f"  not tallied: {unverified_cases} (skip rides on a pending or stale Excel stamp)")
+    if errors or (strict and (pending or stale)):
         return 1
     return 0
+
+
+# Why an IronCalc-imported case is skipped. The registry's own header
+# requires every entry to cite a Mac-side probe golden as evidence that
+# the skip records an IronCalc divergence rather than a Formulon bug --
+# but two populations cannot cite one, and lumping them in with the rest
+# is what made the requirement unenforceable:
+#
+#   mac-probe          Formulon matches Mac Excel and IronCalc's cached
+#                      value is the outlier. Evidence is the probe golden,
+#                      so this cause is derived from the citation rather
+#                      than declared: an entry that names a probe and sets
+#                      no `cause` is counted here.
+#   importer-flatten   The imported case is not the case Excel evaluated.
+#                      The importer flattens each fixture into a
+#                      single-sheet, all-rows-visible, static-cell setup,
+#                      which drops live spill anchors, workbook geometry
+#                      (SHEET / SHEETS), auto-filter visibility (SUBTOTAL
+#                      9 / 109) and post-2019 error codes. No probe can
+#                      adjudicate it because the golden cannot express the
+#                      state the divergence is about.
+#   float-precision    The two answers differ only at the precision limit
+#                      of f64 -- an accumulation-order ULP, or a cached
+#                      value drifting from the arithmetically exact
+#                      result. The correct value is fixed by arithmetic,
+#                      not by what Excel displays, so a probe adds nothing.
+IRONCALC_CAUSES = {
+    "mac-probe",
+    "importer-flatten",
+    "float-precision",
+}
+
+IRONCALC_PREFER = {"mac", "ironcalc"}
+
+_FIRST_NOTED_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# `Probe: <name>` / `Probes: <a>, <b>` inside a reason string, the form
+# every pre-existing entry uses. Names never contain a sentence period,
+# so the citation ends at the first one.
+_PROSE_PROBE_RE = re.compile(r"probes?:\s*([^.]+)", re.IGNORECASE)
+
+
+def load_ironcalc_catalog(golden_dir: Path | None = None) -> tuple[set[str], int]:
+    """Load the imported IronCalc case IDs and the golden count.
+
+    The ID is the `<suite>.<addr>` composite the parameterized runner
+    prints, which is also the key the importer matches skips against --
+    so an entry that does not appear here matches nothing at all.
+    """
+
+    ids: set[str] = set()
+    goldens = 0
+    for path in sorted((golden_dir or IRONCALC_GOLDEN_DIR).glob("*.golden.json")):
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        suite = doc.get("suite")
+        if not isinstance(suite, str):
+            continue
+        goldens += 1
+        for case in doc.get("cases") or []:
+            if isinstance(case, dict) and isinstance(case.get("id"), str):
+                ids.add(f"{suite}.{case['id']}")
+    return ids, goldens
+
+
+def load_probe_names(golden_dir: Path | None = None) -> set[str]:
+    """Names an entry may cite as probe evidence: file stem, suite or case.
+
+    The IronCalc goldens are excluded even though they live under the
+    same tree: they are imported from the same fixtures the skips are
+    about, so citing one would be evidence of nothing.
+    """
+
+    root = golden_dir or GOLDEN_DIR
+    names: set[str] = set()
+    for path in sorted(root.rglob("*.golden.json")):
+        if IRONCALC_GOLDEN_DIR in path.parents:
+            continue
+        names.add(path.name[: -len(".golden.json")])
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(doc.get("suite"), str):
+            names.add(doc["suite"])
+        for case in doc.get("cases") or []:
+            if isinstance(case, dict) and isinstance(case.get("id"), str):
+                names.add(case["id"])
+    return names
+
+
+def cited_probes(entry: dict) -> list[str]:
+    """Probe goldens an entry cites, from the `probe` key or its reason."""
+
+    raw = entry.get("probe")
+    if isinstance(raw, str):
+        candidates = [raw]
+    elif isinstance(raw, list):
+        candidates = [item for item in raw if isinstance(item, str)]
+    else:
+        match = _PROSE_PROBE_RE.search(entry.get("reason") or "")
+        if not match:
+            return []
+        # Drop the parenthetical case list -- it names cases inside the
+        # cited golden, which the golden itself already accounts for.
+        candidates = re.split(r",| and ", re.sub(r"\([^)]*\)", " ", match.group(1)))
+    names = []
+    for candidate in candidates:
+        name = candidate.strip().strip(".,;")
+        if name.endswith(".golden.json"):
+            name = name[: -len(".golden.json")]
+        if name:
+            names.append(name)
+    return names
+
+
+def validate_ironcalc(path: Path, *, golden_dir: Path | None = None, probe_dir: Path | None = None) -> int:
+    """Validate `tests/ironcalc_divergence.yaml` against the imported corpus.
+
+    Every entry names one imported case, so entries and removed cases are
+    the same unit here; the tally is still printed against the corpus size
+    because that is the denominator the skips come out of.
+    """
+
+    try:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        print(f"FAIL {path}: cannot parse YAML: {exc}", file=sys.stderr)
+        return 1
+    entries = doc.get("entries") if isinstance(doc, dict) else None
+    if not isinstance(entries, list):
+        print(f"FAIL {path}: top-level entries must be a list", file=sys.stderr)
+        return 1
+
+    case_ids, goldens = load_ironcalc_catalog(golden_dir)
+    probe_names = load_probe_names(probe_dir)
+
+    errors: list[str] = []
+    seen: set[str] = set()
+    cause_counts: dict[str, int] = {cause: 0 for cause in sorted(IRONCALC_CAUSES)}
+    for index, entry in enumerate(entries):
+        where = f"entries[{index}]"
+        if not isinstance(entry, dict):
+            errors.append(f"{where}: entry must be a mapping")
+            continue
+        case_id = entry.get("id")
+        if not isinstance(case_id, str) or not case_id:
+            errors.append(f"{where}: needs a non-empty id")
+            continue
+        if case_id in seen:
+            errors.append(f"{case_id}: duplicate id")
+        seen.add(case_id)
+        if case_id not in case_ids:
+            errors.append(f"{case_id}: orphan id; no imported IronCalc case carries it")
+        mode = entry.get("mode", "skip-oracle")
+        if mode != "skip-oracle":
+            errors.append(f"{case_id}: mode must be skip-oracle; got {mode!r}")
+        if not isinstance(entry.get("reason"), str) or not entry["reason"].strip():
+            errors.append(f"{case_id}: missing non-empty reason")
+        prefer = entry.get("prefer")
+        if prefer not in IRONCALC_PREFER:
+            errors.append(f"{case_id}: prefer must be one of {sorted(IRONCALC_PREFER)}; got {prefer!r}")
+        first_noted = entry.get("first_noted")
+        if not _FIRST_NOTED_RE.fullmatch(str(first_noted)):
+            errors.append(f"{case_id}: first_noted must be a YYYY-MM-DD date; got {first_noted!r}")
+
+        probes = cited_probes(entry)
+        unknown = [name for name in probes if name not in probe_names]
+        if unknown:
+            errors.append(f"{case_id}: probe evidence names no golden under tests/oracle/golden: {', '.join(unknown)}")
+        cause = entry.get("cause")
+        if cause is None:
+            # Derived, not guessed: the citation is the evidence, and an
+            # entry without one has to say which of the causes that
+            # cannot cite a probe applies.
+            cause = "mac-probe" if probes and not unknown else None
+            if cause is None:
+                errors.append(
+                    f"{case_id}: cites no probe golden, so it needs a `cause` from "
+                    f"{sorted(IRONCALC_CAUSES - {'mac-probe'})}"
+                )
+        elif cause not in IRONCALC_CAUSES:
+            errors.append(f"{case_id}: cause must be one of {sorted(IRONCALC_CAUSES)}; got {cause!r}")
+            cause = None
+        elif cause == "mac-probe" and not probes:
+            errors.append(f"{case_id}: cause mac-probe requires a probe citation")
+        if cause in cause_counts:
+            cause_counts[cause] += 1
+
+    for message in errors:
+        print(f"FAIL {message}", file=sys.stderr)
+
+    print(
+        f"ironcalc divergence records: {len(entries)} entries over {len(case_ids)} imported cases in {goldens} goldens"
+    )
+    print(f"skipped cases by cause: {sum(cause_counts.values())} total")
+    for cause in sorted(cause_counts):
+        print(f"  {cause}: {cause_counts[cause]}")
+    return 1 if errors else 0
 
 
 def main() -> int:
@@ -409,6 +692,8 @@ def main() -> int:
     parser.add_argument("--input", type=Path, default=DEFAULT_DIVERGENCE)
     parser.add_argument("--strict", action="store_true", help="also fail when an entry needs a live Excel reprobe")
     args = parser.parse_args()
+    if args.input.resolve() == IRONCALC_DIVERGENCE:
+        return validate_ironcalc(args.input)
     return validate(args.input, strict=args.strict)
 
 

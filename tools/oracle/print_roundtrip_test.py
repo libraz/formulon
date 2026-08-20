@@ -64,6 +64,70 @@ class SpecTest(unittest.TestCase):
         self.assertEqual(rt.roundtrip_case_ids(doc), ["rt"])
 
 
+class _RecordingWorkbook:
+    """Records the sheet calls `_apply_sheets` makes, in order."""
+
+    def __init__(self, default_name="Sheet1"):
+        self.default_name = default_name
+        self.order = []
+
+    def rename_sheet(self, index, name):
+        self.order.append(name)
+
+    def add_sheet(self, name):
+        self.order.append(name)
+
+    def sheet_name(self, index):
+        return self.default_name
+
+    def set_blank(self, *args):
+        pass
+
+    def set_number(self, *args):
+        pass
+
+    def set_bool(self, *args):
+        pass
+
+    def set_text(self, *args):
+        pass
+
+    def set_formula(self, *args):
+        pass
+
+
+class SheetIndexTest(unittest.TestCase):
+    """Sheet indices follow the spec's declaration order, not its names.
+
+    The capture half and the C++ authoring half have to land on the same
+    name -> index map or they author and inspect different sheets, and a
+    comparison against a field that happens to match the printer default
+    passes anyway. Pinning the order here is what gives the other half a
+    fixed contract to match.
+    """
+
+    def test_indices_follow_declaration_order(self):
+        wb = _RecordingWorkbook()
+        indices = rt._apply_sheets(wb, {"sheets": {"Report": {}, "Data": {}}})
+        self.assertEqual(indices, {"Report": 0, "Data": 1})
+        self.assertEqual(wb.order, ["Report", "Data"])
+
+    def test_reverse_declaration_order_is_honoured_too(self):
+        # The same two names the other way round: an implementation that
+        # sorts by name returns the same map for both, and only this pair
+        # tells the two apart.
+        indices = rt._apply_sheets(_RecordingWorkbook(), {"sheets": {"Data": {}, "Report": {}}})
+        self.assertEqual(indices, {"Data": 0, "Report": 1})
+
+    def test_empty_sheets_block_falls_back_to_the_default_sheet(self):
+        indices = rt._apply_sheets(_RecordingWorkbook("Sheet1"), {"sheets": {}})
+        self.assertEqual(indices, {"Sheet1": 0})
+
+    def test_absent_sheets_block_falls_back_to_the_default_sheet(self):
+        indices = rt._apply_sheets(_RecordingWorkbook("Sheet1"), {})
+        self.assertEqual(indices, {"Sheet1": 0})
+
+
 @unittest.skipIf(_formulon is None, "the Formulon Python binding is not importable here")
 class AuthoringTest(unittest.TestCase):
     """Drives the real binding, so these assert on the bytes we would ship."""
@@ -163,6 +227,21 @@ class AuthoringTest(unittest.TestCase):
         self.assertEqual(payload["xlsx_sha256"], hashlib.sha256(raw).hexdigest())
 
 
+def _target_sheet_index(case):
+    """Resolves a case's `roundtrip.sheet` to the 0-based index it authors.
+
+    Mirrors `_apply_sheets`'s declaration-order contract (see
+    `SheetIndexTest` above) without needing a live workbook: a string name
+    is looked up in the declared `sheets` order, an int is used as-is, and
+    an absent `sheets` block falls back to sheet 0.
+    """
+    names = list((case.get("sheets") or {}).keys())
+    sheet_key = case["roundtrip"].get("sheet", 0)
+    if isinstance(sheet_key, str):
+        return names.index(sheet_key) if names else 0
+    return int(sheet_key)
+
+
 class CommittedSuiteTest(unittest.TestCase):
     """The committed round-trip suite has to stay authorable."""
 
@@ -177,6 +256,7 @@ class CommittedSuiteTest(unittest.TestCase):
 
     @unittest.skipIf(_formulon is None, "the Formulon Python binding is not importable here")
     def test_every_case_authors_a_readable_workbook(self):
+        import base64
         import json
 
         doc = json.loads(self.CASE_FILE.read_text(encoding="utf-8"))
@@ -184,6 +264,22 @@ class CommittedSuiteTest(unittest.TestCase):
             with self.subTest(case=case["id"]):
                 payload = rt.fixture_payload(case, module=_formulon)
                 self.assertGreater(payload["xlsx_bytes"], 0)
+                raw = base64.b64decode(payload["xlsx_base64"])
+                # `xlsx_bytes > 0` alone would still pass for a truncated or
+                # non-zip blob; open it as a zip and require the parts a
+                # reader actually needs -- the workbook manifest and the
+                # worksheet part the case's `roundtrip.sheet` targets.
+                with zipfile.ZipFile(BytesIO(raw)) as zf:
+                    names = zf.namelist()
+                    self.assertIn("xl/workbook.xml", names)
+                    sheet_part = f"xl/worksheets/sheet{_target_sheet_index(case) + 1}.xml"
+                    self.assertIn(
+                        sheet_part,
+                        names,
+                        f"case {case['id']!r} targets sheet index {_target_sheet_index(case)} "
+                        f"but the archive has no {sheet_part}",
+                    )
+                    self.assertGreater(len(zf.read(sheet_part)), 0)
 
 
 if __name__ == "__main__":

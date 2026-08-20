@@ -12,7 +12,8 @@
 # file is exclusively for divergences against IronCalc's published
 # behaviour, and every entry MUST cite a Mac-side probe golden under
 # `tests/oracle/golden/` as evidence that Formulon's behaviour matches
-# Mac (so the skip is legitimate and not just hiding a Formulon bug).
+# Mac (so the skip is legitimate and not just hiding a Formulon bug) —
+# unless it declares a `cause` that says why no probe can adjudicate it.
 #
 # The id format is "<suite>.<addr>" — the same composite key the
 # parameterized test runner prints. The suite name is the one written
@@ -20,13 +21,35 @@
 # `ironcalc_calc_tests_STRING_HANDLING_Sheet1`) and the addr is the
 # A1 reference of the cell under test (e.g. `B8`).
 #
-# Schema (parsed by tools/oracle/ironcalc_import.py::_load_divergence_skips):
+# Schema (parsed by tools/oracle/ironcalc_import.py::_load_divergence_skips,
+# validated by `tools/oracle/divergence_check.py --input <this file>`):
 #
 #   entries:
 #     - id: <suite>.<addr>
 #       reason: "<one-line summary including the probe reference>"
 #       prefer: mac | ironcalc            # which side we trust
 #       first_noted: YYYY-MM-DD
+#       cause: <see below>                # only when no probe is cited
+#
+# The probe reference is written into `reason` as "Probe: <name>", where
+# <name> is a golden file stem, suite or case id under
+# `tests/oracle/golden/`. The checker resolves it, so a renamed or
+# deleted probe fails rather than reading as evidence. An entry that
+# cites one and sets no `cause` is tallied as `mac-probe`.
+#
+#   cause: importer-flatten
+#     The imported case is not the case Excel evaluated. The importer
+#     flattens each fixture into a single-sheet, all-rows-visible,
+#     static-cell setup, dropping live spill anchors, workbook geometry
+#     (SHEET / SHEETS), auto-filter visibility (SUBTOTAL 9 / 109) and
+#     post-2019 error codes. The golden cannot express the state the
+#     divergence is about, so no probe can adjudicate it.
+#
+#   cause: float-precision
+#     The two answers differ only at the precision limit of f64 — an
+#     accumulation-order ULP, or a cached value drifting from the
+#     arithmetically exact result. The correct value is fixed by
+#     arithmetic rather than by what Excel displays.
 
 entries:
   # -- STRING_HANDLING: text functions on error inputs --------------------
@@ -466,6 +489,7 @@ entries:
 
   # -- SORT spill operator (mirrors spill_operator_Sheet1) ----------------
   - id: ironcalc_calc_tests_SORT_Sheet3.E2
+    cause: importer-flatten
     reason: "=SUM(_xlfn.ANCHORARRAY(C2)) over a live C2 SORT spill; Mac/IronCalc=71, Formulon=#REF! because importer flattened the spill anchor to a static literal (C2=23). Same structural pattern as the spill_operator_Sheet1 entries above."
     prefer: mac
     first_noted: 2026-05-02
@@ -479,6 +503,7 @@ entries:
   # impl gap, but even with that fix the test would still fail because the
   # importer setup has no formula on A3.
   - id: ironcalc_calc_tests_FORMULATEXT_Sheet1.A14
+    cause: importer-flatten
     reason: "=_xlfn.FORMULATEXT(OFFSET(A1,2,1)) -> resolves to A3 -> expects \"=FORMULATEXT(A3)\". IronCalc importer flattened A3's formula to bool=true in golden setup; live Mac workbook has A3 as a formula cell."
     prefer: mac
     first_noted: 2026-05-02
@@ -517,33 +542,48 @@ entries:
   # are inherent to the importer's flatten step. No new probes are added
   # because the static-cell driver schema lacks knobs for "this sheet has
   # hidden rows" or "this workbook has 6 sheets".
+  #
+  # SUBTOTAL 101..111 does read `RowLayout::hidden` off the sheet, so the
+  # skip below is about missing input state, not a missing engine path.
+  # Two of the three cases carry a second, independent reason: a range
+  # whose endpoints are `OFFSET` / `INDIRECT` calls has no static row
+  # provenance, so its cells are never dropped even when the sheet does
+  # carry hidden rows. Auto-filter visibility (which codes 1..11 also
+  # honour in Excel) is not modelled at all.
   - id: ironcalc_calc_test_no_export_tables_Escape.E17
+    cause: importer-flatten
     reason: "=_xlfn.SHEET(\"Filters\") -- expects tab index 4 in the live multi-sheet workbook. Importer-flattened single-sheet driver has no \"Filters\" sheet, so Formulon (correctly per spec) returns #N/A. Structural flatten limitation."
     prefer: mac
     first_noted: 2026-05-02
   - id: ironcalc_calc_test_no_export_tables_Functions_Hidden.K38
+    cause: importer-flatten
     reason: "=_xlfn.SHEET() -- expects tab index 6 of the host sheet in the live workbook. Single-sheet driver has only 1 sheet, so Formulon (correctly) returns 1. Structural flatten limitation."
     prefer: mac
     first_noted: 2026-05-02
   - id: ironcalc_calc_test_no_export_tables_Sheet1.D5
+    cause: importer-flatten
     reason: "=_xlfn.SHEET(\"Hidden\") -- expects tab index 3 in the live workbook. Single-sheet driver has no \"Hidden\" sheet, so Formulon returns #N/A. Structural flatten limitation."
     prefer: mac
     first_noted: 2026-05-02
   - id: ironcalc_calc_test_no_export_tables_filters.B8
-    reason: "=SUBTOTAL(9,B3:B6) over a live filtered table; Mac=4 (only B3 visible after filter), Formulon=16 (sums all four importer-imported values). Importer drops auto-filter / hidden-row state; Formulon's SUBTOTAL math is otherwise correct."
+    cause: importer-flatten
+    reason: "=SUBTOTAL(9,B3:B6) over a live filtered table; Mac=4 (only B3 visible after filter), Formulon=16 (sums all four importer-imported values). Importer drops auto-filter state, which Formulon does not model either."
     prefer: mac
     first_noted: 2026-05-02
   - id: ironcalc_calc_test_no_export_tables_filters.B11
-    reason: "=SUBTOTAL(109,OFFSET(A1,1,1):OFFSET(A1,6,1)); same hidden-row flatten issue as filters.B8; Mac=4 (visible-only), Formulon=17."
+    cause: importer-flatten
+    reason: "=SUBTOTAL(109,OFFSET(A1,1,1):OFFSET(A1,6,1)); Mac=4 (visible-only), Formulon=17. Importer supplies no hidden-row state, and the OFFSET endpoints carry no static row provenance for the 101..111 filter to key on."
     prefer: mac
     first_noted: 2026-05-02
   - id: ironcalc_calc_test_no_export_tables_filters.C12
-    reason: "=SUBTOTAL(109,INDIRECT(\"B2\"):INDIRECT(\"B6\")); same hidden-row flatten issue; Mac=4, Formulon=17."
+    cause: importer-flatten
+    reason: "=SUBTOTAL(109,INDIRECT(\"B2\"):INDIRECT(\"B6\")); Mac=4, Formulon=17. Same pair of reasons as filters.B11 — no imported hidden-row state, and INDIRECT endpoints carry no static row provenance."
     prefer: mac
     first_noted: 2026-05-02
 
   # -- SHEETS() with multi-sheet workbook flatten -------------------------
   - id: ironcalc_calc_tests_SHEET_SHEETS_SHEET_SHEETS.C2
+    cause: importer-flatten
     reason: "=SHEETS(); Mac/IronCalc=4 (live 4-sheet workbook), Formulon=1 (single-sheet flatten). Same structural flatten as no_export_tables_Escape.E17."
     prefer: mac
     first_noted: 2026-05-02
@@ -557,16 +597,19 @@ entries:
   # #SPILL!, 14 for #BLOCKED!). Formulon's ERROR.TYPE map is verified by
   # other passing fixtures.
   - id: ironcalc_calc_tests_ERROR.TYPE_Sheet1.B8
+    cause: importer-flatten
     reason: "=ERROR.TYPE(A8); A8 in live xlsx held a post-2019 error mapping to ERROR.TYPE=14 (#BLOCKED! or similar), but importer flattened to #VALUE! in setup. Formulon returns 3 for #VALUE! per spec."
     prefer: mac
     first_noted: 2026-05-02
   - id: ironcalc_calc_tests_ERROR.TYPE_Sheet1.B14
+    cause: importer-flatten
     reason: "=ERROR.TYPE(A14); A14 in live xlsx held an error mapping to ERROR.TYPE=9 (#SPILL!), importer flattened to #VALUE!. Formulon returns 3 per spec."
     prefer: mac
     first_noted: 2026-05-02
 
   # -- COMBIN(20,19) exact integer; IronCalc lgamma drift -----------------
   - id: ironcalc_calc_tests_COMBIN_COMBINA_COMBIN_COMBINA.D5
+    cause: float-precision
     reason: "=COMBINA(20,19) = C(38,19) = 35345263800 (exact integer). Formulon's small-arg factorial path returns the exact integer; IronCalc's lgamma path drifts by 0.000015 in the trailing decimals. Formulon is correct."
     prefer: mac
     first_noted: 2026-05-02
@@ -646,6 +689,7 @@ entries:
   # variance path uses a different summation order whose bit pattern we
   # cannot replicate without arbitrary-precision arithmetic.
   - id: ironcalc_calc_tests_DVAR_DVARP_DSTDEV_DSTDEVP_DVAR_DVARP_DSTDEV_DSTDEVP.B59
+    cause: float-precision
     reason: "DVAR over 11x15 setup; Mac=257613333.33333337, Formulon=257613333.33333334 (1 ULP f64 accumulation order). Irreducible."
     prefer: mac
     first_noted: 2026-05-02
@@ -658,6 +702,7 @@ entries:
   # Accelerate happens to align both expressions; glibc/standard libm
   # does not. Irreducible without changing trig path implementation.
   - id: ironcalc_calc_tests_TRIGONOMETRIC_COTH_CSCH_SECH.D41
+    cause: float-precision
     reason: "=B41=C41 where COTH(1)*CSCH(1) and COSH(1)/SINH(1)^2 differ by 1 ULP under standard f64; Mac's FP evaluation aligns them to identical bits. Irreducible platform-specific FP order."
     prefer: mac
     first_noted: 2026-05-02

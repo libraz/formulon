@@ -24,10 +24,10 @@ from typing import Any, Dict
 import yaml
 
 try:  # pragma: no cover - trivial fallback
-    from tools.oracle import divergence_check, emit_skip_list, oracle_gen, workbook_case_schema
+    from tools.oracle import case_schema, divergence_check, emit_skip_list, oracle_gen, workbook_case_schema
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from tools.oracle import divergence_check, emit_skip_list, oracle_gen, workbook_case_schema
+    from tools.oracle import case_schema, divergence_check, emit_skip_list, oracle_gen, workbook_case_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -248,6 +248,35 @@ class SkipProjectionTests(unittest.TestCase):
         first = out.stat().st_mtime_ns
         emit_skip_list.emit(REPO_ROOT / "tests/divergence.yaml", "win-365-ja_JP", out)
         self.assertEqual(out.stat().st_mtime_ns, first)
+
+    def test_each_track_resolves_its_own_primary(self) -> None:
+        # The two tracks do not share a reference host, and `applies_to`
+        # scoping is evaluated against it -- projecting the formula track
+        # against the workbook primary would skip the wrong cases.
+        targets = emit_skip_list._load_targets(REPO_ROOT / "tools/oracle/targets.yaml")
+        self.assertEqual(emit_skip_list.track_primary(targets, "workbook"), "win-365-ja_JP")
+        self.assertEqual(emit_skip_list.track_primary(targets, "formula"), "mac-365-ja_JP")
+
+    def test_formula_track_expands_suite_selectors(self) -> None:
+        # A `suite:` entry removes every case in that suite. Without the
+        # case files the projection silently drops it, and the verifier
+        # keeps failing exactly the cases the registry excused.
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
+        out = tmp / "skips.json"
+        emit_skip_list.emit(REPO_ROOT / "tests/divergence.yaml", "mac-365-ja_JP", out, track="formula")
+        skips = json.loads(out.read_text(encoding="utf-8"))["skips"]
+        suites = {suite.name: suite for _, suite in case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")}
+        registry = yaml.safe_load((REPO_ROOT / "tests/divergence.yaml").read_text(encoding="utf-8"))
+        selected = [
+            entry["suite"]
+            for entry in registry["entries"]
+            if entry.get("mode") == "skip-oracle" and isinstance(entry.get("suite"), str)
+        ]
+        self.assertTrue(selected, "registry has no suite-selected skip to exercise")
+        for name in selected:
+            for case in suites[name].cases:
+                self.assertIn(case.id, skips)
 
 
 if __name__ == "__main__":

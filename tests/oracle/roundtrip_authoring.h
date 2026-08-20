@@ -65,6 +65,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -172,6 +173,17 @@ struct RoundtripObservation {
 ///   * the saved package cannot be opened, or is missing the workbook
 ///     part, the relationship, or the worksheet the sheet index names.
 Expected<RoundtripObservation, Error> observe_roundtrip_from_spec(const JsonValue& spec);
+
+/// Materialises `spec`'s `sheets` block on a fresh workbook and returns the
+/// resulting sheet name -> index map -- the same map
+/// `observe_roundtrip_from_spec` resolves `roundtrip.sheet` through.
+///
+/// Indices follow the block's declaration order, and a case that declares
+/// no sheets maps the workbook's default sheet to index 0. Both halves of
+/// the round trip must agree on this map or they author and inspect
+/// different sheets; the capture half's `_apply_sheets`
+/// (tools/oracle/print_roundtrip.py) is its mirror.
+Expected<std::map<std::string, std::uint32_t>, Error> roundtrip_sheet_indices(const JsonValue& spec);
 
 }  // namespace oracle
 }  // namespace tests

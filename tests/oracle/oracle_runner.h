@@ -22,6 +22,7 @@
 #define FORMULON_TESTS_ORACLE_ORACLE_RUNNER_H_
 
 #include <cstdint>
+#include <map>
 #include <ostream>
 #include <string>
 #include <utility>
@@ -56,7 +57,25 @@ struct OracleCase {
   // the gtest parameter name as `__<tag>` so primary and variant cases
   // never collide.
   std::string variant;
+  // Non-empty when the case must not be verified: either the golden was
+  // captured with the `skipped` field already baked in, or the divergence
+  // registry names the case id. Empty means "verify this case".
+  std::string skipped_reason;
 };
+
+/// Case ids the divergence registry excludes from verification, mapped to
+/// the registry's reason.
+///
+/// `mode: skip-oracle` in tests/divergence.yaml is a verification-time
+/// policy, so it has to apply to goldens captured before the entry existed.
+/// Baking the skip into the golden -- all the generator can do -- would make
+/// a newly adjudicated divergence wait on a fresh Excel capture to take
+/// effect on every machine, which is the deadlock this path exists to
+/// avoid. CMake projects the registry to JSON at configure time
+/// (tools/oracle/emit_skip_list.py) and hands the path in as
+/// `FORMULON_ORACLE_SKIP_FILE`; an unset or unreadable file yields no
+/// skips.
+const std::map<std::string, std::string>& oracle_skip_registry();
 
 /// Loads every `*.golden.json` file under `golden_dir` and flattens them
 /// into a list of `OracleCase` parameters. Files that fail to parse are

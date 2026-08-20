@@ -288,6 +288,24 @@ Per-variant overrides live in `tests/oracle/variants/<target>/divergence.yaml`
 and get merged on top of the primary file (variant entries win on key
 collision).
 
+`last_verified_excel_version` records the build the observation was made
+on, as a bare stamp (`16.112`, `16.0.20228`) so it can be compared
+numerically. `divergence_check.py --strict` fails both on an entry that
+carries no build at all and on one older than `MIN_VERIFIED_BUILD` — the
+per-train floor declared in that module. A stale entry drops out of the
+per-cause tally and is counted on its own line, because a skip resting on
+a build Excel has moved past is not evidence of anything. Raise the floor
+after a reprobe pass, not to make a run green.
+
+`tests/ironcalc_divergence.yaml` is the second registry and is checked by
+the same tool: `divergence_check.py --input tests/ironcalc_divergence.yaml`
+resolves every entry against the imported IronCalc corpus (so a renamed
+suite fails instead of turning the skip into a silent no-op), resolves the
+probe golden each entry cites, and tallies per `cause`. Its causes are
+`mac-probe`, `importer-flatten` and `float-precision`; the first is
+derived from a probe citation, the other two exist because no probe can
+adjudicate those cases. Definitions live in that file's header.
+
 ### Re-probing skipped cases
 
 To check whether a newer Excel build can now capture a historical

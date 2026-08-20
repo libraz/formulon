@@ -54,6 +54,11 @@ class JsonValue {
   static JsonValue make_string(std::string s);
   static JsonValue make_array(std::vector<JsonValue> items);
   static JsonValue make_object(std::map<std::string, JsonValue> members);
+  /// Same, but with the member order the document stated. `order` must name
+  /// every member of `members`; when it does not, the name-sorted order
+  /// stands so a malformed call degrades to the other overload rather than
+  /// dropping members from `object_keys()`.
+  static JsonValue make_object(std::map<std::string, JsonValue> members, std::vector<std::string> order);
 
   JsonValue(const JsonValue& other) { copy_from(other); }
   JsonValue& operator=(const JsonValue& other) {
@@ -79,6 +84,17 @@ class JsonValue {
   const std::vector<JsonValue>& as_array() const noexcept { return *array_; }
   const std::map<std::string, JsonValue>& as_object() const noexcept { return *object_; }
 
+  /// Member names in the order the document stated them. Must be called
+  /// only on an object.
+  ///
+  /// JSON objects are unordered by definition, but a case file's
+  /// declaration order carries meaning in this harness: a `sheets` block
+  /// names sheet 0, 1, ... in the order written, which is what the Python
+  /// capture half gets from `json.loads`. A caller whose semantics depend
+  /// on that order iterates here; a caller that only looks members up
+  /// uses `as_object()`.
+  const std::vector<std::string>& object_keys() const noexcept { return *object_order_; }
+
   /// Returns a pointer to the value at `key`, or `nullptr` if missing. Must
   /// be called only on an object.
   const JsonValue* find(std::string_view key) const;
@@ -92,6 +108,7 @@ class JsonValue {
   std::unique_ptr<std::string> string_;
   std::unique_ptr<std::vector<JsonValue>> array_;
   std::unique_ptr<std::map<std::string, JsonValue>> object_;
+  std::unique_ptr<std::vector<std::string>> object_order_;
 };
 
 /// Error reported by the reader. `line` / `column` are 1-based positions

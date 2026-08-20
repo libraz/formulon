@@ -1,6 +1,7 @@
 
 #include "tests/oracle/json_reader.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -45,10 +46,37 @@ JsonValue JsonValue::make_array(std::vector<JsonValue> items) {
   return v;
 }
 
+namespace {
+
+/// Member names in the map's own (name-sorted) order -- the fallback order
+/// for an object built without a stated one.
+std::vector<std::string> sorted_keys(const std::map<std::string, JsonValue>& members) {
+  std::vector<std::string> keys;
+  keys.reserve(members.size());
+  for (const auto& entry : members) {
+    keys.push_back(entry.first);
+  }
+  return keys;
+}
+
+}  // namespace
+
 JsonValue JsonValue::make_object(std::map<std::string, JsonValue> members) {
+  std::vector<std::string> order = sorted_keys(members);
+  return make_object(std::move(members), std::move(order));
+}
+
+JsonValue JsonValue::make_object(std::map<std::string, JsonValue> members, std::vector<std::string> order) {
   JsonValue v;
   v.kind_ = JsonKind::Object;
+  const bool order_covers_members =
+      order.size() == members.size() &&
+      std::all_of(order.begin(), order.end(), [&members](const std::string& key) { return members.count(key) == 1; });
+  if (!order_covers_members) {
+    order = sorted_keys(members);
+  }
   v.object_ = std::make_unique<std::map<std::string, JsonValue>>(std::move(members));
+  v.object_order_ = std::make_unique<std::vector<std::string>>(std::move(order));
   return v;
 }
 
@@ -59,6 +87,7 @@ void JsonValue::copy_from(const JsonValue& other) {
   string_ = other.string_ ? std::make_unique<std::string>(*other.string_) : nullptr;
   array_ = other.array_ ? std::make_unique<std::vector<JsonValue>>(*other.array_) : nullptr;
   object_ = other.object_ ? std::make_unique<std::map<std::string, JsonValue>>(*other.object_) : nullptr;
+  object_order_ = other.object_order_ ? std::make_unique<std::vector<std::string>>(*other.object_order_) : nullptr;
 }
 
 const JsonValue* JsonValue::find(std::string_view key) const {
@@ -120,10 +149,14 @@ class Parser {
   Expected<JsonValue, JsonError> parse_object() {
     advance();  // '{'
     std::map<std::string, JsonValue> members;
+    // Declaration order, kept alongside the lookup map: several case blocks
+    // (`sheets` above all) are positional, and the Python half reads them
+    // in the order written.
+    std::vector<std::string> order;
     skip_ws();
     if (peek() == '}') {
       advance();
-      return JsonValue::make_object(std::move(members));
+      return JsonValue::make_object(std::move(members), std::move(order));
     }
     while (true) {
       skip_ws();
@@ -139,7 +172,12 @@ class Parser {
       auto val = parse_value();
       if (!val.has_value())
         return val;
-      members.emplace(std::move(key.value()), std::move(val.value()));
+      std::string key_text = std::move(key.value());
+      // A duplicate key keeps its first position; the value the map holds
+      // for it is likewise the first one, so both views agree.
+      if (members.emplace(key_text, std::move(val.value())).second) {
+        order.push_back(std::move(key_text));
+      }
       skip_ws();
       char sep = peek();
       if (sep == ',') {
@@ -148,7 +186,7 @@ class Parser {
       }
       if (sep == '}') {
         advance();
-        return JsonValue::make_object(std::move(members));
+        return JsonValue::make_object(std::move(members), std::move(order));
       }
       return err("expected ',' or '}' in object");
     }

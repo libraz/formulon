@@ -197,6 +197,38 @@ if(Python3_Interpreter_FOUND)
   )
 endif()
 
+# Project tests/divergence.yaml to JSON for the formula-track verifiers, the
+# same way the workbook track does further down. A `mode: skip-oracle` entry
+# is verification-time policy, but the generator can only bake it into the
+# golden it writes -- so without this projection a newly adjudicated
+# divergence stays red on every machine until someone with a macOS Excel
+# host re-captures the suite. The formula track resolves the registry against
+# its own primary target, which is not the workbook track's.
+set(_formula_oracle_skip_file "")
+if(Python3_Interpreter_FOUND)
+  set(_formula_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/formula_oracle_skips.json")
+  execute_process(
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+            --track formula
+            --out ${_formula_oracle_skip_file}
+    RESULT_VARIABLE _formula_skip_rc
+    OUTPUT_QUIET
+    ERROR_QUIET
+  )
+  if(NOT _formula_skip_rc EQUAL 0)
+    set(_formula_oracle_skip_file "")
+  endif()
+endif()
+
+target_compile_definitions(formulon_oracle_tests
+  PRIVATE
+    FORMULON_ORACLE_SKIP_FILE="${_formula_oracle_skip_file}"
+)
+target_compile_definitions(formulon_ironcalc_oracle_tests
+  PRIVATE
+    FORMULON_ORACLE_SKIP_FILE="${_formula_oracle_skip_file}"
+)
+
 # A directory under variants/ is not automatically an active oracle.  In
 # particular, the historical win-365-ja_JP capture is deliberately kept for
 # research but its manifest status is `wanted` and its provenance record says
@@ -272,6 +304,7 @@ if(FORMULON_ORACLE_VARIANTS)
     PRIVATE
       FORMULON_ORACLE_GOLDEN_DIR=""
       FORMULON_ORACLE_VARIANT_DIRS_DEFAULT="${_variant_dirs_default}"
+      FORMULON_ORACLE_SKIP_FILE="${_formula_oracle_skip_file}"
   )
 
   formulon_apply_warnings(formulon_oracle_variant_tests)
@@ -571,6 +604,24 @@ if(Python3_Interpreter_FOUND)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   set_tests_properties(formulon_workbook_case_schema_negative PROPERTIES LABELS "oracle;oracle-metadata")
+  # Guards the divergence registry gate itself: the assertions here are what
+  # keep the pending-stamp format, the explicit build rejections and the
+  # mandatory `cause` enum from being loosened without notice.
+  add_test(
+    NAME formulon_divergence_registry_unit
+    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.divergence_check_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(formulon_divergence_registry_unit PROPERTIES LABELS "oracle;oracle-metadata")
+  # Covers the other half of the same gate: that a registered skip reaches
+  # both the capture side and each track's verifier without waiting on a
+  # fresh Excel session.
+  add_test(
+    NAME formulon_divergence_projection_unit
+    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.reprobe_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(formulon_divergence_projection_unit PROPERTIES LABELS "oracle;oracle-metadata")
   # This entry covers the spec and address handling only. The suite's
   # authoring half needs the Formulon Python binding, which the oracle
   # venv does not install -- it carries the capture dependencies (PyYAML,

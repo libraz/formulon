@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "eval/pivot_locale.h"
+#include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
@@ -258,53 +259,74 @@ void expect_golden_string(const JsonValue& block, const char* field, const std::
   EXPECT_EQ(got, want->as_string()) << "roundtrip '" << field << "' differs from what Excel read";
 }
 
+// True when the case's `roundtrip.page_setup` block authored `field`.
+bool case_authors(const JsonValue* authored_setup, const char* field) {
+  return authored_setup != nullptr && authored_setup->find(field) != nullptr;
+}
+
 // Diffs one observation against the golden's `expect.roundtrip` block.
 //
-// Only attributes the authored file actually *states* are compared. An
-// attribute the case never authored is absent from the XML, and Excel then
-// answers from the printer's defaults (Letter paper on the capture host)
-// rather than from anything we wrote -- comparing those would pin the
-// capture host's printer, not our writer.
-void verify_roundtrip(const RoundtripObservation& got, const JsonValue& expect) {
+// `authored` is the case's own `roundtrip` block, and it is what decides
+// which page-setup fields are compared. Deriving that gate from the saved
+// file instead -- from the `_stated` flags -- lets a writer that stops
+// emitting an attribute switch off its own check: the file says nothing,
+// so nothing is compared, and a case authoring A4 landscape passes while
+// shipping a Letter portrait workbook.
+//
+// The `_stated` flags stay, in the one role the file can play here: a field
+// the case authored but the package does not state is a failure, because
+// Excel then answers from the printer's defaults (Letter paper on the
+// capture host) rather than from anything we wrote. A field neither
+// authored nor stated is still not compared, for that same reason.
+void verify_roundtrip(const RoundtripObservation& got, const JsonValue& expect, const JsonValue& authored) {
   const JsonValue* setup = expect.find("page_setup");
   ASSERT_TRUE(setup != nullptr && setup->is_object()) << "golden roundtrip has no 'page_setup' block";
+  const JsonValue* authored_setup = authored.is_object() ? authored.find("page_setup") : nullptr;
+  if (authored_setup != nullptr && !authored_setup->is_object()) {
+    authored_setup = nullptr;
+  }
 
-  if (got.paper_size_stated) {
-    const JsonValue* want = setup->find("paper_size");
-    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_setup has no numeric 'paper_size'";
-    EXPECT_EQ(got.paper_size, static_cast<std::uint32_t>(want->as_number())) << "paperSize differs from Excel's read";
-  }
-  if (got.orientation_stated) {
-    // FM_ORIENTATION_* and Excel's XlPageOrientation agree on 1 = portrait,
-    // 2 = landscape, so the golden needs no translation.
-    const JsonValue* want = setup->find("orientation");
-    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_setup has no numeric 'orientation'";
-    EXPECT_EQ(got.orientation, static_cast<std::uint32_t>(want->as_number()))
-        << "orientation differs from Excel's read";
-  }
+  // Compares one `<pageSetup>` integer attribute. `case_field` names it in
+  // the case's authored block, `golden_field` in Excel's read.
+  auto expect_page_setup_u32 = [&](const char* case_field, const char* golden_field, bool stated,
+                                   std::uint32_t observed) {
+    const bool authored_here = case_authors(authored_setup, case_field);
+    if (!stated) {
+      if (authored_here) {
+        ADD_FAILURE() << "the case authors page_setup." << case_field << " but the saved package states no '"
+                      << golden_field << "' for Excel to read";
+      }
+      return;
+    }
+    const JsonValue* want = setup->find(golden_field);
+    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_setup has no numeric '" << golden_field << "'";
+    EXPECT_EQ(observed, static_cast<std::uint32_t>(want->as_number()))
+        << "page_setup." << case_field << " differs from Excel's read";
+  };
+
+  expect_page_setup_u32("paper_size", "paper_size", got.paper_size_stated, got.paper_size);
+  // FM_ORIENTATION_* and Excel's XlPageOrientation agree on 1 = portrait,
+  // 2 = landscape, so the golden needs no translation.
+  expect_page_setup_u32("orientation", "orientation", got.orientation_stated, got.orientation);
+  expect_page_setup_u32("fit_to_width", "fit_to_pages_wide", got.fit_to_width_stated, got.fit_to_width);
+  expect_page_setup_u32("fit_to_height", "fit_to_pages_tall", got.fit_to_height_stated, got.fit_to_height);
 
   // Excel reports `Zoom` as False whenever fit-to-page is engaged, and as
-  // the integer percent otherwise; the golden records whichever it got.
+  // the integer percent otherwise; the golden records whichever it got, so
+  // the scale and the fit-to-page flag are read out of the same field.
+  if (case_authors(authored_setup, "scale") && !got.scale_stated) {
+    ADD_FAILURE() << "the case authors page_setup.scale but the saved package states no 'scale' for Excel to read";
+  }
   if (const JsonValue* zoom = setup->find("zoom"); zoom != nullptr) {
     if (zoom->is_bool()) {
       EXPECT_FALSE(zoom->as_bool()) << "Excel reports Zoom as False or a percent, never True";
       EXPECT_TRUE(got.fit_to_page) << "Excel read the sheet as fit-to-page but the file does not say so";
-    } else if (zoom->is_number() && got.scale_stated) {
-      EXPECT_EQ(got.scale, static_cast<std::uint32_t>(zoom->as_number())) << "print scale differs from Excel's read";
+    } else if (zoom->is_number()) {
+      if (got.scale_stated) {
+        EXPECT_EQ(got.scale, static_cast<std::uint32_t>(zoom->as_number())) << "print scale differs from Excel's read";
+      }
       EXPECT_FALSE(got.fit_to_page) << "Excel reported a zoom percent, so fit-to-page must be off";
     }
-  }
-  if (got.fit_to_width_stated) {
-    const JsonValue* want = setup->find("fit_to_pages_wide");
-    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_setup has no numeric 'fit_to_pages_wide'";
-    EXPECT_EQ(got.fit_to_width, static_cast<std::uint32_t>(want->as_number()))
-        << "fitToWidth differs from Excel's read";
-  }
-  if (got.fit_to_height_stated) {
-    const JsonValue* want = setup->find("fit_to_pages_tall");
-    ASSERT_TRUE(want != nullptr && want->is_number()) << "golden page_setup has no numeric 'fit_to_pages_tall'";
-    EXPECT_EQ(got.fit_to_height, static_cast<std::uint32_t>(want->as_number()))
-        << "fitToHeight differs from Excel's read";
   }
 
   // Margins are inches on both sides: the capture converts COM's points,
@@ -358,15 +380,24 @@ void verify_roundtrip(const RoundtripObservation& got, const JsonValue& expect) 
   // The golden names the artefact Excel opened by length and digest. The
   // digest is not reproducible here -- the zip stamps every entry with the
   // wall clock -- but the length is content-determined, so a mismatch means
-  // the writer no longer emits the file this golden describes and the suite
-  // needs re-capturing on an Excel host.
+  // either the writer no longer emits the file this golden describes (the
+  // suite needs re-capturing on an Excel host) or the two producers that
+  // feed this comparison have drifted apart: the golden's `xlsx_bytes` was
+  // authored by the Python/wasmtime capture path (`_c.py` loads only
+  // `_wasm/formulon_capi.wasm`), while `got.xlsx_bytes` here comes from this
+  // test binary's native writer. A length mismatch that also reproduces
+  // against a freshly built `formulon_capi.wasm` package for the same case
+  // is a stale golden; one that reproduces only here is a native-vs-wasm
+  // divergence in the writer itself and re-capturing Excel will not fix it.
   if (const JsonValue* bytes = expect.find("xlsx_bytes"); bytes != nullptr && bytes->is_number()) {
     EXPECT_EQ(got.xlsx_bytes, static_cast<std::size_t>(bytes->as_number()))
-        << "the authored xlsx is no longer the size of the one Excel read (sha256 "
+        << "the natively-authored xlsx is no longer the size of the one Excel read (sha256 "
         << (expect.find("xlsx_sha256") != nullptr && expect.find("xlsx_sha256")->is_string()
                 ? expect.find("xlsx_sha256")->as_string()
                 : std::string("unknown"))
-        << "); re-capture the suite";
+        << "); before re-capturing the suite, compare against a wasm-built package for the same "
+           "case -- if wasm still matches this golden, the writers have diverged and re-capturing "
+           "will not help";
   }
 }
 
@@ -412,10 +443,12 @@ TEST_P(WorkbookOracleTest, Matches) {
   if (has_roundtrip) {
     const JsonValue* expect = param.expect.find("roundtrip");
     ASSERT_NE(expect, nullptr) << "golden 'expect' has no 'roundtrip' block";
+    const JsonValue* authored = param.spec.find("roundtrip");
+    ASSERT_NE(authored, nullptr) << "case spec has no 'roundtrip' block";
     auto observed_or = observe_roundtrip_from_spec(param.spec);
     ASSERT_TRUE(static_cast<bool>(observed_or))
         << "observe_roundtrip_from_spec failed: " << observed_or.error().message;
-    verify_roundtrip(observed_or.value(), *expect);
+    verify_roundtrip(observed_or.value(), *expect, *authored);
 
     if (!has_pivot && !has_print) {
       return;
@@ -616,6 +649,133 @@ INSTANTIATE_TEST_SUITE_P(WorkbookOracle, WorkbookOracleTest, ::testing::ValuesIn
 // instantiation above expands to nothing. Allow the uninstantiated state
 // explicitly so an empty golden_wb tree builds and runs cleanly.
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(WorkbookOracleTest);
+
+// ---------------------------------------------------------------------------
+// Sheet indices
+// ---------------------------------------------------------------------------
+
+JsonValue parse_or_empty(const char* json) {
+  auto parsed = parse_json(json);
+  EXPECT_TRUE(parsed.has_value()) << "test fixture is not valid JSON: "
+                                  << (parsed.has_value() ? "" : parsed.error().message);
+  return parsed.has_value() ? parsed.value() : JsonValue::make_object({});
+}
+
+// The reader keeps the order a document states its members in, which is
+// what makes a positional block like `sheets` mean the same thing here as
+// it does to the Python capture half's `json.loads`.
+TEST(JsonObjectOrder, MemberNamesFollowTheDocumentNotTheAlphabet) {
+  const JsonValue doc = parse_or_empty(R"json({"Report": 1, "Data": 2})json");
+  ASSERT_TRUE(doc.is_object());
+  EXPECT_EQ(doc.object_keys(), (std::vector<std::string>{"Report", "Data"}));
+  // Lookup is unaffected: `as_object()` remains the name-keyed view.
+  ASSERT_NE(doc.find("Data"), nullptr);
+  EXPECT_EQ(doc.as_object().size(), 2U);
+}
+
+// Both halves of the round trip have to land on the same name -> index map
+// or they author and inspect different sheets -- and a comparison against a
+// field that happens to match the printer default then passes anyway. The
+// capture half pins the same contract in
+// tools/oracle/print_roundtrip_test.py.
+TEST(RoundtripSheetIndices, FollowDeclarationOrderNotSheetName) {
+  auto indices = roundtrip_sheet_indices(parse_or_empty(R"json({"sheets": {"Report": {}, "Data": {}}})json"));
+  ASSERT_TRUE(static_cast<bool>(indices)) << indices.error().message;
+  EXPECT_EQ(indices.value(), (std::map<std::string, std::uint32_t>{{"Report", 0}, {"Data", 1}}));
+}
+
+TEST(RoundtripSheetIndices, ReverseDeclarationOrderIsHonouredToo) {
+  // The same two names the other way round: an implementation that sorts by
+  // name returns the same map for both, and only this pair tells them apart.
+  auto indices = roundtrip_sheet_indices(parse_or_empty(R"json({"sheets": {"Data": {}, "Report": {}}})json"));
+  ASSERT_TRUE(static_cast<bool>(indices)) << indices.error().message;
+  EXPECT_EQ(indices.value(), (std::map<std::string, std::uint32_t>{{"Data", 0}, {"Report", 1}}));
+}
+
+TEST(RoundtripSheetIndices, EmptySheetsBlockFallsBackToTheDefaultSheet) {
+  auto indices = roundtrip_sheet_indices(parse_or_empty(R"json({"sheets": {}})json"));
+  ASSERT_TRUE(static_cast<bool>(indices)) << indices.error().message;
+  EXPECT_EQ(indices.value(), (std::map<std::string, std::uint32_t>{{"Sheet1", 0}}));
+}
+
+TEST(RoundtripSheetIndices, AbsentSheetsBlockFallsBackToTheDefaultSheet) {
+  auto indices = roundtrip_sheet_indices(parse_or_empty(R"json({})json"));
+  ASSERT_TRUE(static_cast<bool>(indices)) << indices.error().message;
+  EXPECT_EQ(indices.value(), (std::map<std::string, std::uint32_t>{{"Sheet1", 0}}));
+}
+
+// ---------------------------------------------------------------------------
+// Round-trip comparison gate
+// ---------------------------------------------------------------------------
+
+// What Excel read out of a fixture whose page setup is A4 landscape, fit to
+// one page wide and tall. Everything outside `page_setup` is the OOXML
+// default, so a test can vary one page-setup field and read the single
+// failure that follows.
+JsonValue golden_roundtrip() {
+  return parse_or_empty(R"json({
+    "page_setup": {"paper_size": 9, "orientation": 2, "zoom": 100,
+                   "fit_to_pages_wide": 1, "fit_to_pages_tall": 1},
+    "page_margins": {"left": 0.7, "right": 0.7, "top": 0.75, "bottom": 0.75,
+                     "header": 0.3, "footer": 0.3},
+    "print_options": {"grid_lines": false, "headings": false,
+                      "horizontal_centered": false, "vertical_centered": false},
+    "header_footer": {"different_odd_even": false, "different_first": false,
+                      "scale_with_doc": true, "align_with_margins": true},
+    "print_area": "", "print_title_rows": "", "print_title_cols": "",
+    "manual_row_breaks": [], "manual_col_breaks": []
+  })json");
+}
+
+// The case that authored it: every field the golden above reports.
+JsonValue authored_roundtrip() {
+  return parse_or_empty(R"json({
+    "sheet": "Sheet1",
+    "page_setup": {"paper_size": 9, "orientation": 2, "scale": 100,
+                   "fit_to_width": 1, "fit_to_height": 1}
+  })json");
+}
+
+// The saved package stating exactly what the case authored.
+RoundtripObservation stated_observation() {
+  RoundtripObservation got;
+  got.paper_size_stated = true;
+  got.paper_size = 9;
+  got.orientation_stated = true;
+  got.orientation = 2;
+  got.scale_stated = true;
+  got.scale = 100;
+  got.fit_to_width_stated = true;
+  got.fit_to_width = 1;
+  got.fit_to_height_stated = true;
+  got.fit_to_height = 1;
+  got.margin_left = 0.7;
+  got.margin_right = 0.7;
+  got.margin_top = 0.75;
+  got.margin_bottom = 0.75;
+  got.margin_header = 0.3;
+  got.margin_footer = 0.3;
+  return got;
+}
+
+TEST(RoundtripGate, AgreesWhenThePackageStatesWhatTheCaseAuthored) {
+  verify_roundtrip(stated_observation(), golden_roundtrip(), authored_roundtrip());
+}
+
+// The finding this pins: with the gate derived from the saved file, a writer
+// that stops emitting `paperSize` silently switches off its own check.
+TEST(RoundtripGate, AnAuthoredFieldTheSavedPackageDropsIsAFailure) {
+  RoundtripObservation got = stated_observation();
+  got.paper_size_stated = false;
+  got.paper_size = 0;
+  EXPECT_NONFATAL_FAILURE(verify_roundtrip(got, golden_roundtrip(), authored_roundtrip()), "page_setup.paper_size");
+}
+
+TEST(RoundtripGate, AnAuthoredFieldExcelReadDifferentlyIsAFailure) {
+  RoundtripObservation got = stated_observation();
+  got.paper_size = 1;  // Letter, where the case asked for A4
+  EXPECT_NONFATAL_FAILURE(verify_roundtrip(got, golden_roundtrip(), authored_roundtrip()), "page_setup.paper_size");
+}
 
 }  // namespace
 }  // namespace oracle

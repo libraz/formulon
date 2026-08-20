@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -15,6 +16,14 @@
 
 #ifndef FORMULON_ORACLE_GOLDEN_DIR
 #define FORMULON_ORACLE_GOLDEN_DIR ""
+#endif
+
+// Path to the JSON projection of tests/divergence.yaml that CMake emits at
+// configure time (tools/oracle/emit_skip_list.py). Empty disables the
+// registry lookup, which is the state in a build configured without the
+// oracle Python venv.
+#ifndef FORMULON_ORACLE_SKIP_FILE
+#define FORMULON_ORACLE_SKIP_FILE ""
 #endif
 
 #ifndef FORMULON_ORACLE_VARIANT_DIRS_DEFAULT
@@ -48,6 +57,32 @@ OracleCase make_load_error(const std::string& path, const std::string& detail) {
 }
 
 }  // namespace
+
+const std::map<std::string, std::string>& oracle_skip_registry() {
+  // Read once; a missing or malformed file simply yields no skips.
+  static const std::map<std::string, std::string> table = [] {
+    std::map<std::string, std::string> out;
+    const std::string path = FORMULON_ORACLE_SKIP_FILE;
+    if (path.empty()) {
+      return out;
+    }
+    auto parsed = parse_json_file(path);
+    if (!parsed.has_value() || !parsed.value().is_object()) {
+      return out;
+    }
+    const JsonValue* skips = parsed.value().find("skips");
+    if (skips == nullptr || !skips->is_object()) {
+      return out;
+    }
+    for (const auto& [case_id, reason] : skips->as_object()) {
+      if (reason.is_string()) {
+        out.emplace(case_id, reason.as_string());
+      }
+    }
+    return out;
+  }();
+  return table;
+}
 
 std::pair<std::string, std::string> split_sheet_qualified_addr(const std::string& key) {
   const std::size_t bang = key.rfind('!');
@@ -247,6 +282,11 @@ std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir, const s
       }
       if (const JsonValue* cm = c.find("compare_mode"); cm && cm->is_string()) {
         oc.compare_mode = cm->as_string();
+      }
+      if (const JsonValue* skipped = c.find("skipped"); skipped != nullptr && skipped->is_string()) {
+        oc.skipped_reason = skipped->as_string();
+      } else if (const auto it = oracle_skip_registry().find(case_id); it != oracle_skip_registry().end()) {
+        oc.skipped_reason = it->second;
       }
       out.push_back(std::move(oc));
     }
