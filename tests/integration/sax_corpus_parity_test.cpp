@@ -347,7 +347,7 @@ Expected<Workbook, Error> read_via_sax(io::ByteSpan bytes, const Workbook& templ
       }
       wb.sheet(i).set_cell_cached_value_borrowed(row, col, Value::text(sst.entries[sst_index]));
       if (sst_index < sst.phonetic_for_entries.size() && !sst.phonetic_for_entries[sst_index].empty()) {
-        wb.sheet(i).set_cell_phonetic(row, col, sst.phonetic_for_entries[sst_index]);
+        wb.sheet(i).set_cell_phonetic_runs(row, col, sst.phonetic_for_entries[sst_index]);
       }
     }
   }

@@ -49,8 +49,10 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "io/zip_reader.h"
+#include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -96,11 +98,14 @@ struct CellRecord {
   std::string_view value;
   /// True iff the value came from `<is>...</is>` (i.e. `t="inlineStr"`).
   bool is_inline_string = false;
-  /// Concatenated kana from every `<is><rPh><t>` payload, in document
-  /// order. Empty when the cell has no inline phonetic annotation. SST-
-  /// referenced cells (`t="s"`) carry their phonetic through the SST
-  /// resolution pass instead and leave this field empty.
-  std::string_view phonetic;
+  /// One run per `<is><rPh>` block, in document order, each carrying the
+  /// surface-text span its kana covers. Null when the cell has no inline
+  /// phonetic annotation. SST-referenced cells (`t="s"`) carry their
+  /// phonetic through the SST resolution pass instead and leave this
+  /// field null. The pointee lives in the reader's per-cell scratch and
+  /// is valid only for the duration of the `on_cell` callback, matching
+  /// the lifetime of every `string_view` above.
+  const std::vector<PhoneticRun>* phonetic = nullptr;
 };
 
 /// One `<row>` element's opening attributes, surfaced to `on_row_start`

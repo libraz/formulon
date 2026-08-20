@@ -35,10 +35,12 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "io/a1_ref.h"
 #include "io/xsd_int.h"
 #include "io/zip_reader.h"
+#include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -323,6 +325,15 @@ std::string_view AttrOfRaw(const TagHeader& header, std::string_view name) noexc
     }
   }
   return {};
+}
+
+/// Reads `name` as a non-negative integer, returning `fallback` when the
+/// attribute is absent or does not parse. Used for the `<rPh>` span
+/// offsets, which Excel always writes as bare ASCII digits, so the raw
+/// (undecoded) attribute value is the right input.
+std::uint32_t AttrUintOr(const TagHeader& header, std::string_view name, std::uint32_t fallback) noexcept {
+  std::uint32_t out = 0;
+  return parse_xsd_nonneg_int(AttrOfRaw(header, name), &out) ? out : fallback;
 }
 
 /// Same as `AttrOfRaw` but transparently decodes XML entity references
@@ -762,10 +773,10 @@ struct CellScratch {
   std::string decoded_value;
   std::string inline_string;
   std::string decoded_formula;
-  /// Concatenation of every `<rPh><t>` payload encountered while
-  /// scanning an `<is>` body. Cleared at the start of each
-  /// `ScanInlineString` call.
-  std::string inline_string_phonetic;
+  /// One run per `<rPh>` block encountered while scanning an `<is>`
+  /// body, each carrying the surface-text span its kana covers. Cleared
+  /// at the start of each `ScanInlineString` call.
+  std::vector<PhoneticRun> inline_string_phonetic;
   /// Scratch buffers for entity-decoded / normalized semantic attributes.
   /// Every simultaneously exposed view has a distinct backing string: the
   /// three `<c>` attributes, the three `<f>` attributes, and the four row
@@ -809,7 +820,8 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
   // surface-text fallback for unannotated cells would silently include
   // the kana too. The kana is captured separately into
   // `inline_string_phonetic` so PHONETIC can return it for inline-
-  // string cells the SAX path materialises.
+  // string cells the SAX path materialises. Each block opens a fresh
+  // run so its sb/eb span survives; `in_rph` names the open one.
   bool in_rph = false;
   while (*p < end) {
     while (*p < end && **p != '<') {
@@ -848,6 +860,13 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
     }
     if (header.name == "rPh") {
       in_rph = true;
+      PhoneticRun run;
+      // A missing or unparsable offset reads as 0. That degrades the
+      // block to an insertion at the head of the string rather than
+      // dropping its kana, which is what the DOM path does too.
+      run.sb = static_cast<std::uint32_t>(AttrUintOr(header, "sb", 0U));
+      run.eb = static_cast<std::uint32_t>(AttrUintOr(header, "eb", 0U));
+      scratch->inline_string_phonetic.push_back(std::move(run));
       continue;
     }
     if (header.name == "t") {
@@ -857,7 +876,12 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
       if (!ScanTextContent(begin, end, p, "t", &raw, &needs_processing, &kind, err)) {
         return false;
       }
-      std::string* dest = in_rph ? &scratch->inline_string_phonetic : &scratch->inline_string;
+      // An `<rPh>` close tag clears `in_rph`, so the open run is always
+      // the last one pushed. A stray `<t>` before any `<rPh>` opened
+      // cannot reach this arm with `in_rph` set.
+      std::string* dest = in_rph && !scratch->inline_string_phonetic.empty()
+                              ? &scratch->inline_string_phonetic.back().text
+                              : &scratch->inline_string;
       if (needs_processing) {
         std::string tmp;
         DecodeTextRunInto(raw, kind, &tmp);
@@ -907,7 +931,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->f_ref = std::string_view{};
   record->value = std::string_view{};
   record->is_inline_string = false;
-  record->phonetic = std::string_view{};
+  record->phonetic = nullptr;
 
   if (cell_header.self_closing) {
     return true;
@@ -980,7 +1004,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       if (child.self_closing) {
         record->is_inline_string = true;
         record->value = std::string_view{};
-        record->phonetic = std::string_view{};
+        record->phonetic = nullptr;
         continue;
       }
       if (!ScanInlineString(begin, end, p, scratch, err)) {
@@ -988,7 +1012,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       }
       record->is_inline_string = true;
       record->value = std::string_view(scratch->inline_string);
-      record->phonetic = std::string_view(scratch->inline_string_phonetic);
+      record->phonetic = &scratch->inline_string_phonetic;
     } else if (!child.self_closing) {
       // Unrecognised child of <c>: skip it.
       if (!SkipUntilClose(begin, end, p, child.name, err)) {

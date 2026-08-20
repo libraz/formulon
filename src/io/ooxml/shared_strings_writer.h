@@ -10,25 +10,33 @@
 #include <unordered_map>
 #include <vector>
 
+#include "phonetic.h"
+
 namespace formulon {
 class Workbook;
 namespace io {
 
 struct SharedStringEntry {
   std::string text;
-  std::string phonetic;
+  /// One `<rPh>` block per run, each covering the surface-text span it
+  /// names. Empty for an unannotated entry.
+  std::vector<PhoneticRun> phonetic;
 };
 
 class SharedStrings {
  public:
-  std::uint32_t intern(std::string_view text, std::string_view phonetic);
-  std::uint32_t index_of(std::string_view text, std::string_view phonetic) const;
+  std::uint32_t intern(std::string_view text, const std::vector<PhoneticRun>& phonetic);
+  std::uint32_t index_of(std::string_view text, const std::vector<PhoneticRun>& phonetic) const;
   bool empty() const noexcept { return entries_.empty(); }
   std::uint32_t total_count() const noexcept { return total_count_; }
   const std::vector<SharedStringEntry>& entries() const noexcept { return entries_; }
 
  private:
-  static std::string key_for(std::string_view text, std::string_view phonetic);
+  /// Interning key. Two cells share an `<si>` only when both their
+  /// surface text and their full run list agree, so the spans are part
+  /// of the key: `東京都` annotated over `[0,2)` and the same text
+  /// annotated over `[0,3)` are different string items.
+  static std::string key_for(std::string_view text, const std::vector<PhoneticRun>& phonetic);
 
   std::uint32_t total_count_ = 0;
   std::vector<SharedStringEntry> entries_;

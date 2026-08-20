@@ -996,13 +996,14 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       }
       wb.sheet(i).set_cell_cached_value_borrowed(row, col, Value::text(sst.entries[idx]));
       // Propagate any <rPh> annotation from the SST entry onto the cell
-      // so PHONETIC() can surface the kana. The SST reader keeps
-      // `phonetic_for_entries` parallel to `entries`, with empty views
-      // for unannotated entries; we only commit a non-empty annotation
-      // to avoid allocating into `Cell::phonetic_text` for the common
-      // unannotated case.
+      // so PHONETIC() can surface the kana over the characters it
+      // covers. The SST reader keeps `phonetic_for_entries` parallel to
+      // `entries`, empty for unannotated entries; we only commit a
+      // non-empty annotation to avoid touching `Cell::phonetic_runs` for
+      // the common unannotated case. Several cells may share one `<si>`,
+      // so the runs are copied rather than moved out.
       if (idx < sst.phonetic_for_entries.size() && !sst.phonetic_for_entries[idx].empty()) {
-        wb.sheet(i).set_cell_phonetic(row, col, sst.phonetic_for_entries[idx]);
+        wb.sheet(i).set_cell_phonetic_runs(row, col, sst.phonetic_for_entries[idx]);
       }
       ++pending_sst_count;
     }

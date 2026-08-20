@@ -12,7 +12,7 @@
 // text formatting (`<r><rPr>`) is intentionally dropped: this layer is
 // plain-text only. Phonetic guides (`<rPh>`) ARE preserved through a
 // parallel `phonetic_for_entries` vector so PHONETIC() can surface the
-// IME-typed kana attached to a cell's source `<si>` entry.
+// kana attached to a cell's source `<si>` entry, span offsets included.
 
 #ifndef FORMULON_IO_SST_READER_H_
 #define FORMULON_IO_SST_READER_H_
@@ -23,6 +23,7 @@
 #include <string_view>
 #include <vector>
 
+#include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -40,14 +41,13 @@ namespace io {
 /// dereferenced.
 struct SharedStringTable {
   std::vector<std::string_view> entries;
-  /// `phonetic_for_entries[i]` is the concatenated kana from every
-  /// `<rPh>` annotation on the `i`-th `<si>` (in document order across
-  /// blocks). Empty `string_view{}` when the entry carries no `<rPh>`.
-  /// Each view aliases an entry inside `text_storage`, with the same
-  /// lifetime contract as `entries`. The vector is held parallel to
+  /// `phonetic_for_entries[i]` holds one `PhoneticRun` per `<rPh>` block
+  /// on the `i`-th `<si>`, in document order, and is empty when the entry
+  /// carries no `<rPh>`. Unlike `entries` these runs own their kana, so
+  /// they do not depend on `text_storage`. The vector is held parallel to
   /// `entries`: `phonetic_for_entries.size() == entries.size()` is an
   /// invariant maintained by `read_shared_strings`.
-  std::vector<std::string_view> phonetic_for_entries;
+  std::vector<std::vector<PhoneticRun>> phonetic_for_entries;
 };
 
 /// Parses an OOXML shared-strings part.
@@ -60,10 +60,11 @@ struct SharedStringTable {
 ///     Rich-text runs (`<r><t>...</t></r>`) are walked transparently and
 ///     their `<t>` payloads are appended to `entries[i]`.
 ///   * Phonetic guides (`<rPh>`) are NOT folded into `entries`. Instead,
-///     each `<rPh>` block's `<t>` descendants are concatenated in
-///     document order and the resulting kana string is stored at
-///     `phonetic_for_entries[i]` (or empty when the `<si>` has no
-///     `<rPh>`).
+///     each `<rPh>` block becomes one run in `phonetic_for_entries[i]`,
+///     carrying its `sb`/`eb` span and the concatenation of its `<t>`
+///     descendants (empty when the `<si>` has no `<rPh>`). A missing or
+///     unparsable `sb`/`eb` reads as `0`, which degrades to an insertion
+///     at the head of the string rather than dropping the kana.
 ///   * The decoded payload is appended to `text_storage` (a pointer-
 ///     stable container), and a `string_view` to that entry is added to
 ///     `entries` so subsequent appends do not invalidate earlier views.

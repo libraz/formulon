@@ -30,7 +30,6 @@
 #include <vector>
 
 #include "cell.h"
-#include "eval/utf8_length.h"
 #include "io/future_functions.h"
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/xml_escape.h"
@@ -38,6 +37,7 @@
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
+#include "phonetic.h"
 #include "sheet.h"
 #include "utils/a1_column.h"
 #include "utils/arena.h"
@@ -117,13 +117,12 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // `phonetic` is the kana annotation associated with a Text-valued cell
 // (empty when none). When non-empty AND `value` is Text, the `<is>`
 // block expands from `<is><t>{text}</t></is>` to
-// `<is><t>{text}</t><rPh sb="0" eb="N"><t>{kana}</t></rPh></is>` where
-// `N` is the UTF-16 code-unit count of `value.as_text()`. The original
-// document may have carried multiple `<rPh>` blocks (one per kanji
-// span); we collapse them to a single block on round-trip because
-// PHONETIC()'s observable behaviour (the concatenated kana) is
-// preserved without per-span boundaries.
-void AppendLiteralCellBody(std::string& out, const Value& value, std::string_view phonetic,
+// `<is><t>{text}</t><rPh sb="S" eb="E"><t>{kana}</t></rPh>...</is>`,
+// one block per run in the order the run list holds them. The spans are
+// emitted as stored rather than merged into one whole-string block:
+// PHONETIC leaves the text outside every span in place, so a merged
+// block would read kana over characters it does not cover.
+void AppendLiteralCellBody(std::string& out, const Value& value, const std::vector<PhoneticRun>& phonetic,
                            const SharedStrings* shared_strings, std::uint32_t xf_index) {
   out.push_back('"');
   AppendStyleAttr(out, xf_index);
@@ -160,12 +159,13 @@ void AppendLiteralCellBody(std::string& out, const Value& value, std::string_vie
     out.append(" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
     AppendXmlEscaped(out, value.as_text());
     out.append("</t>");
-    if (!phonetic.empty()) {
-      const std::uint32_t eb = formulon::eval::utf16_units_in(value.as_text());
-      out.append("<rPh sb=\"0\" eb=\"");
-      out.append(std::to_string(eb));
+    for (const PhoneticRun& run : phonetic) {
+      out.append("<rPh sb=\"");
+      out.append(std::to_string(run.sb));
+      out.append("\" eb=\"");
+      out.append(std::to_string(run.eb));
       out.append("\"><t xml:space=\"preserve\">");
-      AppendXmlEscaped(out, phonetic);
+      AppendXmlEscaped(out, run.text);
       out.append("</t></rPh>");
     }
     out.append("</is></c>");
@@ -365,12 +365,12 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 
   // Literal-value cell. AppendLiteralCellBody completes the opening tag
   // (closing quote + optional `s=` + optional type attribute), writes the
-  // body, and closes the </c>. The cell's `phonetic_text` is forwarded so
-  // any <rPh> annotation captured at read time round-trips back through
-  // the inline-string block.
+  // body, and closes the </c>. The cell's `phonetic_runs` are forwarded
+  // so any <rPh> annotation captured at read time round-trips back
+  // through the inline-string block, spans intact.
   out.append("<c r=\"");
   out.append(addr);
-  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_text, shared_strings, cell.xf_index);
+  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_runs, shared_strings, cell.xf_index);
   return true;
 }
 

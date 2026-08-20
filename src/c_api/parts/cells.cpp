@@ -15,6 +15,7 @@
 #include "cell.h"
 #include "eval/lambda_format.h"
 #include "eval/lambda_value.h"
+#include "phonetic.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
@@ -182,7 +183,9 @@ extern "C" fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, si
   const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   TextStore& store = const_cast<TextStore&>(wb->read_scratch);
   store.clear();
-  store.emplace_back(cell == nullptr ? std::string() : cell->phonetic_text);
+  // The ABI surfaces a bare reading, so the runs' kana concatenate: the
+  // span each covers is `PHONETIC`'s business, not a furigana field's.
+  store.emplace_back(cell == nullptr ? std::string() : formulon::flatten_phonetic(cell->phonetic_runs));
   *out_text = store.back().c_str();
   return 0;
 }

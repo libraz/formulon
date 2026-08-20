@@ -934,13 +934,14 @@ class Sheet {
   /// evaluator results must use `set_cell_cached_value` instead.
   void set_cell_cached_value_borrowed(std::uint32_t row, std::uint32_t col, Value v);
 
-  /// Stores a phonetic-kana annotation on the cell at `(row, col)`.
+  /// Stores a whole-string phonetic-kana annotation on the cell at
+  /// `(row, col)`.
   ///
-  /// Used by the OOXML reader after a Text cell is committed to copy the
-  /// `<rPh>` payload from the cell's source `<si>` (SST) or `<is>`
-  /// (inline string) into the cell's `phonetic_text` field. PHONETIC
-  /// reads this field directly via the lazy dispatch path; the writer
-  /// emits it back as `<rPh>` inside the `<is>` block on save.
+  /// This is the authoring entry point (C ABI / bindings): the caller
+  /// supplies a reading with no span vocabulary, so the annotation is
+  /// recorded as a single run covering the cell's surface text end to
+  /// end. Readers that do have spans call `set_cell_phonetic_runs`
+  /// instead.
   ///
   /// If the cell does not yet exist at `(row, col)` it is created as a
   /// default-constructed slot (empty `formula_text`, blank
@@ -949,6 +950,17 @@ class Sheet {
   /// annotation. This method does NOT touch the cell's stored value or
   /// formula, and does NOT eagerly clear any covering spill region.
   void set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_view phonetic);
+
+  /// Replaces the cell's phonetic annotation with `runs`, each covering
+  /// the surface-text span it names.
+  ///
+  /// Used by the OOXML readers after a Text cell is committed to carry
+  /// the `<rPh>` blocks from the cell's source `<si>` (SST) or `<is>`
+  /// (inline string) onto the cell. PHONETIC reads them directly via the
+  /// lazy dispatch path and the writer emits one `<rPh>` per run on save.
+  /// Cell creation, bounds and spill semantics match
+  /// `set_cell_phonetic`; passing an empty vector clears the annotation.
+  void set_cell_phonetic_runs(std::uint32_t row, std::uint32_t col, std::vector<PhoneticRun> runs);
 
   /// Stores the cellXfs index for the cell at `(row, col)`. The cell must
   /// already exist (created via `set_cell_value` / `set_cell_formula`); on

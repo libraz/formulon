@@ -28,6 +28,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "io/a1_ref.h"
 #include "io/iso_date.h"
@@ -35,6 +36,7 @@
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "io/xsd_int.h"
+#include "phonetic.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
@@ -142,22 +144,27 @@ std::uint32_t ParseColumnLetters(std::string_view text, std::size_t* i) {
 /// Walks `is_node`'s descendants and concatenates every `<t>` text node
 /// payload into `out`, in document order. Thin wrapper over the shared
 /// `append_rich_text` helper (which skips `<rPh>` so phonetic guides do
-/// not leak into the surface string; `ConcatInlinePhoneticText` walks
+/// not leak into the surface string; `CollectInlinePhoneticRuns` walks
 /// them separately).
 void ConcatInlineStringText(const pugi::xml_node& is_node, std::string& out) {
   (void)append_rich_text(is_node, out);
 }
 
-/// Walks every `<rPh>` direct child of `is_node` and concatenates their
-/// `<t>` descendants into `out` in document order. Each `<rPh>` block
-/// carries an `sb`/`eb` (start-byte / end-byte) span attribute, which is
-/// not preserved here: the engine surfaces only the concatenated kana
-/// through PHONETIC, so spans are unobservable at this layer.
-void ConcatInlinePhoneticText(const pugi::xml_node& is_node, std::string& out) {
+/// Collects every `<rPh>` direct child of `is_node` into `out`, one run
+/// per block, in document order. The `sb`/`eb` attributes delimit the
+/// surface-text span each block's kana covers, in UTF-16 code units, and
+/// are preserved: PHONETIC replaces only the annotated spans and passes
+/// the rest of the string through, so the boundaries are observable.
+/// Mirrors `CollectPhoneticRuns` on the shared-strings side.
+void CollectInlinePhoneticRuns(const pugi::xml_node& is_node, std::vector<PhoneticRun>& out) {
   for (pugi::xml_node rph = is_node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
+    PhoneticRun run;
+    run.sb = static_cast<std::uint32_t>(rph.attribute("sb").as_uint(0U));
+    run.eb = static_cast<std::uint32_t>(rph.attribute("eb").as_uint(0U));
     for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
-      AppendOoxmlTextUnescaped(out, t.text().get());
+      AppendOoxmlTextUnescaped(run.text, t.text().get());
     }
+    out.push_back(std::move(run));
   }
 }
 
@@ -401,19 +408,14 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   out.formula = std::move(formula);
   out.xf_index = xf_index;
 
-  // Capture <rPh> phonetic kana from the inline-string block (when
+  // Capture <rPh> phonetic runs from the inline-string block (when
   // present). SST-referenced cells (t="s") carry their phonetic on the
   // matching <si> in xl/sharedStrings.xml; that path is plumbed through
-  // `SharedStringTable::phonetic_for_entries` instead. We append into
-  // the same caller-owned `text_storage` deque used for the cell's
-  // surface text, preserving the pointer-stability lifetime contract.
+  // `SharedStringTable::phonetic_for_entries` instead. The runs own
+  // their kana, so unlike the cell's surface text they do not borrow
+  // from `text_storage`.
   if (is_node) {
-    std::string phonetic_buf;
-    ConcatInlinePhoneticText(is_node, phonetic_buf);
-    if (!phonetic_buf.empty()) {
-      text_storage.emplace_back(std::move(phonetic_buf));
-      out.phonetic_text = text_storage.back();
-    }
+    CollectInlinePhoneticRuns(is_node, out.phonetic_runs);
   }
   return out;
 }

@@ -14,7 +14,9 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "phonetic.h"
 #include "value.h"
 
 namespace formulon {
@@ -72,11 +74,15 @@ struct Cell {
   /// Kana annotation associated with a Text cell, populated from the OOXML
   /// `<rPh>` markers attached to the cell's source `<si>` (SST entry) or
   /// `<is>` (inline string). Empty when the cell carries no annotation.
-  /// `PHONETIC` reads this field directly via the lazy dispatch path; the
-  /// writer emits it back as `<rPh sb="0" eb="N">` inside the `<is>` block
-  /// on save. The annotation is stored as a single concatenated kana string
-  /// (multi-block `<rPh>` runs collapse to one block on round-trip).
-  std::string phonetic_text;
+  ///
+  /// Each run keeps the surface-text span it covers, because `PHONETIC`
+  /// replaces only the annotated spans and passes the rest of the string
+  /// through: a partially annotated cell surfaces kana and original
+  /// characters side by side, so the boundaries cannot be flattened away.
+  /// `PHONETIC` reads this field directly via the lazy dispatch path, and
+  /// the writer emits one `<rPh sb eb>` block per run so the annotation
+  /// round-trips unchanged.
+  std::vector<PhoneticRun> phonetic_runs;
   /// Index into the workbook's `StylesTable::cell_xfs` describing this
   /// cell's visual format (number-format id, font/fill/border indices,
   /// alignment). `0` is the default xf and is the value Excel writes when

@@ -21,7 +21,9 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
+#include "phonetic.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -68,14 +70,14 @@ struct ParsedCell {
   /// SST is loaded.
   bool is_sst_index = false;
   std::uint32_t sst_index = 0;
-  /// Concatenated kana text from any `<rPh>` annotations attached to the
-  /// cell's `<is>` (inline-string) block, in document order. Empty when
-  /// the cell has no `<is>` block or the block carries no `<rPh>`. SST-
-  /// referenced cells (`t="s"`) carry their phonetic on the matching SST
-  /// `<si>` instead, surfaced via `SharedStringTable::phonetic_for_entries`.
-  /// Backed by a fresh entry in the caller-supplied `text_storage`, with
-  /// the same lifetime contract as `value`'s text payload.
-  std::string_view phonetic_text;
+  /// One run per `<rPh>` annotation attached to the cell's `<is>`
+  /// (inline-string) block, in document order, each carrying the surface-
+  /// text span it covers. Empty when the cell has no `<is>` block or the
+  /// block carries no `<rPh>`. SST-referenced cells (`t="s"`) carry their
+  /// phonetic on the matching SST `<si>` instead, surfaced via
+  /// `SharedStringTable::phonetic_for_entries`. The runs own their kana
+  /// and do not depend on `text_storage`.
+  std::vector<PhoneticRun> phonetic_runs;
   /// Index into the workbook's `StylesTable::cell_xfs`, sourced from the
   /// `s=` attribute on the `<c>` element. Defaults to `0` (the default
   /// xf) when the attribute is absent.

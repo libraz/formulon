@@ -20,7 +20,9 @@
 
 #include "cell.h"
 #include "cf/cf_types.h"
+#include "eval/utf8_length.h"
 #include "io/a1_ref.h"
+#include "phonetic.h"
 #include "pivot/pivot_table.h"
 #include "utils/a1_column.h"
 #include "utils/arena.h"
@@ -243,7 +245,7 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.formula_text.clear();
-  slot.phonetic_text.clear();
+  slot.phonetic_runs.clear();
   slot.cached_value = v;
   cell_enumeration_revision_.bump();
 }
@@ -264,7 +266,7 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.formula_text.clear();
-  slot.phonetic_text.clear();
+  slot.phonetic_runs.clear();
   auto owned = std::make_unique<std::string>(text);
   slot.cached_value = Value::text(*owned);
   slot.cached_text_owned = std::move(owned);
@@ -289,7 +291,7 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.formula_text = std::move(formula);
-  slot.phonetic_text.clear();
+  slot.phonetic_runs.clear();
   slot.cached_value = Value::blank();
   cell_enumeration_revision_.bump();
 }
@@ -377,7 +379,26 @@ void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
-  slot.phonetic_text.assign(phonetic.begin(), phonetic.end());
+  slot.phonetic_runs.clear();
+  if (!phonetic.empty()) {
+    // A caller supplying a bare kana string is annotating the whole cell:
+    // there is no span vocabulary on this entry point, so the run covers
+    // the surface text end to end. The span is measured now rather than
+    // at write time because every value-mutating setter clears the
+    // annotation, so the text it describes cannot change underneath it.
+    const std::string_view surface = slot.cached_value.is_text() ? slot.cached_value.as_text() : std::string_view{};
+    slot.phonetic_runs.push_back(PhoneticRun{0U, eval::utf16_units_in(surface), std::string(phonetic)});
+  }
+  cell_enumeration_revision_.bump();
+}
+
+void Sheet::set_cell_phonetic_runs(std::uint32_t row, std::uint32_t col, std::vector<PhoneticRun> runs) {
+  assert(row < kMaxRows && col < kMaxCols);
+
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  RowCells& row_cells = rows_[row];
+  Cell& slot = row_cells.ensure(col);
+  slot.phonetic_runs = std::move(runs);
   cell_enumeration_revision_.bump();
 }
 

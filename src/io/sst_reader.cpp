@@ -8,8 +8,9 @@
 // neither a direct `<t>` nor any `<r><t>` payload. Rich-text formatting
 // attributes on `<r>`/`<rPr>` are not preserved (this layer is plain-
 // text only, by design). Phonetic-guide subtrees (`<rPh>`) are walked
-// separately and their concatenated `<t>` payloads land in
-// `phonetic_for_entries[i]` so PHONETIC() can surface the kana.
+// separately and land in `phonetic_for_entries[i]` as one run per block,
+// span offsets included, so PHONETIC() can surface the kana over the
+// characters it actually covers.
 
 #include "io/sst_reader.h"
 
@@ -21,6 +22,7 @@
 
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "phonetic.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -30,19 +32,23 @@ namespace formulon {
 namespace io {
 namespace {
 
-/// Walks every `<rPh>` direct child of `si_node` and concatenates their
-/// `<t>` descendants into `out` in document order. Each `<rPh>` block
-/// looks like `<rPh sb="0" eb="2"><t>やまだ</t></rPh>`; multi-block
-/// annotations on a single `<si>` (one per kanji span) are flattened
-/// into a single kana string. This is lossy with respect to the sb/eb
-/// span boundaries, which is acceptable: PHONETIC()'s observable result
-/// is the concatenated kana, so the spans are unobservable through the
-/// engine's surface today.
-void AppendPhoneticText(const pugi::xml_node& si_node, std::string& out) {
+/// Collects every `<rPh>` direct child of `si_node` into `out`, one run
+/// per block, in document order. Each block looks like
+/// `<rPh sb="0" eb="2"><t>トウキョウ</t></rPh>`: `sb`/`eb` delimit the
+/// surface-text span the kana covers, in UTF-16 code units, and the
+/// block's `<t>` descendants concatenate into that run's kana. The spans
+/// are kept because PHONETIC leaves the unannotated remainder of the
+/// string in place, so collapsing multi-block annotations into one kana
+/// string would lose observable content.
+void CollectPhoneticRuns(const pugi::xml_node& si_node, std::vector<PhoneticRun>& out) {
   for (pugi::xml_node rph = si_node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
+    PhoneticRun run;
+    run.sb = static_cast<std::uint32_t>(rph.attribute("sb").as_uint(0U));
+    run.eb = static_cast<std::uint32_t>(rph.attribute("eb").as_uint(0U));
     for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
-      AppendOoxmlTextUnescaped(out, t.text().get());
+      AppendOoxmlTextUnescaped(run.text, t.text().get());
     }
+    out.push_back(std::move(run));
   }
 }
 
@@ -82,21 +88,13 @@ Expected<SharedStringTable, Error> read_shared_strings(std::vector<std::uint8_t>
     }
     table.entries.emplace_back(payload);
 
-    // Capture phonetic kana from any <rPh> children. We append into
-    // `text_storage` (which is the same pointer-stable deque used for
-    // `entries`) so the resulting `string_view` shares the same
-    // lifetime. When the entry has no <rPh> we skip the append entirely
-    // and store an empty `string_view{}` to keep the index alignment
-    // invariant `phonetic_for_entries.size() == entries.size()`.
-    text_storage.emplace_back();
-    std::string& phonetic_payload = text_storage.back();
-    AppendPhoneticText(si, phonetic_payload);
-    if (phonetic_payload.empty()) {
-      text_storage.pop_back();
-      table.phonetic_for_entries.emplace_back();
-    } else {
-      table.phonetic_for_entries.emplace_back(phonetic_payload);
-    }
+    // Capture phonetic runs from any <rPh> children. These own their
+    // kana rather than aliasing `text_storage`, so an unannotated entry
+    // costs an empty vector and no allocation. The slot is pushed
+    // unconditionally to keep the index alignment invariant
+    // `phonetic_for_entries.size() == entries.size()`.
+    table.phonetic_for_entries.emplace_back();
+    CollectPhoneticRuns(si, table.phonetic_for_entries.back());
   }
 
   return table;

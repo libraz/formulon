@@ -4,11 +4,19 @@
 
 #include "eval/phonetic_lazy.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include "cell.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/text_ops.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "phonetic.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -53,7 +61,55 @@ Value apply_passthrough_surface(const Value& v, Arena& arena) {
   return Value::error(ErrorCode::NA);
 }
 
+// Advances `*byte` past one UTF-8 sequence of `surface` and adds the
+// UTF-16 cost of what it decoded to `*unit`. A malformed leading byte
+// costs one unit, matching `utf16_units_in`, so the two agree on where
+// an `<rPh>` offset lands even for input Excel would never emit.
+void StepOneCodepoint(std::string_view surface, std::size_t* byte, std::uint32_t* unit) {
+  std::size_t step = 0;
+  const std::uint32_t cp = decode_utf8_step(surface, *byte, &step);
+  if (step == 0) {
+    step = 1;
+  }
+  *byte += step;
+  *unit += cp > 0xFFFFu ? 2U : 1U;
+}
+
 }  // namespace
+
+std::string compose_phonetic(std::string_view surface, const std::vector<PhoneticRun>& runs) {
+  if (runs.empty()) {
+    return std::string(surface);
+  }
+  std::string out;
+  out.reserve(surface.size());
+
+  std::size_t next_run = 0;
+  std::size_t byte = 0;
+  std::uint32_t unit = 0;
+  while (byte < surface.size() || next_run < runs.size()) {
+    // `sb <= unit` rather than `==` so a run whose span the walk has
+    // already passed still contributes its kana instead of vanishing.
+    if (next_run < runs.size() && runs[next_run].sb <= unit) {
+      const PhoneticRun& run = runs[next_run];
+      out.append(run.text);
+      ++next_run;
+      // Swallow the annotated span: those characters are represented by
+      // the kana that was just emitted.
+      while (unit < run.eb && byte < surface.size()) {
+        StepOneCodepoint(surface, &byte, &unit);
+      }
+      continue;
+    }
+    if (byte >= surface.size()) {
+      break;
+    }
+    const std::size_t start = byte;
+    StepOneCodepoint(surface, &byte, &unit);
+    out.append(surface.substr(start, byte - start));
+  }
+  return out;
+}
 
 Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
@@ -80,11 +136,15 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
       return Value::error(ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref);
     }
     const Cell* cell = target->cell_at(r.row, r.col);
-    if (cell != nullptr && !cell->phonetic_text.empty()) {
-      // Annotated cell: surface the kana. Intern into the eval arena so
-      // the returned Value's lifetime matches every other Text emitted
-      // by the evaluator.
-      return Value::text(arena.intern(cell->phonetic_text));
+    if (cell != nullptr && !cell->phonetic_runs.empty()) {
+      // Annotated cell: substitute the annotated spans and keep the rest
+      // of the surface text. Intern into the eval arena so the returned
+      // Value's lifetime matches every other Text emitted by the
+      // evaluator.
+      const Value surface = ctx.resolve_ref(r);
+      const std::string composed =
+          compose_phonetic(surface.is_text() ? surface.as_text() : std::string_view{}, cell->phonetic_runs);
+      return Value::text(arena.intern(composed));
     }
     // No annotation: fall back to the value-based passthrough surface.
     // We don't recurse with a registry here because PHONETIC's argument

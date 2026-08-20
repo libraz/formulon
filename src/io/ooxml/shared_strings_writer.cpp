@@ -7,11 +7,12 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "cell.h"
-#include "eval/utf8_length.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "phonetic.h"
 #include "sheet.h"
 #include "value.h"
 #include "workbook.h"
@@ -19,17 +20,29 @@
 namespace formulon {
 namespace io {
 
-std::string SharedStrings::key_for(std::string_view text, std::string_view phonetic) {
+std::string SharedStrings::key_for(std::string_view text, const std::vector<PhoneticRun>& phonetic) {
   std::string key;
-  key.reserve(text.size() + phonetic.size() + 32U);
+  key.reserve(text.size() + 32U + phonetic.size() * 16U);
   key.append(std::to_string(text.size()));
   key.push_back(':');
   key.append(text);
-  key.append(phonetic);
+  // Length-prefix each run's kana for the same reason the surface text is
+  // prefixed: without it, adjacent fields could be re-cut into the same
+  // byte sequence and collide two distinct annotations onto one <si>.
+  for (const PhoneticRun& run : phonetic) {
+    key.push_back(';');
+    key.append(std::to_string(run.sb));
+    key.push_back(',');
+    key.append(std::to_string(run.eb));
+    key.push_back(',');
+    key.append(std::to_string(run.text.size()));
+    key.push_back(':');
+    key.append(run.text);
+  }
   return key;
 }
 
-std::uint32_t SharedStrings::intern(std::string_view text, std::string_view phonetic) {
+std::uint32_t SharedStrings::intern(std::string_view text, const std::vector<PhoneticRun>& phonetic) {
   ++total_count_;
   const std::string key = key_for(text, phonetic);
   const auto found = index_.find(key);
@@ -37,12 +50,12 @@ std::uint32_t SharedStrings::intern(std::string_view text, std::string_view phon
     return found->second;
   }
   const std::uint32_t index = static_cast<std::uint32_t>(entries_.size());
-  entries_.push_back(SharedStringEntry{std::string(text), std::string(phonetic)});
+  entries_.push_back(SharedStringEntry{std::string(text), phonetic});
   index_.emplace(std::move(key), index);
   return index;
 }
 
-std::uint32_t SharedStrings::index_of(std::string_view text, std::string_view phonetic) const {
+std::uint32_t SharedStrings::index_of(std::string_view text, const std::vector<PhoneticRun>& phonetic) const {
   const auto found = index_.find(key_for(text, phonetic));
   // `BuildSharedStrings` visits the same literal-cell set before any
   // worksheet is written, so this fallback is unreachable in normal use.
@@ -73,7 +86,7 @@ SharedStrings BuildSharedStrings(const Workbook& workbook) {
       const RowCells& cells = row_it->second;
       for (const Cell& cell : cells) {
         if (cell.formula_text.empty() && cell.cached_value.is_text()) {
-          strings.intern(cell.cached_value.as_text(), cell.phonetic_text);
+          strings.intern(cell.cached_value.as_text(), cell.phonetic_runs);
         }
       }
     }
@@ -94,11 +107,16 @@ std::string WriteSharedStrings(const SharedStrings& strings) {
     out.append("<si><t xml:space=\"preserve\">");
     AppendXmlEscaped(out, entry.text);
     out.append("</t>");
-    if (!entry.phonetic.empty()) {
-      out.append("<rPh sb=\"0\" eb=\"");
-      out.append(std::to_string(eval::utf16_units_in(entry.text)));
+    // One block per run, spans included, so a partially annotated string
+    // survives the round trip: merging them would move kana onto
+    // characters it does not read.
+    for (const PhoneticRun& run : entry.phonetic) {
+      out.append("<rPh sb=\"");
+      out.append(std::to_string(run.sb));
+      out.append("\" eb=\"");
+      out.append(std::to_string(run.eb));
       out.append("\"><t xml:space=\"preserve\">");
-      AppendXmlEscaped(out, entry.phonetic);
+      AppendXmlEscaped(out, run.text);
       out.append("</t></rPh>");
     }
     out.append("</si>");

@@ -12,6 +12,7 @@
 
 #include "gtest/gtest.h"
 #include "io/zip_reader.h"
+#include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -69,7 +70,7 @@ Expected<void, Error> CaptureCell(void* ud, const CellRecord& rec) {
   static_cast<Capture*>(ud)->cells.push_back(
       CapturedCell{rec.row, rec.col, std::string(rec.t), std::string(rec.s), std::string(rec.formula),
                    std::string(rec.f_t), std::string(rec.f_si), std::string(rec.f_ref), std::string(rec.value),
-                   rec.is_inline_string, std::string(rec.phonetic)});
+                   rec.is_inline_string, rec.phonetic == nullptr ? std::string() : flatten_phonetic(*rec.phonetic)});
   return Expected<void, Error>::Ok();
 }
 

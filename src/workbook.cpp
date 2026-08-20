@@ -37,6 +37,7 @@
 #include "parser/ast_shift.h"
 #include "parser/parser.h"
 #include "parser/ref_transforms.h"
+#include "phonetic.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
@@ -633,7 +634,11 @@ std::size_t Workbook::approximate_memory_bytes() const noexcept {
       (void)row;
       total += kRowNodeOverheadBytes + (cells.run().capacity() * sizeof(Cell));
       for (const Cell& cell : cells.run()) {
-        total += cell.formula_text.capacity() + cell.phonetic_text.capacity();
+        total += cell.formula_text.capacity();
+        total += cell.phonetic_runs.capacity() * sizeof(PhoneticRun);
+        for (const PhoneticRun& run : cell.phonetic_runs) {
+          total += run.text.capacity();
+        }
         if (cell.cached_text_owned != nullptr) {
           total += sizeof(std::string) + cell.cached_text_owned->capacity();
         }
