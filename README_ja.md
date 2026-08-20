@@ -113,7 +113,7 @@ oracle は **103 カテゴリ** あります。数式 track と条件付き書�
 | workbook oracle (pivot + print) | `66/66` passed / `10` documented skips |
 | 取り込み済み外部エンジンコーパス (クロスチェック) | `12510/12510` passed / `168` documented divergences |
 
-CTest スイートを分けているラベルは 3 つです。`SLOW` (分オーダーの integration・fuzz smoke・concurrency ケース)、`TSAN` (thread sanitizer 実行)、`BENCH` (しきい値が可変なマイクロベンチ回帰チェックで、必要なときだけ実行) の 3 つで、残りはすべて CI がゲートする無ラベルの fast tier です。負荷試験専用の層はありません。
+CTest スイートを分けているラベルは 3 つです。`SLOW` (分オーダーの integration・concurrency ケース)、`TSAN` (thread sanitizer 実行)、`BENCH` (しきい値が可変なマイクロベンチ回帰チェックで、必要なときだけ実行) の 3 つで、残りはすべて CI がゲートする無ラベルの fast tier です。負荷試験専用の層はありません。libFuzzer ハーネスも `SLOW` ラベルを持ちますが、`-DFM_BUILD_FUZZ=ON` を指定したビルド (`make fuzz`) にしか存在せず、既定ビルドにも CI にも含まれません。libFuzzer ランタイムを同梱する Clang が必要で、Apple の toolchain はこれを持たないため、macOS では別途 LLVM が要ります。AddressSanitizer も既定では無効です (近年の macOS 動的リンカとの間で、shadow memory 初期化中にデッドロックするため)。したがって macOS での fuzz 実行が検出できるのは crash・timeout・未定義動作までで、ヒープ破壊は検出しません。
 
 残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `518` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る 4 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、behavior taxonomy の記述が不足しているためです。`JIS` は `DBCS` の alias として宣言され、closure が閉じています。Excel はこの ja-JP 数式バー綴りを保存・評価の前に書き換えるため、`JIS` を直接呼ぶ oracle case は作れません。closure harness は宣言を鵜呑みにせず、alias 先の関数を実際に評価して判定します。
 

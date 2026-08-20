@@ -59,7 +59,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         oracle-gen oracle-gen-cf oracle-gen-workbook oracle-promote \
         oracle-verify oracle-contribute oracle-contribute-list \
         ironcalc-import ironcalc-verify \
-        fuzz-parser fuzz-xlsx fuzz-eval bench coverage mutation \
+        fuzz fuzz-long bench coverage mutation \
         function-status behavior-status
 
 all: build
@@ -243,10 +243,13 @@ clean:
 	@rm -rf $(BUILD_DIR) $(WASM_BUILD_DIR) $(WASM_DEBUG_BUILD_DIR) $(WASM_CAPI_BUILD_DIR)
 
 # -- WASM build / smoke-test targets --------------------------------------
-# `make wasm`        -> Release-mode formulon.{js,wasm} under build-wasm/.
+# `make wasm`        -> Release-mode formulon.{js,wasm} under build-wasm/,
+#                       plus stack_probe.{js,wasm} (the shadow-stack guard;
+#                       a second artifact, never staged into a package).
 # `make wasm-debug`  -> Debug-mode artifact (with assertions) under
 #                       build-wasm-debug/.
-# `make test-wasm`   -> Node-based smoke tests against build-wasm/formulon.js.
+# `make test-wasm`   -> Node-based smoke tests against build-wasm/formulon.js,
+#                       then the shadow-stack guard.
 #
 # All three short-circuit cleanly when the host lacks emscripten so the
 # native CI path stays green without an Emscripten install.
@@ -263,7 +266,8 @@ wasm:
 	fi
 	$(EM_CMAKE) -B $(WASM_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release \
 	  -DFM_BUILD_WASM=ON -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
-	$(CMAKE) --build $(WASM_BUILD_DIR) --parallel --target formulon_wasm
+	$(CMAKE) --build $(WASM_BUILD_DIR) --parallel \
+	  --target formulon_wasm formulon_wasm_stack_probe
 	@echo ""
 	@echo "wasm artifacts:"
 	@ls -la $(WASM_BUILD_DIR)/formulon.wasm $(WASM_BUILD_DIR)/formulon.js 2>/dev/null || \
@@ -305,6 +309,11 @@ test-wasm:
 	  exit 1; \
 	fi
 	FORMULON_WASM_BUILD_DIR="$(WASM_BUILD_DIR)" $(NODE) tests/wasm/run.mjs
+	@if [ ! -f $(WASM_BUILD_DIR)/stack_probe.js ]; then \
+	  echo "test-wasm: $(WASM_BUILD_DIR)/stack_probe.js missing; run 'make wasm' first"; \
+	  exit 1; \
+	fi
+	$(NODE) $(WASM_BUILD_DIR)/stack_probe.js
 
 # -- npm packaging targets ------------------------------------------------
 # `make npm-package` -> stage build-wasm/formulon.{js,wasm} + the
@@ -639,21 +648,59 @@ ironcalc-verify:
 	@rm -f $(BUILD_DIR)/tests/oracle/formulon_ironcalc_oracle_tests*_tests.cmake
 	@(cd $(BUILD_DIR) && $(CTEST) -L ironcalc --output-on-failure --timeout 60)
 
-fuzz-parser:
-	@echo "fuzz-parser: not yet implemented (planned for M8)"
-	@exit 0
+# libFuzzer harnesses. They need a Clang that ships libFuzzer and a
+# sanitizer build of the core, so they get their own build directory rather
+# than contaminating $(BUILD_DIR): the instrumented core is a separate object
+# library, and reusing one tree would force a full rebuild on every switch.
+#
+# Apple's bundled clang does not ship `libclang_rt.fuzzer_osx.a`, so
+# FUZZ_CC / FUZZ_CXX default to a Homebrew LLVM if one is present and
+# otherwise fall back to the default compiler. Point them at any Clang with
+# libFuzzer to override.
+#
+# ASan is off by default because LLVM 18's ASan runtime deadlocks in its own
+# shadow-memory init against recent macOS dyld, before reaching main. Set
+# FUZZ_SANITIZERS=fuzzer,address,undefined on a host where it works.
+FUZZ_BUILD_DIR ?= build-fuzz
+FUZZ_LLVM_PREFIX ?= $(shell test -x /opt/homebrew/opt/llvm@18/bin/clang && echo /opt/homebrew/opt/llvm@18)
+FUZZ_CC ?= $(if $(FUZZ_LLVM_PREFIX),$(FUZZ_LLVM_PREFIX)/bin/clang,clang)
+FUZZ_CXX ?= $(if $(FUZZ_LLVM_PREFIX),$(FUZZ_LLVM_PREFIX)/bin/clang++,clang++)
+FUZZ_SANITIZERS ?= fuzzer,undefined
+# Per-harness wall clock for `make fuzz-long`; the smoke entries registered
+# in ctest are iteration-bounded instead and take seconds.
+FUZZ_TIME ?= 300
 
-fuzz-xlsx:
-	@echo "fuzz-xlsx: not yet implemented (planned for M8)"
-	@exit 0
+fuzz:
+	$(CMAKE) -B $(FUZZ_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DFM_BUILD_FUZZ=ON \
+	  -DFM_FUZZ_SANITIZERS="$(FUZZ_SANITIZERS)" \
+	  -DCMAKE_C_COMPILER="$(FUZZ_CC)" -DCMAKE_CXX_COMPILER="$(FUZZ_CXX)"
+	$(CMAKE) --build $(FUZZ_BUILD_DIR) --parallel
+	@(cd $(FUZZ_BUILD_DIR) && $(CTEST) -R Fuzz --output-on-failure --timeout 300)
 
-fuzz-eval:
-	@echo "fuzz-eval: not yet implemented (planned for M8)"
-	@exit 0
+# The same harnesses under a wall-clock budget instead of an iteration cap.
+# A crash leaves its reproducer in the working directory as `crash-<sha1>`.
+#
+# The two package readers are given the same seed corpora their ctest entries
+# use. Without them a session spends its whole budget being rejected at the
+# ZIP header, because neither format's container is reachable from random
+# bytes; the harness would run and prove nothing.
+fuzz-long: fuzz
+	@for harness in parser_fuzz eval_fuzz xlsx_fuzz xlsb_fuzz print_settings_fuzz; do \
+	  corpus=""; \
+	  case $$harness in \
+	    xlsx_fuzz) corpus="$(FUZZ_BUILD_DIR)/tests/fuzz/corpus_xlsx_seed";; \
+	    xlsb_fuzz) corpus="$(FUZZ_BUILD_DIR)/tests/fuzz/corpus_xlsb_seed";; \
+	  esac; \
+	  echo "== $$harness (max $(FUZZ_TIME)s) =="; \
+	  $(FUZZ_BUILD_DIR)/bin/$$harness -max_total_time=$(FUZZ_TIME) -timeout=10 $$corpus || exit 1; \
+	done
 
+# Microbenchmark regression check. Excluded from the fast suite because its
+# threshold is tunable, so it is run on demand rather than gated.
 bench:
-	@echo "bench: not yet implemented (planned for M9)"
-	@exit 0
+	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
+	$(CMAKE) --build $(BUILD_DIR) --parallel
+	@(cd $(BUILD_DIR) && $(CTEST) -L BENCH --output-on-failure --timeout 600)
 
 # Local coverage diagnostic. Builds with the gcov-instrumented preset,
 # runs fast tests, and prints a per-area report plus the list of files

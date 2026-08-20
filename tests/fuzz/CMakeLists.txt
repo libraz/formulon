@@ -8,9 +8,8 @@
 #
 # Apple clang's libFuzzer support varies between Xcode versions; if the
 # host's clang lacks libFuzzer the configure still succeeds but the
-# generated link step will fail at build time. That is acceptable: the
-# parent never builds these targets in default CI, only in the dedicated
-# nightly fuzz runner.
+# generated link step will fail at build time. That is acceptable: these
+# targets are opt-in and are not part of a default build.
 
 if(NOT FM_BUILD_FUZZ)
   return()
@@ -21,14 +20,37 @@ if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   return()
 endif()
 
+# `MATCHES "Clang"` is a substring match, so `AppleClang` satisfies it -- and
+# Apple's toolchain ships no `libclang_rt.fuzzer_osx.a`. Without this probe
+# the configure succeeds, the whole core is rebuilt with sanitizers, and the
+# first harness fails at link minutes later on a missing runtime. Link a
+# trivial harness now so the answer costs seconds and names the cause.
+include(CMakePushCheckState)
+include(CheckCXXSourceCompiles)
+cmake_push_check_state(RESET)
+set(CMAKE_REQUIRED_FLAGS "-fsanitize=fuzzer")
+check_cxx_source_compiles(
+  "#include <cstddef>
+   #include <cstdint>
+   extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t*, size_t) { return 0; }"
+  FORMULON_HAVE_LIBFUZZER)
+cmake_pop_check_state()
+
+if(NOT FORMULON_HAVE_LIBFUZZER)
+  message(FATAL_ERROR
+    "FM_BUILD_FUZZ=ON but '${CMAKE_CXX_COMPILER}' cannot link -fsanitize=fuzzer.\n"
+    "Apple's clang does not ship the libFuzzer runtime; install an LLVM that "
+    "does and point CMAKE_C_COMPILER / CMAKE_CXX_COMPILER at it "
+    "(for example `brew install llvm`), or configure without FM_BUILD_FUZZ.")
+endif()
+
 message(STATUS "Formulon fuzz: enabling libFuzzer harnesses")
 
 # Sanitizer set for the harnesses. `fuzzer` is mandatory; the rest is
 # overridable because a host's ASan runtime can be unusable independently of
 # the code under test -- LLVM 18's ASan deadlocks inside its own shadow-memory
 # init against the macOS 26 dyld, so the process never reaches main. Dropping
-# to `fuzzer,undefined` keeps the harness runnable there; the nightly runner
-# stays on the full set.
+# to `fuzzer,undefined` keeps the harness runnable there.
 set(FM_FUZZ_SANITIZERS "fuzzer,address,undefined" CACHE STRING
     "Comma-separated -fsanitize list for the fuzz harnesses")
 message(STATUS "Formulon fuzz: sanitizers = ${FM_FUZZ_SANITIZERS}")
@@ -103,11 +125,9 @@ _formulon_add_fuzz_target(xlsx_fuzz   xlsx_fuzz.cpp)
 _formulon_add_fuzz_target(xlsb_fuzz   xlsb_fuzz.cpp)
 _formulon_add_fuzz_target(print_settings_fuzz print_settings_fuzz.cpp)
 
-# Smoke tests run a handful of iterations against an empty corpus so a
-# default `ctest` invocation surfaces obvious regressions without
-# committing to a full nightly fuzz session. The 6h nightly runs are
-# scheduled out-of-band by the parent infrastructure with
-# `-max_total_time=21600`.
+# Smoke tests run a bounded number of iterations so a `ctest` invocation
+# on a fuzz-enabled build surfaces obvious regressions in seconds. A
+# longer session is the same binary with `-max_total_time=<seconds>`.
 add_test(
   NAME FuzzParserSmoke
   COMMAND parser_fuzz -runs=1000 -timeout=10 -dict=${CMAKE_CURRENT_SOURCE_DIR}/parser_dict.txt
@@ -124,9 +144,25 @@ set_tests_properties(FuzzEvalSmoke PROPERTIES LABELS "SLOW")
 set_tests_properties(FuzzEvalSmoke PROPERTIES ENVIRONMENT
   "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
+# `read_ooxml` reaches no cell, shared-string or styles decoding until an
+# input has cleared, in order, a ZIP end-of-central-directory record and
+# central directory, `[Content_Types].xml`, a workbook content-type
+# Override, `_rels/.rels` with an OfficeDocument relationship, and the
+# workbook part. Random bytes do not clear the first of those, so an
+# unseeded run terminates at the ZIP header on essentially every
+# execution and the pipeline this harness names is never entered. Real
+# packages are the only practical way in; they are staged into one
+# build-tree corpus directory for the same reason the XLSB corpus below
+# is (libFuzzer takes a list of inputs or a list of directories, never a
+# mix).
+set(_FORMULON_XLSX_CORPUS "${CMAKE_CURRENT_BINARY_DIR}/corpus_xlsx_seed")
+file(MAKE_DIRECTORY "${_FORMULON_XLSX_CORPUS}")
+file(GLOB _FORMULON_XLSX_SEEDS "${CMAKE_SOURCE_DIR}/tests/fixtures/excel/*.xlsx")
+file(COPY ${_FORMULON_XLSX_SEEDS} DESTINATION "${_FORMULON_XLSX_CORPUS}")
+
 add_test(
   NAME FuzzXlsxSmoke
-  COMMAND xlsx_fuzz -runs=1000 -timeout=10
+  COMMAND xlsx_fuzz -runs=1000 -timeout=10 "${_FORMULON_XLSX_CORPUS}"
 )
 set_tests_properties(FuzzXlsxSmoke PROPERTIES LABELS "SLOW")
 set_tests_properties(FuzzXlsxSmoke PROPERTIES ENVIRONMENT
