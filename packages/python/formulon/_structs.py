@@ -435,6 +435,7 @@ SHEET_VIEW = Struct(
         ("freeze_rows", U32),
         ("freeze_cols", U32),
         ("tab_hidden", I32),
+        ("visibility", I32),
         ("show_grid_lines", I32),
         ("show_row_col_headers", I32),
         ("show_zeros", I32),
@@ -584,6 +585,28 @@ DXF_RECORD = Struct(
         ("num_fmt_code", PTR),
         ("alignment_xml", PTR),
         ("protection_xml", PTR),
+    ],
+)
+
+# ``size_t`` is 4 bytes on wasm32, so the count fields share PTR's layout.
+STYLES_BATCH = Struct(
+    "fm_styles_batch",
+    [
+        ("fonts", PTR),
+        ("font_count", PTR),
+        ("font_indices", PTR),
+        ("fills", PTR),
+        ("fill_count", PTR),
+        ("fill_indices", PTR),
+        ("borders", PTR),
+        ("border_count", PTR),
+        ("border_indices", PTR),
+        ("cell_xfs", PTR),
+        ("cell_xf_count", PTR),
+        ("cell_xf_indices", PTR),
+        ("num_fmt_codes", PTR),
+        ("num_fmt_count", PTR),
+        ("num_fmt_ids", PTR),
     ],
 )
 

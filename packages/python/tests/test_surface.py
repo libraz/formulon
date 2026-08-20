@@ -47,6 +47,7 @@ from formulon import (
     ReadDiagnostics,
     SaveDiagnostics,
     SheetProtection,
+    SheetVisibility,
     ValueKind,
     Workbook,
     WorkbookFormat,
@@ -131,7 +132,7 @@ class StructLayoutTests(unittest.TestCase):
         "SPILL_INFO": 20,
         "FUNCTION_METADATA": 24,
         "CIVIL_TIME": 24,
-        "SHEET_VIEW": 40,
+        "SHEET_VIEW": 44,
         "COLUMN_LAYOUT": 40,
         "ROW_LAYOUT": 32,
         "CELL_XF": 88,
@@ -141,6 +142,9 @@ class StructLayoutTests(unittest.TestCase):
         "BORDER_SIDE": 32,
         "BORDER_RECORD": 168,
         "DXF_RECORD": 360,
+        # Fifteen pointer-or-`size_t` fields; both are four bytes on
+        # wasm32, so the whole record is 15 x 4.
+        "STYLES_BATCH": 60,
         "CELL_STYLE_RECORD": 24,
         "EXTERNAL_LINK_RECORD": 24,
         "PAGE_BREAK": 16,
@@ -469,6 +473,38 @@ class SheetViewProtectionTests(unittest.TestCase):
             # "normal" view), not a no-op -- it must round-trip too.
             wb.set_sheet_view_mode(0, "")
             self.assertEqual(wb.get_sheet_view(0).view_mode, "")
+
+    def test_visibility_states_very_hidden(self) -> None:
+        with Workbook.create_default() as wb:
+            self.assertEqual(wb.get_sheet_view(0).visibility, SheetVisibility.VISIBLE)
+            self.assertFalse(wb.get_sheet_view(0).tab_hidden)
+
+            wb.set_sheet_visibility(0, SheetVisibility.VERY_HIDDEN)
+            view = wb.get_sheet_view(0)
+            self.assertEqual(view.visibility, SheetVisibility.VERY_HIDDEN)
+            # The two-state view stays consistent: a very-hidden sheet is
+            # hidden to code that reads only the bool, never visible.
+            self.assertTrue(view.tab_hidden)
+
+            # "Hidden" says nothing a very-hidden sheet does not already
+            # satisfy, so it must not weaken the author's stronger choice.
+            wb.set_sheet_tab_hidden(0, True)
+            self.assertEqual(wb.get_sheet_view(0).visibility, SheetVisibility.VERY_HIDDEN)
+
+            # Demotion is the other direction the bool cannot express.
+            wb.set_sheet_visibility(0, SheetVisibility.HIDDEN)
+            self.assertEqual(wb.get_sheet_view(0).visibility, SheetVisibility.HIDDEN)
+
+            wb.set_sheet_tab_hidden(0, False)
+            self.assertEqual(wb.get_sheet_view(0).visibility, SheetVisibility.VISIBLE)
+
+    def test_visibility_rejects_unknown_state(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_sheet_visibility(0, SheetVisibility.VERY_HIDDEN)
+            with self.assertRaises(FormulonError):
+                wb.set_sheet_visibility(0, 3)
+            # A refused call leaves the sheet as it was.
+            self.assertEqual(wb.get_sheet_view(0).visibility, SheetVisibility.VERY_HIDDEN)
 
     def test_column_row_overrides(self) -> None:
         with Workbook.create_default() as wb:
@@ -974,6 +1010,74 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertEqual(got[1].data_bar.fill, CfColor(0, 0, 255))
             self.assertEqual(got[2].icon_set.thresholds[1].value, "67")
 
+    # `CfValueObject.type`: 0 num, 1 percent, 2 percentile, 3 min, 4 max,
+    # 5 formula, 6 autoMin, 7 autoMax. Every threshold below states a
+    # `value`, which is what puts a borrowed string behind each CFVO.
+    EXPECTED_CFVO_VALUES = ["0", "50", "100", "5", "95", "0", "33", "67"]
+
+    @staticmethod
+    def _cfvo_rules() -> list[ConditionalFormatInput]:
+        """Build one color-scale, one data-bar and one icon-set rule."""
+        return [
+            ConditionalFormatInput(
+                sqref=[MergeRange(0, 0, 4, 0)],
+                type=2,
+                color_scale=ColorScale(
+                    [CfValueObject(0, "0"), CfValueObject(1, "50"), CfValueObject(0, "100")],
+                    [CfColor(248, 105, 107), CfColor(255, 235, 132), CfColor(99, 190, 123)],
+                ),
+            ),
+            ConditionalFormatInput(
+                sqref=[MergeRange(0, 1, 4, 1)],
+                type=3,
+                data_bar=DataBar(CfValueObject(0, "5"), CfValueObject(0, "95"), CfColor(0, 112, 192)),
+            ),
+            ConditionalFormatInput(
+                sqref=[MergeRange(0, 2, 4, 2)],
+                type=4,
+                icon_set=IconSet(0, [CfValueObject(1, "0"), CfValueObject(1, "33"), CfValueObject(1, "67")]),
+            ),
+        ]
+
+    @staticmethod
+    def _cfvo_values(rules: list) -> list[str]:
+        """Flatten the threshold value strings of the three visual rules."""
+        by_type = {rule.type: rule for rule in rules}
+        color_scale = by_type[2].color_scale
+        data_bar = by_type[3].data_bar
+        icon_set = by_type[4].icon_set
+        return (
+            [t.value for t in color_scale.thresholds]
+            + [data_bar.minimum.value, data_bar.maximum.value]
+            + [t.value for t in icon_set.thresholds]
+        )
+
+    def test_cfvo_value_strings_survive_read_back_and_a_save_load_cycle(self) -> None:
+        # Each CFVO `value` crosses the C ABI as a borrowed `const char*`.
+        # A store that relocates while the later thresholds are pulled
+        # publishes a pointer into freed bytes, so the strings come back
+        # wrong or empty even though the rule count and colors look right.
+        with Workbook.create_default() as wb:
+            for rule in self._cfvo_rules():
+                wb.add_conditional_format(0, rule)
+
+            in_session = wb.get_conditional_formats(0)
+            self.assertEqual(len(in_session), 3)
+            self.assertEqual(self._cfvo_values(in_session), self.EXPECTED_CFVO_VALUES)
+            by_type = {rule.type: rule for rule in in_session}
+            # The type travels with the value: a percent threshold read
+            # back as type 0 would mean an absolute number instead.
+            self.assertEqual([t.type for t in by_type[2].color_scale.thresholds], [0, 1, 0])
+            self.assertEqual([t.type for t in by_type[4].icon_set.thresholds], [1, 1, 1])
+            self.assertEqual(by_type[2].color_scale.colors[2], CfColor(99, 190, 123))
+            self.assertEqual(by_type[3].data_bar.fill, CfColor(0, 112, 192))
+            saved = wb.save()
+
+        with Workbook.load(saved) as reloaded:
+            rules = reloaded.get_conditional_formats(0)
+            self.assertEqual(len(rules), 3)
+            self.assertEqual(self._cfvo_values(rules), self.EXPECTED_CFVO_VALUES)
+
     def test_data_bar_x14_fields_survive_save_and_load(self) -> None:
         # These six live in the `x14` extension, not the legacy `<dataBar>`
         # element. An in-session round-trip alone would not catch a writer
@@ -1303,6 +1407,7 @@ class SurfaceParityTests(unittest.TestCase):
         "set_sheet_zoom",
         "set_sheet_freeze",
         "set_sheet_tab_hidden",
+        "set_sheet_visibility",
         "set_sheet_show_grid_lines",
         "set_sheet_show_row_col_headers",
         "set_sheet_show_zeros",

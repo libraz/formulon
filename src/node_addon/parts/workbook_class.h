@@ -63,6 +63,11 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RecalcParallel(const Napi::CallbackInfo& info);
   Napi::Value PartialRecalc(const Napi::CallbackInfo& info);
   Napi::Value SetIterative(const Napi::CallbackInfo& info);
+  /// The stored iterative-calculation settings as `{status, enabled,
+  /// maxIterations, maxChange}`. The cap and threshold are the stored
+  /// values even while `enabled` is false, so a host can render Excel's
+  /// iterative-calculation dialog without having written them first.
+  Napi::Value GetIterative(const Napi::CallbackInfo& info);
   Napi::Value SetIterativeProgress(const Napi::CallbackInfo& info);
   Napi::Value Save(const Napi::CallbackInfo& info);
   Napi::Value SaveAs(const Napi::CallbackInfo& info);
@@ -198,6 +203,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotFieldAddAggregation(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClearAggregations(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAddItem(const Napi::CallbackInfo& info);
+  /// Appends a manual-filter item addressed by its position in the bound
+  /// cache field's shared items. The only form that can express the blank
+  /// item, which has no label of its own and is matched by its binding.
+  Napi::Value PivotFieldAddItemAt(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClearItems(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetItemVisible(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAddSubtotalFn(const Napi::CallbackInfo& info);
@@ -243,6 +252,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetSheetZoom(const Napi::CallbackInfo& info);
   Napi::Value SetSheetFreeze(const Napi::CallbackInfo& info);
   Napi::Value SetSheetTabHidden(const Napi::CallbackInfo& info);
+  /// States the whole tab visibility, including `veryHidden`, which the
+  /// bool setter cannot express in either direction.
+  Napi::Value SetSheetVisibility(const Napi::CallbackInfo& info);
   Napi::Value SetSheetShowGridLines(const Napi::CallbackInfo& info);
   Napi::Value SetSheetShowRowColHeaders(const Napi::CallbackInfo& info);
   Napi::Value SetSheetShowZeros(const Napi::CallbackInfo& info);

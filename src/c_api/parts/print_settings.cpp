@@ -554,7 +554,7 @@ extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_i
     const std::string qualifier = sheet_qualifier(wb->workbook().sheet(sheet_index).name());
     const std::vector<std::string_view> tokens = split_areas(input);
     if (!formulon::c_api::parts::check_range_count(static_cast<std::uint32_t>(tokens.size()), kFn)) {
-      return static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
+      return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
     }
     for (const std::string_view token : tokens) {
       // Round-trip the token through the resolver's own grammar so a

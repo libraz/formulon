@@ -99,6 +99,7 @@ export const ErrorCode = Object.freeze({
   Unknown: 16,
 });
 export const CalcMode = Object.freeze({ Auto: 0, Manual: 1, AutoNoTable: 2 });
+export const SheetVisibility = Object.freeze({ Visible: 0, Hidden: 1, VeryHidden: 2 });
 export const ExternalLinkKind = Object.freeze({ Unknown: 0, ExternalBook: 1, Ole: 2, Dde: 3 });
 export const LogLevel = Object.freeze({ Debug: 0, Info: 1, Warn: 2, Error: 3, Off: 4 });
 

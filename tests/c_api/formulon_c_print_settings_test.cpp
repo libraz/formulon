@@ -278,6 +278,22 @@ TEST(FormulonCApiPrintSettings, SetPrintAreaRejectsMalformedAreaAndLeavesNameUnc
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$A$1:$F$8");
 }
 
+TEST(FormulonCApiPrintSettings, SetPrintAreaOverTheRangeCapReportsInvalidArgument) {
+  // The per-call range cap is shared with the conditional-formatting and
+  // data-validation entry points, and one failure condition carries one
+  // status across all of them.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A1:F8"), 0);
+
+  std::string areas = "A1:A1";
+  for (std::uint32_t i = 0; i < formulon::c_api::parts::kMaxRangesPerCApiCall; ++i) {
+    areas += ",A1:A1";
+  }
+  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, areas.c_str()), kInvalidArgument);
+  EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$A$1:$F$8");
+}
+
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

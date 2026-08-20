@@ -1863,6 +1863,258 @@ async function run() {
     }
   });
 
+  test('sheet-layout setters refuse coordinates and metrics Excel cannot open', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      // These six setters marshal straight to the C ABI, which is where the
+      // validation lives. The assertions below are what keeps that true: a
+      // binding that grew its own path to the model would still pass every
+      // round-trip test while quietly authoring a file Excel refuses, since
+      // NaN and Infinity serialise to an empty string -- `<col width=""/>`
+      // is not a lexical xsd:double at all, and a repair prompt rather than
+      // an out-of-range value.
+      const kInvalidArgument = 2;
+      // The message is pinned, not just the code. Both JS bindings route
+      // these calls to one set of helpers, so both report that shared
+      // wording; a binding that grew its own check would keep returning
+      // `kInvalidArgument` while the text stopped matching. The status code
+      // alone cannot tell a shared implementation from two that agree today.
+      const kSpanRefused = 'column span out of range';
+      const kRowRefused = 'row index out of range';
+      const kMetricRefused = 'value must be finite and non-negative';
+      const refused = (status, expectedMessage, label) => {
+        assert.equal(status.ok, false, `${label} should have been refused`);
+        assert.equal(status.status, kInvalidArgument, `${label}: ${JSON.stringify(status)}`);
+        assert.equal(status.message, expectedMessage, `${label}: ${JSON.stringify(status)}`);
+      };
+
+      // One past Excel's last column / row.
+      refused(wb.setColumnWidth(0, 0, 16384, 10), kSpanRefused, 'setColumnWidth past the grid');
+      refused(wb.setColumnHidden(0, 0, 16384, true), kSpanRefused, 'setColumnHidden past the grid');
+      refused(wb.setColumnOutline(0, 0, 16384, 1), kSpanRefused, 'setColumnOutline past the grid');
+      refused(wb.setRowHeight(0, 1048576, 10), kRowRefused, 'setRowHeight past the grid');
+      refused(wb.setRowHidden(0, 1048576, true), kRowRefused, 'setRowHidden past the grid');
+      refused(wb.setRowOutline(0, 1048576, 1), kRowRefused, 'setRowOutline past the grid');
+
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
+        refused(wb.setColumnWidth(0, 0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
+        refused(wb.setRowHeight(0, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
+      }
+
+      // The context names the C ABI entry point that refused the call and
+      // the values it saw, which is what makes a rejection actionable.
+      // These six answer with a bare `Status`, not a `{status}` envelope.
+      const span = wb.setColumnWidth(0, 0, 16384, 10);
+      assert.match(span.context, /fm_sheet_set_column_width: first=0 last=16384/);
+      // Pinned separately because the metric path runs through a different
+      // helper than the span path, and it is the only one of the three that
+      // interpolates a `double`. The value itself is left unmatched on
+      // purpose: `std::to_string` of a NaN is implementation-defined
+      // spelling (`nan`, `-nan`, `nan(ind)`), so asserting it would be a
+      // portability trap across the platforms the prebuilds target.
+      const metric = wb.setRowHeight(0, 1, Number.NaN);
+      assert.match(metric.context, /fm_sheet_set_row_height: height=/);
+
+      // Zero is a real width and a real height, not a rejected one.
+      assert.ok(wb.setColumnWidth(0, 0, 2, 0).ok);
+      assert.ok(wb.setRowHeight(0, 1, 0).ok);
+
+      // The last coordinates Excel does address stay accepted -- an
+      // off-by-one in either bound would refuse them.
+      assert.ok(wb.setColumnWidth(0, 16383, 16383, 10).ok);
+      assert.ok(wb.setColumnHidden(0, 16383, 16383, true).ok);
+      assert.ok(wb.setColumnOutline(0, 16383, 16383, 1).ok);
+      assert.ok(wb.setRowHeight(0, 1048575, 10).ok);
+      assert.ok(wb.setRowHidden(0, 1048575, true).ok);
+      assert.ok(wb.setRowOutline(0, 1048575, 1).ok);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('setSheetVisibility states veryHidden, which the bool setter cannot', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const read = () => {
+        const r = wb.getSheetView(0);
+        assert.ok(r.status.ok, `getSheetView: ${JSON.stringify(r.status)}`);
+        return r.view;
+      };
+      assert.equal(read().visibility, 0);
+      assert.equal(read().tabHidden, 0);
+
+      assert.ok(wb.setSheetVisibility(0, 2).ok);
+      // The two-state view stays consistent: a very-hidden sheet reads as
+      // hidden to a caller that knows only the bool, never as visible.
+      assert.equal(read().visibility, 2);
+      assert.equal(read().tabHidden, 1);
+
+      // Asking for plain "hidden" must not weaken the stronger state.
+      assert.ok(wb.setSheetTabHidden(0, true).ok);
+      assert.equal(read().visibility, 2);
+
+      // Demotion is the other direction the bool cannot express.
+      assert.ok(wb.setSheetVisibility(0, 1).ok);
+      assert.equal(read().visibility, 1);
+      assert.equal(read().tabHidden, 1);
+
+      // Showing the sheet clears either hidden state.
+      assert.ok(wb.setSheetTabHidden(0, false).ok);
+      assert.equal(read().visibility, 0);
+      assert.equal(read().tabHidden, 0);
+
+      // An unknown ordinal is refused and leaves the sheet alone.
+      assert.ok(wb.setSheetVisibility(0, 2).ok);
+      assert.equal(wb.setSheetVisibility(0, 3).ok, false);
+      assert.equal(read().visibility, 2);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('getIterative reads back what setIterative stored', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const initial = wb.getIterative();
+      assert.ok(initial.status.ok, `getIterative: ${JSON.stringify(initial.status)}`);
+      assert.equal(typeof initial.enabled, 'boolean');
+      assert.equal(typeof initial.maxIterations, 'number');
+      assert.equal(typeof initial.maxChange, 'number');
+
+      assert.ok(wb.setIterative(true, 42, 0.25).ok);
+      const enabled = wb.getIterative();
+      assert.ok(enabled.status.ok);
+      assert.equal(enabled.enabled, true);
+      assert.equal(enabled.maxIterations, 42);
+      assert.equal(enabled.maxChange, 0.25);
+
+      // The cap and threshold survive switching iteration back off, which is
+      // what lets a host render the dialog with the stored values.
+      assert.ok(wb.setIterative(false, 42, 0.25).ok);
+      const disabled = wb.getIterative();
+      assert.ok(disabled.status.ok);
+      assert.equal(disabled.enabled, false);
+      assert.equal(disabled.maxIterations, 42);
+      assert.equal(disabled.maxChange, 0.25);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('addValidation defaults allowBlank to false', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(
+        wb.addValidation(0, {
+          ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+          type: 3,
+          formula1: '"a,b"',
+        }).ok,
+      );
+      const list = wb.getValidations(0);
+      assert.equal(list.length, 1);
+      assert.equal(list[0].allowBlank, false);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('getCellStyleXf reports xfId alongside the cell-format fields', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const read = wb.getCellStyleXf(0);
+      assert.ok(read.status.ok, `getCellStyleXf: ${JSON.stringify(read.status)}`);
+      // A named-style xf is its own parent, so it never inherits one.
+      assert.equal(read.xfId, 0);
+      // The record shape matches `getCellXf`, which the documented
+      // read / edit / addCellStyleXf round-trip depends on.
+      const cellXf = wb.getCellXf(0);
+      assert.ok(cellXf.status.ok);
+      for (const key of Object.keys(cellXf)) {
+        assert.ok(key in read, `getCellStyleXf is missing '${key}'`);
+      }
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('pivotFieldAddItemAt hides the blank item an empty label cannot name', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const cache = wb.pivotCacheCreate(0);
+      assert.ok(cache.status.ok, `pivotCacheCreate: ${JSON.stringify(cache.status)}`);
+      const region = wb.pivotCacheFieldAdd(cache.index, 'Region');
+      assert.ok(region.status.ok);
+      const amount = wb.pivotCacheFieldAdd(cache.index, 'Amount');
+      assert.ok(amount.status.ok);
+      // Shared item 0 renders as "North"; shared item 1 is the blank, which
+      // carries no label of its own and can only be named by its index.
+      assert.ok(wb.pivotCacheFieldAddSharedItemText(cache.index, region.index, 'North').ok);
+      assert.ok(wb.pivotCacheFieldAddSharedItemBlank(cache.index, region.index).ok);
+
+      const first = wb.pivotCacheRecordAdd(cache.index);
+      assert.ok(first.status.ok);
+      assert.ok(wb.pivotCacheRecordSetNumber(cache.index, first.index, region.index, 0).ok);
+      assert.ok(wb.pivotCacheRecordSetNumber(cache.index, first.index, amount.index, 100).ok);
+      const second = wb.pivotCacheRecordAdd(cache.index);
+      assert.ok(second.status.ok);
+      assert.ok(wb.pivotCacheRecordSetBlank(cache.index, second.index, region.index).ok);
+      assert.ok(wb.pivotCacheRecordSetNumber(cache.index, second.index, amount.index, 200).ok);
+
+      const pivot = wb.pivotCreate(0, 'PT', cache.index, 0, 0);
+      assert.ok(pivot.status.ok, `pivotCreate: ${JSON.stringify(pivot.status)}`);
+      const regionField = wb.pivotFieldAdd(0, pivot.index, { sourceName: 'Region', axis: 0 });
+      assert.ok(regionField.status.ok);
+      const amountField = wb.pivotFieldAdd(0, pivot.index, { sourceName: 'Amount', axis: 2 });
+      assert.ok(amountField.status.ok);
+      assert.ok(wb.pivotSetRowFieldOrder(0, pivot.index, [regionField.index]).ok);
+      assert.ok(
+        wb.pivotDataFieldAdd(0, pivot.index, {
+          name: 'Sum of Amount',
+          fieldIndex: amountField.index,
+          aggregation: 0,
+        }).status.ok,
+      );
+
+      const sumDataCells = () => {
+        const layout = wb.pivotLayout(0, pivot.index);
+        assert.ok(layout.status.ok, `pivotLayout: ${JSON.stringify(layout.status)}`);
+        let total = 0;
+        for (const cell of layout.cells) {
+          if (cell.kind === PIVOT.DATA && cell.value.kind === VAL.NUMBER) {
+            total += cell.value.number;
+          }
+        }
+        return total;
+      };
+      assert.equal(sumDataCells(), 300);
+
+      assert.ok(wb.pivotFieldAddItem(0, pivot.index, regionField.index, 'North', true).ok);
+      assert.ok(wb.pivotFieldAddItemAt(0, pivot.index, regionField.index, 1, false).ok);
+      assert.equal(sumDataCells(), 100);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('a rejected argument reports its own diagnostic, not the previous call', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      // Leave a failure of a different call in the thread-local diagnostics.
+      const stale = wb.getValue(99, 0, 0);
+      assert.equal(stale.status.ok, false);
+      assert.ok(stale.status.message.length > 0);
+
+      const rejected = wb.createTable({ sheetIndex: 0, ref: 'A1:B2', name: 'T' });
+      assert.equal(rejected.status.ok, false);
+      assert.notEqual(rejected.status.message, stale.status.message);
+      assert.match(rejected.status.message, /columns/);
+      assert.equal(rejected.status.context, '');
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('list getters expose failures through their array status', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -1880,6 +2132,62 @@ async function run() {
       const links = wb.getExternalLinks();
       assert.ok(Array.isArray(links));
       assert.equal(links.status.ok, true);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  // Deliberately last. A shadow-stack overflow is a WebAssembly trap, not an
+  // exception: it destroys the module instance, so nothing after it here
+  // would be measuring the engine any more. Running it at the end means the
+  // rest of the suite has already reported when it fires.
+  test('nesting up to the parser depth cap stays inside the shadow stack', () => {
+    // The engine bounds formula nesting with one constant, and under WASM the
+    // stack that bound protects is a link-time size. When the two disagree the
+    // failure is not an error value: the shadow stack runs into the data
+    // segment below it, and past that the module faults in a way no
+    // `Expected` can report and no `try` can recover from. So the assertion is
+    // that the cap is reached by a diagnostic.
+    //
+    // Nested calls are the shape that matters -- parentheses are elided by the
+    // parser and cost a fraction as much per level. The cap itself is
+    // discovered rather than written down, so raising it in the engine does
+    // not quietly narrow what this covers.
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setNumber(0, 0, 0, 7).ok);
+
+      const searchCeiling = 1024;
+      let rejectedAt = 0;
+      for (let depth = 1; depth <= searchCeiling; depth += 1) {
+        const formula = `=${'SUM('.repeat(depth)}A1${')'.repeat(depth)}`;
+        let out;
+        try {
+          out = wb.evaluateFormulaText(0, 1, 0, formula);
+        } catch (e) {
+          // Past this point the instance is gone and its worker threads keep
+          // the process alive, so reporting and continuing would hang rather
+          // than fail. Exit on the spot with the depth that did it.
+          console.error(`FAIL nesting depth ${depth} (${formula.length} chars) faulted instead of evaluating.`);
+          console.error(`  ${e && e.stack ? e.stack : e}`);
+          console.error(
+            '  The WASM shadow stack is too small for parser::kMaxFormulaAstDepth. ' +
+              'See _FM_WASM_STACK_SIZE in cmake/FormulonWasm.cmake and the stack_probe artifact.',
+          );
+          process.exit(1);
+        }
+        assert.ok(out.status.ok, `depth=${depth} status=${JSON.stringify(out.status)}`);
+        if (out.value.kind === VAL.ERROR) {
+          assert.equal(out.value.errorCode, 4, `depth=${depth} should be rejected as #NAME?`);
+          rejectedAt = depth;
+          break;
+        }
+        // Nested SUM over one cell is the identity. A wrong answer here is what
+        // a stack that overran its limit looks like from the outside.
+        assert.equal(out.value.kind, VAL.NUMBER, `depth=${depth}`);
+        assert.equal(out.value.number, 7, `depth=${depth}`);
+      }
+      assert.ok(rejectedAt > 0, `no nesting depth up to ${searchCeiling} was rejected; the depth cap did not engage`);
     } finally {
       wb.delete();
     }

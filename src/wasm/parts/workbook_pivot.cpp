@@ -490,6 +490,15 @@ JsStatus JsWorkbook::pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t cacheIndex,
+                                         bool visible) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_workbook_pivot_field_add_item_at(handle_, sheet, pivotIdx, fieldIdx, cacheIndex, visible ? 1 : 0);
+  return status_from_rc(rc);
+}
+
 JsStatus JsWorkbook::pivotFieldClearItems(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
   if (handle_ == nullptr) {
     return error_status(7000);

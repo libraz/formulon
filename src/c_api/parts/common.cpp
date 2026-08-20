@@ -1,6 +1,7 @@
 
 #include "c_api/parts/common.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -98,6 +99,32 @@ fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, s
                            std::string(api) + ": first_row=" + std::to_string(first_row) +
                                " first_col=" + std::to_string(first_col) + " last_row=" + std::to_string(last_row) +
                                " last_col=" + std::to_string(last_col));
+}
+
+fm_status_t check_column_span(std::uint32_t first, std::uint32_t last, const char* api) {
+  if (first <= last && last < formulon::Sheet::kMaxCols) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "column span out of range",
+                           std::string(api) + ": first=" + std::to_string(first) + " last=" + std::to_string(last) +
+                               " last_col=" + std::to_string(formulon::Sheet::kMaxCols - 1U));
+}
+
+fm_status_t check_row_index(std::uint32_t row, const char* api) {
+  if (row < formulon::Sheet::kMaxRows) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "row index out of range",
+                           std::string(api) + ": row=" + std::to_string(row) +
+                               " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
+}
+
+fm_status_t check_finite_non_negative(double value, const char* api, const char* field) {
+  if (std::isfinite(value) && value >= 0.0) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value must be finite and non-negative",
+                           std::string(api) + ": " + field + "=" + std::to_string(value));
 }
 
 fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* api, const char* field) {

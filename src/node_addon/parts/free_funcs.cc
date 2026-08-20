@@ -144,7 +144,7 @@ Napi::Value SetLogSink(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const bool clearing = info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined();
   if (!clearing && !info[0].IsFunction()) {
-    return MakeErrorStatus(env, kBindingNullPointer);
+    return MakeBindingArgumentError(env, "setLogSink: `sink` must be a function or null");
   }
 
   if (clearing) {

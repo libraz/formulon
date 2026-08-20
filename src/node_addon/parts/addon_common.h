@@ -67,7 +67,21 @@ Napi::Object MakeOkStatus(Napi::Env env);
 
 /// Builds an error Status envelope, copying the thread-local
 /// diagnostics surfaced by the most recent C-ABI call.
+/// `code == kBindingInvalidHandle` is special-cased: that failure is
+/// raised before any C-ABI call, so the envelope carries a synthesised
+/// message rather than the residue of an earlier, unrelated call.
 Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code);
+
+/// Builds an error Status envelope for a failure the binding raised
+/// itself, carrying `message` and an empty context. Never reads the
+/// thread-local diagnostics, which at that point still belong to a
+/// previous call.
+Napi::Object MakeBindingError(Napi::Env env, fm_status_t code, const char* message);
+
+/// `MakeBindingError` with `kBindingNullPointer`, for an entry point that
+/// rejects a missing or wrongly-shaped JS argument before calling the C
+/// ABI. `message` names the offending parameter.
+Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message);
 
 /// Converts a C-ABI status code into the shared JS Status envelope.
 Napi::Object MakeStatus(Napi::Env env, fm_status_t code);

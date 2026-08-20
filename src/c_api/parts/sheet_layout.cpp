@@ -22,6 +22,9 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_column_span;
+using formulon::c_api::parts::check_finite_non_negative;
+using formulon::c_api::parts::check_row_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::FragmentValidation;
@@ -237,9 +240,11 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_column_width"); rc != 0) {
     return rc;
   }
-  if (last < first) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_width: last < first",
-                             "first=" + std::to_string(first) + " last=" + std::to_string(last));
+  if (auto rc = check_column_span(first, last, "fm_sheet_set_column_width"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_finite_non_negative(width, "fm_sheet_set_column_width", "width"); rc != 0) {
+    return rc;
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
                       [width](formulon::ColumnLayout& entry) {
@@ -255,9 +260,8 @@ extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t shee
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_column_hidden"); rc != 0) {
     return rc;
   }
-  if (last < first) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_hidden: last < first",
-                             "first=" + std::to_string(first) + " last=" + std::to_string(last));
+  if (auto rc = check_column_span(first, last, "fm_sheet_set_column_hidden"); rc != 0) {
+    return rc;
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
                       [hidden](formulon::ColumnLayout& entry) { entry.hidden = (hidden != 0); });
@@ -270,9 +274,8 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_column_outline"); rc != 0) {
     return rc;
   }
-  if (last < first) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_outline: last < first",
-                             "first=" + std::to_string(first) + " last=" + std::to_string(last));
+  if (auto rc = check_column_span(first, last, "fm_sheet_set_column_outline"); rc != 0) {
+    return rc;
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
                       [level](formulon::ColumnLayout& entry) { entry.outline_level = level; });
@@ -282,6 +285,12 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
 extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_row_height"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_row_index(row, "fm_sheet_set_row_height"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_finite_non_negative(height, "fm_sheet_set_row_height", "height"); rc != 0) {
     return rc;
   }
   formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
@@ -295,6 +304,9 @@ extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_row_hidden"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_row_index(row, "fm_sheet_set_row_hidden"); rc != 0) {
+    return rc;
+  }
   formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
   entry->hidden = (hidden != 0);
   return 0;
@@ -303,6 +315,9 @@ extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_i
 extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_row_outline"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_row_index(row, "fm_sheet_set_row_outline"); rc != 0) {
     return rc;
   }
   formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
@@ -359,6 +374,20 @@ extern "C" fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_i
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index, int32_t visibility) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_visibility"); rc != 0) {
+    return rc;
+  }
+  if (visibility < static_cast<int32_t>(FM_SHEET_VISIBLE) || visibility > static_cast<int32_t>(FM_SHEET_VERY_HIDDEN)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_set_visibility: unknown visibility", "visibility=" + std::to_string(visibility));
+  }
+  formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
+  view.set_visibility(static_cast<formulon::SheetVisibility>(visibility));
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out) {
   clear_last_error();
   if (out == nullptr) {
@@ -371,7 +400,11 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   out->zoom_scale = v.zoom_scale;
   out->freeze_rows = v.freeze_rows;
   out->freeze_cols = v.freeze_cols;
-  out->tab_hidden = v.tab_hidden ? 1 : 0;
+  // `visibility()` resolves the model's two bits, so the pair handed out
+  // here agrees even for the combination no writer should produce.
+  const formulon::SheetVisibility state = v.visibility();
+  out->tab_hidden = state != formulon::SheetVisibility::kVisible ? 1 : 0;
+  out->visibility = static_cast<int32_t>(state);
   out->show_grid_lines = v.show_grid_lines ? 1 : 0;
   out->show_row_col_headers = v.show_row_col_headers ? 1 : 0;
   out->show_zeros = v.show_zeros ? 1 : 0;

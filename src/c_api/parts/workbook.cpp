@@ -825,7 +825,15 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
   }
   formulon::eval::IterativeOptions opts;
   opts.enabled = (enabled != 0);
-  opts.max_iterations = max_iterations < 1 ? 1U : static_cast<std::uint32_t>(max_iterations);
+  // Clamped into Excel's own dialog range rather than rejected: the
+  // pre-existing contract for this argument is "out-of-range values are
+  // adjusted", and a binding author who passes a large cap wants a long
+  // solve, not an error. The upper bound is what keeps that from becoming
+  // a hang the host cannot cancel without a progress callback.
+  opts.max_iterations = max_iterations < 1 ? 1U
+                        : static_cast<std::uint32_t>(max_iterations) > formulon::eval::kMaxIterationsCap
+                            ? formulon::eval::kMaxIterationsCap
+                            : static_cast<std::uint32_t>(max_iterations);
   opts.max_change = max_change;
   wb->workbook().set_iterative_options(opts);
   return 0;

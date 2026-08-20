@@ -2153,3 +2153,68 @@ TEST(FormulonCApiStyles, CellStyleXfRoundTripsOptionalAlignment) {
   EXPECT_EQ(reread.has_shrink_to_fit, 1);
   EXPECT_EQ(reread.shrink_to_fit, 0);
 }
+
+TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet1"), 0);
+
+  uint32_t font_count = 0;
+  uint32_t fill_count = 0;
+  uint32_t border_count = 0;
+  uint32_t cell_xf_count = 0;
+  ASSERT_EQ(fm_styles_get_font_count(wb.handle, &font_count), 0);
+  ASSERT_EQ(fm_styles_get_fill_count(wb.handle, &fill_count), 0);
+  ASSERT_EQ(fm_styles_get_border_count(wb.handle, &border_count), 0);
+  ASSERT_EQ(fm_styles_get_cell_xf_count(wb.handle, &cell_xf_count), 0);
+  EXPECT_EQ(font_count, 1U);
+  EXPECT_EQ(fill_count, 2U);
+  EXPECT_EQ(border_count, 1U);
+  EXPECT_EQ(cell_xf_count, 1U);
+
+  // Excel reserves fill 0 for `none` and fill 1 for `gray125`, so a caller's
+  // own fill must never take either slot; the same holds for font 0 and
+  // border 0. A non-zero index is what proves the reserved slots survived.
+  fm_font_record font{};
+  font.name = "Arial";
+  font.size = 12.0;
+  uint32_t font_index = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, font, &font_index), 0);
+  EXPECT_GT(font_index, 0U);
+
+  fm_fill_record fill{};
+  fill.pattern = 1U; /* solid */
+  fill.fg_argb = 0xFFFF0000U;
+  uint32_t fill_index = 0;
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, fill, &fill_index), 0);
+  EXPECT_GT(fill_index, 1U);
+
+  fm_border_record border{};
+  border.left.style = 1U; /* thin */
+  uint32_t border_index = 0;
+  ASSERT_EQ(fm_styles_add_border(wb.handle, border, &border_index), 0);
+  EXPECT_GT(border_index, 0U);
+
+  fm_cell_xf xf{};
+  xf.font_index = font_index;
+  xf.fill_index = fill_index;
+  xf.border_index = border_index;
+  uint32_t xf_index = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_index), 0);
+  EXPECT_GT(xf_index, 0U);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  const std::string styles_xml = ExtractStylesXml(saved);
+  EXPECT_NE(styles_xml.find("gray125"), std::string::npos);
+  EXPECT_NE(styles_xml.find("name=\"Normal\""), std::string::npos);
+  // Cell xf 0 stays the unformatted default: it must not pick up the
+  // caller's fill.
+  const std::size_t cell_xfs_begin = styles_xml.find("<cellXfs");
+  ASSERT_NE(cell_xfs_begin, std::string::npos);
+  const std::size_t first_xf = styles_xml.find("<xf", cell_xfs_begin);
+  ASSERT_NE(first_xf, std::string::npos);
+  const std::size_t first_xf_end = styles_xml.find('>', first_xf);
+  ASSERT_NE(first_xf_end, std::string::npos);
+  EXPECT_NE(styles_xml.substr(first_xf, first_xf_end - first_xf).find("fillId=\"0\""), std::string::npos);
+}

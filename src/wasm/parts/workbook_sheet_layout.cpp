@@ -89,6 +89,7 @@ JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
   r.view.freezeRows = v.freeze_rows;
   r.view.freezeCols = v.freeze_cols;
   r.view.tabHidden = v.tab_hidden;
+  r.view.visibility = v.visibility;
   r.view.showGridLines = v.show_grid_lines;
   r.view.showRowColHeaders = v.show_row_col_headers;
   r.view.showZeros = v.show_zeros;
@@ -189,6 +190,14 @@ JsStatus JsWorkbook::setSheetTabHidden(uint32_t sheet, bool hidden) {
     return error_status(7000);
   }
   fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
+  return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::setSheetVisibility(uint32_t sheet, int32_t visibility) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_sheet_set_visibility(handle_, sheet, visibility);
   return status_from_rc(rc);
 }
 

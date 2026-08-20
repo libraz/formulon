@@ -27,9 +27,14 @@ export interface Status {
   ok: boolean;
   /** Numeric `fm_status_t`. 0 on success. */
   status: number;
-  /** Thread-local last-error message (empty on success). */
+  /** Describes the failure this call hit; empty on success. Normally the
+   *  thread-local last-error message the C ABI recorded, but a rejection
+   *  the binding raised itself -- a destroyed handle, a missing or
+   *  wrongly-shaped argument -- carries its own message instead, never the
+   *  residue of an earlier call. */
   message: string;
-  /** Optional thread-local context string (empty on success). */
+  /** Optional thread-local context string. Empty on success, and empty for
+   *  a failure the binding raised before reaching the C ABI. */
   context: string;
 }
 
@@ -581,8 +586,19 @@ export interface PaginationResult {
   pageCount: number;
 }
 
+/** Sheet tab visibility, mirroring OOXML `<sheet state>`.
+ *
+ *  `VeryHidden` differs from `Hidden` in that Excel leaves such a sheet
+ *  out of its "Unhide" dialog, which is how a workbook keeps a settings
+ *  or lookup sheet out of a user's reach. */
+export enum SheetVisibility {
+  Visible = 0,
+  Hidden = 1,
+  VeryHidden = 2,
+}
+
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
- *  counts, tab-hidden flag, and the display / orientation flags mirrored
+ *  counts, tab visibility, and the display / orientation flags mirrored
  *  from OOXML `<sheetView>` (gridlines, row/col headers, zero display,
  *  right-to-left, tab-selected, view mode). Booleans are encoded as
  *  `0`/`1` to match the embind binding's wire shape. */
@@ -590,8 +606,14 @@ export interface SheetView {
   zoomScale: number;
   freezeRows: number;
   freezeCols: number;
-  /** Boolean stored as 0/1 to match the embind binding's wire shape. */
+  /** Boolean stored as 0/1 to match the embind binding's wire shape.
+   *  The two-state view of `visibility`: `1` for both hidden states, so
+   *  reading only this field sees a very-hidden sheet as hidden rather
+   *  than visible. Read `visibility` to tell the two apart. */
   tabHidden: number;
+  /** The authoritative tab state, as a `SheetVisibility` code. Always
+   *  agrees with `tabHidden`. */
+  visibility: number;
   /** `showGridLines`; default 1. */
   showGridLines: number;
   /** `showRowColHeaders`; default 1. */
@@ -923,10 +945,11 @@ export interface ConditionalFormatRange {
  *    13 containsErrors, 14 notContainsErrors, 15 timePeriod,
  *    16 duplicateValues, 17 uniqueValues.
  *
- *  Visual rule kinds (`colorScale` / `dataBar` / `iconSet`) round-trip
- *  through the OOXML reader / writer but their visual sub-spec fields
- *  are not yet surfaced through this read API; only `id`, `type`,
- *  `priority`, `stopIfTrue`, and `sqref` populate for those kinds.
+ *  `id`, `type`, `priority`, `stopIfTrue` and `sqref` populate for every
+ *  rule kind; the remaining fields are engaged by the kinds noted on
+ *  each. A visual rule (`colorScale` / `dataBar` / `iconSet`) carries its
+ *  full sub-spec, so an entry read back here can be handed straight to
+ *  `addConditionalFormat`.
  */
 export interface ConditionalFormatEntry {
   readonly id: string;
@@ -1378,6 +1401,17 @@ export interface PartialRecalcResult {
   recomputed: number;
 }
 
+/** Return type of `Workbook.getIterative()`. */
+export interface IterativeSettingsResult {
+  status: Status;
+  /** Whether iterative calculation is switched on. */
+  enabled: boolean;
+  /** Stored iteration cap; meaningful even while `enabled` is false. */
+  maxIterations: number;
+  /** Stored convergence threshold; meaningful even while `enabled` is false. */
+  maxChange: number;
+}
+
 /** Result of `Workbook.getSheetAutoFilterXml`. The empty `xml` string means
  * that the sheet has no AutoFilter definition. */
 export interface SheetAutoFilterXmlResult {
@@ -1646,6 +1680,11 @@ export interface Workbook {
   partialRecalc(viewport: RecalcViewport): PartialRecalcResult;
 
   setIterative(enabled: boolean, maxIterations: number, maxChange: number): Status;
+  /** Reads back the stored iterative-calculation settings. The cap and
+   *  threshold are the stored values even while `enabled` is false, so a
+   *  host can render Excel's iterative-calculation dialog before the user
+   *  has switched iteration on. */
+  getIterative(): IterativeSettingsResult;
   /** Installs (or, when passed `null`, clears) a JS callback invoked
    *  after each Gauss-Seidel sweep. The callback belongs to this
    *  `Workbook`: installing one on another instance leaves this one's
@@ -1844,8 +1883,20 @@ export interface Workbook {
   pivotFieldAddAggregation(sheet: number, pivotIdx: number, fieldIdx: number, agg: PivotAggregation): Status;
   /** Drops every aggregation from pivot field `fieldIdx`. */
   pivotFieldClearAggregations(sheet: number, pivotIdx: number, fieldIdx: number): Status;
-  /** Appends a manual-filter item to pivot field `fieldIdx`. */
+  /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
+   *  its label. The item carries no cache binding, so the filter engine
+   *  matches source records by comparing their rendered label against
+   *  `name`. An empty `name` therefore cannot express the blank item,
+   *  which has no label of its own; use `pivotFieldAddItemAt`. */
   pivotFieldAddItem(sheet: number, pivotIdx: number, fieldIdx: number, name: string, visible: boolean): Status;
+  /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
+   *  its position in the bound cache field's shared items -- the same
+   *  index space as OOXML `<item x="N">`. The label is resolved from that
+   *  shared item, which makes this the form that can express the blank
+   *  item. `cacheIndex` is not validated: the cache field may be filled in
+   *  after the pivot definition, and an index that resolves to nothing
+   *  yields an item with an empty label that filters nothing. */
+  pivotFieldAddItemAt(sheet: number, pivotIdx: number, fieldIdx: number, cacheIndex: number, visible: boolean): Status;
   /** Drops every manual-filter item from pivot field `fieldIdx`. */
   pivotFieldClearItems(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Toggles the visibility of item `itemIdx` on field `fieldIdx`. */
@@ -1998,8 +2049,18 @@ export interface Workbook {
   setSheetZoom(sheet: number, zoomScale: number): Status;
   /** Sets the frozen pane in `(rows, cols)`. */
   setSheetFreeze(sheet: number, freezeRows: number, freezeCols: number): Status;
-  /** Sets the sheet tab's hidden flag. */
+  /** Sets the sheet tab's hidden flag — the two-state view of
+   *  `setSheetVisibility`. `true` on an already very-hidden sheet leaves
+   *  it very-hidden rather than demoting it, since "hidden" says nothing
+   *  that sheet does not already satisfy; `false` shows it from either
+   *  hidden state. */
   setSheetTabHidden(sheet: number, hidden: boolean): Status;
+  /** Sets the sheet tab's visibility to one of the three states. The only
+   *  way to newly state `SheetVisibility.VeryHidden`, and the only way to
+   *  demote a very-hidden sheet to plain hidden; `setSheetTabHidden` can
+   *  express neither. A value outside `SheetVisibility` fails with
+   *  `kInvalidArgument` and leaves the sheet unchanged. */
+  setSheetVisibility(sheet: number, visibility: SheetVisibility): Status;
   /** Sets the sheet's `showGridLines` flag. */
   setSheetShowGridLines(sheet: number, show: boolean): Status;
   /** Sets the sheet's `showRowColHeaders` flag. */

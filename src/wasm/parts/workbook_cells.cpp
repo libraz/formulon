@@ -302,7 +302,8 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   const bool totals_row = js_pull_bool(spec, "totalsRow", false);
   emscripten::val columns = spec["columns"];
   if (!columns.isArray()) {
-    out.status = error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument));
+    out.status = binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
+                                      "createTable: `columns` must be an array of column names");
     return out;
   }
   const uint32_t count = columns["length"].as<uint32_t>();

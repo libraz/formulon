@@ -396,6 +396,25 @@ JsStatus JsWorkbook::setIterative(bool enabled, uint32_t max_iterations, double 
   return status_from_rc(rc);
 }
 
+emscripten::val JsWorkbook::getIterative() const {
+  int32_t enabled = 0;
+  uint32_t max_iterations = 0;
+  double max_change = 0.0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change) : 7000;
+  if (rc != 0) {
+    enabled = 0;
+    max_iterations = 0;
+    max_change = 0.0;
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  o.set("enabled", enabled != 0);
+  o.set("maxIterations", max_iterations);
+  o.set("maxChange", max_change);
+  return o;
+}
+
 uint32_t JsWorkbook::calcMode() const {
   if (handle_ == nullptr) {
     return static_cast<uint32_t>(FM_CALC_MODE_AUTO);

@@ -199,8 +199,9 @@ fm_border_record PullBorderRecord(const Napi::Object& record) {
 
 /// Builds the JS mirror of a cell format. Shared by `getCellXf` and
 /// `getCellStyleXf`; a zero-initialised `xf` yields the all-default record
-/// those two return on their failure paths. `xfId` is deliberately absent:
-/// only `getCellXf` carries one.
+/// those two return on their failure paths. `xfId` is set by the callers:
+/// a named-style xf is its own parent, so `getCellStyleXf` always reports
+/// 0 there.
 Napi::Object CellXfToJs(Napi::Env env, const fm_cell_xf& xf) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("fontIndex", Napi::Number::New(env, xf.font_index));
@@ -714,6 +715,7 @@ Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = CellXfToJs(env, xf);
   out.Set("status", MakeStatus(env, rc));
+  out.Set("xfId", Napi::Number::New(env, xf.xf_id));
   SetCellXfAlignment(env, xf, &out);
   return out;
 }

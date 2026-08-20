@@ -139,7 +139,7 @@ Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeIndexResult(env, MakeErrorStatus(env, kBindingInvalidHandle), 0);
+    return MakeIndexResult(env, MakeBindingArgumentError(env, "pivotFieldAdd: `spec` must be an object"), 0);
   }
   Napi::Object spec = info[2].As<Napi::Object>();
 
@@ -253,6 +253,21 @@ Napi::Value Workbook::PivotFieldAddItem(const Napi::CallbackInfo& info) {
   const bool visible = ArgBool(info, 4);
   fm_status_t rc =
       fm_workbook_pivot_field_add_item(handle_, sheet, pivot_idx, field_idx, name.c_str(), visible ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldAddItemAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const uint32_t cache_index = ArgU32(info, 3);
+  const bool visible = ArgBool(info, 4);
+  fm_status_t rc =
+      fm_workbook_pivot_field_add_item_at(handle_, sheet, pivot_idx, field_idx, cache_index, visible ? 1 : 0);
   return MakeStatus(env, rc);
 }
 
@@ -398,7 +413,7 @@ Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeIndexResult(env, MakeErrorStatus(env, kBindingInvalidHandle), 0);
+    return MakeIndexResult(env, MakeBindingArgumentError(env, "pivotDataFieldAdd: `spec` must be an object"), 0);
   }
   Napi::Object spec = info[2].As<Napi::Object>();
   fm_pivot_data_field_spec_t c_spec{};
@@ -434,7 +449,7 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t data_field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   if (info.Length() < 4 || !info[3].IsObject()) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
+    return MakeBindingArgumentError(env, "pivotDataFieldSet: `spec` must be an object");
   }
   Napi::Object spec = info[3].As<Napi::Object>();
   fm_pivot_data_field_spec_t c_spec{};
@@ -497,7 +512,7 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
+    return MakeBindingArgumentError(env, "pivotFilterAdd: `spec` must be an object");
   }
   Napi::Object spec = info[2].As<Napi::Object>();
 

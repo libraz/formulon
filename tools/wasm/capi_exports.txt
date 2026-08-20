@@ -6,10 +6,11 @@
 #
 # Lines starting with # are comments. Blank lines are ignored.
 #
-# This list mirrors the full Python Workbook surface: every fm_* entry
-# point the wrapper in packages/python/formulon/workbook.py reaches is
-# listed so the staged WASM exports it. When the Python binding grows a
-# new entry point, add the corresponding symbol here.
+# This list mirrors the full Python binding surface: every fm_* entry
+# point reached from packages/python/formulon (the Workbook wrapper in
+# workbook.py plus the module-level helpers in __init__.py) is listed so
+# the staged WASM exports it. When the Python binding grows a new entry
+# point, add the corresponding symbol here.
 
 # -- Construction / lifecycle ----------------------------------------------------
 fm_workbook_create
@@ -123,6 +124,7 @@ fm_sheet_get_view
 fm_sheet_set_zoom
 fm_sheet_set_freeze
 fm_sheet_set_tab_hidden
+fm_sheet_set_visibility
 fm_sheet_set_show_grid_lines
 fm_sheet_set_show_row_col_headers
 fm_sheet_set_show_zeros

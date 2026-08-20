@@ -14,7 +14,25 @@ Napi::Object MakeOkStatus(Napi::Env env) {
   return o;
 }
 
+Napi::Object MakeBindingError(Napi::Env env, fm_status_t code, const char* message) {
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("ok", Napi::Boolean::New(env, false));
+  o.Set("status", Napi::Number::New(env, static_cast<int32_t>(code)));
+  o.Set("message", Napi::String::New(env, message != nullptr ? message : ""));
+  o.Set("context", Napi::String::New(env, ""));
+  return o;
+}
+
+Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message) {
+  return MakeBindingError(env, kBindingNullPointer, message);
+}
+
 Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code) {
+  if (code == kBindingInvalidHandle) {
+    // No C-ABI call ran, so the thread-local diagnostics still describe
+    // whatever call came before. Synthesise the message here instead.
+    return MakeBindingError(env, code, "the workbook handle was already destroyed");
+  }
   const char* msg = fm_last_error_message();
   const char* ctx = fm_last_error_context();
   Napi::Object o = Napi::Object::New(env);

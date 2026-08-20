@@ -201,6 +201,13 @@ FM_API fm_status_t fm_workbook_create(fm_workbook_t** out);
  * `fm_workbook_add_sheet`. Saving an empty workbook fails just as
  * Excel rejects sheet-less archives.
  *
+ * The only difference from `fm_workbook_create` is the missing sheet:
+ * the style table is seeded with Excel's reserved defaults either way
+ * (font 0, fill 0 = `none`, fill 1 = `gray125`, border 0, cell-style xf
+ * 0, cell xf 0, the `Normal` cell style). Style records added through
+ * `fm_styles_add_*` therefore always land after the reserved slots, so
+ * the first index handed back is non-zero.
+ *
  * @param out  On success receives a freshly allocated handle.
  * @return `kOk` on success; `kBindingNullPointer` if `out == NULL`.
  */
@@ -1509,7 +1516,11 @@ FM_API fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t threa
  *                        cyclic SCCs surface `#REF!`); non-zero
  *                        enables fixed-point resolution up to
  *                        `max_iterations` passes.
- * @param max_iterations  Iteration cap. Values < 1 are treated as 1.
+ * @param max_iterations  Iteration cap. Values < 1 are treated as 1 and
+ *                        values above 32767 are treated as 32767, which
+ *                        is Excel's own limit for this setting.
+ *                        `fm_workbook_get_iterative` reports the clamped
+ *                        value, not the requested one.
  * @param max_change      Absolute convergence threshold.
  *
  * @return `kOk` on success;
@@ -1893,7 +1904,11 @@ typedef struct {
  * All non-active fields carry default-zero values. `priority` is the
  * workbook-global priority lifted from `CFRule::priority` (smaller
  * numbers ranked higher); per-cell match lists are returned in
- * priority-ascending order so a UI can fold matches left-to-right.
+ * priority-ascending order, so `matches[0]` is the highest-priority
+ * match. Fold first-wins: walk the list in the returned order and apply
+ * each property only where nothing has set it yet, so a lower-priority
+ * match fills what a higher-priority one left unset and never overwrites
+ * it.
  */
 typedef struct {
   fm_cf_match_kind_t kind;
@@ -2080,7 +2095,9 @@ FM_API fm_status_t fm_sheet_set_fit_to_page(fm_workbook_t* wb, size_t sheet_inde
  * order.
  *
  * An empty string removes the defined name. Returns `kPrintInvalidArea`
- * (9002) when any area fails to parse.
+ * (9002) when any area fails to parse, and `kInvalidArgument` (2) when
+ * the list holds more areas than the per-call cap every range-taking
+ * entry point shares.
  */
 FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index, const char* ranges_a1);
 
@@ -3728,11 +3745,33 @@ FM_API fm_status_t fm_function_canonicalize(const char* localized_name, int32_t 
 /* -------------------------------------------------------------------------- */
 
 /**
+ * @brief Sheet tab visibility. Mirrors OOXML `<sheet state>` and the
+ *        MS-XLSB `hsState` numbering, so neither container needs a table.
+ *
+ * `FM_SHEET_VERY_HIDDEN` differs from `FM_SHEET_HIDDEN` in that Excel
+ * leaves such a sheet out of its "Unhide" dialog, which is how a workbook
+ * keeps a settings or lookup sheet out of a user's reach.
+ */
+typedef enum {
+  FM_SHEET_VISIBLE = 0,
+  FM_SHEET_HIDDEN = 1,
+  FM_SHEET_VERY_HIDDEN = 2,
+} fm_sheet_visibility_t;
+
+/**
  * @brief Per-sheet view state surfaced over the C ABI.
  *
  * Mirrors `formulon::SheetView` in full. Fields that are at their default
  * value still surface (zoom_scale defaults to `100`, freeze_rows /
  * freeze_cols default to `0`, tab_hidden defaults to `0`).
+ *
+ * `visibility` is the authoritative tab state and `tab_hidden` is the
+ * two-state view of it, kept because it is the field every binding already
+ * reads: `tab_hidden` is non-zero for both hidden states, so a caller that
+ * knows only the bool still sees a very-hidden sheet as hidden rather than
+ * as visible. Read `visibility` to tell the two apart. The pair is always
+ * consistent on the way out; a struct is never handed back in, so the
+ * contradictory combination cannot be constructed across this boundary.
  *
  * `view_mode` is a model-backed NUL-terminated UTF-8 view from the workbook
  * handle. It remains valid until a mutation of this sheet's view record
@@ -3745,7 +3784,8 @@ typedef struct {
   uint32_t zoom_scale;
   uint32_t freeze_rows;
   uint32_t freeze_cols;
-  int32_t tab_hidden;           /* 0/1 */
+  int32_t tab_hidden;           /* 0/1; non-zero for either hidden state */
+  int32_t visibility;           /* fm_sheet_visibility_t */
   int32_t show_grid_lines;      /* 0/1; OOXML default 1 */
   int32_t show_row_col_headers; /* 0/1; OOXML default 1 */
   int32_t show_zeros;           /* 0/1; OOXML default 1 */
@@ -3882,10 +3922,14 @@ FM_API fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_
  *        takes precedence on overlapping columns; non-overlapping
  *        portions of pre-existing entries are retained.
  *
+ * `width` is in Excel's character-width unit. A rejected call leaves the
+ * layout exactly as it was.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
- *         `last < first`.
+ *         `kInvalidArgument` when `sheet_index` is out of range,
+ *         `last < first`, `last` is past the last column (16383), or
+ *         `width` is negative, NaN, or infinite.
  */
 FM_API fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                              double width);
@@ -3897,8 +3941,8 @@ FM_API fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_ind
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
- *         `last < first`.
+ *         `kInvalidArgument` when `sheet_index` is out of range,
+ *         `last < first`, or `last` is past the last column (16383).
  */
 FM_API fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                               int32_t hidden);
@@ -3910,8 +3954,8 @@ FM_API fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_in
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
- *         `last < first`.
+ *         `kInvalidArgument` when `sheet_index` is out of range,
+ *         `last < first`, or `last` is past the last column (16383).
  */
 FM_API fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                uint8_t level);
@@ -3919,9 +3963,14 @@ FM_API fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_i
 /**
  * @brief Sets or replaces the row height override for `row`.
  *
+ * `height` is in points. A rejected call leaves the layout exactly as it
+ * was.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range, `row`
+ *         is past the last row (1048575), or `height` is negative, NaN,
+ *         or infinite.
  */
 FM_API fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height);
 
@@ -3930,7 +3979,8 @@ FM_API fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range or `row`
+ *         is past the last row (1048575).
  */
 FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t hidden);
 
@@ -3939,7 +3989,8 @@ FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range or `row`
+ *         is past the last row (1048575).
  */
 FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level);
 
@@ -3968,18 +4019,42 @@ FM_API fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, ui
  * @brief Sets the sheet's tab-hidden flag. Non-zero hides the sheet
  *        tab; zero shows it.
  *
- * A workbook can also state the stronger `veryHidden` visibility, which
- * keeps a sheet out of Excel's "Unhide" dialog. This flag reports and
- * sets plain hidden, so a very-hidden sheet reads back as hidden and
- * passing non-zero leaves it very-hidden rather than demoting it; zero
- * makes the sheet visible from either state. A very-hidden sheet loaded
- * from a file keeps that visibility on save unless this call shows it.
+ * This is the two-state view of `fm_sheet_set_visibility`, kept for callers
+ * that only ever mean "hidden" or "not hidden". Because the bool cannot
+ * express `FM_SHEET_VERY_HIDDEN`, the two interact asymmetrically: passing
+ * non-zero to an already very-hidden sheet leaves it very-hidden rather
+ * than demoting it, since asking for "hidden" says nothing the sheet does
+ * not already satisfy, while zero makes the sheet visible from either
+ * hidden state. A very-hidden sheet loaded from a file therefore keeps that
+ * visibility on save unless this call shows it. To state the stronger
+ * visibility, or to demote very-hidden to plain hidden, call
+ * `fm_sheet_set_visibility`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index, int32_t hidden);
+
+/**
+ * @brief Sets the sheet's tab visibility to one of the three states.
+ *
+ * The only way to newly state `FM_SHEET_VERY_HIDDEN`, and the only way to
+ * demote a very-hidden sheet to plain hidden; `fm_sheet_set_tab_hidden`
+ * can express neither. Each call states the whole visibility, so the
+ * resulting `fm_sheet_view_t` always reports a `tab_hidden` that agrees
+ * with `visibility`.
+ *
+ * `visibility` is a raw signed 32-bit ordinal, not a validated enum type:
+ * a value outside `fm_sheet_visibility_t` returns `kInvalidArgument` and
+ * leaves the sheet unchanged.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *           `visibility` is not an `fm_sheet_visibility_t` value.
+ */
+FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index, int32_t visibility);
 
 /**
  * @brief Sets the sheet's gridline-visibility flag (`showGridLines`).

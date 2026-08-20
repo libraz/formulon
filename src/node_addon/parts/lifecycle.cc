@@ -448,6 +448,26 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::GetIterative(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  int32_t enabled = 0;
+  uint32_t max_iterations = 0;
+  double max_change = 0.0;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change)
+                                            : kBindingInvalidHandle;
+  if (rc != 0) {
+    enabled = 0;
+    max_iterations = 0;
+    max_change = 0.0;
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("enabled", Napi::Boolean::New(env, enabled != 0));
+  out.Set("maxIterations", Napi::Number::New(env, max_iterations));
+  out.Set("maxChange", Napi::Number::New(env, max_change));
+  return out;
+}
+
 Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -461,7 +481,7 @@ Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
     return MakeStatus(env, rc);
   }
   if (!info[0].IsFunction()) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
+    return MakeBindingArgumentError(env, "setIterativeProgress: `callback` must be a function or null");
   }
   // Persist the function on this wrapper, then let the C ABI give the
   // trampoline this wrapper as user-data. Replacing a callback on another

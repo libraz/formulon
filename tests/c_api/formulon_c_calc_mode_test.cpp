@@ -73,6 +73,52 @@ TEST(FormulonCApiCalcMode, IterativeEnabledTogglePreservesConfiguredLimits) {
   EXPECT_DOUBLE_EQ(max_change, 0.25);
 }
 
+// The reader clamps `iterateCount` on its own path; this pins the setter's,
+// which a host reaches without any file being involved. The getter must
+// report the clamped value so a caller can see what it actually got.
+TEST(FormulonCApiCalcMode, IterativeMaxIterationsSaturatesAtExcelsLimit) {
+  constexpr uint32_t kExcelLimit = 32767U;
+  const std::int32_t oversized[] = {
+      32768,
+      100000,
+      std::numeric_limits<std::int32_t>::max(),
+  };
+  for (const std::int32_t requested : oversized) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, requested, 0.001), 0) << requested;
+
+    int32_t enabled = 0;
+    uint32_t max_iterations = 0;
+    double max_change = 0.0;
+    ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0) << requested;
+    EXPECT_EQ(max_iterations, kExcelLimit) << requested;
+  }
+}
+
+// Neither end of the accepted range may be moved by the clamp.
+TEST(FormulonCApiCalcMode, IterativeMaxIterationsKeepsInRangeValues) {
+  constexpr uint32_t kExcelLimit = 32767U;
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  int32_t enabled = 0;
+  uint32_t max_iterations = 0;
+  double max_change = 0.0;
+  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, static_cast<std::int32_t>(kExcelLimit), 0.001), 0);
+  ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
+  EXPECT_EQ(max_iterations, kExcelLimit);
+
+  // The pre-existing lower clamp is unchanged.
+  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 0, 0.001), 0);
+  ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
+  EXPECT_EQ(max_iterations, 1U);
+
+  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, -5, 0.001), 0);
+  ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
+  EXPECT_EQ(max_iterations, 1U);
+}
+
 TEST(FormulonCApiCalcMode, UnknownModeRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

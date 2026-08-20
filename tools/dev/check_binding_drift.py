@@ -98,6 +98,13 @@ Checks:
                   the source every other check here reads. Reports
                   "SKIPPED" when the package has not been staged, because
                   `dist/` is gitignored and absent in a fresh clone.
+  header-error-codes
+                  Every numeric status code a doc comment in
+                  src/c_api/formulon_c.h prints beside an enumerator name
+                  equals that enumerator's value in src/utils/error.h.
+                  `fm_status_t` is a bare `int32_t`, so those numbers are
+                  the whole contract a binding author reading only the
+                  header can compare against.
   all             Run every check above (default).
 
 Stdlib only; no build artifacts or network access required.
@@ -134,6 +141,7 @@ C_ABI_BASELINE = Path(__file__).resolve().parent / "c_abi_baseline.txt"
 C_ABI_BREAKS = Path(__file__).resolve().parent / "c_abi_breaks.txt"
 NPM_INDEX_MJS = REPO_ROOT / "packages" / "npm" / "index.mjs"
 
+ERROR_H = REPO_ROOT / "src" / "utils" / "error.h"
 VALUE_H = REPO_ROOT / "src" / "value.h"
 CF_MATCH_H = REPO_ROOT / "src" / "cf" / "cf_match.h"
 CALC_MODE_H = REPO_ROOT / "src" / "io" / "calc_mode.h"
@@ -1610,13 +1618,19 @@ def _extract_c_typedef_enum(text: str, type_name: str) -> Optional[List[int]]:
     return _parse_enum_body(match.group(1))
 
 
-def _extract_cpp_enum_class(text: str, enum_name: str) -> Optional[List[int]]:
+def _cpp_enum_class_body(text: str, enum_name: str) -> Optional[str]:
+    """The brace-delimited enumerator list of a scoped enum, or `None`."""
     match = re.search(
         r"enum class\s+" + re.escape(enum_name) + r"\s*(?::\s*[\w:]+)?\s*\{([^}]*)\}\s*;", text, re.DOTALL
     )
-    if not match:
+    return match.group(1) if match else None
+
+
+def _extract_cpp_enum_class(text: str, enum_name: str) -> Optional[List[int]]:
+    body = _cpp_enum_class_body(text, enum_name)
+    if body is None:
         return None
-    return _parse_enum_body(match.group(1))
+    return _parse_enum_body(body)
 
 
 def _extract_ts_enum(text: str, enum_name: str) -> Optional[List[int]]:
@@ -1644,6 +1658,7 @@ _DTS_ENUM_SOURCES = {
     "PivotCalendar": (CAPI_HEADER, "fm_pivot_calendar_t", _extract_c_typedef_enum),
     "PivotReportLayout": (CAPI_HEADER, "fm_pivot_layout_t", _extract_c_typedef_enum),
     "PivotFilterValueKind": (CAPI_HEADER, "fm_pivot_filter_value_kind_t", _extract_c_typedef_enum),
+    "SheetVisibility": (CAPI_HEADER, "fm_sheet_visibility_t", _extract_c_typedef_enum),
     "CfMatchKind": (CF_MATCH_H, "CFMatchKind", _extract_cpp_enum_class),
     "CalcMode": (CALC_MODE_H, "CalcMode", _extract_cpp_enum_class),
     "ErrorCode": (VALUE_H, "ErrorCode", _extract_cpp_enum_class),
@@ -2070,6 +2085,80 @@ def check_abi_baseline() -> List[str]:
     return problems
 
 
+# A doc comment quotes a status code as `` `kName` (N) ``, and the number may
+# wrap onto the next comment line, so the separator spans a `*` continuation
+# marker as well as plain spaces.
+_HEADER_ERROR_CODE_RE = re.compile(r"`?(k[A-Z][A-Za-z0-9_]*)`?(?:[ \t]|\n[ \t]*\*)*\((\d+)\)")
+
+
+def _cpp_enum_class_values(text: str, enum_name: str) -> Optional[dict[str, int]]:
+    """Parses a scoped enum into a name -> value map.
+
+    The value-only sibling `_extract_cpp_enum_class` compares ordinal
+    sequences; this one is for the checks that need to look a member up by
+    name. Implicit members take one more than the previous value, as in C++.
+    Returns `None` when the enum is absent or a member's initializer is not a
+    literal integer, so the caller reports the parse failure rather than a
+    false drift.
+    """
+    raw_body = _cpp_enum_class_body(text, enum_name)
+    if raw_body is None:
+        return None
+    values: dict[str, int] = {}
+    next_value = 0
+    for part in _ENUM_BODY_COMMENT_RE.sub("", raw_body).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        member = _ENUM_MEMBER_RE.match(part)
+        if not member:
+            return None
+        literal = member.group(2)
+        if literal is not None:
+            next_value = int(literal, 0)
+        values[member.group(1)] = next_value
+        next_value += 1
+    return values
+
+
+def check_header_error_codes() -> List[str]:
+    """Every numeric status code quoted in the C header matches its enumerator.
+
+    `fm_status_t` is a bare `int32_t`, so the numbers the header's doc
+    comments print next to an enumerator name are the whole contract a
+    binding author reading only the header can act on. A comparison written
+    against a stale number never matches, and mis-classifies whatever code
+    actually holds that value.
+    """
+    problems: List[str] = []
+
+    codes = _cpp_enum_class_values(_read(ERROR_H), "FormulonErrorCode")
+    if codes is None:
+        return [
+            f"header-error-codes: could not parse `FormulonErrorCode` out of {ERROR_H.relative_to(REPO_ROOT)}; "
+            "the enum moved or gained a non-literal initializer"
+        ]
+
+    header = _read(CAPI_HEADER)
+    for match in _HEADER_ERROR_CODE_RE.finditer(header):
+        name, quoted = match.group(1), match.group(2)
+        line_number = header.count("\n", 0, match.start()) + 1
+        site = f"{CAPI_HEADER.name}:{line_number}"
+        if name not in codes:
+            problems.append(
+                f"header-error-codes: {site} documents `{name}` ({quoted}), which names no enumerator of "
+                f"`FormulonErrorCode` in {ERROR_H.relative_to(REPO_ROOT)}"
+            )
+            continue
+        if int(quoted) != codes[name]:
+            problems.append(
+                f"header-error-codes: {site} documents `{name}` as ({quoted}), but "
+                f"{ERROR_H.relative_to(REPO_ROOT)} defines it as {codes[name]}"
+            )
+
+    return problems
+
+
 CHECKS = {
     "python-exports": check_python_exports,
     "python-struct-layouts": check_python_struct_layouts,
@@ -2084,6 +2173,7 @@ CHECKS = {
     "style-record-fields": check_style_record_fields,
     "staged-dist": check_staged_dist,
     "abi-baseline": check_abi_baseline,
+    "header-error-codes": check_header_error_codes,
 }
 
 

@@ -382,7 +382,7 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   dv.type = js_pull_u8(v, "type", 0U);
   dv.op = js_pull_u8(v, "op", 0U);
   dv.error_style = js_pull_u8(v, "errorStyle", 0U);
-  dv.allow_blank = js_pull_bool(v, "allowBlank", true) ? 1 : 0;
+  dv.allow_blank = js_pull_bool(v, "allowBlank", false) ? 1 : 0;
   dv.show_input_message = js_pull_bool(v, "showInputMessage", false) ? 1 : 0;
   dv.show_error_message = js_pull_bool(v, "showErrorMessage", false) ? 1 : 0;
   dv.show_dropdown = js_pull_bool(v, "showDropDown", true) ? 1 : 0;

@@ -181,6 +181,9 @@ struct JsSheetView {
   uint32_t freezeRows = 0U;
   uint32_t freezeCols = 0U;
   int32_t tabHidden = 0;
+  /// `fm_sheet_visibility_t` ordinal. `tabHidden` is its two-state view
+  /// and is non-zero for both hidden states.
+  int32_t visibility = 0;
   int32_t showGridLines = 1;
   int32_t showRowColHeaders = 1;
   int32_t showZeros = 1;
@@ -255,8 +258,17 @@ struct JsAddNumFmtResult {
 JsStatus ok_status();
 
 /// Builds a failure envelope from `code`, copying out the thread-local
-/// diagnostics surfaced by the most recent C-ABI call.
+/// diagnostics surfaced by the most recent C-ABI call. `code ==
+/// kBindingInvalidHandle` is special-cased: that failure is raised before
+/// any C-ABI call, so the envelope carries a synthesised message rather
+/// than the residue of an earlier, unrelated call.
 JsStatus error_status(int32_t code);
+
+/// Builds a failure envelope for a rejection the binding raised itself --
+/// a missing or wrongly-shaped JS argument -- carrying `message` and an
+/// empty context. Never reads the thread-local diagnostics, which at that
+/// point still belong to a previous call.
+JsStatus binding_error_status(int32_t code, const char* message);
 
 /// Bridges a `fm_status_t` into a `JsStatus` envelope.
 JsStatus status_from_rc(fm_status_t rc);

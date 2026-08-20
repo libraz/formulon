@@ -172,8 +172,9 @@ emscripten::val js_border_record(const fm_border_record& b) {
 /// Builds the JS mirror of a cell format. Shared by `getCellXf` and
 /// `getCellStyleXf`; a zero-initialised `xf` yields the all-default record
 /// those two return on their failure paths, so the key set a caller sees
-/// does not depend on whether the read succeeded. `xfId` is deliberately
-/// absent: only `getCellXf` carries one.
+/// does not depend on whether the read succeeded. `xfId` is set by the
+/// callers: a named-style xf is its own parent, so `getCellStyleXf`
+/// always reports 0 there.
 emscripten::val js_cell_xf_record(const fm_cell_xf& xf) {
   emscripten::val o = emscripten::val::object();
   o.set("fontIndex", xf.font_index);
@@ -574,6 +575,7 @@ emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {
   }
   emscripten::val o = js_cell_xf_record(xf);
   o.set("status", status_from_rc(rc));
+  o.set("xfId", xf.xf_id);
   js_set_cell_xf_alignment(xf, &o);
   return o;
 }

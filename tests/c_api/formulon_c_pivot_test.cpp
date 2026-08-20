@@ -1536,6 +1536,45 @@ TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
+TEST(FormulonCApiPivot, NullHandleStatusMatchesRecordedError) {
+  // The shared-item and record setters resolve their target through a
+  // common lookup helper. The status each returns must be the code that
+  // helper recorded, so a caller branching on the return value and a
+  // caller reading `fm_last_error_message` reach the same conclusion.
+  const auto null_pointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+
+  const auto expect_null_handle = [&](fm_status_t status) {
+    EXPECT_EQ(status, null_pointer);
+    EXPECT_NE(std::string(fm_last_error_message()).find("wb is NULL"), std::string::npos)
+        << "message: " << fm_last_error_message();
+  };
+
+  expect_null_handle(fm_workbook_pivot_cache_field_add_shared_item_number(nullptr, 0U, 0U, 1.0));
+  expect_null_handle(fm_workbook_pivot_cache_field_add_shared_item_bool(nullptr, 0U, 0U, 1));
+  expect_null_handle(fm_workbook_pivot_cache_field_add_shared_item_blank(nullptr, 0U, 0U));
+  expect_null_handle(fm_workbook_pivot_cache_field_add_shared_item_error(nullptr, 0U, 0U, /*error=*/1));
+  expect_null_handle(fm_workbook_pivot_cache_field_clear_shared_items(nullptr, 0U, 0U));
+  expect_null_handle(fm_workbook_pivot_cache_record_set_number(nullptr, 0U, 0U, 0U, 1.0));
+  expect_null_handle(fm_workbook_pivot_cache_record_set_text(nullptr, 0U, 0U, 0U, "x"));
+  expect_null_handle(fm_workbook_pivot_cache_record_set_bool(nullptr, 0U, 0U, 0U, 1));
+  expect_null_handle(fm_workbook_pivot_cache_record_set_blank(nullptr, 0U, 0U, 0U));
+  expect_null_handle(fm_workbook_pivot_cache_record_set_error(nullptr, 0U, 0U, 0U, /*error=*/1));
+
+  // A live handle with an out-of-range coordinate keeps reporting
+  // kInvalidArgument through the same helpers.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_create(wb.handle, 0, &cache_id), 0);
+  std::size_t field_idx = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb.handle, cache_id, "F", &field_idx), 0);
+
+  EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(wb.handle, cache_id, field_idx + 1U, 1.0), invalid);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(wb.handle, cache_id + 100U, field_idx, 1.0), invalid);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, /*record_idx=*/0U, field_idx, 1.0), invalid);
+}
+
 TEST(FormulonCApiPivot, OutOfGridAnchorRejected) {
   // Excel grid ceilings; kept as literals so this test needs no core
   // header. Mirrors Sheet::kMaxRows / kMaxCols.

@@ -24,7 +24,20 @@ JsStatus ok_status() {
   return JsStatus{true, 0, std::string(), std::string()};
 }
 
+JsStatus binding_error_status(int32_t code, const char* message) {
+  JsStatus s;
+  s.ok = false;
+  s.status = code;
+  s.message = message != nullptr ? message : "";
+  return s;
+}
+
 JsStatus error_status(int32_t code) {
+  if (code == kBindingInvalidHandle) {
+    // No C-ABI call ran, so the thread-local diagnostics still describe
+    // whatever call came before. Synthesise the message here instead.
+    return binding_error_status(code, "the workbook handle was already destroyed");
+  }
   JsStatus s;
   s.ok = false;
   s.status = code;

@@ -442,6 +442,15 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py abi-baseline
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The numeric status codes the C header's doc comments print beside an
+  # enumerator name, against src/utils/error.h. `fm_status_t` is a bare
+  # `int32_t`, so a binding author comparing against a stale number never
+  # matches, and mis-classifies whatever code holds that value instead.
+  add_test(
+    NAME binding_drift_header_error_codes
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py header-error-codes
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Structural invariants enforced by "exactly one implementation exists":
   # the bounds-checked array-allocation seam (what keeps a wasm32
   # `rows * cols` from wrapping into a short buffer) and the raw-XML

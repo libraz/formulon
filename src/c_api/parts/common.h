@@ -106,11 +106,11 @@ bool check_range_count(std::uint32_t n, const char* api);
 // admitting the checks that type carries, and adding a field to a
 // struct puts its check in the one place every surface picks up.
 //
-// The three primitives are what the overloads are built from. They are
+// The primitives below are what the overloads are built from. They are
 // also called directly by the scalar entry points, which take the same
 // values as loose arguments and have to reject the same domains.
 //
-// All three return `0` on success and `kInvalidArgument` otherwise,
+// Each returns `0` on success and `kInvalidArgument` otherwise,
 // having already populated the thread-local diagnostic; callers just
 // propagate the returned code. `api` names the entry point and `field`
 // the struct member, so the context string identifies the argument
@@ -123,6 +123,29 @@ bool check_range_count(std::uint32_t n, const char* api);
 // entry points apply.
 fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
                              std::uint32_t last_col, const char* api);
+
+// Rejects a column span that is inverted or reaches past Excel's last
+// column. Such a span reaches the worksheet part as a `<col min="..."
+// max="...">` pair outside the grid, which Excel treats as a damaged
+// worksheet rather than as an entry to ignore, so the whole file is
+// repaired and the layout the caller authored is lost. Out-of-grid
+// columns are refused rather than clamped: clamping would move the
+// override onto the last addressable column, which is a column the
+// caller never named.
+fm_status_t check_column_span(std::uint32_t first, std::uint32_t last, const char* api);
+
+// Rejects a row index past Excel's last row, for the same reason
+// `check_column_span` rejects an out-of-grid span: `<row r="...">` past
+// the grid is a repair prompt, not a discarded attribute.
+fm_status_t check_row_index(std::uint32_t row, const char* api);
+
+// Rejects a measurement that is not a finite, non-negative double. Row
+// heights and column widths reach the file as `xsd:double` attributes,
+// and the number writer renders a NaN or an infinity as an empty
+// string, which is not a lexical `xsd:double` at all; a negative value
+// is outside the measurement's own domain. Zero is accepted: it is the
+// legitimate metric of a zero-width column or zero-height row.
+fm_status_t check_finite_non_negative(double value, const char* api, const char* field);
 
 // Rejects an ordinal outside `[0, max]`. `max` is the last declared
 // enumerator of the model enum the field mirrors, so extending that enum

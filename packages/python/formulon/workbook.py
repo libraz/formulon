@@ -85,6 +85,7 @@ __all__ = [
     "SaveDiagnostics",
     "SheetProtection",
     "SheetView",
+    "SheetVisibility",
     "SpillInfo",
     "Table",
     "Value",
@@ -390,6 +391,19 @@ class CalcMode(IntEnum):
     AUTO = 0
     MANUAL = 1
     AUTO_NO_TABLE = 2
+
+
+class SheetVisibility(IntEnum):
+    """Sheet tab visibility, mirroring OOXML ``<sheet state>``.
+
+    ``VERY_HIDDEN`` differs from ``HIDDEN`` in that Excel leaves such a
+    sheet out of its "Unhide" dialog, which is how a workbook keeps a
+    settings or lookup sheet out of a user's reach.
+    """
+
+    VISIBLE = 0
+    HIDDEN = 1
+    VERY_HIDDEN = 2
 
 
 class LogLevel(IntEnum):
@@ -704,13 +718,19 @@ class CivilTime:
 
 @dataclass(frozen=True)
 class SheetView:
-    """Per-sheet view: zoom, frozen-pane counts, tab-hidden flag, and the
-    display / orientation flags mirrored from OOXML ``<sheetView>``."""
+    """Per-sheet view: zoom, frozen-pane counts, tab visibility, and the
+    display / orientation flags mirrored from OOXML ``<sheetView>``.
+
+    ``visibility`` is the authoritative tab state; ``tab_hidden`` is its
+    two-state view and is true for both hidden states, so code that knows
+    only the bool sees a very-hidden sheet as hidden rather than visible.
+    """
 
     zoom_scale: int
     freeze_rows: int
     freeze_cols: int
     tab_hidden: bool
+    visibility: SheetVisibility = SheetVisibility.VISIBLE
     show_grid_lines: bool = True
     show_row_col_headers: bool = True
     show_zeros: bool = True
@@ -1293,6 +1313,20 @@ def _pack_border_record(ptr: int, sides: Dict[str, object]) -> None:
         _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.get("color") or ColorSpec())
 
 
+class StyleBatchIndices(NamedTuple):
+    """Indices assigned by :meth:`Workbook.add_batch`, per style table.
+
+    Each list is positionally aligned with the request list it came from
+    and is empty when that list was omitted.
+    """
+
+    fonts: List[int]
+    fills: List[int]
+    borders: List[int]
+    cell_xfs: List[int]
+    num_fmts: List[int]
+
+
 @dataclass(frozen=True)
 class CellStyle:
     """A named cell style (``<cellStyle>`` entry)."""
@@ -1559,6 +1593,10 @@ class Workbook:
         Saving an empty workbook fails just as Excel rejects sheet-less
         archives; callers are expected to add at least one sheet before
         :meth:`save`.
+
+        The style table is seeded with Excel's reserved defaults exactly as
+        :meth:`create_default` seeds it, so the first index :meth:`add_font`
+        / :meth:`add_fill` / :meth:`add_border` hands back is non-zero.
         """
         wb = cls()
         out_ptr = _alloc_out_ptr()
@@ -1921,6 +1959,19 @@ class Workbook:
             h, 1 if enabled else 0, _sint(max_iterations, "max_iterations"), float(max_change)
         )
         _check(status, "fm_workbook_set_iterative")
+
+    def set_iterative_enabled(self, enabled: bool) -> None:
+        """Toggle iterative calculation, keeping the cap and threshold.
+
+        The counterpart of Excel's enable checkbox, which is separate from
+        its advanced iterative-calculation settings; :meth:`set_iterative`
+        writes all three at once.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_workbook_set_iterative_enabled(h, 1 if enabled else 0),
+            "fm_workbook_set_iterative_enabled",
+        )
 
     def get_iterative(self) -> IterativeSettings:
         """Read back the iterative-calculation settings.
@@ -3051,6 +3102,7 @@ class Workbook:
                 freeze_rows=d["freeze_rows"],
                 freeze_cols=d["freeze_cols"],
                 tab_hidden=bool(d["tab_hidden"]),
+                visibility=SheetVisibility(d["visibility"]),
                 show_grid_lines=bool(d["show_grid_lines"]),
                 show_row_col_headers=bool(d["show_row_col_headers"]),
                 show_zeros=bool(d["show_zeros"]),
@@ -3079,11 +3131,30 @@ class Workbook:
         )
 
     def set_sheet_tab_hidden(self, sheet: int, hidden: bool) -> None:
-        """Set the sheet tab's hidden flag."""
+        """Set the sheet tab's hidden flag.
+
+        The two-state view of :meth:`set_sheet_visibility`. ``True`` on an
+        already very-hidden sheet leaves it very-hidden rather than
+        demoting it, since "hidden" says nothing that sheet does not
+        already satisfy; ``False`` shows it from either hidden state.
+        """
         h = self._require()
         _check(
             LIB.fm_sheet_set_tab_hidden(h, _uint(sheet, "sheet_index"), 1 if hidden else 0),
             "fm_sheet_set_tab_hidden",
+        )
+
+    def set_sheet_visibility(self, sheet: int, visibility: "SheetVisibility | int") -> None:
+        """Set the sheet tab's visibility to one of the three states.
+
+        The only way to newly state :attr:`SheetVisibility.VERY_HIDDEN`, and
+        the only way to demote a very-hidden sheet to plain hidden;
+        :meth:`set_sheet_tab_hidden` can express neither.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_visibility(h, _uint(sheet, "sheet_index"), _sint(visibility, "visibility")),
+            "fm_sheet_set_visibility",
         )
 
     def set_sheet_show_grid_lines(self, sheet: int, show: bool) -> None:
@@ -4411,6 +4482,119 @@ class Workbook:
         finally:
             LIB.free(ptr)
             LIB.free(out)
+
+    def add_batch(
+        self,
+        *,
+        fonts: Optional[Sequence[FontRecord]] = None,
+        fills: Optional[Sequence[FillRecord]] = None,
+        borders: Optional[Sequence[Dict[str, object]]] = None,
+        num_fmts: Optional[Sequence[str]] = None,
+        cell_xfs: Optional[Sequence[CellXf]] = None,
+    ) -> StyleBatchIndices:
+        """Add (dedup) whole style tables in one call.
+
+        The per-record :meth:`add_font` / :meth:`add_fill` / :meth:`add_border`
+        / :meth:`add_num_fmt` / :meth:`add_cell_xf` methods each rescan their
+        table, so building thousands of formats one at a time is quadratic.
+        This routes the same work through a single ABI call that dedups every
+        table in linear time.
+
+        Fonts, fills, borders and number formats are installed before the
+        xfs, so a ``cell_xfs`` entry may reference an index this same call
+        assigns. ``borders`` entries take :meth:`add_border`'s dict shape.
+
+        The call is one transaction: on failure the workbook is unchanged
+        and :class:`FormulonError` is raised.
+        """
+        h = self._require()
+        font_list = list(fonts or ())
+        fill_list = list(fills or ())
+        border_list = list(borders or ())
+        num_fmt_list = list(num_fmts or ())
+        xf_list = list(cell_xfs or ())
+
+        owned: List[int] = []
+        batch = S.alloc_struct(LIB, S.STYLES_BATCH)
+        try:
+            fields: Dict[str, object] = {}
+
+            def alloc_array(element_size: int, count: int) -> int:
+                """Allocate a zeroed array of ``count`` elements, tracked for release."""
+                ptr = LIB.alloc(element_size * count)
+                owned.append(ptr)
+                LIB.write_bytes(ptr, b"\x00" * (element_size * count))
+                return ptr
+
+            font_indices = 0
+            if font_list:
+                records = alloc_array(S.FONT_RECORD.size, len(font_list))
+                font_indices = alloc_array(4, len(font_list))
+                for i, record in enumerate(font_list):
+                    _pack_font(records + i * S.FONT_RECORD.size, record, owned)
+                fields.update(fonts=records, font_count=len(font_list), font_indices=font_indices)
+
+            fill_indices = 0
+            if fill_list:
+                records = alloc_array(S.FILL_RECORD.size, len(fill_list))
+                fill_indices = alloc_array(4, len(fill_list))
+                for i, record in enumerate(fill_list):
+                    _pack_fill(records + i * S.FILL_RECORD.size, record)
+                fields.update(fills=records, fill_count=len(fill_list), fill_indices=fill_indices)
+
+            border_indices = 0
+            if border_list:
+                records = alloc_array(S.BORDER_RECORD.size, len(border_list))
+                border_indices = alloc_array(4, len(border_list))
+                for i, sides in enumerate(border_list):
+                    _pack_border_record(records + i * S.BORDER_RECORD.size, sides)
+                fields.update(borders=records, border_count=len(border_list), border_indices=border_indices)
+
+            xf_indices = 0
+            if xf_list:
+                records = alloc_array(S.CELL_XF.size, len(xf_list))
+                xf_indices = alloc_array(4, len(xf_list))
+                for i, record in enumerate(xf_list):
+                    S.CELL_XF.pack(LIB, records + i * S.CELL_XF.size, _cell_xf_fields(record))
+                fields.update(cell_xfs=records, cell_xf_count=len(xf_list), cell_xf_indices=xf_indices)
+
+            num_fmt_ids = 0
+            if num_fmt_list:
+                # An array of `const char*`: one 4-byte pointer slot per code.
+                codes = alloc_array(4, len(num_fmt_list))
+                num_fmt_ids = alloc_array(2, len(num_fmt_list))
+                for i, code in enumerate(num_fmt_list):
+                    code_ptr, _ = LIB.alloc_utf8(code)
+                    owned.append(code_ptr)
+                    LIB.write_bytes(codes + i * 4, struct.pack("<I", code_ptr))
+                fields.update(num_fmt_codes=codes, num_fmt_count=len(num_fmt_list), num_fmt_ids=num_fmt_ids)
+
+            S.STYLES_BATCH.pack(LIB, batch, fields)
+            _check(LIB.fm_styles_add_batch(h, batch), "fm_styles_add_batch")
+
+            def read_u32_array(ptr: int, count: int) -> List[int]:
+                if count == 0:
+                    return []
+                raw = LIB.read_bytes(ptr, 4 * count)
+                return [struct.unpack_from("<I", raw, 4 * i)[0] for i in range(count)]
+
+            def read_u16_array(ptr: int, count: int) -> List[int]:
+                if count == 0:
+                    return []
+                raw = LIB.read_bytes(ptr, 2 * count)
+                return [struct.unpack_from("<H", raw, 2 * i)[0] for i in range(count)]
+
+            return StyleBatchIndices(
+                fonts=read_u32_array(font_indices, len(font_list)),
+                fills=read_u32_array(fill_indices, len(fill_list)),
+                borders=read_u32_array(border_indices, len(border_list)),
+                cell_xfs=read_u32_array(xf_indices, len(xf_list)),
+                num_fmts=read_u16_array(num_fmt_ids, len(num_fmt_list)),
+            )
+        finally:
+            LIB.free(batch)
+            for ptr in owned:
+                LIB.free(ptr)
 
     def add_dxf(self, record: DifferentialFormat) -> int:
         """Add (dedup) a differential format and return its ``dxfId``."""

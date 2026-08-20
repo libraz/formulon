@@ -21,6 +21,7 @@ Napi::Object DefaultSheetView(Napi::Env env) {
   view.Set("freezeRows", Napi::Number::New(env, 0));
   view.Set("freezeCols", Napi::Number::New(env, 0));
   view.Set("tabHidden", Napi::Number::New(env, 0));
+  view.Set("visibility", Napi::Number::New(env, 0));
   view.Set("showGridLines", Napi::Number::New(env, 1));
   view.Set("showRowColHeaders", Napi::Number::New(env, 1));
   view.Set("showZeros", Napi::Number::New(env, 1));
@@ -53,6 +54,7 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("freezeRows", Napi::Number::New(env, v.freeze_rows));
   view.Set("freezeCols", Napi::Number::New(env, v.freeze_cols));
   view.Set("tabHidden", Napi::Number::New(env, v.tab_hidden));
+  view.Set("visibility", Napi::Number::New(env, v.visibility));
   view.Set("showGridLines", Napi::Number::New(env, v.show_grid_lines));
   view.Set("showRowColHeaders", Napi::Number::New(env, v.show_row_col_headers));
   view.Set("showZeros", Napi::Number::New(env, v.show_zeros));
@@ -189,6 +191,19 @@ Napi::Value Workbook::SetSheetTabHidden(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const bool hidden = ArgBool(info, 1);
   fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetSheetVisibility(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  // Raw ordinal: the C ABI rejects an unknown value, so coercing it to a
+  // narrower type here would turn a caller's mistake into a silent state.
+  const std::int32_t visibility = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
+  fm_status_t rc = fm_sheet_set_visibility(handle_, sheet, visibility);
   return MakeStatus(env, rc);
 }
 
@@ -874,7 +889,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   dv.type = pull_u8("type");
   dv.op = pull_u8("op");
   dv.error_style = pull_u8("errorStyle");
-  dv.allow_blank = pull_bool("allowBlank", true) ? 1 : 0;
+  dv.allow_blank = pull_bool("allowBlank", false) ? 1 : 0;
   dv.show_input_message = pull_bool("showInputMessage", false) ? 1 : 0;
   dv.show_error_message = pull_bool("showErrorMessage", false) ? 1 : 0;
   dv.show_dropdown = pull_bool("showDropDown", true) ? 1 : 0;

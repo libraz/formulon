@@ -152,6 +152,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_set_tab_hidden",
     "fm_sheet_set_tab_selected",
     "fm_sheet_set_view_mode",
+    "fm_sheet_set_visibility",
     "fm_sheet_set_zoom",
     "fm_styles_add_batch",
     "fm_styles_add_border",

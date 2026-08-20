@@ -512,10 +512,6 @@ std::string cell_xf_key(const formulon::io::CellXf& value) {
   return out;
 }
 
-bool cell_xfs_equal(const formulon::io::CellXf& a, const formulon::io::CellXf& b) {
-  return cell_xf_key(a) == cell_xf_key(b);
-}
-
 /// A dxf's engaged children are compared through the same writer-derived
 /// keys as the global tables, so a differential font that only differs in
 /// `<vertAlign>` or in an explicit `<b val="0"/>` is a distinct record.
@@ -730,8 +726,12 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
   formulon::io::FontRecord candidate = font_from_c(record);
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  ensure_default_style_roots(styles);
+  // The candidate's key is loop-invariant; building it once keeps the scan
+  // linear in the table size instead of quadratic in fragment construction.
+  const std::string candidate_key = font_key(candidate);
   for (std::size_t i = 0; i < styles.fonts.size(); ++i) {
-    if (font_records_equal(styles.fonts[i], candidate)) {
+    if (font_key(styles.fonts[i]) == candidate_key) {
       *out_index = static_cast<uint32_t>(i);
       return 0;
     }
@@ -749,8 +749,10 @@ extern "C" fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record reco
   formulon::io::FillRecord candidate = fill_from_c(record);
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  ensure_default_style_roots(styles);
+  const std::string candidate_key = fill_key(candidate);
   for (std::size_t i = 0; i < styles.fills.size(); ++i) {
-    if (fill_records_equal(styles.fills[i], candidate)) {
+    if (fill_key(styles.fills[i]) == candidate_key) {
       *out_index = static_cast<uint32_t>(i);
       return 0;
     }
@@ -768,8 +770,10 @@ extern "C" fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record 
   formulon::io::BorderRecord candidate = border_from_c(record);
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  ensure_default_style_roots(styles);
+  const std::string candidate_key = border_key(candidate);
   for (std::size_t i = 0; i < styles.borders.size(); ++i) {
-    if (border_records_equal(styles.borders[i], candidate)) {
+    if (border_key(styles.borders[i]) == candidate_key) {
       *out_index = static_cast<uint32_t>(i);
       return 0;
     }
@@ -875,8 +879,9 @@ fm_status_t add_cell_xf_impl(fm_workbook_t* wb, const fm_cell_xf& record, uint32
                 "fm_cell_xf::num_fmt_id width must match formulon::io::CellXf");
 
   formulon::io::CellXf candidate = cell_xf_from_c(record, record.xf_id);
+  const std::string candidate_key = cell_xf_key(candidate);
   for (std::size_t i = 0; i < styles.cell_xfs.size(); ++i) {
-    if (cell_xfs_equal(styles.cell_xfs[i], candidate)) {
+    if (cell_xf_key(styles.cell_xfs[i]) == candidate_key) {
       *out_xf_index = static_cast<uint32_t>(i);
       return 0;
     }
@@ -908,8 +913,9 @@ extern "C" fm_status_t fm_styles_add_cell_style_xf(fm_workbook_t* wb, fm_cell_xf
     return rc;
   }
   formulon::io::CellXf candidate = cell_xf_from_c(record, 0U);
+  const std::string candidate_key = cell_xf_key(candidate);
   for (std::size_t i = 0; i < styles.cell_style_xfs.size(); ++i) {
-    if (cell_xfs_equal(styles.cell_style_xfs[i], candidate)) {
+    if (cell_xf_key(styles.cell_style_xfs[i]) == candidate_key) {
       *out_xf_id = static_cast<uint32_t>(i);
       return 0;
     }

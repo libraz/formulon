@@ -120,6 +120,11 @@ class JsWorkbook {
   /// unsigned-integer coercion would silently change them.
   JsParallelRecalcResult recalcParallel(emscripten::val threadCount);
   JsStatus setIterative(bool enabled, uint32_t max_iterations, double max_change);
+  /// The stored iterative-calculation settings as `{status, enabled,
+  /// maxIterations, maxChange}`. The cap and threshold are the stored
+  /// values even while `enabled` is false, so a host can render Excel's
+  /// iterative-calculation dialog without having written them first.
+  emscripten::val getIterative() const;
   uint32_t calcMode() const;
   JsStatus setCalcMode(uint32_t mode);
   /// The pinned wall-clock reading as `{year, month, day, hour, minute,
@@ -224,6 +229,11 @@ class JsWorkbook {
   JsStatus setSheetZoom(uint32_t sheet, uint32_t zoomScale);
   JsStatus setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols);
   JsStatus setSheetTabHidden(uint32_t sheet, bool hidden);
+  /// States the whole tab visibility, including `veryHidden`, which the
+  /// bool setter cannot express in either direction. Takes a raw signed
+  /// ordinal so an unknown value is rejected by the C ABI rather than
+  /// coerced by embind.
+  JsStatus setSheetVisibility(uint32_t sheet, int32_t visibility);
   JsStatus setSheetShowGridLines(uint32_t sheet, bool show);
   JsStatus setSheetShowRowColHeaders(uint32_t sheet, bool show);
   JsStatus setSheetShowZeros(uint32_t sheet, bool show);
@@ -381,6 +391,10 @@ class JsWorkbook {
   JsStatus pivotFieldClearAggregations(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx);
   JsStatus pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
                              bool visible);
+  /// Appends a manual-filter item addressed by its position in the bound
+  /// cache field's shared items. The only form that can express the blank
+  /// item, which has no label of its own and is matched by its binding.
+  JsStatus pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t cacheIndex, bool visible);
   JsStatus pivotFieldClearItems(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx);
   JsStatus pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
                                     bool visible);

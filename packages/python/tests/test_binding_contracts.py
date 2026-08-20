@@ -9,11 +9,13 @@ allocation discipline of the collection readers.
 from __future__ import annotations
 
 import inspect
+import io
 import os
 import struct
 import sys
 import tempfile
 import unittest
+import zipfile
 from unittest import mock
 
 import formulon
@@ -24,6 +26,8 @@ from formulon import (
     DifferentialFormat,
     ErrorCode,
     ExternalLinkKind,
+    FillRecord,
+    FontRecord,
     FormulonError,
     LogLevel,
     MergeRange,
@@ -216,6 +220,136 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
         self.assertFalse(settings.enabled)
         self.assertEqual(settings.max_iterations, 42)
         self.assertEqual(settings.max_change, 0.5)
+
+    def test_enable_toggle_keeps_the_cap_and_threshold(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_iterative(True, 42, 0.5)
+            wb.set_iterative_enabled(False)
+            disabled = wb.get_iterative()
+            wb.set_iterative_enabled(True)
+            reenabled = wb.get_iterative()
+        self.assertFalse(disabled.enabled)
+        self.assertTrue(reenabled.enabled)
+        self.assertEqual(reenabled.max_iterations, 42)
+        self.assertEqual(reenabled.max_change, 0.5)
+
+
+class StyleSeedingTests(unittest.TestCase):
+    """Excel's reserved style slots survive whichever factory built the workbook."""
+
+    def test_empty_workbook_style_records_append_after_the_reserved_slots(self) -> None:
+        with Workbook.create_empty() as wb:
+            wb.add_sheet("Sheet1")
+            font_index = wb.add_font(FontRecord(name="Arial", size=12.0))
+            # Excel reserves fill 0 for `none` and fill 1 for `gray125`.
+            fill_index = wb.add_fill(FillRecord(pattern=1, fg_argb=0xFFFF0000))
+            border_index = wb.add_border({"left": {"style": 1, "color_argb": 0xFF000000}})
+            xf_index = wb.add_cell_xf(
+                CellXf(
+                    font_index=font_index,
+                    fill_index=fill_index,
+                    border_index=border_index,
+                    num_fmt_id=0,
+                    horizontal_align=0,
+                    vertical_align=0,
+                    wrap_text=False,
+                )
+            )
+            data = wb.save()
+        self.assertGreater(font_index, 0)
+        self.assertGreater(fill_index, 1)
+        self.assertGreater(border_index, 0)
+        self.assertGreater(xf_index, 0)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            styles_xml = archive.read("xl/styles.xml").decode("utf-8")
+        self.assertIn("gray125", styles_xml)
+        self.assertIn('name="Normal"', styles_xml)
+
+
+class StyleBatchTests(unittest.TestCase):
+    """The bulk style path the per-record methods' docs point callers at."""
+
+    def test_batch_returns_one_index_per_requested_record(self) -> None:
+        with Workbook.create_empty() as wb:
+            wb.add_sheet("Sheet1")
+            indices = wb.add_batch(
+                fonts=[FontRecord(name="Arial", size=10.0), FontRecord(name="Arial", size=12.0)],
+                fills=[FillRecord(pattern=1, fg_argb=0xFF00FF00)],
+                borders=[{"left": {"style": 1, "color_argb": 0xFF000000}}],
+                num_fmts=["0.000"],
+            )
+            xf = wb.add_batch(
+                cell_xfs=[
+                    CellXf(
+                        font_index=indices.fonts[1],
+                        fill_index=indices.fills[0],
+                        border_index=indices.borders[0],
+                        num_fmt_id=indices.num_fmts[0],
+                        horizontal_align=0,
+                        vertical_align=0,
+                        wrap_text=False,
+                    )
+                ]
+            )
+            font_count = wb.font_count()
+            read_back = wb.get_font(indices.fonts[1])
+        self.assertEqual(len(indices.fonts), 2)
+        self.assertEqual(len(indices.fills), 1)
+        self.assertEqual(len(indices.borders), 1)
+        self.assertEqual(len(indices.num_fmts), 1)
+        self.assertEqual(indices.cell_xfs, [])
+        self.assertEqual(len(xf.cell_xfs), 1)
+        self.assertEqual(read_back.size, 12.0)
+        # The seeded default font plus the two requested ones.
+        self.assertEqual(font_count, 3)
+
+    def test_batch_matches_the_per_record_path(self) -> None:
+        fonts = [FontRecord(name="Arial", size=float(size)) for size in (8, 9, 10)]
+        with Workbook.create_empty() as wb:
+            wb.add_sheet("Sheet1")
+            batched = wb.add_batch(fonts=fonts).fonts
+        with Workbook.create_empty() as wb:
+            wb.add_sheet("Sheet1")
+            per_record = [wb.add_font(record) for record in fonts]
+        self.assertEqual(batched, per_record)
+
+    def test_batch_deduplicates_against_existing_records(self) -> None:
+        record = FontRecord(name="Arial", size=12.0)
+        with Workbook.create_empty() as wb:
+            wb.add_sheet("Sheet1")
+            first = wb.add_font(record)
+            repeated = wb.add_batch(fonts=[record, record]).fonts
+        self.assertEqual(repeated, [first, first])
+
+    def test_batch_with_no_arrays_is_a_no_op(self) -> None:
+        with Workbook.create_empty() as wb:
+            wb.add_sheet("Sheet1")
+            before = wb.font_count()
+            indices = wb.add_batch()
+            after = wb.font_count()
+        self.assertEqual(indices.fonts, [])
+        self.assertEqual(before, after)
+
+    def test_batch_rejecting_an_xf_leaves_the_workbook_unchanged(self) -> None:
+        with Workbook.create_empty() as wb:
+            wb.add_sheet("Sheet1")
+            before = wb.font_count()
+            with self.assertRaises(FormulonError):
+                wb.add_batch(
+                    fonts=[FontRecord(name="Arial", size=12.0)],
+                    cell_xfs=[
+                        CellXf(
+                            font_index=9999,
+                            fill_index=0,
+                            border_index=0,
+                            num_fmt_id=0,
+                            horizontal_align=0,
+                            vertical_align=0,
+                            wrap_text=False,
+                        )
+                    ],
+                )
+            self.assertEqual(wb.font_count(), before)
 
 
 class MemoryUsageTests(unittest.TestCase):

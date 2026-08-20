@@ -155,6 +155,11 @@ class CalcMode(IntEnum):
     MANUAL = 1
     AUTO_NO_TABLE = 2
 
+class SheetVisibility(IntEnum):
+    VISIBLE = 0
+    HIDDEN = 1
+    VERY_HIDDEN = 2
+
 class LogLevel(IntEnum):
     DEBUG = 0
     INFO = 1
@@ -399,6 +404,7 @@ class SheetView:
     freeze_rows: int
     freeze_cols: int
     tab_hidden: bool
+    visibility: SheetVisibility
     show_grid_lines: bool
     show_row_col_headers: bool
     show_zeros: bool
@@ -766,6 +772,13 @@ class DifferentialFormat:
         protection_xml: str = ...,
     ) -> None: ...
 
+class StyleBatchIndices(NamedTuple):
+    fonts: List[int]
+    fills: List[int]
+    borders: List[int]
+    cell_xfs: List[int]
+    num_fmts: List[int]
+
 class CellStyle:
     name: str
     xf_id: int
@@ -923,6 +936,7 @@ class Workbook:
     # Recalc + calc policy / profile.
     def recalc(self) -> None: ...
     def set_iterative(self, enabled: bool, max_iterations: int, max_change: float) -> None: ...
+    def set_iterative_enabled(self, enabled: bool) -> None: ...
     def get_iterative(self) -> IterativeSettings: ...
     def partial_recalc(
         self,
@@ -1046,6 +1060,7 @@ class Workbook:
     def set_sheet_zoom(self, sheet: int, zoom_scale: int) -> None: ...
     def set_sheet_freeze(self, sheet: int, freeze_rows: int, freeze_cols: int) -> None: ...
     def set_sheet_tab_hidden(self, sheet: int, hidden: bool) -> None: ...
+    def set_sheet_visibility(self, sheet: int, visibility: Union[SheetVisibility, int]) -> None: ...
     def set_sheet_show_grid_lines(self, sheet: int, show: bool) -> None: ...
     def set_sheet_show_row_col_headers(self, sheet: int, show: bool) -> None: ...
     def set_sheet_show_zeros(self, sheet: int, show: bool) -> None: ...
@@ -1177,6 +1192,15 @@ class Workbook:
     def add_num_fmt(self, format_code: str) -> int: ...
     def add_cell_xf(self, record: CellXf) -> int: ...
     def add_cell_style_xf(self, record: CellXf) -> int: ...
+    def add_batch(
+        self,
+        *,
+        fonts: Optional[Sequence[FontRecord]] = ...,
+        fills: Optional[Sequence[FillRecord]] = ...,
+        borders: Optional[Sequence[Dict[str, object]]] = ...,
+        num_fmts: Optional[Sequence[str]] = ...,
+        cell_xfs: Optional[Sequence[CellXf]] = ...,
+    ) -> StyleBatchIndices: ...
     def add_dxf(self, record: DifferentialFormat) -> int: ...
     def set_cell_style(self, name: str, xf_id: int, builtin_id: int = ...) -> None: ...
     def get_cell_style(self, index: int) -> CellStyle: ...

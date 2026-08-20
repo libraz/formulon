@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,7 @@
 #include "gtest/gtest.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/error.h"
 #include "workbook.h"
 
 namespace {
@@ -30,10 +32,25 @@ static_assert(sizeof(fm_row_layout_t) == 32U);
 // the end of its own storage rather than getting a diagnosable error. Pin the
 // size here: changing the struct must break the build and be acknowledged,
 // not merely be reflected in the bindings afterwards.
-static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4U ? 40U : 48U));
+static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4U ? 44U : 48U));
 static_assert(offsetof(fm_sheet_view_t, tab_hidden) == 12U);
-static_assert(offsetof(fm_sheet_view_t, tab_selected) == 32U);
-static_assert(offsetof(fm_sheet_view_t, view_mode) == (sizeof(void*) == 4U ? 36U : 40U));
+static_assert(offsetof(fm_sheet_view_t, visibility) == 16U);
+static_assert(offsetof(fm_sheet_view_t, tab_selected) == 36U);
+static_assert(offsetof(fm_sheet_view_t, view_mode) == 40U);
+
+/// The status every documented rejection on this surface returns. Pinning
+/// the value rather than "non-zero" is what makes the assertions below
+/// distinguish a refused argument from an unrelated failure that happens to
+/// be non-zero too.
+constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+
+constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+constexpr double kInfinity = std::numeric_limits<double>::infinity();
+
+/// Last addressable column / row of Excel's grid. Spelled from the model
+/// constants so widening the grid widens these with it.
+constexpr std::uint32_t kLastColumn = formulon::Sheet::kMaxCols - 1U;
+constexpr std::uint32_t kLastRow = formulon::Sheet::kMaxRows - 1U;
 
 struct WorkbookGuard {
   fm_workbook_t* handle = nullptr;
@@ -63,6 +80,7 @@ TEST(FormulonCApiSheetLayout, GetViewDefaults) {
   EXPECT_EQ(v.freeze_rows, 0U);
   EXPECT_EQ(v.freeze_cols, 0U);
   EXPECT_EQ(v.tab_hidden, 0);
+  EXPECT_EQ(v.visibility, FM_SHEET_VISIBLE);
   EXPECT_EQ(v.show_grid_lines, 1);
   EXPECT_EQ(v.show_row_col_headers, 1);
   EXPECT_EQ(v.show_zeros, 1);
@@ -84,6 +102,65 @@ TEST(FormulonCApiSheetLayout, SetViewSetters) {
   EXPECT_EQ(v.freeze_rows, 4U);
   EXPECT_EQ(v.freeze_cols, 2U);
   EXPECT_EQ(v.tab_hidden, 1);
+  EXPECT_EQ(v.visibility, FM_SHEET_HIDDEN);
+}
+
+TEST(FormulonCApiSheetLayout, SetVisibilityStatesAllThreeTabStates) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_sheet_view_t v{};
+
+  // The state the bool setter cannot reach in either direction.
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.visibility, FM_SHEET_VERY_HIDDEN);
+  // The two-state view stays consistent: a very-hidden sheet is hidden to
+  // a caller that reads only the bool, never visible.
+  EXPECT_EQ(v.tab_hidden, 1);
+
+  // Demotion to plain hidden is the other direction the bool cannot state.
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_HIDDEN), 0);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.visibility, FM_SHEET_HIDDEN);
+  EXPECT_EQ(v.tab_hidden, 1);
+
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBLE), 0);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.visibility, FM_SHEET_VISIBLE);
+  EXPECT_EQ(v.tab_hidden, 0);
+}
+
+TEST(FormulonCApiSheetLayout, SetTabHiddenDoesNotDemoteVeryHidden) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0);
+
+  // "Hidden" says nothing a very-hidden sheet does not already satisfy, so
+  // it must not weaken the author's stronger choice.
+  ASSERT_EQ(fm_sheet_set_tab_hidden(wb.handle, 0, 1), 0);
+  fm_sheet_view_t v{};
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.visibility, FM_SHEET_VERY_HIDDEN);
+
+  // Showing it, however, has to clear both states.
+  ASSERT_EQ(fm_sheet_set_tab_hidden(wb.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.visibility, FM_SHEET_VISIBLE);
+  EXPECT_EQ(v.tab_hidden, 0);
+}
+
+TEST(FormulonCApiSheetLayout, SetVisibilityRejectsUnknownStateAndLeavesTheSheet) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0);
+
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, 3), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, -1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 99U, FM_SHEET_HIDDEN), kInvalidArgument);
+
+  fm_sheet_view_t v{};
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.visibility, FM_SHEET_VERY_HIDDEN);
 }
 
 TEST(FormulonCApiSheetLayout, SetViewDisplayFlagSetters) {
@@ -430,17 +507,183 @@ TEST(FormulonCApiSheetLayout, InvalidSheetIndexRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   fm_sheet_view_t v{};
-  EXPECT_NE(fm_sheet_get_view(wb.handle, 99U, &v), 0);
-  EXPECT_NE(fm_sheet_set_zoom(wb.handle, 99U, 100U), 0);
-  EXPECT_NE(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), 0);
-  EXPECT_NE(fm_sheet_set_tab_hidden(wb.handle, 99U, 1), 0);
-  EXPECT_NE(fm_sheet_set_column_width(wb.handle, 99U, 0U, 1U, 10.0), 0);
+  EXPECT_EQ(fm_sheet_get_view(wb.handle, 99U, &v), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_zoom(wb.handle, 99U, 100U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_tab_hidden(wb.handle, 99U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 99U, 0U, 1U, 10.0), kInvalidArgument);
+}
+
+// The row setters take a bare row index rather than a span, so they reach
+// `check_sheet_index` on a path of their own; a sheet-index guard added to
+// the column setters alone would leave these three writing into whatever
+// `sheet(99)` resolves to.
+TEST(FormulonCApiSheetLayout, RowSettersRejectInvalidSheetIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 99U, 0U, 20.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_hidden(wb.handle, 99U, 0U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 99U, 0U, 2U), kInvalidArgument);
+
+  // Sheet 0 exists and must not have absorbed any of the three.
+  size_t count = 1U;
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
 }
 
 TEST(FormulonCApiSheetLayout, ColumnSetterRejectsInverseSpan) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  EXPECT_NE(fm_sheet_set_column_width(wb.handle, 0, 5U, 3U, 10.0), 0);
-  EXPECT_NE(fm_sheet_set_column_hidden(wb.handle, 0, 5U, 3U, 1), 0);
-  EXPECT_NE(fm_sheet_set_column_outline(wb.handle, 0, 5U, 3U, 2U), 0);
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 0, 5U, 3U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, 5U, 3U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 5U, 3U, 2U), kInvalidArgument);
+}
+
+// A refused call has to leave the sheet exactly as it was. Returning the
+// error after the overlay had already run would report a rejection the model
+// does not reflect, which is worse than either outcome on its own: the
+// caller believes nothing happened and the file says otherwise.
+TEST(FormulonCApiSheetLayout, RejectedColumnSpanLeavesTheLayoutUntouched) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 2U, 14.0), 0);
+
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 0, 5U, 3U, 99.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, 5U, 3U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 5U, 3U, 7U), kInvalidArgument);
+
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_column_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 1U) << "a refused span still created or split an entry";
+  fm_column_layout_t only{};
+  ASSERT_EQ(fm_sheet_get_column(wb.handle, 0, 0U, &only), 0);
+  EXPECT_EQ(only.first, 1U);
+  EXPECT_EQ(only.last, 2U);
+  EXPECT_DOUBLE_EQ(only.width, 14.0);
+  EXPECT_EQ(only.hidden, 0);
+  EXPECT_EQ(only.outline_level, 0U);
+}
+
+// A width the number writer cannot spell reaches `<col width="...">` as an
+// empty attribute value, which is not a lexical `xsd:double`, so Excel
+// repairs the worksheet instead of reading a wrong width. A negative width
+// is outside the attribute's own domain. Zero stays valid - it is the width
+// of a zero-width column, and `ColumnWidthAndOutline` above relies on it.
+TEST(FormulonCApiSheetLayout, ColumnWidthRejectsNonFiniteOrNegativeWidth) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 2U, 14.0), 0);
+
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 2U, kNaN), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 2U, kInfinity), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 2U, -kInfinity), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 2U, -1.0), kInvalidArgument);
+
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_column_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 1U) << "a refused width still created or split an entry";
+  fm_column_layout_t only{};
+  ASSERT_EQ(fm_sheet_get_column(wb.handle, 0, 0U, &only), 0);
+  EXPECT_EQ(only.first, 1U);
+  EXPECT_EQ(only.last, 2U);
+  EXPECT_DOUBLE_EQ(only.width, 14.0);
+}
+
+// Same contract for `<row ht="...">`.
+TEST(FormulonCApiSheetLayout, RowHeightRejectsNonFiniteOrNegativeHeight) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 22.0), 0);
+
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, kNaN), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, kInfinity), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, -kInfinity), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, -1.0), kInvalidArgument);
+  // A refused height must not have created a second override either.
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 7U, kNaN), kInvalidArgument);
+
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 1U) << "a refused height still created an override";
+  fm_row_layout_t only{};
+  ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, 0U, &only), 0);
+  EXPECT_EQ(only.row, 3U);
+  EXPECT_DOUBLE_EQ(only.height, 22.0);
+
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 0.0), 0);
+}
+
+// A span reaching past column XFD is written as a `<col min max>` pair
+// outside the grid, which Excel reads as a damaged worksheet. The span is
+// refused rather than clamped: clamping would silently move the override
+// onto the last real column, which is not the sheet the caller described.
+TEST(FormulonCApiSheetLayout, ColumnSettersRejectSpanPastTheGrid) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 2U, 14.0), 0);
+
+  // `last` past the grid with `first` inside it, and both past it.
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 0, kLastColumn, kLastColumn + 1U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, kLastColumn, kLastColumn + 1U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_outline(wb.handle, 0, kLastColumn, kLastColumn + 1U, 2U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 0, kLastColumn + 1U, kLastColumn + 5U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, kLastColumn + 1U, kLastColumn + 5U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_outline(wb.handle, 0, kLastColumn + 1U, kLastColumn + 5U, 2U), kInvalidArgument);
+
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_column_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 1U) << "a refused span still created or split an entry";
+  fm_column_layout_t only{};
+  ASSERT_EQ(fm_sheet_get_column(wb.handle, 0, 0U, &only), 0);
+  EXPECT_EQ(only.first, 1U);
+  EXPECT_EQ(only.last, 2U);
+  EXPECT_DOUBLE_EQ(only.width, 14.0);
+}
+
+// Same contract for `<row r="...">`.
+TEST(FormulonCApiSheetLayout, RowSettersRejectRowPastTheGrid) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 22.0), 0);
+
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, kLastRow + 1U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, kLastRow + 1U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 0, kLastRow + 1U, 2U), kInvalidArgument);
+
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 1U) << "a refused row index still created an override";
+  fm_row_layout_t only{};
+  ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, 0U, &only), 0);
+  EXPECT_EQ(only.row, 3U);
+  EXPECT_DOUBLE_EQ(only.height, 22.0);
+}
+
+// The grid bound is inclusive of its last coordinate; a check written with
+// the wrong comparison would refuse the one column and row Excel does
+// address, and no other test on this surface reaches them.
+TEST(FormulonCApiSheetLayout, LastGridCoordinateIsStillAccepted) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, kLastColumn, kLastColumn, 11.0), 0);
+  ASSERT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, kLastColumn, kLastColumn, 1), 0);
+  ASSERT_EQ(fm_sheet_set_column_outline(wb.handle, 0, kLastColumn, kLastColumn, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, kLastRow, 33.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, kLastRow, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, kLastRow, 2U), 0);
+
+  fm_column_layout_t column{};
+  ASSERT_EQ(fm_sheet_get_column(wb.handle, 0, 0U, &column), 0);
+  EXPECT_EQ(column.first, kLastColumn);
+  EXPECT_EQ(column.last, kLastColumn);
+  EXPECT_DOUBLE_EQ(column.width, 11.0);
+  EXPECT_EQ(column.hidden, 1);
+  EXPECT_EQ(column.outline_level, 2U);
+
+  fm_row_layout_t row{};
+  ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, 0U, &row), 0);
+  EXPECT_EQ(row.row, kLastRow);
+  EXPECT_DOUBLE_EQ(row.height, 33.0);
+  EXPECT_EQ(row.hidden, 1);
+  EXPECT_EQ(row.outline_level, 2U);
 }

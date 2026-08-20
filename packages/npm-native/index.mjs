@@ -200,6 +200,9 @@ export const WorkbookFormat = Object.freeze({
 /** `fm_calc_mode_t` ordinals (mirror of `formulon::io::CalcMode`). */
 export const CalcMode = Object.freeze({ Auto: 0, Manual: 1, AutoNoTable: 2 });
 
+/** `fm_sheet_visibility_t` ordinals (mirror of OOXML `<sheet state>`). */
+export const SheetVisibility = Object.freeze({ Visible: 0, Hidden: 1, VeryHidden: 2 });
+
 /** External-link kinds (mirror of `formulon::io::ExternalLinkRecord::Kind`). */
 export const ExternalLinkKind = Object.freeze({ Unknown: 0, ExternalBook: 1, Ole: 2, Dde: 3 });
 
@@ -254,6 +257,7 @@ export default {
   PivotReportLayout,
   LogLevel,
   CalcMode,
+  SheetVisibility,
   ExternalLinkKind,
   ErrorCode,
   WorkbookFormat,
