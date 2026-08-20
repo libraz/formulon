@@ -2,11 +2,11 @@
   "suite": "lazy_forms",
   "description": "Representative probes for real lazy forms that are not unavailable stubs. Full workbook-backed coverage lives in unit/integration tests; this suite keeps the oracle catalog from treating their existence as part of the external-stub bucket.",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-20T15:54:34Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -27,6 +27,20 @@
       "formula": "=PHONETIC(\"テスト\")",
       "setup": {},
       "skipped": "PHONETIC is a real lazy form, but annotated rPh workbook metadata needs a dedicated oracle fixture; unit tests cover literal and workbook-backed behavior meanwhile."
+    },
+    {
+      "id": "lazy_phonetic_unannotated_cell",
+      "formula": "=PHONETIC(A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "テスト"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "テスト"
+      }
     }
   ]
 }

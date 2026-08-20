@@ -112,8 +112,11 @@ entries:
     first_noted: 2026-08-05
     last_verified_excel_version: "16.111.2"
 
-  # Mac xlwings reads ARRAYTOTEXT error results back as blank cells, so the
-  # primary golden cannot distinguish #N/A / #VALUE! from a real blank.
+  # Excel refuses these five spellings at entry, so no reading exists to
+  # compare against. An array constant may hold an error *literal* but not a
+  # function call, which rules out `{1,NA(),3}`, and the signature takes one
+  # or two arguments. The same error contract is captured by the sibling
+  # cases that spell it in a form Excel accepts.
   - ids:
       - arraytotext_error_in_array_default
       - arraytotext_error_in_array_strict
@@ -121,11 +124,11 @@ entries:
       - arraytotext_arity_zero
       - arraytotext_arity_three
     mode: skip-oracle
-    cause: harness-cannot-capture
-    reason: "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
+    cause: excel-no-value
+    reason: "Excel discards these formulas at entry rather than evaluating them: `NA()` inside an array constant is not accepted (an error literal such as `{1,#N/A,3}` is), and ARRAYTOTEXT takes one or two arguments. Observed by entering each and reading the formula back empty. The error contract they were written for is captured by arraytotext_error_literal_in_array_default / _strict, arraytotext_error_cells_default / _strict and arraytotext_only_error_cells_default, which Excel does accept."
     prefer: formulon
     first_noted: 2026-08-05
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
   # -- ad-hoc evaluate-formula scalar reduction (intentional API shape) ----
   # `fm_workbook_evaluate_formula` (and the WASM / Node
   # `evaluateFormulaText`) return a single scalar. When the evaluated
@@ -201,19 +204,19 @@ entries:
     tolerance: { abs: 1e-6, rel: 1e-7 }
     prefer: formulon
     first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
   - id: besseli_text_x_coerces
     reason: "Same BESSELI accuracy gap as besseli_one_zero (both compute I_0(1)). Per-case tolerance widened in engineering_special.yaml."
     tolerance: { abs: 1e-6, rel: 1e-7 }
     prefer: formulon
     first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
   - id: besseli_large_x_growth
     reason: "I_0(20): Excel's A&S 9.8.2 large-x polynomial has |epsilon| < 1.9e-7; observed diff is ~7.4e-8 relative (~3 absolute on a 4.4e7 magnitude). Per-case tolerance widened in engineering_special.yaml."
     tolerance: { abs: 100.0, rel: 1e-6 }
     prefer: formulon
     first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
 
   # -- BESSELY: Formulon's POSIX delegation more accurate than Excel ------
   # BESSELY(x, n) goes through POSIX `::yn`, which on macOS / glibc / musl
@@ -226,7 +229,7 @@ entries:
     tolerance: { abs: 1e-6, rel: 1e-7 }
     prefer: formulon
     first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
 
   # -- Formulas Excel refuses to accept into a cell ------------------------
   # These three share one mechanism, established by writing the formula
@@ -265,27 +268,13 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112"
 
-  # -- No-infrastructure stubs --------------------------------------------
-  # These functions return a deterministic Excel-visible surface in lieu
-  # of a Formulon subsystem that is not yet built out. The stubs live in
-  # `src/eval/builtins/service_stubs.cpp` next to the host-service stubs
-  # (IMAGE / RTD / TRANSLATE / DETECTLANGUAGE / COPILOT). When the
-  # underlying subsystem lands, the corresponding stub is replaced with
-  # a real implementation and the entry below is removed.
-  - id: phonetic_returns_input_text
-    cause: harness-cannot-capture
-    mode: skip-oracle
-    scope: deferred-feature
-    evidence:
-      [
-        tests/integration/ooxml_phonetic_roundtrip_test.cpp,
-        tests/unit/eval/phonetic_lazy_test.cpp,
-        tests/unit/io/sst_reader_test.cpp,
-      ]
-    reason: "Reclassified 2026-08-18: the reason this entry carried (rPh annotations not read into the Value model) stopped being true without the entry being revisited. The reader does surface them -- sst_reader.cpp fills a parallel phonetic view per SST entry, sax_xml_reader.cpp does the same for inline strings, both land in Cell::phonetic_text, phonetic_lazy.cpp reads it, and the writer emits it back -- and PhoneticLazy.AnnotatedTextCellReturnsKana pins an annotated cell returning its kana rather than its surface text. What is missing is an oracle fixture: capturing this against real Excel needs a workbook whose annotations were produced by typing through the IME, which the case harness cannot author. Unannotated text passing through unchanged is the same on both sides."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+  # Stale `phonetic_returns_input_text` removed: PHONETIC now substitutes
+  # each annotated span and passes the rest of the string through, so a
+  # partially annotated `東京都` reads `トウキョウ都` on both engines. The
+  # `<rPh>` sb/eb offsets are carried from the readers onto the cell and
+  # back out through the writer instead of being flattened into one kana
+  # string; `tests/integration/ooxml_phonetic_roundtrip_test.cpp` pins the
+  # Excel-observed package end to end.
   # Stale `getpivotdata_always_ref` removed 2026-05-02: GETPIVOTDATA now
   # has a working pivot-anchor lookup path, and the OOXML reader wires
   # pivot caches + pivot tables onto the workbook so anchors over real
@@ -326,38 +315,36 @@ entries:
   # Gap 3: REGEX* family with catastrophic-backtracking inputs. PCRE2
   # bounds runtime via match_limit (1_000_000) and depth_limit (10_000),
   # surfacing FALSE (REGEXTEST) or #CALC! (REGEXEXTRACT / REGEXREPLACE)
-  # when a pattern blows past the budget. Mac Excel applies no such
-  # bound and hangs indefinitely on the same inputs, which xlwings
-  # translates into a generation-time timeout. The Formulon outcomes
-  # are intentional safety-vs-fidelity choices and are exempt from
-  # oracle verification.
+  # when a pattern blows past the budget. Excel bounds the same inputs and
+  # reports #VALUE! for all three, so the divergence is which surface a
+  # bounded run reports, not whether the run terminates.
   - id: regex_match_limit_regextest
-    cause: excel-no-value
+    cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
     evidence: [tests/unit/eval/builtins_regex_test.cpp]
-    reason: "REGEXTEST with catastrophic backtracking pattern: Mac Excel hangs indefinitely; Formulon returns FALSE after pcre2_match_limit=1000000 iterations."
+    reason: "`=REGEXTEST(REPT(\"a\",30)&\"!\",\"(a+)+$\")`: Excel returns #VALUE! (its own ERROR.TYPE on the cell reports 3, and the calculation returns at once rather than blocking), Formulon returns FALSE once pcre2_match_limit=1000000 is reached."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
   - id: regex_match_limit_regexextract
-    cause: excel-no-value
+    cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
     evidence: [tests/unit/eval/builtins_regex_test.cpp]
-    reason: "REGEXEXTRACT with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! after the pcre2 match limit is exceeded."
+    reason: "`=REGEXEXTRACT(REPT(\"a\",30)&\"!\",\"(a+)+$\")`: Excel returns #VALUE! promptly, Formulon returns #CALC! once the pcre2 match limit is exceeded."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
   - id: regex_match_limit_regexreplace
-    cause: excel-no-value
+    cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
     evidence: [tests/unit/eval/builtins_regex_test.cpp]
-    reason: "REGEXREPLACE with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! after the pcre2 match limit is exceeded."
+    reason: "`=REGEXREPLACE(REPT(\"a\",30)&\"!\",\"(a+)+$\",\"x\")`: Excel returns #VALUE! promptly, Formulon returns #CALC! once the pcre2 match limit is exceeded."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
 
   # FORECAST.ETS Holt-Winters fit is non-convex; Mac Excel converges to
   # (alpha,beta,gamma) close to (1,1,1) on perfectly-periodic data and
@@ -369,13 +356,13 @@ entries:
     reason: "Holt-Winters Nelder-Mead converges to a different local optimum than Mac Excel on perfectly-periodic data; ~4.3e-4 relative drift on the point forecast."
     prefer: mac-excel-365
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     tolerance: { abs: 0.01, rel: 0.001 }
   - id: forecast_ets_auto_detect_seasonality
     reason: "Same Holt-Winters convergence drift as forecast_ets_manual_seasonality_4 but with auto-detected period (ACF picks the same period 4)."
     prefer: mac-excel-365
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     tolerance: { abs: 0.01, rel: 0.001 }
 
   # FORECAST.ETS.CONFINT / .STAT — joint (alpha, beta, gamma, L_0, B_0,
@@ -397,7 +384,7 @@ entries:
     reason: "On cyclic period-4 data where joint optimisation drives RMSE -> 0, the alpha value is non-unique: any (alpha, beta, gamma, initial-state) combination with the same forecast manifold yields the same SSE. Mac selects alpha ~0.751 via its bias / regularisation; Formulon's bounded Nelder-Mead reaches RMSE = 0 at alpha ~0.09. The fit quality (RMSE / MASE) matches Mac; the smoothing weight is a non-identifiable parameter on this fixture."
     prefer: mac-excel-365
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
 
   # Stale `forecast_ets_seasonality_linear_no_period` removed: the
@@ -415,7 +402,7 @@ entries:
     reason: "Mac Excel 365 16.109 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements per MS docs and validates via unit tests."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.109"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
 
   # Stale MUNIT spill-navigation entries removed 2026-05-15:
@@ -449,14 +436,14 @@ entries:
     reason: "Perfect-fit LINEST stats=TRUE drives the residual sum to exactly 0, so the F statistic is infinite in the limit. Both engines report a huge finite F — Formulon by flooring the residual at the squared rounding error the data's scale can still resolve, Mac Excel 16.109 by whatever residual its own arithmetic happens to leave — and the two magnitudes differ by a numerically unstable factor. Same class as logest_univariate_stats_true. Other stats cells are covered by unit tests."
     prefer: mac-excel-365
     first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: logest_univariate_stats_true
     cause: non-identifiable
     reason: "Perfect-fit LOGEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 and Formulon both return huge finite F statistics but differ by a numerically unstable factor. Other stats cells are covered by unit tests."
     prefer: mac-excel-365
     first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: frequency_empty_bins
     cause: excel-no-value
@@ -476,35 +463,35 @@ entries:
     reason: "NOW() depends on wall-clock time; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: volatile_today_clock
     cause: excel-no-value
     reason: "TODAY() depends on wall-clock date; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: volatile_rand_uniform
     cause: excel-no-value
     reason: "RAND() draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: volatile_randbetween_int
     cause: excel-no-value
     reason: "RANDBETWEEN draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: volatile_randarray_2x2
     cause: excel-no-value
     reason: "RANDARRAY draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
 
   # Unavailable host-service / connection stubs. These functions are
@@ -518,56 +505,56 @@ entries:
     reason: "IMAGE fetches a network image; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an embedded image client."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_py
     cause: accepted-divergence
     reason: "PY runs Python in the cloud; Formulon does not embed a Python runtime and stubs to #NAME!. Oracle parity requires the Microsoft 365 PY service."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_rtd
     cause: accepted-divergence
     reason: "RTD reads from a real-time data COM server; Formulon has no provider runtime and stubs to #N/A. Oracle parity requires a registered COM RTD server."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_stockhistory
     cause: accepted-divergence
     reason: "STOCKHISTORY pulls live market data; Formulon does no network I/O. Oracle parity requires Microsoft 365 stock data subscription."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_webservice
     cause: accepted-divergence
     reason: "WEBSERVICE makes an HTTP request; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an HTTP client."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_copilot
     cause: accepted-divergence
     reason: "COPILOT dispatches to an LLM backend; Formulon does not embed one and stubs to #NAME!. Oracle parity requires the Microsoft 365 Copilot service."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_detectlanguage
     cause: accepted-divergence
     reason: "DETECTLANGUAGE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_translate
     cause: accepted-divergence
     reason: "TRANSLATE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   # Mac Excel does not have FILTERXML at all: the function name does not
   # resolve, which is a platform fact and not a property of how the oracle
@@ -603,56 +590,56 @@ entries:
     reason: "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubekpimember
     cause: accepted-divergence
     reason: "CUBEKPIMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubemember
     cause: accepted-divergence
     reason: "CUBEMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubememberproperty
     cause: accepted-divergence
     reason: "CUBEMEMBERPROPERTY requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cuberankedmember
     cause: accepted-divergence
     reason: "CUBERANKEDMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubeset
     cause: accepted-divergence
     reason: "CUBESET requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubesetcount
     cause: accepted-divergence
     reason: "CUBESETCOUNT requires a live cube set; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubevalue
     cause: accepted-divergence
     reason: "CUBEVALUE requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   # Stale `external_stub_getpivotdata` removed 2026-05-02: the case
   # `=GETPIVOTDATA("amount", A1)` evaluates to #REF! on both engines
@@ -660,27 +647,23 @@ entries:
   # a divergence.
   #
   # Stale `external_stub_phonetic` removed from external_stubs.yaml:
-  # PHONETIC is a real lazy form. The remaining divergence records the
-  # rPh metadata coverage gap, not an unavailable function stub.
+  # PHONETIC is a real lazy form, not an unavailable function stub. The
+  # entry survives because the case is a string literal, which Excel
+  # refuses at entry.
   - id: external_stub_phonetic
-    cause: harness-cannot-capture
-    scope: deferred-feature
-    evidence:
-      [
-        tests/integration/ooxml_phonetic_roundtrip_test.cpp,
-        tests/unit/eval/phonetic_lazy_test.cpp,
-      ]
-    reason: "As phonetic_returns_input_text, which carries the detail: the rPh pipeline is implemented end to end, and what is missing is an IME-authored fixture to capture against. Unannotated text-cell input behaves identically on both sides."
-    prefer: mac-excel-365
+    cause: excel-no-value
+    case_alias: lazy_phonetic_literal_text
+    reason: "As lazy_phonetic_literal_text: the case is `=PHONETIC(\"テスト\")` and Excel's PHONETIC takes a reference, so the literal is refused at entry and Excel stores no formula to evaluate. Annotated-cell behaviour agrees on both engines and is pinned by tests/integration/ooxml_phonetic_roundtrip_test.cpp."
+    prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: lazy_phonetic_literal_text
-    cause: harness-cannot-capture
-    reason: "PHONETIC is a real lazy form, but annotated rPh workbook metadata needs a dedicated oracle fixture; unit tests cover literal and workbook-backed behavior meanwhile."
+    cause: excel-no-value
+    reason: "Excel's PHONETIC takes a reference, so a string literal is refused at entry and leaves no reading. `=PHONETIC(A1)` over an unannotated text cell returns the text on both engines and is captured as lazy_phonetic_unannotated_cell; the annotated and partially annotated cases are pinned against a hand-built rPh package Excel was asked to open."
     prefer: mac-excel-365
     first_noted: 2026-05-15
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
     mode: skip-oracle
 
   # -- SEQUENCE / TRANSPOSE / SpillRef -------------------------------------
@@ -693,32 +676,43 @@ entries:
   # spills before running the formula under test, so `A1#` and
   # `_xlfn.ANCHORARRAY(A1)` over setup formulas are live oracle cases.
 
+  # `_xlfn.ANCHORARRAY` is the spelling a file stores, not one Excel accepts
+  # from a formula setter: entering it leaves the cell empty. The `ref#`
+  # spelling a user types is retained and evaluated, so the semantics these
+  # cases were written for are pinned by their `_hash_` siblings instead.
   - id: anchorarray_static_value_anchor
-    cause: harness-cannot-capture
+    cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac probe via xlwings reads blank for `=_xlfn.ANCHORARRAY(B1)` typed via the formula2 API even when B1 holds a static value. This is a harness probe artefact (Mac may not fully evaluate the explicit `_xlfn.` form when injected through xlwings) rather than the documented `ref#` semantics. Formulon implements the documented #REF! return for non-spill anchors, covered by spill_ref_eval_test.cpp."
+    reason: "Excel discards `=_xlfn.ANCHORARRAY(B1)` at entry, so there is no reading to compare. Entering `=B1#` on the same sheet returns #REF!, matching Formulon; that is captured as anchorarray_hash_static_value_anchor."
     prefer: mac-excel-365
     first_noted: 2026-05-02
-    last_verified_excel_version: "16.108.2"
+    last_verified_excel_version: "16.112.1"
 
   - id: anchorarray_blank_anchor
-    cause: harness-cannot-capture
+    cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac probe via xlwings reads blank for `=_xlfn.ANCHORARRAY(E1)` typed via formula2 even when E1 is genuinely blank. Same probe artefact as anchorarray_static_value_anchor — Formulon's #REF! is the documented semantics for a non-spill anchor."
+    reason: "Excel discards `=_xlfn.ANCHORARRAY(E1)` at entry. The `=E1#` spelling returns #REF! for a genuinely blank anchor, captured as anchorarray_hash_blank_anchor."
     prefer: mac-excel-365
     first_noted: 2026-05-02
-    last_verified_excel_version: "16.108.2"
+    last_verified_excel_version: "16.112.1"
 
   - ids:
       - anchorarray_resolves_sequence_sum
       - anchorarray_resolves_sequence_rows
       - anchorarray_offset_resolved_anchor
     mode: skip-oracle
-    cause: harness-cannot-capture
-    reason: "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
+    cause: excel-no-value
+    reason: "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor."
     prefer: formulon
     first_noted: 2026-08-05
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
+
+  # Stale `anchorarray_hash_offset_resolved_anchor` removed: the postfix `#`
+  # now takes a computed anchor. The spill-anchor node carries either the
+  # reference that was written out or the expression that names one, and the
+  # tokenizer reads `#` as the operator after anything that can end a
+  # reference. `anchorarray_hash_indirect_anchor` and its siblings cover the
+  # shapes Excel accepts, including the two that resolve and still fail.
 
   # -- ENCODEURL: not available in Mac Excel 365 ja-JP ----------------------
   # Mac Excel 365 ja-JP returns #NAME? for every ENCODEURL invocation:
@@ -792,35 +786,35 @@ entries:
     reason: "INFO(\"release\") returns the host application's version string; intrinsically environment-bound. Mac Excel 365 returns its build number, Formulon returns the engine version."
     prefer: formulon
     first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
   - id: info_osversion
     cause: excel-no-value
     mode: skip-oracle
     reason: "INFO(\"osversion\") returns the host OS version string; intrinsically environment-bound."
     prefer: formulon
     first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
   - id: info_system
     cause: excel-no-value
     mode: skip-oracle
     reason: "INFO(\"system\") returns the host OS family (\"mac\" / \"pcdos\" on Excel); intrinsically environment-bound."
     prefer: formulon
     first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
   - id: info_numfile
     cause: excel-no-value
     mode: skip-oracle
     reason: "INFO(\"numfile\") returns the count of currently open workbooks; varies with host state."
     prefer: formulon
     first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
   - id: info_recalc
     cause: excel-no-value
     mode: skip-oracle
     reason: "INFO(\"recalc\") returns the host application's recalculation mode (\"Automatic\" / \"Manual\"); Formulon has no notion of recalc mode."
     prefer: formulon
     first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112.1"
 
   # -- Print PageBreakPreview low-scale auto-break quirk ------------------
   # Round-3 Windows COM capture (PageBreakPreview view, ActiveWindow.Zoom
@@ -956,7 +950,7 @@ entries:
     reason: "Binary search (search_mode 2/-2) is only defined on sorted input. Formulon treats incomparable cells as greater-than-target to keep the upper bound monotone, so on unsorted/dirty data a near match can be stepped over. Excel's binary search is likewise undefined on unsorted data and lands on a different cell; the divergence only occurs on contract-violating input."
     prefer: formulon
     first_noted: 2026-06-26
-    last_verified_excel_version: "16.109"
+    last_verified_excel_version: "16.112.1"
 
   # -- Page-field header block --------------------------------------------
   # Retired the pair of `engine-gap` entries that claimed GETPIVOTDATA
@@ -1042,7 +1036,7 @@ entries:
     mode: skip-oracle
     scope: fixture
     evidence: [tests/unit/io/xlsb_pivot_fixture_test.cpp]
-    reason: "Pivot tables loaded from .xlsb are not decoded into the evaluated pivot model (the XLSB reader wires no pivot caches / tables onto the workbook), so GETPIVOTDATA over an XLSB-sourced pivot returns #REF! where Excel returns the aggregated value. Measured on tests/fixtures/excel/xlsb_pivot_base.xlsb, an Excel-authored workbook whose Sheet1 carries a Region x Qtr pivot over A1:C7 and three probes Excel evaluated before saving: GETPIVOTDATA(\"Amt\",$E$1,\"Region\",\"North\") = 15, GETPIVOTDATA(\"Amt\",$E$1) = 56, and GETPIVOTDATA(\"Amt\",$E$1,\"Region\",\"North\",\"Qtr\",\"Q1\") = 10. The package holds pivotCacheDefinition1.bin, pivotCacheRecords1.bin and pivotTable1.bin; none is decoded, and a recalc replaces all three cached answers with #REF!. Deferred pending XLSB pivot record decoding."
+    reason: "Pivot tables loaded from .xlsb are not decoded into the evaluated pivot model (the XLSB reader wires no pivot caches / tables onto the workbook), so GETPIVOTDATA over an XLSB-sourced pivot returns #REF! where Excel returns the aggregated value. Measured on tests/fixtures/excel/xlsb_pivot_base.xlsb, an Excel-authored workbook whose Sheet1 carries a Region x Qtr pivot over A1:C7 and three probes Excel evaluated before saving: GETPIVOTDATA(\"Amt\",$E$1,\"Region\",\"North\") = 15, GETPIVOTDATA(\"Amt\",$E$1) = 56, and GETPIVOTDATA(\"Amt\",$E$1,\"Region\",\"North\",\"Qtr\",\"Q1\") = 10. The package holds pivotCacheDefinition1.bin, pivotCacheRecords1.bin and pivotTable1.bin; none is decoded, and a recalc replaces all three cached answers with #REF!. The binary framing is not the obstacle -- the cache definition carries one field record per cache field with its name as a trailing XLWideString, and each record row packs the fields in schema order, so this fixture's three fields decode to (Region index, Qtr index, Amt double) and sum back to the answers above. What is missing is coverage of the value types the fixture does not use: a field holding dates, booleans, blanks or errors, a numeric field with shared items, and a pivot with more than one data field all take encodings this package never exercises, and a decoder guessed for them would return wrong numbers rather than an error. Mac Excel has no reachable pivot-table automation to author more fixtures with, so widening the corpus needs the Windows COM host."
     prefer: mac-excel-365
     first_noted: 2026-07-02
     last_verified_excel_version: "16.112"
@@ -1058,7 +1052,7 @@ entries:
     mode: skip-oracle
     scope: deferred-feature
     evidence: [tests/unit/io/xlsb/ptg_test.cpp, tests/unit/io/xlsb/writer_test.cpp]
-    reason: "XLSB PtgNameX external-workbook defined names require BrtSupBookSrc and BrtSupNameStart table decoding, which is not implemented. The reader keeps the cached cell value and reports the unsupported Ptg instead of fabricating an incorrect internal defined-name reference."
+    reason: "XLSB PtgNameX external-workbook defined names require BrtSupBookSrc and BrtSupNameStart table decoding, which is not implemented. The reader keeps the cached cell value and reports the unsupported Ptg instead of fabricating an incorrect internal defined-name reference. Decoding those tables alone would not resolve the name: the OOXML path does not read an external link's body either, so `xl/externalLinks/externalLink*.xml` -- which is where a remote workbook's defined names and cached cell values live -- round-trips verbatim through the passthrough parts on both formats. A resolvable external name is a cross-workbook feature that both readers would gain together, not an XLSB record gap."
     prefer: mac-excel-365
     first_noted: 2026-08-05
     last_verified_excel_version: "16.111.2"
@@ -1073,16 +1067,19 @@ entries:
   # so `=A1+A2+...+A150` (150 terms, ~640 characters) evaluates to a number
   # in Excel but is rejected by Formulon with `NestedFormulaTooDeep`. The
   # cap stays shared on purpose: `ast_format::FormatNode`, `ast_shift`, and
-  # the XLSB `ptg_reader` decode-time check all recurse over the same tree
-  # and must not overflow the native stack on adversarial input, so raising
-  # the constant alone would reopen that stack-safety hole for genuinely
-  # pathological (deeply nested, not merely long) input.
+  # the XLSB `ptg_reader` decode-time check all recurse over the same tree,
+  # so raising the constant alone would reopen the stack-safety hole for
+  # genuinely pathological (deeply nested, not merely long) input. The stack
+  # at risk is the native thread stack on native builds and the WASM shadow
+  # stack in the shipped binary; the latter is a link-time constant sized
+  # from the measured cost of this cap (see `cmake/FormulonWasm.cmake`), so
+  # raising the cap means re-measuring and re-pinning that flag too.
   - id: left_associative_chain_default_depth_cap
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
     evidence: [tests/unit/parser/parser_error_test.cpp]
-    reason: "Excel's formula-length limit (8,192 characters) is the real ceiling on a flat operator chain; Formulon additionally rejects a flat chain past kMaxFormulaAstDepth (128) terms because the recursion-depth guard is shared with true nesting for native-stack safety across ast_format / ast_shift / the XLSB ptg_reader. Not raised without also bounding those recursive consumers independently. Observed directly: a workbook carrying =A1+A2+...+A150 (642 characters, A1:A150 seeded 1..150) opens and evaluates to 11325, and a 1000-term chain (4,893 characters) opens and evaluates as well. The observation has to be made from a file: the AppleEvent formula setter the oracle driver uses truncates a long formula, so an in-place probe measures the bridge rather than Excel. See DefaultDepthCapRejectsLongLeftAssociativeChain."
+    reason: "Excel's formula-length limit (8,192 characters) is the real ceiling on a flat operator chain; Formulon additionally rejects a flat chain past kMaxFormulaAstDepth (128) terms because the recursion-depth guard is shared with true nesting for stack safety across ast_format / ast_shift / the XLSB ptg_reader -- the native thread stack on native builds, the link-time-sized shadow stack under WASM. Not raised without also bounding those recursive consumers independently. Observed directly: a workbook carrying =A1+A2+...+A150 (642 characters, A1:A150 seeded 1..150) opens and evaluates to 11325, and a 1000-term chain (4,893 characters) opens and evaluates as well. The observation has to be made from a file: the AppleEvent formula setter the oracle driver uses truncates a long formula, so an in-place probe measures the bridge rather than Excel. See DefaultDepthCapRejectsLongLeftAssociativeChain."
     prefer: formulon
     first_noted: 2026-08-13
     last_verified_excel_version: "16.112"
@@ -1113,7 +1110,7 @@ entries:
         tests/integration/pivot_value_date_filter_fixture_test.cpp,
         tests/unit/io/pivot_table_reader_test.cpp,
       ]
-    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Two Excel-authored fixtures pin the families that are decoded. tests/fixtures/excel/pivot_caption_filter.xlsx covers the caption family: a pivot over A1:C7 (Region rows, Qtr columns, sum of Amt) filtered with 'label filters -> equals -> North' renders North alone at 10 / 5 / 15, grand total 15, against 56 unfiltered. tests/fixtures/excel/pivot_value_date_filters.xlsx covers the value and absolute-date families over one source table whose Region totals are North 150 / South 500 / East 100 / West 175: top 2 items keeps South and West; 'greater than 100' keeps North, South and West, dropping East on the threshold, so the comparison is strict; 'between 100 and 175' keeps East, North and West, so both bounds are inclusive; and a date range of 2024-01-01..2024-03-31 keeps the five first-quarter rows totalling 580. All four match Formulon. The relative-period family (thisMonth, yearToDate and their day / month / quarter / year siblings) is decoded too: it resolves against a wall-clock reading the workbook can pin, so a pivot using it is reproducible rather than dependent on the day it was computed. The percent and sum flavours of the top-N dialog are decoded too, and the same fixture pins what they count: a 'top 100 sum' keeps South alone, whose 500 already clears 100, so the target is a running total over leaves ranked descending rather than a per-leaf floor, which would have kept all four regions. A 'top 70 percent' keeps South and West (675 against a 647.5 threshold), which is consistent with a running total but does not on its own establish one: reading the percentage as a share of the leaf count (0.7 x 4 regions, truncated to 2) keeps the same two. A 'top 50 percent' separates them and keeps South alone, because 500 clears the 462.5 threshold by itself while a count share would have kept two. So percent is the running total expressed as a share of the axis total, and the accumulation stops on the leaf that crosses it. Nothing in the file distinguishes these from the count flavour: <top10 val=\"100\"/> under sum is byte-identical to the same element under count, and only the filter type attribute separates them. Two families remain undecoded. The week windows (thisWeek and siblings) turn on which weekday a week starts, which is locale-dependent and unobserved. The recurring M1..M12 and Q1..Q4 selectors pick every January rather than one contiguous range, so they are not a window at all. Both fixtures also show why item visibility cannot stand in for the decode: Excel leaves every <item> entry visible and records the rule only in <filters>, with the result mirrored into <rowItems>."
+    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Two Excel-authored fixtures pin the families that are decoded. tests/fixtures/excel/pivot_caption_filter.xlsx covers the caption family: a pivot over A1:C7 (Region rows, Qtr columns, sum of Amt) filtered with 'label filters -> equals -> North' renders North alone at 10 / 5 / 15, grand total 15, against 56 unfiltered. tests/fixtures/excel/pivot_value_date_filters.xlsx covers the value and absolute-date families over one source table whose Region totals are North 150 / South 500 / East 100 / West 175: top 2 items keeps South and West; 'greater than 100' keeps North, South and West, dropping East on the threshold, so the comparison is strict; 'between 100 and 175' keeps East, North and West, so both bounds are inclusive; and a date range of 2024-01-01..2024-03-31 keeps the five first-quarter rows totalling 580. All four match Formulon. The relative-period family (thisMonth, yearToDate and their day / month / quarter / year siblings) is decoded too: it resolves against a wall-clock reading the workbook can pin, so a pivot using it is reproducible rather than dependent on the day it was computed. The percent and sum flavours of the top-N dialog are decoded too, and the same fixture pins what they count: a 'top 100 sum' keeps South alone, whose 500 already clears 100, so the target is a running total over leaves ranked descending rather than a per-leaf floor, which would have kept all four regions. A 'top 70 percent' keeps South and West (675 against a 647.5 threshold), which is consistent with a running total but does not on its own establish one: reading the percentage as a share of the leaf count (0.7 x 4 regions, truncated to 2) keeps the same two. A 'top 50 percent' separates them and keeps South alone, because 500 clears the 462.5 threshold by itself while a count share would have kept two. So percent is the running total expressed as a share of the axis total, and the accumulation stops on the leaf that crosses it. Nothing in the file distinguishes these from the count flavour: <top10 val=\"100\"/> under sum is byte-identical to the same element under count, and only the filter type attribute separates them. Two families remain undecoded. The week windows (thisWeek and siblings) turn on which weekday a week starts, which is locale-dependent and unobserved. The recurring M1..M12 and Q1..Q4 selectors pick every January rather than one contiguous range, so they are not a window at all. Both fixtures also show why item visibility cannot stand in for the decode: Excel leaves every <item> entry visible and records the rule only in <filters>, with the result mirrored into <rowItems>. Neither undecoded family can be observed on the Mac host: rewriting the <filters> block of an Excel-authored fixture and reopening it renders the cached <rowItems> unchanged, because Excel re-applies an authored filter on refresh rather than on open, and Mac Excel's AppleScript surface has no reachable pivot-table object to refresh (`every pivot table of worksheet` is a parameter error). Closing these two needs a Windows COM host, the same reason the workbook oracle track is Windows-primary."
     prefer: mac-excel-365
     first_noted: 2026-08-14
     last_verified_excel_version: "16.112"

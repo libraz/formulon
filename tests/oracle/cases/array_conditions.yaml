@@ -1,0 +1,99 @@
+suite: array_conditions
+description: >-
+  Condition-armed lazy forms (IF / SWITCH / IFS / CHOOSE) whose selector is a
+  range rather than a scalar. Two seams are covered per function: the value
+  the form spills on its own, and the value an aggregator computes when the
+  form is its argument. The aggregator seam is separate because argument
+  expansion is driven by a static name list, so a form can spill correctly
+  and still be mishandled one level up.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- IF: the form on its own --------------------------------------------
+  - id: array_cond_if_bare_spill
+    description: "A range condition spills the selected arm element-wise"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=IF(A1:A5<=3,A1:A5,0)"
+
+  - id: array_cond_if_bare_text_arms
+    description: "Both arms are scalars; the shape comes from the condition alone"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=IF(A1:A5<=3,\"lo\",\"hi\")"
+
+  # -- IF as an aggregator argument ---------------------------------------
+  - id: array_cond_if_sum
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=SUM(IF(A1:A5<=3,A1:A5,0))"
+
+  - id: array_cond_if_average
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=AVERAGE(IF(A1:A5<=3,A1:A5,0))"
+
+  - id: array_cond_if_min
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=MIN(IF(A1:A5<=3,A1:A5,0))"
+
+  - id: array_cond_if_max
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=MAX(IF(A1:A5<=3,A1:A5,0))"
+
+  - id: array_cond_if_counta
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=COUNTA(IF(A1:A5<=3,A1:A5,0))"
+
+  - id: array_cond_if_product
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=PRODUCT(IF(A1:A5<=3,A1:A5,1))"
+
+  - id: array_cond_if_sumsq
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=SUMSQ(IF(A1:A5<=3,A1:A5,0))"
+
+  - id: array_cond_if_sumproduct
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=SUMPRODUCT(IF(A1:A5<=3,A1:A5,0))"
+
+  - id: array_cond_if_count
+    description: >-
+      COUNT inspects its arguments instead of propagating their errors, so a
+      failed expansion is counted as a non-number rather than surfacing; the
+      observed value distinguishes a correct count from that silent zero.
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=COUNT(IF(A1:A5<=3,A1:A5,0))"
+
+  - id: array_cond_if_index
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=INDEX(IF(A1:A5<=3,A1:A5,0),2)"
+
+  - id: array_cond_if_match
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=MATCH(3,IF(A1:A5<=3,A1:A5,0),0)"
+
+  # -- SWITCH with a range subject ----------------------------------------
+  - id: array_cond_switch_bare_spill
+    description: "A range subject selects per element and falls through to the default"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=SWITCH(A1:A5,1,10,0)"
+
+  - id: array_cond_switch_sum
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=SUM(SWITCH(A1:A5,1,10,2,20,0))"
+
+  # -- IFS with a range condition -----------------------------------------
+  - id: array_cond_ifs_bare_spill
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=IFS(A1:A5<=3,\"lo\",TRUE,\"hi\")"
+
+  - id: array_cond_ifs_unmatched_tail
+    description: "An element matching no condition yields #N/A within the spill"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=IFS(A1:A5<=3,\"lo\")"
+
+  # -- CHOOSE, which already carried a selector arm ------------------------
+  - id: array_cond_choose_bare_spill
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=CHOOSE(A1:A3,10,20,30)"
+
+  - id: array_cond_choose_sum
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=SUM(CHOOSE(A1:A3,10,20,30))"

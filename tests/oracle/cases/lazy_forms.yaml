@@ -10,3 +10,12 @@ cases:
   - id: lazy_phonetic_literal_text
     description: "PHONETIC literal text passthrough; workbook rPh annotation coverage is unit-tested separately"
     formula: '=PHONETIC("テスト")'
+
+  # Excel's PHONETIC takes a reference, not a literal, so the case above is
+  # refused at entry. Against a cell it answers, and an unannotated text cell
+  # is the case both engines agree on.
+  - id: lazy_phonetic_unannotated_cell
+    description: "PHONETIC over a text cell with no rPh annotation returns the text itself"
+    setup:
+      A1: "テスト"
+    formula: "=PHONETIC(A1)"

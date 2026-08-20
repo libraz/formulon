@@ -342,6 +342,40 @@ cases:
     description: "Array of all errors — first error returned"
     formula: "=ARRAYTOTEXT({NA(),#DIV/0!})"
 
+  # An array constant may hold an error *literal* but not a function call, so
+  # the `NA()` spellings above are refused at entry and cannot be captured.
+  # These carry the same contract in a form Excel accepts.
+  - id: arraytotext_error_literal_in_array_default
+    description: "Array containing an error literal — concise mode"
+    formula: "=ARRAYTOTEXT({1,#N/A,3})"
+
+  - id: arraytotext_error_literal_in_array_strict
+    description: "Array containing an error literal — strict mode"
+    formula: "=ARRAYTOTEXT({1,#N/A,3},1)"
+
+  - id: arraytotext_error_cells_default
+    description: "Error inside a cell range — concise mode"
+    setup:
+      A1: 1
+      B1: "=NA()"
+      C1: 3
+    formula: "=ARRAYTOTEXT(A1:C1)"
+
+  - id: arraytotext_error_cells_strict
+    description: "Error inside a cell range — strict mode"
+    setup:
+      A1: 1
+      B1: "=NA()"
+      C1: 3
+    formula: "=ARRAYTOTEXT(A1:C1,1)"
+
+  - id: arraytotext_only_error_cells_default
+    description: "Range of nothing but errors — concise mode"
+    setup:
+      A1: "=NA()"
+      B1: "=1/0"
+    formula: "=ARRAYTOTEXT(A1:B1)"
+
   - id: arraytotext_arity_zero
     description: "Zero args — #VALUE! (Excel signature requires array)"
     formula: "=ARRAYTOTEXT()"

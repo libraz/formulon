@@ -1,0 +1,635 @@
+{
+  "suite": "array_conditions",
+  "description": "Condition-armed lazy forms (IF / SWITCH / IFS / CHOOSE) whose selector is a range rather than a scalar. Two seams are covered per function: the value the form spills on its own, and the value an aggregator computes when the form is its argument. The aggregator seam is separate because argument expansion is driven by a static name list, so a form can spill correctly and still be mishandled one level up.",
+  "environment": {
+    "excel_version": "16.112.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-08-20T15:47:20Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "array_cond_if_bare_spill",
+      "formula": "=IF(A1:A5<=3,A1:A5,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          5,
+          1
+        ]
+      }
+    },
+    {
+      "id": "array_cond_if_bare_text_arms",
+      "formula": "=IF(A1:A5<=3,\"lo\",\"hi\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "lo",
+          "lo",
+          "lo",
+          "hi",
+          "hi"
+        ],
+        "shape": [
+          5,
+          1
+        ]
+      }
+    },
+    {
+      "id": "array_cond_if_sum",
+      "formula": "=SUM(IF(A1:A5<=3,A1:A5,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "array_cond_if_average",
+      "formula": "=AVERAGE(IF(A1:A5<=3,A1:A5,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2
+      }
+    },
+    {
+      "id": "array_cond_if_min",
+      "formula": "=MIN(IF(A1:A5<=3,A1:A5,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "array_cond_if_max",
+      "formula": "=MAX(IF(A1:A5<=3,A1:A5,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "array_cond_if_counta",
+      "formula": "=COUNTA(IF(A1:A5<=3,A1:A5,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "array_cond_if_product",
+      "formula": "=PRODUCT(IF(A1:A5<=3,A1:A5,1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "array_cond_if_sumsq",
+      "formula": "=SUMSQ(IF(A1:A5<=3,A1:A5,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "array_cond_if_sumproduct",
+      "formula": "=SUMPRODUCT(IF(A1:A5<=3,A1:A5,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "array_cond_if_count",
+      "formula": "=COUNT(IF(A1:A5<=3,A1:A5,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "array_cond_if_index",
+      "formula": "=INDEX(IF(A1:A5<=3,A1:A5,0),2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "array_cond_if_match",
+      "formula": "=MATCH(3,IF(A1:A5<=3,A1:A5,0),0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "array_cond_switch_bare_spill",
+      "formula": "=SWITCH(A1:A5,1,10,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          5,
+          1
+        ]
+      }
+    },
+    {
+      "id": "array_cond_switch_sum",
+      "formula": "=SUM(SWITCH(A1:A5,1,10,2,20,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "array_cond_ifs_bare_spill",
+      "formula": "=IFS(A1:A5<=3,\"lo\",TRUE,\"hi\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "lo",
+          "lo",
+          "lo",
+          "hi",
+          "hi"
+        ],
+        "shape": [
+          5,
+          1
+        ]
+      }
+    },
+    {
+      "id": "array_cond_ifs_unmatched_tail",
+      "formula": "=IFS(A1:A5<=3,\"lo\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "lo",
+          "lo",
+          "lo",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          5,
+          1
+        ]
+      }
+    },
+    {
+      "id": "array_cond_choose_bare_spill",
+      "formula": "=CHOOSE(A1:A3,10,20,30)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "array_cond_choose_sum",
+      "formula": "=SUM(CHOOSE(A1:A3,10,20,30))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    }
+  ]
+}
