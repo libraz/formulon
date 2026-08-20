@@ -160,7 +160,7 @@ TEST(StoragePrefixContainers, ClassifierAnswersTheTwoAxesIndependently) {
 
 TEST(StoragePrefixContainers, IsoCeilingSurvivesXlsbSaveWithoutDowngrade) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(0U, 0U, "=ISO.CEILING(4.3)");
   s.set_cell_formula(1U, 0U, "=ISO.CEILING(4.3,1)");
 
@@ -210,7 +210,7 @@ TEST(StoragePrefixContainers, ModelHoldingJisSavesAsDbcsInBothContainers) {
   // produce two different callees. `JIS` in `<f>` would be `#NAME?` on
   // open, since Excel's invariant grammar has no such function.
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(0U, 0U, "=JIS(\"ABC\")");
 
   auto xlsx_or = wb.save();
@@ -242,7 +242,7 @@ TEST(StoragePrefixContainers, ModelHoldingJisSavesAsDbcsInBothContainers) {
 
 TEST(StoragePrefixContainers, IsoCeilingStaysBareOnOoxmlSave) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(0U, 0U, "=ISO.CEILING(4.3)");
 
   auto saved_or = wb.save();

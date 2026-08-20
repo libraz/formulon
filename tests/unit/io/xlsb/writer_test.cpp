@@ -165,7 +165,7 @@ TEST(XlsbWriter, RoundTripsWorkbookWithoutTextCellsSkipsSstPart) {
   // the round-trip should still succeed (the reader is fine without
   // an SST part because the rels file doesn't reference one).
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Solo");
+  Sheet& s = wb.sheet(wb.add_sheet("Solo"));
   s.set_cell_value(0U, 0U, Value::number(1.0));
   s.set_cell_value(0U, 1U, Value::boolean(false));
 
@@ -180,7 +180,7 @@ TEST(XlsbWriter, RoundTripsWorkbookWithoutTextCellsSkipsSstPart) {
 
 TEST(XlsbWriter, RowHeadersDescribeTheirEmittedCellColumns) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Spans");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Spans"));
   sheet.set_cell_value(0U, 5U, Value::number(1.0));
   sheet.set_cell_value(0U, 1024U, Value::number(2.0));
 
@@ -248,7 +248,7 @@ TEST(XlsbWriter, RowHeadersDescribeTheirEmittedCellColumns) {
 
 TEST(XlsbWriter, EmitsRequiredWorksheetPrefixInSpecificationOrder) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Prefix");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Prefix"));
   sheet.set_cell_value(0U, 0U, Value::number(1.0));
 
   auto bytes_or = write_xlsb(wb);
@@ -449,7 +449,7 @@ TEST(XlsbWriter, AbsentFormatDefaultsPreservePaginationAcrossRoundTrip) {
   // is the sharpest end-to-end signal of that: two rows apart tall enough
   // to force a page break at the default row height.
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("S1");
+  Sheet& sheet = wb.sheet(wb.add_sheet("S1"));
   sheet.set_cell_value(0U, 0U, Value::number(1.0));
   sheet.set_cell_value(48U, 0U, Value::number(2.0));
   ASSERT_FALSE(sheet.format_defaults().has_default_row_height);
@@ -474,7 +474,7 @@ TEST(XlsbWriter, AbsentFormatDefaultsPreservePaginationAcrossRoundTrip) {
 
 TEST(XlsbWriter, PassthroughPartsRoundTripVerbatim) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("S1");
+  Sheet& s = wb.sheet(wb.add_sheet("S1"));
   s.set_cell_value(0U, 0U, Value::number(10.0));
 
   // Synthesize a passthrough part: pretend the original archive had
@@ -535,7 +535,7 @@ TEST(XlsbWriter, PassthroughPartsRoundTripVerbatim) {
 
 TEST(XlsbWriter, DropsXlsxMetadataAndItsWorkbookRelationship) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("S1");
+  Sheet& sheet = wb.sheet(wb.add_sheet("S1"));
   sheet.set_cell_value(0U, 0U, Value::number(1.0));
   PassthroughPart metadata;
   metadata.path = "xl/metadata.xml";
@@ -559,7 +559,7 @@ TEST(XlsbWriter, DropsXlsxMetadataAndItsWorkbookRelationship) {
 
 TEST(XlsbWriter, EmitsDynamicArrayMetadataForSpillAnchors) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Spill");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Spill"));
   sheet.set_cell_formula(0U, 0U, "=SEQUENCE(2)");
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
 
@@ -665,7 +665,7 @@ std::vector<std::uint8_t> BuildMetadataPart(const std::vector<std::string>& type
 
 Workbook SpillWorkbookWithRetainedMetadata(std::vector<std::uint8_t> metadata_bytes) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Spill");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Spill"));
   sheet.set_cell_formula(0U, 0U, "=SEQUENCE(2)");
   EXPECT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
   PassthroughPart metadata;
@@ -814,7 +814,7 @@ TEST(XlsbWriter, RetainedMetadataPartShipsVerbatimAndIsNotRegenerated) {
 
 TEST(XlsbWriter, EmitsDynamicArrayMetadataForSingleCellArrayAnchors) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("SingleArray");
+  Sheet& sheet = wb.sheet(wb.add_sheet("SingleArray"));
   sheet.set_cell_formula(0U, 0U, "=IFS(TRUE,\"yes\")");
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 1U, 1U, {Value::text("yes")}));
 
@@ -845,7 +845,7 @@ TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
   // An engine-authored formula encodes to a Ptg stream, survives the
   // write, and decodes back to the same formula text on read.
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(2U, 3U, "=A1+B2*3");
 
   auto bytes_or = write_xlsb(wb);
@@ -889,7 +889,7 @@ bool ContainsUtf16Le(const std::vector<std::uint8_t>& haystack, std::string_view
 
 TEST(XlsbWriter, FutureFunctionCallRegistersHiddenName) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(0U, 0U, "=XLOOKUP(\"k\",A1:A3,B1:B3)");
 
   auto write_or = write_xlsb_with_result(wb);
@@ -912,7 +912,7 @@ TEST(XlsbWriter, CallWithNoKnownFuncIdIsNotEncodedAsAFutureFunction) {
   // an id, which is exactly why the hidden-name route is reachable only
   // by enumeration.
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(0U, 0U, "=CUBEVALUE(\"c\",\"m\")");
   s.set_cell_cached_value(0U, 0U, Value::number(42.0));
 
@@ -941,7 +941,7 @@ TEST(XlsbWriter, LocalisedJisSpellingSavesAsTheStoredDbcsSpelling) {
   // spelling must save without degrading, and both come back as the
   // stored spelling.
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(0U, 0U, "=JIS(\"ABC\")");
   s.set_cell_formula(1U, 0U, "=DBCS(\"ABC\")");
 
@@ -972,7 +972,7 @@ TEST(XlsbWriter, HarvestedFuncIdCallsRoundTripWithIdenticalFormulaText) {
       "=MROUND(17,5)", "=WEEKNUM(43922)", "=WEEKNUM(43922,1)", "=GCD(24,36,60)", "=YEARFRAC(43831,44197,0)",
   };
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   for (std::uint32_t i = 0; i < kFormulaCount; ++i) {
     s.set_cell_formula(i, 0U, kFormulas[i]);
   }
@@ -1002,7 +1002,7 @@ TEST(XlsbWriter, UnencodableFormulaDowngradesToCachedLiteralAndReportsIt) {
   // whole workbook unsaveable: it degrades to its cached literal and the
   // explicit result count records the loss.
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(0U, 0U, "=@A1:A10");
   s.set_cell_cached_value(0U, 0U, Value::number(42.0));
 
@@ -1020,7 +1020,7 @@ TEST(XlsbWriter, UnencodableFormulaDowngradesToCachedLiteralAndReportsIt) {
 
 TEST(XlsbWriter, UnencodableSpillFormulaDowngradesAnchorWithoutPhantoms) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("F");
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(0U, 0U, "=@A1:A10");
   ASSERT_TRUE(s.commit_spill(0U, 0U, 1U, 2U, {Value::number(11.0), Value::number(12.0)}));
 
@@ -1043,7 +1043,7 @@ TEST(XlsbWriter, GeneratedPartsBeatPassthroughOnCollision) {
   // `xl/workbook.bin` path: must be dropped (writer logs a warning,
   // not asserted here), and the round-trip must still succeed.
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("S1");
+  Sheet& s = wb.sheet(wb.add_sheet("S1"));
   s.set_cell_value(0U, 0U, Value::number(1.0));
 
   std::vector<PassthroughPart> parts;
@@ -1099,7 +1099,7 @@ TEST(XlsbWriter, Date1904SurvivesRoundTrip) {
 
 TEST(XlsbWriter, RowAndColumnLayoutSurviveRoundTrip) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Layout");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Layout"));
   sheet.mutable_layout().columns.push_back(ColumnLayout{1U, 3U, 17.25, true, 2U});
   sheet.mutable_layout().row_overrides.push_back(RowLayout{4U, 28.5, true, 3U, true});
 
@@ -1128,7 +1128,7 @@ TEST(XlsbWriter, RowAndColumnLayoutSurviveRoundTrip) {
 
 TEST(XlsbWriter, RowStyleFlagCarriesExplicitZeroAndNonZeroStyles) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("RowStyles");
+  Sheet& sheet = wb.sheet(wb.add_sheet("RowStyles"));
   RowLayout style_zero;
   style_zero.row = 2U;
   style_zero.has_style = true;
@@ -1197,7 +1197,7 @@ TEST(XlsbWriter, RowStyleFlagCarriesExplicitZeroAndNonZeroStyles) {
 
 TEST(XlsbWriter, MergedRangesSurviveRoundTrip) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Merged");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Merged"));
   sheet.set_cell_value(0U, 0U, Value::text("title"));
   sheet.mutable_merges().push_back(MergeRange{0U, 0U, 1U, 2U});
   sheet.mutable_merges().push_back(MergeRange{4U, 3U, 4U, 5U});
@@ -1220,7 +1220,7 @@ TEST(XlsbWriter, MergedRangesSurviveRoundTrip) {
 
 TEST(XlsbWriter, SheetViewAndFrozenPanesSurviveRoundTrip) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("View");
+  Sheet& sheet = wb.sheet(wb.add_sheet("View"));
   sheet.set_cell_value(0U, 0U, Value::number(1.0));
   SheetView& view = sheet.mutable_view();
   view.zoom_scale = 135U;
@@ -1279,7 +1279,7 @@ TEST(XlsbWriter, SheetViewAndFrozenPanesSurviveRoundTrip) {
 
 TEST(XlsbWriter, ReportsDeferredSheetFeatures) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Deferred");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Deferred"));
   Hyperlink hyperlink;
   hyperlink.target = "https://example.com";
   sheet.mutable_hyperlinks().push_back(std::move(hyperlink));
@@ -1296,7 +1296,7 @@ TEST(XlsbWriter, ReportsDeferredSheetFeatures) {
 
 TEST(XlsbWriter, RejectsInvalidHyperlinkRectangle) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("InvalidHyperlink");
+  Sheet& sheet = wb.sheet(wb.add_sheet("InvalidHyperlink"));
   Hyperlink inverted;
   inverted.row = 4U;
   inverted.col = 5U;
@@ -1324,7 +1324,7 @@ TEST(XlsbWriter, RejectsInvalidHyperlinkRectangle) {
 
 TEST(XlsbWriter, RoundTripsExternalAndInternalHyperlinkRectangles) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Hyperlinks");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Hyperlinks"));
   Hyperlink external;
   external.row = 1U;
   external.col = 2U;
@@ -1376,7 +1376,7 @@ TEST(XlsbWriter, RoundTripsExternalAndInternalHyperlinkRectangles) {
 
 TEST(XlsbWriter, ReusesSharedSourceRelationshipIdForMatchingTargets) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("SharedRids");
+  Sheet& sheet = wb.sheet(wb.add_sheet("SharedRids"));
   Hyperlink first;
   first.row = 1U;
   first.col = 1U;
@@ -1420,7 +1420,7 @@ TEST(XlsbWriter, GeneratesStylesPartForModelledStyles) {
   // XLSB writer must therefore materialise the modelled table and expose it
   // through both the content-type override and workbook relationship.
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Styled");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Styled"));
   sheet.set_cell_value(0U, 0U, Value::number(12.5));
 
   StylesTable styles;
@@ -1517,7 +1517,7 @@ TEST(XlsbWriter, PreservesRawStylesPartFromExistingXlsb) {
   // retained an opaque style part, that byte stream remains authoritative so
   // unmodelled binary formatting extensions cannot be erased on save.
   Workbook wb = Workbook::create_empty();
-  wb.add_sheet("S").set_cell_value(0U, 0U, Value::number(1.0));
+  wb.sheet(wb.add_sheet("S")).set_cell_value(0U, 0U, Value::number(1.0));
   StylesTable raw_table;
   raw_table.num_fmt_strings.push_back("0.0000");
   raw_table.num_fmts.push_back(NumFmtRecord{164U, 0U});
@@ -1546,7 +1546,7 @@ TEST(XlsbWriter, PreservesRawStylesPartFromExistingXlsb) {
 
 TEST(XlsbWriter, WholeColumnFormulaSavesWithoutDowngrade) {
   Workbook wb = Workbook::create_empty();
-  Sheet& sheet = wb.add_sheet("Ranges");
+  Sheet& sheet = wb.sheet(wb.add_sheet("Ranges"));
   sheet.set_cell_formula(0U, 0U, "=SUM(A:A)");
 
   auto write_or = write_xlsb_with_result(wb);

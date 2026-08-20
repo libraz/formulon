@@ -217,10 +217,10 @@ bool HasRawStylesPart(const Workbook& wb) {
 
 bool HasModelledStyles(const Workbook& wb) {
   const StylesTable& styles = wb.styles();
-  // An empty table is the intentionally unstyled `Workbook::create_empty()`
-  // shape.  Any populated collection, including an explicitly-created default
-  // XF, needs a styles part because worksheet iStyleRef values resolve only
-  // through its relationship.
+  // An empty table is the unstyled shape a package without a styles part
+  // parses into; both workbook factories seed one.  Any populated collection,
+  // including an explicitly-created default XF, needs a styles part because
+  // worksheet iStyleRef values resolve only through its relationship.
   return !styles.fonts.empty() || !styles.fills.empty() || !styles.borders.empty() || !styles.num_fmts.empty() ||
          !styles.cell_xfs.empty() || !styles.cell_style_xfs.empty() || !styles.cell_styles.empty();
 }

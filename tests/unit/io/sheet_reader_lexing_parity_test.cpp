@@ -90,11 +90,13 @@ void SnapshotSheet(const Sheet& sheet, LoadResult* out) {
 ///
 /// These fixtures feed a bare `<sheetData>` fragment to the sheet readers
 /// with no `xl/styles.xml` alongside it, which is the case `ApplyParsedCell`
-/// exempts from its dangling-`s=` clamp. `Workbook::create()` seeds the
-/// Excel-canonical minimum style table, so building the host that way would
-/// clamp `s="5"` to 0 and pin the wrong disposition here.
+/// exempts from its dangling-`s=` clamp. Both factories seed the
+/// Excel-canonical minimum style table, so the host has to be emptied the
+/// way the OOXML reader empties it; leaving the seed in place would clamp
+/// `s="5"` to 0 and pin the wrong disposition here.
 Workbook MakeStylelessHost() {
   Workbook wb = Workbook::create_empty();
+  wb.set_styles(StylesTable{});
   wb.add_sheet("Sheet1");
   return wb;
 }

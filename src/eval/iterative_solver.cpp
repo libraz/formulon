@@ -131,11 +131,16 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
     return out;
   }
 
-  // Excel docs cap `max_iterations` at 32767 in the dialog. We accept the
-  // full uint32 range; the only constraint we apply is "at least 1
-  // iteration" so the loop body always runs once before the convergence
-  // check inspects a delta.
-  const std::uint32_t max_iters = (opts.max_iterations == 0U) ? 1U : opts.max_iterations;
+  // Clamp into `[1, kMaxIterationsCap]`. The lower bound makes the loop
+  // body run once before the convergence check inspects a delta. The upper
+  // bound is Excel's own dialog limit, repeated here so a caller that built
+  // `IterativeOptions` by hand cannot ask for a sweep count this solver has
+  // no way to abandon: there is no wall-clock limit anywhere in the engine
+  // and `progress` is null unless the host opted in.
+  std::uint32_t max_iters = (opts.max_iterations == 0U) ? 1U : opts.max_iterations;
+  if (max_iters > kMaxIterationsCap) {
+    max_iters = kMaxIterationsCap;
+  }
 
   // Per-cell snapshots of the previous and current iterations. Seed the
   // previous map with comparable Blank values to preserve the legacy solver
@@ -225,8 +230,8 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
   }
 
   // Excel has no residual-growth cutoff. Iteration-limit exhaustion leaves
-  // the last commits intact; `converged` and `diverged` are both false to
-  // signal that the finite budget was consumed.
+  // the last commits intact; `converged` stays false to signal that the
+  // finite budget was consumed rather than a threshold met.
   return out;
 }
 

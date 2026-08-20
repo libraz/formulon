@@ -17,6 +17,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "cell.h"
 #include "eval/function_registry.h"
@@ -223,6 +224,40 @@ TEST(WorkbookIterative, OptionsRoundTrip) {
   EXPECT_TRUE(wb.iterative_options().enabled);
   EXPECT_EQ(wb.iterative_options().max_iterations, 42U);
   EXPECT_DOUBLE_EQ(wb.iterative_options().max_change, 0.5);
+}
+
+// The iteration budget is bounded where it enters the model, so every
+// reader of `iterative_options()` sees a value the solver can exhaust in
+// bounded time — whether or not the path it took clamped on the way in.
+TEST(WorkbookIterative, OptionsClampTheIterationBudgetOnTheWayIn) {
+  Workbook wb = Workbook::create();
+
+  eval::IterativeOptions opts;
+  opts.enabled = true;
+  opts.max_change = 0.0;  // unsatisfiable, so the count is the only bound
+  opts.max_iterations = std::numeric_limits<std::uint32_t>::max();
+  wb.set_iterative_options(opts);
+  EXPECT_EQ(wb.iterative_options().max_iterations, eval::kMaxIterationsCap);
+
+  opts.max_iterations = eval::kMaxIterationsCap + 1U;
+  wb.set_iterative_options(opts);
+  EXPECT_EQ(wb.iterative_options().max_iterations, eval::kMaxIterationsCap);
+
+  // The cap itself and everything under it are stored verbatim; the clamp
+  // must not round a legal request down.
+  opts.max_iterations = eval::kMaxIterationsCap;
+  wb.set_iterative_options(opts);
+  EXPECT_EQ(wb.iterative_options().max_iterations, eval::kMaxIterationsCap);
+
+  opts.max_iterations = 1U;
+  wb.set_iterative_options(opts);
+  EXPECT_EQ(wb.iterative_options().max_iterations, 1U);
+
+  // The low end is the solver's contract (`0` means one pass), not this
+  // setter's, so it is passed through rather than raised to 1 here.
+  opts.max_iterations = 0U;
+  wb.set_iterative_options(opts);
+  EXPECT_EQ(wb.iterative_options().max_iterations, 0U);
 }
 
 }  // namespace

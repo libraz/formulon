@@ -797,7 +797,7 @@ TEST_P(OracleTest, Matches) {
         std::size_t idx = wb.sheet_index_by_name(sheet_name);
         if (idx == static_cast<std::size_t>(-1)) {
           target_sheet_index = wb.sheet_count();
-          target_sheet = &wb.add_sheet(sheet_name);
+          target_sheet = &wb.sheet(wb.add_sheet(sheet_name));
         } else {
           target_sheet_index = idx;
           target_sheet = &wb.sheet(idx);

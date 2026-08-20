@@ -132,7 +132,7 @@ TEST(SheetFeaturesRoundTrip, Comments) {
 TEST(SheetFeaturesRoundTrip, CommentsKeepVmlAfterEarlierCommentSheetIsRemoved) {
   Workbook wb = Workbook::create();
   wb.sheet(0).mutable_comments() = {CellComment{0, 0, "Alice", "first"}};
-  Sheet& second = wb.add_sheet("Second");
+  Sheet& second = wb.sheet(wb.add_sheet("Second"));
   second.mutable_comments() = {CellComment{1, 1, "Bob", "second"}};
   auto first_save = io::write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(first_save));

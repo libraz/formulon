@@ -256,9 +256,12 @@ struct CFHost {
 /// `stop_if_true` is set, the walk halts immediately and later rules
 /// (across the same or sibling blocks) are not consulted.
 ///
-/// The returned list is priority-ascending; consumers fold matches in
-/// order, so a higher-priority `DifferentialFormat` overlays a
-/// lower-priority one. Visual rules render alongside dxf-driven ones.
+/// The returned list is priority-ascending, so `matches[0]` is the
+/// highest-priority match. Consumption is first-wins: walk the list in
+/// the returned order and apply each `DifferentialFormat` property only
+/// where nothing has set it yet, so a lower-priority rule fills gaps but
+/// never overwrites a higher-priority decision. Visual rules render
+/// alongside dxf-driven ones.
 ///
 /// `host.arena` / `host.registry` / `host.eval_ctx` are required;
 /// `host.today_serial` is forwarded to `TimePeriod` rules and may be

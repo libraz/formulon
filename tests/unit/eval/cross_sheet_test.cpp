@@ -96,7 +96,7 @@ TEST(WorkbookSheetLookup, Default_create_HasSheet1) {
 
 TEST(WorkbookSheetLookup, AddSheetReturnsReference) {
   Workbook wb = Workbook::create();
-  Sheet& added = wb.add_sheet("Extra");
+  Sheet& added = wb.sheet(wb.add_sheet("Extra"));
   added.set_cell_value(0, 0, Value::number(7.0));
   // Same mutation observed via sheet_by_name.
   const Sheet* via_lookup = wb.sheet_by_name("Extra");

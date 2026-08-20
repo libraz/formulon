@@ -542,6 +542,41 @@ TEST(WorkbookSheetOps, RemoveFreezesReferencingFormulaBeforeSameNameIsReadded) {
   EXPECT_EQ(value.as_error(), ErrorCode::Ref);
 }
 
+TEST(WorkbookSheetOps, AppendReportsTheIndexOfTheSheetItAppended) {
+  Workbook wb = Workbook::create_empty();
+  EXPECT_EQ(wb.add_sheet("First"), 0U);
+  EXPECT_EQ(wb.add_sheet("Second"), 1U);
+
+  auto checked = wb.add_sheet_checked("Third");
+  ASSERT_TRUE(static_cast<bool>(checked));
+  EXPECT_EQ(checked.value(), 2U);
+
+  ASSERT_EQ(wb.sheet_count(), 3U);
+  EXPECT_EQ(wb.sheet(0).name(), "First");
+  EXPECT_EQ(wb.sheet(1).name(), "Second");
+  EXPECT_EQ(wb.sheet(2).name(), "Third");
+}
+
+// The append path reports a position, not a reference into `sheets_`. A
+// reference taken before a later append would dangle once the vector
+// reallocated, and re-reading through the index after every append is what
+// makes the ordering below safe rather than accidentally correct.
+TEST(WorkbookSheetOps, AppendedSheetStaysReachableAcrossLaterAppends) {
+  Workbook wb = Workbook::create_empty();
+  const std::size_t first = wb.add_sheet("First");
+  // Enough appends to force the underlying vector to reallocate at least
+  // once past whatever capacity the first append reserved.
+  for (int i = 0; i < 64; ++i) {
+    wb.add_sheet("Filler" + std::to_string(i));
+  }
+  wb.sheet(first).set_cell_value(0U, 0U, Value::number(7.0));
+
+  EXPECT_EQ(wb.sheet(first).name(), "First");
+  const Cell* cell = wb.sheet(first).cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_EQ(cell->cached_value.as_number(), 7.0);
+}
+
 // A `CellNodeId` names its sheet with a 16-bit id, so the workbook stops
 // accepting sheets at `kMaxSheets`. The ceiling is only observable with the
 // sheets actually present — every append path shares one headroom check,
@@ -566,8 +601,9 @@ TEST(WorkbookSheetOps, AppendStopsAtTheSheetIdCeiling) {
   EXPECT_EQ(validated.error().code, FormulonErrorCode::kSheetCountLimitExceeded);
 
   // The name-unchecked overload has no error channel, but it must not grow
-  // the workbook past the ceiling either.
-  wb.add_sheet("Overflow");
+  // the workbook past the ceiling either, and the index it reports back must
+  // not name a sheet the caller could then mutate by mistake.
+  EXPECT_EQ(wb.add_sheet("Overflow"), Workbook::kMaxSheets);
   EXPECT_EQ(wb.sheet_count(), Workbook::kMaxSheets);
   EXPECT_EQ(wb.sheet(Workbook::kMaxSheets - 1U).name(), "S" + std::to_string(Workbook::kMaxSheets - 1U));
 }

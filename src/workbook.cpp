@@ -118,7 +118,14 @@ Workbook Workbook::create() {
 
 Workbook Workbook::create_empty() {
   // No default sheet; callers are expected to populate via add_sheet().
-  return Workbook{};
+  // The style table is seeded all the same: the reserved-slot trap that
+  // `seed_default_styles` documents is a property of appending to an empty
+  // table, not of having a sheet, so both construction paths must hand the
+  // caller a table whose reserved entries are already taken. A reader that
+  // builds on top of this replaces the whole table with the one it parsed.
+  Workbook wb;
+  seed_default_styles(wb.styles_);
+  return wb;
 }
 
 std::string_view Workbook::intern_text(std::string_view text) {
@@ -141,22 +148,22 @@ Expected<void, Error> check_sheet_headroom(std::size_t current_count) {
 }
 }  // namespace
 
-Sheet& Workbook::add_sheet(std::string name) {
+std::size_t Workbook::add_sheet(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   // No error channel here; at the ceiling the workbook is left as-is and
-  // the caller sees the existing last sheet (see the header contract).
+  // the caller gets the out-of-range sentinel (see the header contract).
   if (!check_sheet_headroom(sheets_.size()).has_value()) {
-    return sheets_.back();
+    return kMaxSheets;
   }
   sheets_.emplace_back(Sheet{std::move(name)});
-  return sheets_.back();
+  return sheets_.size() - 1U;
 }
 
-Expected<Sheet*, Error> Workbook::add_sheet_checked(std::string name) {
+Expected<std::size_t, Error> Workbook::add_sheet_checked(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
   sheets_.emplace_back(Sheet{std::move(name)});
-  return &sheets_.back();
+  return sheets_.size() - 1U;
 }
 
 Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
@@ -1011,6 +1018,16 @@ Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& re
 }
 
 void Workbook::set_iterative_options(eval::IterativeOptions opts) {
+  // Bound the iteration budget where it enters the model rather than at
+  // each producer. The solver has no wall-clock limit, and cancellation
+  // exists only when the host registered a progress callback, so an
+  // unbounded count is an unrecoverable hang rather than a slow
+  // calculation. Clamping here means every consumer of
+  // `iterative_options()` reads a bounded value by construction — including
+  // the single-cell self-reference driver in the tree walker, which runs
+  // its own loop without any cyclic component ever forming and so would
+  // not be covered by a bound enforced inside the solver.
+  opts.max_iterations = std::min(opts.max_iterations, eval::kMaxIterationsCap);
   engine_->set_iterative_options(opts);
 }
 

@@ -1089,7 +1089,7 @@ TEST(FormulonCApi, LoadRoutesXlsbBytesToXlsbReader) {
   // xlsb container and route to `read_xlsb` rather than failing in the
   // OOXML reader with a "missing xl/workbook.xml" diagnostic.
   formulon::Workbook src = formulon::Workbook::create_empty();
-  formulon::Sheet& s = src.add_sheet("S");
+  formulon::Sheet& s = src.sheet(src.add_sheet("S"));
   s.set_cell_value(0U, 0U, formulon::Value::number(123.5));
   auto xlsb_or = formulon::io::xlsb::write_xlsb(src);
   ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;

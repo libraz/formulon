@@ -114,7 +114,7 @@ Expected<std::unique_ptr<Workbook>, Error> build_workbook(const JsonValue& spec)
   }
   for (const std::string& sheet_name : sheets_v->object_keys()) {
     const JsonValue* cells = sheets_v->find(sheet_name);
-    Sheet& sheet = workbook->add_sheet(sheet_name);
+    Sheet& sheet = workbook->sheet(workbook->add_sheet(sheet_name));
     if (cells == nullptr || !cells->is_object()) {
       return invalid("sheets/" + sheet_name + ": expected an A1 -> value object");
     }

@@ -464,7 +464,7 @@ TEST(Vm, LambdaTwoArgs) {
 
 TEST(Vm, RefResolvesScalarCell) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(7.0));  // A1 = 7
   EvalState state;
   EvalContext ctx(wb, s, state);
@@ -476,7 +476,7 @@ TEST(Vm, RefResolvesScalarCell) {
 
 TEST(Vm, RefArithmetic) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(2.0));  // A1 = 2
   s.set_cell_value(1U, 0U, Value::number(5.0));  // A2 = 5
   EvalState state;
@@ -525,7 +525,7 @@ TEST(Vm, ManyStringConstantsConcatAgreesWithTreeWalker) {
 
 TEST(Vm, SumOverRectangularRange) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(1.0));  // A1 = 1
   s.set_cell_value(0U, 1U, Value::number(2.0));  // B1 = 2
   s.set_cell_value(1U, 0U, Value::number(3.0));  // A2 = 3
@@ -543,7 +543,7 @@ TEST(Vm, SumOverRectangularRange) {
 
 TEST(Vm, SumOverColumnRange) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(10.0));  // A1
   s.set_cell_value(1U, 0U, Value::number(20.0));  // A2
   s.set_cell_value(2U, 0U, Value::number(30.0));  // A3
@@ -557,7 +557,7 @@ TEST(Vm, SumOverColumnRange) {
 
 TEST(Vm, RangeAverageAgreesWithTreeWalker) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(2.0));   // A1
   s.set_cell_value(0U, 1U, Value::number(4.0));   // B1
   s.set_cell_value(1U, 0U, Value::number(6.0));   // A2
@@ -575,7 +575,7 @@ TEST(Vm, RangeAverageAgreesWithTreeWalker) {
 
 TEST(Vm, MixedScalarAndRangeErrorsKeepSourceOrder) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::error(ErrorCode::NA));  // A1 = #N/A
   EvalState state;
   const EvalContext ctx(wb, s, state);
@@ -602,7 +602,7 @@ TEST(Vm, MixedScalarAndRangeErrorsKeepSourceOrder) {
 
 TEST(Vm, RangeErrorsKeepRowMajorOrder) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(1.0));
   s.set_cell_value(0U, 1U, Value::error(ErrorCode::NA));    // B1
   s.set_cell_value(1U, 0U, Value::error(ErrorCode::Div0));  // A2
@@ -688,7 +688,7 @@ TEST(Vm, RecursiveLambdaSumWithInnerLetAgreesWithTreeWalker) {
 
 TEST(Vm, ImplicitIntersectionColumnProjectsFormulaRow) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(10.0));  // A1
   s.set_cell_value(1U, 0U, Value::number(20.0));  // A2
   s.set_cell_value(2U, 0U, Value::number(30.0));  // A3
@@ -706,7 +706,7 @@ TEST(Vm, ImplicitIntersectionColumnProjectsFormulaRow) {
 
 TEST(Vm, ImplicitIntersectionOutsideRangeIsValueError) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(10.0));
   s.set_cell_value(1U, 0U, Value::number(20.0));
   s.set_cell_value(2U, 0U, Value::number(30.0));
@@ -724,7 +724,7 @@ TEST(Vm, ImplicitIntersectionOutsideRangeIsValueError) {
 
 TEST(Vm, ImplicitIntersection2DProjectsIntersectionCell) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(1.0));  // A1
   s.set_cell_value(0U, 1U, Value::number(2.0));  // B1
   s.set_cell_value(1U, 0U, Value::number(3.0));  // A2
@@ -832,7 +832,7 @@ TEST(Vm, ResultMatchesTreeWalker_LetLambdaCompose) {
 
 TEST(Vm, ResultMatchesTreeWalker_WorkbookNamedLambda) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(10.0));
   wb.set_defined_names({io::DefinedName{"AddA1", "LAMBDA(x,x+A1)", -1, false, ""}});
   EvalState state;

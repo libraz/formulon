@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -98,7 +99,7 @@ TEST(CFEvaluator, RuleTypesNotYetImplementedReturnFalse) {
 // reader's own stripping, so it needs its own.
 TEST(CFEvaluator, ExpressionRuleAcceptsXlfnPrefixedFunction) {
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.add_sheet("Sheet1");
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   eval::EvalState state;
   eval::EvalContext eval_ctx(wb, s, state);
   Arena arena;
@@ -2230,6 +2231,32 @@ TEST(CFEvaluator, EvaluateCfAtSortsAcrossBlocks) {
   EXPECT_EQ(matches[0].rule_id, "p1");
   EXPECT_EQ(matches[1].rule_id, "p2");
   EXPECT_EQ(matches[2].rule_id, "p3");
+}
+
+TEST(CFEvaluator, EvaluateCfAtFirstWinsFoldSelectsTheHighestPriorityDxf) {
+  // Two overlapping rules, neither carrying stopIfTrue, both matching the
+  // same cell. The published consumption rule is first-wins over the
+  // returned order, so the smaller priority owns the format. Walking the
+  // list is what a host does, so the test walks it the documented way.
+  CFEvalHarness harness;
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 4, 0)}, {MakeBlanksRule(7, 70, "lower-priority")}));
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(2, 20, "higher-priority")}));
+
+  const auto host = MakeHost(harness);
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  ASSERT_EQ(matches.size(), 2u);
+  EXPECT_EQ(matches[0].rule_id, "higher-priority");
+
+  std::optional<std::uint32_t> painted;
+  for (const CFMatch& match : matches) {
+    if (!painted.has_value() && match.dxf_id.has_value()) {
+      painted = match.dxf_id;
+    }
+  }
+  ASSERT_TRUE(painted.has_value());
+  EXPECT_EQ(*painted, 20u);
 }
 
 TEST(CFEvaluator, EvaluateCfAtStopIfTrueHaltsEvaluation) {

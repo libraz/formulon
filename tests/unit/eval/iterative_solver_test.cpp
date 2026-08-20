@@ -2,8 +2,8 @@
 // Unit tests for the iterative-calc solver. The tests drive the solver
 // directly with mock `evaluate_one` / `commit` callbacks rather than
 // going through `RecalcEngine`; that keeps the tests focused on the
-// fixed-point iteration logic itself (convergence detection, divergence
-// detection, value-kind handling, multi-cell SCCs) without dragging in
+// fixed-point iteration logic itself (convergence detection, iteration
+// budgeting, value-kind handling, multi-cell SCCs) without dragging in
 // parser / evaluator state.
 
 #include "eval/iterative_solver.h"
@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -72,7 +73,6 @@ TEST(IterativeSolver, SimpleFixedPointConverges) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_TRUE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_GT(out.iterations_run, 0U);
   EXPECT_LT(out.iterations_run, 100U);
   Value final = store.get(kCellA);
@@ -96,7 +96,6 @@ TEST(IterativeSolver, ImmediateConvergenceAfterSinglePass) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_TRUE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_EQ(out.iterations_run, 2U);
   Value final = store.get(kCellA);
   ASSERT_TRUE(final.is_number());
@@ -124,7 +123,6 @@ TEST(IterativeSolver, IterationLimitExhaustedWithoutConvergence) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_FALSE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_EQ(out.iterations_run, 5U);
   // Cell still holds the last-iteration value (not #NUM!): the solver
   // does not overwrite on iteration-limit exhaustion; the recalc engine
@@ -155,7 +153,6 @@ TEST(IterativeSolver, DivergingSequenceRunsToIterationLimit) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_FALSE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_EQ(out.iterations_run, 100U);
   Value final = store.get(kCellA);
   ASSERT_TRUE(final.is_number());
@@ -186,7 +183,6 @@ TEST(IterativeSolver, ValueKindFlipNeverConverges) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_FALSE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_EQ(out.iterations_run, opts.max_iterations);
   Value final = store.get(kCellA);
   ASSERT_TRUE(final.is_number());
@@ -315,7 +311,6 @@ TEST(IterativeSolver, MultiCellSccConverges) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_TRUE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_LE(out.iterations_run, 3U);
   Value a = store.get(kCellA);
   Value b = store.get(kCellB);
@@ -344,7 +339,6 @@ TEST(IterativeSolver, EmptySccIsNoop) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_TRUE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_EQ(out.iterations_run, 0U);
   EXPECT_FALSE(eval_called);
   EXPECT_FALSE(commit_called);
@@ -356,7 +350,7 @@ TEST(IterativeSolver, MaxIterationsZeroTreatedAsOne) {
   // converges depends on whether the kind matches the seed (Blank).
   // For a numeric output the kind change registers as +infinity delta,
   // so iter 1 ends without convergence -> iteration limit hit ->
-  // !converged && !diverged.
+  // !converged.
   MockStore store;
   IterativeOptions opts;
   opts.enabled = true;
@@ -369,7 +363,6 @@ TEST(IterativeSolver, MaxIterationsZeroTreatedAsOne) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_FALSE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_EQ(out.iterations_run, 1U);
   Value final = store.get(kCellA);
   ASSERT_TRUE(final.is_number());
@@ -390,8 +383,55 @@ TEST(IterativeSolver, BlankResultConvergesOnFirstSweep) {
   const IterativeOutcome out =
       run_iterative_solve(scc, opts, [](CellNodeId /*cell*/) { return Value::blank(); }, commit_fn);
   EXPECT_TRUE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_EQ(out.iterations_run, 1U);
+}
+
+// A never-converging SCC with an unbounded budget must still terminate at
+// Excel's own iteration limit. This asserts the loop count directly rather
+// than the configured value, because the engine has no wall-clock limit and
+// no default cancellation hook: if the clamp were dropped the only symptom
+// would be this test never returning.
+TEST(IterativeSolver, MaxIterationsSaturatesAtExcelsLimit) {
+  MockStore store;
+  IterativeOptions opts;
+  opts.enabled = true;
+  opts.max_iterations = std::numeric_limits<std::uint32_t>::max();
+  // A threshold no finite residual can satisfy, which is what an
+  // `iterateDelta="0"` workbook asks for.
+  opts.max_change = 0.0;
+
+  const std::vector<CellNodeId> scc{kCellA};
+  std::uint64_t evaluations = 0U;
+  auto eval_fn = [&](CellNodeId /*c*/) {
+    ++evaluations;
+    return Value::number(static_cast<double>(evaluations));
+  };
+  auto commit_fn = [&](CellNodeId c, Value v) { store.set(c, v); };
+
+  const IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
+  EXPECT_FALSE(out.converged);
+  EXPECT_EQ(out.iterations_run, kMaxIterationsCap);
+  EXPECT_EQ(evaluations, static_cast<std::uint64_t>(kMaxIterationsCap));
+}
+
+// The clamp must not shorten a solve the caller is entitled to.
+TEST(IterativeSolver, MaxIterationsAtExcelsLimitIsUnchanged) {
+  MockStore store;
+  IterativeOptions opts;
+  opts.enabled = true;
+  opts.max_iterations = kMaxIterationsCap;
+  opts.max_change = 0.0;
+
+  const std::vector<CellNodeId> scc{kCellA};
+  double next = 0.0;
+  auto eval_fn = [&](CellNodeId /*c*/) {
+    next += 1.0;
+    return Value::number(next);
+  };
+  auto commit_fn = [&](CellNodeId c, Value v) { store.set(c, v); };
+
+  const IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
+  EXPECT_EQ(out.iterations_run, kMaxIterationsCap);
 }
 
 }  // namespace

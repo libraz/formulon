@@ -299,7 +299,7 @@ TEST(BuiltinsSubtotal, HiddenRowHonoredForTwoDimensionalRange) {
 
 TEST(BuiltinsSubtotal, HiddenRowHonoredAcrossSheetQualifier) {
   Workbook wb = Workbook::create();
-  Sheet& data = wb.add_sheet("Data");
+  Sheet& data = wb.sheet(wb.add_sheet("Data"));
   for (std::uint32_t r = 0; r < 3; ++r) {
     data.set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
   }
@@ -313,7 +313,7 @@ TEST(BuiltinsSubtotal, HiddenRowHonoredWhenOnlyRightEndpointIsQualified) {
   // `A1:Data!A3` is the mirrored qualifier shape `expand_range` also
   // accepts; the visibility lookup must read the same sheet it does.
   Workbook wb = Workbook::create();
-  Sheet& data = wb.add_sheet("Data");
+  Sheet& data = wb.sheet(wb.add_sheet("Data"));
   for (std::uint32_t r = 0; r < 3; ++r) {
     data.set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
     wb.sheet(0).set_cell_value(r, 0, Value::number(100.0));

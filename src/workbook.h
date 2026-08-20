@@ -86,6 +86,13 @@ class Workbook {
   /// is intentionally separate so the "default Sheet1" guarantee of
   /// `create()` stays unsurprising.
   ///
+  /// The style table is seeded with Excel's reserved defaults exactly as
+  /// `create()` seeds it, so a style record appended through any mutator
+  /// lands after the reserved slots whichever factory built the workbook.
+  /// A reader reconstructing a workbook from a file overrides that with
+  /// `set_styles`, since the file's style table — including its absence —
+  /// is the authoritative one.
+  ///
   /// Move-only contract is identical to `create()`. Note that a
   /// zero-sheet workbook is invalid input for `save()` — Excel rejects
   /// empty sheet lists, and so do we.
@@ -141,22 +148,33 @@ class Workbook {
   /// sheet_count()`.
   Sheet& sheet(std::size_t index) { return sheets_[index]; }
 
-  /// Appends a new sheet with display name `name` and returns a reference to
-  /// it. The Workbook retains ownership and returned references are
-  /// invalidated by subsequent `add_sheet` calls (which may reallocate the
-  /// underlying vector). Duplicate names are not rejected at this layer;
-  /// OOXML-level name validation lives at the I/O boundary.
+  /// Appends a new sheet with display name `name` and returns its index.
   ///
-  /// This name-unchecked overload is for in-process setup that builds a
-  /// workbook it fully controls. It cannot report the `kMaxSheets`
-  /// ceiling: at the ceiling the workbook is left unchanged and the
-  /// existing last sheet is returned. Callers that append from external
-  /// input use `add_sheet_checked`; public API callers that also want
-  /// name validation use `add_sheet_validated`.
-  Sheet& add_sheet(std::string name);
+  /// An index rather than a reference, because `sheets_` is a vector: a
+  /// reference handed out here would be dangling as soon as the next
+  /// append reallocated, and the two-appends-then-use ordering that
+  /// triggers it reads as obviously correct. Callers that want to mutate
+  /// the new sheet go through `sheet(index)`, whose result has the same
+  /// lifetime as any other element reference and is re-fetched after a
+  /// structural mutation.
+  ///
+  /// Returns `kMaxSheets` — never a valid index, since indices run
+  /// `0 .. kMaxSheets - 1` — when the workbook is already at the ceiling,
+  /// leaving it unchanged. This overload has no error channel, so the
+  /// out-of-range sentinel is what keeps a refused append from reading as
+  /// a successful one.
+  ///
+  /// Duplicate names are not rejected at this layer, deliberately: this is
+  /// the entry point that can build a workbook Excel would refuse, which
+  /// is what the reader-rejection tests need to author their fixtures.
+  /// Anything appending from outside the process must not use it. Callers
+  /// that append from external input use `add_sheet_checked`; public API
+  /// callers that also want name validation use `add_sheet_validated`,
+  /// which is the path every binding and both file readers take.
+  std::size_t add_sheet(std::string name);
 
-  /// Appends a new sheet with display name `name`, rejecting the append
-  /// once the workbook holds `kMaxSheets` sheets.
+  /// Appends a new sheet with display name `name` and returns its index,
+  /// rejecting the append once the workbook holds `kMaxSheets` sheets.
   ///
   /// The name itself is taken verbatim, so this is the entry point for
   /// callers that must preserve whatever name their source carried while
@@ -167,7 +185,7 @@ class Workbook {
   ///
   /// Errors:
   ///   * `kSheetCountLimitExceeded` when `sheet_count() == kMaxSheets`.
-  Expected<Sheet*, Error> add_sheet_checked(std::string name);
+  Expected<std::size_t, Error> add_sheet_checked(std::string name);
 
   /// Appends a new sheet after validating `name` the same way
   /// `rename_sheet` does: strict UTF-8, non-empty, at most 31 UTF-16 code units, no
@@ -373,9 +391,20 @@ class Workbook {
   /// Setting `enabled = true` opts in to circular-reference resolution;
   /// circular SCCs that previously surfaced `#REF!` will then be solved
   /// via fixed-point iteration up to `max_iterations` passes.
+  ///
+  /// `max_iterations` is clamped to `eval::kMaxIterationsCap`, so a value
+  /// above it reads back as the cap. The clamp lives here because this is
+  /// where the budget enters the model: an iteration loop elsewhere in the
+  /// engine inherits the bound instead of restating it, and a caller
+  /// cannot hand the engine a count that no wall-clock limit or
+  /// cancellation hook would ever stop. The cap is Excel's own dialog
+  /// limit, so it costs no fidelity. The lower end is not clamped here:
+  /// the solver documents `0` as meaning one pass.
   void set_iterative_options(eval::IterativeOptions opts);
 
-  /// Returns the active iterative-calc options.
+  /// Returns the active iterative-calc options. `max_iterations` is always
+  /// within `eval::kMaxIterationsCap` when the options were installed
+  /// through `set_iterative_options`.
   const eval::IterativeOptions& iterative_options() const noexcept;
 
   // --- Recalc ---

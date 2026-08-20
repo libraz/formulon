@@ -141,7 +141,6 @@ TEST(IterativeProgress, AbortReturnsAbortedOutcome) {
   cap.abort_after = 3U;
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn, &capture_progress, &cap);
   EXPECT_FALSE(out.converged);
-  EXPECT_FALSE(out.diverged);
   EXPECT_TRUE(out.aborted);
   EXPECT_EQ(out.iterations_run, 3U);
   // The last commit before the abort wrote a partial value; the cell

@@ -46,6 +46,15 @@ namespace formulon::eval {
 
 /// Excel's default iteration cap when iterative calc is enabled.
 constexpr std::uint32_t kDefaultMaxIterations = 100U;
+/// Excel's own upper bound on the iteration count, as enforced by its
+/// "Enable iterative calculation" dialog. Every path that populates
+/// `IterativeOptions` from outside the engine clamps to this, because a
+/// larger cap is not merely slow: the solver has no wall-clock limit and
+/// no default cancellation hook, so a workbook asking for billions of
+/// sweeps is an unrecoverable hang rather than a long calculation.
+/// Clamping here matches the reference implementation instead of
+/// trading fidelity for safety.
+constexpr std::uint32_t kMaxIterationsCap = 32767U;
 /// Excel's default absolute convergence threshold.
 constexpr double kDefaultMaxChange = 0.001;
 
@@ -59,7 +68,8 @@ struct IterativeOptions {
   bool enabled = false;
   /// Maximum number of evaluation passes the solver will run before
   /// giving up. Must be at least 1 to make any progress; the solver
-  /// silently treats 0 as 1 to avoid an empty-loop edge case.
+  /// silently treats 0 as 1 to avoid an empty-loop edge case, and
+  /// silently treats anything above `kMaxIterationsCap` as that cap.
   std::uint32_t max_iterations = kDefaultMaxIterations;
   /// Absolute convergence threshold. The solver stops as soon as
   /// `max(|v_n - v_{n-1}|) < max_change` across all numeric members. A
@@ -74,10 +84,6 @@ struct IterativeOutcome {
   /// True when every member's last-pass delta dropped below
   /// `max_change`.
   bool converged = false;
-  /// Reserved for a future numeric-failure mode. The solver intentionally
-  /// does not infer divergence from residual growth because Excel iterates
-  /// until `max_iterations`.
-  bool diverged = false;
   /// True when the user-supplied progress callback returned `false` and
   /// the solver returned early. The cell store is left in its current
   /// partially-converged state; the caller should treat the result as
@@ -132,10 +138,10 @@ using IterativeProgressCb = bool (*)(std::uint32_t iteration, double max_residua
 /// with `IterativeOutcome::aborted == true`. `progress_user_data` is
 /// forwarded verbatim to every callback invocation.
 ///
-/// On divergence, the solver itself calls `commit(cell, #NUM!)` for every
-/// SCC member before returning. On convergence or iteration-limit
-/// exhaustion, the cell store retains whatever the last iteration
-/// produced. On callback-driven abort the cell store is also left as-is.
+/// The solver never commits a value of its own. On convergence,
+/// iteration-limit exhaustion, and callback-driven abort alike, the cell
+/// store retains whatever the last executed iteration produced; the three
+/// outcomes differ only in the flags `IterativeOutcome` reports.
 IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, const IterativeOptions& opts,
                                           const std::function<Value(CellNodeId)>& evaluate_one,
                                           const std::function<void(CellNodeId, Value)>& commit,
