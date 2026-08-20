@@ -33,6 +33,7 @@
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
+#include "eval/volatile_tracker.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "utils/thread_launch.h"
@@ -396,6 +397,123 @@ TEST(Scheduler, WideLayerExecutesOnDistinctWorkerThreads) {
     const Value value = StoredValue(wb, 0U, row, 1U);
     ASSERT_TRUE(value.is_number()) << "row " << row;
     EXPECT_DOUBLE_EQ(value.as_number(), static_cast<double>(row + 1U));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Volatility classes and the layer split
+// ---------------------------------------------------------------------------
+
+TEST(Scheduler, ValueVolatileLayerStaysOnThePool) {
+  // `RAND` re-fires every pass but reads nothing, so the layering derived
+  // from the dependency edges is complete and every one of these cells is
+  // poolable. A pass must therefore dispatch the layer to the workers and
+  // leave no serial tail behind: if the scheduler ever went back to
+  // isolating value volatility, `pooled` would be empty here and the whole
+  // layer would fall to the caller, flipping both counters.
+  constexpr std::uint32_t kRows = 64U;
+  Workbook wb = Workbook::create();
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 0U, "=RAND()*0+1")));
+  }
+
+  SchedulerConfig cfg;
+  cfg.num_threads = 4U;
+  SchedulerStats stats;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, &stats)));
+
+  EXPECT_EQ(stats.cells_evaluated, kRows);
+  EXPECT_EQ(stats.parallel_steps, 1U);
+  EXPECT_EQ(stats.serial_fallback_steps, 0U);
+  EXPECT_GE(stats.worker_threads_used, 1U);
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    const Value v = StoredValue(wb, 0U, row, 0U);
+    ASSERT_TRUE(v.is_number()) << "row " << row;
+    EXPECT_DOUBLE_EQ(v.as_number(), 1.0) << "row " << row;
+  }
+}
+
+TEST(Scheduler, DynamicReferenceLayerLeavesThePoolButValueVolatileDoesNot) {
+  // One layer holding both classes and nothing else: the `INDIRECT` half
+  // must be the serial tail, the `RAND` half must be the pooled body.
+  // Column A is settled before the measured pass so it contributes no
+  // super-node — re-merging the classes would leave the pool with nothing
+  // to do and drop `parallel_steps` to zero. The tracker assertions pin
+  // which cell landed in which class.
+  constexpr std::uint32_t kRows = 32U;
+  Workbook wb = Workbook::create();
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, row, 0U, Value::number(static_cast<double>(row)))));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 1U, "=RAND()*0+1")));
+    ASSERT_TRUE(
+        static_cast<bool>(wb.set_cell_formula(0U, row, 2U, "=INDIRECT(\"A" + std::to_string(row + 1U) + "\")")));
+  }
+
+  SchedulerConfig cfg;
+  cfg.num_threads = 4U;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, nullptr)));
+
+  SchedulerStats stats;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, &stats)));
+  EXPECT_EQ(stats.cells_evaluated, 2U * kRows);
+  EXPECT_EQ(stats.sccs_processed, 2U * kRows);
+  EXPECT_EQ(stats.parallel_steps, 1U);
+  EXPECT_EQ(stats.serial_fallback_steps, 1U);
+
+  const VolatileTracker& volatiles = wb.recalc_engine().volatiles();
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    const CellNodeId value_volatile{0U, row, 1U};
+    const CellNodeId dynamic_volatile{0U, row, 2U};
+    EXPECT_TRUE(volatiles.contains(value_volatile)) << "row " << row;
+    EXPECT_FALSE(volatiles.contains_dynamic_reference(value_volatile)) << "row " << row;
+    EXPECT_TRUE(volatiles.contains(dynamic_volatile)) << "row " << row;
+    EXPECT_TRUE(volatiles.contains_dynamic_reference(dynamic_volatile)) << "row " << row;
+
+    const Value value_result = StoredValue(wb, 0U, row, 1U);
+    ASSERT_TRUE(value_result.is_number()) << "row " << row;
+    EXPECT_DOUBLE_EQ(value_result.as_number(), 1.0) << "row " << row;
+    const Value dynamic_result = StoredValue(wb, 0U, row, 2U);
+    ASSERT_TRUE(dynamic_result.is_number()) << "row " << row;
+    EXPECT_DOUBLE_EQ(dynamic_result.as_number(), static_cast<double>(row)) << "row " << row;
+  }
+}
+
+TEST(Scheduler, MixedVolatilityClassesMatchSerialRecalc) {
+  // Both classes in one workbook, with every value-volatile result folded
+  // back to a fixed number so an ordering difference cannot hide behind a
+  // legitimately changing value. Column A is the target the dynamic
+  // references resolve to at evaluation time.
+  constexpr std::uint32_t kRows = 48U;
+  WorkbookPair wp;
+  wp.set_value(0, 0, 4, Value::number(0.0));  // E1: the OFFSET base.
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    const std::string row_1based = std::to_string(row + 1U);
+    wp.set_formula(0, row, 0, "=RAND()*0+" + row_1based);
+    wp.set_formula(0, row, 1, "=INDIRECT(\"A" + row_1based + "\")");
+    wp.set_formula(0, row, 2, "=IF(NOW()>0,A" + row_1based + ",-1)");
+    wp.set_formula(0, row, 3, "=OFFSET($E$1," + std::to_string(row) + ",-4)");
+  }
+
+  SchedulerConfig cfg;
+  cfg.num_threads = 4U;
+  // Settling pass: no edge orders a dynamic reference against the cell it
+  // reads, so only the steady state is comparable across engines.
+  ASSERT_TRUE(static_cast<bool>(wp.serial.recalc(default_registry())));
+  ASSERT_TRUE(static_cast<bool>(wp.parallel.recalc_parallel(default_registry(), cfg, nullptr)));
+
+  for (std::uint32_t pass = 0U; pass < 4U; ++pass) {
+    ASSERT_TRUE(static_cast<bool>(wp.serial.recalc(default_registry())));
+    ASSERT_TRUE(static_cast<bool>(wp.parallel.recalc_parallel(default_registry(), cfg, nullptr)));
+    for (std::uint32_t row = 0U; row < kRows; ++row) {
+      for (std::uint32_t col = 0U; col < 4U; ++col) {
+        const Value expected = StoredValue(wp.serial, 0U, row, col);
+        ASSERT_TRUE(expected.is_number()) << "pass " << pass << " at (" << row << ", " << col << ")";
+        EXPECT_DOUBLE_EQ(expected.as_number(), static_cast<double>(row + 1U))
+            << "pass " << pass << " at (" << row << ", " << col << ")";
+        EXPECT_EQ(expected, StoredValue(wp.parallel, 0U, row, col))
+            << "pass " << pass << " value mismatch at (" << row << ", " << col << ")";
+      }
+    }
   }
 }
 

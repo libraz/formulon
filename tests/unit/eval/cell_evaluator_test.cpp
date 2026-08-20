@@ -95,11 +95,11 @@ TEST(EvaluateCellForRecalc, ArrayResultSpillsAndReturnsAnchor) {
   EXPECT_EQ(region->cols, 1U);
 }
 
-TEST(EvaluateCellForRecalc, IterativeModeReadsCachedValueInsteadOfRecursing) {
-  // In iterative mode the EvalContext is built without an EvalState,
-  // so a self-referential formula must read the cell's cached value
-  // instead of recursing. Set A1's cached value to 7 and evaluate
-  // `=A1+1` at A2 in iterative mode — should yield 8.
+TEST(EvaluateCellForRecalc, FormulaCellReadTakesTheCachedValueInsteadOfRecursing) {
+  // The EvalContext this helper builds carries no EvalState, so a formula
+  // reference resolves to the referenced cell's cached value rather than
+  // recursing into its formula text. Set A1's cached value to 7 and
+  // evaluate `=A1+1` at A2 — should yield 8.
   Workbook wb = MakeWorkbookWithSheet();
   Sheet& sheet = wb.sheet(0U);
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(7.0))));
@@ -108,7 +108,6 @@ TEST(EvaluateCellForRecalc, IterativeModeReadsCachedValueInsteadOfRecursing) {
   cell.formula_text = "=A1+1";
 
   EvaluateCellOptions opts;
-  opts.iterative_mode = true;
   Arena arena;
   const Value v = evaluate_cell_for_recalc(wb, sheet, cell, /*row=*/1U, /*col=*/0U, default_registry(), arena, opts);
   ASSERT_TRUE(v.is_number());

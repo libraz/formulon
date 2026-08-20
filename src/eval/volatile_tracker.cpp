@@ -1,6 +1,7 @@
 //
-// Implementation of `VolatileTracker::is_volatile_function`. The set of
-// volatile functions is fixed by Excel's contract.
+// Implementation of the `VolatileTracker` name classifiers. The set of
+// volatile functions is fixed by Excel's contract; which of them resolve
+// their reads at evaluation time follows from their argument shapes.
 
 #include "eval/volatile_tracker.h"
 
@@ -34,6 +35,27 @@ bool VolatileTracker::is_volatile_function(std::string_view name) {
              case_insensitive_eq(name, "RANDARRAY");
     case 'T':
       return case_insensitive_eq(name, "TODAY");
+    default:
+      return false;
+  }
+}
+
+bool VolatileTracker::is_dynamic_reference_function(std::string_view name) {
+  // `INDIRECT` builds its reference from text and `OFFSET` derives one
+  // from a base plus runtime displacements, so neither read is visible to
+  // the static dependency extractor. Every other volatile function reads
+  // the host environment (clock, RNG, workbook metadata) or a reference
+  // its caller spelled out, both of which the graph already describes.
+  if (name.empty()) {
+    return false;
+  }
+  using strings::ascii_to_upper;
+  using strings::case_insensitive_eq;
+  switch (ascii_to_upper(name.front())) {
+    case 'I':
+      return case_insensitive_eq(name, "INDIRECT");
+    case 'O':
+      return case_insensitive_eq(name, "OFFSET");
     default:
       return false;
   }

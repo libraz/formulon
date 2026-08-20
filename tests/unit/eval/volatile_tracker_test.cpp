@@ -1,6 +1,6 @@
 //
-// Unit tests for the per-workbook volatile-cell tracker and the
-// `is_volatile_function` static classifier.
+// Unit tests for the per-workbook volatile-cell tracker and its two static
+// name classifiers.
 
 #include "eval/volatile_tracker.h"
 
@@ -30,7 +30,7 @@ TEST(VolatileTracker, RegisterAndContains) {
   VolatileTracker v;
   CellNodeId a = Make(0, 0, 0);
   CellNodeId b = Make(0, 0, 1);
-  v.register_cell(a);
+  v.register_cell(a, VolatileKind::kValue);
   EXPECT_TRUE(v.contains(a));
   EXPECT_FALSE(v.contains(b));
   EXPECT_EQ(v.size(), 1u);
@@ -39,16 +39,16 @@ TEST(VolatileTracker, RegisterAndContains) {
 TEST(VolatileTracker, RegisterIsIdempotent) {
   VolatileTracker v;
   CellNodeId a = Make(0, 1, 1);
-  v.register_cell(a);
-  v.register_cell(a);
-  v.register_cell(a);
+  v.register_cell(a, VolatileKind::kValue);
+  v.register_cell(a, VolatileKind::kValue);
+  v.register_cell(a, VolatileKind::kValue);
   EXPECT_EQ(v.size(), 1u);
 }
 
 TEST(VolatileTracker, UnregisterDropsEntry) {
   VolatileTracker v;
   CellNodeId a = Make(0, 0, 0);
-  v.register_cell(a);
+  v.register_cell(a, VolatileKind::kValue);
   v.unregister_cell(a);
   EXPECT_FALSE(v.contains(a));
   EXPECT_TRUE(v.empty());
@@ -59,9 +59,9 @@ TEST(VolatileTracker, UnregisterDropsEntry) {
 
 TEST(VolatileTracker, ClearEmptiesSet) {
   VolatileTracker v;
-  v.register_cell(Make(0, 0, 0));
-  v.register_cell(Make(0, 0, 1));
-  v.register_cell(Make(1, 5, 5));
+  v.register_cell(Make(0, 0, 0), VolatileKind::kValue);
+  v.register_cell(Make(0, 0, 1), VolatileKind::kValue);
+  v.register_cell(Make(1, 5, 5), VolatileKind::kValue);
   EXPECT_EQ(v.size(), 3u);
   v.clear();
   EXPECT_TRUE(v.empty());
@@ -76,7 +76,7 @@ TEST(VolatileTracker, ForEachVisitsEveryRegisteredCell) {
       Make(2, 9, 0),
   };
   for (CellNodeId id : ids) {
-    v.register_cell(id);
+    v.register_cell(id, VolatileKind::kValue);
   }
 
   std::unordered_set<CellNodeId, CellNodeIdHash> visited;
@@ -140,14 +140,73 @@ TEST(VolatileTracker, IsVolatileFunctionRejectsPrefixesAndSuffixes) {
   EXPECT_FALSE(VolatileTracker::is_volatile_function("INFOX"));
 }
 
+TEST(VolatileTracker, DynamicReferenceClassIsSeparateFromValueClass) {
+  VolatileTracker v;
+  const CellNodeId value_cell = Make(0, 0, 0);
+  const CellNodeId dynamic_cell = Make(0, 0, 1);
+  v.register_cell(value_cell, VolatileKind::kValue);
+  v.register_cell(dynamic_cell, VolatileKind::kDynamicReference);
+
+  EXPECT_TRUE(v.contains(value_cell));
+  EXPECT_TRUE(v.contains(dynamic_cell));
+  EXPECT_FALSE(v.contains_dynamic_reference(value_cell));
+  EXPECT_TRUE(v.contains_dynamic_reference(dynamic_cell));
+  EXPECT_EQ(v.size(), 2u);
+}
+
+TEST(VolatileTracker, UnregisteredCellHasNoDynamicReference) {
+  VolatileTracker v;
+  EXPECT_FALSE(v.contains_dynamic_reference(Make(3, 3, 3)));
+}
+
+TEST(VolatileTracker, ReregisteringReplacesTheRecordedClass) {
+  VolatileTracker v;
+  const CellNodeId cell = Make(0, 2, 2);
+  v.register_cell(cell, VolatileKind::kDynamicReference);
+  ASSERT_TRUE(v.contains_dynamic_reference(cell));
+  // A rewrite that drops the dynamic call must not leave the cell pinned
+  // to the serial path forever.
+  v.register_cell(cell, VolatileKind::kValue);
+  EXPECT_TRUE(v.contains(cell));
+  EXPECT_FALSE(v.contains_dynamic_reference(cell));
+  EXPECT_EQ(v.size(), 1u);
+}
+
+TEST(VolatileTracker, DynamicReferenceClassifierMatchesOnlyResolvedAtEvalTime) {
+  EXPECT_TRUE(VolatileTracker::is_dynamic_reference_function("INDIRECT"));
+  EXPECT_TRUE(VolatileTracker::is_dynamic_reference_function("OFFSET"));
+  EXPECT_TRUE(VolatileTracker::is_dynamic_reference_function("indirect"));
+  EXPECT_TRUE(VolatileTracker::is_dynamic_reference_function("Offset"));
+  // The value-volatile functions read the host environment or a spelled-out
+  // reference; both are covered by the recorded edges.
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("NOW"));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("TODAY"));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("RAND"));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("RANDBETWEEN"));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("RANDARRAY"));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("INFO"));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("CELL"));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("SUM"));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function(""));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("INDIRECTX"));
+  EXPECT_FALSE(VolatileTracker::is_dynamic_reference_function("OFFSE"));
+}
+
+TEST(VolatileTracker, EveryDynamicReferenceFunctionIsAlsoVolatile) {
+  for (const std::string_view name : {"INDIRECT", "OFFSET", "indirect", "Offset"}) {
+    EXPECT_TRUE(VolatileTracker::is_dynamic_reference_function(name)) << name;
+    EXPECT_TRUE(VolatileTracker::is_volatile_function(name)) << name;
+  }
+}
+
 TEST(VolatileTracker, CrossSheetCellsAreDistinct) {
   VolatileTracker v;
   CellNodeId a = Make(0, 1, 1);
   CellNodeId b = Make(1, 1, 1);  // same row/col, different sheet
-  v.register_cell(a);
+  v.register_cell(a, VolatileKind::kValue);
   EXPECT_TRUE(v.contains(a));
   EXPECT_FALSE(v.contains(b));
-  v.register_cell(b);
+  v.register_cell(b, VolatileKind::kValue);
   EXPECT_EQ(v.size(), 2u);
 }
 

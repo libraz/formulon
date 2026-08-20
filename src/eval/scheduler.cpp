@@ -176,26 +176,6 @@ ThreadArenas make_thread_arenas(std::size_t count, std::size_t max_arena_bytes) 
   return arenas;
 }
 
-// Copies the formula cell at `(row, col)` out of `sheet` and stages it for
-// `evaluate_cell_for_recalc`. Returns false when the coordinate holds no
-// formula, in which case `staged` is left untouched.
-//
-// `Sheet::cell_at` hands back a raw `Cell*` and releases the sheet lock, so
-// a worker that kept one across an evaluation would read `formula_text`
-// while a peer's `set_cell_cached_value` rewrites the same slot — and a
-// spill commit that grows the row's storage relocates the slot outright.
-// The staged copy owns the only field the evaluator reads, so neither
-// reaches it.
-bool stage_formula_cell(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Cell& staged) {
-  Sheet::CellRead read;
-  sheet.read_formula_cell(row, col, read);
-  if (!read.is_formula()) {
-    return false;
-  }
-  staged.formula_text.assign(read.formula_text());
-  return true;
-}
-
 // Evaluates a single dirty SCC and writes the result(s) back into `wb`.
 // Holds `write_mutex` only across the per-cell `set_cell_cached_value`
 // call so concurrent evaluators on other SCCs of the same layer do not
@@ -258,7 +238,6 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       }
       arena.reset();
       EvaluateCellOptions opts;
-      opts.iterative_mode = true;
       opts.spill_release_callback = release_callback;
       opts.spill_release_user_data = release_user_data;
       return evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
@@ -684,28 +663,33 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       // and the ones that have to run with every worker parked.
       //
       // "Same layer => no shared dependency edge => safe to run together" is
-      // a statement about the edges the graph records, and a volatile
-      // formula is precisely the case where those edges do not describe the
-      // reads. `INDIRECT` / `OFFSET` compute their target at evaluation
+      // a statement about the edges the graph records, and a dynamic
+      // reference is precisely the case where those edges do not describe
+      // the reads. `INDIRECT` / `OFFSET` compute their target at evaluation
       // time, so `dep_extractor` registers nothing for it and nothing stops
       // that target from sitting in the same layer as its reader — where a
-      // peer worker would be committing it as it is read. Volatile-bearing
-      // super-nodes therefore run on the calling thread once the layer's
-      // edge-scheduled work has drained, against a quiescent cell store.
-      // Only cells the workbook actually registered as volatile lose
-      // parallelism; a workbook with none is scheduled exactly as before.
+      // peer worker would be committing it as it is read. Super-nodes
+      // holding such a cell therefore run on the calling thread once the
+      // layer's edge-scheduled work has drained, against a quiescent cell
+      // store.
+      //
+      // Value volatility (`RAND` / `NOW` / `TODAY` / ...) is a different
+      // property: the result changes every pass, but every cell read is
+      // still described by an edge, so the layering is complete and those
+      // super-nodes stay poolable. Only the dynamic-reference class loses
+      // parallelism.
       std::vector<std::size_t> pooled;
       std::vector<std::size_t> isolated;
       pooled.reserve(layer.size());
       for (const std::size_t scc_id : layer) {
-        bool volatile_bearing = false;
+        bool dynamic_reference_bearing = false;
         for (const CellNodeId member : idx.components[scc_id]) {
-          if (engine.volatiles_.contains(member)) {
-            volatile_bearing = true;
+          if (engine.volatiles_.contains_dynamic_reference(member)) {
+            dynamic_reference_bearing = true;
             break;
           }
         }
-        (volatile_bearing ? isolated : pooled).push_back(scc_id);
+        (dynamic_reference_bearing ? isolated : pooled).push_back(scc_id);
       }
 
       bool run_serial = pooled.size() <= 1U || configured_worker_count <= 1U || callback_cycle;
@@ -772,8 +756,8 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       ++parallel_steps;
 
       // `run()` returned, so every worker is back at the barrier and the
-      // cell store is quiescent. This is where the layer's volatile-bearing
-      // super-nodes run.
+      // cell store is quiescent. This is where the layer's
+      // dynamic-reference super-nodes run.
       if (!isolated.empty()) {
         ++serial_fallback_steps;
         Arena& arena = *arenas[0U];

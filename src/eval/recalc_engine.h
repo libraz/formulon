@@ -35,6 +35,7 @@
 #ifndef FORMULON_EVAL_RECALC_ENGINE_H_
 #define FORMULON_EVAL_RECALC_ENGINE_H_
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -315,7 +316,22 @@ class RecalcEngine {
   /// 0.001 max change). Callers flip `enabled = true` to opt circular
   /// SCCs into fixed-point resolution; the next `recalc()` pass picks up
   /// the new options.
-  void set_iterative_options(IterativeOptions opts) noexcept { iterative_ = opts; }
+  ///
+  /// `max_iterations` is clamped to `kMaxIterationsCap` here rather than
+  /// at each producer, because this is the one place the budget enters
+  /// the engine: the options live in this object, so every reader of
+  /// `iterative_options()` — including iteration loops outside the solver,
+  /// which never see a cyclic component — inherits the bound instead of
+  /// restating it. Without a bound the engine has no wall-clock limit and
+  /// no cancellation unless the host installed a progress callback, so an
+  /// arbitrary count is an unrecoverable hang rather than a slow
+  /// calculation. The cap is Excel's own dialog limit, so it costs no
+  /// fidelity. The low end is left alone: `0` is the solver's documented
+  /// spelling for a single pass.
+  void set_iterative_options(IterativeOptions opts) noexcept {
+    opts.max_iterations = std::min(opts.max_iterations, kMaxIterationsCap);
+    iterative_ = opts;
+  }
 
   /// Returns the active iterative-calc options.
   const IterativeOptions& iterative_options() const noexcept { return iterative_; }

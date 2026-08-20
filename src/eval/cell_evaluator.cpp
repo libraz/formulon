@@ -9,7 +9,6 @@
 
 #include "cell.h"
 #include "eval/eval_context.h"
-#include "eval/eval_state.h"
 #include "eval/formula_text_utils.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
@@ -23,6 +22,16 @@
 
 namespace formulon {
 namespace eval {
+
+bool stage_formula_cell(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Cell& staged) {
+  Sheet::CellRead read;
+  sheet.read_formula_cell(row, col, read);
+  if (!read.is_formula()) {
+    return false;
+  }
+  staged.formula_text.assign(read.formula_text());
+  return true;
+}
 
 Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cell_data, std::uint32_t row,
                                std::uint32_t col, const FunctionRegistry& registry, Arena& arena,
@@ -43,32 +52,22 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   }
 
   // Build an EvalContext that authorises spill writes on `sheet` and
-  // anchors the formula at the cell being evaluated. Outside of iterative
-  // mode each cell gets its own EvalState so the recursion stack / memo
-  // are scoped to one top-level evaluate() call — the dep graph already
-  // handles the workbook-wide ordering.
-  EvalState state;
-  EvalContext ctx;
-  if (opts.iterative_mode || opts.use_cached_formula_refs) {
-    // Workbook-bound, state-less context: formula refs short-circuit to
-    // their cached values. This is required for iterative calculation and
-    // for the normal dependency-ordered recalc path alike.
-    ctx = EvalContext::workbook_only(workbook, sheet)
-              .with_excel_profile(workbook.excel_profile())
-              .with_date1904(workbook.date1904())
-              .with_pinned_now(workbook.pinned_now())
-              .with_mutable_sheet(sheet)
-              .with_spill_release_callback(opts.spill_release_callback, opts.spill_release_user_data)
-              .with_formula_cell(row, col);
-  } else {
-    ctx = EvalContext(workbook, sheet, state)
-              .with_excel_profile(workbook.excel_profile())
-              .with_date1904(workbook.date1904())
-              .with_pinned_now(workbook.pinned_now())
-              .with_mutable_sheet(sheet)
-              .with_spill_release_callback(opts.spill_release_callback, opts.spill_release_user_data)
-              .with_formula_cell(row, col);
-  }
+  // anchors the formula at the cell being evaluated. The context is
+  // workbook-bound and state-less, so a formula-cell read short-circuits to
+  // that cell's cached value instead of recursing into its formula text.
+  // Both recalc paths need that: iterative calculation reads each SCC
+  // member's last committed value, and the dependency-ordered path has
+  // already computed every predecessor, so recursing would re-enter the
+  // tree walker once per hop and exhaust its recursion budget on a long
+  // chain. Ad-hoc evaluation, which does want recursive resolution, builds
+  // its own `EvalContext` rather than coming through this recalc helper.
+  EvalContext ctx = EvalContext::workbook_only(workbook, sheet)
+                        .with_excel_profile(workbook.excel_profile())
+                        .with_date1904(workbook.date1904())
+                        .with_pinned_now(workbook.pinned_now())
+                        .with_mutable_sheet(sheet)
+                        .with_spill_release_callback(opts.spill_release_callback, opts.spill_release_user_data)
+                        .with_formula_cell(row, col);
   // The recalc engine owns iterative-calc resolution (SCC detection + the
   // iterative solver). Each per-cell evaluation it issues must be a single
   // pass; suppress the `evaluate()`-level fixed-point driver so the two

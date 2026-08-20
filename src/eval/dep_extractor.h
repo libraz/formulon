@@ -14,9 +14,12 @@
 //      Excel-volatile one. Sheet qualifiers are resolved against the bound
 //      `Workbook` so cross-sheet references land on the correct `sheet_id`.
 //   2. Whether any function call in the tree is one of the nine Excel
-//      Volatile functions (per `VolatileTracker::is_volatile_function`).
-//      The recalc engine uses this to add the formula's cell to the
-//      always-dirty seed set.
+//      Volatile functions (per `VolatileTracker::is_volatile_function`),
+//      and separately whether any of them resolves its reads at
+//      evaluation time (per `is_dynamic_reference_function`). The recalc
+//      engine uses the first to add the formula's cell to the
+//      always-dirty seed set and the second to decide whether the cell
+//      may be evaluated concurrently with its layer.
 //
 // Defined-name (`NameRef`) nodes are resolved against the workbook's
 // `defined_names()` list: a sheet-scoped definition matching the current
@@ -130,6 +133,10 @@ struct ExtractedDeps {
   /// nodes, including those reached through defined names / named Lambdas.
   std::vector<ThreeDSheetSpanDependency> three_d_spans;
   bool is_volatile = false;
+  /// True when a volatile call in the AST resolves the cells it reads at
+  /// evaluation time, so `cell_deps` / `range_deps` cannot describe that
+  /// read. Implies `is_volatile`.
+  bool has_dynamic_reference = false;
 };
 
 /// Walks `node` and reports the cell dependencies and volatility status of

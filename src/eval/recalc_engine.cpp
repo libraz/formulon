@@ -339,7 +339,7 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
     }
   });
   if (deps.is_volatile) {
-    volatiles_.register_cell(cell);
+    volatiles_.register_cell(cell, deps.has_dynamic_reference ? VolatileKind::kDynamicReference : VolatileKind::kValue);
   }
   update_potential_spill_producer_locked(cell, spill_potential(ast));
 }
@@ -559,13 +559,18 @@ recalc_next_wave:
       // dynamic-array spills back into a scalar anchor. The `commit`
       // lambda writes the new value into the cell store so the next
       // iteration's `evaluate_one` reads the freshest value back.
+      // Hoisted out of `evaluate_one` so a staged formula's bytes stay live
+      // exactly as long as the arena contents of the same call: a string
+      // literal inside the formula surfaces in the returned Value as a view
+      // into this buffer, and the solver consumes each result before asking
+      // for the next one (which resets the arena).
+      Cell staged;
       auto evaluate_one = [&](CellNodeId c) -> Value {
         if (c.sheet_id >= sheet_count) {
           return Value::error(ErrorCode::Ref);
         }
         Sheet& sheet = workbook.sheet(c.sheet_id);
-        const Cell* cell_data = sheet.cell_at(c.row, c.col);
-        if (cell_data == nullptr || cell_data->formula_text.empty()) {
+        if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
           // No formula text: nothing to evaluate. Treat as Blank so the
           // solver still has a value to compare against — this happens
           // only on logic bugs but we degrade gracefully.
@@ -579,10 +584,9 @@ recalc_next_wave:
         // `Sheet::commit_spill`.
         arena_->reset();
         EvaluateCellOptions opts;
-        opts.iterative_mode = true;
         opts.spill_release_callback = release_callback;
         opts.spill_release_user_data = &release_queue;
-        return evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
+        return evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
       };
       auto commit = [&](CellNodeId c, Value v) {
         if (c.sheet_id >= sheet_count) {
@@ -628,8 +632,8 @@ recalc_next_wave:
       continue;
     }
     Sheet& sheet = workbook.sheet(only.sheet_id);
-    const Cell* cell_data = sheet.cell_at(only.row, only.col);
-    if (cell_data == nullptr || cell_data->formula_text.empty()) {
+    Cell staged;
+    if (!stage_formula_cell(sheet, only.row, only.col, staged)) {
       // The dep graph may carry pure-input cells (read-only literals that
       // someone reads via `add_dependency`). They have nothing to evaluate.
       continue;
@@ -649,7 +653,7 @@ recalc_next_wave:
     EvaluateCellOptions opts;
     opts.spill_release_callback = release_callback;
     opts.spill_release_user_data = &release_queue;
-    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_, opts);
+    Value result = evaluate_cell_for_recalc(workbook, sheet, staged, only.row, only.col, registry, *arena_, opts);
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
     }
@@ -671,15 +675,15 @@ recalc_next_wave:
       continue;
     }
     Sheet& sheet = workbook.sheet(c.sheet_id);
-    const Cell* cell_data = sheet.cell_at(c.row, c.col);
-    if (cell_data == nullptr || cell_data->formula_text.empty()) {
+    Cell staged;
+    if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
       continue;
     }
     arena_->reset();
     EvaluateCellOptions opts;
     opts.spill_release_callback = release_callback;
     opts.spill_release_user_data = &release_queue;
-    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
+    Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
     }
@@ -1032,21 +1036,24 @@ partial_recalc_next_wave:
         continue;
       }
 
+      // Hoisted for the same reason as the full-recalc solver above: the
+      // staged bytes have to outlive each `evaluate_one` call, because a
+      // string literal in the formula surfaces in the result as a view
+      // into them.
+      Cell staged;
       auto evaluate_one = [&](CellNodeId c) -> Value {
         if (c.sheet_id >= sheet_count) {
           return Value::error(ErrorCode::Ref);
         }
         Sheet& sheet = workbook.sheet(c.sheet_id);
-        const Cell* cell_data = sheet.cell_at(c.row, c.col);
-        if (cell_data == nullptr || cell_data->formula_text.empty()) {
+        if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
           return Value::blank();
         }
         arena_->reset();
         EvaluateCellOptions opts;
-        opts.iterative_mode = true;
         opts.spill_release_callback = release_callback;
         opts.spill_release_user_data = &release_queue;
-        return evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
+        return evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
       };
       auto commit = [&](CellNodeId c, Value v) {
         if (c.sheet_id >= sheet_count) {
@@ -1068,7 +1075,6 @@ partial_recalc_next_wave:
           ++stats.iterative_cells;
         }
       } else {
-        // As in full recalc, only an actual divergence writes `#NUM!`.
         // A finite iteration budget leaves the solver's final approximation
         // in place so a later viewport/full pass can resume from it.
         for (CellNodeId c : component) {
@@ -1090,15 +1096,15 @@ partial_recalc_next_wave:
       continue;
     }
     Sheet& sheet = workbook.sheet(only.sheet_id);
-    const Cell* cell_data = sheet.cell_at(only.row, only.col);
-    if (cell_data == nullptr || cell_data->formula_text.empty()) {
+    Cell staged;
+    if (!stage_formula_cell(sheet, only.row, only.col, staged)) {
       continue;
     }
     arena_->reset();
     EvaluateCellOptions opts;
     opts.spill_release_callback = release_callback;
     opts.spill_release_user_data = &release_queue;
-    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_, opts);
+    Value result = evaluate_cell_for_recalc(workbook, sheet, staged, only.row, only.col, registry, *arena_, opts);
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
     }
@@ -1121,15 +1127,15 @@ partial_recalc_next_wave:
       continue;
     }
     Sheet& sheet = workbook.sheet(c.sheet_id);
-    const Cell* cell_data = sheet.cell_at(c.row, c.col);
-    if (cell_data == nullptr || cell_data->formula_text.empty()) {
+    Cell staged;
+    if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
       continue;
     }
     arena_->reset();
     EvaluateCellOptions opts;
     opts.spill_release_callback = release_callback;
     opts.spill_release_user_data = &release_queue;
-    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
+    Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
     }

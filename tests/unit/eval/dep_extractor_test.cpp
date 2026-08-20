@@ -149,6 +149,47 @@ TEST(DepExtractor, OffsetIsVolatileAndStillVisitsArgRefs) {
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
 }
 
+TEST(DepExtractor, ValueVolatileCallsCarryNoDynamicReference) {
+  // These read the clock, the RNG or workbook metadata; the cells they
+  // read (none, or a reference the caller spelled out) are exactly what
+  // `cell_deps` records.
+  Workbook wb = Workbook::create();
+  for (const char* formula :
+       {"NOW()", "TODAY()", "RAND()", "RANDBETWEEN(1,9)", "RANDARRAY(2,2)", "INFO(\"numfile\")", "CELL(\"row\",A1)"}) {
+    Arena arena;
+    const parser::AstNode* root = ParseFormula(formula, arena);
+    ASSERT_NE(root, nullptr) << formula;
+    ExtractedDeps deps = extract_deps(*root, 0U, wb);
+    EXPECT_TRUE(deps.is_volatile) << formula;
+    EXPECT_FALSE(deps.has_dynamic_reference) << formula;
+  }
+}
+
+TEST(DepExtractor, IndirectAndOffsetCarryADynamicReference) {
+  Workbook wb = Workbook::create();
+  for (const char* formula :
+       {"INDIRECT(\"A1\")", "OFFSET(A1,1,1)", "indirect(B2&\"\")", "Offset(A1,1,1)", "SUM(RAND(),INDIRECT(\"A1\"))"}) {
+    Arena arena;
+    const parser::AstNode* root = ParseFormula(formula, arena);
+    ASSERT_NE(root, nullptr) << formula;
+    ExtractedDeps deps = extract_deps(*root, 0U, wb);
+    EXPECT_TRUE(deps.is_volatile) << formula;
+    EXPECT_TRUE(deps.has_dynamic_reference) << formula;
+  }
+}
+
+TEST(DepExtractor, ShadowedIndirectCarriesNoDynamicReference) {
+  // A LET-bound name that merely spells like `INDIRECT` is not the
+  // built-in, so it must not force the cell onto the serial path.
+  Workbook wb = Workbook::create();
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("LET(INDIRECT,LAMBDA(x,x+1),INDIRECT(1))", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_FALSE(deps.has_dynamic_reference);
+}
+
 TEST(DepExtractor, MixedScalarAndRangeNonVolatile) {
   Workbook wb = Workbook::create();
   Arena arena;

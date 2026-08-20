@@ -13,6 +13,7 @@
 #include "eval/dep_graph.h"
 #include "eval/function_registry.h"
 #include "eval/scheduler.h"
+#include "eval/volatile_tracker.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 #include "value.h"
@@ -415,6 +416,35 @@ TEST(RecalcEngine, VolatileCellReexecutesEveryRecalc) {
   ASSERT_TRUE(static_cast<bool>(stats2));
   EXPECT_EQ(stats2.value().volatile_cells, 1u);
   EXPECT_EQ(stats2.value().cells_evaluated, 1u);
+}
+
+TEST(RecalcEngine, RegistrationRecordsTheVolatilityClass) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=RAND()")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=INDIRECT(\"B1\")")));
+  // Both classes in one formula: the dynamic read is the binding one.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=RAND()+OFFSET(B1,1,0)")));
+
+  const VolatileTracker& volatiles = wb.recalc_engine().volatiles();
+  EXPECT_EQ(volatiles.size(), 3u);
+  EXPECT_TRUE(volatiles.contains(CellNodeId{0U, 0U, 0U}));
+  EXPECT_FALSE(volatiles.contains_dynamic_reference(CellNodeId{0U, 0U, 0U}));
+  EXPECT_TRUE(volatiles.contains_dynamic_reference(CellNodeId{0U, 1U, 0U}));
+  EXPECT_TRUE(volatiles.contains_dynamic_reference(CellNodeId{0U, 2U, 0U}));
+}
+
+TEST(RecalcEngine, RewritingAwayADynamicReferenceDropsTheClass) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=INDIRECT(\"B1\")")));
+  ASSERT_TRUE(wb.recalc_engine().volatiles().contains_dynamic_reference(CellNodeId{0U, 0U, 0U}));
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=RAND()")));
+  EXPECT_TRUE(wb.recalc_engine().volatiles().contains(CellNodeId{0U, 0U, 0U}));
+  EXPECT_FALSE(wb.recalc_engine().volatiles().contains_dynamic_reference(CellNodeId{0U, 0U, 0U}));
+
+  // A rewrite to a non-volatile formula drops the cell entirely.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=1+1")));
+  EXPECT_FALSE(wb.recalc_engine().volatiles().contains(CellNodeId{0U, 0U, 0U}));
 }
 
 TEST(RecalcEngine, CrossSheetReferencePropagatesValue) {

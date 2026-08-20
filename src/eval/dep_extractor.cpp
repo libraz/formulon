@@ -551,6 +551,9 @@ void walk(const parser::AstNode& node, WalkState& state) {
       // volatile merely because its spelling resembles a built-in.
       if (lexical == nullptr && defined == nullptr && VolatileTracker::is_volatile_function(node.as_call_name())) {
         state.out->is_volatile = true;
+        if (VolatileTracker::is_dynamic_reference_function(node.as_call_name())) {
+          state.out->has_dynamic_reference = true;
+        }
       }
       if (lexical != nullptr) {
         if (lexical->lambda != nullptr) {
