@@ -28,6 +28,15 @@
 # `brotli` is absent from PATH the Brotli check is skipped, not failed --
 # a missing tool must not turn into a phantom size regression.
 #
+# Two margins are reported per measure, and neither is called just "headroom".
+# The soft ceiling is a tripwire: it sits just above the shipped binary so one
+# feature's worth of growth trips it, leaving room to react before the gate.
+# The hard ceiling is what fails the build. A reader deciding whether a change
+# has room wants the soft margin; a reader asking whether CI will pass wants
+# the hard one. Reporting a single unqualified figure invites the first
+# question to be answered with the second number, so every margin here names
+# the ceiling it was measured against.
+#
 # The report also names the Emscripten toolchain that produced the artifact,
 # read from the `<artifact>.toolchain` stamp the WASM build writes, and
 # compares it against the pin in tools/wasm/emsdk-version.txt. A different
@@ -57,7 +66,9 @@ Usage: ${PROG} [PATH] [--json] [--ceiling-bytes N] [--soft-ceiling-bytes N]
        [--brotli-ceiling-bytes N] [--brotli-soft-ceiling-bytes N]
 
 Report the size of a Formulon .wasm artifact and check it against the
-configured size ceilings.
+configured size ceilings. Margins are reported against both the soft ceiling
+(the tripwire, read this one when judging whether a change has room) and the
+hard ceiling (what fails the build).
 
 Arguments:
   PATH                            Path to the .wasm file (default: build-wasm/formulon.wasm)
@@ -296,20 +307,33 @@ elif [ "$UNCOMPRESSED_STATUS" = "over-soft-ceiling" ] || [ "$BROTLI_STATUS" = "o
   STATUS="over-soft-ceiling"
 fi
 
-# Compute headroom against the hard ceiling. May be negative.
-HEADROOM_BYTES="$(awk -v h="$HARD_CEILING" -v u="$UNCOMPRESSED_BYTES" \
-  'BEGIN { printf "%d", h - u }')"
-HEADROOM_PCT="$(awk -v h="$HARD_CEILING" -v u="$UNCOMPRESSED_BYTES" \
-  'BEGIN { if (h <= 0) { print "0.0"; exit } printf "%.1f", (h - u) * 100.0 / h }')"
+# Margin of a measure against one ceiling. Negative once the ceiling is
+# exceeded; the percentage is of that ceiling, so the two margins are not
+# comparable to each other and are never printed without their label.
+margin_bytes() { awk -v c="$1" -v u="$2" 'BEGIN { printf "%d", c - u }'; }
+margin_pct() {
+  awk -v c="$1" -v u="$2" \
+    'BEGIN { if (c <= 0) { print "0.0"; exit } printf "%.1f", (c - u) * 100.0 / c }'
+}
+
+SOFT_MARGIN_BYTES="$(margin_bytes "$SOFT_CEILING" "$UNCOMPRESSED_BYTES")"
+SOFT_MARGIN_PCT="$(margin_pct "$SOFT_CEILING" "$UNCOMPRESSED_BYTES")"
+HARD_MARGIN_BYTES="$(margin_bytes "$HARD_CEILING" "$UNCOMPRESSED_BYTES")"
+HARD_MARGIN_PCT="$(margin_pct "$HARD_CEILING" "$UNCOMPRESSED_BYTES")"
 if [ -n "$BROTLI_BYTES" ]; then
-  BROTLI_HEADROOM_BYTES="$(awk -v h="$BROTLI_HARD_CEILING" -v u="$BROTLI_BYTES" \
-    'BEGIN { printf "%d", h - u }')"
-  BROTLI_HEADROOM_PCT="$(awk -v h="$BROTLI_HARD_CEILING" -v u="$BROTLI_BYTES" \
-    'BEGIN { if (h <= 0) { print "0.0"; exit } printf "%.1f", (h - u) * 100.0 / h }')"
+  BROTLI_SOFT_MARGIN_BYTES="$(margin_bytes "$BROTLI_SOFT_CEILING" "$BROTLI_BYTES")"
+  BROTLI_SOFT_MARGIN_PCT="$(margin_pct "$BROTLI_SOFT_CEILING" "$BROTLI_BYTES")"
+  BROTLI_HARD_MARGIN_BYTES="$(margin_bytes "$BROTLI_HARD_CEILING" "$BROTLI_BYTES")"
+  BROTLI_HARD_MARGIN_PCT="$(margin_pct "$BROTLI_HARD_CEILING" "$BROTLI_BYTES")"
 else
-  BROTLI_HEADROOM_BYTES=""
-  BROTLI_HEADROOM_PCT=""
+  BROTLI_SOFT_MARGIN_BYTES=""
+  BROTLI_SOFT_MARGIN_PCT=""
+  BROTLI_HARD_MARGIN_BYTES=""
+  BROTLI_HARD_MARGIN_PCT=""
 fi
+
+# A negative margin is easy to skim past, so say so in words next to it.
+margin_note() { [ "$1" -lt 0 ] && printf ' [over]' || true; }
 
 # Pretty MiB / KiB. awk handles the floats.
 mib() { awk -v b="$1" 'BEGIN { printf "%.2f", b / 1048576.0 }'; }
@@ -333,14 +357,20 @@ if [ "$EMIT_JSON" -eq 1 ]; then
   printf '"soft_ceiling_bytes":%s,' "$SOFT_CEILING"
   printf '"brotli_hard_ceiling_bytes":%s,' "$BROTLI_HARD_CEILING"
   printf '"brotli_soft_ceiling_bytes":%s,' "$BROTLI_SOFT_CEILING"
-  printf '"headroom_bytes":%s,' "$HEADROOM_BYTES"
-  printf '"headroom_pct":%s,' "$HEADROOM_PCT"
-  if [ -n "$BROTLI_HEADROOM_BYTES" ]; then
-    printf '"brotli_headroom_bytes":%s,' "$BROTLI_HEADROOM_BYTES"
-    printf '"brotli_headroom_pct":%s,' "$BROTLI_HEADROOM_PCT"
+  printf '"soft_margin_bytes":%s,' "$SOFT_MARGIN_BYTES"
+  printf '"soft_margin_pct":%s,' "$SOFT_MARGIN_PCT"
+  printf '"hard_margin_bytes":%s,' "$HARD_MARGIN_BYTES"
+  printf '"hard_margin_pct":%s,' "$HARD_MARGIN_PCT"
+  if [ -n "$BROTLI_SOFT_MARGIN_BYTES" ]; then
+    printf '"brotli_soft_margin_bytes":%s,' "$BROTLI_SOFT_MARGIN_BYTES"
+    printf '"brotli_soft_margin_pct":%s,' "$BROTLI_SOFT_MARGIN_PCT"
+    printf '"brotli_hard_margin_bytes":%s,' "$BROTLI_HARD_MARGIN_BYTES"
+    printf '"brotli_hard_margin_pct":%s,' "$BROTLI_HARD_MARGIN_PCT"
   else
-    printf '"brotli_headroom_bytes":null,'
-    printf '"brotli_headroom_pct":null,'
+    printf '"brotli_soft_margin_bytes":null,'
+    printf '"brotli_soft_margin_pct":null,'
+    printf '"brotli_hard_margin_bytes":null,'
+    printf '"brotli_hard_margin_pct":null,'
   fi
   printf '"emcc_version":"%s",' "$EMCC_VERSION"
   printf '"emcc_source":"%s",' "$EMCC_SOURCE"
@@ -356,34 +386,41 @@ if [ "$EMIT_JSON" -eq 1 ]; then
   printf '}\n'
 else
   printf '%s\n' "$WASM_NAME"
-  printf '  uncompressed: %s bytes (%s MiB)\n' "$UNCOMPRESSED_BYTES" "$(mib "$UNCOMPRESSED_BYTES")"
+  printf '  uncompressed:   %s bytes (%s MiB)\n' "$UNCOMPRESSED_BYTES" "$(mib "$UNCOMPRESSED_BYTES")"
   if [ -n "$BROTLI_BYTES" ]; then
-    printf '  brotli:       %s bytes (%s KiB)   [tool: %s]\n' \
+    printf '  brotli:         %s bytes (%s KiB)   [tool: %s]\n' \
       "$BROTLI_BYTES" "$(kib "$BROTLI_BYTES")" "$BROTLI_TOOL_NOTE"
   else
-    printf '  brotli:       (skipped)                  [tool: %s]\n' "$BROTLI_TOOL_NOTE"
+    printf '  brotli:         (skipped)                  [tool: %s]\n' "$BROTLI_TOOL_NOTE"
   fi
-  printf '  ceiling:      %s bytes (%s MiB)   [hard ceiling]\n' \
-    "$HARD_CEILING" "$(mib "$HARD_CEILING")"
-  printf '  soft-ceiling: %s bytes (%s MiB)   [stretch goal]\n' \
+  printf '  soft-ceiling:   %s bytes (%s MiB)   [tripwire]\n' \
     "$SOFT_CEILING" "$(mib "$SOFT_CEILING")"
-  printf '  headroom:     %s bytes (%s%%)\n' "$HEADROOM_BYTES" "$HEADROOM_PCT"
-  printf '  br-ceiling:   %s bytes (%s KiB)   [hard ceiling]\n' \
-    "$BROTLI_HARD_CEILING" "$(kib "$BROTLI_HARD_CEILING")"
-  printf '  br-soft:      %s bytes (%s KiB)   [stretch goal]\n' \
+  printf '  hard-ceiling:   %s bytes (%s MiB)   [CI gate]\n' \
+    "$HARD_CEILING" "$(mib "$HARD_CEILING")"
+  printf '  margin-to-soft: %s bytes (%s%%)%s\n' \
+    "$SOFT_MARGIN_BYTES" "$SOFT_MARGIN_PCT" "$(margin_note "$SOFT_MARGIN_BYTES")"
+  printf '  margin-to-hard: %s bytes (%s%%)%s\n' \
+    "$HARD_MARGIN_BYTES" "$HARD_MARGIN_PCT" "$(margin_note "$HARD_MARGIN_BYTES")"
+  printf '  br-soft:        %s bytes (%s KiB)   [tripwire]\n' \
     "$BROTLI_SOFT_CEILING" "$(kib "$BROTLI_SOFT_CEILING")"
-  if [ -n "$BROTLI_HEADROOM_BYTES" ]; then
-    printf '  br-headroom:  %s bytes (%s%%)\n' "$BROTLI_HEADROOM_BYTES" "$BROTLI_HEADROOM_PCT"
+  printf '  br-hard:        %s bytes (%s KiB)   [CI gate]\n' \
+    "$BROTLI_HARD_CEILING" "$(kib "$BROTLI_HARD_CEILING")"
+  if [ -n "$BROTLI_SOFT_MARGIN_BYTES" ]; then
+    printf '  br-margin-soft: %s bytes (%s%%)%s\n' \
+      "$BROTLI_SOFT_MARGIN_BYTES" "$BROTLI_SOFT_MARGIN_PCT" "$(margin_note "$BROTLI_SOFT_MARGIN_BYTES")"
+    printf '  br-margin-hard: %s bytes (%s%%)%s\n' \
+      "$BROTLI_HARD_MARGIN_BYTES" "$BROTLI_HARD_MARGIN_PCT" "$(margin_note "$BROTLI_HARD_MARGIN_BYTES")"
   else
-    printf '  br-headroom:  (skipped)\n'
+    printf '  br-margin-soft: (skipped)\n'
+    printf '  br-margin-hard: (skipped)\n'
   fi
-  printf '  toolchain:    emcc %s (%s)\n' "$EMCC_VERSION" "$EMCC_SOURCE"
+  printf '  toolchain:      emcc %s (%s)\n' "$EMCC_VERSION" "$EMCC_SOURCE"
   if [ -n "$EMSDK_PIN" ]; then
-    printf '  emsdk-pin:    %s (%s)\n' "$EMSDK_PIN" "$TOOLCHAIN_STATUS"
+    printf '  emsdk-pin:      %s (%s)\n' "$EMSDK_PIN" "$TOOLCHAIN_STATUS"
   else
-    printf '  emsdk-pin:    (unreadable)\n'
+    printf '  emsdk-pin:      (unreadable)\n'
   fi
-  printf '  status:       %s (uncompressed: %s, brotli: %s)\n' \
+  printf '  status:         %s (uncompressed: %s, brotli: %s)\n' \
     "$STATUS" "$UNCOMPRESSED_STATUS" "$BROTLI_STATUS"
 fi
 
