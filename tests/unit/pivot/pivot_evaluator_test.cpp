@@ -1567,6 +1567,111 @@ TEST(RelativePeriod, TheWindowFollowsTheWorkbookEpoch) {
   EXPECT_DOUBLE_EQ(window.high, Serial(2026, 5, 31) - eval::date_time::kDate1904EpochGap);
 }
 
+TEST(RelativePeriod, WeekWindowsRunSundayThroughSaturday) {
+  // Excel anchors the week group on the calendar week, so a reading taken
+  // mid-week still starts the window on the preceding Sunday rather than
+  // seven days back from the reading. 2026-08-21 is a Friday.
+  constexpr eval::date_time::CivilTime kAug21{{2026, 8U, 21U}, {9U, 30U, 0U}};
+  ExpectWindow(RelativePeriod::ThisWeek, kAug21, 2026, 8, 16, 2026, 8, 22);
+  ExpectWindow(RelativePeriod::LastWeek, kAug21, 2026, 8, 9, 2026, 8, 15);
+  ExpectWindow(RelativePeriod::NextWeek, kAug21, 2026, 8, 23, 2026, 8, 29);
+}
+
+TEST(RelativePeriod, WeekWindowsTileWithoutGapOrOverlap) {
+  // The three windows are adjacent by construction; asserting it directly
+  // is what rules out an off-by-one that a single window would hide.
+  const DateWindow last = resolve_relative_period(RelativePeriod::LastWeek, kMay20, /*date1904=*/false);
+  const DateWindow current = resolve_relative_period(RelativePeriod::ThisWeek, kMay20, /*date1904=*/false);
+  const DateWindow next = resolve_relative_period(RelativePeriod::NextWeek, kMay20, /*date1904=*/false);
+  EXPECT_DOUBLE_EQ(current.low, last.high + 1.0);
+  EXPECT_DOUBLE_EQ(next.low, current.high + 1.0);
+  EXPECT_DOUBLE_EQ(current.high - current.low, 6.0);
+}
+
+TEST(RelativePeriod, AWeekWindowStartingOnSundayDoesNotShiftBack) {
+  // A Sunday reading is the boundary case: the week it belongs to is its
+  // own, not the one that just ended.
+  constexpr eval::date_time::CivilTime kSunday{{2025, 12U, 28U}, {0U, 0U, 0U}};
+  ExpectWindow(RelativePeriod::ThisWeek, kSunday, 2025, 12, 28, 2026, 1, 3);
+}
+
+TEST(RelativePeriod, WeekWindowsCrossTheYearBoundary) {
+  constexpr eval::date_time::CivilTime kNewYear{{2026, 1U, 1U}, {0U, 0U, 0U}};
+  ExpectWindow(RelativePeriod::ThisWeek, kNewYear, 2025, 12, 28, 2026, 1, 3);
+  ExpectWindow(RelativePeriod::LastWeek, kNewYear, 2025, 12, 21, 2025, 12, 27);
+}
+
+TEST(RelativePeriod, TheWeekWindowFollowsTheWorkbookEpoch) {
+  const DateWindow window = resolve_relative_period(RelativePeriod::ThisWeek, kMay20, /*date1904=*/true);
+  EXPECT_DOUBLE_EQ(window.low, Serial(2026, 5, 17) - eval::date_time::kDate1904EpochGap);
+  EXPECT_DOUBLE_EQ(window.high, Serial(2026, 5, 23) - eval::date_time::kDate1904EpochGap);
+}
+
+TEST(PivotEvaluator, RecurringMonthFilterKeepsEveryYearsMatchingMonth) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  // Field 2 holds North 100 / 50 / 25 and South 200 / 300, read here as
+  // date serials: 25 is 1900-01-25, 50 is 1900-02-19, 100 is 1900-04-09,
+  // 200 is 1900-07-18 and 300 is 1900-10-26. January therefore admits
+  // North's 25 alone -- and it does so with no clock reading at all,
+  // which is what separates this family from the relative periods.
+  AuthoredRecurringFilter f;
+  f.field_index = 2;
+  f.month_low = 1;
+  f.month_high = 1;
+  table.mutable_authored_recurring_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache, PivotLayoutOptions{}, PivotFilterEnv{});
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "North");
+  EXPECT_DOUBLE_EQ(r_or.value().values[0][0][0].as_number(), 25.0);
+}
+
+TEST(PivotEvaluator, ARecurringQuarterSpansItsThreeMonths) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  // Q2 is months 4..6; serial 100 is 1900-04-09, so North's 100 survives
+  // and its January pair does not.
+  AuthoredRecurringFilter f;
+  f.field_index = 2;
+  f.month_low = 4;
+  f.month_high = 6;
+  table.mutable_authored_recurring_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache, PivotLayoutOptions{}, PivotFilterEnv{});
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "North");
+  EXPECT_DOUBLE_EQ(r_or.value().values[0][0][0].as_number(), 100.0);
+}
+
+TEST(PivotEvaluator, ARecurringFilterIsIndependentOfTheClock) {
+  // The whole point of the family: the same table evaluated against two
+  // very different readings selects the same records.
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredRecurringFilter f;
+  f.field_index = 2;
+  f.month_low = 1;
+  f.month_high = 1;
+  table.mutable_authored_recurring_filters().push_back(f);
+
+  PivotFilterEnv early;
+  early.pinned_now = eval::date_time::CivilTime{{1900, 2U, 15U}, {0U, 0U, 0U}};
+  PivotFilterEnv late;
+  late.pinned_now = eval::date_time::CivilTime{{2099, 11U, 3U}, {0U, 0U, 0U}};
+  auto early_or = evaluate(table, cache, PivotLayoutOptions{}, early);
+  auto late_or = evaluate(table, cache, PivotLayoutOptions{}, late);
+  ASSERT_TRUE(static_cast<bool>(early_or)) << early_or.error().message;
+  ASSERT_TRUE(static_cast<bool>(late_or)) << late_or.error().message;
+  EXPECT_DOUBLE_EQ(early_or.value().values[0][0][0].as_number(), 25.0);
+  EXPECT_DOUBLE_EQ(late_or.value().values[0][0][0].as_number(), 25.0);
+}
+
 TEST(PivotEvaluator, AuthoredPeriodFilterPrunesRecordsAgainstThePinnedClock) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});

@@ -129,11 +129,26 @@ class PreparedRecordFilter {
     DateWindow window;
   };
 
+  /// A recurring-period entry with its field index validated. Unlike
+  /// `ResolvedPeriod` there is nothing to resolve against a clock: the
+  /// criterion is which calendar month a record's date falls in, so the
+  /// bounds are carried through from the file as-is.
+  struct ResolvedRecurring {
+    std::size_t field_index = 0;
+    unsigned month_low = 1;
+    unsigned month_high = 1;
+  };
+
   const PivotCache* cache_ = nullptr;
   const PivotTable* table_ = nullptr;
+  /// The workbook epoch, kept because a recurring selector reads a
+  /// record's month back out of its serial at match time rather than
+  /// resolving to serials up front the way a window does.
+  bool date1904_ = false;
   std::vector<HiddenItems> hidden_items_;
   std::vector<ResolvedFilter> label_filters_;
   std::vector<ResolvedPeriod> period_windows_;
+  std::vector<ResolvedRecurring> recurring_months_;
 };
 
 /// Projects an authored `<filters>` value entry onto the `PivotFilter`

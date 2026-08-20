@@ -541,21 +541,22 @@ TEST(PivotTableReader, AuthoredCaptionFilterAcceptsThePlainFilterListShape) {
 // dialog. They share `count`'s nested `<top10>` element but rank on a
 // share of the total rather than on an item count, so reading them as a
 // count would quietly return the wrong rows -- worse than not filtering.
-// `dateThisMonth` stands in for the relative-period families, which
-// resolve against the current date this engine has no clock for.
+// An entry that names a family but no usable criterion is the remaining
+// unevaluable shape: it must not reach any decoded list, and it must
+// still survive the round trip so a save does not drop a filter Excel
+// authored and can apply itself.
 TEST(PivotTableReader, UnevaluableFilterFamiliesAreSkippedButStillRoundTrip) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
   xml.append("<location ref=\"A1:B2\"/>");
   xml.append("<filters count=\"3\">");
-  // A week window's first day is locale-dependent, so the family is left
-  // undecoded rather than guessed at.
-  xml.append("<filter fld=\"2\" type=\"thisWeek\"><autoFilter ref=\"A1\"/></filter>");
-  // M1 selects every January rather than one contiguous window, so it is
-  // not a date range at all.
-  xml.append("<filter fld=\"2\" type=\"M1\"><autoFilter ref=\"A1\"/></filter>");
   // A count filter with no nested `<top10>` names no quantity at all.
   xml.append("<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"/></filter>");
+  // An unknown type is the forward-compatibility case: a family this
+  // version does not know must be passed through rather than guessed at.
+  xml.append("<filter fld=\"1\" type=\"someFutureFamily\"><autoFilter ref=\"A1\"/></filter>");
+  // A caption filter whose criterion element is missing entirely.
+  xml.append("<filter fld=\"2\" type=\"captionEqual\"><autoFilter ref=\"A1\"/></filter>");
   xml.append("</filters>");
   xml.append("</pivotTableDefinition>");
 
@@ -564,9 +565,33 @@ TEST(PivotTableReader, UnevaluableFilterFamiliesAreSkippedButStillRoundTrip) {
   EXPECT_TRUE(table_or.value().authored_value_filters().empty());
   EXPECT_TRUE(table_or.value().authored_caption_filters().empty());
   EXPECT_TRUE(table_or.value().authored_period_filters().empty());
+  EXPECT_TRUE(table_or.value().authored_recurring_filters().empty());
 
   const std::string round = write_pivot_table_definition(table_or.value());
   EXPECT_EQ(CountOccurrences(round, "<filter "), 3U) << round;
+  EXPECT_NE(round.find("someFutureFamily"), std::string::npos) << round;
+}
+
+TEST(PivotTableReader, DecodedFilterFamiliesStillRoundTripVerbatim) {
+  // Decoding is read-side only: the writer re-emits the `<filters>` block
+  // from the verbatim passthrough tail, so gaining a decoder must not
+  // change a single byte of what is written back.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"2\">");
+  xml.append("<filter fld=\"2\" type=\"thisWeek\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("<filter fld=\"2\" type=\"M1\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_EQ(table_or.value().authored_period_filters().size(), 1U);
+  EXPECT_EQ(table_or.value().authored_recurring_filters().size(), 1U);
+
+  const std::string round = write_pivot_table_definition(table_or.value());
+  EXPECT_EQ(CountOccurrences(round, "<filter "), 2U) << round;
   EXPECT_NE(round.find("thisWeek"), std::string::npos) << round;
   EXPECT_NE(round.find("\"M1\""), std::string::npos) << round;
 }
@@ -634,6 +659,79 @@ TEST(PivotTableReader, RelativePeriodFiltersDecodeFromTheTypeNameAlone) {
 
   const std::string round = write_pivot_table_definition(table_or.value());
   EXPECT_EQ(CountOccurrences(round, "<filter "), 3U) << round;
+}
+
+TEST(PivotTableReader, RecurringPeriodFiltersDecodeToACalendarMonthRange) {
+  // `M<n>` is one month and `Q<n>` its three, both year-free -- so unlike
+  // the relative periods these need no clock to mean something.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"4\">");
+  xml.append("<filter fld=\"2\" type=\"M1\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("<filter fld=\"2\" type=\"M12\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("<filter fld=\"3\" type=\"Q1\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("<filter fld=\"1\" type=\"Q4\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const auto& recurring = table_or.value().authored_recurring_filters();
+  ASSERT_EQ(recurring.size(), 4U);
+  EXPECT_EQ(recurring[0].field_index, 2U);
+  EXPECT_EQ(recurring[0].month_low, 1U);
+  EXPECT_EQ(recurring[0].month_high, 1U);
+  EXPECT_EQ(recurring[1].month_low, 12U);
+  EXPECT_EQ(recurring[1].month_high, 12U);
+  EXPECT_EQ(recurring[2].field_index, 3U);
+  EXPECT_EQ(recurring[2].month_low, 1U);
+  EXPECT_EQ(recurring[2].month_high, 3U);
+  EXPECT_EQ(recurring[3].month_low, 10U);
+  EXPECT_EQ(recurring[3].month_high, 12U);
+  // A recurring entry is not a window and carries no bounds, so it must
+  // reach neither sibling list.
+  EXPECT_TRUE(table_or.value().authored_period_filters().empty());
+  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
+}
+
+TEST(PivotTableReader, MalformedRecurringSelectorsAreSkipped) {
+  // `M0`, `M13` and `Q5` are outside their families, and a bare letter or
+  // a non-digit tail names nothing at all. None may decode to a range that
+  // silently filters the wrong months.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"6\">");
+  for (const char* type : {"M0", "M13", "Q0", "Q5", "M", "Mx"}) {
+    xml.append("<filter fld=\"2\" type=\"").append(type).append("\"><autoFilter ref=\"A1\"/></filter>");
+  }
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_TRUE(table_or.value().authored_recurring_filters().empty());
+}
+
+TEST(PivotTableReader, WeekPeriodFiltersDecodeAlongsideTheOtherWindows) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"3\">");
+  xml.append("<filter fld=\"2\" type=\"thisWeek\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("<filter fld=\"2\" type=\"lastWeek\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("<filter fld=\"2\" type=\"nextWeek\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const auto& periods = table_or.value().authored_period_filters();
+  ASSERT_EQ(periods.size(), 3U);
+  EXPECT_EQ(periods[0].period, pivot::RelativePeriod::ThisWeek);
+  EXPECT_EQ(periods[1].period, pivot::RelativePeriod::LastWeek);
+  EXPECT_EQ(periods[2].period, pivot::RelativePeriod::NextWeek);
 }
 
 TEST(PivotTableReader, ValueFilterCriteriaThatAreNotNumbersAreSkipped) {

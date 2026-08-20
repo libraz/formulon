@@ -295,12 +295,15 @@ struct AuthoredValueFilter {
 /// bounds are literals in the file) and why the workbook can pin the
 /// reading they resolve against.
 ///
-/// Only the families whose boundaries are unambiguous are represented.
-/// The `dateThisWeek` group is deliberately absent: a week's first day is
-/// locale-dependent and no Excel observation pins it yet. The recurring
-/// `M1`..`M12` / `Q1`..`Q4` families are absent for a different reason —
-/// they select every January, not a contiguous range, so they are not a
-/// window at all.
+/// Every family here spans one contiguous range. The recurring
+/// `M1`..`M12` / `Q1`..`Q4` selectors are not part of it: they pick every
+/// January rather than one January, so they are not a window at all and
+/// are modelled by `AuthoredRecurringFilter`.
+///
+/// The week group runs Sunday through Saturday, and the three windows
+/// tile without gap or overlap. Excel resolves them against the calendar
+/// week rather than a rolling seven days from today, so `ThisWeek` on a
+/// Friday still starts on the preceding Sunday.
 enum class RelativePeriod : std::uint8_t {
   Today = 0,
   Yesterday = 1,
@@ -315,6 +318,9 @@ enum class RelativePeriod : std::uint8_t {
   LastYear = 10,
   NextYear = 11,
   YearToDate = 12,
+  ThisWeek = 13,
+  LastWeek = 14,
+  NextWeek = 15,
 };
 
 /// An authored relative-period date filter.
@@ -327,6 +333,23 @@ struct AuthoredPeriodFilter {
   /// Source `fld` attribute: an index into `<pivotFields>`.
   std::uint32_t field_index = 0;
   RelativePeriod period = RelativePeriod::Today;
+};
+
+/// An authored recurring-period date filter: the `M1`..`M12` and
+/// `Q1`..`Q4` families.
+///
+/// Held apart from `AuthoredPeriodFilter` because these select a calendar
+/// position rather than a range. `M1` keeps every January of every year,
+/// so no `DateWindow` can express it and no clock reading is needed to
+/// resolve it — the criterion is simply which month a record's date falls
+/// in. Both families reduce to one inclusive month range because a
+/// quarter is three adjacent months: `Q2` is months 4..6.
+struct AuthoredRecurringFilter {
+  /// Source `fld` attribute: an index into `<pivotFields>`.
+  std::uint32_t field_index = 0;
+  /// Inclusive 1-based calendar month bounds. `low == high` for `M<n>`.
+  unsigned month_low = 1;
+  unsigned month_high = 1;
 };
 
 /// Sort directive for a pivot field.

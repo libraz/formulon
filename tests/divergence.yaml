@@ -1091,29 +1091,23 @@ entries:
   # relative (`R[-1]C`, bare `R`) axes against the formula cell, and a
   # single-axis endpoint is unbounded along the other exactly as `5:5` is.
 
-  # -- Pivot: authored value / date <filters> are not evaluated -------------
-  # An authored `<filters>` element (OOXML pivotTableDefinition) survives
-  # save/reload byte-for-byte in the verbatim passthrough tail, and its
-  # caption entries are decoded into PivotTable::authored_caption_filters()
-  # and applied during evaluation. The value, date and relative-period
-  # families are not decoded, so a pivot filtered by one of those still
-  # evaluates unfiltered. src/pivot/pivot_table.h documents why the decode
-  # is read-side only (the writer keeps emitting the block verbatim, so
-  # nothing has to author filter XML).
-  - id: pivot_authored_filter_families_not_evaluated
-    cause: engine-gap
-    mode: skip-oracle
-    scope: deferred-feature
-    evidence:
-      [
-        tests/integration/pivot_caption_filter_fixture_test.cpp,
-        tests/integration/pivot_value_date_filter_fixture_test.cpp,
-        tests/unit/io/pivot_table_reader_test.cpp,
-      ]
-    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Two Excel-authored fixtures pin the families that are decoded. tests/fixtures/excel/pivot_caption_filter.xlsx covers the caption family: a pivot over A1:C7 (Region rows, Qtr columns, sum of Amt) filtered with 'label filters -> equals -> North' renders North alone at 10 / 5 / 15, grand total 15, against 56 unfiltered. tests/fixtures/excel/pivot_value_date_filters.xlsx covers the value and absolute-date families over one source table whose Region totals are North 150 / South 500 / East 100 / West 175: top 2 items keeps South and West; 'greater than 100' keeps North, South and West, dropping East on the threshold, so the comparison is strict; 'between 100 and 175' keeps East, North and West, so both bounds are inclusive; and a date range of 2024-01-01..2024-03-31 keeps the five first-quarter rows totalling 580. All four match Formulon. The relative-period family (thisMonth, yearToDate and their day / month / quarter / year siblings) is decoded too: it resolves against a wall-clock reading the workbook can pin, so a pivot using it is reproducible rather than dependent on the day it was computed. The percent and sum flavours of the top-N dialog are decoded too, and the same fixture pins what they count: a 'top 100 sum' keeps South alone, whose 500 already clears 100, so the target is a running total over leaves ranked descending rather than a per-leaf floor, which would have kept all four regions. A 'top 70 percent' keeps South and West (675 against a 647.5 threshold), which is consistent with a running total but does not on its own establish one: reading the percentage as a share of the leaf count (0.7 x 4 regions, truncated to 2) keeps the same two. A 'top 50 percent' separates them and keeps South alone, because 500 clears the 462.5 threshold by itself while a count share would have kept two. So percent is the running total expressed as a share of the axis total, and the accumulation stops on the leaf that crosses it. Nothing in the file distinguishes these from the count flavour: <top10 val=\"100\"/> under sum is byte-identical to the same element under count, and only the filter type attribute separates them. Two families remain undecoded. The week windows (thisWeek and siblings) turn on which weekday a week starts, which is locale-dependent and unobserved. The recurring M1..M12 and Q1..Q4 selectors pick every January rather than one contiguous range, so they are not a window at all. Both fixtures also show why item visibility cannot stand in for the decode: Excel leaves every <item> entry visible and records the rule only in <filters>, with the result mirrored into <rowItems>. Neither undecoded family can be observed on the Mac host: rewriting the <filters> block of an Excel-authored fixture and reopening it renders the cached <rowItems> unchanged, because Excel re-applies an authored filter on refresh rather than on open, and Mac Excel's AppleScript surface has no reachable pivot-table object to refresh (`every pivot table of worksheet` is a parameter error). Closing these two needs a Windows COM host, the same reason the workbook oracle track is Windows-primary."
-    prefer: mac-excel-365
-    first_noted: 2026-08-14
-    last_verified_excel_version: "16.112"
+  # Stale `pivot_authored_filter_families_not_evaluated` removed: the two
+  # families it was parked on are decoded now, so no authored `<filters>`
+  # family is left unevaluated. The week windows run Sunday through
+  # Saturday on the calendar week -- `thisWeek` read on a Friday still
+  # starts the preceding Sunday, and the three windows tile with no gap.
+  # The recurring `M1`..`M12` / `Q1`..`Q4` selectors pick a calendar month
+  # range in any year, so they resolve with no clock reading at all and
+  # are modelled apart from the windows as AuthoredRecurringFilter.
+  #
+  # Both were observed on the Mac host after all. The earlier reading --
+  # that Mac Excel exposes no reachable pivot-table object -- was wrong:
+  # `sheet.api.pivot_tables()` resolves and `refresh_table` applies an
+  # authored filter. What actually defeated the first attempt was the
+  # fixture, which put the rewritten filter on a cache field that no pivot
+  # placed on an axis, and read a different sheet than the one it edited.
+  # Excel does re-apply an authored filter on refresh rather than on open,
+  # which is the one part of that reading that held.
 
   # -- Bare whole-axis reference: geometry cases are live --------------
   # The five geometry cases (a declared rectangle that no longer fits from

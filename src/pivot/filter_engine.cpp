@@ -2,7 +2,9 @@
 #include "pivot/filter_engine.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -11,6 +13,7 @@
 #include <variant>
 #include <vector>
 
+#include "eval/date_time.h"
 #include "pivot/aggregator.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
@@ -322,7 +325,7 @@ AxisScores score_axis(const PivotResult& result, ScoreAxis score_axis, std::size
 }  // namespace
 
 PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotCache& cache, const PivotFilterEnv& env)
-    : cache_(&cache), table_(&table) {
+    : cache_(&cache), table_(&table), date1904_(env.date1904) {
   // A field with no hidden item filters nothing, so it never reaches the
   // record loop at all. Excel writes an `items[]` list for every field it
   // places on an axis, which is why presence of the list cannot stand in for
@@ -378,6 +381,14 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
       }
       period_windows_.push_back(ResolvedPeriod{f.field_index, resolve_relative_period(f.period, now, env.date1904)});
     }
+  }
+  // Recurring selectors need no clock reading, so they are hoisted only to
+  // drop entries naming a field that does not exist.
+  for (const AuthoredRecurringFilter& f : table.authored_recurring_filters()) {
+    if (f.field_index >= table.fields().size()) {
+      continue;
+    }
+    recurring_months_.push_back(ResolvedRecurring{f.field_index, f.month_low, f.month_high});
   }
 }
 
@@ -472,6 +483,20 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
       return false;
     }
   }
+  for (const ResolvedRecurring& resolved : recurring_months_) {
+    const Value v = cell_value(cache, record, resolved.field_index);
+    if (!v.is_number()) {
+      continue;  // Non-numeric cells are outside the date domain.
+    }
+    const double serial = v.as_number();
+    if (serial < 0.0) {
+      continue;  // Outside the serial domain `ymd_from_serial` is defined on.
+    }
+    const unsigned month = eval::date_time::ymd_from_serial(std::floor(serial), date1904_).m;
+    if (month < resolved.month_low || month > resolved.month_high) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -503,6 +528,20 @@ DateWindow resolve_relative_period(RelativePeriod period, const eval::date_time:
   const double today = serial(year, month, now.date.d);
   // The calendar quarter's first month: 1, 4, 7 or 10.
   const unsigned quarter_start = ((month - 1U) / 3U) * 3U + 1U;
+  // A whole calendar week, `weeks` away from the one holding today. Excel
+  // anchors these on the calendar week running Sunday through Saturday,
+  // not on a rolling seven days, so `ThisWeek` read on a Friday still
+  // starts the preceding Sunday and the three windows tile exactly.
+  //
+  // The weekday comes from the civil date rather than the serial so the
+  // 1900 leap-year bug cannot shift it: 1970-01-01 was a Thursday, which
+  // is index 4 when Sunday is 0.
+  const auto week_span = [&](int weeks) {
+    const std::int64_t epoch_days = eval::date_time::days_from_civil(year, month, now.date.d);
+    const std::int64_t weekday = ((epoch_days + 4) % 7 + 7) % 7;
+    const double start = today - static_cast<double>(weekday) + static_cast<double>(weeks) * 7.0;
+    return DateWindow{start, start + 6.0};
+  };
 
   switch (period) {
     case RelativePeriod::Today:
@@ -541,6 +580,12 @@ DateWindow resolve_relative_period(RelativePeriod period, const eval::date_time:
       // Excel's "year to date" runs from January 1 through today inclusive,
       // not through the end of the year.
       return DateWindow{serial(year, 1U, 1U), today};
+    case RelativePeriod::ThisWeek:
+      return week_span(0);
+    case RelativePeriod::LastWeek:
+      return week_span(-1);
+    case RelativePeriod::NextWeek:
+      return week_span(1);
   }
   return DateWindow{today, today};
 }

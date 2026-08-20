@@ -521,10 +521,9 @@ pivot::TopNBasis ParseTopNBasis(std::string_view text) {
 /// Maps a relative-period `<filter type>` onto its evaluation counterpart.
 ///
 /// These types carry no criteria at all — the window is implied by the
-/// name — so the mapping is the entire decode. The `dateThisWeek` group is
-/// absent because a week's first day is locale-dependent and nothing pins
-/// it yet, and `M1`..`M12` / `Q1`..`Q4` are absent because they select a
-/// recurring period rather than one contiguous window.
+/// name — so the mapping is the entire decode. `M1`..`M12` / `Q1`..`Q4`
+/// are absent because they select a recurring period rather than one
+/// contiguous window; `ParseRecurringMonths` decodes those instead.
 std::optional<pivot::RelativePeriod> ParseRelativePeriod(std::string_view text) {
   struct Entry {
     std::string_view name;
@@ -544,6 +543,9 @@ std::optional<pivot::RelativePeriod> ParseRelativePeriod(std::string_view text) 
       {"lastYear", pivot::RelativePeriod::LastYear},
       {"nextYear", pivot::RelativePeriod::NextYear},
       {"yearToDate", pivot::RelativePeriod::YearToDate},
+      {"thisWeek", pivot::RelativePeriod::ThisWeek},
+      {"lastWeek", pivot::RelativePeriod::LastWeek},
+      {"nextWeek", pivot::RelativePeriod::NextWeek},
   };
   for (const Entry& entry : kEntries) {
     if (entry.name == text) {
@@ -551,6 +553,59 @@ std::optional<pivot::RelativePeriod> ParseRelativePeriod(std::string_view text) 
     }
   }
   return std::nullopt;
+}
+
+/// Maps a recurring `<filter type>` — `M1`..`M12`, `Q1`..`Q4` — onto the
+/// inclusive calendar-month range it selects.
+///
+/// These name a position in the year rather than a window: `M1` keeps
+/// every January of every year, so the decode is year-free and needs no
+/// clock reading. A quarter is three adjacent months, which is why one
+/// month range covers both families.
+std::optional<std::pair<unsigned, unsigned>> ParseRecurringMonths(std::string_view text) {
+  if (text.size() < 2U) {
+    return std::nullopt;
+  }
+  const char family = text.front();
+  if (family != 'M' && family != 'Q') {
+    return std::nullopt;
+  }
+  unsigned index = 0;
+  for (const char digit : text.substr(1)) {
+    if (digit < '0' || digit > '9') {
+      return std::nullopt;
+    }
+    index = index * 10U + static_cast<unsigned>(digit - '0');
+    if (index > 12U) {
+      return std::nullopt;  // Longer than any valid selector; stop before overflow.
+    }
+  }
+  if (family == 'M') {
+    if (index < 1U || index > 12U) {
+      return std::nullopt;
+    }
+    return std::pair<unsigned, unsigned>{index, index};
+  }
+  if (index < 1U || index > 4U) {
+    return std::nullopt;
+  }
+  const unsigned first = (index - 1U) * 3U + 1U;
+  return std::pair<unsigned, unsigned>{first, first + 2U};
+}
+
+/// Decodes the recurring-period entries of a `<filters>` block.
+void ParseAuthoredRecurringFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
+  for (pugi::xml_node node = parent.child("filter"); node; node = node.next_sibling("filter")) {
+    const auto months_or = ParseRecurringMonths(attr_str(node, "type"));
+    if (!months_or) {
+      continue;
+    }
+    pivot::AuthoredRecurringFilter entry;
+    entry.field_index = parse_xml_u32_attr(node.attribute("fld"), 0U);
+    entry.month_low = months_or->first;
+    entry.month_high = months_or->second;
+    out->mutable_authored_recurring_filters().push_back(entry);
+  }
 }
 
 /// Decodes the relative-period entries of a `<filters>` block.
@@ -785,6 +840,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     ParseAuthoredFilters(filters, &table);
     ParseAuthoredValueFilters(filters, &table);
     ParseAuthoredPeriodFilters(filters, &table);
+    ParseAuthoredRecurringFilters(filters, &table);
   }
   // Capture any remaining direct children of <pivotTableDefinition> that
   // we do not model structurally into position-keyed raw-XML buffers, so

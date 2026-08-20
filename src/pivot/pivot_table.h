@@ -231,12 +231,18 @@ class PivotTable {
   // is the same split `active_filters()` already drives, and both lists
   // feed the same two passes.
   //
-  // The relative-period families (`thisMonth`, `yearToDate`, ...) form a
-  // third list. They carry no criteria in the file — the window is implied
-  // by the type name — so they resolve against a clock reading supplied at
-  // evaluation time. Pinning that reading (`Workbook::pinned_now`) is what
-  // keeps a pivot that uses them reproducible rather than dependent on the
-  // day it happened to be computed.
+  // The relative-period families (`thisMonth`, `yearToDate`, the week
+  // windows, ...) form a third list. They carry no criteria in the file —
+  // the window is implied by the type name — so they resolve against a
+  // clock reading supplied at evaluation time. Pinning that reading
+  // (`Workbook::pinned_now`) is what keeps a pivot that uses them
+  // reproducible rather than dependent on the day it happened to be
+  // computed.
+  //
+  // The recurring selectors (`M1`..`M12`, `Q1`..`Q4`) form a fourth. They
+  // carry no criteria either, but they name a position in the calendar
+  // rather than a window — `M1` keeps every January of every year — so
+  // they need no clock reading and cannot fold into the third list.
   const std::vector<AuthoredCaptionFilter>& authored_caption_filters() const { return authored_caption_filters_; }
   std::vector<AuthoredCaptionFilter>& mutable_authored_caption_filters() { return authored_caption_filters_; }
 
@@ -245,6 +251,9 @@ class PivotTable {
 
   const std::vector<AuthoredPeriodFilter>& authored_period_filters() const { return authored_period_filters_; }
   std::vector<AuthoredPeriodFilter>& mutable_authored_period_filters() { return authored_period_filters_; }
+
+  const std::vector<AuthoredRecurringFilter>& authored_recurring_filters() const { return authored_recurring_filters_; }
+  std::vector<AuthoredRecurringFilter>& mutable_authored_recurring_filters() { return authored_recurring_filters_; }
 
   // Most-recent evaluation result -------------------------------------------
   //
@@ -342,6 +351,7 @@ class PivotTable {
   std::vector<AuthoredCaptionFilter> authored_caption_filters_;
   std::vector<AuthoredValueFilter> authored_value_filters_;
   std::vector<AuthoredPeriodFilter> authored_period_filters_;
+  std::vector<AuthoredRecurringFilter> authored_recurring_filters_;
   std::string raw_passthrough_xml_;
   std::string raw_passthrough_after_row_fields_;
   std::string raw_passthrough_after_col_fields_;
