@@ -792,13 +792,20 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       continue;
     }
 
-    // Postfix `#`: spilled-range operator (e.g. `=A1#`). Only valid on a
-    // single-cell `Ref` atom; reject anything else (range, full-column /
-    // full-row, function call, arithmetic) with a diagnostic and consume
-    // the `#` so the surrounding context keeps parsing. Bound tighter than
-    // `:` so that `=A1:B2#` first consumes `#` against `B2` (yielding a
-    // SpillRef), and the `:` shape check then rejects SpillRef as a range
-    // endpoint. `=A1#+B1#` similarly parses as
+    // Postfix `#`: spilled-range operator (e.g. `=A1#`). The anchor may be
+    // written out (`A1#`) or computed by an expression that names a
+    // reference: Excel accepts `OFFSET(A1,1,0)#`, `INDIRECT("A2")#`,
+    // `CHOOSE(1,A2)#`, `IF(TRUE,A2)#` and a LET-bound `x#`, storing each
+    // verbatim, and answers `#REF!` when the anchor turns out to be
+    // unusable rather than refusing the formula. What it does refuse at
+    // entry is an anchor that cannot name a reference at all -- `"A1"#`
+    // and `1#` are rejected before anything is stored -- so a `Literal`
+    // or an arithmetic result is a diagnostic here too. The `#` is
+    // consumed either way so the surrounding context keeps parsing.
+    //
+    // Bound tighter than `:` so that `=A1:B2#` first consumes `#` against
+    // `B2` (yielding a SpillRef), and the `:` shape check then rejects
+    // SpillRef as a range endpoint. `=A1#+B1#` similarly parses as
     // `SpillRef(A1)+SpillRef(B1)`.
     if (kind == TokenKind::Hash) {
       if (kBpPostfixHash < min_bp) {
@@ -808,22 +815,23 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // Always consume `#` so we never re-enter the loop on the same token,
       // even on rejection. The diagnostic carries the Hash token's range.
       const Token& hash_tok = advance();
-      if (lhs->kind() != NodeKind::Ref) {
+      const NodeKind anchor_kind = lhs->kind();
+      const bool computed_anchor = anchor_kind == NodeKind::Call || anchor_kind == NodeKind::NameRef;
+      if (anchor_kind != NodeKind::Ref && !computed_anchor) {
         record_error_with_token(ParseErrorCode::UnsupportedConstruct, hash_tok.range, hash_tok.lexeme);
         // Surface an `ErrorPlaceholder` so siblings keep parsing.
         AstNode* placeholder = make_recovery_placeholder(SpanRange(lhs->range(), hash_tok.range));
         lhs = placeholder != nullptr ? placeholder : lhs;
         continue;
       }
-      const Reference& r = lhs->as_ref();
-      if (r.is_full_col || r.is_full_row) {
+      if (!computed_anchor && (lhs->as_ref().is_full_col || lhs->as_ref().is_full_row)) {
         // `A:A#` / `1:1#` are not legal Excel spill anchors.
         record_error_with_token(ParseErrorCode::UnsupportedConstruct, hash_tok.range, hash_tok.lexeme);
         AstNode* placeholder = make_recovery_placeholder(SpanRange(lhs->range(), hash_tok.range));
         lhs = placeholder != nullptr ? placeholder : lhs;
         continue;
       }
-      AstNode* node = make_spill_ref(arena_, r);
+      AstNode* node = computed_anchor ? make_spill_ref_expr(arena_, lhs) : make_spill_ref(arena_, lhs->as_ref());
       if (node == nullptr) {
         bailed_ = true;
         --depth_;

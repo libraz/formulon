@@ -172,9 +172,13 @@ class Tokenizer {
   bool done_ = false;
   bool truncated_ = false;
 
-  // The byte offset at which the most recent CellRef ends. Used to
-  // disambiguate a trailing `#` into the spilled-range operator (OP_HASH).
-  std::size_t last_cellref_end_byte_ = static_cast<std::size_t>(-1);
+  // The byte offset at which the most recent token that can end a spill
+  // anchor finished. Used to disambiguate a trailing `#` into the
+  // spilled-range operator (OP_HASH) rather than the start of an error
+  // literal. Excel accepts `#` after anything that names a reference --
+  // `A1#`, `OFFSET(A1,1,0)#`, `(A4)#`, `Anchor#` -- so a `CellRef`, a
+  // closing parenthesis and an identifier all arm it.
+  std::size_t last_anchor_tail_end_byte_ = static_cast<std::size_t>(-1);
 };
 
 }  // namespace parser

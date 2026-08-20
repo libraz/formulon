@@ -405,6 +405,9 @@ const std::vector<Token>& Tokenizer::tokens() {
         continue;
       case ')':
         emit_single_char(TokenKind::RParen);
+        // `OFFSET(A1,1,0)#` and `(A4)#` both anchor on what the closing
+        // parenthesis ends.
+        last_anchor_tail_end_byte_ = byte_pos_;
         continue;
       case '{':
         emit_single_char(TokenKind::LBrace);
@@ -937,13 +940,15 @@ void Tokenizer::scan_error_literal() {
   const std::size_t start = byte_pos_;
   mark_start();
 
-  // Spilled-range `#`: emitted if the previous non-whitespace token was a
-  // CellRef and there was no whitespace between. Whitespace between a
-  // CellRef and `#` becomes Whitespace then Hash (the parser decides).
-  if (last_cellref_end_byte_ == byte_pos_) {
+  // Spilled-range `#`: emitted if the previous token can end a spill
+  // anchor and there was no whitespace between. Whitespace before the `#`
+  // becomes Whitespace then Hash (the parser decides). The parser is what
+  // rules on whether the anchor shape is legal; the tokenizer only has to
+  // stop reading `#` as the opening byte of an error literal.
+  if (last_anchor_tail_end_byte_ == byte_pos_) {
     advance_one();
     emit(TokenKind::Hash, start);
-    last_cellref_end_byte_ = static_cast<std::size_t>(-1);
+    last_anchor_tail_end_byte_ = static_cast<std::size_t>(-1);
     return;
   }
 
@@ -1050,7 +1055,7 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
     t.range = make_range();
     t.lexeme = run;
     tokens_.push_back(t);
-    last_cellref_end_byte_ = byte_pos_;
+    last_anchor_tail_end_byte_ = byte_pos_;
     return;
   }
 
@@ -1110,6 +1115,9 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
   t.range = make_range();
   t.lexeme = run;
   tokens_.push_back(t);
+  // A defined name or a LET binding can anchor a spill (`Anchor#`,
+  // `LET(x, A4, SUM(x#))`), so an identifier arms the operator too.
+  last_anchor_tail_end_byte_ = byte_pos_;
   (void)letters_only;
 }
 

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
@@ -399,33 +400,39 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     // range-aware consumer (lookup, conditional aggregator, regression,
     // workdays, …) accepts a SpillRef passed through a LET binding without
     // collapsing to its anchor scalar.
-    const parser::Reference& sr = arg_node.as_spill_ref();
+    std::string_view anchor_sheet;
+    std::uint32_t anchor_row = 0;
+    std::uint32_t anchor_col = 0;
+    if (!resolve_spill_anchor_node(arg_node, arena, registry, ctx, &anchor_sheet, &anchor_row, &anchor_col,
+                                   out_err_code)) {
+      return false;
+    }
     const Sheet* current = ctx.current_sheet();
     if (current == nullptr) {
       *out_err_code = ErrorCode::Name;
       return false;
     }
     const Sheet* target = current;
-    if (!sr.sheet.empty()) {
+    if (!anchor_sheet.empty()) {
       const Workbook* wb = ctx.workbook();
       if (wb == nullptr) {
         *out_err_code = ErrorCode::Ref;
         return false;
       }
-      target = wb->sheet_by_name(sr.sheet);
+      target = wb->sheet_by_name(anchor_sheet);
       if (target == nullptr) {
         *out_err_code = ErrorCode::Ref;
         return false;
       }
     }
-    if (sr.row >= Sheet::kMaxRows || sr.col >= Sheet::kMaxCols) {
+    if (anchor_row >= Sheet::kMaxRows || anchor_col >= Sheet::kMaxCols) {
       *out_err_code = ErrorCode::Ref;
       return false;
     }
     // The copied cells outlive the region, so the read re-homes any Text
     // payload into `arena` while the sheet lock is held.
     out_cells->clear();
-    if (!target->read_spill_region_at_anchor(sr.row, sr.col, arena, *out_cells, out_rows, out_cols)) {
+    if (!target->read_spill_region_at_anchor(anchor_row, anchor_col, arena, *out_cells, out_rows, out_cols)) {
       *out_err_code = ErrorCode::Ref;
       return false;
     }

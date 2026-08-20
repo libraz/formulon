@@ -17,8 +17,12 @@
 #ifndef FORMULON_EVAL_DYNAMIC_ARRAY_ANCHOR_H_
 #define FORMULON_EVAL_DYNAMIC_ARRAY_ANCHOR_H_
 
+#include <cstdint>
+#include <string_view>
+
 #include "eval/lazy_impls.h"
 #include "utils/arena.h"
+#include "utils/error.h"
 #include "value.h"
 
 namespace formulon {
@@ -31,6 +35,26 @@ namespace eval {
 
 class EvalContext;
 class FunctionRegistry;
+
+/// Resolves `node` to the cell a spill anchor names, writing the sheet
+/// qualifier (empty = bound sheet) and 0-based coordinates to the out
+/// parameters. Shared by `ANCHORARRAY` and by the `NodeKind::SpillRef`
+/// branches, which are two spellings of one operator.
+///
+/// Accepts the shapes Excel accepts as an anchor: a written-out `Ref`, a
+/// nested `SpillRef`, a reference-returning `Call` (OFFSET / INDIRECT /
+/// IF / CHOOSE), and a `NameRef` bound to one of those by an enclosing
+/// LET. An anchor is a single cell, so a reference that resolves to more
+/// than one is rejected rather than narrowed to its top-left corner:
+/// `=SUM(OFFSET(A1,0,0,2,2)#)` is `#REF!` in Excel even when A1 anchors a
+/// live spill.
+///
+/// Returns false on failure with the Excel error code in `*out_err`.
+/// Every anchor that fails to resolve surfaces `#REF!`, matching Excel,
+/// which does not distinguish a missing spill from an unusable anchor.
+bool resolve_spill_anchor_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_row,
+                               std::uint32_t* out_col, ErrorCode* out_err);
 
 Value eval_anchorarray_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx);

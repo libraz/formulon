@@ -113,6 +113,16 @@ TEST(ShiftRelativeRefs, ColDeltaShiftsRelativeCol) {
   EXPECT_EQ(ParseShiftRelativeDump("=A1", 0, 2), "(ref C1)");
 }
 
+TEST(ShiftRelativeRefs, WrittenOutSpillAnchorShifts) {
+  EXPECT_EQ(ParseShiftRelativeDump("=A1#", 2, 0), "(spill-ref A3#)");
+}
+
+TEST(ShiftRelativeRefs, ComputedSpillAnchorShiftsInsideTheExpression) {
+  // The operator itself has no reference to move; the shift lands on the
+  // refs the anchor expression reads.
+  EXPECT_EQ(ParseShiftRelativeDump("=OFFSET(A1,1,0)#", 2, 0), "(spill-ref (call OFFSET (ref A3) (num 1) (num 0))#)");
+}
+
 TEST(ShiftRelativeRefs, AbsoluteRowKept) {
   EXPECT_EQ(ParseShiftRelativeDump("=A$1", 5, 0), "(ref A$1)");
 }

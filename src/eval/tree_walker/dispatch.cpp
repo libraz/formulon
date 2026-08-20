@@ -32,6 +32,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/defined_name_resolve.h"
+#include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
@@ -447,21 +448,32 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // `propagate_errors`.
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::SpillRef) {
       had_range_shaped_arg = true;
-      const parser::Reference& sr = arg_node.as_spill_ref();
+      std::string_view anchor_sheet;
+      std::uint32_t anchor_row = 0;
+      std::uint32_t anchor_col = 0;
+      ErrorCode spill_err = ErrorCode::Ref;
+      if (!resolve_spill_anchor_node(arg_node, arena, registry, ctx, &anchor_sheet, &anchor_row, &anchor_col,
+                                     &spill_err)) {
+        const Value err = Value::error(spill_err);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
       const Sheet* current = ctx.current_sheet();
       const Sheet* target = current;
-      ErrorCode spill_err = ErrorCode::Ref;
       if (current == nullptr) {
         spill_err = ErrorCode::Name;
-      } else if (!sr.sheet.empty()) {
+      } else if (!anchor_sheet.empty()) {
         const Workbook* wb = ctx.workbook();
         if (wb == nullptr) {
           target = nullptr;
         } else {
-          target = wb->sheet_by_name(sr.sheet);
+          target = wb->sheet_by_name(anchor_sheet);
         }
       }
-      if (target == nullptr || sr.row >= Sheet::kMaxRows || sr.col >= Sheet::kMaxCols) {
+      if (target == nullptr || anchor_row >= Sheet::kMaxRows || anchor_col >= Sheet::kMaxCols) {
         const Value err = Value::error(spill_err);
         if (def->propagate_errors) {
           return err;
@@ -473,7 +485,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       // `arena`: the flattened values feed the whole call and outlive the
       // region they came from.
       std::vector<Value> region_cells;
-      if (!target->read_spill_region_at_anchor(sr.row, sr.col, arena, region_cells, nullptr, nullptr)) {
+      if (!target->read_spill_region_at_anchor(anchor_row, anchor_col, arena, region_cells, nullptr, nullptr)) {
         const Value err = Value::error(ErrorCode::Ref);
         if (def->propagate_errors) {
           return err;

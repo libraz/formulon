@@ -26,6 +26,7 @@
 #include "eval/array_alloc.h"
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
+#include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
@@ -596,14 +597,20 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       //   * Qualified anchor with missing target sheet     -> #REF!
       //   * Anchor row/col >= Sheet::kMax{Rows,Cols}       -> #REF!
       //   * No spill region anchored at this address       -> #REF!
+      //   * Computed anchor that names no single cell      -> #REF!
       //
       // The returned ArrayValue header lives in the eval `arena`; its cells
       // buffer holds shallow copies of the SpillRegion's `Value`s. Text
       // payloads point into `SpillRegion::owned_strings`, which lives on
       // Sheet and outlives any single evaluation arena (zero-copy reuse).
-      const parser::Reference& r = node.as_spill_ref();
+      std::string_view anchor_sheet;
+      std::uint32_t anchor_row = 0;
+      std::uint32_t anchor_col = 0;
       ErrorCode spill_err = ErrorCode::Ref;
-      ArrayValue* arr = project_spill_at_anchor(r.sheet, r.row, r.col, arena, ctx, &spill_err);
+      if (!resolve_spill_anchor_node(node, arena, registry, ctx, &anchor_sheet, &anchor_row, &anchor_col, &spill_err)) {
+        return Value::error(spill_err);
+      }
+      ArrayValue* arr = project_spill_at_anchor(anchor_sheet, anchor_row, anchor_col, arena, ctx, &spill_err);
       if (arr == nullptr) {
         return Value::error(spill_err);
       }

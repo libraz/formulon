@@ -142,9 +142,14 @@ void DumpInto(const AstNode& node, std::string& out) {
     case NodeKind::SpillRef:
       // Spilled-range reference (`A1#`): dumped with a trailing `#` after
       // the anchor's A1 spelling so the corpus stays unambiguous against
-      // ordinary refs.
+      // ordinary refs. A computed anchor dumps the sub-expression in its
+      // place.
       out.append("(spill-ref ");
-      out.append(format_a1(node.as_spill_ref()));
+      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        DumpInto(*anchor, out);
+      } else {
+        out.append(format_a1(node.as_spill_ref()));
+      }
       out.append("#)");
       return;
 

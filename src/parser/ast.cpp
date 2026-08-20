@@ -78,9 +78,12 @@ std::uint64_t ChildCount(const AstNode& node) {
       return static_cast<std::uint64_t>(node.as_let_binding_count()) + 1;
     case NodeKind::LambdaCall:
       return static_cast<std::uint64_t>(node.as_lambda_call_arity()) + 1;
+    case NodeKind::SpillRef:
+      // A written-out anchor is a leaf; a computed one owns the
+      // sub-expression that names its cell.
+      return node.as_spill_ref_anchor_expr() != nullptr ? 1 : 0;
     case NodeKind::Literal:
     case NodeKind::Ref:
-    case NodeKind::SpillRef:
     case NodeKind::Ref3D:
     case NodeKind::StructuredRef:
     case NodeKind::NameRef:
@@ -119,9 +122,13 @@ const AstNode& ChildAt(const AstNode& node, std::uint64_t index) {
     }
     case NodeKind::LambdaCall:
       return index == 0 ? node.as_lambda_call_callee() : node.as_lambda_call_arg(static_cast<std::uint32_t>(index - 1));
+    case NodeKind::SpillRef:
+      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        return *anchor;
+      }
+      break;
     case NodeKind::Literal:
     case NodeKind::Ref:
-    case NodeKind::SpillRef:
     case NodeKind::Ref3D:
     case NodeKind::StructuredRef:
     case NodeKind::NameRef:
@@ -199,11 +206,22 @@ AstNode* make_spill_ref(Arena& arena, const Reference& r) {
     return nullptr;
   }
   n->kind_ = NodeKind::SpillRef;
-  // Reuse the Ref payload slot; the discriminator distinguishes them. The
-  // anchor reference is structurally a single cell — `is_full_col` /
+  // The anchor reference is structurally a single cell — `is_full_col` /
   // `is_full_row` are rejected at parse time before this factory runs.
-  n->data_.ref = r;
-  n->data_.ref.sheet = arena.intern(r.sheet);
+  n->data_.spill_ref.anchor = r;
+  n->data_.spill_ref.anchor.sheet = arena.intern(r.sheet);
+  n->data_.spill_ref.anchor_expr = nullptr;
+  return n;
+}
+
+AstNode* make_spill_ref_expr(Arena& arena, const AstNode* anchor_expr) {
+  AstNode* n = arena.create<AstNode>();
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->kind_ = NodeKind::SpillRef;
+  n->data_.spill_ref.anchor = Reference{};
+  n->data_.spill_ref.anchor_expr = anchor_expr;
   return n;
 }
 
@@ -522,7 +540,13 @@ const Reference& AstNode::as_ref() const {
 
 const Reference& AstNode::as_spill_ref() const {
   FM_CHECK(kind_ == NodeKind::SpillRef, "AstNode::as_spill_ref on non-SpillRef");
-  return data_.ref;
+  FM_CHECK(data_.spill_ref.anchor_expr == nullptr, "AstNode::as_spill_ref on a computed anchor");
+  return data_.spill_ref.anchor;
+}
+
+const AstNode* AstNode::as_spill_ref_anchor_expr() const {
+  FM_CHECK(kind_ == NodeKind::SpillRef, "AstNode::as_spill_ref_anchor_expr on non-SpillRef");
+  return data_.spill_ref.anchor_expr;
 }
 
 std::string_view AstNode::as_ref3d_sheet_begin() const {

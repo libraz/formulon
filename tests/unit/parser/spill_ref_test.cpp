@@ -9,6 +9,11 @@
 //   * `=#`           -> still UnsupportedConstruct (Hash as a primary).
 //   * `=A1:B2#`      -> error (`#` cannot follow a range).
 //   * `=A1#:B2`      -> error (SpillRef cannot start a range).
+//
+// The anchor may also be computed rather than written out. Excel accepts
+// `#` after anything that names a reference -- a call, a name, a
+// parenthesised reference -- and refuses it after a literal, so those two
+// groups are tested separately.
 
 #include <algorithm>
 #include <string_view>
@@ -126,6 +131,104 @@ TEST(SpillRef, ArithmeticBetweenSpillRefs) {
   EXPECT_TRUE(p.errors().empty());
   EXPECT_EQ(root->kind(), NodeKind::BinaryOp);
   EXPECT_EQ(dump_sexpr(*root), "(binary + (spill-ref A1#) (spill-ref B1#))");
+}
+
+TEST(SpillRef, CallAnchorParsesAsComputedSpillRef) {
+  // `OFFSET(A1,1,0)#`: the anchor is whatever the call names, so the node
+  // carries the sub-expression rather than a Reference.
+  Arena a;
+  Parser p("=OFFSET(A1,1,0)#", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(p.errors().empty()) << "unexpected errors";
+  ASSERT_EQ(root->kind(), NodeKind::SpillRef);
+  ASSERT_NE(root->as_spill_ref_anchor_expr(), nullptr);
+  EXPECT_EQ(root->as_spill_ref_anchor_expr()->kind(), NodeKind::Call);
+  EXPECT_EQ(dump_sexpr(*root), "(spill-ref (call OFFSET (ref A1) (num 1) (num 0))#)");
+}
+
+TEST(SpillRef, WrittenOutAnchorCarriesNoExpression) {
+  // The literal form keeps its Reference inline; the two forms are told
+  // apart by the anchor-expression accessor being null.
+  Arena a;
+  Parser p("=A1#", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_EQ(root->kind(), NodeKind::SpillRef);
+  EXPECT_EQ(root->as_spill_ref_anchor_expr(), nullptr);
+}
+
+TEST(SpillRef, ParenthesisedRefAnchorParses) {
+  // `(A4)#` -- the parentheses collapse, so this reaches the operator as
+  // an ordinary written-out anchor.
+  Arena a;
+  Parser p("=(A4)#", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(p.errors().empty());
+  ASSERT_EQ(root->kind(), NodeKind::SpillRef);
+  EXPECT_EQ(dump_sexpr(*root), "(spill-ref A4#)");
+}
+
+TEST(SpillRef, NameAnchorParsesAsComputedSpillRef) {
+  // A defined name or a LET binding can anchor a spill.
+  Arena a;
+  Parser p("=Anchor#", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(p.errors().empty());
+  ASSERT_EQ(root->kind(), NodeKind::SpillRef);
+  ASSERT_NE(root->as_spill_ref_anchor_expr(), nullptr);
+  EXPECT_EQ(root->as_spill_ref_anchor_expr()->kind(), NodeKind::NameRef);
+}
+
+TEST(SpillRef, NestedCallAnchorParses) {
+  Arena a;
+  Parser p("=OFFSET(OFFSET(A1,3,0),0,0)#", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(p.errors().empty());
+  ASSERT_EQ(root->kind(), NodeKind::SpillRef);
+  EXPECT_NE(root->as_spill_ref_anchor_expr(), nullptr);
+}
+
+TEST(SpillRef, ParenthesisedArithmeticAnchorIsRejected) {
+  // A closing parenthesis arms the operator, so `(1+2)#` reaches the
+  // parser as a `#` over an arithmetic result. Excel refuses that at
+  // entry; here it is an unsupported construct.
+  Arena a;
+  Parser p("=(1+2)#", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct));
+}
+
+TEST(SpillRef, LiteralAnchorIsRejected) {
+  // Excel refuses `1#` and `"A1"#` at entry: neither names a reference.
+  // Nothing arms the operator after a number or a string, so the `#` is
+  // read as the opening byte of an error literal and fails there instead
+  // of reaching the postfix rule. Either way the formula does not parse,
+  // which is the contract these spellings need.
+  for (const char* src : {"=1#", "=\"A1\"#"}) {
+    Arena a;
+    Parser p(src, a);
+    AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << src;
+    EXPECT_FALSE(p.errors().empty()) << src;
+  }
+}
+
+TEST(SpillRef, ErrorLiteralAfterAnAnchorTailStillLexes) {
+  // Widening the `#` disambiguation must not swallow an error literal that
+  // merely follows a call or a name. An operator always separates them, so
+  // `#` there still opens `#REF!`.
+  for (const char* src : {"=SUM(A1)+#REF!", "=Anchor+#N/A", "=A1+#REF!", "=#REF!"}) {
+    Arena a;
+    Parser p(src, a);
+    AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << src;
+    EXPECT_TRUE(p.errors().empty()) << src;
+  }
 }
 
 }  // namespace

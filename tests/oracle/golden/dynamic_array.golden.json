@@ -2,11 +2,11 @@
   "suite": "dynamic_array",
   "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-20T17:06:36Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -354,13 +354,13 @@
           "value": 42.0
         }
       },
-      "skipped": "Mac probe via xlwings reads blank for `=_xlfn.ANCHORARRAY(B1)` typed via the formula2 API even when B1 holds a static value. This is a harness probe artefact (Mac may not fully evaluate the explicit `_xlfn.` form when injected through xlwings) rather than the documented `ref#` semantics. Formulon implements the documented #REF! return for non-spill anchors, covered by spill_ref_eval_test.cpp."
+      "skipped": "Excel discards `=_xlfn.ANCHORARRAY(B1)` at entry, so there is no reading to compare. Entering `=B1#` on the same sheet returns #REF!, matching Formulon; that is captured as anchorarray_hash_static_value_anchor."
     },
     {
       "id": "anchorarray_blank_anchor",
       "formula": "=_xlfn.ANCHORARRAY(E1)",
       "setup": {},
-      "skipped": "Mac probe via xlwings reads blank for `=_xlfn.ANCHORARRAY(E1)` typed via formula2 even when E1 is genuinely blank. Same probe artefact as anchorarray_static_value_anchor — Formulon's #REF! is the documented semantics for a non-spill anchor."
+      "skipped": "Excel discards `=_xlfn.ANCHORARRAY(E1)` at entry. The `=E1#` spelling returns #REF! for a genuinely blank anchor, captured as anchorarray_hash_blank_anchor."
     },
     {
       "id": "anchorarray_resolves_sequence_sum",
@@ -371,7 +371,7 @@
           "formula": "=SEQUENCE(3)"
         }
       },
-      "skipped": "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
+      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor."
     },
     {
       "id": "anchorarray_resolves_sequence_rows",
@@ -382,7 +382,7 @@
           "formula": "=SEQUENCE(3)"
         }
       },
-      "skipped": "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
+      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor."
     },
     {
       "id": "anchorarray_offset_resolved_anchor",
@@ -393,7 +393,184 @@
           "formula": "=SEQUENCE(2,2)"
         }
       },
-      "skipped": "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
+      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor."
+    },
+    {
+      "id": "anchorarray_hash_resolves_sequence_sum",
+      "formula": "=SUM(A1#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_resolves_sequence_rows",
+      "formula": "=ROWS(A1#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_offset_resolved_anchor",
+      "formula": "=SUM(OFFSET(A1,1,0)#)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_static_value_anchor",
+      "formula": "=B1#",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "anchorarray_hash_blank_anchor",
+      "formula": "=E1#",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "anchorarray_hash_indirect_anchor",
+      "formula": "=SUM(INDIRECT(\"A1\")#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_choose_anchor",
+      "formula": "=SUM(CHOOSE(1,A1)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_if_anchor",
+      "formula": "=SUM(IF(TRUE,A1)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_parenthesised_anchor",
+      "formula": "=SUM((A1)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_let_bound_anchor",
+      "formula": "=LET(x,A1,SUM(x#))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_nested_offset_anchor",
+      "formula": "=SUM(OFFSET(OFFSET(A1,0,0),0,0)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_multi_cell_anchor",
+      "formula": "=SUM(OFFSET(A1,0,0,2,2)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,2)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "anchorarray_hash_computed_anchor_without_spill",
+      "formula": "=SUM(OFFSET(A1,0,5)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
     }
   ]
 }

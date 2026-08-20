@@ -77,6 +77,16 @@ const AstNode* TransformRef(const AstNode& node, Arena& arena, const RefTransfor
 }
 
 const AstNode* TransformSpillRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+    // A computed anchor carries its references inside the sub-expression,
+    // so the rewrite belongs there; the operator itself has nothing to
+    // shift.
+    const AstNode* moved = TransformNode(*anchor, arena, transform);
+    if (moved == nullptr) {
+      return nullptr;
+    }
+    return moved == anchor ? &node : make_spill_ref_expr(arena, moved);
+  }
   std::optional<Reference> rewritten = transform.apply(node.as_spill_ref());
   if (!rewritten.has_value()) {
     return MakeRefError(arena);

@@ -195,6 +195,14 @@ TEST(AstFormat, SpillRef) {
   ExpectRoundTripsToSame("=A1#");
 }
 
+TEST(AstFormat, SpillRefComputedAnchor) {
+  // The anchor sub-expression prints in the operand's place, so the whole
+  // spelling survives a parse / format round trip.
+  ExpectRoundTripsToSame("=SUM(OFFSET(A1,1,0)#)");
+  ExpectRoundTripsToSame("=SUM(INDIRECT(\"A1\")#)");
+  ExpectRoundTripsToSame("=Anchor#");
+}
+
 TEST(AstFormat, StructuredRefRoundTripsColumn) {
   ExpectRoundTripsToSame("=Tbl[Region]");
 }

@@ -153,3 +153,89 @@ cases:
     setup:
       A2: "=SEQUENCE(2,2)"
     formula: "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,0)))"
+
+  # `_xlfn.ANCHORARRAY` is the stored spelling; Excel discards it when it is
+  # typed in, so the cases above cannot be captured. `A1#` is the spelling a
+  # user enters and Excel retains, and it pins the same semantics.
+  - id: anchorarray_hash_resolves_sequence_sum
+    description: "A1=SEQUENCE(3) spills to A1:A3. SUM(A1#) = 1+2+3 = 6."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=SUM(A1#)"
+
+  - id: anchorarray_hash_resolves_sequence_rows
+    description: "A1=SEQUENCE(3) spills 3x1. ROWS(A1#) = 3."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=ROWS(A1#)"
+
+  - id: anchorarray_hash_offset_resolved_anchor
+    description: "A2=SEQUENCE(2,2) spills 2x2; OFFSET(A1,1,0) -> A2 -> spill anchor; SUM = 10."
+    setup:
+      A2: "=SEQUENCE(2,2)"
+    formula: "=SUM(OFFSET(A1,1,0)#)"
+
+  - id: anchorarray_hash_static_value_anchor
+    description: "B1 holds a static number, so B1# has no spill to resolve."
+    setup:
+      B1: 42
+    formula: "=B1#"
+
+  - id: anchorarray_hash_blank_anchor
+    description: "E1 is genuinely blank, so E1# has no spill to resolve."
+    formula: "=E1#"
+
+  # The anchor need not be written out: Excel accepts `#` after anything
+  # that names a reference and stores the spelling verbatim. The cases
+  # below cover each anchor shape the engine resolves, plus the two ways
+  # an accepted anchor still fails.
+  - id: anchorarray_hash_indirect_anchor
+    description: "INDIRECT builds the anchor from text; the spill at A1 resolves the same as a written-out A1#."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: '=SUM(INDIRECT("A1")#)'
+
+  - id: anchorarray_hash_choose_anchor
+    description: "CHOOSE passes a reference through, so its picked branch anchors the spill."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=SUM(CHOOSE(1,A1)#)"
+
+  - id: anchorarray_hash_if_anchor
+    description: "IF preserves reference shape on the picked branch, so it can anchor a spill."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=SUM(IF(TRUE,A1)#)"
+
+  - id: anchorarray_hash_parenthesised_anchor
+    description: "Parentheses around the anchor do not change what it names."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=SUM((A1)#)"
+
+  - id: anchorarray_hash_let_bound_anchor
+    description: "A LET binding is transparent to the anchor: x# resolves the spill x was bound to."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=LET(x,A1,SUM(x#))"
+
+  - id: anchorarray_hash_nested_offset_anchor
+    description: "Nested reference-returning calls resolve to one cell, which anchors the spill."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=SUM(OFFSET(OFFSET(A1,0,0),0,0)#)"
+
+  - id: anchorarray_hash_multi_cell_anchor
+    description: >-
+      An anchor is a single cell. A reference covering more than one is
+      rejected rather than narrowed to its top-left corner, even when that
+      corner does anchor a live spill.
+    setup:
+      A1: "=SEQUENCE(2,2)"
+    formula: "=SUM(OFFSET(A1,0,0,2,2)#)"
+
+  - id: anchorarray_hash_computed_anchor_without_spill
+    description: "A computed anchor that lands on a cell with no spill fails the same way a written-out one does."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=SUM(OFFSET(A1,0,5)#)"

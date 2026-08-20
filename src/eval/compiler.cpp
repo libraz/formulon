@@ -287,6 +287,14 @@ Expected<void, Error> compile_ref(BodyState& bs, const parser::AstNode& node) {
 }
 
 Expected<void, Error> compile_spill_ref(BodyState& bs, const parser::AstNode& node) {
+  if (node.as_spill_ref_anchor_expr() != nullptr) {
+    // `LoadSpillRef` carries an index into the ref pool, which only a
+    // written-out anchor has. A computed anchor (`OFFSET(A1,1,0)#`) has to
+    // resolve its cell during evaluation, so the formula falls back to the
+    // tree walker rather than being encoded.
+    return make_compile_error(FormulonErrorCode::kVmUnsupportedNode,
+                              "spill anchor computed by an expression is not supported by the VM");
+  }
   ASSIGN_OR_RETURN(auto idx, push_ref(bs, node.as_spill_ref()));
   RETURN_IF_ERROR(emit(bs, node, OpCode::LoadSpillRef, idx));
   return {};

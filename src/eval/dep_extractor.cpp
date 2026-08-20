@@ -419,6 +419,15 @@ void walk(const parser::AstNode& node, WalkState& state) {
       // shape), so we conservatively register only the anchor as a direct
       // dep: any change at the anchor invalidates the whole region by
       // construction in `Sheet::clear_spill`.
+      if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        // A computed anchor names no cell until the formula runs, so there
+        // is nothing static to register for the region itself. Walking the
+        // sub-expression still records the references it reads and any
+        // volatile call it makes, which is what keeps
+        // `=SUM(OFFSET(A1,1,0)#)` recalculating.
+        walk(*anchor, state);
+        return;
+      }
       const parser::Reference& ref = node.as_spill_ref();
       if (ref.is_full_col || ref.is_full_row) {
         return;  // Parser rejects this shape; defensive.

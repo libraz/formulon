@@ -591,7 +591,13 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
       if (wrap) {
         out.push_back('(');
       }
-      FormatRef(node.as_spill_ref(), out);
+      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        // A computed anchor prints at the postfix level so a lower-binding
+        // sub-expression parenthesises itself back into place.
+        FormatNode(*anchor, out, kBpPostfixHash);
+      } else {
+        FormatRef(node.as_spill_ref(), out);
+      }
       out.push_back('#');
       if (wrap) {
         out.push_back(')');
@@ -687,7 +693,13 @@ struct StorageEmitter {
         if (wrap) {
           out.push_back('(');
         }
-        FormatRef(node.as_spill_ref(), out);
+        if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+          // Recurse through `emit`, not `FormatNode`: a computed anchor may
+          // itself call a function whose stored spelling carries a prefix.
+          emit(*anchor, out, kBpPostfixHash);
+        } else {
+          FormatRef(node.as_spill_ref(), out);
+        }
         out.push_back('#');
         if (wrap) {
           out.push_back(')');

@@ -147,7 +147,12 @@ class AstNode final {
   const Reference& as_ref() const;
 
   // --- SpillRef ------------------------------------------------------------
+  /// The anchor written out literally (`A1#`). Only valid when
+  /// `as_spill_ref_anchor_expr()` is null; check that first.
   const Reference& as_spill_ref() const;
+  /// The expression that computes the anchor (`OFFSET(A1,1,0)#`), or null
+  /// when the anchor was written out and lives in `as_spill_ref()`.
+  const AstNode* as_spill_ref_anchor_expr() const;
 
   // --- Ref3D ---------------------------------------------------------------
   std::string_view as_ref3d_sheet_begin() const;
@@ -234,6 +239,7 @@ class AstNode final {
   friend AstNode* make_literal(Arena&, Value);
   friend AstNode* make_ref(Arena&, const Reference&);
   friend AstNode* make_spill_ref(Arena&, const Reference&);
+  friend AstNode* make_spill_ref_expr(Arena&, const AstNode*);
   friend AstNode* make_ref3d(Arena&, std::string_view, std::string_view, const Reference&);
   friend AstNode* make_ref3d_range(Arena&, std::string_view, std::string_view, const Reference&, const Reference&);
   friend AstNode* make_structured_ref(Arena&, std::string_view, std::string_view, StructuredRefModifier);
@@ -269,6 +275,14 @@ class AstNode final {
     // tail, `Sheet1:Sheet3!A1`).
     Reference cell_end;
     bool is_range = false;
+  };
+  /// `A1#` and `OFFSET(A1,1,0)#` are the same operator over two kinds of
+  /// anchor. The written-out form keeps its `Reference` inline so the
+  /// common case costs no indirection; the computed form points at the
+  /// sub-expression and leaves `anchor` unused.
+  struct SpillRefPayload {
+    Reference anchor;
+    const AstNode* anchor_expr;
   };
   struct StructuredRefPayload {
     std::string_view table;
@@ -330,6 +344,7 @@ class AstNode final {
   union Payload {
     Value literal;
     Reference ref;
+    SpillRefPayload spill_ref;
     const Ref3DPayload* ref3d;
     StructuredRefPayload structured_ref;
     std::string_view name;
@@ -391,6 +406,13 @@ AstNode* make_ref(Arena& arena, const Reference& r);
 /// valid spill anchors; the parser is expected to reject those before
 /// reaching this factory.
 AstNode* make_spill_ref(Arena& arena, const Reference& r);
+
+/// Builds a `SpillRef` node whose anchor is computed by `anchor_expr`
+/// rather than written out (`OFFSET(A1,1,0)#`, `INDIRECT("A2")#`). The
+/// expression is resolved to a single cell at evaluation time; the parser
+/// only admits shapes that can name a reference, so a literal or an
+/// arithmetic result never reaches this factory.
+AstNode* make_spill_ref_expr(Arena& arena, const AstNode* anchor_expr);
 
 /// Builds a `Ref3D` node referencing `sheet_begin:sheet_end!cell`. The
 /// span is by workbook sheet order, resolved at evaluation time; `cell`'s
