@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(formulon VERSION 0.10.0 LANGUAGES CXX)
+project(formulon VERSION 0.11.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Language standard and global settings
@@ -437,6 +437,7 @@ if(FM_BUILD_CLI)
     src/cli/recalc_cmd.cpp
     src/cli/dump_cmd.cpp
     src/cli/paginate_cmd.cpp
+    src/cli/diagnostics.cpp
     src/cli/file_io.cpp
     src/cli/render.cpp
   )

@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-20
+
 ### Added
+
+- `pivotFieldAddItemAt` / `pivot_field_add_item_at` reaches WASM and the
+  native Node addon, where only Python and the C ABI had it. It is the
+  only way to name a pivot item by its cache index, and therefore the
+  only way to express the blank member of a pivot axis — an empty label
+  passed to `pivotFieldAddItem` cannot name it, and filtering on it
+  silently did nothing. The C header had prescribed this entry point as
+  the required alternative all along.
+
+- `getIterative()` reads back the iterative-calculation settings on WASM
+  and the native Node addon, which previously carried only the setter.
+  It returns `enabled`, `maxIterations` and `maxChange` beside the usual
+  status, so a host can render the settings dialog it is about to write
+  to. Python already had it.
+
+- A sheet tab's `veryHidden` visibility can now be set, not only
+  preserved. Excel leaves a very-hidden sheet out of its "Unhide"
+  dialog, which is how a workbook keeps a settings or lookup sheet out
+  of a user's reach; until now that state round-tripped through a file
+  but no surface could newly state it, and the boolean setter could only
+  clear it. `fm_sheet_set_visibility` takes the three-state
+  `fm_sheet_visibility_t` and reaches WASM and the native Node addon as
+  `setSheetVisibility` and Python as `set_sheet_visibility`.
+  `fm_sheet_view_t` gains a `visibility` field carrying the resolved
+  state, surfaced as `SheetView.visibility` on all three bindings.
 
 - Worksheet print settings can now be authored, not only read back. Page
   setup, margins, print options, print area, print titles, header/footer
@@ -20,11 +47,266 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raw-XML counterpart for the parts this engine does not model, and a
   fragment handed to one of those is validated as well-formed and bounded
   before it is stored, so a malformed fragment is rejected at the call
-  rather than on save. A style table is now seeded when a workbook is
-  created, which keeps a caller-appended font, fill or border off the
-  index slots Excel reserves.
+  rather than on save.
+
+- A newly created workbook carries the minimum style table Excel writes:
+  one font, the reserved `none` and `gray125` fills, one border, one cell
+  style. The writer used to synthesise these on save only while the table
+  was empty, so a caller that appended a single fill took the slot Excel
+  reserves for `none` and shifted every `fillId` in the file by one — a
+  break visible only after the file reached Excel. Seeding also makes
+  index 0 a usable template, so "copy the default and change the size"
+  works without a separate partial-input type.
+
+- `fm_sheet_set_range_xf_index` / `setRangeXfIndex` / `set_range_xf_index`
+  stores one style index across every cell in a rectangle in a single
+  call, materialising cells that do not exist yet as styled blanks, so
+  ruling a report's border no longer costs one ABI crossing per cell.
+
+### Changed
+
+- The style table a newly created workbook now carries (see above)
+  reserves index 0 for its font, border and cell style, and indices 0
+  and 1 for its `none` and `gray125` fills. The first `addFont` or
+  `addBorder` a caller appends to a freshly created workbook therefore
+  returns index 1, not 0, and the first `addFill` returns index 2, not
+  0; callers that assumed a fresh workbook's style tables start empty
+  should read the index back from the setter's return value rather than
+  assuming it.
+
+- `fm_workbook_set_iterative` / `setIterative` / `set_iterative` clamp
+  `max_iterations` to 32767, and the getter reports the clamped value
+  rather than the requested one, so a caller that set a larger cap and
+  reads it back now sees 32767. A loaded file whose `iterateCount`
+  exceeds that saves back as 32767 rather than its original figure —
+  such a file is schema-valid, but Excel's own dialog cannot produce
+  one, and the alternative was leaving an unbounded recalculation
+  reachable from a file.
+
+- `addValidation`'s `allowBlank` now defaults to `false` on WASM and the
+  native Node addon, where it defaulted to `true`. Python already
+  defaulted to `false`, and both TypeScript declarations state the
+  general rule that an omitted boolean field defaults to `false` with
+  `showDropDown` as the only carve-out. A validation rule that omits the
+  field therefore changes meaning: it now rejects empty cells. Spell
+  `allowBlank: true` to keep the old behaviour.
+
+- Argument-validation failures on the native Node addon report
+  `kBindingNullPointer` (7001) instead of `kBindingInvalidHandle`
+  (7000). 7000 means "this workbook handle was already destroyed", so a
+  caller handed that code for a malformed argument would reach for the
+  one recovery that cannot help — recreating the workbook. The affected
+  entry points are `pivotFieldAdd`, `pivotDataFieldAdd`,
+  `pivotDataFieldSet`, `pivotFilterAdd`, `setIterativeProgress` and the
+  module-level `setLogSink`. A caller branching on 7000 for those will
+  see the new code.
+
+- `formulon eval` no longer treats a malformed formula as a structural
+  failure. Malformed syntax now resolves to Excel's ordinary `#NAME?`,
+  which prints to stdout with an exit status of 0, the same result every
+  other surface over the C ABI already produced. A caller that used the
+  exit status to detect a typo should test the printed value instead.
+
+- A number written into the pivot cache now carries its shortest
+  round-tripping spelling, so a cached `0.1` is stored as `0.1` rather
+  than `0.10000000000000001`. Cell values already used this form; the
+  cache did not, so the same number appeared two ways in one file. The
+  value each spelling parses back to is identical, but the saved bytes
+  differ from those earlier releases produced.
+
+- Row heights, column widths, the default sheet format metrics, font
+  sizes and colour tints are written the same shortest round-tripping
+  way, for the same reason. A default column width is now stored as
+  `8.43` rather than `8.4299999999999997`, and a colour tint as `0.35`
+  rather than `0.34999999999999998`. The values are unchanged and only
+  the spelling differs, but a byte comparison against a file saved by
+  an earlier release will show it.
+
+- The WASM size report's soft ceilings moved to 2.75 MiB uncompressed and
+  736 KiB Brotli. The previous pair sat below the shipped binary, so the
+  warning fired on every run and said nothing about the change being
+  measured. The new pair sits just above it, which is what a tripwire has
+  to do to be read: one feature's worth of growth trips it, and the hard
+  ceilings — unchanged at 3.00 MiB and 768 KiB — stay a further 0.25 MiB
+  and 32 KiB away.
+
+- `fm_sheet_view_t` gains a `visibility` field between `tab_hidden` and
+  `show_grid_lines`. The struct is 48 bytes on a 64-bit host as before —
+  the new field fills what was tail padding — but grows from 40 to 44
+  bytes on wasm32, so code compiled against the previous layout must be
+  rebuilt. `tab_hidden` is unchanged in meaning and is non-zero for both
+  hidden states, so a caller reading only that field sees a very-hidden
+  sheet as hidden rather than as visible. `fm_sheet_set_tab_hidden`
+  still refuses to demote a very-hidden sheet to plain hidden;
+  `fm_sheet_set_visibility` is the way to do that.
+
+- The `fuzz-parser`, `fuzz-xlsx` and `fuzz-eval` make targets are
+  replaced by `fuzz`, which builds every harness under
+  `-DFM_BUILD_FUZZ=ON` and runs the smoke tier, and `fuzz-long`, which
+  runs them to a wall-clock budget. The three old names printed that
+  they were unimplemented and exited 0; they covered three of the five
+  harnesses in any case. `bench` likewise printed that it was
+  unimplemented and now runs the regression check. Scripts calling the
+  four old names will now fail with "No rule to make target" rather than
+  silently succeeding.
+
+- The fuzz harnesses need a Clang that ships libFuzzer, which the Apple
+  toolchain does not; `fuzz` looks for a Homebrew LLVM and falls back to
+  `clang` on the `PATH`, overridable with `FUZZ_CC` / `FUZZ_CXX`. When
+  neither can link `-fsanitize=fuzzer`, configuring now refuses in
+  seconds and names the cause, rather than failing at link after a full
+  sanitized rebuild of the core.
+  AddressSanitizer stays off by default because it deadlocks in its own
+  shadow-memory setup against recent macOS dynamic linkers; set
+  `FUZZ_SANITIZERS` to opt back in.
+
+- The xlsx fuzz target now seeds from the bundled workbook fixtures.
+  Starting from an empty corpus, it only ever explored the ZIP header
+  rejection path.
+
+### Performance
+
+- Parallel recalculation no longer routes a cell to the calling thread
+  merely because it is volatile. The isolation exists so that a formula
+  resolving a reference at evaluation time — `INDIRECT`, `OFFSET` —
+  cannot read a cell a worker is writing, which says nothing about a
+  formula whose only volatility is producing a fresh value. `RAND`,
+  `NOW`, `TODAY` and their relatives were isolated all the same, so a
+  sheet of them created no worker pool at all and a four-thread
+  configuration ran exactly like a single-threaded one. Reference-
+  resolving formulas stay isolated. The gain follows the work each
+  formula does rather than the cell count: a heavy volatile formula
+  scales with the pool, while a sheet of bare `=RAND()` is bound by the
+  per-cell commit rather than by evaluation and does not.
 
 ### Fixed
+
+- A row or column insert or delete now moves the worksheet auto-filter's
+  `ref` rectangle with the cells it filters, and drops the auto-filter
+  when the edit consumes its whole range. Previously the rectangle stayed
+  where it was while the data moved out from under it. The criteria
+  offsets on `<filterColumn>` are not remapped, so a column edit inside
+  the filtered range still leaves the criteria attached to the wrong
+  columns.
+
+- Bulk range reads and spilled-range (`A1#`) reads handed back text whose
+  bytes belonged to the sheet, so a value read from a range could be
+  invalidated by a later write to the cell it came from or by a clear of
+  the spill region behind it. The scalar cell read already returned owned
+  bytes; the bulk paths now match it.
+
+- A workbook could specify its own iteration budget with nothing
+  bounding it. `<calcPr iterate="1" iterateCount="4294967295"
+  iterateDelta="0"/>` over a two-cell cycle made the first
+  recalculation run billions of sweeps: the delta of zero makes the
+  convergence test unsatisfiable, there is no time limit anywhere in the
+  engine, and cancellation only exists if the host registered a progress
+  callback. On WASM that is an unrecoverable hang of the instance. The
+  count is now capped at 32767 — Excel's own limit for the setting, so
+  the cap costs no fidelity — on the file path, the API setter and the
+  solver itself.
+
+- `spinCount` values above 2^32-1 were truncated on read, and a value
+  that truncated to exactly zero then lost the attribute entirely on
+  save, leaving a protected sheet's hash and salt with no iteration
+  count. Such values now saturate at 4294967295.
+
+- Converting an `.xlsb` to an `.xlsx` silently dropped every cell's
+  alignment, protection and `apply*` flags. The XLSB styles reader left
+  seventeen `<xf>` fields unmodelled on the grounds that they round-trip
+  through the retained `xl/styles.bin` — which holds for `.xlsb` to
+  `.xlsb`, but not for a conversion, because the `.xlsx` writer emits
+  from the model rather than from the retained bytes. `vertical="center"`
+  is the ja-JP Excel default, so a typical Japanese-authored workbook
+  came out of the conversion with every cell bottom-aligned. The reverse
+  direction lost `textRotation`, `indent`, `justifyLastLine`,
+  `shrinkToFit` and `readingOrder`. Both are now carried. One field
+  still cannot survive an `.xlsb` save: the binary record has no slot for
+  `relativeIndent`, which is now stated in the reader rather than left
+  to be discovered.
+
+- A deeply nested formula could corrupt memory or kill the WASM module.
+  The parser's nesting cap is sized against a measured worst-case stack
+  cost, but the WASM link inherited the toolchain's default stack of
+  64 KiB while the deepest legal input needs about 97 KiB, and release
+  builds disable the overflow check — so the shadow stack ran into the
+  data segment underneath it without any diagnostic. A formula of about
+  420 characters, well inside both the nesting cap and Excel's
+  8,192-character limit, already wrote past the stack; around 600
+  characters it faulted outright and took the module instance with it.
+  Any host-supplied formula string reached this, as did a crafted
+  workbook, since the same parser serves the file readers. The stack is
+  now pinned explicitly at 320 KiB — a little over three times the
+  measured worst case — for both the embind and the C-ABI variants, and
+  a formula past the nesting cap reports the parser's error instead of
+  faulting.
+
+- The six sheet-layout setters accepted a width or height of NaN, ±Inf
+  or a negative number, and a column or row index past the grid, then
+  wrote the result to file. NaN and infinity serialise to an empty
+  string, which is not a lexical `xsd:double` at all, so the emitted
+  `<col width=""/>` and `<row ht=""/>` made Excel prompt to repair the
+  workbook rather than merely rendering something odd; `min="16384"` and
+  `r="1048577"` name tracks outside the grid. `fm_sheet_set_column_width`,
+  `fm_sheet_set_column_hidden`, `fm_sheet_set_column_outline`,
+  `fm_sheet_set_row_height`, `fm_sheet_set_row_hidden` and
+  `fm_sheet_set_row_outline` now return `kInvalidArgument` and leave the
+  model untouched. A width or height of zero remains legal — a
+  zero-width column is a real thing. Callers that were getting a success
+  status for these arguments will now see a failure, but the file that
+  path produced could not be opened.
+
+- A failed call on WASM and the native Node addon could report the
+  message left behind by an unrelated earlier call. Failures raised
+  inside the binding layer never set the thread-local diagnostics, so
+  the envelope carried whatever residue was there — or nothing at all
+  when the previous call had succeeded. A destroyed handle now says so,
+  and a rejected argument names the parameter it rejected.
+
+- `getCellStyleXf` omitted `xfId` from the record it returns, although
+  both TypeScript declarations state it is always 0 there and the C
+  layer sets it. The returned object now matches `getCellXf`'s shape, so
+  the documented read-modify-write round trip no longer depends on the
+  field's absence happening to coincide with its default.
+
+- Evaluating a pivot with a manual filter walked every item of every
+  field for every record, so a filter's cost grew with the length of the
+  item list Excel writes for any field placed on an axis — even when
+  nothing was hidden. The hidden-label set is a property of the table,
+  not of a record, so it is now built once per evaluation and each
+  record costs one lookup per field that hides something. On fifty
+  thousand records the effect ranges from roughly forty-fold to two
+  orders of magnitude depending on item-list length, and the cost no
+  longer follows that length at all.
+
+- `=A:C B:B` and its relatives returned `#VALUE!` instead of the
+  intersection Excel computes. Deriving a rectangle from full-column or
+  full-row endpoints had implementations left that predated the shared
+  one; the intersection operator, the scalar shape seam and the
+  aggregator expander now use the same derivation as every other
+  consumer.
+
+- `ROW` and `COLUMN` given a whole-column or whole-row reference
+  collapsed to `1` instead of projecting every index of that axis, so
+  `=SUM(ROW(A:A))` returned 1 rather than 549,756,338,176. `ROWS` and
+  `COLUMNS` already reported the full axis for the same reference, so
+  the singular and plural forms disagreed with each other. `=ROW(A:C)`
+  and `=COLUMN(1:3)` were wrong the same way. The off-axis spellings —
+  `=ROW(1:1)`, `=COLUMN(A:A)` — were already right and still are.
+
+- `dump` and `paginate` discarded the diagnostics a load produces when
+  part of a workbook could not be represented, so a snapshot or a page
+  geometry could be taken from a silently incomplete workbook. All three
+  subcommands now report them, prefixed with the subcommand that read
+  the file.
+
+- A cell containing a tab or a newline could forge column and row
+  boundaries in `eval`'s plain grid output. Both are now escaped, the way
+  `dump` already escaped them.
+
+- `--version` and `--help` exited 0 even when the write to stdout failed,
+  so a caller reading them through a closed pipe saw success and no
+  output. They now fail.
 
 - A manual page break written to an xlsx landed one row or column late
   when the file was opened in Excel, and a break read from an
@@ -34,15 +316,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cancelled inside a read/write cycle, so only pagination results and
   Excel disagreed with the model.
 
-### Changed
+- `SUM(IF(condition_range, a, b))` and its relatives returned `#VALUE!`
+  instead of aggregating the masked range. The array condition was
+  coerced to a single boolean at the aggregator's argument seam rather
+  than picked per cell, so the array idiom — which needs no
+  Ctrl+Shift+Enter in Excel 365 — failed under every eager aggregator.
+  The criteria and lookup families reached a second copy of that seam
+  and failed the same way: `SUMPRODUCT` and `INDEX` returned `#VALUE!`
+  and `#REF!`, and `COUNT` returned a plausible wrong number rather than
+  an error, because a function that inspects error arguments drops a
+  failed expansion as "not a number". A bare `=IF(A1:A5<=3,1,0)` spilled
+  correctly throughout; only the consuming forms were affected.
 
-- The WASM size report's soft ceilings moved to 2.75 MiB uncompressed and
-  736 KiB Brotli. The previous pair sat below the shipped binary, so the
-  warning fired on every run and said nothing about the change being
-  measured. The new pair sits just above it, which is what a tripwire has
-  to do to be read: one feature's worth of growth trips it, and the hard
-  ceilings — unchanged at 3.00 MiB and 768 KiB — stay a further 0.25 MiB
-  and 32 KiB away.
+- A range chaining `:` over whole-column or whole-row endpoints on one
+  axis lost an endpoint on save. `=SUM(A:A:A:A)` was written as
+  `=SUM(A:A)`, which reads back as a single whole-column reference
+  rather than the pair. Where the two endpoints were anchored
+  differently — `=SUM($A:$A:A:A)` — the surviving form also answered
+  differently once filled, because one endpoint had stopped being
+  relative. The splice that compacts `A:A:C:C` to `A:C` now applies only
+  across axes, where there is something to compact. A side effect worth
+  knowing: this engine does not yet evaluate a `:` chain whose endpoints
+  are themselves whole-axis ranges, and the old compaction was
+  incidentally hiding that on save, so such a formula now keeps its
+  `#VALUE!` across a save and reload instead of appearing to repair
+  itself.
+
+- `IFS` with an array condition returned `#VALUE!` instead of deciding
+  per cell. `=IFS(A1:A5<=3,A1:A5,TRUE,0)` now spills `{1;2;3;0;0}`, and
+  several array conditions in sequence each win the cells they hold for.
+  A condition that wins as a scalar still settles the call before any
+  later condition is evaluated, so a later argument that would error is
+  not reached.
+
+- `SWITCH` with an array as its first argument returned a single value
+  instead of selecting per cell. Nothing matched, so the walk fell
+  through to the default: `=SWITCH(A1:A5,1,10,0)` answered `0` where
+  Excel spills `{10;0;0;0;0}`, with no error to show something had gone
+  wrong. Where there is no default, the rule that an unmatched subject
+  yields `#N/A` now applies per cell, so the cells that match keep their
+  value.
+
+- A cell reference followed by a space and a parenthesis parsed as a
+  function call rather than an intersection, so `=A1 (B1:C5)` returned
+  `#NAME?` where Excel evaluates the intersection. Only a range tail was
+  carved out of the call rewrite; a parenthesised operand of any other
+  shape still became a call. A parenthesised comma list is also a legal
+  intersection operand, and was separately rejected as an invalid range.
+  `LOG10` is the only Excel function whose name is shaped like a cell
+  reference, so it stays a call.
+
+- Negative elements of an array constant were written back in a form
+  neither Excel nor Formulon can read: `={-1,2}` was saved as
+  `{(-1),2}`, and an array constant admits constants only. Formulas such
+  as `=IRR({-100,40,40,40})` were affected on every save.
+
+- A sheet name beginning with a digit was written without quotes in a
+  3-D reference span, producing `3S1:Daa!A1`, which does not parse — the
+  leading run is read as a number. Renaming a sheet to a name of that
+  shape, such as `2026Q1`, corrupted every reference to it.
+
+- A range whose endpoint is a defined name or `LAMBDA` parameter spelled
+  like a column letter was written in a form that read back as a
+  whole-column range: `RO:r` became `RO:R`. Such an endpoint is now
+  parenthesised. Ordinary ranges, whole-column ranges and ranges ending
+  in a function call are written as before.
 
 ## [0.10.0] - 2026-08-18
 
@@ -840,7 +1178,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/libraz/formulon/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/libraz/formulon/compare/v0.9.7...v0.10.0
 [0.9.7]: https://github.com/libraz/formulon/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/libraz/formulon/compare/v0.9.5...v0.9.6
