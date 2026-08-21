@@ -5,6 +5,7 @@
 # isolated from the fast unit-test suite.
 
 set(FORMULON_INTEGRATION_TEST_SOURCES
+  cf_databar_union_sqref_fixture_test.cpp
   external_links_roundtrip_test.cpp
   formula_corpus_fixture_smoke_test.cpp
   legacy_at_test.cpp
