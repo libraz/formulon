@@ -132,6 +132,137 @@ inline bool declared_rect_endpoints(const parser::AstNode& node, const parser::R
   return true;
 }
 
+namespace detail {
+
+/// Running state for `declared_rect_endpoint_pair`'s walk over a `:` chain.
+/// Coordinates on an axis a leaf does not bound are folded in anyway and
+/// simply never read, matching `declared_rect`'s own rule that a
+/// whole-column endpoint's `row` is a structure default.
+struct RangeChainFold {
+  const parser::Reference* first = nullptr;
+  /// The first leaf whose sheet qualifier differs from `first`'s, so the
+  /// synthesised pair carries the disagreement into `effective_range_sheet`
+  /// rather than restating its cross-sheet rule here.
+  const parser::Reference* other_sheet = nullptr;
+  /// Extents in the coordinates each leaf actually bounds: a whole-column
+  /// leaf spans every row, a whole-row leaf spans every column.
+  std::uint32_t row_first = 0;
+  std::uint32_t row_last = 0;
+  std::uint32_t col_first = 0;
+  std::uint32_t col_last = 0;
+  bool any_full_col = false;
+  bool any_full_row = false;
+  bool seen = false;
+};
+
+inline bool fold_range_chain(const parser::AstNode& node, RangeChainFold* acc) {
+  if (node.kind() == parser::NodeKind::Ref) {
+    const parser::Reference& ref = node.as_ref();
+    // A leaf's own span, in grid coordinates. A whole-column reference
+    // names no row and a whole-row reference names no column, so the
+    // unnamed axis contributes the whole grid rather than the structure
+    // default sitting in that field.
+    const std::uint32_t leaf_row_first = ref.is_full_col ? 0U : ref.row;
+    const std::uint32_t leaf_row_last = ref.is_full_col ? Sheet::kMaxRows - 1U : ref.row;
+    const std::uint32_t leaf_col_first = ref.is_full_row ? 0U : ref.col;
+    const std::uint32_t leaf_col_last = ref.is_full_row ? Sheet::kMaxCols - 1U : ref.col;
+    acc->any_full_col = acc->any_full_col || ref.is_full_col;
+    acc->any_full_row = acc->any_full_row || ref.is_full_row;
+    if (!acc->seen) {
+      acc->first = &ref;
+      acc->row_first = leaf_row_first;
+      acc->row_last = leaf_row_last;
+      acc->col_first = leaf_col_first;
+      acc->col_last = leaf_col_last;
+      acc->seen = true;
+      return true;
+    }
+    if (acc->other_sheet == nullptr && ref.sheet != acc->first->sheet) {
+      acc->other_sheet = &ref;
+    }
+    acc->row_first = std::min(acc->row_first, leaf_row_first);
+    acc->row_last = std::max(acc->row_last, leaf_row_last);
+    acc->col_first = std::min(acc->col_first, leaf_col_first);
+    acc->col_last = std::max(acc->col_last, leaf_col_last);
+    return true;
+  }
+  if (node.kind() != parser::NodeKind::RangeOp) {
+    return false;
+  }
+  return fold_range_chain(node.as_range_lhs(), acc) && fold_range_chain(node.as_range_rhs(), acc);
+}
+
+}  // namespace detail
+
+/// Reduces a static reference expression to the endpoint pair that bounds
+/// it, following a `:` chain to any depth.
+///
+/// Excel's `:` yields the bounding box of its two operands and composes, so
+/// `A:C:E:G` names columns A through G and `COLUMNS` reports 7 for it. The
+/// two-endpoint shapes -- a bare `Ref` and `RangeOp(Ref, Ref)` -- are
+/// returned verbatim, so every spelling that resolved before keeps its
+/// exact anchors and sheet qualifier and only a genuine chain synthesises
+/// corners.
+///
+/// Returns false when `node` is not a static reference shape at all: a
+/// `RangeOp` whose endpoints are reference-returning calls has a rectangle
+/// only once evaluated, which is `resolve_range_endpoint`'s job.
+///
+/// The leaves do not have to bound the same axis. Measured on Excel 365
+/// (Mac, ja-JP, 16.112.1): `=COLUMNS(A:C:1:3)` is 16384 and
+/// `=ROWS(A:C:1:3)` is 1048576 -- composing a whole-column span with a
+/// whole-row span bounds the entire grid, it is not an error. Likewise
+/// `=COLUMNS(A:C:E1)` is 5 and `=ROWS(A:C:E1)` is 1048576. The
+/// two-endpoint `A:1` earns `#VALUE!` from `declared_rect` and keeps it,
+/// but that spelling is a grammar case rather than a semantic one --
+/// Excel rejects it when it is typed, so no answer for it is observable.
+inline bool declared_rect_endpoint_pair(const parser::AstNode& node, parser::Reference* out_lhs,
+                                        parser::Reference* out_rhs) {
+  const parser::Reference* pair_lhs = nullptr;
+  const parser::Reference* pair_rhs = nullptr;
+  if (declared_rect_endpoints(node, &pair_lhs, &pair_rhs)) {
+    *out_lhs = *pair_lhs;
+    *out_rhs = *pair_rhs;
+    return true;
+  }
+  detail::RangeChainFold acc;
+  if (!detail::fold_range_chain(node, &acc) || !acc.seen) {
+    return false;
+  }
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  // The synthesised pair is spelled so that `declared_rect` re-derives the
+  // rectangle just folded, including whether it spans a whole axis --
+  // `whole_axis` is what lets range expansion clamp the unbounded side to
+  // the populated extent instead of enumerating the full grid.
+  if (acc.any_full_col) {
+    // Some leaf spans every row, so the row axis is whole and only the
+    // column extent is carried. A whole-row leaf has already widened that
+    // extent to the entire grid width.
+    lhs.is_full_col = true;
+    rhs.is_full_col = true;
+    lhs.col = acc.col_first;
+    rhs.col = acc.col_last;
+  } else if (acc.any_full_row) {
+    lhs.is_full_row = true;
+    rhs.is_full_row = true;
+    lhs.row = acc.row_first;
+    rhs.row = acc.row_last;
+  } else {
+    lhs.row = acc.row_first;
+    lhs.col = acc.col_first;
+    rhs.row = acc.row_last;
+    rhs.col = acc.col_last;
+  }
+  lhs.sheet = acc.first->sheet;
+  lhs.sheet_quoted = acc.first->sheet_quoted;
+  rhs.sheet = acc.other_sheet != nullptr ? acc.other_sheet->sheet : acc.first->sheet;
+  rhs.sheet_quoted = acc.other_sheet != nullptr ? acc.other_sheet->sheet_quoted : acc.first->sheet_quoted;
+  *out_lhs = lhs;
+  *out_rhs = rhs;
+  return true;
+}
+
 }  // namespace eval
 }  // namespace formulon
 

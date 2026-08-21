@@ -1106,6 +1106,37 @@ entries:
   # Excel does re-apply an authored filter on refresh rather than on open,
   # which is the one part of that reading that held.
 
+  # -- Chained `:`: the rectangle matches, the stored spelling may not ---
+  # Excel stores a `:` chain exactly as it was typed and keeps every link,
+  # so `=SUM(H:H:E:E)` and `=SUM(A:C:E:G)` come back verbatim. The AST
+  # records the rectangle a chain names rather than the chain itself:
+  # `H:H:E:E` and `H:E` parse to the same node, and `A:C:E:G` parses to a
+  # pair of pairs. Re-serialising therefore normalises the spelling -- to
+  # `H:E` and to `A:C:(E:G)` respectively.
+  #
+  # No evaluated result moves: every spelling names the same rectangle,
+  # and a fill shifts each endpoint the same way either side of the
+  # normalisation. The stored text is the only observable, and it is
+  # reachable only when the formula is re-serialised at all -- the writer
+  # emits the original text verbatim unless a storage prefix has to be
+  # added, so a chain is preserved unless the same formula also uses a
+  # future function or LET / LAMBDA.
+  #
+  # Recorded rather than fixed because closing it means teaching the AST
+  # to carry a spelling it does not need for any other purpose. The
+  # narrower everyday case was a real defect and is fixed: `A:C` used to
+  # be re-serialised as `A:A:C:C` because the storage emitter did not
+  # share the canonical emitter's whole-axis splice.
+  - id: chained_range_operator_spelling_normalised_on_reserialise
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: deferred-feature
+    evidence: [tests/unit/parser/ast_format_test.cpp, tests/oracle/cases/shape.yaml]
+    reason: "Excel stores a chained range operator verbatim and Formulon re-serialises it as the bounding pair, so `H:H:E:E` is written back as `H:E` and `A:C:E:G` as `A:C:(E:G)`. The rectangle, every evaluated result and the fill behaviour are identical -- the AST records the rectangle a chain names rather than the sequence of endpoints, which is why the spelling cannot be reproduced. The stored text is reachable only when the formula is re-serialised, which the writer does only to add an `_xlfn.` / `_xlpm.` storage prefix; otherwise the original text is emitted verbatim. The rectangle itself matches Excel for every chain shape measured, including the mixed-axis composition `A:C:1:3` that bounds the whole grid -- see the chain cases in tests/oracle/cases/shape.yaml, which are live goldens."
+    prefer: mac-excel-365
+    first_noted: 2026-08-21
+    last_verified_excel_version: "16.112.1"
+
   # -- Bare whole-axis reference: geometry cases are live --------------
   # The five geometry cases (a declared rectangle that no longer fits from
   # the formula cell, and a blocker anywhere inside the footprint) were

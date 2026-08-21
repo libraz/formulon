@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
@@ -601,10 +602,23 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       // rejects whole references (no bounded rectangle on their own), so route
       // the pair straight to `expand_range`, which clamps the unbounded axis to
       // the sheet's used range.
-      if (lhs_ast.kind() == parser::NodeKind::Ref && rhs_ast.kind() == parser::NodeKind::Ref &&
-          (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row || rhs_ast.as_ref().is_full_col ||
-           rhs_ast.as_ref().is_full_row)) {
-        auto expanded = ctx.expand_range(lhs_ast.as_ref(), rhs_ast.as_ref(), arena, registry);
+      //
+      // A `:` chain of three or more endpoints nests, so neither side is a
+      // bare `Ref`; `declared_rect_endpoint_pair` reduces the whole chain
+      // to the endpoint pair that bounds it. Without it a chain falls into
+      // the endpoint union below, which rejects whole references and turns
+      // `=SUM(A:C:E:G)` into `#VALUE!` where Excel answers.
+      parser::Reference chain_lhs{};
+      parser::Reference chain_rhs{};
+      const bool is_bare_pair = lhs_ast.kind() == parser::NodeKind::Ref && rhs_ast.kind() == parser::NodeKind::Ref;
+      const bool whole_axis_pair = is_bare_pair && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row ||
+                                                    rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row);
+      if (whole_axis_pair || (!is_bare_pair && declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs))) {
+        if (whole_axis_pair) {
+          chain_lhs = lhs_ast.as_ref();
+          chain_rhs = rhs_ast.as_ref();
+        }
+        auto expanded = ctx.expand_range(chain_lhs, chain_rhs, arena, registry);
         if (!expanded) {
           const Value err = Value::error(expanded.error());
           if (def->propagate_errors) {

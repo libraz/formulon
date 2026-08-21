@@ -2,11 +2,11 @@
   "suite": "shape",
   "description": "ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT lazy-dispatched builtins. Each requires per-argument AST shape (Ref / RangeOp / ArrayLiteral) so the eager dispatcher's Value-flattening path is bypassed.",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-21T06:08:24Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -125,6 +125,152 @@
         "kind": "number",
         "value": 3.0
       }
+    },
+    {
+      "id": "columns_of_whole_col_chain",
+      "formula": "=COLUMNS(A:C:E:G)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "rows_of_whole_row_chain",
+      "formula": "=ROWS(1:3:5:7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "columns_of_whole_col_chain_descending",
+      "formula": "=COLUMNS(G:E:C:A)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "columns_of_repeated_whole_col_chain",
+      "formula": "=COLUMNS(H:H:E:E)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "columns_of_bounded_chain",
+      "formula": "=COLUMNS(A1:C3:E5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "rows_of_bounded_chain",
+      "formula": "=ROWS(A1:C3:E5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "sum_over_whole_col_chain",
+      "formula": "=SUM(A:C:E:G)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "columns_of_mixed_axis_chain",
+      "formula": "=COLUMNS(A:C:1:3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16384.0
+      }
+    },
+    {
+      "id": "rows_of_mixed_axis_chain",
+      "formula": "=ROWS(A:C:1:3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "columns_of_whole_col_chained_with_cell",
+      "formula": "=COLUMNS(A:C:E1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "rows_of_whole_col_chained_with_cell",
+      "formula": "=ROWS(A:C:E1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "columns_of_whole_row_chained_with_cell",
+      "formula": "=COLUMNS(1:3:E5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16384.0
+      }
+    },
+    {
+      "id": "rows_of_whole_row_chained_with_cell",
+      "formula": "=ROWS(1:3:E5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "columns_of_two_endpoint_mixed_axis",
+      "formula": "=COLUMNS(A:1)",
+      "setup": {},
+      "skipped": "driver skip: _FormulaRetentionError: Excel silently rejected formula for case 'columns_of_two_endpoint_mixed_axis' result: formula='=COLUMNS(A:1)'; formula2/formula readback was empty"
+    },
+    {
+      "id": "rows_of_two_endpoint_mixed_axis",
+      "formula": "=ROWS(A:1)",
+      "setup": {},
+      "skipped": "driver skip: _FormulaRetentionError: Excel silently rejected formula for case 'rows_of_two_endpoint_mixed_axis' result: formula='=ROWS(A:1)'; formula2/formula readback was empty"
     },
     {
       "id": "row_of_ref",
@@ -391,7 +537,7 @@
       "id": "rows_of_mixed_row_array_literal",
       "formula": "=ROWS({1,2;3,4,5})",
       "setup": {},
-      "skipped": "Mac Excel rejects =ROWS({1,2;3,4,5}) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #NAME? for the jagged array literal."
+      "skipped": "Mac Excel refuses =ROWS({1,2;3,4,5}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's parser surfaces #NAME? for the jagged array literal."
     },
     {
       "id": "rows_of_let_rangeop",

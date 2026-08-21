@@ -367,13 +367,13 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
   bool resolved_rect = false;
 
   const parser::NodeKind k = arg.kind();
-  const parser::Reference* rect_lhs = nullptr;
-  const parser::Reference* rect_rhs = nullptr;
-  if (declared_rect_endpoints(arg, &rect_lhs, &rect_rhs)) {
+  parser::Reference rect_lhs{};
+  parser::Reference rect_rhs{};
+  if (declared_rect_endpoint_pair(arg, &rect_lhs, &rect_rhs)) {
     // Same derivation the scalar seam in `shape_ops_lazy.cpp` uses: a
     // full-axis endpoint names a coordinate only on its bounded axis, so
     // the rectangle cannot come from the endpoints' raw row/col fields.
-    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*rect_lhs, *rect_rhs);
+    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(rect_lhs, rect_rhs);
     if (!rect) {
       *out_err_code = rect.error();
       return false;

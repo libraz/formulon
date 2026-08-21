@@ -205,12 +205,12 @@ Value materialize_rectangle(const parser::Reference& top_left, const parser::Ref
 // out-params untouched.
 bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* top_left,
                               parser::Reference* bottom_right) {
-  const parser::Reference* lhs = nullptr;
-  const parser::Reference* rhs = nullptr;
-  if (!declared_rect_endpoints(node, &lhs, &rhs)) {
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  if (!declared_rect_endpoint_pair(node, &lhs, &rhs)) {
     return false;
   }
-  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*lhs, *rhs);
+  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);
   if (!rect || !rect.value().whole_axis) {
     return false;
   }
@@ -218,8 +218,8 @@ bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* to
   parser::Reference last{};
   // The parser keeps the sheet qualifier on the left endpoint, matching how
   // `Sheet1!A1:B2` parses; `expand_range` inherits it for the rectangle.
-  first.sheet = lhs->sheet;
-  first.sheet_quoted = lhs->sheet_quoted;
+  first.sheet = lhs.sheet;
+  first.sheet_quoted = lhs.sheet_quoted;
   first.row = rect.value().row_first;
   first.col = rect.value().col_first;
   last.row = rect.value().row_last;
@@ -248,12 +248,12 @@ bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_l
   if (node.kind() != parser::NodeKind::RangeOp) {
     return false;
   }
-  const parser::Reference* lhs = nullptr;
-  const parser::Reference* rhs = nullptr;
-  if (!declared_rect_endpoints(node, &lhs, &rhs)) {
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  if (!declared_rect_endpoint_pair(node, &lhs, &rhs)) {
     return false;
   }
-  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*lhs, *rhs);
+  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);
   if (!rect || rect.value().whole_axis || rect.value().single_cell()) {
     return false;
   }
@@ -262,12 +262,12 @@ bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_l
   // `eval_node` carries the left endpoint's qualifier onto both corners, and
   // `expand_range` lets the right corner inherit it either way; reproducing
   // it keeps the two entry points describing one rectangle.
-  first.sheet = lhs->sheet;
-  first.sheet_quoted = lhs->sheet_quoted;
+  first.sheet = lhs.sheet;
+  first.sheet_quoted = lhs.sheet_quoted;
   first.row = rect.value().row_first;
   first.col = rect.value().col_first;
-  last.sheet = lhs->sheet;
-  last.sheet_quoted = lhs->sheet_quoted;
+  last.sheet = lhs.sheet;
+  last.sheet_quoted = lhs.sheet_quoted;
   last.row = rect.value().row_last;
   last.col = rect.value().col_last;
   *top_left = first;

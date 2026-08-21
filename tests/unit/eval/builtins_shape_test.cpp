@@ -544,6 +544,121 @@ TEST(BuiltinsSumproduct, ScalarArgsMultiply) {
   EXPECT_DOUBLE_EQ(v.as_number(), 24.0);
 }
 
+// ---------------------------------------------------------------------------
+// Chained `:` — the operator composes, so the shape is the bounding box.
+// ---------------------------------------------------------------------------
+//
+// Excel accepts a `:` chain and stores it verbatim, and the rectangle it
+// names is the bounding box of every endpoint: `=COLUMNS(A:C:E:G)` is 7,
+// measured on Excel 365 (Mac, ja-JP, 16.112.1). The two-endpoint shape is
+// not a special case of the grammar, so a derivation that stops there
+// answers `#VALUE!` for a spelling Excel evaluates.
+
+TEST(BuiltinsShapeChainedRange, WholeColumnChainSpansEveryEndpoint) {
+  Workbook wb = Workbook::create();
+  const Value cols = EvalSourceIn("=COLUMNS(A:C:E:G)", wb, wb.sheet(0));
+  ASSERT_TRUE(cols.is_number()) << "expected a count, got an error";
+  EXPECT_DOUBLE_EQ(cols.as_number(), 7.0);
+
+  // Out-of-order endpoints bound the same rectangle; the chain is not
+  // required to run left to right.
+  const Value reversed = EvalSourceIn("=COLUMNS(G:E:C:A)", wb, wb.sheet(0));
+  ASSERT_TRUE(reversed.is_number());
+  EXPECT_DOUBLE_EQ(reversed.as_number(), 7.0);
+
+  const Value longer = EvalSourceIn("=COLUMNS(A:C:E:G:I:K)", wb, wb.sheet(0));
+  ASSERT_TRUE(longer.is_number());
+  EXPECT_DOUBLE_EQ(longer.as_number(), 11.0);
+}
+
+TEST(BuiltinsShapeChainedRange, RepeatedEndpointsDoNotChangeTheRectangle) {
+  // `H:H:E:E` is the four-endpoint spelling of `H:E`, and the six-endpoint
+  // `h:h:h:h:e:e` names the same four columns. Each was answering
+  // `#VALUE!` past the depth the two-endpoint derivation reached, so the
+  // answer used to depend on how many times a column was written.
+  Workbook wb = Workbook::create();
+  for (const char* src : {"=COLUMNS(H:E)", "=COLUMNS(H:H:E:E)", "=COLUMNS(h:h:h:h:e:e)"}) {
+    const Value cols = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(cols.is_number()) << src;
+    EXPECT_DOUBLE_EQ(cols.as_number(), 4.0) << src;
+  }
+}
+
+TEST(BuiltinsShapeChainedRange, WholeRowChainSpansEveryEndpoint) {
+  Workbook wb = Workbook::create();
+  const Value rows = EvalSourceIn("=ROWS(1:3:5:7)", wb, wb.sheet(0));
+  ASSERT_TRUE(rows.is_number());
+  EXPECT_DOUBLE_EQ(rows.as_number(), 7.0);
+  // The unbounded axis stays whole-grid, exactly as for the pair form.
+  const Value cols = EvalSourceIn("=COLUMNS(1:3:5:7)", wb, wb.sheet(0));
+  ASSERT_TRUE(cols.is_number());
+  EXPECT_DOUBLE_EQ(cols.as_number(), static_cast<double>(Sheet::kMaxCols));
+}
+
+TEST(BuiltinsShapeChainedRange, BoundedChainTakesEachAxisFromADifferentEndpoint) {
+  // Neither corner of `A1:C3:E5`'s bounding box is one of the endpoints on
+  // both axes at once, which is why the chain cannot be reduced by picking
+  // one endpoint per side.
+  Workbook wb = Workbook::create();
+  const Value cols = EvalSourceIn("=COLUMNS(A1:C3:E5)", wb, wb.sheet(0));
+  ASSERT_TRUE(cols.is_number());
+  EXPECT_DOUBLE_EQ(cols.as_number(), 5.0);
+  const Value rows = EvalSourceIn("=ROWS(A1:C3:E5)", wb, wb.sheet(0));
+  ASSERT_TRUE(rows.is_number());
+  EXPECT_DOUBLE_EQ(rows.as_number(), 5.0);
+
+  const Value out_of_order = EvalSourceIn("=ROWS(C1:A3:B2)", wb, wb.sheet(0));
+  ASSERT_TRUE(out_of_order.is_number());
+  EXPECT_DOUBLE_EQ(out_of_order.as_number(), 3.0);
+}
+
+TEST(BuiltinsShapeChainedRange, MixedAxisChainBoundsTheWholeGrid) {
+  // The endpoints do not have to bound the same axis. Composing a
+  // whole-column span with a whole-row span leaves neither axis bounded,
+  // so the rectangle is the entire grid -- not an error. Measured on
+  // Excel 365 (Mac, ja-JP, 16.112.1); `shape.yaml` carries the goldens.
+  Workbook wb = Workbook::create();
+  const Value cols = EvalSourceIn("=COLUMNS(A:C:1:3)", wb, wb.sheet(0));
+  ASSERT_TRUE(cols.is_number()) << "a mixed-axis chain is not an error in Excel";
+  EXPECT_DOUBLE_EQ(cols.as_number(), static_cast<double>(Sheet::kMaxCols));
+  const Value rows = EvalSourceIn("=ROWS(A:C:1:3)", wb, wb.sheet(0));
+  ASSERT_TRUE(rows.is_number());
+  EXPECT_DOUBLE_EQ(rows.as_number(), static_cast<double>(Sheet::kMaxRows));
+}
+
+TEST(BuiltinsShapeChainedRange, WholeAxisChainedWithACellExtendsOnlyTheBoundedAxis) {
+  // `A:C:E1` keeps every row and widens the columns to A..E; the bounded
+  // endpoint cannot narrow an axis the span already covers.
+  Workbook wb = Workbook::create();
+  const Value col_span_cols = EvalSourceIn("=COLUMNS(A:C:E1)", wb, wb.sheet(0));
+  ASSERT_TRUE(col_span_cols.is_number());
+  EXPECT_DOUBLE_EQ(col_span_cols.as_number(), 5.0);
+  const Value col_span_rows = EvalSourceIn("=ROWS(A:C:E1)", wb, wb.sheet(0));
+  ASSERT_TRUE(col_span_rows.is_number());
+  EXPECT_DOUBLE_EQ(col_span_rows.as_number(), static_cast<double>(Sheet::kMaxRows));
+
+  const Value row_span_rows = EvalSourceIn("=ROWS(1:3:E5)", wb, wb.sheet(0));
+  ASSERT_TRUE(row_span_rows.is_number());
+  EXPECT_DOUBLE_EQ(row_span_rows.as_number(), 5.0);
+  const Value row_span_cols = EvalSourceIn("=COLUMNS(1:3:E5)", wb, wb.sheet(0));
+  ASSERT_TRUE(row_span_cols.is_number());
+  EXPECT_DOUBLE_EQ(row_span_cols.as_number(), static_cast<double>(Sheet::kMaxCols));
+}
+
+TEST(BuiltinsShapeChainedRange, ChainedRangeAggregatesOverTheBoundingBox) {
+  // The shape functions are not a separate path: a plain aggregate reads
+  // the same rectangle, so the chain has to reach range expansion too.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));  // A1
+  sheet.set_cell_value(0, 2, Value::number(2.0));  // C1
+  sheet.set_cell_value(0, 4, Value::number(4.0));  // E1
+  sheet.set_cell_value(0, 6, Value::number(8.0));  // G1
+  const Value sum = EvalSourceIn("=SUM(A:C:E:G)", wb, sheet);
+  ASSERT_TRUE(sum.is_number()) << "chained range did not reach range expansion";
+  EXPECT_DOUBLE_EQ(sum.as_number(), 15.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

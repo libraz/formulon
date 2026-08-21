@@ -300,13 +300,13 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
   // cannot express, because a full-axis endpoint has no bounded corner to
   // union. Every other shape — a bounded pair, or one the derivation names no
   // rectangle for — falls through to its existing resolution.
-  const parser::Reference* rect_lhs = nullptr;
-  const parser::Reference* rect_rhs = nullptr;
-  if (declared_rect_endpoints(node, &rect_lhs, &rect_rhs)) {
-    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*rect_lhs, *rect_rhs);
+  parser::Reference rect_lhs{};
+  parser::Reference rect_rhs{};
+  if (declared_rect_endpoint_pair(node, &rect_lhs, &rect_rhs)) {
+    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(rect_lhs, rect_rhs);
     if (rect && rect.value().whole_axis) {
       // The parser keeps the sheet qualifier on the left endpoint.
-      *out_sheet = rect_lhs->sheet;
+      *out_sheet = rect_lhs.sheet;
       *out_top_row = rect.value().row_first;
       *out_left_col = rect.value().col_first;
       *out_bottom_row = rect.value().row_last;

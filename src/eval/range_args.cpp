@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
@@ -285,6 +286,33 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
         std::uint32_t rows = 0;
         std::uint32_t cols = 0;
         auto expanded = ctx.expand_range(lhs_ref, rhs_ref, arena, registry, &rows, &cols);
+        if (!expanded) {
+          *out_err_code = expanded.error();
+          return false;
+        }
+        *out_cells = std::move(expanded.value());
+        if (out_rows != nullptr) {
+          *out_rows = rows;
+        }
+        if (out_cols != nullptr) {
+          *out_cols = cols;
+        }
+        return true;
+      }
+    } else {
+      // A `:` chain of three or more endpoints nests, so neither side is a
+      // bare `Ref` and the pair test above does not see it. The chain
+      // names one rectangle -- the bounding box of every endpoint -- and
+      // the shared reduction spells it as the endpoint pair that
+      // `expand_range` already knows how to enumerate. A chain containing
+      // a reference-returning call reduces to nothing and falls through to
+      // the endpoint union below.
+      parser::Reference chain_lhs{};
+      parser::Reference chain_rhs{};
+      if (declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs)) {
+        std::uint32_t rows = 0;
+        std::uint32_t cols = 0;
+        auto expanded = ctx.expand_range(chain_lhs, chain_rhs, arena, registry, &rows, &cols);
         if (!expanded) {
           *out_err_code = expanded.error();
           return false;

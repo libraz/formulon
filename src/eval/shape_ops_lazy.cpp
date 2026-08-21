@@ -73,10 +73,10 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
   const parser::AstNode& arg_node = *effective;
   const parser::NodeKind k = arg_node.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    const parser::Reference* lhs = nullptr;
-    const parser::Reference* rhs = nullptr;
-    if (declared_rect_endpoints(arg_node, &lhs, &rhs)) {
-      const auto rect = ctx.declared_range_rect(*lhs, *rhs);
+    parser::Reference lhs{};
+    parser::Reference rhs{};
+    if (declared_rect_endpoint_pair(arg_node, &lhs, &rhs)) {
+      const auto rect = ctx.declared_range_rect(lhs, rhs);
       if (!rect) {
         *out_err = Value::error(rect.error());
         return false;
@@ -307,15 +307,15 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   }
   const parser::AstNode& arg = *effective;
   const parser::NodeKind k = arg.kind();
-  const parser::Reference* rect_lhs = nullptr;
-  const parser::Reference* rect_rhs = nullptr;
-  if (declared_rect_endpoints(arg, &rect_lhs, &rect_rhs)) {
+  parser::Reference rect_lhs{};
+  parser::Reference rect_rhs{};
+  if (declared_rect_endpoint_pair(arg, &rect_lhs, &rect_rhs)) {
     // A full-axis endpoint carries a meaningful coordinate only on its
     // bounded axis, so the rectangle comes from the shared derivation
     // rather than from the endpoints' raw row/col fields. Reading those
     // directly is what made `ROW(A:A)` answer 1 — the structure default
     // for the row a whole-column reference never names.
-    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*rect_lhs, *rect_rhs);
+    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(rect_lhs, rect_rhs);
     if (!rect) {
       return Value::error(rect.error());
     }

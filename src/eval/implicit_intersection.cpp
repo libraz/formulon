@@ -56,9 +56,9 @@ std::optional<parser::Reference> project_implicit_intersection(const parser::Ref
 
 IntersectionProjection project_implicit_intersection(const parser::AstNode& operand, std::uint32_t formula_row,
                                                      std::uint32_t formula_col, parser::Reference* out_target) {
-  const parser::Reference* lhs = nullptr;
-  const parser::Reference* rhs = nullptr;
-  if (!declared_rect_endpoints(operand, &lhs, &rhs)) {
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  if (!declared_rect_endpoint_pair(operand, &lhs, &rhs)) {
     // A `RangeOp` over reference-returning calls is still a range, but not
     // one with static coordinates; Excel rejects `@` on it rather than
     // reducing the evaluated rectangle.
@@ -67,10 +67,10 @@ IntersectionProjection project_implicit_intersection(const parser::AstNode& oper
   }
   // A bounded single `Ref` is already a scalar. Projecting it as a 1x1
   // rectangle would reject `=@A1` from every cell outside row 1.
-  if (operand.kind() == parser::NodeKind::Ref && !lhs->is_full_col && !lhs->is_full_row) {
+  if (operand.kind() == parser::NodeKind::Ref && !lhs.is_full_col && !lhs.is_full_row) {
     return IntersectionProjection::kNotStaticReference;
   }
-  const std::optional<parser::Reference> target = project_implicit_intersection(*lhs, *rhs, formula_row, formula_col);
+  const std::optional<parser::Reference> target = project_implicit_intersection(lhs, rhs, formula_row, formula_col);
   if (!target.has_value()) {
     return IntersectionProjection::kNoCell;
   }
