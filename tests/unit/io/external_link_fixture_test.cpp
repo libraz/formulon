@@ -240,10 +240,17 @@ TEST_P(ExternalLinkFixture, InternalReferencesInTheSameWorkbookStillResolve) {
   ExpectSameAsExcel(OurAnswer(wb, 2), excel_a2, "SUM(Local!A1:A3)");
 }
 
+// Names each instantiation after its container extension without the dot,
+// so the two cases read as `xlsx` and `xlsb`. It is a free function rather
+// than a lambda spelled inside the macro argument because the macro expands
+// around a parameter of its own named `info`, which a lambda parameter of
+// that name shadows.
+std::string ContainerSuffixName(const ::testing::TestParamInfo<const char*>& info) {
+  return std::string(info.param).substr(1);
+}
+
 INSTANTIATE_TEST_SUITE_P(BothContainerFormats, ExternalLinkFixture, ::testing::Values(".xlsx", ".xlsb"),
-                         [](const ::testing::TestParamInfo<const char*>& info) {
-                           return std::string(info.param).substr(1);
-                         });
+                         ContainerSuffixName);
 
 }  // namespace
 }  // namespace formulon
