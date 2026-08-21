@@ -488,7 +488,23 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         env = oracle.probe_environment()
         declared_locale = target.get("locale")
-        if not isinstance(declared_locale, str) or not declared_locale or env.excel_locale != declared_locale:
+        if not isinstance(declared_locale, str) or not declared_locale:
+            print(
+                f"workbook-oracle-gen: target declares no locale (got {declared_locale!r})",
+                file=sys.stderr,
+            )
+            return 2
+        # An *undetected* locale is not a mismatch. `detect_locale_from_app`
+        # probes `Application.International(xlCountryCode)`, which Mac Excel
+        # does not expose at all, so it returns "" there by design and its
+        # own contract says to fall back to the target's declared locale.
+        # The formula and CF generators both follow that; this one compared
+        # the empty string against the declared locale instead and refused
+        # every capture on a Mac host -- for a track whose Mac entry is a
+        # declared variant, so the refusal was of a capture the targets file
+        # says to take. Only a locale Excel actually reported, and that
+        # disagrees, is a reason to stop.
+        if env.excel_locale and env.excel_locale != declared_locale:
             print(
                 f"workbook-oracle-gen: target locale {declared_locale!r} does not match Excel locale {env.excel_locale!r}",
                 file=sys.stderr,

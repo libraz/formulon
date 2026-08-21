@@ -1,0 +1,386 @@
+suite: pivot_cross_axis
+kind: workbook
+description: >
+  Two row fields crossed with a column field, and value columns that hold
+  something other than a number.
+
+  Both shapes were absent from the pivot corpus. Every earlier case has at
+  most one axis populated on each side, so nothing pinned how a nested row
+  hierarchy interacts with a column axis -- where the subtotal rows land,
+  what the grand-total column spans, how an empty (Region, Product) pair
+  renders under a column split. And no case put an error or a text value
+  into a data field, so what Count and Sum do with one was engine
+  inference rather than something Excel had been asked.
+
+  The dataset is deliberately sparse: (South, Gadget) has no East-quarter
+  row, so at least one cross-axis cell has no contributing record.
+
+cases:
+  - id: two_row_fields_by_column_field_compact
+    description: Region x Product down, Quarter across, Compact layout.
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Quarter
+        D1: Amount
+        A2: North
+        B2: Widget
+        C2: Q1
+        D2: 100
+        A3: North
+        B3: Widget
+        C3: Q2
+        D3: 110
+        A4: North
+        B4: Gadget
+        C4: Q1
+        D4: 50
+        A5: South
+        B5: Widget
+        C5: Q1
+        D5: 200
+        A6: South
+        B6: Widget
+        C6: Q2
+        D6: 210
+        A7: South
+        B7: Gadget
+        C7: Q2
+        D7: 300
+      Report: {}
+    pivot:
+      source: Data!A1:D7
+      anchor: Report!A1
+      row_fields: [Region, Product]
+      col_fields: [Quarter]
+      data_fields:
+        - {field: Amount, agg: Sum}
+      layout: Compact
+
+  - id: two_row_fields_by_column_field_tabular
+    description: The same pivot in Tabular layout, where each row field takes its own column.
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Quarter
+        D1: Amount
+        A2: North
+        B2: Widget
+        C2: Q1
+        D2: 100
+        A3: North
+        B3: Widget
+        C3: Q2
+        D3: 110
+        A4: North
+        B4: Gadget
+        C4: Q1
+        D4: 50
+        A5: South
+        B5: Widget
+        C5: Q1
+        D5: 200
+        A6: South
+        B6: Widget
+        C6: Q2
+        D6: 210
+        A7: South
+        B7: Gadget
+        C7: Q2
+        D7: 300
+      Report: {}
+    pivot:
+      source: Data!A1:D7
+      anchor: Report!A1
+      row_fields: [Region, Product]
+      col_fields: [Quarter]
+      data_fields:
+        - {field: Amount, agg: Sum}
+      layout: Tabular
+
+  - id: two_row_fields_by_column_field_outline
+    description: The same pivot in Outline layout.
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Quarter
+        D1: Amount
+        A2: North
+        B2: Widget
+        C2: Q1
+        D2: 100
+        A3: North
+        B3: Widget
+        C3: Q2
+        D3: 110
+        A4: North
+        B4: Gadget
+        C4: Q1
+        D4: 50
+        A5: South
+        B5: Widget
+        C5: Q1
+        D5: 200
+        A6: South
+        B6: Widget
+        C6: Q2
+        D6: 210
+        A7: South
+        B7: Gadget
+        C7: Q2
+        D7: 300
+      Report: {}
+    pivot:
+      source: Data!A1:D7
+      anchor: Report!A1
+      row_fields: [Region, Product]
+      col_fields: [Quarter]
+      data_fields:
+        - {field: Amount, agg: Sum}
+      layout: Outline
+
+  - id: two_row_fields_by_column_field_count
+    description: The same cross-axis shape aggregated with Count rather than Sum.
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Quarter
+        D1: Amount
+        A2: North
+        B2: Widget
+        C2: Q1
+        D2: 100
+        A3: North
+        B3: Widget
+        C3: Q2
+        D3: 110
+        A4: North
+        B4: Gadget
+        C4: Q1
+        D4: 50
+        A5: South
+        B5: Widget
+        C5: Q1
+        D5: 200
+        A6: South
+        B6: Widget
+        C6: Q2
+        D6: 210
+        A7: South
+        B7: Gadget
+        C7: Q2
+        D7: 300
+      Report: {}
+    pivot:
+      source: Data!A1:D7
+      anchor: Report!A1
+      row_fields: [Region, Product]
+      col_fields: [Quarter]
+      data_fields:
+        - {field: Amount, agg: Count}
+      layout: Tabular
+
+  - id: two_row_fields_two_col_fields
+    description: Two fields on each axis, the densest shape the corpus can express.
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Quarter
+        D1: Channel
+        E1: Amount
+        A2: North
+        B2: Widget
+        C2: Q1
+        D2: Web
+        E2: 100
+        A3: North
+        B3: Widget
+        C3: Q2
+        D3: Store
+        E3: 110
+        A4: North
+        B4: Gadget
+        C4: Q1
+        D4: Web
+        E4: 50
+        A5: South
+        B5: Widget
+        C5: Q1
+        D5: Store
+        E5: 200
+        A6: South
+        B6: Widget
+        C6: Q2
+        D6: Web
+        E6: 210
+        A7: South
+        B7: Gadget
+        C7: Q2
+        D7: Store
+        E7: 300
+      Report: {}
+    pivot:
+      source: Data!A1:E7
+      anchor: Report!A1
+      row_fields: [Region, Product]
+      col_fields: [Quarter, Channel]
+      data_fields:
+        - {field: Amount, agg: Sum}
+      layout: Tabular
+
+  # -- Value columns that are not all numbers -------------------------------
+  # An error in a data field is the case the engine had to guess at. Count
+  # and Sum are captured over the same dataset so the two answers can be
+  # read against each other: whether Count includes the error row, and
+  # whether Sum propagates it or steps over it, are separate questions.
+  - id: count_with_error_in_value_column
+    description: Count(Amount) where one Amount cell evaluates to #DIV/0!.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: "=1/0"
+        A4: North
+        B4: 50
+        A5: South
+        B5: 200
+        A6: South
+        B6: 300
+      Report: {}
+    pivot:
+      source: Data!A1:B6
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Count}
+
+  - id: sum_with_error_in_value_column
+    description: Sum(Amount) over the same dataset, so error handling can be compared with Count.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: "=1/0"
+        A4: North
+        B4: 50
+        A5: South
+        B5: 200
+        A6: South
+        B6: 300
+      Report: {}
+    pivot:
+      source: Data!A1:B6
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
+
+  - id: count_numbers_with_error_in_value_column
+    description: CountNumbers(Amount) over the same dataset — the aggregation that names a type.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: "=1/0"
+        A4: North
+        B4: 50
+        A5: South
+        B5: 200
+        A6: South
+        B6: 300
+      Report: {}
+    pivot:
+      source: Data!A1:B6
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: CountNumbers}
+
+  - id: count_with_text_in_value_column
+    description: Count(Amount) where one Amount cell holds text rather than an error.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: n/a
+        A4: North
+        B4: 50
+        A5: South
+        B5: 200
+        A6: South
+        B6: 300
+      Report: {}
+    pivot:
+      source: Data!A1:B6
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Count}
+
+  - id: count_with_blank_in_value_column
+    description: Count(Amount) where one Amount cell is empty — the third non-number kind.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        A4: North
+        B4: 50
+        A5: South
+        B5: 200
+        A6: South
+        B6: 300
+      Report: {}
+    pivot:
+      source: Data!A1:B6
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Count}
+
+  - id: error_in_value_column_crossed_with_column_field
+    description: An error in a data field under a column split, so it lands in one cross-axis cell.
+    sheets:
+      Data:
+        A1: Region
+        B1: Quarter
+        C1: Amount
+        A2: North
+        B2: Q1
+        C2: 100
+        A3: North
+        B3: Q2
+        C3: "=1/0"
+        A4: South
+        B4: Q1
+        C4: 200
+        A5: South
+        B5: Q2
+        C5: 300
+      Report: {}
+    pivot:
+      source: Data!A1:C5
+      anchor: Report!A1
+      row_fields: [Region]
+      col_fields: [Quarter]
+      data_fields:
+        - {field: Amount, agg: Sum}
