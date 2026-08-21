@@ -2,11 +2,11 @@
   "suite": "intersect_operator",
   "description": "Range-intersect operator (single space between two range refs). Excel evaluates `A1:C3 B1:B5` as the rectangle common to both operands (B1:B3 here); non-overlapping operands yield #NULL!. The operator is legal anywhere a range is expected (SUM argument, single-cell read in a 365 spill, comparison operand). Coverage spans: aligned intersection in an aggregator, non-overlapping operands, single-cell intersection, whole-column/whole-row intersection, and intersect feeding an INDEX call.\n",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-21T15:46:48Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -305,6 +305,165 @@
       "expect": {
         "kind": "number",
         "value": 100.0
+      }
+    },
+    {
+      "id": "intersect_yields_multi_cell_column",
+      "formula": "=C1:D3 D1:E2",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "intersect_multi_cell_inside_sum",
+      "formula": "=SUM(C1:D3 D1:E2)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "intersect_multi_cell_row_shape",
+      "formula": "=ROWS(C1:D3 D1:E2)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "intersect_multi_cell_counta",
+      "formula": "=COUNTA(C1:D3 D1:E2)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
       }
     },
     {

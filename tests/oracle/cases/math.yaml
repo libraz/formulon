@@ -1031,3 +1031,30 @@ cases:
   - id: seriessum_offset_initial_power
     description: "Initial power n=2 with x=3: 1*3^2 + 1*3^3 = 9 + 27 = 36"
     formula: "=SERIESSUM(3, 2, 1, {1;1})"
+
+  # Every case above passes the coefficients as an array literal. The
+  # argument is documented as a range or array, and what a bare scalar
+  # there means -- a one-term series, or a rejected argument -- is not
+  # something the array cases can answer. The range spelling is captured
+  # beside it so the three forms can be compared as one set.
+  - id: seriessum_scalar_coefficient
+    description: "A bare scalar coefficient: 1*2^0 read as a one-term series?"
+    formula: "=SERIESSUM(2, 0, 1, 1)"
+
+  - id: seriessum_scalar_coefficient_nonunit
+    description: "A bare non-unit scalar coefficient with a non-zero initial power"
+    formula: "=SERIESSUM(3, 2, 1, 5)"
+
+  - id: seriessum_single_cell_range_coefficient
+    description: "A one-cell range coefficient, the spelling between scalar and array"
+    setup: { A1: 5 }
+    formula: "=SERIESSUM(3, 2, 1, A1)"
+
+  - id: seriessum_range_coefficients
+    description: "A multi-cell range coefficient: the range spelling of {1;1}"
+    setup: { A1: 1, A2: 1 }
+    formula: "=SERIESSUM(3, 2, 1, A1:A2)"
+
+  - id: seriessum_scalar_text_coefficient
+    description: "A text coefficient in the scalar position"
+    formula: "=SERIESSUM(2, 0, 1, \"x\")"

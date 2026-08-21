@@ -35,6 +35,58 @@ cases:
     description: "{1,2,3} is a 1x3 row literal -> COLUMNS=3"
     formula: "=COLUMNS({1,2,3})"
 
+  # -- Whole-axis references, two-endpoint and single -----------------------
+  # A whole-axis reference names the declared rectangle, not the populated
+  # one, so the count is the sheet bound and does not depend on what the
+  # sheet holds. Each shape is captured twice -- once on a sheet the case
+  # leaves empty, once on a sheet whose populated extent is strictly
+  # smaller than the declaration -- because the defect these pin was
+  # exactly a used-extent clamp, which an empty sheet alone reports as 0
+  # and a populated sheet reports as the wrong non-zero number.
+  - id: rows_of_whole_col_empty_sheet
+    description: "ROWS(A:A) on an empty sheet is the sheet's row bound, not 0"
+    formula: "=ROWS(A:A)"
+
+  - id: rows_of_whole_col_populated_sheet
+    description: "ROWS(A:A) does not shrink to the populated extent (A1:A3 filled)"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=ROWS(A:A)"
+
+  - id: columns_of_whole_row_empty_sheet
+    description: "COLUMNS(1:1) on an empty sheet is the sheet's column bound"
+    formula: "=COLUMNS(1:1)"
+
+  - id: columns_of_whole_row_populated_sheet
+    description: "COLUMNS(1:1) does not shrink to the populated extent (A1:C1 filled)"
+    setup: { A1: 1, B1: 2, C1: 3 }
+    formula: "=COLUMNS(1:1)"
+
+  - id: columns_of_whole_col_pair
+    description: "COLUMNS(A:C) counts the declared columns -> 3"
+    formula: "=COLUMNS(A:C)"
+
+  - id: columns_of_whole_col_pair_populated
+    description: "COLUMNS(A:C) stays 3 with only A1 populated"
+    setup: { A1: 1 }
+    formula: "=COLUMNS(A:C)"
+
+  - id: rows_of_whole_row_pair
+    description: "ROWS(1:3) counts the declared rows -> 3"
+    formula: "=ROWS(1:3)"
+
+  - id: rows_of_whole_row_pair_populated
+    description: "ROWS(1:3) stays 3 with only A1 populated"
+    setup: { A1: 1 }
+    formula: "=ROWS(1:3)"
+
+  - id: rows_of_whole_col_pair
+    description: "ROWS(A:C) is the sheet's row bound: no axis bounds the rows"
+    formula: "=ROWS(A:C)"
+
+  - id: columns_of_whole_row_pair
+    description: "COLUMNS(1:3) is the sheet's column bound: no axis bounds the columns"
+    formula: "=COLUMNS(1:3)"
+
   # -- Chained `:` --------------------------------------------------------
   # The range operator composes, so the rectangle is the bounding box of
   # every endpoint rather than of the last two. Excel stores the chain

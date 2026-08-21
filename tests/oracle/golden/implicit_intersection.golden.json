@@ -2,11 +2,11 @@
   "suite": "implicit_intersection",
   "description": "Implicit intersection semantics for Mac Excel 365 (ja-JP). The xlwings driver places the formula under test at cell Z1 (row 1, column Z=26) on a fresh sheet per case. We use that fixed position to design differential tests: ranges that either include or exclude Z1's row / column. The two candidate behaviors are:\n\n  * Pre-365 implicit intersection: range -> single cell at the row /\n    column that aligns with the formula cell, or #VALUE! if no axis\n    aligns.\n  * Excel 365 dynamic-array spill: range stays as an array, and\n    xlwings reads back the spill anchor (top-left of the rectangle\n    placed at the formula cell).\n\nMac Excel 365 with @-prefix auto-conversion on legacy files lands on implicit intersection; fresh formulas typed in the formula bar use spill. This suite probes which behavior surfaces through xlwings.\n",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-21T15:46:48Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1222,6 +1222,140 @@
       "expect": {
         "kind": "number",
         "value": 42.0
+      }
+    },
+    {
+      "id": "at_prefix_whole_col_single_ref",
+      "formula": "=@A:A",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "at_prefix_whole_col_pair_same_column",
+      "formula": "=@(A:A)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "at_prefix_bounded_pair_same_column",
+      "formula": "=@A1:A5",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 102.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "at_prefix_whole_col_multi_column",
+      "formula": "=@A:B",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 43.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "at_prefix_whole_col_blank_projection",
+      "formula": "=@A:A",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "single_fn_whole_col",
+      "formula": "=_xlfn.SINGLE(A:A)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "round_of_at_prefix_whole_col",
+      "formula": "=ROUND(@A:A, 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.567
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.57
       }
     }
   ]

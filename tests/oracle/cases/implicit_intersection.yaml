@@ -394,3 +394,63 @@ cases:
   - id: single_scalar_identity
     description: "=_xlfn.SINGLE(42) at Z1; scalar passthrough -> 42"
     formula: "=_xlfn.SINGLE(42)"
+
+  # LL) Whole-axis operands. A whole-column reference leaves the row axis
+  # unbounded, so the projection has a row to land on wherever the formula
+  # sits; the cases above only ever handed the projector a bounded pair.
+  # The forms below name the same column A from the same cell (Z1) in
+  # three spellings -- single `Ref`, whole-axis pair, bounded pair -- and
+  # the three are captured together because agreeing with Excel one at a
+  # time is not the property that matters. `A:A` parses to a single `Ref`
+  # rather than a `RangeOp`, which is the shape that used to miss the
+  # projection path entirely.
+  - id: at_prefix_whole_col_single_ref
+    description: "=@A:A at Z1; whole column A projected onto row 1 -> A1"
+    setup:
+      A1: 42
+      A2: 99
+    formula: "=@A:A"
+
+  - id: at_prefix_whole_col_pair_same_column
+    description: "=@A:A written as the pair A:A at Z1; same rectangle as the single Ref"
+    setup:
+      A1: 42
+      A2: 99
+    formula: "=@(A:A)"
+
+  - id: at_prefix_bounded_pair_same_column
+    description: "=@A1:A5 at Z1; the bounded spelling of the same projection -> A1"
+    setup:
+      A1: 42
+      A2: 99
+      A3: 100
+      A4: 101
+      A5: 102
+    formula: "=@A1:A5"
+
+  - id: at_prefix_whole_col_multi_column
+    description: "=@A:B at Z1; column Z is outside A..B, so no column axis aligns"
+    setup:
+      A1: 42
+      B1: 43
+    formula: "=@A:B"
+
+  - id: at_prefix_whole_col_blank_projection
+    description: "=@A:A at Z1 with A1 empty; projection lands on a blank cell"
+    setup:
+      A2: 99
+    formula: "=@A:A"
+
+  - id: single_fn_whole_col
+    description: "=_xlfn.SINGLE(A:A) at Z1; the function spelling of the same projection"
+    setup:
+      A1: 42
+      A2: 99
+    formula: "=_xlfn.SINGLE(A:A)"
+
+  - id: round_of_at_prefix_whole_col
+    description: "=ROUND(@A:A, 2) at Z1; the projection in a nested argument position"
+    setup:
+      A1: 42.567
+      A2: 99
+    formula: "=ROUND(@A:A, 2)"

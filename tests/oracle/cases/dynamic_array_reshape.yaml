@@ -381,3 +381,37 @@ cases:
     description: "TRIMRANGE's interior blank keeps blank semantics for COUNTA"
     setup: { A1: 1, A3: 2 }
     formula: '=COUNTA(TRIMRANGE(A1:A3))'
+
+  # -- Blank promotion when a reference is copied into a new array ----------
+  # A blank read straight out of a worksheet range is invisible to COUNTA;
+  # a blank that has been copied into a freshly materialised array is not.
+  # Which of the two a reshaping function produces is only observable
+  # through a counting function wrapped around it, so each reshape is
+  # paired with the range-consuming form that should agree with it.
+  # TRIMRANGE is deliberately absent: it composes transparently into
+  # range-consuming functions and keeps the raw provenance on purpose,
+  # which the four cases above already pin.
+  - id: transpose_all_blank_counta
+    description: "COUNTA(TRANSPOSE(A1:D1)) with A1:D1 entirely blank"
+    formula: '=COUNTA(TRANSPOSE(A1:D1))'
+
+  - id: filter_all_blank_counta
+    description: "COUNTA(FILTER(A1:D1,{1,1,1,1})) over the same blank range, for comparison"
+    formula: '=COUNTA(FILTER(A1:D1,{1,1,1,1}))'
+
+  - id: transpose_partial_blank_counta
+    description: "COUNTA(TRANSPOSE(A1:D1)) with only A1 and C1 populated"
+    setup: { A1: 1, C1: 3 }
+    formula: '=COUNTA(TRANSPOSE(A1:D1))'
+
+  - id: wraprows_all_blank_counta
+    description: "COUNTA(WRAPROWS(A1:D1,2)) over a blank range"
+    formula: '=COUNTA(WRAPROWS(A1:D1,2))'
+
+  - id: wrapcols_all_blank_counta
+    description: "COUNTA(WRAPCOLS(A1:D1,2)) over a blank range"
+    formula: '=COUNTA(WRAPCOLS(A1:D1,2))'
+
+  - id: tocol_all_blank_counta
+    description: "COUNTA(TOCOL(A1:D1)) over a blank range, the sibling that already promotes"
+    formula: '=COUNTA(TOCOL(A1:D1))'

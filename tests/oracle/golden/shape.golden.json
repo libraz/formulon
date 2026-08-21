@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-21T06:08:24Z"
+    "generated_at": "2026-08-21T15:45:40Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -124,6 +124,132 @@
       "expect": {
         "kind": "number",
         "value": 3.0
+      }
+    },
+    {
+      "id": "rows_of_whole_col_empty_sheet",
+      "formula": "=ROWS(A:A)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "rows_of_whole_col_populated_sheet",
+      "formula": "=ROWS(A:A)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "columns_of_whole_row_empty_sheet",
+      "formula": "=COLUMNS(1:1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16384.0
+      }
+    },
+    {
+      "id": "columns_of_whole_row_populated_sheet",
+      "formula": "=COLUMNS(1:1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16384.0
+      }
+    },
+    {
+      "id": "columns_of_whole_col_pair",
+      "formula": "=COLUMNS(A:C)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "columns_of_whole_col_pair_populated",
+      "formula": "=COLUMNS(A:C)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "rows_of_whole_row_pair",
+      "formula": "=ROWS(1:3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "rows_of_whole_row_pair_populated",
+      "formula": "=ROWS(1:3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "rows_of_whole_col_pair",
+      "formula": "=ROWS(A:C)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "columns_of_whole_row_pair",
+      "formula": "=COLUMNS(1:3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16384.0
       }
     },
     {

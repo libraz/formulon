@@ -133,6 +133,62 @@ cases:
   # then intersected with 2:2 = B2.
   # =========================================================================
 
+  # =========================================================================
+  # Multi-cell results. Every case above intersects down to one cell, so
+  # none of them says whether the operator materialises a rectangle the
+  # way `:` does or collapses to the top-left. These do: the intersection
+  # is genuinely multi-cell, and the formula is bare so nothing downstream
+  # can rescue a collapsed value.
+  # =========================================================================
+
+  - id: intersect_yields_multi_cell_column
+    description: 'C1:D3 D1:E2 -> the 2x1 rectangle D1:D2, bare (not inside SUM)'
+    setup:
+      C1: 1
+      D1: 2
+      C2: 3
+      D2: 4
+      C3: 5
+      D3: 6
+      E1: 7
+      E2: 8
+    formula: '=C1:D3 D1:E2'
+
+  - id: intersect_multi_cell_inside_sum
+    description: 'SUM(C1:D3 D1:E2) sums the same rectangle -> D1+D2 = 6'
+    setup:
+      C1: 1
+      D1: 2
+      C2: 3
+      D2: 4
+      C3: 5
+      D3: 6
+      E1: 7
+      E2: 8
+    formula: '=SUM(C1:D3 D1:E2)'
+
+  - id: intersect_multi_cell_row_shape
+    description: 'ROWS/COLUMNS of a multi-cell intersection report its rectangle'
+    setup:
+      C1: 1
+      D1: 2
+      C2: 3
+      D2: 4
+    formula: '=ROWS(C1:D3 D1:E2)'
+
+  - id: intersect_multi_cell_counta
+    description: 'COUNTA over a multi-cell intersection sees both cells, not one'
+    setup:
+      C1: 1
+      D1: 2
+      C2: 3
+      D2: 4
+      C3: 5
+      D3: 6
+      E1: 7
+      E2: 8
+    formula: '=COUNTA(C1:D3 D1:E2)'
+
   - id: intersect_chain_three_ways
     description: 'A1:C3 B1:B5 2:2 -> B2 (three-way intersect, left-assoc)'
     setup:

@@ -2,11 +2,11 @@
   "suite": "dynamic_array_reshape",
   "description": "dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS, TRIMRANGE. Spill outputs and scalar errors are captured live by the array-aware oracle harness.",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T13:01:17Z"
+    "generated_at": "2026-08-21T15:50:34Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -1810,6 +1810,69 @@
       "expect": {
         "kind": "number",
         "value": 2.0
+      }
+    },
+    {
+      "id": "transpose_all_blank_counta",
+      "formula": "=COUNTA(TRANSPOSE(A1:D1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "filter_all_blank_counta",
+      "formula": "=COUNTA(FILTER(A1:D1,{1,1,1,1}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "transpose_partial_blank_counta",
+      "formula": "=COUNTA(TRANSPOSE(A1:D1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "wraprows_all_blank_counta",
+      "formula": "=COUNTA(WRAPROWS(A1:D1,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "wrapcols_all_blank_counta",
+      "formula": "=COUNTA(WRAPCOLS(A1:D1,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "tocol_all_blank_counta",
+      "formula": "=COUNTA(TOCOL(A1:D1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
       }
     }
   ]
