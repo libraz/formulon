@@ -413,6 +413,51 @@ bool ColonEndpointsWouldFold(const AstNode& lhs, const AstNode& rhs) noexcept {
          IsBareColumnToken(LeadingIdentifier(rhs));
 }
 
+// Renders a `RangeOp` over two whole-axis `Ref`s as the compact `A:C` /
+// `1:3` form and reports whether it did.
+//
+// Multi-column (`A:C`) / multi-row (`1:3`) whole references are stored as a
+// RangeOp over two whole-column / whole-row Refs. Each endpoint's
+// `format_a1` output duplicates its own axis (`A:A`, `C:C`), so a naive
+// `<lhs>:<rhs>` join emits `A:A:C:C`. That names the same rectangle, so no
+// evaluated value changes, but it is not the spelling Excel stores and it
+// is not a fixpoint of the formatter.
+//
+// Both emitters call this. Living in only one of them is what let the
+// storage form drift from the canonical form while every value-level test
+// stayed green.
+//
+// Two endpoints sitting on the same axis are the one case the splice must
+// not touch. `RangeOp(A:A, A:A)` would splice to `A:A`, and `A:A` reads
+// back as the single whole-column Ref rather than as the pair it came
+// from. Anchoring does not rescue it -- `$A:A` is likewise one token, not
+// two -- so the test is on the axis index, not on the rendered text. The
+// parser only builds this shape from text that already spelled the pair
+// out (`=A:A:A:A`, `=$A:$A:A:A`), so compacting it discards what was
+// written; left unspliced the pair joins to text that reads back as
+// itself.
+bool TrySpliceWholeAxisPair(const AstNode& lhs, const AstNode& rhs, std::string& out) {
+  if (lhs.kind() != NodeKind::Ref || rhs.kind() != NodeKind::Ref) {
+    return false;
+  }
+  const Reference& lr = lhs.as_ref();
+  const Reference& rr = rhs.as_ref();
+  const bool both_full_col = lr.is_full_col && rr.is_full_col;
+  const bool both_full_row = lr.is_full_row && rr.is_full_row;
+  if (!both_full_col && !both_full_row) {
+    return false;
+  }
+  if ((both_full_col && lr.col == rr.col) || (both_full_row && lr.row == rr.row)) {
+    return false;
+  }
+  const std::string lhs_str = format_a1(lr);
+  const std::string rhs_str = format_a1(rr);
+  out.append(lhs_str, 0, lhs_str.find(':'));
+  out.push_back(':');
+  out.append(rhs_str, 0, rhs_str.find(':'));
+  return true;
+}
+
 void FormatRangeOp(const AstNode& node, std::string& out, int min_bp) {
   const bool wrap = kBpRange < min_bp;
   if (wrap) {
@@ -420,38 +465,11 @@ void FormatRangeOp(const AstNode& node, std::string& out, int min_bp) {
   }
   const AstNode& lhs = node.as_range_lhs();
   const AstNode& rhs = node.as_range_rhs();
-  // Multi-column (`A:C`) / multi-row (`1:3`) whole references are stored as a
-  // RangeOp over two whole-column / whole-row Refs. Each endpoint's
-  // `format_a1` output duplicates its own axis (`A:A`, `C:C`), so a naive
-  // `<lhs>:<rhs>` join would emit `A:A:C:C`. Splice the two endpoints at
-  // their leading axis token to reproduce the compact `A:C` / `1:3` form.
-  //
-  // Two endpoints sitting on the same axis are the one case the splice must
-  // not touch. `RangeOp(A:A, A:A)` would splice to `A:A`, and `A:A` reads
-  // back as the single whole-column Ref rather than as the pair it came
-  // from. Anchoring does not rescue it -- `$A:A` is likewise one token, not
-  // two -- so the test is on the axis index, not on the rendered text. The
-  // parser only builds this shape from text that already spelled the pair
-  // out (`=A:A:A:A`, `=$A:$A:A:A`), so compacting it discards what was
-  // written; left unspliced the pair joins to text that reads back as
-  // itself.
-  if (lhs.kind() == NodeKind::Ref && rhs.kind() == NodeKind::Ref) {
-    const Reference& lr = lhs.as_ref();
-    const Reference& rr = rhs.as_ref();
-    const bool both_full_col = lr.is_full_col && rr.is_full_col;
-    const bool both_full_row = lr.is_full_row && rr.is_full_row;
-    const bool same_axis = (both_full_col && lr.col == rr.col) || (both_full_row && lr.row == rr.row);
-    if ((both_full_col || both_full_row) && !same_axis) {
-      const std::string lhs_str = format_a1(lr);
-      const std::string rhs_str = format_a1(rr);
-      out.append(lhs_str, 0, lhs_str.find(':'));
-      out.push_back(':');
-      out.append(rhs_str, 0, rhs_str.find(':'));
-      if (wrap) {
-        out.push_back(')');
-      }
-      return;
+  if (TrySpliceWholeAxisPair(lhs, rhs, out)) {
+    if (wrap) {
+      out.push_back(')');
     }
+    return;
   }
   const bool split_endpoints = ColonEndpointsWouldFold(lhs, rhs);
   if (split_endpoints) {
@@ -869,6 +887,15 @@ struct StorageEmitter {
       out.push_back('(');
     }
     if (node.kind() == NodeKind::RangeOp) {
+      // Same splice the canonical formatter applies. A whole-axis pair has
+      // no function name inside it, so there is nothing here for the
+      // storage speller to add and the shared helper renders both forms.
+      if (TrySpliceWholeAxisPair(node.as_range_lhs(), node.as_range_rhs(), out)) {
+        if (wrap) {
+          out.push_back(')');
+        }
+        return;
+      }
       const bool split_endpoints = ColonEndpointsWouldFold(node.as_range_lhs(), node.as_range_rhs());
       if (split_endpoints) {
         out.push_back('(');

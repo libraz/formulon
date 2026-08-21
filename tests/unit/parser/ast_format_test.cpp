@@ -478,6 +478,90 @@ TEST(AstFormat, AstStructuredRefBareAllModifier) {
   EXPECT_EQ(format_formula(*n), "Tbl[#All]");
 }
 
+// ---------------------------------------------------------------------------
+// The storage emitter and the canonical emitter must not drift apart.
+// ---------------------------------------------------------------------------
+
+// Spells every function name as written. `format_formula_storage` differs
+// from `format_formula` only in how it spells calls and LET / LAMBDA
+// binding names, so with this speller the two must agree on any formula
+// whose call names carry no storage prefix.
+std::string SpellVerbatim(std::string_view name) {
+  return std::string(name);
+}
+
+TEST(AstFormat, StorageFormAgreesWithCanonicalFormOnReferenceSpellings) {
+  // `format_formula_storage` is reached only from the OOXML writer, so a
+  // divergence here changes saved bytes while every value-level test stays
+  // green: `A:A:C:C` names the same rectangle as `A:C`.
+  const char* kSpellings[] = {
+      "A1",      "A:A", "A:C",   "1:1",     "1:3",   "A1:C3",    "$A:$C",    "$A:A",    "A:$C",
+      "A:A:A:A", "B:D", "AA:AC", "1:1:3:3", "A:C^2", "SUM(A:C)", "SUM(1:3)", "A:C B:B", "SUM(A:C,E:G)",
+  };
+  for (const char* src : kSpellings) {
+    Arena arena;
+    Parser parser(src, arena);
+    AstNode* root = parser.parse();
+    ASSERT_NE(root, nullptr) << src;
+    ASSERT_TRUE(parser.errors().empty()) << src;
+    EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), format_formula(*root))
+        << "storage form diverged for: " << src;
+  }
+}
+
+TEST(AstFormat, WholeAxisPairIsStoredAsTheCompactSpelling) {
+  // Excel stores a multi-column whole reference as `A:C`, and stores back
+  // exactly what was typed. Emitting `A:A:C:C` would rewrite an everyday
+  // formula on the first save.
+  const char* kSpellings[] = {
+      "SUM(A:C)", "COUNTA(B:D)", "SUM(1:3)", "SUM($A:$C)", "SUM($A:C)", "SUM(A:A)", "SUM(1:1)", "SUM(A:A:A:A)",
+  };
+  for (const char* src : kSpellings) {
+    Arena arena;
+    Parser parser(src, arena);
+    AstNode* root = parser.parse();
+    ASSERT_NE(root, nullptr) << src;
+    ASSERT_TRUE(parser.errors().empty()) << src;
+    const std::string stored = format_formula_storage(*root, &SpellVerbatim);
+    EXPECT_EQ(stored, src) << "the stored spelling is not the one that was written";
+
+    // And it has to be a fixpoint, or the text keeps moving on every save.
+    Arena reparsed_arena;
+    Parser reparser(stored, reparsed_arena);
+    AstNode* reparsed = reparser.parse();
+    ASSERT_NE(reparsed, nullptr) << stored;
+    ASSERT_TRUE(reparser.errors().empty()) << stored;
+    EXPECT_EQ(format_formula_storage(*reparsed, &SpellVerbatim), stored)
+        << "storage form is not a fixpoint for: " << src;
+  }
+}
+
+TEST(AstFormat, ChainedRangeOperatorIsAFormatterFixpoint) {
+  // Excel stores a chained `:` verbatim, so every link has to survive the
+  // round trip. A fuzz run found `h:h:h:h:e:e` formatting to `H:H:E:E` and
+  // that formatting again to `H:E`: the text kept moving on each hop, so a
+  // workbook's stored formula would drift away from what was written.
+  const char* kSpellings[] = {
+      "H:H:E:E", "A:C:E:G", "A:A:A:A", "1:1:3:3", "H:H:H:H:E:E", "A:C:E:G:I:K", "1:3:5:7",
+  };
+  for (const char* src : kSpellings) {
+    Arena arena;
+    Parser parser(src, arena);
+    AstNode* root = parser.parse();
+    ASSERT_NE(root, nullptr) << src;
+    ASSERT_TRUE(parser.errors().empty()) << src;
+    const std::string once = format_formula(*root);
+
+    Arena second_arena;
+    Parser second(once, second_arena);
+    AstNode* reparsed = second.parse();
+    ASSERT_NE(reparsed, nullptr) << once;
+    ASSERT_TRUE(second.errors().empty()) << once;
+    EXPECT_EQ(format_formula(*reparsed), once) << "formatter is not a fixpoint for: " << src;
+    EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), once) << "storage form diverged for: " << src;
+  }
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon
