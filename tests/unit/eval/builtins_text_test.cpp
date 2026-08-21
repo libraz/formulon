@@ -146,47 +146,59 @@ TEST(TextTrim, StripsIdeographicSpace) {
 }
 
 TEST(TextTrim, CollapsesIdeographicWithAscii) {
-  // Mixed ideographic + ASCII spaces between non-space chars collapse to a
-  // single ASCII space, mirroring Excel's behaviour of normalising any run
-  // of trimmable spaces to one U+0020.
+  // A mixed run collapses to its FIRST member, not to an ASCII space. The
+  // run here opens with U+3000, so that is what survives. Excel keeps the
+  // character rather than normalising the run, which matters because a
+  // full-width space between two words is typography, not padding.
   const Value v = EvalSource(
       "=TRIM(\"a\xE3\x80\x80 \xE3\x80\x80"
+      "b\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "a\xE3\x80\x80\x62");
+}
+
+TEST(TextTrim, MixedRunOpeningWithAsciiKeepsTheAsciiSpace) {
+  // The mirror of the case above: the same two space kinds in the other
+  // order, so the ASCII space is the survivor. The pair is what shows the
+  // rule is "first of the run" rather than "prefer one kind".
+  const Value v = EvalSource(
+      "=TRIM(\"a \xE3\x80\x80"
       "b\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "a b");
 }
 
-// The interior rule for U+3000 on its own, without an ASCII space in the
-// run to carry the result: a run of ideographic spaces between two
-// non-space characters becomes exactly one U+0020, so the trimmed text is
-// shorter in both bytes and UTF-16 units than the input. This is the
-// ja-JP everyday case, and it is what makes a later FIND / MID position
-// land where the caller expects.
-TEST(TextTrim, SingleInteriorIdeographicSpaceBecomesAsciiSpace) {
-  // "あ　い" -> "あ い"
+// The interior rule for U+3000 on its own. A lone ideographic space
+// between two non-space characters is a run of one, so it survives as
+// itself and the text is unchanged. This is the ja-JP everyday case:
+// rewriting it to U+0020 would silently reflow Japanese text that was
+// spaced deliberately.
+TEST(TextTrim, SingleInteriorIdeographicSpaceIsKept) {
+  // "あ　い" is already trimmed.
   const Value v = EvalSource("=TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "\xE3\x81\x82 \xE3\x81\x84");
+  EXPECT_EQ(v.as_text(), "\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84");
 
   const Value len = EvalSource("=LEN(TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84\"))");
   ASSERT_TRUE(len.is_number());
   EXPECT_DOUBLE_EQ(len.as_number(), 3.0);
 }
 
-TEST(TextTrim, RepeatedInteriorIdeographicSpacesCollapseToOne) {
-  // "あ　　い" -> "あ い"
+TEST(TextTrim, RepeatedInteriorIdeographicSpacesCollapseToOneIdeographic) {
+  // "あ　　い" -> "あ　い": the run shortens to one, and the one it keeps
+  // is still U+3000.
   const Value v = EvalSource("=TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x80\x80\xE3\x81\x84\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "\xE3\x81\x82 \xE3\x81\x84");
+  EXPECT_EQ(v.as_text(), "\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84");
 }
 
 TEST(TextTrim, EdgeAndInteriorIdeographicSpacesTogether) {
-  // "　　あ　　い　　" -> "あ い": the edge runs go away entirely and the
-  // interior one becomes a single ASCII space.
+  // "　　あ　　い　　" -> "あ　い": the edge runs go away entirely and the
+  // interior one shortens to a single U+3000.
   const Value v = EvalSource(
       "=TRIM(\"\xE3\x80\x80\xE3\x80\x80\xE3\x81\x82\xE3\x80\x80\xE3\x80\x80\xE3\x81\x84\xE3\x80\x80\xE3\x80\x80\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "\xE3\x81\x82 \xE3\x81\x84");
+  EXPECT_EQ(v.as_text(), "\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84");
 }
 
 // A byte that merely looks space-adjacent is not one. Tabs and newlines
@@ -206,15 +218,15 @@ TEST(TextTrim, TabAndNewlineArePreservedVerbatim) {
   EXPECT_EQ(leading_tab.as_text(), "\ta");
 }
 
-TEST(TextTrim, IdeographicSpaceAdjacentToTabIsStillCollapsed) {
-  // "a　\t　b" -> "a \t b". The tab ends the run, so the ideographic space
-  // on either side of it is interior and collapses to one ASCII space each
-  // rather than being deleted.
+TEST(TextTrim, IdeographicSpaceAdjacentToTabSurvivesAsItself) {
+  // "a　\t　b" is unchanged. The tab is not trimmable and ends the run, so
+  // each ideographic space is a run of one and keeps its own character
+  // rather than being deleted or rewritten.
   const Value v = EvalSource(
       "=TRIM(\"a\xE3\x80\x80\t\xE3\x80\x80"
       "b\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "a \t b");
+  EXPECT_EQ(v.as_text(), "a\xE3\x80\x80\t\xE3\x80\x80\x62");
 }
 
 TEST(TextTrim, DoesNotStripNbsp) {

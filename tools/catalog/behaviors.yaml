@@ -227,10 +227,10 @@ groups:
         expected: impl
       - name: "SEARCH with ~* literal escape"
         probe_regex: 'SEARCH\("[^"]*~\*'
-        expected: missing
+        expected: impl
       - name: "SEARCH with ~? literal escape"
         probe_regex: 'SEARCH\("[^"]*~\?'
-        expected: missing
+        expected: impl
 
   # -------------------------------------------------------------------------
   # NUMBERVALUE separator overrides. The 1-arg form uses en-US defaults

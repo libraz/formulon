@@ -2,11 +2,11 @@
   "suite": "text",
   "description": "LEN / LEFT / RIGHT / MID / CONCAT / EXACT / FIND / SEARCH / UPPER / LOWER / PROPER / TRIM / CLEAN / SUBSTITUTE / REPT / TEXTJOIN / UNICHAR / UNICODE",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T01:08:30Z"
+    "generated_at": "2026-08-21T16:32:47Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -441,6 +441,60 @@
       }
     },
     {
+      "id": "search_escaped_question_matches_literal",
+      "formula": "=SEARCH(\"a~?c\",\"abcaa?c\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "search_escaped_question_ignores_wildcard_match",
+      "formula": "=SEARCH(\"a~?c\",\"abca?c\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "search_escaped_star_matches_literal",
+      "formula": "=SEARCH(\"a~*c\",\"abca*c\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "search_escaped_star_no_literal_present",
+      "formula": "=SEARCH(\"a~*c\",\"zabbbbc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "search_escaped_tilde_matches_literal",
+      "formula": "=SEARCH(\"a~~c\",\"za~cbc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "find_tilde_is_not_an_escape",
+      "formula": "=FIND(\"a~?c\",\"xa~?cy\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
       "id": "upper_ascii",
       "formula": "=UPPER(\"hello\")",
       "setup": {},
@@ -628,6 +682,141 @@
         "kind": "text",
         "value": "a"
       }
+    },
+    {
+      "id": "trim_internal_fullwidth_run_length",
+      "formula": "=LEN(TRIM(\"a　　b\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trim_internal_fullwidth_run_value",
+      "formula": "=TRIM(\"a　　b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a　b"
+      }
+    },
+    {
+      "id": "trim_internal_ascii_run_length",
+      "formula": "=LEN(TRIM(\"a  b\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trim_mixed_internal_run_length",
+      "formula": "=LEN(TRIM(\"a 　 b\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trim_mixed_run_ascii_first_survivor",
+      "formula": "=UNICODE(MID(TRIM(\"a 　b\"), 2, 1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "trim_mixed_run_fullwidth_first_survivor",
+      "formula": "=UNICODE(MID(TRIM(\"a　 b\"), 2, 1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12288.0
+      }
+    },
+    {
+      "id": "trim_fullwidth_run_survivor",
+      "formula": "=UNICODE(MID(TRIM(\"a　　b\"), 2, 1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12288.0
+      }
+    },
+    {
+      "id": "trim_ascii_run_survivor",
+      "formula": "=UNICODE(MID(TRIM(\"a  b\"), 2, 1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "trim_mixed_three_char_run_survivor",
+      "formula": "=UNICODE(MID(TRIM(\"a 　 b\"), 2, 1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "trim_leading_fullwidth_then_ascii",
+      "formula": "=TRIM(\"　 a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "trim_single_interior_fullwidth_unchanged",
+      "formula": "=TRIM(\"あ　い\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あ　い"
+      }
+    },
+    {
+      "id": "trim_single_interior_fullwidth_length",
+      "formula": "=LEN(TRIM(\"あ　い\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trim_fullwidth_around_tab_survivor",
+      "formula": "=UNICODE(MID(TRIM(\"a\" & UNICHAR(12288) & CHAR(9) & UNICHAR(12288) & \"b\"), 2, 1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12288.0
+      }
+    },
+    {
+      "id": "trim_fullwidth_around_tab_length",
+      "formula": "=LEN(TRIM(\"a\" & UNICHAR(12288) & CHAR(9) & UNICHAR(12288) & \"b\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "trim_fullwidth_only_string",
+      "formula": "=TRIM(\"　　　\")",
+      "setup": {},
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "clean_strips_chr7",

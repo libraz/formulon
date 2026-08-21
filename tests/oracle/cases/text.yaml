@@ -179,6 +179,36 @@ cases:
     description: "SEARCH respects start_num: skips first match"
     formula: "=SEARCH(\"a\",\"abcabc\",2)"
 
+  # `~` escapes the next wildcard, so `~?` and `~*` match a literal `?`
+  # and `*`. Each escape is captured twice: once against a haystack whose
+  # only match is the literal character, and once against one where an
+  # unescaped wildcard would have matched earlier. The pair is what
+  # separates "the escape works" from "the escape was ignored and the
+  # wildcard happened to match at the same position".
+  - id: search_escaped_question_matches_literal
+    description: "SEARCH(\"a~?c\",...) matches a literal '?', not any character"
+    formula: "=SEARCH(\"a~?c\",\"abcaa?c\")"
+
+  - id: search_escaped_question_ignores_wildcard_match
+    description: "An escaped ? does not match the earlier 'abc' an unescaped ? would"
+    formula: "=SEARCH(\"a~?c\",\"abca?c\")"
+
+  - id: search_escaped_star_matches_literal
+    description: "SEARCH(\"a~*c\",...) matches a literal '*', not any run"
+    formula: "=SEARCH(\"a~*c\",\"abca*c\")"
+
+  - id: search_escaped_star_no_literal_present
+    description: "An escaped * finds nothing when the haystack has no literal '*'"
+    formula: "=SEARCH(\"a~*c\",\"zabbbbc\")"
+
+  - id: search_escaped_tilde_matches_literal
+    description: "`~~` matches a literal tilde"
+    formula: "=SEARCH(\"a~~c\",\"za~cbc\")"
+
+  - id: find_tilde_is_not_an_escape
+    description: "FIND has no wildcards, so `~?` there is two literal characters"
+    formula: "=FIND(\"a~?c\",\"xa~?cy\")"
+
   # -- UPPER / LOWER / PROPER / TRIM / CLEAN -----------------------------
   - id: upper_ascii
     formula: "=UPPER(\"hello\")"
@@ -265,6 +295,79 @@ cases:
   - id: trim_strips_fullwidth_space
     description: "TRIM strips ideographic space U+3000 in ja-JP locale -> 'a'"
     formula: "=TRIM(\"　a　\")"
+
+  # Leading and trailing U+3000 are stripped (above). Whether an interior
+  # run of them collapses the way an interior run of U+0020 does is a
+  # separate question, and the answer decides whether TRIM treats U+3000
+  # as whitespace or merely trims it at the edges. LEN is used rather than
+  # the string itself so the result cannot be read as an incidental
+  # round-trip of an invisible character.
+  - id: trim_internal_fullwidth_run_length
+    description: "LEN(TRIM(\"a　　b\")) — does an interior U+3000 run collapse?"
+    formula: "=LEN(TRIM(\"a　　b\"))"
+
+  - id: trim_internal_fullwidth_run_value
+    description: "TRIM(\"a　　b\") — the string an interior U+3000 run leaves behind"
+    formula: "=TRIM(\"a　　b\")"
+
+  - id: trim_internal_ascii_run_length
+    description: "LEN(TRIM(\"a  b\")) — the ASCII control this is compared against"
+    formula: "=LEN(TRIM(\"a  b\"))"
+
+  - id: trim_mixed_internal_run_length
+    description: "LEN(TRIM(\"a 　 b\")) — an interior run mixing U+0020 and U+3000"
+    formula: "=LEN(TRIM(\"a 　 b\"))"
+
+  # A collapsed run is one character wide, so which character survives is
+  # a separate question from how many do. UNICODE of the survivor answers
+  # it directly: 32 for U+0020, 12288 for U+3000. The two orderings are
+  # captured separately because "the first of the run" and "the last of
+  # the run" are indistinguishable in a run that starts and ends with the
+  # same kind.
+  - id: trim_mixed_run_ascii_first_survivor
+    description: "UNICODE of the survivor when the run is U+0020 then U+3000"
+    formula: "=UNICODE(MID(TRIM(\"a 　b\"), 2, 1))"
+
+  - id: trim_mixed_run_fullwidth_first_survivor
+    description: "UNICODE of the survivor when the run is U+3000 then U+0020"
+    formula: "=UNICODE(MID(TRIM(\"a　 b\"), 2, 1))"
+
+  - id: trim_fullwidth_run_survivor
+    description: "UNICODE of the survivor in a pure U+3000 run"
+    formula: "=UNICODE(MID(TRIM(\"a　　b\"), 2, 1))"
+
+  - id: trim_ascii_run_survivor
+    description: "UNICODE of the survivor in a pure U+0020 run"
+    formula: "=UNICODE(MID(TRIM(\"a  b\"), 2, 1))"
+
+  - id: trim_mixed_three_char_run_survivor
+    description: "UNICODE of the survivor in a U+0020 / U+3000 / U+0020 run"
+    formula: "=UNICODE(MID(TRIM(\"a 　 b\"), 2, 1))"
+
+  - id: trim_leading_fullwidth_then_ascii
+    description: "A leading mixed run is stripped whichever kind starts it"
+    formula: "=TRIM(\"　 a\")"
+
+  - id: trim_single_interior_fullwidth_unchanged
+    description: "A lone interior U+3000 is a run of one: is the text unchanged?"
+    formula: "=TRIM(\"あ　い\")"
+
+  - id: trim_single_interior_fullwidth_length
+    description: "LEN of the same string, so the answer does not rest on read-back fidelity"
+    formula: "=LEN(TRIM(\"あ　い\"))"
+
+  - id: trim_fullwidth_around_tab_survivor
+    description: "A tab is not trimmable, so it splits the run: UNICODE of the char before it"
+    formula: "=UNICODE(MID(TRIM(\"a\" & UNICHAR(12288) & CHAR(9) & UNICHAR(12288) & \"b\"), 2, 1))"
+
+  - id: trim_fullwidth_around_tab_length
+    description: "LEN of the tab-split case: are both single U+3000 runs kept?"
+    formula: "=LEN(TRIM(\"a\" & UNICHAR(12288) & CHAR(9) & UNICHAR(12288) & \"b\"))"
+
+  - id: trim_fullwidth_only_string
+    description: "TRIM of a string that is nothing but U+3000"
+    formula: "=TRIM(\"　　　\")"
+    compare_mode: empty_string_readback
 
   - id: clean_strips_chr7
     description: "CLEAN strips bell (CHR 7)"

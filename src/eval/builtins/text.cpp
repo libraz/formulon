@@ -100,9 +100,17 @@ Value Lower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 
 // TRIM(text) - removes leading and trailing ASCII spaces (0x20) plus the
 // ideographic space U+3000 (encoded UTF-8 as `E3 80 80`), and collapses runs
-// of those same characters to a single ASCII space internally. Mac Excel
-// 365 ja-JP treats U+3000 as a trimmable space; other whitespace-like bytes
-// (tabs, newlines, NBSP U+00A0, etc.) are preserved verbatim.
+// of those same characters internally. Mac Excel 365 ja-JP treats U+3000 as
+// a trimmable space; other whitespace-like bytes (tabs, newlines, NBSP
+// U+00A0, etc.) are preserved verbatim.
+//
+// A collapsed run keeps the character that *started* it rather than
+// normalising to an ASCII space: `"a　　b"` trims to `"a　b"`, and a mixed
+// run takes its first member, so `" 　 "` collapses to `" "` while `"　 "`
+// collapses to `"　"`. Emitting an ASCII space for every run reads as the
+// obvious simplification and is what this did; it silently rewrote
+// ja-JP text, since a full-width space between two words is typography
+// rather than padding.
 Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
@@ -120,26 +128,29 @@ Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   };
   std::string out;
   out.reserve(src.size());
-  bool pending_space = false;
+  // The pending run's first member, held as the bytes to emit if the run
+  // turns out to be interior. Empty means no run is open, which is why a
+  // separate `pending_space` flag is not needed.
+  std::string_view pending_space;
   bool seen_non_space = false;
   for (std::size_t i = 0; i < src.size();) {
     if (src[i] == ' ') {
-      if (seen_non_space) {
-        pending_space = true;
+      if (seen_non_space && pending_space.empty()) {
+        pending_space = " ";
       }
       ++i;
       continue;
     }
     if (is_ideographic_space_at(i)) {
-      if (seen_non_space) {
-        pending_space = true;
+      if (seen_non_space && pending_space.empty()) {
+        pending_space = "\xE3\x80\x80";
       }
       i += 3;
       continue;
     }
-    if (pending_space) {
-      out.push_back(' ');
-      pending_space = false;
+    if (!pending_space.empty()) {
+      out.append(pending_space);
+      pending_space = std::string_view();
     }
     out.push_back(src[i]);
     ++i;
