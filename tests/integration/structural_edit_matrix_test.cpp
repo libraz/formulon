@@ -558,6 +558,78 @@ TEST(StructuralEditMatrix, EditsLeaveAnUnparsableAutoFilterRefAlone) {
   EXPECT_EQ(wb.sheet(0).auto_filter_xml(), original);
 }
 
+// The three structures `shift_sheet_metadata` deliberately omits. Excel
+// moves all of them, so these tests pin a divergence rather than a
+// correct behaviour: they exist so a future partial fix -- one that
+// derives an `<xm:sqref>` from the model rule its `x14:id` names, and
+// therefore reaches only the entries carrying an id -- shows up as a
+// changed expectation here instead of shipping as "extLst now follows
+// edits". The reason the whole of it is not fixed at once, and what it
+// would take, is `structural_edit_does_not_remap_verbatim_worksheet_
+// extensions` in tests/divergence.yaml.
+
+TEST(StructuralEditMatrix, EditsLeaveExtLstCoordinatesAtTheirPreEditRectangle) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+
+  // A DataBar extension linked to a legacy rule by GUID, plus a sparkline
+  // group. The sparkline is the one that keeps rendering afterwards: it
+  // carries its own source range in `<xm:f>` and no link to anything the
+  // model owns, so nothing beside it moved either.
+  const std::string ext_lst =
+      "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\">"
+      "<x14:conditionalFormattings><x14:conditionalFormatting>"
+      "<x14:cfRule type=\"dataBar\" id=\"{00000000-0000-0000-0000-000000000001}\"/>"
+      "<xm:sqref>A1:A10</xm:sqref>"
+      "</x14:conditionalFormatting></x14:conditionalFormattings></ext>"
+      "<ext uri=\"{05C60535-1F16-4fd2-B633-F4F36F0B64E0}\">"
+      "<x14:sparklineGroups><x14:sparklineGroup><x14:sparklines><x14:sparkline>"
+      "<xm:f>Sheet1!A1:A10</xm:f><xm:sqref>C1</xm:sqref>"
+      "</x14:sparkline></x14:sparklines></x14:sparklineGroup></x14:sparklineGroups></ext></extLst>";
+  sheet.set_ext_lst_xml(ext_lst);
+
+  cf::ConditionalFormat block;
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule rule;
+  rule.type = cf::RuleType::DataBar;
+  rule.id = "{00000000-0000-0000-0000-000000000001}";
+  block.rules.push_back(rule);
+  sheet.mutable_conditional_formats().push_back(block);
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 0, 5)));
+
+  // The modelled sqref moved; the extension's copy of the same rectangle
+  // did not, and neither did the sparkline's source range.
+  ASSERT_EQ(sheet.conditional_formats().size(), 1U);
+  ASSERT_EQ(sheet.conditional_formats()[0].sqref.size(), 1U);
+  EXPECT_EQ(sheet.conditional_formats()[0].sqref[0].first.row, 5U);
+  EXPECT_EQ(sheet.conditional_formats()[0].sqref[0].last.row, 14U);
+  EXPECT_EQ(sheet.ext_lst_xml(), ext_lst);
+}
+
+TEST(StructuralEditMatrix, EditsLeaveRawWorksheetChildrenAtTheirPreEditRectangle) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+
+  // `<sortState>` is the everyday case: Excel writes it whenever a range
+  // is sorted without a table, and it names a rectangle.
+  const std::string sort_state = "<sortState ref=\"A1:C10\"><sortCondition ref=\"A1:A10\"/></sortState>";
+  sheet.mutable_raw_extensions().push_back(WorksheetRawChild{11U, sort_state});
+
+  // Control: a modelled rectangle over the same cells, so an edit that did
+  // not run at all cannot be mistaken for one that ran and left the raw
+  // child alone.
+  sheet.mutable_merges().push_back(MergeRange{0U, 0U, 9U, 2U});
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 0, 5)));
+
+  ASSERT_EQ(sheet.merges().size(), 1U);
+  EXPECT_EQ(sheet.merges()[0].first_row, 5U);
+  EXPECT_EQ(sheet.merges()[0].last_row, 14U);
+  ASSERT_EQ(sheet.raw_extensions().size(), 1U);
+  EXPECT_EQ(sheet.raw_extensions()[0].xml, sort_state);
+}
+
 TEST(StructuralEditMatrix, DeleteRowsShrinksHyperlinkRange) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);

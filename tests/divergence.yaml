@@ -1137,6 +1137,32 @@ entries:
     first_noted: 2026-08-21
     last_verified_excel_version: "16.112.1"
 
+  # -- Structural edits do not reach verbatim-retained extensions ----------
+  # A row or column edit moves every structure the engine models. The
+  # worksheet content it keeps byte-verbatim precisely because it does not
+  # model it -- the worksheet `<extLst>` and unmodelled `<worksheet>`
+  # children -- stays where it was, so any rectangle or formula inside it
+  # is left addressing pre-edit cells.
+  #
+  # Recorded rather than fixed, and the reason is worth stating plainly:
+  # the obvious fix is wrong in a way that is worse than the gap. Deriving
+  # each `<xm:sqref>` from the model rule its `x14:id` links to would close
+  # only the entries that carry an id, and rests on Excel writing that
+  # `xm:sqref` equal to the legacy block's `sqref` rather than to a subset
+  # of it. No file in the corpus can settle that -- there is no workbook
+  # here, fixture or third-party, that carries a conditional format at all,
+  # and the CF I/O tests all feed hand-written XML. Guessing wrong turns a
+  # silent omission into a silent mis-range.
+  - id: structural_edit_does_not_remap_verbatim_worksheet_extensions
+    cause: engine-gap
+    mode: skip-oracle
+    scope: deferred-feature
+    evidence: [src/sheet.h, tests/integration/structural_edit_matrix_test.cpp]
+    reason: "`insert_rows` / `delete_rows` / `insert_cols` / `delete_cols` remap every modelled structure but not the coordinates inside worksheet content retained byte-verbatim: the worksheet `<extLst>` (the `x14` conditional-formatting block behind DataBar negative-fill / axis / gradient settings, sparkline groups, slicer anchors) and unmodelled `<worksheet>` children. Excel moves all of them, so an edited workbook differs from what Excel would have produced. The visible outcome differs per extension: Excel drops an `x14` conditional-formatting entry whose range no longer matches the legacy rule it extends, reverting an extended DataBar to its legacy rendering, while a sparkline group keeps drawing and reads its `<xm:f>` source range from the wrong cells. Nothing reports it -- no status, no read diagnostic. Closing it needs an Excel-authored workbook whose legacy `<conditionalFormatting sqref>` is a union rather than a single rectangle, saved by Excel itself, to establish whether the `x14` entry mirrors that sqref or narrows it; a single rectangle looks mirrored either way and answers nothing."
+    prefer: mac-excel-365
+    first_noted: 2026-08-21
+    last_verified_excel_version: "16.112.1"
+
   # -- Bare whole-axis reference: geometry cases are live --------------
   # The five geometry cases (a declared rectangle that no longer fits from
   # the formula cell, and a blocker anywhere inside the footprint) were
