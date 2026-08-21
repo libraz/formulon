@@ -1598,9 +1598,24 @@ class Sheet {
   /// `<xm:sqref>` here keeps its pre-edit rectangle while the `cfRule` it
   /// extends moves with `conditional_formats()`. Excel resolves the
   /// mismatch by dropping the extension, which silently reverts an extended
-  /// DataBar to its legacy rendering. Fixing it means deciding what an
-  /// `xm:sqref` means for each extension the block can carry, which is more
-  /// than a coordinate rewrite.
+  /// DataBar to its legacy rendering.
+  ///
+  /// The extended DataBar is the cheapest case to describe, not the whole
+  /// of it, and reading it as the whole understates what a structural edit
+  /// leaves behind here. An `<x14:cfRule>` carrying no `id` has no link
+  /// back to a model rule at all, so nothing beside it moved either.
+  /// Sparklines are worse than a stale rectangle: each group carries both
+  /// an `<xm:sqref>` for the cells it draws in and an `<xm:f>` naming the
+  /// source range it draws from, and neither is modelled, so an edit
+  /// between the two leaves a chart reading a range that no longer holds
+  /// its data. Slicers name their cache and their anchored range the same
+  /// way. Deriving the right coordinates from the model — rather than
+  /// shifting the retained bytes — closes only the subset that carries an
+  /// `id`, and rests on Excel writing an `xm:sqref` equal to the legacy
+  /// block's `sqref` rather than a subset of it, which no file in the
+  /// corpus can confirm. That is why this is documented rather than
+  /// half-fixed: deriving a wrong rectangle would trade a silent omission
+  /// for a silent mis-range.
   const std::string& ext_lst_xml() const noexcept { return ext_lst_xml_; }
 
   /// Sets the raw worksheet-level `<extLst>` element. Plain metadata.

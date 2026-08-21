@@ -645,6 +645,29 @@ FM_API fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const 
 /* Row / column structural edits                                              */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * The four edits below move every structure the engine models: cells,
+ * formulas, merges, conditional-format ranges, data validations,
+ * hyperlinks, tables, print areas, manual breaks and the auto-filter
+ * range. What they do not move is the worksheet content the engine keeps
+ * byte-verbatim because it does not model it -- the worksheet-level
+ * `<extLst>` (2010+ extensions: the `x14` conditional-formatting block
+ * behind DataBar negative-fill / axis / gradient settings, sparkline
+ * groups, slicer anchors) and any unmodelled `<worksheet>` child retained
+ * to keep it from being dropped on save.
+ *
+ * A `ref`, an `sqref` or a formula inside those keeps its pre-edit
+ * rectangle. The visible outcome depends on the extension: Excel drops an
+ * `x14` conditional-formatting entry whose range no longer matches the
+ * legacy rule it extends, so an extended DataBar quietly falls back to its
+ * legacy rendering, while a sparkline group keeps drawing and reads its
+ * source range from the wrong cells. Neither is reported: no status code,
+ * no diagnostic counter.
+ *
+ * A host that edits rows or columns on a sheet carrying those extensions
+ * should re-author them after the edit rather than rely on the round trip.
+ */
+
 /**
  * @brief Inserts `count` rows at `row` on `sheet`. Cells at `row` and
  *        beyond shift forward; cells pushed past the sheet bound are

@@ -1739,6 +1739,28 @@ export interface Workbook {
   excelProfileId(): ExcelProfileId;
   setExcelProfileId(profileId: ExcelProfileId): Status;
 
+  /**
+   * The four structural edits move every structure the engine models:
+   * cells, formulas, merges, conditional-format ranges, validations,
+   * hyperlinks, tables, print areas, manual breaks and the auto-filter
+   * range.
+   *
+   * They do not move coordinates held in worksheet content the engine
+   * keeps byte-verbatim because it does not model it — the worksheet
+   * `<extLst>` (the `x14` conditional-formatting block behind DataBar
+   * negative-fill / axis / gradient settings, sparkline groups, slicer
+   * anchors) and any unmodelled `<worksheet>` child kept so a save does
+   * not drop it. Those keep their pre-edit rectangles.
+   *
+   * What that looks like in Excel differs per extension: it drops an
+   * `x14` entry whose range no longer matches the legacy rule it extends,
+   * so an extended DataBar quietly reverts to its legacy rendering, while
+   * a sparkline group keeps drawing and reads its source range from the
+   * wrong cells. Neither raises a status or a diagnostic counter. Re-author
+   * those extensions after editing rows or columns on a sheet that carries
+   * them.
+   */
+
   /** Inserts `count` rows at `row` on `sheet` and rewrites cross-workbook
    *  references to follow the shift. */
   insertRows(sheet: number, row: number, count: number): Status;

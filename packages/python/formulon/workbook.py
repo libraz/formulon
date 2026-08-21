@@ -2381,8 +2381,32 @@ class Workbook:
             LIB.free(formula_ptr)
 
     # -- Row / column structural edits -------------------------------------
+    #
+    # The four edits below move every structure the engine models: cells,
+    # formulas, merges, conditional-format ranges, validations, hyperlinks,
+    # tables, print areas, manual breaks and the auto-filter range.
+    #
+    # They do not move coordinates held in worksheet content the engine
+    # keeps byte-verbatim because it does not model it -- the worksheet
+    # ``<extLst>`` (the ``x14`` conditional-formatting block behind DataBar
+    # negative-fill / axis / gradient settings, sparkline groups, slicer
+    # anchors) and any unmodelled ``<worksheet>`` child kept so a save does
+    # not drop it. Those keep their pre-edit rectangles.
+    #
+    # What that looks like in Excel differs per extension: it drops an
+    # ``x14`` entry whose range no longer matches the legacy rule it
+    # extends, so an extended DataBar quietly reverts to its legacy
+    # rendering, while a sparkline group keeps drawing and reads its source
+    # range from the wrong cells. Neither raises an exception or a
+    # diagnostic counter. Re-author those extensions after editing rows or
+    # columns on a sheet that carries them.
     def insert_rows(self, sheet: int, row: int, count: int) -> None:
-        """Insert ``count`` rows at ``row`` on ``sheet``."""
+        """Insert ``count`` rows at ``row`` on ``sheet``.
+
+        Coordinates inside verbatim-retained worksheet extensions
+        (``<extLst>``, unmodelled ``<worksheet>`` children) are not
+        remapped; see the note above this method group.
+        """
         h = self._require()
         _check(
             LIB.fm_workbook_insert_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")),
@@ -2390,7 +2414,11 @@ class Workbook:
         )
 
     def delete_rows(self, sheet: int, row: int, count: int) -> None:
-        """Delete ``count`` rows starting at ``row`` on ``sheet``."""
+        """Delete ``count`` rows starting at ``row`` on ``sheet``.
+
+        Coordinates inside verbatim-retained worksheet extensions are not
+        remapped; see the note above this method group.
+        """
         h = self._require()
         _check(
             LIB.fm_workbook_delete_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")),
@@ -2398,7 +2426,11 @@ class Workbook:
         )
 
     def insert_cols(self, sheet: int, col: int, count: int) -> None:
-        """Insert ``count`` columns at ``col`` on ``sheet``."""
+        """Insert ``count`` columns at ``col`` on ``sheet``.
+
+        Coordinates inside verbatim-retained worksheet extensions are not
+        remapped; see the note above this method group.
+        """
         h = self._require()
         _check(
             LIB.fm_workbook_insert_cols(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")),
@@ -2406,7 +2438,11 @@ class Workbook:
         )
 
     def delete_cols(self, sheet: int, col: int, count: int) -> None:
-        """Delete ``count`` columns starting at ``col`` on ``sheet``."""
+        """Delete ``count`` columns starting at ``col`` on ``sheet``.
+
+        Coordinates inside verbatim-retained worksheet extensions are not
+        remapped; see the note above this method group.
+        """
         h = self._require()
         _check(
             LIB.fm_workbook_delete_cols(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")),

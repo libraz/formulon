@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- The row and column edits now state what they do not move. They remap
+  every structure the engine models, but worksheet content kept
+  byte-verbatim because the engine does not model it — the worksheet
+  `<extLst>` behind DataBar extended settings, sparkline groups and
+  slicer anchors, plus any unmodelled `<worksheet>` child — keeps its
+  pre-edit rectangles, and nothing reports it. Excel resolves the
+  mismatch differently per extension: it drops an `x14`
+  conditional-formatting entry whose range no longer matches the rule it
+  extends, so an extended DataBar reverts to its legacy rendering, while
+  a sparkline keeps drawing from a source range that has moved out from
+  under it. The limitation now reaches the C header, both TypeScript
+  declaration files and the Python docstrings, where previously only an
+  internal header mentioned it.
+
 ## [0.11.0] - 2026-08-20
 
 ### Added
