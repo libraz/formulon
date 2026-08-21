@@ -25,6 +25,7 @@
 #include "cf/scale_evaluator.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "utils/rect_iterator.h"
 #include "value.h"
 
@@ -207,7 +208,7 @@ struct Span {
 /// leaving a disjoint ascending sequence. Adjacent-but-disjoint spans
 /// stay separate; the sweep visits them in order either way.
 void merge_spans(std::vector<Span>& spans) {
-  std::sort(spans.begin(), spans.end(), [](const Span& lhs, const Span& rhs) {
+  sort_by_index(spans, [](const Span& lhs, const Span& rhs) {
     return lhs.first < rhs.first || (lhs.first == rhs.first && lhs.last < rhs.last);
   });
   std::size_t out = 0;

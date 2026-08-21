@@ -38,6 +38,7 @@
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon {
@@ -238,7 +239,7 @@ ModeFrequencies build_mode_frequencies(const std::vector<double>& xs) {
     freq.best_count = std::max(freq.best_count, count);
     begin = end;
   }
-  std::sort(entries.begin(), entries.end(), [](const Entry& lhs, const Entry& rhs) { return lhs.first < rhs.first; });
+  sort_by_index(entries, [](const Entry& lhs, const Entry& rhs) { return lhs.first < rhs.first; });
   freq.values.reserve(entries.size());
   freq.counts.reserve(entries.size());
   for (const Entry& entry : entries) {

@@ -11,6 +11,7 @@
 #include "io/xsd_double.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 
 namespace formulon {
@@ -92,7 +93,7 @@ void read_manual_breaks(const pugi::xml_node& breaks_node, std::vector<ManualBre
   // whose order carries no meaning.
   // Stable, so a repeated `id` keeps the span the document stated first
   // rather than an arbitrary one of the duplicates.
-  std::stable_sort(out.begin(), out.end(), [](const ManualBreak& a, const ManualBreak& b) { return a.id < b.id; });
+  sort_by_index(out, [](const ManualBreak& lhs, const ManualBreak& rhs) { return lhs.id < rhs.id; });
   out.erase(
       std::unique(out.begin(), out.end(), [](const ManualBreak& a, const ManualBreak& b) { return a.id == b.id; }),
       out.end());

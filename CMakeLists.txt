@@ -116,6 +116,7 @@ endif()
 set(FORMULON_CORE_SOURCES
   src/utils/a1_column.cpp
   src/utils/double_format.cpp
+  src/utils/index_sort.cpp
   src/utils/structured_log.cpp
   src/utils/thread_launch.cpp
   src/value.cpp

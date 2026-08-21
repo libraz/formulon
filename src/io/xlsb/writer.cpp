@@ -43,6 +43,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 
@@ -398,8 +399,9 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
       plan.workbook_bin_override = true;
     }
   }
-  std::sort(plan.default_content_types.begin(), plan.default_content_types.end(),
-            [](const DefaultContentType& a, const DefaultContentType& b) { return a.extension < b.extension; });
+  sort_by_index(plan.default_content_types, [](const DefaultContentType& lhs, const DefaultContentType& rhs) {
+    return lhs.extension < rhs.extension;
+  });
   return plan;
 }
 

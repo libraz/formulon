@@ -13,6 +13,7 @@
 #include "cell.h"
 #include "eval/dep_graph.h"
 #include "sheet.h"
+#include "utils/index_sort.h"
 #include "workbook.h"
 
 namespace formulon::eval::detail {
@@ -50,7 +51,7 @@ std::vector<BlockedSpillState> snapshot_blocked_spills(const Workbook& workbook)
       state.push_back(BlockedSpillState{static_cast<std::uint16_t>(sheet_id), footprint});
     }
   }
-  std::sort(state.begin(), state.end(), [](const BlockedSpillState& lhs, const BlockedSpillState& rhs) {
+  sort_by_index(state, [](const BlockedSpillState& lhs, const BlockedSpillState& rhs) {
     if (lhs.sheet_id != rhs.sheet_id) {
       return lhs.sheet_id < rhs.sheet_id;
     }

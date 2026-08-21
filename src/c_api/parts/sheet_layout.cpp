@@ -20,6 +20,7 @@
 #include "c_api/parts/xml_fragment.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_column_span;
@@ -41,7 +42,7 @@ bool SameColumnLayoutState(const formulon::ColumnLayout& lhs, const formulon::Co
 // Orders column spans by start, then by end. This lives at namespace scope
 // rather than inside `overlay_column_span` on purpose: a comparator declared
 // inside a template has a distinct closure type per instantiation, so every
-// setter would get its own copy of the whole `std::sort` body.
+// setter would otherwise reach the shared sort through its own trampoline.
 struct ColumnSpanOrder {
   bool operator()(const formulon::ColumnLayout& lhs, const formulon::ColumnLayout& rhs) const {
     if (lhs.first != rhs.first) {
@@ -95,7 +96,8 @@ void overlay_column_span(formulon::SheetLayout& layout, std::uint32_t first, std
   // Merge covered intervals before synthesising gaps. Normal SheetLayout
   // entries are disjoint, but this also avoids duplicating a default segment
   // when a caller supplied overlapping aggregate entries directly.
-  std::sort(covered.begin(), covered.end());
+  formulon::sort_by_index(covered, [](const std::pair<std::uint32_t, std::uint32_t>& lhs,
+                                      const std::pair<std::uint32_t, std::uint32_t>& rhs) { return lhs < rhs; });
   std::vector<std::pair<std::uint32_t, std::uint32_t>> covered_union;
   for (const auto& interval : covered) {
     if (covered_union.empty() ||
@@ -125,7 +127,7 @@ void overlay_column_span(formulon::SheetLayout& layout, std::uint32_t first, std
     next.push_back(gap);
   }
 
-  std::sort(next.begin(), next.end(), ColumnSpanOrder{});
+  formulon::sort_by_index(next, ColumnSpanOrder{});
   std::vector<formulon::ColumnLayout> merged;
   merged.reserve(next.size());
   for (const formulon::ColumnLayout& entry : next) {

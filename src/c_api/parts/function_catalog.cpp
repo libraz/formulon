@@ -40,6 +40,7 @@
 #include "eval/special_forms_catalog.h"
 #include "eval/tree_walker.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
@@ -135,7 +136,7 @@ const std::vector<std::string>& sorted_function_names() {
     for (const char* const* p = formulon::eval::parser_special_form_names(); p != nullptr && *p != nullptr; ++p) {
       out.emplace_back(*p);
     }
-    std::sort(out.begin(), out.end());
+    formulon::sort_by_index(out, [](const std::string& lhs, const std::string& rhs) { return lhs < rhs; });
     // A name can appear in more than one source (e.g. registry + lazy); keep a
     // single entry so the enumeration count matches the recognised set.
     out.erase(std::unique(out.begin(), out.end()), out.end());

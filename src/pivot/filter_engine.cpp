@@ -23,6 +23,7 @@
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
 #include "utils/checked_index.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -636,23 +637,24 @@ std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, doubl
   }
   // Rank the scoring leaves descending; all-blank leaves never contribute
   // and never survive, matching the item-count flavour.
-  std::vector<std::size_t> order;
+  std::vector<std::uint32_t> order;
   order.reserve(n);
   double total = 0.0;
   for (std::size_t i = 0; i < n; ++i) {
     if (!axis.all_blank[i]) {
-      order.push_back(i);
+      order.push_back(static_cast<std::uint32_t>(i));
       total += axis.scores[i];
     }
   }
-  std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return axis.scores[a] > axis.scores[b]; });
+  const auto by_score_desc = [&](std::uint32_t lhs, std::uint32_t rhs) { return axis.scores[lhs] > axis.scores[rhs]; };
+  sort_index_order(order, make_index_less(by_score_desc));
   // `percent` is the same rule expressed as a share of the axis total,
   // not as a share of the leaf count. Only a threshold low enough for one
   // leaf to clear it alone tells the two apart, which is what the 50 %
   // pivot in `tests/fixtures/excel/pivot_value_date_filters.xlsx` is for.
   const double threshold = basis == TopNBasis::Percent ? total * target / 100.0 : target;
   double running = 0.0;
-  for (const std::size_t idx : order) {
+  for (const std::uint32_t idx : order) {
     if (running >= threshold) {
       break;
     }
@@ -675,16 +677,14 @@ std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, c
         index_from_double(requested, n + 1U).value_or(requested > static_cast<double>(n) ? n : 0U);
     // Sort indices by score descending; all-blank leaves sink to the
     // bottom regardless of N.
-    std::vector<std::size_t> order(n);
-    for (std::size_t i = 0; i < n; ++i) {
-      order[i] = i;
-    }
-    std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
-      if (axis.all_blank[a] != axis.all_blank[b]) {
-        return !axis.all_blank[a];
+    const auto by_score_desc = [&](std::uint32_t lhs, std::uint32_t rhs) {
+      if (axis.all_blank[lhs] != axis.all_blank[rhs]) {
+        return !axis.all_blank[lhs];
       }
-      return axis.scores[a] > axis.scores[b];
-    });
+      return axis.scores[lhs] > axis.scores[rhs];
+    };
+    std::vector<std::uint32_t> order;
+    sorted_index_order(order, static_cast<std::uint32_t>(n), make_index_less(by_score_desc));
     const std::size_t k = std::min(top_n, n);
     for (std::size_t i = 0; i < k; ++i) {
       if (!axis.all_blank[order[i]]) {

@@ -18,6 +18,7 @@
 #include "phonetic.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -263,7 +264,8 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(cons
         static_cast<std::vector<std::pair<std::uint32_t, std::uint32_t>>*>(ctx)->emplace_back(address.row, address.col);
       },
       &out);
-  std::sort(out.begin(), out.end());
+  formulon::sort_by_index(out, [](const std::pair<std::uint32_t, std::uint32_t>& lhs,
+                                  const std::pair<std::uint32_t, std::uint32_t>& rhs) { return lhs < rhs; });
   out.erase(std::unique(out.begin(), out.end()), out.end());
   return out;
 }

@@ -65,6 +65,7 @@
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
@@ -233,8 +234,7 @@ void CaptureUnconsumedWorksheetChildren(const pugi::xml_node& worksheet, Workshe
     out.push_back(WorksheetRawChild{static_cast<std::uint32_t>(slot == worksheet_child::kCount ? previous_slot : slot),
                                     raw_xml(child)});
   }
-  std::stable_sort(out.begin(), out.end(),
-                   [](const WorksheetRawChild& a, const WorksheetRawChild& b) { return a.slot < b.slot; });
+  sort_by_index(out, [](const WorksheetRawChild& lhs, const WorksheetRawChild& rhs) { return lhs.slot < rhs.slot; });
 }
 
 /// Reads every non-cell worksheet element (siblings of `<sheetData>`) from
@@ -1231,7 +1231,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   }
 
   // Stable order so callers / tests can compare deterministically.
-  std::sort(unknown_parts.begin(), unknown_parts.end(), PassthroughPathOrder{});
+  sort_passthrough_parts(unknown_parts);
 
   // The workbook is the sole owner of the passthrough payload; the read
   // result does not mirror it. Handing it over by move keeps a package

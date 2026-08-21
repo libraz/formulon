@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+#include "utils/index_sort.h"
+
 namespace formulon {
 namespace io {
 
@@ -47,12 +49,12 @@ struct PassthroughPart {
 /// Orders captured parts by package path, giving both readers a stable
 /// emission order callers and tests can compare against.
 ///
-/// A named type rather than a lambda at each call site: each closure type
-/// instantiates its own copy of the sort, and the two readers would then
-/// carry two identical sort bodies in the binary.
-struct PassthroughPathOrder {
-  bool operator()(const PassthroughPart& lhs, const PassthroughPart& rhs) const { return lhs.path < rhs.path; }
-};
+/// Routed through the shared index sort rather than `std::sort`: the element
+/// owns two strings and a byte vector, so a direct sort inlines the whole
+/// move-and-destroy machinery into a private copy of the sort body.
+inline void sort_passthrough_parts(std::vector<PassthroughPart>& parts) {
+  sort_by_index(parts, [](const PassthroughPart& lhs, const PassthroughPart& rhs) { return lhs.path < rhs.path; });
+}
 
 }  // namespace io
 }  // namespace formulon

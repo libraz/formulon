@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <numeric>
 #include <vector>
 
 #include "eval/coerce.h"
@@ -17,6 +16,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon {
@@ -258,17 +258,16 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // Build a permutation of lane indices, sort it stably by the chosen
   // key column / row, then materialise the output by gathering lanes.
   const std::uint32_t lanes = by_col ? array->cols : array->rows;
-  std::vector<std::uint32_t> perm(lanes);
-  std::iota(perm.begin(), perm.end(), 0U);
-
   const ArrayValue& arr_ref = *array;
-  std::stable_sort(perm.begin(), perm.end(), [&](std::uint32_t a, std::uint32_t b) {
-    const Value& ka = by_col ? arr_ref.cells[static_cast<std::size_t>(key_idx) * arr_ref.cols + a]
-                             : arr_ref.cells[static_cast<std::size_t>(a) * arr_ref.cols + key_idx];
-    const Value& kb = by_col ? arr_ref.cells[static_cast<std::size_t>(key_idx) * arr_ref.cols + b]
-                             : arr_ref.cells[static_cast<std::size_t>(b) * arr_ref.cols + key_idx];
-    return dynamic_array::sort_lane_less(ka, kb, descending);
-  });
+  const auto lane_less = [&](std::uint32_t lhs, std::uint32_t rhs) {
+    const Value& key_lhs = by_col ? arr_ref.cells[static_cast<std::size_t>(key_idx) * arr_ref.cols + lhs]
+                                  : arr_ref.cells[static_cast<std::size_t>(lhs) * arr_ref.cols + key_idx];
+    const Value& key_rhs = by_col ? arr_ref.cells[static_cast<std::size_t>(key_idx) * arr_ref.cols + rhs]
+                                  : arr_ref.cells[static_cast<std::size_t>(rhs) * arr_ref.cols + key_idx];
+    return dynamic_array::sort_lane_less(key_lhs, key_rhs, descending);
+  };
+  std::vector<std::uint32_t> perm;
+  sorted_index_order(perm, lanes, make_index_less(lane_less));
 
   ArrayValue* out = dynamic_array::materialise_selected_lanes(arr_ref, perm, by_col, arena);
   if (out == nullptr) {
@@ -357,22 +356,22 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   // Build permutation, sort with multi-key compare. Stable so rows that
   // tie on every key keep their input order.
-  std::vector<std::uint32_t> perm(lanes);
-  std::iota(perm.begin(), perm.end(), 0U);
-  std::stable_sort(perm.begin(), perm.end(), [&](std::uint32_t a, std::uint32_t b) {
-    for (const KeySpec& k : keys) {
-      const Value& ka = key_at(k.arr, a);
-      const Value& kb = key_at(k.arr, b);
-      if (dynamic_array::sort_lane_less(ka, kb, k.descending)) {
+  const auto lane_less = [&](std::uint32_t lhs, std::uint32_t rhs) {
+    for (const KeySpec& spec : keys) {
+      const Value& key_lhs = key_at(spec.arr, lhs);
+      const Value& key_rhs = key_at(spec.arr, rhs);
+      if (dynamic_array::sort_lane_less(key_lhs, key_rhs, spec.descending)) {
         return true;
       }
-      if (dynamic_array::sort_lane_less(kb, ka, k.descending)) {
+      if (dynamic_array::sort_lane_less(key_rhs, key_lhs, spec.descending)) {
         return false;
       }
       // Equal under this key -> fall through to next.
     }
     return false;
-  });
+  };
+  std::vector<std::uint32_t> perm;
+  sorted_index_order(perm, lanes, make_index_less(lane_less));
 
   // Materialise output, preserving input shape (axis-only reorder).
   const ArrayValue& arr_ref = *array;

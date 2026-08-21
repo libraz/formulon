@@ -1575,8 +1575,11 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
   for (const auto& kv : rows_) {
     keys.push_back(kv.first);
   }
-  std::sort(keys.begin(), keys.end(), std::greater<std::uint32_t>());
-  for (std::uint32_t key : keys) {
+  // Ascending sort, walked backwards: the descending comparator would be a
+  // second `std::sort` instantiation for the sake of the iteration direction.
+  std::sort(keys.begin(), keys.end());
+  for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
+    const std::uint32_t key = *it;
     if (key < row) {
       continue;
     }

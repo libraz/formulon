@@ -30,6 +30,7 @@
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot/value_order.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -76,7 +77,7 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
   }
   const bool ascending = depth >= levels.size() || levels[depth].ascending;
   const bool sort_by_value = depth < levels.size() && levels[depth].value_sort_field.has_value();
-  std::sort(entries.begin(), entries.end(), [&](const OrderedHierarchyChild& lhs, const OrderedHierarchyChild& rhs) {
+  sort_by_index(entries, [&](const OrderedHierarchyChild& lhs, const OrderedHierarchyChild& rhs) {
     if (sort_by_value && lhs.node->value_sort_key.has_value() && rhs.node->value_sort_key.has_value()) {
       const ValueLess less;
       if (less(*lhs.node->value_sort_key, *rhs.node->value_sort_key)) {

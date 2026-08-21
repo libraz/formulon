@@ -445,82 +445,45 @@ Value Arabic(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //   ROMAN(499, 0..4)  = CDXCIX, LDVLIV, XDIX, VDIV, ID
 //   ROMAN(1999, 0..4) = MCMXCIX, MLMVLIV, MXMIX, MVMIV, MIM
 //
-// The implementation is greedy over a per-form ordered table of
-// (value, glyph) pairs. Each higher form simply prepends additional
-// subtractive pairs to the form-0 table.
+// The implementation is greedy over one value-descending table of
+// (value, glyph) pairs; each pair records the lowest form that admits it,
+// so a form is a subsequence of that single table.
 inline std::string roman_render(int n, int form) {
-  // Base (form 0) subtractive pair table, value-descending.
   struct Pair {
     int value;
     const char* glyph;
+    int min_form;  // Lowest `form` that admits this pairing.
   };
-  static constexpr Pair kForm0[] = {
-      {1000, "M"}, {900, "CM"}, {500, "D"}, {400, "CD"}, {100, "C"}, {90, "XC"}, {50, "L"},
-      {40, "XL"},  {10, "X"},   {9, "IX"},  {5, "V"},    {4, "IV"},  {1, "I"},
+  // The full value-descending pair table, form 0 first and every
+  // higher-form addition slotted into its ordered position. A form selects
+  // a subsequence of this one table, so no per-call merge or sort is needed:
+  //
+  //   * form 1 adds V/L/C as the subtracted glyph in one-step pairings
+  //     (VL=45, LD=450, LM=950, VC=95);
+  //   * form 2 adds X and I two decades up (XM=990, XD=490, IC=99, IL=49) --
+  //     Mac Excel 365 places IC/IL here, not in form 4 as the Microsoft docs'
+  //     499/1999 examples might suggest; the oracle fixture is authoritative;
+  //   * form 3 adds V two decades up (VM=995, VD=495);
+  //   * form 4 adds I three decades up (IM=999, ID=499).
+  static constexpr Pair kPairs[] = {
+      {1000, "M", 0}, {999, "IM", 4}, {995, "VM", 3}, {990, "XM", 2}, {950, "LM", 1}, {900, "CM", 0}, {500, "D", 0},
+      {499, "ID", 4}, {495, "VD", 3}, {490, "XD", 2}, {450, "LD", 1}, {400, "CD", 0}, {100, "C", 0},  {99, "IC", 2},
+      {95, "VC", 1},  {90, "XC", 0},  {50, "L", 0},   {49, "IL", 2},  {45, "VL", 1},  {40, "XL", 0},  {10, "X", 0},
+      {9, "IX", 0},   {5, "V", 0},    {4, "IV", 0},   {1, "I", 0},
   };
-  // Form 1 additions: allows V/L/C as the subtracted glyph in one-step
-  // pairings (VL=45, LD=450, LM=950, VC=95).
-  static constexpr Pair kForm1Adds[] = {
-      {950, "LM"},
-      {450, "LD"},
-      {95, "VC"},
-      {45, "VL"},
-  };
-  // Form 2 additions: allows X and I as subtracted glyphs two decades up
-  // (XM=990, XD=490, IC=99, IL=49). Mac Excel 365 places IC/IL in form 2,
-  // not form 4 as the Microsoft docs' 499/1999 examples might suggest — the
-  // oracle fixture is the authoritative reference here.
-  static constexpr Pair kForm2Adds[] = {
-      {990, "XM"},
-      {490, "XD"},
-      {99, "IC"},
-      {49, "IL"},
-  };
-  // Form 3 additions: allows V two decades up (VM=995, VD=495).
-  static constexpr Pair kForm3Adds[] = {
-      {995, "VM"},
-      {495, "VD"},
-  };
-  // Form 4 additions: allows I three decades up (IM=999, ID=499). The two
-  // decade-up I pairs (IC, IL) already ship in form 2.
-  static constexpr Pair kForm4Adds[] = {
-      {999, "IM"},
-      {499, "ID"},
-  };
-
-  // Build a single ordered table by merging all enabled additions into the
-  // form-0 table. The count is bounded and small enough to use a fixed
-  // static buffer.
-  Pair table[sizeof(kForm0) / sizeof(kForm0[0]) + 16];
-  std::size_t count = 0;
-  auto append = [&](const Pair* src, std::size_t n_src) {
-    for (std::size_t i = 0; i < n_src; ++i) {
-      table[count++] = src[i];
-    }
-  };
-  append(kForm0, sizeof(kForm0) / sizeof(kForm0[0]));
-  if (form >= 1) {
-    append(kForm1Adds, sizeof(kForm1Adds) / sizeof(kForm1Adds[0]));
-  }
-  if (form >= 2) {
-    append(kForm2Adds, sizeof(kForm2Adds) / sizeof(kForm2Adds[0]));
-  }
-  if (form >= 3) {
-    append(kForm3Adds, sizeof(kForm3Adds) / sizeof(kForm3Adds[0]));
-  }
-  if (form >= 4) {
-    append(kForm4Adds, sizeof(kForm4Adds) / sizeof(kForm4Adds[0]));
-  }
-  // Sort value-descending so the greedy consumption picks the longest
-  // subtractive pair first.
-  std::sort(table, table + count, [](const Pair& a, const Pair& b) { return a.value > b.value; });
 
   std::string out;
   int remaining = n;
-  for (std::size_t i = 0; i < count && remaining > 0; ++i) {
-    while (remaining >= table[i].value) {
-      out.append(table[i].glyph);
-      remaining -= table[i].value;
+  for (const Pair& pair : kPairs) {
+    if (remaining <= 0) {
+      break;
+    }
+    if (pair.min_form > form) {
+      continue;
+    }
+    while (remaining >= pair.value) {
+      out.append(pair.glyph);
+      remaining -= pair.value;
     }
   }
   return out;
