@@ -40,6 +40,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
@@ -112,9 +113,16 @@ bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode
 
 namespace {
 
+// `syntax_args` is the call site's argument AST, consulted for one thing
+// only: telling a syntactically omitted slot (`f(1, , 3)`) from a supplied
+// one. It is deliberately separate from `ast_args`, which is recorded on
+// the binding so range-aware consumers inside the body can re-dispatch on
+// the original range expression. Feeding the call AST into `ast_args` to
+// get the omission test would also make every lambda parameter
+// range-shaped on this path, which is a different change.
 Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, const Value* args,
-                                const parser::AstNode* const* ast_args, Arena& arena, const FunctionRegistry& registry,
-                                const EvalContext& ctx) {
+                                const parser::AstNode* const* ast_args, const parser::AstNode* const* syntax_args,
+                                Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   const std::uint32_t required = lv->param_count - lv->optional_count;
   if (arity < required || arity > lv->param_count) {
     return Value::error(ErrorCode::Value);
@@ -128,6 +136,19 @@ Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, cons
   }
   for (std::uint32_t i = 0; i < arity; ++i) {
     const parser::AstNode* expr = (ast_args != nullptr) ? ast_args[i] : nullptr;
+    // `f(1, , 3)` supplies the slot syntactically and omits its value, and
+    // Excel treats that as omitted wherever it appears -- leading, middle
+    // or trailing -- not only past the end of the argument list. Binding
+    // it as an ordinary blank would give the body the right number (an
+    // omitted slot arithmetic-coerces to 0 either way) while telling
+    // ISOMITTED the wrong thing, which is the whole of what that function
+    // is for. Only the AST can answer this: by the time the argument is a
+    // Value, an omitted slot and a blank cell are the same blank.
+    const parser::AstNode* syntax = (syntax_args != nullptr) ? syntax_args[i] : expr;
+    if (syntax != nullptr && is_omitted_arg(*syntax)) {
+      env = env.extend_omitted(lv->params[i], arena);
+      continue;
+    }
     env = env.extend(lv->params[i], args[i], expr, arena);
   }
   for (std::uint32_t i = arity; i < lv->param_count; ++i) {
@@ -157,7 +178,7 @@ Value invoke_lambda_values_with_ast(const LambdaValue* lv, std::uint32_t arity, 
   if (lambda_guard.exceeded()) {
     return Value::error(ErrorCode::Calc);
   }
-  return invoke_lambda_values_impl(lv, arity, args, ast_args, arena, registry, ctx);
+  return invoke_lambda_values_impl(lv, arity, args, ast_args, /*syntax_args=*/nullptr, arena, registry, ctx);
 }
 
 Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
@@ -181,8 +202,8 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   for (std::uint32_t i = 0; i < arity; ++i) {
     args.push_back(eval_node(*call_args[i], arena, registry, ctx));
   }
-  return invoke_lambda_values_impl(lv, arity, args.empty() ? nullptr : args.data(), /*ast_args=*/nullptr, arena,
-                                   registry, ctx);
+  return invoke_lambda_values_impl(lv, arity, args.empty() ? nullptr : args.data(), /*ast_args=*/nullptr, call_args,
+                                   arena, registry, ctx);
 }
 
 namespace {

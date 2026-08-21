@@ -209,3 +209,64 @@ cases:
   - id: makearray_lambda_returns_error
     description: "MAKEARRAY where LAMBDA body returns error"
     formula: "=MAKEARRAY(2,2,LAMBDA(r, c, 1/0))"
+
+  # -- Helper LAMBDA bound through LET, called with a parameter omitted -----
+  # A LAMBDA bound to a LET name and then invoked is the shape a host uses
+  # to factor a repeated subexpression. What an omitted trailing argument
+  # becomes inside the body -- a blank that coerces to 0, or a #VALUE! for
+  # arity mismatch -- is not settled by any case above, and it decides
+  # whether a helper can carry an optional parameter at all.
+  - id: let_lambda_helper_all_args
+    description: "A LET-bound two-parameter helper called with both arguments"
+    formula: "=LET(f, LAMBDA(a, b, a * 10 + b), f(3, 4))"
+
+  - id: let_lambda_helper_omitted_trailing_arg
+    description: "The same helper called with the trailing argument omitted"
+    formula: "=LET(f, LAMBDA(a, b, a * 10 + b), f(3, ))"
+
+  - id: let_lambda_helper_missing_trailing_arg
+    description: "The same helper called with the trailing argument absent entirely"
+    formula: "=LET(f, LAMBDA(a, b, a * 10 + b), f(3))"
+
+  - id: let_lambda_helper_omitted_arg_isblank
+    description: "ISBLANK inside the body reports what an omitted argument became"
+    formula: "=LET(f, LAMBDA(a, b, ISBLANK(b)), f(3, ))"
+
+  - id: let_lambda_helper_omitted_arg_isomitted
+    description: "ISOMITTED distinguishes an omitted argument from a blank one"
+    formula: "=LET(f, LAMBDA(a, b, _xlfn.ISOMITTED(b)), f(3, ))"
+
+  - id: let_lambda_helper_isomitted_when_supplied
+    description: "ISOMITTED on the same parameter when the argument was supplied"
+    formula: "=LET(f, LAMBDA(a, b, _xlfn.ISOMITTED(b)), f(3, 4))"
+
+  - id: let_lambda_helper_default_via_isomitted
+    description: "The optional-parameter idiom: ISOMITTED selects a default"
+    formula: "=LET(f, LAMBDA(a, b, a * 10 + IF(_xlfn.ISOMITTED(b), 7, b)), f(3))"
+
+  - id: let_lambda_helper_extra_arg
+    description: "The same helper called with one argument more than it declares"
+    formula: "=LET(f, LAMBDA(a, b, a * 10 + b), f(3, 4, 5))"
+
+  # Interior omission. The trailing cases above cannot say whether
+  # "omitted" is a property of the argument's spelling or of its position,
+  # and the two rules differ for `f(, 4)`.
+  - id: let_lambda_helper_omitted_leading_arg
+    description: "A three-parameter helper with the FIRST argument omitted"
+    formula: "=LET(f, LAMBDA(a, b, c, _xlfn.ISOMITTED(a)), f(, 2, 3))"
+
+  - id: let_lambda_helper_omitted_middle_arg
+    description: "A three-parameter helper with the MIDDLE argument omitted"
+    formula: "=LET(f, LAMBDA(a, b, c, _xlfn.ISOMITTED(b)), f(1, , 3))"
+
+  - id: let_lambda_helper_omitted_middle_arg_value
+    description: "What the omitted middle parameter arithmetic-coerces to"
+    formula: "=LET(f, LAMBDA(a, b, c, a * 100 + b * 10 + c), f(1, , 3))"
+
+  - id: let_lambda_helper_supplied_arg_not_omitted
+    description: "ISOMITTED on a supplied neighbour of an omitted argument"
+    formula: "=LET(f, LAMBDA(a, b, c, _xlfn.ISOMITTED(c)), f(1, , 3))"
+
+  - id: let_lambda_helper_omitted_arg_isblank_middle
+    description: "ISBLANK on the omitted middle parameter"
+    formula: "=LET(f, LAMBDA(a, b, c, ISBLANK(b)), f(1, , 3))"
