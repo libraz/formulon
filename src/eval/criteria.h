@@ -99,6 +99,14 @@ struct ParsedCriterion {
   /// pattern malformed, with `Op::Eq` matching nothing and `Op::NotEq`
   /// matching everything (modulo blanks / errors handled upstream).
   bool rhs_invalid_wildcard = false;
+  /// True when the criterion was a comparator with nothing after it —
+  /// `"="`, `"<>"`, `"<"` and friends. It is what separates `"="` from
+  /// `""`: both parse to `Op::Eq` with an empty text RHS, but Excel
+  /// treats them differently. `COUNTIF(range, "")` counts blank cells and
+  /// zero-length strings alike, while `COUNTIF(range, "=")` counts only
+  /// genuinely blank cells. Without this flag the two are the same
+  /// criterion and the zero-length strings are miscounted.
+  bool rhs_bare_comparator = false;
 
   // `rhs_text` may alias `rhs_storage` (owning) or the caller-provided
   // `Value::text` view (non-owning). When `rhs_storage` holds the buffer,
@@ -171,6 +179,11 @@ ParsedCriterion parse_criterion_dfunc(const Value& criterion);
 ///       - `Op::NotEq` with text RHS "" -> false
 ///       - `Op::NotEq` with any non-empty RHS -> true (blank != value)
 ///       - All other ops against blank -> false
+///   * Bare comparators, which carry no RHS to compare against and so
+///     act as cell-state probes rather than value tests:
+///       - `"="`  -> blank cells only (a zero-length string is not blank)
+///       - `"<>"` -> every non-blank cell, zero-length strings included
+///       - `"<"` / `"<="` / `">"` / `">="` -> nothing at all
 ///   * Error cell: always false. Excel silently skips errors in a
 ///     criteria range; `COUNTIF`/`SUMIF`/`AVERAGEIF` do not propagate them.
 ///   * Numeric criterion (`rhs_is_number == true`) — Eq and NotEq are

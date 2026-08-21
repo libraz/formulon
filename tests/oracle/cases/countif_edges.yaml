@@ -707,3 +707,25 @@ cases:
       B2: "y"
       B3: "x"
     formula: "=SUMIFS(A1:A3,B1:B3,\"z\")"
+
+  - id: countif_equals_sentinel_over_mixed
+    description: >
+      Bare "=" is the blank sentinel and separates a genuinely blank cell
+      from a zero-length string, which the "" and "<>" criteria do not.
+    setup:
+      A1: =""
+      A2: ''
+      A3: null
+      A4: apple
+    formula: '=COUNTIF(A1:A4,"=")'
+
+  - id: countif_wildcard_star_over_mixed_empties
+    description: >
+      "*" matches every text cell including the two zero-length strings,
+      and excludes only the blank.
+    setup:
+      A1: =""
+      A2: ''
+      A3: null
+      A4: apple
+    formula: '=COUNTIF(A1:A4,"*")'

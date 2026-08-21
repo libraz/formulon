@@ -349,16 +349,15 @@ TEST(CriteriaMatchWildcard, NotEqWithWildcard) {
   EXPECT_TRUE(matches_criterion(Value::text("bar"), c));
 }
 
-TEST(CriteriaMatchWildcard, StarAloneMatchesNonEmptyTextOnly) {
-  // Mac Excel 365 treats `=COUNTIF(range, "*")` as "match any non-empty
-  // text cell". An empty-text cell `Value::text("")` has no characters
-  // and is excluded; Number / Bool / Blank cells are likewise excluded
-  // (the text-only-cells rule already in place). Verified via
-  // tests/oracle/cases/countif.yaml case
-  // `countif_wildcard_star_alone_text_only`.
+TEST(CriteriaMatchWildcard, StarAloneMatchesTextCellsOnly) {
+  // Mac Excel 365 treats `=COUNTIF(range, "*")` as "match any text cell".
+  // A zero-length string is one, so it matches even though it has no
+  // characters; Number / Bool / Blank cells are excluded by the
+  // text-only-cells rule. Verified via tests/oracle/cases/countif.yaml
+  // case `countif_wildcard_star_alone_text_only`.
   const ParsedCriterion c = parse_criterion(Value::text("*"));
   EXPECT_TRUE(matches_criterion(Value::text("hello"), c));
-  EXPECT_FALSE(matches_criterion(Value::text(""), c));
+  EXPECT_TRUE(matches_criterion(Value::text(""), c));
   EXPECT_FALSE(matches_criterion(Value::number(10.0), c));
   EXPECT_FALSE(matches_criterion(Value::blank(), c));
 }
@@ -418,9 +417,23 @@ TEST(CriteriaMatchBlank, EqEmptyStringMatchesBlankCell) {
   EXPECT_FALSE(matches_criterion(Value::text("x"), c));
 }
 
+TEST(CriteriaMatchBlank, BareEqualsMatchesOnlyGenuinelyBlankCells) {
+  // `"="` and `""` both parse to Eq with an empty RHS, but Excel keeps
+  // them apart: `""` above accepts a zero-length string, `"="` asks
+  // strictly whether the cell is empty and a zero-length string is not.
+  const ParsedCriterion c = parse_criterion(Value::text("="));
+  EXPECT_TRUE(matches_criterion(Value::blank(), c));
+  EXPECT_FALSE(matches_criterion(Value::text(""), c));
+  EXPECT_FALSE(matches_criterion(Value::text("x"), c));
+  EXPECT_FALSE(matches_criterion(Value::number(0.0), c));
+}
+
 TEST(CriteriaMatchBlank, NotEqEmptyStringRejectsBlankCell) {
+  // The mirror of the bare `"="` probe: every non-blank cell, and a
+  // zero-length string counts as populated.
   const ParsedCriterion c = parse_criterion(Value::text("<>"));
   EXPECT_FALSE(matches_criterion(Value::blank(), c));
+  EXPECT_TRUE(matches_criterion(Value::text(""), c));
   EXPECT_TRUE(matches_criterion(Value::text("x"), c));
 }
 

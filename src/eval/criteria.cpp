@@ -389,6 +389,7 @@ ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
     rhs_error_code = other.rhs_error_code;
     prefix_match = other.prefix_match;
     rhs_invalid_wildcard = other.rhs_invalid_wildcard;
+    rhs_bare_comparator = other.rhs_bare_comparator;
     rhs_storage = other.rhs_storage;
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
     rhs_text = other.rhs_text;
@@ -408,6 +409,7 @@ ParsedCriterion& ParsedCriterion::operator=(ParsedCriterion&& other) noexcept {
     rhs_error_code = other.rhs_error_code;
     prefix_match = other.prefix_match;
     rhs_invalid_wildcard = other.rhs_invalid_wildcard;
+    rhs_bare_comparator = other.rhs_bare_comparator;
     rhs_storage = std::move(other.rhs_storage);
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
     rhs_text = other.rhs_text;
@@ -450,6 +452,11 @@ ParsedCriterion parse_criterion(const Value& criterion) {
       const std::string_view rhs_view = strip_comparator(raw, &op);
       parsed.op = op;
       const bool prefix_stripped = rhs_view.size() != raw.size();
+      // A comparator with nothing after it. Set before any of the RHS
+      // probes below so it holds whichever branch returns: `""` and `"="`
+      // both end up as Eq with an empty RHS, and this is the only thing
+      // that tells them apart.
+      parsed.rhs_bare_comparator = prefix_stripped && rhs_view.empty();
       // Probe for numeric RHS first — Excel treats ">5" as numeric even
       // though the RHS is textual at this layer.
       double num = 0.0;
@@ -623,17 +630,13 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
         // tests/oracle/cases/countif_edges.yaml case
         // `countif_wildcard_matches_text_cells_only` (Mac=1 over one text
         // "12 Oak Street" + one number 1213).
+        // A zero-length string is a Text cell like any other and `"*"`
+        // matches it; only a genuinely blank cell is excluded, which the
+        // kind check above already does. Verified via
+        // tests/oracle/cases/countif.yaml case
+        // `countif_wildcard_star_alone_text_only` (Mac=3 over `[apple, "",
+        // 10, banana]`).
         if (cell.kind() != ValueKind::Text) {
-          return false;
-        }
-        // Mac Excel additionally excludes empty-text cells from any
-        // wildcard pattern: `=COUNTIF(range, "*")` matches text cells with
-        // non-empty content but skips a cell holding the empty string `""`.
-        // Verified via tests/oracle/cases/countif.yaml case
-        // `countif_wildcard_star_alone_text_only` (Mac=2 over `[apple, "",
-        // 10, banana]`). This is the criteria-layer counterpart to the
-        // text-only-cells rule above.
-        if (cell_text.empty()) {
           return false;
         }
         const std::string rhs_folded = fold_criteria_text_for_profile(rhs, profile);
@@ -658,11 +661,6 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
         // wildcard text pattern, so `<>12*` against a Number cell is
         // trivially true.
         if (cell.kind() != ValueKind::Text) {
-          return true;
-        }
-        // Empty-text cells never satisfy a wildcard equality pattern (see
-        // the Eq branch above), so they always satisfy the NotEq mirror.
-        if (cell_text.empty()) {
           return true;
         }
         const std::string rhs_folded = fold_criteria_text_for_profile(rhs, profile);
@@ -823,6 +821,16 @@ bool matches_criterion(const Value& cell, const ParsedCriterion& c, ExcelProfile
   if (!c.rhs_is_number && c.rhs_text.empty() &&
       (c.op == CriteriaOp::Lt || c.op == CriteriaOp::LtEq || c.op == CriteriaOp::Gt || c.op == CriteriaOp::GtEq)) {
     return false;
+  }
+
+  // Sentinel "is blank" filter: bare `"="` asks strictly whether the cell
+  // is empty, and a zero-length string is not. This is where `"="` parts
+  // company with `""`, which the Eq text path below matches against a
+  // zero-length string as an ordinary equal-length comparison. Both reach
+  // here as Eq with an empty RHS, so only `rhs_bare_comparator` separates
+  // them.
+  if (!c.rhs_is_number && c.rhs_text.empty() && c.op == CriteriaOp::Eq && c.rhs_bare_comparator) {
+    return cell.is_blank();
   }
 
   // Blank-cell special cases. Excel's rule: `=""` matches blanks (see

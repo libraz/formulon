@@ -2,11 +2,11 @@
   "suite": "countif_edges",
   "description": "COUNTIF / SUMIF criteria-engine edge cases observed in IronCalc's COUNTIF_Rows / COUNTIF_Columns / COUNTIFS_Rows2 suites. Each case here probes a specific semantic question that the existing `countif.yaml` coverage does not answer, so we can confirm whether Mac Excel 365 (ja-JP) agrees with Formulon, with IronCalc, or with neither. The author-side `expect:` value below each case is Formulon's current return, included as a documentation aid; the verifier compares against the Excel-observed golden JSON (not this field) once oracle-gen has been run.\n",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-20T20:09:04Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -544,7 +544,10 @@
           "value": "apple"
         }
       },
-      "skipped": "xlwings writes \"\" as a blank cell, so Excel's COUNTIF(range, \"<>\") over a range with a literal-\"\" cell sees one fewer populated cell than Formulon's in-memory model. Formulon returns 3, Mac records 2 due to the xlwings round-trip gap."
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
     },
     {
       "id": "countif_cell_criterion_bool_true",
@@ -1946,6 +1949,56 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "countif_equals_sentinel_over_mixed",
+      "formula": "=COUNTIF(A1:A4,\"=\")",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A2": {
+          "kind": "text",
+          "value": ""
+        },
+        "A3": {
+          "kind": "blank"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countif_wildcard_star_over_mixed_empties",
+      "formula": "=COUNTIF(A1:A4,\"*\")",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A2": {
+          "kind": "text",
+          "value": ""
+        },
+        "A3": {
+          "kind": "blank"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
       }
     }
   ]

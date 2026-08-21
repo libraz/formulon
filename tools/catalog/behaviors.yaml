@@ -5906,12 +5906,15 @@ groups:
       - name: "empty cell -> FALSE"
         probe: "=ISFORMULA(A1)"
         expected: impl
+      # Excel rejects a non-reference argument when the formula is
+      # entered, so it never evaluates these and has no answer to
+      # diverge from.
       - name: "non-reference number -> #VALUE!"
         probe: "=ISFORMULA(42)"
-        expected: diverged
+        expected: impl
       - name: "non-reference text -> #VALUE!"
         probe: "=ISFORMULA(\"A1\")"
-        expected: diverged
+        expected: impl
 
   - function: "ISREF"
     aspect: "AST-shape introspection"

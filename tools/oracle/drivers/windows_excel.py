@@ -1028,7 +1028,17 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
         rng.value = bool(rec["value"])
         return
     if kind == "text":
-        rng.value = str(rec["value"])
+        text = str(rec["value"])
+        if text == "":
+            # See the macOS driver's counterpart: "" assigns as a blank
+            # cell, so the zero-length string is written through the
+            # apostrophe entry prefix instead.
+            try:
+                rng.formula2 = "'"
+            except Exception:
+                rng.formula = "'"
+            return
+        rng.value = text
         return
     if kind == "formula":
         try:

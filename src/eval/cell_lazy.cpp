@@ -580,16 +580,20 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       }
       return resolved;
     }
-    // "type": "b" for blank or empty-string text, "l" for non-empty text,
-    // "v" for everything else (number, bool, error). Errors short-circuit
-    // only when they came from the reference argument itself; an error
-    // *value* sitting in a cell still classifies as "v". Mac Excel folds
-    // an empty string to "b" rather than "l".
+    // "type": "b" only for a genuinely blank cell, "l" for text, "v" for
+    // everything else (number, bool, error). Errors short-circuit only
+    // when they came from the reference argument itself; an error *value*
+    // sitting in a cell still classifies as "v".
+    //
+    // A zero-length string is text, not blank: Excel reports "l" for it
+    // and agrees whether it arrived as a constant or as the result of
+    // `=""`. The two are indistinguishable to every predicate Excel
+    // exposes, so no cell metadata is needed to tell them apart.
     if (resolved.is_blank()) {
       return arena_text(arena, "b");
     }
     if (resolved.is_text()) {
-      return arena_text(arena, resolved.as_text().empty() ? "b" : "l");
+      return arena_text(arena, "l");
     }
     return arena_text(arena, "v");
   }

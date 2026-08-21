@@ -2,11 +2,11 @@
   "suite": "countif",
   "description": "COUNTIF / SUMIF / AVERAGEIF criteria engine",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-20T19:36:32Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -290,7 +290,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 2.0
+        "value": 3.0
       }
     },
     {

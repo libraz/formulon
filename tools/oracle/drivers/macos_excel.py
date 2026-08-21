@@ -942,9 +942,22 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any], *, context: str = "setup ce
         rng.value = bool(rec["value"])
         return
     if kind == "text":
-        # Prepend an apostrophe is tempting but changes the cell's stored
-        # value; leave it to Excel's default string handling.
-        rng.value = str(rec["value"])
+        text = str(rec["value"])
+        if text == "":
+            # Assigning "" leaves the cell genuinely blank, which is a
+            # different cell state from a zero-length string: ISBLANK
+            # flips to TRUE and COUNTA drops it. The apostrophe prefix is
+            # the entry convention that produces the non-blank
+            # zero-length string, and it is a display flag rather than
+            # part of the stored text -- the cell reads back with
+            # ISBLANK FALSE, COUNTA 1, ISTEXT TRUE and LEN 0. It goes
+            # through the formula route because the prefix is honoured on
+            # entry, not on a value assignment.
+            rng.formula2 = "'"
+            return
+        # A non-empty string needs no prefix; Excel's default string
+        # handling stores it verbatim.
+        rng.value = text
         return
     if kind == "formula":
         _assign_formula(rng, rec["formula"], context=context)

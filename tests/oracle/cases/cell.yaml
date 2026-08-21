@@ -69,6 +69,15 @@ cases:
     setup: { A1: "" }
     formula: '=CELL("type", A1)'
 
+  - id: cell_type_formula_empty_string
+    description: '"type" returns "l" for a formula-produced empty string too'
+    setup: { A1: '=""' }
+    formula: '=CELL("type", A1)'
+
+  - id: cell_type_blank_is_b_not_empty_string
+    description: '"b" is reserved for a genuinely blank cell, unlike a zero-length string'
+    formula: '=CELL("type", A1)'
+
   # -- format / color / parentheses / prefix / protect / width / filename --
   - id: cell_format_general
     description: '"format" returns the current cell number-format code'

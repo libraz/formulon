@@ -2,11 +2,11 @@
   "suite": "info",
   "description": "IS* predicates, T, N type-introspection and coercion",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.112.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-20T19:34:05Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -45,7 +45,10 @@
           "value": ""
         }
       },
-      "skipped": "xlwings writes \"\" as a blank cell, so Excel reports ISBLANK=TRUE even though Formulon correctly says FALSE."
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
     },
     {
       "id": "isnumber_of_integer",
@@ -619,13 +622,13 @@
       "id": "isformula_of_literal_number_is_value",
       "formula": "=ISFORMULA(42)",
       "setup": {},
-      "skipped": "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
+      "skipped": "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against."
     },
     {
       "id": "isformula_of_literal_text_is_value",
       "formula": "=ISFORMULA(\"A1\")",
       "setup": {},
-      "skipped": "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
+      "skipped": "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against."
     },
     {
       "id": "isref_of_cell_ref",

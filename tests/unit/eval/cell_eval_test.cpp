@@ -175,14 +175,15 @@ TEST(BuiltinsCellType, BlankCellIsB) {
   EXPECT_EQ(std::string(v.as_text()), "b");
 }
 
-TEST(BuiltinsCellType, EmptyStringFormulaIsB) {
-  // Mac Excel folds an empty string `""` to "b" (blank), not "l" -- a
-  // non-empty text value is required to surface "l".
+TEST(BuiltinsCellType, EmptyStringIsL) {
+  // A zero-length string is text, so it reports "l" and not the "b" that
+  // only a genuinely blank cell earns. Excel gives the same answer
+  // whether the string was entered as a constant or produced by `=""`.
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text(""));
   const Value v = EvalSourceIn("=CELL(\"type\", A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(std::string(v.as_text()), "b");
+  EXPECT_EQ(std::string(v.as_text()), "l");
 }
 
 // ---------------------------------------------------------------------------
