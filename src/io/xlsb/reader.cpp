@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -32,8 +33,11 @@
 #include "io/default_content_type.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/rels_walker.h"
+#include "io/ooxml_defs.h"
 #include "io/passthrough_part.h"
 #include "io/unknown_relationship.h"
+#include "io/xlsb/external_link_reader.h"
+#include "io/xlsb/pivot_reader.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/styles_reader.h"
@@ -42,6 +46,9 @@
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "pivot/pivot_cache.h"
+#include "pivot/pivot_index.h"
+#include "pivot/pivot_table.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -79,6 +86,12 @@ constexpr std::string_view kRelSharedStrings =
 constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
 constexpr std::string_view kRelHyperlink =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+constexpr std::string_view kRelPivotTable =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+constexpr std::string_view kRelPivotCacheDefinition =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
+constexpr std::string_view kRelPivotCacheRecords =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
 
 // `[Content_Types].xml` registers the workbook part under the binary
 // content type for `.xlsb`. The reader gates on this content type to
@@ -570,19 +583,94 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
   return names;
 }
 
+/// Decodes the supporting-book list from `xl/workbook.bin` into one
+/// entry per book, in `BrtExternSheet`'s `iSupBook` order. The value is
+/// `0` for this workbook and `N >= 1` for the N-th external book in
+/// package order, which is the number the equivalent xlsx formula text
+/// spells as `[N]`.
+///
+/// Layout verified against Excel-365-produced `xl/workbook.bin` files:
+/// the books are the records between `BrtBeginExternals` and
+/// `BrtEndExternals`, one record each, and the record id alone says
+/// which kind it is. Only `BrtSupSelf` is this workbook; `BrtSupAddin`
+/// and `BrtSupSame` are counted so later entries keep their index, but
+/// neither names a resolvable external package, so both are reported as
+/// external and therefore refused downstream.
+///
+/// A workbook can legitimately have no self entry: one whose only
+/// qualified references are cross-workbook carries a single
+/// `BrtSupBookSrc`, so `iSupBook == 0` is then an external book. That
+/// case is why this list has to be read rather than assumed.
+///
+/// A `BrtSupBookSrc` also names the relationship its external link part
+/// hangs off, which is how a `[N]` is turned back into a package part.
+/// That id is retained on the entry; the other kinds leave it empty.
+struct XlsbSupBook {
+  std::uint32_t external_book = 0;
+  std::string rel_id;
+};
+
+std::vector<XlsbSupBook> DecodeSupBooks(const std::vector<std::uint8_t>& body) {
+  std::vector<XlsbSupBook> books;
+  ByteSpan cursor{body.data(), body.size()};
+  bool inside = false;
+  std::uint32_t next_external = 1;
+  while (cursor.size > 0) {
+    auto rec_or = read_record(cursor);
+    if (!rec_or) {
+      break;
+    }
+    const XlsbRecord& rec = rec_or.value();
+    const auto type = static_cast<XlsbRecordType>(rec.type);
+    if (type == XlsbRecordType::BrtBeginExternals) {
+      inside = true;
+      continue;
+    }
+    if (type == XlsbRecordType::BrtEndExternals) {
+      break;
+    }
+    if (!inside) {
+      continue;
+    }
+    switch (type) {
+      case XlsbRecordType::BrtSupSelf:
+        books.push_back(XlsbSupBook{});
+        break;
+      case XlsbRecordType::BrtSupBookSrc: {
+        ByteSpan payload = rec.payload;
+        auto rid_or = read_xlwidestring(payload);
+        books.push_back(XlsbSupBook{next_external, rid_or ? std::move(rid_or.value()) : std::string()});
+        ++next_external;
+        break;
+      }
+      case XlsbRecordType::BrtSupAddin:
+      case XlsbRecordType::BrtSupSame:
+        books.push_back(XlsbSupBook{next_external, std::string()});
+        ++next_external;
+        break;
+      default:
+        // `BrtSupTabs` and the future-record framing that decorates a
+        // book entry sit inside the same block without adding a book.
+        break;
+    }
+  }
+  return books;
+}
+
 /// Decodes the `BrtExternSheet` table from `xl/workbook.bin`: resolves a
 /// `PtgRef3d` / `PtgArea3d` `ixti` (0-based index into the returned
 /// vector) to a `(itabFirst, itabLast)` sheet-index range. Byte layout
 /// verified against a real Excel-365-produced `xl/workbook.bin`: u32
 /// count, followed by `count` entries of `(iSupBook, itabFirst,
-/// itabLast)` as 3 x i32 each. `iSupBook` is retained on each entry so
-/// `decode_ptgs` can tell an internal range (`iSupBook == 0`, "this
-/// workbook") from an external-workbook one, whose sheet indices index
-/// the supporting book rather than this workbook's `sheet_names`.
+/// itabLast)` as 3 x i32 each. `iSupBook` is resolved through
+/// `DecodeSupBooks` so `decode_ptgs` can tell an internal range from an
+/// external-workbook one, whose sheet indices index the supporting book
+/// rather than this workbook's `sheet_names`.
 /// A workbook with no qualified references at all carries no
 /// `BrtExternSheet` record, so an empty result is a normal outcome, not
 /// an error.
-Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector<std::uint8_t>& body) {
+Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector<std::uint8_t>& body,
+                                                               const std::vector<XlsbSupBook>& books) {
   std::vector<XlsbSheetRange> ranges;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
@@ -620,8 +708,25 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
       if (!last_or) {
         return last_or.error();
       }
+      // An `iSupBook` past the end of the list cannot be resolved. Treat
+      // it as external: that refuses the reference, where assuming
+      // "internal" would bind it to a local sheet by index.
+      //
+      // An *entirely* absent list is a different situation: the file
+      // carries qualified references but no supporting-book block to
+      // resolve them against, which no Excel-written file observed here
+      // does. Refusing every reference would regress such a file from
+      // working to undecodable, so it keeps the weaker rule that index
+      // 0 is this workbook.
+      const std::uint32_t sup_book = sup_book_or.value();
+      std::uint32_t external_book = std::numeric_limits<std::uint32_t>::max();
+      if (books.empty()) {
+        external_book = sup_book == 0U ? 0U : sup_book;
+      } else if (sup_book < books.size()) {
+        external_book = books[sup_book].external_book;
+      }
       ranges.push_back(XlsbSheetRange{static_cast<std::int32_t>(first_or.value()),
-                                      static_cast<std::int32_t>(last_or.value()), sup_book_or.value()});
+                                      static_cast<std::int32_t>(last_or.value()), external_book});
     }
     break;  // Exactly one BrtExternSheet record per workbook.
   }
@@ -696,13 +801,13 @@ bool IsAnchorShellFormula(ByteSpan ptgs) {
 /// loss is still reported — just not as a decode failure here.
 std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vector<std::string>& sheet_names,
                               const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
-                              std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
-                              std::uint32_t* undecoded_formula_count) {
+                              const XlsbExternalBooks& external_books, std::size_t sheet_index, std::uint32_t row,
+                              std::uint32_t col, std::uint32_t* undecoded_formula_count) {
   if (IsAnchorShellFormula(ptg_bytes)) {
     return {};
   }
   Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
-  auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges);
+  auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books);
   if (!ast_or) {
     StructuredLog("xlsb.formula.not_decoded")
         .field("sheet_index", static_cast<std::int64_t>(sheet_index))
@@ -744,7 +849,8 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
 Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body,
                                            const std::vector<XlsbName>& name_table,
                                            const std::vector<std::string>& sheet_names,
-                                           const std::vector<XlsbSheetRange>& sheet_ranges, Workbook& wb,
+                                           const std::vector<XlsbSheetRange>& sheet_ranges,
+                                           const XlsbExternalBooks& external_books, Workbook& wb,
                                            std::uint32_t* undecoded_defined_name_count) {
   ByteSpan cursor{body.data(), body.size()};
   std::size_t name_index = 0;
@@ -816,7 +922,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     p.data += cb;
     p.size -= cb;
     Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
-    auto ast_or = decode_ptgs(rgce, rgcb, arena, sheet_names, name_table, sheet_ranges);
+    auto ast_or = decode_ptgs(rgce, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books);
     if (!ast_or) {
       StructuredLog("xlsb.defined_name.not_decoded")
           .field("name", entry.name)
@@ -1361,6 +1467,249 @@ Expected<std::vector<io::UnknownRelationship>, Error> LoadSheetRelationships(con
   return out;
 }
 
+/// Returns the package-relative target of the first internal relationship
+/// of `type` declared by `part_path`, or an empty string when the part has
+/// no rels file or no such relationship.
+Expected<std::string, Error> FindRelationshipTarget(const ZipReader& zip, std::string_view part_path,
+                                                    std::string_view type) {
+  const std::string rels_path = ooxml::rels_path_for_part(part_path);
+  if (!zip.has_entry(rels_path)) {
+    return std::string();
+  }
+  const std::string dir = ooxml::dir_of(part_path);
+  std::string found;
+  auto status = ooxml::visit_relationship_nodes(
+      zip, rels_path, "pivot rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+        if (!found.empty()) {
+          return Expected<void, Error>::Ok();
+        }
+        if (std::string_view(rel.attribute("Type").value()) != type) {
+          return Expected<void, Error>::Ok();
+        }
+        if (std::string_view(rel.attribute("TargetMode").value()) == "External") {
+          return Expected<void, Error>::Ok();
+        }
+        auto resolved = ResolveRelativePath(dir, rel.attribute("Target").value());
+        if (!resolved) {
+          return Expected<void, Error>(resolved.error());
+        }
+        found = std::move(resolved).value();
+        return Expected<void, Error>::Ok();
+      });
+  if (!status) {
+    return status.error();
+  }
+  return found;
+}
+
+/// Decodes the cache a pivot-table part binds to, returning the model id
+/// it was registered under. Caches already loaded are reused so two
+/// tables over one cache share it, as they do in the file.
+///
+/// The id is ours to assign: the workbook's own cache-id table is not
+/// decoded, and nothing outside the model consults these ids -- the parts
+/// round-trip through passthrough rather than being rewritten from the
+/// model.
+std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& wb, std::string_view pivot_table_path,
+                                               std::unordered_map<std::string, std::uint32_t>& loaded) {
+  auto def_path_or = FindRelationshipTarget(zip, pivot_table_path, kRelPivotCacheDefinition);
+  if (!def_path_or || def_path_or.value().empty()) {
+    return std::nullopt;
+  }
+  const std::string def_path = std::move(def_path_or).value();
+  const auto seen = loaded.find(def_path);
+  if (seen != loaded.end()) {
+    return seen->second;
+  }
+  auto rec_path_or = FindRelationshipTarget(zip, def_path, kRelPivotCacheRecords);
+  if (!rec_path_or || rec_path_or.value().empty()) {
+    return std::nullopt;
+  }
+  const std::string rec_path = std::move(rec_path_or).value();
+  if (!zip.has_entry(def_path) || !zip.has_entry(rec_path)) {
+    return std::nullopt;
+  }
+  auto def_bytes_or = zip.read_entry(def_path);
+  if (!def_bytes_or) {
+    return std::nullopt;
+  }
+  auto rec_bytes_or = zip.read_entry(rec_path);
+  if (!rec_bytes_or) {
+    return std::nullopt;
+  }
+  const std::vector<std::uint8_t>& def_bytes = def_bytes_or.value();
+  const std::vector<std::uint8_t>& rec_bytes = rec_bytes_or.value();
+  auto cache_or =
+      read_pivot_cache_bin(ByteSpan{def_bytes.data(), def_bytes.size()}, ByteSpan{rec_bytes.data(), rec_bytes.size()});
+  if (!cache_or) {
+    return std::nullopt;
+  }
+  const auto cache_id = static_cast<std::uint32_t>(wb.pivot_caches().size());
+  pivot::PivotCache cache = std::move(cache_or.value());
+  cache.set_cache_id(cache_id);
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
+  loaded.emplace(def_path, cache_id);
+  return cache_id;
+}
+
+/// Decodes every pivot table reachable from a sheet's relationships.
+///
+/// A pivot this reader cannot account for is skipped, not failed. Before
+/// this existed no XLSB pivot was decoded at all, so refusing one leaves
+/// that workbook loading exactly as it used to, whereas propagating the
+/// error would turn a working open into a failure. Skipping is also why
+/// the parts are left out of `consumed_parts`: the XLSB writer has no
+/// pivot output, so a decoded-but-not-consumed part still round-trips
+/// verbatim, and a skipped one is indistinguishable from before.
+/// Returns the package-relative target of the relationship `rel_id`
+/// declared by `part_path`, or an empty string when it is absent or
+/// points outside the package.
+Expected<std::string, Error> FindRelationshipById(const ZipReader& zip, std::string_view part_path,
+                                                  std::string_view rel_id) {
+  const std::string rels_path = ooxml::rels_path_for_part(part_path);
+  if (rel_id.empty() || !zip.has_entry(rels_path)) {
+    return std::string();
+  }
+  const std::string dir = ooxml::dir_of(part_path);
+  std::string found;
+  auto status = ooxml::visit_relationship_nodes(
+      zip, rels_path, "external link rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+        if (!found.empty() || std::string_view(rel.attribute("Id").value()) != rel_id) {
+          return Expected<void, Error>::Ok();
+        }
+        if (std::string_view(rel.attribute("TargetMode").value()) == "External") {
+          return Expected<void, Error>::Ok();
+        }
+        auto resolved = ResolveRelativePath(dir, rel.attribute("Target").value());
+        if (!resolved) {
+          return Expected<void, Error>(resolved.error());
+        }
+        found = std::move(resolved).value();
+        return Expected<void, Error>::Ok();
+      });
+  if (!status) {
+    return status.error();
+  }
+  return found;
+}
+
+/// Reads the remote workbook URL recorded in an external link part's own
+/// rels file. Empty when the part has no rels or no external-path
+/// relationship, which is what an unresolvable link already looks like.
+std::string ReadExternalLinkTarget(const ZipReader& zip, std::string_view part_path) {
+  const std::string rels_path = ooxml::rels_path_for_part(part_path);
+  if (!zip.has_entry(rels_path)) {
+    return std::string();
+  }
+  std::string found;
+  auto status = ooxml::visit_relationship_nodes(
+      zip, rels_path, "external link rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+        if (found.empty() && std::string_view(rel.attribute("Type").value()) == kRelExternalLinkPath) {
+          found = rel.attribute("Target").value();
+        }
+        return Expected<void, Error>::Ok();
+      });
+  (void)status;
+  return found;
+}
+
+/// Loads every external link part the supporting-book list names, in
+/// `[N]` order, so `external_links()[N - 1]` is the book a formula's
+/// `[N]` prefix selects.
+///
+/// A part that is missing, unreadable or uses an encoding the decoder
+/// has not measured contributes an entry with an empty cache rather than
+/// none: the position has to be held or every later `[N]` would shift by
+/// one and resolve against the wrong workbook. A reference into an empty
+/// cache reads `#REF!`, which is the behaviour before this existed.
+///
+/// The parts stay out of `consumed_parts` for the same reason the pivot
+/// parts do -- the XLSB writer has no external-link output, so they must
+/// continue to round-trip verbatim through passthrough.
+void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector<XlsbSupBook>& books) {
+  std::vector<io::ExternalLinkRecord> links;
+  for (const XlsbSupBook& sup : books) {
+    if (sup.external_book == 0) {
+      continue;  // This workbook.
+    }
+    io::ExternalLinkRecord record;
+    record.index = sup.external_book;
+    record.rel_id = sup.rel_id;
+    auto path_or = FindRelationshipById(zip, "xl/workbook.bin", sup.rel_id);
+    if (path_or && !path_or.value().empty() && zip.has_entry(path_or.value())) {
+      record.part_path = path_or.value();
+      record.target = ReadExternalLinkTarget(zip, record.part_path);
+      auto bytes_or = zip.read_entry(record.part_path);
+      if (bytes_or) {
+        const std::vector<std::uint8_t>& bytes = bytes_or.value();
+        auto book_or = read_external_link_bin(ByteSpan{bytes.data(), bytes.size()});
+        if (book_or) {
+          record.kind = io::ExternalLinkRecord::Kind::kExternalBook;
+          record.book = std::move(book_or.value());
+        }
+      }
+    }
+    links.push_back(std::move(record));
+  }
+  if (!links.empty()) {
+    wb.set_external_links(std::move(links));
+  }
+}
+
+/// Projects the loaded external links onto the two name tables
+/// `decode_ptgs` consults. The projection exists so the Ptg decoder does
+/// not have to know about `Workbook` or the link records at all.
+XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
+  XlsbExternalBooks books;
+  books.reserve(wb.external_links().size());
+  for (const io::ExternalLinkRecord& link : wb.external_links()) {
+    XlsbExternalBook entry;
+    entry.sheet_names = link.book.sheet_names;
+    entry.names.reserve(link.book.names.size());
+    for (const io::ExternalBookName& name : link.book.names) {
+      entry.names.push_back(name.name);
+    }
+    books.push_back(std::move(entry));
+  }
+  return books;
+}
+
+void LoadPivotParts(const ZipReader& zip, Workbook& wb) {
+  std::unordered_map<std::string, std::uint32_t> loaded_caches;
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    std::vector<std::string> pivot_table_paths;
+    for (const io::UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
+      if (rel.type == kRelPivotTable && !rel.target_external && !rel.target.empty()) {
+        pivot_table_paths.push_back(rel.target);
+      }
+    }
+    for (const std::string& path : pivot_table_paths) {
+      if (!zip.has_entry(path)) {
+        continue;
+      }
+      auto bytes_or = zip.read_entry(path);
+      if (!bytes_or) {
+        continue;
+      }
+      const std::vector<std::uint8_t>& bytes = bytes_or.value();
+      auto table_or = read_pivot_table_bin(ByteSpan{bytes.data(), bytes.size()});
+      if (!table_or) {
+        continue;
+      }
+      const std::optional<std::uint32_t> cache_id = LoadPivotCacheFor(zip, wb, path, loaded_caches);
+      if (!cache_id) {
+        continue;
+      }
+      pivot::PivotTable table = std::move(table_or.value());
+      table.set_pivot_cache_id(*cache_id);
+      wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(table)));
+    }
+  }
+  // Backfills each field's source-column name and each item's label from
+  // the bound cache; without it GETPIVOTDATA cannot match a field by name.
+  pivot::resolve_all_pivot_names(wb);
+}
+
 /// Resolves the relationship ids carried by model-owned BrtHLink records.
 /// Only relationships actually consumed by a hyperlink are removed from the
 /// sheet's unknown relationship list; unrelated drawing/table/custom rels,
@@ -1529,7 +1878,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
     SheetDecodeState& state, std::size_t sheet_index, Workbook& wb, const std::vector<std::string_view>& sst_entries,
     std::deque<std::string>& text_storage, const std::vector<std::string>& sheet_names,
     const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
-    std::uint32_t* undecoded_formula_count) {
+    const XlsbExternalBooks& external_books, std::uint32_t* undecoded_formula_count) {
   switch (type) {
     case XlsbRecordType::BrtBeginWsView: {
       // BrtBeginWsView ([MS-XLSB] §2.4.141) stores the SheetView fields
@@ -2060,8 +2409,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         rgcb = ByteSpan{p.data, cb};
       }
       const std::string formula_text =
-          DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, sheet_index, state.current_row,
-                            col_or.value().col, undecoded_formula_count);
+          DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, external_books, sheet_index,
+                            state.current_row, col_or.value().col, undecoded_formula_count);
       if (!formula_text.empty()) {
         // Register the real formula via the workbook-level entry so the
         // dep graph tracks it (matching the OOXML reader). The cached
@@ -2159,8 +2508,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         rgcb = ByteSpan{p.data, cb};
       }
       const std::string formula_text =
-          DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, sheet_index, rw_first_or.value(),
-                            col_first_or.value(), undecoded_formula_count);
+          DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, external_books, sheet_index,
+                            rw_first_or.value(), col_first_or.value(), undecoded_formula_count);
       if (formula_text.empty()) {
         return RecordDisposition::kModelled;
       }
@@ -2198,6 +2547,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
                                                  const std::vector<std::string>& sheet_names,
                                                  const std::vector<XlsbName>& name_table,
                                                  const std::vector<XlsbSheetRange>& sheet_ranges,
+                                                 const XlsbExternalBooks& external_books,
                                                  std::uint32_t* undecoded_formula_count) {
   SheetDecodeState state;
   ByteSpan cursor{body.data(), body.size()};
@@ -2217,7 +2567,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
     // than discarded so that no record can pass through unclassified.
     auto disposition_or =
         DispatchSheetRecord(rec, type, framed, framed_size, state, sheet_index, wb, sst_entries, text_storage,
-                            sheet_names, name_table, sheet_ranges, undecoded_formula_count);
+                            sheet_names, name_table, sheet_ranges, external_books, undecoded_formula_count);
     if (!disposition_or) {
       return disposition_or.error();
     }
@@ -2318,7 +2668,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     return name_table_or.error();
   }
   const std::vector<XlsbName>& name_table = name_table_or.value();
-  auto sheet_ranges_or = DecodeExternSheet(wb_bytes_or.value());
+  const std::vector<XlsbSupBook> sup_books = DecodeSupBooks(wb_bytes_or.value());
+  auto sheet_ranges_or = DecodeExternSheet(wb_bytes_or.value(), sup_books);
   if (!sheet_ranges_or) {
     return sheet_ranges_or.error();
   }
@@ -2379,6 +2730,12 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     sheet_names.push_back(b.name);
   }
 
+  // Runs before both the defined names and the sheets, because a formula
+  // in either can carry a `PtgNameX` that only the supporting workbook's
+  // own name table can bind.
+  LoadExternalLinkParts(zip, wb, sup_books);
+  const XlsbExternalBooks external_books = CollectExternalBookTables(wb);
+
   // 5b. Register every non-hidden `BrtName` entry as a defined name.
   // Needs `sheet_names` (for qualified references inside a name's own
   // formula) and the complete `name_table` / `sheet_ranges` (for
@@ -2386,7 +2743,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // only run after both are fully built above.
   std::uint32_t undecoded_formula_count = 0;
   std::uint32_t undecoded_defined_name_count = 0;
-  if (auto r = RegisterDefinedNames(wb_bytes_or.value(), name_table, sheet_names, sheet_ranges, wb,
+  if (auto r = RegisterDefinedNames(wb_bytes_or.value(), name_table, sheet_names, sheet_ranges, external_books, wb,
                                     &undecoded_defined_name_count);
       !r) {
     return r.error();
@@ -2455,7 +2812,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       return sheet_bytes_or.error();
     }
     auto state_or = DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, text_storage, sheet_names, name_table,
-                                   sheet_ranges, &undecoded_formula_count);
+                                   sheet_ranges, external_books, &undecoded_formula_count);
     if (!state_or) {
       return state_or.error();
     }
@@ -2489,6 +2846,11 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       }
     }
   }
+
+  // Pivot caches and tables, reached through the sheet relationships the
+  // loop above stored. Runs after every sheet is decoded because a table
+  // is attached to its sheet and its cache is workbook-level.
+  LoadPivotParts(zip, wb);
 
   // 8. Passthrough parts. First capture every Override-listed part the
   // reader did not consume, retaining its explicit content type. A second

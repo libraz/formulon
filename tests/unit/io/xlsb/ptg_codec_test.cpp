@@ -62,7 +62,7 @@ std::string RoundTrip(std::string_view formula, const std::vector<std::string>& 
   Arena dec_arena;
   ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
   ByteSpan rgcb{encoded.value().rgcb.data(), encoded.value().rgcb.size()};
-  auto decoded = decode_ptgs(rgce, rgcb, dec_arena, sheet_names, {}, decode_ranges);
+  auto decoded = decode_ptgs(rgce, rgcb, dec_arena, sheet_names, {}, decode_ranges, {});
   EXPECT_TRUE(static_cast<bool>(decoded))
       << "decode failed for: " << formula << " | " << (decoded ? "" : decoded.error().message);
   if (!decoded) {
@@ -92,7 +92,7 @@ TEST(XlsbPtgCodec, AttrChooseSkipsU16JumpOffsets) {
       0x04, 0x00,        // jump offset 1 (u16)
   };
   Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "1");
 }
@@ -114,7 +114,7 @@ TEST(XlsbPtgCodec, AttrChooseWithMultipleBranchesSkipsU16JumpOffsets) {
       0x22, 0x04, 0x64, 0x00,  // PtgFuncVar, argc=4, iftab=100 (CHOOSE)
   };
   Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "CHOOSE(2,10,20,30)");
 }
@@ -175,7 +175,7 @@ TEST(XlsbPtgCodec, GenuineThreeDimensionalRangeRoundTrips) {
   Arena dec_arena;
   ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
   const std::vector<XlsbSheetRange> decode_ranges = {{0, 2}};
-  auto decoded = decode_ptgs(rgce, ByteSpan{}, dec_arena, sheets, {}, decode_ranges);
+  auto decoded = decode_ptgs(rgce, ByteSpan{}, dec_arena, sheets, {}, decode_ranges, {});
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "Sheet1:Sheet3!B2");
 }
@@ -203,7 +203,7 @@ TEST(XlsbPtgCodec, GenuineThreeDimensionalRangeTailRoundTrips) {
   Arena dec_arena;
   ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
   const std::vector<XlsbSheetRange> decode_ranges = {{0, 2}};
-  auto decoded = decode_ptgs(rgce, ByteSpan{}, dec_arena, sheets, {}, decode_ranges);
+  auto decoded = decode_ptgs(rgce, ByteSpan{}, dec_arena, sheets, {}, decode_ranges, {});
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "Sheet1:Sheet3!A1:B2");
 }
@@ -291,7 +291,7 @@ TEST(XlsbPtgCodec, DecoderRejectsTruncatedStream) {
   Arena arena;
   const std::vector<std::uint8_t> bytes = {0x1E};
   ByteSpan span{bytes.data(), bytes.size()};
-  auto decoded = decode_ptgs(span, ByteSpan{}, arena, {}, {}, {});
+  auto decoded = decode_ptgs(span, ByteSpan{}, arena, {}, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
 }
@@ -301,7 +301,7 @@ TEST(XlsbPtgCodec, DecoderRejectsUnknownPtg) {
   Arena arena;
   const std::vector<std::uint8_t> bytes = {0x18, 0x00};
   ByteSpan span{bytes.data(), bytes.size()};
-  auto decoded = decode_ptgs(span, ByteSpan{}, arena, {}, {}, {});
+  auto decoded = decode_ptgs(span, ByteSpan{}, arena, {}, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
 }
@@ -332,7 +332,8 @@ TEST(XlsbPtgCodec, PtgArrayDecodesRowsBeforeColsFromRawWireBytes) {
     rgcb.insert(rgcb.end(), bytes, bytes + 8);
   }
   Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, {}, {}, {});
+  auto decoded =
+      decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, {}, {}, {}, {});
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "{1,2,3}");
 }
@@ -357,7 +358,8 @@ TEST(XlsbPtgCodec, PtgArrayCoversNumericElementsOnlyAndSaysSoBothWays) {
   rgcb.push_back(0x00);
 
   Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, {}, {}, {});
+  auto decoded =
+      decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, {}, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
 
@@ -386,7 +388,7 @@ TEST(XlsbPtgCodec, PtgRefRowAtGridBoundIsRecordCorrupt) {
       0x00, 0x00,              // col = 0, absolute
   };
   Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
 }
@@ -402,7 +404,7 @@ TEST(XlsbPtgCodec, PtgAreaReversedCornersIsRecordCorrupt) {
       0x00, 0x00,              // col2 = 0, absolute
   };
   Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
 }
@@ -419,7 +421,7 @@ TEST(XlsbPtgCodec, PtgRefErrWithSentinelCoordinatesStillDecodesAsRef) {
       0xFF, 0xFF,              // sentinel col payload (discarded)
   };
   Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "#REF!");
 }
@@ -431,7 +433,7 @@ TEST(XlsbPtgCodec, DecoderAcceptsTransparentParenToken) {
   Arena arena;
   ByteSpan main{rgce.data(), rgce.size()};
   ByteSpan extra{nullptr, 0};
-  auto decoded = decode_ptgs(main, extra, arena, {}, {}, {});
+  auto decoded = decode_ptgs(main, extra, arena, {}, {}, {}, {});
   ASSERT_TRUE(static_cast<bool>(decoded));
   EXPECT_EQ(parser::format_formula(*decoded.value()), "1+2");
 }
@@ -449,7 +451,7 @@ TEST(XlsbPtgCodec, DecoderConsumesMemoryCachePtgsWithoutChangingExpression) {
     Arena arena;
     ByteSpan main{rgce.data(), rgce.size()};
     ByteSpan extra = has_extra_mem ? ByteSpan{extra_mem.data(), extra_mem.size()} : ByteSpan{};
-    auto decoded = decode_ptgs(main, extra, arena, {}, {}, {});
+    auto decoded = decode_ptgs(main, extra, arena, {}, {}, {}, {});
     ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
     EXPECT_EQ(parser::format_formula(*decoded.value()), "1");
   };
@@ -465,7 +467,7 @@ TEST(XlsbPtgCodec, DecoderRejectsTruncatedMemAreaExtraCache) {
   const std::vector<std::uint8_t> extra = {1, 0, 0, 0};
   Arena arena;
   auto decoded =
-      decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{extra.data(), extra.size()}, arena, {}, {}, {});
+      decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{extra.data(), extra.size()}, arena, {}, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
 }
@@ -483,7 +485,7 @@ TEST(XlsbPtgCodec, DecoderRejectsAstDeeperThanSharedLimit) {
   Arena dec_arena;
   ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
   ByteSpan rgcb{encoded.value().rgcb.data(), encoded.value().rgcb.size()};
-  auto decoded = decode_ptgs(rgce, rgcb, dec_arena, {}, {}, {});
+  auto decoded = decode_ptgs(rgce, rgcb, dec_arena, {}, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbCorrupt);
 }
@@ -530,7 +532,7 @@ TEST(XlsbPtgCodec, EncoderLowersRegisteredDefinedName) {
   Arena dec_arena;
   ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
   const std::vector<XlsbName> name_table = {{-1, "MyName", false}};
-  auto decoded = decode_ptgs(rgce, ByteSpan{}, dec_arena, {}, name_table, {});
+  auto decoded = decode_ptgs(rgce, ByteSpan{}, dec_arena, {}, name_table, {}, {});
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "MyName");
 }

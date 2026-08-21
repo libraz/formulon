@@ -85,6 +85,7 @@ std::uint64_t ChildCount(const AstNode& node) {
     case NodeKind::Literal:
     case NodeKind::Ref:
     case NodeKind::Ref3D:
+    case NodeKind::ExternalRef:
     case NodeKind::StructuredRef:
     case NodeKind::NameRef:
     case NodeKind::ErrorLiteral:
@@ -130,6 +131,7 @@ const AstNode& ChildAt(const AstNode& node, std::uint64_t index) {
     case NodeKind::Literal:
     case NodeKind::Ref:
     case NodeKind::Ref3D:
+    case NodeKind::ExternalRef:
     case NodeKind::StructuredRef:
     case NodeKind::NameRef:
     case NodeKind::ErrorLiteral:
@@ -271,6 +273,53 @@ AstNode* make_ref3d_range(Arena& arena, std::string_view sheet_begin, std::strin
   }
   n->kind_ = NodeKind::Ref3D;
   n->data_.ref3d = payload;
+  return n;
+}
+
+AstNode* make_external_ref(Arena& arena, std::uint32_t book, std::string_view sheet, const Reference& cell,
+                           const Reference& cell_end, bool is_range) {
+  // Heap-allocate the payload for the same reason `make_ref3d` does: the
+  // AstNode union has a size budget asserted in ast.h.
+  auto* payload = arena.create<AstNode::ExternalRefPayload>();
+  if (payload == nullptr) {
+    return nullptr;
+  }
+  payload->book = book;
+  payload->sheet = arena.intern(sheet);
+  payload->name = {};
+  payload->cell = cell;
+  // The payload's `sheet` carries the identity; the corner refs are
+  // always sheet-less, matching `make_ref3d`.
+  payload->cell.sheet = {};
+  payload->cell.sheet_quoted = false;
+  payload->cell_end = is_range ? cell_end : payload->cell;
+  payload->cell_end.sheet = {};
+  payload->cell_end.sheet_quoted = false;
+  payload->is_range = is_range;
+  AstNode* n = arena.create<AstNode>();
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->kind_ = NodeKind::ExternalRef;
+  n->data_.external_ref = payload;
+  return n;
+}
+
+AstNode* make_external_name_ref(Arena& arena, std::uint32_t book, std::string_view name) {
+  auto* payload = arena.create<AstNode::ExternalRefPayload>();
+  if (payload == nullptr) {
+    return nullptr;
+  }
+  payload->book = book;
+  payload->sheet = {};
+  payload->name = arena.intern(name);
+  payload->is_range = false;
+  AstNode* n = arena.create<AstNode>();
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->kind_ = NodeKind::ExternalRef;
+  n->data_.external_ref = payload;
   return n;
 }
 
@@ -567,6 +616,36 @@ const Reference& AstNode::as_ref3d_cell() const {
 const Reference& AstNode::as_ref3d_cell_end() const {
   FM_CHECK(kind_ == NodeKind::Ref3D, "AstNode::as_ref3d_cell_end on non-Ref3D");
   return data_.ref3d->cell_end;
+}
+
+std::uint32_t AstNode::as_external_ref_book() const {
+  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_book on non-ExternalRef");
+  return data_.external_ref->book;
+}
+
+std::string_view AstNode::as_external_ref_sheet() const {
+  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_sheet on non-ExternalRef");
+  return data_.external_ref->sheet;
+}
+
+std::string_view AstNode::as_external_ref_name() const {
+  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_name on non-ExternalRef");
+  return data_.external_ref->name;
+}
+
+const Reference& AstNode::as_external_ref_cell() const {
+  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_cell on non-ExternalRef");
+  return data_.external_ref->cell;
+}
+
+const Reference& AstNode::as_external_ref_cell_end() const {
+  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_cell_end on non-ExternalRef");
+  return data_.external_ref->cell_end;
+}
+
+bool AstNode::as_external_ref_is_range() const {
+  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_is_range on non-ExternalRef");
+  return data_.external_ref->is_range;
 }
 
 bool AstNode::as_ref3d_is_range() const {

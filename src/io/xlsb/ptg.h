@@ -261,7 +261,12 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::AreaN, 0x2D, "AreaN", PtgStatus::Unsupported},
     {PtgKind::MemAreaN, 0x2E, "MemAreaN", PtgStatus::Unsupported},
     {PtgKind::MemNoMemN, 0x2F, "MemNoMemN", PtgStatus::Unsupported},
-    {PtgKind::NameX, 0x39, "NameX", PtgStatus::Unsupported},
+    // Decoded into an `ExternalRef` when the supporting workbook's own
+    // name table is available, and refused otherwise; the encoder has no
+    // supporting-book table to write one back into, so the round-trip is
+    // read-only. `Partial` rather than `Unsupported` because the
+    // dispatch-time gate must let the token through to be decoded.
+    {PtgKind::NameX, 0x39, "NameX", PtgStatus::Partial},
     {PtgKind::Ref3d, 0x3A, "Ref3d", PtgStatus::Full},
     {PtgKind::Area3d, 0x3B, "Area3d", PtgStatus::Full},
     {PtgKind::RefErr3d, 0x3C, "RefErr3d", PtgStatus::Full},

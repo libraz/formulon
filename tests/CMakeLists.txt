@@ -88,6 +88,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/sst_writer_test.cpp
   unit/io/xlsb/writer_test.cpp
   unit/io/xlsb_fidelity_test.cpp
+  unit/io/external_link_fixture_test.cpp
   unit/io/xlsb_pivot_fixture_test.cpp
   unit/io/xlsb_reader_contract_test.cpp
   unit/io/ooxml_output_contract_test.cpp

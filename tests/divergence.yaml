@@ -149,42 +149,28 @@ entries:
     prefer: formulon
     first_noted: 2026-07-03
     last_verified_excel_version: "16.111.2"
-  # -- xlwings empty-string / blank read-back gaps -------------------------
-  # The Mac xlwings driver cannot write a cell holding the empty string
-  # "": assigning "" leaves the cell genuinely blank from Excel's point of
-  # view. Formula results that return "" are verified with
-  # compare_mode=empty_string_readback; the remaining skipped cases below
-  # need an actual setup-cell empty string, or hit xlwings blank read-back
-  # for rejected formulas. Revisit if the oracle pipeline moves to a bridge
-  # that can preserve Excel empty-string cells and rejected-formula errors.
-  - id: isblank_of_empty_string
-    cause: harness-cannot-capture
+  # -- ISFORMULA over a non-reference argument -----------------------------
+  # ISFORMULA's argument is reference-typed, and Excel enforces that when
+  # the formula is entered rather than when it is evaluated: `=ISFORMULA(42)`,
+  # `=ISFORMULA("A1")` and `=ISFORMULA(1+1)` are all discarded at entry,
+  # leaving the cell blank with no formula to read back. `=ISFORMULA(A1)`
+  # and `=ISREF(42)` entered alongside them retain and evaluate normally,
+  # so this is Excel's grammar and not a bridge failure.
+  #
+  # Excel therefore never produces a value for these, and Formulon's
+  # #VALUE! is unobservable rather than wrong. A setup-cell empty string is
+  # a separate matter and no longer skipped: the apostrophe entry prefix
+  # writes a genuine zero-length string, so ISBLANK / COUNTIF over one are
+  # captured from Excel directly.
+  - ids:
+      - isformula_of_literal_number_is_value
+      - isformula_of_literal_text_is_value
     mode: skip-oracle
-    reason: "xlwings writes \"\" as a blank cell, so Excel reports ISBLANK=TRUE even though Formulon correctly says FALSE."
+    cause: excel-no-value
+    reason: "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against."
     prefer: formulon
     first_noted: 2026-04-23
-    last_verified_excel_version: "16.111.2"
-  - id: countif_notequal_empty_over_mixed
-    cause: harness-cannot-capture
-    mode: skip-oracle
-    reason: "xlwings writes \"\" as a blank cell, so Excel's COUNTIF(range, \"<>\") over a range with a literal-\"\" cell sees one fewer populated cell than Formulon's in-memory model. Formulon returns 3, Mac records 2 due to the xlwings round-trip gap."
-    prefer: formulon
-    first_noted: 2026-04-25
-    last_verified_excel_version: "16.111.2"
-  - id: isformula_of_literal_number_is_value
-    cause: harness-cannot-capture
-    mode: skip-oracle
-    reason: "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
-    prefer: formulon
-    first_noted: 2026-04-23
-    last_verified_excel_version: "16.111.2"
-  - id: isformula_of_literal_text_is_value
-    cause: harness-cannot-capture
-    mode: skip-oracle
-    reason: "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
-    prefer: formulon
-    first_noted: 2026-04-23
-    last_verified_excel_version: "16.111.2"
+    last_verified_excel_version: "16.112.1"
 
   # -- BESSELI: Formulon more accurate than Excel's A&S 9.8.1/9.8.2 -------
   # Excel's BESSELI uses the Abramowitz & Stegun rational polynomial
@@ -1031,31 +1017,42 @@ entries:
   # Excel returns the aggregated pivot value. Removing this divergence
   # requires decoding the XLSB binary pivot records (tracked under the
   # XLSB completion work).
-  - id: xlsb_pivot_getpivotdata_ref
+  # XLSB pivot decoding landed: the three parts are read into the same
+  # model the OOXML reader builds, and every answer Excel cached in
+  # tests/fixtures/excel/xlsb_pivot_base.xlsb is reproduced by a recalc.
+  # The record layouts were established by differential decode -- the
+  # same workbook re-saved by Excel as .xlsx and read with the OOXML
+  # pivot reader -- rather than guessed, and the aggregation selector was
+  # isolated by re-saving one pivot per `<dataField subtotal>` value.
+  # Two earlier claims in the retired entry were wrong: Mac Excel does
+  # expose a reachable pivot object model, and it converts a pivot-bearing
+  # .xlsb to .xlsx, which is what made the differential reference
+  # available without a Windows host. What Mac genuinely cannot do is
+  # *create* a pivot from the AppleScript bridge.
+  - id: xlsb_pivot_unmeasured_cell_encodings
     cause: engine-gap
     mode: skip-oracle
     scope: fixture
-    evidence: [tests/unit/io/xlsb_pivot_fixture_test.cpp]
-    reason: "Pivot tables loaded from .xlsb are not decoded into the evaluated pivot model (the XLSB reader wires no pivot caches / tables onto the workbook), so GETPIVOTDATA over an XLSB-sourced pivot returns #REF! where Excel returns the aggregated value. Measured on tests/fixtures/excel/xlsb_pivot_base.xlsb, an Excel-authored workbook whose Sheet1 carries a Region x Qtr pivot over A1:C7 and three probes Excel evaluated before saving: GETPIVOTDATA(\"Amt\",$E$1,\"Region\",\"North\") = 15, GETPIVOTDATA(\"Amt\",$E$1) = 56, and GETPIVOTDATA(\"Amt\",$E$1,\"Region\",\"North\",\"Qtr\",\"Q1\") = 10. The package holds pivotCacheDefinition1.bin, pivotCacheRecords1.bin and pivotTable1.bin; none is decoded, and a recalc replaces all three cached answers with #REF!. The binary framing is not the obstacle -- the cache definition carries one field record per cache field with its name as a trailing XLWideString, and each record row packs the fields in schema order, so this fixture's three fields decode to (Region index, Qtr index, Amt double) and sum back to the answers above. What is missing is coverage of the value types the fixture does not use: a field holding dates, booleans, blanks or errors, a numeric field with shared items, and a pivot with more than one data field all take encodings this package never exercises, and a decoder guessed for them would return wrong numbers rather than an error. Mac Excel has no reachable pivot-table automation to author more fixtures with, so widening the corpus needs the Windows COM host."
+    evidence: [tests/unit/io/xlsb_pivot_fixture_test.cpp, src/io/xlsb/pivot_reader.h]
+    reason: "The XLSB pivot decoder covers the encodings measured against an Excel-authored fixture: shared-item string fields, an inline-double measure, row / column axis orders, and the eleven aggregation selectors. Encodings no capture has pinned yet -- a cache field holding dates, booleans, blanks or errors, a numeric field with shared items, and the per-item flag bits that mark an item hidden -- are refused rather than guessed, so a pivot using one is skipped and GETPIVOTDATA over it still returns #REF! where Excel answers. Refusing keeps a wrong number off the sheet (a mis-sized record cell shifts every later field, and a dropped hidden-item filter would over-count silently), and the record-width check plus the shared-item bounds check are what turn a wrong encoding into a refusal instead of a plausible total. Closing this needs more Excel-authored fixtures, which the .xlsb -> .xlsx conversion path can now supply."
     prefer: mac-excel-365
     first_noted: 2026-07-02
-    last_verified_excel_version: "16.112"
+    last_verified_excel_version: "16.112.1"
 
-  # -- XLSB external-workbook defined names --------------------------------
-  # PtgNameX resolves through the external-supporting-book and external-name
-  # tables. Formulon deliberately does not invent an internal NameRef when
-  # those tables are absent: it retains Excel's cached result and exposes the
-  # unsupported-formula diagnostic instead. Decoding those binary tables is
-  # deferred XLSB work.
-  - id: xlsb_ptg_namex_external_name_deferred
+  # -- Cross-workbook references on save -----------------------------------
+  # Both readers resolve a cross-workbook reference against the values Excel
+  # cached in the external link part, which is what Excel itself shows once
+  # the supporting workbook is closed. Only the XLSB *writer* cannot put one
+  # back, so an xlsb save keeps the cached value and drops the formula.
+  - id: xlsb_external_reference_not_encoded_on_save
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
-    evidence: [tests/unit/io/xlsb/ptg_test.cpp, tests/unit/io/xlsb/writer_test.cpp]
-    reason: "XLSB PtgNameX external-workbook defined names require BrtSupBookSrc and BrtSupNameStart table decoding, which is not implemented. The reader keeps the cached cell value and reports the unsupported Ptg instead of fabricating an incorrect internal defined-name reference. Decoding those tables alone would not resolve the name: the OOXML path does not read an external link's body either, so `xl/externalLinks/externalLink*.xml` -- which is where a remote workbook's defined names and cached cell values live -- round-trips verbatim through the passthrough parts on both formats. A resolvable external name is a cross-workbook feature that both readers would gain together, not an XLSB record gap."
+    evidence: [tests/unit/io/external_link_fixture_test.cpp, tests/unit/io/xlsb/ptg_test.cpp]
+    reason: "A cross-workbook reference reads and evaluates in both container formats, against the sheet names, defined names and cached cell values decoded from `xl/externalLinks/externalLink*.{xml,bin}`. Writing one back is where the two formats part: the xlsx writer re-serialises the formula as text and the link parts ride through passthrough, so an xlsx save round-trips it, while the XLSB writer emits no supporting-book table and so has no `iSupBook` to point a `PtgNameX` or an external `PtgRef3d` at. Such a formula is therefore downgraded on an xlsb save -- the cell keeps Excel's cached value and loses the formula. That is the same output the writer produced before the reader could decode these tokens at all, so nothing regressed; encoding them needs the writer to author `BrtSupSelf` / `BrtSupBookSrc` and to bind each entry to the relationship id it allocates for the external link part."
     prefer: mac-excel-365
     first_noted: 2026-08-05
-    last_verified_excel_version: "16.111.2"
+    last_verified_excel_version: "16.112.1"
 
 # -- Parser internal-safety limits ------------------------------------------
   # `Parser::parse_expression`'s recursion-depth guard (`kMaxFormulaAstDepth`,

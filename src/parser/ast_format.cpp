@@ -175,6 +175,46 @@ void AppendQuoteEscaped(std::string_view s, std::string& out) {
   }
 }
 
+void FormatExternalRef(const AstNode& node, std::string& out) {
+  // Excel stores a cross-workbook reference with the supporting book
+  // named by its 1-based position in `<externalReferences>`, never by
+  // path: `[1]Data!A1`, `[1]Data!A1:A3`, `[1]!SrcTotal`. When the sheet
+  // name needs quoting the bracket goes *inside* the quotes
+  // (`'[1]My Sheet'!A1`), because the whole book-and-sheet qualifier is
+  // one quoted unit.
+  const std::string_view sheet = node.as_external_ref_sheet();
+  const std::string_view name = node.as_external_ref_name();
+  // The name form carries no sheet at all, and an absent qualifier is not
+  // a name that needs quoting: `[1]!SrcTotal`, never `'[1]'!SrcTotal`.
+  const bool quoted = !sheet.empty() && sheet_name_needs_quoting(sheet);
+  if (quoted) {
+    out.push_back('\'');
+  }
+  out.push_back('[');
+  out.append(std::to_string(node.as_external_ref_book()));
+  out.push_back(']');
+  AppendQuoteEscaped(sheet, out);
+  if (quoted) {
+    out.push_back('\'');
+  }
+  out.push_back('!');
+  if (!name.empty()) {
+    out.append(name);
+    return;
+  }
+  Reference cell_no_sheet = node.as_external_ref_cell();
+  cell_no_sheet.sheet = {};
+  cell_no_sheet.sheet_quoted = false;
+  out.append(format_a1(cell_no_sheet));
+  if (node.as_external_ref_is_range()) {
+    Reference end_no_sheet = node.as_external_ref_cell_end();
+    end_no_sheet.sheet = {};
+    end_no_sheet.sheet_quoted = false;
+    out.push_back(':');
+    out.append(format_a1(end_no_sheet));
+  }
+}
+
 void FormatRef3D(const AstNode& node, std::string& out) {
   // A 3-D range's sheet span (`SheetFrom:SheetTo`) quotes as a SINGLE
   // unit when either endpoint needs quoting -- `'Data:S2'!B1`, not
@@ -607,6 +647,9 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
     case NodeKind::Ref3D:
       FormatRef3D(node, out);
       return;
+    case NodeKind::ExternalRef:
+      FormatExternalRef(node, out);
+      return;
     case NodeKind::StructuredRef:
       FormatStructuredRef(node, out);
       return;
@@ -708,6 +751,9 @@ struct StorageEmitter {
       }
       case NodeKind::Ref3D:
         FormatRef3D(node, out);
+        return;
+      case NodeKind::ExternalRef:
+        FormatExternalRef(node, out);
         return;
       case NodeKind::StructuredRef:
         FormatStructuredRef(node, out);

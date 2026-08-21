@@ -289,7 +289,8 @@ bool NeedsSheetQuote(std::string_view sheet) {
 Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Arena& arena,
                                               const std::vector<std::string>& sheet_names,
                                               const std::vector<XlsbName>& name_table,
-                                              const std::vector<XlsbSheetRange>& sheet_ranges) {
+                                              const std::vector<XlsbSheetRange>& sheet_ranges,
+                                              const XlsbExternalBooks& external_books) {
   std::vector<parser::AstNode*> stack;
   // `PtgArray` stores only an 8-byte placeholder inline (see its case
   // below); the real dimensions + elements are consumed from this
@@ -310,7 +311,33 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
   // unqualified same-sheet reference). Both outcomes change the value
   // silently, so the token is surfaced as undecodable instead.
   auto ixti_is_external = [&sheet_ranges](std::uint32_t ixti) -> bool {
-    return ixti < sheet_ranges.size() && sheet_ranges[ixti].sup_book != 0U;
+    return ixti < sheet_ranges.size() && sheet_ranges[ixti].external_book != 0U;
+  };
+
+  // Resolves an external `ixti` to the supporting book's `[N]` index and
+  // the name of the sheet it qualifies. Returns 0 when the reference
+  // cannot be bound: an unknown book, a sheet index the supporting
+  // book's own table does not cover, or a span across more than one of
+  // its sheets, which `ExternalRef` does not model. The caller then
+  // reports the token undecodable and Excel's cached value stands.
+  auto external_sheet_for_ixti = [&sheet_ranges, &external_books](std::uint32_t ixti,
+                                                                  std::string_view& sheet_out) -> std::uint32_t {
+    if (ixti >= sheet_ranges.size()) {
+      return 0;
+    }
+    const XlsbSheetRange& range = sheet_ranges[ixti];
+    if (range.external_book == 0 || range.external_book > external_books.size()) {
+      return 0;
+    }
+    if (range.itab_first != range.itab_last || range.itab_first < 0) {
+      return 0;
+    }
+    const std::vector<std::string>& sheets = external_books[range.external_book - 1U].sheet_names;
+    if (static_cast<std::size_t>(range.itab_first) >= sheets.size()) {
+      return 0;
+    }
+    sheet_out = sheets[static_cast<std::size_t>(range.itab_first)];
+    return range.external_book;
   };
 
   // Single-sheet resolution for `ixti`: prefers the `BrtExternSheet`
@@ -714,6 +741,41 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         break;
       }
 
+      case PtgKind::NameX: {
+        // `ixti` names an ExternSheet entry whose supporting book is the
+        // one holding the name, and `ilbl` (1-based) indexes that book's
+        // own name table. The entry's sheet indices are `-2` here (the
+        // name is book-scope, so it qualifies no sheet), which is why
+        // this resolves the book through `sheet_ranges` but never asks
+        // `external_sheet_for_ixti` for a sheet.
+        auto ixti_or = read_u16(cursor);
+        if (!ixti_or) {
+          return ixti_or.error();
+        }
+        auto ilbl_or = read_u32(cursor);
+        if (!ilbl_or) {
+          return ilbl_or.error();
+        }
+        const std::uint32_t ixti = ixti_or.value();
+        const std::uint32_t book = ixti < sheet_ranges.size() ? sheet_ranges[ixti].external_book : 0U;
+        if (book == 0 || book > external_books.size()) {
+          return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                            "PtgNameX names a supporting workbook this reader cannot bind", "context=xlsb_ptg_reader");
+        }
+        const std::vector<std::string>& names = external_books[book - 1U].names;
+        if (ilbl_or.value() == 0 || ilbl_or.value() > names.size()) {
+          return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                            "PtgNameX ilbl is outside the supporting workbook's name table",
+                            "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
+        }
+        parser::AstNode* n = parser::make_external_name_ref(arena, book, arena.intern(names[ilbl_or.value() - 1U]));
+        if (n == nullptr) {
+          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNameX)", "context=xlsb_ptg_reader");
+        }
+        stack.push_back(n);
+        break;
+      }
+
       // ---- References -----------------------------------------------------
       case PtgKind::Ref: {
         auto ref_or = read_loc(cursor, {});
@@ -765,8 +827,29 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // genuinely multi-sheet; otherwise the plain qualified `Ref`
         // this token already produced.
         if (ixti_is_external(ixti_or.value())) {
-          return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                            "PtgRef3d qualifies a sheet of an external workbook", "context=xlsb_ptg_reader");
+          std::string_view external_sheet;
+          const std::uint32_t book = external_sheet_for_ixti(ixti_or.value(), external_sheet);
+          if (book == 0) {
+            return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                              "PtgRef3d qualifies a sheet of an external workbook this reader cannot bind",
+                              "context=xlsb_ptg_reader");
+          }
+          auto loc_or = read_loc(cursor, {});
+          if (!loc_or) {
+            return loc_or.error();
+          }
+          auto domain_or = check_ref_domain(loc_or.value(), "PtgRef3d");
+          if (!domain_or) {
+            return domain_or.error();
+          }
+          parser::AstNode* n = parser::make_external_ref(arena, book, arena.intern(external_sheet), loc_or.value(),
+                                                         loc_or.value(), /*is_range=*/false);
+          if (n == nullptr) {
+            return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef3d external)",
+                              "context=xlsb_ptg_reader");
+          }
+          stack.push_back(n);
+          break;
         }
         std::string_view begin_sheet;
         std::string_view end_sheet;
@@ -816,8 +899,30 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // single-sheet qualified area (`Sheet2!A1:B2`) keeps the plain
         // `RangeOp` of two qualified refs.
         if (ixti_is_external(ixti_or.value())) {
-          return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                            "PtgArea3d qualifies a sheet of an external workbook", "context=xlsb_ptg_reader");
+          std::string_view external_sheet;
+          const std::uint32_t book = external_sheet_for_ixti(ixti_or.value(), external_sheet);
+          if (book == 0) {
+            return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                              "PtgArea3d qualifies a sheet of an external workbook this reader cannot bind",
+                              "context=xlsb_ptg_reader");
+          }
+          auto area_or = read_area(cursor, {}, {});
+          if (!area_or) {
+            return area_or.error();
+          }
+          auto domain_or = check_area_domain(area_or.value().first, area_or.value().second, "PtgArea3d");
+          if (!domain_or) {
+            return domain_or.error();
+          }
+          parser::AstNode* n = parser::make_external_ref(arena, book, arena.intern(external_sheet),
+                                                         area_or.value().first, area_or.value().second,
+                                                         /*is_range=*/true);
+          if (n == nullptr) {
+            return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea3d external)",
+                              "context=xlsb_ptg_reader");
+          }
+          stack.push_back(n);
+          break;
         }
         std::string_view begin_sheet;
         std::string_view end_sheet;

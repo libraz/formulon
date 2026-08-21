@@ -18,6 +18,7 @@ using detail::DecodeDigitRunClamped;
 using detail::IsAsciiDigit;
 using detail::IsAsciiLetter;
 using detail::kMaxColumn;
+using detail::kMaxExternalBookIndex;
 using detail::kMaxRow;
 using detail::SpanRange;
 
@@ -508,6 +509,95 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
 // ---------------------------------------------------------------------------
 // Sheet-qualified refs
 // ---------------------------------------------------------------------------
+
+bool Parser::split_external_qualifier(std::string_view text, std::uint32_t* out_book, std::string_view* out_sheet) {
+  if (text.empty() || text.front() != '[') {
+    return false;
+  }
+  const std::size_t close = text.find(']');
+  if (close == std::string_view::npos || close == 1U) {
+    return false;
+  }
+  std::uint64_t book = 0;
+  for (std::size_t i = 1; i < close; ++i) {
+    if (!IsAsciiDigit(text[i])) {
+      return false;
+    }
+    book = book * 10U + static_cast<std::uint64_t>(text[i] - '0');
+    if (book > kMaxExternalBookIndex) {
+      return false;
+    }
+  }
+  if (book == 0) {
+    return false;
+  }
+  *out_book = static_cast<std::uint32_t>(book);
+  *out_sheet = text.substr(close + 1U);
+  return true;
+}
+
+AstNode* Parser::parse_external_ref_tail(std::uint32_t book, std::string_view sheet, TextRange start_range) {
+  if (peek_kind() != TokenKind::Bang) {
+    record_error_with_token(ParseErrorCode::UnexpectedToken, peek().range, peek().lexeme);
+    return nullptr;
+  }
+  advance();  // Bang
+
+  // `[1]!Name` — a book-scope defined name in the supporting workbook.
+  // The sheet-qualified spelling of an external name is deliberately not
+  // accepted here: the external-link cache records book-scope names only,
+  // so binding one would mean guessing which sheet's namespace it came
+  // from.
+  if (sheet.empty()) {
+    if (peek_kind() != TokenKind::Ident) {
+      record_error_with_token(ParseErrorCode::InvalidReference, peek().range, peek().lexeme);
+      return nullptr;
+    }
+    const Token& name = advance();
+    AstNode* node = make_external_name_ref(arena_, book, name.lexeme);
+    if (node == nullptr) {
+      return nullptr;
+    }
+    node->set_range(SpanRange(start_range, name.range));
+    return node;
+  }
+
+  // `[1]Data!A1` and `[1]Data!A1:A3`. Whole-axis tails (`[1]Data!A:A`)
+  // are not accepted: Excel writes a cross-workbook reference against the
+  // cells it cached, and it caches no whole column, so the rectangle such
+  // a tail declares has no cached content to name.
+  if (peek_kind() != TokenKind::CellRef) {
+    record_error_with_token(ParseErrorCode::InvalidReference, peek().range, peek().lexeme);
+    return nullptr;
+  }
+  const Token& cell = advance();
+  Reference first;
+  if (!decode_cellref_lexeme(cell.lexeme, &first)) {
+    record_error_with_token(ParseErrorCode::InvalidReference, cell.range, cell.lexeme);
+    return nullptr;
+  }
+  if (peek_kind() == TokenKind::Colon && peek_kind_at(1) == TokenKind::CellRef) {
+    advance();  // Colon
+    const Token& tail = advance();
+    Reference last;
+    if (!decode_cellref_lexeme(tail.lexeme, &last)) {
+      record_error_with_token(ParseErrorCode::InvalidReference, tail.range, tail.lexeme);
+      return nullptr;
+    }
+    AstNode* range_node = make_external_ref(arena_, book, sheet, first, last, /*is_range=*/true);
+    if (range_node == nullptr) {
+      return nullptr;
+    }
+    range_node->set_range(SpanRange(start_range, tail.range));
+    return range_node;
+  }
+  AstNode* node = make_external_ref(arena_, book, sheet, first, first, /*is_range=*/false);
+  if (node == nullptr) {
+    return nullptr;
+  }
+  node->set_range(SpanRange(start_range, cell.range));
+  return node;
+}
 
 AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, TextRange sheet_range) {
   // Expect Bang next. (For SheetName tokens we have not yet consumed Bang;

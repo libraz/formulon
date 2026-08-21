@@ -29,6 +29,7 @@
 #include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
+#include "eval/external_ref.h"
 #include "eval/function_registry.h"
 #include "eval/implicit_intersection.h"
 #include "eval/iterative_solver.h"
@@ -706,6 +707,14 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       }
       return Value::error(ErrorCode::Value);
     }
+
+    case parser::NodeKind::ExternalRef:
+      // Read straight out of the external-link cache. Unlike `Ref3D` this
+      // needs no sheet resolution against the workbook: the target lives
+      // in another file whose grid the cache already holds, so a
+      // rectangle materialises here rather than being routed through
+      // `expand_range`.
+      return resolve_external_ref(node, arena, ctx);
 
     case parser::NodeKind::StructuredRef: {
       // Resolve the table reference (`Table[Col]`, `Table[#All]`, ...) to

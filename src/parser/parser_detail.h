@@ -56,6 +56,14 @@ inline constexpr int kBpAtPrefix = 65;
 inline constexpr std::uint32_t kMaxColumn = 16384;  // XFD
 inline constexpr std::uint32_t kMaxRow = 1048576;   // 2^20
 
+// Ceiling on the `[N]` supporting-workbook index of a cross-workbook
+// reference. Excel sets no documented limit; this one exists so a long
+// digit run inside the brackets stops accumulating instead of
+// overflowing, and sits far above any plausible number of external links
+// so it never rejects a real file. An index past the workbook's actual
+// link count resolves to `#REF!` at evaluation, not here.
+inline constexpr std::uint32_t kMaxExternalBookIndex = 65535;
+
 // ASCII helpers. Re-implemented locally to avoid depending on the tokenizer's
 // privates and to keep the parser self-contained.
 inline bool IsAsciiLetter(char c) noexcept {

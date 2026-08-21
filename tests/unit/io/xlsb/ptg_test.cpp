@@ -72,13 +72,20 @@ TEST(XlsbPtg, LookupRecognisesExtensionPtgIfError) {
   EXPECT_FALSE(is_class_marked(p->kind));
 }
 
-TEST(XlsbPtg, ExternalWorkbookDefinedNamesRemainExplicitlyUnsupported) {
-  // PtgNameX must not be mistaken for an internal PtgName: resolving it
-  // requires the XLSB external-supporting-book and external-name tables.
+TEST(XlsbPtg, ExternalWorkbookDefinedNamesAreReadOnly) {
+  // PtgNameX must not be mistaken for an internal PtgName: it names a
+  // defined name in a *supporting* workbook, resolved through the
+  // supporting-book table and that book's own name table. The reader
+  // does that; the encoder has no supporting-book table to write one
+  // back into, so claiming `Full` would say such a formula survives a
+  // save, which it does not.
   const PtgInfo* p = lookup_ptg_from_wire(0x39);
   ASSERT_NE(p, nullptr);
   EXPECT_EQ(p->kind, PtgKind::NameX);
-  EXPECT_EQ(p->status, PtgStatus::Unsupported);
+  EXPECT_EQ(p->status, PtgStatus::Partial);
+  // Whether the token decodes depends on the tables available at read
+  // time, so it must not be rejected on sight by the dispatch-time gate.
+  EXPECT_NE(p->status, PtgStatus::Unsupported);
 }
 
 TEST(XlsbPtg, ArrayConstantsAreClassifiedAsPartiallyCovered) {

@@ -440,6 +440,10 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
     case NodeKind::ErrorPlaceholder:
     case NodeKind::NameRef:
     case NodeKind::StructuredRef:
+    // A cross-workbook reference addresses another file's grid. Inserting
+    // or deleting rows here cannot move a cell there, and Excel leaves
+    // such a reference untouched for exactly that reason.
+    case NodeKind::ExternalRef:
       return &node;
     case NodeKind::Ref:
       return TransformRef(node, arena, transform);

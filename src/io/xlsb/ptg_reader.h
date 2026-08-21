@@ -62,14 +62,41 @@ struct XlsbName {
 struct XlsbSheetRange {
   std::int32_t itab_first = -1;
   std::int32_t itab_last = -1;
-  /// `BrtExternSheet`'s `iSupBook`: the supporting-book table index this
-  /// entry's sheet range belongs to. `0` is this workbook; any other
-  /// value qualifies a sheet of an *external* workbook, whose sheet
-  /// indices are unrelated to `sheet_names`. `decode_ptgs` refuses to
-  /// resolve such an entry rather than binding the reference to a
+  /// Which book the sheet range belongs to, resolved from
+  /// `BrtExternSheet`'s `iSupBook` through the supporting-book list.
+  /// `0` is this workbook; `N >= 1` is the N-th *external* book in
+  /// package order, matching the `[N]` prefix the equivalent xlsx
+  /// formula text carries. An external book's sheet indices are
+  /// unrelated to `sheet_names`, so `decode_ptgs` refuses to resolve
+  /// such an entry rather than binding the reference to a
   /// same-numbered local sheet.
-  std::uint32_t sup_book = 0;
+  ///
+  /// The raw `iSupBook` is deliberately not retained: it cannot answer
+  /// this question on its own, because a workbook with no internal
+  /// qualified references carries no `BrtSupSelf` entry and index 0 is
+  /// then an external book.
+  std::uint32_t external_book = 0;
 };
+
+/// The name tables of one supporting workbook, as a `PtgNameX` /
+/// `PtgRef3d` into that workbook needs them.
+///
+/// Both are the *supporting* workbook's, not this one's: an external
+/// `BrtExternSheet` entry's `itabFirst` indexes `sheet_names` here, and
+/// `PtgNameX`'s 1-based `ilbl` indexes `names`.
+struct XlsbExternalBook {
+  std::vector<std::string> sheet_names;
+  std::vector<std::string> names;
+};
+
+/// The supporting workbooks in `[N]` order: entry `i` is the book a
+/// formula spells `[i + 1]`.
+///
+/// A book whose external link part could not be decoded contributes an
+/// empty entry rather than being omitted, so the index keeps its
+/// meaning; a reference into it fails to resolve a sheet or name and is
+/// reported undecodable.
+using XlsbExternalBooks = std::vector<XlsbExternalBook>;
 
 /// Decodes the `rgce` Ptg byte stream `ptgs` into a `parser::AstNode`
 /// tree allocated in `arena`. The returned node is the formula root
@@ -119,10 +146,10 @@ struct XlsbSheetRange {
 /// aware behaviour. When an index is out of range for either table the
 /// decoder emits `#REF!` for the reference (Excel's own behaviour for a
 /// dangling sheet index) rather than failing the whole formula. An entry
-/// with a non-zero `sup_book` qualifies a sheet of another workbook; the
-/// decoder reports `kIoXlsbUnsupportedPtg` for it so the caller keeps
-/// Excel's cached value instead of silently rebinding the reference to
-/// a same-numbered local sheet.
+/// with a non-zero `external_book` qualifies a sheet of another
+/// workbook; the decoder reports `kIoXlsbUnsupportedPtg` for it so the
+/// caller keeps Excel's cached value instead of silently rebinding the
+/// reference to a same-numbered local sheet.
 ///
 /// Errors:
 ///   * `kIoXlsbUnsupportedPtg` — a token outside the supported set
@@ -136,7 +163,8 @@ struct XlsbSheetRange {
 Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Arena& arena,
                                               const std::vector<std::string>& sheet_names,
                                               const std::vector<XlsbName>& name_table,
-                                              const std::vector<XlsbSheetRange>& sheet_ranges);
+                                              const std::vector<XlsbSheetRange>& sheet_ranges,
+                                              const XlsbExternalBooks& external_books);
 
 }  // namespace xlsb
 }  // namespace io

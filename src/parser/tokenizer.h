@@ -21,13 +21,17 @@
 //     small and lets the parser handle the context-sensitive grammar.
 //     Bare structured refs with no table name (`[@col]` on its own) are
 //     rejected by the parser as `UnsupportedConstruct`.
-//     Cross-workbook references (`[Book1.xlsx]Sheet1!A1`, `[1]Sheet1!A1`)
-//     tokenize as the same component punctuation and are likewise not
-//     reinterpreted: the engine evaluates a single workbook, so there is
-//     no AST node for them. Such a reference falls through to the same
-//     bare-bracket handling as an unqualified structured ref and is
-//     rejected as `UnsupportedConstruct`. External link metadata found in
-//     a package is preserved separately (see `io/external_links.h`).
+//     Cross-workbook references tokenize as the same component
+//     punctuation and are reinterpreted by the parser into an
+//     `ExternalRef` node when the supporting workbook is named by index
+//     (`[1]Sheet1!A1`, `[1]!Name`), which is the only spelling Excel
+//     stores. A quoted qualifier keeps the bracket inside the quotes
+//     (`'[1]My Sheet'!A1`) and so arrives as a single SheetName token.
+//     The path-spelled form (`[Book1.xlsx]Sheet1!A1`) has no link table
+//     to bind the file name against and falls through to the same
+//     bare-bracket handling as an unqualified structured ref, rejected as
+//     `UnsupportedConstruct`. What such a reference resolves to lives in
+//     the external link cache (see `io/external_book.h`).
 //   * Column-only (`A:A`) and row-only (`1:1`) references: the lexer emits
 //     them as `Ident COLON Ident` and `Number COLON Number` respectively;
 //     the parser promotes the adjacent tokens to full range references.

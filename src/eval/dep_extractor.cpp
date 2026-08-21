@@ -392,6 +392,11 @@ void walk(const parser::AstNode& node, WalkState& state) {
     case parser::NodeKind::Literal:
     case parser::NodeKind::ErrorLiteral:
     case parser::NodeKind::ErrorPlaceholder:
+    // A cross-workbook reference reads a cache attached to the workbook,
+    // never a cell of it, so it contributes no edge to the dependency
+    // graph. The cache changes only when the file is reloaded, which
+    // rebuilds the graph anyway.
+    case parser::NodeKind::ExternalRef:
       return;
 
     case parser::NodeKind::Ref: {

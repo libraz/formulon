@@ -72,7 +72,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   if (decode_ptg_hex_corpus(data, size, &ptgs)) {
     formulon::Arena arena;
     formulon::io::ByteSpan bytes{ptgs.data(), ptgs.size()};
-    (void)formulon::io::xlsb::decode_ptgs(bytes, {}, arena, {}, {}, {});
+    (void)formulon::io::xlsb::decode_ptgs(bytes, {}, arena, {}, {}, {}, {});
     return 0;
   }
 

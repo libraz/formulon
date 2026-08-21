@@ -7,10 +7,12 @@
 //
 // The link's body part (`xl/externalLinks/externalLink<N>.xml`)
 // continues to round-trip verbatim through `passthrough_parts()`; this
-// reader only captures the metadata. Missing or unparseable parts
-// produce an `kUnknown` record rather than failing the load — Excel
-// itself tolerates partially-broken external link sections and we
-// match that behaviour.
+// reader additionally decodes its `<sheetNames>`, `<definedNames>` and
+// `<sheetDataSet>` into `ExternalLinkRecord::book`, which is what lets a
+// cross-workbook reference evaluate against Excel's own cache. Missing
+// or unparseable parts produce an `kUnknown` record rather than failing
+// the load — Excel itself tolerates partially-broken external link
+// sections and we match that behaviour.
 //
 // Internal helper for the OOXML reader. Not exposed beyond `src/io/`.
 

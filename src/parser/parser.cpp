@@ -964,6 +964,23 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
         skip_to_sync(ctx);
         return make_recovery_placeholder(sheet1.range);
       }
+      // A quoted qualifier that opens with `[N]` is a cross-workbook
+      // reference whose sheet name needed quoting (`'[1]My Sheet'!A1`).
+      // The bracket sits inside the quotes, so the whole thing arrives as
+      // one SheetName token.
+      {
+        std::uint32_t book = 0;
+        std::string_view book_sheet;
+        if (split_external_qualifier(peek().text, &book, &book_sheet)) {
+          const Token& qualifier = advance();
+          AstNode* ext = parse_external_ref_tail(book, book_sheet, qualifier.range);
+          if (ext != nullptr) {
+            return ext;
+          }
+          skip_to_sync(ctx);
+          return make_recovery_placeholder(qualifier.range);
+        }
+      }
       const Token& sheet = advance();
       AstNode* n = parse_sheet_qualified_ref(sheet.text, /*quoted=*/true, sheet.range);
       if (n != nullptr) {
@@ -973,19 +990,47 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       return make_recovery_placeholder(sheet.range);
     }
     case TokenKind::LBracket: {
-      // This arm only fires when `[` opens an atom with no preceding
-      // identifier — i.e. a *bare* structured reference (`=[@col]`,
-      // `=[col]`) or an external-book reference (`=[Book1.xlsx]Sheet1!A1`,
-      // `=[1]Sheet1!A1`). Neither shape is supported: bare structured
-      // refs have no table to qualify against, and cross-workbook
-      // references are out of scope for the engine (see `tokenizer.h`'s
-      // design-notes comment). Both surface `UnsupportedConstruct` (or
-      // `UnbalancedBrackets` if the bracket never closes).
+      // `[` opening an atom with no preceding identifier is one of three
+      // shapes. Two are cross-workbook references naming the supporting
+      // workbook by its index — `=[1]Sheet1!A1` and `=[1]!Name`, which is
+      // how Excel stores every such reference — and are parsed here into
+      // an `ExternalRef`. The third is a *bare* structured reference
+      // (`=[@col]`, `=[col]`), which has no table to qualify against, and
+      // stays `UnsupportedConstruct`. So does the path-spelled book form
+      // (`=[Book1.xlsx]Sheet1!A1`): Excel rewrites it to the index form
+      // on entry, so it only ever arrives from a caller typing it, and
+      // there is no link table to bind the file name against.
       //
       // Table-qualified structured refs (`=Table[col]`, `=Table[@col]`)
       // never reach this arm: they dispatch through `TokenKind::Ident`
       // to `parse_ident_or_call_or_full_col`, which builds a real
       // `StructuredRef` node.
+      if (peek_kind_at(1) == TokenKind::Number && peek_at(1).is_integer && peek_kind_at(2) == TokenKind::RBracket) {
+        const bool name_form = peek_kind_at(3) == TokenKind::Bang;
+        const bool cell_form = peek_kind_at(3) == TokenKind::Ident && peek_kind_at(4) == TokenKind::Bang;
+        if (name_form || cell_form) {
+          const Token& open = advance();  // LBracket
+          const Token& index = advance();
+          advance();  // RBracket
+          std::uint32_t book = 0;
+          std::string_view unused_sheet;
+          const std::string qualifier = "[" + std::string(index.lexeme) + "]";
+          if (split_external_qualifier(qualifier, &book, &unused_sheet)) {
+            std::string_view sheet;
+            if (cell_form) {
+              sheet = advance().lexeme;
+            }
+            AstNode* ext = parse_external_ref_tail(book, sheet, open.range);
+            if (ext != nullptr) {
+              return ext;
+            }
+          } else {
+            record_error_with_token(ParseErrorCode::InvalidReference, index.range, index.lexeme);
+          }
+          skip_to_sync(ctx);
+          return make_recovery_placeholder(open.range);
+        }
+      }
       const Token& lbracket = peek();
       bool found_close = false;
       std::uint32_t depth = 1;

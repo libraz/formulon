@@ -97,6 +97,14 @@ SpillPotential spill_potential_impl(const AstNode& root, const FunctionRegistry*
       // the endpoint span contains multiple sheets; without workbook order
       // in this syntax-only pass, retain array potential conservatively.
       return SpillPotential::kMaySpill;
+    case NodeKind::ExternalRef:
+      // A rectangle into another workbook spills exactly like a local one;
+      // a single cell or a defined name naming one does not. The
+      // name form stays conservative because the rectangle it names lives
+      // in the external-link cache, which this syntax-only pass cannot
+      // consult.
+      return (root.as_external_ref_is_range() || !root.as_external_ref_name().empty()) ? SpillPotential::kMaySpill
+                                                                                       : SpillPotential::kNever;
     case NodeKind::SpillRef:
     case NodeKind::StructuredRef:
     case NodeKind::RangeOp:

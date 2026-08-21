@@ -106,10 +106,50 @@ enum class XlsbRecordType : std::uint16_t {
                  ///< `_xlfn.*` / `_xlpm.*` future-function and LET/LAMBDA
                  ///< parameter name entries referenced by `PtgName`.
 
+  // Supporting-book table (workbook globals). The records between
+  // `BrtBeginExternals` and `BrtEndExternals` list, in order, every book
+  // a qualified reference can name; `BrtExternSheet`'s `iSupBook` is a
+  // 0-based index into that list. The list is *not* guaranteed to start
+  // with `BrtSupSelf`: a workbook whose only qualified references are
+  // cross-workbook carries no self entry at all, so index 0 is then an
+  // external book. Deciding internal-vs-external from the index alone
+  // rebinds such a reference to a same-numbered local sheet.
+  BrtBeginExternals = 353,  ///< Start of the supporting-book list.
+  BrtEndExternals = 354,    ///< End of the supporting-book list.
+  BrtSupBookSrc = 355,      ///< Another workbook, named by its externalLink rel id.
+  BrtSupAddin = 356,        ///< An add-in function library.
+  BrtSupSelf = 357,         ///< This workbook.
+  BrtSupSame = 358,         ///< The same book as the preceding entry.
+  /// Sheet-name table of the preceding supporting book: `count(u32)`
+  /// then `count` XLWideStrings. Appears both in `xl/workbook.bin` and
+  /// in an external link part, where it names the sheets a cached
+  /// `sheetId` indexes.
+  BrtSupTabs = 359,
+
+  // External link part (`xl/externalLinks/externalLink<N>.bin`): the
+  // supporting workbook's defined names and the cell values Excel cached
+  // the last time it could read that workbook. Layout measured against
+  // Excel-365 output with the equivalent `.xlsx` package as the
+  // reference; see `xlsb/external_link_reader.cpp`.
+  BrtBeginExternalBook = 360,  ///< Opens the part; carries the link's rel id.
+  BrtEndExternalBook = 588,    ///< Closes the part.
+  BrtExternNameStart = 577,    ///< One supporting-workbook defined name.
+  BrtExternNameFmla = 585,     ///< That name's target, as a Ptg stream.
+  BrtExternNameEnd = 587,      ///< Closes a defined name.
+  BrtBeginExternTable = 363,   ///< Opens one cached sheet; carries its `sheetId`.
+  BrtEndExternTable = 364,     ///< Closes a cached sheet.
+  BrtExternRowHdr = 366,       ///< Row index of the cached cells that follow.
+  BrtExternCellReal = 368,     ///< Cached numeric cell.
+  BrtExternCellBool = 369,     ///< Cached boolean cell.
+  BrtExternCellError = 370,    ///< Cached error cell.
+  BrtExternCellString = 371,   ///< Cached text cell.
+
   // ExternSheet table (workbook globals): resolves a `PtgRef3d` /
-  // `PtgArea3d` `ixti` to a `(itabFirst, itabLast)` sheet-index range.
-  // `itabFirst == itabLast` is a single-sheet qualified reference;
-  // `itabFirst != itabLast` is a genuine 3-D range (e.g. `Sheet1:Sheet3`).
+  // `PtgArea3d` `ixti` to a `(iSupBook, itabFirst, itabLast)` triple.
+  // Within one book, `itabFirst == itabLast` is a single-sheet qualified
+  // reference and `itabFirst != itabLast` a genuine 3-D range (e.g.
+  // `Sheet1:Sheet3`); `itabFirst == -2` marks an entry that names no
+  // sheet at all, which is what a `PtgNameX` book-scope name uses.
   BrtExternSheet = 362,
 
   // Array-formula body: the real Ptg tokens for a CSE / dynamic-array

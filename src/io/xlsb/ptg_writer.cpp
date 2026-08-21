@@ -229,6 +229,8 @@ class Encoder {
         return emit_array(node);
       case parser::NodeKind::NameRef:
         return emit_name_ref(node.as_name());
+      case parser::NodeKind::ExternalRef:
+        return unsupported_node("ExternalRef");
       case parser::NodeKind::StructuredRef:
         return unsupported_node("StructuredRef");
       case parser::NodeKind::SpillRef:

@@ -225,16 +225,29 @@ TEST(ParserErrors, UnbalancedBracketsForOpenStructuredRef) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnbalancedBrackets));
 }
 
-TEST(ParserErrors, ExternalWorkbookReferenceIsUnsupported) {
-  // Cross-workbook references are out of scope: a leading `[` with no
-  // qualifying table name is rejected as UnsupportedConstruct, and the
-  // parser recovers with a placeholder rather than bailing.
-  for (const char* src : {"=[1]Sheet1!A1", "=[Book1.xlsx]Sheet1!A1"}) {
+TEST(ParserErrors, PathSpelledExternalWorkbookReferenceIsUnsupported) {
+  // Excel rewrites a cross-workbook reference to the index form
+  // (`[1]Sheet1!A1`) as it is entered, so the path-spelled form only ever
+  // arrives from a caller typing it and has no link table to bind the
+  // file name against. It stays UnsupportedConstruct, and the parser
+  // recovers with a placeholder rather than bailing.
+  Arena a;
+  Parser p("=[Book1.xlsx]Sheet1!A1", a);
+  const AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct));
+}
+
+TEST(ParserErrors, IndexSpelledExternalWorkbookReferenceParses) {
+  // The shape Excel actually stores. Both the sheet form and the
+  // book-scope defined-name form parse cleanly into an `ExternalRef`.
+  for (const char* src : {"=[1]Sheet1!A1", "=[1]Sheet1!A1:B2", "=[2]!SomeName"}) {
     Arena a;
     Parser p(src, a);
     const AstNode* root = p.parse();
     ASSERT_NE(root, nullptr) << src;
-    EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct)) << src;
+    EXPECT_TRUE(p.errors().empty()) << src;
+    EXPECT_EQ(root->kind(), NodeKind::ExternalRef) << src;
   }
 }
 

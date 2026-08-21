@@ -29,20 +29,23 @@
 //        * Walk the row hierarchy depth-first to find the leaf whose
 //          ancestors match every recorded row-axis pair (in the order
 //          declared by `row_field_order`). Same for the col hierarchy.
-//        * Partial paths -- caller did not supply every row/col field --
-//          surface `#REF!`. Only the (no-args, grand_total) and
-//          (full-axis, leaf) shapes are honoured in the MVP.
-//   7. Locate the data field by name in `data_fields()` -> data field
-//      index `df_idx`. Emit `result.values[row_leaf][col_leaf][df_idx]`
-//      reified into the eval arena (see `reify_text` below). If no
-//      row/col fields are configured, the (0, 0) cell is the sole leaf;
-//      this also covers the "plain `=GETPIVOTDATA("Sum of Amount", A3)`
-//      grand-total formula when row/col fields are configured" case via
-//      the same path because the grand total of a single-aggregation
-//      pivot equals `result.values[0][0][df_idx]` only when there are
-//      no axis fields. With axis fields, no axis pairs -> `#REF!`. The
-//      design corpus (§15.1.4) keeps this strict because Mac itself
-//      surfaces `#REF!` for partial-path lookups.
+//        * An axis is addressed all-or-nothing. Naming some of an
+//          axis's fields but not all of them is a partial path and
+//          surfaces `#REF!` -- the design corpus (§15.1.4) keeps this
+//          strict because Mac does the same.
+//        * Naming one axis in full and not mentioning the other at all
+//          is not a partial path: it asks for that leaf's total over
+//          the whole of the other axis, which is the Grand Total row or
+//          column the pivot renders. Those come from
+//          `row_leaf_totals` / `col_leaf_totals`, which the evaluator
+//          re-aggregates from the source records so a non-additive
+//          measure (Average / Max / StdDev) stays correct.
+//   7. Locate the data field by display name, falling back to the name
+//      of the source column it aggregates -> index `df_idx`. Emit
+//      `result.values[row_leaf][col_leaf][df_idx]` reified into the eval
+//      arena (see `reify_text` below). With no axis fields the (0, 0)
+//      cell is the sole leaf; with axis fields and no pairs at all the
+//      answer is the grand total.
 
 #include "eval/getpivotdata_lazy.h"
 
@@ -118,12 +121,32 @@ std::size_t find_field_index(const std::vector<pivot::PivotField>& fields, std::
   return static_cast<std::size_t>(-1);
 }
 
-// Locates `name` in `data_fields` by display name. Returns the 0-based
+// Locates `name` in `data_fields`, by display name first and then by the
+// name of the source field the entry aggregates. Returns the 0-based
 // index, or `static_cast<std::size_t>(-1)` when no data field matches.
+//
+// Both spellings are accepted because Excel accepts both, and the one it
+// writes into a generated formula is the source-column name: a pivot
+// whose measure displays as "合計 / Amt" is addressed by Excel's own
+// click-generated formula as `GETPIVOTDATA("Amt", ...)`. Display name
+// wins so an entry explicitly renamed to another field's column name
+// still resolves to itself, and the source-name pass takes the first
+// match so two measures over one column (Sum and Average of the same
+// field) resolve to the earlier one rather than to nothing.
 std::size_t find_data_field_index(const std::vector<pivot::PivotDataField>& data_fields,
-                                  std::string_view name) noexcept {
+                                  const std::vector<pivot::PivotField>& fields, std::string_view name) noexcept {
   for (std::size_t i = 0; i < data_fields.size(); ++i) {
     if (data_fields[i].name == name) {
+      return i;
+    }
+  }
+  for (std::size_t i = 0; i < data_fields.size(); ++i) {
+    const std::size_t source = data_fields[i].field_index;
+    if (source >= fields.size()) {
+      continue;
+    }
+    const pivot::PivotField& field = fields[source];
+    if (field.custom_name == name || field.source_name == name) {
       return i;
     }
   }
@@ -376,7 +399,7 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // row/col axis fields the value matrix is 1x1xN_data; with axis
   // fields the (row_leaf, col_leaf) coordinates address the correct
   // cell. Either way, the third index is the data-field slot.
-  const std::size_t df_idx = find_data_field_index(table->data_fields(), data_field_text.value());
+  const std::size_t df_idx = find_data_field_index(table->data_fields(), table->fields(), data_field_text.value());
   if (df_idx == static_cast<std::size_t>(-1)) {
     return Value::error(kPivotRefError);
   }
@@ -397,31 +420,70 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return Value::error(kPivotRefError);
   }
 
-  // 8. Resolve the row / col leaf indices. With axis fields configured,
-  // every depth must be filled; otherwise refuse the lookup.
-  std::size_t row_leaf = 0;
-  if (!table->row_field_order().empty()) {
-    for (bool s : row_path_set) {
-      if (!s) {
-        return Value::error(kPivotRefError);
-      }
+  // 8. Resolve the row / col leaf indices. An axis is either fully
+  // specified or not mentioned at all; a path that names some of an
+  // axis's fields but not all of them has no well-defined answer and is
+  // refused.
+  //
+  // Naming one axis in full and omitting the other is not a partial
+  // path: it asks for that leaf's total across the whole of the other
+  // axis, which is the "Grand Total" row or column the pivot renders.
+  // `=GETPIVOTDATA("Amt", $E$1, "Region", "North")` over a pivot with
+  // Qtr on the columns is that shape, and Excel answers with North's
+  // total across every quarter.
+  const auto axis_state = [](const std::vector<bool>& path_set) {
+    std::size_t filled = 0;
+    for (const bool is_set : path_set) {
+      filled += is_set ? 1U : 0U;
     }
+    return filled;
+  };
+  const bool has_row_axis = !table->row_field_order().empty();
+  const bool has_col_axis = !table->col_field_order().empty();
+  const std::size_t row_filled = axis_state(row_path_set);
+  const std::size_t col_filled = axis_state(col_path_set);
+  const bool row_complete = has_row_axis && row_filled == row_path_set.size();
+  const bool col_complete = has_col_axis && col_filled == col_path_set.size();
+  if (has_row_axis && row_filled != 0 && !row_complete) {
+    return Value::error(kPivotRefError);
+  }
+  if (has_col_axis && col_filled != 0 && !col_complete) {
+    return Value::error(kPivotRefError);
+  }
+
+  std::size_t row_leaf = 0;
+  if (row_complete) {
     row_leaf = walk_hierarchy<pivot::RowHierarchyNode>(pivot_result.rows, row_path);
     if (row_leaf == static_cast<std::size_t>(-1)) {
       return Value::error(kPivotRefError);
     }
   }
   std::size_t col_leaf = 0;
-  if (!table->col_field_order().empty()) {
-    for (bool s : col_path_set) {
-      if (!s) {
-        return Value::error(kPivotRefError);
-      }
-    }
+  if (col_complete) {
     col_leaf = walk_hierarchy<pivot::ColHierarchyNode>(pivot_result.cols, col_path);
     if (col_leaf == static_cast<std::size_t>(-1)) {
       return Value::error(kPivotRefError);
     }
+  }
+
+  // One axis named, the other left open: read the leaf's own total. The
+  // evaluator re-aggregates these from the source records rather than
+  // summing the row's cells, which is what keeps a non-additive measure
+  // (Average / Max / StdDev) correct here.
+  if (row_complete && has_col_axis && !col_complete) {
+    if (row_leaf >= pivot_result.row_leaf_totals.size() || df_idx >= pivot_result.row_leaf_totals[row_leaf].size()) {
+      return Value::error(kPivotRefError);
+    }
+    return reify_in_arena(pivot_result.row_leaf_totals[row_leaf][df_idx], arena);
+  }
+  if (col_complete && has_row_axis && !row_complete) {
+    if (col_leaf >= pivot_result.col_leaf_totals.size() || df_idx >= pivot_result.col_leaf_totals[col_leaf].size()) {
+      return Value::error(kPivotRefError);
+    }
+    return reify_in_arena(pivot_result.col_leaf_totals[col_leaf][df_idx], arena);
+  }
+  if ((has_row_axis && !row_complete) || (has_col_axis && !col_complete)) {
+    return Value::error(kPivotRefError);
   }
 
   if (row_leaf >= pivot_result.values.size() || col_leaf >= pivot_result.values[row_leaf].size() ||

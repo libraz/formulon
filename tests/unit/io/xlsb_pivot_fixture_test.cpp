@@ -1,14 +1,17 @@
 //
-// Pins the XLSB pivot gap against a real Mac Excel 365-produced `.xlsb`
-// (`tests/fixtures/excel/xlsb_pivot_base.xlsb`).
+// Checks XLSB pivot decoding against a real Mac Excel 365-produced
+// `.xlsb` (`tests/fixtures/excel/xlsb_pivot_base.xlsb`).
 //
-// The XLSB reader decodes no pivot records, so a pivot that lives in a
-// `.xlsb` never reaches the evaluated pivot model and GETPIVOTDATA over
-// it resolves against nothing. That is a divergence from Excel rather
-// than a formula defect, and this fixture is what makes it measurable:
-// Excel evaluated the same three formulas before saving, so the file
-// carries both answers at once — Excel's in the cached cell values, ours
-// from a recalc.
+// The fixture carries both engines' answers at once: Excel evaluated the
+// three GETPIVOTDATA formulas before saving, so its results sit in the
+// cached cell values while ours come from a recalc over the decoded
+// model. Every expectation below is therefore a direct comparison rather
+// than a number transcribed into this file.
+//
+// The record layouts the reader relies on were established by
+// differential decode — the same workbook re-saved by Excel as `.xlsx`
+// and read with the OOXML pivot reader — rather than from a
+// specification. See `src/io/xlsb/pivot_reader.h`.
 //
 // Fixture layout (`Sheet1`):
 //   A1:C7  source table, headers Region / Qtr / Amt
@@ -19,10 +22,9 @@
 //   E13    GETPIVOTDATA("Amt",$E$1)                             -> 56
 //   E14    GETPIVOTDATA("Amt",$E$1,"Region","North","Qtr","Q1") -> 10
 //
-// When XLSB pivot record decoding lands, the recalc expectations below
-// become the cached values and this file collapses into a plain equality
-// check. Until then it is the only place the measured Excel answers are
-// written down.
+// E12 is the shape that names one axis in full and leaves the other
+// open: Qtr is on the columns and the formula does not mention it, so
+// the answer is North's total across every quarter.
 
 #include <array>
 #include <cstdint>
@@ -35,6 +37,9 @@
 #include "gtest/gtest.h"
 #include "io/xlsb/reader.h"
 #include "io/zip_reader.h"
+#include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
+#include "pivot/pivot_types.h"
 #include "sheet.h"
 #include "value.h"
 #include "workbook.h"
@@ -97,19 +102,67 @@ Workbook LoadFixture() {
 }
 
 // ---------------------------------------------------------------------------
-// (a) The package really does carry a pivot, and we really do drop it.
+// (a) The package's three pivot parts reach the model.
 // ---------------------------------------------------------------------------
 
-TEST(XlsbPivotFixture, PivotPartsAreNotDecodedIntoTheModel) {
+TEST(XlsbPivotFixture, PivotPartsDecodeIntoTheModel) {
   Workbook wb = LoadFixture();
   ASSERT_EQ(wb.sheet_count(), 1U);
-  // The `.xlsb` holds `pivotCacheDefinition1.bin`, `pivotCacheRecords1.bin`
-  // and `pivotTable1.bin`; none of the three is decoded, so nothing is
-  // wired onto the workbook. Asserting zero (rather than skipping the
-  // check) is what turns "not implemented" into a fact a future decoder
-  // has to overturn deliberately.
-  EXPECT_TRUE(wb.pivot_caches().empty());
-  EXPECT_TRUE(wb.sheet(0).pivot_tables().empty());
+  ASSERT_EQ(wb.pivot_caches().size(), 1U);
+  ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 1U);
+
+  // `pivotCacheDefinition1.bin`: three source columns, the two discrete
+  // ones carrying their shared items and the measure carrying none
+  // because its values are stored inline on each record.
+  const pivot::PivotCache& cache = *wb.pivot_caches().front();
+  ASSERT_EQ(cache.fields().size(), 3U);
+  EXPECT_EQ(cache.fields()[0].name, "Region");
+  EXPECT_EQ(cache.fields()[1].name, "Qtr");
+  EXPECT_EQ(cache.fields()[2].name, "Amt");
+  EXPECT_EQ(cache.fields()[0].shared_items.size(), 3U);
+  EXPECT_EQ(cache.fields()[1].shared_items.size(), 2U);
+  EXPECT_TRUE(cache.fields()[2].shared_items.empty());
+
+  // `pivotCacheRecords1.bin`: the six source rows, each an index into
+  // Region's items, an index into Qtr's, and the inline amount.
+  ASSERT_EQ(cache.records().size(), 6U);
+  double amount_total = 0.0;
+  for (const pivot::PivotCacheRecord& record : cache.records()) {
+    ASSERT_EQ(record.cells.size(), 3U);
+    ASSERT_EQ(record.cell_is_index.size(), 3U);
+    EXPECT_TRUE(record.cell_is_index[0]);
+    EXPECT_TRUE(record.cell_is_index[1]);
+    EXPECT_FALSE(record.cell_is_index[2]) << "the measure is stored inline, not as a shared-item index";
+    ASSERT_TRUE(record.cells[2].is_number());
+    amount_total += record.cells[2].as_number();
+  }
+  EXPECT_DOUBLE_EQ(amount_total, kExcelGrandTotal) << "the decoded records do not sum to Excel's grand total";
+
+  // `pivotTable1.bin`: Region down the rows, Qtr across the columns, one
+  // summed measure, anchored on the E1:H6 rectangle Excel wrote.
+  const pivot::PivotTable& table = *wb.sheet(0).pivot_tables().front();
+  EXPECT_EQ(table.pivot_cache_id(), cache.cache_id());
+  EXPECT_EQ(table.anchor_row(), 0U);
+  EXPECT_EQ(table.anchor_col(), kProbeCol);
+  EXPECT_EQ(table.span_rows(), 6U);
+  EXPECT_EQ(table.span_cols(), 4U);
+  ASSERT_EQ(table.row_field_order().size(), 1U);
+  ASSERT_EQ(table.col_field_order().size(), 1U);
+  EXPECT_EQ(table.row_field_order()[0], 0U);
+  EXPECT_EQ(table.col_field_order()[0], 1U);
+  ASSERT_EQ(table.data_fields().size(), 1U);
+  EXPECT_EQ(table.data_fields()[0].field_index, 2U);
+  EXPECT_EQ(table.data_fields()[0].aggregation, pivot::Aggregation::Sum);
+  // Excel names the measure after its aggregation; GETPIVOTDATA in the
+  // sheet addresses it by the source column instead, and both resolve.
+  EXPECT_EQ(table.data_fields()[0].name, "合計 / Amt");
+
+  // Names are backfilled from the bound cache, positionally: the binary
+  // identifies a source column by index and never by name.
+  ASSERT_EQ(table.fields().size(), 3U);
+  EXPECT_EQ(table.fields()[0].source_name, "Region");
+  EXPECT_EQ(table.fields()[1].source_name, "Qtr");
+  EXPECT_EQ(table.fields()[2].source_name, "Amt");
 }
 
 // ---------------------------------------------------------------------------
@@ -149,10 +202,13 @@ TEST(XlsbPivotFixture, RenderedPivotGridSurvivesAsPlainCells) {
 }
 
 // ---------------------------------------------------------------------------
-// (c) The divergence itself: recalc replaces every answer with #REF!.
+// (c) A recalc reproduces every answer Excel cached.
 // ---------------------------------------------------------------------------
 
-TEST(XlsbPivotFixture, RecalcTurnsGetPivotDataIntoRefErrorWhileExcelAnswers) {
+TEST(XlsbPivotFixture, RecalcReproducesTheExcelGetPivotDataAnswers) {
+  // The fixture carries both answers at once -- Excel's in the cached cell
+  // values, ours from the recalc -- so this is a direct comparison rather
+  // than a check against a number written down in this file.
   Workbook wb = LoadFixture();
   ASSERT_EQ(wb.sheet_count(), 1U);
   auto recalc_or = wb.recalc(eval::default_registry());
@@ -167,10 +223,27 @@ TEST(XlsbPivotFixture, RecalcTurnsGetPivotDataIntoRefErrorWhileExcelAnswers) {
                                         Probe{kProbeRowTwoFields, kExcelTwoFields}};
   for (const Probe& probe : kProbes) {
     const Value after = wb.sheet(0).resolve_cell_value(probe.row, kProbeCol);
-    ASSERT_TRUE(after.is_error()) << "row " << probe.row << ": expected the pivot lookup to fail, got a value";
-    EXPECT_EQ(after.as_error(), ErrorCode::Ref)
-        << "row " << probe.row << ": Excel answered " << probe.excel_answer << " for this probe";
+    ASSERT_TRUE(after.is_number()) << "row " << probe.row << ": the pivot lookup did not produce a number";
+    EXPECT_DOUBLE_EQ(after.as_number(), probe.excel_answer) << "row " << probe.row;
   }
+}
+
+// The measure displays as "合計 / Amt" but every formula in the sheet
+// addresses it as "Amt", which is what Excel writes into a formula it
+// generates. Both spellings have to resolve to the same value.
+TEST(XlsbPivotFixture, TheMeasureResolvesByDisplayNameAndBySourceColumn) {
+  Workbook wb = LoadFixture();
+  ASSERT_EQ(wb.sheet_count(), 1U);
+  // E13 already asks for "Amt" and is covered above; rewriting that same
+  // cell with the display-name spelling keeps the comparison on one cell
+  // the dependency graph already tracks.
+  wb.sheet(0).set_cell_formula(kProbeRowGrandTotal, kProbeCol, "=GETPIVOTDATA(\"合計 / Amt\",$E$1)");
+  auto recalc_or = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(recalc_or)) << (recalc_or ? "" : recalc_or.error().message);
+
+  const Value by_display = wb.sheet(0).resolve_cell_value(kProbeRowGrandTotal, kProbeCol);
+  ASSERT_TRUE(by_display.is_number()) << "the display-name spelling did not resolve";
+  EXPECT_DOUBLE_EQ(by_display.as_number(), kExcelGrandTotal);
 }
 
 }  // namespace

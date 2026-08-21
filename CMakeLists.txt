@@ -131,6 +131,7 @@ set(FORMULON_CORE_SOURCES
   src/io/comments_reader.cpp
   src/io/comments_writer.cpp
   src/io/defined_names.cpp
+  src/io/external_book.cpp
   src/io/future_functions.cpp
   src/io/iso_date.cpp
   src/io/ooxml_reader.cpp
@@ -165,11 +166,13 @@ set(FORMULON_CORE_SOURCES
   src/io/xsd_double.cpp
   src/io/zip_reader.cpp
   src/io/xlsb/cell_writer.cpp
+  src/io/xlsb/external_link_reader.cpp
   src/io/xlsb/func_id_table.cpp
   src/io/xlsb/metadata_bin.cpp
   src/io/xlsb/ptg.cpp
   src/io/xlsb/ptg_reader.cpp
   src/io/xlsb/ptg_writer.cpp
+  src/io/xlsb/pivot_reader.cpp
   src/io/xlsb/reader.cpp
   src/io/xlsb/record.cpp
   src/io/xlsb/record_writer.cpp
@@ -286,6 +289,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/tree_walker/walker.cpp
   src/eval/tree_walker_lazy_table.cpp
   src/eval/eval_context.cpp
+  src/eval/external_ref.cpp
   src/eval/eval_state.cpp
   src/eval/criteria.cpp
   src/eval/jp_fold.cpp

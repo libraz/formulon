@@ -178,6 +178,28 @@ void DumpInto(const AstNode& node, std::string& out) {
       return;
     }
 
+    case NodeKind::ExternalRef: {
+      out.append("(external-ref [");
+      out.append(std::to_string(node.as_external_ref_book()));
+      out.push_back(']');
+      if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
+        out.append(" name ");
+        out.append(name);
+        out.push_back(')');
+        return;
+      }
+      out.push_back(' ');
+      out.append(node.as_external_ref_sheet());
+      out.push_back(' ');
+      out.append(format_a1(node.as_external_ref_cell()));
+      if (node.as_external_ref_is_range()) {
+        out.push_back(':');
+        out.append(format_a1(node.as_external_ref_cell_end()));
+      }
+      out.push_back(')');
+      return;
+    }
+
     case NodeKind::StructuredRef: {
       out.append("(struct-ref ");
       out.append(node.as_structured_ref_table());

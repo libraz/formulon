@@ -6,10 +6,12 @@
 //
 // The link's body part — `xl/externalLinks/externalLink<N>.xml`, which
 // records cached cell values, sheet names and defined names from the
-// remote workbook — is NOT parsed here; it round-trips verbatim through
-// `Workbook::passthrough_parts()`. This module only exposes enough
-// metadata for callers to enumerate the links and obtain the target
-// URL / kind through the C ABI.
+// remote workbook — is read into `ExternalLinkRecord::book` so that
+// cross-workbook references can be evaluated against Excel's own cache
+// (see `io/external_book.h`). The part continues to round-trip verbatim
+// through `Workbook::passthrough_parts()` rather than being rebuilt on
+// save: nothing in the engine authors an external link, so re-emitting
+// Excel's bytes is strictly more faithful than regenerating them.
 //
 // Design references:
 //   * ECMA-376 §18.14 (externalLink, externalBook, oleLink, ddeLink)
@@ -20,6 +22,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+
+#include "io/external_book.h"
 
 namespace formulon {
 namespace io {
@@ -71,6 +75,11 @@ struct ExternalLinkRecord {
   std::string target;
   bool target_external = true;
   Kind kind = Kind::kUnknown;
+  /// The supporting workbook's cached sheet names, defined names and
+  /// cell values. Populated only for `kExternalBook`; an OLE or DDE link
+  /// carries no such cache and leaves this empty, which reads as "no
+  /// sheet, no name, nothing cached".
+  ExternalBook book;
 };
 
 }  // namespace io

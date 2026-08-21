@@ -599,6 +599,11 @@ Expected<void, Error> compile_node(BodyState& bs, const parser::AstNode& node) {
       // 3-D references are resolved by the tree-walker only; the bytecode
       // VM runs in parity mode and does not implement them.
       return make_compile_error(FormulonErrorCode::kVmUnsupportedNode, "3-D reference not supported by the VM");
+    case parser::NodeKind::ExternalRef:
+      // Same position as `Ref3D`: resolving one needs the workbook's
+      // external-link cache, which the VM's IR does not carry.
+      return make_compile_error(FormulonErrorCode::kVmUnsupportedNode,
+                                "cross-workbook reference not supported by the VM");
     case parser::NodeKind::StructuredRef:
       return compile_structured_ref(bs, node);
     case parser::NodeKind::NameRef:
