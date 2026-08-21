@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `TRIM` no longer rewrites an ideographic space (U+3000) as an ASCII
+  space. A run of trimmable spaces still collapses to one character, but
+  the character it keeps is the one the run started with, so `"a　　b"`
+  trims to `"a　b"` and a lone interior full-width space is left alone.
+  Rewriting it to U+0020 silently reflowed Japanese text that had been
+  spaced deliberately, and shifted every later `FIND` / `MID` position by
+  the difference in byte width.
+
+- `ISOMITTED` now reports `TRUE` for an argument the caller omitted with
+  an empty slot — `f(1, , 3)` as well as a missing trailing one. It had
+  answered `FALSE` for the empty-slot spelling, which is the spelling
+  Excel actually uses for an omitted argument, so the optional-parameter
+  idiom (`IF(ISOMITTED(x), default, x)`) selected the wrong branch in a
+  `LAMBDA` helper. Omission is a property of the call's syntax rather
+  than of the argument's position, and applies to leading, middle and
+  trailing slots alike.
+
 ### Documentation
 
 - The row and column edits now state what they do not move. They remap
