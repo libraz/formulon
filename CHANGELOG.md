@@ -7,42 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- `TRIM` no longer rewrites an ideographic space (U+3000) as an ASCII
-  space. A run of trimmable spaces still collapses to one character, but
-  the character it keeps is the one the run started with, so `"a　　b"`
-  trims to `"a　b"` and a lone interior full-width space is left alone.
-  Rewriting it to U+0020 silently reflowed Japanese text that had been
-  spaced deliberately, and shifted every later `FIND` / `MID` position by
-  the difference in byte width.
-
-- `ISOMITTED` now reports `TRUE` for an argument the caller omitted with
-  an empty slot — `f(1, , 3)` as well as a missing trailing one. It had
-  answered `FALSE` for the empty-slot spelling, which is the spelling
-  Excel actually uses for an omitted argument, so the optional-parameter
-  idiom (`IF(ISOMITTED(x), default, x)`) selected the wrong branch in a
-  `LAMBDA` helper. Omission is a property of the call's syntax rather
-  than of the argument's position, and applies to leading, middle and
-  trailing slots alike.
-
-### Documentation
-
-- The row and column edits now state what they do not move. They remap
-  every structure the engine models, but worksheet content kept
-  byte-verbatim because the engine does not model it — the worksheet
-  `<extLst>` behind DataBar extended settings, sparkline groups and
-  slicer anchors, plus any unmodelled `<worksheet>` child — keeps its
-  pre-edit rectangles, and nothing reports it. Excel resolves the
-  mismatch differently per extension: it drops an `x14`
-  conditional-formatting entry whose range no longer matches the rule it
-  extends, so an extended DataBar reverts to its legacy rendering, while
-  a sparkline keeps drawing from a source range that has moved out from
-  under it. The limitation now reaches the C header, both TypeScript
-  declaration files and the Python docstrings, where previously only an
-  internal header mentioned it.
-
-## [0.11.0] - 2026-08-20
+## [0.11.0] - 2026-08-22
 
 ### Added
 
@@ -97,6 +62,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stores one style index across every cell in a rectangle in a single
   call, materialising cells that do not exist yet as styled blanks, so
   ruling a report's border no longer costs one ABI crossing per cell.
+
+- Cross-workbook references resolve. The index-spelled forms Excel
+  stores — `[1]Sheet1!A1`, `[1]Sheet1!A1:B2`, `[2]!Name` and the quoted
+  `'[1]My Sheet'!A1` — parse and evaluate against the cached values in
+  the external link part, which is the same cache Excel itself reads
+  once the supporting workbook is closed. The path-spelled
+  `[Book1.xlsx]Sheet1!A1` remains unsupported: it carries no link-table
+  index to bind the file name against. On XLSB the supporting-book table
+  is decoded too, so an external sheet index resolves to the book it
+  names rather than being assumed to be this workbook — index 0 is not
+  always the file itself, and assuming it rebound a cross-workbook
+  reference onto a same-numbered local sheet. Such a reference is still
+  not encoded on an XLSB save.
+
+- The XLSB pivot parts — `pivotCacheDefinition`, `pivotCacheRecords` and
+  the pivot table itself — decode into the same model the OOXML pivot
+  reader builds, so a pivot in an `.xlsb` file is evaluated rather than
+  dropped. A pivot whose record encoding has not been measured against a
+  file Excel wrote is skipped rather than guessed at. `GETPIVOTDATA`
+  resolves
+  a data field by its display name and then by the source column it
+  aggregates, which is the spelling Excel writes into a
+  click-generated formula, and a lookup that names one axis in full
+  while leaving the other open answers from the leaf totals instead of
+  `#REF!`.
+
+- Phonetic (furigana) annotations keep the spans they annotate. A cell's
+  kana is stored as one run per `<rPh>` block carrying that block's
+  UTF-16 span, rather than flattened to a single whole-string
+  annotation, so a partially annotated string survives a load and save.
+  `PHONETIC` substitutes only the annotated spans and passes the rest of
+  the surface text through, surfacing kana and original characters side
+  by side. Two cells share a shared-string entry only when their spans
+  agree as well as their text.
+
+- The spill operator `#` accepts an anchor that is computed rather than
+  written out, so `OFFSET`, `INDIRECT`, a `CHOOSE` or `IF` branch, a
+  parenthesised reference and a `LET`-bound name each anchor a spill. An
+  anchor naming more than one cell is `#REF!` rather than being narrowed
+  to its top-left corner. A formula of this shape evaluates through the
+  tree walker, since the bytecode compiler's spill-reference opcode
+  indexes a pool a computed anchor has no entry in.
+
+- Two more authored pivot filter families are evaluated. The week
+  windows (`thisWeek` / `lastWeek` / `nextWeek`) resolve against the
+  calendar week running Sunday through Saturday rather than a rolling
+  seven days, so a `thisWeek` read on a Friday still starts on the
+  preceding Sunday and the three windows tile with no gap or overlap.
+  The recurring `M1`..`M12` / `Q1`..`Q4` selectors name a calendar
+  position rather than a contiguous range — `M1` keeps every January of
+  every year — so they resolve without reading the clock. No authored
+  `<filters>` family is left unevaluated.
+
+- The range operator composes to any depth. A `:` chain folds into the
+  rectangle bounding every leaf, and mixing axes is a composition rather
+  than an error: a whole-column leaf spans every row and a whole-row
+  leaf every column, so `A:C:1:3` bounds the whole grid and
+  `SUM(A:C:E:G)` sums the bounded columns instead of answering
+  `#VALUE!`. Every existing two-endpoint spelling keeps its anchors and
+  sheet qualifier verbatim. Excel stores such a chain as written while
+  this engine records the rectangle it names, so a re-serialised
+  `H:H:E:E` is written back as `H:E` — the rectangle and every evaluated
+  result are identical.
 
 ### Changed
 
@@ -214,7 +242,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scales with the pool, while a sheet of bare `=RAND()` is bound by the
   per-cell commit rather than by evaluation and does not.
 
+- Every sort in the engine runs through one shared index-sort body — the
+  C API parts list, conditional-format span merging, `MODE`'s frequency
+  table, the dynamic-array `SORT` / `SORTBY` lane permutations, spill
+  release, the OOXML and XLSB readers and writers, the pivot filter and
+  hierarchy builders, and the sheet's own row operations — instead of
+  each site instantiating its own copy of the introsort. This is a WASM
+  code-size measure: the shared order is stable, which is at least as
+  strong as what the replaced comparators guaranteed, so no result
+  moves. `ROMAN` additionally walks a fixed value-descending pair table
+  instead of building and sorting one on every call, with unchanged
+  output.
+
 ### Fixed
+
+- `TRIM` no longer rewrites an ideographic space (U+3000) as an ASCII
+  space. A run of trimmable spaces still collapses to one character, but
+  the character it keeps is the one the run started with, so `"a　　b"`
+  trims to `"a　b"` and a lone interior full-width space is left alone.
+  Rewriting it to U+0020 silently reflowed Japanese text that had been
+  spaced deliberately, and shifted every later `FIND` / `MID` position by
+  the difference in byte width.
+
+- `ISOMITTED` now reports `TRUE` for an argument the caller omitted with
+  an empty slot — `f(1, , 3)` as well as a missing trailing one. It had
+  answered `FALSE` for the empty-slot spelling, which is the spelling
+  Excel actually uses for an omitted argument, so the optional-parameter
+  idiom (`IF(ISOMITTED(x), default, x)`) selected the wrong branch in a
+  `LAMBDA` helper. Omission is a property of the call's syntax rather
+  than of the argument's position, and applies to leading, middle and
+  trailing slots alike.
+
+- A zero-length string is no longer treated as a blank cell.
+  `CELL("type", ...)` returns `"l"` for one, whether it was entered as a
+  constant or produced by `=""`, and `"b"` is reserved for a genuinely
+  blank cell. Wildcard criteria stop excluding it, so
+  `COUNTIF(range, "*")` counts every text cell and leaves out only
+  blanks. `COUNTIF(range, "=")` is now separated from
+  `COUNTIF(range, "")`: both parse to an equality against an empty
+  right-hand side, but the bare comparator is a blank-cell probe that a
+  zero-length string fails. All three had been built around an empty
+  string that reached the sheet as a blank cell, which is a state Excel
+  does not produce for `=""`.
+
+- A whole-axis pair is spliced in the stored form of a formula as well
+  as in its canonical one: `RangeOp(A:A, C:C)` is written as `A:C`
+  rather than `A:A:C:C`. Only the canonical formatter had the splice, so
+  the text written into a file drifted from what Excel writes while
+  every evaluated result stayed correct. `RangeOp(A:A, A:A)` stays
+  unspliced, since `A:C`'s compaction would read back as a single
+  whole-column reference rather than as the pair that was written.
 
 - A row or column insert or delete now moves the worksheet auto-filter's
   `ref` rectangle with the cells it filters, and drops the auto-filter
@@ -416,6 +493,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole-column range: `RO:r` became `RO:R`. Such an endpoint is now
   parenthesised. Ordinary ranges, whole-column ranges and ranges ending
   in a function call are written as before.
+
+### Documentation
+
+- The row and column edits now state what they do not move. They remap
+  every structure the engine models, but worksheet content kept
+  byte-verbatim because the engine does not model it — the worksheet
+  `<extLst>` behind DataBar extended settings, sparkline groups and
+  slicer anchors, plus any unmodelled `<worksheet>` child — keeps its
+  pre-edit rectangles, and nothing reports it. Excel resolves the
+  mismatch differently per extension: it drops an `x14`
+  conditional-formatting entry whose range no longer matches the rule it
+  extends, so an extended DataBar reverts to its legacy rendering, while
+  a sparkline keeps drawing from a source range that has moved out from
+  under it. The limitation now reaches the C header, both TypeScript
+  declaration files and the Python docstrings, where previously only an
+  internal header mentioned it.
 
 ## [0.10.0] - 2026-08-18
 
