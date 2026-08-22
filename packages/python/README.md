@@ -123,6 +123,21 @@ wb.get_phonetic(0, 0, 0)  # -> 'トウキョウト' (the readings concatenated)
 Offsets are UTF-16 code units, and the runs must be an ordered partition:
 each needs `sb <= eb` and must start at or after the previous run's `eb`.
 
+How the ruby renders is a separate call, so editing the readings does not
+reset it and vice versa:
+
+```python
+wb.set_phonetic_properties(0, 0, 0, PhoneticProperties(font_id=0, type=2, alignment=2))
+wb.get_phonetic_properties(0, 0, 0)  # -> PhoneticProperties(font_id=0, type=2, alignment=2)
+```
+
+`type` is the kana form (0 half-width katakana, 1 full-width katakana,
+2 hiragana, 3 no conversion) and `alignment` how the kana is distributed
+(0 no control, 1 left, 2 center, 3 distributed). The all-zero default is
+what Excel infers for a guide written without the block. Both are only
+observable on a cell that has runs, and every value setter clears the
+readings and the rendering together.
+
 **AutoFilter** -- the raw `<autoFilter>` fragment, preserved verbatim so
 filter criteria and extensions survive a round trip:
 

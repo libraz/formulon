@@ -682,6 +682,47 @@ async function run() {
     }
   });
 
+  test('setCellPhoneticProperties survives a run edit and a save/load cycle', () => {
+    // The result carries a `status` alongside the triple; compare the
+    // triple alone so a status-shape change does not read as a value change.
+    const phoneticProps = (book, sheet, row, col) => {
+      const { fontId, type, alignment } = book.getCellPhoneticProperties(sheet, row, col);
+      return { fontId, type, alignment };
+    };
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setText(0, 0, 0, '大阪').ok);
+      // An unannotated cell reports what Excel infers for a guide written
+      // with no <phoneticPr> at all.
+      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontId: 0, type: 0, alignment: 0 });
+
+      assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 }).ok);
+      // Setting the readings must not reset the rendering.
+      assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'おおさか' }]).ok);
+      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontId: 3, type: 2, alignment: 2 });
+
+      const saved = wb.save();
+      assert.ok(saved.status.ok);
+      const loaded = Module.Workbook.loadBytes(saved.bytes);
+      try {
+        assert.deepEqual(phoneticProps(loaded, 0, 0, 0), { fontId: 3, type: 2, alignment: 2 });
+      } finally {
+        loaded.delete();
+      }
+
+      // Two bits each on the binary side, so a wider ordinal is refused
+      // rather than truncated into a different, valid-looking one.
+      assert.equal(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 4, alignment: 0 }).ok, false);
+      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontId: 3, type: 2, alignment: 2 });
+
+      // A value write discards the guide and its rendering together.
+      assert.ok(wb.setText(0, 0, 0, '京都').ok);
+      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontId: 0, type: 0, alignment: 0 });
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('setDefaultFont replaces font 0, which addFont can only append beside', () => {
     const wb = Module.Workbook.createDefault();
     try {

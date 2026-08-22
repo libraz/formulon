@@ -50,12 +50,14 @@ fm_workbook_set_formula
 fm_workbook_set_error
 fm_workbook_set_cell_phonetic
 fm_workbook_set_cell_phonetic_runs
+fm_workbook_set_cell_phonetic_properties
 
 # -- Cell read -------------------------------------------------------------------
 fm_workbook_get_value
 fm_workbook_get_cell_phonetic
 fm_workbook_get_cell_phonetic_run_count
 fm_workbook_get_cell_phonetic_run
+fm_workbook_get_cell_phonetic_properties
 fm_workbook_lambda_text_at
 
 # -- Ad-hoc array evaluation (two-step: evaluate + per-cell readback) -------------

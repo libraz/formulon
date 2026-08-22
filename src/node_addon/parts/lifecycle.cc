@@ -161,6 +161,26 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::SetCellPhoneticProperties(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  if (info.Length() <= 3 || !info[3].IsObject()) {
+    return MakeBindingArgumentError(
+        env, "setCellPhoneticProperties: `properties` must be an object { fontId, type, alignment }");
+  }
+  const Napi::Object props = info[3].As<Napi::Object>();
+  fm_status_t rc = fm_workbook_set_cell_phonetic_properties(handle_, sheet, row, col,
+                                                            SpecPullU32(props, "fontId", 0U),
+                                                            SpecPullU32(props, "type", 0U),
+                                                            SpecPullU32(props, "alignment", 0U));
+  return MakeStatus(env, rc);
+}
+
 Napi::Value Workbook::SetBlank(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -249,6 +269,33 @@ Napi::Value Workbook::GetCellPhoneticRuns(const Napi::CallbackInfo& info) {
     return MakeFieldResult(env, MakeErrorStatus(env, rc), "runs", Napi::Array::New(env, 0));
   }
   return MakeFieldResult(env, MakeOkStatus(env), "runs", out);
+}
+
+Napi::Value Workbook::GetCellPhoneticProperties(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  uint32_t font_id = 0;
+  uint32_t type = 0;
+  uint32_t alignment = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_cell_phonetic_properties(handle_, sheet, row, col, &font_id, &type,
+                                                                    &alignment)
+                         : kBindingInvalidHandle;
+  // The payload keys are declared unconditionally, so a failure reports the
+  // defaults beside the status rather than dropping them.
+  if (rc != 0) {
+    font_id = 0;
+    type = 0;
+    alignment = 0;
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("fontId", Napi::Number::New(env, font_id));
+  out.Set("type", Napi::Number::New(env, type));
+  out.Set("alignment", Napi::Number::New(env, alignment));
+  out.Set("status", MakeStatus(env, rc));
+  return out;
 }
 
 Napi::Value Workbook::EvaluateFormulaText(const Napi::CallbackInfo& info) {

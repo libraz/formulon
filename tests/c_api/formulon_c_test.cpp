@@ -468,6 +468,73 @@ TEST(FormulonCApi, CellPhoneticRunsRejectMalformedInput) {
   EXPECT_NE(fm_workbook_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, nullptr), 0);
 }
 
+TEST(FormulonCApi, CellPhoneticPropertiesAreIndependentOfTheRuns) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "大阪"), 0);
+
+  // An unannotated cell reads the state Excel infers for a guide written
+  // with no `<phoneticPr>` at all.
+  uint32_t font_id = 9;
+  uint32_t type = 9;
+  uint32_t alignment = 9;
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
+  EXPECT_EQ(font_id, 0U);
+  EXPECT_EQ(type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
+  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_NO_CONTROL);
+
+  ASSERT_EQ(fm_workbook_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 3U, FM_PHONETIC_TYPE_HIRAGANA,
+                                                     FM_PHONETIC_ALIGNMENT_CENTER),
+            0);
+  // Writing the readings must not reset the rendering, which is the whole
+  // reason the two entry points are separate.
+  const fm_phonetic_run_t runs[] = {{0U, 2U, "おおさか"}};
+  ASSERT_EQ(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, runs, 1U), 0);
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
+  EXPECT_EQ(font_id, 3U);
+  EXPECT_EQ(type, FM_PHONETIC_TYPE_HIRAGANA);
+  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_CENTER);
+
+  // Each out-parameter is optional.
+  uint32_t only_type = 0;
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr, &only_type, nullptr), 0);
+  EXPECT_EQ(only_type, FM_PHONETIC_TYPE_HIRAGANA);
+
+  // Overwriting the value discards the guide and its rendering together.
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "京都"), 0);
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
+  EXPECT_EQ(font_id, 0U);
+  EXPECT_EQ(type, 0U);
+  EXPECT_EQ(alignment, 0U);
+}
+
+TEST(FormulonCApi, CellPhoneticPropertiesRejectValuesTheContainerCannotHold) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  // type and alignment are two bits each in the xlsb trailer, and font_id a
+  // u16; a wider value would be truncated into a different, valid-looking
+  // one on save.
+  EXPECT_NE(fm_workbook_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, 4U, 0U), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, 0U, 4U), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0x10000U, 0U, 0U), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic_properties(wb.handle, 0, formulon::Sheet::kMaxRows, 0, 0U, 0U, 0U), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic_properties(wb.handle, 1U, 0, 0, 0U, 0U, 0U), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic_properties(nullptr, 0, 0, 0, 0U, 0U, 0U), 0);
+  EXPECT_NE(fm_workbook_get_cell_phonetic_properties(nullptr, 0, 0, 0, nullptr, nullptr, nullptr), 0);
+
+  // A rejected call leaves the stored rendering alone.
+  ASSERT_EQ(fm_workbook_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 1U, FM_PHONETIC_TYPE_NO_CONVERSION,
+                                                     FM_PHONETIC_ALIGNMENT_DISTRIBUTED),
+            0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 1U, 7U, 0U), 0);
+  uint32_t type = 0;
+  uint32_t alignment = 0;
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr, &type, &alignment), 0);
+  EXPECT_EQ(type, FM_PHONETIC_TYPE_NO_CONVERSION);
+  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_DISTRIBUTED);
+}
+
 TEST(FormulonCApi, LoadMapsCorruptAndEncryptedContainersToIoErrors) {
   fm_workbook_t* loaded = reinterpret_cast<fm_workbook_t*>(0x1);
   const std::vector<std::uint8_t> garbage = {0x01U, 0x02U, 0x03U, 0x04U};

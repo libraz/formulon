@@ -88,6 +88,12 @@ class JsWorkbook {
   /// whole cell, this preserves which characters each reading covers. See
   /// `fm_workbook_set_cell_phonetic_runs` for the ordering rules.
   JsStatus setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val runs);
+
+  /// Stores how the cell's guide renders: `fontId`, `type` (0=halfwidth
+  /// katakana, 1=fullwidth katakana, 2=hiragana, 3=no conversion) and
+  /// `alignment` (0=no control, 1=left, 2=center, 3=distributed).
+  /// Independent of the readings in both directions.
+  JsStatus setCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val properties);
   JsStatus setBlank(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula);
 
@@ -97,6 +103,10 @@ class JsWorkbook {
   /// spans included. `getCellPhonetic` returns the same readings
   /// concatenated, without the spans.
   emscripten::val getCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col) const;
+
+  /// Reads the guide's rendering back as `{ fontId, type, alignment }`.
+  /// A cell with no annotation reports the all-zero triple.
+  emscripten::val getCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const;
 
   /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns a

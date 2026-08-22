@@ -826,6 +826,49 @@ FM_API fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t sheet
 FM_API fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                       const fm_phonetic_run_t* runs, size_t count);
 
+/** `type` values for `fm_workbook_set_cell_phonetic_properties`. */
+#define FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA 0u
+#define FM_PHONETIC_TYPE_FULLWIDTH_KATAKANA 1u
+#define FM_PHONETIC_TYPE_HIRAGANA 2u
+#define FM_PHONETIC_TYPE_NO_CONVERSION 3u
+
+/** `alignment` values for `fm_workbook_set_cell_phonetic_properties`. */
+#define FM_PHONETIC_ALIGNMENT_NO_CONTROL 0u
+#define FM_PHONETIC_ALIGNMENT_LEFT 1u
+#define FM_PHONETIC_ALIGNMENT_CENTER 2u
+#define FM_PHONETIC_ALIGNMENT_DISTRIBUTED 3u
+
+/**
+ * @brief Stores how a cell's phonetic guide renders (OOXML `<phoneticPr>`).
+ *
+ * `font_id` indexes the workbook's font table for the ruby text; `type` is
+ * the kana form Excel generates readings in (`FM_PHONETIC_TYPE_*`) and
+ * `alignment` how the kana is distributed over the characters it covers
+ * (`FM_PHONETIC_ALIGNMENT_*`).
+ *
+ * Deliberately separate from `fm_workbook_set_cell_phonetic_runs` in both
+ * directions: editing the readings does not reset the rendering, and
+ * setting the rendering does not touch the readings. The two are stored
+ * together and travel together, but a host that only has one of them should
+ * not have to supply the other.
+ *
+ * Only observable on a cell that has runs — the writer emits no element for
+ * an unannotated cell — and any value-mutating setter clears the runs and
+ * these properties together, so set them after the cell's text.
+ *
+ * The all-zero triple is what Excel infers for a guide that arrived with no
+ * `<phoneticPr>` at all, so a host that does not care can leave it alone.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or the cell coordinate is
+ *         out of range, when `font_id` exceeds 65535, or when `type` or
+ *         `alignment` is not one of the four values above.
+ */
+FM_API fm_status_t fm_workbook_set_cell_phonetic_properties(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                            uint32_t col, uint32_t font_id, uint32_t type,
+                                                            uint32_t alignment);
+
 /**
  * @brief Stores a `Blank` literal at `(row, col)`. Equivalent to
  *        clearing a cell.
@@ -926,6 +969,23 @@ FM_API fm_status_t fm_workbook_get_cell_phonetic_run_count(const fm_workbook_t* 
  */
 FM_API fm_status_t fm_workbook_get_cell_phonetic_run(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                      uint32_t col, uint32_t run_index, fm_phonetic_run_t* out);
+
+/**
+ * @brief Reads how a cell's phonetic guide renders (OOXML `<phoneticPr>`).
+ *
+ * Reports the all-zero triple for a cell with no annotation, including one
+ * that does not exist — the same state Excel infers for a guide written
+ * without a `<phoneticPr>` element.
+ *
+ * Any out-parameter may be `NULL` to skip that field.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_get_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                            uint32_t col, uint32_t* out_font_id, uint32_t* out_type,
+                                                            uint32_t* out_alignment);
 
 /**
  * @brief Renders the lambda closure stored at `(sheet_index, row, col)`

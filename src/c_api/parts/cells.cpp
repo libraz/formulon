@@ -164,6 +164,47 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, siz
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_set_cell_phonetic_properties(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                                uint32_t col, uint32_t font_id, uint32_t type,
+                                                                uint32_t alignment) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_cell_phonetic_properties"); rc != 0) {
+    return rc;
+  }
+  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_cell_phonetic_properties: cell coordinate out of range");
+  }
+  // Both enumerations occupy two bits of the XLSB trailer's flags word, so
+  // an out-of-range value would not survive an `.xlsb` save intact. Reject
+  // it here rather than truncate it into a different, valid-looking form.
+  constexpr uint32_t kMaxOrdinal = 3U;
+  if (type > kMaxOrdinal) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_cell_phonetic_properties: type out of range",
+                             "type=" + std::to_string(type));
+  }
+  if (alignment > kMaxOrdinal) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_cell_phonetic_properties: alignment out of range",
+                             "alignment=" + std::to_string(alignment));
+  }
+  constexpr uint32_t kMaxFontId = 0xFFFFU;
+  if (font_id > kMaxFontId) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_cell_phonetic_properties: font_id out of range",
+                             "font_id=" + std::to_string(font_id));
+  }
+
+  wb->workbook()
+      .sheet(sheet_index)
+      .set_cell_phonetic_props(
+          row, col,
+          formulon::PhoneticProperties{static_cast<std::uint16_t>(font_id), static_cast<std::uint8_t>(type),
+                                       static_cast<std::uint8_t>(alignment)});
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_blank"); rc != 0) {
@@ -280,6 +321,30 @@ extern "C" fm_status_t fm_workbook_get_cell_phonetic_run(const fm_workbook_t* wb
   out->sb = run.sb;
   out->eb = run.eb;
   out->text = store.back().c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index,
+                                                                uint32_t row, uint32_t col, uint32_t* out_font_id,
+                                                                uint32_t* out_type, uint32_t* out_alignment) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_phonetic_properties"); rc != 0) {
+    return rc;
+  }
+  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  // An absent cell reports the defaults rather than failing, matching the
+  // run-count reader: "no annotation" and "no cell" are the same answer to
+  // a host walking a range.
+  const formulon::PhoneticProperties props = cell == nullptr ? formulon::PhoneticProperties{} : cell->phonetic_props;
+  if (out_font_id != nullptr) {
+    *out_font_id = props.font_id;
+  }
+  if (out_type != nullptr) {
+    *out_type = props.type;
+  }
+  if (out_alignment != nullptr) {
+    *out_alignment = props.alignment;
+  }
   return 0;
 }
 

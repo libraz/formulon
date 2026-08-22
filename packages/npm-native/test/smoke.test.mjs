@@ -1349,6 +1349,36 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
   wb.dispose();
 });
 
+test('phonetic properties are independent of the runs and survive a round trip', async () => {
+  const mod = await getModule();
+  // The result carries a `status` alongside the triple; compare the triple
+  // alone so a status-shape change does not read as a value change.
+  const props = (book) => {
+    const { fontId, type, alignment } = book.getCellPhoneticProperties(0, 0, 0);
+    return { fontId, type, alignment };
+  };
+  const wb = mod.Workbook.createDefault();
+  wb.setText(0, 0, 0, '大阪');
+  assert.deepEqual(props(wb), { fontId: 0, type: 0, alignment: 0 });
+
+  assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 }).ok);
+  // Setting the readings must not reset the rendering.
+  assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'おおさか' }]).ok);
+  assert.deepEqual(props(wb), { fontId: 3, type: 2, alignment: 2 });
+
+  const saved = wb.save();
+  assert.ok(saved.status.ok, `save: ${JSON.stringify(saved.status)}`);
+  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  assert.deepEqual(props(loaded), { fontId: 3, type: 2, alignment: 2 });
+
+  // Two bits each on the binary side, so a wider ordinal is refused.
+  assert.equal(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 4, alignment: 0 }).ok, false);
+  assert.deepEqual(props(wb), { fontId: 3, type: 2, alignment: 2 });
+
+  loaded.dispose();
+  wb.dispose();
+});
+
 test('setDefaultFont declares what an unstyled cell is saved as', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -2308,6 +2338,7 @@ function envelopeProbes(wb) {
     ['NumFmtResult', true, () => wb.getNumFmt(59999)],
     ['LambdaTextResult', true, () => wb.getLambdaText(99, 0, 0)],
     ['PhoneticRunsResult', true, () => wb.getCellPhoneticRuns(99, 0, 0)],
+    ['PhoneticPropertiesResult', true, () => wb.getCellPhoneticProperties(99, 0, 0)],
     ['CellStyleResult', true, () => wb.getCellStyle(9999)],
     ['AddStyleResult', true, () => wb.addXf({ fontIndex: 9999 })],
     ['AddNumFmtResult', false, () => wb.addNumFmt('0.00')],

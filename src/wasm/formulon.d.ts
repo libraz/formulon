@@ -1269,6 +1269,23 @@ export interface PhoneticRunsResult {
   runs: PhoneticRun[];
 }
 
+/** How a cell's phonetic guide renders (OOXML `<phoneticPr>`). `fontId`
+ *  indexes the workbook's font table for the ruby text; `type` is the kana
+ *  form (0 half-width katakana, 1 full-width katakana, 2 hiragana, 3 no
+ *  conversion) and `alignment` how the kana is distributed (0 no control,
+ *  1 left, 2 center, 3 distributed). The all-zero triple is what Excel
+ *  infers for a guide written with no `<phoneticPr>` element. */
+export interface PhoneticProperties {
+  fontId: number;
+  type: number;
+  alignment: number;
+}
+
+/** Return type of `Workbook.getCellPhoneticProperties(sheet, row, col)`. */
+export interface PhoneticPropertiesResult extends PhoneticProperties {
+  status: Status;
+}
+
 /** Return type of `Workbook.getFont(fontIndex)`. */
 export interface FontResult extends FontRecord {
   status: Status;
@@ -1633,6 +1650,11 @@ export interface Workbook {
    *  partition: each needs `sb <= eb` and must start at or after the previous
    *  run's `eb`. */
   setCellPhoneticRuns(sheet: number, row: number, col: number, runs: PhoneticRun[]): Status;
+  /** Stores how the cell's guide renders. Independent of
+   *  `setCellPhoneticRuns` in both directions, and only observable on a cell
+   *  that has runs; every value setter clears both, so call it after the
+   *  cell's text. */
+  setCellPhoneticProperties(sheet: number, row: number, col: number, properties: PhoneticProperties): Status;
   setBlank(sheet: number, row: number, col: number): Status;
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
@@ -1680,6 +1702,9 @@ export interface Workbook {
   /** Returns the cell's `<rPh>` blocks with their spans. `getCellPhonetic`
    *  returns the same readings concatenated, without the spans. */
   getCellPhoneticRuns(sheet: number, row: number, col: number): PhoneticRunsResult;
+  /** Returns how the cell's guide renders. A cell with no annotation
+   *  reports the all-zero triple. */
+  getCellPhoneticProperties(sheet: number, row: number, col: number): PhoneticPropertiesResult;
 
   /** Recalculates all dirty cells serially on the caller thread.
    *

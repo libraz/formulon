@@ -89,6 +89,16 @@ JsStatus JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t 
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::setCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val properties) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  const fm_status_t rc = fm_workbook_set_cell_phonetic_properties(
+      handle_, sheet, row, col, js_pull_u32(properties, "fontId", 0U), js_pull_u32(properties, "type", 0U),
+      js_pull_u32(properties, "alignment", 0U));
+  return status_from_rc(rc);
+}
+
 JsStatus JsWorkbook::setBlank(uint32_t sheet, uint32_t row, uint32_t col) {
   if (handle_ == nullptr) {
     return error_status(7000);
@@ -172,6 +182,28 @@ emscripten::val JsWorkbook::getCellPhoneticRuns(uint32_t sheet, uint32_t row, ui
   }
   o.set("status", ok_status());
   o.set("runs", out);
+  return o;
+}
+
+emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col) const {
+  uint32_t font_id = 0;
+  uint32_t type = 0;
+  uint32_t alignment = 0;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_cell_phonetic_properties(handle_, sheet, row, col,
+                                                                                       &font_id, &type, &alignment)
+                                            : kBindingInvalidHandle;
+  // The payload keys are declared unconditionally, so a failure reports the
+  // defaults beside the status rather than dropping them.
+  if (rc != 0) {
+    font_id = 0;
+    type = 0;
+    alignment = 0;
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("status", rc == 0 ? ok_status() : error_status(rc));
+  o.set("fontId", font_id);
+  o.set("type", type);
+  o.set("alignment", alignment);
   return o;
 }
 

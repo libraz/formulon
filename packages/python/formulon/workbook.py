@@ -1130,6 +1130,24 @@ class PhoneticRun:
 
 
 @dataclass
+class PhoneticProperties:
+    """How a cell's phonetic guide renders (OOXML ``<phoneticPr>``).
+
+    ``font_id`` indexes the workbook's font table for the ruby text.
+    ``type`` is the kana form: 0 half-width katakana, 1 full-width
+    katakana, 2 hiragana, 3 no conversion. ``alignment`` is how the kana
+    is distributed: 0 no control, 1 left, 2 center, 3 distributed.
+
+    The all-zero default is the state Excel infers for a guide written
+    with no ``<phoneticPr>`` element at all.
+    """
+
+    font_id: int = 0
+    type: int = 0
+    alignment: int = 0
+
+
+@dataclass
 class FontRecord:
     """A font record (``add_font`` input / ``get_font`` result).
 
@@ -1930,6 +1948,62 @@ class Workbook:
         finally:
             LIB.free(run_ptr)
         return out
+
+    def set_phonetic_properties(self, sheet: int, row: int, col: int, properties: PhoneticProperties) -> None:
+        """Set how the cell's phonetic guide renders.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based. Independent of
+        :meth:`set_phonetic_runs` in both directions: editing the readings
+        does not reset the rendering, and this does not touch the readings.
+        Only observable on a cell that has runs, and every value-setting
+        method clears both, so call it after the cell's text.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_workbook_set_cell_phonetic_properties(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(row, "row"),
+                _uint(col, "col"),
+                _uint(properties.font_id, "font_id"),
+                _uint(properties.type, "type"),
+                _uint(properties.alignment, "alignment"),
+            ),
+            "fm_workbook_set_cell_phonetic_properties",
+        )
+
+    def get_phonetic_properties(self, sheet: int, row: int, col: int) -> PhoneticProperties:
+        """Return how the cell's phonetic guide renders.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based. A cell with no
+        annotation reports the all-zero default.
+        """
+        h = self._require()
+        font_ptr = _alloc_out_ptr()
+        type_ptr = _alloc_out_ptr()
+        alignment_ptr = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_workbook_get_cell_phonetic_properties(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(row, "row"),
+                    _uint(col, "col"),
+                    font_ptr,
+                    type_ptr,
+                    alignment_ptr,
+                ),
+                "fm_workbook_get_cell_phonetic_properties",
+            )
+            return PhoneticProperties(
+                font_id=LIB.read_u32(font_ptr),
+                type=LIB.read_u32(type_ptr),
+                alignment=LIB.read_u32(alignment_ptr),
+            )
+        finally:
+            LIB.free(font_ptr)
+            LIB.free(type_ptr)
+            LIB.free(alignment_ptr)
 
     def get_phonetic(self, sheet: int, row: int, col: int) -> str:
         """Return the cell's phonetic guide, or ``""`` when it has none.

@@ -31,6 +31,7 @@ from formulon import (
     FormulonError,
     LogLevel,
     MergeRange,
+    PhoneticProperties,
     PhoneticRun,
     PivotAggregation,
     PivotAxis,
@@ -495,6 +496,44 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.set_text(0, 0, 0, "東京都")
             with self.assertRaises(FormulonError):
                 wb.set_phonetic_runs(0, 0, 0, [PhoneticRun(2, 3, "ト"), PhoneticRun(0, 2, "トウ")])
+
+    def test_phonetic_properties_are_independent_of_the_runs(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "大阪")
+            # An unannotated cell reports what Excel infers for a guide
+            # written with no <phoneticPr> element at all.
+            self.assertEqual(wb.get_phonetic_properties(0, 0, 0), PhoneticProperties(0, 0, 0))
+
+            wb.set_phonetic_properties(0, 0, 0, PhoneticProperties(font_id=3, type=2, alignment=2))
+            # Setting the readings must not reset the rendering.
+            wb.set_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "おおさか")])
+            self.assertEqual(wb.get_phonetic_properties(0, 0, 0), PhoneticProperties(3, 2, 2))
+            data = wb.save()
+        with Workbook.load(data) as reloaded:
+            self.assertEqual(reloaded.get_phonetic_properties(0, 0, 0), PhoneticProperties(3, 2, 2))
+
+    def test_phonetic_properties_reject_values_the_container_cannot_hold(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "大阪")
+            wb.set_phonetic_properties(0, 0, 0, PhoneticProperties(1, 3, 3))
+            # Two bits each on the binary side, so a wider ordinal is
+            # refused rather than truncated into a valid-looking one.
+            with self.assertRaises(FormulonError):
+                wb.set_phonetic_properties(0, 0, 0, PhoneticProperties(type=4))
+            with self.assertRaises(FormulonError):
+                wb.set_phonetic_properties(0, 0, 0, PhoneticProperties(alignment=4))
+            with self.assertRaises(FormulonError):
+                wb.set_phonetic_properties(0, 0, 0, PhoneticProperties(font_id=0x10000))
+            self.assertEqual(wb.get_phonetic_properties(0, 0, 0), PhoneticProperties(1, 3, 3))
+
+    def test_a_value_write_discards_the_guide_and_its_rendering(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "大阪")
+            wb.set_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "おおさか")])
+            wb.set_phonetic_properties(0, 0, 0, PhoneticProperties(3, 2, 2))
+            wb.set_text(0, 0, 0, "京都")
+            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), [])
+            self.assertEqual(wb.get_phonetic_properties(0, 0, 0), PhoneticProperties(0, 0, 0))
 
     def test_default_font_replaces_what_an_unstyled_cell_saves_as(self) -> None:
         with Workbook.create_default() as wb:
