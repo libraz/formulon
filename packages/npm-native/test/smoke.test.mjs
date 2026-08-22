@@ -1314,6 +1314,77 @@ test('addFont / getFont preserve superscript and round-trip to the same index', 
   assert.equal(reread.colorArgb, 0xff00ff00);
 });
 
+test('phonetic runs keep their spans through a save/load round trip', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  wb.setText(0, 0, 0, '東京都');
+  assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, []);
+
+  const runs = [
+    { sb: 0, eb: 2, text: 'トウキョウ' },
+    { sb: 2, eb: 3, text: 'ト' },
+  ];
+  const stored = wb.setCellPhoneticRuns(0, 0, 0, runs);
+  assert.ok(stored.ok, `setCellPhoneticRuns: ${JSON.stringify(stored)}`);
+  assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, runs);
+  // The flattening getter still reports the concatenation.
+  assert.equal(wb.getCellPhonetic(0, 0, 0).value, 'トウキョウト');
+
+  const saved = wb.save();
+  assert.ok(saved.status.ok, `save: ${JSON.stringify(saved.status)}`);
+  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  assert.deepEqual(loaded.getCellPhoneticRuns(0, 0, 0).runs, runs);
+
+  // Writing the flattened reading back is the collapse the run API avoids.
+  wb.setCellPhonetic(0, 0, 0, 'トウキョウト');
+  assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, [{ sb: 0, eb: 3, text: 'トウキョウト' }]);
+
+  const rejected = wb.setCellPhoneticRuns(0, 0, 0, [
+    { sb: 2, eb: 3, text: 'ト' },
+    { sb: 0, eb: 2, text: 'トウ' },
+  ]);
+  assert.equal(rejected.ok, false);
+
+  loaded.dispose();
+  wb.dispose();
+});
+
+test('setDefaultFont declares what an unstyled cell is saved as', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.getFont(0).name, 'Calibri');
+
+  // addFont can only ever append beside the seeded default.
+  const appended = wb.addFont({ name: '游ゴシック', size: 11 });
+  assert.ok(appended.status.ok);
+  assert.ok(appended.index > 0);
+  assert.equal(wb.getFont(0).name, 'Calibri');
+
+  const declared = wb.setDefaultFont({ name: '游ゴシック', size: 11, hasCharset: true, charset: 128 });
+  assert.ok(declared.ok, `setDefaultFont: ${JSON.stringify(declared)}`);
+  assert.equal(wb.getFont(0).name, '游ゴシック');
+  assert.equal(wb.getFont(0).charset, 128);
+
+  wb.dispose();
+});
+
+test('setFont overwrites an existing slot and refuses an absent index', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const added = wb.addFont({ name: 'Meiryo', size: 12 });
+  assert.ok(added.status.ok);
+
+  const replaced = wb.setFont(added.index, { name: 'MS Gothic', size: 9 });
+  assert.ok(replaced.ok, `setFont: ${JSON.stringify(replaced)}`);
+  assert.equal(wb.getFont(added.index).name, 'MS Gothic');
+
+  const before = wb.fontCount();
+  assert.equal(wb.setFont(before, { name: 'MS Gothic', size: 9 }).ok, false);
+  assert.equal(wb.fontCount(), before);
+
+  wb.dispose();
+});
+
 test('addDxf / getDxf round-trip a superscript differential font', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -2236,6 +2307,7 @@ function envelopeProbes(wb) {
     ['BorderResult', true, () => wb.getBorder(9999)],
     ['NumFmtResult', true, () => wb.getNumFmt(59999)],
     ['LambdaTextResult', true, () => wb.getLambdaText(99, 0, 0)],
+    ['PhoneticRunsResult', true, () => wb.getCellPhoneticRuns(99, 0, 0)],
     ['CellStyleResult', true, () => wb.getCellStyle(9999)],
     ['AddStyleResult', true, () => wb.addXf({ fontIndex: 9999 })],
     ['AddNumFmtResult', false, () => wb.addNumFmt('0.00')],

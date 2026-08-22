@@ -369,6 +369,26 @@ JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
   return r;
 }
 
+JsStatus JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  std::string name;
+  fm_font_record fr{};
+  js_pull_font_record(record, &name, &fr);
+  return status_from_rc(fm_styles_set_font(handle_, font_index, fr));
+}
+
+JsStatus JsWorkbook::setDefaultFont(emscripten::val record) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  std::string name;
+  fm_font_record fr{};
+  js_pull_font_record(record, &name, &fr);
+  return status_from_rc(fm_workbook_set_default_font(handle_, fr));
+}
+
 JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {

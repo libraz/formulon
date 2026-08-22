@@ -39,11 +39,15 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetBool(const Napi::CallbackInfo& info);
   Napi::Value SetError(const Napi::CallbackInfo& info);
   Napi::Value SetText(const Napi::CallbackInfo& info);
+  Napi::Value SetCellPhonetic(const Napi::CallbackInfo& info);
+  Napi::Value SetCellPhoneticRuns(const Napi::CallbackInfo& info);
   Napi::Value SetBlank(const Napi::CallbackInfo& info);
   Napi::Value SetFormula(const Napi::CallbackInfo& info);
 
   // Cell read.
   Napi::Value GetValue(const Napi::CallbackInfo& info);
+  Napi::Value GetCellPhonetic(const Napi::CallbackInfo& info);
+  Napi::Value GetCellPhoneticRuns(const Napi::CallbackInfo& info);
 
   // Ad-hoc, side-effect-free formula evaluation.
   Napi::Value EvaluateFormulaText(const Napi::CallbackInfo& info);
@@ -281,6 +285,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetNumFmt(const Napi::CallbackInfo& info);
   Napi::Value GetDxf(const Napi::CallbackInfo& info);
   Napi::Value AddFont(const Napi::CallbackInfo& info);
+  Napi::Value SetFont(const Napi::CallbackInfo& info);
+  Napi::Value SetDefaultFont(const Napi::CallbackInfo& info);
   Napi::Value AddFill(const Napi::CallbackInfo& info);
   Napi::Value AddBorder(const Napi::CallbackInfo& info);
   Napi::Value AddNumFmt(const Napi::CallbackInfo& info);

@@ -758,11 +758,36 @@ FM_API fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_index, u
                                         const char* utf8);
 
 /**
- * @brief Stores the phonetic guide (OOXML `<rPh>`) for a cell.
+ * @brief One `<rPh>` block: the kana reading `text` covers the half-open
+ *        span `[sb, eb)` of the cell's surface text.
+ *
+ * Offsets are UTF-16 code units, which is how Excel indexes string
+ * positions everywhere else. A cell whose reading was typed in one go
+ * carries the single run `{0, <length of the text>, kana}`.
+ *
+ * The spans are observable rather than presentation detail: `PHONETIC`
+ * substitutes each annotated span with its kana and passes the text
+ * outside every span through unchanged, so a partially annotated string
+ * surfaces a mix of kana and original characters.
+ */
+typedef struct {
+  uint32_t sb;      /* inclusive span start, in UTF-16 code units */
+  uint32_t eb;      /* exclusive span end, in UTF-16 code units   */
+  const char* text; /* NUL-terminated UTF-8 kana                  */
+} fm_phonetic_run_t;
+
+/**
+ * @brief Stores a whole-cell phonetic guide (OOXML `<rPh>`).
  *
  * The guide is independent of the cell's visible text. Passing an empty
  * string clears an existing guide. The destination cell copies `utf8`, so
  * the input does not need to outlive the call.
+ *
+ * This entry point has no span vocabulary, so the reading it stores covers
+ * the surface text end to end — one run spanning the whole cell. Feeding
+ * `fm_workbook_get_cell_phonetic`'s result back through here therefore
+ * flattens a partially annotated cell into a single whole-cell annotation.
+ * Use `fm_workbook_set_cell_phonetic_runs` to preserve the spans.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -770,6 +795,36 @@ FM_API fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_index, u
  */
 FM_API fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                  const char* utf8);
+
+/**
+ * @brief Stores a cell's phonetic guide as one `<rPh>` block per run,
+ *        spans included.
+ *
+ * `count == 0` clears the annotation (`runs` may be `NULL` in that case).
+ * Each run's `text` is copied, so the array and its strings do not need to
+ * outlive the call.
+ *
+ * The runs must describe a partition of the surface text in reading order:
+ * every run needs `sb <= eb`, and each run must start at or after the
+ * previous run's `eb`. Overlapping or out-of-order runs are rejected rather
+ * than normalised, because `PHONETIC` walks them in order and a run whose
+ * span has already been passed would silently move its kana onto characters
+ * it does not read.
+ *
+ * `eb` is not checked against the cell's current text length. The surface
+ * text may legitimately be written after the annotation, and every
+ * value-mutating setter clears the annotation anyway, so a span that
+ * overshoots is treated as covering the remainder of the text rather than
+ * as an error.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`, if `runs` is `NULL` with
+ *         a non-zero `count`, or if any run's `text` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or the cell coordinate is
+ *         out of range, or when the runs are not an ordered partition.
+ */
+FM_API fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                      const fm_phonetic_run_t* runs, size_t count);
 
 /**
  * @brief Stores a `Blank` literal at `(row, col)`. Equivalent to
@@ -824,6 +879,12 @@ FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_i
  * @brief Reads the cell's phonetic guide (OOXML `<rPh>`), or an empty string
  *        when the cell has no guide.
  *
+ * Every run's kana concatenated in reading order — the shape a furigana
+ * field wants. Which characters each run covers is dropped; read the runs
+ * individually when the spans matter, and note that writing this string
+ * back through `fm_workbook_set_cell_phonetic` collapses a partially
+ * annotated cell to a single whole-cell annotation.
+ *
  * `*out_text` is a read-scratch-backed view into the handle's transient read
  * storage. It may be invalidated by the next successful scratch-backed read
  * on this handle; a validation-rejected call does not refresh the storage.
@@ -836,6 +897,35 @@ FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_i
  */
 FM_API fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                  uint32_t col, const char** out_text);
+
+/**
+ * @brief Counts the `<rPh>` blocks attached to a cell.
+ *
+ * Zero for a cell with no annotation, including one that does not exist.
+ * Pair with `fm_workbook_get_cell_phonetic_run` to walk the spans.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_count` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_get_cell_phonetic_run_count(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                           uint32_t col, uint32_t* out_count);
+
+/**
+ * @brief Reads the `run_index`-th `<rPh>` block of a cell.
+ *
+ * `out->text` is a read-scratch-backed view with the same lifetime rules as
+ * `fm_workbook_get_cell_phonetic`'s: the next successful scratch-backed read
+ * on this handle may invalidate it, so a caller collecting every run must
+ * copy each one before asking for the next.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *         `run_index` is past the cell's run count.
+ */
+FM_API fm_status_t fm_workbook_get_cell_phonetic_run(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                     uint32_t col, uint32_t run_index, fm_phonetic_run_t* out);
 
 /**
  * @brief Renders the lambda closure stored at `(sheet_index, row, col)`
@@ -4743,6 +4833,55 @@ FM_API fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index
  *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
  */
 FM_API fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record record, uint32_t* out_index);
+
+/**
+ * @brief Overwrites the `font_index`-th font record in place.
+ *
+ * The counterpart to `fm_styles_add_font` for a slot that already exists.
+ * Every `<xf>` whose `font_index` names this slot renders with the new
+ * record, so this is a bulk restyle rather than a local edit: replacing a
+ * font that several cell formats share changes all of them at once. Use
+ * `fm_styles_add_font` when the intent is to introduce a new appearance and
+ * repoint selected `<xf>` records at it.
+ *
+ * No dedup and no auto-grow: the index must already be in range, and a
+ * record equal to another slot's is allowed to sit at two indices (the
+ * styles writer emits both, which Excel accepts).
+ *
+ * `record.name` follows `fm_styles_add_font`: NUL-terminated UTF-8, copied
+ * into the styles table, `NULL` treated as the empty string.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `font_index >= fonts.size()`.
+ */
+FM_API fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record record);
+
+/**
+ * @brief Declares the workbook's default font.
+ *
+ * Font 0 is the record every unformatted cell resolves to: `fm_workbook_create`
+ * seeds it with Excel's `Calibri` 11, and cell xf 0 — the format of a cell
+ * that was never styled — names it. Because the seeded table already owns
+ * index 0, `fm_styles_add_font` can only ever append beside it, so this is
+ * the only way to change what an unstyled cell is saved as. A ja-JP host
+ * declaring `游ゴシック` calls this once after creating the workbook.
+ *
+ * Equivalent to `fm_styles_set_font(wb, 0, record)`, except that it also
+ * succeeds on a workbook whose styles table is empty (a table replaced
+ * wholesale by `fm_workbook_load` on a package with no `xl/styles.xml`):
+ * the reserved roots are seeded first, then index 0 is overwritten.
+ *
+ * Reading the current default is `fm_styles_get_font(wb, 0, out)`.
+ *
+ * The record is a font, not a theme: Formulon writes no `xl/theme/theme1.xml`
+ * for a workbook it created, so the name is stored literally and Excel
+ * resolves it without a `<scheme>` indirection.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_record record);
 
 /**
  * @brief Adds a fill record to the workbook's styles table, deduplicating

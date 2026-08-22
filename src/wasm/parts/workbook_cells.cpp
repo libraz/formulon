@@ -62,6 +62,33 @@ JsStatus JsWorkbook::setCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col,
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val runs) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  if (!runs.isArray()) {
+    return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
+                                "setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
+  }
+  const uint32_t count = runs["length"].as<uint32_t>();
+  // Two passes for the same reason `createTable` needs them: no `c_str()`
+  // may be taken before `texts` has finished growing.
+  std::vector<std::string> texts;
+  texts.reserve(count);
+  std::vector<fm_phonetic_run_t> records;
+  records.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    const emscripten::val run = runs[i];
+    texts.push_back(js_pull_string(run, "text"));
+    records.push_back(fm_phonetic_run_t{js_pull_u32(run, "sb", 0U), js_pull_u32(run, "eb", 0U), nullptr});
+  }
+  for (uint32_t i = 0; i < count; ++i) {
+    records[i].text = texts[i].c_str();
+  }
+  const fm_status_t rc = fm_workbook_set_cell_phonetic_runs(handle_, sheet, row, col, records.data(), records.size());
+  return status_from_rc(rc);
+}
+
 JsStatus JsWorkbook::setBlank(uint32_t sheet, uint32_t row, uint32_t col) {
   if (handle_ == nullptr) {
     return error_status(7000);
@@ -111,6 +138,40 @@ emscripten::val JsWorkbook::getCellPhonetic(uint32_t sheet, uint32_t row, uint32
   }
   o.set("status", ok_status());
   o.set("value", std::string(text != nullptr ? text : ""));
+  return o;
+}
+
+emscripten::val JsWorkbook::getCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col) const {
+  emscripten::val o = emscripten::val::object();
+  emscripten::val out = emscripten::val::array();
+  if (handle_ == nullptr) {
+    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("runs", out);
+    return o;
+  }
+  uint32_t count = 0;
+  fm_status_t rc = fm_workbook_get_cell_phonetic_run_count(handle_, sheet, row, col, &count);
+  for (uint32_t i = 0; rc == 0 && i < count; ++i) {
+    fm_phonetic_run_t run{};
+    rc = fm_workbook_get_cell_phonetic_run(handle_, sheet, row, col, i, &run);
+    if (rc != 0) {
+      break;
+    }
+    emscripten::val entry = emscripten::val::object();
+    entry.set("sb", run.sb);
+    entry.set("eb", run.eb);
+    // Copied immediately: each read refreshes the handle's scratch, so the
+    // previous run's pointer is dead by the time the next one lands.
+    entry.set("text", std::string(run.text != nullptr ? run.text : ""));
+    out.call<void>("push", entry);
+  }
+  if (rc != 0) {
+    o.set("status", error_status(rc));
+    o.set("runs", emscripten::val::array());
+    return o;
+  }
+  o.set("status", ok_status());
+  o.set("runs", out);
   return o;
 }
 

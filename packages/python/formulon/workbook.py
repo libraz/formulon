@@ -1116,6 +1116,20 @@ class ColorSpec:
 
 
 @dataclass
+class PhoneticRun:
+    """One ``<rPh>`` block: ``text`` reads the span ``[sb, eb)``.
+
+    Offsets are UTF-16 code units, which is how Excel indexes string
+    positions. A whole-cell reading is the single run
+    ``PhoneticRun(0, <length of the cell text>, kana)``.
+    """
+
+    sb: int = 0
+    eb: int = 0
+    text: str = ""
+
+
+@dataclass
 class FontRecord:
     """A font record (``add_font`` input / ``get_font`` result).
 
@@ -1538,6 +1552,25 @@ def _pack_merge_array(ranges: Sequence[MergeRange], owned: List[int]) -> int:
     return ptr
 
 
+def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], owned: List[int]) -> int:
+    """Pack a list of ``PhoneticRun`` into a contiguous WASM array.
+
+    Returns the array pointer (0 when empty). Every buffer allocated here --
+    the array and each run's kana string -- is appended to ``owned`` for
+    later release.
+    """
+    if not runs:
+        return 0
+    size = S.PHONETIC_RUN.size
+    ptr = LIB.alloc(size * len(runs))
+    owned.append(ptr)
+    for i, run in enumerate(runs):
+        slot = ptr + i * size
+        S.PHONETIC_RUN.pack(LIB, slot, {"sb": _uint(run.sb, "sb"), "eb": _uint(run.eb, "eb")})
+        S.write_str_field(LIB, slot, S.PHONETIC_RUN, "text", run.text, owned)
+    return ptr
+
+
 class Workbook:
     """Owns an ``fm_workbook_t*`` handle (a WASM i32 offset).
 
@@ -1816,6 +1849,83 @@ class Workbook:
             _check(status, "fm_workbook_set_cell_phonetic")
         finally:
             LIB.free(text_ptr)
+
+    def set_phonetic_runs(self, sheet: int, row: int, col: int, runs: Sequence[PhoneticRun]) -> None:
+        """Set the cell's phonetic guide as one ``<rPh>`` block per run.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based. An empty ``runs``
+        removes the guide. Unlike :meth:`set_phonetic`, which annotates the
+        whole cell, this keeps the spans each reading covers -- the
+        difference ``PHONETIC`` and a partially annotated cell depend on.
+
+        The runs must be an ordered partition: each needs ``sb <= eb`` and
+        must start at or after the previous run's ``eb``.
+        """
+        h = self._require()
+        owned: List[int] = []
+        ptr = _pack_phonetic_run_array(runs, owned)
+        try:
+            status = LIB.fm_workbook_set_cell_phonetic_runs(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(row, "row"),
+                _uint(col, "col"),
+                ptr,
+                _uint(len(runs), "count"),
+            )
+            _check(status, "fm_workbook_set_cell_phonetic_runs")
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def get_phonetic_runs(self, sheet: int, row: int, col: int) -> List[PhoneticRun]:
+        """Return the cell's ``<rPh>`` blocks, spans included.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based. An unannotated cell
+        yields an empty list. :meth:`get_phonetic` returns the same readings
+        concatenated, without the spans.
+        """
+        h = self._require()
+        count_out = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_workbook_get_cell_phonetic_run_count(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), count_out
+                ),
+                "fm_workbook_get_cell_phonetic_run_count",
+            )
+            count = LIB.read_u32(count_out)
+        finally:
+            LIB.free(count_out)
+        out: List[PhoneticRun] = []
+        run_ptr = S.alloc_struct(LIB, S.PHONETIC_RUN)
+        try:
+            for i in range(count):
+                S.zero_struct(LIB, S.PHONETIC_RUN, run_ptr)
+                _check(
+                    LIB.fm_workbook_get_cell_phonetic_run(
+                        h,
+                        _uint(sheet, "sheet_index"),
+                        _uint(row, "row"),
+                        _uint(col, "col"),
+                        _uint(i, "run_index"),
+                        run_ptr,
+                    ),
+                    "fm_workbook_get_cell_phonetic_run",
+                )
+                fields = S.PHONETIC_RUN.unpack(LIB, run_ptr)
+                # Decoded before the next read: the text points into the
+                # handle's scratch, which every read refreshes.
+                out.append(
+                    PhoneticRun(
+                        sb=fields["sb"],
+                        eb=fields["eb"],
+                        text=LIB.read_cstr(fields["text"]) if fields["text"] else "",
+                    )
+                )
+        finally:
+            LIB.free(run_ptr)
+        return out
 
     def get_phonetic(self, sheet: int, row: int, col: int) -> str:
         """Return the cell's phonetic guide, or ``""`` when it has none.
@@ -4446,6 +4556,47 @@ class Workbook:
         finally:
             LIB.free(ptr)
             LIB.free(out)
+            for p in owned:
+                LIB.free(p)
+
+    def set_font(self, font_index: int, record: FontRecord) -> None:
+        """Overwrite an existing font slot in place.
+
+        Every ``<xf>`` naming ``font_index`` restyles at once, so this is a
+        bulk change rather than a local edit; :meth:`add_font` is the way to
+        introduce a new appearance. The index must already exist.
+        """
+        h = self._require()
+        owned: List[int] = []
+        ptr = S.alloc_struct(LIB, S.FONT_RECORD)
+        try:
+            _pack_font(ptr, record, owned)
+            _check(
+                LIB.fm_styles_set_font(h, _uint(font_index, "font_index"), ptr),
+                "fm_styles_set_font",
+            )
+        finally:
+            LIB.free(ptr)
+            for p in owned:
+                LIB.free(p)
+
+    def set_default_font(self, record: FontRecord) -> None:
+        """Declare the workbook's default font (font 0).
+
+        Font 0 is what an unstyled cell resolves to. A new workbook seeds it
+        with Excel's Calibri 11, and :meth:`add_font` can only append beside
+        it, so this is the way a ja-JP host declares e.g. ``游ゴシック`` for
+        the cells it never styles explicitly. Read it back with
+        ``get_font(0)``.
+        """
+        h = self._require()
+        owned: List[int] = []
+        ptr = S.alloc_struct(LIB, S.FONT_RECORD)
+        try:
+            _pack_font(ptr, record, owned)
+            _check(LIB.fm_workbook_set_default_font(h, ptr), "fm_workbook_set_default_font")
+        finally:
+            LIB.free(ptr)
             for p in owned:
                 LIB.free(p)
 

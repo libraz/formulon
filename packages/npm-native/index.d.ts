@@ -1114,6 +1114,20 @@ export interface CellXf {
   xfId?: number;
 }
 
+/** One `<rPh>` block: `text` reads the half-open span `[sb, eb)` of the
+ *  cell's surface text, measured in UTF-16 code units. */
+export interface PhoneticRun {
+  sb: number;
+  eb: number;
+  text: string;
+}
+
+/** Return type of `Workbook.getCellPhoneticRuns(sheet, row, col)`. */
+export interface PhoneticRunsResult {
+  status: Status;
+  runs: PhoneticRun[];
+}
+
 /** Return type of `Workbook.getFont(fontIndex)`. */
 export interface FontResult extends FontRecord {
   status: Status;
@@ -1546,11 +1560,24 @@ export interface Workbook {
   /** Stores a static Excel error literal; `errorCode` is an ErrorCode ordinal. */
   setError(sheet: number, row: number, col: number, errorCode: number): Status;
   setText(sheet: number, row: number, col: number, text: string): Status;
+  /** Stores (or, when empty, clears) the cell's OOXML phonetic guide (`<rPh>`). */
+  setCellPhonetic(sheet: number, row: number, col: number, phonetic: string): Status;
+  /** Stores (or, when empty, clears) the cell's phonetic guide as one `<rPh>`
+   *  block per run. Unlike `setCellPhonetic`, which annotates the whole cell,
+   *  this keeps the span each reading covers. The runs must be an ordered
+   *  partition: each needs `sb <= eb` and must start at or after the previous
+   *  run's `eb`. */
+  setCellPhoneticRuns(sheet: number, row: number, col: number, runs: PhoneticRun[]): Status;
   setBlank(sheet: number, row: number, col: number): Status;
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
   // Cell read.
   getValue(sheet: number, row: number, col: number): CellResult;
+  /** Returns the cell's OOXML phonetic guide (`<rPh>`), or an empty string. */
+  getCellPhonetic(sheet: number, row: number, col: number): StringResult;
+  /** Returns the cell's `<rPh>` blocks with their spans. `getCellPhonetic`
+   *  returns the same readings concatenated, without the spans. */
+  getCellPhoneticRuns(sheet: number, row: number, col: number): PhoneticRunsResult;
   /** Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
    *  single scalar result, without mutating the workbook. Local and
    *  cross-sheet references, defined names, and `ROW()` / `COLUMN()` resolve
@@ -2071,6 +2098,16 @@ export interface Workbook {
   /** Adds a font (deduplicating against existing entries) and returns
    *  the resolved index. */
   addFont(record: FontRecord): AddStyleResult;
+  /** Overwrites the font at `fontIndex` in place. Every `<xf>` naming that
+   *  index restyles at once, so this is a bulk change rather than a local
+   *  edit; `addFont` is the way to introduce a new appearance. The index
+   *  must already exist -- the table does not auto-grow. */
+  setFont(fontIndex: number, record: FontRecord): Status;
+  /** Declares the workbook's default font: font 0, the record an unstyled
+   *  cell resolves to. A new workbook seeds it with Excel's Calibri 11 and
+   *  `addFont` can only append beside it, so this is the way to change what
+   *  a never-styled cell is saved as. Read it back with `getFont(0)`. */
+  setDefaultFont(record: FontRecord): Status;
   /** Adds a fill (deduplicating against existing entries). */
   addFill(record: FillRecord): AddStyleResult;
   /** Adds a border (deduplicating against existing entries). */

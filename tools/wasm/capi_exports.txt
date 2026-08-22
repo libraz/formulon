@@ -49,10 +49,13 @@ fm_workbook_set_blank
 fm_workbook_set_formula
 fm_workbook_set_error
 fm_workbook_set_cell_phonetic
+fm_workbook_set_cell_phonetic_runs
 
 # -- Cell read -------------------------------------------------------------------
 fm_workbook_get_value
 fm_workbook_get_cell_phonetic
+fm_workbook_get_cell_phonetic_run_count
+fm_workbook_get_cell_phonetic_run
 fm_workbook_lambda_text_at
 
 # -- Ad-hoc array evaluation (two-step: evaluate + per-cell readback) -------------
@@ -191,6 +194,8 @@ fm_styles_add_cell_xf
 fm_styles_add_dxf
 fm_styles_add_cell_style_xf
 fm_styles_set_cell_style
+fm_styles_set_font
+fm_workbook_set_default_font
 
 # -- Pivot layout projection -----------------------------------------------------
 fm_workbook_pivot_count

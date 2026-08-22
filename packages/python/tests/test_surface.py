@@ -118,6 +118,7 @@ class StructLayoutTests(unittest.TestCase):
         "SHEET_PROTECTION": 88,
         "VIEWPORT": 20,
         "CELL_NODE": 12,
+        "PHONETIC_RUN": 12,
         "CFVO": 12,
         "CF_CELL_RANGE": 16,
         "CF_COLOR": 4,

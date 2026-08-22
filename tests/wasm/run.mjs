@@ -647,6 +647,63 @@ async function run() {
     }
   });
 
+  test('setCellPhoneticRuns / getCellPhoneticRuns keep the spans apart', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setText(0, 0, 0, '東京都').ok);
+      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, []);
+
+      const runs = [
+        { sb: 0, eb: 2, text: 'トウキョウ' },
+        { sb: 2, eb: 3, text: 'ト' },
+      ];
+      assert.ok(wb.setCellPhoneticRuns(0, 0, 0, runs).ok);
+      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, runs);
+      // The flattening getter still reports the concatenation.
+      assert.equal(wb.getCellPhonetic(0, 0, 0).value, 'トウキョウト');
+
+      // Writing that back through the whole-cell setter is the collapse the
+      // run API exists to avoid.
+      assert.ok(wb.setCellPhonetic(0, 0, 0, 'トウキョウト').ok);
+      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, [{ sb: 0, eb: 3, text: 'トウキョウト' }]);
+
+      assert.ok(wb.setCellPhoneticRuns(0, 0, 0, []).ok);
+      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, []);
+
+      assert.equal(
+        wb.setCellPhoneticRuns(0, 0, 0, [
+          { sb: 2, eb: 3, text: 'ト' },
+          { sb: 0, eb: 2, text: 'トウ' },
+        ]).ok,
+        false,
+      );
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('setDefaultFont replaces font 0, which addFont can only append beside', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.getFont(0).name, 'Calibri');
+      const appended = wb.addFont({ name: '游ゴシック', size: 11 });
+      assert.ok(appended.status.ok);
+      assert.ok(appended.index > 0);
+      assert.equal(wb.getFont(0).name, 'Calibri');
+
+      assert.ok(wb.setDefaultFont({ name: '游ゴシック', size: 11, hasCharset: true, charset: 128 }).ok);
+      assert.equal(wb.getFont(0).name, '游ゴシック');
+      assert.equal(wb.getFont(0).charset, 128);
+
+      const added = wb.addFont({ name: 'Meiryo', size: 12 });
+      assert.ok(wb.setFont(added.index, { name: 'MS Gothic', size: 9 }).ok);
+      assert.equal(wb.getFont(added.index).name, 'MS Gothic');
+      assert.equal(wb.setFont(wb.fontCount(), { name: 'MS Gothic', size: 9 }).ok, false);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('table update omits fields without resetting existing metadata', () => {
     const wb = Module.Workbook.createDefault();
     try {

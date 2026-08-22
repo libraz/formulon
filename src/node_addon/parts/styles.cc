@@ -414,6 +414,31 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
 }
 
+Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t font_index = ArgU32(info, 0);
+  Napi::Object record = (info.Length() > 1 && info[1].IsObject()) ? info[1].As<Napi::Object>() : Napi::Object::New(env);
+  std::string name;
+  fm_font_record fr{};
+  PullFontRecord(record, &name, &fr);
+  return MakeStatus(env, fm_styles_set_font(handle_, font_index, fr));
+}
+
+Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  std::string name;
+  fm_font_record fr{};
+  PullFontRecord(record, &name, &fr);
+  return MakeStatus(env, fm_workbook_set_default_font(handle_, fr));
+}
+
 Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

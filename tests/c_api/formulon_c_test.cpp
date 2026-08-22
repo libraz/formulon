@@ -398,6 +398,76 @@ TEST(FormulonCApi, CellPhoneticCanBeReadClearedAndRejectsInvalidArguments) {
   EXPECT_NE(fm_workbook_get_cell_phonetic(wb.handle, 0, 0, 0, nullptr), 0);
 }
 
+TEST(FormulonCApi, CellPhoneticRunsPreserveTheirSpans) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "東京都"), 0);
+
+  const fm_phonetic_run_t runs[] = {{0U, 2U, "トウキョウ"}, {2U, 3U, "ト"}};
+  ASSERT_EQ(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, runs, 2U), 0);
+
+  uint32_t count = 0;
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+
+  fm_phonetic_run_t read{};
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_run(wb.handle, 0, 0, 0, 0U, &read), 0);
+  EXPECT_EQ(read.sb, 0U);
+  EXPECT_EQ(read.eb, 2U);
+  EXPECT_STREQ(read.text, "トウキョウ");
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_run(wb.handle, 0, 0, 0, 1U, &read), 0);
+  EXPECT_EQ(read.sb, 2U);
+  EXPECT_EQ(read.eb, 3U);
+  EXPECT_STREQ(read.text, "ト");
+
+  // The flattening getter still reports the concatenation, and feeding that
+  // back through the whole-cell setter is exactly the collapse the run API
+  // exists to avoid.
+  const char* flattened = nullptr;
+  ASSERT_EQ(fm_workbook_get_cell_phonetic(wb.handle, 0, 0, 0, &flattened), 0);
+  EXPECT_STREQ(flattened, "トウキョウト");
+  ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, "トウキョウト"), 0);
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+
+  // An empty batch clears; a cell that was never annotated reports zero runs.
+  ASSERT_EQ(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, nullptr, 0U), 0);
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_run_count(wb.handle, 0, 5, 5, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
+TEST(FormulonCApi, CellPhoneticRunsRejectMalformedInput) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "東京都"), 0);
+
+  const fm_phonetic_run_t backwards[] = {{2U, 1U, "ト"}};
+  EXPECT_NE(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, backwards, 1U), 0);
+  const fm_phonetic_run_t overlapping[] = {{0U, 2U, "トウキョウ"}, {1U, 3U, "ト"}};
+  EXPECT_NE(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, overlapping, 2U), 0);
+  const fm_phonetic_run_t null_text[] = {{0U, 2U, nullptr}};
+  EXPECT_NE(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, null_text, 1U), 0);
+
+  const fm_phonetic_run_t ok[] = {{0U, 3U, "トウキョウト"}};
+  EXPECT_NE(fm_workbook_set_cell_phonetic_runs(nullptr, 0, 0, 0, ok, 1U), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, nullptr, 1U), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, formulon::Sheet::kMaxRows, 0, ok, 1U), 0);
+
+  // A rejected batch leaves the previous annotation intact.
+  ASSERT_EQ(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, ok, 1U), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, overlapping, 2U), 0);
+  uint32_t count = 0;
+  ASSERT_EQ(fm_workbook_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+
+  fm_phonetic_run_t read{};
+  EXPECT_NE(fm_workbook_get_cell_phonetic_run(wb.handle, 0, 0, 0, 1U, &read), 0);
+  EXPECT_NE(fm_workbook_get_cell_phonetic_run(wb.handle, 0, 0, 0, 0U, nullptr), 0);
+  EXPECT_NE(fm_workbook_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, nullptr), 0);
+}
+
 TEST(FormulonCApi, LoadMapsCorruptAndEncryptedContainersToIoErrors) {
   fm_workbook_t* loaded = reinterpret_cast<fm_workbook_t*>(0x1);
   const std::vector<std::uint8_t> garbage = {0x01U, 0x02U, 0x03U, 0x04U};

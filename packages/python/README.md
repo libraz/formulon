@@ -107,6 +107,22 @@ wb.set_phonetic(0, 0, 0, "ニホンゴ")
 wb.get_phonetic(0, 0, 0)  # -> 'ニホンゴ'; '' when the cell has none
 ```
 
+A reading that covers only part of the text needs one run per span. The
+spans are observable through `PHONETIC`, which substitutes each annotated
+span and passes the rest through, so a partially annotated cell has to be
+read and written as runs -- `set_phonetic` annotates the whole cell and
+would collapse them:
+
+```python
+wb.set_text(0, 0, 0, "東京都")
+wb.set_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "ト")])
+wb.get_phonetic_runs(0, 0, 0)  # -> [PhoneticRun(0, 2, 'トウキョウ'), PhoneticRun(2, 3, 'ト')]
+wb.get_phonetic(0, 0, 0)  # -> 'トウキョウト' (the readings concatenated)
+```
+
+Offsets are UTF-16 code units, and the runs must be an ordered partition:
+each needs `sb <= eb` and must start at or after the previous run's `eb`.
+
 **AutoFilter** -- the raw `<autoFilter>` fragment, preserved verbatim so
 filter criteria and extensions survive a round trip:
 
@@ -172,6 +188,15 @@ xf = wb.add_cell_xf(
     )
 )
 wb.set_cell_xf_index(0, 0, 0, xf)
+```
+
+`add_font` always appends beside font 0, the record an unstyled cell
+resolves to. To change what a never-styled cell is saved as -- Calibri 11
+in a fresh workbook -- declare the default instead:
+
+```python
+wb.set_default_font(FontRecord(name="游ゴシック", size=11.0, has_charset=True, charset=128))
+wb.get_font(0).name  # -> '游ゴシック'
 ```
 
 **Conditional formatting**

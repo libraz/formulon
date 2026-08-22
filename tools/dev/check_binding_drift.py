@@ -159,10 +159,8 @@ WASM_AUTO_METHODS = {"delete"}
 WASM_ONLY_METHODS = {
     "addCellStyleXf",
     "createTable",
-    "getCellPhonetic",
     "getSheetAutoFilterXml",
     "removeTable",
-    "setCellPhonetic",
     "setCellStyle",
     "setSheetAutoFilterXml",
     "updateTable",

@@ -31,6 +31,7 @@ from formulon import (
     FormulonError,
     LogLevel,
     MergeRange,
+    PhoneticRun,
     PivotAggregation,
     PivotAxis,
     PivotDataFieldSpec,
@@ -460,6 +461,63 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.set_phonetic(0, 0, 0, "ニホンゴ")
             wb.set_phonetic(0, 0, 0, "")
             self.assertEqual(wb.get_phonetic(0, 0, 0), "")
+
+    def test_phonetic_runs_keep_their_spans(self) -> None:
+        runs = [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "ト")]
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "東京都")
+            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), [])
+            wb.set_phonetic_runs(0, 0, 0, runs)
+            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), runs)
+            # The flattening getter still reports the concatenation.
+            self.assertEqual(wb.get_phonetic(0, 0, 0), "トウキョウト")
+            data = wb.save()
+        with Workbook.load(data) as reloaded:
+            self.assertEqual(reloaded.get_phonetic_runs(0, 0, 0), runs)
+
+    def test_whole_cell_setter_collapses_the_spans(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "東京都")
+            wb.set_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "ト")])
+            wb.set_phonetic(0, 0, 0, wb.get_phonetic(0, 0, 0))
+            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), [PhoneticRun(0, 3, "トウキョウト")])
+
+    def test_empty_run_list_clears_the_guide(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "東京都")
+            wb.set_phonetic_runs(0, 0, 0, [PhoneticRun(0, 3, "トウキョウト")])
+            wb.set_phonetic_runs(0, 0, 0, [])
+            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), [])
+            self.assertEqual(wb.get_phonetic(0, 0, 0), "")
+
+    def test_out_of_order_runs_are_rejected(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "東京都")
+            with self.assertRaises(FormulonError):
+                wb.set_phonetic_runs(0, 0, 0, [PhoneticRun(2, 3, "ト"), PhoneticRun(0, 2, "トウ")])
+
+    def test_default_font_replaces_what_an_unstyled_cell_saves_as(self) -> None:
+        with Workbook.create_default() as wb:
+            self.assertEqual(wb.get_font(0).name, "Calibri")
+            # add_font can only ever append beside the seeded default.
+            self.assertGreater(wb.add_font(FontRecord(name="游ゴシック", size=11.0)), 0)
+            self.assertEqual(wb.get_font(0).name, "Calibri")
+
+            wb.set_default_font(FontRecord(name="游ゴシック", size=11.0, has_charset=True, charset=128))
+            self.assertEqual(wb.get_font(0).name, "游ゴシック")
+            self.assertEqual(wb.get_font(0).charset, 128)
+            data = wb.save()
+        with Workbook.load(data) as reloaded:
+            self.assertEqual(reloaded.get_font(0).name, "游ゴシック")
+
+    def test_set_font_overwrites_an_existing_slot(self) -> None:
+        with Workbook.create_default() as wb:
+            index = wb.add_font(FontRecord(name="Meiryo", size=12.0))
+            wb.set_font(index, FontRecord(name="MS Gothic", size=9.0))
+            self.assertEqual(wb.get_font(index).name, "MS Gothic")
+            self.assertEqual(wb.font_count(), index + 1)
+            with self.assertRaises(FormulonError):
+                wb.set_font(wb.font_count(), FontRecord(name="MS Gothic"))
 
     def test_table_create_update_remove(self) -> None:
         with Workbook.create_default() as wb:

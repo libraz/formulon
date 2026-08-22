@@ -2218,3 +2218,83 @@ TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
   ASSERT_NE(first_xf_end, std::string::npos);
   EXPECT_NE(styles_xml.substr(first_xf, first_xf_end - first_xf).find("fillId=\"0\""), std::string::npos);
 }
+
+TEST(FormulonCApiStyles, DefaultFontDeclaresWhatAnUnstyledCellSavesAs) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "unstyled"), 0);
+
+  // The seeded default is Excel's Calibri 11, and `add_font` can only append
+  // beside it -- which is exactly why the declaring entry point exists.
+  fm_font_record seeded{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, 0, &seeded), 0);
+  EXPECT_STREQ(seeded.name, "Calibri");
+  fm_font_record appended{};
+  appended.name = "游ゴシック";
+  appended.size = 11.0;
+  uint32_t appended_index = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, appended, &appended_index), 0);
+  EXPECT_GT(appended_index, 0U);
+
+  fm_font_record declared{};
+  declared.name = "游ゴシック";
+  declared.size = 11.0;
+  declared.has_family = 1;
+  declared.family = 2;
+  declared.has_charset = 1;
+  declared.charset = 128;
+  declared.color_argb = 0xFF000000U;
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, declared), 0);
+
+  fm_font_record read_back{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, 0, &read_back), 0);
+  EXPECT_STREQ(read_back.name, "游ゴシック");
+  EXPECT_EQ(read_back.charset, 128U);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  const std::string styles_xml = ExtractStylesXml(saved);
+  const std::size_t fonts_begin = styles_xml.find("<fonts");
+  ASSERT_NE(fonts_begin, std::string::npos);
+  const std::size_t first_font = styles_xml.find("<font>", fonts_begin);
+  ASSERT_NE(first_font, std::string::npos);
+  const std::size_t first_font_end = styles_xml.find("</font>", first_font);
+  ASSERT_NE(first_font_end, std::string::npos);
+  const std::string first = styles_xml.substr(first_font, first_font_end - first_font);
+  EXPECT_NE(first.find("<name val=\"游ゴシック\"/>"), std::string::npos);
+  EXPECT_EQ(first.find("Calibri"), std::string::npos);
+}
+
+TEST(FormulonCApiStyles, SetFontOverwritesInPlaceAndRejectsAnAbsentIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_font_record added{};
+  added.name = "Meiryo";
+  added.size = 12.0;
+  uint32_t index = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, added, &index), 0);
+  ASSERT_GT(index, 0U);
+
+  fm_font_record replacement{};
+  replacement.name = "MS Gothic";
+  replacement.size = 9.0;
+  ASSERT_EQ(fm_styles_set_font(wb.handle, index, replacement), 0);
+
+  fm_font_record read_back{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, index, &read_back), 0);
+  EXPECT_STREQ(read_back.name, "MS Gothic");
+  EXPECT_DOUBLE_EQ(read_back.size, 9.0);
+
+  // Overwriting does not grow the table, and an index past its end is
+  // refused rather than filled in with default records.
+  uint32_t count = 0;
+  ASSERT_EQ(fm_styles_get_font_count(wb.handle, &count), 0);
+  EXPECT_EQ(count, index + 1U);
+  EXPECT_NE(fm_styles_set_font(wb.handle, count, replacement), 0);
+  ASSERT_EQ(fm_styles_get_font_count(wb.handle, &count), 0);
+  EXPECT_EQ(count, index + 1U);
+
+  EXPECT_NE(fm_styles_set_font(nullptr, 0, replacement), 0);
+  EXPECT_NE(fm_workbook_set_default_font(nullptr, replacement), 0);
+}

@@ -741,6 +741,39 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
   return 0;
 }
 
+extern "C" fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record record) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_set_font: NULL argument");
+  }
+  formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  // No `ensure_default_style_roots` here: growing the table to satisfy an
+  // out-of-range index would install a default-constructed font at every
+  // slot below it, which is a different workbook than the caller asked for.
+  if (font_index >= styles.fonts.size()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_set_font: font_index out of range",
+        "font_index=" + std::to_string(font_index) + " fonts_count=" + std::to_string(styles.fonts.size()));
+  }
+  styles.fonts[font_index] = font_from_c(record);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_record record) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_default_font: NULL argument");
+  }
+  formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  // Unlike `fm_styles_set_font`, seeding is right here: index 0 is reserved
+  // by construction, so a table without it is an empty table rather than one
+  // whose slot the caller mis-numbered.
+  ensure_default_style_roots(styles);
+  styles.fonts[0] = font_from_c(record);
+  return 0;
+}
+
 extern "C" fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record record, uint32_t* out_index) {
   clear_last_error();
   if (wb == nullptr || out_index == nullptr) {

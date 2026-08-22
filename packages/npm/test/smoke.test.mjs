@@ -911,6 +911,7 @@ function envelopeProbes(wb) {
     ['BorderResult', true, () => wb.getBorder(9999)],
     ['NumFmtResult', true, () => wb.getNumFmt(59999)],
     ['LambdaTextResult', true, () => wb.getLambdaText(99, 0, 0)],
+    ['PhoneticRunsResult', true, () => wb.getCellPhoneticRuns(99, 0, 0)],
     ['CellStyleResult', true, () => wb.getCellStyle(9999)],
     ['AddStyleResult', true, () => wb.addXf({ fontIndex: 9999 })],
     ['AddNumFmtResult', false, () => wb.addNumFmt('0.00')],

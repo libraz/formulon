@@ -83,11 +83,20 @@ class JsWorkbook {
   JsStatus setError(uint32_t sheet, uint32_t row, uint32_t col, int32_t errorCode);
   JsStatus setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text);
   JsStatus setCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col, const std::string& phonetic);
+  /// Stores a cell's furigana as one `<rPh>` block per element of `runs`,
+  /// each `{ sb, eb, text }`. Unlike `setCellPhonetic`, which annotates the
+  /// whole cell, this preserves which characters each reading covers. See
+  /// `fm_workbook_set_cell_phonetic_runs` for the ordering rules.
+  JsStatus setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val runs);
   JsStatus setBlank(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula);
 
   JsCellResult getValue(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const;
+  /// Reads a cell's furigana as `{ status, runs: [{ sb, eb, text }] }`,
+  /// spans included. `getCellPhonetic` returns the same readings
+  /// concatenated, without the spans.
+  emscripten::val getCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const;
 
   /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
@@ -272,6 +281,12 @@ class JsWorkbook {
   emscripten::val getDxf(uint32_t dxf_index) const;
 
   JsAddStyleResult addFont(emscripten::val record);
+  /// Overwrites an existing font slot; every xf naming it restyles at once.
+  /// See `fm_styles_set_font`.
+  JsStatus setFont(uint32_t font_index, emscripten::val record);
+  /// Declares the workbook's default font -- font 0, the record an unstyled
+  /// cell resolves to. See `fm_workbook_set_default_font`.
+  JsStatus setDefaultFont(emscripten::val record);
   JsAddStyleResult addFill(emscripten::val record);
   JsAddStyleResult addBorder(emscripten::val record);
   JsAddNumFmtResult addNumFmt(const std::string& format_code);

@@ -114,6 +114,56 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t s
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                          uint32_t col, const fm_phonetic_run_t* runs, size_t count) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_cell_phonetic_runs"); rc != 0) {
+    return rc;
+  }
+  if (runs == nullptr && count != 0U) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_cell_phonetic_runs: runs is NULL");
+  }
+  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_cell_phonetic_runs: cell coordinate out of range");
+  }
+
+  std::vector<formulon::PhoneticRun> parsed;
+  parsed.reserve(count);
+  // `PHONETIC` walks the runs once in order, emitting each run's kana when
+  // the walk reaches its start. Runs that overlap or run backwards would
+  // still all be emitted, silently attaching kana to characters they do not
+  // read, so the ordered-partition rule is enforced here rather than
+  // repaired at composition time.
+  std::uint32_t previous_end = 0;
+  for (size_t i = 0; i < count; ++i) {
+    const fm_phonetic_run_t& run = runs[i];
+    if (run.text == nullptr) {
+      return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                               "fm_workbook_set_cell_phonetic_runs: run text is NULL",
+                               "run_index=" + std::to_string(i));
+    }
+    if (run.eb < run.sb) {
+      return set_binding_error(
+          formulon::FormulonErrorCode::kInvalidArgument,
+          "fm_workbook_set_cell_phonetic_runs: run ends before it starts",
+          "run_index=" + std::to_string(i) + " sb=" + std::to_string(run.sb) + " eb=" + std::to_string(run.eb));
+    }
+    if (i != 0U && run.sb < previous_end) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_workbook_set_cell_phonetic_runs: runs overlap or are out of order",
+                               "run_index=" + std::to_string(i) + " sb=" + std::to_string(run.sb) +
+                                   " previous_eb=" + std::to_string(previous_end));
+    }
+    previous_end = run.eb;
+    parsed.push_back(formulon::PhoneticRun{run.sb, run.eb, std::string(run.text)});
+  }
+
+  wb->workbook().sheet(sheet_index).set_cell_phonetic_runs(row, col, std::move(parsed));
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_blank"); rc != 0) {
@@ -188,6 +238,48 @@ extern "C" fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, si
   // span each covers is `PHONETIC`'s business, not a furigana field's.
   store.emplace_back(cell == nullptr ? std::string() : formulon::flatten_phonetic(cell->phonetic_runs));
   *out_text = store.back().c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_cell_phonetic_run_count(const fm_workbook_t* wb, size_t sheet_index,
+                                                               uint32_t row, uint32_t col, uint32_t* out_count) {
+  clear_last_error();
+  if (out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_get_cell_phonetic_run_count: out_count is NULL");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_phonetic_run_count"); rc != 0) {
+    return rc;
+  }
+  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  *out_count = cell == nullptr ? 0U : static_cast<uint32_t>(cell->phonetic_runs.size());
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_cell_phonetic_run(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                         uint32_t col, uint32_t run_index, fm_phonetic_run_t* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_get_cell_phonetic_run: out is NULL");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_phonetic_run"); rc != 0) {
+    return rc;
+  }
+  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  const size_t run_count = cell == nullptr ? 0U : cell->phonetic_runs.size();
+  if (run_index >= run_count) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_get_cell_phonetic_run: run_index out of range",
+                             "run_index=" + std::to_string(run_index) + " run_count=" + std::to_string(run_count));
+  }
+  const formulon::PhoneticRun& run = cell->phonetic_runs[run_index];
+  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
+  store.clear();
+  store.emplace_back(run.text);
+  out->sb = run.sb;
+  out->eb = run.eb;
+  out->text = store.back().c_str();
   return 0;
 }
 

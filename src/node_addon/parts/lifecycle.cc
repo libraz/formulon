@@ -113,6 +113,54 @@ Napi::Value Workbook::SetText(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::SetCellPhonetic(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const std::string phonetic = ArgString(info, 3);
+  fm_status_t rc = fm_workbook_set_cell_phonetic(handle_, sheet, row, col, phonetic.c_str());
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  if (info.Length() <= 3 || !info[3].IsArray()) {
+    return MakeBindingArgumentError(env, "setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
+  }
+  const Napi::Array runs = info[3].As<Napi::Array>();
+  const uint32_t count = runs.Length();
+  // Two passes so no `c_str()` is taken before `texts` has finished growing.
+  std::vector<std::string> texts;
+  texts.reserve(count);
+  std::vector<fm_phonetic_run_t> records;
+  records.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    Napi::Value element = runs.Get(i);
+    if (!element.IsObject()) {
+      return MakeBindingArgumentError(env, "setCellPhoneticRuns: each run must be an object { sb, eb, text }");
+    }
+    const Napi::Object run = element.As<Napi::Object>();
+    const Napi::Value text = run.Get("text");
+    texts.push_back(text.IsString() ? text.As<Napi::String>().Utf8Value() : std::string());
+    records.push_back(fm_phonetic_run_t{SpecPullU32(run, "sb", 0U), SpecPullU32(run, "eb", 0U), nullptr});
+  }
+  for (uint32_t i = 0; i < count; ++i) {
+    records[i].text = texts[i].c_str();
+  }
+  fm_status_t rc = fm_workbook_set_cell_phonetic_runs(handle_, sheet, row, col, records.data(), records.size());
+  return MakeStatus(env, rc);
+}
+
 Napi::Value Workbook::SetBlank(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -154,6 +202,53 @@ Napi::Value Workbook::GetValue(const Napi::CallbackInfo& info) {
     return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
   }
   return MakeValueResult(env, MakeOkStatus(env), v);
+}
+
+Napi::Value Workbook::GetCellPhonetic(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeStringFieldResult(env, NullHandleError(env), "value", "");
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const char* text = nullptr;
+  fm_status_t rc = fm_workbook_get_cell_phonetic(handle_, sheet, row, col, &text);
+  if (rc != 0) {
+    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), "value", "");
+  }
+  return MakeStringFieldResult(env, MakeOkStatus(env), "value", text);
+}
+
+Napi::Value Workbook::GetCellPhoneticRuns(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeFieldResult(env, NullHandleError(env), "runs", Napi::Array::New(env, 0));
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  uint32_t count = 0;
+  fm_status_t rc = fm_workbook_get_cell_phonetic_run_count(handle_, sheet, row, col, &count);
+  Napi::Array out = Napi::Array::New(env, rc == 0 ? count : 0);
+  for (uint32_t i = 0; rc == 0 && i < count; ++i) {
+    fm_phonetic_run_t run{};
+    rc = fm_workbook_get_cell_phonetic_run(handle_, sheet, row, col, i, &run);
+    if (rc != 0) {
+      break;
+    }
+    Napi::Object entry = Napi::Object::New(env);
+    entry.Set("sb", Napi::Number::New(env, run.sb));
+    entry.Set("eb", Napi::Number::New(env, run.eb));
+    // Copied immediately: each read refreshes the handle's scratch, so the
+    // previous run's pointer is dead by the time the next one lands.
+    entry.Set("text", Napi::String::New(env, run.text != nullptr ? run.text : ""));
+    out.Set(i, entry);
+  }
+  if (rc != 0) {
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), "runs", Napi::Array::New(env, 0));
+  }
+  return MakeFieldResult(env, MakeOkStatus(env), "runs", out);
 }
 
 Napi::Value Workbook::EvaluateFormulaText(const Napi::CallbackInfo& info) {

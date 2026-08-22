@@ -313,6 +313,14 @@ CELL_NODE = Struct(
     [("sheet", U32), ("row", U32), ("col", U32)],
 )
 
+# One ``<rPh>`` block. Passed both ways: as an element of the array
+# ``fm_workbook_set_cell_phonetic_runs`` takes, and as the out-parameter of
+# ``fm_workbook_get_cell_phonetic_run``.
+PHONETIC_RUN = Struct(
+    "fm_phonetic_run_t",
+    [("sb", U32), ("eb", U32), ("text", PTR)],
+)
+
 # fm_pivot_cell_t embeds an fm_value_t (16 bytes, 8-aligned) inline. The
 # ``value`` field is an opaque blob; decode it with Value._from_wasm
 # against ``cell_ptr + PIVOT_CELL_VALUE_OFFSET``.
