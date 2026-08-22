@@ -46,6 +46,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the guide as well as the text, so two cells reading the same kanji
   differently no longer collapse onto one entry.
 
+### Fixed
+
+- A font's `<scheme>` theme link survives a load and save. A ja-JP
+  workbook's Normal font carries `scheme="minor"`, which is what makes
+  Excel show it as the body font and re-resolve it when the theme
+  changes; the element was dropped on read, so re-saving rewrote the font
+  as a literal name. It now round-trips through both containers — the
+  binary form is `BrtFont`'s `bFontScheme`, whose ordinals the field
+  shares — and reaches the record projections as `scheme` on WASM, the
+  native Node addon and Python, so reading a font, editing one field and
+  writing it back no longer unlinks it.
+
+- A phonetic guide's `<phoneticPr>` block survives a load and save. Only
+  the `<rPh>` runs were carried, so a guide set to hiragana or to a
+  distributed layout came back as Excel's default half-width katakana on
+  the next save. Which font renders the ruby, which kana form it uses and
+  how it is distributed now round-trip through both containers, and are
+  written beside every annotated string item the way Excel writes them.
+  An absent element and a bare `<phoneticPr/>` resolve differently —
+  half-width katakana / no control against full-width katakana / left —
+  and are now read apart.
+
 ## [0.11.0] - 2026-08-22
 
 ### Added
