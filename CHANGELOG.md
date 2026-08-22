@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A workbook's default font can be declared. Font 0 is the record every
+  unstyled cell resolves to, and a new workbook seeds it with Excel's
+  Calibri 11; since the seeded table already owns index 0, `add_font`
+  could only ever append beside it, leaving a ja-JP host no way to say
+  what a never-styled cell should be saved as. `fm_workbook_set_default_font`
+  fills that gap, and `fm_styles_set_font` overwrites any existing slot
+  in place for the general case of restyling every `<xf>` that names it.
+  Both reach WASM and the native Node addon as `setDefaultFont` /
+  `setFont` and Python as `set_default_font` / `set_font`; the current
+  default reads back through the existing `getFont(0)`.
+
+- Phonetic guides can be authored span by span, not only as one reading
+  for the whole cell. The core has kept one run per `<rPh>` block since
+  0.11.0, but the bindings carried a single string in each direction, so
+  reading a partially annotated cell and writing it back collapsed every
+  span into one whole-cell annotation.
+  `fm_workbook_set_cell_phonetic_runs` takes the runs as an ordered
+  partition and `fm_workbook_get_cell_phonetic_run_count` /
+  `fm_workbook_get_cell_phonetic_run` read them back with their spans.
+  They reach WASM and the native Node addon as `setCellPhoneticRuns` /
+  `getCellPhoneticRuns` and Python as `set_phonetic_runs` /
+  `get_phonetic_runs`. The flattening `getCellPhonetic` is unchanged and
+  still returns the readings concatenated.
+
+- `getCellPhonetic` and `setCellPhonetic` reach the native Node addon,
+  which had neither. They were the last cell-level pair that existed on
+  WASM and Python only.
+
+- Phonetic guides survive the MS-XLSB container. `BrtSSTItem`'s phonetic
+  tail is now decoded and emitted, so furigana no longer disappears when
+  a workbook is saved as `.xlsb` or read back from one. The binary form
+  stores the kana once and gives each run a start offset into that
+  concatenation, and elides the run array entirely for a whole-string
+  reading; both shapes are handled. The shared-string interner keys on
+  the guide as well as the text, so two cells reading the same kanji
+  differently no longer collapse onto one entry.
+
 ## [0.11.0] - 2026-08-22
 
 ### Added
