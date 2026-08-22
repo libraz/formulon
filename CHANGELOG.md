@@ -37,6 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which had neither. They were the last cell-level pair that existed on
   WASM and Python only.
 
+- How a phonetic guide renders can be authored, not only round-tripped.
+  `fm_workbook_set_cell_phonetic_properties` /
+  `fm_workbook_get_cell_phonetic_properties` carry the font that draws the
+  ruby, the kana form Excel generates readings in and how the kana is
+  distributed over the characters it covers. They reach WASM and the
+  native Node addon as `setCellPhoneticProperties` /
+  `getCellPhoneticProperties` and Python as `set_phonetic_properties` /
+  `get_phonetic_properties`, with `FM_PHONETIC_TYPE_*` and
+  `FM_PHONETIC_ALIGNMENT_*` naming the ordinals. Deliberately separate
+  from the run entry points in both directions: editing the readings does
+  not reset the rendering, and setting the rendering does not touch the
+  readings. A value write still clears both.
+
 - Phonetic guides survive the MS-XLSB container. `BrtSSTItem`'s phonetic
   tail is now decoded and emitted, so furigana no longer disappears when
   a workbook is saved as `.xlsb` or read back from one. The binary form
