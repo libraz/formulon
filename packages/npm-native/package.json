@@ -1,6 +1,6 @@
 {
   "name": "@libraz/formulon-native",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Excel 365 calculation engine -- native N-API binding",
   "license": "Apache-2.0",
   "author": "libraz",

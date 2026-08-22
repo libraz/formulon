@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-22
+
 ### Added
 
 - A workbook's default font can be declared. Font 0 is the record every
@@ -1380,7 +1382,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/libraz/formulon/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/libraz/formulon/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/libraz/formulon/compare/v0.9.7...v0.10.0
 [0.9.7]: https://github.com/libraz/formulon/compare/v0.9.6...v0.9.7
