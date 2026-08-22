@@ -111,6 +111,7 @@ emscripten::val js_font_record(const fm_font_record& f) {
   o.set("family", static_cast<std::uint32_t>(f.family));
   o.set("hasCharset", f.has_charset != 0);
   o.set("charset", static_cast<std::uint32_t>(f.charset));
+  o.set("scheme", static_cast<std::uint32_t>(f.scheme));
   o.set("color", js_color_spec(f.color));
   return o;
 }
@@ -133,6 +134,7 @@ void js_pull_font_record(const emscripten::val& record, std::string* name_storag
   out->family = js_pull_u8(record, "family", 0U);
   out->has_charset = js_pull_bool(record, "hasCharset", false) ? 1 : 0;
   out->charset = js_pull_u8(record, "charset", 0U);
+  out->scheme = js_pull_u8(record, "scheme", 0U);
   out->color_argb = js_pull_u32(record, "colorArgb", 0xFF000000U);
   out->color = js_pull_color_spec(record, "color");
 }

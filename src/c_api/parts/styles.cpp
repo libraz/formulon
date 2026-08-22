@@ -206,6 +206,7 @@ void font_to_c(const formulon::io::FontRecord& f, fm_font_record* out) noexcept 
   out->vert_align = f.vert_align;
   out->family = f.family;
   out->charset = f.charset;
+  out->scheme = f.scheme;
   color_to_c(f.color, &out->color);
 }
 
@@ -681,6 +682,7 @@ formulon::io::FontRecord font_from_c(const fm_font_record& record) {
   out.vert_align = record.vert_align;
   out.family = record.family;
   out.charset = record.charset;
+  out.scheme = record.scheme;
   out.color_argb = record.color_argb;
   out.color = color_from_c(record.color);
   return out;

@@ -44,11 +44,11 @@ static_assert(offsetof(fm_cell_xf, has_horizontal_align) == 72U, "fm_cell_xf.has
 static_assert(offsetof(fm_cell_xf, has_vertical_align) == 76U, "fm_cell_xf.has_vertical_align offset changed");
 static_assert(offsetof(fm_cell_xf, has_wrap_text) == 80U, "fm_cell_xf.has_wrap_text offset changed");
 static_assert(offsetof(fm_cell_xf, has_justify_last_line) == 84U, "fm_cell_xf.has_justify_last_line offset changed");
-static_assert(sizeof(fm_dxf_record) == (sizeof(void*) == 4U ? 360U : 368U), "fm_dxf_record ABI layout changed");
-static_assert(offsetof(fm_dxf_record, num_fmt_code) == 344U, "fm_dxf_record.num_fmt_code offset changed");
-static_assert(offsetof(fm_dxf_record, alignment_xml) == (sizeof(void*) == 4U ? 348U : 352U),
+static_assert(sizeof(fm_dxf_record) == (sizeof(void*) == 4U ? 368U : 376U), "fm_dxf_record ABI layout changed");
+static_assert(offsetof(fm_dxf_record, num_fmt_code) == 352U, "fm_dxf_record.num_fmt_code offset changed");
+static_assert(offsetof(fm_dxf_record, alignment_xml) == (sizeof(void*) == 4U ? 356U : 360U),
               "fm_dxf_record.alignment_xml offset changed");
-static_assert(offsetof(fm_dxf_record, protection_xml) == (sizeof(void*) == 4U ? 352U : 360U),
+static_assert(offsetof(fm_dxf_record, protection_xml) == (sizeof(void*) == 4U ? 360U : 368U),
               "fm_dxf_record.protection_xml offset changed");
 
 // `fm_styles_batch` is fifteen pointer-width slots: five (array, count,
@@ -2297,4 +2297,41 @@ TEST(FormulonCApiStyles, SetFontOverwritesInPlaceAndRejectsAnAbsentIndex) {
 
   EXPECT_NE(fm_styles_set_font(nullptr, 0, replacement), 0);
   EXPECT_NE(fm_workbook_set_default_font(nullptr, replacement), 0);
+}
+
+TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_font_record body{};
+  body.name = "游ゴシック";
+  body.size = 11.0;
+  body.has_charset = 1;
+  body.charset = 128;
+  body.scheme = 2;  // minor: the theme's body font
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, body), 0);
+
+  // The link has to come back out of the projection, or a host that reads a
+  // font, edits one field and writes it back silently unlinks it.
+  fm_font_record read_back{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, 0, &read_back), 0);
+  EXPECT_EQ(read_back.scheme, 2U);
+  read_back.size = 12.0;
+  ASSERT_EQ(fm_styles_set_font(wb.handle, 0, read_back), 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  const std::string styles_xml = ExtractStylesXml(saved);
+  EXPECT_NE(styles_xml.find("<charset val=\"128\"/><scheme val=\"minor\"/>"), std::string::npos);
+
+  // A record left at the default writes no element, so `add_font` sees a
+  // distinct entry rather than folding the two together.
+  fm_font_record unlinked{};
+  unlinked.name = "游ゴシック";
+  unlinked.size = 12.0;
+  unlinked.has_charset = 1;
+  unlinked.charset = 128;
+  uint32_t unlinked_index = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, unlinked, &unlinked_index), 0);
+  EXPECT_GT(unlinked_index, 0U);
 }

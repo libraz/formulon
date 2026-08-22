@@ -103,6 +103,7 @@ Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record& f) {
   out.Set("family", Napi::Number::New(env, static_cast<uint32_t>(f.family)));
   out.Set("hasCharset", Napi::Boolean::New(env, f.has_charset != 0));
   out.Set("charset", Napi::Number::New(env, static_cast<uint32_t>(f.charset)));
+  out.Set("scheme", Napi::Number::New(env, static_cast<uint32_t>(f.scheme)));
   out.Set("color", ColorSpecToJs(env, f.color));
   return out;
 }
@@ -129,6 +130,7 @@ void PullFontRecord(const Napi::Object& record, std::string* name_storage, fm_fo
   out->family = static_cast<uint8_t>(SpecPullU32(record, "family", 0U) & 0xFFU);
   out->has_charset = SpecPullBool(record, "hasCharset", false) ? 1 : 0;
   out->charset = static_cast<uint8_t>(SpecPullU32(record, "charset", 0U) & 0xFFU);
+  out->scheme = static_cast<uint8_t>(SpecPullU32(record, "scheme", 0U) & 0xFFU);
   out->color_argb = SpecPullU32(record, "colorArgb", 0xFF000000U);
   out->color = PullColorSpec(record, "color");
 }

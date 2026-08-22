@@ -723,6 +723,7 @@ class FontRecord:
     family: int
     has_charset: bool
     charset: int
+    scheme: int
     color: ColorSpec
     def __init__(
         self,
@@ -741,6 +742,7 @@ class FontRecord:
         family: int = ...,
         has_charset: bool = ...,
         charset: int = ...,
+        scheme: int = ...,
         color: ColorSpec = ...,
     ) -> None: ...
 

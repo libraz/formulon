@@ -1158,6 +1158,8 @@ class FontRecord:
     family: int = 0
     has_charset: bool = False
     charset: int = 0
+    #: ``<scheme>`` theme link: 0=absent, 1=major, 2=minor.
+    scheme: int = 0
     color: ColorSpec = field(default_factory=ColorSpec)
 
 
@@ -1234,6 +1236,7 @@ def _decode_font(ptr: int) -> FontRecord:
         family=d["family"],
         has_charset=bool(d["has_charset"]),
         charset=d["charset"],
+        scheme=d["scheme"],
         color=_decode_color(ptr + S.FONT_RECORD.offsets["color"][1]),
     )
 
@@ -1257,6 +1260,7 @@ def _pack_font(ptr: int, record: FontRecord, owned: List[int]) -> None:
             "family": _uint(record.family, "family", 8),
             "has_charset": 1 if record.has_charset else 0,
             "charset": _uint(record.charset, "charset", 8),
+            "scheme": _uint(record.scheme, "scheme", 8),
         },
     )
     _pack_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color)

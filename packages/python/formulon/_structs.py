@@ -538,6 +538,7 @@ FONT_RECORD = Struct(
         ("vert_align", U8),
         ("family", U8),
         ("charset", U8),
+        ("scheme", U8),
         ("color", COLOR_SPEC_BLOB),
     ],
 )

@@ -138,11 +138,11 @@ class StructLayoutTests(unittest.TestCase):
         "ROW_LAYOUT": 32,
         "CELL_XF": 88,
         "COLOR_SPEC": 24,
-        "FONT_RECORD": 80,
+        "FONT_RECORD": 88,
         "FILL_RECORD": 64,
         "BORDER_SIDE": 32,
         "BORDER_RECORD": 168,
-        "DXF_RECORD": 360,
+        "DXF_RECORD": 368,
         # Fifteen pointer-or-`size_t` fields; both are four bytes on
         # wasm32, so the whole record is 15 x 4.
         "STYLES_BATCH": 60,

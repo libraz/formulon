@@ -1170,6 +1170,9 @@ export interface FontRecord {
   hasCharset: boolean;
   /** OOXML charset codepage id (e.g. 128 = Shift_JIS). */
   charset: number;
+  /** `<scheme>` theme link: 0=absent, 1=major, 2=minor. Meaningful only on
+   *  a workbook that carries a theme part. */
+  scheme: number;
   /** AARRGGBB literal RGB or compatibility fallback; not a resolved
    *  theme/indexed/auto render colour. */
   colorArgb: number;

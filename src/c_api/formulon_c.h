@@ -4422,6 +4422,12 @@ typedef struct {
  * means "leave the source formatting unchanged" while `<b val="0"/>`
  * means "switch bold off"; on a cell font a `has_*` flag without its
  * value emits the explicit-off form.
+ *
+ * `scheme` is the `<scheme>` link to the workbook theme's major (heading)
+ * or minor (body) typeface. It needs no presence flag because OOXML has no
+ * "absent value" spelling for it: `0` is exactly "no `<scheme>` element".
+ * Set it only on a workbook that carries a theme part — a link into a
+ * theme that is not there resolves to nothing.
  */
 typedef struct {
   const char* name; /* NUL-terminated UTF-8, model-backed view */
@@ -4441,6 +4447,7 @@ typedef struct {
   uint8_t vert_align;  /* 0=baseline, 1=superscript, 2=subscript */
   uint8_t family;      /* `<family>` font-family class (0..5) */
   uint8_t charset;     /* `<charset>` codepage id (e.g. 128 = Shift_JIS) */
+  uint8_t scheme;      /* `<scheme>` theme link: 0=absent, 1=major, 2=minor */
   fm_color_spec color;
 } fm_font_record;
 
@@ -4875,8 +4882,11 @@ FM_API fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index, fm
  * Reading the current default is `fm_styles_get_font(wb, 0, out)`.
  *
  * The record is a font, not a theme: Formulon writes no `xl/theme/theme1.xml`
- * for a workbook it created, so the name is stored literally and Excel
- * resolves it without a `<scheme>` indirection.
+ * for a workbook it created, so leave `record.scheme` at 0 and Excel resolves
+ * the name literally. A workbook loaded from a package that brought its own
+ * theme keeps that part, and there `scheme` is worth carrying: reading font 0,
+ * changing the name and writing it back with `scheme` preserved keeps Excel
+ * showing the font as the theme's body font.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` is `NULL`.
