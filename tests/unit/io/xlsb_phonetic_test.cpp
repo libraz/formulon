@@ -29,6 +29,7 @@
 #include "cell.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "phonetic.h"
@@ -155,6 +156,60 @@ TEST(XlsbPhonetic, SurvivesAWriteReadCycleThroughTheBinaryContainer) {
     EXPECT_EQ(CellText(back, row), CellText(wb, row)) << "row=" << row;
     EXPECT_EQ(DescribeRuns(back, row), DescribeRuns(wb, row)) << "row=" << row;
   }
+}
+
+/// The `(font_id, type, alignment)` triple of `(row, 0)`, flattened so a
+/// mismatch prints all three.
+std::string DescribeProps(const Workbook& wb, std::uint32_t row) {
+  const Cell* cell = wb.sheet(0).cell_at(row, 0);
+  if (cell == nullptr) {
+    return "<absent>";
+  }
+  return std::to_string(cell->phonetic_props.font_id) + "/" + std::to_string(cell->phonetic_props.type) + "/" +
+         std::to_string(cell->phonetic_props.alignment);
+}
+
+TEST(XlsbPhonetic, ReadsThePhoneticPropertiesBothContainersCarry) {
+  const std::vector<std::uint8_t> xlsx_bytes = ReadFileBytes(XlsxTwinPath());
+  ASSERT_FALSE(xlsx_bytes.empty());
+  auto xlsx_or = io::read_ooxml(SpanOf(xlsx_bytes));
+  ASSERT_TRUE(static_cast<bool>(xlsx_or)) << (xlsx_or ? "" : xlsx_or.error().message);
+  Workbook from_xlsb = LoadXlsb();
+
+  // Excel wrote `fontId="0" type="halfwidthKatakana" alignment="noControl"`
+  // on every annotated `<si>` here, which is the all-zero triple.
+  for (std::uint32_t row = 0; row < 3U; ++row) {
+    EXPECT_EQ(DescribeProps(from_xlsb, row), "0/0/0") << "row=" << row;
+    EXPECT_EQ(DescribeProps(xlsx_or.value().workbook, row), "0/0/0") << "row=" << row;
+  }
+}
+
+TEST(XlsbPhonetic, CarriesNonDefaultPhoneticPropertiesThroughBothContainers) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(0, 0, 0, "大阪")));
+  wb.sheet(0).set_cell_phonetic_runs(0, 0, {{0U, 2U, "おおさか"}});
+  wb.sheet(0).set_cell_phonetic_props(0, 0, PhoneticProperties{3U, 2U, 2U});
+  // Same text and same reading, differing only in how it renders: the
+  // shared-string interners have to keep the two entries apart or one
+  // cell's rendering silently becomes the other's.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(0, 1, 0, "大阪")));
+  wb.sheet(0).set_cell_phonetic_runs(1, 0, {{0U, 2U, "おおさか"}});
+
+  auto xlsb_or = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb_or)) << (xlsb_or ? "" : xlsb_or.error().message);
+  auto from_xlsb_or = io::xlsb::read_xlsb(SpanOf(xlsb_or.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb_or)) << (from_xlsb_or ? "" : from_xlsb_or.error().message);
+  EXPECT_EQ(DescribeProps(from_xlsb_or.value().workbook, 0), "3/2/2");
+  EXPECT_EQ(DescribeProps(from_xlsb_or.value().workbook, 1), "0/0/0");
+  EXPECT_EQ(DescribeRuns(from_xlsb_or.value().workbook, 0), "[0,2)=おおさか ");
+
+  auto xlsx_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx_or)) << (xlsx_or ? "" : xlsx_or.error().message);
+  auto from_xlsx_or = io::read_ooxml(SpanOf(xlsx_or.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx_or)) << (from_xlsx_or ? "" : from_xlsx_or.error().message);
+  EXPECT_EQ(DescribeProps(from_xlsx_or.value().workbook, 0), "3/2/2");
+  EXPECT_EQ(DescribeProps(from_xlsx_or.value().workbook, 1), "0/0/0");
+  EXPECT_EQ(DescribeRuns(from_xlsx_or.value().workbook, 0), "[0,2)=おおさか ");
 }
 
 TEST(XlsbPhonetic, KeepsTwoReadingsOfTheSameSurfaceTextApart) {

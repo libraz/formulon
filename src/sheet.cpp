@@ -246,6 +246,7 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   Cell& slot = row_cells.ensure(col);
   slot.formula_text.clear();
   slot.phonetic_runs.clear();
+  slot.phonetic_props = PhoneticProperties{};
   slot.cached_value = v;
   cell_enumeration_revision_.bump();
 }
@@ -267,6 +268,7 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
   Cell& slot = row_cells.ensure(col);
   slot.formula_text.clear();
   slot.phonetic_runs.clear();
+  slot.phonetic_props = PhoneticProperties{};
   auto owned = std::make_unique<std::string>(text);
   slot.cached_value = Value::text(*owned);
   slot.cached_text_owned = std::move(owned);
@@ -292,6 +294,7 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   Cell& slot = row_cells.ensure(col);
   slot.formula_text = std::move(formula);
   slot.phonetic_runs.clear();
+  slot.phonetic_props = PhoneticProperties{};
   slot.cached_value = Value::blank();
   cell_enumeration_revision_.bump();
 }
@@ -399,6 +402,16 @@ void Sheet::set_cell_phonetic_runs(std::uint32_t row, std::uint32_t col, std::ve
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.phonetic_runs = std::move(runs);
+  cell_enumeration_revision_.bump();
+}
+
+void Sheet::set_cell_phonetic_props(std::uint32_t row, std::uint32_t col, PhoneticProperties props) {
+  assert(row < kMaxRows && col < kMaxCols);
+
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  RowCells& row_cells = rows_[row];
+  Cell& slot = row_cells.ensure(col);
+  slot.phonetic_props = props;
   cell_enumeration_revision_.bump();
 }
 

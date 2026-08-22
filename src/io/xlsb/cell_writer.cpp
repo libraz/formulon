@@ -177,7 +177,8 @@ void EmitArrayFormulaRecord(std::vector<std::uint8_t>& dst, std::uint32_t rw_fir
 /// the guide belongs to the string entry rather than the cell record, so
 /// two cells reading the same kanji differently need distinct entries.
 void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index,
-                           const Value& cached, const std::vector<PhoneticRun>& phonetic, SstBuilder& sst) {
+                           const Value& cached, const std::vector<PhoneticRun>& phonetic,
+                           PhoneticProperties phonetic_props, SstBuilder& sst) {
   switch (cached.kind()) {
     case ValueKind::Blank: {
       std::vector<std::uint8_t> p;
@@ -213,7 +214,7 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
       return;
     }
     case ValueKind::Text: {
-      const std::uint32_t idx = sst.intern(cached.as_text(), phonetic);
+      const std::uint32_t idx = sst.intern(cached.as_text(), phonetic, phonetic_props);
       std::vector<std::uint8_t> p;
       EmitCellHeader(p, col, xf_index);
       emit_u32(p, idx);
@@ -258,14 +259,14 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell
       if (downgraded_formula_count != nullptr) {
         ++*downgraded_formula_count;
       }
-      EmitLiteralCellRecord(dst, col, cell.xf_index, cell.cached_value, cell.phonetic_runs, sst);
+      EmitLiteralCellRecord(dst, col, cell.xf_index, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, sst);
       return Expected<void, Error>::Ok();
     }
     EmitFormulaCellRecord(dst, col, cell.xf_index, cell.cached_value, formula_or.value());
     return Expected<void, Error>::Ok();
   }
 
-  EmitLiteralCellRecord(dst, col, cell.xf_index, cell.cached_value, cell.phonetic_runs, sst);
+  EmitLiteralCellRecord(dst, col, cell.xf_index, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, sst);
   return Expected<void, Error>::Ok();
 }
 
@@ -288,7 +289,7 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Ce
     if (downgraded_to_literal != nullptr) {
       *downgraded_to_literal = true;
     }
-    EmitLiteralCellRecord(dst, col, cell.xf_index, anchor_value, cell.phonetic_runs, sst);
+    EmitLiteralCellRecord(dst, col, cell.xf_index, anchor_value, cell.phonetic_runs, cell.phonetic_props, sst);
     return Expected<void, Error>::Ok();
   }
   // The anchor's own cell record is a PtgExp shell typed by the spilled

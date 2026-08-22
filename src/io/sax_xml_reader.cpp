@@ -38,6 +38,7 @@
 #include <vector>
 
 #include "io/a1_ref.h"
+#include "io/phonetic_pr.h"
 #include "io/xsd_int.h"
 #include "io/zip_reader.h"
 #include "phonetic.h"
@@ -777,6 +778,7 @@ struct CellScratch {
   /// body, each carrying the surface-text span its kana covers. Cleared
   /// at the start of each `ScanInlineString` call.
   std::vector<PhoneticRun> inline_string_phonetic;
+  PhoneticProperties inline_string_phonetic_props;
   /// Scratch buffers for entity-decoded / normalized semantic attributes.
   /// Every simultaneously exposed view has a distinct backing string: the
   /// three `<c>` attributes, the three `<f>` attributes, and the four row
@@ -814,6 +816,7 @@ struct CellScratch {
 bool ScanInlineString(const char* begin, const char* end, const char** p, CellScratch* scratch, Error* err) {
   scratch->inline_string.clear();
   scratch->inline_string_phonetic.clear();
+  scratch->inline_string_phonetic_props = PhoneticProperties{};
   // Tracks whether we are currently inside an <rPh> (phonetic guide)
   // subtree. <rPh> wraps a <t> element carrying kana, which must NOT
   // be concatenated into the surface text — otherwise PHONETIC's
@@ -853,6 +856,15 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
     }
     if (header.is_end_tag) {
       // Close of an inner element (e.g. </r>): keep streaming.
+      continue;
+    }
+    if (header.name == "phoneticPr") {
+      // Self-closing, so this arm has to precede the generic skip below.
+      // The attribute values are a fixed vocabulary with no escapes, so
+      // the raw slice is the decoded one.
+      scratch->inline_string_phonetic_props.font_id = static_cast<std::uint16_t>(AttrUintOr(header, "fontId", 0U));
+      scratch->inline_string_phonetic_props.type = parse_phonetic_type(AttrOfRaw(header, "type"));
+      scratch->inline_string_phonetic_props.alignment = parse_phonetic_alignment(AttrOfRaw(header, "alignment"));
       continue;
     }
     if (header.self_closing) {
@@ -932,6 +944,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->value = std::string_view{};
   record->is_inline_string = false;
   record->phonetic = nullptr;
+  record->phonetic_props = PhoneticProperties{};
 
   if (cell_header.self_closing) {
     return true;
@@ -1013,6 +1026,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       record->is_inline_string = true;
       record->value = std::string_view(scratch->inline_string);
       record->phonetic = &scratch->inline_string_phonetic;
+      record->phonetic_props = scratch->inline_string_phonetic_props;
     } else if (!child.self_closing) {
       // Unrecognised child of <c>: skip it.
       if (!SkipUntilClose(begin, end, p, child.name, err)) {

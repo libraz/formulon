@@ -37,6 +37,27 @@ struct PhoneticRun {
   std::string text;
 };
 
+/// The `<phoneticPr>` block that sits beside a string item's `<rPh>` runs:
+/// which font renders the ruby, which kana form Excel generates for it, and
+/// how it is distributed over the surface text.
+///
+/// The ordinals are the ones XLSB packs into `BrtSSTItem`'s phonetic
+/// trailer (`flags = 0x30 | type | (alignment << 2)`), so the XML and
+/// binary paths share this struct without a mapping table.
+///
+/// Every field's `0` is the value Excel normalises an absent `<phoneticPr>`
+/// to, which is why a default-constructed instance needs no presence flag:
+/// writing the element out with all-zero fields reproduces what Excel would
+/// have inferred anyway.
+struct PhoneticProperties {
+  /// Index into the workbook's font table for the ruby text.
+  std::uint16_t font_id = 0;
+  /// 0=halfwidthKatakana, 1=fullwidthKatakana, 2=Hiragana, 3=noConversion.
+  std::uint8_t type = 0;
+  /// 0=noControl, 1=left, 2=center, 3=distributed.
+  std::uint8_t alignment = 0;
+};
+
 /// Returns every run's kana concatenated in run order.
 ///
 /// This is the cell's reading with no regard for which characters each

@@ -766,7 +766,28 @@ constexpr std::size_t kStrRunSize = 4U;
 /// annotation type and alignment `<phoneticPr>` carries in OOXML -- is
 /// read past but not modelled: `PhoneticRun` holds the reading, not how
 /// Excel renders it. The OOXML reader drops the same element.
-Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surface, std::vector<PhoneticRun>& out) {
+/// Reads the phonetic tail's closing `(u16 ifnt, u16 flags)` pair.
+///
+/// Leniently: a record that stops short of the pair keeps the defaults
+/// rather than failing the load. The runs have already been decoded by
+/// then, and a guide missing only its rendering hints is still the
+/// reading the user typed.
+void DecodePhoneticProperties(ByteSpan& cursor, PhoneticProperties& out) {
+  auto font_or = read_u16(cursor);
+  if (!font_or) {
+    return;
+  }
+  auto flags_or = read_u16(cursor);
+  if (!flags_or) {
+    return;
+  }
+  out.font_id = font_or.value();
+  out.type = static_cast<std::uint8_t>(flags_or.value() & 0x03U);
+  out.alignment = static_cast<std::uint8_t>((flags_or.value() >> 2U) & 0x03U);
+}
+
+Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surface, std::vector<PhoneticRun>& out,
+                                         PhoneticProperties& out_props) {
   auto phonetic_or = read_xlwidestring(cursor);
   if (!phonetic_or) {
     return phonetic_or.error();
@@ -781,6 +802,7 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
     if (!phonetic.empty()) {
       out.push_back(PhoneticRun{0U, eval::utf16_units_in(surface), phonetic});
     }
+    DecodePhoneticProperties(cursor, out_props);
     return {};
   }
 
@@ -821,6 +843,7 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
     out.push_back(PhoneticRun{surface_start, surface_start + surface_length,
                               eval::utf16_substring(phonetic, kana_start, kana_length)});
   }
+  DecodePhoneticProperties(cursor, out_props);
   return {};
 }
 
@@ -828,10 +851,10 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
 /// payloads, appending each one into `text_storage` so cells can take
 /// non-owning views. `out_phonetic` is filled in parallel with `entries`
 /// -- one (possibly empty) run list per SST index, exactly as the OOXML
-/// reader's `phonetic_for_entries` is.
+/// reader's `phonetic_for_entries` is, and `out_phonetic_props` beside it.
 Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
     const std::vector<std::uint8_t>& body, std::deque<std::string>& text_storage,
-    std::vector<std::vector<PhoneticRun>>& out_phonetic) {
+    std::vector<std::vector<PhoneticRun>>& out_phonetic, std::vector<PhoneticProperties>& out_phonetic_props) {
   std::vector<std::string_view> entries;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
@@ -859,6 +882,7 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
     text_storage.push_back(std::move(str_or.value()));
     entries.push_back(text_storage.back());
     out_phonetic.emplace_back();
+    out_phonetic_props.emplace_back();
 
     if ((flags & kRichStrPhonetic) == 0U) {
       continue;
@@ -882,7 +906,8 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
       p.data += static_cast<std::size_t>(rich_runs) * kStrRunSize;
       p.size -= static_cast<std::size_t>(rich_runs) * kStrRunSize;
     }
-    if (auto decoded = DecodePhoneticTail(p, entries.back(), out_phonetic.back()); !decoded) {
+    if (auto decoded = DecodePhoneticTail(p, entries.back(), out_phonetic.back(), out_phonetic_props.back());
+        !decoded) {
       return decoded.error();
     }
   }
@@ -1995,7 +2020,8 @@ Expected<void, Error> RegisterArraySpills(Workbook& wb, std::size_t sheet_index,
 Expected<RecordDisposition, Error> DispatchSheetRecord(
     const XlsbRecord& rec, XlsbRecordType type, const std::uint8_t* framed, std::size_t framed_size,
     SheetDecodeState& state, std::size_t sheet_index, Workbook& wb, const std::vector<std::string_view>& sst_entries,
-    const std::vector<std::vector<PhoneticRun>>& sst_phonetic, std::deque<std::string>& text_storage,
+    const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
+    const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
     std::uint32_t* undecoded_formula_count) {
@@ -2428,6 +2454,10 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       if (idx_or.value() < sst_phonetic.size() && !sst_phonetic[idx_or.value()].empty()) {
         wb.sheet(sheet_index)
             .set_cell_phonetic_runs(state.current_row, col_or.value().col, sst_phonetic[idx_or.value()]);
+        if (idx_or.value() < sst_phonetic_props.size()) {
+          wb.sheet(sheet_index)
+              .set_cell_phonetic_props(state.current_row, col_or.value().col, sst_phonetic_props[idx_or.value()]);
+        }
       }
       if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
         return r.error();
@@ -2672,9 +2702,10 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
 Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<std::uint8_t>& body, std::size_t sheet_index, Workbook& wb,
     const std::vector<std::string_view>& sst_entries, const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
-    std::deque<std::string>& text_storage, const std::vector<std::string>& sheet_names,
-    const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
-    const XlsbExternalBooks& external_books, std::uint32_t* undecoded_formula_count) {
+    const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
+    const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
+    const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
+    std::uint32_t* undecoded_formula_count) {
   SheetDecodeState state;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
@@ -2692,8 +2723,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     // Every record resolves to a disposition; the result is consumed rather
     // than discarded so that no record can pass through unclassified.
     auto disposition_or = DispatchSheetRecord(rec, type, framed, framed_size, state, sheet_index, wb, sst_entries,
-                                              sst_phonetic, text_storage, sheet_names, name_table, sheet_ranges,
-                                              external_books, undecoded_formula_count);
+                                              sst_phonetic, sst_phonetic_props, text_storage, sheet_names, name_table,
+                                              sheet_ranges, external_books, undecoded_formula_count);
     if (!disposition_or) {
       return disposition_or.error();
     }
@@ -2883,12 +2914,13 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   std::vector<std::string_view> sst_entries;
   // Parallel to `sst_entries`, one (possibly empty) run list per index.
   std::vector<std::vector<PhoneticRun>> sst_phonetic;
+  std::vector<PhoneticProperties> sst_phonetic_props;
   if (!wb_rels.sst_path.empty() && zip.has_entry(wb_rels.sst_path)) {
     auto sst_bytes_or = zip.read_entry(wb_rels.sst_path);
     if (!sst_bytes_or) {
       return sst_bytes_or.error();
     }
-    auto sst_or = DecodeSharedStringsBin(sst_bytes_or.value(), text_storage, sst_phonetic);
+    auto sst_or = DecodeSharedStringsBin(sst_bytes_or.value(), text_storage, sst_phonetic, sst_phonetic_props);
     if (!sst_or) {
       return sst_or.error();
     }
@@ -2939,8 +2971,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (!sheet_bytes_or) {
       return sheet_bytes_or.error();
     }
-    auto state_or = DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, sst_phonetic, text_storage, sheet_names,
-                                   name_table, sheet_ranges, external_books, &undecoded_formula_count);
+    auto state_or =
+        DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
+                       sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count);
     if (!state_or) {
       return state_or.error();
     }

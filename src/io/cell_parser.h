@@ -78,6 +78,9 @@ struct ParsedCell {
   /// `SharedStringTable::phonetic_for_entries`. The runs own their kana
   /// and do not depend on `text_storage`.
   std::vector<PhoneticRun> phonetic_runs;
+  /// The `<phoneticPr>` sibling of those runs, defaulted when the block
+  /// carries none. Only meaningful when `phonetic_runs` is non-empty.
+  PhoneticProperties phonetic_props;
   /// Index into the workbook's `StylesTable::cell_xfs`, sourced from the
   /// `s=` attribute on the `<c>` element. Defaults to `0` (the default
   /// xf) when the attribute is absent.

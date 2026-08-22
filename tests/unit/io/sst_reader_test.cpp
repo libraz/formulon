@@ -133,6 +133,35 @@ TEST(SstReader, PhoneticGuidesAreNotFoldedIntoSurfaceText) {
 // Phonetic (<rPh>) capture
 // ---------------------------------------------------------------------------
 
+TEST(SstReader, PhoneticPropertiesTravelWithTheRuns) {
+  std::string xml(kXmlDecl);
+  xml.append("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  xml.append("<si><t>\xE5\xA4\xA7\xE9\x98\xAA</t><rPh sb=\"0\" eb=\"2\"><t>\xE3\x81\x8A\xE3\x81\x8A\xE3\x81\x95");
+  xml.append("\xE3\x81\x8B</t></rPh>");
+  xml.append("<phoneticPr fontId=\"3\" type=\"Hiragana\" alignment=\"center\"/></si>");
+  // A bare element is not the same state as no element: each attribute
+  // falls back to its own schema default (fullwidthKatakana / left),
+  // where a missing element resolves to halfwidthKatakana / noControl.
+  xml.append("<si><t>bare</t><rPh sb=\"0\" eb=\"1\"><t>x</t></rPh><phoneticPr fontId=\"0\"/></si>");
+  xml.append("<si><t>plain</t><rPh sb=\"0\" eb=\"1\"><t>x</t></rPh></si>");
+  xml.append("</sst>");
+
+  std::deque<std::string> storage;
+  auto result_or = read_shared_strings(Bytes(xml), storage);
+  ASSERT_TRUE(static_cast<bool>(result_or));
+  const SharedStringTable& table = result_or.value();
+  ASSERT_EQ(table.phonetic_props_for_entries.size(), 3U);
+  EXPECT_EQ(table.phonetic_props_for_entries[0].font_id, 3U);
+  EXPECT_EQ(table.phonetic_props_for_entries[0].type, 2U);       // Hiragana
+  EXPECT_EQ(table.phonetic_props_for_entries[0].alignment, 2U);  // center
+  EXPECT_EQ(table.phonetic_props_for_entries[1].font_id, 0U);
+  EXPECT_EQ(table.phonetic_props_for_entries[1].type, 1U);       // fullwidthKatakana
+  EXPECT_EQ(table.phonetic_props_for_entries[1].alignment, 1U);  // left
+  EXPECT_EQ(table.phonetic_props_for_entries[2].font_id, 0U);
+  EXPECT_EQ(table.phonetic_props_for_entries[2].type, 0U);       // halfwidthKatakana
+  EXPECT_EQ(table.phonetic_props_for_entries[2].alignment, 0U);  // noControl
+}
+
 TEST(SstReader, EntryWithoutPhoneticHasEmptyParallelView) {
   // A plain <si><t>...</t></si> entry should produce an empty run list
   // in the parallel `phonetic_for_entries` slot, keeping the index

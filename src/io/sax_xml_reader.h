@@ -106,6 +106,9 @@ struct CellRecord {
   /// is valid only for the duration of the `on_cell` callback, matching
   /// the lifetime of every `string_view` above.
   const std::vector<PhoneticRun>* phonetic = nullptr;
+  /// The `<phoneticPr>` block that came with those runs. Only meaningful
+  /// when `phonetic` points at a non-empty vector.
+  PhoneticProperties phonetic_props;
 };
 
 /// One `<row>` element's opening attributes, surfaced to `on_row_start`

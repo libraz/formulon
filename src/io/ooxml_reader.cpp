@@ -1004,6 +1004,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       // so the runs are copied rather than moved out.
       if (idx < sst.phonetic_for_entries.size() && !sst.phonetic_for_entries[idx].empty()) {
         wb.sheet(i).set_cell_phonetic_runs(row, col, sst.phonetic_for_entries[idx]);
+        if (idx < sst.phonetic_props_for_entries.size()) {
+          wb.sheet(i).set_cell_phonetic_props(row, col, sst.phonetic_props_for_entries[idx]);
+        }
       }
       ++pending_sst_count;
     }

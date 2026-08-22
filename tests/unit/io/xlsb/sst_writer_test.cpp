@@ -29,6 +29,7 @@ namespace xlsb {
 namespace {
 
 const std::vector<PhoneticRun> kNoPhonetic;
+constexpr PhoneticProperties kDefaultProps{};
 
 ByteSpan SpanOf(const std::vector<std::uint8_t>& v) {
   return ByteSpan{v.data(), v.size()};
@@ -152,11 +153,11 @@ TEST(XlsbSstBuilder, EmptyBuilderEmitsBeginEndFraming) {
 
 TEST(XlsbSstBuilder, InternsIdenticalStringsToSameIndex) {
   SstBuilder sst;
-  EXPECT_EQ(sst.intern("apple", kNoPhonetic), 0U);
-  EXPECT_EQ(sst.intern("banana", kNoPhonetic), 1U);
-  EXPECT_EQ(sst.intern("apple", kNoPhonetic), 0U);
-  EXPECT_EQ(sst.intern("cherry", kNoPhonetic), 2U);
-  EXPECT_EQ(sst.intern("banana", kNoPhonetic), 1U);
+  EXPECT_EQ(sst.intern("apple", kNoPhonetic, kDefaultProps), 0U);
+  EXPECT_EQ(sst.intern("banana", kNoPhonetic, kDefaultProps), 1U);
+  EXPECT_EQ(sst.intern("apple", kNoPhonetic, kDefaultProps), 0U);
+  EXPECT_EQ(sst.intern("cherry", kNoPhonetic, kDefaultProps), 2U);
+  EXPECT_EQ(sst.intern("banana", kNoPhonetic, kDefaultProps), 1U);
   EXPECT_EQ(sst.size(), 3U);
 
   ASSERT_EQ(sst.entries().size(), 3U);
@@ -167,10 +168,10 @@ TEST(XlsbSstBuilder, InternsIdenticalStringsToSameIndex) {
 
 TEST(XlsbSstBuilder, EmittedStreamRoundTripsThroughReader) {
   SstBuilder sst;
-  sst.intern("alpha", kNoPhonetic);
-  sst.intern("beta", kNoPhonetic);
-  sst.intern("alpha", kNoPhonetic);
-  sst.intern("gamma", kNoPhonetic);
+  sst.intern("alpha", kNoPhonetic, kDefaultProps);
+  sst.intern("beta", kNoPhonetic, kDefaultProps);
+  sst.intern("alpha", kNoPhonetic, kDefaultProps);
+  sst.intern("gamma", kNoPhonetic, kDefaultProps);
 
   auto body_or = emit_sst(sst);
   ASSERT_TRUE(static_cast<bool>(body_or));
@@ -185,10 +186,10 @@ TEST(XlsbSstBuilder, InternHandlesBmpAndSurrogatePairStrings) {
   SstBuilder sst;
   // BMP only ("日本") and a string that triggers surrogate pairs ("🌟ok")
   // to exercise the writer's UTF-16 expansion.
-  EXPECT_EQ(sst.intern("\xE6\x97\xA5\xE6\x9C\xAC", kNoPhonetic), 0U);
+  EXPECT_EQ(sst.intern("\xE6\x97\xA5\xE6\x9C\xAC", kNoPhonetic, kDefaultProps), 0U);
   EXPECT_EQ(sst.intern("\xF0\x9F\x8C\x9F"
                        "ok",
-                       kNoPhonetic),
+                       kNoPhonetic, kDefaultProps),
             1U);
 
   auto body_or = emit_sst(sst);
@@ -207,10 +208,10 @@ TEST(XlsbSstBuilder, PhoneticGuideKeepsItsSpansAndSplitsTheInternKey) {
   const std::vector<PhoneticRun> other{{0U, 3U, "ヒガシキョウト"}};
   // Same surface text, different readings: the guide is part of the entry,
   // so merging them would move one cell's furigana onto the other.
-  EXPECT_EQ(sst.intern("東京都", tokyo), 0U);
-  EXPECT_EQ(sst.intern("東京都", other), 1U);
-  EXPECT_EQ(sst.intern("東京都", tokyo), 0U);
-  EXPECT_EQ(sst.intern("東京都", kNoPhonetic), 2U);
+  EXPECT_EQ(sst.intern("東京都", tokyo, kDefaultProps), 0U);
+  EXPECT_EQ(sst.intern("東京都", other, kDefaultProps), 1U);
+  EXPECT_EQ(sst.intern("東京都", tokyo, kDefaultProps), 0U);
+  EXPECT_EQ(sst.intern("東京都", kNoPhonetic, kDefaultProps), 2U);
   EXPECT_EQ(sst.size(), 3U);
 
   auto body_or = emit_sst(sst);
@@ -232,8 +233,8 @@ TEST(XlsbSstBuilder, PhoneticGuideKeepsItsSpansAndSplitsTheInternKey) {
 
 TEST(XlsbSstBuilder, BeginRecordCarriesCountFields) {
   SstBuilder sst;
-  sst.intern("a", kNoPhonetic);
-  sst.intern("b", kNoPhonetic);
+  sst.intern("a", kNoPhonetic, kDefaultProps);
+  sst.intern("b", kNoPhonetic, kDefaultProps);
   auto body_or = emit_sst(sst);
   ASSERT_TRUE(static_cast<bool>(body_or));
   const std::vector<std::uint8_t>& body = body_or.value();

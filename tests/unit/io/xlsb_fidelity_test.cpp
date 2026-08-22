@@ -426,8 +426,8 @@ testing::AssertionResult FontsMatch(const io::FontRecord& lhs, const io::FontRec
     return testing::AssertionFailure() << "toggles differ for font " << lhs.name;
   }
   if (lhs.has_family != rhs.has_family || lhs.family != rhs.family || lhs.has_charset != rhs.has_charset ||
-      lhs.charset != rhs.charset) {
-    return testing::AssertionFailure() << "family/charset differ for font " << lhs.name;
+      lhs.charset != rhs.charset || lhs.scheme != rhs.scheme) {
+    return testing::AssertionFailure() << "family/charset/scheme differ for font " << lhs.name;
   }
   if (lhs.color.kind != rhs.color.kind || lhs.color_argb != rhs.color_argb || lhs.color.theme != rhs.color.theme ||
       lhs.color.indexed != rhs.color.indexed) {
@@ -461,6 +461,13 @@ TEST(XlsbFidelity, FontTableMatchesTheXlsxTwin) {
     }
   }
   EXPECT_TRUE(saw_bold_red) << "the bold red font behind D3 did not survive the load";
+
+  // `bFontScheme`'s ordinals are not spelled out anywhere on disk; this
+  // fixture pins them, because its `.xlsx` twin says `<scheme val="minor"/>`
+  // for the Normal font while the `.xlsb` says `2`. Asserted directly so a
+  // reader that stopped decoding the byte cannot pass by comparing two zeros.
+  EXPECT_EQ(binary.fonts[0].scheme, 2U);
+  EXPECT_EQ(xml.fonts[0].scheme, 2U);
 }
 
 TEST(XlsbFidelity, FillTableMatchesTheXlsxTwin) {

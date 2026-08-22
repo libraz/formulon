@@ -207,6 +207,7 @@ TEST(XlsbCrossFormatSymmetry, FontRecordContentsMatch) {
     EXPECT_EQ(fb[i].family, fx[i].family);
     EXPECT_EQ(fb[i].has_charset, fx[i].has_charset);
     EXPECT_EQ(fb[i].charset, fx[i].charset);
+    EXPECT_EQ(fb[i].scheme, fx[i].scheme);
     ExpectColorSpecEqual(fb[i].color, fx[i].color);
   }
 }

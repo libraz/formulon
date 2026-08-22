@@ -48,6 +48,10 @@ struct SharedStringTable {
   /// `entries`: `phonetic_for_entries.size() == entries.size()` is an
   /// invariant maintained by `read_shared_strings`.
   std::vector<std::vector<PhoneticRun>> phonetic_for_entries;
+  /// `phonetic_props_for_entries[i]` is the `<phoneticPr>` sibling of those
+  /// runs, defaulted when the entry carries none. Held parallel to
+  /// `entries` under the same invariant as `phonetic_for_entries`.
+  std::vector<PhoneticProperties> phonetic_props_for_entries;
 };
 
 /// Parses an OOXML shared-strings part.

@@ -20,6 +20,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "phonetic.h"
@@ -50,6 +51,18 @@ void CollectPhoneticRuns(const pugi::xml_node& si_node, std::vector<PhoneticRun>
     }
     out.push_back(std::move(run));
   }
+}
+
+/// Reads the `<phoneticPr>` sibling of those runs. An absent element
+/// leaves the defaults, which is the state Excel would have inferred.
+PhoneticProperties ReadPhoneticProperties(const pugi::xml_node& si_node) {
+  PhoneticProperties props;
+  if (pugi::xml_node node = si_node.child("phoneticPr")) {
+    props.font_id = static_cast<std::uint16_t>(node.attribute("fontId").as_uint(0U));
+    props.type = parse_phonetic_type(node.attribute("type").value());
+    props.alignment = parse_phonetic_alignment(node.attribute("alignment").value());
+  }
+  return props;
 }
 
 }  // namespace
@@ -95,6 +108,7 @@ Expected<SharedStringTable, Error> read_shared_strings(std::vector<std::uint8_t>
     // `phonetic_for_entries.size() == entries.size()`.
     table.phonetic_for_entries.emplace_back();
     CollectPhoneticRuns(si, table.phonetic_for_entries.back());
+    table.phonetic_props_for_entries.push_back(ReadPhoneticProperties(si));
   }
 
   return table;

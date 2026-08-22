@@ -264,8 +264,8 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
 }
 
 Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view formula_text, std::uint32_t xf_index,
-                                      const std::vector<PhoneticRun>* phonetic_runs, std::size_t sheet_index,
-                                      Workbook& workbook, SheetReadContext& ctx) {
+                                      const std::vector<PhoneticRun>* phonetic_runs, PhoneticProperties phonetic_props,
+                                      std::size_t sheet_index, Workbook& workbook, SheetReadContext& ctx) {
   // A `<c s="900">` against a five-entry `<cellXfs>` names no style. Fall
   // back to the default xf so the loaded workbook stays self-consistent:
   // `fm_cell_get_xf` resolves for every cell that loaded, and a save does
@@ -326,6 +326,7 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
 
   if (!parsed.is_sst_index && phonetic_runs != nullptr && !phonetic_runs->empty()) {
     workbook.sheet(sheet_index).set_cell_phonetic_runs(parsed.row, parsed.col, *phonetic_runs);
+    workbook.sheet(sheet_index).set_cell_phonetic_props(parsed.row, parsed.col, phonetic_props);
   }
   return Expected<void, Error>::Ok();
 }
@@ -378,8 +379,8 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         }
       }
 
-      auto applied =
-          ApplyParsedCell(parsed, formula_text, parsed.xf_index, &parsed.phonetic_runs, sheet_index, workbook, ctx);
+      auto applied = ApplyParsedCell(parsed, formula_text, parsed.xf_index, &parsed.phonetic_runs,
+                                     parsed.phonetic_props, sheet_index, workbook, ctx);
       if (!applied) {
         return applied.error();
       }
@@ -784,7 +785,7 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   // SAX record. SST-referenced cells (rec.phonetic stays null by
   // construction) route their phonetic through the post-loop SST
   // resolution pass instead — same contract the DOM path uses.
-  auto applied = ApplyParsedCell(cell, formula_text, xf, rec.phonetic, sheet_index, workbook, ctx);
+  auto applied = ApplyParsedCell(cell, formula_text, xf, rec.phonetic, rec.phonetic_props, sheet_index, workbook, ctx);
   if (!applied) {
     return applied.error();
   }

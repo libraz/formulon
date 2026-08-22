@@ -32,6 +32,7 @@
 
 #include "io/a1_ref.h"
 #include "io/iso_date.h"
+#include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
@@ -416,6 +417,11 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   // from `text_storage`.
   if (is_node) {
     CollectInlinePhoneticRuns(is_node, out.phonetic_runs);
+    if (pugi::xml_node pr = is_node.child("phoneticPr")) {
+      out.phonetic_props.font_id = static_cast<std::uint16_t>(pr.attribute("fontId").as_uint(0U));
+      out.phonetic_props.type = parse_phonetic_type(pr.attribute("type").value());
+      out.phonetic_props.alignment = parse_phonetic_alignment(pr.attribute("alignment").value());
+    }
   }
   return out;
 }

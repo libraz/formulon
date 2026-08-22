@@ -42,6 +42,9 @@ namespace xlsb {
 struct SstEntry {
   std::string text;
   std::vector<PhoneticRun> phonetic;
+  /// The guide's `<phoneticPr>` equivalent, packed into the record's
+  /// trailing `(ifnt, flags)` pair. Ignored when `phonetic` is empty.
+  PhoneticProperties phonetic_props;
 };
 
 /// Interns text payloads for `xl/sharedStrings.bin`.
@@ -55,7 +58,8 @@ class SstBuilder {
   /// Interns `text` carrying `phonetic` and returns the assigned 0-based
   /// index. The first time a payload is seen the index equals the prior
   /// `size()`.
-  std::uint32_t intern(std::string_view text, const std::vector<PhoneticRun>& phonetic);
+  std::uint32_t intern(std::string_view text, const std::vector<PhoneticRun>& phonetic,
+                       PhoneticProperties phonetic_props);
 
   /// Number of distinct payloads interned so far. Equals
   /// `entries().size()`.

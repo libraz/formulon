@@ -92,6 +92,12 @@ struct Cell {
   /// `cellXfs` index width (Excel allows up to ~65,000 entries; we leave
   /// headroom for future widening).
   std::uint32_t xf_index = 0;
+  /// The `<phoneticPr>` block attached to the same string item as
+  /// `phonetic_runs`. Meaningful only when that vector is non-empty; the
+  /// writer emits no element for a cell with no runs. Sits here rather
+  /// than beside the runs because it fits the tail padding `xf_index`
+  /// leaves, so carrying it costs the cell store nothing.
+  PhoneticProperties phonetic_props;
 };
 
 }  // namespace formulon

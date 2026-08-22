@@ -32,6 +32,7 @@
 #include "cell.h"
 #include "io/future_functions.h"
 #include "io/ooxml/shared_strings_writer.h"
+#include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "parser/ast.h"
@@ -117,13 +118,14 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // `phonetic` is the kana annotation associated with a Text-valued cell
 // (empty when none). When non-empty AND `value` is Text, the `<is>`
 // block expands from `<is><t>{text}</t></is>` to
-// `<is><t>{text}</t><rPh sb="S" eb="E"><t>{kana}</t></rPh>...</is>`,
+// `<is><t>{text}</t><rPh sb="S" eb="E"><t>{kana}</t></rPh>...<phoneticPr .../></is>`,
 // one block per run in the order the run list holds them. The spans are
 // emitted as stored rather than merged into one whole-string block:
 // PHONETIC leaves the text outside every span in place, so a merged
 // block would read kana over characters it does not cover.
 void AppendLiteralCellBody(std::string& out, const Value& value, const std::vector<PhoneticRun>& phonetic,
-                           const SharedStrings* shared_strings, std::uint32_t xf_index) {
+                           PhoneticProperties phonetic_props, const SharedStrings* shared_strings,
+                           std::uint32_t xf_index) {
   out.push_back('"');
   AppendStyleAttr(out, xf_index);
   if (value.is_number()) {
@@ -152,7 +154,7 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
   if (value.is_text()) {
     if (shared_strings != nullptr) {
       out.append(" t=\"s\"><v>");
-      out.append(std::to_string(shared_strings->index_of(value.as_text(), phonetic)));
+      out.append(std::to_string(shared_strings->index_of(value.as_text(), phonetic, phonetic_props)));
       out.append("</v></c>");
       return;
     }
@@ -167,6 +169,9 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
       out.append("\"><t xml:space=\"preserve\">");
       AppendXmlEscaped(out, run.text);
       out.append("</t></rPh>");
+    }
+    if (!phonetic.empty()) {
+      append_phonetic_pr(out, phonetic_props);
     }
     out.append("</is></c>");
     return;
@@ -370,7 +375,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // through the inline-string block, spans intact.
   out.append("<c r=\"");
   out.append(addr);
-  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_runs, shared_strings, cell.xf_index);
+  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, shared_strings, cell.xf_index);
   return true;
 }
 

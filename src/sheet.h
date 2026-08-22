@@ -962,6 +962,14 @@ class Sheet {
   /// `set_cell_phonetic`; passing an empty vector clears the annotation.
   void set_cell_phonetic_runs(std::uint32_t row, std::uint32_t col, std::vector<PhoneticRun> runs);
 
+  /// Stores the `<phoneticPr>` block that belongs with those runs.
+  ///
+  /// Independent of `set_cell_phonetic_runs` so a caller that edits only
+  /// the readings does not silently reset the guide's font, kana form and
+  /// alignment. The writer emits the element only for a cell that has
+  /// runs, so setting these on an unannotated cell has no on-disk effect.
+  void set_cell_phonetic_props(std::uint32_t row, std::uint32_t col, PhoneticProperties props);
+
   /// Stores the cellXfs index for the cell at `(row, col)`. The cell must
   /// already exist (created via `set_cell_value` / `set_cell_formula`); on
   /// an absent cell this method is a no-op. `xf_index = 0` references the
