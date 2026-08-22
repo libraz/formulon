@@ -14,6 +14,7 @@
 #include "io/xlsb/reader.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -29,6 +30,8 @@
 #include <utility>
 #include <vector>
 
+#include "eval/text_ops.h"
+#include "eval/utf8_length.h"
 #include "io/array_anchor_budget.h"
 #include "io/default_content_type.h"
 #include "io/ooxml/package_validator.h"
@@ -46,6 +49,7 @@
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "phonetic.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_table.h"
@@ -733,12 +737,101 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
   return ranges;
 }
 
+/// `RichStr` flag bits ([MS-XLSB] §2.5.87): rich-text runs follow the
+/// string when the first is set, a phonetic guide when the second is.
+constexpr std::uint8_t kRichStrRichRuns = 0x01U;
+constexpr std::uint8_t kRichStrPhonetic = 0x02U;
+
+/// One `StrRun` ([MS-XLSB] §2.5.94) is `(u16 ich, u16 ifnt)`.
+constexpr std::size_t kStrRunSize = 4U;
+
+/// Decodes the phonetic tail a `RichStr` carries when `fExtStr` is set,
+/// appending one `PhoneticRun` per `PhRun` to `out`.
+///
+/// The binary shape stores the kana once, concatenated across every run,
+/// and each `PhRun` names where its slice starts rather than carrying the
+/// slice: `(u16 ichFirst, u16 ichMom, u16 cchMom)` is the start of this
+/// run's kana inside the concatenation, the surface-text offset it reads,
+/// and how many surface characters it covers. A run's kana therefore ends
+/// where the next run's begins, and the last run's runs to the end. All
+/// offsets are UTF-16 code units, which is what `PhoneticRun` uses too.
+///
+/// Excel elides the runs entirely for a whole-string reading (the
+/// concatenation is then simply the whole annotation), so an empty run
+/// array with a non-empty phonetic string is the single-run case rather
+/// than an absent one -- the same shape `<rPh sb="0" eb="len">` takes in
+/// OOXML.
+///
+/// The trailing `(u16 ifnt, u16 flags)` -- phonetic font, plus the
+/// annotation type and alignment `<phoneticPr>` carries in OOXML -- is
+/// read past but not modelled: `PhoneticRun` holds the reading, not how
+/// Excel renders it. The OOXML reader drops the same element.
+Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surface, std::vector<PhoneticRun>& out) {
+  auto phonetic_or = read_xlwidestring(cursor);
+  if (!phonetic_or) {
+    return phonetic_or.error();
+  }
+  const std::string phonetic = std::move(phonetic_or.value());
+  auto count_or = read_u32(cursor);
+  if (!count_or) {
+    return count_or.error();
+  }
+  const std::uint32_t run_count = count_or.value();
+  if (run_count == 0U) {
+    if (!phonetic.empty()) {
+      out.push_back(PhoneticRun{0U, eval::utf16_units_in(surface), phonetic});
+    }
+    return {};
+  }
+
+  // Each PhRun is three `u16`s; bound the count against the remaining
+  // payload before reserving so a corrupt count cannot drive a large
+  // allocation.
+  constexpr std::size_t kPhRunSize = 6U;
+  if (static_cast<std::size_t>(run_count) > cursor.size / kPhRunSize) {
+    std::string ctx("context=xlsb.sst run_count=");
+    ctx.append(std::to_string(run_count));
+    ctx.append(" cursor_size=").append(std::to_string(cursor.size));
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb phonetic run array truncated", std::move(ctx));
+  }
+  std::vector<std::array<std::uint16_t, 3>> runs;
+  runs.reserve(run_count);
+  for (std::uint32_t i = 0; i < run_count; ++i) {
+    std::array<std::uint16_t, 3> fields{};
+    for (std::uint16_t& field : fields) {
+      auto field_or = read_u16(cursor);
+      if (!field_or) {
+        return field_or.error();
+      }
+      field = field_or.value();
+    }
+    runs.push_back(fields);
+  }
+
+  const std::uint32_t phonetic_units = eval::utf16_units_in(phonetic);
+  for (std::size_t i = 0; i < runs.size(); ++i) {
+    const std::uint32_t kana_start = runs[i][0];
+    const std::uint32_t surface_start = runs[i][1];
+    const std::uint32_t surface_length = runs[i][2];
+    const std::uint32_t kana_end = (i + 1U < runs.size()) ? runs[i + 1U][0] : phonetic_units;
+    // A backwards or out-of-range slice yields an empty reading rather
+    // than an error: the surrounding cell is still usable, and the run
+    // boundaries are Excel's own bookkeeping rather than user data.
+    const std::uint32_t kana_length = kana_end > kana_start ? kana_end - kana_start : 0U;
+    out.push_back(PhoneticRun{surface_start, surface_start + surface_length,
+                              eval::utf16_substring(phonetic, kana_start, kana_length)});
+  }
+  return {};
+}
+
 /// Decodes `xl/sharedStrings.bin` into an in-order list of string
 /// payloads, appending each one into `text_storage` so cells can take
-/// non-owning views. Returns the list of `string_view`s parallel to the
-/// SST index.
-Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(const std::vector<std::uint8_t>& body,
-                                                                      std::deque<std::string>& text_storage) {
+/// non-owning views. `out_phonetic` is filled in parallel with `entries`
+/// -- one (possibly empty) run list per SST index, exactly as the OOXML
+/// reader's `phonetic_for_entries` is.
+Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
+    const std::vector<std::uint8_t>& body, std::deque<std::string>& text_storage,
+    std::vector<std::vector<PhoneticRun>>& out_phonetic) {
   std::vector<std::string_view> entries;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
@@ -750,22 +843,48 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(const std:
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem)) {
       continue;
     }
-    // BrtSSTItem ([MS-XLSB] §2.4.293):
-    //   richStr   : RichStr (we only need the string — first byte is a
-    //               flags byte; rich-format runs follow when fRichStr is
-    //               set, but those are not decoded here).
+    // BrtSSTItem ([MS-XLSB] §2.4.293) is a `RichStr`: a flags byte, the
+    // string, then the optional rich-format runs and phonetic guide the
+    // flags announce.
     ByteSpan p = rec.payload;
     auto flags_or = read_u8(p);
     if (!flags_or) {
       return flags_or.error();
     }
-    (void)flags_or.value();
+    const std::uint8_t flags = flags_or.value();
     auto str_or = read_xlwidestring(p);
     if (!str_or) {
       return str_or.error();
     }
     text_storage.push_back(std::move(str_or.value()));
     entries.push_back(text_storage.back());
+    out_phonetic.emplace_back();
+
+    if ((flags & kRichStrPhonetic) == 0U) {
+      continue;
+    }
+    // The rich-format runs sit between the string and the phonetic tail,
+    // so they have to be stepped over even though the reader models
+    // plain text only.
+    if ((flags & kRichStrRichRuns) != 0U) {
+      auto run_count_or = read_u32(p);
+      if (!run_count_or) {
+        return run_count_or.error();
+      }
+      const std::uint32_t rich_runs = run_count_or.value();
+      if (static_cast<std::size_t>(rich_runs) > p.size / kStrRunSize) {
+        std::string ctx("context=xlsb.sst rich_runs=");
+        ctx.append(std::to_string(rich_runs));
+        ctx.append(" cursor_size=").append(std::to_string(p.size));
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb rich-text run array truncated",
+                          std::move(ctx));
+      }
+      p.data += static_cast<std::size_t>(rich_runs) * kStrRunSize;
+      p.size -= static_cast<std::size_t>(rich_runs) * kStrRunSize;
+    }
+    if (auto decoded = DecodePhoneticTail(p, entries.back(), out_phonetic.back()); !decoded) {
+      return decoded.error();
+    }
   }
   return entries;
 }
@@ -1876,9 +1995,10 @@ Expected<void, Error> RegisterArraySpills(Workbook& wb, std::size_t sheet_index,
 Expected<RecordDisposition, Error> DispatchSheetRecord(
     const XlsbRecord& rec, XlsbRecordType type, const std::uint8_t* framed, std::size_t framed_size,
     SheetDecodeState& state, std::size_t sheet_index, Workbook& wb, const std::vector<std::string_view>& sst_entries,
-    std::deque<std::string>& text_storage, const std::vector<std::string>& sheet_names,
-    const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
-    const XlsbExternalBooks& external_books, std::uint32_t* undecoded_formula_count) {
+    const std::vector<std::vector<PhoneticRun>>& sst_phonetic, std::deque<std::string>& text_storage,
+    const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
+    const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
+    std::uint32_t* undecoded_formula_count) {
   switch (type) {
     case XlsbRecordType::BrtBeginWsView: {
       // BrtBeginWsView ([MS-XLSB] §2.4.141) stores the SheetView fields
@@ -2301,6 +2421,14 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       wb.sheet(sheet_index)
           .set_cell_cached_value_borrowed(state.current_row, col_or.value().col,
                                           Value::text(sst_entries[idx_or.value()]));
+      // Attached after the value, mirroring the OOXML reader: every
+      // value-mutating setter clears the annotation, so the order is
+      // load-bearing. Skipped when the entry carries no guide so an
+      // unannotated cell keeps its default-constructed run vector.
+      if (idx_or.value() < sst_phonetic.size() && !sst_phonetic[idx_or.value()].empty()) {
+        wb.sheet(sheet_index)
+            .set_cell_phonetic_runs(state.current_row, col_or.value().col, sst_phonetic[idx_or.value()]);
+      }
       if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
         return r.error();
       }
@@ -2541,14 +2669,12 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
 /// `wb.sheet(sheet_index)`. SST indices are resolved against
 /// `sst_entries`; out-of-range indices are returned as
 /// `kIoXlsbCorrupt`.
-Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>& body, std::size_t sheet_index,
-                                                 Workbook& wb, const std::vector<std::string_view>& sst_entries,
-                                                 std::deque<std::string>& text_storage,
-                                                 const std::vector<std::string>& sheet_names,
-                                                 const std::vector<XlsbName>& name_table,
-                                                 const std::vector<XlsbSheetRange>& sheet_ranges,
-                                                 const XlsbExternalBooks& external_books,
-                                                 std::uint32_t* undecoded_formula_count) {
+Expected<SheetDecodeState, Error> DecodeSheetBin(
+    const std::vector<std::uint8_t>& body, std::size_t sheet_index, Workbook& wb,
+    const std::vector<std::string_view>& sst_entries, const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
+    std::deque<std::string>& text_storage, const std::vector<std::string>& sheet_names,
+    const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
+    const XlsbExternalBooks& external_books, std::uint32_t* undecoded_formula_count) {
   SheetDecodeState state;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
@@ -2565,9 +2691,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
     }
     // Every record resolves to a disposition; the result is consumed rather
     // than discarded so that no record can pass through unclassified.
-    auto disposition_or =
-        DispatchSheetRecord(rec, type, framed, framed_size, state, sheet_index, wb, sst_entries, text_storage,
-                            sheet_names, name_table, sheet_ranges, external_books, undecoded_formula_count);
+    auto disposition_or = DispatchSheetRecord(rec, type, framed, framed_size, state, sheet_index, wb, sst_entries,
+                                              sst_phonetic, text_storage, sheet_names, name_table, sheet_ranges,
+                                              external_books, undecoded_formula_count);
     if (!disposition_or) {
       return disposition_or.error();
     }
@@ -2755,12 +2881,14 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // after the caller moves the workbook out of the read result.
   std::deque<std::string>& text_storage = wb.mutable_text_storage();
   std::vector<std::string_view> sst_entries;
+  // Parallel to `sst_entries`, one (possibly empty) run list per index.
+  std::vector<std::vector<PhoneticRun>> sst_phonetic;
   if (!wb_rels.sst_path.empty() && zip.has_entry(wb_rels.sst_path)) {
     auto sst_bytes_or = zip.read_entry(wb_rels.sst_path);
     if (!sst_bytes_or) {
       return sst_bytes_or.error();
     }
-    auto sst_or = DecodeSharedStringsBin(sst_bytes_or.value(), text_storage);
+    auto sst_or = DecodeSharedStringsBin(sst_bytes_or.value(), text_storage, sst_phonetic);
     if (!sst_or) {
       return sst_or.error();
     }
@@ -2811,8 +2939,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (!sheet_bytes_or) {
       return sheet_bytes_or.error();
     }
-    auto state_or = DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, text_storage, sheet_names, name_table,
-                                   sheet_ranges, external_books, &undecoded_formula_count);
+    auto state_or = DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, sst_phonetic, text_storage, sheet_names,
+                                   name_table, sheet_ranges, external_books, &undecoded_formula_count);
     if (!state_or) {
       return state_or.error();
     }
