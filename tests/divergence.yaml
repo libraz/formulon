@@ -928,6 +928,28 @@ entries:
     prefer: formulon
     first_noted: 2026-08-16
     last_verified_excel_version: "16.0.20228"
+  # -- Column geometry is calibrated to one Normal font ---------------------
+  # Excel resolves a column's width in points from its stored character-unit
+  # width times the Normal font's maximum digit width, so the conversion is a
+  # property of that font. Pagination carries a single calibration for it.
+  # The scope was measured by opening workbooks that differ only in font 0
+  # and reading `Range.Width` back: at 11 pt the family does not move it at
+  # all, so a ja-JP workbook whose default font is a Japanese body face
+  # paginates identically. The point size does move it, and away from 11 pt
+  # the family starts to matter too. Recorded rather than fixed because the
+  # calibration this constant carries is the Windows one, and the sweep that
+  # would size it off the Normal font has only been run on Mac, whose column
+  # geometry is a different regime.
+  - id: pagination_column_width_calibrated_to_one_normal_font
+    cause: engine-gap
+    mode: skip-oracle
+    scope: deferred-feature
+    evidence: [src/print/pagination.cpp, tests/unit/print/pagination_test.cpp]
+    reason: "Column width in points is the stored character-unit width times the Normal font's max digit width. Mac Excel 365 16.112.1 resolves a 30-unit column to the same width under Calibri 11, 游ゴシック 11 and ＭＳ Ｐゴシック 11, so the font family is not observable at 11 pt; the point size is (Calibri 8/11/18 give 4/6/9 pt per stored unit) and the family becomes observable away from 11 pt (游ゴシック 14 gives 8 where Calibri 14 gives 7). Formulon paginates every workbook against the 11 pt calibration. Closing it needs the same sweep captured on the Windows primary oracle, whose column geometry is a different regime from the Mac numbers above."
+    prefer: mac-excel-365
+    first_noted: 2026-08-22
+    last_verified_excel_version: "16.112.1"
+
   - id: xlookup_binary_search_dirty_data
     cause: accepted-divergence
     mode: skip-oracle
