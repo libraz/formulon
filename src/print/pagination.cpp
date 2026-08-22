@@ -40,6 +40,27 @@ namespace {
 /// Pagination compares these against the printable body, so using the
 /// screen model made a wide print area fit roughly one column too many per
 /// page.
+///
+/// The calibration is to one Normal font, and MDW is a property of that
+/// font, so a workbook whose Normal style names a different one resolves a
+/// different number of points per character. The scope of that was measured
+/// by opening workbooks that differ only in font 0 and reading
+/// `Range.Width` back:
+///
+///   * At 11 pt the family does not move it. `Calibri`, `游ゴシック` and
+///     `ＭＳ Ｐゴシック` all resolve a 30-unit column to the same width, so
+///     a ja-JP host declaring a Japanese body font paginates identically.
+///   * The point size does move it, roughly in proportion, and the family
+///     starts to matter away from 11 pt: `Calibri 18` resolves half again
+///     as wide as `Calibri 11`, and `游ゴシック 14` a seventh wider than
+///     `Calibri 14`.
+///
+/// Those observations are Mac Excel's, whose column geometry is a different
+/// regime from the Windows primary oracle these constants come from, so
+/// they establish that the dependency exists without supplying the numbers
+/// to model it. Sizing the constants off the Normal font needs a Windows
+/// capture over the same sweep; until then a workbook whose Normal font is
+/// not 11 pt paginates against the 11 pt geometry.
 constexpr double kPointsPerColumnChar = 39.0 / 7.0;
 constexpr double kColumnPaddingPt = 27.0 / 7.0;
 
