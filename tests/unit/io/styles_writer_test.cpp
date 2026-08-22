@@ -516,6 +516,40 @@ TEST(StylesWriter, RoundTripsFontVertAlignFamilyCharset) {
   EXPECT_EQ(rt.fonts[0].charset, 128U);
 }
 
+TEST(StylesWriter, RoundTripsFontThemeScheme) {
+  StylesTable original;
+  FontRecord minor;
+  minor.name = "\xE6\xB8\xB8\xE3\x82\xB4\xE3\x82\xB7\xE3\x83\x83\xE3\x82\xAF";  // "游ゴシック"
+  minor.has_family = true;
+  minor.family = 3;
+  minor.has_charset = true;
+  minor.charset = 128;
+  minor.scheme = 2;
+  FontRecord major;
+  major.name = "Calibri Light";
+  major.scheme = 1;
+  FontRecord plain;
+  plain.name = "Calibri";
+  original.fonts.push_back(minor);
+  original.fonts.push_back(major);
+  original.fonts.push_back(plain);
+
+  const std::string xml = write_styles(original);
+  EXPECT_NE(xml.find("<charset val=\"128\"/><scheme val=\"minor\"/>"), std::string::npos);
+  EXPECT_NE(xml.find("<scheme val=\"major\"/>"), std::string::npos);
+
+  std::vector<std::uint8_t> bytes(xml.begin(), xml.end());
+  auto round_or = read_styles(bytes);
+  ASSERT_TRUE(static_cast<bool>(round_or)) << "read failed: " << round_or.error().message;
+  const StylesTable& rt = round_or.value();
+  ASSERT_EQ(rt.fonts.size(), 3U);
+  EXPECT_EQ(rt.fonts[0].scheme, 2U);
+  EXPECT_EQ(rt.fonts[1].scheme, 1U);
+  // A font with no theme link emits no element at all, so the last `<font>`
+  // must not have picked one up from its neighbours.
+  EXPECT_EQ(rt.fonts[2].scheme, 0U);
+}
+
 TEST(StylesWriter, RoundTripsDxfThemeColor) {
   StylesTable original;
   DifferentialFormat dxf;

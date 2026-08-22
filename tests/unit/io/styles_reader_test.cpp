@@ -329,6 +329,27 @@ TEST(StylesReader, ReadsFontVertAlignFamilyCharset) {
   EXPECT_EQ(table.fonts[0].charset, 128U);
 }
 
+TEST(StylesReader, ReadsFontThemeScheme) {
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+  xml.append("  <fonts count=\"3\">");
+  // The shape Excel writes for a ja-JP workbook's Normal font.
+  xml.append("<font><sz val=\"11\"/><name val=\"\xE6\xB8\xB8\xE3\x82\xB4\xE3\x82\xB7\xE3\x83\x83\xE3\x82\xAF\"/>");
+  xml.append("<family val=\"3\"/><charset val=\"128\"/><scheme val=\"minor\"/></font>");
+  xml.append("<font><sz val=\"18\"/><name val=\"Calibri Light\"/><scheme val=\"major\"/></font>");
+  // A value from a future schema must not become a link Excel cannot follow.
+  xml.append("<font><sz val=\"11\"/><name val=\"Calibri\"/><scheme val=\"tertiary\"/></font>");
+  xml.append("</fonts>\n</styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read failed: " << result_or.error().message;
+  const StylesTable& table = result_or.value();
+  ASSERT_EQ(table.fonts.size(), 3U);
+  EXPECT_EQ(table.fonts[0].scheme, 2U);  // minor
+  EXPECT_EQ(table.fonts[1].scheme, 1U);  // major
+  EXPECT_EQ(table.fonts[2].scheme, 0U);
+}
+
 TEST(StylesReader, InternsCustomNumFmts) {
   std::string xml(kXmlDecl);
   xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");

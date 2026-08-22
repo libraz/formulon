@@ -198,11 +198,15 @@ Expected<void, Error> DecodeFont(ByteSpan payload, StylesTable& table) {
   if (auto color = DecodeColor(p, /*unset_argb=*/rec.color_argb, rec.color_argb, rec.color); !color) {
     return color.error();
   }
-  auto scheme_or = read_u8(p);  // bFontScheme: no shared-model equivalent.
+  auto scheme_or = read_u8(p);
   if (!scheme_or) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtFont scheme truncated",
                       "context=xlsb_styles_reader");
   }
+  // `bFontScheme` shares the shared model's ordinals (0=none, 1=major,
+  // 2=minor). Anything else is a value this build cannot name, and
+  // writing back a link Excel would not resolve is worse than dropping it.
+  rec.scheme = scheme_or.value() <= 2U ? scheme_or.value() : 0U;
   auto name_or = read_xlwidestring(p);
   if (!name_or) {
     return name_or.error();

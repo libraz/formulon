@@ -81,6 +81,13 @@ struct FontRecord {
   /// from an absent element.
   bool has_charset = false;
   std::uint8_t charset = 0;
+  /// `<scheme>` theme-font link: 0=absent, 1=major, 2=minor. A ja-JP
+  /// workbook's Normal font carries `scheme="minor"`, which is what makes
+  /// Excel show it as the body font and re-resolve it when the theme
+  /// changes; dropping the element rewrites the font as a literal name.
+  /// The ordinals match XLSB `BrtFont`'s `bFontScheme`, so the binary and
+  /// XML paths share this field without a mapping table.
+  std::uint8_t scheme = 0;
   std::uint32_t color_argb = 0xFF000000U;
   ColorSpec color;
 };

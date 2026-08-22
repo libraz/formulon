@@ -96,6 +96,20 @@ std::uint8_t ParseVertAlign(std::string_view s) {
   return 0;
 }
 
+/// Parses a `<scheme val="..."/>` link into the `FontRecord::scheme`
+/// ordinal. An unknown value collapses to 0, which writes no element:
+/// preserving an uninterpretable link would let the writer emit a theme
+/// reference Excel cannot resolve.
+std::uint8_t ParseFontScheme(std::string_view s) {
+  if (s == "major") {
+    return 1;
+  }
+  if (s == "minor") {
+    return 2;
+  }
+  return 0;
+}
+
 /// Maps OOXML border-style strings to the integer ordinal stored in
 /// `BorderSide::style`. Unknown strings collapse to `0` (none).
 std::uint8_t ParseBorderStyle(std::string_view s) {
@@ -264,6 +278,9 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
   if (pugi::xml_node charset = f.child("charset")) {
     rec.has_charset = true;
     rec.charset = static_cast<std::uint8_t>(charset.attribute("val").as_uint(0U));
+  }
+  if (pugi::xml_node scheme = f.child("scheme")) {
+    rec.scheme = ParseFontScheme(scheme.attribute("val").value());
   }
   rec.color_argb = ParseColorArgb(f.child("color"), 0xFF000000U);
   rec.color = ParseColorSpec(f.child("color"));

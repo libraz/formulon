@@ -340,7 +340,21 @@ void AppendVertAlign(std::string& out, std::uint8_t v) {
   }
 }
 
-void AppendFontFamilyCharset(std::string& out, const FontRecord& f) {
+const char* FontSchemeName(std::uint8_t v) {
+  switch (v) {
+    case 1:
+      return "major";
+    case 2:
+      return "minor";
+    default:
+      return nullptr;  // 0 = no theme link; emit no element.
+  }
+}
+
+/// Emits the trailing `<family>` / `<charset>` / `<scheme>` children in the
+/// order Excel writes them, so a re-saved `<font>` is byte-comparable with
+/// its source.
+void AppendFontFamilyCharsetScheme(std::string& out, const FontRecord& f) {
   if (f.has_family) {
     out.append("<family val=\"");
     AppendUint(out, f.family);
@@ -349,6 +363,11 @@ void AppendFontFamilyCharset(std::string& out, const FontRecord& f) {
   if (f.has_charset) {
     out.append("<charset val=\"");
     AppendUint(out, f.charset);
+    out.append("\"/>");
+  }
+  if (const char* sname = FontSchemeName(f.scheme); sname != nullptr) {
+    out.append("<scheme val=\"");
+    out.append(sname);
     out.append("\"/>");
   }
 }
@@ -546,7 +565,7 @@ void AppendFonts(std::string& out, const StylesTable& table) {
       } else {
         out.append("<name val=\"Calibri\"/>");
       }
-      AppendFontFamilyCharset(out, f);
+      AppendFontFamilyCharsetScheme(out, f);
       out.append("</font>\n");
     }
   }
@@ -809,7 +828,7 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
     AppendXmlAttrEscaped(out, f.name);
     out.append("\"/>");
   }
-  AppendFontFamilyCharset(out, f);
+  AppendFontFamilyCharsetScheme(out, f);
   out.append("</font>");
 }
 

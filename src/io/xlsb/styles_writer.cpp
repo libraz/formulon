@@ -101,7 +101,7 @@ void EmitFont(std::vector<std::uint8_t>& out, const FontRecord& font) {
   emit_u8(payload, font.has_charset ? font.charset : 0U);
   emit_u8(payload, 0U);
   EmitColor(payload, font.color_argb, font.color);
-  emit_u8(payload, 0U);  // no theme font scheme in the shared model
+  emit_u8(payload, font.scheme);  // bFontScheme shares the shared model's ordinals
   emit_xlwidestring(payload, font.name.empty() ? std::string_view("Calibri") : std::string_view(font.name));
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtFont), payload);
 }

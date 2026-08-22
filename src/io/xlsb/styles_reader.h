@@ -13,9 +13,9 @@
 // retained bytes, so every field `CellXf` can hold is decoded here,
 // including the alignment, protection and `apply*` groups.
 //
-// Three record fields have no shared-model equivalent and are consumed
-// without being modelled: `BrtFont`'s theme font scheme, and `BrtXF`'s
-// `fMergeCell` / `fSxButton`, which state a sheet-level condition rather
+// Two record fields have no shared-model equivalent and are consumed
+// without being modelled: `BrtXF`'s `fMergeCell` and `fSxButton`, which
+// state a sheet-level condition rather
 // than a cell format and have no `<xf>` attribute to carry them. They
 // survive an `.xlsb` -> `.xlsb` cycle through the raw passthrough copy of
 // the part. The gap runs the other way too: `CellXf::relative_indent` has
