@@ -9,9 +9,15 @@
 #   generate-hashes: false
 #   universal: false
 
+appscript==1.4.0
+    # via xlwings
 et-xmlfile==2.0.0
     # via openpyxl
+lxml==6.1.3
+    # via appscript
 openpyxl==3.1.5
+psutil==7.2.2
+    # via xlwings
 pyyaml==6.0.3
-wasmtime==47.0.1
-xlwings==0.35.1
+wasmtime==49.0.0
+xlwings==0.37.5
