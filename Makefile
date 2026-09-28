@@ -50,7 +50,7 @@ SRC_DIRS := src tests
 CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 2>/dev/null)
 
 .PHONY: all build release build-type test test-slow test-all format format-check lint clean \
-        wasm wasm-debug wasm-capi test-wasm test-python size-check \
+        wasm wasm-threads wasm-debug wasm-capi test-wasm test-python size-check \
         npm-package npm-test npm-pack npm-check-dts \
         node-native node-package node-test \
         python-package python-test python-wheel \
@@ -240,21 +240,26 @@ clean:
 	  echo "removing $$removed build director$$([ "$$removed" = 1 ] && echo y || echo ies)"; \
 	fi
 	@find . -maxdepth 1 -type d \( -name build -o -name 'build-*' \) -exec rm -rf {} +
-	@rm -rf $(BUILD_DIR) $(WASM_BUILD_DIR) $(WASM_DEBUG_BUILD_DIR) $(WASM_CAPI_BUILD_DIR)
+	@rm -rf $(BUILD_DIR) $(WASM_BUILD_DIR) $(WASM_THREADS_BUILD_DIR) $(WASM_DEBUG_BUILD_DIR) $(WASM_CAPI_BUILD_DIR)
 
 # -- WASM build / smoke-test targets --------------------------------------
-# `make wasm`        -> Release-mode formulon.{js,wasm} under build-wasm/,
-#                       plus stack_probe.{js,wasm} (the shadow-stack guard;
+# `make wasm`        -> Release-mode single-threaded formulon.{js,wasm}
+#                       under build-wasm/ (the npm package root), plus
+#                       stack_probe.{js,wasm} (the shadow-stack guard;
 #                       a second artifact, never staged into a package).
+# `make wasm-threads`-> Release-mode pthread formulon_threads.{js,wasm}
+#                       under build-wasm-threads/ (`@libraz/formulon/threads`),
+#                       plus its own stack_probe.
 # `make wasm-debug`  -> Debug-mode artifact (with assertions) under
 #                       build-wasm-debug/.
-# `make test-wasm`   -> Node-based smoke tests against build-wasm/formulon.js,
-#                       then the shadow-stack guard.
+# `make test-wasm`   -> Node-based smoke tests against both embind builds,
+#                       then each build's shadow-stack guard.
 #
 # All three short-circuit cleanly when the host lacks emscripten so the
 # native CI path stays green without an Emscripten install.
 EM_CMAKE := emcmake cmake
 WASM_BUILD_DIR ?= build-wasm
+WASM_THREADS_BUILD_DIR ?= build-wasm-threads
 WASM_DEBUG_BUILD_DIR ?= build-wasm-debug
 WASM_CAPI_BUILD_DIR ?= build-wasm-capi
 
@@ -271,6 +276,21 @@ wasm:
 	@echo ""
 	@echo "wasm artifacts:"
 	@ls -la $(WASM_BUILD_DIR)/formulon.wasm $(WASM_BUILD_DIR)/formulon.js 2>/dev/null || \
+	  echo "  (artifacts not found; check build log above)"
+
+wasm-threads:
+	@if ! command -v emcmake >/dev/null 2>&1; then \
+	  echo "wasm-threads: emscripten toolchain not found in PATH"; \
+	  exit 1; \
+	fi
+	$(EM_CMAKE) -B $(WASM_THREADS_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release \
+	  -DFM_BUILD_WASM=ON -DFM_WASM_THREADS=ON \
+	  -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
+	$(CMAKE) --build $(WASM_THREADS_BUILD_DIR) --parallel \
+	  --target formulon_wasm formulon_wasm_stack_probe
+	@echo ""
+	@echo "wasm-threads artifacts:"
+	@ls -la $(WASM_THREADS_BUILD_DIR)/formulon_threads.wasm $(WASM_THREADS_BUILD_DIR)/formulon_threads.js 2>/dev/null || \
 	  echo "  (artifacts not found; check build log above)"
 
 wasm-debug:
@@ -300,23 +320,24 @@ wasm-capi:
 	  echo "  (artifact not found; check build log above)"
 
 test-wasm:
-	@if [ ! -f $(WASM_BUILD_DIR)/formulon.js ]; then \
-	  echo "test-wasm: $(WASM_BUILD_DIR)/formulon.js missing; run 'make wasm' first"; \
-	  exit 1; \
-	fi
+	@for f in $(WASM_BUILD_DIR)/formulon.js $(WASM_BUILD_DIR)/stack_probe.js \
+	          $(WASM_THREADS_BUILD_DIR)/formulon_threads.js $(WASM_THREADS_BUILD_DIR)/stack_probe.js; do \
+	  if [ ! -f $$f ]; then \
+	    echo "test-wasm: $$f missing; run 'make wasm wasm-threads' first"; \
+	    exit 1; \
+	  fi; \
+	done
 	@if ! command -v $(NODE) >/dev/null 2>&1; then \
 	  echo "test-wasm: '$(NODE)' not found"; \
 	  exit 1; \
 	fi
 	FORMULON_WASM_BUILD_DIR="$(WASM_BUILD_DIR)" $(NODE) tests/wasm/run.mjs
-	@if [ ! -f $(WASM_BUILD_DIR)/stack_probe.js ]; then \
-	  echo "test-wasm: $(WASM_BUILD_DIR)/stack_probe.js missing; run 'make wasm' first"; \
-	  exit 1; \
-	fi
+	FORMULON_WASM_BUILD_DIR="$(WASM_THREADS_BUILD_DIR)" FORMULON_WASM_THREADS=1 $(NODE) tests/wasm/run.mjs
 	$(NODE) $(WASM_BUILD_DIR)/stack_probe.js
+	$(NODE) $(WASM_THREADS_BUILD_DIR)/stack_probe.js
 
 # -- npm packaging targets ------------------------------------------------
-# `make npm-package` -> stage build-wasm/formulon.{js,wasm} + the
+# `make npm-package` -> stage both embind builds, the entry shims and the
 #                       hand-written .d.ts into packages/npm/dist/.
 # `make npm-test`    -> run node:test smoke tests against the staged
 #                       package (catches staging mistakes that running
@@ -327,13 +348,14 @@ test-wasm:
 # Publishing is a manual, out-of-band step.
 NPM_PKG_DIR := packages/npm
 
-npm-package: wasm
+npm-package: wasm wasm-threads
 	@if ! command -v $(NODE) >/dev/null 2>&1; then \
 	  echo "npm-package: '$(NODE)' not found"; \
 	  exit 1; \
 	fi
 	$(NODE) $(NPM_PKG_DIR)/scripts/stage.mjs \
 	  --build-dir $(WASM_BUILD_DIR) \
+	  --threads-build-dir $(WASM_THREADS_BUILD_DIR) \
 	  --out-dir $(NPM_PKG_DIR)/dist
 
 # `make npm-check-dts` -> fail if the staged dist/formulon.d.ts has
@@ -352,6 +374,7 @@ npm-test: npm-package npm-check-dts
 	  exit 1; \
 	fi
 	(cd $(NPM_PKG_DIR) && $(NODE) --test 'test/*.test.mjs')
+	(cd $(NPM_PKG_DIR) && FORMULON_NPM_ENTRY=./threads $(NODE) --test 'test/*.test.mjs')
 
 npm-pack: npm-package
 	@if ! command -v npm >/dev/null 2>&1; then \
@@ -466,11 +489,13 @@ parity-test:
 # Alias kept for backward compatibility with `make test-python`.
 test-python: python-test
 
-# Standalone .wasm size report. Reads the artifact built by `make wasm`
-# and gates against the milestone size ceiling. See
+# Standalone .wasm size report. Reads both npm artifacts (`make wasm`,
+# `make wasm-threads`) and gates each against the size ceiling; a consumer
+# loads one or the other, so each carries the budget on its own. See
 # tools/bench/wasm_size_report.sh and CLAUDE.md "WASM Size Policy".
 size-check:
 	@sh tools/bench/wasm_size_report.sh $(WASM_BUILD_DIR)/formulon.wasm
+	@sh tools/bench/wasm_size_report.sh $(WASM_THREADS_BUILD_DIR)/formulon_threads.wasm
 
 # -- Oracle targets --------------------------------------------------------
 # Drive Mac Excel 365 to generate golden JSON (oracle-gen), and verify

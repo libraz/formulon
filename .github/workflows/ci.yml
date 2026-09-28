@@ -16,9 +16,10 @@
 #              Pattern mirrored from ../mygram-db's ci.yml: tests and
 #              coverage share a single instrumented run so coverage tracks
 #              the same code paths the CI gate validates.
-#   - wasm   : build the WASM artifact, run the size report against
-#              the 3.0 MiB hard ceiling, smoke-test under Node 22,
-#              and upload formulon.wasm as a downloadable artifact.
+#   - wasm   : build both npm WASM artifacts (single-threaded and
+#              pthread), run the size report on each against the hard
+#              ceilings, smoke-test under Node 22, and upload them as a
+#              downloadable artifact.
 #
 # Sanitizers (TSan, ASan, UBSan) live in
 # .github/workflows/sanitizers.yml and are fired manually via
@@ -206,7 +207,7 @@ jobs:
       - name: Build WASM
         # Force the Makefile to use the apt-installed cmake instead of
         # whatever PATH currently points at first (see diagnose step).
-        run: make CMAKE=/usr/bin/cmake wasm
+        run: make CMAKE=/usr/bin/cmake wasm wasm-threads
 
       - name: Stage npm package and check d.ts drift
         # `packages/npm/dist/formulon.d.ts` is a gitignored staged copy that
@@ -220,19 +221,22 @@ jobs:
           make npm-check-dts
 
       - name: Size report (human)
-        run: tools/bench/wasm_size_report.sh build-wasm/formulon.wasm
+        run: |
+          tools/bench/wasm_size_report.sh build-wasm/formulon.wasm
+          tools/bench/wasm_size_report.sh build-wasm-threads/formulon_threads.wasm
 
       - name: Size report (JSON, for step summary)
         run: |
-          tools/bench/wasm_size_report.sh build-wasm/formulon.wasm --json \
-            > /tmp/wasm_size.json
           {
             echo "## WASM size report"
-            echo ""
-            echo '```json'
-            cat /tmp/wasm_size.json
-            echo ""
-            echo '```'
+            for wasm in build-wasm/formulon.wasm build-wasm-threads/formulon_threads.wasm; do
+              tools/bench/wasm_size_report.sh "$wasm" --json > /tmp/wasm_size.json
+              echo ""
+              echo '```json'
+              cat /tmp/wasm_size.json
+              echo ""
+              echo '```'
+            done
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload WASM artifact
@@ -242,6 +246,8 @@ jobs:
           path: |
             build-wasm/formulon.wasm
             build-wasm/formulon.js
+            build-wasm-threads/formulon_threads.wasm
+            build-wasm-threads/formulon_threads.js
           retention-days: 7
 
       - name: WASM smoke test (Node)

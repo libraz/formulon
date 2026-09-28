@@ -9,10 +9,15 @@
 #     emits a MODULARIZE'd ES module factory (`createFormulon`). The
 #     `parts/` split keeps the per-area binding surface manageable;
 #     every TU is compiled with `-frtti` because embind keys its
-#     type-registration tables on `typeid()`. Threads are wired in via
-#     -pthread / -sUSE_PTHREADS=1 / -sPTHREAD_POOL_SIZE=8 so the
-#     parallel SCC scheduler can use real Web Workers. Output:
-#     `<build>/formulon.{js,wasm}`.
+#     type-registration tables on `typeid()`. FM_WASM_THREADS picks the
+#     threading model:
+#       OFF (default): no pthread, non-shared memory, so the module loads
+#         without cross-origin isolation; `recalcParallel` degrades to
+#         serial. Output: `<build>/formulon.{js,wasm}` (package root).
+#       ON: -pthread / -sUSE_PTHREADS=1 / -sPTHREAD_POOL_SIZE=8 so the
+#         parallel SCC scheduler runs on real Web Workers; needs
+#         SharedArrayBuffer, hence COOP/COEP in a browser. Output:
+#         `<build>/formulon_threads.{js,wasm}` (`@libraz/formulon/threads`).
 #
 #   capi: the formulon (PyPI) artifact, consumed by wasmtime-py. No
 #     embind, no JS glue, no pthread. Compiles src/c_api/formulon_c.cpp
@@ -73,6 +78,11 @@ if(NOT FM_WASM_VARIANT STREQUAL "embind" AND NOT FM_WASM_VARIANT STREQUAL "capi"
     "FM_WASM_VARIANT must be one of: embind, capi (got: ${FM_WASM_VARIANT})")
 endif()
 
+option(FM_WASM_THREADS "Link the embind variant with pthreads (@libraz/formulon/threads)" OFF)
+if(FM_WASM_THREADS AND NOT FM_WASM_VARIANT STREQUAL "embind")
+  message(FATAL_ERROR "FM_WASM_THREADS applies only to FM_WASM_VARIANT=embind")
+endif()
+
 # Output base name: artifact + JS glue land at <build>/<base>.{js,wasm}.
 # Debug builds get a distinct base so debug + release can coexist when
 # the build directory is reused.
@@ -84,6 +94,8 @@ endif()
 
 if(FM_WASM_VARIANT STREQUAL "capi")
   set(_FM_WASM_BASE "${_FM_WASM_BASE}_capi")
+elseif(FM_WASM_THREADS)
+  set(_FM_WASM_BASE "${_FM_WASM_BASE}_threads")
 endif()
 
 if(FM_WASM_VARIANT STREQUAL "embind")
@@ -170,16 +182,6 @@ endif()
 set(_FM_WASM_STACK_SIZE 327680)
 
 if(FM_WASM_VARIANT STREQUAL "embind")
-  # Threads (parallel recalc scheduler): -pthread is required at both
-  # compile and link time under Emscripten. The link side additionally
-  # wants -sUSE_PTHREADS=1 and a non-zero PTHREAD_POOL_SIZE so the
-  # runtime preallocates worker Web Workers up front. The 8-thread cap
-  # matches kMaxAutoThreads in src/eval/scheduler.cpp.
-  #
-  # @size-budget-event: +~14 KB one-time pthread runtime. It is retained
-  # because Workbook.recalcParallel is now reachable from the embind/npm
-  # surface; size is recorded by the H-29 verification rather than treated
-  # as a gate for this feature-first change.
   set(_FM_WASM_COMMON_LINK_FLAGS
     "-lembind"
     "-sWASM=1"
@@ -197,15 +199,6 @@ if(FM_WASM_VARIANT STREQUAL "embind")
     "-sWASM_BIGINT=0"
     "-sMALLOC=emmalloc"
     "-sSTACK_SIZE=${_FM_WASM_STACK_SIZE}"
-    "-pthread"
-    "-sUSE_PTHREADS=1"
-    "-sPTHREAD_POOL_SIZE=8"
-    # Worker stacks would follow STACK_SIZE implicitly; state it so the
-    # coupling survives a toolchain whose default changes. The recalc
-    # workers evaluate the same trees the main thread parses. This reserves
-    # PTHREAD_POOL_SIZE x 320 KiB (2.5 MiB) of the runtime heap up front,
-    # which is heap, not artifact size.
-    "-sDEFAULT_PTHREAD_STACK_SIZE=${_FM_WASM_STACK_SIZE}"
     "--closure=0"
   )
 
@@ -228,21 +221,41 @@ if(FM_WASM_VARIANT STREQUAL "embind")
     ${_FM_WASM_OPT_FLAGS}
     -fno-exceptions
     -frtti
-    -pthread
   )
 
-  # Threading is wired in at the workbook scheduler. Under Emscripten the
-  # core library MUST also be built with -pthread so atomics in the
-  # scheduler's worker pool resolve to the multi-threaded ABI. Native
-  # builds do not need a special flag -- Threads::Threads propagates the
-  # host pthread requirements.
-  target_compile_options(formulon_core PRIVATE -pthread)
+  if(FM_WASM_THREADS)
+    # -pthread is required at both compile and link time, and on
+    # formulon_core too so the scheduler's atomics resolve to the
+    # multi-threaded ABI. The pool is preallocated because recalcParallel
+    # joins synchronously, which a browser main thread cannot do while a
+    # worker is still being spawned. The 8-thread cap matches
+    # kMaxAutoThreads in src/eval/scheduler.cpp.
+    #
+    # @size-budget-event: +~14 KB one-time pthread runtime.
+    list(APPEND _FM_WASM_COMMON_LINK_FLAGS
+      "-pthread"
+      "-sUSE_PTHREADS=1"
+      "-sPTHREAD_POOL_SIZE=8"
+      # Worker stacks would follow STACK_SIZE implicitly; state it so the
+      # coupling survives a toolchain whose default changes. This reserves
+      # PTHREAD_POOL_SIZE x 320 KiB (2.5 MiB) of the runtime heap up front,
+      # which is heap, not artifact size.
+      "-sDEFAULT_PTHREAD_STACK_SIZE=${_FM_WASM_STACK_SIZE}"
+    )
+    target_compile_options(formulon_wasm PRIVATE -pthread)
+    target_compile_options(formulon_core PRIVATE -pthread)
 
-  # formulon_core is compiled -pthread under this variant, so anything linking
-  # the archive has to agree with it. The probe runs single-threaded, hence a
-  # pool of zero.
-  set(_FM_WASM_PROBE_THREAD_FLAGS -pthread)
-  set(_FM_WASM_PROBE_THREAD_LINK_FLAGS "-pthread" "-sUSE_PTHREADS=1" "-sPTHREAD_POOL_SIZE=0")
+    # formulon_core is compiled -pthread under this variant, so anything
+    # linking the archive has to agree with it. The probe runs
+    # single-threaded, hence a pool of zero.
+    set(_FM_WASM_PROBE_THREAD_FLAGS -pthread)
+    set(_FM_WASM_PROBE_THREAD_LINK_FLAGS "-pthread" "-sUSE_PTHREADS=1" "-sPTHREAD_POOL_SIZE=0")
+  else()
+    # Without pthreads `launch_thread` sees pthread_create refuse with
+    # EAGAIN, and the scheduler evaluates the pass on the calling thread.
+    set(_FM_WASM_PROBE_THREAD_FLAGS)
+    set(_FM_WASM_PROBE_THREAD_LINK_FLAGS)
+  endif()
 else()
   # capi variant: standalone reactor-style WASM. No JS glue, no embind,
   # no pthread. The scheduler's std::thread calls compile but run

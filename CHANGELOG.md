@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `@libraz/formulon` now resolves to a single-threaded build that loads
+  without cross-origin isolation. The previous build allocated its memory
+  as a `SharedArrayBuffer` and spawned eight pthread workers as soon as the
+  factory ran, so a page or worker without COOP/COEP headers (an Electron
+  `file://` page, most static hosts) never got a ready module, even when
+  only the serial `recalc` was used. That build moves to
+  `@libraz/formulon/threads`, with its binary at
+  `@libraz/formulon/formulon_threads.wasm`. The API and `.d.ts` are shared;
+  in the default build `recalcParallel` still succeeds but evaluates
+  serially, reporting `workerThreadsStarted: 0`. A host that relies on
+  parallel recalc imports `@libraz/formulon/threads` instead.
+
+### Fixed
+
+- The pthread npm build no longer hangs when bundled. Its workers were
+  spawned from the entry shim, which a bundler honouring the package's
+  `"sideEffects": false` reduced to an empty worker chunk, so the pool never
+  started and `createFormulon()` never resolved, with no error. Workers now
+  boot from the Emscripten module itself, and `"sideEffects"` names that
+  module, whose top level starts the pthread runtime.
+
 ## [0.11.1] - 2026-08-22
 
 ### Added

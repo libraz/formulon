@@ -68,14 +68,38 @@ try {
 }
 ```
 
+## Choosing a build
+
+The package ships two builds of the same API:
+
+| Import | Threads | Hosting requirement |
+| --- | --- | --- |
+| `@libraz/formulon` | none | none; loads in any page, worker, Electron `file://` page, or Node |
+| `@libraz/formulon/threads` | up to 8 Web Workers for `recalcParallel` | a browser page must be cross-origin isolated |
+
+The default build uses ordinary (non-shared) memory and starts no workers.
+`recalcParallel` is still callable there and runs the pass serially,
+reporting `workerThreadsStarted: 0`.
+
+The threads build allocates its memory as a `SharedArrayBuffer` and
+pre-spawns its worker pool when the factory is called, so in a browser it
+only loads when the page is served with `Cross-Origin-Opener-Policy:
+same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. Node needs
+no extra setup.
+
+```js
+import createFormulon from '@libraz/formulon/threads';
+```
+
 ## Bundler integration (Vite, webpack, esbuild)
 
-The package ships a single ES module factory plus the companion
-`formulon.wasm`. Two consumer-side concerns are worth knowing about:
+Each build is an ES module factory plus a companion `.wasm`
+(`formulon.wasm`, or `formulon_threads.wasm` for the threads build).
+Consumer-side concerns worth knowing about:
 
-**1. `recalcParallel` requires ES module workers.** The parallel recalc
-scheduler runs on Web Workers spawned by Emscripten with
-`new Worker(new URL("formulon.js", import.meta.url), {type: "module"})`.
+**1. The threads build needs ES module workers.** Its pthread workers are
+spawned by Emscripten with
+`new Worker(new URL("formulon_threads_core.js", import.meta.url), {type: "module"})`.
 Bundlers default to classic (IIFE) workers and must be told otherwise:
 
 ```ts
@@ -90,8 +114,8 @@ webpack 5 picks up the `{type: "module"}` automatically when
 chunk.
 
 **2. Node bridging code is compiled in.** The factory contains a Node
-branch (lazy-loaded `node:module` / `node:worker_threads` for Node
-runtime support) that browser bundlers will warn about as
+branch (lazy-loaded `node:module`, plus `node:worker_threads` in the
+threads build) that browser bundlers will warn about as
 "externalised". The warnings are harmless — the branch is dead code at
 runtime in browsers — but if you want to silence them, mark the imports
 external:
@@ -119,15 +143,11 @@ export default defineConfig({
 });
 ```
 
-**3. Workers + SharedArrayBuffer require cross-origin isolation.** When
-hosting in a browser, serve the page with `Cross-Origin-Opener-Policy:
-same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers,
-or pthread workers will refuse to start.
-
 ### Parallel recalculation
 
 `Workbook.recalc()` remains the serial, caller-thread recalculation API.
-`Workbook.recalcParallel(threadCount)` is synchronous and returns a
+`Workbook.recalcParallel(threadCount)` starts workers only in the
+`@libraz/formulon/threads` build; it is synchronous and returns a
 `{ status, stats }` result after all workers have joined. A thread count of
 `0` selects automatic detection capped at 8, `1` keeps all evaluation on the
 caller thread and starts no workers, and `2..8` sets the maximum worker count.
@@ -154,7 +174,8 @@ authoritative reference. Highlights:
 - `Workbook.recalc()` -- triggers a serial, full dependency-ordered
   recalculation.
 - `Workbook.recalcParallel(threadCount)` -- synchronously recalculates with
-  the parallel SCC scheduler and returns status plus telemetry.
+  the parallel SCC scheduler and returns status plus telemetry (serial
+  outside the threads build).
 - `Workbook.getValue(sheet, row, col)` -- reads a cached cell value.
 - `Workbook.save()` -- serialises back to an in-memory `.xlsx` byte buffer.
 

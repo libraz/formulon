@@ -1,7 +1,8 @@
 //
 // Node-based smoke tests for the Formulon WASM bundle.
 //
-// Loads `build-wasm/formulon.js` (or FORMULON_WASM_BUILD_DIR when set),
+// Loads `build-wasm/formulon.js` (or FORMULON_WASM_BUILD_DIR when set;
+// FORMULON_WASM_THREADS=1 selects the pthread build's formulon_threads.js),
 // exercises every embind export at least once, and exits 1 with a
 // descriptive message on any failure.
 //
@@ -42,7 +43,14 @@ const PIVOT = Object.freeze({
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const wasmBuildDir = process.env.FORMULON_WASM_BUILD_DIR ?? 'build-wasm';
-const moduleUrl = path.resolve(__dirname, '..', '..', wasmBuildDir, 'formulon.js');
+const threadsBuild = process.env.FORMULON_WASM_THREADS === '1';
+const moduleUrl = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  wasmBuildDir,
+  threadsBuild ? 'formulon_threads.js' : 'formulon.js',
+);
 
 const utf8 = new TextEncoder();
 let crcTable = null;
@@ -477,6 +485,10 @@ async function run() {
       assert.equal(typeof parallel.stats.parallelSteps, 'number');
       assert.ok(parallel.stats.cellsEvaluated > 0);
       assert.ok(parallel.stats.sccsProcessed > 0);
+      if (!threadsBuild) {
+        // Without pthreads every launch is refused, so the pass runs serially.
+        assert.equal(parallel.stats.workerThreadsStarted, 0);
+      }
       if (parallel.stats.workerThreadsStarted <= 1) {
         // OS launch refusal or a partial launch of one worker is a documented
         // successful serial degradation.

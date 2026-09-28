@@ -89,10 +89,12 @@ jobs:
       - name: Build WASM
         # Force apt-installed cmake; emsdk's PATH order can shadow it
         # with a non-executable bundled cmake (see ci.yml WASM job).
-        run: make CMAKE=/usr/bin/cmake wasm
+        run: make CMAKE=/usr/bin/cmake wasm wasm-threads
 
       - name: Size report (advisory)
-        run: tools/bench/wasm_size_report.sh build-wasm/formulon.wasm
+        run: |
+          tools/bench/wasm_size_report.sh build-wasm/formulon.wasm
+          tools/bench/wasm_size_report.sh build-wasm-threads/formulon_threads.wasm
 
       - name: Stage and smoke-test npm package
         # CMAKE override mirrors the Build WASM step (emsdk's PATH order

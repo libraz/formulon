@@ -19,7 +19,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Threads are required by the parallel recalc scheduler. `Threads::Threads`
 # is INTERFACE-linked into `formulon_core` below; under Emscripten the WASM
-# wiring in `cmake/FormulonWasm.cmake` adds `-pthread` / `-sUSE_PTHREADS`.
+# wiring in `cmake/FormulonWasm.cmake` adds `-pthread` / `-sUSE_PTHREADS`
+# when FM_WASM_THREADS is on.
 find_package(Threads REQUIRED)
 
 # Reproducible build: honour SOURCE_DATE_EPOCH if present.

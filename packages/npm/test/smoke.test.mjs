@@ -32,31 +32,43 @@ const __dirname = path.dirname(__filename);
 const pkgRoot = path.resolve(__dirname, '..');
 const pkgJsonPath = path.join(pkgRoot, 'package.json');
 
-// Resolve the staged entry point through the package's own package.json
-// "main" field. Fails (rather than skips) if the package isn't staged --
-// that's the whole point of running these tests against dist/.
-async function loadStagedFactory() {
+// Resolve the staged entry point through the package's own "exports" map,
+// so a broken entry fails here rather than in a consumer. FORMULON_NPM_ENTRY
+// selects the subpath: "." (single-threaded, default) or "./threads".
+// Fails (rather than skips) if the package isn't staged -- that's the whole
+// point of running these tests against dist/.
+const entry = process.env.FORMULON_NPM_ENTRY ?? '.';
+const threadsEntry = entry === './threads';
+
+async function loadStagedModule() {
   const raw = await readFile(pkgJsonPath, 'utf8');
   const pkg = JSON.parse(raw);
-  const main = pkg.main;
-  if (!main) {
-    throw new Error(`package.json is missing "main": ${pkgJsonPath}`);
+  const target = pkg.exports?.[entry]?.import;
+  if (!target) {
+    throw new Error(`package.json "exports" has no import target for ${entry}: ${pkgJsonPath}`);
   }
-  const mainPath = path.resolve(pkgRoot, main);
   // Node ESM requires file:// URLs for absolute paths on Windows;
   // pathToFileURL is the portable form.
-  const mod = await import(pathToFileURL(mainPath).href);
+  return import(pathToFileURL(path.resolve(pkgRoot, target)).href);
+}
+
+async function loadStagedFactory() {
+  const mod = await loadStagedModule();
   if (typeof mod.default !== 'function') {
     throw new Error(`expected default export to be a factory, got ${typeof mod.default}`);
   }
   return mod.default;
 }
 
-async function loadStagedModule() {
-  const raw = await readFile(pkgJsonPath, 'utf8');
-  const pkg = JSON.parse(raw);
-  return import(pathToFileURL(path.resolve(pkgRoot, pkg.main)).href);
-}
+// The pthread workers must boot from the core, whose top level starts the
+// runtime; a bundler can empty the entry shim when it is used as a worker.
+test('threads build spawns its workers from the core, not the entry shim', async () => {
+  const glue = await readFile(path.join(pkgRoot, 'dist', 'formulon_threads_core.js'), 'utf8');
+  assert.match(glue, /new Worker\(new URL\("formulon_threads_core\.js",import\.meta\.url\)/);
+  assert.doesNotMatch(glue, /"formulon_threads\.js"/);
+  const pkg = JSON.parse(await readFile(pkgJsonPath, 'utf8'));
+  assert.ok(pkg.sideEffects.includes('./dist/formulon_threads_core.js'));
+});
 
 // Load once and reuse across tests; the factory itself is cheap, but the
 // underlying WASM instantiation costs ~30ms per invocation.
@@ -656,6 +668,10 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
     assert.equal(typeof parallel.stats.parallelSteps, 'number');
     assert.ok(parallel.stats.cellsEvaluated > 0);
     assert.ok(parallel.stats.sccsProcessed > 0);
+    if (!threadsEntry) {
+      // Without pthreads every launch is refused, so the pass runs serially.
+      assert.equal(parallel.stats.workerThreadsStarted, 0);
+    }
     if (parallel.stats.workerThreadsStarted <= 1) {
       // OS launch refusal or a partial launch of one worker is a documented
       // successful serial degradation.

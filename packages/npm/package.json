@@ -14,6 +14,12 @@
       "default": "./dist/formulon.js"
     },
     "./formulon.wasm": "./dist/formulon.wasm",
+    "./threads": {
+      "types": "./dist/formulon.d.ts",
+      "import": "./dist/formulon_threads.js",
+      "default": "./dist/formulon_threads.js"
+    },
+    "./formulon_threads.wasm": "./dist/formulon_threads.wasm",
     "./package.json": "./package.json"
   },
   "files": [
@@ -41,5 +47,7 @@
   "bugs": {
     "url": "https://github.com/libraz/formulon/issues"
   },
-  "sideEffects": false
+  "sideEffects": [
+    "./dist/formulon_threads_core.js"
+  ]
 }

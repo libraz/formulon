@@ -1,10 +1,11 @@
 //
 // Hand-written TypeScript declarations for the Formulon WASM bindings.
 //
-// The single entry point is the default export from `formulon.js`,
-// which is the Emscripten module factory produced under
-// MODULARIZE=1 / EXPORT_NAME=createFormulon / EXPORT_ES6=1. It returns
-// a Promise resolving to the Module surface declared below.
+// The entry point is the default export of `@libraz/formulon` (single-
+// threaded) or `@libraz/formulon/threads` (pthread); both are the
+// Emscripten module factory produced under MODULARIZE=1 /
+// EXPORT_NAME=createFormulon / EXPORT_ES6=1 and share this surface. It
+// returns a Promise resolving to the Module surface declared below.
 //
 // Mirror of `EMSCRIPTEN_BINDINGS(formulon)` in `src/wasm/embind.cpp`.
 // Keep this file in sync when adding or removing bindings.
@@ -1723,6 +1724,9 @@ export interface Workbook {
    * through `Number.MAX_SAFE_INTEGER` (2^53 - 1).
    * As with `recalc`, a throwing `IterativeProgressCallback` is reported as
    * status 7003 with the counters left at zero.
+   * Only `@libraz/formulon/threads` starts workers. The default
+   * `@libraz/formulon` build has no pthreads, so the same pass runs
+   * serially with `workerThreadsStarted` at 0.
    */
   recalcParallel(threadCount: number): ParallelRecalcResult;
   /** Recalculates only cells touched by the supplied viewport. Reports
