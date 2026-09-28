@@ -59,12 +59,12 @@ jobs:
       # (.mjs / .d.ts) via `npx`, so uv and Node must be on PATH alongside
       # clang-format.
       - name: Set up uv (ruff)
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10
 
       - name: Set up Node.js (biome)
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: format check
         run: make format-check
@@ -148,7 +148,7 @@ jobs:
                --ignore-errors unused,negative
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: build-coverage/coverage/coverage.filtered.info
@@ -184,7 +184,7 @@ jobs:
           actions-cache-folder: emsdk-cache
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
