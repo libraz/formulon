@@ -14,4 +14,4 @@
 # both artifacts, and have wasm-size-guardian review the size delta.
 #
 # Format: a single bare version line. Comment lines start with '#'.
-5.0.2
+6.0.10

@@ -271,6 +271,8 @@ else()
   #   number of "private" runtime symbols (memory growth notifier,
   #   stack restore) that wasmtime resolves at instantiation via
   #   imports. The Python binding declares an env stub for these.
+  # * WASM_BIGINT stays at its default (on): with it off, emcc splits the
+  #   i64 params of WASI imports into i32 pairs, which wasmtime rejects.
   set(_FM_WASM_COMMON_LINK_FLAGS
     "--no-entry"
     "-sWASM=1"
@@ -280,7 +282,6 @@ else()
     "-sFILESYSTEM=0"
     "-sDISABLE_EXCEPTION_CATCHING=1"
     "-sSUPPORT_LONGJMP=0"
-    "-sWASM_BIGINT=0"
     "-sMALLOC=emmalloc"
     "-sSTACK_SIZE=${_FM_WASM_STACK_SIZE}"
     "-sEXPORTED_FUNCTIONS=${_FM_WASM_CAPI_EXPORTS}"
