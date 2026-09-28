@@ -20,6 +20,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon {
@@ -566,9 +567,8 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
   // Sort by date ascending. Stable-sort keeps the original row order
   // for same-day entries, which matches Excel's behaviour when two
   // cash flows share a serial.
-  std::stable_sort(
-      pairs.begin(), pairs.end(),
-      [](const std::pair<double, double>& a, const std::pair<double, double>& b) { return a.first < b.first; });
+  sort_by_index(
+      pairs, [](const std::pair<double, double>& a, const std::pair<double, double>& b) { return a.first < b.first; });
   out_values->clear();
   out_dates->clear();
   out_values->reserve(pairs.size());

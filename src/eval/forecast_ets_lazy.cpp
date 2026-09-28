@@ -56,6 +56,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon {
@@ -229,11 +230,9 @@ double aggregate_run(const Series& src, std::size_t begin, std::size_t end, Aggr
 // Returns the new (deduped, sorted) series.
 Series sort_and_aggregate(const Series& src, AggregationMode mode) {
   const std::size_t n = src.t.size();
-  std::vector<std::size_t> idx(n);
-  for (std::size_t i = 0; i < n; ++i)
-    idx[i] = i;
-  std::stable_sort(idx.begin(), idx.end(),
-                   [&src](std::size_t a, std::size_t b) noexcept { return src.t[a] < src.t[b]; });
+  const auto by_t = [&src](std::uint32_t a, std::uint32_t b) { return src.t[a] < src.t[b]; };
+  std::vector<std::uint32_t> idx;
+  sorted_index_order(idx, static_cast<std::uint32_t>(n), make_index_less(by_t));
   Series sorted;
   sorted.t.reserve(n);
   sorted.y.reserve(n);
