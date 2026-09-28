@@ -42,6 +42,7 @@
 #include "sheet.h"
 #include "utils/a1_column.h"
 #include "utils/arena.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon {
@@ -499,7 +500,7 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
       row_indices.push_back(ro.row);
     }
   }
-  std::sort(row_indices.begin(), row_indices.end());
+  sort_ascending(row_indices);
   row_indices.erase(std::unique(row_indices.begin(), row_indices.end()), row_indices.end());
 
   std::string body;

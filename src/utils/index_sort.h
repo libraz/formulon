@@ -59,6 +59,10 @@ void sort_index_order(std::vector<std::uint32_t>& order, IndexLess less);
 /// guarantees as `sort_index_order`; the convenience is the fill.
 void sorted_index_order(std::vector<std::uint32_t>& order, std::uint32_t count, IndexLess less);
 
+/// Sorts plain `uint32_t` values ascending through the shared sort body, so a
+/// row-key sort does not carry its own `std::sort` instantiation.
+void sort_ascending(std::vector<std::uint32_t>& values);
+
 /// Rearranges `values` into `order`, moving each element exactly once.
 template <typename T>
 void apply_index_order(std::vector<T>& values, const std::vector<std::uint32_t>& order) {

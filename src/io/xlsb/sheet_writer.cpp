@@ -26,6 +26,7 @@
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon {
@@ -562,7 +563,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
       row_indices.push_back(layout.row);
     }
   }
-  std::sort(row_indices.begin(), row_indices.end());
+  sort_ascending(row_indices);
   row_indices.erase(std::unique(row_indices.begin(), row_indices.end()), row_indices.end());
 
   std::unordered_set<std::uint64_t> downgraded_array_anchors;

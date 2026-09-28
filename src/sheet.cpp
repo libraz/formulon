@@ -26,6 +26,7 @@
 #include "pivot/pivot_table.h"
 #include "utils/a1_column.h"
 #include "utils/arena.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "value.h"
 
@@ -1588,9 +1589,9 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
   for (const auto& kv : rows_) {
     keys.push_back(kv.first);
   }
-  // Ascending sort, walked backwards: the descending comparator would be a
-  // second `std::sort` instantiation for the sake of the iteration direction.
-  std::sort(keys.begin(), keys.end());
+  // Ascending sort, walked backwards, so the shared ascending sort serves this
+  // direction too.
+  sort_ascending(keys);
   for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
     const std::uint32_t key = *it;
     if (key < row) {
@@ -1624,7 +1625,7 @@ void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
   for (const auto& kv : rows_) {
     keys.push_back(kv.first);
   }
-  std::sort(keys.begin(), keys.end());
+  sort_ascending(keys);
   for (std::uint32_t key : keys) {
     if (key < row) {
       continue;

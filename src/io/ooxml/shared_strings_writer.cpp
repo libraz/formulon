@@ -3,7 +3,6 @@
 
 #include "io/ooxml/shared_strings_writer.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -15,6 +14,7 @@
 #include "io/xml_utils.h"
 #include "phonetic.h"
 #include "sheet.h"
+#include "utils/index_sort.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -89,7 +89,7 @@ SharedStrings BuildSharedStrings(const Workbook& workbook) {
       (void)cells;
       rows.push_back(row);
     }
-    std::sort(rows.begin(), rows.end());
+    sort_ascending(rows);
     for (const std::uint32_t row : rows) {
       const auto row_it = sheet.rows().find(row);
       if (row_it == sheet.rows().end()) {

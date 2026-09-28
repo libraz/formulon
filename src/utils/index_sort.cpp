@@ -30,4 +30,9 @@ void sort_index_order(std::vector<std::uint32_t>& order, IndexLess less) {
   });
 }
 
+void sort_ascending(std::vector<std::uint32_t>& values) {
+  sort_index_order(values,
+                   IndexLess{nullptr, [](const void*, std::uint32_t lhs, std::uint32_t rhs) { return lhs < rhs; }});
+}
+
 }  // namespace formulon

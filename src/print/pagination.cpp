@@ -11,6 +11,7 @@
 #include "print/page_setup.h"
 #include "print/print_area.h"
 #include "sheet.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "workbook.h"
 
@@ -536,10 +537,10 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // before column H) reports v=[3,7,7], one entry per area, so
   // de-duplicating here dropped a break Excel reports.
   auto merge_manual = [](std::vector<std::uint32_t>* automatic, std::vector<std::uint32_t>* manual) {
-    std::sort(manual->begin(), manual->end());
+    sort_ascending(*manual);
     manual->erase(std::unique(manual->begin(), manual->end()), manual->end());
     automatic->insert(automatic->end(), manual->begin(), manual->end());
-    std::sort(automatic->begin(), automatic->end());
+    sort_ascending(*automatic);
   };
   merge_manual(&all_h, &manual_h);
   merge_manual(&all_v, &manual_v);
