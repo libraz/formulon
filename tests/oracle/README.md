@@ -8,13 +8,11 @@ golden JSON. Additional Excel environments are checked in under
 for comparison but are not active CTest or coverage evidence for Microsoft
 365.
 
-Current local status (2026-05-15):
-
-- Unit suite: `5788/5788` passed.
-- Primary oracle: `3843` passed, `80` documented skips.
-- Historical Windows focus files remain on disk for comparison; they are not
-  counted until a Microsoft 365 Windows host passes the provenance sentinel
-  and writes `PROVENANCE.json` with `active_ctest: true`.
+Pass counts and skip counts for each track are published in the root
+`README.md`, which is the single place they are written down. Historical
+Windows focus files remain on disk for comparison; they are not counted until
+a Microsoft 365 Windows host passes the provenance sentinel and writes
+`PROVENANCE.json` with `active_ctest: true`.
 
 The remaining skips are explicit entries in `tests/divergence.yaml` or a
 variant `divergence.yaml`: volatile/environment-bound results, host-service
