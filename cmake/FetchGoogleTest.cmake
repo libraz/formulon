@@ -1,6 +1,6 @@
 # FetchGoogleTest.cmake
 #
-# Downloads and configures GoogleTest v1.14.0 using FetchContent.
+# Downloads and configures GoogleTest v1.18.0 using FetchContent.
 # Only included from tests/CMakeLists.txt when FM_BUILD_TESTING is ON.
 
 include(FetchContent)
@@ -12,7 +12,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "Use shared CRT" FORCE)
 FetchContent_Declare(
   googletest
   GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG v1.14.0
+  GIT_TAG v1.18.0
   GIT_SHALLOW TRUE
 )
 

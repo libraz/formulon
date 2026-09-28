@@ -1,6 +1,6 @@
 # FetchPugixml.cmake
 #
-# Downloads and configures pugixml v1.14 via FetchContent.
+# Downloads and configures pugixml v1.16 via FetchContent.
 # pugixml parses OOXML parts (sheet1.xml, workbook.xml, styles.xml, ...).
 # We enable PUGIXML_COMPACT for WASM size and PUGIXML_NO_EXCEPTIONS to
 # match the project-wide -fno-exceptions policy.
@@ -17,23 +17,16 @@ set(PUGIXML_NO_EXCEPTIONS ON CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF)
 set(PUGIXML_BUILD_SHARED_AND_STATIC_LIBS OFF CACHE BOOL "" FORCE)
 
-# pugixml 1.14 still declares cmake_minimum_required(VERSION 3.5); CMake 4.x
-# removed that compatibility.  FetchMiniz.cmake already sets this, but guard
-# against include order differences.
-if(NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM)
-  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-endif()
-
 FetchContent_Declare(
   pugixml
   GIT_REPOSITORY https://github.com/zeux/pugixml.git
-  GIT_TAG v1.14
+  GIT_TAG v1.16
   GIT_SHALLOW TRUE
 )
 
 FetchContent_MakeAvailable(pugixml)
 
-# Upstream target layout (v1.14):
+# Upstream target layout (v1.16):
 #   pugixml-static       — STATIC library (the one actually built here).
 #   pugixml              — INTERFACE library that links to pugixml-static.
 #   pugixml::pugixml     — ALIAS to the INTERFACE target (the recommended

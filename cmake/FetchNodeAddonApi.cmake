@@ -6,7 +6,7 @@
 #
 # Upstream: https://github.com/nodejs/node-addon-api
 #
-# Pinned to v8.5.0 (the v8 line is current LTS-track as of 2026-05).
+# Pinned to v8.9.2 (the v8 line is current LTS-track as of 2026-09).
 # The macros `NODE_ADDON_API_DISABLE_CPP_EXCEPTIONS` and
 # `NAPI_DISABLE_CPP_EXCEPTIONS` are propagated by the consumer
 # (`FormulonNodeAddon.cmake`) so this fetch step is just include-path
@@ -21,7 +21,7 @@ endif()
 FetchContent_Declare(
   node_addon_api
   GIT_REPOSITORY https://github.com/nodejs/node-addon-api.git
-  GIT_TAG v8.5.0
+  GIT_TAG v8.9.2
   GIT_SHALLOW TRUE
 )
 

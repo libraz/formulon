@@ -1,11 +1,11 @@
 # FetchPcre2.cmake
 #
-# Downloads and configures PCRE2 10.43 via FetchContent.
+# Downloads and configures PCRE2 10.49 via FetchContent.
 # PCRE2 backs Formulon's `REGEXTEST`, `REGEXEXTRACT`, and `REGEXREPLACE`
 # Excel functions. Upstream: https://github.com/PCRE2Project/pcre2.
 #
-# We pin to 10.43 (released 2024-02-16, the latest stable line as of late
-# 2025) and link the 8-bit static library only. JIT is intentionally
+# We pin to 10.49 (released 2026-09-28, the latest stable line as of
+# 2026-09) and link the 8-bit static library only. JIT is intentionally
 # disabled to keep the WASM artifact small and to avoid generating
 # executable pages at runtime (Emscripten does not support JIT). UTF and
 # UCP are enabled so Excel's `\d`, `\w`, `\s`, and Unicode property
@@ -19,20 +19,13 @@
 # formulon::eval, so they cannot fire.
 #
 # Resource limits (PCRE2_HEAP_LIMIT, PCRE2_MATCH_LIMIT) are documented
-# upstream as cache options, but in 10.43 they are *defaults* compiled
+# upstream as cache options, but in 10.49 they are *defaults* compiled
 # into the library and can be overridden at runtime via
 # pcre2_match_context_set_match_limit / set_depth_limit / set_heap_limit.
 # The Formulon REGEX impl sets these at runtime (match_limit = 1_000_000,
 # depth_limit = 10_000), so the build-time defaults are immaterial.
 
 include(FetchContent)
-
-# PCRE2 10.43 declares cmake_minimum_required(VERSION 3.5); CMake 4.x
-# removed that compatibility shim. Match the policy raise the other
-# fetched dependencies use.
-if(NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM)
-  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-endif()
 
 # --- Library variants ------------------------------------------------------
 # Build only the 8-bit code unit width. The 16/32-bit variants would each
@@ -77,13 +70,13 @@ set(PCRE2_MATCH_LIMIT         10000000 CACHE STRING "" FORCE)
 FetchContent_Declare(
   pcre2
   GIT_REPOSITORY https://github.com/PCRE2Project/pcre2.git
-  GIT_TAG pcre2-10.43
+  GIT_TAG pcre2-10.49
   GIT_SHALLOW TRUE
 )
 
 FetchContent_MakeAvailable(pcre2)
 
-# Upstream target layout (10.43): the static 8-bit library is exposed as
+# Upstream target layout (10.49): the static 8-bit library is exposed as
 # `pcre2-8-static`. We alias it under the `formulon::pcre2` namespace so
 # downstream targets can link without caring about the upstream name.
 if(NOT TARGET formulon::pcre2)

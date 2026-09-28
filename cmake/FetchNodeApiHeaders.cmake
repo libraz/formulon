@@ -6,7 +6,7 @@
 #
 # Upstream: https://github.com/nodejs/node-api-headers
 #
-# Pinned to v1.5.0 (a tagged release) rather than tracking `main` so the
+# Pinned to v1.9.0 (a tagged release) rather than tracking `main` so the
 # fetched ABI is reproducible. When bumping, verify the addon still
 # compiles cleanly under `NAPI_VERSION=8`.
 #
@@ -24,7 +24,7 @@ endif()
 FetchContent_Declare(
   node_api_headers
   GIT_REPOSITORY https://github.com/nodejs/node-api-headers.git
-  GIT_TAG v1.5.0
+  GIT_TAG v1.9.0
   GIT_SHALLOW TRUE
 )
 

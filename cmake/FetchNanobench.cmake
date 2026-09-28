@@ -1,6 +1,6 @@
 # FetchNanobench.cmake
 #
-# Fetches the nanobench v4.3.11 single-header microbenchmark library used
+# Fetches the nanobench v4.6.0 single-header microbenchmark library used
 # by `tests/bench/`. Header-only, MIT-licensed; never linked into the WASM
 # artifact (bench targets are guarded behind `FM_BUILD_TESTING` and only
 # built when the host CMake also configures `tests/bench/CMakeLists.txt`).
@@ -16,14 +16,10 @@
 
 include(FetchContent)
 
-if(NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM)
-  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-endif()
-
 FetchContent_Declare(
   nanobench
   GIT_REPOSITORY https://github.com/martinus/nanobench.git
-  GIT_TAG v4.3.11
+  GIT_TAG v4.6.0
   GIT_SHALLOW TRUE
   # Source-only fetch: redirect SOURCE_SUBDIR at a path that contains no
   # CMakeLists.txt so `MakeAvailable` populates the source tree but does

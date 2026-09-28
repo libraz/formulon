@@ -46,8 +46,12 @@ formulon_apply_warnings(formulon_oracle_tests)
 # invocation. That matters here because golden JSON files are dynamic
 # test inputs — when `make oracle-gen` writes a new suite, the test list
 # must update without requiring a relink.
+#
+# CMake 4.x parses the JSON test list in script, which takes ~20 s for this
+# binary's ~4.7k cases; the 5 s default would abort every `ctest` run.
 gtest_discover_tests(formulon_oracle_tests
   DISCOVERY_MODE PRE_TEST
+  DISCOVERY_TIMEOUT 120
   PROPERTIES LABELS "oracle"
 )
 
