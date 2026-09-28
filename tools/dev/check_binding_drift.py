@@ -52,7 +52,9 @@ Checks:
                   type needs one in `_DTS_RETURN_TYPE_EXEMPT_METHODS`.
   pure-js-helpers Helpers with no native entry point behind them
                   (`NODE_PURE_JS_FREE_FUNCTIONS`) are exported by both npm
-                  packages' `index.mjs`, declared in both declaration files,
+                  packages (packages/npm/common.mjs, re-exported by each
+                  entry point, and packages/npm-native/index.mjs), declared
+                  in both declaration files,
                   and implemented with identical source. The two packages
                   share no module, so this is the only thing holding the
                   copies together.
@@ -67,7 +69,7 @@ Checks:
                   ordinal values live on the JS side) matches its
                   source enum's ordinal sequence. The frozen ordinal
                   tables the two published ESM entry points export
-                  (packages/npm/index.mjs and
+                  (packages/npm/common.mjs via index.mjs / threads.mjs, and
                   packages/npm-native/index.mjs) must then carry the same
                   names and the same values as each other, as that
                   canonical `.d.ts`, and as the declaration file their own
@@ -139,7 +141,13 @@ NODE_DIST_DIR = REPO_ROOT / "packages" / "npm-native" / "dist"
 
 C_ABI_BASELINE = Path(__file__).resolve().parent / "c_abi_baseline.txt"
 C_ABI_BREAKS = Path(__file__).resolve().parent / "c_abi_breaks.txt"
-NPM_INDEX_MJS = REPO_ROOT / "packages" / "npm" / "index.mjs"
+# The npm package's constants and helpers live in common.mjs; each published
+# entry point (single-threaded and pthread) re-exports it wholesale.
+NPM_COMMON_MJS = REPO_ROOT / "packages" / "npm" / "common.mjs"
+NPM_ENTRY_MJS = (
+    REPO_ROOT / "packages" / "npm" / "index.mjs",
+    REPO_ROOT / "packages" / "npm" / "threads.mjs",
+)
 
 ERROR_H = REPO_ROOT / "src" / "utils" / "error.h"
 VALUE_H = REPO_ROOT / "src" / "value.h"
@@ -1450,10 +1458,19 @@ def _js_exported_function_source(text: str, name: str) -> Optional[str]:
     return " ".join(_extract_braced_block(text, body_open + 1).split())
 
 
+def _npm_entries_reexport_common(check: str) -> List[str]:
+    """Every npm entry point must re-export common.mjs, or it ships without the shared surface."""
+    return [
+        f"{check}: {entry.relative_to(REPO_ROOT)} does not `export * from './common.js'`"
+        for entry in NPM_ENTRY_MJS
+        if not re.search(r"^export \* from '\./common\.js';", _read(entry), re.MULTILINE)
+    ]
+
+
 def check_pure_js_helpers() -> List[str]:
-    problems: List[str] = []
+    problems: List[str] = _npm_entries_reexport_common("pure-js-helpers")
     sources = {
-        "npm": (NPM_INDEX_MJS, WASM_DTS),
+        "npm": (NPM_COMMON_MJS, WASM_DTS),
         "npm-native": (NODE_INDEX_MJS, NODE_DTS),
     }
 
@@ -1476,7 +1493,7 @@ def check_pure_js_helpers() -> List[str]:
         if len(bodies) == len(sources) and len(set(bodies.values())) != 1:
             problems.append(
                 f"pure-js-helpers: the `{name}` implementations have diverged between "
-                f"{NPM_INDEX_MJS.relative_to(REPO_ROOT)} and {NODE_INDEX_MJS.relative_to(REPO_ROOT)}. "
+                f"{NPM_COMMON_MJS.relative_to(REPO_ROOT)} and {NODE_INDEX_MJS.relative_to(REPO_ROOT)}. "
                 "The two packages share no module, so the copies are held together here or not "
                 "at all."
             )
@@ -1744,10 +1761,10 @@ def _parse_ts_named_enum(text: str, name: str) -> Optional[dict]:
 
 
 def _check_js_constant_tables(wasm_dts_text: str) -> List[str]:
-    problems: List[str] = []
-    npm = _parse_js_constants(NPM_INDEX_MJS)
+    problems: List[str] = _npm_entries_reexport_common("dts-enums")
+    npm = _parse_js_constants(NPM_COMMON_MJS)
     native = _parse_js_constants(NODE_INDEX_MJS)
-    npm_label = NPM_INDEX_MJS.relative_to(REPO_ROOT)
+    npm_label = NPM_COMMON_MJS.relative_to(REPO_ROOT)
     native_label = NODE_INDEX_MJS.relative_to(REPO_ROOT)
 
     only_npm = sorted(set(npm) - set(native))
