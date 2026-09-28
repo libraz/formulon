@@ -159,7 +159,7 @@ void append_visibility(const parser::AstNode& node, const EvalContext& ctx, std:
   std::uint32_t top = 0;
   const Sheet* sheet = reference_arg_origin(node, ctx, &top);
   if (sheet == nullptr || rows == 0U || cols == 0U) {
-    out_hidden->insert(out_hidden->end(), count, false);
+    out_hidden->resize(out_hidden->size() + count, false);
     return;
   }
   // One pass over the sheet's overrides rather than a lookup per row: the
@@ -177,7 +177,7 @@ void append_visibility(const parser::AstNode& node, const EvalContext& ctx, std:
   }
   out_hidden->reserve(out_hidden->size() + count);
   for (std::uint32_t r = 0; r < rows; ++r) {
-    out_hidden->insert(out_hidden->end(), cols, hidden_row[r]);
+    out_hidden->resize(out_hidden->size() + cols, hidden_row[r]);
   }
 }
 
@@ -222,7 +222,7 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
     if (static_cast<std::size_t>(rr.rows) * static_cast<std::size_t>(rr.cols) == n) {
       append_visibility(node, ctx, rr.rows, rr.cols, out_hidden);
     } else {
-      out_hidden->insert(out_hidden->end(), n, false);
+      out_hidden->resize(out_hidden->size() + n, false);
     }
     out_cells->insert(out_cells->end(), std::make_move_iterator(rr.cells.begin()),
                       std::make_move_iterator(rr.cells.end()));
@@ -252,7 +252,7 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
     const ArrayValue* array = v.as_array();
     const std::size_t n = static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols);
     out_cells->insert(out_cells->end(), array->cells, array->cells + n);
-    out_hidden->insert(out_hidden->end(), n, false);
+    out_hidden->resize(out_hidden->size() + n, false);
     return true;
   }
   out_cells->push_back(v);
