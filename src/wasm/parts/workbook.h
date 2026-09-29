@@ -80,7 +80,7 @@ class JsWorkbook {
 
   JsStatus setNumber(uint32_t sheet, uint32_t row, uint32_t col, double value);
   JsStatus setBool(uint32_t sheet, uint32_t row, uint32_t col, bool value);
-  JsStatus setError(uint32_t sheet, uint32_t row, uint32_t col, int32_t errorCode);
+  JsStatus setError(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val errorCode);
   JsStatus setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text);
   JsStatus setCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col, const std::string& phonetic);
   /// Stores a cell's furigana as one `<rPh>` block per element of `runs`,
@@ -487,6 +487,11 @@ class JsWorkbook {
   // Set when `progress_callback_` threw during the pass that is still
   // unwinding. Consumed by the recalc entry points.
   bool progress_callback_threw_ = false;
+  // True for the duration of a call into `progress_callback_`. Mirrors the
+  // Node addon's `in_iterative_progress_callback_` guard: `~JsWorkbook()`
+  // refuses to run while this is set, so `delete()` from inside the
+  // callback can't free the handle a still-running `recalc` is using.
+  bool in_iterative_progress_callback_ = false;
 };
 
 // ---- Free helpers ------------------------------------------------------

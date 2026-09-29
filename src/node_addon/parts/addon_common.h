@@ -56,6 +56,11 @@ constexpr fm_status_t kBindingNullPointer = 7001;
 /// A JS callable handed to the binding threw. Reported on the envelope of
 /// the call that ran it.
 constexpr fm_status_t kBindingCallbackException = 7003;
+/// `formulon::FormulonErrorCode::kInvalidArgument` (src/utils/error.h),
+/// mirrored here the same way as the 7000-band codes above: a value out
+/// of a binding-enforced range, used when the binding itself rejects the
+/// argument before any C call.
+constexpr fm_status_t kInvalidArgument = 2;
 
 // ---------------------------------------------------------------------
 // Status / Value envelope builders
@@ -82,6 +87,14 @@ Napi::Object MakeBindingError(Napi::Env env, fm_status_t code, const char* messa
 /// rejects a missing or wrongly-shaped JS argument before calling the C
 /// ABI. `message` names the offending parameter.
 Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message);
+
+/// Builds the Status envelope for `rc == 0 && callback_threw`: the engine
+/// reported success (it only saw a cancellation), so there is no
+/// thread-local diagnostic for this failure to read -- `MakeErrorStatus`
+/// would otherwise carry whatever an earlier, unrelated call left behind.
+/// Matches the WASM binding's `progress_callback_threw_status()` message
+/// and context exactly.
+Napi::Object MakeCallbackThrewStatus(Napi::Env env);
 
 /// Converts a C-ABI status code into the shared JS Status envelope.
 Napi::Object MakeStatus(Napi::Env env, fm_status_t code);

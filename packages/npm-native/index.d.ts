@@ -1554,7 +1554,10 @@ export type IterativeProgressCallback = (
  *  an explicit `delete()` step. Hold the reference for the lifetime
  *  you need the workbook. */
 export interface Workbook {
-  /** Deterministically releases the native workbook handle. Idempotent. */
+  /** Deterministically releases the native workbook handle. Idempotent.
+   *  Throws, and leaves the handle intact, if called from inside this
+   *  workbook's own iterative-progress callback -- that callback is still
+   *  running a `recalc`/`recalcParallel` against the handle. */
   dispose(): void;
 
   /** True when the wrapper holds a live native handle. False when the
@@ -2309,9 +2312,11 @@ export interface WorkbookCtor {
   createDefault(): Workbook;
   /** Workbook with no sheets. */
   createEmpty(): Workbook;
-  /** Loads from an in-memory `.xlsx` byte buffer. The returned wrapper
-   *  may be unusable (subsequent calls return `kBindingInvalidHandle`)
-   *  on failure; consult `lastErrorMessage()` for diagnostics. */
+  /** Loads from an in-memory workbook byte buffer, auto-detecting
+   *  `.xlsx` vs `.xlsb` from the package contents (there is no filename
+   *  to route on). The returned wrapper may be unusable (subsequent
+   *  calls return `kBindingInvalidHandle`) on failure; consult
+   *  `lastErrorMessage()` for diagnostics. */
   loadBytes(bytes: Uint8Array): Workbook;
 }
 

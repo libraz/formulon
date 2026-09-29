@@ -182,14 +182,23 @@ authoritative reference. Highlights:
 Workbook handles wrap a native pointer; always call `wb.delete()` (in a
 `finally` block) when done.
 
+Two C ABI capabilities are bound in the Python package but not exposed
+here: `fm_workbook_set_iterative_enabled` (toggling iterative calculation
+without re-supplying the existing iteration cap and residual threshold --
+`setIterative(enabled, maxIterations, maxChange)` here always takes all
+three) and `fm_styles_add_batch` (bulk style registration). This is a
+genuine gap, not an intentional exclusion.
+
 ## Memory when loading a workbook
 
-`loadBytes` reads worksheet XML through the DOM parser only. The native
-CLI switches to a streaming parser for worksheets past 256 KiB; that
-implementation costs binary size the WASM budget does not have, so
-loading here needs memory proportional to the largest single worksheet's
-XML rather than a fixed window. Sheets are read one at a time, so the
-peak is per worksheet, and the practical ceiling is the 32-bit WASM
+Both surfaces inflate each worksheet part into memory whole before
+parsing it (the zip reader caps this at 100 MiB per entry, 256 MiB per
+load); `loadBytes` here then always builds a DOM tree from that buffer.
+The native CLI switches to a streaming parser for worksheets past 256
+KiB instead, which skips building the DOM tree -- that implementation
+costs binary size the WASM budget does not have -- but still holds the
+same inflated XML buffer first. Sheets are read one at a time, so the
+peak is per worksheet, and the practical ceiling here is the 32-bit WASM
 address space. Results are identical either way.
 
 ## Project

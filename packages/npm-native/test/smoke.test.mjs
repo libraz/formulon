@@ -253,6 +253,42 @@ test('the default threshold delivers nothing to a registered sink', async () => 
   }
 });
 
+test('a throwing log sink does not leave a pending exception at the ThreadSafeFunction boundary', async () => {
+  const mod = await getModule();
+  let calls = 0;
+  assert.ok(
+    mod.setLogSink(() => {
+      calls += 1;
+      throw new Error('sink failure');
+    }).ok,
+  );
+  assert.ok(mod.setLogMinLevel(mod.LogLevel.Warn).ok);
+  try {
+    const wb = mod.Workbook.createDefault();
+    assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+    assert.ok(wb.recalc().ok);
+    assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).status.ok);
+    wb.dispose();
+    // Wait for the ThreadSafeFunction drain to run the sink.
+    await new Promise((resolve) => setTimeout(resolve, SINK_SETTLE_MS));
+    assert.ok(calls > 0, 'expected the sink to have been invoked');
+  } finally {
+    assert.ok(mod.setLogMinLevel(mod.LogLevel.Off).ok);
+    assert.ok(mod.setLogSink(null).ok);
+  }
+
+  // An uncaught exception at the drain boundary would have crashed the
+  // process by now; the engine must still be usable afterwards.
+  const wb2 = mod.Workbook.createDefault();
+  try {
+    assert.ok(wb2.setFormula(0, 0, 0, '=1+1').ok);
+    assert.ok(wb2.recalc().ok);
+    assert.equal(wb2.getValue(0, 0, 0).value.number, 2);
+  } finally {
+    wb2.dispose();
+  }
+});
+
 test('memoryUsage and the Python wheel agree that the estimate grows', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -637,9 +673,13 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   assertInvalid(-Infinity, '-Infinity threadCount');
   assertInvalid(1.5, 'fractional threadCount');
   assertInvalid(-1, 'negative threadCount');
+  // Rejected by the binding itself, before any C ABI call: the message is
+  // binding-authored and the context is empty, never a value built from
+  // the threadCount the caller passed (the Status contract's promise for
+  // a binding-raised failure).
   const invalid = assertInvalid(9, 'threadCount above cap');
-  assert.equal(invalid.status.message, 'fm_workbook_recalc_parallel: thread_count must be 0..8');
-  assert.equal(invalid.status.context, 'thread_count=9 max=8');
+  assert.equal(invalid.status.message, 'recalcParallel: `threadCount` must be an integer in 0..8');
+  assert.equal(invalid.status.context, '');
   wb.dispose();
 });
 
@@ -1314,6 +1354,21 @@ test('addFont / getFont preserve superscript and round-trip to the same index', 
   assert.equal(reread.colorArgb, 0xff00ff00);
 });
 
+test('addFont/setFont with a non-numeric field throws and does not commit a coerced value', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+
+  const before = wb.fontCount();
+  assert.throws(() => wb.addFont({ name: 'Arial', size: 'not a number' }), TypeError);
+  assert.equal(wb.fontCount(), before, 'no font must have been added for the rejected call');
+
+  const font = wb.addFont({ name: 'Arial', size: 12 });
+  assert.ok(font.status.ok);
+  assert.throws(() => wb.setFont(font.index, { name: 'Arial', size: 'not a number' }), TypeError);
+  // The font slot must still hold its original size, not a coerced 0.
+  assert.equal(wb.getFont(font.index).size, 12);
+});
+
 test('phonetic runs keep their spans through a save/load round trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -1658,6 +1713,32 @@ test('pivotFilterAt rejects an out-of-range index', async () => {
   }
 });
 
+test('a required pivot spec string field left out of the object is rejected, not coerced to "undefined"', async () => {
+  const mod = await getModule();
+  const { wb, pivot } = makePivotWorkbook(mod.Workbook);
+  try {
+    const fieldCountBefore = wb.pivotFieldCount(0, pivot);
+    const field = wb.pivotFieldAdd(0, pivot, { axis: 0 }); // no `sourceName`
+    assert.equal(field.status.ok, false);
+    assert.equal(field.status.status, 7001);
+    assert.equal(wb.pivotFieldCount(0, pivot), fieldCountBefore, 'no field must have been added');
+
+    const dataFieldCountBefore = wb.pivotDataFieldCount(0, pivot);
+    const dataField = wb.pivotDataFieldAdd(0, pivot, { fieldIndex: 0, aggregation: 0 }); // no `name`
+    assert.equal(dataField.status.ok, false);
+    assert.equal(dataField.status.status, 7001);
+    assert.equal(wb.pivotDataFieldCount(0, pivot), dataFieldCountBefore, 'no data field must have been added');
+
+    const filterCountBefore = wb.pivotFilterCount(0, pivot);
+    const filter = wb.pivotFilterAdd(0, pivot, { axis: 0, type: 1, valueKind: 1, valueDouble: 15 }); // no `fieldName`
+    assert.equal(filter.ok, false);
+    assert.equal(filter.status, 7001);
+    assert.equal(wb.pivotFilterCount(0, pivot), filterCountBefore, 'no filter must have been added');
+  } finally {
+    wb.dispose();
+  }
+});
+
 test('comments round-trip: setComment + getComment', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -1740,6 +1821,17 @@ test('setError() rejects a missing errorCode argument', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.throws(() => wb.setError(0, 0, 0), TypeError);
+});
+
+test('setError() rejects a non-number errorCode before mutating the cell', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setNumber(0, 0, 0, 7).ok);
+  assert.throws(() => wb.setError(0, 0, 0, 'not a number'), TypeError);
+  // The rejected call must not have overwritten the cell.
+  const got = wb.getValue(0, 0, 0);
+  assert.ok(got.status.ok, JSON.stringify(got.status));
+  assert.equal(got.value.number, 7);
 });
 
 test('saveAs() writes xlsx and xlsb bytes; rejects a missing format argument', async () => {
@@ -2446,6 +2538,12 @@ test('a throwing iterative progress callback aborts the solve and reports a stat
     const aborted = wb.recalc();
     assert.equal(aborted.ok, false, `expected a failure envelope: ${JSON.stringify(aborted)}`);
     assert.equal(aborted.status, 7003);
+    // The engine reported success (it only saw a cancellation), so there
+    // is no thread-local diagnostic to read here -- this must be the
+    // binding's own message, matching the WASM package's, not the residue
+    // of an earlier call.
+    assert.equal(aborted.message, 'the iterative progress callback threw; the solve was aborted');
+    assert.equal(aborted.context, 'Workbook.setIterativeProgress');
     assert.equal(calls, 1, 'the solve must stop at the first throw');
 
     const mid = wb.getValue(0, 0, 0);

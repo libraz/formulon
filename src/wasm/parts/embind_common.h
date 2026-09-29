@@ -49,6 +49,12 @@ constexpr int32_t kBindingInvalidHandle = 7000;
 /// the call that ran it; see `call_js_callback` below.
 constexpr int32_t kBindingCallbackException = 7003;
 
+/// `formulon::FormulonErrorCode::kInvalidArgument` (src/utils/error.h),
+/// mirrored here the same way as the codes above: a value out of a
+/// binding-enforced range, used when the binding itself rejects the
+/// argument before any C call.
+constexpr int32_t kInvalidArgument = 2;
+
 // ---- Value-object mirrors -----------------------------------------------
 //
 // Every cross-boundary record is reflected through a POD struct so embind

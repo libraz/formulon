@@ -29,7 +29,9 @@ Why prefer the native build:
   the engine's parallel scheduler.
 - **No V8 ↔ WASM heap copies** on `loadBytes` / `save` (the most
   expensive operations on large workbooks).
-- **Larger workbook capacity**: not bound by the WASM 4 GiB ceiling.
+- **Larger workbook capacity**: not bound by the WASM package's 2 GiB
+  growth ceiling (`ALLOW_MEMORY_GROWTH` without an explicit
+  `MAXIMUM_MEMORY` caps growth at Emscripten's 2 GiB default).
 
 ## Surface parity
 
@@ -63,6 +65,13 @@ workbook's estimated native footprint. `recalcParallel(threadCount)` is
 available on both the native and WASM packages and returns the parallel SCC
 telemetry described in the API declarations. See
 [Memory accounting](#memory-accounting).
+
+Two C ABI capabilities are bound in the Python package but not exposed by
+either JS binding: `fm_workbook_set_iterative_enabled` (toggling iterative
+calculation without re-supplying the existing iteration cap and residual
+threshold -- `setIterative(enabled, maxIterations, maxChange)` here always
+takes all three) and `fm_styles_add_batch` (bulk style registration). This
+is a genuine gap, not an intentional exclusion.
 
 The TypeScript declarations in `dist/index.d.ts` are the authoritative
 method list; the categories below summarise what is registered on the
@@ -125,7 +134,7 @@ PivotTables & pivot caches
 
 Top-level: evalFormula, version, versionString, lastErrorMessage,
            lastErrorContext, statusString, errorDisplayName,
-           mergeFunctionMetadata
+           mergeFunctionMetadata, setLogMinLevel, setLogSink
 ```
 
 Every top-level function is available both as a named export and on the

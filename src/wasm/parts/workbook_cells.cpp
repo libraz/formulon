@@ -38,11 +38,22 @@ JsStatus JsWorkbook::setBool(uint32_t sheet, uint32_t row, uint32_t col, bool va
   return status_from_rc(rc);
 }
 
-JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, int32_t errorCode) {
+JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val errorCode) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  fm_status_t rc = fm_workbook_set_error(handle_, sheet, row, col, static_cast<fm_error_code_t>(errorCode));
+  // Unlike setNumber/setBool/setText, there is no sane zero-value default
+  // here: an omitted `errorCode` silently writing `#NULL!` (error code 0)
+  // would mask a caller bug instead of surfacing it. `errorCode` is taken
+  // as `emscripten::val` rather than `int32_t` so a missing argument is
+  // still distinguishable from a literal `0` at this point -- matching
+  // the Node binding's `info.Length() < 4` rejection for the same call.
+  if (errorCode.isUndefined() || errorCode.isNull()) {
+    return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kBindingNullPointer),
+                                "setError: `errorCode` is required");
+  }
+  fm_status_t rc =
+      fm_workbook_set_error(handle_, sheet, row, col, static_cast<fm_error_code_t>(errorCode.as<int32_t>()));
   return status_from_rc(rc);
 }
 

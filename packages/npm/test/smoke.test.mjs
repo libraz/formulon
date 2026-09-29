@@ -155,6 +155,14 @@ test('a registered sink receives records only once the threshold admits them', a
     assert.ok(Module.setLogMinLevel(mod.LogLevel.Warn).ok);
     emitXlsbWarning(Module, mod.WorkbookFormat.Xlsb);
     assert.ok(records.length > 0, 'expected at least one record');
+    for (const r of records) {
+      // The sink must receive a copy, never a live view into the WASM
+      // instance's own memory: the /threads build backs that memory with
+      // a `SharedArrayBuffer`, over which most browsers' `TextDecoder`
+      // refuses to operate -- a failure this suite cannot reproduce under
+      // Node, so the buffer identity is what it checks instead.
+      assert.ok(!(r.buffer instanceof SharedArrayBuffer), 'log sink record must not be SharedArrayBuffer-backed');
+    }
     const text = records.map((r) => new TextDecoder().decode(r)).join('');
     assert.match(text, /xlsb\.writer\.formula_downgraded/);
     assert.match(text, /"level":"warn"/);
@@ -362,6 +370,32 @@ test('pivotFilterAt rejects an out-of-range index', async () => {
   try {
     const got = wb.pivotFilterAt(0, pivot, 99);
     assert.equal(got.status.ok, false);
+  } finally {
+    wb.delete();
+  }
+});
+
+test('a required pivot spec string field left out of the object is rejected, not silently empty', async () => {
+  const Module = await getModule();
+  const { wb, pivot } = makePivotWorkbook(Module.Workbook);
+  try {
+    const fieldCountBefore = wb.pivotFieldCount(0, pivot);
+    const field = wb.pivotFieldAdd(0, pivot, { axis: 0 }); // no `sourceName`
+    assert.equal(field.status.ok, false);
+    assert.equal(field.status.status, 7001);
+    assert.equal(wb.pivotFieldCount(0, pivot), fieldCountBefore, 'no field must have been added');
+
+    const dataFieldCountBefore = wb.pivotDataFieldCount(0, pivot);
+    const dataField = wb.pivotDataFieldAdd(0, pivot, { fieldIndex: 0, aggregation: 0 }); // no `name`
+    assert.equal(dataField.status.ok, false);
+    assert.equal(dataField.status.status, 7001);
+    assert.equal(wb.pivotDataFieldCount(0, pivot), dataFieldCountBefore, 'no data field must have been added');
+
+    const filterCountBefore = wb.pivotFilterCount(0, pivot);
+    const filter = wb.pivotFilterAdd(0, pivot, { axis: 0, type: 1, valueKind: 1, valueDouble: 15 }); // no `fieldName`
+    assert.equal(filter.ok, false);
+    assert.equal(filter.status, 7001);
+    assert.equal(wb.pivotFilterCount(0, pivot), filterCountBefore, 'no filter must have been added');
   } finally {
     wb.delete();
   }
@@ -707,6 +741,11 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
     const invalid = wb.recalcParallel(9);
     assert.equal(invalid.status.ok, false);
     assert.notEqual(invalid.status.status, 0);
+    // Rejected by the binding itself, before any C ABI call: the context
+    // is empty, never a value built from the threadCount the caller
+    // passed (the Status contract's promise for a binding-raised
+    // failure).
+    assert.equal(invalid.status.context, '');
     assert.equal(invalid.stats.cellsEvaluated, 0);
     assert.equal(invalid.stats.sccsProcessed, 0);
     assert.equal(invalid.stats.parallelSteps, 0);
@@ -799,6 +838,57 @@ test('a throwing iterative progress callback aborts the solve and reports a stat
     wb.setIterativeProgress(null);
     wb.delete();
   }
+});
+
+test('delete() from inside its own progress callback throws instead of crashing', async () => {
+  const Module = await getModule();
+  const wb = makeIterativeWorkbook(Module);
+  let calls = 0;
+  let caught = null;
+  assert.ok(
+    wb.setIterativeProgress(() => {
+      calls += 1;
+      try {
+        wb.delete();
+      } catch (e) {
+        caught = e;
+      }
+      return false;
+    }).ok,
+  );
+
+  const result = wb.recalc();
+  assert.equal(calls, 1, 'the callback must run exactly once');
+  assert.ok(caught instanceof Error, 'delete() inside the callback must throw, not free the handle');
+  assert.match(String(caught.message), /iterative progress callback/);
+  // The handle survived: delete() never reached fm_workbook_destroy, so
+  // the workbook is still usable after the (deliberately cancelled) solve.
+  assert.ok(result.ok, `recalc after a cancelled solve: ${JSON.stringify(result)}`);
+  assert.ok(wb.isValid());
+
+  wb.setIterativeProgress(null);
+  wb.delete();
+});
+
+test('an uncaught delete() inside the progress callback aborts the solve like any other throw', async () => {
+  const Module = await getModule();
+  const wb = makeIterativeWorkbook(Module);
+  let calls = 0;
+  assert.ok(
+    wb.setIterativeProgress(() => {
+      calls += 1;
+      wb.delete(); // not caught here -- propagates the same as a plain `throw`
+    }).ok,
+  );
+
+  const result = wb.recalc();
+  assert.equal(calls, 1);
+  assert.equal(result.ok, false, `expected a failure envelope: ${JSON.stringify(result)}`);
+  assert.equal(result.status, STATUS.CALLBACK_EXCEPTION);
+  assert.ok(wb.isValid(), 'the handle must still be alive: delete() never completed');
+
+  wb.setIterativeProgress(null);
+  wb.delete();
 });
 
 test('an iterative progress callback returning a non-boolean is read by truthiness', async () => {

@@ -408,6 +408,12 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   std::string name;
   fm_font_record fr{};
   PullFontRecord(record, &name, &fr);
+  if (env.IsExceptionPending()) {
+    // A malformed field left a pending JS exception (see SpecPullInt32 /
+    // SpecPullU32 / SpecPullDouble): stop before the C ABI call commits a
+    // default value for it. The exception surfaces to JS on return.
+    return env.Undefined();
+  }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
   if (rc != 0) {
@@ -426,6 +432,10 @@ Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
   std::string name;
   fm_font_record fr{};
   PullFontRecord(record, &name, &fr);
+  if (env.IsExceptionPending()) {
+    // See the matching guard in AddFont.
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_styles_set_font(handle_, font_index, fr));
 }
 
@@ -438,6 +448,10 @@ Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
   std::string name;
   fm_font_record fr{};
   PullFontRecord(record, &name, &fr);
+  if (env.IsExceptionPending()) {
+    // See the matching guard in AddFont.
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_workbook_set_default_font(handle_, fr));
 }
 
@@ -448,6 +462,11 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
   const fm_fill_record fr = PullFillRecord(record);
+  if (env.IsExceptionPending()) {
+    // See the matching guard in AddFont. The return value is discarded
+    // in favor of the pending exception either way.
+    return env.Undefined();
+  }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
   if (rc != 0) {
@@ -463,6 +482,11 @@ Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
   const fm_border_record br = PullBorderRecord(record);
+  if (env.IsExceptionPending()) {
+    // See the matching guard in AddFont. The return value is discarded
+    // in favor of the pending exception either way.
+    return env.Undefined();
+  }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_border(handle_, br, &idx);
   if (rc != 0) {
@@ -543,6 +567,11 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
     xf.has_reading_order = 1;
     xf.reading_order = SpecPullU32(record, "readingOrder", 0U);
   }
+  if (env.IsExceptionPending()) {
+    // See the matching guard in AddFont. The return value is discarded
+    // in favor of the pending exception either way.
+    return env.Undefined();
+  }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
   if (rc != 0) {
@@ -599,6 +628,11 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
   dxf.alignment_xml = alignment_xml.c_str();
   dxf.protection_xml = protection_xml.c_str();
 
+  if (env.IsExceptionPending()) {
+    // See the matching guard in AddFont. The return value is discarded
+    // in favor of the pending exception either way.
+    return env.Undefined();
+  }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_dxf(handle_, dxf, &idx);
   if (rc != 0) {
@@ -1048,6 +1082,11 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     rule.icon_set_reverse = SpecPullBool(is, "reverse", false) ? 1 : 0;
     rule.icon_set_show_value = SpecPullBool(is, "showValue", true) ? 1 : 0;
     rule.icon_set_percent = SpecPullBool(is, "percent", true) ? 1 : 0;
+  }
+  if (env.IsExceptionPending()) {
+    // See the matching guard in AddFont. The return value is discarded
+    // in favor of the pending exception either way.
+    return env.Undefined();
   }
   std::size_t new_index = 0;
   fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);

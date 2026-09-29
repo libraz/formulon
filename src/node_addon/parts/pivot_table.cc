@@ -143,19 +143,29 @@ Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
   }
   Napi::Object spec = info[2].As<Napi::Object>();
 
+  const bool has_source = SpecHas(spec, "sourceName");
+  const std::string source_name = has_source ? spec.Get("sourceName").ToString().Utf8Value() : std::string();
   const bool has_custom = SpecHas(spec, "customName");
-  const std::string source_name = spec.Get("sourceName").ToString().Utf8Value();
   const std::string custom_name = has_custom ? spec.Get("customName").ToString().Utf8Value() : std::string();
   const bool has_nfmt = SpecHas(spec, "numberFormat");
   const std::string number_format = has_nfmt ? spec.Get("numberFormat").ToString().Utf8Value() : std::string();
 
   fm_pivot_field_spec_t c_spec{};
-  c_spec.source_name = source_name.c_str();
+  // `sourceName` is required; an omitted key passes NULL through rather
+  // than the coerced literal string "undefined" `.ToString()` would
+  // otherwise produce, so the C ABI's own kBindingNullPointer check is
+  // what rejects the call.
+  c_spec.source_name = has_source ? source_name.c_str() : nullptr;
   c_spec.custom_name = has_custom ? custom_name.c_str() : nullptr;
   c_spec.axis = static_cast<fm_pivot_axis_t>(SpecPullU32(spec, "axis", 0U));
   c_spec.subtotal_top = SpecPullBool(spec, "subtotalTop", false) ? 1 : 0;
   c_spec.number_format = has_nfmt ? number_format.c_str() : nullptr;
 
+  if (env.IsExceptionPending()) {
+    // A malformed `axis` left a pending JS exception (see SpecPullU32):
+    // stop before the C ABI call commits a default value for it.
+    return env.Undefined();
+  }
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_field_add(handle_, sheet, pivot_idx, &c_spec, &out);
   if (rc != 0) {
@@ -421,6 +431,12 @@ Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
   std::string nfmt_buf;
   bool has_nfmt = false;
   BuildDataFieldSpec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+  if (env.IsExceptionPending()) {
+    // A malformed field left a pending JS exception (see SpecPullU32 /
+    // SpecPullInt32 inside BuildDataFieldSpec): stop before the C ABI
+    // call commits a default value for it.
+    return env.Undefined();
+  }
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_data_field_add(handle_, sheet, pivot_idx, &c_spec, &out);
   if (rc != 0) {
@@ -457,6 +473,10 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
   std::string nfmt_buf;
   bool has_nfmt = false;
   BuildDataFieldSpec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+  if (env.IsExceptionPending()) {
+    // See the matching guard in PivotDataFieldAdd.
+    return env.Undefined();
+  }
   fm_status_t rc = fm_workbook_pivot_data_field_set(handle_, sheet, pivot_idx, data_field_idx, &c_spec);
   return MakeStatus(env, rc);
 }
@@ -516,13 +536,17 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   }
   Napi::Object spec = info[2].As<Napi::Object>();
 
-  const std::string field_name = spec.Get("fieldName").ToString().Utf8Value();
+  const bool has_field = SpecHas(spec, "fieldName");
+  const std::string field_name = has_field ? spec.Get("fieldName").ToString().Utf8Value() : std::string();
   const bool has_text = SpecHas(spec, "valueText");
   const std::string value_text = has_text ? spec.Get("valueText").ToString().Utf8Value() : std::string();
 
   fm_pivot_filter_spec_t c_spec{};
   c_spec.axis = static_cast<fm_pivot_axis_t>(SpecPullU32(spec, "axis", 0U));
-  c_spec.field_name = field_name.c_str();
+  // `fieldName` is required; see the `sourceName` comment in
+  // `PivotFieldAdd` above -- an omitted key must reach the C ABI as NULL,
+  // not the coerced literal string "undefined".
+  c_spec.field_name = has_field ? field_name.c_str() : nullptr;
   c_spec.type = static_cast<fm_pivot_filter_type_t>(SpecPullU32(spec, "type", 0U));
   c_spec.value_kind = static_cast<fm_pivot_filter_value_kind_t>(SpecPullInt32(spec, "valueKind", -1));
   c_spec.value_int = SpecPullInt32(spec, "valueInt", 0);
@@ -533,6 +557,11 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   c_spec.value_high_double = SpecPullDouble(spec, "valueHighDouble", 0.0);
   c_spec.data_field_index = SpecPullU32(spec, "dataFieldIndex", 0U);
 
+  if (env.IsExceptionPending()) {
+    // A malformed numeric field left a pending JS exception: stop before
+    // the C ABI call commits a default value for it.
+    return env.Undefined();
+  }
   fm_status_t rc = fm_workbook_pivot_filter_add(handle_, sheet, pivot_idx, &c_spec);
   return MakeStatus(env, rc);
 }

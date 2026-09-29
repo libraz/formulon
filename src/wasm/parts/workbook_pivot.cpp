@@ -405,14 +405,18 @@ JsAddStyleResult JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, em
     r.status = error_status(7000);
     return r;
   }
-  const std::string source_name = js_pull_string(spec, "sourceName");
+  const bool has_source = !spec["sourceName"].isUndefined() && !spec["sourceName"].isNull();
+  const std::string source_name = has_source ? spec["sourceName"].as<std::string>() : std::string();
   const bool has_custom = !spec["customName"].isUndefined() && !spec["customName"].isNull();
   const std::string custom_name = has_custom ? spec["customName"].as<std::string>() : std::string();
   const bool has_nfmt = !spec["numberFormat"].isUndefined() && !spec["numberFormat"].isNull();
   const std::string number_format = has_nfmt ? spec["numberFormat"].as<std::string>() : std::string();
 
   fm_pivot_field_spec_t c_spec{};
-  c_spec.source_name = source_name.c_str();
+  // `sourceName` is required; an omitted key passes NULL through rather
+  // than `js_pull_string`'s empty-string default, which the C ABI's own
+  // required-field check does not treat the same as a missing argument.
+  c_spec.source_name = has_source ? source_name.c_str() : nullptr;
   c_spec.custom_name = has_custom ? custom_name.c_str() : nullptr;
   c_spec.axis = static_cast<fm_pivot_axis_t>(js_pull_u32(spec, "axis", 0U));
   c_spec.subtotal_top = js_pull_bool(spec, "subtotalTop", false) ? 1 : 0;
@@ -609,10 +613,14 @@ uint32_t JsWorkbook::pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx) cons
 
 void JsWorkbook::build_data_field_spec(emscripten::val spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
                                        std::string& nfmt_buf, bool& has_nfmt) {
-  name_buf = js_pull_string(spec, "name");
+  // `name` is required; an omitted key passes NULL through rather than
+  // `js_pull_string`'s empty-string default, which the C ABI's own
+  // required-field check does not treat the same as a missing argument.
+  const bool has_name = !spec["name"].isUndefined() && !spec["name"].isNull();
+  name_buf = has_name ? spec["name"].as<std::string>() : std::string();
   has_nfmt = !spec["numberFormat"].isUndefined() && !spec["numberFormat"].isNull();
   nfmt_buf = has_nfmt ? spec["numberFormat"].as<std::string>() : std::string();
-  out.name = name_buf.c_str();
+  out.name = has_name ? name_buf.c_str() : nullptr;
   out.field_index = js_pull_u32(spec, "fieldIndex", 0U);
   out.aggregation = static_cast<fm_pivot_aggregation_t>(js_pull_u32(spec, "aggregation", 0U));
   out.number_format = has_nfmt ? nfmt_buf.c_str() : nullptr;
@@ -688,13 +696,17 @@ JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripte
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  const std::string field_name = js_pull_string(spec, "fieldName");
+  // `fieldName` is required; an omitted key passes NULL through rather
+  // than `js_pull_string`'s empty-string default, which the C ABI's own
+  // required-field check does not treat the same as a missing argument.
+  const bool has_field = !spec["fieldName"].isUndefined() && !spec["fieldName"].isNull();
+  const std::string field_name = has_field ? spec["fieldName"].as<std::string>() : std::string();
   const bool has_text = !spec["valueText"].isUndefined() && !spec["valueText"].isNull();
   const std::string value_text = has_text ? spec["valueText"].as<std::string>() : std::string();
 
   fm_pivot_filter_spec_t c_spec{};
   c_spec.axis = static_cast<fm_pivot_axis_t>(js_pull_u32(spec, "axis", 0U));
-  c_spec.field_name = field_name.c_str();
+  c_spec.field_name = has_field ? field_name.c_str() : nullptr;
   c_spec.type = static_cast<fm_pivot_filter_type_t>(js_pull_u32(spec, "type", 0U));
   // valueKind defaults to NONE (-1) when omitted; the C ABI rejects NONE
   // for non-range filters.

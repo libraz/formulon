@@ -89,6 +89,14 @@ Napi::Value Workbook::SetError(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  if (!info[3].IsNumber()) {
+    // `.As<Napi::Number>()` below is an unchecked cast: on a non-number
+    // 4th argument it does not itself throw, so without this check the
+    // mutation below would run first and any resulting exception would
+    // only surface afterwards, on return to JS.
+    Napi::TypeError::New(env, "setError: `errorCode` must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
@@ -157,6 +165,12 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
   for (uint32_t i = 0; i < count; ++i) {
     records[i].text = texts[i].c_str();
   }
+  if (env.IsExceptionPending()) {
+    // A malformed `sb`/`eb` left a pending JS exception (see
+    // SpecPullU32): stop before the C ABI call commits a default value
+    // for it.
+    return env.Undefined();
+  }
   fm_status_t rc = fm_workbook_set_cell_phonetic_runs(handle_, sheet, row, col, records.data(), records.size());
   return MakeStatus(env, rc);
 }
@@ -174,10 +188,15 @@ Napi::Value Workbook::SetCellPhoneticProperties(const Napi::CallbackInfo& info) 
         env, "setCellPhoneticProperties: `properties` must be an object { fontId, type, alignment }");
   }
   const Napi::Object props = info[3].As<Napi::Object>();
-  fm_status_t rc = fm_workbook_set_cell_phonetic_properties(handle_, sheet, row, col,
-                                                            SpecPullU32(props, "fontId", 0U),
-                                                            SpecPullU32(props, "type", 0U),
-                                                            SpecPullU32(props, "alignment", 0U));
+  const uint32_t font_id = SpecPullU32(props, "fontId", 0U);
+  const uint32_t type = SpecPullU32(props, "type", 0U);
+  const uint32_t alignment = SpecPullU32(props, "alignment", 0U);
+  if (env.IsExceptionPending()) {
+    // A malformed field left a pending JS exception (see SpecPullU32):
+    // stop before the C ABI call commits a default value for it.
+    return env.Undefined();
+  }
+  fm_status_t rc = fm_workbook_set_cell_phonetic_properties(handle_, sheet, row, col, font_id, type, alignment);
   return MakeStatus(env, rc);
 }
 
@@ -509,7 +528,7 @@ Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
   // specific answer. Otherwise a throwing progress callback, which the
   // engine only saw as a cancellation, becomes the reported failure.
   if (rc == 0 && callback_threw) {
-    return MakeErrorStatus(env, kBindingCallbackException);
+    return MakeCallbackThrewStatus(env);
   }
   return MakeStatus(env, rc);
 }
@@ -523,12 +542,12 @@ Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
 
   uint32_t thread_count = 0;
   if (!ReadThreadCount(info, thread_count)) {
-    // Reuse the C ABI's canonical invalid-thread-count diagnostic. The C
-    // entry point validates before touching the workbook, and zeroes stats
-    // on this failure path just as it does for a direct caller.
-    const fm_status_t rc = fm_workbook_recalc_parallel(handle_, 9U, &stats);
-    Napi::Object status = MakeStatus(env, rc);
-    SyncExternalMemory(env);
+    // Reject here instead of forwarding a sentinel to the C ABI: its own
+    // out-of-range diagnostic would otherwise report a thread_count value
+    // the caller never passed, violating the Status contract that a
+    // binding-raised failure carries an empty context.
+    Napi::Object status =
+        MakeBindingError(env, kInvalidArgument, "recalcParallel: `threadCount` must be an integer in 0..8");
     return MakeParallelRecalcResult(env, status, stats);
   }
 
@@ -540,7 +559,7 @@ Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
     // counters are not reported.
     stats = fm_parallel_recalc_stats{};
     SyncExternalMemory(env);
-    return MakeParallelRecalcResult(env, MakeErrorStatus(env, kBindingCallbackException), stats);
+    return MakeParallelRecalcResult(env, MakeCallbackThrewStatus(env), stats);
   }
   Napi::Object status = MakeStatus(env, rc);
   // Parallel recalc can change cached values and spill geometry just like the
@@ -573,7 +592,7 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "recomputed", 0);
   }
   if (callback_threw) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, kBindingCallbackException), "recomputed", 0);
+    return MakeNumberFieldResult(env, MakeCallbackThrewStatus(env), "recomputed", 0);
   }
   return MakeNumberFieldResult(env, MakeOkStatus(env), "recomputed", recomputed);
 }

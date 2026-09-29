@@ -52,6 +52,24 @@ EM_JS(int32_t, fm_wasm_invoke_js_callback, (emscripten::EM_VAL fn_handle, emscri
 
 EM_JS_DEPS(fm_wasm_js_callback, "$Emval");
 
+// Aborts the in-flight `delete()` call with a JS-visible error instead of
+// letting `~JsWorkbook()` return normally into `fm_workbook_destroy`. The
+// throw unwinds back through embind's `delete()` (which never reaches the
+// lines that null out its pointer) and, if the caller is the progress
+// callback itself, on into the `try`/`catch` in
+// `fm_wasm_invoke_js_callback` above -- the same path an ordinarily
+// throwing callback takes. Message matches the Node addon's guard
+// (`lifecycle.cc`'s `Workbook::Dispose`) so the two surfaces read alike.
+//
+// FORMULON-ALLOW: JavaScript source again, for the same reason as the
+// callback trampoline above -- it is the one place a JS-visible exception
+// can be raised from a binary built with -fno-exceptions.
+// clang-format off
+EM_JS(void, fm_wasm_throw_dispose_during_callback, (), {
+  throw new Error('cannot dispose a Workbook from its iterative progress callback');
+});
+// clang-format on
+
 namespace formulon {
 namespace wasm {
 namespace parts {
@@ -78,6 +96,11 @@ JsStatus progress_callback_threw_status() {
 }  // namespace
 
 JsWorkbook::~JsWorkbook() {
+  if (in_iterative_progress_callback_) {
+    // Never reached past this call: it throws into the JS caller of
+    // `delete()`, which is `progress_callback_` itself here.
+    fm_wasm_throw_dispose_during_callback();
+  }
   if (handle_ != nullptr) {
     fm_workbook_destroy(handle_);
     handle_ = nullptr;
@@ -346,16 +369,23 @@ JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
 
   // Do not bind this parameter as uint32_t: embind would otherwise coerce
   // e.g. -0.5, 1.5, NaN, Infinity, null, and a missing argument before this
-  // method could apply the public 0..8 integer contract. Reuse the C ABI's
-  // invalid-argument path so its status message/context remain canonical.
+  // method could apply the public 0..8 integer contract.
   const emscripten::val number = emscripten::val::global("Number");
   const bool is_finite = number.call<bool>("isFinite", threadCount);
   const bool is_integer = is_finite && number.call<bool>("isInteger", threadCount);
   const double requested = is_integer ? threadCount.as<double>() : -1.0;
   const bool is_valid = is_integer && requested >= 0.0 && requested <= 8.0;
+  if (!is_valid) {
+    // Reject here instead of forwarding a sentinel to the C ABI: its own
+    // out-of-range diagnostic would otherwise report a thread_count value
+    // the caller never passed, violating the Status contract that a
+    // binding-raised failure carries an empty context.
+    r.status = binding_error_status(kInvalidArgument, "recalcParallel: `threadCount` must be an integer in 0..8");
+    return r;
+  }
 
   fm_parallel_recalc_stats stats{};
-  const uint32_t native_thread_count = is_valid ? static_cast<uint32_t>(requested) : 9U;
+  const uint32_t native_thread_count = static_cast<uint32_t>(requested);
   progress_callback_threw_ = false;
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, native_thread_count, &stats);
   const bool callback_threw = progress_callback_threw_;
@@ -540,7 +570,9 @@ int32_t JsWorkbook::iterativeProgressTrampoline(uint32_t iteration, double max_r
   args.set(0, iteration);
   args.set(1, max_residual);
   args.set(2, max_iterations);
+  self->in_iterative_progress_callback_ = true;
   const JsCallbackOutcome outcome = call_js_callback(self->progress_callback_, args);
+  self->in_iterative_progress_callback_ = false;
   if (outcome == JsCallbackOutcome::kThrew) {
     // Abort the solve so every frame between here and the recalc entry
     // point unwinds the ordinary way, and leave the reason behind for it.
@@ -641,10 +673,13 @@ void log_sink_trampoline(const char* record, std::size_t len, void* /*user_data*
   if (sink.isNull() || sink.isUndefined()) {
     return;
   }
-  // The record is a length-delimited byte range, never NUL-terminated;
-  // hand the JS side a view over exactly `len` bytes.
+  // The record is a length-delimited byte range, never NUL-terminated. A
+  // `bytes_to_val` copy, not a live view into the module's own memory: the
+  // `/threads` build backs that memory with a `SharedArrayBuffer`, and a
+  // view over it fails `formulon.d.ts`'s other documented read path --
+  // most browsers' `TextDecoder#decode` rejects such a backing buffer.
   emscripten::val args = emscripten::val::array();
-  args.set(0, emscripten::val(emscripten::typed_memory_view(len, reinterpret_cast<const std::uint8_t*>(record))));
+  args.set(0, bytes_to_val(reinterpret_cast<const std::uint8_t*>(record), len));
   // A throwing sink is dropped. Records are emitted from arbitrary depth
   // inside the engine and a log write has no return path to report on, so
   // the only contract worth keeping is that it cannot damage the caller.

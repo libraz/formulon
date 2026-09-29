@@ -27,6 +27,15 @@ Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message) {
   return MakeBindingError(env, kBindingNullPointer, message);
 }
 
+Napi::Object MakeCallbackThrewStatus(Napi::Env env) {
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("ok", Napi::Boolean::New(env, false));
+  o.Set("status", Napi::Number::New(env, static_cast<int32_t>(kBindingCallbackException)));
+  o.Set("message", Napi::String::New(env, "the iterative progress callback threw; the solve was aborted"));
+  o.Set("context", Napi::String::New(env, "Workbook.setIterativeProgress"));
+  return o;
+}
+
 Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code) {
   if (code == kBindingInvalidHandle) {
     // No C-ABI call ran, so the thread-local diagnostics still describe
@@ -178,6 +187,16 @@ int32_t SpecPullInt32(const Napi::Object& spec, const char* key, int32_t dflt) {
   if (v.IsUndefined() || v.IsNull()) {
     return dflt;
   }
+  if (!v.IsNumber()) {
+    // `.As<Napi::Number>()` below is an unchecked cast: under
+    // NAPI_DISABLE_CPP_EXCEPTIONS it does not throw a C++ exception on a
+    // non-number value, it leaves a *pending* JS exception and returns a
+    // default -- indistinguishable, to this function's caller, from a
+    // successful parse. Throwing here explicitly makes the failure
+    // immediate and deterministic instead of implementation-defined.
+    Napi::TypeError::New(spec.Env(), std::string(key) + " must be a number").ThrowAsJavaScriptException();
+    return dflt;
+  }
   return v.As<Napi::Number>().Int32Value();
 }
 
@@ -189,6 +208,10 @@ uint32_t SpecPullU32(const Napi::Object& spec, const char* key, uint32_t dflt) {
   if (v.IsUndefined() || v.IsNull()) {
     return dflt;
   }
+  if (!v.IsNumber()) {
+    Napi::TypeError::New(spec.Env(), std::string(key) + " must be a number").ThrowAsJavaScriptException();
+    return dflt;
+  }
   return v.As<Napi::Number>().Uint32Value();
 }
 
@@ -198,6 +221,10 @@ double SpecPullDouble(const Napi::Object& spec, const char* key, double dflt) {
   }
   Napi::Value v = spec.Get(key);
   if (v.IsUndefined() || v.IsNull()) {
+    return dflt;
+  }
+  if (!v.IsNumber()) {
+    Napi::TypeError::New(spec.Env(), std::string(key) + " must be a number").ThrowAsJavaScriptException();
     return dflt;
   }
   return v.As<Napi::Number>().DoubleValue();
@@ -242,10 +269,16 @@ std::vector<uint32_t> ReadU32Array(const Napi::CallbackInfo& info, size_t idx) {
 
 void BuildDataFieldSpec(const Napi::Object& spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
                         std::string& nfmt_buf, bool& has_nfmt) {
-  name_buf = spec.Get("name").ToString().Utf8Value();
+  // `name` is required; an omitted key passes NULL through rather than
+  // the coerced literal string "undefined" `.ToString()` would otherwise
+  // produce, so the C ABI's own kBindingNullPointer check is what rejects
+  // the call. See the `sourceName` comment in `pivot_table.cc`'s
+  // `PivotFieldAdd`.
+  const bool has_name = SpecHas(spec, "name");
+  name_buf = has_name ? spec.Get("name").ToString().Utf8Value() : std::string();
   has_nfmt = SpecHas(spec, "numberFormat");
   nfmt_buf = has_nfmt ? spec.Get("numberFormat").ToString().Utf8Value() : std::string();
-  out.name = name_buf.c_str();
+  out.name = has_name ? name_buf.c_str() : nullptr;
   out.field_index = SpecPullU32(spec, "fieldIndex", 0U);
   out.aggregation = static_cast<fm_pivot_aggregation_t>(SpecPullU32(spec, "aggregation", 0U));
   out.number_format = has_nfmt ? nfmt_buf.c_str() : nullptr;

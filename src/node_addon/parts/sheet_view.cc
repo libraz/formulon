@@ -156,6 +156,12 @@ Napi::Value Workbook::SetSheetProtection(const Napi::CallbackInfo& info) {
   p.sort = SpecPullInt32(in, "sort", 0);
   p.auto_filter = SpecPullInt32(in, "autoFilter", 0);
   p.pivot_tables = SpecPullInt32(in, "pivotTables", 0);
+  if (env.IsExceptionPending()) {
+    // A malformed field left a pending JS exception (see SpecPullInt32 /
+    // SpecPullU32): stop before the C ABI call commits a default value
+    // for it.
+    return env.Undefined();
+  }
   fm_status_t rc = fm_sheet_set_protection(handle_, sheet, &p);
   return MakeStatus(env, rc);
 }

@@ -50,6 +50,17 @@ void LogSinkTrampoline(const char* record, std::size_t len, void* /*user_data*/)
         Napi::Buffer<std::uint8_t> view = Napi::Buffer<std::uint8_t>::Copy(env, bytes->data(), bytes->size());
         delete bytes;
         cb.Call({view});
+        if (env.IsExceptionPending()) {
+          // A throwing sink must not leave a pending exception at this
+          // ThreadSafeFunction drain point: an uncaught exception here is
+          // already fatal to the process under current Node's
+          // unhandled-exception default. Records are best-effort
+          // telemetry with no return path to report a failure on, so the
+          // call that produced this one simply completes -- matching the
+          // WASM sink's contract (a throw is intercepted, never
+          // propagated).
+          (void)env.GetAndClearPendingException();
+        }
       });
   if (rc != napi_ok) {
     delete payload;

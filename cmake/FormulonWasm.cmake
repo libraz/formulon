@@ -53,7 +53,11 @@
 #
 # * `INITIAL_MEMORY=33554432` (32 MiB) is the runtime heap, separate
 #   from the `.wasm` code-size budget. `ALLOW_MEMORY_GROWTH=1` lets
-#   large workbooks expand the heap up to the 4 GiB limit.
+#   large workbooks expand the heap, up to Emscripten's 2 GiB
+#   `MAXIMUM_MEMORY` default (no larger value is set here: raising it
+#   forces unsigned pointer arithmetic in the generated JS, a real
+#   `.wasm`-size cost against the ceiling in CLAUDE.md's WASM size
+#   policy, not something to opt into as a doc-comment correction).
 #
 # * `STACK_SIZE` is set explicitly on both variants rather than left to
 #   Emscripten's default. See the shared block below for the measurement

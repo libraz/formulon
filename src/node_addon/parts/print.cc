@@ -258,6 +258,11 @@ Napi::Value Workbook::SetSheetPageSetup(const Napi::CallbackInfo& info) {
   out.fit_to_height = SpecPullU32(spec, "fitToHeight", 0U);
   out.fit_to_page_engaged = SpecHas(spec, "fitToPage") ? 1 : 0;
   out.fit_to_page = SpecPullBool(spec, "fitToPage", false) ? 1 : 0;
+  if (env.IsExceptionPending()) {
+    // A malformed field left a pending JS exception (see SpecPullU32):
+    // stop before the C ABI call commits a default value for it.
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_sheet_set_page_setup(handle_, ArgU32(info, 0), &out));
 }
 
@@ -285,6 +290,11 @@ Napi::Value Workbook::SetSheetPageMargins(const Napi::CallbackInfo& info) {
   out.header = SpecPullDouble(spec, "header", 0.0);
   out.footer_engaged = SpecHas(spec, "footer") ? 1 : 0;
   out.footer = SpecPullDouble(spec, "footer", 0.0);
+  if (env.IsExceptionPending()) {
+    // A malformed field left a pending JS exception (see SpecPullDouble):
+    // stop before the C ABI call commits a default value for it.
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_sheet_set_page_margins(handle_, ArgU32(info, 0), &out));
 }
 
