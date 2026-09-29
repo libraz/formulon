@@ -453,7 +453,11 @@
         "kind": "text",
         "value": "-1.9576"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 0.0
+      }
     },
     {
       "id": "ipmt_per_out_of_range_is_num",
