@@ -1276,6 +1276,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   wb.set_unknown_package_rels(std::move(package_rels_or.value()));
   wb.set_default_content_types(std::move(default_content_types));
 
+  wb.apply_legacy_implicit_intersections();
+
   OoxmlReadResult result{std::move(wb), pending_sst_count, diagnostics};
   return result;
 }

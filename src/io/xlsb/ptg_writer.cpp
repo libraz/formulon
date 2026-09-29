@@ -459,18 +459,226 @@ bool UsesArrayEvaluation(const parser::AstNode& node, Slot slot, bool root) {
   return false;
 }
 
+/// Walker behind `legacy_intersections`: where Excel 365 shows an `@` in a
+/// formula saved without the dynamic-array mark (measured cell by cell
+/// against its formula2 text). An area, a multi-cell name or an
+/// array-returning call takes one wherever an area would be value class.
+class LegacyIntersections {
+ public:
+  LegacyIntersections(const NameIsScalar& name_is_scalar, std::vector<const parser::AstNode*>& out)
+      : name_is_scalar_(name_is_scalar), out_(out) {}
+
+  void walk(const parser::AstNode& node, Slot slot, bool root) {
+    const bool value = root || SlotClass(slot, /*area=*/true, /*legacy=*/true) == kPtgValueClass;
+    if (node.kind() == parser::NodeKind::ImplicitIntersection) {
+      // A written `@` is listed when it is the one Excel would show; its
+      // operand never takes a second one.
+      const parser::AstNode& operand = node.as_implicit_intersection_operand();
+      if (value && array_valued(operand)) {
+        out_.push_back(&node);
+      }
+      walk_children(operand, slot, root);
+      return;
+    }
+    if (value && array_valued(node)) {
+      out_.push_back(&node);
+    }
+    walk_children(node, slot, root);
+  }
+
+ private:
+  void walk_children(const parser::AstNode& node, Slot slot, bool root) {
+    using parser::NodeKind;
+    switch (node.kind()) {
+      case NodeKind::UnaryOp:
+        walk(node.as_unary_operand(), Slot{slot.letter, true}, false);
+        return;
+      case NodeKind::BinaryOp:
+        walk(node.as_binary_lhs(), Slot{slot.letter, true}, false);
+        walk(node.as_binary_rhs(), Slot{slot.letter, true}, false);
+        return;
+      case NodeKind::RangeOp:
+        walk(node.as_range_lhs(), Slot{'R', false}, false);
+        walk(node.as_range_rhs(), Slot{'R', false}, false);
+        return;
+      case NodeKind::IntersectOp:
+        walk(node.as_intersect_lhs(), Slot{'R', false}, false);
+        walk(node.as_intersect_rhs(), Slot{'R', false}, false);
+        return;
+      case NodeKind::UnionOp:
+        for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+          walk(node.as_union_child(i), Slot{'R', false}, false);
+        }
+        return;
+      case NodeKind::Call: {
+        const std::string_view name = canonical_function_name(node.as_call_name());
+        const bool builtin = known_builtin(name);
+        for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+          walk(node.as_call_arg(i), builtin ? Slot{xlsb_parameter_class(name, i), false} : Slot{}, false);
+        }
+        return;
+      }
+      case NodeKind::LambdaCall:
+        for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
+          walk(node.as_lambda_call_arg(i), Slot{}, false);
+        }
+        return;
+      case NodeKind::LetBinding: {
+        const std::size_t scope = let_scope_.size();
+        for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+          walk(node.as_let_binding_expr(i), Slot{}, false);
+          let_scope_.emplace_back(node.as_let_binding_name(i), array_valued(node.as_let_binding_expr(i)));
+        }
+        walk(node.as_let_body(), slot, root);
+        let_scope_.resize(scope);
+        return;
+      }
+      default:
+        // Leaves; a LAMBDA body is evaluated where it is called, not here.
+        return;
+    }
+  }
+
+  bool known_builtin(std::string_view name) const {
+    return !let_bound(name) && (lookup_func_by_name(name) != nullptr || UsesHiddenNameRoute(name));
+  }
+
+  bool let_bound(std::string_view name) const {
+    return std::any_of(let_scope_.begin(), let_scope_.end(),
+                       [&](const auto& bound) { return strings::case_insensitive_eq(bound.first, name); });
+  }
+
+  bool name_array_valued(const parser::AstNode& node) const {
+    if (node.kind() == parser::NodeKind::NameRef && node.as_name_sheet().empty()) {
+      for (auto it = let_scope_.rbegin(); it != let_scope_.rend(); ++it) {
+        if (strings::case_insensitive_eq(it->first, node.as_name())) {
+          return it->second;
+        }
+      }
+    }
+    return !name_is_scalar_ || !name_is_scalar_(node);
+  }
+
+  bool array_valued(const parser::AstNode& node) const {
+    using parser::NodeKind;
+    switch (node.kind()) {
+      case NodeKind::Ref:
+        return node.as_ref().is_full_col || node.as_ref().is_full_row;
+      case NodeKind::RangeOp:
+        return true;
+      case NodeKind::Ref3D:
+        return node.as_ref3d_is_range() || node.as_ref3d_sheet_begin() != node.as_ref3d_sheet_end();
+      case NodeKind::NameRef:
+        return name_array_valued(node);
+      case NodeKind::ExternalRef:
+        return parser::is_self_book_name_ref(node) ? name_array_valued(node) : node.as_external_ref_is_range();
+      case NodeKind::IntersectOp:
+        // `A1 B1` is one cell either way.
+        return !single_cell(node.as_intersect_lhs()) || !single_cell(node.as_intersect_rhs());
+      case NodeKind::StructuredRef:
+        return node.as_structured_ref_modifier() != parser::StructuredRefModifier::At;
+      case NodeKind::Call:
+        return call_returns_array(node);
+      case NodeKind::LambdaCall:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  static bool single_cell(const parser::AstNode& node) {
+    return node.kind() == parser::NodeKind::Ref && !node.as_ref().is_full_col && !node.as_ref().is_full_row;
+  }
+
+  /// A number literal equal to `want`, or any nonzero one when `want` is 0.
+  static bool number_literal(const parser::AstNode& node, double want) {
+    if (node.kind() != parser::NodeKind::Literal || !node.as_literal().is_number()) {
+      return false;
+    }
+    const double n = node.as_literal().as_number();
+    return want == 0.0 ? n != 0.0 : n == want;
+  }
+
+  bool call_returns_array(const parser::AstNode& node) const {
+    const std::string_view name = canonical_function_name(node.as_call_name());
+    if (!known_builtin(name)) {
+      return true;
+    }
+    const std::uint32_t arity = node.as_call_arity();
+    auto is = [&](std::string_view fn) { return strings::case_insensitive_eq(name, fn); };
+    auto any_arg_array_valued = [&](std::uint32_t first) {
+      for (std::uint32_t i = first; i < arity; ++i) {
+        if (array_valued(node.as_call_arg(i))) {
+          return true;
+        }
+      }
+      return false;
+    };
+    if (is("INDEX")) {
+      // A literal nonzero row and column pick one cell; 0, omitted or
+      // computed ones may pick a whole row or column.
+      return arity < 2 || !number_literal(node.as_call_arg(1), 0.0) ||
+             (arity >= 3 && !number_literal(node.as_call_arg(2), 0.0)) ||
+             (arity >= 4 && node.as_call_arg(3).kind() != parser::NodeKind::Literal);
+    }
+    if (is("OFFSET")) {
+      // One cell only from a cell base with height and width literal 1 or absent.
+      return arity < 3 || !single_cell(node.as_call_arg(0)) ||
+             (arity >= 4 && !number_literal(node.as_call_arg(3), 1.0)) ||
+             (arity >= 5 && !number_literal(node.as_call_arg(4), 1.0));
+    }
+    if (is("ROW") || is("COLUMN")) {
+      return any_arg_array_valued(0);
+    }
+    if (is("CHOOSE")) {
+      return any_arg_array_valued(1);
+    }
+    if (is("IF") || is("IFERROR") || is("IFNA") || is("IFS") || is("SWITCH")) {
+      return any_arg_array_valued(0);
+    }
+    if (is("XLOOKUP")) {
+      return arity < 3 || !single_line(node.as_call_arg(2));
+    }
+    static constexpr std::string_view kArrayFunctions[] = {
+        "SEQUENCE",   "RANDARRAY",  "FILTER",    "SORT",     "SORTBY",    "UNIQUE",       "TAKE",        "DROP",
+        "EXPAND",     "HSTACK",     "VSTACK",    "TOCOL",    "TOROW",     "WRAPCOLS",     "WRAPROWS",    "TRANSPOSE",
+        "CHOOSECOLS", "CHOOSEROWS", "MAKEARRAY", "MAP",      "SCAN",      "REDUCE",       "BYROW",       "BYCOL",
+        "FREQUENCY",  "MUNIT",      "MMULT",     "MINVERSE", "TEXTSPLIT", "GROUPBY",      "PIVOTBY",     "LINEST",
+        "LOGEST",     "TREND",      "GROWTH",    "INDIRECT", "TRIMRANGE", "REGEXEXTRACT", "STOCKHISTORY"};
+    return std::any_of(std::begin(kArrayFunctions), std::end(kArrayFunctions), is);
+  }
+
+  /// A bounded area one row or one column across.
+  static bool single_line(const parser::AstNode& node) {
+    if (node.kind() != parser::NodeKind::RangeOp || !single_cell(node.as_range_lhs()) ||
+        !single_cell(node.as_range_rhs())) {
+      return false;
+    }
+    const parser::Reference& a = node.as_range_lhs().as_ref();
+    const parser::Reference& b = node.as_range_rhs().as_ref();
+    return a.row == b.row || a.col == b.col;
+  }
+
+  const NameIsScalar& name_is_scalar_;
+  std::vector<const parser::AstNode*>& out_;
+  std::vector<std::pair<std::string_view, bool>> let_scope_;
+};
+
 class Encoder {
  public:
   Encoder(const parser::AstNode& root, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
           const NameTable& name_table, PtgRootClass root_class, std::optional<PtgBaseCell> base,
-          PtgEvaluation evaluation)
+          PtgEvaluation evaluation, const NameIsScalar& name_is_scalar)
       : sheet_names_(sheet_names),
         sheet_ranges_(sheet_ranges),
         name_table_(name_table),
         base_(base),
-        legacy_(evaluation == PtgEvaluation::kLegacy),
+        legacy_(evaluation != PtgEvaluation::kDynamicArray),
         promote_root_(root_class == PtgRootClass::kValue) {
     parser::collect_parenthesized_nodes(root, parens_);
+    if (evaluation == PtgEvaluation::kLegacy) {
+      implied_at_ = legacy_intersections(root, name_is_scalar);
+    }
   }
 
   /// Emits `node`, then `PtgParen` wherever the formula text parenthesises
@@ -545,6 +753,11 @@ class Encoder {
       case parser::NodeKind::SpillRef:
         return emit_spill_ref(node);
       case parser::NodeKind::ImplicitIntersection:
+        if (std::find(implied_at_.begin(), implied_at_.end(), &node) != implied_at_.end()) {
+          is_root_ = root;
+          next_slot_ = slot;
+          return emit(node.as_implicit_intersection_operand());
+        }
         return emit_implicit_intersection(node);
       case parser::NodeKind::Lambda:
         return emit_lambda(node);
@@ -1226,7 +1439,7 @@ class Encoder {
       RETURN_IF_ERROR(emit(*anchor));
     } else {
       // Always a PtgFuncVar argument below, so it stays reference-class.
-      RETURN_IF_ERROR(emit_ref(node.as_spill_ref(), false));
+      RETURN_IF_ERROR(emit_ref(node.as_spill_ref(), kPtgReferenceClass));
     }
     emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
     emit_u8(out_, 2);                    // cparams: name-ref + one anchor operand
@@ -1301,6 +1514,8 @@ class Encoder {
   const std::optional<PtgBaseCell> base_;
   /// See `PtgEvaluation`.
   const bool legacy_;
+  /// Written `@` nodes a legacy formula stores as nothing.
+  std::vector<const parser::AstNode*> implied_at_;
   /// See `emit()`'s `promote` local. Cleared on the first call.
   bool is_root_ = true;
   const bool promote_root_;
@@ -1627,11 +1842,18 @@ bool formula_uses_array_evaluation(const parser::AstNode& root) {
   return UsesArrayEvaluation(root, Slot{}, /*root=*/true);
 }
 
+std::vector<const parser::AstNode*> legacy_intersections(const parser::AstNode& root,
+                                                         const NameIsScalar& name_is_scalar) {
+  std::vector<const parser::AstNode*> out;
+  LegacyIntersections(name_is_scalar, out).walk(root, Slot{}, /*root=*/true);
+  return out;
+}
+
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base,
-                                            PtgEvaluation evaluation) {
-  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation);
+                                            PtgEvaluation evaluation, const NameIsScalar& name_is_scalar) {
+  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation, name_is_scalar);
   // A formula calling a volatile function itself (not through a name) opens
   // with `PtgAttrSemi`, without which Excel does not recalculate it
   // (measured for cells and name bodies; the u16 is unused).

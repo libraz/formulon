@@ -1655,6 +1655,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   wb.set_unknown_package_rels(std::move(package_rels_or.value()));
   wb.set_unknown_workbook_rels(std::move(wb_rels_or.value().unknown_rels));
 
+  wb.apply_legacy_implicit_intersections();
+
   XlsbReadResult result{std::move(wb),      cells_read,          undecoded_formula_count, undecoded_defined_name_count,
                         dropped_part_count, dropped_record_count};
   return result;

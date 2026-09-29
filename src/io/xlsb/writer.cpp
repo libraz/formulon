@@ -1437,7 +1437,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
     auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table,
-                                    &downgraded_formula_count, dynamic_array.ifmd);
+                                    &downgraded_formula_count, dynamic_array.ifmd, legacy_name_shapes(workbook, i));
     if (!sheet_body_or) {
       return sheet_body_or.error();
     }

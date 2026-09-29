@@ -64,7 +64,8 @@ namespace xlsb {
 Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
                                 SstBuilder& sst, const std::vector<std::string>& sheet_names,
                                 const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                std::uint32_t* downgraded_formula_count = nullptr);
+                                std::uint32_t* downgraded_formula_count = nullptr,
+                                const NameIsScalar& name_is_scalar = NameIsScalar());
 
 /// Emits the anchor cell of a spilled dynamic-array formula, matching how
 /// Excel structures one: a `BrtFmla*` "shell" record (typed by
@@ -80,7 +81,8 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Ce
                                         std::uint32_t last_col, const std::vector<std::string>& sheet_names,
                                         const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count = nullptr,
-                                        bool* downgraded_to_literal = nullptr);
+                                        bool* downgraded_to_literal = nullptr,
+                                        const NameIsScalar& name_is_scalar = NameIsScalar());
 
 /// Emits a phantom cell of a spilled dynamic-array formula: a `BrtFmla*`
 /// "shell" record (typed by `cached`, the spilled value at this position)

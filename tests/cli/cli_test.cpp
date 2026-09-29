@@ -371,7 +371,7 @@ bool write_lossy_xlsx_fixture(const std::string& path) {
   if (fm_workbook_create(&wb) != 0) {
     return false;
   }
-  if (fm_workbook_set_formula(wb, 0, 0, 0, "=@A1:A10") != 0) {
+  if (fm_workbook_set_formula(wb, 0, 0, 0, "=T[C]") != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
@@ -960,7 +960,8 @@ TEST(FormulonCli, RecalcLossWarningsAreNonfatalAndNotSuppressedByQuiet) {
   EXPECT_TRUE(r.stdout_text.empty());
   EXPECT_NE(r.stderr_text.find("warning: XLSB write diagnostics"), std::string::npos);
   EXPECT_NE(r.stderr_text.find("downgraded_formula_count=1"), std::string::npos);
-  EXPECT_NE(r.stderr_text.find("deferred_feature_count=2"), std::string::npos);
+  // Only the autoFilter is deferred; the data validation is written to .xlsb.
+  EXPECT_NE(r.stderr_text.find("deferred_feature_count=1"), std::string::npos);
 }
 
 TEST(FormulonCli, RecalcReportsOoxmlReadDiagnosticsSeparatelyFromXlsbOnes) {

@@ -21,6 +21,7 @@
 #define FORMULON_IO_XLSB_PTG_WRITER_H_
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -78,10 +79,13 @@ enum class PtgRootClass : std::uint8_t {
 /// operand array class where the parameter takes arrays
 /// (`SUM(A1:A2*2)` -> 0x65); a legacy formula (`Cell::dynamic_array` clear)
 /// intersects it, value class (0x45), except under a forced-array parameter
-/// such as SUMPRODUCT's.
+/// such as SUMPRODUCT's. A legacy formula also stores no `@` where Excel's
+/// own implied one stands (`legacy_intersections`); a legacy CSE block
+/// (`kLegacyArray`) intersects nothing, so every written `@` is kept.
 enum class PtgEvaluation : std::uint8_t {
   kDynamicArray,
   kLegacy,
+  kLegacyArray,
 };
 
 /// Result of `encode_ptgs`: the main token stream plus the array-
@@ -156,6 +160,19 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
 /// when its result is one value, or reads it with implicit intersection.
 bool formula_uses_array_evaluation(const parser::AstNode& root);
 
+/// Whether a `NameRef` (or `[0]!Name`) node names a single value: a
+/// one-cell reference or a constant. An empty one takes every name as
+/// multi-cell.
+using NameIsScalar = std::function<bool(const parser::AstNode& name)>;
+
+/// The nodes of `root`, a cell formula without the dynamic-array mark, that
+/// Excel 365 shows behind an implicit-intersection `@` (its formula2 text):
+/// an area, a multi-cell name or an array-returning call where an area would
+/// be value class. A written `@` node is listed itself when it stands where
+/// Excel's own would, so a legacy writer can drop it; in document order.
+std::vector<const parser::AstNode*> legacy_intersections(const parser::AstNode& root,
+                                                         const NameIsScalar& name_is_scalar);
+
 /// Encodes the AST rooted at `node` into an `rgce` Ptg byte stream (plus
 /// its `rgcb` array-constant extra data, see `EncodedFormula`).
 /// `sheet_names` maps a sheet display name to its 0-based index.
@@ -181,11 +198,13 @@ bool formula_uses_array_evaluation(const parser::AstNode& root);
 ///
 /// Returns `kIoXlsbUnsupportedPtg` for any node kind outside the
 /// supported set (see header banner). The error context names the
-/// offending node kind.
+/// offending node kind. `name_is_scalar` feeds a legacy formula's
+/// `legacy_intersections`.
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base = std::nullopt,
-                                            PtgEvaluation evaluation = PtgEvaluation::kDynamicArray);
+                                            PtgEvaluation evaluation = PtgEvaluation::kDynamicArray,
+                                            const NameIsScalar& name_is_scalar = NameIsScalar());
 
 }  // namespace xlsb
 }  // namespace io

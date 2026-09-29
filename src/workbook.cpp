@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -24,6 +25,7 @@
 #include "eval/scheduler.h"
 #include "eval/spill_potential.h"
 #include "external_link.h"
+#include "io/dynamic_array_formula.h"
 #include "io/format_detect.h"
 #include "io/future_functions.h"
 #include "io/ooxml_writer.h"
@@ -1088,6 +1090,43 @@ Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint
   return Expected<void, Error>::Ok();
 }
 
+void Workbook::apply_legacy_implicit_intersections() {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  for (std::size_t sheet_index = 0; sheet_index < sheets_.size(); ++sheet_index) {
+    const io::xlsb::NameIsScalar name_is_scalar = io::legacy_name_shapes(*this, sheet_index);
+    Sheet& sheet = sheets_[sheet_index];
+    for (const CellAddress address : sheet.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U)) {
+      const Cell* cell = sheet.cell_at(address.row, address.col);
+      // A dynamic-array formula already says where it intersects, and a CSE
+      // block evaluates as an array.
+      if (cell == nullptr || cell->dynamic_array || sheet.spill_region_at_anchor(address.row, address.col) != nullptr) {
+        continue;
+      }
+      std::string text = cell->formula_text;
+      const std::size_t body_at = !text.empty() && text.front() == '=' ? 1U : 0U;
+      Arena arena;
+      const parser::AstNode* root = parser::parse_strict(std::string_view(text).substr(body_at), arena);
+      if (root == nullptr) {
+        continue;
+      }
+      std::vector<std::uint32_t> at;
+      for (const parser::AstNode* node : io::xlsb::legacy_intersections(*root, name_is_scalar)) {
+        if (node->kind() != parser::NodeKind::ImplicitIntersection) {
+          at.push_back(node->range().start);
+        }
+      }
+      if (at.empty()) {
+        continue;
+      }
+      std::sort(at.begin(), at.end(), std::greater<>());
+      for (const std::uint32_t offset : at) {
+        text.insert(body_at + offset, 1U, '@');
+      }
+      sheet.set_cell_formula_text(address.row, address.col, std::move(text));
+    }
+  }
+}
+
 Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                  std::string formula) {
   if (sheet_index >= sheets_.size()) {
@@ -1107,9 +1146,12 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   // shows, and lets LET / LAMBDA resolve their `_xlpm.`-prefixed
   // parameter names. The transform is a no-op on an already-canonical
   // formula, so hand-authored / test formulas are unaffected. The writer
-  // re-applies the prefixes on save for Excel readability.
+  // re-applies the prefixes on save for Excel readability. The stored
+  // `SINGLE(x)` / `ANCHORARRAY(x)` calls read back as the `@x` / `x#` the
+  // formula bar shows.
   {
-    std::string normalized = parser::strip_storage_prefixes(formula, &io::has_storage_prefix);
+    std::string normalized =
+        parser::spell_storage_operators(parser::strip_storage_prefixes(formula, &io::has_storage_prefix));
     if (normalized != formula) {
       formula = std::move(normalized);
     }

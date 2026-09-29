@@ -35,6 +35,7 @@
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/phonetic_pr.h"
 #include "io/stored_cell_error.h"
+#include "io/xlsb/ptg_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "parser/ast.h"
@@ -176,7 +177,8 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
 // <v>. Phantoms are suppressed by the caller via spill_region_covering;
 // this function trusts the caller and never re-checks.
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
-                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index) {
+                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
+                   const xlsb::NameIsScalar& name_is_scalar) {
   const bool has_formula = !cell.formula_text.empty();
   if (!CellIsEmitted(cell)) {
     return false;
@@ -287,7 +289,13 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // text unchanged.
     bool storage_emitted = false;
     if (formula_root != nullptr) {
-      const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name);
+      // A legacy formula stores no `@` where Excel's own implied one stands;
+      // a CSE block intersects nothing.
+      std::vector<const parser::AstNode*> implied_at;
+      if (!cell.dynamic_array && anchored == nullptr) {
+        implied_at = xlsb::legacy_intersections(*formula_root, name_is_scalar);
+      }
+      const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name, &implied_at);
       // Only re-serialise when a storage prefix was actually added (the
       // formula uses a future function or LET / LAMBDA). For a classic
       // formula the storage form equals the plain form, so the stored text
@@ -399,7 +407,7 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
 // so the override survives the round-trip.
 bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
                   std::string_view override_attrs, const SharedStrings* shared_strings,
-                  std::uint32_t dynamic_array_cm_index) {
+                  std::uint32_t dynamic_array_cm_index, const xlsb::NameIsScalar& name_is_scalar) {
   // Buffer the row body separately so we can tell whether anything ended
   // up inside the <row> wrapper before we commit to writing it.
   std::string body;
@@ -412,7 +420,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
       // anchor on load.
       continue;
     }
-    (void)AppendCellXml(body, sheet, row, col, row_cells[i], shared_strings, dynamic_array_cm_index);
+    (void)AppendCellXml(body, sheet, row, col, row_cells[i], shared_strings, dynamic_array_cm_index, name_is_scalar);
   }
   if (body.empty() && override_attrs.empty()) {
     return false;
@@ -440,7 +448,7 @@ bool CellIsEmitted(const Cell& cell) {
 }
 
 std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings,
-                              std::uint32_t dynamic_array_cm_index) {
+                              std::uint32_t dynamic_array_cm_index, const xlsb::NameIsScalar& name_is_scalar) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
@@ -484,7 +492,7 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
     }
     auto cells_it = rows_map.find(row);
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
-    AppendRowXml(body, sheet, row, row_cells, override_attrs, shared_strings, dynamic_array_cm_index);
+    AppendRowXml(body, sheet, row, row_cells, override_attrs, shared_strings, dynamic_array_cm_index, name_is_scalar);
   }
 
   if (body.empty()) {

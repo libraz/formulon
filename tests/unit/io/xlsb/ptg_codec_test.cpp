@@ -605,6 +605,25 @@ TEST(XlsbPtgCodec, WrittenAtStoresAsSingleCall) {
   }
 }
 
+// A legacy formula stores Excel's implied `@` as nothing; a CSE block keeps
+// every written one.
+TEST(XlsbPtgCodec, LegacyFormulaStoresNoImpliedAt) {
+  const NameTable names = {{"_xlfn.SINGLE", 2U}};
+  auto encode = [&names](const char* formula, PtgEvaluation evaluation) {
+    Arena arena;
+    parser::Parser p(formula, arena);
+    parser::AstNode* root = p.parse();
+    EXPECT_NE(root, nullptr) << formula;
+    auto encoded = encode_ptgs(*root, {}, {}, names, PtgRootClass::kValue, std::nullopt, evaluation);
+    EXPECT_TRUE(static_cast<bool>(encoded)) << formula;
+    return encoded ? encoded.value().rgce : std::vector<std::uint8_t>{};
+  };
+  EXPECT_EQ(encode("SUM(@A1:A2*2)", PtgEvaluation::kLegacy), encode("SUM(A1:A2*2)", PtgEvaluation::kLegacy));
+  EXPECT_EQ(encode("@A1:A2", PtgEvaluation::kLegacy), encode("A1:A2", PtgEvaluation::kLegacy));
+  EXPECT_NE(encode("SUM(@A1:A2)", PtgEvaluation::kLegacy), encode("SUM(A1:A2)", PtgEvaluation::kLegacy));
+  EXPECT_NE(encode("@A1:A2", PtgEvaluation::kLegacyArray), encode("A1:A2", PtgEvaluation::kLegacyArray));
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }

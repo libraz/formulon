@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "io/ooxml/emission_plan.h"
+#include "io/xlsb/ptg_writer.h"
 
 namespace formulon {
 class Sheet;
@@ -46,7 +47,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
                               const SharedStrings* shared_strings, std::size_t dxf_count,
-                              std::uint32_t dynamic_array_cm_index);
+                              std::uint32_t dynamic_array_cm_index, const xlsb::NameIsScalar& name_is_scalar);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, comments / VML, and

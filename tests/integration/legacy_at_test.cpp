@@ -28,6 +28,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -345,6 +346,255 @@ TEST(LegacyAt, AtPrefixBeforeBinaryOpTakesTopLeftOfComputedArray) {
   const Value c3 = StoredValue(wb, 0U, 2U, 2U);
   ASSERT_TRUE(c3.is_number()) << "kind=" << static_cast<int>(c3.kind());
   EXPECT_DOUBLE_EQ(c3.as_number(), 2.0);
+}
+
+// ---------------------------------------------------------------------------
+// A loaded legacy formula (no dynamic-array mark) reads as Excel 365 shows it
+// ---------------------------------------------------------------------------
+
+struct LegacyCase {
+  const char* stored;    // the formula as a legacy file stores it
+  const char* formula2;  // Excel 365's formula2 text for it
+  const char* value;     // Excel's value in column E of that row; "" when volatile
+};
+
+// Excel 365 (Mac, ja-JP) opening a legacy workbook: A1:B3 hold 1..3 per row,
+// Rng = A1:A2, Cel = A1, Val = 5, Fn = LAMBDA(x,x*2), each formula in E<row>
+// (backup/oracle_probe/dyn_flag/legacy61_formula2.txt, legacy_at/legacy61_values.txt).
+constexpr LegacyCase kLegacy61[] = {
+    {"=A1", "=A1", "1"},
+    {"=A1+1", "=A1+1", "2"},
+    {"=A1:A2", "=@A1:A2", "#VALUE!"},
+    {"=A1:A2*2", "=@A1:A2*2", "#VALUE!"},
+    {"=SUM(A1:A2)", "=SUM(A1:A2)", "3"},
+    {"=SUM(A1:A2*2)", "=SUM(@A1:A2*2)", "#VALUE!"},
+    {"=A1:A2", "=@A1:A2", "#VALUE!"},
+    {"=Sheet1!A1", "=Sheet1!A1", "1"},
+    {"=NOSUCH(1)", "=@NOSUCH(1)", "#NAME?"},
+    {"=NOSUCHREF", "=@NOSUCHREF", "#NAME?"},
+    {"=Fn(1)", "=@Fn(1)", "2"},
+    {"=A1(1)", "=@A1(1)", "#REF!"},
+    {"=A1:B2 B2:C3", "=@A1:B2 B2:C3", "2"},
+    {"=A1 B1", "=A1 B1", "#NULL!"},
+    {"=(A1:A2,B1:B2)", "=(A1:A2,B1:B2)", "#VALUE!"},
+    {"=INDEX(A1:A2,1)", "=INDEX(A1:A2,1)", "1"},
+    {"=INDEX(A1:B2,1,0)", "=@INDEX(A1:B2,1,0)", "#VALUE!"},
+    {"=OFFSET(A1,0,0)", "=OFFSET(A1,0,0)", "1"},
+    {"=OFFSET(A1,0,0,2)", "=@OFFSET(A1,0,0,2)", "#VALUE!"},
+    {"=INDIRECT(\"A1\")", "=@INDIRECT(\"A1\")", "1"},
+    {"=SEQUENCE(1)", "=@SEQUENCE(1)", "1"},
+    {"=SEQUENCE(2)", "=@SEQUENCE(2)", "1"},
+    {"=Rng", "=@Rng", "#VALUE!"},
+    {"=Cel", "=Cel", "1"},
+    {"=Val", "=Val", "5"},
+    {"=IF(A1>0,1,0)", "=IF(A1>0,1,0)", "1"},
+    {"=IF(A1:A2>0,1,0)", "=IF(@A1:A2>0,1,0)", "#VALUE!"},
+    {"=ROW()", "=ROW()", "28"},
+    {"=ROW(A1:A2)", "=@ROW(A1:A2)", "1"},
+    {"=ROWS(A1:A2)", "=ROWS(A1:A2)", "2"},
+    {"=VLOOKUP(1,A1:B2,2,0)", "=VLOOKUP(1,A1:B2,2,0)", "1"},
+    {"=TODAY()", "=TODAY()", ""},
+    {"=RAND()", "=RAND()", ""},
+    {"=TRANSPOSE(A1)", "=@TRANSPOSE(A1)", "1"},
+    {"=LET(x,1,x)", "=LET(x,1,x)", "1"},
+    {"=LAMBDA(x,x)(1)", "=@LAMBDA(x,x)(1)", "1"},
+    {"=CHOOSE(1,A1)", "=CHOOSE(1,A1)", "1"},
+    {"=CHOOSE(1,A1:A2)", "=@CHOOSE(1,A1:A2)", "#VALUE!"},
+    {"=IFERROR(A1,0)", "=IFERROR(A1,0)", "1"},
+    {"=N(A1)", "=N(A1)", "1"},
+    {"=ISNUMBER(A1:A2)", "=ISNUMBER(@A1:A2)", "FALSE"},
+    {"=ABS(A1:A2)", "=ABS(@A1:A2)", "#VALUE!"},
+    {"=ABS(A1)", "=ABS(A1)", "1"},
+    {"=MMULT(A1,A1)", "=@MMULT(A1,A1)", "1"},
+    {"=SUMPRODUCT(A1:A2)", "=SUMPRODUCT(A1:A2)", "3"},
+    {"=COUNTIF(A1:A2,1)", "=COUNTIF(A1:A2,1)", "1"},
+    {"=COUNTIF(A1:A2,A1:A2)", "=COUNTIF(A1:A2,@A1:A2)", "0"},
+    {"=MATCH(1,A1:A2,0)", "=MATCH(1,A1:A2,0)", "1"},
+    {"=A1&\"x\"", "=A1&\"x\"", "1x"},
+    {"=\"x\"", "=\"x\"", "x"},
+    {"=1", "=1", "1"},
+    {"=TEXT(A1,\"0\")", "=TEXT(A1,\"0\")", "1"},
+    {"=LEN(A1:A2)", "=LEN(@A1:A2)", "#VALUE!"},
+    {"=Rng+1", "=@Rng+1", "#VALUE!"},
+    {"=SUM(Rng)", "=SUM(Rng)", "3"},
+    {"=1/0", "=1/0", "#DIV/0!"},
+    {"=NA()", "=NA()", "#N/A"},
+    {"=XLOOKUP(1,A1:A2,B1:B2)", "=XLOOKUP(1,A1:A2,B1:B2)", "1"},
+    {"=UNIQUE(A1)", "=@UNIQUE(A1)", "1"},
+    {"=MAX(A1:A2)", "=MAX(A1:A2)", "2"},
+    {"=AND(A1:A2>0)", "=AND(@A1:A2>0)", "#VALUE!"},
+};
+
+// INDEX / OFFSET shapes on the same sheet with A5 = 0, A6 = 1
+// (backup/oracle_probe/legacy_at/legacy_extra_formula2.txt).
+constexpr LegacyCase kLegacyIndexOffset[] = {
+    {"=INDEX(A1:B2,0,1)", "=@INDEX(A1:B2,0,1)", "1"},
+    {"=INDEX(A1:B2,1)", "=INDEX(A1:B2,1)", "#REF!"},
+    {"=INDEX(A1:B2,1,1)", "=INDEX(A1:B2,1,1)", "1"},
+    {"=INDEX(A1:B2,,1)", "=@INDEX(A1:B2,,1)", "#VALUE!"},
+    {"=INDEX(A1:B2,A5,1)", "=@INDEX(A1:B2,A5,1)", "#VALUE!"},
+    {"=INDEX(A1:A2,A5)", "=@INDEX(A1:A2,A5)", "#VALUE!"},
+    {"=INDEX(A1:B2,1,A5)", "=@INDEX(A1:B2,1,A5)", "#VALUE!"},
+    {"=INDEX(A1:A2,0)", "=@INDEX(A1:A2,0)", "#VALUE!"},
+    {"=OFFSET(A1,0,0,1)", "=OFFSET(A1,0,0,1)", "1"},
+    {"=OFFSET(A1,0,0,1,1)", "=OFFSET(A1,0,0,1,1)", "1"},
+    {"=OFFSET(A1,0,0,2,1)", "=@OFFSET(A1,0,0,2,1)", "#VALUE!"},
+    {"=OFFSET(A1,0,0,1,2)", "=@OFFSET(A1,0,0,1,2)", "#VALUE!"},
+    {"=OFFSET(A1,0,0,A5)", "=@OFFSET(A1,0,0,A5)", "#REF!"},
+    {"=OFFSET(A1,0,0,,2)", "=@OFFSET(A1,0,0,,2)", "#VALUE!"},
+    {"=OFFSET(A1,0,0,A6,1)", "=@OFFSET(A1,0,0,A6,1)", "1"},
+    {"=OFFSET(A1:A2,0,0)", "=@OFFSET(A1:A2,0,0)", "#VALUE!"},
+    {"=OFFSET(A1,A5,0)", "=OFFSET(A1,A5,0)", "1"},
+    {"=INDEX(A1:B2,1,0)", "=@INDEX(A1:B2,1,0)", "#VALUE!"},
+    {"=SUM(OFFSET(A1,0,0,2))", "=SUM(OFFSET(A1,0,0,2))", "3"},
+    {"=INDEX(Rng,1)", "=INDEX(Rng,1)", "1"},
+    {"=OFFSET(Rng,0,0)", "=@OFFSET(Rng,0,0)", "#VALUE!"},
+    {"=INDEX((A1:A2,B1:B2),1,1,2)", "=INDEX((A1:A2,B1:B2),1,1,2)", "1"},
+};
+
+// The legacy workbook both tables were measured on, loaded with every
+// formula unmarked, as a reader leaves a file without dynamic-array marks.
+template <std::size_t N>
+Workbook LoadedLegacyWorkbook(const LegacyCase (&cases)[N], bool index_offset_inputs) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    s.set_cell_value(r, 0U, Value::number(r + 1.0));
+    s.set_cell_value(r, 1U, Value::number(r + 1.0));
+  }
+  if (index_offset_inputs) {
+    s.set_cell_value(4U, 0U, Value::number(0.0));
+    s.set_cell_value(5U, 0U, Value::number(1.0));
+  }
+  EXPECT_TRUE(static_cast<bool>(wb.set_defined_name("Rng", "Sheet1!$A$1:$A$2")));
+  EXPECT_TRUE(static_cast<bool>(wb.set_defined_name("Cel", "Sheet1!$A$1")));
+  EXPECT_TRUE(static_cast<bool>(wb.set_defined_name("Val", "5")));
+  EXPECT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "LAMBDA(x,x*2)")));
+  for (std::uint32_t i = 0; i < N; ++i) {
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, i, 4U, cases[i].stored)));
+    s.set_cell_dynamic_array(i, 4U, false);
+  }
+  wb.apply_legacy_implicit_intersections();
+  return wb;
+}
+
+std::string DisplayOf(const Value& v) {
+  if (v.is_number()) {
+    std::ostringstream out;
+    out << v.as_number();
+    return out.str();
+  }
+  if (v.is_boolean()) {
+    return v.as_boolean() ? "TRUE" : "FALSE";
+  }
+  if (v.is_error()) {
+    return display_name(v.as_error());
+  }
+  if (v.is_text()) {
+    return std::string(v.as_text());
+  }
+  return "";
+}
+
+// A row whose value the engine does not yet reproduce: Excel's value stays in
+// the table, and the row asserts the engine's current one until a fix lands.
+// Causes: (a) `@` over a reference a name or call returns takes the top-left
+// instead of intersecting the formula cell; (b) INDEX on a 2-D area with only
+// a row number is not #REF!; (c) OFFSET's empty height is not the reference's.
+struct KnownGap {
+  std::uint32_t row;    // 1-based row in column E
+  const char* current;  // the engine's value today
+  char cause;
+};
+
+constexpr KnownGap kLegacy61Gaps[] = {
+    {17, "1", 'a'}, {19, "1", 'a'}, {23, "1", 'a'}, {38, "1", 'a'}, {54, "2", 'a'},
+};
+
+constexpr KnownGap kLegacyIndexOffsetGaps[] = {
+    {2, "1", 'b'},  {4, "1", 'a'},  {5, "1", 'a'},      {6, "1", 'a'},  {7, "1", 'a'},  {8, "1", 'a'},
+    {11, "1", 'a'}, {12, "1", 'a'}, {14, "#REF!", 'c'}, {16, "1", 'a'}, {18, "1", 'a'},
+};
+
+template <std::size_t N, std::size_t G>
+void ExpectExcelsFormula2AndValues(const LegacyCase (&cases)[N], const KnownGap (&gaps)[G], bool index_offset_inputs) {
+  Workbook wb = LoadedLegacyWorkbook(cases, index_offset_inputs);
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t i = 0; i < N; ++i) {
+    const Cell* cell = wb.sheet(0).cell_at(i, 4U);
+    ASSERT_NE(cell, nullptr) << cases[i].stored;
+    EXPECT_EQ(cell->formula_text, cases[i].formula2) << "E" << (i + 1U);
+    if (*cases[i].value == '\0') {
+      continue;
+    }
+    const KnownGap* gap = nullptr;
+    for (const KnownGap& g : gaps) {
+      gap = g.row == i + 1U ? &g : gap;
+    }
+    if (gap != nullptr) {
+      EXPECT_EQ(DisplayOf(cell->cached_value), gap->current)
+          << "E" << (i + 1U) << " (" << gap->cause << ") now gives Excel's " << cases[i].value
+          << "; move it out of the known gaps";
+    } else {
+      EXPECT_EQ(DisplayOf(cell->cached_value), cases[i].value) << "E" << (i + 1U) << " " << cell->formula_text;
+    }
+  }
+}
+
+TEST(LegacyAt, LoadedLegacyFormulasReadAsExcelShowsThem) {
+  ExpectExcelsFormula2AndValues(kLegacy61, kLegacy61Gaps, false);
+}
+
+TEST(LegacyAt, LoadedLegacyIndexAndOffsetReadAsExcelShowsThem) {
+  ExpectExcelsFormula2AndValues(kLegacyIndexOffset, kLegacyIndexOffsetGaps, true);
+}
+
+TEST(LegacyAt, DynamicArrayAndCseFormulasKeepTheirText) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 4U, "=A1:A2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 4U, "=A1:A2*2")));
+  s.set_cell_dynamic_array(1U, 4U, false);
+  ASSERT_TRUE(s.commit_spill(1U, 4U, 2U, 1U, {Value::number(2.0), Value::number(4.0)}));
+  wb.apply_legacy_implicit_intersections();
+  EXPECT_EQ(s.cell_at(0U, 4U)->formula_text, "=A1:A2");
+  EXPECT_EQ(s.cell_at(1U, 4U)->formula_text, "=A1:A2*2");
+}
+
+TEST(LegacyAt, LegacyImpliedAtIsNotStored) {
+  // Excel stores the '@' it would add to a legacy formula as nothing, and a
+  // written one elsewhere as `_xlfn.SINGLE`.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 4U, "=SUM(@A1:A2*2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 4U, "=SUM(@A1:A2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rng", "Sheet1!$A$1:$A$2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Cel", "Sheet1!$A$1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 4U, "=@Rng")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 3U, 4U, "=@Cel")));
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    s.set_cell_dynamic_array(row, 4U, false);
+  }
+
+  auto bytes_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  const std::string sheet_xml(sheet_or.value().begin(), sheet_or.value().end());
+  EXPECT_NE(sheet_xml.find("<f>SUM(A1:A2*2)</f>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<f>SUM(_xlfn.SINGLE(A1:A2))</f>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<f>Rng</f>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<f>_xlfn.SINGLE(Cel)</f>"), std::string::npos) << sheet_xml;
+
+  auto result_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const char* const formulas[] = {"=SUM(@A1:A2*2)", "=SUM(@A1:A2)", "=@Rng", "=@Cel"};
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    EXPECT_EQ(result_or.value().workbook.sheet(0).cell_at(row, 4U)->formula_text, formulas[row]);
+  }
 }
 
 }  // namespace

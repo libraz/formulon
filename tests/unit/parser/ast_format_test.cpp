@@ -710,6 +710,26 @@ TEST(AstFormat, ChainedRangeOperatorIsAFormatterFixpoint) {
   }
 }
 
+TEST(AstFormat, StorageOperatorCallsRespellAsOperators) {
+  EXPECT_EQ(spell_storage_operators("=SINGLE(A1)"), "=@A1");
+  EXPECT_EQ(spell_storage_operators("=SINGLE(A1:A2)*2"), "=@A1:A2*2");
+  EXPECT_EQ(spell_storage_operators("=SINGLE(A1+1)"), "=@(A1+1)");
+  EXPECT_EQ(spell_storage_operators("=SINGLE((A1+1))"), "=@(A1+1)");
+  EXPECT_EQ(spell_storage_operators("=SUM( single(A1:A2) , 1)"), "=SUM( @A1:A2 , 1)");
+  EXPECT_EQ(spell_storage_operators("=ANCHORARRAY(A1)"), "=A1#");
+  EXPECT_EQ(spell_storage_operators("=SUM(ANCHORARRAY(B2))"), "=SUM(B2#)");
+  EXPECT_EQ(spell_storage_operators("=ANCHORARRAY(INDEX(A1:B2,1,1))"), "=INDEX(A1:B2,1,1)#");
+  EXPECT_EQ(spell_storage_operators("=SINGLE(ANCHORARRAY(A1))"), "=@A1#");
+  EXPECT_EQ(spell_storage_operators("SINGLE(SUM(A1:A5))"), "@SUM(A1:A5)");
+}
+
+TEST(AstFormat, StorageOperatorRespellingLeavesEverythingElse) {
+  EXPECT_EQ(spell_storage_operators("=\"SINGLE(A1)\"&A1"), "=\"SINGLE(A1)\"&A1");
+  EXPECT_EQ(spell_storage_operators("=SINGLE(A1,2)"), "=SINGLE(A1,2)");
+  EXPECT_EQ(spell_storage_operators("=SUM(A1:A2)"), "=SUM(A1:A2)");
+  EXPECT_EQ(spell_storage_operators("=SINGLE("), "=SINGLE(");
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

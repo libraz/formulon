@@ -8,6 +8,7 @@
 
 #include "parser/ast_format.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -15,8 +16,10 @@
 #include <vector>
 
 #include "parser/ast.h"
+#include "parser/parser.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
+#include "utils/arena.h"
 #include "utils/double_format.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -873,6 +876,7 @@ void CollectParens(const AstNode& node, int min_bp, std::unordered_set<const Ast
 struct StorageEmitter {
   StorageFunctionNameSpeller spell;
   std::vector<std::string_view> scope;  // in-scope LET binding / LAMBDA param names
+  const std::vector<const AstNode*>* omitted_at = nullptr;
 
   bool in_scope(std::string_view name) const {
     // Case-insensitive: LET/LAMBDA parameter names resolve case-insensitively
@@ -950,6 +954,10 @@ struct StorageEmitter {
         emit_binary_ref(node, out, min_bp, kBpIntersect, ' ');
         return;
       case NodeKind::ImplicitIntersection: {
+        if (omitted_at != nullptr && std::find(omitted_at->begin(), omitted_at->end(), &node) != omitted_at->end()) {
+          emit(node.as_implicit_intersection_operand(), out, min_bp);
+          return;
+        }
         // Excel stores a written `@` as a call to `_xlfn.SINGLE`; the
         // parentheses stay where the `@` form has them, as XLSB `PtgParen`s do.
         const bool wrap = kBpAtPrefix < min_bp;
@@ -1208,15 +1216,166 @@ std::string format_formula(const AstNode& node) {
   return out;
 }
 
-std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell) {
+std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell,
+                                   const std::vector<const AstNode*>* omitted_at) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
     return "#REF!";
   }
-  StorageEmitter emitter{spell, {}};
+  StorageEmitter emitter{spell, {}, omitted_at};
   std::string out;
   out.reserve(64);
   emitter.emit(node, out, 0);
   return out;
+}
+
+namespace {
+
+bool IsOperatorCall(const AstNode& node, std::string_view name) {
+  return node.kind() == NodeKind::Call && node.as_call_arity() == 1U &&
+         strings::case_insensitive_eq(node.as_call_name(), name);
+}
+
+bool IsStorageOperatorCall(const AstNode& node) {
+  return IsOperatorCall(node, "SINGLE") || IsOperatorCall(node, "ANCHORARRAY");
+}
+
+std::vector<const AstNode*> Children(const AstNode& node) {
+  std::vector<const AstNode*> out;
+  switch (node.kind()) {
+    case NodeKind::UnaryOp:
+      out.push_back(&node.as_unary_operand());
+      break;
+    case NodeKind::BinaryOp:
+      out = {&node.as_binary_lhs(), &node.as_binary_rhs()};
+      break;
+    case NodeKind::RangeOp:
+      out = {&node.as_range_lhs(), &node.as_range_rhs()};
+      break;
+    case NodeKind::IntersectOp:
+      out = {&node.as_intersect_lhs(), &node.as_intersect_rhs()};
+      break;
+    case NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        out.push_back(&node.as_union_child(i));
+      }
+      break;
+    case NodeKind::ImplicitIntersection:
+      out.push_back(&node.as_implicit_intersection_operand());
+      break;
+    case NodeKind::Call:
+      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+        out.push_back(&node.as_call_arg(i));
+      }
+      break;
+    case NodeKind::LambdaCall:
+      out.push_back(&node.as_lambda_call_callee());
+      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
+        out.push_back(&node.as_lambda_call_arg(i));
+      }
+      break;
+    case NodeKind::LetBinding:
+      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+        out.push_back(&node.as_let_binding_expr(i));
+      }
+      out.push_back(&node.as_let_body());
+      break;
+    case NodeKind::Lambda:
+      out.push_back(&node.as_lambda_body());
+      break;
+    case NodeKind::SpillRef:
+      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        out.push_back(anchor);
+      }
+      break;
+    default:
+      break;
+  }
+  return out;
+}
+
+bool HasStorageOperatorCall(const AstNode& node) {
+  if (IsStorageOperatorCall(node)) {
+    return true;
+  }
+  for (const AstNode* child : Children(node)) {
+    if (HasStorageOperatorCall(*child)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Rewrites `node`'s source text, copying every part without an operator call
+/// verbatim so spacing and spelling survive.
+class OperatorRespeller {
+ public:
+  explicit OperatorRespeller(std::string_view src) : src_(src) {}
+
+  std::string text(const AstNode& node, bool tight_parent) const {
+    const TextRange r = node.range();
+    if (!HasStorageOperatorCall(node)) {
+      return std::string(src_.substr(r.start, r.end - r.start));
+    }
+    if (IsStorageOperatorCall(node)) {
+      const AstNode& arg = node.as_call_arg(0);
+      if (IsOperatorCall(node, "SINGLE")) {
+        // `@` binds looser than `:`, ` ` and `%`, tighter than every infix operator.
+        const bool wrap_arg = arg.kind() == NodeKind::BinaryOp ||
+                              (arg.kind() == NodeKind::UnaryOp && arg.as_unary_op() == UnaryOp::Percent);
+        const std::string at = "@" + parenthesised(arg, wrap_arg);
+        return tight_parent ? "(" + at + ")" : at;
+      }
+      const bool bare = arg.kind() == NodeKind::Ref || arg.kind() == NodeKind::Ref3D ||
+                        arg.kind() == NodeKind::NameRef || arg.kind() == NodeKind::Call ||
+                        arg.kind() == NodeKind::ExternalRef;
+      return parenthesised(arg, !bare) + "#";
+    }
+    std::vector<const AstNode*> children = Children(node);
+    std::sort(children.begin(), children.end(),
+              [](const AstNode* a, const AstNode* b) { return a->range().start < b->range().start; });
+    const bool tight = node.kind() == NodeKind::RangeOp || node.kind() == NodeKind::IntersectOp ||
+                       node.kind() == NodeKind::SpillRef ||
+                       (node.kind() == NodeKind::UnaryOp && node.as_unary_op() == UnaryOp::Percent);
+    std::string out;
+    std::uint32_t at = r.start;
+    for (const AstNode* child : children) {
+      if (!HasStorageOperatorCall(*child)) {
+        continue;
+      }
+      out.append(src_.substr(at, child->range().start - at));
+      out.append(text(*child, tight));
+      at = child->range().end;
+    }
+    out.append(src_.substr(at, r.end - at));
+    return out;
+  }
+
+ private:
+  std::string parenthesised(const AstNode& node, bool wrap) const {
+    std::string inner = text(node, false);
+    return wrap && (inner.empty() || inner.front() != '(') ? "(" + inner + ")" : inner;
+  }
+
+  std::string_view src_;
+};
+
+}  // namespace
+
+std::string spell_storage_operators(std::string_view formula) {
+  const std::size_t body_at = !formula.empty() && formula.front() == '=' ? 1U : 0U;
+  const std::string_view body = formula.substr(body_at);
+  if (!strings::case_insensitive_contains(body, "SINGLE(") &&
+      !strings::case_insensitive_contains(body, "ANCHORARRAY(")) {
+    return std::string(formula);
+  }
+  Arena arena;
+  const AstNode* root = parse_strict(body, arena);
+  if (root == nullptr || !HasStorageOperatorCall(*root)) {
+    return std::string(formula);
+  }
+  const TextRange r = root->range();
+  const std::string respelled = OperatorRespeller(body).text(*root, false);
+  return std::string(formula.substr(0, body_at + r.start)) + respelled + std::string(body.substr(r.end));
 }
 
 }  // namespace parser

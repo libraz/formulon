@@ -1026,7 +1026,7 @@ TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
 TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnesZero) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=@A1:A10"), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=T[C]"), 0);
 
   auto& sheet = wb.handle->workbook().sheet(0);
   formulon::Hyperlink hyperlink;

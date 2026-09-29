@@ -240,19 +240,36 @@ TEST(StoragePrefixContainers, ModelHoldingJisSavesAsDbcsInBothContainers) {
   EXPECT_EQ(xlsb_a1->formula_text, "=DBCS(\"ABC\")");
 }
 
-TEST(StoragePrefixContainers, WrittenAtKeepsItsFormulaInXlsb) {
+TEST(StoragePrefixContainers, AtAndSpillOperatorsRoundTripInBothContainers) {
+  // Stored as `_xlfn.SINGLE(...)` / `_xlfn.ANCHORARRAY(...)` calls, read back
+  // as the operators the formula bar shows.
+  const std::vector<std::string> formulas = {"=@A1", "=SUM(@A1:A2)", "=@A1:A2", "=@SUM(A1:A5)", "=SUM(A1#)", "=A1#+1"};
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("F"));
-  s.set_cell_formula(0U, 1U, "=@A1:A2");
+  for (std::uint32_t i = 0; i < formulas.size(); ++i) {
+    s.set_cell_formula(i, 1U, formulas[i]);
+  }
+
+  auto xlsx_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(xlsx_or)) << xlsx_or.error().message;
+  auto from_xlsx = read_ooxml(test::span_of(xlsx_or.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
 
   auto xlsb_or = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message << " | " << xlsb_or.error().context;
   EXPECT_EQ(xlsb_or.value().diagnostics.downgraded_formula_count, 0U);
   auto from_xlsb = xlsb::read_xlsb(test::span_of(xlsb_or.value().bytes));
   ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
-  const Cell* b1 = from_xlsb.value().workbook.sheet(0).cell_at(0U, 1U);
-  ASSERT_NE(b1, nullptr);
-  EXPECT_FALSE(b1->formula_text.empty());
+  EXPECT_EQ(from_xlsb.value().undecoded_formula_count, 0U);
+
+  for (std::uint32_t i = 0; i < formulas.size(); ++i) {
+    const Cell* xlsx_cell = from_xlsx.value().workbook.sheet(0).cell_at(i, 1U);
+    const Cell* xlsb_cell = from_xlsb.value().workbook.sheet(0).cell_at(i, 1U);
+    ASSERT_NE(xlsx_cell, nullptr) << formulas[i];
+    ASSERT_NE(xlsb_cell, nullptr) << formulas[i];
+    EXPECT_EQ(xlsx_cell->formula_text, formulas[i]);
+    EXPECT_EQ(xlsb_cell->formula_text, formulas[i]);
+  }
 }
 
 TEST(StoragePrefixContainers, IsoCeilingStaysBareOnOoxmlSave) {

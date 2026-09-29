@@ -314,6 +314,18 @@ void Sheet::set_cell_dynamic_array(std::uint32_t row, std::uint32_t col, bool dy
   }
 }
 
+void Sheet::set_cell_formula_text(std::uint32_t row, std::uint32_t col, std::string formula) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const auto row_it = rows_.find(row);
+  if (row_it == rows_.end()) {
+    return;
+  }
+  Cell* cell = row_it->second.find(col);
+  if (cell != nullptr && !cell->formula_text.empty() && !formula.empty()) {
+    cell->formula_text = std::move(formula);
+  }
+}
+
 void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v) {
   // Bounds checks are advisory: callers above this layer (parser, OOXML
   // reader, recalc engine) own coordinate validation. A debug assert

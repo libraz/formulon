@@ -14,6 +14,8 @@
 #include <cstdint>
 #include <string>
 
+#include "io/xlsb/ptg_writer.h"
+
 namespace formulon {
 class Sheet;
 struct Cell;
@@ -39,9 +41,11 @@ bool CellIsEmitted(const Cell& cell);
 /// `dynamic_array_cm_index` is the 1-based `<cellMetadata>/<bk>` index a
 /// spill anchor's `<c cm="N">` names; 0 (the default) omits `cm=`
 /// entirely, which is correct whenever the saved package carries no
-/// XLDAPR-typed `xl/metadata.xml` for it to reference.
+/// XLDAPR-typed `xl/metadata.xml` for it to reference. `name_is_scalar`
+/// feeds a legacy formula's `xlsb::legacy_intersections`.
 std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
-                              std::uint32_t dynamic_array_cm_index = 0U);
+                              std::uint32_t dynamic_array_cm_index = 0U,
+                              const xlsb::NameIsScalar& name_is_scalar = xlsb::NameIsScalar());
 
 }  // namespace io
 }  // namespace formulon

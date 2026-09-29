@@ -332,6 +332,12 @@ class Workbook {
   Expected<void, Error> set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                          std::string formula);
 
+  /// Spells every loaded formula without the dynamic-array mark as Excel 365
+  /// shows it, with an `@` wherever the legacy formula intersects implicitly
+  /// (`io::xlsb::legacy_intersections`), so it evaluates as Excel does. Run by
+  /// each reader once cells, marks and defined names are in.
+  void apply_legacy_implicit_intersections();
+
   /// Dirties every existing dependent of `(sheet_index, row, col)` via the
   /// engine's ordinary dep-graph edges, without touching the cell's own
   /// value, formula, or registration. Out-of-range coordinates are a no-op.

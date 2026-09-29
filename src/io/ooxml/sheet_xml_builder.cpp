@@ -740,11 +740,11 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
                               const SharedStrings* shared_strings, std::size_t dxf_count,
-                              std::uint32_t dynamic_array_cm_index) {
+                              std::uint32_t dynamic_array_cm_index, const xlsb::NameIsScalar& name_is_scalar) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml = BuildSheetFormatPrXml(sheet.format_defaults());
   const std::string cols_xml = BuildColsXml(sheet.layout());
-  const std::string sheet_data = BuildSheetDataXml(sheet, shared_strings, dynamic_array_cm_index);
+  const std::string sheet_data = BuildSheetDataXml(sheet, shared_strings, dynamic_array_cm_index, name_is_scalar);
   // Conditional-format blocks live between <sheetData> and <tableParts>
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.

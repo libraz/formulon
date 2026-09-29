@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/xlsb/ptg_writer.h"
 #include "sheet.h"
 #include "workbook.h"
 
@@ -41,6 +42,11 @@ inline std::uint64_t dynamic_array_cell_key(std::uint32_t row, std::uint32_t col
 /// marked it (`marked` holds `dynamic_array_cell_key`s), replacing what
 /// formula entry inferred: a loaded formula keeps the meaning the file gives.
 void apply_loaded_dynamic_array_marks(Sheet& sheet, const std::unordered_set<std::uint64_t>& marked);
+
+/// Which names a formula on sheet `sheet_index` of `wb` reads as one value
+/// (`xlsb::legacy_intersections`): a defined name, sheet-local before
+/// workbook-wide, whose body is a one-cell reference or a constant.
+xlsb::NameIsScalar legacy_name_shapes(const Workbook& wb, std::size_t sheet_index);
 
 }  // namespace io
 }  // namespace formulon

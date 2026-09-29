@@ -62,11 +62,13 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet);
 /// no identifiable dynamic-array entry — or that no part ships at all — and
 /// every anchor is then written as a plain `BrtArrFmla` with no `BrtCellMeta`
 /// record, because a dangling index makes Excel repair the file.
+/// `name_is_scalar` feeds a legacy formula's `legacy_intersections`.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBuilder& sst,
                                                       const std::vector<std::string>& sheet_names,
                                                       const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                                       std::uint32_t* downgraded_formula_count = nullptr,
-                                                      std::uint32_t dynamic_array_ifmd = 0);
+                                                      std::uint32_t dynamic_array_ifmd = 0,
+                                                      const NameIsScalar& name_is_scalar = NameIsScalar());
 
 }  // namespace xlsb
 }  // namespace io

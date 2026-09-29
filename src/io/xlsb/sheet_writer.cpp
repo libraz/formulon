@@ -545,7 +545,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
                                                       const std::vector<std::string>& sheet_names,
                                                       const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                                       std::uint32_t* downgraded_formula_count,
-                                                      std::uint32_t dynamic_array_ifmd) {
+                                                      std::uint32_t dynamic_array_ifmd,
+                                                      const NameIsScalar& name_is_scalar) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -702,7 +703,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
           }
           if (auto r =
                   emit_array_anchor(body, *cell, anchor_value, col, row, last_row, last_col, sheet_names, sheet_ranges,
-                                    name_table, sst, downgraded_formula_count, &downgraded_to_literal);
+                                    name_table, sst, downgraded_formula_count, &downgraded_to_literal, name_is_scalar);
               !r) {
             return r.error();
           }
@@ -710,7 +711,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
             downgraded_array_anchors.insert(anchor_key(row, col));
           }
         } else if (auto r = emit_cell(body, *cell, row, col, sst, sheet_names, sheet_ranges, name_table,
-                                      downgraded_formula_count);
+                                      downgraded_formula_count, name_is_scalar);
                    !r) {
           return r.error();
         }

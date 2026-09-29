@@ -59,9 +59,11 @@ std::uint8_t ErrorWireCode(ErrorCode e) {
 /// consumes the body after it. Returns the encoded bytes, or an Error
 /// when the formula cannot be parsed or lowered to the supported Ptg
 /// token set. The caller surfaces that error through `write_xlsb` rather
-/// than silently dropping the formula.
+/// than silently dropping the formula. `array_formula` marks the tokens of
+/// an array block's `BrtArrFmla`.
 Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::vector<std::string>& sheet_names,
-                                                  const SheetRangeTable& sheet_ranges, const NameTable& name_table) {
+                                                  const SheetRangeTable& sheet_ranges, const NameTable& name_table,
+                                                  bool array_formula, const NameIsScalar& name_is_scalar) {
   std::string_view body(cell.formula_text);
   if (!body.empty() && body.front() == '=') {
     body.remove_prefix(1);
@@ -75,7 +77,10 @@ Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::v
   }
   // Cell formulas: a bare reference/range as the whole formula promotes.
   return encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kValue, std::nullopt,
-                     cell.dynamic_array ? PtgEvaluation::kDynamicArray : PtgEvaluation::kLegacy);
+                     cell.dynamic_array ? PtgEvaluation::kDynamicArray
+                     : array_formula    ? PtgEvaluation::kLegacyArray
+                                        : PtgEvaluation::kLegacy,
+                     name_is_scalar);
 }
 
 /// Emits a `BrtFmla*` record matching `cached`'s kind, with the encoded
@@ -245,11 +250,11 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
 Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
                                 SstBuilder& sst, const std::vector<std::string>& sheet_names,
                                 const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                std::uint32_t* downgraded_formula_count) {
+                                std::uint32_t* downgraded_formula_count, const NameIsScalar& name_is_scalar) {
   // Formula cells take precedence: even if the cached_value is blank, we
   // still emit a BrtFmla* record so the formula round-trips.
   if (!cell.formula_text.empty()) {
-    auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table);
+    auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, false, name_is_scalar);
     if (!formula_or) {
       StructuredLog("xlsb.writer.formula_downgraded")
           .field("row", static_cast<std::int64_t>(row))
@@ -275,8 +280,8 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Ce
                                         std::uint32_t last_col, const std::vector<std::string>& sheet_names,
                                         const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count,
-                                        bool* downgraded_to_literal) {
-  auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table);
+                                        bool* downgraded_to_literal, const NameIsScalar& name_is_scalar) {
+  auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, true, name_is_scalar);
   if (!formula_or) {
     StructuredLog("xlsb.writer.array_formula_downgraded")
         .field("row", static_cast<std::int64_t>(anchor_row))
