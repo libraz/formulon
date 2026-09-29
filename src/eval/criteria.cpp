@@ -394,6 +394,8 @@ ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
     rhs_text = other.rhs_text;
     rebind_rhs_text();
+    rhs_fold_cached_ = false;
+    rhs_fold_cache_.clear();
   }
   return *this;
 }
@@ -414,8 +416,23 @@ ParsedCriterion& ParsedCriterion::operator=(ParsedCriterion&& other) noexcept {
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
     rhs_text = other.rhs_text;
     rebind_rhs_text();
+    rhs_fold_cached_ = false;
+    rhs_fold_cache_.clear();
   }
   return *this;
+}
+
+const std::string& ParsedCriterion::cached_folded_rhs(ExcelProfile profile, bool unescape_first) const {
+  if (rhs_fold_cached_ && rhs_fold_cache_unescape_first_ == unescape_first &&
+      same_profile(rhs_fold_cache_profile_, profile)) {
+    return rhs_fold_cache_;
+  }
+  const std::string folded_input = unescape_first ? unescape_literal(rhs_text) : std::string(rhs_text);
+  rhs_fold_cache_ = fold_criteria_text_for_profile(folded_input, profile);
+  rhs_fold_cache_unescape_first_ = unescape_first;
+  rhs_fold_cache_profile_ = profile;
+  rhs_fold_cached_ = true;
+  return rhs_fold_cache_;
 }
 
 ParsedCriterion parse_criterion(const Value& criterion) {
@@ -609,7 +626,6 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
     return false;
   }
   const std::string& cell_text = cell_text_exp.value();
-  const std::string_view rhs = c.rhs_text;
 
   // Mac Excel ja-JP folds Japanese variants (hiragana<->katakana,
   // half<->full-width katakana, full<->half-width ASCII, ideographic
@@ -639,11 +655,10 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
         if (cell.kind() != ValueKind::Text) {
           return false;
         }
-        const std::string rhs_folded = fold_criteria_text_for_profile(rhs, profile);
+        const std::string& rhs_folded = c.cached_folded_rhs(profile, /*unescape_first=*/false);
         return wildcard_match(rhs_folded, cell_folded);
       }
-      const std::string unescaped = unescape_literal(rhs);
-      const std::string literal = fold_criteria_text_for_profile(unescaped, profile);
+      const std::string& literal = c.cached_folded_rhs(profile, /*unescape_first=*/true);
       if (c.prefix_match) {
         // D-function "begins-with" semantics: cell text starts with
         // the literal (case-insensitive ASCII). Per Excel docs, the
@@ -663,11 +678,10 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
         if (cell.kind() != ValueKind::Text) {
           return true;
         }
-        const std::string rhs_folded = fold_criteria_text_for_profile(rhs, profile);
+        const std::string& rhs_folded = c.cached_folded_rhs(profile, /*unescape_first=*/false);
         return !wildcard_match(rhs_folded, cell_folded);
       }
-      const std::string unescaped = unescape_literal(rhs);
-      const std::string literal = fold_criteria_text_for_profile(unescaped, profile);
+      const std::string& literal = c.cached_folded_rhs(profile, /*unescape_first=*/true);
       if (c.prefix_match) {
         // D-function "does-NOT-begin-with" semantics: negation of the
         // prefix test. Reachable only via `parse_criterion_dfunc`, and
@@ -697,7 +711,7 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
       if (cell.kind() != ValueKind::Text) {
         return false;
       }
-      const std::string rhs_folded = fold_criteria_text_for_profile(rhs, profile);
+      const std::string& rhs_folded = c.cached_folded_rhs(profile, /*unescape_first=*/false);
       const int cmp = strings::case_insensitive_compare(cell_folded, rhs_folded);
       return apply_ordering(c.op, cmp);
     }

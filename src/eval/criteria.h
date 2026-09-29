@@ -125,6 +125,19 @@ struct ParsedCriterion {
   ParsedCriterion& operator=(ParsedCriterion&& other) noexcept;
   ~ParsedCriterion() = default;
 
+  /// Lazily-computed, profile-folded projection of `rhs_text`, for
+  /// `matches_text`'s text-comparison branches (`fold_criteria_text_for_
+  /// profile`, preceded by `unescape_literal` for a non-wildcard Eq/NotEq
+  /// literal). `rhs_text`, `op`, and `has_wildcard` are fixed once a
+  /// criterion is parsed, so a per-cell aggregator loop that matches the
+  /// same criterion against a whole range recomputes an unchanging string
+  /// on every cell; this cache makes that computation happen at most once
+  /// per (criterion, profile, unescape_first) triple. `unescape_first`
+  /// distinguishes the two RHS-side computations `matches_text` needs (at
+  /// most one of which is ever reached for a given criterion, since it is
+  /// selected by `op`/`has_wildcard`, themselves fixed).
+  const std::string& cached_folded_rhs(ExcelProfile profile, bool unescape_first) const;
+
  private:
   /// Owns the re-buffered RHS when the parser needed to strip a comparator
   /// prefix from an interned `Value::text` view. External callers should
@@ -136,6 +149,11 @@ struct ParsedCriterion {
   bool rhs_text_owns_storage_ = false;
 
   void rebind_rhs_text() noexcept;
+
+  mutable bool rhs_fold_cached_ = false;
+  mutable bool rhs_fold_cache_unescape_first_ = false;
+  mutable ExcelProfile rhs_fold_cache_profile_{};
+  mutable std::string rhs_fold_cache_;
 
   friend ParsedCriterion parse_criterion(const Value&);
   friend ParsedCriterion parse_criterion_dfunc(const Value&);

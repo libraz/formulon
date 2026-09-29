@@ -587,6 +587,12 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     }
     return 0;
   };
+  // Hoisted out of the scan loop below: `lookup_value` and `profile` are
+  // loop-invariant, so the text-mode branch normalises the lookup side
+  // once rather than once per scanned cell.
+  const std::string lookup_key =
+      lookup_value.is_text() ? lookup_text_cmp_key(lookup_value.as_text(), profile) : std::string();
+
   std::size_t best = SIZE_MAX;
   for (std::size_t i = 0; i < n; ++i) {
     const Value& cell = cell_at(i);
@@ -596,8 +602,7 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
       // Normalise (see exact-mode branch above) before the ASCII
       // case-insensitive compare so kana / half-width voicing variants order
       // together.
-      cmp = strings::case_insensitive_compare(lookup_text_cmp_key(cell.as_text(), profile),
-                                              lookup_text_cmp_key(lookup_value.as_text(), profile));
+      cmp = strings::case_insensitive_compare(lookup_text_cmp_key(cell.as_text(), profile), lookup_key);
       comparable = true;
     } else if ((lookup_value.is_number() || lookup_value.is_blank()) && cell.is_number()) {
       // Blank cells in the scanned axis are NOT treated as numeric 0 in
@@ -1451,10 +1456,13 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
     }
     return 0;
   };
-  auto cmp_text = [&](std::string_view a, std::string_view b) -> int {
+  // `lookup` and `profile` are loop-invariant; normalise the lookup side
+  // once rather than once per scanned cell (see classic.cpp::lookup_scan).
+  const std::string lookup_key = lookup.is_text() ? lookup_text_cmp_key(lookup.as_text(), profile) : std::string();
+  auto cmp_text = [&](std::string_view a) -> int {
     // Normalise (see classic.cpp::lookup_scan / lookup_text_cmp_key) so kana /
     // half-width voicing variants order together in MATCH approximate mode.
-    return strings::case_insensitive_compare(lookup_text_cmp_key(a, profile), lookup_text_cmp_key(b, profile));
+    return strings::case_insensitive_compare(lookup_text_cmp_key(a, profile), lookup_key);
   };
 
   // `last_valid_pos` is the running best position under the ordering rule.
@@ -1466,7 +1474,7 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
     int cmp = 0;  // sign of (cell - lookup)
     bool comparable = false;
     if (lookup.is_text() && cell.is_text()) {
-      cmp = cmp_text(cell.as_text(), lookup.as_text());
+      cmp = cmp_text(cell.as_text());
       comparable = true;
     } else if ((lookup.is_number() || lookup.is_blank()) && cell.is_number()) {
       // Blank cells in the scanned axis are NOT treated as numeric 0 in MATCH
