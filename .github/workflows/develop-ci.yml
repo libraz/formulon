@@ -61,7 +61,7 @@ jobs:
       # (.mjs / .d.ts) via `npx`, so uv and Node must be on PATH alongside
       # clang-format.
       - name: Set up uv (ruff)
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.2.0
 
       - name: Set up Node.js (biome)
         uses: actions/setup-node@v7
