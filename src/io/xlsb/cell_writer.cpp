@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/stored_cell_error.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -46,14 +47,11 @@ void EmitCellHeader(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint
   emit_u8(dst, 0);  // fPhShow
 }
 
-/// Returns the OOXML wire code for `e`. Mirrors the inverse mapping
-/// `read_xlsb` performs in `BrtCellError`.
+/// Returns the `BErr` byte a cell value of `e` is stored as (see
+/// `io::stored_cell_error`). Mirrors the inverse mapping `read_xlsb`
+/// performs in `BrtCellError`.
 std::uint8_t ErrorWireCode(ErrorCode e) {
-  const std::int32_t code = ooxml_code(e);
-  if (code < 0 || code > 0xFF) {
-    return 0x09;  // `#UNKNOWN!` wire code
-  }
-  return static_cast<std::uint8_t>(code);
+  return static_cast<std::uint8_t>(ooxml_code(stored_cell_error(e)));
 }
 
 /// Parses `cell.formula_text` into an AST and encodes it as a Ptg

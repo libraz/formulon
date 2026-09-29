@@ -1311,6 +1311,36 @@ TEST(XlsbWriter, FutureFunctionCallRegistersHiddenName) {
   EXPECT_TRUE(ContainsUtf16Le(workbook_or.value(), "_xlfn.XLOOKUP"));
 }
 
+// Measured on backup/oracle_probe/dyn_err: Excel stores a cached #SPILL! or
+// #CALC! as #VALUE! (the real error lives in a rich value this writer does
+// not produce) and #GETTING_DATA as #N/A. A newer error byte in a cell made
+// Excel refuse the whole file.
+TEST(XlsbWriter, NewerErrorsAreStoredAsTheirLegacyFallback) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.sheet(wb.add_sheet("E"));
+  const ErrorCode errors[] = {ErrorCode::Spill, ErrorCode::Calc, ErrorCode::GettingData, ErrorCode::Div0};
+  const ErrorCode stored[] = {ErrorCode::Value, ErrorCode::Value, ErrorCode::NA, ErrorCode::Div0};
+  for (std::uint32_t row = 0; row < std::size(errors); ++row) {
+    s.set_cell_formula(row, 0U, "=1/0");
+    s.set_cell_cached_value(row, 0U, Value::error(errors[row]));
+    s.set_cell_value(row, 1U, Value::error(errors[row]));
+  }
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Sheet& back = read_or.value().workbook.sheet(0);
+  for (std::uint32_t row = 0; row < std::size(errors); ++row) {
+    for (std::uint32_t col = 0; col < 2U; ++col) {
+      const Cell* c = back.cell_at(row, col);
+      ASSERT_NE(c, nullptr);
+      const Value& v = c->cached_value;
+      EXPECT_EQ(v, Value::error(stored[row])) << "row " << row << " col " << col;
+    }
+  }
+}
+
 TEST(XlsbWriter, CubeFunctionsEncodeWithTheirFunctionIds) {
   // Excel 365 saves `CUBEVALUE("c","m")` as two strings and
   // `PtgFuncVar(2, 380)`, not through a hidden `_xlfn.` name.
