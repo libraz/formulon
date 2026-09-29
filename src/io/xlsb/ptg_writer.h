@@ -91,8 +91,9 @@ struct EncodedFormula {
 ///     (`io/future_functions.h`: XLOOKUP, TEXTJOIN, CONCAT, IFS,
 ///     SEQUENCE, ...), which Excel stores as a hidden `_xlfn.*` name
 ///     rather than a function id.
-///   * A `NameRef` node (an ordinary defined-name reference, e.g.
-///     `Rate`).
+///   * An unqualified `NameRef` (an ordinary defined-name reference, e.g.
+///     `Rate`) or a self-book `[0]!Rate`. A sheet-qualified one resolves
+///     through a scoped key instead (`collect_sheet_qualified_names`).
 ///
 ///   * The hidden `_xlfn.LET` / `_xlfn.LAMBDA` callee and one
 ///     `_xlpm.<param>` placeholder per LET binding or LAMBDA parameter.
@@ -103,11 +104,18 @@ struct EncodedFormula {
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
                        std::unordered_set<std::string>& seen);
 
-/// `collect_ptg_names` without qualified references (`Sheet2!Rate`, `[0]!Rate`)
-/// and with every callee that has no function id (`Fn(3)`): every name the
-/// formula resolves from its own scope.
+/// `collect_ptg_names` without the self-book `[0]!Rate` and with every
+/// callee that has no function id (`Fn(3)`): every name the formula
+/// resolves from its own scope.
 void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
                                   std::unordered_set<std::string>& seen);
+
+/// Appends every distinct sheet-qualified defined-name reference in `node`
+/// (`Sheet2!Rate`, `Sheet2!Fn(3)`) as `(sheet, name)`, in encounter order.
+/// Excel stores an undefined one against an empty `BrtName` stub scoped to
+/// that sheet, which the writer has to emit.
+void collect_sheet_qualified_names(const parser::AstNode& node,
+                                   std::vector<std::pair<std::string, std::string>>& qualified);
 
 /// Walks `node`'s AST appending, in encounter order, every distinct
 /// `(itabFirst, itabLast)` sheet-range pair a qualified reference will

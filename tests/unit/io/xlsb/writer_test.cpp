@@ -16,6 +16,8 @@
 
 #include "cell.h"
 #include "defined_name.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/reader.h"
@@ -1194,6 +1196,47 @@ TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
   const Cell* c = read_or.value().workbook.sheet(0).cell_at(2U, 3U);
   ASSERT_NE(c, nullptr);
   EXPECT_EQ(c->formula_text, "=A1+B2*3");
+}
+
+// Measured on backup/oracle_probe/qualified_xlsb/qualified.xlsb: Excel saves
+// `S!Name` that neither `S` nor the workbook defines against an empty stub
+// scoped to `S`, never against another sheet's definition, so `Sheet2!SVal`
+// stays #NAME? while only Sheet1 defines SVal.
+TEST(XlsbWriter, SheetQualifiedNamesKeepTheirQualifierAndScope) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  DefinedName dn;
+  dn.name = "SVal";
+  dn.formula = "9";
+  dn.local_sheet_id = 0;
+  wb.set_defined_names({dn});
+  struct Case {
+    const char* formula;
+    Value want;
+  };
+  const Case cases[] = {
+      {"=Sheet2!SVal", Value::error(ErrorCode::Name)},      {"=Sheet1!SVal", Value::number(9.0)},
+      {"=Sheet1!NOSUCH(1)", Value::error(ErrorCode::Name)}, {"=Sheet2!NOSUCH(1)", Value::error(ErrorCode::Name)},
+      {"=NOSUCH(1)", Value::error(ErrorCode::Name)},        {"=Sheet1!A1(1)", Value::error(ErrorCode::Ref)},
+  };
+  for (std::uint32_t row = 0; row < std::size(cases); ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row, 1U, cases[row].formula)));
+  }
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  Workbook& back = read_or.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(back.recalc(eval::default_registry())));
+
+  for (std::uint32_t row = 0; row < std::size(cases); ++row) {
+    const Cell* c = back.sheet(0).cell_at(row, 1U);
+    ASSERT_NE(c, nullptr) << cases[row].formula;
+    EXPECT_EQ(c->formula_text, cases[row].formula);
+    EXPECT_EQ(c->cached_value, cases[row].want) << cases[row].formula;
+  }
 }
 
 TEST(XlsbWriter, DefinedNameWithFutureFunctionRoundTrips) {

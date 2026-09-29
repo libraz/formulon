@@ -122,7 +122,8 @@ TEST(XlsbPtgCodec, AttrChooseWithMultipleBranchesSkipsU16JumpOffsets) {
 // A `BrtName` record local to a sheet other than the formula's own is only
 // reachable as `Sheet!Name`; one local to the host sheet, or workbook
 // scoped, stays unqualified. `PtgNameX` through this workbook's own
-// ExternSheet entry names the same records.
+// ExternSheet entry is the qualified spelling, so it names a local record
+// with its sheet even on that sheet (Excel stores `Sheet1!Fn` on Sheet1 so).
 TEST(XlsbPtgCodec, NameLocalToAnotherSheetDecodesSheetQualified) {
   const std::vector<std::string> sheets = {"Sheet1", "My Sheet"};
   const std::vector<XlsbName> names = {XlsbName{1, "Local", false}, XlsbName{0, "Own", false},
@@ -139,6 +140,8 @@ TEST(XlsbPtgCodec, NameLocalToAnotherSheetDecodesSheetQualified) {
       {{0x23, 0x02, 0x00, 0x00, 0x00}, "Own"},
       {{0x23, 0x03, 0x00, 0x00, 0x00}, "Global"},
       {{0x39, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}, "'My Sheet'!Local"},
+      {{0x39, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}, "Sheet1!Own"},
+      {{0x39, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00}, "[0]!Global"},
   };
   for (const Case& c : cases) {
     Arena arena;
@@ -185,6 +188,44 @@ TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
     Arena dec_arena;
     auto decoded = decode_ptgs(ByteSpan{encoded.value().rgce.data(), encoded.value().rgce.size()}, {}, dec_arena,
                                sheets, names, decode_ranges, {}, /*host_itab=*/0);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
+    EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
+  }
+}
+
+// A cell reference invoked as a callee is the reference-class `PtgRef` /
+// `PtgRef3d`, the arguments and `PtgFuncVar(255)`; bytes as Excel 365
+// saved `A1(1)` and `Sheet1!LOG10(100)`.
+TEST(XlsbPtgCodec, CellReferenceCalleeMatchesExcelBytes) {
+  const std::vector<std::string> sheets = {"Sheet1"};
+  struct Case {
+    const char* formula;
+    std::vector<std::uint8_t> want;
+  };
+  const Case cases[] = {
+      {"A1(1)", {0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x1E, 0x01, 0x00, 0x42, 0x02, 0xFF, 0x00}},
+      {"Sheet1!LOG10(100)",
+       {0x3A, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x3C, 0xE1, 0x1E, 0x64, 0x00, 0x42, 0x02, 0xFF, 0x00}},
+  };
+  for (const Case& c : cases) {
+    Arena arena;
+    parser::Parser p(c.formula, arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << c.formula;
+    SheetRangeTable ranges;
+    std::unordered_set<std::uint64_t> seen;
+    collect_ptg_sheet_ranges(*root, sheets, ranges, seen);
+    auto encoded = encode_ptgs(*root, sheets, ranges, {}, PtgRootClass::kValue);
+    ASSERT_TRUE(static_cast<bool>(encoded)) << c.formula << " | " << (encoded ? "" : encoded.error().message);
+    EXPECT_EQ(encoded.value().rgce, c.want) << c.formula;
+
+    std::vector<XlsbSheetRange> decode_ranges;
+    for (const auto& [first, last] : ranges) {
+      decode_ranges.push_back(XlsbSheetRange{first, last});
+    }
+    Arena dec_arena;
+    auto decoded = decode_ptgs(ByteSpan{c.want.data(), c.want.size()}, {}, dec_arena, sheets, {}, decode_ranges, {},
+                               /*host_itab=*/0);
     ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
     EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
   }

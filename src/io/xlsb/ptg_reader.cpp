@@ -346,8 +346,11 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
   };
 
   // Builds the `NameRef` for this workbook's `name_table[ilbl - 1]`,
-  // qualifying it when the entry is local to a sheet other than the host.
-  auto make_local_name_ref = [&arena, &name_table, &sheet_names, host_itab](std::uint32_t ilbl) -> parser::AstNode* {
+  // qualifying it when the entry is local to a sheet other than the host,
+  // or to any sheet when the token was `PtgNameX`: Excel stores `Sheet1!Fn`
+  // that way even on Sheet1, and bare `Fn` as `PtgName`.
+  auto make_local_name_ref = [&arena, &name_table, &sheet_names, host_itab](std::uint32_t ilbl,
+                                                                            bool qualified) -> parser::AstNode* {
     const XlsbName& entry = name_table[ilbl - 1];
     // `_xlpm.`-prefixed names are LET/LAMBDA-local parameter references;
     // strip the storage prefix at every use site (not just the LET
@@ -356,7 +359,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     // the text parser would have produced for the same formula.
     const std::string_view name = entry.name;
     const std::string_view display_name = starts_with_ci(name, "_xlpm.") ? name.substr(6) : name;
-    if (entry.itab >= 0 && entry.itab != host_itab && static_cast<std::size_t>(entry.itab) < sheet_names.size()) {
+    if (entry.itab >= 0 && (qualified || entry.itab != host_itab) &&
+        static_cast<std::size_t>(entry.itab) < sheet_names.size()) {
       const std::string& sheet = sheet_names[static_cast<std::size_t>(entry.itab)];
       return parser::make_sheet_name_ref(arena, sheet, display_name, /*sheet_quoted=*/false);
     }
@@ -389,9 +393,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     }
     const std::uint32_t real_count = cparams - 1;
     // `LAMBDA(z,z*z)(4)` and a curried call store the callee expression
-    // itself as the first operand; `[0]!Fn(3)` stores the self-book name.
+    // itself as the first operand; `[0]!Fn(3)` stores the self-book name,
+    // and `A1(1)` / `Sheet1!LOG10(100)` the cell reference.
     if (ops[0]->kind() == parser::NodeKind::Lambda || ops[0]->kind() == parser::NodeKind::LambdaCall ||
-        parser::is_self_book_name_ref(*ops[0])) {
+        ops[0]->kind() == parser::NodeKind::Ref || parser::is_self_book_name_ref(*ops[0])) {
       parser::AstNode* n = parser::make_lambda_call(arena, const_cast<parser::AstNode*>(ops[0]), ops + 1, real_count);
       if (n == nullptr) {
         return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (LAMBDA call)", "context=xlsb_ptg_reader");
@@ -745,7 +750,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb PtgName: ilbl out of range",
                             "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
         }
-        parser::AstNode* n = make_local_name_ref(ilbl_or.value());
+        parser::AstNode* n = make_local_name_ref(ilbl_or.value(), /*qualified=*/false);
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgName)", "context=xlsb_ptg_reader");
         }
@@ -782,7 +787,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           }
           parser::AstNode* n = name_table[ilbl_or.value() - 1U].itab < 0
                                    ? parser::make_external_name_ref(arena, 0U, name)
-                                   : make_local_name_ref(ilbl_or.value());
+                                   : make_local_name_ref(ilbl_or.value(), /*qualified=*/true);
           if (n == nullptr) {
             return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNameX)", "context=xlsb_ptg_reader");
           }

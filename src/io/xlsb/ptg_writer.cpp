@@ -343,10 +343,10 @@ class Encoder {
 
   /// Emits `PtgNameX` for `sheet!name`, naming the record local to `sheet`
   /// when one exists, else the workbook-scoped one, which is what the
-  /// reference resolves to. A name defined in neither falls back to its
-  /// placeholder record, as an undefined unqualified name does. Excel 365
-  /// writes a sheet-qualified name as `PtgNameX` through a book-scope
-  /// `BrtExternSheet` entry rather than as `PtgName`.
+  /// reference resolves to. A name defined in neither names the empty stub
+  /// record scoped to `sheet` that Excel 365 saves for it (never another
+  /// sheet's definition). Excel writes a sheet-qualified name as `PtgNameX`
+  /// through a book-scope `BrtExternSheet` entry rather than as `PtgName`.
   Expected<void, Error> emit_sheet_name_ref(std::string_view sheet, std::string_view name) {
     const int itab = resolve_ixti(sheet_names_, sheet);
     if (itab < 0) {
@@ -356,9 +356,6 @@ class Encoder {
     auto it = name_table_.find(sheet_scoped_name_key(itab, name));
     if (it == name_table_.end()) {
       it = name_table_.find(sheet_scoped_name_key(-1, name));
-    }
-    if (it == name_table_.end()) {
-      it = name_table_.find(std::string(name));
     }
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
@@ -943,6 +940,8 @@ void AddSheetRange(std::int32_t itab_first, std::int32_t itab_last, SheetRangeTa
   }
 }
 
+enum class NameCollectMode : std::uint8_t { kPtg, kScopeResolved, kSheetQualified };
+
 /// True when `name` matches an in-scope LET / LAMBDA parameter.
 bool InParamScope(const std::vector<std::string_view>& scope, std::string_view name) {
   // Case-insensitive: see `Encoder::emit_name_ref`.
@@ -955,72 +954,82 @@ bool InParamScope(const std::vector<std::string_view>& scope, std::string_view n
 /// matching an in-scope parameter resolves at encode time to that
 /// parameter's hidden `_xlpm.<name>` placeholder (see
 /// `Encoder::emit_name_ref`), so it must not be registered as an ordinary
-/// workbook defined name. `scope_resolved` selects the
-/// `collect_scope_resolved_names` view: sheet-qualified names are skipped
-/// and a callee with no function id (`Fn(3)`, possibly a named LAMBDA) is
-/// included, since it resolves from the formula's scope as a name does.
+/// workbook defined name. `mode` selects the view: every unqualified name a
+/// `PtgName` or self-book `PtgNameX` needs (`kPtg`); only names resolved from
+/// the formula's own scope, including a callee with no function id (`Fn(3)`,
+/// possibly a named LAMBDA) (`kScopeResolved`); or only sheet-qualified
+/// names, each added as `sheet` NUL `name` (`kSheetQualified`).
 void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& names,
                         std::unordered_set<std::string>& seen, std::vector<std::string_view>& scope,
-                        bool scope_resolved) {
+                        NameCollectMode mode) {
+  // Hidden `_xlfn.*` / `_xlpm.*` records and unqualified names.
+  auto add = [&](std::string_view name) {
+    if (mode != NameCollectMode::kSheetQualified) {
+      AddName(name, names, seen);
+    }
+  };
   switch (node.kind()) {
     case parser::NodeKind::NameRef: {
       const std::string_view name = node.as_name();
       if (!node.as_name_sheet().empty()) {
-        if (!scope_resolved) {
-          AddName(name, names, seen);  // never a LET / LAMBDA parameter.
+        // Resolves through a scoped key (a definition or its sheet's stub),
+        // never a LET / LAMBDA parameter or a workbook placeholder.
+        if (mode == NameCollectMode::kSheetQualified) {
+          AddName(std::string(node.as_name_sheet()) + '\0' + std::string(name), names, seen);
         }
         return;
       }
       if (InParamScope(scope, name)) {
         return;  // LET / LAMBDA parameter: encoded via its _xlpm. placeholder.
       }
-      AddName(name, names, seen);
+      add(name);
       return;
     }
     case parser::NodeKind::Call: {
       const std::string_view name = canonical_function_name(node.as_call_name());
       if (UsesHiddenNameRoute(name)) {
-        AddName(xlsb_hidden_function_name(name), names, seen);
-      } else if (scope_resolved && lookup_func_by_name(name) == nullptr && !InParamScope(scope, node.as_call_name())) {
+        add(xlsb_hidden_function_name(name));
+      } else if (mode == NameCollectMode::kScopeResolved && lookup_func_by_name(name) == nullptr &&
+                 !InParamScope(scope, node.as_call_name())) {
         AddName(node.as_call_name(), names, seen);
       }
       const std::uint32_t arity = node.as_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_call_arg(i), names, seen, scope, scope_resolved);
+        CollectNamesScoped(node.as_call_arg(i), names, seen, scope, mode);
       }
       return;
     }
     case parser::NodeKind::UnaryOp:
-      CollectNamesScoped(node.as_unary_operand(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_unary_operand(), names, seen, scope, mode);
       return;
     case parser::NodeKind::BinaryOp:
-      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope, scope_resolved);
-      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope, mode);
       return;
     case parser::NodeKind::RangeOp:
-      CollectNamesScoped(node.as_range_lhs(), names, seen, scope, scope_resolved);
-      CollectNamesScoped(node.as_range_rhs(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_range_lhs(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_range_rhs(), names, seen, scope, mode);
       return;
     case parser::NodeKind::IntersectOp:
-      CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope, scope_resolved);
-      CollectNamesScoped(node.as_intersect_rhs(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_intersect_rhs(), names, seen, scope, mode);
       return;
     case parser::NodeKind::UnionOp: {
       const std::uint32_t arity = node.as_union_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_union_child(i), names, seen, scope, scope_resolved);
+        CollectNamesScoped(node.as_union_child(i), names, seen, scope, mode);
       }
       return;
     }
     case parser::NodeKind::ImplicitIntersection:
-      CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope, mode);
       return;
     case parser::NodeKind::ArrayLiteral: {
       const std::uint32_t rows = node.as_array_rows();
       const std::uint32_t cols = node.as_array_cols();
       for (std::uint32_t r = 0; r < rows; ++r) {
         for (std::uint32_t c = 0; c < cols; ++c) {
-          CollectNamesScoped(node.as_array_element(r, c), names, seen, scope, scope_resolved);
+          CollectNamesScoped(node.as_array_element(r, c), names, seen, scope, mode);
         }
       }
       return;
@@ -1029,51 +1038,51 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       // Stored as a call to the hidden `_xlfn.ANCHORARRAY` name (see
       // `Encoder::emit_spill_ref`), so it needs the same BrtName
       // registration any other future-function callee gets.
-      AddName(xlsb_hidden_function_name("ANCHORARRAY"), names, seen);
+      add(xlsb_hidden_function_name("ANCHORARRAY"));
       if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        CollectNamesScoped(*anchor, names, seen, scope, scope_resolved);
+        CollectNamesScoped(*anchor, names, seen, scope, mode);
       }
       return;
     }
     case parser::NodeKind::ExternalRef:
       // `[0]!Rate` is never a LET / LAMBDA parameter and, like `Sheet2!Rate`,
       // not resolved from the formula's own scope.
-      if (parser::is_self_book_name_ref(node) && !scope_resolved) {
+      if (parser::is_self_book_name_ref(node) && mode == NameCollectMode::kPtg) {
         AddName(node.as_external_ref_name(), names, seen);
       }
       return;
     case parser::NodeKind::LambdaCall: {
-      CollectNamesScoped(node.as_lambda_call_callee(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_lambda_call_callee(), names, seen, scope, mode);
       const std::uint32_t arity = node.as_lambda_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_lambda_call_arg(i), names, seen, scope, scope_resolved);
+        CollectNamesScoped(node.as_lambda_call_arg(i), names, seen, scope, mode);
       }
       return;
     }
     case parser::NodeKind::LetBinding: {
-      AddName("_xlfn.LET", names, seen);
+      add("_xlfn.LET");
       const std::uint32_t n = node.as_let_binding_count();
       const std::size_t scope_base = scope.size();
       for (std::uint32_t i = 0; i < n; ++i) {
-        AddName(std::string("_xlpm.") + std::string(node.as_let_binding_name(i)), names, seen);
+        add(std::string("_xlpm.") + std::string(node.as_let_binding_name(i)));
         // Excel LET binds sequentially: a value expression sees only the
         // earlier bindings, so collect it before pushing this parameter.
-        CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope, scope_resolved);
+        CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope, mode);
         scope.push_back(node.as_let_binding_name(i));
       }
-      CollectNamesScoped(node.as_let_body(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_let_body(), names, seen, scope, mode);
       scope.resize(scope_base);
       return;
     }
     case parser::NodeKind::Lambda: {
-      AddName("_xlfn.LAMBDA", names, seen);
+      add("_xlfn.LAMBDA");
       const std::uint32_t n = node.as_lambda_param_count();
       const std::size_t scope_base = scope.size();
       for (std::uint32_t i = 0; i < n; ++i) {
-        AddName(std::string("_xlpm.") + std::string(node.as_lambda_param(i)), names, seen);
+        add(std::string("_xlpm.") + std::string(node.as_lambda_param(i)));
         scope.push_back(node.as_lambda_param(i));
       }
-      CollectNamesScoped(node.as_lambda_body(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_lambda_body(), names, seen, scope, mode);
       scope.resize(scope_base);
       return;
     }
@@ -1097,13 +1106,25 @@ std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name) {
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
                        std::unordered_set<std::string>& seen) {
   std::vector<std::string_view> scope;
-  CollectNamesScoped(node, names, seen, scope, /*scope_resolved=*/false);
+  CollectNamesScoped(node, names, seen, scope, NameCollectMode::kPtg);
 }
 
 void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
                                   std::unordered_set<std::string>& seen) {
   std::vector<std::string_view> scope;
-  CollectNamesScoped(node, names, seen, scope, /*scope_resolved=*/true);
+  CollectNamesScoped(node, names, seen, scope, NameCollectMode::kScopeResolved);
+}
+
+void collect_sheet_qualified_names(const parser::AstNode& node,
+                                   std::vector<std::pair<std::string, std::string>>& qualified) {
+  std::vector<std::string> keys;
+  std::unordered_set<std::string> seen;
+  std::vector<std::string_view> scope;
+  CollectNamesScoped(node, keys, seen, scope, NameCollectMode::kSheetQualified);
+  for (const std::string& key : keys) {
+    const std::size_t split = key.find('\0');
+    qualified.emplace_back(key.substr(0, split), key.substr(split + 1));
+  }
 }
 
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
