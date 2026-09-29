@@ -63,6 +63,22 @@ std::string_view strip_future_prefix(std::string_view name) noexcept;
 Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx);
 
+/// Returns the static `Ref` / `RangeOp` a reference-valued `expr` denotes (`A1`,
+/// `A1:B2`, a reference-returning call resolved to its rectangle, a name bound
+/// to one), or nullptr for any other source.
+const parser::AstNode* resolve_binding_reference(const parser::AstNode& expr, Arena& arena,
+                                                 const FunctionRegistry& registry, const EvalContext& ctx);
+
+/// Evaluates the source of a LET binding or a LAMBDA argument, the one rule
+/// both follow. A reference source also yields in `*out_ast` the AST from
+/// `resolve_binding_reference` for the binding to record, so the bound name
+/// stays a reference; array literals and `A1#` spill references are recorded
+/// as written. Any other source binds by value alone and `*out_ast` is nullptr.
+/// A recorded AST never names a binding, so it reads the same inside a lambda
+/// body whose scope is not the caller's.
+Value eval_binding_source(const parser::AstNode& expr, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx, const parser::AstNode** out_ast);
+
 // Invokes a runtime `LambdaValue` with the given argument-AST accessor
 // and arity. Shared between the `LambdaCall` AST case (a parser-emitted
 // IIFE or curried call) and the name-bound dispatch path inside

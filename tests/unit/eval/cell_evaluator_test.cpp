@@ -59,6 +59,20 @@ TEST(EvaluateCellForRecalc, ParseFailureSurfacesNameError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
+TEST(EvaluateCellForRecalc, QualifiedBuiltinCallFailsLikeAParseError) {
+  // Excel refuses a sheet-qualified built-in call at entry; stored text that
+  // bypassed that check must not evaluate either.
+  Workbook wb = MakeWorkbookWithSheet();
+  Sheet& sheet = wb.sheet(0U);
+  Cell cell;
+  cell.formula_text = "=Sheet1!SUM(1)+1";
+
+  Arena arena;
+  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
 TEST(EvaluateCellForRecalc, ErrorPropagatesFromExpression) {
   // Division by zero inside the expression must propagate verbatim;
   // the helper should not swallow or rewrite Excel-visible errors.

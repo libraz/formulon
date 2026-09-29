@@ -317,12 +317,54 @@ Value eval_intersect_op(const parser::AstNode& node, Arena& arena, const Functio
   return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
 }
 
-// Resolves a LET initialiser that returns a reference (a reference-returning
-// call, or a `:` over one) to the static `Ref` / `RangeOp` it names, so the
-// binding carries that rectangle rather than the call. Returns nullptr for
-// any other shape or when the call picks a non-reference (`INDEX({1,2},1)`).
-const parser::AstNode* resolve_let_reference(const parser::AstNode& expr, Arena& arena,
-                                             const FunctionRegistry& registry, const EvalContext& ctx) {
+// True when `node` reads no lexical binding, so it evaluates the same in any
+// scope. Conservative: a shape it does not know is not scope-free.
+bool is_scope_free(const parser::AstNode& node, const NameEnv* env) {
+  switch (node.kind()) {
+    case parser::NodeKind::Literal:
+    case parser::NodeKind::ErrorLiteral:
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::Ref3D:
+    case parser::NodeKind::ArrayLiteral:
+      return true;
+    case parser::NodeKind::SpillRef:
+      return node.as_spill_ref_anchor_expr() == nullptr;
+    case parser::NodeKind::UnaryOp:
+      return is_scope_free(node.as_unary_operand(), env);
+    case parser::NodeKind::BinaryOp:
+      return is_scope_free(node.as_binary_lhs(), env) && is_scope_free(node.as_binary_rhs(), env);
+    case parser::NodeKind::RangeOp:
+      return is_scope_free(node.as_range_lhs(), env) && is_scope_free(node.as_range_rhs(), env);
+    case parser::NodeKind::IntersectOp:
+      return is_scope_free(node.as_intersect_lhs(), env) && is_scope_free(node.as_intersect_rhs(), env);
+    case parser::NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        if (!is_scope_free(node.as_union_child(i), env)) {
+          return false;
+        }
+      }
+      return true;
+    case parser::NodeKind::Call:
+      if (env != nullptr && env->lookup(node.as_call_name()) != nullptr) {
+        return false;
+      }
+      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+        if (!is_scope_free(node.as_call_arg(i), env)) {
+          return false;
+        }
+      }
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Resolves a binding source that returns a reference (a reference-returning
+// call, a `:` over one, or an intersection) to the static `RangeOp` it names,
+// so the binding carries that rectangle rather than the call. Returns nullptr
+// for any other shape or when the call picks a non-reference (`INDEX({1,2},1)`).
+const parser::AstNode* resolve_computed_reference(const parser::AstNode& expr, Arena& arena,
+                                                  const FunctionRegistry& registry, const EvalContext& ctx) {
   if (expr.kind() == parser::NodeKind::Call) {
     const NameEnv* env = ctx.name_env();
     if (!is_reference_call_name(expr.as_call_name()) ||
@@ -335,7 +377,7 @@ const parser::AstNode* resolve_let_reference(const parser::AstNode& expr, Arena&
     if (declared_rect_endpoint_pair(expr, &lhs, &rhs)) {
       return nullptr;
     }
-  } else {
+  } else if (expr.kind() != parser::NodeKind::IntersectOp) {
     return nullptr;
   }
   std::string_view sheet;
@@ -378,6 +420,54 @@ const parser::AstNode* resolve_let_reference(const parser::AstNode& expr, Arena&
 }
 
 }  // namespace
+
+const parser::AstNode* resolve_binding_reference(const parser::AstNode& expr, Arena& arena,
+                                                 const FunctionRegistry& registry, const EvalContext& ctx) {
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  switch (expr.kind()) {
+    case parser::NodeKind::Ref:
+      return &expr;
+    case parser::NodeKind::RangeOp:
+      if (declared_rect_endpoint_pair(expr, &lhs, &rhs)) {
+        return &expr;
+      }
+      break;
+    case parser::NodeKind::NameRef: {
+      const NameEnv* env = ctx.name_env();
+      const parser::AstNode* bound =
+          (env != nullptr && expr.as_name_sheet().empty()) ? env->lookup_ast(expr.as_name()) : nullptr;
+      if (bound != nullptr && (bound->kind() == parser::NodeKind::Ref || bound->kind() == parser::NodeKind::RangeOp)) {
+        return bound;
+      }
+      return nullptr;
+    }
+    default:
+      break;
+  }
+  return resolve_computed_reference(expr, arena, registry, ctx);
+}
+
+Value eval_binding_source(const parser::AstNode& expr, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx, const parser::AstNode** out_ast) {
+  const parser::AstNode* ref = resolve_binding_reference(expr, arena, registry, ctx);
+  *out_ast = ref;
+  // A union, or a range-shaped call naming no single rectangle (one picking a
+  // union), is recorded as written when it reads the same in any scope.
+  const bool unresolved_range =
+      ref == nullptr && (expr.kind() == parser::NodeKind::UnionOp ||
+                         (expr.kind() == parser::NodeKind::Call && is_range_shaped_ast(expr)));
+  if (expr.kind() == parser::NodeKind::ArrayLiteral ||
+      (expr.kind() == parser::NodeKind::SpillRef && expr.as_spill_ref_anchor_expr() == nullptr) ||
+      (unresolved_range && is_scope_free(expr, ctx.name_env()))) {
+    *out_ast = &expr;
+  } else if (expr.kind() == parser::NodeKind::NameRef && expr.as_name_sheet().empty() && ctx.name_env() != nullptr) {
+    *out_ast = ctx.name_env()->lookup_ast(expr.as_name());
+  }
+  // A call resolved to its rectangle is read through that rectangle, so it runs once.
+  const bool computed = ref != nullptr && ref != &expr && expr.kind() != parser::NodeKind::NameRef;
+  return eval_node(computed ? *ref : expr, arena, registry, ctx);
+}
 
 // Public entry point declared in `eval/tree_walker.h`. Routes through
 // the lazy-table seam; the actual array is owned by
@@ -629,12 +719,8 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       //     them: `LET(x, 1/0, IFERROR(x, 99))` returns 99.
       //   * Names are ASCII-case-insensitive and a later binding with the
       //     same name shadows earlier ones in subsequent expressions.
-      //   * Range-shaped initialisers (RangeOp, ArrayLiteral, OFFSET/CHOOSE/
-      //     INDIRECT calls, single-cell Refs, or NameRefs that resolve to
-      //     such) keep a pointer to their source AST in the binding so that
-      //     range-aware consumers (SUM, COUNT, VLOOKUP, ...) can re-dispatch
-      //     on the underlying shape rather than seeing only the spill-anchor
-      //     scalar that `eval_node` collapses a bare RangeOp to.
+      //   * A reference initialiser binds as a reference, by the rule every
+      //     LAMBDA argument follows too (see `eval_binding_source`).
       NameEnv env;
       const NameEnv* parent = ctx.name_env();
       // Start from whatever the caller supplied; extending `NameEnv` makes
@@ -644,42 +730,10 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       }
       const std::uint32_t count = node.as_let_binding_count();
       for (std::uint32_t i = 0; i < count; ++i) {
-        const parser::AstNode& expr_node = node.as_let_binding_expr(i);
-        const EvalContext inner_ctx = ctx.with_name_env(&env);
-        // A reference-returning initialiser binds the rectangle it resolves
-        // to, resolved once, so every consumer of the name (ROW, CELL, a `:`
-        // endpoint, SUM) sees a plain reference rather than re-running the call.
-        const parser::AstNode* resolved_ref = resolve_let_reference(expr_node, arena, registry, inner_ctx);
-        if (resolved_ref != nullptr) {
-          const Value v = eval_node(*resolved_ref, arena, registry, inner_ctx);
-          env = env.extend(node.as_let_binding_name(i), v, resolved_ref, arena);
-          continue;
-        }
-        const Value v = eval_node(expr_node, arena, registry, inner_ctx);
-        // Record the AST source for reference-shaped bindings: a bare
-        // `Ref` (`=LET(r, A5, ROW(r))`), a `RangeOp`, an `ArrayLiteral`,
-        // or one of the reference-producing calls (`OFFSET`, `CHOOSE`,
-        // `INDIRECT`, `IF`). The `Ref` case keeps `ROW` / `COLUMN` able
-        // to introspect a single-cell binding without re-evaluation;
-        // SUM-family callers continue to skip `Ref` via the narrower
-        // `is_range_shaped_ast` predicate so a scalar-bound name still
-        // flows through the existing scalar branch. Truly scalar shapes
-        // (literals, arithmetic) still bind by Value only — recording
-        // their AST would risk re-evaluating side-effecting or expensive
-        // sub-expressions on every NameRef read. NameRef-on-NameRef is
-        // transitive: if the RHS already resolves to a reference-shaped
-        // AST in the (possibly outer) scope, we inherit that AST so
-        // `=LET(s, r, SUM(s))` works when `r` is itself a range binding.
-        const parser::AstNode* expr_for_binding = nullptr;
-        if (expr_node.kind() == parser::NodeKind::Ref || is_range_shaped_ast(expr_node)) {
-          expr_for_binding = &expr_node;
-        } else if (expr_node.kind() == parser::NodeKind::NameRef && expr_node.as_name_sheet().empty()) {
-          // `env` already reflects every previously bound name in this LET
-          // (and, via `parent`, any outer LETs); a single lookup walks the
-          // whole chain.
-          expr_for_binding = env.lookup_ast(expr_node.as_name());
-        }
-        env = env.extend(node.as_let_binding_name(i), v, expr_for_binding, arena);
+        const parser::AstNode* bound_ast = nullptr;
+        const Value v =
+            eval_binding_source(node.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env), &bound_ast);
+        env = env.extend(node.as_let_binding_name(i), v, bound_ast, arena);
       }
       const EvalContext body_ctx = ctx.with_name_env(&env);
       return eval_node(node.as_let_body(), arena, registry, body_ctx);
@@ -772,6 +826,11 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     }
 
     case parser::NodeKind::LambdaCall: {
+      // Calling a cell (`A1(1)`, `Sheet1!LOG10(100)`) is #REF! in Excel,
+      // whatever the cell holds.
+      if (node.as_lambda_call_callee().kind() == parser::NodeKind::Ref) {
+        return Value::error(ErrorCode::Ref);
+      }
       // Evaluate the callee expression. Excel rejects calling a non-lambda
       // with #VALUE! (e.g. `(1+2)(3)` — when the parser admits the form).
       const Value callee = eval_node(node.as_lambda_call_callee(), arena, registry, ctx);

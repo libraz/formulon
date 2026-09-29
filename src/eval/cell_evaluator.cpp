@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "cell.h"
+#include "eval/builtin_names.h"
 #include "eval/eval_context.h"
 #include "eval/formula_text_utils.h"
 #include "eval/function_registry.h"
@@ -43,6 +44,11 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   const std::string_view src = strip_formula_prefix(cell_data.formula_text);
 
   parser::AstNode* root = parser::parse_strict(src, arena);
+  // A sheet- or book-qualified built-in call is rejected at entry; the stored
+  // text still reaches here, so it fails the same way a parse error does.
+  if (root != nullptr && find_qualified_builtin_call(*root) != nullptr) {
+    root = nullptr;
+  }
   if (root == nullptr) {
     // Hard parse failure, or a valid prefix followed by unparseable trailing
     // tokens. Either way we refuse to evaluate a recovered prefix as if it

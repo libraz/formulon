@@ -247,5 +247,62 @@ TEST(DynamicReferenceRecalc, ReplacingAReaderDropsItsLearnedEdges) {
   EXPECT_FALSE(engine_graph().has_dynamic_dependencies(c1));
 }
 
+// A reference bound to a LAMBDA parameter, a helper callback argument or a
+// named LAMBDA's parameter stays a reference, so OFFSET inside the body reads
+// through it and recalc learns the read; a plain reference argument remains
+// a static precedent.
+TEST(DynamicReferenceRecalc, ReferenceBoundLambdaParametersRecalc) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Below5", "=LAMBDA(r,OFFSET(r,5,0))")));
+  Number(wb, {0U, kB}, 3.0);
+  Formula(wb, {0U, kD}, "=LAMBDA(r,OFFSET(r,5,0))(A1)");
+  Formula(wb, {1U, kD}, "=MAP(A1,LAMBDA(r,OFFSET(r,5,0)))");
+  Formula(wb, {2U, kD}, "=Below5(A1)");
+  Formula(wb, {3U, kD}, "=REDUCE(0,A1,LAMBDA(a,v,OFFSET(v,5,0)))");
+  Formula(wb, {4U, kD}, "=LAMBDA(r,LAMBDA(s,OFFSET(s,5,0))(r))(A1)");
+  Formula(wb, {5U, kD}, "=LAMBDA(r,r*10)(B1)");
+  Formula(wb, {5U, kA}, "=B1*2");
+  const char* readers[] = {"LAMBDA(r,OFFSET(r,5,0))(A1)", "MAP(A1,...)", "Below5(A1)", "REDUCE(0,A1,...)",
+                           "nested LAMBDA"};
+  Recalc(wb);
+  for (std::uint32_t row = 0U; row < 5U; ++row) {
+    ExpectNumberAt(wb, {row, kD}, 6.0, readers[row]);
+  }
+  ExpectNumberAt(wb, {5U, kD}, 30.0, "LAMBDA(r,r*10)(B1)");
+  const eval::DepGraph& graph = wb.recalc_engine().dep_graph();
+  EXPECT_TRUE(graph.has_dependency_source(eval::CellNodeId{0U, 0U, kD}, eval::CellNodeId{0U, 5U, kA},
+                                          eval::DepGraph::DependencySource::kDynamicReference));
+  EXPECT_TRUE(graph.has_dependency_source(eval::CellNodeId{0U, 5U, kD}, eval::CellNodeId{0U, 0U, kB},
+                                          eval::DepGraph::DependencySource::kAuthored));
+  Number(wb, {0U, kB}, 4.0);
+  Recalc(wb);
+  for (std::uint32_t row = 0U; row < 5U; ++row) {
+    ExpectNumberAt(wb, {row, kD}, 8.0, readers[row]);
+  }
+  ExpectNumberAt(wb, {5U, kD}, 40.0, "LAMBDA(r,r*10)(B1)");
+}
+
+// A helper's callback is invoked, so the cells its body reads are
+// precedents whether the lambda is written inline, bound by LET or named.
+TEST(DynamicReferenceRecalc, HelperCallbackBodyReadsRecalc) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("TimesB1", "=LAMBDA(x,x*B1)")));
+  Number(wb, {0U, kA}, 1.0);
+  Number(wb, {0U, kB}, 3.0);
+  Formula(wb, {0U, kD}, "=MAP(A1,LAMBDA(x,x*B1))");
+  Formula(wb, {1U, kD}, "=LET(f,LAMBDA(x,x*B1),MAP(A1,f))");
+  Formula(wb, {2U, kD}, "=MAP(A1,TimesB1)");
+  Formula(wb, {3U, kD}, "=REDUCE(0,A1,LAMBDA(a,v,v*B1))");
+  Recalc(wb);
+  for (std::uint32_t row = 0U; row < 4U; ++row) {
+    ExpectNumberAt(wb, {row, kD}, 3.0, "callback reads B1");
+  }
+  Number(wb, {0U, kB}, 5.0);
+  Recalc(wb);
+  for (std::uint32_t row = 0U; row < 4U; ++row) {
+    ExpectNumberAt(wb, {row, kD}, 5.0, "callback reads B1");
+  }
+}
+
 }  // namespace
 }  // namespace formulon

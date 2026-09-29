@@ -34,7 +34,9 @@
 //   * Parser-level rejection of empty LAMBDA, cell-ref-shaped param,
 //     duplicate param names.
 //   * Calling a non-lambda LET binding via `name(args)` -> #VALUE!.
+//   * Reference arguments bind as references, in calls and helper callbacks.
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -47,8 +49,10 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "test_eval_helpers.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -466,6 +470,134 @@ TEST(EvalLambda, ParserCallingNonLambdaBindingIsValueError) {
   const Value v = EvalSource("=LET(n, 5, n(1))");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// Reference-bound parameters
+// ---------------------------------------------------------------------------
+
+// A1:A10 = 1..10, B1:B10 = 10..100.
+Workbook ParamFixture() {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 10; ++r) {
+    const double n = static_cast<double>(r + 1U);
+    wb.sheet(0).set_cell_value(r, 0, Value::number(n));
+    wb.sheet(0).set_cell_value(r, 1, Value::number(n * 10.0));
+  }
+  return wb;
+}
+
+Value EvalParam(std::string_view src) {
+  const Workbook wb = ParamFixture();
+  return formulon::test::EvalSourceAt(src, wb, wb.sheet(0), 19, 7);
+}
+
+void ExpectParamBool(std::string_view src, bool expected) {
+  const Value v = EvalParam(src);
+  ASSERT_TRUE(v.is_boolean()) << src << " -> " << v.debug_to_string();
+  EXPECT_EQ(v.as_boolean(), expected) << src;
+}
+
+void ExpectParamNumber(std::string_view src, double expected) {
+  const Value v = EvalParam(src);
+  ASSERT_TRUE(v.is_number()) << src << " -> " << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), expected) << src;
+}
+
+void ExpectParamText(std::string_view src, std::string_view expected) {
+  const Value v = EvalParam(src);
+  ASSERT_TRUE(v.is_text()) << src << " -> " << v.debug_to_string();
+  EXPECT_EQ(v.as_text(), expected) << src;
+}
+
+TEST(EvalLambdaReferenceParam, ReferenceArgumentStaysReference) {
+  ExpectParamBool("=LAMBDA(r,ISREF(r))(A1)", true);
+  ExpectParamBool("=LAMBDA(r,ISREF(r))(A1:A3)", true);
+  ExpectParamBool("=LAMBDA(r,ISREF(r))(OFFSET(A1,1,0))", true);
+  ExpectParamBool("=LAMBDA(r,ISREF(r))(IF(TRUE,A1:A3,0))", true);
+  ExpectParamBool("=LAMBDA(r,ISREF(r))(A1:A3 A2:A3)", true);
+  ExpectParamNumber("=LAMBDA(r,ROWS(r))(A1:A3 A2:A3)", 2.0);
+}
+
+TEST(EvalLambdaReferenceParam, ValueArgumentIsNotReference) {
+  ExpectParamBool("=LAMBDA(r,ISREF(r))(1)", false);
+  ExpectParamBool("=LAMBDA(r,ISREF(r))(A1+0)", false);
+  ExpectParamBool("=LAMBDA(r,ISREF(r))({1,2})", false);
+  ExpectParamNumber("=LAMBDA(r,r*2)(A5)", 10.0);
+}
+
+TEST(EvalLambdaReferenceParam, PositionAndOffsetReadTheArgument) {
+  ExpectParamNumber("=LAMBDA(r,ROW(r))(B5)", 5.0);
+  ExpectParamNumber("=LAMBDA(r,COLUMN(r))(B2:B3)", 2.0);
+  ExpectParamNumber("=LAMBDA(r,OFFSET(r,1,0))(A1)", 2.0);
+  ExpectParamNumber("=LAMBDA(r,SUM(OFFSET(r,0,0,2,1)))(A1)", 3.0);
+  ExpectParamText("=LAMBDA(r,CELL(\"address\",r))(B2)", "$B$2");
+  ExpectParamNumber("=LAMBDA(r,SUM(r:A3))(A2)", 5.0);
+  ExpectParamNumber("=LAMBDA(r,ROW(r))(INDEX(A1:A10,4))", 4.0);
+}
+
+TEST(EvalLambdaReferenceParam, ReferenceFlowsThroughNamesAndNesting) {
+  ExpectParamNumber("=LAMBDA(r,LAMBDA(s,ROW(s))(r))(B5)", 5.0);
+  ExpectParamNumber("=LET(f,LAMBDA(r,ROW(r)),f(B5))", 5.0);
+  ExpectParamNumber("=LET(x,B5,LAMBDA(r,ROW(r))(x))", 5.0);
+  ExpectParamNumber("=LET(f,LAMBDA(r,ROW(r)),LET(x,B7,f(x)))", 7.0);
+}
+
+// The argument resolves in the caller's scope, so a name the lambda body
+// rebinds cannot move the reference the argument named.
+TEST(EvalLambdaReferenceParam, ArgumentResolvesInCallerScope) {
+  ExpectParamNumber("=LET(n,3,LAMBDA(n,r,ROW(r))(1,INDEX(A1:A10,n)))", 3.0);
+  ExpectParamNumber("=LET(n,3,LAMBDA(n,r,ROW(r))(1,OFFSET(A1,n,0)))", 4.0);
+}
+
+TEST(EvalLambdaReferenceParam, HelperCallbacksReceiveReferences) {
+  const Value map = EvalParam("=MAP(A1:A3,LAMBDA(x,CELL(\"address\",x)))");
+  ASSERT_TRUE(map.is_array()) << map.debug_to_string();
+  ASSERT_EQ(map.as_array()->rows, 3U);
+  EXPECT_EQ(map.as_array()->cells[2].as_text(), "$A$3");
+  const Value byrow = EvalParam("=BYROW(A2:B3,LAMBDA(x,ROW(x)*100+SUM(x)))");
+  ASSERT_TRUE(byrow.is_array()) << byrow.debug_to_string();
+  EXPECT_EQ(byrow.as_array()->cells[0].as_number(), 222.0);
+  EXPECT_EQ(byrow.as_array()->cells[1].as_number(), 333.0);
+  const Value bycol = EvalParam("=BYCOL(A1:B2,LAMBDA(x,COLUMN(x)))");
+  ASSERT_TRUE(bycol.is_array()) << bycol.debug_to_string();
+  EXPECT_EQ(bycol.as_array()->cells[1].as_number(), 2.0);
+  ExpectParamText("=REDUCE(\"\",A1:A3,LAMBDA(a,v,a&ROW(v)))", "123");
+  ExpectParamBool("=REDUCE(A1,A2:A2,LAMBDA(a,v,ISREF(a)))", true);
+  ExpectParamBool("=REDUCE(A1,A2:A3,LAMBDA(a,v,ISREF(a)))", false);
+  const Value scan = EvalParam("=SCAN(0,A4:A5,LAMBDA(a,v,ROW(v)))");
+  ASSERT_TRUE(scan.is_array()) << scan.debug_to_string();
+  EXPECT_EQ(scan.as_array()->cells[1].as_number(), 5.0);
+}
+
+TEST(EvalLambdaReferenceParam, HelperCallbacksOverArraysReceiveValues) {
+  const Value map = EvalParam("=MAP({1,2},LAMBDA(x,ISREF(x)))");
+  ASSERT_TRUE(map.is_array()) << map.debug_to_string();
+  EXPECT_FALSE(map.as_array()->cells[0].as_boolean());
+  const Value makearray = EvalParam("=MAKEARRAY(1,2,LAMBDA(r,c,ISREF(r)))");
+  ASSERT_TRUE(makearray.is_array()) << makearray.debug_to_string();
+  EXPECT_FALSE(makearray.as_array()->cells[1].as_boolean());
+  const Value byrow = EvalParam("=BYROW({1,2;3,4},LAMBDA(x,SUM(x)))");
+  ASSERT_TRUE(byrow.is_array()) << byrow.debug_to_string();
+  EXPECT_EQ(byrow.as_array()->cells[1].as_number(), 7.0);
+}
+
+void ExpectParamError(std::string_view src, ErrorCode expected) {
+  const Value v = EvalParam(src);
+  ASSERT_TRUE(v.is_error()) << src << " -> " << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), expected) << src;
+}
+
+// Calling a cell is #REF! whatever it holds, and so is calling a name bound
+// to a reference; a name bound to a value is #VALUE!.
+TEST(EvalLambdaReferenceParam, CallingAReferenceIsRef) {
+  ExpectParamError("=A1(1)", ErrorCode::Ref);
+  ExpectParamError("=E1(1)", ErrorCode::Ref);
+  ExpectParamError("=LAMBDA(f,f(1))(A1)", ErrorCode::Ref);
+  ExpectParamError("=LAMBDA(f,f(1))(A1:A2)", ErrorCode::Ref);
+  ExpectParamError("=LET(f,A1,f(1))", ErrorCode::Ref);
+  ExpectParamError("=LAMBDA(f,f(1))(5)", ErrorCode::Value);
+  ExpectParamError("=LET(f,5,f(1))", ErrorCode::Value);
 }
 
 }  // namespace

@@ -321,6 +321,35 @@ void expand_defined_name(const DefinedName& def, WalkState& state, bool invoked)
   });
 }
 
+// A builtin can use a lambda argument only by calling it (MAP, BYROW, REDUCE,
+// GROUPBY, ...), so a lambda written inline, bound by LET or named by a defined
+// name is walked as an invoked body. Returns false for any other argument.
+bool walk_callable_arg(const parser::AstNode& arg, WalkState& state) {
+  if (arg.kind() == parser::NodeKind::Lambda) {
+    walk_invoked_lambda_body(arg, state);
+    return true;
+  }
+  if (arg.kind() == parser::NodeKind::NameRef && arg.as_name_sheet().empty()) {
+    if (const WalkState::LexicalBinding* lexical = lookup_lexical(arg.as_name(), state); lexical != nullptr) {
+      if (lexical->lambda == nullptr) {
+        return false;
+      }
+      walk_invoked_lambda_body(*lexical->lambda, state);
+      return true;
+    }
+  }
+  if (arg.kind() != parser::NodeKind::NameRef && !parser::is_self_book_name_ref(arg)) {
+    return false;
+  }
+  const DefinedName* def = find_name_ref_definition(arg, state);
+  if (def == nullptr) {
+    return false;
+  }
+  // A definition that is not a LAMBDA walks exactly as a non-invoked one.
+  expand_defined_name(*def, state, /*invoked=*/true);
+  return true;
+}
+
 // Resolves a `StructuredRef` node into a static rectangle on the table's
 // owning sheet.
 //
@@ -812,6 +841,9 @@ void walk(const parser::AstNode& node, WalkState& state) {
       for (std::uint32_t i = 0; i < arity; ++i) {
         const parser::AstNode& arg = node.as_call_arg(i);
         if (builtin && is_reference_only_arg(node.as_call_name(), i) && is_static_reference(arg, state)) {
+          continue;
+        }
+        if (builtin && walk_callable_arg(arg, state)) {
           continue;
         }
         walk(arg, state);

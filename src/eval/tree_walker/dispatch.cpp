@@ -107,13 +107,27 @@ bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode
 
 namespace {
 
+// True when a binding recorded `ast` for a reference rather than for an
+// array literal or a value.
+bool is_reference_binding(const parser::AstNode* ast) {
+  if (ast == nullptr) {
+    return false;
+  }
+  switch (ast->kind()) {
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::RangeOp:
+    case parser::NodeKind::UnionOp:
+    case parser::NodeKind::SpillRef:
+      return true;
+    default:
+      return false;
+  }
+}
+
 // `syntax_args` is the call site's argument AST, consulted for one thing
 // only: telling a syntactically omitted slot (`f(1, , 3)`) from a supplied
-// one. It is deliberately separate from `ast_args`, which is recorded on
-// the binding so range-aware consumers inside the body can re-dispatch on
-// the original range expression. Feeding the call AST into `ast_args` to
-// get the omission test would also make every lambda parameter
-// range-shaped on this path, which is a different change.
+// one. It is deliberately separate from `ast_args`, the per-argument AST
+// `eval_binding_source` chose to record on the binding.
 Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, const Value* args,
                                 const parser::AstNode* const* ast_args, const parser::AstNode* const* syntax_args,
                                 Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
@@ -288,12 +302,16 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
     return Value::error(ErrorCode::Value);
   }
   std::vector<Value> args;
+  std::vector<const parser::AstNode*> bound_asts;
   args.reserve(arity);
+  bound_asts.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
-    args.push_back(eval_node(*call_args[i], arena, registry, ctx));
+    const parser::AstNode* bound = nullptr;
+    args.push_back(eval_binding_source(*call_args[i], arena, registry, ctx, &bound));
+    bound_asts.push_back(bound);
   }
-  return invoke_lambda_values_impl(lv, arity, args.empty() ? nullptr : args.data(), /*ast_args=*/nullptr, call_args,
-                                   arena, registry, ctx);
+  return invoke_lambda_values_impl(lv, arity, args.empty() ? nullptr : args.data(),
+                                   bound_asts.empty() ? nullptr : bound_asts.data(), call_args, arena, registry, ctx);
 }
 
 namespace {
@@ -432,11 +450,14 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   // (LET-bound or LAMBDA-parameter), invoke it as if the user had written
   // an explicit IIFE. The lookup runs *before* the registry / lazy table so
   // a LET binding can shadow a built-in name (matching Excel's semantics).
-  // A bound non-Lambda value is `#VALUE!` (calling a non-callable); a
-  // bound error propagates verbatim. Unbound names fall through to the
-  // existing registry path.
+  // A name bound to a reference is `#REF!`, as calling a cell is; any other
+  // bound non-Lambda value is `#VALUE!`; a bound error propagates verbatim.
+  // Unbound names fall through to the existing registry path.
   if (const NameEnv* env = ctx.name_env(); env != nullptr) {
     if (const Value* bound = env->lookup(name); bound != nullptr) {
+      if (is_reference_binding(env->lookup_ast(name))) {
+        return Value::error(ErrorCode::Ref);
+      }
       if (bound->is_lambda()) {
         // Build a flat argv pointer array from the call's child slots.
         std::vector<const parser::AstNode*> argv;

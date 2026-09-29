@@ -8,6 +8,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/dynamic_array_limits.h"
 #include "eval/eval_context.h"
 #include "eval/lambda_value.h"
@@ -93,6 +94,70 @@ const parser::AstNode* build_array_literal_for(const ArrayValue* arr, Arena& are
   return parser::make_array_literal(arena, rows, cols, children);
 }
 
+// Where a helper's source argument lies on the grid when it is a reference.
+// Excel binds each callback argument taken from such a source as the cell
+// (MAP, REDUCE, SCAN) or the row / column (BYROW, BYCOL) it came from, so
+// ISREF, ROW or OFFSET inside the body see a reference. `valid` is false for
+// an array or computed source, whose elements bind by value.
+struct SourceOrigin {
+  bool valid = false;
+  parser::Reference top_left{};
+};
+
+SourceOrigin source_origin(const parser::AstNode& node, const ArrayValue* arr, Arena& arena,
+                           const FunctionRegistry& registry, const EvalContext& ctx) {
+  SourceOrigin out;
+  const parser::AstNode* ref = resolve_binding_reference(node, arena, registry, ctx);
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  if (ref == nullptr || !declared_rect_endpoint_pair(*ref, &lhs, &rhs)) {
+    return out;
+  }
+  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);
+  // The evaluated array must lie inside the rectangle for every element to
+  // have a cell of its own.
+  if (!rect || arr->rows > rect.value().rows() || arr->cols > rect.value().cols()) {
+    return out;
+  }
+  out.valid = true;
+  out.top_left.sheet = lhs.sheet;
+  out.top_left.sheet_quoted = lhs.sheet_quoted;
+  out.top_left.row = rect.value().row_first;
+  out.top_left.col = rect.value().col_first;
+  return out;
+}
+
+// The `RangeOp` over rows `[r1, r2]` x columns `[c1, c2]` of `origin`'s source
+// (a single cell stays a one-cell `RangeOp`, the shape a resolved reference
+// binds as). Returns nullptr when the source is not a reference or the arena
+// is exhausted.
+const parser::AstNode* origin_rect_ast(const SourceOrigin& origin, std::uint32_t r1, std::uint32_t c1, std::uint32_t r2,
+                                       std::uint32_t c2, Arena& arena) {
+  if (!origin.valid) {
+    return nullptr;
+  }
+  parser::Reference first = origin.top_left;
+  parser::Reference last = origin.top_left;
+  first.row += r1;
+  first.col += c1;
+  last.row += r2;
+  last.col += c2;
+  parser::AstNode* lhs = parser::make_ref(arena, first);
+  parser::AstNode* rhs = parser::make_ref(arena, last);
+  if (lhs == nullptr || rhs == nullptr) {
+    return nullptr;
+  }
+  return parser::make_range_op(arena, lhs, rhs);
+}
+
+// The one-cell reference of row-major element `i` of `arr`, or nullptr for a
+// non-reference source.
+const parser::AstNode* element_ast(const SourceOrigin& origin, const ArrayValue* arr, std::size_t i, Arena& arena) {
+  const auto r = static_cast<std::uint32_t>(i / arr->cols);
+  const auto c = static_cast<std::uint32_t>(i % arr->cols);
+  return origin_rect_ast(origin, r, c, r, c, arena);
+}
+
 // Evaluates an argument in array context, returning the `ArrayValue*` on
 // success. On failure paths (argument error, non-array result) writes the
 // appropriate scalar error to `*out_err` and returns nullptr.
@@ -171,6 +236,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   if (lv == nullptr) {
     return err;
   }
+  const SourceOrigin origin = source_origin(call.as_call_arg(0), in, arena, registry, ctx);
   if (in->rows == 0U || in->cols == 0U) {
     // Mac Excel: an empty input has no row / column to apply the lambda to.
     return Value::error(ErrorCode::Calc);
@@ -208,11 +274,13 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
       }
     }
     const Value slice = Value::array(slice_arr);
-    // Bind the slice with both the Value and a synthetic ArrayLiteral AST
-    // so range-aware functions inside the body (`SUM(r)`, `AVERAGE(r)`,
-    // ...) flatten the slice through the dispatcher's ArrayLiteral branch
-    // instead of receiving an opaque `Value::Array` they cannot coerce.
-    const parser::AstNode* slice_ast = build_array_literal_for(slice_arr, arena);
+    // A reference source binds the slice as its row / column reference;
+    // otherwise a synthetic ArrayLiteral AST lets range-aware functions
+    // inside the body (`SUM(r)`, ...) flatten the slice through the
+    // dispatcher's ArrayLiteral branch.
+    const parser::AstNode* slice_ast = origin.valid ? (by_row ? origin_rect_ast(origin, i, 0U, i, cols_in - 1U, arena)
+                                                              : origin_rect_ast(origin, 0U, i, rows_in - 1U, i, arena))
+                                                    : build_array_literal_for(slice_arr, arena);
     if (slice_ast == nullptr) {
       return Value::error(ErrorCode::Num);
     }
@@ -294,6 +362,14 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   if (lv == nullptr) {
     return err;
   }
+  SourceOrigin* origins = arena.create_array<SourceOrigin>(array_count);
+  const parser::AstNode** arg_asts = arena.create_array<const parser::AstNode*>(array_count);
+  if (origins == nullptr || arg_asts == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t i = 0; i < array_count; ++i) {
+    origins[i] = source_origin(call.as_call_arg(i), arrays[i], arena, registry, ctx);
+  }
 
   if (rows == 0U || cols == 0U) {
     return Value::error(ErrorCode::Calc);
@@ -320,14 +396,13 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     for (std::uint32_t k = 0; k < array_count; ++k) {
       if (r >= arrays[k]->rows || c >= arrays[k]->cols) {
         args[k] = Value::error(ErrorCode::NA);
+        arg_asts[k] = nullptr;
       } else {
         args[k] = arrays[k]->cells[static_cast<std::size_t>(r) * arrays[k]->cols + c];
+        arg_asts[k] = origin_rect_ast(origins[k], r, c, r, c, arena);
       }
     }
-    // MAP per-cell args are scalars from the input arrays; no AST hint
-    // needed because range-aware functions inside the lambda body would
-    // see a single cell either way.
-    const Value res = invoke_lambda_values(lv, array_count, args, arena, registry, ctx);
+    const Value res = invoke_lambda_values_with_ast(lv, array_count, args, arg_asts, arena, registry, ctx);
     if (res.is_error()) {
       out_cells[idx] = res;
       continue;
@@ -349,8 +424,10 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (call.as_call_arity() != 3U) {
     return Value::error(ErrorCode::Value);
   }
-  // initial_value is evaluated as a plain scalar Value; an error propagates.
-  Value acc = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  // initial_value binds like a LAMBDA argument, so a reference seed stays a
+  // reference for the first call; an error propagates.
+  const parser::AstNode* acc_ast = nullptr;
+  Value acc = eval_binding_source(call.as_call_arg(0), arena, registry, ctx, &acc_ast);
   if (acc.is_error()) {
     return acc;
   }
@@ -363,6 +440,7 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (lv == nullptr) {
     return err;
   }
+  const SourceOrigin origin = source_origin(call.as_call_arg(1), in, arena, registry, ctx);
 
   // An empty input is a no-op fold: REDUCE returns the seed unchanged
   // (the Mac Excel observed behaviour for `=REDUCE(0, FILTER(...empty...), ...)`).
@@ -372,17 +450,17 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
 
   Value args[2] = {Value::blank(), Value::blank()};
+  const parser::AstNode* arg_asts[2] = {nullptr, nullptr};
   for (std::size_t i = 0; i < total; ++i) {
     args[0] = acc;
     args[1] = in->cells[i];
+    // Only the seed can be a reference; every later accumulator is a result.
+    arg_asts[0] = i == 0U ? acc_ast : nullptr;
+    arg_asts[1] = element_ast(origin, in, i, arena);
     // An errored cell reaches the lambda verbatim, matching SCAN: a body
     // that guards with IFERROR keeps folding, and one that does not leaves
     // the error in the accumulator, which is what the fold returns.
-    //
-    // REDUCE feeds scalar (accumulator, current) per call. The accumulator
-    // can be any Value but is consumed inside the body via the parameter
-    // name lookup, not as a range-aware seam, so no AST hint is required.
-    acc = invoke_lambda_values(lv, 2U, args, arena, registry, ctx);
+    acc = invoke_lambda_values_with_ast(lv, 2U, args, arg_asts, arena, registry, ctx);
   }
   return acc;
 }
@@ -392,7 +470,8 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (call.as_call_arity() != 3U) {
     return Value::error(ErrorCode::Value);
   }
-  Value acc = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  const parser::AstNode* acc_ast = nullptr;
+  Value acc = eval_binding_source(call.as_call_arg(0), arena, registry, ctx, &acc_ast);
   if (acc.is_error()) {
     return acc;
   }
@@ -405,6 +484,7 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (lv == nullptr) {
     return err;
   }
+  const SourceOrigin origin = source_origin(call.as_call_arg(1), in, arena, registry, ctx);
 
   const std::uint32_t rows = in->rows;
   const std::uint32_t cols = in->cols;
@@ -421,18 +501,18 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
 
   Value args[2] = {Value::blank(), Value::blank()};
+  const parser::AstNode* arg_asts[2] = {nullptr, nullptr};
   const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
   for (std::size_t i = 0; i < total; ++i) {
     args[0] = acc;
     args[1] = in->cells[i];
+    arg_asts[0] = i == 0U ? acc_ast : nullptr;
+    arg_asts[1] = element_ast(origin, in, i, arena);
     // An errored cell is handed to the lambda verbatim rather than
     // short-circuited: a body that guards with IFERROR recovers, and one
     // that does not returns the error, which then rides the accumulator
     // into every later cell. Both outcomes are per-cell, not whole-call.
-    //
-    // SCAN feeds scalar (accumulator, current) per call. No AST hint is
-    // needed; the body sees both bindings as scalar Values.
-    const Value res = invoke_lambda_values(lv, 2U, args, arena, registry, ctx);
+    const Value res = invoke_lambda_values_with_ast(lv, 2U, args, arg_asts, arena, registry, ctx);
     if (res.is_error()) {
       acc = res;
       out_cells[i] = res;

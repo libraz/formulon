@@ -1,0 +1,178 @@
+suite: lambda_reference_params
+description: >
+  LAMBDA parameters and LET names bound to a reference stay references:
+  ISREF, ROW / COLUMN, CELL and OFFSET inside the body see the argument's
+  rectangle, not its value. Also pins what the helper callbacks (MAP /
+  BYROW / BYCOL / REDUCE / SCAN / MAKEARRAY) receive for a range source.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # -- LAMBDA immediate invocation ----------------------------------------
+  - id: lambda_isref_single_cell
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, ISREF(r))(A1)"
+
+  - id: lambda_isref_scalar
+    formula: "=LAMBDA(r, ISREF(r))(1)"
+
+  - id: lambda_isref_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, ISREF(r))(A1:A3)"
+
+  - id: lambda_isref_expression
+    setup: { A1: 10 }
+    formula: "=LAMBDA(r, ISREF(r))(A1+0)"
+
+  - id: lambda_isref_offset_argument
+    setup: { A1: 10, A2: 20 }
+    formula: "=LAMBDA(r, ISREF(r))(OFFSET(A1,1,0))"
+
+  - id: lambda_row_single_cell
+    setup: { B5: 7 }
+    formula: "=LAMBDA(r, ROW(r))(B5)"
+
+  - id: lambda_column_range
+    setup: { C2: 1, D2: 2, C3: 3, D3: 4 }
+    formula: "=LAMBDA(r, COLUMN(r))(C2:D3)"
+
+  - id: lambda_rows_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, ROWS(r))(A1:A3)"
+
+  - id: lambda_offset_single_cell
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, OFFSET(r,1,0))(A1)"
+
+  - id: lambda_sum_offset_resize
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, SUM(OFFSET(r,0,0,2,1)))(A1)"
+
+  - id: lambda_cell_address
+    setup: { B2: 5 }
+    formula: "=LAMBDA(r, CELL(\"address\", r))(B2)"
+
+  - id: lambda_index_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, INDEX(r,2))(A1:A3)"
+
+  - id: lambda_isref_index_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, ISREF(INDEX(r,2)))(A1:A3)"
+
+  - id: lambda_row_index_argument
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, ROW(r))(INDEX(A1:A3,2))"
+
+  - id: lambda_areas_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, AREAS(r))(A1:A3)"
+
+  - id: lambda_range_endpoint
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LAMBDA(r, SUM(r:A3))(A2)"
+
+  - id: lambda_nested_row
+    setup: { B5: 7 }
+    formula: "=LAMBDA(r, LAMBDA(s, ROW(s))(r))(B5)"
+
+  - id: lambda_nested_isref
+    setup: { B5: 7 }
+    formula: "=LAMBDA(r, LAMBDA(s, ISREF(s))(r))(B5)"
+
+  - id: lambda_let_bound_row
+    setup: { B5: 7 }
+    formula: "=LET(f, LAMBDA(r, ROW(r)), f(B5))"
+
+  - id: lambda_let_bound_offset
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LET(f, LAMBDA(r, OFFSET(r,2,0)), f(A1))"
+
+  - id: lambda_let_name_argument
+    setup: { B5: 7 }
+    formula: "=LET(x, B5, LAMBDA(r, ROW(r))(x))"
+
+  - id: lambda_value_arithmetic
+    setup: { A1: 10 }
+    formula: "=LAMBDA(r, r*2)(A1)"
+
+  # -- LET ---------------------------------------------------------------
+  - id: let_row_single_cell
+    setup: { B5: 7 }
+    formula: "=LET(x, B5, ROW(x))"
+
+  - id: let_isref_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LET(x, A1:A3, ISREF(x))"
+
+  - id: let_isref_single_cell
+    setup: { A1: 10 }
+    formula: "=LET(x, A1, ISREF(x))"
+
+  - id: let_isref_scalar
+    formula: "=LET(x, 1, ISREF(x))"
+
+  - id: let_offset_single_cell
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LET(x, A1, OFFSET(x,1,0))"
+
+  - id: let_cell_address
+    setup: { B2: 5 }
+    formula: "=LET(x, B2, CELL(\"address\", x))"
+
+  # -- Helper callbacks over a range source -------------------------------
+  - id: map_isref_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=MAP(A1:A3, LAMBDA(x, ISREF(x)))"
+
+  - id: map_cell_address_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=MAP(A1:A3, LAMBDA(x, CELL(\"address\", x)))"
+
+  - id: byrow_isref_range
+    setup: { A1: 1, B1: 2, A2: 3, B2: 4 }
+    formula: "=BYROW(A1:B2, LAMBDA(x, ISREF(x)))"
+
+  - id: bycol_isref_range
+    setup: { A1: 1, B1: 2, A2: 3, B2: 4 }
+    formula: "=BYCOL(A1:B2, LAMBDA(x, ISREF(x)))"
+
+  - id: reduce_isref_value_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=REDUCE(\"\", A1:A3, LAMBDA(a, v, a&ISREF(v)))"
+
+  - id: reduce_isref_initial_reference
+    setup: { A1: 10, A2: 20 }
+    formula: "=REDUCE(A1, A2:A2, LAMBDA(a, v, ISREF(a)))"
+
+  - id: scan_isref_value_range
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=SCAN(\"\", A1:A3, LAMBDA(a, v, ISREF(v)))"
+
+  - id: makearray_isref
+    formula: "=MAKEARRAY(1, 2, LAMBDA(r, c, ISREF(r)))"
+
+  # -- Calling a reference ------------------------------------------------
+  - id: call_cell_reference
+    setup: { A1: 5 }
+    formula: "=A1(1)"
+
+  - id: call_empty_cell_reference
+    formula: "=B1(1)"
+
+  - id: call_lambda_param_bound_to_cell
+    setup: { A1: 5 }
+    formula: "=LAMBDA(f, f(1))(A1)"
+
+  - id: call_lambda_param_bound_to_range
+    setup: { A1: 5 }
+    formula: "=LAMBDA(f, f(1))(A1:A2)"
+
+  - id: call_let_name_bound_to_cell
+    setup: { A1: 5 }
+    formula: "=LET(f, A1, f(1))"
+
+  - id: call_lambda_param_bound_to_value
+    formula: "=LAMBDA(f, f(1))(5)"
+
+  - id: call_let_name_bound_to_value
+    formula: "=LET(f, 5, f(1))"
