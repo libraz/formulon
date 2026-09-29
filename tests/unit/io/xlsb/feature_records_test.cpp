@@ -25,6 +25,8 @@
 //   prot2      the remaining protection flags, one per sheet
 //   excelprot  SHA-512 sheet and workbook passwords set by Excel
 //   x14        data bars linked to x14 counterparts
+//   x14bars    x14 data-bar fields varied one per rule: border, gradient,
+//              axis position and colour, negative fill and border, lengths
 
 #include <algorithm>
 #include <cstddef>
@@ -123,9 +125,7 @@ void DescribeColor(std::ostream& os, cf::Color c) {
 }
 
 /// Every modelled CF field except the verbatim `ext_lst_raw` XML, which
-/// only an .xlsx source can carry. The x14 overlay of a linked data bar is
-/// not decoded from .xlsb, so its lengths -- which the overlay overrides --
-/// are left out for linked rules.
+/// only an .xlsx source can carry.
 std::string DescribeCf(const Sheet& sheet) {
   std::ostringstream os;
   for (const cf::ConditionalFormat& f : sheet.conditional_formats()) {
@@ -156,11 +156,21 @@ std::string DescribeCf(const Sheet& sheet) {
         DescribeCfvo(os, r.data_bar->min);
         DescribeCfvo(os, r.data_bar->max);
         DescribeColor(os, r.data_bar->fill);
-        if (r.id.empty()) {
-          os << " len=" << static_cast<int>(r.data_bar->min_length_pct) << "-"
-             << static_cast<int>(r.data_bar->max_length_pct);
+        const cf::DataBarSpec& b = *r.data_bar;
+        os << " len=" << static_cast<int>(b.min_length_pct) << "-" << static_cast<int>(b.max_length_pct)
+           << " show=" << b.show_value << " grad=" << b.gradient << " axis=" << static_cast<int>(b.axis_position);
+        os << " neg";
+        DescribeColor(os, b.negative_fill);
+        os << " axiscol";
+        DescribeColor(os, b.axis_color);
+        if (b.border) {
+          os << " border";
+          DescribeColor(os, *b.border);
         }
-        os << " show=" << r.data_bar->show_value;
+        if (b.negative_border) {
+          os << " negborder";
+          DescribeColor(os, *b.negative_border);
+        }
       }
       if (r.icon_set) {
         os << " icons=" << static_cast<int>(r.icon_set->name) << " rev=" << r.icon_set->reverse
@@ -273,10 +283,13 @@ bool SameUpToPtgClass(const std::string& a, const std::string& b) {
     return false;
   }
   // The formula size fields (BrtBeginCFRule bytes 30-41, BrtCFVO 20-23),
-  // which the writer fills with `cce` (see `EncodedFeatureFormula`).
+  // which the writer fills with `cce` (see `EncodedFeatureFormula`), and
+  // the legacy bar lengths (BrtBeginDataBar bytes 0-1): for an x14-linked
+  // bar Excel writes the pre-2010 10/90 there, while the writer, like the
+  // .xlsx writer, writes the model's lengths.
   const std::string type = a.substr(0, colon);
   const std::size_t skip_from = type == "463" ? 30U : type == "471" ? 20U : 0U;
-  const std::size_t skip_to = type == "463" ? 42U : type == "471" ? 24U : 0U;
+  const std::size_t skip_to = type == "463" ? 42U : type == "471" ? 24U : type == "467" ? 2U : 0U;
   for (std::size_t i = colon + 2U; i + 1U < a.size(); i += 3U) {
     const std::size_t byte = (i - colon - 2U) / 3U;
     if (a.compare(i, 2, b, i, 2) == 0 || (byte >= skip_from && byte < skip_to)) {
@@ -351,7 +364,7 @@ TEST_P(XlsbFeatureWriterBytes, MatchExcelUpToPtgClass) {
 
 INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureFixture,
                          ::testing::Values("base", "cellis_ops", "text_rules", "flags", "cfvo", "iconbits", "rel",
-                                           "dv_all", "prot", "prot2", "excelprot", "x14"));
+                                           "dv_all", "prot", "prot2", "excelprot", "x14", "x14bars"));
 
 // Left out of the byte comparison, all for the Ptg encoder's canonical
 // form or the model's shape rather than the record layout: `flags` and
@@ -360,8 +373,8 @@ INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureFixture,
 // its own function-token classes) and `iconbits` (a `3Flags` set whose
 // `num 0` floor threshold the model drops, as the OOXML path does).
 INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureWriterBytes,
-                         ::testing::Values("base", "cellis_ops", "cfvo", "dv_all", "prot", "prot2", "excelprot",
-                                           "x14"));
+                         ::testing::Values("base", "cellis_ops", "cfvo", "dv_all", "prot", "prot2", "excelprot", "x14",
+                                           "x14bars"));
 
 /// Payload of the first `type` record in `part`, hex-encoded.
 std::string RecordPayload(const std::vector<std::uint8_t>& xlsb, const std::string& part, std::uint16_t type) {

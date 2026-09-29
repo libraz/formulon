@@ -34,6 +34,14 @@ inline constexpr std::uint16_t kBrtEndConditionalFormatting = 462;
 /// and ending with its BrtEndConditionalFormatting.
 std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const FeatureFormulaReadContext& ctx);
 
+/// Folds the x14 data-bar settings the legacy records cannot carry
+/// (negative fill and border, axis position and colour, border, gradient,
+/// bar lengths) onto the linked rules of `formats`, as the .xlsx reader
+/// does with `<x14:dataBar>`. `records` is a run of framed tail records;
+/// the x14 blocks stay retained verbatim. An x14 rule whose records hold
+/// anything unmeasured leaves its legacy rule as decoded.
+void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFormat>& formats);
+
 /// Emits `format` as one framed block. Fails on a rule the records cannot
 /// carry (a formula the Ptg codec refuses, an x14 link id that is not a
 /// GUID, a malformed number threshold).

@@ -1445,6 +1445,11 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     return spills.error();
   }
   if (!state.tail.empty()) {
+    std::vector<cf::ConditionalFormat>& formats = wb.sheet(sheet_index).mutable_conditional_formats();
+    for (const std::vector<std::uint8_t>* slot :
+         {&state.tail.before_merges, &state.tail.after_merges_before_hyperlinks, &state.tail.after_hyperlinks}) {
+      apply_x14_data_bar_overlays(ByteSpan{slot->data(), slot->size()}, formats);
+    }
     for (const XlsbSheetRange& range : sheet_ranges) {
       XlsbExternSheetEntry entry;
       const bool sheetless = range.itab_first == -2 && range.itab_last == -2;

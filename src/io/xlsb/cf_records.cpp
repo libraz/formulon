@@ -40,6 +40,24 @@ constexpr std::uint16_t kCfRuleExt = 1146;
 constexpr std::array<std::uint8_t, 4> kFrtVersion = {0x02, 0x0E, 0x00, 0x00};
 constexpr std::size_t kGuidBytes = 16;
 
+// x14 conditional-format records (inside a sheet-level FRT block).
+// BrtBeginCFRule14 for a data bar is 70 bytes with the rule GUID at offset
+// 50; BrtBeginDataBar14 is a zero u32, minLength, maxLength, a byte always
+// 1, direction, axis position (0 automatic, 1 middle, 2 none) and a u16
+// flag word; each BrtColor14 is a zero u32 and a BrtColor, positional in
+// the order border, negative fill, negative border, axis.
+constexpr std::uint16_t kBeginCfRule14 = 1048;
+constexpr std::uint16_t kEndCfRule14 = 1049;
+constexpr std::uint16_t kBeginDataBar14 = 1051;
+constexpr std::uint16_t kColor14 = 1055;
+constexpr std::size_t kDataBarRule14Bytes = 70;
+constexpr std::size_t kRule14GuidOffset = 50;
+constexpr std::size_t kDataBar14Bytes = 11;
+constexpr std::uint16_t kBar14Border = 0x01;
+constexpr std::uint16_t kBar14Gradient = 0x02;
+constexpr std::uint16_t kBar14NegativeFill = 0x04;
+constexpr std::uint16_t kBar14NegativeBorder = 0x08;
+
 // BrtBeginCFRule flag bits; every other bit was zero in every sample.
 constexpr std::uint16_t kFlagStopIfTrue = 0x02;
 constexpr std::uint16_t kFlagAbove = 0x04;
@@ -753,6 +771,84 @@ std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const Featu
     out.rules.push_back(std::move(*rule));
   }
   return std::nullopt;
+}
+
+void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFormat>& formats) {
+  // State of the x14 rule being read; `measured` drops to false at the
+  // first record outside the measured data-bar shape.
+  struct Rule14 {
+    bool measured = false;
+    bool has_bar = false;
+    std::string id;
+    std::uint16_t flags = 0;
+    cf::DataBarSpec bar;
+    std::vector<cf::Color> colors;
+  } rule14;
+  ByteSpan cursor = records;
+  while (cursor.size != 0U) {
+    auto rec_or = read_record(cursor);
+    if (!rec_or) {
+      return;
+    }
+    const XlsbRecord& rec = rec_or.value();
+    const std::uint8_t* d = rec.payload.data;
+    if (rec.type == kBeginCfRule14) {
+      rule14 = Rule14{};
+      rule14.measured = rec.payload.size == kDataBarRule14Bytes && d[4] == 4U;
+      if (rule14.measured) {
+        rule14.id = FormatGuid(d + kRule14GuidOffset);
+      }
+    } else if (rec.type == kBeginDataBar14 && rule14.measured) {
+      rule14.measured = rec.payload.size == kDataBar14Bytes && d[0] == 0U && d[1] == 0U && d[2] == 0U && d[3] == 0U &&
+                        d[4] <= 100U && d[5] <= 100U && d[6] == 1U && d[8] <= 2U && (d[9] & 0xF0U) == 0U && d[10] == 0U;
+      if (rule14.measured) {
+        rule14.has_bar = true;
+        rule14.bar.min_length_pct = d[4];
+        rule14.bar.max_length_pct = d[5];
+        rule14.bar.axis_position = static_cast<cf::DataBarAxisPosition>(d[8]);
+        rule14.flags = d[9];
+        rule14.bar.gradient = (rule14.flags & kBar14Gradient) != 0U;
+      }
+    } else if (rec.type == kColor14 && rule14.measured) {
+      const bool framed = rec.payload.size == 12U && d[0] == 0U && d[1] == 0U && d[2] == 0U && d[3] == 0U;
+      const std::optional<cf::Color> color = framed ? DecodeColor(ByteSpan{d + 4, 8U}) : std::nullopt;
+      rule14.measured = color.has_value();
+      if (color) {
+        rule14.colors.push_back(*color);
+      }
+    } else if (rec.type == kEndCfRule14 && rule14.measured && rule14.has_bar) {
+      const bool border = (rule14.flags & kBar14Border) != 0U;
+      const bool negative_fill = (rule14.flags & kBar14NegativeFill) != 0U;
+      const bool negative_border = border && (rule14.flags & kBar14NegativeBorder) != 0U;
+      const bool axis = rule14.bar.axis_position != cf::DataBarAxisPosition::None;
+      const std::size_t expected = static_cast<std::size_t>(border) + static_cast<std::size_t>(negative_fill) +
+                                   static_cast<std::size_t>(negative_border) + static_cast<std::size_t>(axis);
+      for (cf::ConditionalFormat& format : formats) {
+        for (cf::CFRule& rule : format.rules) {
+          if (rule.id != rule14.id || !rule.data_bar || rule14.colors.size() != expected) {
+            continue;
+          }
+          cf::DataBarSpec& out = *rule.data_bar;
+          std::size_t next = 0;
+          if (border) {
+            out.border = rule14.colors[next++];
+          }
+          out.negative_fill = negative_fill ? rule14.colors[next++] : out.fill;
+          if (negative_border) {
+            out.negative_border = rule14.colors[next++];
+          }
+          if (axis) {
+            out.axis_color = rule14.colors[next++];
+          }
+          out.axis_position = rule14.bar.axis_position;
+          out.gradient = rule14.bar.gradient;
+          out.min_length_pct = rule14.bar.min_length_pct;
+          out.max_length_pct = rule14.bar.max_length_pct;
+        }
+      }
+      rule14.measured = false;
+    }
+  }
 }
 
 Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const cf::ConditionalFormat& format,
