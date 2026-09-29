@@ -1038,6 +1038,10 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
                         "xlsb writer: defined-name formula failed to parse for Ptg encoding",
                         std::string("context=xlsb_writer name=") + name);
     }
+    // fCalcExp (grbit bit 4): Excel 365 sets it on a name whose body is a LAMBDA.
+    if (root->kind() == parser::NodeKind::Lambda) {
+      p[0] |= 0x10U;
+    }
     auto encoded_or = encode_ptgs(*root, sheet_names, sheet_ranges, name_table);
     if (!encoded_or) {
       return encoded_or.error();

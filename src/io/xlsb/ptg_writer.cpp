@@ -7,6 +7,7 @@
 
 #include "io/xlsb/ptg_writer.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -247,16 +248,11 @@ class Encoder {
       case parser::NodeKind::ImplicitIntersection:
         return unsupported_node("ImplicitIntersection");
       case parser::NodeKind::Lambda:
-        return unsupported_node("Lambda");
+        return emit_lambda(node);
       case parser::NodeKind::LetBinding:
         return emit_let(node);
-      case parser::NodeKind::LambdaCall: {
-        const parser::AstNode& callee = node.as_lambda_call_callee();
-        if (callee.kind() == parser::NodeKind::NameRef && !callee.as_name_sheet().empty()) {
-          return emit_sheet_name_call(node);
-        }
-        return unsupported_node("LambdaCall");
-      }
+      case parser::NodeKind::LambdaCall:
+        return emit_lambda_call(node);
       case parser::NodeKind::ErrorPlaceholder:
         return unsupported_node("ErrorPlaceholder");
     }
@@ -310,6 +306,11 @@ class Encoder {
   /// carry every name this encoder is asked to reference — the caller
   /// (`write_xlsb`) builds it from `collect_ptg_names` before encoding
   /// any cell, so a live `NameRef` always resolves.
+  bool in_let_scope(std::string_view name) const {
+    return std::any_of(let_scope_.begin(), let_scope_.end(),
+                       [name](const auto& binding) { return strings::case_insensitive_eq(binding.first, name); });
+  }
+
   Expected<void, Error> emit_name_ref(std::string_view name) {
     // Case-insensitive: LET/LAMBDA parameter names resolve case-insensitively
     // (Excel folds ASCII case on name resolution), so a NameRef spelled in a
@@ -361,19 +362,67 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
-  /// Encodes `sheet!name(args)` the way a call to a named LAMBDA is stored:
-  /// the callee name-ref, then the arguments, then `PtgFuncVar` with the
-  /// `id == 255` sentinel and `cparams == arity + 1`.
-  Expected<void, Error> emit_sheet_name_call(const parser::AstNode& node) {
-    const parser::AstNode& callee = node.as_lambda_call_callee();
-    RETURN_IF_ERROR(emit_sheet_name_ref(callee.as_name_sheet(), callee.as_name()));
+  /// Encodes a `LambdaCall` the way Excel 365 stores any LAMBDA
+  /// invocation: the callee operand (`Sheet1!Fn` as `PtgNameX`, or an
+  /// inline `LAMBDA(...)` / curried call), then the arguments, then
+  /// `PtgFuncVar` with the `id == 255` sentinel and `cparams == arity + 1`.
+  Expected<void, Error> emit_lambda_call(const parser::AstNode& node) {
+    RETURN_IF_ERROR(emit(node.as_lambda_call_callee()));
     const std::uint32_t arity = node.as_lambda_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
       RETURN_IF_ERROR(emit(node.as_lambda_call_arg(i)));
     }
-    const std::uint32_t cparams = arity + 1;  // +1 for the name-ref operand
+    return emit_hidden_call_tail(arity + 1, "LambdaCall(arity>254)");
+  }
+
+  /// Encodes `Fn(args)` whose callee is a defined name or an in-scope LET /
+  /// LAMBDA parameter: the callee `PtgName`, the arguments, then
+  /// `PtgFuncVar(255)`, as Excel 365 saves a call to a named LAMBDA.
+  Expected<void, Error> emit_name_call(const parser::AstNode& node) {
+    RETURN_IF_ERROR(emit_name_ref(node.as_call_name()));
+    const std::uint32_t arity = node.as_call_arity();
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      RETURN_IF_ERROR(emit(node.as_call_arg(i)));
+    }
+    return emit_hidden_call_tail(arity + 1, "Call(arity>254, named LAMBDA)");
+  }
+
+  /// Encodes a `Lambda` as Excel 365 saves one: `PtgName(_xlfn.LAMBDA)`, a
+  /// `PtgName(_xlpm.<param>)` per parameter, the body with the parameters
+  /// in scope, then `PtgFuncVar(255)` with `cparams == params + 2`.
+  /// Optional `[param]`s have no measured encoding and are refused.
+  Expected<void, Error> emit_lambda(const parser::AstNode& node) {
+    if (node.as_lambda_optional_count() != 0) {
+      return unsupported_node("Lambda(optional parameter)");
+    }
+    const auto it_lambda = name_table_.find("_xlfn.LAMBDA");
+    if (it_lambda == name_table_.end()) {
+      return unsupported_node("Lambda(_xlfn.LAMBDA not registered)");
+    }
+    emit_u8(out_, 0x23);  // PtgName (reference-class): the LAMBDA name-ref
+    emit_u32(out_, it_lambda->second);
+    const std::uint32_t n = node.as_lambda_param_count();
+    for (std::uint32_t i = 0; i < n; ++i) {
+      const std::string_view raw_name = node.as_lambda_param(i);
+      const auto it_param = name_table_.find(std::string("_xlpm.") + std::string(raw_name));
+      if (it_param == name_table_.end()) {
+        return unsupported_node("Lambda(param name not registered)");
+      }
+      emit_u8(out_, 0x23);  // PtgName (reference-class): the parameter name-ref
+      emit_u32(out_, it_param->second);
+      let_scope_.emplace_back(raw_name, it_param->second);
+    }
+    auto status = emit(node.as_lambda_body());
+    let_scope_.resize(let_scope_.size() - n);
+    RETURN_IF_ERROR(status);
+    return emit_hidden_call_tail(n + 2, "Lambda(too many parameters)");
+  }
+
+  /// Emits the `PtgFuncVar(255)` that closes a hidden-name-route call whose
+  /// `cparams` operands (callee name-ref included) are already on the stack.
+  Expected<void, Error> emit_hidden_call_tail(std::uint32_t cparams, const char* too_many) {
     if (cparams > 0xFF) {
-      return unsupported_node("LambdaCall(arity>254)");
+      return unsupported_node(too_many);
     }
     emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
     emit_u8(out_, static_cast<std::uint8_t>(cparams));
@@ -658,10 +707,16 @@ class Encoder {
     // before anything is looked up, so both containers agree on the
     // callee and `func_id_table` needs no alias of its own.
     const std::string_view name = canonical_function_name(node.as_call_name());
+    if (in_let_scope(node.as_call_name())) {
+      return emit_name_call(node);
+    }
     if (UsesHiddenNameRoute(name)) {
       return emit_future_function_call(node, name);
     }
     const XlsbFuncEntry* entry = lookup_func_by_name(name);
+    if (entry == nullptr && name_table_.count(std::string(node.as_call_name())) != 0) {
+      return emit_name_call(node);
+    }
     if (entry == nullptr) {
       // A classic callee whose id `func_id_table` does not yet carry.
       // Encoding it through the hidden-name route would make real Excel
@@ -833,29 +888,36 @@ void AddSheetRange(std::int32_t itab_first, std::int32_t itab_last, SheetRangeTa
   }
 }
 
+/// True when `name` matches an in-scope LET / LAMBDA parameter.
+bool InParamScope(const std::vector<std::string_view>& scope, std::string_view name) {
+  // Case-insensitive: see `Encoder::emit_name_ref`.
+  return std::any_of(scope.begin(), scope.end(),
+                     [name](std::string_view param) { return strings::case_insensitive_eq(param, name); });
+}
+
 /// Recursive worker for `collect_ptg_names` carrying the LET / LAMBDA
 /// parameter names currently in scope (innermost last). A `NameRef`
 /// matching an in-scope parameter resolves at encode time to that
 /// parameter's hidden `_xlpm.<name>` placeholder (see
 /// `Encoder::emit_name_ref`), so it must not be registered as an ordinary
-/// workbook defined name.
+/// workbook defined name. `scope_resolved` selects the
+/// `collect_scope_resolved_names` view: sheet-qualified names are skipped
+/// and a callee with no function id (`Fn(3)`, possibly a named LAMBDA) is
+/// included, since it resolves from the formula's scope as a name does.
 void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& names,
                         std::unordered_set<std::string>& seen, std::vector<std::string_view>& scope,
-                        bool skip_sheet_qualified) {
+                        bool scope_resolved) {
   switch (node.kind()) {
     case parser::NodeKind::NameRef: {
       const std::string_view name = node.as_name();
       if (!node.as_name_sheet().empty()) {
-        if (!skip_sheet_qualified) {
+        if (!scope_resolved) {
           AddName(name, names, seen);  // never a LET / LAMBDA parameter.
         }
         return;
       }
-      // Case-insensitive: see `Encoder::emit_name_ref`.
-      for (const std::string_view param : scope) {
-        if (strings::case_insensitive_eq(param, name)) {
-          return;  // LET / LAMBDA parameter: encoded via its _xlpm. placeholder.
-        }
+      if (InParamScope(scope, name)) {
+        return;  // LET / LAMBDA parameter: encoded via its _xlpm. placeholder.
       }
       AddName(name, names, seen);
       return;
@@ -864,44 +926,46 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       const std::string_view name = canonical_function_name(node.as_call_name());
       if (UsesHiddenNameRoute(name)) {
         AddName(xlsb_hidden_function_name(name), names, seen);
+      } else if (scope_resolved && lookup_func_by_name(name) == nullptr && !InParamScope(scope, node.as_call_name())) {
+        AddName(node.as_call_name(), names, seen);
       }
       const std::uint32_t arity = node.as_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_call_arg(i), names, seen, scope, skip_sheet_qualified);
+        CollectNamesScoped(node.as_call_arg(i), names, seen, scope, scope_resolved);
       }
       return;
     }
     case parser::NodeKind::UnaryOp:
-      CollectNamesScoped(node.as_unary_operand(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_unary_operand(), names, seen, scope, scope_resolved);
       return;
     case parser::NodeKind::BinaryOp:
-      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope, skip_sheet_qualified);
-      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope, scope_resolved);
       return;
     case parser::NodeKind::RangeOp:
-      CollectNamesScoped(node.as_range_lhs(), names, seen, scope, skip_sheet_qualified);
-      CollectNamesScoped(node.as_range_rhs(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_range_lhs(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_range_rhs(), names, seen, scope, scope_resolved);
       return;
     case parser::NodeKind::IntersectOp:
-      CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope, skip_sheet_qualified);
-      CollectNamesScoped(node.as_intersect_rhs(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope, scope_resolved);
+      CollectNamesScoped(node.as_intersect_rhs(), names, seen, scope, scope_resolved);
       return;
     case parser::NodeKind::UnionOp: {
       const std::uint32_t arity = node.as_union_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_union_child(i), names, seen, scope, skip_sheet_qualified);
+        CollectNamesScoped(node.as_union_child(i), names, seen, scope, scope_resolved);
       }
       return;
     }
     case parser::NodeKind::ImplicitIntersection:
-      CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope, scope_resolved);
       return;
     case parser::NodeKind::ArrayLiteral: {
       const std::uint32_t rows = node.as_array_rows();
       const std::uint32_t cols = node.as_array_cols();
       for (std::uint32_t r = 0; r < rows; ++r) {
         for (std::uint32_t c = 0; c < cols; ++c) {
-          CollectNamesScoped(node.as_array_element(r, c), names, seen, scope, skip_sheet_qualified);
+          CollectNamesScoped(node.as_array_element(r, c), names, seen, scope, scope_resolved);
         }
       }
       return;
@@ -912,16 +976,15 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       // registration any other future-function callee gets.
       AddName(xlsb_hidden_function_name("ANCHORARRAY"), names, seen);
       if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        CollectNamesScoped(*anchor, names, seen, scope, skip_sheet_qualified);
+        CollectNamesScoped(*anchor, names, seen, scope, scope_resolved);
       }
       return;
     }
     case parser::NodeKind::LambdaCall: {
-      // Only `Sheet1!Fn(args)` is lowered (see `Encoder::emit_sheet_name_call`).
-      CollectNamesScoped(node.as_lambda_call_callee(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_lambda_call_callee(), names, seen, scope, scope_resolved);
       const std::uint32_t arity = node.as_lambda_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_lambda_call_arg(i), names, seen, scope, skip_sheet_qualified);
+        CollectNamesScoped(node.as_lambda_call_arg(i), names, seen, scope, scope_resolved);
       }
       return;
     }
@@ -933,17 +996,28 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
         AddName(std::string("_xlpm.") + std::string(node.as_let_binding_name(i)), names, seen);
         // Excel LET binds sequentially: a value expression sees only the
         // earlier bindings, so collect it before pushing this parameter.
-        CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope, skip_sheet_qualified);
+        CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope, scope_resolved);
         scope.push_back(node.as_let_binding_name(i));
       }
-      CollectNamesScoped(node.as_let_body(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_let_body(), names, seen, scope, scope_resolved);
       scope.resize(scope_base);
       return;
     }
-    // Leaves, and forms the encoder does not lower (Lambda /
-    // StructuredRef): nothing to collect. A future writer bundle that
-    // lowers these would extend this switch alongside the corresponding
-    // `emit_*` case.
+    case parser::NodeKind::Lambda: {
+      AddName("_xlfn.LAMBDA", names, seen);
+      const std::uint32_t n = node.as_lambda_param_count();
+      const std::size_t scope_base = scope.size();
+      for (std::uint32_t i = 0; i < n; ++i) {
+        AddName(std::string("_xlpm.") + std::string(node.as_lambda_param(i)), names, seen);
+        scope.push_back(node.as_lambda_param(i));
+      }
+      CollectNamesScoped(node.as_lambda_body(), names, seen, scope, scope_resolved);
+      scope.resize(scope_base);
+      return;
+    }
+    // Leaves, and forms the encoder does not lower (StructuredRef): nothing
+    // to collect. A future writer bundle that lowers these would extend
+    // this switch alongside the corresponding `emit_*` case.
     default:
       return;
   }
@@ -961,13 +1035,13 @@ std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name) {
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
                        std::unordered_set<std::string>& seen) {
   std::vector<std::string_view> scope;
-  CollectNamesScoped(node, names, seen, scope, /*skip_sheet_qualified=*/false);
+  CollectNamesScoped(node, names, seen, scope, /*scope_resolved=*/false);
 }
 
 void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
                                   std::unordered_set<std::string>& seen) {
   std::vector<std::string_view> scope;
-  CollectNamesScoped(node, names, seen, scope, /*skip_sheet_qualified=*/true);
+  CollectNamesScoped(node, names, seen, scope, /*scope_resolved=*/true);
 }
 
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
@@ -1051,6 +1125,9 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       collect_ptg_sheet_ranges(node.as_let_body(), sheet_names, ranges, seen);
       return;
     }
+    case parser::NodeKind::Lambda:
+      collect_ptg_sheet_ranges(node.as_lambda_body(), sheet_names, ranges, seen);
+      return;
     default:
       return;
   }

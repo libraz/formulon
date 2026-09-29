@@ -810,9 +810,7 @@ TEST(XlsbWriteReadSymmetry, SheetQualifiedNameKeepsItsScope) {
 }
 
 // A local name whose body binds its unqualified names in the owning sheet
-// survives a save and reload with its qualifier and value. (A qualified
-// LAMBDA call is pinned at the codec level: the writer cannot lower a
-// LAMBDA-valued definition, so no workbook holding one saves as XLSB.)
+// survives a save and reload with its qualifier and value.
 TEST(XlsbWriteReadSymmetry, SheetQualifiedLocalBodyScopeRoundTrips) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
@@ -869,6 +867,116 @@ TEST(XlsbWriteReadSymmetry, ExcelSheetQualifiedLocalNameFixture) {
   EXPECT_EQ(after.sheet(0).cell_at(0U, 0U)->formula_text, "=Sheet2!Local");
   ASSERT_TRUE(static_cast<bool>(after.recalc(eval::default_registry())));
   EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 0U).as_number(), 20.0);
+}
+
+// Excel-saved workbook (Mac Excel 365): Fn = LAMBDA(x,x*2), G = 5 and
+// Plus = LAMBDA(a,b,a+b); Sheet1!A1:E1 = Fn(3), Plus(1,2), Sheet1!G,
+// LET(f,LAMBDA(y,y+1),f(2)) and LAMBDA(z,z*z)(4). Excel stores a LAMBDA as
+// PtgName(_xlfn.LAMBDA), one PtgName(_xlpm.<param>) per parameter, the body
+// and PtgFuncVar(255); a named or inline LAMBDA call is the callee operand,
+// the arguments and PtgFuncVar(255); a LAMBDA-valued name sets fCalcExp.
+TEST(XlsbWriteReadSymmetry, ExcelLambdaNameFixture) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath("lambda_name.xlsb"));
+  ASSERT_FALSE(bytes.empty());
+  auto loaded = io::xlsb::read_xlsb(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << "read_xlsb failed: " << loaded.error().message;
+  EXPECT_EQ(loaded.value().undecoded_formula_count, 0U);
+  Workbook wb = std::move(loaded.value().workbook);
+
+  const auto expect_workbook = [](Workbook& book) {
+    const Sheet& sheet = book.sheet(0);
+    EXPECT_EQ(sheet.cell_at(0U, 0U)->formula_text, "=Fn(3)");
+    EXPECT_EQ(sheet.cell_at(0U, 1U)->formula_text, "=Plus(1,2)");
+    EXPECT_EQ(sheet.cell_at(0U, 3U)->formula_text, "=LET(f,LAMBDA(y,y+1),f(2))");
+    EXPECT_EQ(sheet.cell_at(0U, 4U)->formula_text, "=LAMBDA(z,z*z)(4)");
+    ASSERT_EQ(book.defined_names().size(), 3U);
+    EXPECT_EQ(book.defined_names()[0].name, "Fn");
+    EXPECT_EQ(book.defined_names()[0].formula, "LAMBDA(x,x*2)");
+    EXPECT_EQ(book.defined_names()[2].formula, "LAMBDA(a,b,a+b)");
+    ASSERT_TRUE(static_cast<bool>(book.recalc(eval::default_registry())));
+    const double expected[] = {6.0, 3.0, 5.0, 3.0, 16.0};
+    for (std::uint32_t col = 0; col < 5U; ++col) {
+      const Value v = book.sheet(0).resolve_cell_value(0U, col);
+      ASSERT_TRUE(v.is_number()) << "col=" << col;
+      EXPECT_EQ(v.as_number(), expected[col]) << "col=" << col;
+    }
+  };
+  expect_workbook(wb);
+
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  std::string workbook_bin;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), "xl/workbook.bin", &workbook_bin));
+  // BrtName for Fn: flags 0x10 (fCalcExp), chKey 0, workbook scope, "Fn".
+  const std::string fn_header("\x10\x00\x00\x00\x00\xff\xff\xff\xff\x02\x00\x00\x00\x46\x00\x6e\x00", 17);
+  EXPECT_NE(workbook_bin.find(fn_header), std::string::npos);
+  std::string sheet1;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), "xl/worksheets/sheet1.bin", &sheet1));
+  // A1: PtgName(Fn, ilbl 1), PtgInt 3, PtgFuncVar(cparams 2, iftab 255).
+  const std::string fn_call("\x23\x01\x00\x00\x00\x1e\x03\x00\x42\x02\xff\x00", 12);
+  EXPECT_NE(sheet1.find(fn_call), std::string::npos);
+
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << "read_xlsb failed: " << reloaded.error().message;
+  EXPECT_EQ(reloaded.value().undecoded_formula_count, 0U);
+  Workbook after = std::move(reloaded.value().workbook);
+  expect_workbook(after);
+}
+
+TEST(XlsbWriteReadSymmetry, LambdaNamesAndCallsRoundTrip) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Twice", "LAMBDA(x,x*2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Local", "LAMBDA(x,Twice(x)+Sheet2!$A$1)", 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(100.0))));  // Sheet2!A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Twice(3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=Sheet2!Local(1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=LAMBDA(a,LAMBDA(b,a-b))(10)(4)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=LET(sq,LAMBDA(n,n*n),sq(5)+Twice(1))")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 1U, 0U, "=Local(2)")));  // Sheet2!A2
+
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << "read_xlsb failed: " << reloaded.error().message;
+  EXPECT_EQ(reloaded.value().undecoded_formula_count, 0U);
+  Workbook after = std::move(reloaded.value().workbook);
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 0U)->formula_text, "=Twice(3)");
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 1U)->formula_text, "=Sheet2!Local(1)");
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 2U)->formula_text, "=LAMBDA(a,LAMBDA(b,a-b))(10)(4)");
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 3U)->formula_text, "=LET(sq,LAMBDA(n,n*n),sq(5)+Twice(1))");
+  EXPECT_EQ(after.sheet(1).cell_at(1U, 0U)->formula_text, "=Local(2)");
+  ASSERT_EQ(after.defined_names().size(), 2U);
+  EXPECT_EQ(after.defined_names()[1].formula, "LAMBDA(x,Twice(x)+Sheet2!$A$1)");
+  EXPECT_EQ(after.defined_names()[1].local_sheet_id, 1);
+
+  ASSERT_TRUE(static_cast<bool>(after.recalc(eval::default_registry())));
+  EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 0U).as_number(), 6.0);
+  EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 1U).as_number(), 102.0);
+  EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 2U).as_number(), 6.0);
+  EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 3U).as_number(), 27.0);
+  EXPECT_EQ(after.sheet(1).resolve_cell_value(1U, 0U).as_number(), 104.0);
+}
+
+TEST(XlsbWriteReadSymmetry, CallToAnotherSheetsLocalLambdaStaysUnresolved) {
+  // Fn exists only as Sheet2's local name, so `Fn(3)` on Sheet1 is #NAME?;
+  // the encode must not borrow Sheet2's record, which would read back as a
+  // resolvable `Sheet2!Fn(3)`.
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Fn", "LAMBDA(x,x*2)", 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Fn(3)")));
+
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << "read_xlsb failed: " << reloaded.error().message;
+  Workbook after = std::move(reloaded.value().workbook);
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 0U)->formula_text, "=Fn(3)");
+  ASSERT_TRUE(static_cast<bool>(after.recalc(eval::default_registry())));
+  const Value v = after.sheet(0).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
 // Reinterprets `v`'s object representation so two doubles can be

@@ -11,9 +11,9 @@
 // decoder is the authoritative consumer, so the encoder need only stay
 // consistent with it.
 //
-// Tokens the AST can carry but the encoder cannot lower (defined-name
-// refs, structured refs, external refs, lambda / let forms, spilled
-// refs, implicit-intersection) return `kIoXlsbUnsupportedPtg` rather
+// Tokens the AST can carry but the encoder cannot lower (structured refs,
+// external refs, implicit-intersection, optional LAMBDA parameters)
+// return `kIoXlsbUnsupportedPtg` rather
 // than silently dropping data; the cell writer surfaces that as a hard
 // failure through `write_xlsb`'s `Expected` return.
 
@@ -84,16 +84,18 @@ struct EncodedFormula {
 ///   * A `NameRef` node (an ordinary defined-name reference, e.g.
 ///     `Rate`).
 ///
+///   * The hidden `_xlfn.LET` / `_xlfn.LAMBDA` callee and one
+///     `_xlpm.<param>` placeholder per LET binding or LAMBDA parameter.
+///
 /// Names already present in `seen` are skipped (both to dedupe and so
 /// callers can pre-seed `seen` with names that already have an assigned
 /// `ilbl`, e.g. from the workbook's existing defined-name table).
-/// `LetBinding` / `Lambda` nodes are not walked into by this pass (the
-/// encoder does not yet lower them — see `ptg_writer.cpp`'s `emit`).
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
                        std::unordered_set<std::string>& seen);
 
-/// `collect_ptg_names` without sheet-qualified references (`Sheet2!Rate`):
-/// every name the formula resolves from its own scope.
+/// `collect_ptg_names` without sheet-qualified references (`Sheet2!Rate`)
+/// and with every callee that has no function id (`Fn(3)`): every name the
+/// formula resolves from its own scope.
 void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
                                   std::unordered_set<std::string>& seen);
 

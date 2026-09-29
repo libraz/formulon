@@ -387,12 +387,49 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     for (std::uint32_t i = 0; i < cparams; ++i) {
       ops[cparams - 1 - i] = pop();
     }
+    const std::uint32_t real_count = cparams - 1;
+    // `LAMBDA(z,z*z)(4)` and a curried call store the callee expression
+    // itself as the first operand.
+    if (ops[0]->kind() == parser::NodeKind::Lambda || ops[0]->kind() == parser::NodeKind::LambdaCall) {
+      parser::AstNode* n = parser::make_lambda_call(arena, const_cast<parser::AstNode*>(ops[0]), ops + 1, real_count);
+      if (n == nullptr) {
+        return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (LAMBDA call)", "context=xlsb_ptg_reader");
+      }
+      return n;
+    }
     if (ops[0]->kind() != parser::NodeKind::NameRef) {
       return make_error(FormulonErrorCode::kIoXlsbCorrupt,
                         "xlsb PtgFuncVar(255): callee operand is not a name reference", "context=xlsb_ptg_reader");
     }
     const std::string_view callee = ops[0]->as_name();
-    const std::uint32_t real_count = cparams - 1;
+    if (strings::case_insensitive_eq(callee, "_xlfn.LAMBDA")) {
+      // LAMBDA(param1, ..., body): `_xlpm.*` parameter-name references
+      // followed by the body.
+      if (real_count < 1) {
+        return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb LAMBDA: missing body", "context=xlsb_ptg_reader");
+      }
+      const std::uint32_t param_count = real_count - 1;
+      auto* params = param_count == 0 ? nullptr : arena.create_array<std::string_view>(param_count);
+      if (param_count != 0 && params == nullptr) {
+        return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (LAMBDA parameters)",
+                          "context=xlsb_ptg_reader");
+      }
+      for (std::uint32_t i = 0; i < param_count; ++i) {
+        const parser::AstNode* param = ops[1 + i];
+        if (param->kind() != parser::NodeKind::NameRef || !param->as_name_sheet().empty()) {
+          return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb LAMBDA: parameter operand is not a name reference",
+                            "context=xlsb_ptg_reader");
+        }
+        const std::string_view raw = param->as_name();
+        params[i] = starts_with_ci(raw, "_xlpm.") ? raw.substr(6) : raw;
+      }
+      auto* body = const_cast<parser::AstNode*>(ops[cparams - 1]);
+      parser::AstNode* n = parser::make_lambda(arena, params, param_count, /*optional_count=*/0, body);
+      if (n == nullptr) {
+        return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (LAMBDA node)", "context=xlsb_ptg_reader");
+      }
+      return n;
+    }
     if (starts_with_ci(callee, "_xlfn.LET")) {
       // LET(name1, value1, [name2, value2, ...], body): an odd count of
       // >= 3 real operands (name/value pairs plus a trailing body).
