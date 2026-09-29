@@ -850,8 +850,8 @@ TEST(XlsbWriter, EmitsDynamicArrayMetadataForSingleCellArrayAnchors) {
 
 // ---------------------------------------------------------------------------
 // Ptg class byte at the formula's own root position. Measured against real
-// Excel 365 `.xlsb` output (`backup/oracle_probe/xlsb_spill/*.xlsb`,
-// `backup/oracle_probe/self_book/self_book_name.xlsb`): a bare reference
+// Excel 365 `.xlsb` output (spill anchors and a workbook-qualified name): a
+// bare reference
 // that is the *entire* formula body -- nothing else consumes it -- is
 // written in value class, not reference class. A reference-class token
 // cannot stand alone as a formula's result; without this a cell whose
@@ -1030,9 +1030,8 @@ TEST(XlsbWriter, NestedRangeArgumentStaysReferenceClass) {
 TEST(XlsbWriter, RootLevelChainedRangeWithDefinedNameWrapsInValueClassMemFunc) {
   // The general (non-collapsible) form of a `:` range at root position:
   // one endpoint is a defined name, so the fast-path Area/Area3d collapse
-  // in `emit_range` does not apply. Measured against
-  // `backup/oracle_probe/self_book/self_book_name.xlsb`'s Sheet2!D1
-  // (`=Sheet1!A10:Book!Rng`): real Excel wraps `operand + operand +
+  // in `emit_range` does not apply. Measured against an Excel 365 cell
+  // `=Sheet1!A10:Book!Rng`: real Excel wraps `operand + operand +
   // PtgRange` in a value-class `PtgMemFunc` ("function returns a range",
   // per ptg.h) carrying the wrapped run's byte length ahead of it, because
   // `PtgRange` itself carries no class bits to promote directly.
@@ -1159,8 +1158,8 @@ std::uint32_t FindItabCur(const std::vector<std::uint8_t>& workbook_bin) {
 }  // namespace
 
 TEST(XlsbWriter, DefinedNameBodyRootReferenceStaysReferenceClass) {
-  // Measured against backup/oracle_probe/self_book/self_book_name.xlsb's
-  // BrtName "Rng" (=Sheet1!$A$10:$A$11): unlike a cell formula, a defined
+  // Measured against an Excel 365 BrtName "Rng" (=Sheet1!$A$10:$A$11):
+  // unlike a cell formula, a defined
   // name's own body keeps reference class at its root.
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
@@ -1232,7 +1231,7 @@ TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
   EXPECT_EQ(c->formula_text, "=A1+B2*3");
 }
 
-// Measured on backup/oracle_probe/qualified_xlsb/qualified.xlsb: Excel saves
+// Measured on Excel 365: it saves
 // `S!Name` that neither `S` nor the workbook defines against an empty stub
 // scoped to `S`, never against another sheet's definition, so `Sheet2!SVal`
 // stays #NAME? while only Sheet1 defines SVal.
@@ -1317,7 +1316,7 @@ TEST(XlsbWriter, FutureFunctionCallRegistersHiddenName) {
   EXPECT_TRUE(ContainsUtf16Le(workbook_or.value(), "_xlfn.XLOOKUP"));
 }
 
-// Measured on backup/oracle_probe/dyn_err: Excel stores a cached #SPILL! or
+// Measured on Excel 365: it stores a cached #SPILL! or
 // #CALC! as #VALUE! (the real error lives in a rich value this writer does
 // not produce) and #GETTING_DATA as #N/A. A newer error byte in a cell made
 // Excel refuse the whole file.
@@ -1347,7 +1346,7 @@ TEST(XlsbWriter, NewerErrorsAreStoredAsTheirLegacyFallback) {
   }
 }
 
-// Measured on backup/oracle_probe/root_ops: Excel keeps `_xlfn.` on a name it
+// Measured on Excel 365: it keeps `_xlfn.` on a name it
 // does not know, in the formula bar and in the file.
 TEST(XlsbWriter, UnknownPrefixedNameKeepsItsPrefix) {
   Workbook wb = Workbook::create_empty();
@@ -1449,7 +1448,7 @@ TEST(XlsbWriter, CubeFunctionsEncodeWithTheirFunctionIds) {
 }
 
 TEST(XlsbWriter, UndefinedNameCallIsStoredAgainstAWorkbookStub) {
-  // Measured on backup/oracle_probe/root_ops: a lone `NOSUCH(1)` is
+  // Measured on Excel 365: a lone `NOSUCH(1)` is
   // `PtgName` + the argument + `PtgFuncVar(255)`, the name an empty,
   // visible, workbook-scoped BrtName.
   Workbook wb = Workbook::create_empty();

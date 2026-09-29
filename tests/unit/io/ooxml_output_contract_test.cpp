@@ -137,8 +137,8 @@ TEST(OoxmlDynamicArrayMetadata, SpillAnchorsFromARealFixtureKeepCmOnResave) {
 // Every formula Excel 365 marked dynamic-array (`cm=`) when entered is
 // stored so; the ones it did not mark may be too (measured harmless), and
 // those are listed so the set cannot grow unnoticed. Entered through the
-// same path as any formula (backup/oracle_probe/dyn_flag, Rng/Cel/Val/Fn
-// being a range, cell, constant and LAMBDA name there).
+// same path as any formula (Rng/Cel/Val/Fn being a range, cell, constant
+// and LAMBDA name in the measured workbook).
 TEST(OoxmlDynamicArrayMetadata, EnteredFormulasAreStoredDynamicWhereExcelDoes) {
   struct Case {
     const char* formula;
@@ -225,7 +225,7 @@ TEST(OoxmlDynamicArrayMetadata, EnteredFormulasAreStoredDynamicWhereExcelDoes) {
 TEST(OoxmlDynamicArrayMetadata, FreshWorkbookGeneratesTheMetadataItsCmNames) {
   // A workbook built from scratch carries no xl/metadata.xml, so the writer
   // generates the XLDAPR-only part Excel 365 writes (bytes from an
-  // Excel-saved workbook, backup/oracle_probe/callee2) and every
+  // Excel-saved workbook) and every
   // dynamic-array formula names it: a spill anchor, and a one-value formula
   // that evaluates an area as an array, which Excel would otherwise read as
   // =SUM(@A1:A2*2).

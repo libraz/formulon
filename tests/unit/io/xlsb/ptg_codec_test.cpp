@@ -255,7 +255,7 @@ EncodedFormula EncodeOnSheet1(std::string_view formula, PtgRootClass root_class)
   return encoded ? encoded.value() : EncodedFormula{};
 }
 
-// Bytes as Excel 365 saved each formula (backup/oracle_probe/root_ops). A
+// Bytes as Excel 365 saved each formula. A
 // union or intersection of plain references in a cell sits behind the memory
 // token carrying Excel's precomputed result; `PtgMemArea`'s leading four
 // bytes are unused, which Excel leaves uninitialised and this writes as zero.
@@ -446,7 +446,7 @@ TEST(XlsbPtgCodec, RelativeTokensNeedABaseCell) {
 }
 
 // A cell formula calling a volatile function opens with `PtgAttrSemi`;
-// bytes as Excel 365 saved them (backup/oracle_probe/volatile). Without it
+// bytes as Excel 365 saved them. Without it
 // Excel did not recalculate an engine-written =RAND() on F9.
 TEST(XlsbPtgCodec, VolatileFormulasOpenWithAttrSemi) {
   struct Case {
@@ -475,7 +475,7 @@ TEST(XlsbPtgCodec, VolatileFormulasOpenWithAttrSemi) {
 
 // A reference argument takes the class of the parameter it feeds, and an
 // operator's operand the class that parameter gives it; bytes as Excel 365
-// saved them (backup/oracle_probe/param_class). A reference-class operand
+// saved them. A reference-class operand
 // under IF made Excel compute =IF(A1>0,A2,A3) as #VALUE!, a value-class one
 // under SUMPRODUCT showed as =SUMPRODUCT(@A1:A2*2).
 TEST(XlsbPtgCodec, ArgumentClassesFollowTheParameter) {
@@ -517,7 +517,7 @@ TEST(XlsbPtgCodec, ParameterClassTailRepeats) {
 // A parenthesised union or intersection called as a function (#REF! in
 // Excel) is stored like any other reference operation there: reference-class
 // `PtgMemArea` caching its rectangles, `PtgParen`, the arguments and
-// `PtgFuncVar(255)`; bytes as Excel 365 saved them (backup/oracle_probe/callee2).
+// `PtgFuncVar(255)`; bytes as Excel 365 saved them.
 TEST(XlsbPtgCodec, ReferenceOperationCalleeMatchesExcelBytes) {
   const EncodedFormula union_call = EncodeOnSheet1("(A1,B1)(1)", PtgRootClass::kValue);
   EXPECT_EQ(union_call.rgce, (std::vector<std::uint8_t>{0x26, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x24, 0x00, 0x00,
@@ -539,7 +539,7 @@ TEST(XlsbPtgCodec, ReferenceOperationCalleeMatchesExcelBytes) {
 }
 
 // Formulas Excel 365 marks dynamic-array on entry because an area is
-// evaluated as an array, and ones it does not (backup/oracle_probe/dyn_flag).
+// evaluated as an array, and ones it does not (measured).
 TEST(XlsbPtgCodec, ArrayEvaluationFollowsTheParameterClasses) {
   for (const char* formula : {"A1:A2", "A1:A2*2", "SUM(A1:A2*2)", "COUNTIF(A1:A2,A1:A2)", "AND(A1:A2>0)",
                               "ISNUMBER(A1:A2)", "LEN(A1:A2)", "IF(A1:A2>0,1,0)", "A1:B2 B2:C3"}) {
@@ -562,7 +562,7 @@ TEST(XlsbPtgCodec, ArrayEvaluationFollowsTheParameterClasses) {
 // A legacy formula (no dynamic-array mark) intersects an operator's area
 // operand, so SUM(A1:A2*2) stores it value class where a dynamic-array one
 // stores it array class; bytes as Excel 365 saved a legacy workbook's E1 and
-// its CSE block {=A1:A2*2} (backup/oracle_probe/dyn_write/legacy_excel.xlsb).
+// its CSE block {=A1:A2*2}.
 TEST(XlsbPtgCodec, LegacyFormulaIntersectsOperatorOperands) {
   const std::vector<std::uint8_t> area = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0xC0};
   auto encode = [](const char* formula, PtgEvaluation evaluation) {
@@ -588,8 +588,8 @@ TEST(XlsbPtgCodec, LegacyFormulaIntersectsOperatorOperands) {
 }
 
 // A written `@` is a call to the hidden `_xlfn.SINGLE` name in either
-// evaluation mode; bytes as Excel 365 saved `=@A1`
-// (backup/oracle_probe/legacy_at/typed_at.xlsb C5).
+// evaluation mode; bytes as Excel 365 saved `=@A1`, a cell it stored
+// without the dynamic-array mark.
 TEST(XlsbPtgCodec, WrittenAtStoresAsSingleCall) {
   const NameTable names = {{"_xlfn.SINGLE", 2U}};
   const std::vector<std::uint8_t> expected = {0x23, 0x02, 0x00, 0x00, 0x00, 0x24, 0x00, 0x00,

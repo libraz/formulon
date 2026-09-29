@@ -428,7 +428,7 @@ TEST(BuildSheetDataXml, LegacyErrorStillEmitsCachedValue) {
 }
 
 // A marked dynamic-array formula keeps that form even when it is one value
-// (backup/oracle_probe/dyn_flag); written plainly, Excel shows it as =@...
+// (measured); written plainly, Excel shows it as =@...
 // and intersects.
 TEST(BuildSheetDataXml, DynamicArrayFormulaKeepsItsFormWithoutSpilling) {
   Sheet s("Sheet1");
@@ -449,7 +449,7 @@ TEST(BuildSheetDataXml, DynamicArrayFormulaKeepsItsFormWithoutSpilling) {
 }
 
 TEST(BuildSheetDataXml, NewerErrorsAreStoredAsTheirLegacyFallback) {
-  // Measured on backup/oracle_probe/dyn_err: Excel writes a cached #SPILL! or
+  // Measured on Excel 365: it writes a cached #SPILL! or
   // #CALC! as <v>#VALUE!</v> (the real error lives in a rich value this
   // writer does not produce) and #GETTING_DATA as <v>#N/A</v>.
   Sheet s("Sheet1");

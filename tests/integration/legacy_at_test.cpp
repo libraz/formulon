@@ -359,8 +359,8 @@ struct LegacyCase {
 };
 
 // Excel 365 (Mac, ja-JP) opening a legacy workbook: A1:B3 hold 1..3 per row,
-// Rng = A1:A2, Cel = A1, Val = 5, Fn = LAMBDA(x,x*2), each formula in E<row>
-// (backup/oracle_probe/dyn_flag/legacy61_formula2.txt, legacy_at/legacy61_values.txt).
+// Rng = A1:A2, Cel = A1, Val = 5, Fn = LAMBDA(x,x*2), each formula in E<row>;
+// formula2 text and values as Excel showed them.
 constexpr LegacyCase kLegacy61[] = {
     {"=A1", "=A1", "1"},
     {"=A1+1", "=A1+1", "2"},
@@ -425,8 +425,8 @@ constexpr LegacyCase kLegacy61[] = {
     {"=AND(A1:A2>0)", "=AND(@A1:A2>0)", "#VALUE!"},
 };
 
-// INDEX / OFFSET shapes on the same sheet with A5 = 0, A6 = 1
-// (backup/oracle_probe/legacy_at/legacy_extra_formula2.txt).
+// INDEX / OFFSET shapes on the same sheet with A5 = 0, A6 = 1, measured the
+// same way.
 constexpr LegacyCase kLegacyIndexOffset[] = {
     {"=INDEX(A1:B2,0,1)", "=@INDEX(A1:B2,0,1)", "1"},
     {"=INDEX(A1:B2,1)", "=INDEX(A1:B2,1)", "#REF!"},
