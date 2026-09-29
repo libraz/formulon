@@ -644,6 +644,39 @@ bool is_cellref_shaped_function_name(std::string_view lexeme) noexcept {
   return strings::case_insensitive_eq(lexeme, "LOG10");
 }
 
+bool is_volatile_function_name(std::string_view name) noexcept {
+  if (name.empty()) {
+    return false;
+  }
+  using strings::ascii_to_upper;
+  using strings::case_insensitive_eq;
+  // Switch on the upper-cased first character to keep the comparison list small.
+  switch (ascii_to_upper(name.front())) {
+    case 'C':
+      return case_insensitive_eq(name, "CELL");
+    case 'I':
+      return case_insensitive_eq(name, "INDIRECT") || case_insensitive_eq(name, "INFO");
+    case 'N':
+      return case_insensitive_eq(name, "NOW");
+    case 'O':
+      return case_insensitive_eq(name, "OFFSET");
+    case 'R':
+      return case_insensitive_eq(name, "RAND") || case_insensitive_eq(name, "RANDBETWEEN") ||
+             case_insensitive_eq(name, "RANDARRAY");
+    case 'T':
+      return case_insensitive_eq(name, "TODAY");
+    default:
+      return false;
+  }
+}
+
+bool is_dynamic_reference_function_name(std::string_view name) noexcept {
+  // `INDIRECT` builds its reference from text and `OFFSET` derives one from a
+  // base plus runtime displacements; every other volatile function reads the
+  // host environment or a reference its caller spelled out.
+  return strings::case_insensitive_eq(name, "INDIRECT") || strings::case_insensitive_eq(name, "OFFSET");
+}
+
 std::uint32_t AstNode::as_external_ref_book() const {
   FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_book on non-ExternalRef");
   return data_.external_ref->book;

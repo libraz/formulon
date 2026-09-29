@@ -445,6 +445,34 @@ TEST(XlsbPtgCodec, RelativeTokensNeedABaseCell) {
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
 }
 
+// A cell formula calling a volatile function opens with `PtgAttrSemi`;
+// bytes as Excel 365 saved them (backup/oracle_probe/volatile). Without it
+// Excel did not recalculate an engine-written =RAND() on F9.
+TEST(XlsbPtgCodec, VolatileFormulasOpenWithAttrSemi) {
+  struct Case {
+    const char* formula;
+    std::vector<std::uint8_t> rgce;
+  };
+  const Case cases[] = {
+      {"RAND()", {0x19, 0x01, 0x00, 0x00, 0x41, 0x3F, 0x00}},
+      {"RAND()+A1", {0x19, 0x01, 0x00, 0x00, 0x41, 0x3F, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x03}},
+      {"SUM(A1,RAND())",
+       {0x19, 0x01, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x41, 0x3F, 0x00, 0x42, 0x02, 0x04, 0x00}},
+      {"OFFSET(A1,0,0)", {0x19, 0x01, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0,
+                          0x1E, 0x00, 0x00, 0x1E, 0x00, 0x00, 0x42, 0x03, 0x4E, 0x00}},
+      {"A1+1", {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x1E, 0x01, 0x00, 0x03}},
+  };
+  for (const Case& c : cases) {
+    EXPECT_EQ(EncodeOnSheet1(c.formula, PtgRootClass::kValue).rgce, c.rgce) << c.formula;
+    EXPECT_EQ(RoundTrip(c.formula), c.formula);
+  }
+  // A defined name's body is marked the same way (Excel's `MyNow` = NOW()).
+  const std::vector<std::uint8_t> name_body = EncodeOnSheet1("NOW()", PtgRootClass::kReference).rgce;
+  ASSERT_GE(name_body.size(), 4U);
+  EXPECT_EQ(std::vector<std::uint8_t>(name_body.begin(), name_body.begin() + 4),
+            (std::vector<std::uint8_t>{0x19, 0x01, 0x00, 0x00}));
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }

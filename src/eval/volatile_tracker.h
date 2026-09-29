@@ -104,16 +104,12 @@ class VolatileTracker {
     }
   }
 
-  /// Returns true iff `name` is one of the nine Excel volatile functions
-  /// (`NOW`, `TODAY`, `RAND`, `RANDBETWEEN`, `RANDARRAY`, `OFFSET`,
-  /// `INDIRECT`, `INFO`, `CELL`). Returns false for anything else,
-  /// including the empty string.
+  /// Returns true iff `name` is one of Excel's volatile functions
+  /// (`parser::is_volatile_function_name`, shared with the file writers).
   static bool is_volatile_function(std::string_view name);
 
-  /// Returns true iff `name` is one of the volatile functions that
-  /// resolves the cells it reads at evaluation time (`OFFSET`,
-  /// `INDIRECT`). Every name accepted here is also accepted by
-  /// `is_volatile_function`.
+  /// Returns true iff `name` is a volatile function that resolves the cells
+  /// it reads at evaluation time (`parser::is_dynamic_reference_function_name`).
   static bool is_dynamic_reference_function(std::string_view name);
 
  private:

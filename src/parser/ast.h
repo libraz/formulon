@@ -512,6 +512,17 @@ bool is_self_book_name_ref(const AstNode& node) noexcept;
 /// rather than a registry lookup.
 bool is_cellref_shaped_function_name(std::string_view lexeme) noexcept;
 
+/// True for one of Excel's volatile functions (NOW, TODAY, RAND,
+/// RANDBETWEEN, RANDARRAY, OFFSET, INDIRECT, INFO, CELL), ASCII
+/// case-insensitively: a formula calling one is recalculated on every pass,
+/// and a file marks it so (XLSB `PtgAttrSemi`).
+bool is_volatile_function_name(std::string_view name) noexcept;
+
+/// True for a volatile function that resolves the cells it reads at
+/// evaluation time (`OFFSET`, `INDIRECT`), so no static dependency describes
+/// the read. Every name accepted here is also volatile.
+bool is_dynamic_reference_function_name(std::string_view name) noexcept;
+
 /// Builds a `StructuredRef` node.  `column` may be empty when the reference
 /// targets the whole table.  `modifier` is `None` for plain `Table[col]`.
 AstNode* make_structured_ref(Arena& arena, std::string_view table, std::string_view column,
