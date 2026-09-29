@@ -157,8 +157,9 @@ TEST(XlsbPtgCodec, NameLocalToAnotherSheetDecodesSheetQualified) {
 }
 
 // Excel 365 writes `Sheet2!Local` as `PtgNameX` through a sheetless
-// book-scope ExternSheet entry, and `Sheet2!Fn(3)` as that name-ref, the
-// argument and `PtgFuncVar(255)`; both read back with the qualifier.
+// book-scope ExternSheet entry (value class at a cell formula's root), and
+// `Sheet2!Fn(3)` as the reference-class name-ref, the argument and
+// `PtgFuncVar(255)`; both read back with the qualifier.
 TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
   const std::vector<std::string> sheets = {"Sheet1", "Sheet2"};
   NameTable table;
@@ -170,7 +171,7 @@ TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
     std::vector<std::uint8_t> want;
   };
   const Case cases[] = {
-      {"Sheet2!Local", {0x39, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}},
+      {"Sheet2!Local", {0x59, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}},
       {"Sheet2!Fn(3)", {0x39, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x1E, 0x03, 0x00, 0x42, 0x02, 0xFF, 0x00}},
   };
   for (const Case& c : cases) {
@@ -365,6 +366,83 @@ TEST(XlsbPtgCodec, EveryBuiltinHasAnXlsbEncoding) {
     check(*p);
   }
   EXPECT_TRUE(missing.empty()) << (missing.empty() ? "" : missing.front());
+}
+
+// `PtgRefN` / `PtgAreaN` against a base cell, with the bytes Excel 365 saved
+// for tests/fixtures/excel/xlsb_feature_rel.xlsb's conditional formats. The
+// base is the top-left of the sqref's bounding box.
+TEST(XlsbPtgCodec, RelativeReferencesAgainstABaseCellMatchExcelBytes) {
+  struct Case {
+    const char* formula;
+    PtgBaseCell base;
+    std::vector<std::uint8_t> rgce;
+  };
+  const Case cases[] = {
+      // sqref "E2:E10 G3:G5": base E2.
+      {"E2>F$1", {1U, 4U}, {0x4C, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x4C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x40, 0x0D}},
+      // sqref "C4:D6": base C4, so A1:B2 sits at negative offsets; a fully
+      // absolute area stays `PtgArea`.
+      {"SUM(A1:B2)>$A$1:$B$2", {3U, 2U}, {0x2D, 0xFD, 0xFF, 0x0F, 0x00, 0xFE, 0xFF, 0x0F, 0x00, 0xFE, 0xFF,
+                                          0xFF, 0xFF, 0x19, 0x10, 0x00, 0x00, 0x45, 0x00, 0x00, 0x00, 0x00,
+                                          0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x0D}},
+  };
+  for (const Case& c : cases) {
+    Arena arena;
+    parser::Parser p(c.formula, arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << c.formula;
+    auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue, c.base);
+    ASSERT_TRUE(static_cast<bool>(encoded)) << c.formula << " | " << (encoded ? "" : encoded.error().message);
+    EXPECT_EQ(encoded.value().rgce, c.rgce) << c.formula;
+
+    Arena dec_arena;
+    auto decoded = decode_ptgs(ByteSpan{c.rgce.data(), c.rgce.size()}, {}, dec_arena, {}, {}, {}, {}, -1, c.base);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << c.formula << " | " << (decoded ? "" : decoded.error().message);
+    EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
+  }
+}
+
+// A relative offset is taken modulo the grid both ways, so a reference
+// across the grid's edge wraps: from A1 the last cell is one step up and
+// left, and from the last cell A1 is one step down and right.
+TEST(XlsbPtgCodec, RelativeOffsetsWrapAroundTheGrid) {
+  struct Case {
+    const char* formula;
+    PtgBaseCell base;
+    std::vector<std::uint8_t> rgce;
+  };
+  const Case cases[] = {
+      {"XFD1048576", {0U, 0U}, {0x4C, 0xFF, 0xFF, 0x0F, 0x00, 0xFF, 0xFF}},
+      {"A1", {1048575U, 16383U}, {0x4C, 0x01, 0x00, 0x00, 0x00, 0x01, 0xC0}},
+      {"$A1", {1048575U, 16383U}, {0x4C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x80}},
+      {"A$1", {1048575U, 16383U}, {0x4C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x40}},
+      {"A1:B2", {1U, 1U}, {0x4D, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0xC0}},
+  };
+  for (const Case& c : cases) {
+    Arena arena;
+    parser::Parser p(c.formula, arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << c.formula;
+    auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue, c.base);
+    ASSERT_TRUE(static_cast<bool>(encoded)) << c.formula;
+    EXPECT_EQ(encoded.value().rgce, c.rgce) << c.formula;
+    Arena dec_arena;
+    auto decoded = decode_ptgs(ByteSpan{c.rgce.data(), c.rgce.size()}, {}, dec_arena, {}, {}, {}, {}, -1, c.base);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << c.formula;
+    EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
+  }
+}
+
+// Without a base cell nothing changes: relative references stay `PtgRef`,
+// and a `PtgRefN` has nothing to resolve against.
+TEST(XlsbPtgCodec, RelativeTokensNeedABaseCell) {
+  EXPECT_EQ(EncodeOnSheet1("A1", PtgRootClass::kValue).rgce,
+            (std::vector<std::uint8_t>{0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0}));
+  const std::vector<std::uint8_t> ref_n = {0x4C, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};
+  Arena arena;
+  auto decoded = decode_ptgs(ByteSpan{ref_n.data(), ref_n.size()}, {}, arena, {}, {}, {}, {});
+  ASSERT_FALSE(static_cast<bool>(decoded));
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
 }
 
 TEST(XlsbPtgCodec, SumOverArea) {

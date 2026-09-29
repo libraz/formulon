@@ -678,8 +678,8 @@ std::uint32_t IlblOfNameOnlyFormula(const std::vector<std::uint8_t>& sheet_bin, 
     p.data += 4U + 8U + 2U;  // iStyleRef + fPhShow, cached value, grbitFlags
     p.size -= 4U + 8U + 2U;
     auto cce = io::xlsb::read_u32(p);
-    // `=Foo` lowers to exactly one PtgName: opcode 0x23 + a u32 ilbl.
-    if (!cce || cce.value() != 5U || p.size < 5U || p.data[0] != 0x23U) {
+    // `=Foo` lowers to exactly one value-class PtgName: opcode 0x43 + a u32 ilbl.
+    if (!cce || cce.value() != 5U || p.size < 5U || p.data[0] != 0x43U) {
       return 0U;
     }
     p.data += 1U;
@@ -856,8 +856,9 @@ TEST(XlsbWriteReadSymmetry, ExcelSheetQualifiedLocalNameFixture) {
   ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
   std::string sheet1;
   ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), "xl/worksheets/sheet1.bin", &sheet1));
-  // PtgNameX, ixti 1 (after Local's own Sheet2 entry), ilbl 1.
-  const std::string name_x("\x39\x01\x00\x01\x00\x00\x00", 7);
+  // Value-class PtgNameX, ixti 1 (after Local's own Sheet2 entry), ilbl 1:
+  // the fixture's own bytes.
+  const std::string name_x("\x59\x01\x00\x01\x00\x00\x00", 7);
   EXPECT_NE(sheet1.find(name_x), std::string::npos);
 
   auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));

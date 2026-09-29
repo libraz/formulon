@@ -184,6 +184,23 @@ void emit_area(std::vector<std::uint8_t>& dst, const parser::Reference& a, const
   emit_u16(dst, pack_area_col(b));
 }
 
+/// True when either axis of `ref` is relative.
+bool IsRelative(const parser::Reference& ref) {
+  return !ref.row_abs || !ref.col_abs;
+}
+
+/// `ref` with each relative axis replaced by its offset from `base` modulo
+/// the grid (2^20 rows, 2^14 columns), the `PtgRefN` / `PtgAreaN` field.
+parser::Reference OffsetFrom(parser::Reference ref, PtgBaseCell base) {
+  if (!ref.row_abs) {
+    ref.row = (ref.row - base.row) & ((1U << 20) - 1U);
+  }
+  if (!ref.col_abs) {
+    ref.col = (ref.col - base.col) & 0x3FFFU;
+  }
+  return ref;
+}
+
 /// `itabFirst` / `itabLast` of the `BrtExternSheet` entry a `PtgNameX`
 /// naming one of this workbook's own defined names resolves through: the
 /// entry names no sheet, the record's own scope does.
@@ -269,10 +286,11 @@ bool StaticRects(const parser::AstNode& node, std::vector<Rect>& out) {
 class Encoder {
  public:
   Encoder(const parser::AstNode& root, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
-          const NameTable& name_table, PtgRootClass root_class)
+          const NameTable& name_table, PtgRootClass root_class, std::optional<PtgBaseCell> base)
       : sheet_names_(sheet_names),
         sheet_ranges_(sheet_ranges),
         name_table_(name_table),
+        base_(base),
         promote_root_(root_class == PtgRootClass::kValue) {
     parser::collect_parenthesized_nodes(root, parens_);
   }
@@ -295,6 +313,10 @@ class Encoder {
     const bool root = std::exchange(is_root_, false);
     // Root promotion applies only to the single outermost node, and only when the caller wants it.
     const bool promote = root && promote_root_;
+    // In the same formulas an operator's operand is value class too (measured
+    // for a cell, an area and a name at the top level; inside a function
+    // Excel takes the class from the parameter, which is not modelled).
+    const bool value_operand = std::exchange(value_operand_, false) && promote_root_;
     switch (node.kind()) {
       case parser::NodeKind::Literal:
         return emit_literal(node.as_literal());
@@ -303,7 +325,8 @@ class Encoder {
         emit_u8(out_, error_wire_code(node.as_error_literal()));
         return Expected<void, Error>::Ok();
       case parser::NodeKind::Ref:
-        return emit_ref(node.as_ref(), promote);
+        return emit_ref(node.as_ref(),
+                        promote || (value_operand && !node.as_ref().is_full_col && !node.as_ref().is_full_row));
       case parser::NodeKind::Ref3D:
         return emit_ref3d(node, promote);
       case parser::NodeKind::UnaryOp:
@@ -311,7 +334,7 @@ class Encoder {
       case parser::NodeKind::BinaryOp:
         return emit_binary(node);
       case parser::NodeKind::RangeOp:
-        return emit_range(node, promote);
+        return emit_range(node, promote, value_operand);
       case parser::NodeKind::UnionOp:
       case parser::NodeKind::IntersectOp:
         return emit_reference_operation(node, root);
@@ -321,12 +344,12 @@ class Encoder {
         return emit_array(node);
       case parser::NodeKind::NameRef:
         if (!node.as_name_sheet().empty()) {
-          return emit_sheet_name_ref(node.as_name_sheet(), node.as_name());
+          return emit_sheet_name_ref(node.as_name_sheet(), node.as_name(), promote || value_operand);
         }
-        return emit_name_ref(node.as_name());
+        return emit_name_ref(node.as_name(), promote || value_operand);
       case parser::NodeKind::ExternalRef:
         if (parser::is_self_book_name_ref(node)) {
-          return emit_self_book_name_ref(node.as_external_ref_name());
+          return emit_self_book_name_ref(node.as_external_ref_name(), promote || value_operand);
         }
         return unsupported_node("ExternalRef");
       case parser::NodeKind::StructuredRef:
@@ -396,7 +419,9 @@ class Encoder {
                        [name](const auto& binding) { return strings::case_insensitive_eq(binding.first, name); });
   }
 
-  Expected<void, Error> emit_name_ref(std::string_view name) {
+  /// `value`: value-class `PtgName` (0x43), as Excel writes a name a cell
+  /// formula takes the value of; a LET / LAMBDA parameter stays 0x23.
+  Expected<void, Error> emit_name_ref(std::string_view name, bool value = false) {
     // Case-insensitive: LET/LAMBDA parameter names resolve case-insensitively
     // (Excel folds ASCII case on name resolution), so a NameRef spelled in a
     // different case than its binding is still that parameter.
@@ -412,7 +437,7 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
     }
-    emit_u8(out_, 0x23);  // PtgName (reference-class base)
+    emit_u8(out_, value ? ValueClassPtg(0x23) : 0x23);  // PtgName
     emit_u32(out_, it->second);
     return Expected<void, Error>::Ok();
   }
@@ -423,7 +448,7 @@ class Encoder {
   /// record scoped to `sheet` that Excel 365 saves for it (never another
   /// sheet's definition). Excel writes a sheet-qualified name as `PtgNameX`
   /// through a book-scope `BrtExternSheet` entry rather than as `PtgName`.
-  Expected<void, Error> emit_sheet_name_ref(std::string_view sheet, std::string_view name) {
+  Expected<void, Error> emit_sheet_name_ref(std::string_view sheet, std::string_view name, bool value) {
     const int itab = resolve_ixti(sheet_names_, sheet);
     if (itab < 0) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet-qualified name names no sheet",
@@ -437,14 +462,14 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
     }
-    return emit_name_x(it->second);
+    return emit_name_x(it->second, value);
   }
 
   /// Emits `PtgNameX` for the self-book `[0]!name`, naming the record it
   /// resolves to: the workbook-scoped one, else the lowest sheet's local
   /// one, as Excel 365 saves it. An undefined name falls back to its
   /// placeholder record.
-  Expected<void, Error> emit_self_book_name_ref(std::string_view name) {
+  Expected<void, Error> emit_self_book_name_ref(std::string_view name, bool value) {
     auto it = name_table_.find(sheet_scoped_name_key(-1, name));
     for (std::size_t itab = 0; it == name_table_.end() && itab < sheet_names_.size(); ++itab) {
       it = name_table_.find(sheet_scoped_name_key(static_cast<std::int32_t>(itab), name));
@@ -456,14 +481,14 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
     }
-    return emit_name_x(it->second);
+    return emit_name_x(it->second, value);
   }
 
   /// Emits `PtgNameX` for record `ilbl` through the sheetless
   /// `BrtExternSheet` entry this workbook's own names resolve through.
-  Expected<void, Error> emit_name_x(std::uint32_t ilbl) {
+  Expected<void, Error> emit_name_x(std::uint32_t ilbl, bool value) {
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiNoSheet, kXtiNoSheet));
-    emit_u8(out_, 0x39);  // PtgNameX (reference-class base)
+    emit_u8(out_, value ? ValueClassPtg(0x39) : 0x39);  // PtgNameX
     emit_u16(out_, ixti);
     emit_u32(out_, ilbl);
     return Expected<void, Error>::Ok();
@@ -615,6 +640,11 @@ class Encoder {
       emit_area(out_, first, last);
       return Expected<void, Error>::Ok();
     }
+    if (ref.sheet.empty() && base_ && IsRelative(ref)) {
+      emit_u8(out_, promote ? ValueClassPtg(0x2C) : 0x2C);  // PtgRefN
+      emit_loc(out_, OffsetFrom(ref, *base_));
+      return Expected<void, Error>::Ok();
+    }
     if (ref.sheet.empty()) {
       emit_u8(out_, promote ? ValueClassPtg(0x24) : 0x24);  // PtgRef
       emit_loc(out_, ref);
@@ -694,8 +724,14 @@ class Encoder {
     return -1;
   }
 
+  /// Emits an operator's operand, which takes its value (see `emit_node`).
+  Expected<void, Error> emit_operand(const parser::AstNode& node) {
+    value_operand_ = true;
+    return emit(node);
+  }
+
   Expected<void, Error> emit_unary(const parser::AstNode& node) {
-    RETURN_IF_ERROR(emit(node.as_unary_operand()));
+    RETURN_IF_ERROR(emit_operand(node.as_unary_operand()));
     switch (node.as_unary_op()) {
       case parser::UnaryOp::Plus:
         emit_u8(out_, 0x12);  // PtgUplus
@@ -711,8 +747,8 @@ class Encoder {
   }
 
   Expected<void, Error> emit_binary(const parser::AstNode& node) {
-    RETURN_IF_ERROR(emit(node.as_binary_lhs()));
-    RETURN_IF_ERROR(emit(node.as_binary_rhs()));
+    RETURN_IF_ERROR(emit_operand(node.as_binary_lhs()));
+    RETURN_IF_ERROR(emit_operand(node.as_binary_rhs()));
     std::uint8_t byte = 0x03;
     switch (node.as_binary_op()) {
       case parser::BinOp::Add:
@@ -759,7 +795,10 @@ class Encoder {
   /// `promote`: see `emit_ref`. The fast-path Area/Area3d collapse gets the
   /// same promotion; the general form instead wraps `operand+operand+
   /// PtgRange` in a value-class `PtgMemFunc` (both measured, real Excel 365).
-  Expected<void, Error> emit_range(const parser::AstNode& node, bool promote) {
+  /// `value_operand`: the range is an operator's operand, whose compact
+  /// `PtgArea` / `PtgAreaN` form is value class (measured) while the general
+  /// form keeps its reference-class tokens.
+  Expected<void, Error> emit_range(const parser::AstNode& node, bool promote, bool value_operand) {
     // Fast path: a range whose endpoints are both plain cell refs maps
     // to PtgArea / PtgArea3d (a single operand) rather than two refs +
     // the `:` operator. The decoder produces a RangeOp of two refs, so
@@ -770,8 +809,14 @@ class Encoder {
       const parser::Reference& a = lhs.as_ref();
       const parser::Reference& b = rhs.as_ref();
       if (!a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row && b.sheet.empty()) {
+        const bool value = promote || value_operand;
+        if (a.sheet.empty() && base_ && (IsRelative(a) || IsRelative(b))) {
+          emit_u8(out_, value ? ValueClassPtg(0x2D) : 0x2D);  // PtgAreaN
+          emit_area(out_, OffsetFrom(a, *base_), OffsetFrom(b, *base_));
+          return Expected<void, Error>::Ok();
+        }
         if (a.sheet.empty()) {
-          emit_u8(out_, promote ? ValueClassPtg(0x25) : 0x25);  // PtgArea
+          emit_u8(out_, value ? ValueClassPtg(0x25) : 0x25);  // PtgArea
           emit_area(out_, a, b);
           return Expected<void, Error>::Ok();
         }
@@ -838,7 +883,8 @@ class Encoder {
       return emit_union_or_intersect(node);  // Only the outermost operation carries one.
     }
     std::vector<Rect> rects;
-    if (promote_root_ && StaticRects(node, rects)) {
+    // A formula with a base cell (CF / DV) is evaluated per cell, so it has no single result to cache.
+    if (promote_root_ && !base_ && StaticRects(node, rects)) {
       if (root && rects.size() != 1U) {
         emit_u8(out_, ValueClassPtg(0x27));  // PtgMemErr
         emit_u8(out_, error_wire_code(rects.empty() ? ErrorCode::Null : ErrorCode::Value));
@@ -1044,6 +1090,10 @@ class Encoder {
   std::unordered_set<const parser::AstNode*> parens_;
   /// True while emitting the operation a memory token covers.
   bool in_memory_token_ = false;
+  /// Set by `emit_operand` for the next node `emit_node` starts.
+  bool value_operand_ = false;
+  /// Base cell of `PtgRefN` / `PtgAreaN` offsets, when the formula has one.
+  const std::optional<PtgBaseCell> base_;
   /// See `emit()`'s `promote` local. Cleared on the first call.
   bool is_root_ = true;
   const bool promote_root_;
@@ -1367,8 +1417,8 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
 
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                            PtgRootClass root_class) {
-  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class);
+                                            PtgRootClass root_class, std::optional<PtgBaseCell> base) {
+  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base);
   auto status = enc.emit(node);
   if (!status) {
     return status.error();

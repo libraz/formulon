@@ -21,6 +21,7 @@
 #define FORMULON_IO_XLSB_PTG_WRITER_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -28,6 +29,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/xlsb/ptg.h"
 #include "parser/ast.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -152,12 +154,19 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
 /// enclosing function or operator) promotes to value class -- see
 /// `PtgRootClass`.
 ///
+/// With a `base` cell (a conditional-format or data-validation formula,
+/// see `PtgBaseCell`), a same-sheet cell or area reference with any
+/// relative axis becomes `PtgRefN` / `PtgAreaN`: a relative axis stores its
+/// offset from `base` modulo the grid, an absolute one the index itself. A
+/// fully absolute reference, and every reference without a base, keeps
+/// `PtgRef` / `PtgArea`.
+///
 /// Returns `kIoXlsbUnsupportedPtg` for any node kind outside the
 /// supported set (see header banner). The error context names the
 /// offending node kind.
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                            PtgRootClass root_class);
+                                            PtgRootClass root_class, std::optional<PtgBaseCell> base = std::nullopt);
 
 }  // namespace xlsb
 }  // namespace io

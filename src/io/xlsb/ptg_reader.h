@@ -24,9 +24,11 @@
 #define FORMULON_IO_XLSB_PTG_READER_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "io/xlsb/ptg.h"
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -156,6 +158,12 @@ using XlsbExternalBooks = std::vector<XlsbExternalBook>;
 /// caller keeps Excel's cached value instead of silently rebinding the
 /// reference to a same-numbered local sheet.
 ///
+/// `base` is the cell `PtgRefN` / `PtgAreaN` offsets resolve against (see
+/// `PtgBaseCell`): a relative axis stores its offset modulo the grid (2^20
+/// rows, 2^14 columns) and resolves with the same wrap, keeping its
+/// relative flag; an absolute axis stores the index itself. Without a base
+/// those tokens are `kIoXlsbUnsupportedPtg`.
+///
 /// Errors:
 ///   * `kIoXlsbUnsupportedPtg` — a token outside the supported set
 ///     (PtgTbl/PtgNameX/PtgMemFunc materialisation/...), or a 3-D
@@ -169,7 +177,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                                               const std::vector<std::string>& sheet_names,
                                               const std::vector<XlsbName>& name_table,
                                               const std::vector<XlsbSheetRange>& sheet_ranges,
-                                              const XlsbExternalBooks& external_books, std::int32_t host_itab = -1);
+                                              const XlsbExternalBooks& external_books, std::int32_t host_itab = -1,
+                                              std::optional<PtgBaseCell> base = std::nullopt);
 
 }  // namespace xlsb
 }  // namespace io

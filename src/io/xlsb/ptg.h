@@ -49,6 +49,15 @@ enum class PtgStatus : std::uint8_t {
   Partial = 3,
 };
 
+/// The cell a formula's `PtgRefN` / `PtgAreaN` offsets are taken from: the
+/// top-left of the bounding box of a conditional format's or data
+/// validation's `sqref`, which is also the cell its OOXML text is relative
+/// to. 0-based.
+struct PtgBaseCell {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+};
+
 /// Class mark carried by class-marked Ptgs (`0x20`/`0x40`/`0x60` trio).
 ///
 /// The class bits live in positions 5..6 of the first byte; they decide
@@ -257,8 +266,11 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     // the actual read+write contract despite the asymmetric wire form.
     {PtgKind::RefErr, 0x2A, "RefErr", PtgStatus::Full},
     {PtgKind::AreaErr, 0x2B, "AreaErr", PtgStatus::Full},
-    {PtgKind::RefN, 0x2C, "RefN", PtgStatus::Unsupported},
-    {PtgKind::AreaN, 0x2D, "AreaN", PtgStatus::Unsupported},
+    // Offsets from the formula's base cell (`PtgBaseCell`); read and written
+    // only where the caller supplies one (conditional-format and
+    // data-validation formulas), refused elsewhere.
+    {PtgKind::RefN, 0x2C, "RefN", PtgStatus::Full},
+    {PtgKind::AreaN, 0x2D, "AreaN", PtgStatus::Full},
     {PtgKind::MemAreaN, 0x2E, "MemAreaN", PtgStatus::Unsupported},
     {PtgKind::MemNoMemN, 0x2F, "MemNoMemN", PtgStatus::Unsupported},
     // Decoded into an `ExternalRef` when the supporting workbook's own

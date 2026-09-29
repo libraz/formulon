@@ -34,6 +34,8 @@ namespace {
 // the "column relative" flag and bit 15 the "row relative" flag. An
 // absolute coordinate is the *cleared* relative bit.
 constexpr std::uint16_t kColMask = 0x3FFF;
+/// Rows in the grid; a relative row offset is stored modulo this.
+constexpr std::uint32_t kRowCount = 1U << 20;
 constexpr std::uint16_t kColRelBit = 0x4000;
 constexpr std::uint16_t kRowRelBit = 0x8000;
 
@@ -194,6 +196,17 @@ Expected<std::pair<parser::Reference, parser::Reference>, Error> read_area(ByteS
   return std::make_pair(first, last);
 }
 
+// Resolves a `PtgRefN` / `PtgAreaN` corner read by `read_loc` / `read_area`
+// against `base`: a relative axis holds an offset modulo the grid.
+void resolve_relative(parser::Reference& ref, PtgBaseCell base) {
+  if (!ref.row_abs) {
+    ref.row = (base.row + ref.row) & (kRowCount - 1U);
+  }
+  if (!ref.col_abs) {
+    ref.col = (base.col + ref.col) & kColMask;
+  }
+}
+
 // Validates a decoded single-cell `Reference` against the Excel grid
 // bound (`Sheet::kMaxRows` / `Sheet::kMaxCols`) before it is materialized
 // into an AST node. `PtgRef`/`PtgRef3d` col fields are already masked to
@@ -243,7 +256,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                                               const std::vector<std::string>& sheet_names,
                                               const std::vector<XlsbName>& name_table,
                                               const std::vector<XlsbSheetRange>& sheet_ranges,
-                                              const XlsbExternalBooks& external_books, std::int32_t host_itab) {
+                                              const XlsbExternalBooks& external_books, std::int32_t host_itab,
+                                              std::optional<PtgBaseCell> base) {
   std::vector<parser::AstNode*> stack;
   // `PtgArray` stores only an 8-byte placeholder inline (see its case
   // below); the real dimensions + elements are consumed from this
@@ -827,6 +841,45 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         parser::AstNode* n = parser::make_ref(arena, ref_or.value());
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef)", "context=xlsb_ptg_reader");
+        }
+        stack.push_back(n);
+        break;
+      }
+      case PtgKind::RefN:
+      case PtgKind::AreaN: {
+        if (!base) {
+          return unsupported_ptg(first_byte, info->name);
+        }
+        parser::AstNode* n = nullptr;
+        if (info->kind == PtgKind::RefN) {
+          auto ref_or = read_loc(cursor, {});
+          if (!ref_or) {
+            return ref_or.error();
+          }
+          resolve_relative(ref_or.value(), *base);
+          auto domain_or = check_ref_domain(ref_or.value(), info->name);
+          if (!domain_or) {
+            return domain_or.error();
+          }
+          n = parser::make_ref(arena, ref_or.value());
+        } else {
+          auto area_or = read_area(cursor, {}, {});
+          if (!area_or) {
+            return area_or.error();
+          }
+          resolve_relative(area_or.value().first, *base);
+          resolve_relative(area_or.value().second, *base);
+          auto domain_or = check_area_domain(area_or.value().first, area_or.value().second, info->name);
+          if (!domain_or) {
+            return domain_or.error();
+          }
+          parser::AstNode* lhs = parser::make_ref(arena, area_or.value().first);
+          parser::AstNode* rhs = parser::make_ref(arena, area_or.value().second);
+          n = lhs == nullptr || rhs == nullptr ? nullptr : parser::make_range_op(arena, lhs, rhs);
+        }
+        if (n == nullptr) {
+          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRefN/PtgAreaN)",
+                            "context=xlsb_ptg_reader");
         }
         stack.push_back(n);
         break;
