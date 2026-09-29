@@ -249,10 +249,13 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/structured_ref_test.cpp
   unit/eval/structured_ref_eval_test.cpp
   unit/pivot/pivot_evaluator_test.cpp
+  unit/pivot/pivot_filter_test.cpp
   unit/pivot/pivot_layout_test.cpp
+  unit/pivot/pivot_show_values_as_test.cpp
   unit/pivot/pivot_types_test.cpp
   unit/cf/cf_evaluator_test.cpp
   unit/cf/cf_types_test.cpp
+  unit/cf/scale_evaluator_test.cpp
   unit/print/page_setup_test.cpp
   unit/print/print_area_test.cpp
   unit/print/pagination_test.cpp

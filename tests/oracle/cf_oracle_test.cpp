@@ -145,7 +145,7 @@ constexpr int kColorChannelTolerance = 2;
 
 // Reusable harness that bundles the sheet, arena, and evaluation
 // context the CFHost needs. Mirrors the unit-test harness in
-// tests/unit/cf/cf_evaluator_test.cpp; lifted here so the oracle
+// tests/unit/cf/cf_evaluator_fixtures.h; lifted here so the oracle
 // binary stays free of test-helper headers from the unit suite.
 struct CFOracleHarness {
   Sheet sheet{"Sheet1"};
