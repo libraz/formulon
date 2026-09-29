@@ -243,6 +243,17 @@ TEST(AstFormat, StorageFormNeverPrefixesSheetQualifiedName) {
   EXPECT_NE(stored.find("_xlpm.Rate*Sheet1!Rate"), std::string::npos) << stored;
 }
 
+// A cell callee prints bare unless it would re-read as the function it is
+// spelled like.
+TEST(AstFormat, CellReferenceCallee) {
+  ExpectRoundTripsToSame("=A1(1)");
+  ExpectRoundTripsToSame("=$A$1(1)");
+  ExpectRoundTripsToSame("=Sheet1!A1(1)");
+  ExpectRoundTripsToSame("=Sheet1!LOG10(100)");
+  ExpectRoundTripsToSame("=(LOG10)(100)");
+  ExpectRoundTripsToSame("=LOG10(100)");
+}
+
 TEST(AstFormat, SelfBookNameRef) {
   ExpectRoundTripsToSame("=[0]!Rate");
   ExpectRoundTripsToSame("=SUM([0]!Rng)");

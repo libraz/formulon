@@ -445,16 +445,6 @@ AstNode* Parser::parse() {
            raw[j + 2].kind == TokenKind::RBracket &&
            (raw[j + 3].kind == TokenKind::Bang || raw[j + 3].kind == TokenKind::Ident);
   };
-  // A cell-shaped lexeme that is also an Excel function name. The two forms
-  // overlap only where a function name matches the cell-reference pattern
-  // `[A-Za-z]{1,3}[0-9]{1,7}` within the A1..XFD1048576 grid, which across
-  // the whole Excel catalogue is `LOG10` alone. The parser resolves no names
-  // at parse time -- that is what lets a LAMBDA parameter shadow a function
-  // name at eval time -- so this cannot be a registry lookup and is instead
-  // pinned to the exhaustive list.
-  auto is_cellref_shaped_function_name = [](std::string_view lexeme) noexcept {
-    return strings::case_insensitive_eq(lexeme, "LOG10");
-  };
   // Walk `raw` with a sliding window over the most recent non-whitespace
   // token and the next non-whitespace token after each whitespace run. If
   // both bracket the whitespace as reference-shaped, keep it; otherwise drop.
@@ -493,21 +483,16 @@ AstNode* Parser::parse() {
     // Otherwise: drop. Subsequent iterations resume on the next token.
   }
 
-  // Disambiguate CellRef-shaped tokens that are actually function-call names.
-  // `LOG10`, `LOG2`, and similar function names match the cell-reference
-  // pattern `[A-Z]+[0-9]+`, so the tokenizer (which is grammar-agnostic)
-  // emits CellRef. When such a token is immediately followed by `(`, the
-  // only correct interpretation is a function call: rewrite to Ident here.
-  //
-  // Skip the rewrite when the CellRef is preceded by `!` (sheet-qualified
-  // reference). `Sheet1!LOG10` must remain a CellRef so that
-  // `parse_sheet_qualified_ref` resolves it as the sheet-scoped cell.
+  // A cell-shaped token followed by `(` is a function name only when it is
+  // one (`LOG10(100)`); any other, and every sheet-qualified one
+  // (`Sheet1!LOG10(100)`), is a cell reference invoked as a callee, which
+  // Excel accepts and evaluates to #REF! (`A1(1)`).
   for (std::size_t i = 0; i + 1 < tokens_.size(); ++i) {
-    if (tokens_[i].kind != TokenKind::CellRef)
-      continue;
-    if (tokens_[i + 1].kind != TokenKind::LParen)
+    if (tokens_[i].kind != TokenKind::CellRef || tokens_[i + 1].kind != TokenKind::LParen)
       continue;
     if (i > 0 && tokens_[i - 1].kind == TokenKind::Bang)
+      continue;
+    if (!is_cellref_shaped_function_name(tokens_[i].lexeme))
       continue;
     tokens_[i].kind = TokenKind::Ident;
   }
@@ -713,7 +698,8 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // did not write. Only `Lambda` (an immediate IIFE), `LambdaCall`
       // (chained curry) and a sheet- or self-book-qualified name
       // (`Sheet1!Fn(2)`, `[0]!Fn(2)`, whose unqualified spelling is an
-      // ordinary `Call`) participate.
+      // ordinary `Call`) participate, plus a single-cell reference
+      // (`A1(1)`, `Sheet1!LOG10(100)`).
       // Parenthesised lambda expressions like `(LAMBDA(x, x))(5)` still
       // work because `parse_paren_atom` unwraps a single inner expression
       // to its own kind; the outer Lambda kind is preserved across the
@@ -723,7 +709,8 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // ever sees them.
       const NodeKind lk = lhs->kind();
       const bool sheet_name = (lk == NodeKind::NameRef && !lhs->as_name_sheet().empty()) || is_self_book_name_ref(*lhs);
-      if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall && !sheet_name) {
+      const bool cell_callee = lk == NodeKind::Ref && !lhs->as_ref().is_full_col && !lhs->as_ref().is_full_row;
+      if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall && !sheet_name && !cell_callee) {
         // Special-case: a *Bool* literal LHS followed by an empty `()` is
         // treated as a no-op so the surrounding Pratt loop can continue and
         // pick up trailing operators. The motivating case is `=TRUE()+0`: the

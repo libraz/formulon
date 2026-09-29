@@ -640,6 +640,10 @@ bool is_self_book_name_ref(const AstNode& node) noexcept {
          !node.as_external_ref_name().empty();
 }
 
+bool is_cellref_shaped_function_name(std::string_view lexeme) noexcept {
+  return strings::case_insensitive_eq(lexeme, "LOG10");
+}
+
 std::uint32_t AstNode::as_external_ref_book() const {
   FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_book on non-ExternalRef");
   return data_.external_ref->book;

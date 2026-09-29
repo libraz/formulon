@@ -369,8 +369,10 @@ TEST(ParserCalls, OneArg) {
 //
 // Function names like `LOG10` lex as CellRef (column "LOG", row 10) because
 // the tokenizer is grammar-agnostic. The parser's token-stream postprocess
-// rewrites such tokens to Ident when immediately followed by `(`, so they
-// reach the function-call dispatch path.
+// rewrites such a token to Ident when it is a function name followed by
+// `(`, so it reaches the function-call dispatch path. Any other cell token
+// followed by `(`, and every sheet-qualified one, is a cell invoked as a
+// callee (`A1(1)`), which Excel accepts and evaluates to #REF!.
 // ---------------------------------------------------------------------------
 
 TEST(ParserCellRefCall, Log10WithArgIsCall) {
@@ -409,6 +411,13 @@ TEST(ParserCellRefCall, Log10InsideSumArgsStaysCellRef) {
 
 TEST(ParserCellRefCall, Log10EmptyCall) {
   EXPECT_EQ(ParseToSexpr("=LOG10()"), "(call LOG10)");
+}
+
+TEST(ParserCellRefCall, CellInvokedAsCallee) {
+  EXPECT_EQ(ParseToSexpr("=A1(1)"), "(lambda-call (ref A1) (num 1))");
+  EXPECT_EQ(ParseToSexpr("=Sheet1!A1(1)"), "(lambda-call (ref Sheet1!A1) (num 1))");
+  EXPECT_EQ(ParseToSexpr("=Sheet1!LOG10(100)"), "(lambda-call (ref Sheet1!LOG10) (num 100))");
+  EXPECT_EQ(ParseToSexpr("=(LOG10)(100)"), "(lambda-call (ref LOG10) (num 100))");
 }
 
 // ---------------------------------------------------------------------------

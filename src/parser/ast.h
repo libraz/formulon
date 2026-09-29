@@ -504,6 +504,14 @@ AstNode* make_external_name_ref(Arena& arena, std::uint32_t book, std::string_vi
 /// `Book!Name` spelling.
 bool is_self_book_name_ref(const AstNode& node) noexcept;
 
+/// True for a cell-shaped lexeme that is also an Excel function name. The
+/// two overlap only where a name matches `[A-Za-z]{1,3}[0-9]{1,7}` inside
+/// the A1..XFD1048576 grid, which across the whole catalogue is `LOG10`
+/// alone. The parser resolves no names (a LAMBDA parameter may shadow a
+/// function name at eval time), so this is pinned to that exhaustive list
+/// rather than a registry lookup.
+bool is_cellref_shaped_function_name(std::string_view lexeme) noexcept;
+
 /// Builds a `StructuredRef` node.  `column` may be empty when the reference
 /// targets the whole table.  `modifier` is `None` for plain `Table[col]`.
 AstNode* make_structured_ref(Arena& arena, std::string_view table, std::string_view column,

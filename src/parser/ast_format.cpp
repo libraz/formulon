@@ -631,6 +631,22 @@ void FormatLet(const AstNode& node, std::string& out) {
   out.push_back(')');
 }
 
+// A callee that re-parses as the same callee without parentheses. An
+// unqualified cell spelled like a function (`LOG10`) would re-parse as that
+// function's call, so it keeps them.
+bool CalleePrintsBare(const AstNode& callee) {
+  switch (callee.kind()) {
+    case NodeKind::Lambda:
+    case NodeKind::NameRef:
+    case NodeKind::LambdaCall:
+      return true;
+    case NodeKind::Ref:
+      return !callee.as_ref().sheet.empty() || !is_cellref_shaped_function_name(format_a1(callee.as_ref()));
+    default:
+      return is_self_book_name_ref(callee);
+  }
+}
+
 void FormatLambdaCall(const AstNode& node, std::string& out) {
   // Excel's immediately-invoked lambda renders as `<callee>(args...)`. The
   // callee itself may need parens when it is not a bare ident / lambda.
@@ -639,8 +655,7 @@ void FormatLambdaCall(const AstNode& node, std::string& out) {
   // else (paren'd expression, prior LambdaCall, NameRef) is also fine
   // because the parser treats the postfix `(` as a high-precedence
   // operator. Still, wrap operator children defensively.
-  if (callee.kind() == NodeKind::Lambda || callee.kind() == NodeKind::NameRef ||
-      callee.kind() == NodeKind::LambdaCall || is_self_book_name_ref(callee)) {
+  if (CalleePrintsBare(callee)) {
     FormatNode(callee, out, 0);
   } else {
     out.push_back('(');
@@ -1048,8 +1063,7 @@ struct StorageEmitter {
 
   void emit_lambda_call(const AstNode& node, std::string& out) {
     const AstNode& callee = node.as_lambda_call_callee();
-    if (callee.kind() == NodeKind::Lambda || callee.kind() == NodeKind::NameRef ||
-        callee.kind() == NodeKind::LambdaCall || is_self_book_name_ref(callee)) {
+    if (CalleePrintsBare(callee)) {
       emit(callee, out, 0);
     } else {
       out.push_back('(');
