@@ -76,15 +76,16 @@ std::vector<formulon::eval::CellNodeId> bfs_collect(formulon::eval::CellNodeId s
   return ordered;
 }
 
-template <bool kPrecedents>
-fm_status_t trace_impl(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row, std::uint32_t col,
-                       std::uint32_t depth, fm_cell_nodes_t** out) {
+// The direction is a runtime flag rather than a template parameter so the
+// BFS body and its hash set are linked once for both entry points.
+fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                       std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
   clear_last_error();
-  constexpr const char* fn_name = kPrecedents ? "fm_workbook_precedents" : "fm_workbook_dependents";
+  const char* fn_name = precedents ? "fm_workbook_precedents" : "fm_workbook_dependents";
   if (out == nullptr) {
     return set_binding_error(
         formulon::FormulonErrorCode::kBindingNullPointer,
-        kPrecedents ? "fm_workbook_precedents: NULL argument" : "fm_workbook_dependents: NULL argument");
+        precedents ? "fm_workbook_precedents: NULL argument" : "fm_workbook_dependents: NULL argument");
   }
   *out = nullptr;
   if (auto rc = check_sheet_u32(wb, sheet, fn_name); rc != 0) {
@@ -100,19 +101,12 @@ fm_status_t trace_impl(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32
   // content-clipped expansion into the neighbour set in place of the
   // rectangle's virtual graph node, which is not a cell.
   auto neighbors = [&](formulon::eval::CellNodeId node) {
-    if constexpr (kPrecedents) {
-      auto nodes = graph.dependencies_of(node);
-      nodes.erase(std::remove_if(nodes.begin(), nodes.end(), formulon::eval::is_range_node), nodes.end());
-      const auto compact = engine.compact_range_precedents_of(node, workbook);
-      nodes.insert(nodes.end(), compact.begin(), compact.end());
-      return nodes;
-    } else {
-      auto nodes = graph.dependents_of(node);
-      nodes.erase(std::remove_if(nodes.begin(), nodes.end(), formulon::eval::is_range_node), nodes.end());
-      const auto compact = engine.compact_range_dependents_of(node);
-      nodes.insert(nodes.end(), compact.begin(), compact.end());
-      return nodes;
-    }
+    auto nodes = precedents ? graph.dependencies_of(node) : graph.dependents_of(node);
+    nodes.erase(std::remove_if(nodes.begin(), nodes.end(), formulon::eval::is_range_node), nodes.end());
+    const auto compact =
+        precedents ? engine.compact_range_precedents_of(node, workbook) : engine.compact_range_dependents_of(node);
+    nodes.insert(nodes.end(), compact.begin(), compact.end());
+    return nodes;
   };
   auto nodes = bfs_collect(seed, effective_depth(depth), neighbors);
 
@@ -126,12 +120,12 @@ fm_status_t trace_impl(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32
 
 extern "C" fm_status_t fm_workbook_precedents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
                                               std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
-  return trace_impl<true>(wb, sheet, row, col, depth, out);
+  return trace_impl(true, wb, sheet, row, col, depth, out);
 }
 
 extern "C" fm_status_t fm_workbook_dependents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
                                               std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
-  return trace_impl<false>(wb, sheet, row, col, depth, out);
+  return trace_impl(false, wb, sheet, row, col, depth, out);
 }
 
 extern "C" void fm_cell_nodes_destroy(fm_cell_nodes_t* nodes) {
