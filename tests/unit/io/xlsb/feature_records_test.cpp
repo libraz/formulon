@@ -283,31 +283,20 @@ std::vector<std::string> FeatureRecords(const std::vector<std::uint8_t>& xlsb, c
   return out;
 }
 
-/// True when `a` and `b` differ at most in formula size fields and in the
-/// class bits of reference Ptg opcodes (Ref / Area / Name and their N and
-/// 3-D forms). The Ptg encoder assigns operand classes its own way, and
-/// Excel re-derives them on load: its re-save of such a file matches its
-/// own original.
-bool SameUpToPtgClass(const std::string& a, const std::string& b) {
+/// True when `a` and `b` differ at most in the formula size fields
+/// (BrtBeginCFRule bytes 30-41, BrtCFVO 20-23), which the writer fills with
+/// `cce` (see `EncodedFeatureFormula`) where Excel counts differently.
+bool SameUpToFormulaSize(const std::string& a, const std::string& b) {
   const std::size_t colon = a.find(':');
   if (a.size() != b.size() || colon == std::string::npos || a.compare(0, colon, b, 0, colon) != 0) {
     return false;
   }
-  // The formula size fields (BrtBeginCFRule bytes 30-41, BrtCFVO 20-23),
-  // which the writer fills with `cce` (see `EncodedFeatureFormula`).
   const std::string type = a.substr(0, colon);
   const std::size_t skip_from = type == "463" ? 30U : type == "471" ? 20U : 0U;
   const std::size_t skip_to = type == "463" ? 42U : type == "471" ? 24U : 0U;
   for (std::size_t i = colon + 2U; i + 1U < a.size(); i += 3U) {
     const std::size_t byte = (i - colon - 2U) / 3U;
-    if (a.compare(i, 2, b, i, 2) == 0 || (byte >= skip_from && byte < skip_to)) {
-      continue;
-    }
-    const auto x = static_cast<unsigned>(std::stoul(a.substr(i, 2), nullptr, 16));
-    const auto y = static_cast<unsigned>(std::stoul(b.substr(i, 2), nullptr, 16));
-    const unsigned base = (x & 0x1FU) | 0x20U;
-    const bool reference = (base >= 0x23U && base <= 0x2DU) || (base >= 0x3AU && base <= 0x3DU);
-    if (((x ^ y) & ~0x60U) != 0U || x < 0x20U || x >= 0x80U || y < 0x20U || !reference) {
+    if (a.compare(i, 2, b, i, 2) != 0 && (byte < skip_from || byte >= skip_to)) {
       return false;
     }
   }
@@ -345,7 +334,7 @@ TEST_P(XlsbFeatureFixture, RoundTripsThroughTheModel) {
 /// all-default records are left out of the comparison.
 class XlsbFeatureWriterBytes : public ::testing::TestWithParam<const char*> {};
 
-TEST_P(XlsbFeatureWriterBytes, MatchExcelUpToPtgClass) {
+TEST_P(XlsbFeatureWriterBytes, MatchExcel) {
   const std::string name = GetParam();
   const std::vector<std::uint8_t> source = ReadFileBytes(FixturePath(name, "xlsb"));
   const Workbook wb = ReadXlsbBytes(source);
@@ -362,7 +351,7 @@ TEST_P(XlsbFeatureWriterBytes, MatchExcelUpToPtgClass) {
     const std::vector<std::string> actual = FeatureRecords(written.value(), part);
     bool same = actual.size() == expected.size();
     for (std::size_t r = 0; same && r < actual.size(); ++r) {
-      same = SameUpToPtgClass(actual[r], expected[r]);
+      same = SameUpToFormulaSize(actual[r], expected[r]);
     }
     if (!same) {
       EXPECT_EQ(Joined(actual), Joined(expected)) << part;
@@ -377,7 +366,10 @@ INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureFixture,
 // Left out: `text_rules`, `flags` and `rel`, whose formulas differ from
 // Excel's only in the Ptg codec's canonical form, not in record layout:
 // redundant parentheses the decoder does not keep, the PtgAttrSemi operand
-// (`00 00` where Excel writes `fe ff`), and IF's PtgAttr jumps.
+// (`00 00` where Excel writes `fe ff` or `fc ff`), a WEEKDAY result Excel
+// stores reference-class and EDATE as `PtgFuncVar` inside its own
+// timePeriod rules, and IF's PtgAttr jumps. `rel` without its IF rule is
+// checked below.
 INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureWriterBytes,
                          ::testing::Values("base", "cellis_ops", "cfvo", "iconbits", "dv_all", "prot", "prot2",
                                            "excelprot", "x14", "x14bars", "x14dir"));
@@ -409,6 +401,31 @@ std::string RecordPayload(const std::vector<std::uint8_t>& xlsb, const std::stri
     }
   }
   return "absent";
+}
+
+// `rel`'s rules match Excel's bytes, classes included (an operand under AND
+// is array class, a cell and a name too), except the IF rule, whose
+// PtgAttrIf / PtgAttrGoto jumps (`19 02`, `19 08`) the encoder does not write.
+TEST(XlsbFeatureRecords, RelativeRulesMatchExcelBesideIfJumps) {
+  const std::vector<std::uint8_t> source = ReadFileBytes(FixturePath("rel", "xlsb"));
+  const Workbook wb = ReadXlsbBytes(source);
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  std::vector<std::string> expected = FeatureRecords(source, "xl/worksheets/sheet1.bin");
+  expected.erase(
+      std::remove_if(expected.begin(), expected.end(), [](const std::string& r) { return r.rfind("535:", 0) == 0; }),
+      expected.end());
+  const std::vector<std::string> actual = FeatureRecords(written.value(), "xl/worksheets/sheet1.bin");
+  ASSERT_EQ(actual.size(), expected.size());
+  std::size_t skipped = 0U;
+  for (std::size_t r = 0; r < actual.size(); ++r) {
+    if (expected[r].find(" 19 02 ") != std::string::npos) {
+      ++skipped;
+      continue;
+    }
+    EXPECT_TRUE(SameUpToFormulaSize(actual[r], expected[r])) << actual[r] << "\n" << expected[r];
+  }
+  EXPECT_EQ(skipped, 1U);
 }
 
 // `iconbits` and `rel` each keep an x14 block Excel writes only in its

@@ -70,10 +70,12 @@ Expected<std::string, Error> read_feature_formula(ByteSpan& cursor, std::uint32_
                                                   const FeatureFormulaReadContext& ctx);
 
 /// Parses `text` (no leading `=`) and encodes it anchored at
-/// (`base_row`, `base_col`).
+/// (`base_row`, `base_col`); a conditional format's formulas pass
+/// `PtgEvaluation::kConditionalFormat`.
 Expected<EncodedFeatureFormula, Error> encode_feature_formula(std::string_view text, std::uint32_t base_row,
                                                               std::uint32_t base_col, PtgRootClass root_class,
-                                                              const FeatureFormulaWriteContext& ctx);
+                                                              const FeatureFormulaWriteContext& ctx,
+                                                              PtgEvaluation evaluation = PtgEvaluation::kDynamicArray);
 
 }  // namespace xlsb
 }  // namespace io

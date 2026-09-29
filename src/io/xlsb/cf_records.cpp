@@ -579,7 +579,8 @@ Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValue
   double num = 0;
   EncodedFeatureFormula formula;
   if (v.type == cf::CfvoType::Formula) {
-    auto f = encode_feature_formula(v.value, base.first_row, base.first_col, PtgRootClass::kValue, ctx);
+    auto f = encode_feature_formula(v.value, base.first_row, base.first_col, PtgRootClass::kValue, ctx,
+                                    PtgEvaluation::kConditionalFormat);
     if (!f) {
       return f.error();
     }
@@ -654,7 +655,8 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
       if (!sources[i]->has_value() || (*sources[i])->empty()) {
         continue;
       }
-      auto f = encode_feature_formula(**sources[i], base.first_row, base.first_col, PtgRootClass::kValue, ctx);
+      auto f = encode_feature_formula(**sources[i], base.first_row, base.first_col, PtgRootClass::kValue, ctx,
+                                      PtgEvaluation::kConditionalFormat);
       if (!f) {
         return f.error();
       }

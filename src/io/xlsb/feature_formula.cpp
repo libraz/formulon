@@ -95,7 +95,8 @@ Expected<std::string, Error> read_feature_formula(ByteSpan& cursor, std::uint32_
 
 Expected<EncodedFeatureFormula, Error> encode_feature_formula(std::string_view text, std::uint32_t base_row,
                                                               std::uint32_t base_col, PtgRootClass root_class,
-                                                              const FeatureFormulaWriteContext& ctx) {
+                                                              const FeatureFormulaWriteContext& ctx,
+                                                              PtgEvaluation evaluation) {
   EncodedFeatureFormula out;
   if (text.empty()) {
     emit_u32(out.bytes, 0U);
@@ -110,7 +111,7 @@ Expected<EncodedFeatureFormula, Error> encode_feature_formula(std::string_view t
                       "context=xlsb_feature_formula formula=" + std::string(text));
   }
   auto encoded = encode_ptgs(*root, ctx.sheet_names, ctx.sheet_ranges, ctx.name_table, root_class,
-                             PtgBaseCell{base_row, base_col});
+                             PtgBaseCell{base_row, base_col}, evaluation);
   if (!encoded) {
     return encoded.error();
   }

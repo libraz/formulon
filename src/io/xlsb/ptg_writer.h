@@ -81,11 +81,15 @@ enum class PtgRootClass : std::uint8_t {
 /// intersects it, value class (0x45), except under a forced-array parameter
 /// such as SUMPRODUCT's. A legacy formula also stores no `@` where Excel's
 /// own implied one stands (`legacy_intersections`); a legacy CSE block
-/// (`kLegacyArray`) intersects nothing, so every written `@` is kept.
+/// (`kLegacyArray`) intersects nothing, so every written `@` is kept. A
+/// conditional-format formula (`kConditionalFormat`) gives any operand under a
+/// parameter other than a value one array class, a cell or a name included
+/// (`AND(H2>Lim)` -> 0x6C / 0x63).
 enum class PtgEvaluation : std::uint8_t {
   kDynamicArray,
   kLegacy,
   kLegacyArray,
+  kConditionalFormat,
 };
 
 /// Result of `encode_ptgs`: the main token stream plus the array-

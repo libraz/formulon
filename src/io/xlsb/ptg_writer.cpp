@@ -87,10 +87,13 @@ struct Slot {
 /// `slot` (measured per parameter; see `xlsb_parameter_class`). Outside
 /// every built-in an operand is value class and a direct argument keeps
 /// reference class.
-std::uint8_t SlotClass(Slot slot, bool area, bool legacy = false) {
-  if (slot.operand && legacy) {
+std::uint8_t SlotClass(Slot slot, bool area, PtgEvaluation evaluation = PtgEvaluation::kDynamicArray) {
+  if (slot.operand && (evaluation == PtgEvaluation::kLegacy || evaluation == PtgEvaluation::kLegacyArray)) {
     // A legacy formula intersects an operand unless the parameter forces arrays.
     return slot.letter == 'F' ? kPtgArrayClass : kPtgValueClass;
+  }
+  if (slot.operand && evaluation == PtgEvaluation::kConditionalFormat && slot.letter != 0 && slot.letter != 'V') {
+    return kPtgArrayClass;
   }
   if (slot.operand) {
     switch (slot.letter) {
@@ -469,7 +472,7 @@ class LegacyIntersections {
       : name_is_scalar_(name_is_scalar), out_(out) {}
 
   void walk(const parser::AstNode& node, Slot slot, bool root) {
-    const bool value = root || SlotClass(slot, /*area=*/true, /*legacy=*/true) == kPtgValueClass;
+    const bool value = root || SlotClass(slot, /*area=*/true, PtgEvaluation::kLegacy) == kPtgValueClass;
     if (node.kind() == parser::NodeKind::ImplicitIntersection) {
       // A written `@` is listed when it is the one Excel would show; its
       // operand never takes a second one.
@@ -673,7 +676,7 @@ class Encoder {
         sheet_ranges_(sheet_ranges),
         name_table_(name_table),
         base_(base),
-        legacy_(evaluation != PtgEvaluation::kDynamicArray),
+        evaluation_(evaluation),
         promote_root_(root_class == PtgRootClass::kValue) {
     parser::collect_parenthesized_nodes(root, parens_);
     if (evaluation == PtgEvaluation::kLegacy) {
@@ -712,7 +715,7 @@ class Encoder {
       if (promote) {
         return kPtgValueClass;
       }
-      return promote_root_ ? SlotClass(slot, area, legacy_) : kPtgReferenceClass;
+      return promote_root_ ? SlotClass(slot, area, evaluation_) : kPtgReferenceClass;
     };
     switch (node.kind()) {
       case parser::NodeKind::Literal:
@@ -1513,7 +1516,7 @@ class Encoder {
   /// Base cell of `PtgRefN` / `PtgAreaN` offsets, when the formula has one.
   const std::optional<PtgBaseCell> base_;
   /// See `PtgEvaluation`.
-  const bool legacy_;
+  const PtgEvaluation evaluation_;
   /// Written `@` nodes a legacy formula stores as nothing.
   std::vector<const parser::AstNode*> implied_at_;
   /// See `emit()`'s `promote` local. Cleared on the first call.
