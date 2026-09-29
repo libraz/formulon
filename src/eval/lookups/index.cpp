@@ -551,8 +551,9 @@ struct IndexPick {
 // Zero indices are "whole dimension" in Excel's spill model. The value path
 // reads the pick out of the source and the reference path maps it onto the
 // source rectangle, so the two cannot disagree on what INDEX selects.
+// `reference` marks the reference form, whose 2-D area needs both indices.
 Expected<IndexPick, ErrorCode> index_pick(std::uint32_t rows, std::uint32_t cols, std::uint32_t row_idx,
-                                          std::uint32_t col_idx, bool col_explicit) {
+                                          std::uint32_t col_idx, bool col_explicit, bool reference) {
   if (!col_explicit) {
     // Two-arg form.
     if (rows == 1U && cols == 1U) {
@@ -592,7 +593,9 @@ Expected<IndexPick, ErrorCode> index_pick(std::uint32_t rows, std::uint32_t cols
     if (row_idx == 0U) {
       return IndexPick{IndexPickKind::kWhole, 0U, 0U};
     }
-    if (row_idx > rows) {
+    // A 2-D reference with a row number alone is #REF! (measured on Excel
+    // 365); an array spills the row.
+    if (row_idx > rows || reference) {
       return ErrorCode::Ref;
     }
     return IndexPick{IndexPickKind::kRow, row_idx - 1U, 0U};
@@ -887,7 +890,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       return Value::error(col.error);
     }
   }
-  const auto pick = index_pick(rows, cols, row.index, col.index, col_explicit);
+  const auto pick = index_pick(rows, cols, row.index, col.index, col_explicit, by_reference && by_reference.value());
   if (!pick) {
     return Value::error(pick.error());
   }
@@ -947,7 +950,7 @@ bool resolve_index_reference(const parser::AstNode& call, Arena& arena, const Fu
       return false;
     }
   }
-  const auto pick = index_pick(bottom - top + 1U, right - left + 1U, row.index, col.index, col_explicit);
+  const auto pick = index_pick(bottom - top + 1U, right - left + 1U, row.index, col.index, col_explicit, true);
   if (!pick) {
     *out_err = pick.error();
     return false;

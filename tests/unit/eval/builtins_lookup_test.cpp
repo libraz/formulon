@@ -442,8 +442,9 @@ TEST(BuiltinsIndex, ZeroColOn2DRangeSpillsRow) {
   EXPECT_DOUBLE_EQ(cells[2].as_number(), 6.0);  // (1,2)
 }
 
-TEST(BuiltinsIndex, TwoArg2DRowOnlySpillsRow) {
-  // 2-arg INDEX on a 2-D source spills the whole selected row.
+TEST(BuiltinsIndex, TwoArg2DReferenceRowOnlyIsRefError) {
+  // The reference form needs both indices on a 2-D area: Excel 365 gives
+  // `INDEX(A1:B2,1)` #REF! (backup/oracle_probe/legacy_at/legacy_extra_formula2.txt).
   Workbook wb = Workbook::create();
   for (std::uint32_t r = 0; r < 3; ++r) {
     for (std::uint32_t c = 0; c < 3; ++c) {
@@ -451,13 +452,8 @@ TEST(BuiltinsIndex, TwoArg2DRowOnlySpillsRow) {
     }
   }
   const Value v = EvalSourceIn("=INDEX(A1:C3, 3)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_array());
-  EXPECT_EQ(v.as_array_rows(), 1U);
-  EXPECT_EQ(v.as_array_cols(), 3U);
-  const Value* cells = v.as_array_cells();
-  EXPECT_DOUBLE_EQ(cells[0].as_number(), 7.0);
-  EXPECT_DOUBLE_EQ(cells[1].as_number(), 8.0);
-  EXPECT_DOUBLE_EQ(cells[2].as_number(), 9.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
 TEST(BuiltinsIndex, ZeroBothOn2DRangeSpillsWholeArray) {

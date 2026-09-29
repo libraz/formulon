@@ -826,6 +826,17 @@ TEST(BuiltinsOffset, WholeColumnBaseDefaultHeightIsFullAxis) {
   EXPECT_EQ(shifted_down.as_error(), ErrorCode::Ref);
 }
 
+TEST(BuiltinsOffset, EmptyHeightOrWidthKeepsTheBaseSize) {
+  // An empty height or width is the base's, not zero (Excel 365:
+  // `@OFFSET(A1,0,0,,2)` is the 1x2 A1:B1, so #VALUE! off its row).
+  const Value rows = EvalSource("=ROWS(OFFSET(A1:A3,0,0,,2))");
+  ASSERT_TRUE(rows.is_number());
+  EXPECT_DOUBLE_EQ(rows.as_number(), 3.0);
+  const Value cols = EvalSource("=COLUMNS(OFFSET(A1:A3,0,0,2,))");
+  ASSERT_TRUE(cols.is_number());
+  EXPECT_DOUBLE_EQ(cols.as_number(), 1.0);
+}
+
 TEST(BuiltinsOffset, WholeRowBaseResolvesInsteadOfValueError) {
   // OFFSET(1:1, 0, 1, 1, 1) anchors one column right of row 1: B1.
   Workbook wb = Workbook::create();

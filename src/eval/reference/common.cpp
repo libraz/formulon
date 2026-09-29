@@ -806,17 +806,22 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
     return false;
   }
 
+  // An omitted height or width, trailing or empty (`OFFSET(A1,0,0,,2)`),
+  // keeps the base reference's.
+  auto given = [&](std::uint32_t idx) {
+    if (idx >= arity) {
+      return false;
+    }
+    const parser::AstNode& arg = call.as_call_arg(idx);
+    return arg.kind() != parser::NodeKind::Literal || !arg.as_literal().is_blank();
+  };
   int height_i = static_cast<int>(out_base->rows);
   int width_i = static_cast<int>(out_base->cols);
-  if (arity >= 4U) {
-    if (!eval_dim(3U, &height_i)) {
-      return false;
-    }
+  if (given(3U) && !eval_dim(3U, &height_i)) {
+    return false;
   }
-  if (arity >= 5U) {
-    if (!eval_dim(4U, &width_i)) {
-      return false;
-    }
+  if (given(4U) && !eval_dim(4U, &width_i)) {
+    return false;
   }
   // Zero height or width -> `#REF!`. Excel allows negative height / width
   // meaning the rectangle extends in the negative direction from the
