@@ -251,6 +251,49 @@ TEST(ParserErrors, IndexSpelledExternalWorkbookReferenceParses) {
   }
 }
 
+TEST(ParserErrors, SelfBookNameParses) {
+  // `[0]` is the formula's own workbook: Excel stores `Book!Name` as
+  // `[0]!Name`, including as a LAMBDA callee and as a `:` endpoint.
+  {
+    Arena a;
+    Parser p("=[0]!Rate", a);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr);
+    EXPECT_TRUE(p.errors().empty());
+    EXPECT_TRUE(is_self_book_name_ref(*root));
+    EXPECT_EQ(root->as_external_ref_name(), "Rate");
+  }
+  {
+    Arena a;
+    Parser p("=[0]!Fn(3)", a);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr);
+    EXPECT_TRUE(p.errors().empty());
+    ASSERT_EQ(root->kind(), NodeKind::LambdaCall);
+    EXPECT_TRUE(is_self_book_name_ref(root->as_lambda_call_callee()));
+  }
+  {
+    Arena a;
+    Parser p("=Sheet1!A10:[0]!Rng", a);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr);
+    EXPECT_TRUE(p.errors().empty());
+    ASSERT_EQ(root->kind(), NodeKind::RangeOp);
+    EXPECT_TRUE(is_self_book_name_ref(root->as_range_rhs()));
+  }
+}
+
+TEST(ParserErrors, SelfBookCellReferenceIsInvalid) {
+  // Excel never writes `[0]` in front of a sheet; the self-book qualifier
+  // exists only in the name form.
+  for (const char* src : {"=[0]Sheet1!A1", "='[0]My Sheet'!A1"}) {
+    Arena a;
+    Parser p(src, a);
+    (void)p.parse();
+    EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::InvalidReference)) << src;
+  }
+}
+
 TEST(ParserErrors, UnbalancedBracketsForOpenExternalWorkbookReference) {
   // The same atom arm reports UnbalancedBrackets when the `[` never closes.
   Arena a;

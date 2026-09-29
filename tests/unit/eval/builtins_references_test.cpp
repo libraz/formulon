@@ -1215,6 +1215,8 @@ TEST(ReferenceCall, DefinedNameAsRangeEndpoint) {
   ExpectNumber(EvalSourceIn("=SUM(A1:CellNm:B1)", wb, s1), 198.0, "SUM(A1:CellNm:B1)");
   ExpectNumber(EvalSourceIn("=SUM(Sheet1!A1:CellNm)", wb, s1), 198.0, "SUM(Sheet1!A1:CellNm)");
   ExpectNumber(EvalSourceIn("=SUM(Sheet2!A1:OtherNm)", wb, s1), 1098.0, "SUM(Sheet2!A1:OtherNm)");
+  ExpectNumber(EvalSourceIn("=SUM(A1:Sheet1!CellNm)", wb, s1), 198.0, "SUM(A1:Sheet1!CellNm)");
+  ExpectNumber(EvalSourceIn("=SUM(A1:[0]!CellNm)", wb, s1), 198.0, "SUM(A1:[0]!CellNm)");
 }
 
 TEST(ReferenceCall, NonReferenceNameAsRangeEndpoint) {

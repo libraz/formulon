@@ -263,5 +263,20 @@ TEST(WorkbookTest, DefinedNameRangeEndpointTracksCellsInsideTheBox) {
   EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 7.0);
 }
 
+TEST(WorkbookTest, RedefiningWorkbookNameRecalcsSelfBookReferences) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("G", "=100", 0)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("G", "=5")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=[0]!G")));
+  Value v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("G", "=6")));
+  v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+}
+
 }  // namespace
 }  // namespace formulon

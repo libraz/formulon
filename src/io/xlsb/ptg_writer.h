@@ -12,7 +12,7 @@
 // consistent with it.
 //
 // Tokens the AST can carry but the encoder cannot lower (structured refs,
-// external refs, implicit-intersection, optional LAMBDA parameters)
+// cross-workbook refs, implicit-intersection, optional LAMBDA parameters)
 // return `kIoXlsbUnsupportedPtg` rather
 // than silently dropping data; the cell writer surfaces that as a hard
 // failure through `write_xlsb`'s `Expected` return.
@@ -93,7 +93,7 @@ struct EncodedFormula {
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
                        std::unordered_set<std::string>& seen);
 
-/// `collect_ptg_names` without sheet-qualified references (`Sheet2!Rate`)
+/// `collect_ptg_names` without qualified references (`Sheet2!Rate`, `[0]!Rate`)
 /// and with every callee that has no function id (`Fn(3)`): every name the
 /// formula resolves from its own scope.
 void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
@@ -104,10 +104,10 @@ void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::
 /// need an `ixti` for while encoding it: a single-sheet `Ref` whose
 /// `sheet` is non-empty contributes `(itab, itab)`; a `Ref3D` node
 /// contributes its full `(begin, end)` span; a sheet-qualified defined
-/// name (`Sheet2!Rate`) contributes the sheetless `(-2, -2)` entry its
-/// `PtgNameX` resolves through. `sheet_names` resolves a sheet display
-/// name to its 0-based index; a name absent from `sheet_names` is
-/// skipped here (the encode fails later with a precise
+/// or self-book name (`Sheet2!Rate`, `[0]!Rate`) contributes the sheetless
+/// `(-2, -2)` entry its `PtgNameX` resolves through. `sheet_names` resolves
+/// a sheet display name to its 0-based index; a name absent from
+/// `sheet_names` is skipped here (the encode fails later with a precise
 /// error instead of silently fabricating an entry). `seen` dedupes
 /// (both across one call and across callers pre-seeding it), and
 /// `ranges`' index order becomes the `ixti` assignment `encode_ptgs`

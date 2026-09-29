@@ -233,6 +233,64 @@ TEST_F(MeasuredSheetScopedNames, QualifiedFormulaNameIsNotAReference) {
   EXPECT_FALSE(v.as_boolean());
 }
 
+// `[0]!Name` is Excel's storage form of `Book!Name`. Values measured on
+// Excel 365 (Mac, ja-JP) against files holding the formulas below.
+class MeasuredSelfBookNames : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    wb_.add_sheet("Sheet1");
+    wb_.add_sheet("Sheet2");
+    wb_.sheet(0).set_cell_value(9U, 0U, Value::number(3.0));   // A10
+    wb_.sheet(0).set_cell_value(10U, 0U, Value::number(4.0));  // A11
+    wb_.set_defined_names({
+        DefinedName{"Loc", "8", 1, false, ""},
+        DefinedName{"Fn", "LAMBDA(x,x*2)", -1, false, ""},
+        DefinedName{"G", "100", 0, false, ""},
+        DefinedName{"G", "5", -1, false, ""},
+        DefinedName{"Loc", "7", 0, false, ""},
+        DefinedName{"Rng", "Sheet1!$A$10:$A$11", -1, false, ""},
+    });
+  }
+
+  Value Eval(std::size_t sheet, std::string_view src) {
+    EvalState state;
+    EvalContext ctx(wb_, wb_.sheet(sheet), state);
+    return EvalOrDie(src, arena_, ctx);
+  }
+
+  Workbook wb_ = Workbook::create_empty();
+  Arena arena_;
+};
+
+TEST_F(MeasuredSelfBookNames, Numbers) {
+  struct Case {
+    std::size_t sheet;
+    const char* src;
+    double want;
+  };
+  // `[0]!G` skips Sheet1's local G; with no workbook-scoped `Loc`, `[0]!Loc`
+  // is the lowest sheet's local one whatever the definition order.
+  for (const Case& c : {Case{0, "=[0]!G", 5.0}, Case{0, "=G", 100.0}, Case{1, "=[0]!G", 5.0},
+                        Case{0, "=[0]!Fn(3)", 6.0}, Case{0, "=SUM([0]!Rng)", 7.0}, Case{1, "=ROWS([0]!Rng)", 2.0},
+                        Case{1, "=SUM(Sheet1!A10:[0]!Rng)", 7.0}, Case{0, "=[0]!Loc", 7.0}, Case{1, "=[0]!Loc", 7.0}}) {
+    const Value v = Eval(c.sheet, c.src);
+    ASSERT_TRUE(v.is_number()) << c.src << " -> " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.want) << c.src;
+  }
+}
+
+TEST_F(MeasuredSelfBookNames, UndefinedNameIsNameError) {
+  const Value v = Eval(1, "=[0]!Nope");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+TEST_F(MeasuredSelfBookNames, NeverALexicalBinding) {
+  const Value v = Eval(0, "=LET(G,1,[0]!G)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
+}
+
 // A LAMBDA built in a local name's body keeps that scope when it runs, and
 // a workbook name reached from it inherits the scope rather than the
 // calling sheet's.

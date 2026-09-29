@@ -635,6 +635,11 @@ const Reference& AstNode::as_ref3d_cell_end() const {
   return data_.ref3d->cell_end;
 }
 
+bool is_self_book_name_ref(const AstNode& node) noexcept {
+  return node.kind() == NodeKind::ExternalRef && node.as_external_ref_book() == 0U &&
+         !node.as_external_ref_name().empty();
+}
+
 std::uint32_t AstNode::as_external_ref_book() const {
   FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_book on non-ExternalRef");
   return data_.external_ref->book;

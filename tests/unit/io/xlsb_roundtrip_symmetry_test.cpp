@@ -979,6 +979,78 @@ TEST(XlsbWriteReadSymmetry, CallToAnotherSheetsLocalLambdaStaysUnresolved) {
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
+// Excel-saved workbook (Mac Excel 365): workbook names G = 5,
+// Fn = LAMBDA(x,x*2) and Rng = Sheet1!$A$10:$A$11, Sheet1-local G = 100 and
+// Loc = 7. Excel stores the `Book!Name` spelling as `[0]!Name` in .xlsx and
+// as PtgNameX through the sheetless ExternSheet entry in .xlsb; the values
+// below are what Excel shows.
+void ExpectSelfBookFixture(Workbook& wb, const char* label) {
+  const Sheet& s1 = wb.sheet(0);
+  const Sheet& s2 = wb.sheet(1);
+  EXPECT_EQ(s1.cell_at(0U, 2U)->formula_text, "=[0]!Fn(3)") << label;
+  EXPECT_EQ(s1.cell_at(0U, 3U)->formula_text, "=SUM([0]!Rng)") << label;
+  EXPECT_EQ(s2.cell_at(0U, 0U)->formula_text, "=[0]!G") << label;
+  EXPECT_EQ(s2.cell_at(0U, 2U)->formula_text, "=ROWS([0]!Rng)") << label;
+  EXPECT_EQ(s2.cell_at(0U, 3U)->formula_text, "=Sheet1!A10:[0]!Rng") << label;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry()))) << label;
+  const double sheet1[] = {100.0, 100.0, 6.0, 7.0, 100.0};
+  for (std::uint32_t col = 0; col < 5U; ++col) {
+    const Value v = wb.sheet(0).resolve_cell_value(0U, col);
+    ASSERT_TRUE(v.is_number()) << label << " Sheet1 col=" << col;
+    EXPECT_EQ(v.as_number(), sheet1[col]) << label << " Sheet1 col=" << col;
+  }
+  const double sheet2[] = {5.0, 5.0, 2.0, 3.0};
+  for (std::uint32_t col = 0; col < 4U; ++col) {
+    const Value v = wb.sheet(1).resolve_cell_value(0U, col);
+    ASSERT_TRUE(v.is_number()) << label << " Sheet2 col=" << col;
+    EXPECT_EQ(v.as_number(), sheet2[col]) << label << " Sheet2 col=" << col;
+  }
+  EXPECT_EQ(wb.sheet(1).resolve_cell_value(1U, 3U).as_number(), 4.0) << label << " Sheet2!D2 spill";
+}
+
+TEST(XlsbWriteReadSymmetry, ExcelSelfBookNameFixtures) {
+  auto from_xlsx = io::read_ooxml(test::span_of(test::read_file_bytes(FixturePath("self_book_name.xlsx"))));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  auto from_xlsb = io::xlsb::read_xlsb(test::span_of(test::read_file_bytes(FixturePath("self_book_name.xlsb"))));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  EXPECT_EQ(from_xlsb.value().undecoded_formula_count, 0U);
+  Workbook xlsx = std::move(from_xlsx.value().workbook);
+  Workbook xlsb = std::move(from_xlsb.value().workbook);
+  ExpectSelfBookFixture(xlsx, "xlsx");
+  ExpectSelfBookFixture(xlsb, "xlsb");
+
+  for (Workbook* source : {&xlsx, &xlsb}) {
+    auto saved_xlsb = io::xlsb::write_xlsb(*source);
+    ASSERT_TRUE(static_cast<bool>(saved_xlsb)) << saved_xlsb.error().message;
+    auto reread_xlsb = io::xlsb::read_xlsb(test::span_of(saved_xlsb.value()));
+    ASSERT_TRUE(static_cast<bool>(reread_xlsb)) << reread_xlsb.error().message;
+    EXPECT_EQ(reread_xlsb.value().undecoded_formula_count, 0U);
+    ExpectSelfBookFixture(reread_xlsb.value().workbook, "xlsb round trip");
+
+    auto saved_xlsx = io::write_ooxml(*source);
+    ASSERT_TRUE(static_cast<bool>(saved_xlsx)) << saved_xlsx.error().message;
+    auto reread_xlsx = io::read_ooxml(test::span_of(saved_xlsx.value()));
+    ASSERT_TRUE(static_cast<bool>(reread_xlsx)) << reread_xlsx.error().message;
+    ExpectSelfBookFixture(reread_xlsx.value().workbook, "xlsx round trip");
+  }
+}
+
+// Excel saves `Sheet1!G` where Sheet1 has no local G exactly as it saves
+// `[0]!G`, and reads it back as the self-book form.
+TEST(XlsbWriteReadSymmetry, SheetQualifiedWorkbookNameReadsBackAsSelfBook) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("G", "5")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Sheet1!G")));
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  Workbook after = std::move(reloaded.value().workbook);
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 0U)->formula_text, "=[0]!G");
+  ASSERT_TRUE(static_cast<bool>(after.recalc(eval::default_registry())));
+  EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 0U).as_number(), 5.0);
+}
+
 // Reinterprets `v`'s object representation so two doubles can be
 // compared for bit equality rather than numeric equality.
 std::uint64_t BitsOf(double v) {

@@ -640,7 +640,7 @@ void FormatLambdaCall(const AstNode& node, std::string& out) {
   // because the parser treats the postfix `(` as a high-precedence
   // operator. Still, wrap operator children defensively.
   if (callee.kind() == NodeKind::Lambda || callee.kind() == NodeKind::NameRef ||
-      callee.kind() == NodeKind::LambdaCall) {
+      callee.kind() == NodeKind::LambdaCall || is_self_book_name_ref(callee)) {
     FormatNode(callee, out, 0);
   } else {
     out.push_back('(');
@@ -1049,7 +1049,7 @@ struct StorageEmitter {
   void emit_lambda_call(const AstNode& node, std::string& out) {
     const AstNode& callee = node.as_lambda_call_callee();
     if (callee.kind() == NodeKind::Lambda || callee.kind() == NodeKind::NameRef ||
-        callee.kind() == NodeKind::LambdaCall) {
+        callee.kind() == NodeKind::LambdaCall || is_self_book_name_ref(callee)) {
       emit(callee, out, 0);
     } else {
       out.push_back('(');

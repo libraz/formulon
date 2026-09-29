@@ -389,8 +389,9 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     }
     const std::uint32_t real_count = cparams - 1;
     // `LAMBDA(z,z*z)(4)` and a curried call store the callee expression
-    // itself as the first operand.
-    if (ops[0]->kind() == parser::NodeKind::Lambda || ops[0]->kind() == parser::NodeKind::LambdaCall) {
+    // itself as the first operand; `[0]!Fn(3)` stores the self-book name.
+    if (ops[0]->kind() == parser::NodeKind::Lambda || ops[0]->kind() == parser::NodeKind::LambdaCall ||
+        parser::is_self_book_name_ref(*ops[0])) {
       parser::AstNode* n = parser::make_lambda_call(arena, const_cast<parser::AstNode*>(ops[0]), ops + 1, real_count);
       if (n == nullptr) {
         return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (LAMBDA call)", "context=xlsb_ptg_reader");
@@ -770,12 +771,18 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         const std::uint32_t ixti = ixti_or.value();
         // An ExternSheet entry of this workbook names one of its own
         // `BrtName` records; that record's own scope decides the qualifier.
+        // A workbook-scoped record is the self-book `[0]!Name`, which is
+        // what Excel saves both that spelling and `Sheet1!Name` as when
+        // Sheet1 has no local `Name`.
         if (ixti < sheet_ranges.size() && sheet_ranges[ixti].external_book == 0U) {
-          if (resolve_name(ilbl_or.value()).empty()) {
+          const std::string_view name = resolve_name(ilbl_or.value());
+          if (name.empty()) {
             return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb PtgNameX: ilbl out of range",
                               "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
           }
-          parser::AstNode* n = make_local_name_ref(ilbl_or.value());
+          parser::AstNode* n = name_table[ilbl_or.value() - 1U].itab < 0
+                                   ? parser::make_external_name_ref(arena, 0U, name)
+                                   : make_local_name_ref(ilbl_or.value());
           if (n == nullptr) {
             return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNameX)", "context=xlsb_ptg_reader");
           }

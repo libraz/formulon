@@ -705,6 +705,10 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     }
 
     case parser::NodeKind::ExternalRef:
+      // `[0]!Name` names a defined name of this workbook itself.
+      if (parser::is_self_book_name_ref(node)) {
+        return resolve_self_book_defined_name(node.as_external_ref_name(), arena, registry, ctx);
+      }
       // Read straight out of the external-link cache. Unlike `Ref3D` this
       // needs no sheet resolution against the workbook: the target lives
       // in another file whose grid the cache already holds, so a

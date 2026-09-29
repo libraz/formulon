@@ -243,6 +243,23 @@ TEST(AstFormat, StorageFormNeverPrefixesSheetQualifiedName) {
   EXPECT_NE(stored.find("_xlpm.Rate*Sheet1!Rate"), std::string::npos) << stored;
 }
 
+TEST(AstFormat, SelfBookNameRef) {
+  ExpectRoundTripsToSame("=[0]!Rate");
+  ExpectRoundTripsToSame("=SUM([0]!Rng)");
+  ExpectRoundTripsToSame("=[0]!Fn(3)");
+  ExpectRoundTripsToSame("=Sheet1!A10:[0]!Rng");
+}
+
+TEST(AstFormat, StorageFormNeverPrefixesSelfBookName) {
+  Arena a;
+  Parser p("=LET(Rate,2,Rate*[0]!Rate)", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(p.errors().empty());
+  const std::string stored = format_formula_storage(*root, [](std::string_view n) { return std::string(n); });
+  EXPECT_NE(stored.find("_xlpm.Rate*[0]!Rate"), std::string::npos) << stored;
+}
+
 TEST(AstFormat, SpillRef) {
   ExpectRoundTripsToSame("=A1#");
 }

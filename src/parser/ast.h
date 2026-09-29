@@ -178,7 +178,9 @@ class AstNode final {
 
   // --- ExternalRef ---------------------------------------------------------
   /// 1-based index of the supporting workbook (the `[N]` of the formula
-  /// text), selecting the N-th entry of `Workbook::external_links()`.
+  /// text), selecting the N-th entry of `Workbook::external_links()`; 0
+  /// is the formula's own workbook, which only the name form carries (see
+  /// `is_self_book_name_ref`).
   std::uint32_t as_external_ref_book() const;
   /// Sheet name inside the supporting workbook; empty for the
   /// defined-name form.
@@ -495,6 +497,12 @@ AstNode* make_external_ref(Arena& arena, std::uint32_t book, std::string_view sh
 /// book-scope defined name `[book]!name`. `name` is re-interned into
 /// `arena`.
 AstNode* make_external_name_ref(Arena& arena, std::uint32_t book, std::string_view name);
+
+/// True for `[0]!Name`: the defined name `Name` of the formula's own
+/// workbook, read as workbook-scoped first (see
+/// `eval::find_self_book_defined_name`). It is how Excel stores the
+/// `Book!Name` spelling.
+bool is_self_book_name_ref(const AstNode& node) noexcept;
 
 /// Builds a `StructuredRef` node.  `column` may be empty when the reference
 /// targets the whole table.  `modifier` is `None` for plain `Table[col]`.

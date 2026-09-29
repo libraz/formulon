@@ -240,6 +240,9 @@ class Encoder {
         }
         return emit_name_ref(node.as_name());
       case parser::NodeKind::ExternalRef:
+        if (parser::is_self_book_name_ref(node)) {
+          return emit_self_book_name_ref(node.as_external_ref_name());
+        }
         return unsupported_node("ExternalRef");
       case parser::NodeKind::StructuredRef:
         return unsupported_node("StructuredRef");
@@ -355,15 +358,40 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
     }
+    return emit_name_x(it->second);
+  }
+
+  /// Emits `PtgNameX` for the self-book `[0]!name`, naming the record it
+  /// resolves to: the workbook-scoped one, else the lowest sheet's local
+  /// one, as Excel 365 saves it. An undefined name falls back to its
+  /// placeholder record.
+  Expected<void, Error> emit_self_book_name_ref(std::string_view name) {
+    auto it = name_table_.find(sheet_scoped_name_key(-1, name));
+    for (std::size_t itab = 0; it == name_table_.end() && itab < sheet_names_.size(); ++itab) {
+      it = name_table_.find(sheet_scoped_name_key(static_cast<std::int32_t>(itab), name));
+    }
+    if (it == name_table_.end()) {
+      it = name_table_.find(std::string(name));
+    }
+    if (it == name_table_.end()) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
+                        std::string("context=xlsb_ptg_writer name=") + std::string(name));
+    }
+    return emit_name_x(it->second);
+  }
+
+  /// Emits `PtgNameX` for record `ilbl` through the sheetless
+  /// `BrtExternSheet` entry this workbook's own names resolve through.
+  Expected<void, Error> emit_name_x(std::uint32_t ilbl) {
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiNoSheet, kXtiNoSheet));
     emit_u8(out_, 0x39);  // PtgNameX (reference-class base)
     emit_u16(out_, ixti);
-    emit_u32(out_, it->second);
+    emit_u32(out_, ilbl);
     return Expected<void, Error>::Ok();
   }
 
   /// Encodes a `LambdaCall` the way Excel 365 stores any LAMBDA
-  /// invocation: the callee operand (`Sheet1!Fn` as `PtgNameX`, or an
+  /// invocation: the callee operand (`Sheet1!Fn` / `[0]!Fn` as `PtgNameX`, or an
   /// inline `LAMBDA(...)` / curried call), then the arguments, then
   /// `PtgFuncVar` with the `id == 255` sentinel and `cparams == arity + 1`.
   Expected<void, Error> emit_lambda_call(const parser::AstNode& node) {
@@ -980,6 +1008,13 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       }
       return;
     }
+    case parser::NodeKind::ExternalRef:
+      // `[0]!Rate` is never a LET / LAMBDA parameter and, like `Sheet2!Rate`,
+      // not resolved from the formula's own scope.
+      if (parser::is_self_book_name_ref(node) && !scope_resolved) {
+        AddName(node.as_external_ref_name(), names, seen);
+      }
+      return;
     case parser::NodeKind::LambdaCall: {
       CollectNamesScoped(node.as_lambda_call_callee(), names, seen, scope, scope_resolved);
       const std::uint32_t arity = node.as_lambda_call_arity();
@@ -1062,11 +1097,16 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       return;
     }
     case parser::NodeKind::NameRef:
-      // `Sheet1!Rate` encodes as `PtgNameX` through the book-scope entry.
-      if (!node.as_name_sheet().empty() && seen.insert(PackRangeKey(kXtiNoSheet, kXtiNoSheet)).second) {
+    case parser::NodeKind::ExternalRef: {
+      // `Sheet1!Rate` and `[0]!Rate` encode as `PtgNameX` through the
+      // book-scope entry.
+      const bool name_x = node.kind() == parser::NodeKind::NameRef ? !node.as_name_sheet().empty()
+                                                                   : parser::is_self_book_name_ref(node);
+      if (name_x && seen.insert(PackRangeKey(kXtiNoSheet, kXtiNoSheet)).second) {
         ranges.emplace_back(kXtiNoSheet, kXtiNoSheet);
       }
       return;
+    }
     case parser::NodeKind::LambdaCall: {
       collect_ptg_sheet_ranges(node.as_lambda_call_callee(), sheet_names, ranges, seen);
       const std::uint32_t arity = node.as_lambda_call_arity();

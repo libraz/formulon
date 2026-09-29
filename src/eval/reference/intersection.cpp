@@ -344,7 +344,7 @@ bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const Func
                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                            ErrorCode* out_err);
 
-// A name standing as an endpoint (`A1:MyName`) denotes the reference its
+// A name standing as an endpoint (`A1:MyName`, `A1:[0]!MyName`) denotes the reference its
 // value is. Measured on Excel 365: an undefined name is #NAME?, an
 // error-valued name surfaces its error, and any other non-reference value
 // (a constant, an expression, text) is #VALUE!.
@@ -352,28 +352,30 @@ bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const Func
                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                            ErrorCode* out_err) {
-  const std::string_view sheet = node.as_name_sheet();
-  // `resolve_name_ast` already looked through a LET binding with a
-  // reference; one reaching here is bound to a plain value.
-  if (sheet.empty() && ctx.name_env() != nullptr) {
-    if (const Value* bound = ctx.name_env()->lookup(node.as_name()); bound != nullptr) {
-      *out_err = bound->is_error() ? bound->as_error() : ErrorCode::Value;
-      return false;
-    }
-  }
   const Workbook* wb = ctx.workbook();
   if (wb == nullptr) {
     *out_err = ErrorCode::Name;
     return false;
   }
   const DefinedName* def = nullptr;
-  if (sheet.empty()) {
-    def = find_defined_name(ctx, node.as_name());
-  } else if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {
-    *out_err = ErrorCode::Ref;
-    return false;
-  } else {
+  if (parser::is_self_book_name_ref(node)) {
+    def = find_self_book_defined_name(*wb, node.as_external_ref_name());
+  } else if (const std::string_view sheet = node.as_name_sheet(); !sheet.empty()) {
+    if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {
+      *out_err = ErrorCode::Ref;
+      return false;
+    }
     def = find_sheet_defined_name(*wb, sheet, node.as_name());
+  } else {
+    // `resolve_name_ast` already looked through a LET binding with a
+    // reference; one reaching here is bound to a plain value.
+    if (ctx.name_env() != nullptr) {
+      if (const Value* bound = ctx.name_env()->lookup(node.as_name()); bound != nullptr) {
+        *out_err = bound->is_error() ? bound->as_error() : ErrorCode::Value;
+        return false;
+      }
+    }
+    def = find_defined_name(ctx, node.as_name());
   }
   DefinedNameFrame frame;
   EvalContext body_ctx = ctx;
@@ -383,6 +385,7 @@ bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const Func
   }
   const parser::NodeKind k = body->kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::NameRef ||
+      parser::is_self_book_name_ref(*body) ||
       (k == parser::NodeKind::Call && find_reference_call(body->as_call_name()) != nullptr)) {
     return resolve_range_endpoint(*body, arena, registry, body_ctx, out_sheet, out_top_row, out_left_col,
                                   out_bottom_row, out_right_col, out_err);
@@ -460,7 +463,7 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
     return resolve_reference_call(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
                                   out_right_col, &is_range_unused, out_err);
   }
-  if (node.kind() == parser::NodeKind::NameRef) {
+  if (node.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(node)) {
     return resolve_name_endpoint(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
                                  out_right_col, out_err);
   }

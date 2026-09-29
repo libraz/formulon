@@ -91,6 +91,12 @@ const WalkState::LexicalBinding* lookup_lexical(std::string_view name, const Wal
 // The definition a `NameRef` denotes: `Sheet1!Name` in Sheet1's scope, an
 // unqualified name in the formula's own.
 const DefinedName* find_name_ref_definition(const parser::AstNode& name_ref, const WalkState& state) {
+  if (name_ref.kind() == parser::NodeKind::ExternalRef) {
+    // Only `[0]!Name` names a definition of this workbook.
+    return parser::is_self_book_name_ref(name_ref)
+               ? find_self_book_defined_name(*state.workbook, name_ref.as_external_ref_name())
+               : nullptr;
+  }
   const std::string_view sheet = name_ref.as_name_sheet();
   if (!sheet.empty()) {
     return find_sheet_defined_name(*state.workbook, sheet, name_ref.as_name());
@@ -301,7 +307,7 @@ void expand_defined_name(const DefinedName& def, WalkState& state, bool invoked)
       // to the same definition remains a lambda value and must not invent
       // dependencies from its body.
       walk_invoked_lambda_body(root, state);
-    } else if (invoked && root.kind() == parser::NodeKind::NameRef) {
+    } else if (invoked && (root.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(root))) {
       // Preserve the common alias shape (`Alias = NamedLambda`) without
       // repeatedly walking the lambda body. Any non-defined alias is handled
       // by the ordinary NameRef walker and contributes no static deps.
@@ -517,8 +523,9 @@ std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkSt
       return out;
     }
 
-    case parser::NodeKind::NameRef: {
-      if (node.as_name_sheet().empty()) {
+    case parser::NodeKind::NameRef:
+    case parser::NodeKind::ExternalRef: {
+      if (node.kind() == parser::NodeKind::NameRef && node.as_name_sheet().empty()) {
         if (const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_name(), state); lexical != nullptr) {
           return lexical->footprint;
         }
@@ -582,8 +589,10 @@ bool is_static_reference(const parser::AstNode& node, WalkState& state) {
         }
       }
       return true;
-    case parser::NodeKind::NameRef: {
-      if (node.as_name_sheet().empty() && lookup_lexical(node.as_name(), state) != nullptr) {
+    case parser::NodeKind::NameRef:
+    case parser::NodeKind::ExternalRef: {
+      if (node.kind() == parser::NodeKind::NameRef && node.as_name_sheet().empty() &&
+          lookup_lexical(node.as_name(), state) != nullptr) {
         return false;
       }
       const DefinedName* def = find_name_ref_definition(node, state);
@@ -628,11 +637,16 @@ void walk(const parser::AstNode& node, WalkState& state) {
     case parser::NodeKind::Literal:
     case parser::NodeKind::ErrorLiteral:
     case parser::NodeKind::ErrorPlaceholder:
+      return;
+
     // A cross-workbook reference reads a cache attached to the workbook,
     // never a cell of it, so it contributes no edge to the dependency
     // graph. The cache changes only when the file is reloaded, which
-    // rebuilds the graph anyway.
+    // rebuilds the graph anyway. `[0]!Name` is this workbook's own name.
     case parser::NodeKind::ExternalRef:
+      if (const DefinedName* def = find_name_ref_definition(node, state); def != nullptr) {
+        expand_defined_name(*def, state, /*invoked=*/false);
+      }
       return;
 
     case parser::NodeKind::Ref: {
@@ -886,17 +900,17 @@ void walk(const parser::AstNode& node, WalkState& state) {
         // lambda *value*, the body IS evaluated here, so its cell refs and
         // volatile calls are genuine dependencies that must reach the graph.
         walk_invoked_lambda_body(callee, state);
-      } else if (callee.kind() == parser::NodeKind::NameRef) {
-        // `Sheet1!Fn(5)`: the sheet-qualified spelling of `Fn(5)`, which
-        // invokes the definition just as the `Call` case does.
+      } else if (callee.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(callee)) {
+        // `Sheet1!Fn(5)` / `[0]!Fn(5)`: qualified spellings of `Fn(5)`, which
+        // invoke the definition just as the `Call` case does.
         if (const DefinedName* def = find_name_ref_definition(callee, state); def != nullptr) {
           expand_defined_name(*def, state, /*invoked=*/true);
         }
       } else {
         // The remaining callee kind is a nested `LambdaCall` (currying,
         // e.g. `LAMBDA(x, LAMBDA(y, x+y))(3)(4)`): the parser gates this
-        // postfix `(` to a `Lambda`, a `LambdaCall` or a sheet-qualified
-        // name, and an unqualified named callee (`=MyLambda(5)`) parses as
+        // postfix `(` to a `Lambda`, a `LambdaCall` or a qualified name,
+        // and an unqualified named callee (`=MyLambda(5)`) parses as
         // a `Call` handled above. Walking generically here recurses back
         // into this same `case` (or into `Lambda`, at the base of the curry
         // chain), which is what still surfaces the chain's embedded refs

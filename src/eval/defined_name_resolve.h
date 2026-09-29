@@ -72,6 +72,11 @@ const DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t cur
 /// owned by the workbook, or no definition is visible.
 const DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept;
 
+/// Finds the definition a self-book reference `[0]!name` denotes: the
+/// workbook-scoped one, else the sheet-local one on the lowest-index sheet,
+/// as measured on Excel 365. Returns `nullptr` when `name` is undefined.
+const DefinedName* find_self_book_defined_name(const Workbook& workbook, std::string_view name) noexcept;
+
 /// Finds the defined name a sheet-qualified reference `sheet!name` denotes:
 /// `name` as seen from `sheet`'s scope, so that sheet's local definition
 /// wins over a workbook-scoped one. Returns `nullptr` when `sheet` names no
@@ -108,6 +113,11 @@ const parser::AstNode* prepare_defined_name_body(const DefinedName* def, Arena& 
 /// sheet's scope; a workbook-scoped one inherits the caller's.
 Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx);
+
+/// `resolve_defined_name` for the self-book spelling `[0]!name` (see
+/// `find_self_book_defined_name`). An undefined name yields `#NAME?`.
+Value resolve_self_book_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                                     const EvalContext& ctx);
 
 /// `resolve_defined_name` for the sheet-qualified spelling `sheet!name`
 /// (see `find_sheet_defined_name`). A `sheet` naming no sheet yields

@@ -1211,6 +1211,19 @@ TEST(DepExtractor, DefinedNameEndpointRegistersBoundingBox) {
   EXPECT_EQ(deps, RectCells(0U, 0U, 2U, 0U, 2U));
 }
 
+TEST(DepExtractor, SelfBookNameReadsTheWorkbookScopedDefinition) {
+  // `[0]!G` reads the workbook-scoped G (B2), never Sheet1's local G (C3).
+  Workbook wb = Workbook::create();
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"G", "=Sheet1!$C$3", 0, false, ""});
+  names.push_back(DefinedName{"G", "=Sheet1!$B$2", -1, false, ""});
+  names.push_back(DefinedName{"Rng", "=Sheet1!$A$10:$A$11", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+  EXPECT_EQ(Sorted(ExtractFrom("[0]!G", wb).cell_deps), RectCells(0U, 1U, 1U, 1U, 1U));
+  EXPECT_EQ(Sorted(ExtractFrom("SUM([0]!Rng)", wb).cell_deps), RectCells(0U, 9U, 10U, 0U, 0U));
+  EXPECT_EQ(Sorted(ExtractFrom("SUM(A1:[0]!G)", wb).cell_deps), RectCells(0U, 0U, 1U, 0U, 1U));
+}
+
 TEST(DepExtractor, DynamicEndpointOnAnotherSheet) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");

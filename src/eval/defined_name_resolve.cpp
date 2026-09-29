@@ -81,6 +81,23 @@ const DefinedName* find_defined_name(const EvalContext& ctx, std::string_view na
   return find_defined_name(*wb, sheet_id, name);
 }
 
+const DefinedName* find_self_book_defined_name(const Workbook& workbook, std::string_view name) noexcept {
+  const DefinedName* local_match = nullptr;
+  for (const auto& entry : workbook.defined_names()) {
+    if (!strings::case_insensitive_eq(entry.name, name)) {
+      continue;
+    }
+    if (entry.local_sheet_id < 0) {
+      return &entry;
+    }
+    if (static_cast<std::size_t>(entry.local_sheet_id) < workbook.sheet_count() &&
+        (local_match == nullptr || entry.local_sheet_id < local_match->local_sheet_id)) {
+      local_match = &entry;
+    }
+  }
+  return local_match;
+}
+
 const DefinedName* find_sheet_defined_name(const Workbook& workbook, std::string_view sheet,
                                            std::string_view name) noexcept {
   const std::size_t sheet_id = workbook.sheet_index_by_name(sheet);
@@ -157,6 +174,15 @@ Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Name);
   }
   return evaluate_defined_name(find_defined_name(ctx, name), arena, registry, ctx);
+}
+
+Value resolve_self_book_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                                     const EvalContext& ctx) {
+  const Workbook* wb = ctx.workbook();
+  if (wb == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate_defined_name(find_self_book_defined_name(*wb, name), arena, registry, ctx);
 }
 
 Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, Arena& arena,

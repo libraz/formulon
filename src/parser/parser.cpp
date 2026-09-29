@@ -701,8 +701,9 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // Gate by LHS shape so we do not turn `=TRUE(1)` (Bool literal then
       // `(`) and similar non-callable forms into LambdaCall nodes the user
       // did not write. Only `Lambda` (an immediate IIFE), `LambdaCall`
-      // (chained curry) and a sheet-qualified name (`Sheet1!Fn(2)`, whose
-      // unqualified spelling is an ordinary `Call`) participate.
+      // (chained curry) and a sheet- or self-book-qualified name
+      // (`Sheet1!Fn(2)`, `[0]!Fn(2)`, whose unqualified spelling is an
+      // ordinary `Call`) participate.
       // Parenthesised lambda expressions like `(LAMBDA(x, x))(5)` still
       // work because `parse_paren_atom` unwraps a single inner expression
       // to its own kind; the outer Lambda kind is preserved across the
@@ -711,7 +712,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // consumes the Ident and the matching `(` together before this loop
       // ever sees them.
       const NodeKind lk = lhs->kind();
-      const bool sheet_name = lk == NodeKind::NameRef && !lhs->as_name_sheet().empty();
+      const bool sheet_name = (lk == NodeKind::NameRef && !lhs->as_name_sheet().empty()) || is_self_book_name_ref(*lhs);
       if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall && !sheet_name) {
         // Special-case: a *Bool* literal LHS followed by an empty `()` is
         // treated as a no-op so the surrounding Pratt loop can continue and
@@ -912,7 +913,8 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       const NodeKind rk = rhs->kind();
       if (lk == NodeKind::SpillRef || rk == NodeKind::SpillRef) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
-      } else if (!is_range_endpoint_kind(lk) || !is_range_endpoint_kind(rk)) {
+      } else if (!(is_range_endpoint_kind(lk) || is_self_book_name_ref(*lhs)) ||
+                 !(is_range_endpoint_kind(rk) || is_self_book_name_ref(*rhs))) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_range_op(arena_, lhs, rhs);

@@ -528,9 +528,6 @@ bool Parser::split_external_qualifier(std::string_view text, std::uint32_t* out_
       return false;
     }
   }
-  if (book == 0) {
-    return false;
-  }
   *out_book = static_cast<std::uint32_t>(book);
   *out_sheet = text.substr(close + 1U);
   return true;
@@ -542,6 +539,13 @@ AstNode* Parser::parse_external_ref_tail(std::uint32_t book, std::string_view sh
     return nullptr;
   }
   advance();  // Bang
+
+  // `[0]` is the formula's own workbook, which Excel only writes in the
+  // name form (`[0]!Name`, the storage spelling of `Book!Name`).
+  if (book == 0 && !sheet.empty()) {
+    record_error_with_token(ParseErrorCode::InvalidReference, start_range, "[0]");
+    return nullptr;
+  }
 
   // `[1]!Name` — a book-scope defined name in the supporting workbook.
   // The sheet-qualified spelling of an external name is deliberately not

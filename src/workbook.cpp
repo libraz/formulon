@@ -238,7 +238,7 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
   }
 }
 
-// Invokes `visit_name(name)` for every `NameRef` and every `Call` callee (a
+// Invokes `visit_name(name)` for every `NameRef`, `[0]!Name` and `Call` callee (a
 // LAMBDA-valued defined name is called as `Fn(args)`; a built-in callee
 // simply matches no defined name) and `visit_table(table)` for every
 // `StructuredRef`'s table specifier found while walking `node`'s subtree.
@@ -258,10 +258,14 @@ void for_each_name_and_table_ref(const parser::AstNode& node, const VisitName& v
     case parser::NodeKind::StructuredRef:
       visit_table(node.as_structured_ref_table());
       return;
+    case parser::NodeKind::ExternalRef:
+      if (parser::is_self_book_name_ref(node)) {
+        visit_name(node.as_external_ref_name());
+      }
+      return;
     case parser::NodeKind::Literal:
     case parser::NodeKind::ErrorLiteral:
     case parser::NodeKind::ErrorPlaceholder:
-    case parser::NodeKind::ExternalRef:
     case parser::NodeKind::Ref:
     case parser::NodeKind::SpillRef:
     case parser::NodeKind::Ref3D:
