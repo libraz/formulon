@@ -27,6 +27,8 @@
 #ifndef FORMULON_EVAL_CELL_LAZY_H_
 #define FORMULON_EVAL_CELL_LAZY_H_
 
+#include <string_view>
+
 #include "utils/arena.h"
 #include "value.h"
 
@@ -91,6 +93,12 @@ class FunctionRegistry;
 ///     "address" / "col" / "row" / "contents" / "type" keys.
 Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
+
+/// Whether CELL's `info_type` reads the referenced cell's value: only
+/// "contents" and "type" do (ASCII case-insensitive); every other key reads
+/// the reference's position or the cell's formatting. Excel's circularity
+/// follows this split, so the dependency extractor asks the same question.
+bool cell_info_reads_value(std::string_view info_type) noexcept;
 
 }  // namespace eval
 }  // namespace formulon

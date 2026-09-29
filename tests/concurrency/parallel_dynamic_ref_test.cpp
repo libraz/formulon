@@ -183,5 +183,36 @@ TEST(ParallelDynamicRef, RepeatedPassesAreDeterministic) {
   }
 }
 
+// Many cycles closing through OFFSET, each with a static member, next to
+// pooled work: every member is restored to its pre-recalc value (0 for the
+// member just entered) while workers commit around them, and repeating the
+// pass changes nothing.
+TEST(ParallelDynamicRef, DynamicCyclesRestoreEveryMember) {
+  Workbook wb = Workbook::create();
+  constexpr std::uint32_t kCycles = 32U;
+  for (std::uint32_t row = 0U; row < kCycles; ++row) {
+    const std::string r = std::to_string(row + 1U);
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, row, 3U, Value::number(static_cast<double>(row)))));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 0U, "=B" + r + "+D" + r)));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 4U, "=D" + r + "*2")));
+  }
+  SchedulerConfig cfg;
+  cfg.num_threads = 4U;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, nullptr)));
+  for (std::uint32_t row = 0U; row < kCycles; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 1U, "=OFFSET(A" + std::to_string(row + 1U) + ",0,0)")));
+  }
+  for (int pass = 0; pass < 3; ++pass) {
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, nullptr)));
+    for (std::uint32_t row = 0U; row < kCycles; ++row) {
+      const Value a = StoredValue(wb, row, 0U);
+      const Value b = StoredValue(wb, row, 1U);
+      ASSERT_TRUE(a.is_number() && b.is_number()) << row;
+      EXPECT_EQ(a.as_number(), static_cast<double>(row)) << "A" << row + 1U << " pass " << pass;
+      EXPECT_EQ(b.as_number(), 0.0) << "B" << row + 1U << " pass " << pass;
+    }
+  }
+}
+
 }  // namespace
 }  // namespace formulon::eval

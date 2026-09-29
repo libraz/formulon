@@ -26,6 +26,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "eval/declared_rect.h"
@@ -85,8 +86,14 @@ class DynamicReadLog {
   /// component are the solver's contract, not stale reads.
   void note_iterative_member(CellNodeId cell, std::uint64_t component);
 
+  /// Keeps, before a recalc evaluates anything, the value of every formula
+  /// cell in `nodes` that an observed reader in `nodes` feeds through the
+  /// graph: the cells a cycle closing through a dynamic read can hold.
+  void keep_prior_values_fed_by_readers(const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes);
+
   /// Writes back the value each of `cells` showed before this recalc first
-  /// evaluated it, where one was kept.
+  /// evaluated it, where one was kept. A formula cell that had no computed
+  /// value shows 0, as Excel shows an uncomputed cell.
   void restore_prior_values(Workbook& workbook, const std::vector<CellNodeId>& cells) const;
 
   /// Drops the wave records and keeps the prior values.

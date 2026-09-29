@@ -7,6 +7,8 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
+#include <vector>
 
 #include "eval/cell_evaluator.h"
 #include "eval/volatile_tracker.h"
@@ -81,6 +83,32 @@ void DynamicReadLog::keep_prior_value(CellNodeId cell, const Value& prior) {
   }
 }
 
+void DynamicReadLog::keep_prior_values_fed_by_readers(const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) {
+  std::vector<CellNodeId> queue;
+  std::unordered_set<CellNodeId, CellNodeIdHash> seen;
+  for (const CellNodeId c : nodes) {
+    if (observes(c)) {
+      queue.push_back(c);
+      seen.insert(c);
+    }
+  }
+  for (std::size_t head = 0; head < queue.size(); ++head) {
+    const CellNodeId c = queue[head];
+    if (c.sheet_id < workbook_.sheet_count()) {
+      Sheet::CellRead read;
+      workbook_.sheet(c.sheet_id).read_formula_cell(c.row, c.col, read);
+      if (read.is_formula()) {
+        keep_prior_value(c, read.value());
+      }
+    }
+    for (const CellNodeId dependent : graph_.dependents_of_ref(c)) {
+      if (nodes.count(dependent) != 0U && seen.insert(dependent).second) {
+        queue.push_back(dependent);
+      }
+    }
+  }
+}
+
 void DynamicReadLog::restore_prior_values(Workbook& workbook, const std::vector<CellNodeId>& cells) const {
   for (const CellNodeId c : cells) {
     if (c.sheet_id >= workbook.sheet_count()) {
@@ -88,7 +116,8 @@ void DynamicReadLog::restore_prior_values(Workbook& workbook, const std::vector<
     }
     const auto kept = prior_values_.find(c);
     if (kept != prior_values_.end()) {
-      workbook.sheet(c.sheet_id).set_cell_cached_value(c.row, c.col, kept->second.value);
+      const Value& prior = kept->second.value;
+      workbook.sheet(c.sheet_id).set_cell_cached_value(c.row, c.col, prior.is_blank() ? Value::number(0.0) : prior);
     }
   }
 }

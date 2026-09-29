@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "defined_name.h"
+#include "eval/cell_lazy.h"
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/dep_graph.h"
@@ -614,15 +615,30 @@ std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkSt
   }
 }
 
-// CELL reads its reference's value only for info_type "contents" and "type"
-// (measured on Mac Excel 365); a non-constant info_type is not known here.
-bool cell_info_is_positional(const parser::AstNode& call) {
-  if (call.as_call_arity() < 1U || call.as_call_arg(0).kind() != parser::NodeKind::Literal ||
-      !call.as_call_arg(0).as_literal().is_text()) {
+// Whether CELL's info_type is a constant that reads the referenced cell's
+// value, which makes the reference a static read.
+bool cell_info_is_constant_value_read(const parser::AstNode& call) {
+  if (call.as_call_arity() < 1U || call.as_call_arg(0).kind() != parser::NodeKind::Literal) {
     return false;
   }
-  const std::string_view info = call.as_call_arg(0).as_literal().as_text();
-  return !strings::case_insensitive_eq(info, "contents") && !strings::case_insensitive_eq(info, "type");
+  const Value& info = call.as_call_arg(0).as_literal();
+  return info.is_text() && cell_info_reads_value(info.as_text());
+}
+
+// A CELL reference is only positioned unless a constant info_type reads its
+// value; a computed info_type's read is reported at run time instead.
+bool cell_info_is_positional(const parser::AstNode& call) {
+  return !cell_info_is_constant_value_read(call);
+}
+
+// True when a builtin call may read a cell no formula text names: OFFSET /
+// INDIRECT, and CELL with a computed info_type.
+bool reads_cells_at_run_time(const parser::AstNode& call) {
+  if (VolatileTracker::is_dynamic_reference_function(call.as_call_name())) {
+    return true;
+  }
+  return strings::case_insensitive_eq(strip_future_prefix(call.as_call_name()), "CELL") && call.as_call_arity() == 2U &&
+         call.as_call_arg(0).kind() != parser::NodeKind::Literal;
 }
 
 // Builtins that read only the position or shape of a reference argument,
@@ -1000,7 +1016,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
       // volatile merely because its spelling resembles a built-in.
       if (builtin && VolatileTracker::is_volatile_function(node.as_call_name())) {
         state.out->is_volatile = true;
-        if (VolatileTracker::is_dynamic_reference_function(node.as_call_name())) {
+        if (reads_cells_at_run_time(node)) {
           state.out->has_dynamic_reference = true;
         }
       }

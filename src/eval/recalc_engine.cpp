@@ -312,7 +312,13 @@ RecalcEngine::DynamicReadPass::DynamicReadPass(RecalcEngine& engine, const Workb
 
 void RecalcEngine::DynamicReadPass::settle_sccs(std::vector<std::vector<CellNodeId>>& sccs,
                                                 const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) {
-  if (first_wave_ && engine_.drop_dynamic_only_cycles_locked(sccs)) {
+  if (!first_wave_) {
+    return;
+  }
+  // Before anything is evaluated: a cycle through a dynamic read is left at
+  // these values whichever path, serial or pooled, evaluates its members.
+  log_.keep_prior_values_fed_by_readers(nodes);
+  if (engine_.drop_dynamic_only_cycles_locked(sccs)) {
     sccs = engine_.graph_.tarjan_scc_subset(nodes);
   }
 }

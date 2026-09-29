@@ -443,8 +443,10 @@ class RecalcEngine {
     DynamicReadLog& log() noexcept { return log_; }
     std::uint64_t next_ordinal() noexcept { return next_ordinal_++; }
 
-    /// On the call's first wave, forgets learned cycles made of
-    /// dynamic-only edges and re-derives `sccs` over `nodes` when it did.
+    /// On the call's first wave, keeps the pre-recalc values a cycle through
+    /// a dynamic read restores, forgets learned cycles made of dynamic-only
+    /// edges and re-derives `sccs` over `nodes` when it did. Every recalc
+    /// driver calls it before evaluating.
     void settle_sccs(std::vector<std::vector<CellNodeId>>& sccs,
                      const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes);
 

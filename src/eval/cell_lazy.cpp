@@ -19,6 +19,7 @@
 #include "cell.h"
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
@@ -480,6 +481,10 @@ bool resolve_topleft_or_formula_cell(const parser::AstNode& call, Arena& arena, 
 
 }  // namespace
 
+bool cell_info_reads_value(std::string_view info_type) noexcept {
+  return strings::case_insensitive_eq(info_type, "contents") || strings::case_insensitive_eq(info_type, "type");
+}
+
 Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -533,12 +538,15 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     std::uint32_t col = 0;
     std::string_view sheet;
     Value early_result = Value::blank();
-    // Only "contents", "type" and "prefix" read the cell's value; the other
-    // keys read the reference's position or the cell's formatting.
-    const bool reads_value = key == "contents" || key == "type" || key == "prefix";
+    const bool reads_value = cell_info_reads_value(key);
     if (!resolve_topleft_or_formula_cell(call, arena, registry, reads_value ? ctx : ctx.without_dynamic_read_callback(),
                                          &row, &col, &sheet, &early_result)) {
       return early_result;
+    }
+    // The extractor cannot tell a computed info_type's read from the formula
+    // text, so the cell a value-reading key reads is reported as it runs.
+    if (reads_value && call.as_call_arity() == 2U) {
+      ctx.note_dynamic_read(sheet, DeclaredRect{row, row, col, col, /*whole_axis=*/false});
     }
     if (key == "address") {
       return build_address(arena, sheet, row, col);

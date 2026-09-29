@@ -184,6 +184,35 @@ TEST(DynamicReferenceRecalc, PositionOnlyCellInfoAndReferenceCallsOnOwnCell) {
   }
 }
 
+// A computed CELL info_type leaves the reference unread by the formula text:
+// a position key on the formula's own cell is not circular (measured on Mac
+// Excel 365), and a value key's read is learned as the formula runs.
+TEST(DynamicReferenceRecalc, ComputedCellInfoTypeReadsAtRunTime) {
+  for (const char* info : {"row", "address", "prefix"}) {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, kB, Value::text(info))));
+    Formula(wb, {0U, kA}, "=CELL(B2,A1)");
+    EXPECT_EQ(Recalc(wb).cycle_cells, 0U) << info;
+  }
+  for (const char* info : {"contents", "type"}) {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, kB, Value::text(info))));
+    Formula(wb, {0U, kA}, "=LEN(CELL(B2,A1)&\"\")+100");
+    EXPECT_GT(Recalc(wb).cycle_cells, 0U) << info;
+    ExpectNumberAt(wb, {0U, kA}, 0.0, info);
+  }
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, kB, Value::text("contents"))));
+  Number(wb, {4U, kD}, 3.0);
+  Formula(wb, {0U, kA}, "=CELL(B2,C5)");
+  Formula(wb, {4U, kC}, "=D5*2");
+  Recalc(wb);
+  ExpectNumberAt(wb, {0U, kA}, 6.0, "CELL(B2,C5)");
+  Number(wb, {4U, kD}, 4.0);
+  Recalc(wb);
+  ExpectNumberAt(wb, {0U, kA}, 8.0, "CELL(B2,C5)");
+}
+
 TEST(DynamicReferenceRecalc, SumOverItsOwnCellIsCircular) {
   Workbook wb = Workbook::create();
   Formula(wb, {0U, kA}, "=SUM(A1:A2)");
@@ -412,6 +441,77 @@ TEST(DynamicReferenceRecalc, HelperCallbackBodyReadsRecalc) {
     ExpectNumberAt(wb, {row, kD}, 5.0, "callback reads B1");
   }
 }
+
+// With iterative calculation off, a cycle closing through an OFFSET read
+// leaves every member -- the static one included -- at the value it showed
+// before the recalc, an uncomputed member at 0, and recalculating changes
+// nothing. Measured on Mac Excel 365 (A1 `=B1+1`, B1 `=OFFSET(A1,0,0)`).
+enum class CycleDriver { kSerial, kParallel };
+
+void RecalcWith(Workbook& wb, CycleDriver driver) {
+  if (driver == CycleDriver::kSerial) {
+    Recalc(wb);
+    return;
+  }
+  eval::SchedulerConfig cfg;
+  cfg.num_threads = 2U;
+  const auto done = wb.recalc_parallel(eval::default_registry(), cfg, nullptr);
+  EXPECT_TRUE(static_cast<bool>(done)) << done.error().message;
+}
+
+void ExpectCycleValues(const Workbook& wb, double a1, double b1, const char* what) {
+  ExpectNumberAt(wb, {0U, kA}, a1, what);
+  ExpectNumberAt(wb, {0U, kB}, b1, what);
+}
+
+class DynamicCycleRecalc : public ::testing::TestWithParam<CycleDriver> {};
+
+TEST_P(DynamicCycleRecalc, ClosingMemberShowsZeroOthersKeepTheirValue) {
+  Workbook wb = Workbook::create();
+  Formula(wb, {0U, kA}, "=B1+1");
+  RecalcWith(wb, GetParam());
+  Formula(wb, {0U, kB}, "=OFFSET(A1,0,0)");
+  RecalcWith(wb, GetParam());
+  ExpectCycleValues(wb, 1.0, 0.0, "S1");
+  RecalcWith(wb, GetParam());
+  RecalcWith(wb, GetParam());
+  ExpectCycleValues(wb, 1.0, 0.0, "S1 recalculated");
+}
+
+TEST_P(DynamicCycleRecalc, StaticMemberEnteredLastShowsZero) {
+  Workbook wb = Workbook::create();
+  Formula(wb, {0U, kB}, "=OFFSET(A1,0,0)");
+  RecalcWith(wb, GetParam());
+  Formula(wb, {0U, kA}, "=B1+1");
+  RecalcWith(wb, GetParam());
+  ExpectCycleValues(wb, 0.0, 0.0, "S2");
+}
+
+TEST_P(DynamicCycleRecalc, ValueReplacedByFormulaShowsZero) {
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kA}, 10.0);
+  Formula(wb, {0U, kB}, "=OFFSET(A1,0,0)");
+  RecalcWith(wb, GetParam());
+  ExpectNumberAt(wb, {0U, kB}, 10.0, "S4 before");
+  Formula(wb, {0U, kA}, "=B1+1");
+  RecalcWith(wb, GetParam());
+  ExpectCycleValues(wb, 0.0, 10.0, "S4");
+}
+
+TEST_P(DynamicCycleRecalc, MemberIsNotRecomputedWhenItsOtherInputChanges) {
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kC}, 3.0);
+  Formula(wb, {0U, kA}, "=B1+C1");
+  RecalcWith(wb, GetParam());
+  Formula(wb, {0U, kB}, "=OFFSET(A1,0,0)");
+  RecalcWith(wb, GetParam());
+  ExpectCycleValues(wb, 3.0, 0.0, "S6");
+  Number(wb, {0U, kC}, 4.0);
+  RecalcWith(wb, GetParam());
+  ExpectCycleValues(wb, 3.0, 0.0, "S6 after C1 = 4");
+}
+
+INSTANTIATE_TEST_SUITE_P(Drivers, DynamicCycleRecalc, ::testing::Values(CycleDriver::kSerial, CycleDriver::kParallel));
 
 }  // namespace
 }  // namespace formulon
