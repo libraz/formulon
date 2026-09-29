@@ -6,6 +6,8 @@ import threading
 import unittest
 from typing import Optional
 
+import wasmtime
+
 from formulon import _c
 
 
@@ -19,6 +21,18 @@ class _Export:
         if self.name is not None:
             self.calls[self.name] += 1
         return self.result
+
+
+class _TrappingExport:
+    """A raw export stand-in that raises like an aborted WASM call."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        self.calls = 0
+
+    def __call__(self, _store, *_args: int) -> int:
+        self.calls += 1
+        raise wasmtime.Trap(self.message)
 
 
 def _fake_instance(function_name: str, function_result: int) -> tuple[_c._WasmInstance, dict[str, int]]:
@@ -37,6 +51,7 @@ def _fake_instance(function_name: str, function_result: int) -> tuple[_c._WasmIn
     instance._init_lock = threading.Lock()
     instance._call_lock = threading.RLock()
     instance._last_diagnostic = threading.local()
+    instance._poison_message = None
     instance._read_cstr_unlocked = lambda ptr: {0x100: "captured message", 0x200: "captured context"}[ptr]
     return instance, calls
 
@@ -90,6 +105,55 @@ class DiagnosticCaptureTests(unittest.TestCase):
         instance._last_diagnostic.value = (5050, "message", "context")
         self.assertEqual(instance.last_diagnostic(0), ("", ""))
         self.assertEqual(calls, {"message": 0, "context": 0})
+
+
+class WasmTrapPoisoningTests(unittest.TestCase):
+    """A `wasmtime.Trap` (e.g. an OOM abort) must surface as
+    `FormulonError`, not the raw trap type, and must poison the shared
+    instance so later calls fail the same way instead of touching the
+    module again."""
+
+    def test_trap_during_export_call_raises_formulon_error(self) -> None:
+        instance, _calls = _fake_instance("fm_workbook_recalc", 0)
+        instance._exports["fm_workbook_recalc"] = _TrappingExport("out of memory")
+
+        with self.assertRaises(_c.FormulonError) as caught:
+            instance.fm_workbook_recalc(0)
+        self.assertEqual(caught.exception.status_name, "kInternalError")
+        self.assertIn("out of memory", caught.exception.message)
+        self.assertIn("fm_workbook_recalc", str(caught.exception))
+
+    def test_trap_poisons_instance_for_every_later_call(self) -> None:
+        instance, _calls = _fake_instance("fm_workbook_recalc", 0)
+        trapping = _TrappingExport("out of memory")
+        instance._exports["fm_workbook_recalc"] = trapping
+        other_calls: dict[str, int] = {"other": 0}
+        instance._exports["fm_workbook_sheet_count"] = _Export(0, other_calls, "other")
+
+        with self.assertRaises(_c.FormulonError):
+            instance.fm_workbook_recalc(0)
+        self.assertEqual(trapping.calls, 1)
+
+        # A second call, even to an export that never itself traps, is
+        # rejected without touching the (possibly corrupted) module.
+        with self.assertRaises(_c.FormulonError) as caught:
+            instance.fm_workbook_sheet_count(0)
+        self.assertEqual(other_calls, {"other": 0})
+        self.assertEqual(caught.exception.status_name, "kInternalError")
+
+    def test_trap_from_malloc_raises_formulon_error_not_memory_error(self) -> None:
+        instance, _calls = _fake_instance("fm_workbook_recalc", 0)
+        instance._exports["malloc"] = _TrappingExport("out of memory")
+
+        with self.assertRaises(_c.FormulonError) as caught:
+            instance.alloc(64)
+        self.assertEqual(caught.exception.status_name, "kInternalError")
+
+        # The instance is poisoned: `free` also fails closed rather than
+        # calling into the module again.
+        instance._exports["free"] = _Export(0, {"free": 0}, "free")
+        with self.assertRaises(_c.FormulonError):
+            instance.free(0x1000)
 
 
 if __name__ == "__main__":

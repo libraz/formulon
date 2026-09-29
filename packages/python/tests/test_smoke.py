@@ -329,5 +329,43 @@ class IterationTests(unittest.TestCase):
             self.assertEqual(list(wb.iter_passthrough()), [])
 
 
+class IteratorHandleLivenessTests(unittest.TestCase):
+    """`close()` between two `next()` calls on a live iterator must raise
+    `FormulonError` on resume, not read the now-freed workbook handle."""
+
+    def test_iter_cells_after_close_mid_iteration_raises(self) -> None:
+        wb = Workbook.create_default()
+        wb.set_number(0, 0, 0, 1.0)
+        wb.set_number(0, 1, 0, 2.0)
+        it = wb.iter_cells(0)
+        next(it)
+        wb.close()
+        with self.assertRaises(FormulonError):
+            next(it)
+
+    def test_iter_defined_names_after_close_mid_iteration_raises(self) -> None:
+        wb = Workbook.create_default()
+        wb.set_defined_name("NameOne", "=1")
+        wb.set_defined_name("NameTwo", "=2")
+        it = wb.iter_defined_names()
+        next(it)
+        wb.close()
+        with self.assertRaises(FormulonError):
+            next(it)
+
+    def test_iter_tables_after_close_mid_iteration_raises(self) -> None:
+        wb = Workbook.create_default()
+        wb.add_sheet("Sheet2")
+        wb.set_text(0, 0, 0, "A")
+        wb.set_text(1, 0, 0, "A")
+        wb.table_create(0, "A1:A1", "TableOne", "TableOne", ["A"])
+        wb.table_create(1, "A1:A1", "TableTwo", "TableTwo", ["A"])
+        it = wb.iter_tables()
+        next(it)
+        wb.close()
+        with self.assertRaises(FormulonError):
+            next(it)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -734,14 +734,30 @@ HEADER_FOOTER = Struct(
 CELL_STYLE_BUILTIN_ID_NONE = 0xFFFFFFFF
 
 
-def write_str_field(lib, struct_ptr: int, layout: Struct, field: str, value: Optional[str], owned: List[int]) -> None:
+def write_str_field(
+    lib,
+    struct_ptr: int,
+    layout: Struct,
+    field: str,
+    value: Optional[str],
+    owned: List[int],
+    *,
+    allow_empty: bool = False,
+) -> None:
     """Encode ``value`` into WASM memory and store its pointer in a field.
 
-    ``None`` / empty leaves the field as the NULL pointer (already zeroed
-    by :meth:`Struct.pack`). Every buffer allocated here is appended to
-    ``owned`` so the caller can free them after the WASM call returns.
+    ``None`` leaves the field as the NULL pointer (already zeroed by
+    :meth:`Struct.pack`). ``""`` does too, unless ``allow_empty`` is set --
+    needed for a field the C ABI itself distinguishes NULL from a
+    zero-length string on, such as ``fm_phonetic_run_t.text``: a NULL run
+    text is rejected (``kBindingNullPointer``), but Excel legitimately
+    produces empty-reading runs (see ``src/io/xlsb/reader.cpp``'s
+    out-of-range kana slices), so ``get_phonetic_runs()``'s own output
+    could not always round-trip back through ``set_phonetic_runs()``.
+    Every buffer allocated here is appended to ``owned`` so the caller can
+    free them after the WASM call returns.
     """
-    if value is None or value == "":
+    if value is None or (value == "" and not allow_empty):
         return
     ptr, _ = lib.alloc_utf8(value)
     owned.append(ptr)

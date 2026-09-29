@@ -476,6 +476,16 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.load(data) as reloaded:
             self.assertEqual(reloaded.get_phonetic_runs(0, 0, 0), runs)
 
+    def test_phonetic_run_with_empty_text_round_trips(self) -> None:
+        # Excel itself produces a run with `text == ""` for an out-of-range
+        # kana slice (see src/io/xlsb/reader.cpp); the C ABI rejects a NULL
+        # run text but accepts a zero-length one, so this must not raise.
+        runs = [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "")]
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "東京都")
+            wb.set_phonetic_runs(0, 0, 0, runs)
+            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), runs)
+
     def test_whole_cell_setter_collapses_the_spans(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "東京都")

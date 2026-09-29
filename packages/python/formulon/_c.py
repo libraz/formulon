@@ -44,6 +44,7 @@ import wasmtime
 
 __all__ = [
     "LIB",
+    "FormulonError",
     "ValueKind",
     "decode_cstr",
     "fm_value_t_size",
@@ -51,6 +52,126 @@ __all__ = [
 
 # fm_value_t layout: int32 kind + 4 pad + 8 union = 16 bytes.
 fm_value_t_size = 16
+
+# `formulon::FormulonErrorCode::kInternalError` (src/utils/error.h, the
+# "General" 0-999 band). Used only for a host-side failure the WASM trampoline
+# below observes but the C ABI itself never reported a status for -- a
+# wasmtime Trap, which aborts the call before any `fm_status_t` is returned.
+_STATUS_INTERNAL_ERROR = 8
+
+
+def _uint(value: int, name: str, bits: int = 32) -> int:
+    """Validate ``value`` as an unsigned WASM argument of ``bits`` width.
+
+    Every integer the C ABI takes by value crosses into WebAssembly as an
+    ``i32``, and ``wasmtime`` marshals a Python ``int`` into that slot
+    modulo 2**32 without complaint. An index the caller never intended --
+    ``2**32 + 5``, or a negative produced by an arithmetic slip -- would
+    therefore arrive on the engine side as a perfectly plausible
+    coordinate (``5``) and silently overwrite an unrelated cell. The
+    engine's own grid bounds cannot catch that: they see only the wrapped
+    value.
+
+    The same applies to an integer packed into a struct the ABI reads
+    through a pointer, with a different failure: ``struct.pack`` rejects
+    the value outright and raises ``struct.error``, which is not the
+    exception this API documents and not one a caller catches. Both routes
+    go through here so the diagnosis is the same either way.
+
+    Args:
+      value: the caller-supplied index, count, or length.
+      name: the C ABI parameter or struct field name, used in the message.
+      bits: width of the destination (32 for ``uint32_t`` / ``size_t``,
+        16 and 8 for the narrower struct fields, which overflow well
+        before an ``i32`` does).
+
+    Returns:
+      ``value`` as an ``int``, unchanged.
+
+    Raises:
+      ValueError: when ``value`` is negative or does not fit ``bits``.
+    """
+    ivalue = int(value)
+    if ivalue < 0 or ivalue >= (1 << bits):
+        raise ValueError(f"formulon: {name} out of range for uint{bits}: {ivalue}")
+    return ivalue
+
+
+def _sint(value: int, name: str, bits: int = 32) -> int:
+    """Validate ``value`` as a signed WASM argument of ``bits`` width.
+
+    Signed counterpart of :func:`_uint`, for the ``int32_t`` parameters
+    and struct fields (enum selectors, iteration caps, the ``-1``
+    sentinels of the pivot date-group and show-as APIs) where a negative
+    value is meaningful.
+
+    Raises:
+      ValueError: when ``value`` does not fit a signed ``bits``-wide int.
+    """
+    ivalue = int(value)
+    limit = 1 << (bits - 1)
+    if ivalue < -limit or ivalue >= limit:
+        raise ValueError(f"formulon: {name} out of range for int{bits}: {ivalue}")
+    return ivalue
+
+
+class FormulonError(Exception):
+    """Raised for host-side failures of the Formulon C ABI.
+
+    Attributes:
+      status: numeric ``fm_status_t`` (matches
+        ``formulon::FormulonErrorCode`` ordinals).
+      status_name: symbolic name (e.g. ``"kInvalidArgument"``) returned
+        by ``fm_status_string``.
+      message: thread-local diagnostic message captured from
+        ``fm_last_error_message`` at the time the failure was detected.
+      context: optional context string captured from
+        ``fm_last_error_context``.
+
+    The message and context are copied out of the thread-local WASM
+    buffers eagerly, so they remain valid even after subsequent WASM
+    calls overwrite those buffers.
+
+    Defined here rather than in :mod:`formulon.workbook` (which
+    re-exports it) so the low-level export trampoline below can raise it
+    directly on a trap, without importing back into the module that
+    imports ``LIB`` from here.
+    """
+
+    def __init__(
+        self,
+        status: int,
+        *,
+        op: str = "",
+        _diagnostic_override: Optional[Tuple[str, str]] = None,
+        _status_name_override: Optional[str] = None,
+    ) -> None:
+        self.status = int(status)
+        if _status_name_override is not None:
+            # A trap leaves the module instance poisoned (see `_wrapped`
+            # below); calling back into it for `fm_status_string` would
+            # retry the very call that just failed, so this path never
+            # touches WASM memory.
+            self.status_name = _status_name_override
+            self.message, self.context = _diagnostic_override or ("", "")
+        else:
+            # Take the Python-side snapshot before calling fm_status_string.
+            # The latter is a non-status pointer-returning export and must
+            # not become a diagnostic read or overwrite the pending
+            # snapshot. An override still drains a pending C diagnostic so
+            # it cannot leak into a later exception on this Python thread.
+            message, context = LIB.last_diagnostic(self.status)
+            if _diagnostic_override is not None:
+                message, context = _diagnostic_override
+            self.status_name = LIB.read_cstr(LIB.fm_status_string(_sint(self.status, "status")))
+            self.message, self.context = message, context
+        prefix = f"{op}: " if op else ""
+        text = f"{prefix}{self.status_name} ({self.status})"
+        if self.message:
+            text += f": {self.message}"
+        if self.context:
+            text += f" [{self.context}]"
+        super().__init__(text)
 
 
 # Generated from the current working-tree C header and WASM export manifest:
@@ -392,6 +513,14 @@ class _WasmInstance:
     underlying calculation engine is already safe for one outstanding
     recalc per ``Workbook`` handle, so the additional lock only prevents
     cross-handle reentry on the wasmtime store itself.
+
+    A ``wasmtime.Trap`` (an allocation failure, an assertion the engine
+    compiles in, ...) aborts the WASM call that raised it partway through,
+    which can leave shared state inside the one process-wide instance --
+    the allocator's free list, a diagnostic buffer -- half-written. Once
+    that happens this wrapper is poisoned: every further export call
+    raises :class:`FormulonError` without touching WASM memory again,
+    rather than risk operating on a corrupted module.
     """
 
     def __init__(self) -> None:
@@ -403,6 +532,7 @@ class _WasmInstance:
         self._init_lock = threading.Lock()
         self._call_lock = threading.RLock()
         self._last_diagnostic = threading.local()
+        self._poison_message: Optional[str] = None
 
     def _ensure(self) -> None:
         if self._instance is not None:
@@ -453,12 +583,43 @@ class _WasmInstance:
             self._exports = exports
 
     # ----- raw export accessor --------------------------------------------
+    def _call_or_poison(self, fn, name: str, *args):
+        """Invoke a raw WASM export, converting a poisoned instance or a
+        fresh ``wasmtime.Trap`` into :class:`FormulonError`.
+
+        Shared by ``__getattr__``'s ``_wrapped`` closure and by
+        :meth:`alloc` / :meth:`free`, which call ``malloc`` / ``free``
+        directly rather than through a named export lookup. The caller
+        must already hold ``_call_lock``.
+        """
+        if self._poison_message is not None:
+            raise FormulonError(
+                _STATUS_INTERNAL_ERROR,
+                op=name,
+                _diagnostic_override=(self._poison_message, ""),
+                _status_name_override="kInternalError",
+            )
+        try:
+            return fn(self._store, *args)
+        except wasmtime.Trap as trap:
+            # The call aborted partway through; the module's shared state
+            # (allocator, diagnostic buffers) is no longer trustworthy.
+            # Poison the instance so every later call, on this or any
+            # other Workbook, fails the same way instead of running
+            # against it.
+            self._poison_message = str(trap)
+            raise FormulonError(
+                _STATUS_INTERNAL_ERROR,
+                op=name,
+                _diagnostic_override=(self._poison_message, ""),
+                _status_name_override="kInternalError",
+            ) from trap
+
     def __getattr__(self, name: str):
         self._ensure()
         fn = self._exports.get(name)
         if fn is None:
             raise AttributeError(f"WASM export '{name}' not found")
-        store = self._store
         lock = self._call_lock
         captures_diagnostics = name in _STATUS_RETURNING_EXPORTS
 
@@ -472,7 +633,7 @@ class _WasmInstance:
                     # every status-returning call so success cannot leave a
                     # previous failure pending.
                     self._last_diagnostic.value = None
-                result = fn(store, *args)
+                result = self._call_or_poison(fn, name, *args)
                 # Only status-returning exports are allowed to populate the
                 # snapshot. Counts, indices, and pointers are all i32 in
                 # WASM and must never be mistaken for a failure status.
@@ -482,8 +643,8 @@ class _WasmInstance:
                     if message_fn is not None and context_fn is not None:
                         self._last_diagnostic.value = (
                             result,
-                            self._read_cstr_unlocked(message_fn(store)),
-                            self._read_cstr_unlocked(context_fn(store)),
+                            self._read_cstr_unlocked(message_fn(self._store)),
+                            self._read_cstr_unlocked(context_fn(self._store)),
                         )
                 return result
 
@@ -613,7 +774,7 @@ class _WasmInstance:
             return 0
         self._ensure()
         with self._call_lock:
-            ptr = self._exports["malloc"](self._store, size)
+            ptr = self._call_or_poison(self._exports["malloc"], "malloc", size)
         if ptr == 0:
             raise MemoryError(f"formulon: WASM malloc({size}) returned NULL")
         return ptr
@@ -623,7 +784,7 @@ class _WasmInstance:
             return
         self._ensure()
         with self._call_lock:
-            self._exports["free"](self._store, ptr)
+            self._call_or_poison(self._exports["free"], "free", ptr)
 
     def alloc_utf8(self, s: str) -> Tuple[int, int]:
         """Encode ``s`` as UTF-8 and copy it into WASM memory.

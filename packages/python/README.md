@@ -43,9 +43,10 @@ v = formulon.eval_formula("=SUM(1,2,3)")
 print(v.to_python())  # 6.0
 
 # Cell-level Excel errors surface as Value(kind=ValueKind.ERROR), not
-# Python exceptions.
+# Python exceptions. `.name` prints "ERROR" on every supported version;
+# IntEnum's own __str__ prints the bare "4" from Python 3.11 on.
 v = formulon.eval_formula("=1/0")
-print(v.kind)  # ValueKind.ERROR
+print(v.kind.name)  # ERROR
 print(v.error_code)  # 1 (ErrorCode::Div0)
 ```
 
@@ -205,8 +206,9 @@ xf = wb.add_cell_xf(
 wb.set_cell_xf_index(0, 0, 0, xf)
 ```
 
-`add_font` always appends beside font 0, the record an unstyled cell
-resolves to. To change what a never-styled cell is saved as -- Calibri 11
+`add_font` dedups against the existing pool, font 0 included: passing a
+record identical to `get_font(0)` returns index `0` rather than appending
+a duplicate. To change what a never-styled cell is saved as -- Calibri 11
 in a fresh workbook -- declare the default instead:
 
 ```python
@@ -305,9 +307,12 @@ errors and reserved kinds.
 
 `FormulonError` is raised only for host-side problems (NULL handle,
 parser crash inside `Workbook.load`, out-of-range index, OOM). Excel cell
-errors travel inside `Value(kind=ValueKind.ERROR)`. The one absent
-lookup is `get_comment`, which returns `None` (not an error) when no
-comment is anchored at the requested cell.
+errors travel inside `Value(kind=ValueKind.ERROR)`. Three lookups return
+`None` (not an error) for an absent result rather than raising:
+`get_comment` (no comment anchored at the cell), `function_metadata` (no
+function registered under that name), and
+`get_pivot_cache_worksheet_source` (the cache has no worksheet source
+set).
 
 ### Not exposed
 
@@ -338,13 +343,24 @@ process-wide state rather than a `Workbook` method. The default is
 raising it to `LogLevel.WARN` or below sends one JSON record per line to
 stderr.
 
-Worksheet XML is read through the DOM parser only. The native CLI
-switches to a streaming parser for worksheets past 256 KiB; that
-implementation costs binary size the WASM budget does not have, so
-loading a workbook here needs memory proportional to the largest single
-worksheet's XML rather than a fixed window. Sheets are read one at a
-time, so the peak is per worksheet, and the practical ceiling is the
-32-bit WASM address space. Results are identical either way.
+Both surfaces inflate each worksheet part into memory whole before
+parsing it (the zip reader caps this at 100 MiB per entry, 256 MiB per
+load); this package then always builds a DOM tree from that buffer. The
+native CLI switches to a streaming parser for worksheets past 256 KiB
+instead, which skips building the DOM tree -- that implementation costs
+binary size the WASM budget does not have -- but still holds the same
+inflated XML buffer first. Sheets are read one at a time, so the peak is
+per worksheet, and the practical ceiling here is the 32-bit WASM address
+space. Results are identical either way.
+
+### Python-only additions
+
+Two C ABI capabilities are bound here but not exposed by either npm
+package: `set_iterative_enabled` (toggling iterative calculation without
+re-supplying the existing iteration cap and residual threshold -- the JS
+`setIterative(enabled, maxIterations, maxChange)` always takes all three)
+and `add_batch` (bulk style registration). This is a genuine gap on the
+JS side, not an intentional Python-only design.
 
 ## Building from source
 

@@ -29,7 +29,7 @@ from enum import IntEnum
 from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Union
 
 from . import _structs as S
-from ._c import LIB, ValueKind, fm_value_t_size
+from ._c import LIB, FormulonError, ValueKind, _sint, _uint, fm_value_t_size
 
 __all__ = [
     "CalcMode",
@@ -110,50 +110,9 @@ _STATUS_BINDING_NULL_POINTER = 7001
 _LOCALE_MIN = 0
 _LOCALE_MAX = 1
 
-
-class FormulonError(Exception):
-    """Raised for host-side failures of the Formulon C ABI.
-
-    Attributes:
-      status: numeric ``fm_status_t`` (matches
-        ``formulon::FormulonErrorCode`` ordinals).
-      status_name: symbolic name (e.g. ``"kInvalidArgument"``) returned
-        by ``fm_status_string``.
-      message: thread-local diagnostic message captured from
-        ``fm_last_error_message`` at the time the failure was detected.
-      context: optional context string captured from
-        ``fm_last_error_context``.
-
-    The message and context are copied out of the thread-local WASM
-    buffers eagerly, so they remain valid even after subsequent WASM
-    calls overwrite those buffers.
-    """
-
-    def __init__(
-        self,
-        status: int,
-        *,
-        op: str = "",
-        _diagnostic_override: Optional[tuple[str, str]] = None,
-    ) -> None:
-        self.status = int(status)
-        # Take the Python-side snapshot before calling fm_status_string.
-        # The latter is a non-status pointer-returning export and must not
-        # become a diagnostic read or overwrite the pending snapshot. An
-        # override still drains a pending C diagnostic so it cannot leak into
-        # a later exception on this Python thread.
-        message, context = LIB.last_diagnostic(self.status)
-        if _diagnostic_override is not None:
-            message, context = _diagnostic_override
-        self.status_name = LIB.read_cstr(LIB.fm_status_string(_sint(self.status, "status")))
-        self.message, self.context = message, context
-        prefix = f"{op}: " if op else ""
-        text = f"{prefix}{self.status_name} ({self.status})"
-        if self.message:
-            text += f": {self.message}"
-        if self.context:
-            text += f" [{self.context}]"
-        super().__init__(text)
+# `FormulonError` itself lives in `formulon._c` (imported above): its
+# constructor needs to run from inside that module's WASM call trampoline,
+# on a `wasmtime.Trap`, which this module cannot depend on without a cycle.
 
 
 @dataclass(frozen=True)
@@ -212,60 +171,9 @@ def _check(status: int, op: str) -> None:
         raise FormulonError(status, op=op)
 
 
-def _uint(value: int, name: str, bits: int = 32) -> int:
-    """Validate ``value`` as an unsigned WASM argument of ``bits`` width.
-
-    Every integer the C ABI takes by value crosses into WebAssembly as an
-    ``i32``, and ``wasmtime`` marshals a Python ``int`` into that slot
-    modulo 2**32 without complaint. An index the caller never intended --
-    ``2**32 + 5``, or a negative produced by an arithmetic slip -- would
-    therefore arrive on the engine side as a perfectly plausible
-    coordinate (``5``) and silently overwrite an unrelated cell. The
-    engine's own grid bounds cannot catch that: they see only the wrapped
-    value.
-
-    The same applies to an integer packed into a struct the ABI reads
-    through a pointer, with a different failure: ``struct.pack`` rejects
-    the value outright and raises ``struct.error``, which is not the
-    exception this API documents and not one a caller catches. Both routes
-    go through here so the diagnosis is the same either way.
-
-    Args:
-      value: the caller-supplied index, count, or length.
-      name: the C ABI parameter or struct field name, used in the message.
-      bits: width of the destination (32 for ``uint32_t`` / ``size_t``,
-        16 and 8 for the narrower struct fields, which overflow well
-        before an ``i32`` does).
-
-    Returns:
-      ``value`` as an ``int``, unchanged.
-
-    Raises:
-      ValueError: when ``value`` is negative or does not fit ``bits``.
-    """
-    ivalue = int(value)
-    if ivalue < 0 or ivalue >= (1 << bits):
-        raise ValueError(f"formulon: {name} out of range for uint{bits}: {ivalue}")
-    return ivalue
-
-
-def _sint(value: int, name: str, bits: int = 32) -> int:
-    """Validate ``value`` as a signed WASM argument of ``bits`` width.
-
-    Signed counterpart of :func:`_uint`, for the ``int32_t`` parameters
-    and struct fields (enum selectors, iteration caps, the ``-1``
-    sentinels of the pivot date-group and show-as APIs) where a negative
-    value is meaningful.
-
-    Raises:
-      ValueError: when ``value`` does not fit a signed ``bits``-wide int.
-    """
-    ivalue = int(value)
-    limit = 1 << (bits - 1)
-    if ivalue < -limit or ivalue >= limit:
-        raise ValueError(f"formulon: {name} out of range for int{bits}: {ivalue}")
-    return ivalue
-
+# `_uint` / `_sint` live in `formulon._c` (imported above) alongside
+# `FormulonError`: they validate a value right at the WASM call boundary
+# that module owns, and `_c.py`'s own `fm_status_string` call needs one too.
 
 # ---------------------------------------------------------------------------
 # Value POD
@@ -1589,7 +1497,7 @@ def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], owned: List[int]) -> i
     for i, run in enumerate(runs):
         slot = ptr + i * size
         S.PHONETIC_RUN.pack(LIB, slot, {"sb": _uint(run.sb, "sb"), "eb": _uint(run.eb, "eb")})
-        S.write_str_field(LIB, slot, S.PHONETIC_RUN, "text", run.text, owned)
+        S.write_str_field(LIB, slot, S.PHONETIC_RUN, "text", run.text, owned, allow_empty=True)
     return ptr
 
 
@@ -1665,15 +1573,18 @@ class Workbook:
 
     @classmethod
     def load(cls, data: Union[bytes, bytearray, memoryview]) -> "Workbook":
-        """Load a workbook from an in-memory ``.xlsx`` byte buffer.
+        """Load a workbook from an in-memory byte buffer.
+
+        Auto-detects ``.xlsx`` vs ``.xlsb`` from the package contents --
+        there is no filename to route on.
 
         Args:
-          data: the raw OOXML archive bytes. Accepts any object that
-            satisfies the buffer protocol.
+          data: the raw archive bytes. Accepts any object that satisfies
+            the buffer protocol.
 
         Raises:
           FormulonError: when the input cannot be parsed as a valid
-            OOXML archive.
+            OOXML or XLSB archive.
         """
         if not isinstance(data, (bytes, bytearray, memoryview)):
             raise TypeError(f"Workbook.load: expected bytes-like, got {type(data).__name__}")
@@ -1745,6 +1656,25 @@ class Workbook:
                 _diagnostic_override=("handle is NULL or already closed", ""),
             )
         return self._handle
+
+    def _check_live(self) -> int:
+        """Re-validate the handle at a generator resume point.
+
+        The iterator methods below hoist their C ABI handle out of the
+        per-item loop, and a `yield` in that loop hands control back to
+        the caller -- who can call `close()` before asking for the next
+        item. Reading `self._handle` under `LIB.call_lock` (rather than
+        `_require`'s plain attribute read) also closes the same window
+        against a concurrent `close()` from another thread.
+        """
+        with LIB.call_lock:
+            if not self._handle:
+                raise FormulonError(
+                    _STATUS_BINDING_INVALID_HANDLE,
+                    op="Workbook",
+                    _diagnostic_override=("handle is NULL or already closed", ""),
+                )
+            return self._handle
 
     # -- Sheets ------------------------------------------------------------
     def sheet_count(self) -> int:
@@ -2329,6 +2259,7 @@ class Workbook:
             LIB.write_bytes(col_ptr, b"\x00\x00\x00\x00")
             LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
             for i in range(n):
+                h = self._check_live()
                 status = LIB.fm_workbook_cell_at(
                     h, _uint(sheet, "sheet_index"), _uint(i, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr
                 )
@@ -2358,6 +2289,7 @@ class Workbook:
         local_sheet_ptr = _alloc_out_ptr()
         try:
             for i in range(n):
+                h = self._check_live()
                 status = LIB.fm_workbook_defined_name_at(h, _uint(i, "idx"), name_ptr, formula_ptr, local_sheet_ptr)
                 _check(status, "fm_workbook_defined_name_at")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
@@ -2380,6 +2312,7 @@ class Workbook:
         sheet_ptr = _alloc_out_ptr()
         try:
             for i in range(n):
+                h = self._check_live()
                 status = LIB.fm_workbook_table_at(h, _uint(i, "idx"), name_ptr, display_ptr, ref_ptr, sheet_ptr)
                 _check(status, "fm_workbook_table_at")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
@@ -2496,6 +2429,7 @@ class Workbook:
         path_ptr = _alloc_out_ptr()
         try:
             for i in range(n):
+                h = self._check_live()
                 status = LIB.fm_workbook_passthrough_at(h, _uint(i, "idx"), path_ptr)
                 _check(status, "fm_workbook_passthrough_at")
                 path = LIB.read_cstr(LIB.read_u32(path_ptr))
