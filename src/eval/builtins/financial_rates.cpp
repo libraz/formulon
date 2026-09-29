@@ -33,14 +33,6 @@ namespace eval {
 namespace financial_detail {
 namespace {
 
-struct SecurityRateArgs {
-  double settlement;
-  double maturity;
-  double amount1;
-  double amount2;
-  int basis;
-};
-
 struct TBillArgs {
   double value;
   double dsm;
@@ -59,33 +51,6 @@ Expected<double, ErrorCode> positive_yearfrac(double settlement, double maturity
     return ErrorCode::Num;
   }
   return yf.value();
-}
-
-Expected<SecurityRateArgs, ErrorCode> read_security_rate_args(const Value* args, std::uint32_t arity) {
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return settlement.error();
-  }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return maturity.error();
-  }
-  auto amount1 = read_required_number(args, 2);
-  if (!amount1) {
-    return amount1.error();
-  }
-  auto amount2 = read_required_number(args, 3);
-  if (!amount2) {
-    return amount2.error();
-  }
-  auto basis = read_day_count_basis(args, arity, 4);
-  if (!basis) {
-    return basis.error();
-  }
-  if (settlement.value() >= maturity.value()) {
-    return ErrorCode::Num;
-  }
-  return SecurityRateArgs{settlement.value(), maturity.value(), amount1.value(), amount2.value(), basis.value()};
 }
 
 bool has_direct_bool_tbill_arg(const Value* args) {
@@ -154,9 +119,6 @@ Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date19
     return Value::error(parsed.error());
   }
   const auto [settlement, maturity, pr, redemption, basis] = parsed.value();
-  if (pr <= 0.0 || redemption <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
   auto yf = positive_yearfrac(settlement, maturity, basis, date1904);
   if (!yf) {
     return Value::error(yf.error());
@@ -181,9 +143,6 @@ Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
     return Value::error(parsed.error());
   }
   const auto [settlement, maturity, investment, redemption, basis] = parsed.value();
-  if (investment <= 0.0 || redemption <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
   auto yf = positive_yearfrac(settlement, maturity, basis, date1904);
   if (!yf) {
     return Value::error(yf.error());
@@ -209,9 +168,6 @@ Value Received(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     return Value::error(parsed.error());
   }
   const auto [settlement, maturity, investment, disc_rate, basis] = parsed.value();
-  if (investment <= 0.0 || disc_rate <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
   auto yf = positive_yearfrac(settlement, maturity, basis, date1904);
   if (!yf) {
     return Value::error(yf.error());

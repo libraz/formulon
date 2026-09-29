@@ -102,6 +102,91 @@ inline Expected<int, ErrorCode> read_coupon_frequency(const Value* args, std::ui
   return frequency;
 }
 
+// The `(settlement, maturity, amount1, amount2, [basis])` arguments shared by
+// the discounted-security family (DISC, INTRATE, RECEIVED, PRICEDISC,
+// YIELDDISC, and ACCRINTM with issue / settlement as its two dates).
+struct SecurityRateArgs {
+  double settlement;
+  double maturity;
+  double amount1;
+  double amount2;
+  int basis;
+};
+
+// Reads `SecurityRateArgs` from positions 0..4. `#NUM!` unless
+// `settlement < maturity` and both amounts are positive.
+inline Expected<SecurityRateArgs, ErrorCode> read_security_rate_args(const Value* args, std::uint32_t arity) {
+  auto settlement = read_financial_date(args, 0);
+  if (!settlement) {
+    return settlement.error();
+  }
+  auto maturity = read_financial_date(args, 1);
+  if (!maturity) {
+    return maturity.error();
+  }
+  auto amount1 = read_required_number(args, 2);
+  if (!amount1) {
+    return amount1.error();
+  }
+  auto amount2 = read_required_number(args, 3);
+  if (!amount2) {
+    return amount2.error();
+  }
+  auto basis = read_day_count_basis(args, arity, 4);
+  if (!basis) {
+    return basis.error();
+  }
+  if (settlement.value() >= maturity.value()) {
+    return ErrorCode::Num;
+  }
+  if (amount1.value() <= 0.0 || amount2.value() <= 0.0) {
+    return ErrorCode::Num;
+  }
+  return SecurityRateArgs{settlement.value(), maturity.value(), amount1.value(), amount2.value(), basis.value()};
+}
+
+// The `(rate, amount, redemption, frequency, [basis])` argument tail shared
+// by PRICE / YIELD and the ODDF* / ODDL* bond family, where `amount` is the
+// yld or pr slot.
+struct CouponBondTail {
+  double rate;
+  double amount;
+  double redemption;
+  int frequency;
+  int basis;
+};
+
+// Reads `CouponBondTail` starting at `args[rate_index]`. `#NUM!` on a
+// negative rate or a non-positive redemption; the amount's sign rule is
+// the caller's.
+inline Expected<CouponBondTail, ErrorCode> read_coupon_bond_tail(const Value* args, std::uint32_t arity,
+                                                                 std::uint32_t rate_index) {
+  auto rate = read_required_number(args, rate_index);
+  if (!rate) {
+    return rate.error();
+  }
+  auto amount = read_required_number(args, rate_index + 1);
+  if (!amount) {
+    return amount.error();
+  }
+  auto redemption = read_required_number(args, rate_index + 2);
+  if (!redemption) {
+    return redemption.error();
+  }
+  auto frequency = read_coupon_frequency(args, rate_index + 3);
+  if (!frequency) {
+    return frequency.error();
+  }
+  auto basis = read_day_count_basis(args, arity, rate_index + 4);
+  if (!basis) {
+    return basis.error();
+  }
+  if (rate.value() < 0.0 || redemption.value() <= 0.0) {
+    return ErrorCode::Num;
+  }
+  return CouponBondTail{rate.value(), amount.value(), redemption.value(), frequency.value(), basis.value()};
+}
+
 // Computes YEARFRAC(start, end, basis) under the same rules as the
 // YEARFRAC builtin. Allows a zero result; callers that divide by the
 // year fraction should reject zero before use. `date1904` must be the

@@ -109,44 +109,19 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   if (!maturity) {
     return maturity.error();
   }
-  auto rate = read_required_number(args, 2);
-  if (!rate) {
-    return rate.error();
+  auto tail = read_coupon_bond_tail(args, arity, 2);
+  if (!tail) {
+    return tail.error();
   }
-  auto pr = read_required_number(args, 3);
-  if (!pr) {
-    return pr.error();
-  }
-  auto redemption = read_required_number(args, 4);
-  if (!redemption) {
-    return redemption.error();
-  }
-  auto frequency_e = read_coupon_frequency(args, 5);
-  if (!frequency_e) {
-    return frequency_e.error();
-  }
-  auto basis_e = read_day_count_basis(args, arity, 6);
-  if (!basis_e) {
-    return basis_e.error();
-  }
+  const auto [rate, pr_v, red, frequency, basis] = tail.value();
 
-  // Validation order mirrors PRICE: date ordering -> frequency domain ->
-  // basis domain -> rate sign -> pr sign (replaces yld) -> redemption
-  // sign. The `pr <= 0` check is the YIELD-specific addition; PRICE
+  // Validation mirrors PRICE. The `pr <= 0` check is the YIELD-specific addition; PRICE
   // accepts a zero yld but YIELD rejects a non-positive market price
   // (zero would mean "infinite yield").
   if (settlement.value() >= maturity.value()) {
     return ErrorCode::Num;
   }
-  const int frequency = frequency_e.value();
-  const int basis = basis_e.value();
-  if (rate.value() < 0.0) {
-    return ErrorCode::Num;
-  }
-  if (pr.value() <= 0.0) {
-    return ErrorCode::Num;
-  }
-  if (redemption.value() <= 0.0) {
+  if (pr_v <= 0.0) {
     return ErrorCode::Num;
   }
 
@@ -159,11 +134,9 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   }
 
   const double freq_d = static_cast<double>(frequency);
-  const double cf = 100.0 * rate.value() / freq_d;
-  const double ai = 100.0 * rate.value() * cd.days_bs / (cd.period_days * freq_d);
+  const double cf = 100.0 * rate / freq_d;
+  const double ai = 100.0 * rate * cd.days_bs / (cd.period_days * freq_d);
   const std::int32_t n = cd.coupons_remaining;
-  const double red = redemption.value();
-  const double pr_v = pr.value();
 
   // --- n == 1: closed-form analytic inversion of the simple-interest
   // discount branch. See the file-level comment for the derivation.
@@ -202,7 +175,7 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   if (avg_capital == 0.0) {
     return ErrorCode::Num;
   }
-  double yld = ((100.0 * rate.value() + (red - pr_v) / static_cast<double>(n)) / avg_capital) * freq_d;
+  double yld = ((100.0 * rate + (red - pr_v) / static_cast<double>(n)) / avg_capital) * freq_d;
   if (std::isnan(yld) || std::isinf(yld)) {
     return ErrorCode::Num;
   }

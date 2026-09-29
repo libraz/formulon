@@ -118,6 +118,7 @@ Expected<VdbArgs, ErrorCode> read_vdb_args(const Value* args, std::uint32_t arit
                  end.value(),       factor.value(),       no_switch.value() != 0.0};
 }
 
+// Reads the AMORDEGRC / AMORLINC arguments and applies their shared domain checks.
 Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t arity) {
   auto cost = read_dep_number(args, 0);
   if (!cost) {
@@ -147,8 +148,39 @@ Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t ar
   if (!basis) {
     return basis.error();
   }
+  if (cost.value() <= 0.0 || rate.value() <= 0.0 || salvage.value() >= cost.value() || period.value() < 0.0 ||
+      period.value() > kMaxDepreciationPeriods) {
+    return ErrorCode::Num;
+  }
   return AmorArgs{cost.value(),   date_purchased.value(), first_period.value(), salvage.value(),
                   period.value(), rate.value(),           basis.value()};
+}
+
+// Walks periods 0..floor(period), capping each charge from `period_dep(i, book)`
+// at the remaining depreciable value, and returns the requested period's charge.
+template <typename PeriodDep>
+double run_amor_schedule(double cost, double salvage, double period, PeriodDep period_dep) {
+  const auto requested = static_cast<std::int64_t>(std::floor(period));
+  double book = cost;
+  double dep_i = 0.0;
+  for (std::int64_t i = 0; i <= requested; ++i) {
+    dep_i = period_dep(i, book);
+    // Cap against the remaining depreciable book value (book - salvage).
+    const double cap = book - salvage;
+    if (dep_i > cap) {
+      dep_i = cap;
+    }
+    if (dep_i < 0.0) {
+      dep_i = 0.0;
+    }
+    book -= dep_i;
+    if (book <= salvage && i < requested) {
+      // Asset is fully depreciated; every remaining period returns 0.
+      dep_i = 0.0;
+      break;
+    }
+  }
+  return dep_i;
 }
 
 // The AMORDEGRC depreciation coefficient (French accounting code). The
@@ -592,9 +624,6 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
   const double salvage = parsed.value().salvage;
   const double period = parsed.value().period;
   const double rate = parsed.value().rate;
-  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0 || period > kMaxDepreciationPeriods) {
-    return Value::error(ErrorCode::Num);
-  }
   // Computed life drives the French coefficient table. A coefficient of
   // 0 means the life bucket is invalid (Excel's #NUM! territory).
   const double life = 1.0 / rate;
@@ -611,45 +640,27 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
     return Value::error(yf.error());
   }
 
-  // Walk periods 0..period, rounding each period's depreciation to the
-  // nearest integer (Excel's observed AMORDEGRC behaviour). The schedule
-  // terminates early once book value reaches salvage.
-  const auto requested = static_cast<std::int64_t>(std::floor(period));
-  double book = cost;
-  double dep_i = 0.0;
   // Integer estimate of the asset's life (in periods) used by the
   // two-step end-of-schedule rule. Excel rounds life to the nearest
   // integer for this calculation.
   const auto life_int = static_cast<std::int64_t>(std::floor(life + 0.5));
-  for (std::int64_t i = 0; i <= requested; ++i) {
+  // Each period's depreciation is rounded to the nearest integer (Excel's
+  // observed AMORDEGRC behaviour).
+  return finalize(run_amor_schedule(cost, salvage, period, [&](std::int64_t i, double book) {
     // End-of-schedule rule: the penultimate full period depreciates
     // half of the remaining book value; the last period finishes the
     // remainder. life_int here is a conservative integer proxy.
     if (i == life_int - 1) {
-      dep_i = std::floor(book * 0.5 + 0.5);
-    } else if (i >= life_int) {
-      dep_i = book;
-    } else if (i == 0) {
-      dep_i = std::floor(cost * applied_rate * yf.value() + 0.5);
-    } else {
-      dep_i = std::floor(book * applied_rate + 0.5);
+      return std::floor(book * 0.5 + 0.5);
     }
-    // Cap against the remaining depreciable book value (book - salvage).
-    const double cap = book - salvage;
-    if (dep_i > cap) {
-      dep_i = cap;
+    if (i >= life_int) {
+      return book;
     }
-    if (dep_i < 0.0) {
-      dep_i = 0.0;
+    if (i == 0) {
+      return std::floor(cost * applied_rate * yf.value() + 0.5);
     }
-    book -= dep_i;
-    if (book <= salvage && i < requested) {
-      // Asset is fully depreciated; every remaining period returns 0.
-      dep_i = 0.0;
-      break;
-    }
-  }
-  return finalize(dep_i);
+    return std::floor(book * applied_rate + 0.5);
+  }));
 }
 
 // --- AMORLINC(cost, date_purchased, first_period, salvage, period, rate,
@@ -679,9 +690,6 @@ Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   const double salvage = parsed.value().salvage;
   const double period = parsed.value().period;
   const double rate = parsed.value().rate;
-  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0 || period > kMaxDepreciationPeriods) {
-    return Value::error(ErrorCode::Num);
-  }
 
   auto yf =
       yearfrac_for_basis(parsed.value().date_purchased, parsed.value().first_period, parsed.value().basis, date1904);
@@ -692,30 +700,8 @@ Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   const double dep_first = cost * rate * yf.value();
   const double dep_flat = cost * rate;
 
-  const auto requested = static_cast<std::int64_t>(std::floor(period));
-  double book = cost;
-  double dep_i = 0.0;
-  for (std::int64_t i = 0; i <= requested; ++i) {
-    if (i == 0) {
-      dep_i = dep_first;
-    } else {
-      dep_i = dep_flat;
-    }
-    // Never push book value below salvage.
-    const double cap = book - salvage;
-    if (dep_i > cap) {
-      dep_i = cap;
-    }
-    if (dep_i < 0.0) {
-      dep_i = 0.0;
-    }
-    book -= dep_i;
-    if (book <= salvage && i < requested) {
-      dep_i = 0.0;
-      break;
-    }
-  }
-  return finalize(dep_i);
+  return finalize(run_amor_schedule(cost, salvage, period,
+                                    [&](std::int64_t i, double /*book*/) { return i == 0 ? dep_first : dep_flat; }));
 }
 
 }  // namespace financial_detail

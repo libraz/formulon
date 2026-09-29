@@ -336,30 +336,13 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
   if (!first_coupon) {
     return first_coupon.error();
   }
-  auto rate = read_required_number(args, 4);
-  if (!rate) {
-    return rate.error();
+  auto tail = read_coupon_bond_tail(args, arity, 4);
+  if (!tail) {
+    return tail.error();
   }
-  auto slot5 = read_required_number(args, 5);
-  if (!slot5) {
-    return slot5.error();
-  }
-  auto redemption = read_required_number(args, 6);
-  if (!redemption) {
-    return redemption.error();
-  }
-  auto frequency_e = read_coupon_frequency(args, 7);
-  if (!frequency_e) {
-    return frequency_e.error();
-  }
-  auto basis_e = read_day_count_basis(args, arity, 8);
-  if (!basis_e) {
-    return basis_e.error();
-  }
+  const auto [rate, slot5, redemption, frequency, basis] = tail.value();
 
-  // Validation order mirrors PRICE / ODDLPRICE: date ordering ->
-  // frequency -> basis -> rate / slot-5 signs -> redemption sign.
-  // The odd-first family has the strict ordering constraint
+  // Validation mirrors PRICE / ODDLPRICE. The odd-first family has the strict ordering constraint
   // `issue < settlement < first_coupon < maturity` -- the issue date
   // must precede settlement (the holder is past the issue at trade
   // time), settlement must precede the first coupon (hence "first"
@@ -375,15 +358,7 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
   if (first_coupon.value() >= maturity.value()) {
     return ErrorCode::Num;
   }
-  const int frequency = frequency_e.value();
-  const int basis = basis_e.value();
-  if (rate.value() < 0.0) {
-    return ErrorCode::Num;
-  }
-  if (slot5_must_be_positive ? (slot5.value() <= 0.0) : (slot5.value() < 0.0)) {
-    return ErrorCode::Num;
-  }
-  if (redemption.value() <= 0.0) {
+  if (slot5_must_be_positive ? (slot5 <= 0.0) : (slot5 < 0.0)) {
     return ErrorCode::Num;
   }
 
@@ -395,9 +370,9 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
   sched_out = sched_e.value();
 
   OddFirstArgs out{};
-  out.rate = rate.value();
-  out.slot5 = slot5.value();
-  out.redemption = redemption.value();
+  out.rate = rate;
+  out.slot5 = slot5;
+  out.redemption = redemption;
   out.freq_d = static_cast<double>(frequency);
   return out;
 }

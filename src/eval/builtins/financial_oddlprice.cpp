@@ -169,29 +169,13 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
   if (!last_interest) {
     return last_interest.error();
   }
-  auto rate = read_required_number(args, 3);
-  if (!rate) {
-    return rate.error();
+  auto tail = read_coupon_bond_tail(args, arity, 3);
+  if (!tail) {
+    return tail.error();
   }
-  auto slot4 = read_required_number(args, 4);
-  if (!slot4) {
-    return slot4.error();
-  }
-  auto redemption = read_required_number(args, 5);
-  if (!redemption) {
-    return redemption.error();
-  }
-  auto frequency_e = read_coupon_frequency(args, 6);
-  if (!frequency_e) {
-    return frequency_e.error();
-  }
-  auto basis_e = read_day_count_basis(args, arity, 7);
-  if (!basis_e) {
-    return basis_e.error();
-  }
+  const auto [rate, slot4, redemption, frequency, basis] = tail.value();
 
-  // Validation order mirrors PRICE: date ordering -> frequency -> basis
-  // -> rate / slot-4 signs -> redemption sign. The odd-last family adds the
+  // Validation mirrors PRICE. The odd-last family adds the
   // ordering constraint `last_interest < settlement` (the bond's last
   // regular coupon must precede settlement).
   if (last_interest.value() >= settlement.value()) {
@@ -200,15 +184,7 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
   if (settlement.value() >= maturity.value()) {
     return ErrorCode::Num;
   }
-  const int frequency = frequency_e.value();
-  const int basis = basis_e.value();
-  if (rate.value() < 0.0) {
-    return ErrorCode::Num;
-  }
-  if (slot4_must_be_positive ? (slot4.value() <= 0.0) : (slot4.value() < 0.0)) {
-    return ErrorCode::Num;
-  }
-  if (redemption.value() <= 0.0) {
+  if (slot4_must_be_positive ? (slot4 <= 0.0) : (slot4 < 0.0)) {
     return ErrorCode::Num;
   }
 
@@ -220,13 +196,13 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
 
   const double freq_d = static_cast<double>(frequency);
   OddLastInputs out{};
-  out.slot4 = slot4.value();
-  out.redemption = redemption.value();
+  out.slot4 = slot4;
+  out.redemption = redemption;
   out.dsc = sched.value().dsc;
   out.e = sched.value().e;
   out.freq_d = freq_d;
-  out.cf = 100.0 * rate.value() / freq_d * (sched.value().dc_total / out.e);
-  out.ai = 100.0 * rate.value() / freq_d * (sched.value().a_total / out.e);
+  out.cf = 100.0 * rate / freq_d * (sched.value().dc_total / out.e);
+  out.ai = 100.0 * rate / freq_d * (sched.value().a_total / out.e);
   return out;
 }
 

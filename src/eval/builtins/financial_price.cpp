@@ -61,42 +61,18 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
   if (!maturity) {
     return maturity.error();
   }
-  auto rate = read_required_number(args, 2);
-  if (!rate) {
-    return rate.error();
+  auto tail = read_coupon_bond_tail(args, arity, 2);
+  if (!tail) {
+    return tail.error();
   }
-  auto yld = read_required_number(args, 3);
-  if (!yld) {
-    return yld.error();
-  }
-  auto redemption = read_required_number(args, 4);
-  if (!redemption) {
-    return redemption.error();
-  }
-  auto frequency_e = read_coupon_frequency(args, 5);
-  if (!frequency_e) {
-    return frequency_e.error();
-  }
-  auto basis_e = read_day_count_basis(args, arity, 6);
-  if (!basis_e) {
-    return basis_e.error();
-  }
+  const auto [rate, yld, red, frequency, basis] = tail.value();
 
-  // Validation order matches Microsoft's documented contract and the
-  // sibling DURATION / PRICE* impls: date ordering -> frequency domain
-  // -> basis domain -> rate / yld sign checks -> redemption sign check.
+  // Every domain check past the reads is `#NUM!`, so the tail reader's
+  // rate / redemption checks may run ahead of the date ordering.
   if (settlement.value() >= maturity.value()) {
     return ErrorCode::Num;
   }
-  const int frequency = frequency_e.value();
-  const int basis = basis_e.value();
-  if (rate.value() < 0.0) {
-    return ErrorCode::Num;
-  }
-  if (yld.value() < 0.0) {
-    return ErrorCode::Num;
-  }
-  if (redemption.value() <= 0.0) {
+  if (yld < 0.0) {
     return ErrorCode::Num;
   }
 
@@ -114,11 +90,10 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
   // bases, including bases 2 / 3 where the raw COUPDAYSNC value would
   // break the identity. See `coupon_schedule.h` for the rationale.
   const double t1 = cd.bond_dsc / cd.period_days;
-  const double cf = 100.0 * rate.value() / freq_d;
-  const double ai = 100.0 * rate.value() * cd.days_bs / (cd.period_days * freq_d);
+  const double cf = 100.0 * rate / freq_d;
+  const double ai = 100.0 * rate * cd.days_bs / (cd.period_days * freq_d);
   const std::int32_t n = cd.coupons_remaining;
-  const double red = redemption.value();
-  const double yfreq = yld.value() / freq_d;
+  const double yfreq = yld / freq_d;
 
   // Single-period branch: simple-interest discounting on the final
   // cash flow. See the file header for why this is NOT the same as

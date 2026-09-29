@@ -137,37 +137,16 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
 //   - par <= 0                       ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}   ->  #NUM!
 Value Accrintm(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto issue = read_financial_date(args, 0);
-  if (!issue) {
-    return Value::error(issue.error());
+  auto parsed = read_security_rate_args(args, arity);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto settlement = read_financial_date(args, 1);
-  if (!settlement) {
-    return Value::error(settlement.error());
-  }
-  auto rate = read_required_number(args, 2);
-  if (!rate) {
-    return Value::error(rate.error());
-  }
-  auto par = read_required_number(args, 3);
-  if (!par) {
-    return Value::error(par.error());
-  }
-  auto basis = read_day_count_basis(args, arity, 4);
-  if (!basis) {
-    return Value::error(basis.error());
-  }
-  if (issue.value() >= settlement.value()) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (rate.value() <= 0.0 || par.value() <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  auto yf = yearfrac_for_basis(issue.value(), settlement.value(), basis.value(), date1904);
+  const auto [issue, settlement, rate, par, basis] = parsed.value();
+  auto yf = yearfrac_for_basis(issue, settlement, basis, date1904);
   if (!yf) {
     return Value::error(yf.error());
   }
-  return finalize(par.value() * rate.value() * yf.value());
+  return finalize(par * rate * yf.value());
 }
 
 }  // namespace financial_detail

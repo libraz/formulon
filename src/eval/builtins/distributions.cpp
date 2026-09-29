@@ -87,6 +87,25 @@ inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args) {
   return builtins_detail::read_number_triple(args, 0, 1, 2);
 }
 
+// The `(x, param1, param2, cumulative)` arguments of the four-argument DIST entries.
+struct CumulativeTriple {
+  NumberTriple params;
+  bool cumulative;
+};
+
+// Reads the three numbers, then the cumulative flag, propagating the left-most error.
+Expected<CumulativeTriple, ErrorCode> read_cumulative_triple(const Value* args) {
+  auto parsed = read_number_triple(args);
+  if (!parsed) {
+    return parsed.error();
+  }
+  auto cum_e = coerce_to_bool(args[3]);
+  if (!cum_e) {
+    return cum_e.error();
+  }
+  return CumulativeTriple{parsed.value(), cum_e.value()};
+}
+
 // Shared bracket-then-Newton inverter for CDF surfaces on a half-open
 // interval. The caller supplies `cdf(x)` and its derivative `pdf(x)`
 // along with a bracket `[lo, hi]` known to contain the root (i.e.
@@ -373,21 +392,17 @@ double GammaPdf(double x, double alpha, double beta_scale) noexcept {
 //   alpha > 1: 0
 // The CDF at x == 0 is 0 by definition.
 Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_number_triple(args);
+  auto parsed = read_cumulative_triple(args);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  auto cum_e = coerce_to_bool(args[3]);
-  if (!cum_e) {
-    return Value::error(cum_e.error());
-  }
-  const double x = parsed.value().first;
-  const double alpha = parsed.value().second;
-  const double beta_scale = parsed.value().third;
+  const double x = parsed.value().params.first;
+  const double alpha = parsed.value().params.second;
+  const double beta_scale = parsed.value().params.third;
   if (x < 0.0 || alpha <= 0.0 || beta_scale <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (cum_e.value()) {
+  if (parsed.value().cumulative) {
     if (x == 0.0) {
       return finalize(0.0);
     }
@@ -494,23 +509,19 @@ Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // contract for this entry is "density at the boundary is zero"; verified
 // against the golden oracle. The CDF at x == 0 is 0 as expected.
 Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_number_triple(args);
+  auto parsed = read_cumulative_triple(args);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  auto cum_e = coerce_to_bool(args[3]);
-  if (!cum_e) {
-    return Value::error(cum_e.error());
-  }
-  const double x = parsed.value().first;
-  const double alpha = parsed.value().second;
-  const double beta_scale = parsed.value().third;
+  const double x = parsed.value().params.first;
+  const double alpha = parsed.value().params.second;
+  const double beta_scale = parsed.value().params.third;
   if (x < 0.0 || alpha <= 0.0 || beta_scale <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
   const double t = x / beta_scale;
   const double t_pow = std::pow(t, alpha);
-  if (cum_e.value()) {
+  if (parsed.value().cumulative) {
     return finalize(1.0 - std::exp(-t_pow));
   }
   // PDF boundary: Mac Excel surfaces exactly 0 at x == 0 regardless of
@@ -533,22 +544,18 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 //   PDF: 1 / (x * sd * sqrt(2*pi)) * exp(-(ln x - mean)^2 / (2 sd^2))
 // #NUM! on x <= 0, sd <= 0.
 Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_number_triple(args);
+  auto parsed = read_cumulative_triple(args);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  auto cum_e = coerce_to_bool(args[3]);
-  if (!cum_e) {
-    return Value::error(cum_e.error());
-  }
-  const double x = parsed.value().first;
-  const double mean = parsed.value().second;
-  const double sd = parsed.value().third;
+  const double x = parsed.value().params.first;
+  const double mean = parsed.value().params.second;
+  const double sd = parsed.value().params.third;
   if (x <= 0.0 || sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
   const double z = (std::log(x) - mean) / sd;
-  if (cum_e.value()) {
+  if (parsed.value().cumulative) {
     // P(X <= x) = Phi(z) = 0.5 * erfc(-z / sqrt(2)).
     return finalize(0.5 * std::erfc(-z / std::sqrt(2.0)));
   }
