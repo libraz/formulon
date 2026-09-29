@@ -1268,11 +1268,12 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
       v.error_style = 0;
     }
 
-    // boolean attributes: allowBlank defaults to true (Excel convention),
-    // input/error message visibility default to false.
+    // Boolean attributes default to false: Excel omits allowBlank when it
+    // is off (the .xlsb twin's fAllowBlank bit is clear) and writes "1"
+    // when it is on.
+    v.allow_blank = false;
     if (pugi::xml_attribute ab = dv.attribute("allowBlank"); ab) {
-      const std::string_view sv = ab.value();
-      v.allow_blank = !(sv == "0" || sv == "false");
+      v.allow_blank = parse_xml_bool(ab.value());
     }
     if (pugi::xml_attribute sim = dv.attribute("showInputMessage"); sim) {
       v.show_input_message = parse_xml_bool(sim.value());

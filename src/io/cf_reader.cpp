@@ -142,7 +142,8 @@ cf::IconSetName ParseIconSetName(std::string_view text) {
     return cf::IconSetName::Five_Rating;
   if (text == "5Quarters")
     return cf::IconSetName::Five_Quarters;
-  return cf::IconSetName::Three_Arrows;
+  // The schema default, which Excel omits the attribute for.
+  return cf::IconSetName::Three_TrafficLights1;
 }
 
 cf::TimePeriod ParseTimePeriod(std::string_view text) {

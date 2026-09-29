@@ -115,7 +115,7 @@ TEST(RoundtripSymmetry, IconSetCfvoSurvivesReadWrite) {
   constexpr const char* kBefore =
       "<worksheet><conditionalFormatting sqref=\"B2:B10\">"
       "<cfRule type=\"iconSet\" priority=\"1\">"
-      "<iconSet iconSet=\"3TrafficLights1\">"
+      "<iconSet iconSet=\"3Arrows\">"
       "<cfvo type=\"percent\" val=\"0\"/>"
       "<cfvo type=\"percent\" val=\"33\"/>"
       "<cfvo type=\"percent\" val=\"67\"/>"

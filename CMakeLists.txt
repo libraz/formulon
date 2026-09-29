@@ -165,13 +165,17 @@ set(FORMULON_CORE_SOURCES
   src/io/xsd_double.cpp
   src/io/zip_reader.cpp
   src/io/xlsb/cell_writer.cpp
+  src/io/xlsb/cf_records.cpp
+  src/io/xlsb/dv_records.cpp
   src/io/xlsb/external_link_reader.cpp
+  src/io/xlsb/feature_formula.cpp
   src/io/xlsb/func_id_table.cpp
   src/io/xlsb/metadata_bin.cpp
   src/io/xlsb/ptg.cpp
   src/io/xlsb/ptg_reader.cpp
   src/io/xlsb/ptg_writer.cpp
   src/io/xlsb/pivot_reader.cpp
+  src/io/xlsb/protection_records.cpp
   src/io/xlsb/reader.cpp
   src/io/xlsb/record.cpp
   src/io/xlsb/record_writer.cpp

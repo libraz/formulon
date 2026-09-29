@@ -10,9 +10,10 @@
 // `BrtRowHdr`. Column/row layout, frozen panes and merged-cell
 // rectangles are emitted from the model.
 //
-// Conditional-format rules, data validation, auto-filter, print setup and
-// page breaks are not modelled per-record. Hyperlinks are model-owned and
-// emitted as BrtHLink records. The remaining unsupported records from a
+// Sheet protection, conditional-format rules, data validation and
+// hyperlinks are model-owned and emitted from the model. Auto-filter,
+// print setup and page breaks are not modelled per-record; those and the
+// other unsupported records from a
 // sheet that came from an `.xlsb` survive as `Sheet::xlsb_tail()`, whose
 // framed bytes are appended around the merged-cell and hyperlink blocks; a
 // sheet from any other source carries no retained tail and the writer reports

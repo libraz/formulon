@@ -1720,9 +1720,9 @@ TEST(XlsbWriter, ReportsDeferredSheetFeatures) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  // Validation and auto-filter state remain deferred; hyperlinks now emit as
-  // BrtHLink records and therefore no longer inflate this counter.
-  EXPECT_EQ(write_or.value().diagnostics.deferred_feature_count, 2U);
+  // Auto-filter state remains deferred; hyperlinks and validations are
+  // written from the model and therefore no longer inflate this counter.
+  EXPECT_EQ(write_or.value().diagnostics.deferred_feature_count, 1U);
 }
 
 TEST(XlsbWriter, RejectsInvalidHyperlinkRectangle) {

@@ -26,6 +26,7 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/sheet_reader.h"
+#include "io/xlsb/reader.h"
 #include "io/xlsb/retained_part_fingerprint.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
@@ -273,13 +274,29 @@ TEST(XlsbWriteDiagnostics, CommentsCountAsDeferred) {
   EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
 }
 
-TEST(XlsbWriteDiagnostics, EnabledSheetProtectionCountsAsDeferred) {
+TEST(XlsbWriteDiagnostics, EnabledSheetProtectionIsWritten) {
   Workbook wb = OneSheetWorkbook();
   wb.sheet(0).mutable_protection().enabled = true;
+  wb.sheet(0).mutable_protection().sheet = true;
+
+  auto result = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
+  auto back = xlsb::read_xlsb(ByteSpan{result.value().bytes.data(), result.value().bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  EXPECT_TRUE(back.value().workbook.sheet(0).protection().enabled);
+}
+
+TEST(XlsbWriteDiagnostics, WorkbookLockWindowsCountsAsDeferred) {
+  Workbook wb = OneSheetWorkbook();
+  wb.set_workbook_protection_xml("<workbookProtection lockStructure=\"1\" lockWindows=\"1\"/>");
 
   auto result = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+  auto back = xlsb::read_xlsb(ByteSpan{result.value().bytes.data(), result.value().bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  EXPECT_EQ(back.value().workbook.workbook_protection_xml(), "<workbookProtection lockStructure=\"1\"/>");
 }
 
 TEST(XlsbWriteDiagnostics, NonAutoCalcModeCountsAsDeferred) {

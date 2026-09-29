@@ -283,9 +283,13 @@ void AppendDataBar(std::string& out, const cf::DataBarSpec& d) {
 }
 
 void AppendIconSet(std::string& out, const cf::IconSetSpec& i) {
-  out.append("<iconSet iconSet=\"");
-  out.append(IconSetNameToString(i.name));
-  out.push_back('"');
+  out.append("<iconSet");
+  // Excel omits the attribute for the schema default, 3TrafficLights1.
+  if (i.name != cf::IconSetName::Three_TrafficLights1) {
+    out.append(" iconSet=\"");
+    out.append(IconSetNameToString(i.name));
+    out.push_back('"');
+  }
   if (i.reverse) {
     out.append(" reverse=\"1\"");
   }

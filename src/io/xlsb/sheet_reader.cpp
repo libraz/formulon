@@ -6,12 +6,17 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 #include "io/array_anchor_budget.h"
+#include "io/xlsb/cf_records.h"
+#include "io/xlsb/dv_records.h"
+#include "io/xlsb/feature_formula.h"
+#include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xml_escape.h"
@@ -488,12 +493,17 @@ bool IsAfterHyperlinks(XlsbRecordType type) {
 /// Appends the framed bytes of one worksheet-tail record to the grammar slot
 /// represented by `XlsbSheetTail`. `framed` spans the record header *and*
 /// payload, so re-emission is a plain byte copy rather than a re-encode.
+/// Slots only move forward: a record classified into a later slot advances
+/// the phase, so an unlisted record after it (an x14 FRT block after
+/// BrtMargins on a sheet with no merges or hyperlinks) is not hoisted ahead.
 void RetainTailRecord(SheetDecodeState& state, XlsbRecordType type, const std::uint8_t* framed, std::size_t size) {
   std::vector<std::uint8_t>* dst = &state.tail.before_merges;
   if (state.hyperlinks_seen || IsAfterHyperlinks(type)) {
     dst = &state.tail.after_hyperlinks;
+    state.hyperlinks_seen = true;
   } else if (state.merges_seen || IsAfterMergesBeforeHyperlinks(type)) {
     dst = &state.tail.after_merges_before_hyperlinks;
+    state.merges_seen = true;
   }
   dst->insert(dst->end(), framed, framed + size);
 }
@@ -523,6 +533,60 @@ RecordDisposition ResolveUnmodelledRecord(SheetDecodeState& state, XlsbRecordTyp
       .field("bytes", static_cast<std::int64_t>(size))
       .warn();
   return RecordDisposition::kAccounted;
+}
+
+/// Decodes the model-owned tail features -- sheet protection, conditional
+/// formatting blocks and the data-validation container -- which the writer
+/// re-emits from `Sheet`. `rec` has just been read from `cursor`; a block's
+/// remaining records are consumed here. A record or block holding content
+/// outside the measured set is retained verbatim instead. Returns false
+/// for any other record.
+Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* framed, const XlsbRecord& rec,
+                                        SheetDecodeState& state, Sheet& sheet, const FeatureFormulaReadContext& ctx) {
+  const auto type = static_cast<XlsbRecordType>(rec.type);
+  if (rec.type == kBrtSheetProtection || rec.type == kBrtSheetProtectionIso) {
+    SheetProtection& protection = sheet.mutable_protection();
+    const bool ok = rec.type == kBrtSheetProtection ? decode_sheet_protection(rec.payload, protection)
+                                                    : decode_sheet_protection_iso(rec.payload, protection);
+    if (!ok) {
+      StructuredLog("xlsb.protection.retained_raw").field("record_type", static_cast<std::int64_t>(rec.type)).warn();
+      RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
+    }
+    return true;
+  }
+  const bool is_cf = rec.type == kBrtBeginConditionalFormatting;
+  if (!is_cf && rec.type != kBrtBeginDVals) {
+    return false;
+  }
+  const std::uint16_t end_type = is_cf ? kBrtEndConditionalFormatting : kBrtEndDVals;
+  for (;;) {
+    auto next = read_record(cursor);
+    if (!next) {
+      return next.error();
+    }
+    if (next.value().type == end_type) {
+      break;
+    }
+  }
+  const ByteSpan block{framed, static_cast<std::size_t>(cursor.data - framed)};
+  // Both block kinds sit after the merged cells; later records follow them.
+  state.merges_seen = true;
+  bool decoded = false;
+  if (is_cf) {
+    if (auto format = decode_cf_block(block, ctx)) {
+      sheet.mutable_conditional_formats().push_back(std::move(*format));
+      decoded = true;
+    }
+  } else if (auto validations = decode_dv_block(block, ctx)) {
+    std::vector<DataValidation>& dst = sheet.mutable_validations();
+    dst.insert(dst.end(), std::make_move_iterator(validations->begin()), std::make_move_iterator(validations->end()));
+    decoded = true;
+  }
+  if (!decoded) {
+    StructuredLog("xlsb.feature.retained_raw").field("record_type", static_cast<std::int64_t>(rec.type)).warn();
+    RetainTailRecord(state, type, block.data, block.size);
+  }
+  return true;
 }
 
 /// Column + style-table index decoded by `ReadCellHeader`.
@@ -1333,6 +1397,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
     std::uint32_t* undecoded_formula_count) {
   SheetDecodeState state;
+  const FeatureFormulaReadContext feature_ctx{sheet_names, name_table, sheet_ranges, external_books, sheet_index};
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
     const std::uint8_t* const framed = cursor.data;
@@ -1345,6 +1410,15 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const auto framed_size = static_cast<std::size_t>(cursor.data - framed);
     if (type == XlsbRecordType::BrtHLink) {
       state.hyperlinks_seen = true;
+    }
+    if (state.in_tail) {
+      auto feature = DecodeTailFeature(cursor, framed, rec, state, wb.sheet(sheet_index), feature_ctx);
+      if (!feature) {
+        return feature.error();
+      }
+      if (feature.value()) {
+        continue;
+      }
     }
     // Every record resolves to a disposition; the result is consumed rather
     // than discarded so that no record can pass through unclassified.

@@ -34,6 +34,7 @@
 #include "io/ooxml_defs.h"
 #include "io/xlsb/external_link_reader.h"
 #include "io/xlsb/pivot_reader.h"
+#include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/retained_part_fingerprint.h"
@@ -369,12 +370,16 @@ struct SheetBundleEntry {
 struct WorkbookBinInfo {
   std::vector<SheetBundleEntry> sheets;
   bool date1904 = false;
+  /// `<workbookProtection>` rebuilt from BrtBookProtection(Iso); empty
+  /// when the book is unprotected or the records were not decodable.
+  std::string protection_xml;
 };
 
 /// Decodes `xl/workbook.bin` to extract the ordered sheet-bundle list and
-/// workbook date system. Other records are skipped.
+/// workbook date system and protection. Other records are skipped.
 Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_t>& body) {
   WorkbookBinInfo info;
+  ByteSpan protection_iso{};
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
@@ -392,6 +397,17 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
         return flags_or.error();
       }
       info.date1904 = (flags_or.value() & 0x00000001U) != 0U;
+      continue;
+    }
+    if (rec.type == kBrtBookProtectionIso) {
+      protection_iso = rec.payload;
+      continue;
+    }
+    if (rec.type == kBrtBookProtection) {
+      if (!decode_book_protection(rec.payload, protection_iso, info.protection_xml)) {
+        info.protection_xml.clear();
+        StructuredLog("xlsb.book_protection.not_decoded").warn();
+      }
       continue;
     }
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtBundleSh)) {
@@ -1310,6 +1326,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // records the file never carried and add an unwanted styles part on write.
   wb.set_styles(StylesTable{});
   wb.set_date1904(workbook_info.date1904);
+  wb.set_workbook_protection_xml(workbook_info.protection_xml);
   std::vector<std::string> sheet_part_paths;
   sheet_part_paths.reserve(bundle.size());
   for (const SheetBundleEntry& b : bundle) {

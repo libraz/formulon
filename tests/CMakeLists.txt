@@ -47,6 +47,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/hyperlink_roundtrip_test.cpp
   unit/io/iso_date_test.cpp
   unit/io/merge_roundtrip_test.cpp
+  unit/io/ooxml_feature_defaults_test.cpp
   unit/io/ooxml_reader_test.cpp
   unit/io/ooxml_unknown_kind_test.cpp
   unit/io/ooxml_writer_cell_test.cpp
@@ -78,6 +79,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_roundtrip_symmetry_test.cpp
   unit/io/sheet_roundtrip_symmetry_test.cpp
   unit/io/xlsb_roundtrip_symmetry_test.cpp
+  unit/io/xlsb/feature_records_test.cpp
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp

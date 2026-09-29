@@ -55,12 +55,14 @@ struct SheetDecodeState {
   /// True once `BrtEndSheetData` has been seen: everything from there to
   /// `BrtEndSheet` is tail.
   bool in_tail = false;
-  /// True once the merged-cell block has been passed. This is the fallback
-  /// grammar phase for tail records not covered by an explicit slot id.
+  /// True once the merged-cell block, or any record of a later slot, has
+  /// been passed. This is the fallback grammar phase for tail records not
+  /// covered by an explicit slot id.
   bool merges_seen = false;
-  /// True once the first raw BrtHLink has been encountered. Raw hyperlink
-  /// records are model-owned and are never retained, but this marker keeps
-  /// unrelated records after them in the correct post-hyperlink buffer.
+  /// True once the first raw BrtHLink, or any record of the post-hyperlink
+  /// slot, has been encountered. Raw hyperlink records are model-owned and
+  /// are never retained, but this marker keeps unrelated records after them
+  /// in the correct post-hyperlink buffer.
   bool hyperlinks_seen = false;
   /// Source records this sheet could not carry whole (see
   /// `RecordDisposition::kAccounted`).

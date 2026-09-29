@@ -18,7 +18,12 @@
 #include <vector>
 
 #include "cell.h"
+#include "cf/cf_types.h"
 #include "io/xlsb/cell_writer.h"
+#include "io/xlsb/cf_records.h"
+#include "io/xlsb/dv_records.h"
+#include "io/xlsb/feature_formula.h"
+#include "io/xlsb/protection_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sst_writer.h"
@@ -442,6 +447,47 @@ Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet
   return Expected<void, Error>::Ok();
 }
 
+/// Offset of the first framed record of `type` in `records`, or its size.
+std::size_t FindRecord(const std::vector<std::uint8_t>& records, std::uint16_t type) {
+  ByteSpan cursor{records.data(), records.size()};
+  while (cursor.size != 0U) {
+    const std::uint8_t* at = cursor.data;
+    auto rec = read_record(cursor);
+    if (!rec) {
+      break;
+    }
+    if (rec.value().type == type) {
+      return static_cast<std::size_t>(at - records.data());
+    }
+  }
+  return records.size();
+}
+
+/// Emits the retained records between the merge and hyperlink blocks
+/// (BrtPhoneticInfo, and any block the reader could not decode) with the
+/// model's conditional formats and validations in grammar order: phonetic
+/// info, CF blocks, then the single DVals container.
+Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& body, const Sheet& sheet,
+                                                  const std::vector<std::uint8_t>& retained,
+                                                  const FeatureFormulaWriteContext& ctx) {
+  const auto raw_dvals = static_cast<std::ptrdiff_t>(FindRecord(retained, kBrtBeginDVals));
+  body.insert(body.end(), retained.begin(), retained.begin() + raw_dvals);
+  for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
+    if (auto s = emit_cf_block(body, format, ctx); !s) {
+      return s;
+    }
+  }
+  if (raw_dvals != static_cast<std::ptrdiff_t>(retained.size()) && !sheet.validations().empty()) {
+    return make_error(FormulonErrorCode::kIoXlsbRetainedPartStale,
+                      "retained XLSB data validations cannot be merged with model validations", "context=write_xlsb");
+  }
+  if (auto s = emit_dv_block(body, sheet.validations(), ctx); !s) {
+    return s;
+  }
+  body.insert(body.end(), retained.begin() + raw_dvals, retained.end());
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace
 
 std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet) {
@@ -683,9 +729,19 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   // buffers hold already-framed records, so this is a byte append.
   const XlsbSheetTail& tail = sheet.xlsb_tail();
   const std::vector<std::string> hyperlink_rids = hyperlink_relationship_ids(sheet);
+  // Protection, conditional formatting and data validation are emitted
+  // from the model. Protection leads the tail: the one record the grammar
+  // puts ahead of it (BrtSheetCalcProp) is one Excel does not persist.
+  if (auto protection = emit_sheet_protection(body, sheet.protection()); !protection) {
+    return protection.error();
+  }
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);
-  body.insert(body.end(), tail.after_merges_before_hyperlinks.begin(), tail.after_merges_before_hyperlinks.end());
+  if (auto features = EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks,
+                                                  FeatureFormulaWriteContext{sheet_names, sheet_ranges, name_table});
+      !features) {
+    return features.error();
+  }
   if (auto hyperlinks = EmitHyperlinks(body, sheet, hyperlink_rids); !hyperlinks) {
     return hyperlinks.error();
   }

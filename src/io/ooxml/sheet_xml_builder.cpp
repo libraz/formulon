@@ -171,9 +171,7 @@ std::string BuildDataValidationsBlock(const Sheet& sheet) {
       out.append(es);
       out.append("\"");
     }
-    if (!v.allow_blank) {
-      out.append(" allowBlank=\"0\"");
-    } else {
+    if (v.allow_blank) {
       out.append(" allowBlank=\"1\"");
     }
     if (v.show_input_message) {

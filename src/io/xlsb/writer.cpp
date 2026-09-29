@@ -29,6 +29,7 @@
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/xlsb/metadata_bin.h"
+#include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -211,12 +212,9 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   const bool pivots_survive_via_passthrough = HasPivotPassthroughPart(workbook);
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
-    ReportDeferred(&count, "conditional_formats", sheet.conditional_formats().size(), i);
-    ReportDeferred(&count, "data_validations", sheet.validations().size(), i);
     ReportDeferred(&count, "auto_filter", sheet.auto_filter_xml().empty() ? 0U : 1U, i);
     ReportDeferred(&count, "comments", sheet.comments().size(), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
-    ReportDeferred(&count, "sheet_protection", sheet.protection().enabled ? 1U : 0U, i);
     const SheetPrintSettings& print = sheet.print_settings();
     const bool has_print = !print.sheet_pr_xml.empty() || !print.page_margins_xml.empty() ||
                            !print.page_setup_xml.empty() || !print.print_options_xml.empty() ||
@@ -242,6 +240,11 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   // Workbook-level calc settings: this writer emits no calc-properties
   // record at all, so a non-default mode or an enabled iterative solve
   // silently reverts to automatic / non-iterative recalculation on open.
+  // lockWindows / lockRevision / a revisions password have no measured
+  // BrtBookProtection field and are left out of the saved workbook.
+  std::vector<std::uint8_t> protection_scratch;
+  const auto book_protection = emit_book_protection(protection_scratch, workbook.workbook_protection_xml());
+  ReportDeferred(&count, "workbook_protection", book_protection && !book_protection.value() ? 1U : 0U, 0U);
   ReportDeferred(&count, "calc_mode", workbook.calc_mode() == Workbook::CalcMode::kAuto ? 0U : 1U, 0U);
   ReportDeferred(&count, "iterative_calc", workbook.iterative_options().enabled ? 1U : 0U, 0U);
   return count;
@@ -835,6 +838,57 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
   }
 }
 
+/// Calls `visit` with the text (no leading `=`) of every formula a sheet
+/// part carries: cell formulas, conditional-format rule and threshold
+/// formulas, and data-validation formulas. The name and ExternSheet tables
+/// are both built over this one walk, so every formula the sheet writer
+/// encodes finds its entries.
+template <typename Visit>
+void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
+  for (const auto& [row, cells] : sheet.rows()) {
+    (void)row;
+    for (const Cell& cell : cells) {
+      std::string_view body(cell.formula_text);
+      if (!body.empty() && body.front() == '=') {
+        body.remove_prefix(1);
+      }
+      if (!body.empty()) {
+        visit(body);
+      }
+    }
+  }
+  const auto visit_text = [&visit](const std::string& text) {
+    if (!text.empty()) {
+      visit(std::string_view(text));
+    }
+  };
+  const auto visit_cfvo = [&visit_text](const cf::CfValueObject& v) {
+    if (v.type == cf::CfvoType::Formula) {
+      visit_text(v.value);
+    }
+  };
+  for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
+    for (const cf::CFRule& rule : format.rules) {
+      visit_text(rule.formula1.value_or(std::string()));
+      visit_text(rule.formula2.value_or(std::string()));
+      if (rule.color_scale) {
+        std::for_each(rule.color_scale->thresholds.begin(), rule.color_scale->thresholds.end(), visit_cfvo);
+      }
+      if (rule.data_bar) {
+        visit_cfvo(rule.data_bar->min);
+        visit_cfvo(rule.data_bar->max);
+      }
+      if (rule.icon_set) {
+        std::for_each(rule.icon_set->thresholds.begin(), rule.icon_set->thresholds.end(), visit_cfvo);
+      }
+    }
+  }
+  for (const DataValidation& dv : sheet.validations()) {
+    visit_text(dv.formula1);
+    visit_text(dv.formula2);
+  }
+}
+
 /// Builds the workbook's `BrtName` record order: every genuine defined
 /// name (`Workbook::defined_names()`, in declaration order) occupies the
 /// leading slots, followed by every future-function callee / `NameRef`
@@ -870,16 +924,10 @@ void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_nam
                             qualified);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    for (const auto& [row, cells] : wb.sheet(i).rows()) {
-      (void)row;
-      for (const Cell& cell : cells) {
-        if (cell.formula_text.empty()) {
-          continue;
-        }
-        CollectNamesFromFormula(cell.formula_text, static_cast<std::int32_t>(i), defined_scopes, names, seen, invisible,
-                                invisible_seen, qualified);
-      }
-    }
+    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula) {
+      CollectNamesFromFormula(formula, static_cast<std::int32_t>(i), defined_scopes, names, seen, invisible,
+                              invisible_seen, qualified);
+    });
   }
   for (std::string& text : names) {
     ordered_names.push_back(OrderedName{std::move(text), -1});
@@ -990,8 +1038,8 @@ void CollectSheetRangesFromFormula(std::string_view formula, const std::vector<s
 
 /// Builds the `BrtExternSheet` table for the whole workbook: every
 /// distinct sheet-qualified reference span (single-sheet `(itab, itab)`
-/// or a genuine 3-D range `(itabFirst, itabLast)`) any cell formula or
-/// defined-name formula needs, in first-encounter order. Every
+/// or a genuine 3-D range `(itabFirst, itabLast)`) any sheet formula (see
+/// `ForEachSheetFormula`) or defined-name formula needs, in first-encounter order. Every
 /// `PtgRef3d` / `PtgArea3d` token this writer emits -- single- or
 /// multi-sheet alike -- resolves its `ixti` through this one table:
 /// once the workbook emits any `BrtExternSheet` entry, the reader
@@ -1006,19 +1054,9 @@ SheetRangeTable BuildSheetRangeTable(const Workbook& wb, const std::vector<std::
     CollectSheetRangesFromFormula(dn.formula, sheet_names, ranges, seen);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    for (const auto& [row, cells] : wb.sheet(i).rows()) {
-      (void)row;
-      for (const Cell& cell : cells) {
-        if (cell.formula_text.empty()) {
-          continue;
-        }
-        std::string_view body(cell.formula_text);
-        if (!body.empty() && body.front() == '=') {
-          body.remove_prefix(1);
-        }
-        CollectSheetRangesFromFormula(body, sheet_names, ranges, seen);
-      }
-    }
+    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula) {
+      CollectSheetRangesFromFormula(formula, sheet_names, ranges, seen);
+    });
   }
   return ranges;
 }
@@ -1174,6 +1212,10 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
     wb_prop_payload[0] |= 0x01U;
   }
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtWbProp), wb_prop_payload);
+  // Excel places the protection records between BrtWbProp and the views.
+  if (auto protection = emit_book_protection(body, wb.workbook_protection_xml()); !protection) {
+    return protection.error();
+  }
   emit_record(body, kBrtBeginBookViews, ByteSpan{});
   // itabCur (u32 at offset 24): measured to equal the tab-selected sheet's
   // index in every fixture; a mismatch made Excel show every tab selected.
