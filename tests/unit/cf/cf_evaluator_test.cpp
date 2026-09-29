@@ -906,6 +906,43 @@ TEST(CFEvaluator, TimePeriodNextMonthHandlesYearBoundary) {
   EXPECT_FALSE(match_rule(r, Value::number(Serial(2025, 2, 1)), ctx));
 }
 
+double Date1904Serial(int year, unsigned month, unsigned day) {
+  return eval::date_time::serial_from_ymd(year, month, day, /*date1904=*/true);
+}
+
+// Same anchor and boundary assertions as `TimePeriodThisWeekIsSundayThroughSaturday`,
+// but with every serial encoded under the 1904 system and the context's
+// `EvalContext` carrying that epoch. A decode that silently assumed 1900
+// would land on the wrong civil date and miss these boundaries.
+TEST(CFEvaluator, TimePeriodThisWeekHonorsDate1904Epoch) {
+  CFEvalHarness harness;
+  eval::EvalContext date1904_ctx = harness.eval_ctx.with_date1904(true);
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::ThisWeek;
+  CFEvalContext ctx = PinnedContext(harness, Date1904Serial(2024, 3, 13));
+  ctx.eval_ctx = &date1904_ctx;
+  EXPECT_TRUE(match_rule(r, Value::number(Date1904Serial(2024, 3, 10)), ctx));   // Sun
+  EXPECT_TRUE(match_rule(r, Value::number(Date1904Serial(2024, 3, 16)), ctx));   // Sat
+  EXPECT_FALSE(match_rule(r, Value::number(Date1904Serial(2024, 3, 9)), ctx));   // prior Sat
+  EXPECT_FALSE(match_rule(r, Value::number(Date1904Serial(2024, 3, 17)), ctx));  // next Sun
+}
+
+// Same as `TimePeriodThisMonthMatchesSameYearAndMonth`, under the 1904
+// epoch: the month boundary at 2024-02-29/2024-03-01 only lands correctly
+// if the decode reads the epoch the caller encoded with.
+TEST(CFEvaluator, TimePeriodThisMonthHonorsDate1904Epoch) {
+  CFEvalHarness harness;
+  eval::EvalContext date1904_ctx = harness.eval_ctx.with_date1904(true);
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::ThisMonth;
+  CFEvalContext ctx = PinnedContext(harness, Date1904Serial(2024, 3, 13));
+  ctx.eval_ctx = &date1904_ctx;
+  EXPECT_TRUE(match_rule(r, Value::number(Date1904Serial(2024, 3, 1)), ctx));
+  EXPECT_TRUE(match_rule(r, Value::number(Date1904Serial(2024, 3, 31)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Date1904Serial(2024, 2, 29)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Date1904Serial(2024, 4, 1)), ctx));
+}
+
 TEST(CFEvaluator, TimePeriodValueOnlyOverloadStillReturnsFalse) {
   // The value-only overload has no today reference, so TimePeriod
   // continues to return false there. Pin the contract.

@@ -231,6 +231,11 @@ bool match_time_period(const CFRule& rule, const Value& cell_value, const CFEval
     return false;
   }
   const double today = std::floor(*ctx.today_serial);
+  // The workbook's epoch, so `cell_serial`/`today` decode onto the same
+  // civil calendar they were stored under; a null `eval_ctx` (no
+  // workbook to consult) falls back to the 1900 system, matching
+  // `ymd_from_serial`'s own default.
+  const bool date1904 = ctx.eval_ctx != nullptr && ctx.eval_ctx->date1904();
 
   switch (*rule.time_period) {
     case TimePeriod::Today:
@@ -242,25 +247,25 @@ bool match_time_period(const CFRule& rule, const Value& cell_value, const CFEval
     case TimePeriod::Last7Days:
       return cell_serial >= today - kLast7DaysSpan && cell_serial <= today;
     case TimePeriod::ThisWeek: {
-      const double sunday = helpers::sunday_of_week(today);
+      const double sunday = helpers::sunday_of_week(today, date1904);
       return cell_serial >= sunday && cell_serial <= sunday + kWeekLastDayOffset;
     }
     case TimePeriod::LastWeek: {
-      const double sunday = helpers::sunday_of_week(today);
+      const double sunday = helpers::sunday_of_week(today, date1904);
       return cell_serial >= sunday - kDaysPerWeek && cell_serial <= sunday - kPriorWeekDayOffset;
     }
     case TimePeriod::NextWeek: {
-      const double sunday = helpers::sunday_of_week(today);
+      const double sunday = helpers::sunday_of_week(today, date1904);
       return cell_serial >= sunday + kDaysPerWeek && cell_serial <= sunday + kDaysPerWeek + kWeekLastDayOffset;
     }
     case TimePeriod::ThisMonth:
-      return helpers::year_month_from_serial(cell_serial) == helpers::year_month_from_serial(today);
+      return helpers::year_month_from_serial(cell_serial, date1904) == helpers::year_month_from_serial(today, date1904);
     case TimePeriod::LastMonth:
-      return helpers::year_month_from_serial(cell_serial) ==
-             helpers::shift_year_month(helpers::year_month_from_serial(today), -1);
+      return helpers::year_month_from_serial(cell_serial, date1904) ==
+             helpers::shift_year_month(helpers::year_month_from_serial(today, date1904), -1);
     case TimePeriod::NextMonth:
-      return helpers::year_month_from_serial(cell_serial) ==
-             helpers::shift_year_month(helpers::year_month_from_serial(today), 1);
+      return helpers::year_month_from_serial(cell_serial, date1904) ==
+             helpers::shift_year_month(helpers::year_month_from_serial(today, date1904), 1);
   }
   return false;
 }

@@ -461,8 +461,8 @@ constexpr int kDaysPerWeek = 7;
 
 }  // namespace
 
-int weekday_sunday_one(double serial_floor) {
-  const eval::date_time::YMD ymd = eval::date_time::ymd_from_serial(serial_floor);
+int weekday_sunday_one(double serial_floor, bool date1904) {
+  const eval::date_time::YMD ymd = eval::date_time::ymd_from_serial(serial_floor, date1904);
   const std::int64_t days = eval::date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
   // 1970-01-01 was a Thursday → Excel weekday 5. Adjust so days = 0
   // maps to 5, then take mod 7 and shift to the 1..7 range.
@@ -470,13 +470,13 @@ int weekday_sunday_one(double serial_floor) {
   return static_cast<int>(adjusted) + 1;
 }
 
-double sunday_of_week(double serial_floor) {
-  const int weekday = weekday_sunday_one(serial_floor);
+double sunday_of_week(double serial_floor, bool date1904) {
+  const int weekday = weekday_sunday_one(serial_floor, date1904);
   return serial_floor - (weekday - 1);
 }
 
-YearMonth year_month_from_serial(double serial_floor) {
-  const eval::date_time::YMD ymd = eval::date_time::ymd_from_serial(serial_floor);
+YearMonth year_month_from_serial(double serial_floor, bool date1904) {
+  const eval::date_time::YMD ymd = eval::date_time::ymd_from_serial(serial_floor, date1904);
   return {ymd.y, ymd.m};
 }
 

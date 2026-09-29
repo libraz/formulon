@@ -169,11 +169,13 @@ std::optional<double> parse_double(std::string_view source);
 // ---------------------------------------------------------------------------
 
 /// Excel weekday with `WEEKDAY(date, 1)` semantics: Sunday = 1,
-/// Saturday = 7.
-int weekday_sunday_one(double serial_floor);
+/// Saturday = 7. `date1904` selects the epoch `serial_floor` is read
+/// against, matching `eval::date_time::ymd_from_serial`; defaults to the
+/// 1900 system for callers with no workbook to consult.
+int weekday_sunday_one(double serial_floor, bool date1904 = false);
 
 /// Serial of the Sunday opening the week that contains `serial_floor`.
-double sunday_of_week(double serial_floor);
+double sunday_of_week(double serial_floor, bool date1904 = false);
 
 struct YearMonth {
   int year;
@@ -184,7 +186,7 @@ struct YearMonth {
   }
 };
 
-YearMonth year_month_from_serial(double serial_floor);
+YearMonth year_month_from_serial(double serial_floor, bool date1904 = false);
 
 /// Shifts `anchor` by `delta_months`, normalising the result back into
 /// the canonical `1..12` month range.
