@@ -177,11 +177,10 @@ double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned
   // YEARFRAC("2020-01-01","2021-01-01",1) is exactly 1.0 (366/366) rather
   // than 366/365.5.
   //
-  // Longer cross-year spans: denominator is the average calendar-year length
-  // over the inclusive year range [y1, y2], where a leap year contributes 366
-  // ONLY if its Feb 29 falls in the closed interval [start, end]. A span that
-  // straddles a leap-year boundary without crossing Feb 29 averages as if
-  // that leap year were a normal 365-day year.
+  // Longer cross-year spans: denominator is the average full calendar-year
+  // length over the inclusive year range [y1, y2], whether or not a leap
+  // year's Feb 29 lies inside the span. (Observed behaviour:
+  // YEARFRAC("2024-03-01","2026-06-01",1) = 822/365.333... = 2.25.)
   double denom = 0.0;
   if (y1 == y2) {
     denom = is_leap_year(y1) ? 366.0 : 365.0;
@@ -200,19 +199,8 @@ double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned
     denom = has_feb29 ? 366.0 : 365.0;
   } else {
     const int total_years = y2 - y1 + 1;
-    int leap_years_in_span = 0;
-    for (int y = y1; y <= y2; ++y) {
-      if (!is_leap_year(y)) {
-        continue;
-      }
-      const std::int64_t feb29 = days_from_civil(y, 2, 29);
-      if (feb29 >= days1 && feb29 <= days2) {
-        ++leap_years_in_span;
-      }
-    }
-    const int non_leap_years = total_years - leap_years_in_span;
-    denom = (static_cast<double>(leap_years_in_span) * 366.0 + static_cast<double>(non_leap_years) * 365.0) /
-            static_cast<double>(total_years);
+    const std::int64_t span_days = days_from_civil(y2 + 1, 1, 1) - days_from_civil(y1, 1, 1);
+    denom = static_cast<double>(span_days) / static_cast<double>(total_years);
   }
   return actual_days / denom;
 }

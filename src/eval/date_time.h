@@ -145,10 +145,9 @@ double yearfrac_us30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, 
 double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
 
 /// Year fraction under the Actual/Actual convention — Excel basis 1.
-/// Denominator is 366 when a Feb 29 lies strictly inside the interval
-/// `[start, end)` (or both endpoints are Feb 29 in a leap year), 365
-/// otherwise. This produces integer-valued results on exact anniversary
-/// spans.
+/// A same-year span divides by that year's length; a span of at most one
+/// year divides by 366 when a Feb 29 lies in `[start, end]`, else 365; a
+/// longer span divides by the average full length of the years `y1..y2`.
 double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
 
 /// Days between two Excel serials under a day-count `basis`, with `a <= b`.

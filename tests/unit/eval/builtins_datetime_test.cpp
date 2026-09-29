@@ -911,6 +911,21 @@ TEST(DateTimeYearfrac, Basis1_ActualActual_NonLeapOneYearSpan) {
   EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
 }
 
+TEST(DateTimeYearfrac, Basis1_ActualActual_MultiYearAveragesFullYearLengths) {
+  // Spans longer than one year divide by the average full length of the
+  // years y1..y2, even when the leap year's Feb 29 lies outside the span.
+  // Values captured from Excel 365.
+  const Value leap_start = EvalSource("=YEARFRAC(DATE(2024,3,1),DATE(2026,6,1),1)");
+  ASSERT_TRUE(leap_start.is_number());
+  EXPECT_EQ(leap_start.as_number(), 2.25);
+  const Value leap_end = EvalSource("=YEARFRAC(DATE(2022,6,1),DATE(2024,2,1),1)");
+  ASSERT_TRUE(leap_end.is_number());
+  EXPECT_EQ(leap_end.as_number(), 1.6697080291970803);
+  const Value contains = EvalSource("=YEARFRAC(DATE(2023,6,1),DATE(2025,6,1),1)");
+  ASSERT_TRUE(contains.is_number());
+  EXPECT_EQ(contains.as_number(), 2.0009124087591244);
+}
+
 TEST(DateTimeYearfrac, Basis2_Actual360_HalfLeapYear) {
   // 2024-01-01 -> 2024-07-01 is 182 days in 2024; 182/360.
   const Value v = EvalSource("=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),2)");

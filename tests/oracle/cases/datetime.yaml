@@ -155,6 +155,18 @@ cases:
     description: "Short interval straddling Feb 29 2024 -> denom 366"
     formula: "=YEARFRAC(DATE(2024,2,28),DATE(2024,3,1),1)"
 
+  - id: yearfrac_basis_1_multi_year_leap_start_before_feb29
+    description: "Multi-year span starting in leap year 2024 after its Feb 29"
+    formula: "=YEARFRAC(DATE(2024,3,1),DATE(2026,6,1),1)"
+
+  - id: yearfrac_basis_1_multi_year_leap_end_before_feb29
+    description: "Multi-year span ending in leap year 2024 before its Feb 29"
+    formula: "=YEARFRAC(DATE(2022,6,1),DATE(2024,2,1),1)"
+
+  - id: yearfrac_basis_1_multi_year_contains_feb29
+    description: "Multi-year span containing Feb 29 2024"
+    formula: "=YEARFRAC(DATE(2023,6,1),DATE(2025,6,1),1)"
+
   - id: yearfrac_invalid_basis_is_num
     formula: "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),5)"
 

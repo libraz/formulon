@@ -2,11 +2,11 @@
   "suite": "datetime",
   "description": "DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS / DAYS360 / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / NETWORKDAYS / NETWORKDAYS.INTL / WORKDAY / WORKDAY.INTL",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-09-29T06:37:59Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -362,6 +362,33 @@
       "expect": {
         "kind": "number",
         "value": 0.00546448087431694
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_multi_year_leap_start_before_feb29",
+      "formula": "=YEARFRAC(DATE(2024,3,1),DATE(2026,6,1),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.25
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_multi_year_leap_end_before_feb29",
+      "formula": "=YEARFRAC(DATE(2022,6,1),DATE(2024,2,1),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.6697080291970803
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_multi_year_contains_feb29",
+      "formula": "=YEARFRAC(DATE(2023,6,1),DATE(2025,6,1),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0009124087591244
       }
     },
     {
