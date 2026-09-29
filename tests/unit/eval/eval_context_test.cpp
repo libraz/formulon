@@ -12,6 +12,7 @@
 #include "eval/adhoc_eval.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "parser/reference.h"
@@ -222,6 +223,26 @@ TEST(EvalContextRecursive, ReadOnlyRangeUsesCommittedSpillAnchorScalar) {
   const Value phantom_column = evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, "=SUM(B:B)", arena, default_registry());
   ASSERT_TRUE(phantom_column.is_number());
   EXPECT_DOUBLE_EQ(phantom_column.as_number(), 12.0);
+}
+
+// fm_workbook_evaluate_formula documents ad-hoc evaluation as a single
+// pass decoupled from iterative calc: a self-reference reads the cell's
+// cached value instead of engaging the evaluate()-level fixed-point
+// driver. Without suppression, resolving A1 while evaluating "=A1+1"
+// anchored at A1 re-enters the driver and iterates toward max_iterations
+// instead of returning cached-value-plus-one.
+TEST(EvalContextRecursive, ReadOnlyEvalIgnoresIterativeCalcOnSelfReference) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(7.0))));  // A1
+  eval::IterativeOptions opts;
+  opts.enabled = true;
+  opts.max_iterations = 50U;
+  wb.set_iterative_options(opts);
+
+  Arena arena;
+  const Value result = evaluate_formula_text(wb, wb.sheet(0), 0U, 0U, "=A1+1", arena, default_registry());
+  ASSERT_TRUE(result.is_number());
+  EXPECT_DOUBLE_EQ(result.as_number(), 8.0);
 }
 
 TEST(EvalContextRecursive, ReadOnlyThreeDRangeUsesScalarFormulaAnchors) {

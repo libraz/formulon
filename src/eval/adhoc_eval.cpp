@@ -43,13 +43,21 @@ Value reduce_to_scalar(Value v) {
 // deliberate omission of `with_mutable_sheet` is the purity guarantee:
 // without it `EvalContext::dispatch_array_result` is inert and recursive
 // `resolve_ref` never commits a spill, so the workbook is never mutated.
+//
+// The ad-hoc drivers are documented (see `fm_workbook_evaluate_formula` in
+// `formulon_c.h`) to be a single-pass evaluation decoupled from iterative
+// calc: a self-reference reads the cell's cached value rather than engaging
+// the `evaluate()`-level fixed-point driver. Suppressing it here mirrors
+// `cell_evaluator.cpp`'s recalc-path context, which the recalc engine
+// itself owns iterative-calc resolution for.
 EvalContext make_readonly_context(const Workbook& workbook, const Sheet& sheet, EvalState& state, std::uint32_t row,
                                   std::uint32_t col) {
   return EvalContext(workbook, sheet, state)
       .with_excel_profile(workbook.excel_profile())
       .with_date1904(workbook.date1904())
       .with_pinned_now(workbook.pinned_now())
-      .with_formula_cell(row, col);
+      .with_formula_cell(row, col)
+      .with_iterative_driver_suppressed();
 }
 
 // Parses and evaluates `formula` at `(row, col)` under a read-only context,
