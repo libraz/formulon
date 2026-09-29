@@ -363,6 +363,8 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/trace.cpp
   src/c_api/parts/version.cpp
   src/c_api/parts/workbook.cpp
+  src/c_api/parts/recalc.cpp
+  src/c_api/parts/tables.cpp
   src/c_api/generated/sheet_counts.cpp
   src/c_api/generated/styles_counts.cpp
   src/c_api/generated/workbook_counts.cpp
