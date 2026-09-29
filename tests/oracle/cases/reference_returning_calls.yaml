@@ -1,0 +1,42 @@
+suite: reference_returning_calls
+description: >
+  IFS and SWITCH return the reference their chosen branch names, not its
+  value: ISREF sees a reference, the result can end a `:` range, and CELL
+  reads its address. A1:A3 = 1,2,3 and A5 = 5 throughout.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: isref_ifs_branch
+    description: "ISREF(IFS(TRUE,A1)) - the chosen branch is a reference"
+    setup: { A1: 1, A2: 2, A3: 3, A5: 5 }
+    formula: "=ISREF(IFS(TRUE,A1))"
+
+  - id: isref_switch_branch
+    description: "ISREF(SWITCH(1,1,A1)) - the matched result is a reference"
+    setup: { A1: 1, A2: 2, A3: 3, A5: 5 }
+    formula: "=ISREF(SWITCH(1,1,A1))"
+
+  - id: sum_range_ending_in_ifs
+    description: "SUM(A1:IFS(TRUE,A3)) - IFS ends a range, A1:A3"
+    setup: { A1: 1, A2: 2, A3: 3, A5: 5 }
+    formula: "=SUM(A1:IFS(TRUE,A3))"
+
+  - id: sum_range_ending_in_switch
+    description: "SUM(A1:SWITCH(1,1,A3)) - SWITCH ends a range, A1:A3"
+    setup: { A1: 1, A2: 2, A3: 3, A5: 5 }
+    formula: "=SUM(A1:SWITCH(1,1,A3))"
+
+  - id: rows_range_ending_in_switch
+    description: "ROWS(A1:SWITCH(1,1,A5)) - the range spans A1:A5"
+    setup: { A1: 1, A2: 2, A3: 3, A5: 5 }
+    formula: "=ROWS(A1:SWITCH(1,1,A5))"
+
+  - id: cell_address_of_ifs
+    description: "CELL(\"address\",IFS(TRUE,B2)) - the address of the chosen reference"
+    setup: { A1: 1, A2: 2, A3: 3, A5: 5 }
+    formula: "=CELL(\"address\",IFS(TRUE,B2))"
+
+  - id: cell_address_of_switch
+    description: "CELL(\"address\",SWITCH(1,1,B2)) - the address of the matched reference"
+    setup: { A1: 1, A2: 2, A3: 3, A5: 5 }
+    formula: "=CELL(\"address\",SWITCH(1,1,B2))"
