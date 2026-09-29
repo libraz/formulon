@@ -47,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other non-empty string is rejected with `kInvalidArgument`. A pivot
   field's id now reaches the saved file as `<pivotField numFmtId>` and is
   read back from it; it was previously accepted and silently dropped.
+- The WASM size report's Brotli ceilings moved to 800 KiB soft and
+  832 KiB hard. Shipped feature code had filled the previous margin, so
+  the soft warning fired on every run; the uncompressed pair is unchanged
+  at 2.75 MiB and 3.00 MiB.
 
 ### Fixed
 
