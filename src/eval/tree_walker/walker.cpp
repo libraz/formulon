@@ -609,6 +609,9 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
           case IntersectionProjection::kNotStaticReference:
             break;
         }
+        if (Value projected = Value::blank(); project_reference_result(operand, arena, registry, ctx, &projected)) {
+          return projected;
+        }
       } else if (operand.kind() == parser::NodeKind::RangeOp) {
         // No formula-cell context (top-level evaluator entry) -> degrade to
         // top-left, matching the bare-range fallback. Production calls

@@ -5,7 +5,12 @@
 
 #include "eval/implicit_intersection.h"
 
+#include <string_view>
+
 #include "eval/declared_rect.h"
+#include "eval/eval_context.h"
+#include "eval/name_env_resolve.h"
+#include "eval/range_resolvers.h"
 
 namespace formulon::eval {
 
@@ -76,6 +81,42 @@ IntersectionProjection project_implicit_intersection(const parser::AstNode& oper
   }
   *out_target = *target;
   return IntersectionProjection::kCell;
+}
+
+bool project_reference_result(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
+                              const EvalContext& ctx, Value* out) {
+  const parser::AstNode& target = resolve_name_ast(operand, ctx.name_env());
+  const bool yields_reference =
+      target.kind() == parser::NodeKind::NameRef || target.kind() == parser::NodeKind::IntersectOp ||
+      (target.kind() == parser::NodeKind::ExternalRef && parser::is_self_book_name_ref(target)) ||
+      (target.kind() == parser::NodeKind::Call && is_reference_call_name(target.as_call_name()));
+  if (!yields_reference) {
+    return false;
+  }
+  std::string_view sheet;
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t bottom = 0;
+  std::uint32_t right = 0;
+  ErrorCode err = ErrorCode::Value;
+  if (!resolve_reference_rect(target, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
+    return false;
+  }
+  parser::Reference lhs{};
+  lhs.sheet = sheet;
+  lhs.row = top;
+  lhs.col = left;
+  parser::Reference rhs = lhs;
+  rhs.row = bottom;
+  rhs.col = right;
+  if (top == bottom && left == right) {
+    *out = ctx.resolve_ref(lhs, arena, registry);
+    return true;
+  }
+  const std::optional<parser::Reference> cell =
+      project_implicit_intersection(lhs, rhs, ctx.formula_row(), ctx.formula_col());
+  *out = cell.has_value() ? ctx.resolve_ref(*cell, arena, registry) : Value::error(ErrorCode::Value);
+  return true;
 }
 
 }  // namespace formulon::eval

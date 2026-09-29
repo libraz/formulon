@@ -491,6 +491,32 @@ TEST(ImplicitIntersection, SingleMatchesAtForTwoDimensionalRange) {
   EXPECT_EQ(single.as_number(), at.as_number());
 }
 
+// `@` over a reference a name or call returns intersects it with the formula
+// cell like a static range (Excel 365, legacy61 E17/E19/E23/E38 and E1).
+TEST(ImplicitIntersection, ReferenceResultsProjectOntoTheFormulaCell) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    s.set_cell_value(r, 0U, Value::number(r + 1.0));
+    s.set_cell_value(r, 1U, Value::number(r + 1.0));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rng", "Sheet1!$A$1:$A$2")));
+  for (const char* src : {"=@INDEX(A1:B2,1,0)", "=@OFFSET(A1,0,0,2)", "=@Rng", "=@CHOOSE(1,A1:A2)",
+                          "=_xlfn.SINGLE(Rng)", "=_xlfn.SINGLE(OFFSET(A1,0,0,2))"}) {
+    const Value outside = EvalSourceAt(src, wb, s, 16U, 4U);
+    ASSERT_TRUE(outside.is_error()) << src;
+    EXPECT_EQ(outside.as_error(), ErrorCode::Value) << src;
+  }
+  for (const char* src : {"=@INDEX(A1:B2,0,1)", "=@Rng", "=_xlfn.SINGLE(OFFSET(A1,0,0,2))"}) {
+    const Value inside = EvalSourceAt(src, wb, s, 1U, 4U);
+    ASSERT_TRUE(inside.is_number()) << src;
+    EXPECT_EQ(inside.as_number(), 2.0) << src;
+  }
+  const Value one_cell = EvalSourceAt("=@INDEX(A1:B2,2,2)", wb, s, 16U, 4U);
+  ASSERT_TRUE(one_cell.is_number());
+  EXPECT_EQ(one_cell.as_number(), 2.0);
+}
+
 TEST(IterativeEvaluation, AppliesTopLevelSurfaceContractsAfterFixedPointLoop) {
   Workbook wb = Workbook::create();
   IterativeOptions options;

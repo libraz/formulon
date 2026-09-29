@@ -499,26 +499,22 @@ std::string DisplayOf(const Value& v) {
 
 // A row whose value the engine does not yet reproduce: Excel's value stays in
 // the table, and the row asserts the engine's current one until a fix lands.
-// Causes: (a) `@` over a reference a name or call returns takes the top-left
-// instead of intersecting the formula cell; (b) INDEX on a 2-D area with only
-// a row number is not #REF!; (c) OFFSET's empty height is not the reference's.
+// Causes: (b) INDEX on a 2-D area with only a row number is not #REF!;
+// (c) OFFSET's empty height is not the reference's.
 struct KnownGap {
   std::uint32_t row;    // 1-based row in column E
   const char* current;  // the engine's value today
   char cause;
 };
 
-constexpr KnownGap kLegacy61Gaps[] = {
-    {17, "1", 'a'}, {19, "1", 'a'}, {23, "1", 'a'}, {38, "1", 'a'}, {54, "2", 'a'},
+const std::vector<KnownGap> kLegacyIndexOffsetGaps = {
+    {2, "1", 'b'},
+    {14, "#REF!", 'c'},
 };
 
-constexpr KnownGap kLegacyIndexOffsetGaps[] = {
-    {2, "1", 'b'},  {4, "1", 'a'},  {5, "1", 'a'},      {6, "1", 'a'},  {7, "1", 'a'},  {8, "1", 'a'},
-    {11, "1", 'a'}, {12, "1", 'a'}, {14, "#REF!", 'c'}, {16, "1", 'a'}, {18, "1", 'a'},
-};
-
-template <std::size_t N, std::size_t G>
-void ExpectExcelsFormula2AndValues(const LegacyCase (&cases)[N], const KnownGap (&gaps)[G], bool index_offset_inputs) {
+template <std::size_t N>
+void ExpectExcelsFormula2AndValues(const LegacyCase (&cases)[N], bool index_offset_inputs,
+                                   const std::vector<KnownGap>& gaps = {}) {
   Workbook wb = LoadedLegacyWorkbook(cases, index_offset_inputs);
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   for (std::uint32_t i = 0; i < N; ++i) {
@@ -543,11 +539,11 @@ void ExpectExcelsFormula2AndValues(const LegacyCase (&cases)[N], const KnownGap 
 }
 
 TEST(LegacyAt, LoadedLegacyFormulasReadAsExcelShowsThem) {
-  ExpectExcelsFormula2AndValues(kLegacy61, kLegacy61Gaps, false);
+  ExpectExcelsFormula2AndValues(kLegacy61, false);
 }
 
 TEST(LegacyAt, LoadedLegacyIndexAndOffsetReadAsExcelShowsThem) {
-  ExpectExcelsFormula2AndValues(kLegacyIndexOffset, kLegacyIndexOffsetGaps, true);
+  ExpectExcelsFormula2AndValues(kLegacyIndexOffset, true, kLegacyIndexOffsetGaps);
 }
 
 TEST(LegacyAt, DynamicArrayAndCseFormulasKeepTheirText) {

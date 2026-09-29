@@ -9,9 +9,13 @@
 
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "utils/arena.h"
 #include "value.h"
 
 namespace formulon::eval {
+
+class EvalContext;
+class FunctionRegistry;
 
 /// Applies implicit intersection to an already-evaluated value that has no
 /// static range coordinates left to project. Scalars pass through unchanged;
@@ -68,6 +72,14 @@ enum class IntersectionProjection : std::uint8_t {
 /// `kNotStaticReference`, as does any dynamic-array producer.
 IntersectionProjection project_implicit_intersection(const parser::AstNode& operand, std::uint32_t formula_row,
                                                      std::uint32_t formula_col, parser::Reference* out_target);
+
+/// Projects the reference a defined name, an intersection or a
+/// reference-returning call yields (`@Rng`, `@INDEX(A1:B2,0,1)`) onto the
+/// formula cell, as a static range projects: a 1x1 result is that cell, any
+/// other the projected one or `#VALUE!`. False when `operand` yields no
+/// reference here; the caller then reduces its value.
+bool project_reference_result(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
+                              const EvalContext& ctx, Value* out);
 
 }  // namespace formulon::eval
 

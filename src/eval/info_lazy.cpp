@@ -390,6 +390,9 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
       case IntersectionProjection::kNotStaticReference:
         break;
     }
+    if (Value projected = Value::blank(); project_reference_result(arg, arena, registry, ctx, &projected)) {
+      return projected;
+    }
   } else if (arg.kind() == parser::NodeKind::RangeOp) {
     // Without a bound formula cell there is no row/col to project onto.
     return Value::error(ErrorCode::Value);
