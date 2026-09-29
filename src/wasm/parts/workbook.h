@@ -73,7 +73,7 @@ class JsWorkbook {
   JsStatus insertCols(uint32_t sheet, uint32_t col, uint32_t count);
   JsStatus deleteCols(uint32_t sheet, uint32_t col, uint32_t count);
 
-  uint32_t sheetCount() const;
+  JsNumberResult sheetCount() const;
   JsStringResult sheetName(uint32_t idx) const;
 
   // ---- Cell value / formula ops ------------------------------------------
@@ -144,16 +144,17 @@ class JsWorkbook {
   /// values even while `enabled` is false, so a host can render Excel's
   /// iterative-calculation dialog without having written them first.
   emscripten::val getIterative() const;
-  uint32_t calcMode() const;
+  JsNumberResult calcMode() const;
   JsStatus setCalcMode(uint32_t mode);
-  /// The pinned wall-clock reading as `{year, month, day, hour, minute,
-  /// second}`, or `null` when the workbook follows the host clock. `null`
-  /// rather than a flag beside the fields because JS already has a way to
-  /// say "no reading", and every field combination is a legal date.
+  /// `{status, now}` where `now` is the pinned wall-clock reading as
+  /// `{year, month, day, hour, minute, second}`, or `null` when the workbook
+  /// follows the host clock. `null` rather than a flag beside the fields
+  /// because JS already has a way to say "no reading", and every field
+  /// combination is a legal date.
   emscripten::val pinnedNow() const;
   JsStatus setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute, uint32_t second);
   JsStatus clearPinnedNow();
-  std::string excelProfileId() const;
+  JsStringResult excelProfileId() const;
   JsStatus setExcelProfileId(const std::string& profile_id);
   emscripten::val partialRecalc(emscripten::val viewport);
   /// Installs the JS callback the iterative solver invokes after each
@@ -164,22 +165,22 @@ class JsWorkbook {
 
   // ---- Iteration / metadata accessors ------------------------------------
 
-  uint32_t cellCount(uint32_t sheet) const;
+  JsNumberResult cellCount(uint32_t sheet) const;
   emscripten::val cellAt(uint32_t sheet, uint32_t idx) const;
 
-  uint32_t definedNameCount() const;
+  JsNumberResult definedNameCount() const;
   emscripten::val definedNameAt(uint32_t idx) const;
 
-  uint32_t tableCount() const;
+  JsNumberResult tableCount() const;
   emscripten::val tableAt(uint32_t idx) const;
   JsAddStyleResult createTable(emscripten::val spec);
   JsStatus updateTable(uint32_t idx, emscripten::val spec);
   JsStatus removeTable(uint32_t idx);
 
-  uint32_t passthroughCount() const;
+  JsNumberResult passthroughCount() const;
   emscripten::val passthroughAt(uint32_t idx) const;
 
-  uint32_t pivotCount(uint32_t sheet) const;
+  JsNumberResult pivotCount(uint32_t sheet) const;
   emscripten::val pivotLayout(uint32_t sheet, uint32_t pivotIndex) const;
 
   emscripten::val evaluateCfRange(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
@@ -303,13 +304,13 @@ class JsWorkbook {
   JsAddStyleResult addXf(emscripten::val record);
   JsAddStyleResult addDxf(emscripten::val record);
 
-  uint32_t fontCount() const;
-  uint32_t fillCount() const;
-  uint32_t borderCount() const;
-  uint32_t xfCount() const;
-  uint32_t dxfCount() const;
-  uint32_t cellStyleCount() const;
-  uint32_t cellStyleXfCount() const;
+  JsNumberResult fontCount() const;
+  JsNumberResult fillCount() const;
+  JsNumberResult borderCount() const;
+  JsNumberResult xfCount() const;
+  JsNumberResult dxfCount() const;
+  JsNumberResult cellStyleCount() const;
+  JsNumberResult cellStyleXfCount() const;
   emscripten::val getCellStyle(uint32_t index) const;
   emscripten::val getCellStyleXf(uint32_t index) const;
   JsAddStyleResult addCellStyleXf(emscripten::val record);
@@ -358,25 +359,25 @@ class JsWorkbook {
   emscripten::val dependents(uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
   emscripten::val functionMetadata(const std::string& name, uint32_t locale) const;
   emscripten::val functionNames() const;
-  std::string localizeFunctionName(const std::string& canonical_name, uint32_t locale) const;
-  std::string canonicalizeFunctionName(const std::string& localized_name, uint32_t locale) const;
+  JsStringResult localizeFunctionName(const std::string& canonical_name, uint32_t locale) const;
+  JsStringResult canonicalizeFunctionName(const std::string& localized_name, uint32_t locale) const;
   emscripten::val spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const;
 
   // ---- PivotCache mutation -----------------------------------------------
 
-  uint32_t pivotCacheCount() const;
+  JsNumberResult pivotCacheCount() const;
   JsAddStyleResult pivotCacheIdAt(uint32_t idx) const;
   JsAddStyleResult pivotCacheCreate(uint32_t requestedId);
   JsStatus pivotCacheRemove(uint32_t cacheId);
   emscripten::val pivotCacheGetWorksheetSource(uint32_t cacheId) const;
   JsStatus pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val source);
 
-  uint32_t pivotCacheFieldCount(uint32_t cacheId) const;
+  JsNumberResult pivotCacheFieldCount(uint32_t cacheId) const;
   JsStringResult pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIdx) const;
   JsAddStyleResult pivotCacheFieldAdd(uint32_t cacheId, const std::string& name);
   JsStatus pivotCacheFieldClear(uint32_t cacheId);
 
-  uint32_t pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIdx) const;
+  JsNumberResult pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIdx) const;
   JsStatus pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIdx, double value);
   JsStatus pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIdx, const std::string& utf8);
   JsStatus pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIdx, bool value);
@@ -384,7 +385,7 @@ class JsWorkbook {
   JsStatus pivotCacheFieldAddSharedItemError(uint32_t cacheId, uint32_t fieldIdx, int32_t errorCode);
   JsStatus pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIdx);
 
-  uint32_t pivotCacheRecordCount(uint32_t cacheId) const;
+  JsNumberResult pivotCacheRecordCount(uint32_t cacheId) const;
   JsAddStyleResult pivotCacheRecordAdd(uint32_t cacheId);
   JsStatus pivotCacheRecordClear(uint32_t cacheId);
   JsStatus pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double value);
@@ -405,7 +406,7 @@ class JsWorkbook {
   emscripten::val pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const;
   JsStatus pivotSetLayout(uint32_t sheet, uint32_t pivotIdx, uint32_t layout);
 
-  uint32_t pivotFieldCount(uint32_t sheet, uint32_t pivotIdx) const;
+  JsNumberResult pivotFieldCount(uint32_t sheet, uint32_t pivotIdx) const;
   JsAddStyleResult pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
   JsStatus pivotFieldClear(uint32_t sheet, uint32_t pivotIdx);
   JsStatus pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t axis);
@@ -433,12 +434,12 @@ class JsWorkbook {
   JsStatus pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices);
   JsStatus pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices);
 
-  uint32_t pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx) const;
+  JsNumberResult pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx) const;
   JsAddStyleResult pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
   JsStatus pivotDataFieldClear(uint32_t sheet, uint32_t pivotIdx);
   JsStatus pivotDataFieldSet(uint32_t sheet, uint32_t pivotIdx, uint32_t dataFieldIdx, emscripten::val spec);
 
-  uint32_t pivotFilterCount(uint32_t sheet, uint32_t pivotIdx) const;
+  JsNumberResult pivotFilterCount(uint32_t sheet, uint32_t pivotIdx) const;
   /// Reads the active filter at `filterIdx`.
   ///
   /// The active-filter list is **session state**: an entry added through

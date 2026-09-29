@@ -15,27 +15,23 @@ namespace formulon_node {
 Napi::Value Workbook::CellCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
-  if (fm_workbook_cell_count(handle_, sheet, &count) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(count));
+  const fm_status_t rc = fm_workbook_cell_count(handle_, sheet, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::PivotCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
-  if (fm_workbook_pivot_count(handle_, sheet, &count) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(count));
+  const fm_status_t rc = fm_workbook_pivot_count(handle_, sheet, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 }  // namespace formulon_node

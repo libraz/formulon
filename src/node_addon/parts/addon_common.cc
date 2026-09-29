@@ -112,6 +112,14 @@ Napi::Object MakeStringFieldResult(Napi::Env env, Napi::Object status, const cha
   return MakeFieldResult(env, status, field, Napi::String::New(env, value != nullptr ? value : ""));
 }
 
+Napi::Object MakeNumberResult(Napi::Env env, fm_status_t code, double value) {
+  return MakeNumberFieldResult(env, MakeStatus(env, code), "value", code == 0 ? value : 0.0);
+}
+
+Napi::Object MakeStringResult(Napi::Env env, fm_status_t code, const char* value) {
+  return MakeStringFieldResult(env, MakeStatus(env, code), "value", code == 0 ? value : nullptr);
+}
+
 Napi::Object MakeValueResult(Napi::Env env, Napi::Object status, const fm_value_t& value) {
   return MakeFieldResult(env, status, "value", TranslateValue(env, value));
 }

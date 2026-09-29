@@ -80,6 +80,10 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("status", &JsStringResult::status)
       .field("value", &JsStringResult::value);
 
+  value_object<JsNumberResult>("NumberResult")
+      .field("status", &JsNumberResult::status)
+      .field("value", &JsNumberResult::value);
+
   // ---- Conditional-format value-objects ------------------------------------
   value_object<JsCfColor>("CfColor")
       .field("r", &JsCfColor::r)

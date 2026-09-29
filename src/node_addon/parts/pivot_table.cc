@@ -120,15 +120,13 @@ Napi::Value Workbook::PivotSetLayout(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotFieldCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   std::size_t count = 0;
-  if (fm_workbook_pivot_field_count(handle_, sheet, pivot_idx, &count) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(count));
+  const fm_status_t rc = fm_workbook_pivot_field_count(handle_, sheet, pivot_idx, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
@@ -404,15 +402,13 @@ Napi::Value Workbook::PivotSetColFieldOrder(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotDataFieldCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   std::size_t count = 0;
-  if (fm_workbook_pivot_data_field_count(handle_, sheet, pivot_idx, &count) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(count));
+  const fm_status_t rc = fm_workbook_pivot_data_field_count(handle_, sheet, pivot_idx, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
@@ -484,15 +480,13 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotFilterCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   std::size_t count = 0;
-  if (fm_workbook_pivot_filter_count(handle_, sheet, pivot_idx, &count) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(count));
+  const fm_status_t rc = fm_workbook_pivot_filter_count(handle_, sheet, pivot_idx, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {

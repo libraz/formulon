@@ -277,41 +277,38 @@ def _emit_capi_entry(e: dict) -> str:
 # ---------------------------------------------------------------------------
 #
 # Each entry becomes a JsWorkbook::<methodName>() body that delegates to
-# the corresponding C ABI function. Bodies follow the project's existing
-# JsWorkbook pattern: NULL handle check first, then call the C ABI.
+# the corresponding C ABI function and returns a `{ status, value }`
+# NumberResult, so a destroyed handle or a rejected argument is visible
+# to the caller instead of reading as a zero count.
 
 _EMBIND_BODY_DIRECT_SIZE_T = """\
-uint32_t JsWorkbook::{embind_cpp}() const {{
+JsNumberResult JsWorkbook::{embind_cpp}() const {{
   if (handle_ == nullptr) {{
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }}
-  return static_cast<uint32_t>({capi}(handle_));
+  return number_result(0, static_cast<double>({capi}(handle_)));
 }}
 """
 
 _EMBIND_BODY_STATUS_U32_OUT = """\
-uint32_t JsWorkbook::{embind_cpp}() const {{
+JsNumberResult JsWorkbook::{embind_cpp}() const {{
   if (handle_ == nullptr) {{
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }}
   uint32_t n = 0;
-  if ({capi}(handle_, &n) != 0) {{
-    return 0U;
-  }}
-  return n;
+  const fm_status_t rc = {capi}(handle_, &n);
+  return number_result(rc, static_cast<double>(n));
 }}
 """
 
 _EMBIND_BODY_STATUS_SIZE_WITH_SHEET = """\
-uint32_t JsWorkbook::{embind_cpp}(uint32_t sheet) const {{
+JsNumberResult JsWorkbook::{embind_cpp}(uint32_t sheet) const {{
   if (handle_ == nullptr) {{
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }}
   std::size_t count = 0;
-  if ({capi}(handle_, sheet, &count) != 0) {{
-    return 0U;
-  }}
-  return static_cast<uint32_t>(count);
+  const fm_status_t rc = {capi}(handle_, sheet, &count);
+  return number_result(rc, static_cast<double>(count));
 }}
 """
 
@@ -335,6 +332,7 @@ def _emit_embind(entries: List[dict]) -> Dict[str, str]:
         out += "#include <cstdint>\n"
         out += "\n"
         out += '#include "c_api/formulon_c.h"\n'
+        out += '#include "wasm/parts/embind_common.h"\n'
         out += '#include "wasm/parts/workbook.h"\n'
         out += "\n"
         out += "namespace formulon {\n"
@@ -368,17 +366,17 @@ def _emit_embind_entry(e: dict) -> str:
 # N-API emitter
 # ---------------------------------------------------------------------------
 #
-# N-API method bodies follow the addon's existing pattern:
-#   - NULL handle returns Napi::Number(0).
-#   - Direct passthroughs cast the size_t / uint32 result into a JS Number.
+# N-API method bodies mirror the embind ones: every body returns the
+# `{ status, value }` NumberResult, with a destroyed handle reported as
+# `kBindingInvalidHandle`.
 
 _NODE_BODY_DIRECT_SIZE_T = """\
 Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {{
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }}
-  return Napi::Number::New(env, static_cast<double>({capi}(handle_)));
+  return MakeNumberResult(env, 0, static_cast<double>({capi}(handle_)));
 }}
 """
 
@@ -386,13 +384,11 @@ _NODE_BODY_STATUS_U32_OUT = """\
 Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {{
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }}
   uint32_t n = 0;
-  if ({capi}(handle_, &n) != 0) {{
-    return Napi::Number::New(env, 0);
-  }}
-  return Napi::Number::New(env, n);
+  const fm_status_t rc = {capi}(handle_, &n);
+  return MakeNumberResult(env, rc, n);
 }}
 """
 
@@ -400,14 +396,12 @@ _NODE_BODY_STATUS_SIZE_WITH_SHEET = """\
 Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {{
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }}
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
-  if ({capi}(handle_, sheet, &count) != 0) {{
-    return Napi::Number::New(env, 0);
-  }}
-  return Napi::Number::New(env, static_cast<double>(count));
+  const fm_status_t rc = {capi}(handle_, sheet, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }}
 """
 

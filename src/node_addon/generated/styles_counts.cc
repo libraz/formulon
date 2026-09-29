@@ -15,49 +15,41 @@ namespace formulon_node {
 Napi::Value Workbook::BorderCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_border_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
+  const fm_status_t rc = fm_styles_get_border_count(handle_, &n);
+  return MakeNumberResult(env, rc, n);
 }
 
 Napi::Value Workbook::FillCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_fill_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
+  const fm_status_t rc = fm_styles_get_fill_count(handle_, &n);
+  return MakeNumberResult(env, rc, n);
 }
 
 Napi::Value Workbook::FontCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_font_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
+  const fm_status_t rc = fm_styles_get_font_count(handle_, &n);
+  return MakeNumberResult(env, rc, n);
 }
 
 Napi::Value Workbook::XfCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_cell_xf_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
+  const fm_status_t rc = fm_styles_get_cell_xf_count(handle_, &n);
+  return MakeNumberResult(env, rc, n);
 }
 
 }  // namespace formulon_node

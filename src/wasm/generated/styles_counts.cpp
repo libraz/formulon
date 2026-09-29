@@ -9,54 +9,47 @@
 #include <cstdint>
 
 #include "c_api/formulon_c.h"
+#include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
 namespace formulon {
 namespace wasm {
 namespace parts {
 
-uint32_t JsWorkbook::borderCount() const {
+JsNumberResult JsWorkbook::borderCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_border_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
+  const fm_status_t rc = fm_styles_get_border_count(handle_, &n);
+  return number_result(rc, static_cast<double>(n));
 }
 
-uint32_t JsWorkbook::fillCount() const {
+JsNumberResult JsWorkbook::fillCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_fill_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
+  const fm_status_t rc = fm_styles_get_fill_count(handle_, &n);
+  return number_result(rc, static_cast<double>(n));
 }
 
-uint32_t JsWorkbook::fontCount() const {
+JsNumberResult JsWorkbook::fontCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_font_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
+  const fm_status_t rc = fm_styles_get_font_count(handle_, &n);
+  return number_result(rc, static_cast<double>(n));
 }
 
-uint32_t JsWorkbook::xfCount() const {
+JsNumberResult JsWorkbook::xfCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_cell_xf_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
+  const fm_status_t rc = fm_styles_get_cell_xf_count(handle_, &n);
+  return number_result(rc, static_cast<double>(n));
 }
 
 }  // namespace parts

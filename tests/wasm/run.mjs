@@ -440,7 +440,7 @@ async function run() {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.isValid());
-      assert.equal(wb.sheetCount(), 1);
+      assert.equal(wb.sheetCount().value, 1);
       const nameRes = wb.sheetName(0);
       assert.ok(nameRes.status.ok);
       assert.equal(nameRes.value, 'Sheet1');
@@ -461,7 +461,7 @@ async function run() {
 
       // addSheet should grow sheetCount.
       assert.ok(wb.addSheet('Second').ok);
-      assert.equal(wb.sheetCount(), 2);
+      assert.equal(wb.sheetCount().value, 2);
     } finally {
       wb.delete();
     }
@@ -586,10 +586,10 @@ async function run() {
     const wb = Module.Workbook.createDefault();
     try {
       // Unpinned by default: the workbook follows the host clock.
-      assert.equal(wb.pinnedNow(), null);
+      assert.equal(wb.pinnedNow().now, null);
 
       assert.ok(wb.setPinnedNow(2026, 4, 23, 15, 30, 45).ok);
-      assert.deepEqual(wb.pinnedNow(), {
+      assert.deepEqual(wb.pinnedNow().now, {
         year: 2026,
         month: 4,
         day: 23,
@@ -610,7 +610,7 @@ async function run() {
       assert.equal(wb.setPinnedNow(2025, 2, 29, 0, 0, 0).ok, false);
 
       assert.ok(wb.clearPinnedNow().ok);
-      assert.equal(wb.pinnedNow(), null);
+      assert.equal(wb.pinnedNow().now, null);
     } finally {
       wb.delete();
     }
@@ -751,7 +751,7 @@ async function run() {
       const added = wb.addFont({ name: 'Meiryo', size: 12 });
       assert.ok(wb.setFont(added.index, { name: 'MS Gothic', size: 9 }).ok);
       assert.equal(wb.getFont(added.index).name, 'MS Gothic');
-      assert.equal(wb.setFont(wb.fontCount(), { name: 'MS Gothic', size: 9 }).ok, false);
+      assert.equal(wb.setFont(wb.fontCount().value, { name: 'MS Gothic', size: 9 }).ok, false);
     } finally {
       wb.delete();
     }
@@ -835,7 +835,7 @@ async function run() {
     const loaded = Module.Workbook.loadBytes(saved);
     try {
       assert.ok(loaded.isValid(), `load failed: ${Module.lastErrorMessage()}`);
-      assert.ok(loaded.sheetCount() >= 1);
+      assert.ok(loaded.sheetCount().value >= 1);
       assert.ok(loaded.recalc().ok);
       const a1 = loaded.getValue(0, 0, 0);
       assert.ok(a1.status.ok);
@@ -1081,7 +1081,7 @@ async function run() {
   test('renameSheet updates the sheet name', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.sheetCount(), 1);
+      assert.equal(wb.sheetCount().value, 1);
       assert.ok(wb.renameSheet(0, 'Renamed').ok);
       const r = wb.sheetName(0);
       assert.ok(r.status.ok);
@@ -1108,9 +1108,9 @@ async function run() {
       assert.ok(wb.addSheet('A').ok);
       assert.ok(wb.addSheet('B').ok);
       assert.ok(wb.addSheet('C').ok);
-      assert.equal(wb.sheetCount(), 3);
+      assert.equal(wb.sheetCount().value, 3);
       assert.ok(wb.removeSheet(1).ok);
-      assert.equal(wb.sheetCount(), 2);
+      assert.equal(wb.sheetCount().value, 2);
       assert.equal(wb.sheetName(0).value, 'A');
       assert.equal(wb.sheetName(1).value, 'C');
     } finally {
@@ -1146,22 +1146,22 @@ async function run() {
   test('setDefinedName adds, updates, and removes', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.definedNameCount(), 0);
+      assert.equal(wb.definedNameCount().value, 0);
       assert.ok(wb.setDefinedName('Pi', '=3.14').ok);
-      assert.equal(wb.definedNameCount(), 1);
+      assert.equal(wb.definedNameCount().value, 1);
       const a = wb.definedNameAt(0);
       assert.ok(a.status.ok);
       assert.equal(a.name, 'Pi');
       assert.equal(a.formula, '=3.14');
 
       assert.ok(wb.setDefinedName('PI', '=3.14159').ok);
-      assert.equal(wb.definedNameCount(), 1);
+      assert.equal(wb.definedNameCount().value, 1);
       const b = wb.definedNameAt(0);
       assert.equal(b.name, 'Pi'); // authored case preserved
       assert.equal(b.formula, '=3.14159');
 
       assert.ok(wb.setDefinedName('Pi', '').ok);
-      assert.equal(wb.definedNameCount(), 0);
+      assert.equal(wb.definedNameCount().value, 0);
     } finally {
       wb.delete();
     }
@@ -1175,7 +1175,7 @@ async function run() {
       assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok);
       assert.ok(wb.recalc().ok);
 
-      const count = wb.cellCount(0);
+      const count = wb.cellCount(0).value;
       assert.ok(count >= 3, `expected >=3 cells, got ${count}`);
 
       // The very first iteration entry should be A1 (row=0, col=0).
@@ -1209,7 +1209,7 @@ async function run() {
   test('pivotCount + pivotLayout expose PivotTable projection status', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.pivotCount(0), 0);
+      assert.equal(wb.pivotCount(0).value, 0);
 
       const missing = wb.pivotLayout(0, 0);
       assert.equal(missing.status.ok, false);
@@ -1228,8 +1228,8 @@ async function run() {
     const wb = Module.Workbook.loadBytes(buildPivotWorkbookBytes());
     try {
       assert.ok(wb.isValid(), Module.lastErrorMessage());
-      assert.equal(wb.pivotCount(0), 0);
-      assert.equal(wb.pivotCount(1), 1);
+      assert.equal(wb.pivotCount(0).value, 0);
+      assert.equal(wb.pivotCount(1).value, 1);
 
       const layout = wb.pivotLayout(1, 0);
       assert.ok(layout.status.ok, `status=${JSON.stringify(layout.status)}`);
@@ -1287,10 +1287,10 @@ async function run() {
       // a caller-appended record never lands on one of the slots Excel
       // reserves: one font, the `none` and `gray125` fills, one border,
       // one xf.
-      assert.equal(wb.fontCount(), 1);
-      assert.equal(wb.fillCount(), 2);
-      assert.equal(wb.borderCount(), 1);
-      assert.equal(wb.xfCount(), 1);
+      assert.equal(wb.fontCount().value, 1);
+      assert.equal(wb.fillCount().value, 2);
+      assert.equal(wb.borderCount().value, 1);
+      assert.equal(wb.xfCount().value, 1);
 
       const f1 = wb.addFont({
         name: 'Arial',
@@ -1316,7 +1316,7 @@ async function run() {
       });
       assert.ok(f1b.status.ok);
       assert.equal(f1b.index, f1.index);
-      assert.equal(wb.fontCount(), 2);
+      assert.equal(wb.fontCount().value, 2);
 
       const fill = wb.addFill({ pattern: 1, fgArgb: 0xffff0000, bgArgb: 0xff000000 });
       assert.ok(fill.status.ok);
@@ -1351,7 +1351,7 @@ async function run() {
         wrapText: true,
       });
       assert.ok(xf.status.ok, `addXf: ${JSON.stringify(xf.status)}`);
-      assert.ok(wb.xfCount() >= 1);
+      assert.ok(wb.xfCount().value >= 1);
 
       // Adding the same xf is a no-op.
       const xfDup = wb.addXf({
@@ -1629,12 +1629,12 @@ async function run() {
     try {
       const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
       assert.ok(added.status.ok);
-      const before = wb.fontCount();
+      const before = wb.fontCount().value;
       const readBack = wb.getFont(added.index);
       const again = wb.addFont(readBack);
       assert.ok(again.status.ok);
       assert.equal(again.index, added.index);
-      assert.equal(wb.fontCount(), before);
+      assert.equal(wb.fontCount().value, before);
     } finally {
       wb.delete();
     }
@@ -1665,11 +1665,11 @@ async function run() {
       assert.ok(added.status.ok);
       const readBack = wb.getDxf(added.index);
       assert.equal(readBack.font.vertAlign, 1);
-      const before = wb.dxfCount();
+      const before = wb.dxfCount().value;
       const again = wb.addDxf(readBack);
       assert.ok(again.status.ok);
       assert.equal(again.index, added.index);
-      assert.equal(wb.dxfCount(), before);
+      assert.equal(wb.dxfCount().value, before);
     } finally {
       wb.delete();
     }

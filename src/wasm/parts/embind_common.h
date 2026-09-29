@@ -153,6 +153,13 @@ struct JsStringResult {
   std::string value;
 };
 
+/// Result envelope for the numeric accessors (every `*Count`, `calcMode`).
+/// `value` stays zero on failure.
+struct JsNumberResult {
+  JsStatus status;
+  double value = 0.0;
+};
+
 /// JS-side mirror of `fm_cf_color_t`. Channels are 0-255 (sRGB); widened
 /// to signed int32 because embind serialises that more cleanly.
 struct JsCfColor {
@@ -278,6 +285,13 @@ JsStatus binding_error_status(int32_t code, const char* message);
 
 /// Bridges a `fm_status_t` into a `JsStatus` envelope.
 JsStatus status_from_rc(fm_status_t rc);
+
+/// Builds a `JsNumberResult` from `rc`, carrying `value` only on success.
+JsNumberResult number_result(fm_status_t rc, double value);
+
+/// Builds a `JsStringResult` from `rc`, carrying `value` only on success.
+/// A NULL `value` becomes the empty string.
+JsStringResult string_result(fm_status_t rc, const char* value);
 
 // ---- Guarded JS callback invocation -------------------------------------
 //

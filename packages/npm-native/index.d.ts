@@ -152,10 +152,20 @@ export const WorkbookFormat: Readonly<{
   Xlsb: 2;
 }>;
 
-/** Return type of `Workbook.sheetName(idx)`. */
-export interface StringResult {
+/** `{ status, value }` returned by the text accessors (`sheetName`,
+ *  `localizeFunctionName`, `excelProfileId`, ...). `value` is `""` on
+ *  failure. */
+export interface StringResult<T extends string = string> {
   status: Status;
-  value: string;
+  value: T;
+}
+
+/** `{ status, value }` returned by the numeric accessors (every `*Count`,
+ *  `calcMode`, ...). `value` is `0` on failure, so a zero count is only
+ *  meaningful when `status.ok` is true. */
+export interface NumberResult<T extends number = number> {
+  status: Status;
+  value: T;
 }
 
 /** Return type of `Workbook.cellAt(sheet, idx)`. */
@@ -499,6 +509,13 @@ export interface CivilTime {
   hour: number;
   minute: number;
   second: number;
+}
+
+/** Return type of `Workbook.pinnedNow()`. `now` is `null` when the workbook
+ *  follows the host clock, and on failure. */
+export interface PinnedNowResult {
+  status: Status;
+  now: CivilTime | null;
 }
 
 /** RGBA colour. Channels are 0-255 (sRGB). */
@@ -1451,8 +1468,10 @@ export interface MergedFunctionMetadataResult extends FunctionMetadataResult {
   readonly localizedName?: string;
 }
 
-/** Spill region info returned by `spillInfo(sheet, row, col)`. */
+/** Spill region info returned by `spillInfo(sheet, row, col)`. On failure
+ *  `engaged` is `false` and the other fields are zero. */
 export interface SpillInfo {
+  readonly status: Status;
   readonly engaged: boolean;
   readonly anchorRow: number;
   readonly anchorCol: number;
@@ -1686,11 +1705,12 @@ export interface Workbook {
   /** Workbook-level calc mode (Excel `<calcPr calcMode>` policy). The
    *  engine does NOT gate evaluation on this value — every `recalc()`
    *  honours all dirty cells. The mode is preserved as round-trip
-   *  metadata and surfaced here so the UI can mirror Excel's state. */
-  calcMode(): CalcMode;
+   *  metadata and surfaced here so the UI can mirror Excel's state.
+   *  `value` is one of the `CalcMode` codes. */
+  calcMode(): NumberResult<CalcMode>;
   setCalcMode(mode: CalcMode): Status;
-  /** The workbook's pinned wall-clock reading, or `null` when it follows
-   *  the host clock (the default).
+  /** The workbook's pinned wall-clock reading as `now`, or `now: null`
+   *  when it follows the host clock (the default).
    *
    *  Pinning gives `NOW()`, `TODAY()` and the pivot relative-period filters
    *  ("this month", "year to date", ...) one instant to agree on; without a
@@ -1702,7 +1722,7 @@ export interface Workbook {
    *  Model state, not file state: `save()` does not record it and a reloaded
    *  workbook comes back unpinned. Existing formula cells keep their cached
    *  values until the next `recalc()`. */
-  pinnedNow(): CivilTime | null;
+  pinnedNow(): PinnedNowResult;
   /** Pins the workbook clock. Returns `kInvalidArgument` unless `year` is in
    *  `[1900, 9999]`, `month` in `[1, 12]`, `day` within that month's real
    *  length, `hour` in `[0, 23]`, and `minute` / `second` in `[0, 59]` — the
@@ -1713,7 +1733,7 @@ export interface Workbook {
    *  nothing. */
   clearPinnedNow(): Status;
   /** Full formula-behaviour profile id. Defaults to `win-365-ja_JP`. */
-  excelProfileId(): ExcelProfileId;
+  excelProfileId(): StringResult<ExcelProfileId>;
   setExcelProfileId(profileId: ExcelProfileId): Status;
 
   // Sheet operations.
@@ -1722,7 +1742,7 @@ export interface Workbook {
   renameSheet(index: number, name: string): Status;
   /** Moves the sheet from `fromIdx` to `toIdx` (post-removal index). */
   moveSheet(fromIdx: number, toIdx: number): Status;
-  sheetCount(): number;
+  sheetCount(): NumberResult;
   sheetName(index: number): StringResult;
 
   // Row / column structural edits.
@@ -1760,22 +1780,22 @@ export interface Workbook {
   deleteCols(sheet: number, col: number, count: number): Status;
 
   // Iteration / metadata.
-  cellCount(sheet: number): number;
+  cellCount(sheet: number): NumberResult;
   cellAt(sheet: number, idx: number): CellEntry;
-  definedNameCount(): number;
+  definedNameCount(): NumberResult;
   definedNameAt(idx: number): DefinedNameEntry;
-  tableCount(): number;
+  tableCount(): NumberResult;
   tableAt(idx: number): TableEntry;
-  passthroughCount(): number;
+  passthroughCount(): NumberResult;
   passthroughAt(idx: number): PassthroughEntry;
   /** Returns the number of PivotTables anchored on `sheet`. */
-  pivotCount(sheet: number): number;
+  pivotCount(sheet: number): NumberResult;
   /** Evaluates and projects a PivotTable into concrete grid cells. */
   pivotLayout(sheet: number, pivotIndex: number): PivotLayoutResult;
 
   // ---- PivotCache mutation -----------------------------------------------
   /** Returns the number of pivot caches owned by the workbook. */
-  pivotCacheCount(): number;
+  pivotCacheCount(): NumberResult;
   /** Returns `{ status, index: cacheId }` for the cache at flat
    *  index `idx`. */
   pivotCacheIdAt(idx: number): AddStyleResult;
@@ -1791,7 +1811,7 @@ export interface Workbook {
   pivotCacheSetWorksheetSource(cacheId: number, source: PivotWorksheetSource): Status;
 
   /** Number of fields on the cache identified by `cacheId`. */
-  pivotCacheFieldCount(cacheId: number): number;
+  pivotCacheFieldCount(cacheId: number): NumberResult;
   /** Reads the name of the cache field at `fieldIdx`. */
   pivotCacheFieldName(cacheId: number, fieldIdx: number): StringResult;
   /** Appends a new field with the given UTF-8 name to the cache.
@@ -1801,7 +1821,7 @@ export interface Workbook {
   pivotCacheFieldClear(cacheId: number): Status;
 
   /** Number of shared items configured on cache field `fieldIdx`. */
-  pivotCacheFieldSharedItemCount(cacheId: number, fieldIdx: number): number;
+  pivotCacheFieldSharedItemCount(cacheId: number, fieldIdx: number): NumberResult;
   /** Appends a numeric shared item to cache field `fieldIdx`. */
   pivotCacheFieldAddSharedItemNumber(cacheId: number, fieldIdx: number, value: number): Status;
   /** Appends a text shared item to cache field `fieldIdx`. */
@@ -1816,7 +1836,7 @@ export interface Workbook {
   pivotCacheFieldClearSharedItems(cacheId: number, fieldIdx: number): Status;
 
   /** Returns the number of records on the cache. */
-  pivotCacheRecordCount(cacheId: number): number;
+  pivotCacheRecordCount(cacheId: number): NumberResult;
   /** Appends a new empty record. `index` carries the new record's index. */
   pivotCacheRecordAdd(cacheId: number): AddStyleResult;
   /** Drops every record from the cache. */
@@ -1857,7 +1877,7 @@ export interface Workbook {
   pivotSetLayout(sheet: number, pivotIdx: number, layout: number): Status;
 
   /** Number of fields configured on the pivot. */
-  pivotFieldCount(sheet: number, pivotIdx: number): number;
+  pivotFieldCount(sheet: number, pivotIdx: number): NumberResult;
   /** Appends a new field. Returns `{ status, index: fieldIdx }`. */
   pivotFieldAdd(sheet: number, pivotIdx: number, spec: PivotFieldSpec): AddStyleResult;
   /** Drops every field from the pivot. */
@@ -1925,7 +1945,7 @@ export interface Workbook {
   pivotSetColFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
 
   /** Number of `<dataField>` entries on the pivot. */
-  pivotDataFieldCount(sheet: number, pivotIdx: number): number;
+  pivotDataFieldCount(sheet: number, pivotIdx: number): NumberResult;
   /** Appends a new data-field entry. */
   pivotDataFieldAdd(sheet: number, pivotIdx: number, spec: PivotDataFieldSpec): AddStyleResult;
   /** Drops every data-field entry from the pivot. */
@@ -1935,7 +1955,7 @@ export interface Workbook {
 
   /** Number of active (slicer-applied) filters on the pivot. Counts only
    *  the entries this session added -- see {@link PivotFilterResult}. */
-  pivotFilterCount(sheet: number, pivotIdx: number): number;
+  pivotFilterCount(sheet: number, pivotIdx: number): NumberResult;
   /** Appends an active filter. The entry is session state and is not
    *  written by `save`; see {@link PivotFilterResult}. */
   pivotFilterAdd(sheet: number, pivotIdx: number, spec: PivotFilterSpec): Status;
@@ -2161,22 +2181,22 @@ export interface Workbook {
   addDxf(record: DxfRecord): AddStyleResult;
 
   /** Returns the number of font records currently registered. */
-  fontCount(): number;
+  fontCount(): NumberResult;
   /** Returns the number of fill records currently registered. */
-  fillCount(): number;
+  fillCount(): NumberResult;
   /** Returns the number of border records currently registered. */
-  borderCount(): number;
+  borderCount(): NumberResult;
   /** Returns the number of `<xf>` records currently registered. */
-  xfCount(): number;
+  xfCount(): NumberResult;
   /** Returns the number of `<dxf>` records available for CF `dxfId`. */
-  dxfCount(): number;
+  dxfCount(): NumberResult;
 
   // Named cell styles.
   /** Returns the number of named cell styles (`<cellStyle>` entries). */
-  cellStyleCount(): number;
+  cellStyleCount(): NumberResult;
   /** Returns the number of `<cellStyleXfs>` records — the named-style xf
    *  table referenced by `CellStyleResult.xfId`. */
-  cellStyleXfCount(): number;
+  cellStyleXfCount(): NumberResult;
   /** Returns the named cell style at `index`. Out-of-range indices
    *  surface `kInvalidArgument` via `status`. */
   getCellStyle(index: number): CellStyleResult;
@@ -2267,11 +2287,12 @@ export interface Workbook {
   // Dependency-graph trace.
   /** Returns the cells that `(sheet, row, col)` directly reads (1-step
    *  precedents) when `depth <= 1`, or every cell reached within `depth`
-   *  BFS steps otherwise. `depth` is capped at 32. */
-  precedents(sheet: number, row: number, col: number, depth: number): ReadonlyArray<CellNode>;
+   *  BFS steps otherwise. `depth` is capped at 32. An invalid sheet, row
+   *  or column yields an empty list with `status.ok === false`. */
+  precedents(sheet: number, row: number, col: number, depth: number): ListResult<CellNode>;
   /** Returns the cells that read `(sheet, row, col)` directly (1-step
    *  dependents). Same depth semantics as `precedents`. */
-  dependents(sheet: number, row: number, col: number, depth: number): ReadonlyArray<CellNode>;
+  dependents(sheet: number, row: number, col: number, depth: number): ListResult<CellNode>;
 
   // Function catalog.
   /** Returns metadata for the function `name` (case-insensitive). When
@@ -2280,15 +2301,16 @@ export interface Workbook {
   functionMetadata(name: string, locale: number): FunctionMetadataResult;
   /** Returns every registered function's canonical name in ascending
    *  sort order. */
-  functionNames(): ReadonlyArray<string>;
+  functionNames(): ListResult<string>;
   /** Returns the localized display name for the canonical function
-   *  `canonicalName` in `locale`. Returns the empty string when the
-   *  canonical name does not match a registered function. */
-  localizeFunctionName(canonicalName: string, locale: number): string;
+   *  `canonicalName` in `locale`. `value` is the empty string, with
+   *  `status.ok === false`, when the canonical name does not match a
+   *  registered function. */
+  localizeFunctionName(canonicalName: string, locale: number): StringResult;
   /** Inverse of `localizeFunctionName`: returns the canonical English
-   *  name for `localizedName`. Returns the empty string when no function
-   *  matches. */
-  canonicalizeFunctionName(localizedName: string, locale: number): string;
+   *  name for `localizedName`. `value` is the empty string, with
+   *  `status.ok === false`, when no function matches. */
+  canonicalizeFunctionName(localizedName: string, locale: number): StringResult;
 
   // External links.
   /** Returns every external-link record carried by the workbook in

@@ -445,13 +445,13 @@ emscripten::val JsWorkbook::getIterative() const {
   return o;
 }
 
-uint32_t JsWorkbook::calcMode() const {
+JsNumberResult JsWorkbook::calcMode() const {
   if (handle_ == nullptr) {
-    return static_cast<uint32_t>(FM_CALC_MODE_AUTO);
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
-  fm_workbook_calc_mode(handle_, &mode);
-  return static_cast<uint32_t>(mode);
+  const fm_status_t rc = fm_workbook_calc_mode(handle_, &mode);
+  return number_result(rc, static_cast<double>(mode));
 }
 
 JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
@@ -463,21 +463,27 @@ JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
 }
 
 emscripten::val JsWorkbook::pinnedNow() const {
+  emscripten::val out = emscripten::val::object();
+  out.set("now", emscripten::val::null());
   if (handle_ == nullptr) {
-    return emscripten::val::null();
+    out.set("status", error_status(kBindingInvalidHandle));
+    return out;
   }
   fm_civil_time_t now{};
   std::int32_t pinned = 0;
-  if (fm_workbook_pinned_now(handle_, &now, &pinned) != 0 || pinned == 0) {
-    return emscripten::val::null();
+  const fm_status_t rc = fm_workbook_pinned_now(handle_, &now, &pinned);
+  out.set("status", status_from_rc(rc));
+  if (rc != 0 || pinned == 0) {
+    return out;
   }
-  emscripten::val out = emscripten::val::object();
-  out.set("year", now.year);
-  out.set("month", now.month);
-  out.set("day", now.day);
-  out.set("hour", now.hour);
-  out.set("minute", now.minute);
-  out.set("second", now.second);
+  emscripten::val civil = emscripten::val::object();
+  civil.set("year", now.year);
+  civil.set("month", now.month);
+  civil.set("day", now.day);
+  civil.set("hour", now.hour);
+  civil.set("minute", now.minute);
+  civil.set("second", now.second);
+  out.set("now", civil);
   return out;
 }
 
@@ -502,13 +508,13 @@ JsStatus JsWorkbook::clearPinnedNow() {
   return status_from_rc(fm_workbook_clear_pinned_now(handle_));
 }
 
-std::string JsWorkbook::excelProfileId() const {
+JsStringResult JsWorkbook::excelProfileId() const {
   if (handle_ == nullptr) {
-    return "win-365-ja_JP";
+    return string_result(kBindingInvalidHandle, nullptr);
   }
   const char* id = nullptr;
-  fm_workbook_excel_profile_id(handle_, &id);
-  return id == nullptr ? std::string("win-365-ja_JP") : std::string(id);
+  const fm_status_t rc = fm_workbook_excel_profile_id(handle_, &id);
+  return string_result(rc, id);
 }
 
 JsStatus JsWorkbook::setExcelProfileId(const std::string& profile_id) {

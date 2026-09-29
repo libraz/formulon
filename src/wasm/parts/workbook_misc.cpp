@@ -21,24 +21,27 @@ namespace parts {
 // ---- Trace helpers -----------------------------------------------------
 //
 // Shared bridge for `precedents` / `dependents`: invokes the C ABI
-// entry point, copies the result into a JS array of {sheet, row, col}
-// value-objects, and frees the C-owned handle. Returns an empty array
-// on any error so the JS side does not need a separate failure path.
+// entry point, copies the result into a `ListResult` of {sheet, row, col}
+// value-objects, and frees the C-owned handle.
 
 emscripten::val JsWorkbook::trace_to_val(TraceFn fn, uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
+    arr.set("status", error_status(kBindingInvalidHandle));
     return arr;
   }
   fm_cell_nodes_t* nodes = nullptr;
-  if (fn(handle_, sheet, row, col, depth, &nodes) != 0) {
+  fm_status_t rc = fn(handle_, sheet, row, col, depth, &nodes);
+  if (rc != 0) {
+    arr.set("status", status_from_rc(rc));
     return arr;
   }
   const std::size_t count = fm_cell_nodes_count(nodes);
   for (std::size_t i = 0; i < count; ++i) {
     fm_cell_node_t n{};
-    if (fm_cell_nodes_at(nodes, i, &n) != 0) {
-      continue;
+    rc = fm_cell_nodes_at(nodes, i, &n);
+    if (rc != 0) {
+      break;
     }
     emscripten::val item = emscripten::val::object();
     item.set("sheet", n.sheet);
@@ -47,6 +50,7 @@ emscripten::val JsWorkbook::trace_to_val(TraceFn fn, uint32_t sheet, uint32_t ro
     arr.set(static_cast<uint32_t>(i), item);
   }
   fm_cell_nodes_destroy(nodes);
+  arr.set("status", status_from_rc(rc));
   return arr;
 }
 
@@ -91,31 +95,29 @@ emscripten::val JsWorkbook::functionMetadata(const std::string& name, uint32_t l
 emscripten::val JsWorkbook::functionNames() const {
   emscripten::val arr = emscripten::val::array();
   const std::size_t n = fm_function_count();
+  fm_status_t rc = 0;
   for (std::size_t i = 0; i < n; ++i) {
     const char* name = nullptr;
-    if (fm_function_name_at(i, &name) != 0 || name == nullptr) {
-      continue;
+    rc = fm_function_name_at(i, &name);
+    if (rc != 0) {
+      break;
     }
-    arr.set(static_cast<uint32_t>(i), std::string(name));
+    arr.set(static_cast<uint32_t>(i), std::string(name != nullptr ? name : ""));
   }
+  arr.set("status", status_from_rc(rc));
   return arr;
 }
 
-std::string JsWorkbook::localizeFunctionName(const std::string& canonical_name, uint32_t locale) const {
+JsStringResult JsWorkbook::localizeFunctionName(const std::string& canonical_name, uint32_t locale) const {
   const char* out = nullptr;
-  if (fm_function_localize(canonical_name.c_str(), static_cast<std::int32_t>(locale), &out) != 0 || out == nullptr) {
-    return std::string();
-  }
-  return std::string(out);
+  const fm_status_t rc = fm_function_localize(canonical_name.c_str(), static_cast<std::int32_t>(locale), &out);
+  return string_result(rc, out);
 }
 
-std::string JsWorkbook::canonicalizeFunctionName(const std::string& localized_name, uint32_t locale) const {
+JsStringResult JsWorkbook::canonicalizeFunctionName(const std::string& localized_name, uint32_t locale) const {
   const char* out = nullptr;
-  if (fm_function_canonicalize(localized_name.c_str(), static_cast<std::int32_t>(locale), &out) != 0 ||
-      out == nullptr) {
-    return std::string();
-  }
-  return std::string(out);
+  const fm_status_t rc = fm_function_canonicalize(localized_name.c_str(), static_cast<std::int32_t>(locale), &out);
+  return string_result(rc, out);
 }
 
 // ---- Spill info --------------------------------------------------------
@@ -128,10 +130,13 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
   item.set("rows", 0U);
   item.set("cols", 0U);
   if (handle_ == nullptr) {
+    item.set("status", error_status(kBindingInvalidHandle));
     return item;
   }
   fm_spill_info_t info{};
-  if (fm_workbook_spill_info(handle_, sheet, row, col, &info) != 0) {
+  const fm_status_t rc = fm_workbook_spill_info(handle_, sheet, row, col, &info);
+  item.set("status", status_from_rc(rc));
+  if (rc != 0) {
     return item;
   }
   item.set("engaged", info.engaged != 0);

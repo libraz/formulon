@@ -649,13 +649,11 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::DxfCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_dxf_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
+  const fm_status_t rc = fm_styles_get_dxf_count(handle_, &n);
+  return MakeNumberResult(env, rc, n);
 }
 
 // ---- Conditional formatting -----------------------------------------
@@ -726,25 +724,21 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::CellStyleCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_cell_style_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
+  const fm_status_t rc = fm_styles_get_cell_style_count(handle_, &n);
+  return MakeNumberResult(env, rc, n);
 }
 
 Napi::Value Workbook::CellStyleXfCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_cell_style_xf_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
+  const fm_status_t rc = fm_styles_get_cell_style_xf_count(handle_, &n);
+  return MakeNumberResult(env, rc, n);
 }
 
 Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {

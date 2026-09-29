@@ -15,33 +15,33 @@ namespace formulon_node {
 Napi::Value Workbook::DefinedNameCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  return Napi::Number::New(env, static_cast<double>(fm_workbook_defined_name_count(handle_)));
+  return MakeNumberResult(env, 0, static_cast<double>(fm_workbook_defined_name_count(handle_)));
 }
 
 Napi::Value Workbook::PassthroughCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  return Napi::Number::New(env, static_cast<double>(fm_workbook_passthrough_count(handle_)));
+  return MakeNumberResult(env, 0, static_cast<double>(fm_workbook_passthrough_count(handle_)));
 }
 
 Napi::Value Workbook::SheetCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  return Napi::Number::New(env, static_cast<double>(fm_workbook_sheet_count(handle_)));
+  return MakeNumberResult(env, 0, static_cast<double>(fm_workbook_sheet_count(handle_)));
 }
 
 Napi::Value Workbook::TableCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  return Napi::Number::New(env, static_cast<double>(fm_workbook_table_count(handle_)));
+  return MakeNumberResult(env, 0, static_cast<double>(fm_workbook_table_count(handle_)));
 }
 
 }  // namespace formulon_node

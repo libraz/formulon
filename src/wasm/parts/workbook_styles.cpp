@@ -536,40 +536,34 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
 // `fontCount` / `fillCount` / `borderCount` / `xfCount` are now emitted
 // by the binding codegen (see `src/wasm/generated/styles_counts.cpp`).
 
-uint32_t JsWorkbook::dxfCount() const {
+JsNumberResult JsWorkbook::dxfCount() const {
   if (handle_ == nullptr) {
-    return 0;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_dxf_count(handle_, &n) != 0) {
-    return 0;
-  }
-  return n;
+  const fm_status_t rc = fm_styles_get_dxf_count(handle_, &n);
+  return number_result(rc, static_cast<double>(n));
 }
 // `cellStyleCount` / `cellStyleXfCount` stay here because they have no
 // N-API counterpart and are therefore not part of the cross-binding
 // manifest.
 
-uint32_t JsWorkbook::cellStyleCount() const {
+JsNumberResult JsWorkbook::cellStyleCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_cell_style_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
+  const fm_status_t rc = fm_styles_get_cell_style_count(handle_, &n);
+  return number_result(rc, static_cast<double>(n));
 }
 
-uint32_t JsWorkbook::cellStyleXfCount() const {
+JsNumberResult JsWorkbook::cellStyleXfCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  if (fm_styles_get_cell_style_xf_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
+  const fm_status_t rc = fm_styles_get_cell_style_xf_count(handle_, &n);
+  return number_result(rc, static_cast<double>(n));
 }
 
 emscripten::val JsWorkbook::getCellStyle(uint32_t index) const {

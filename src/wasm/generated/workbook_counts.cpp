@@ -9,38 +9,39 @@
 #include <cstdint>
 
 #include "c_api/formulon_c.h"
+#include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
 namespace formulon {
 namespace wasm {
 namespace parts {
 
-uint32_t JsWorkbook::definedNameCount() const {
+JsNumberResult JsWorkbook::definedNameCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
-  return static_cast<uint32_t>(fm_workbook_defined_name_count(handle_));
+  return number_result(0, static_cast<double>(fm_workbook_defined_name_count(handle_)));
 }
 
-uint32_t JsWorkbook::passthroughCount() const {
+JsNumberResult JsWorkbook::passthroughCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
-  return static_cast<uint32_t>(fm_workbook_passthrough_count(handle_));
+  return number_result(0, static_cast<double>(fm_workbook_passthrough_count(handle_)));
 }
 
-uint32_t JsWorkbook::sheetCount() const {
+JsNumberResult JsWorkbook::sheetCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
-  return static_cast<uint32_t>(fm_workbook_sheet_count(handle_));
+  return number_result(0, static_cast<double>(fm_workbook_sheet_count(handle_)));
 }
 
-uint32_t JsWorkbook::tableCount() const {
+JsNumberResult JsWorkbook::tableCount() const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
-  return static_cast<uint32_t>(fm_workbook_table_count(handle_));
+  return number_result(0, static_cast<double>(fm_workbook_table_count(handle_)));
 }
 
 }  // namespace parts

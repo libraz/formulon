@@ -429,11 +429,11 @@ Napi::Value Workbook::GetLambdaText(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::CalcMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::Number::New(env, static_cast<int32_t>(FM_CALC_MODE_AUTO));
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
-  fm_workbook_calc_mode(handle_, &mode);
-  return Napi::Number::New(env, static_cast<int32_t>(mode));
+  const fm_status_t rc = fm_workbook_calc_mode(handle_, &mode);
+  return MakeNumberResult(env, rc, static_cast<int32_t>(mode));
 }
 
 Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
@@ -449,21 +449,22 @@ Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PinnedNow(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return env.Null();
+    return MakeFieldResult(env, NullHandleError(env), "now", env.Null());
   }
   fm_civil_time_t now{};
   std::int32_t pinned = 0;
-  if (fm_workbook_pinned_now(handle_, &now, &pinned) != 0 || pinned == 0) {
-    return env.Null();
+  const fm_status_t rc = fm_workbook_pinned_now(handle_, &now, &pinned);
+  if (rc != 0 || pinned == 0) {
+    return MakeFieldResult(env, MakeStatus(env, rc), "now", env.Null());
   }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("year", Napi::Number::New(env, now.year));
-  out.Set("month", Napi::Number::New(env, now.month));
-  out.Set("day", Napi::Number::New(env, now.day));
-  out.Set("hour", Napi::Number::New(env, now.hour));
-  out.Set("minute", Napi::Number::New(env, now.minute));
-  out.Set("second", Napi::Number::New(env, now.second));
-  return out;
+  Napi::Object civil = Napi::Object::New(env);
+  civil.Set("year", Napi::Number::New(env, now.year));
+  civil.Set("month", Napi::Number::New(env, now.month));
+  civil.Set("day", Napi::Number::New(env, now.day));
+  civil.Set("hour", Napi::Number::New(env, now.hour));
+  civil.Set("minute", Napi::Number::New(env, now.minute));
+  civil.Set("second", Napi::Number::New(env, now.second));
+  return MakeFieldResult(env, MakeOkStatus(env), "now", civil);
 }
 
 Napi::Value Workbook::SetPinnedNow(const Napi::CallbackInfo& info) {
@@ -492,11 +493,11 @@ Napi::Value Workbook::ClearPinnedNow(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::ExcelProfileId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return Napi::String::New(env, "win-365-ja_JP");
+    return MakeStringResult(env, kBindingInvalidHandle, nullptr);
   }
   const char* id = nullptr;
-  fm_workbook_excel_profile_id(handle_, &id);
-  return Napi::String::New(env, id != nullptr ? id : "win-365-ja_JP");
+  const fm_status_t rc = fm_workbook_excel_profile_id(handle_, &id);
+  return MakeStringResult(env, rc, id);
 }
 
 Napi::Value Workbook::SetExcelProfileId(const Napi::CallbackInfo& info) {

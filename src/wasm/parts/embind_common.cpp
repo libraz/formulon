@@ -52,6 +52,24 @@ JsStatus status_from_rc(fm_status_t rc) {
   return rc == 0 ? ok_status() : error_status(rc);
 }
 
+JsNumberResult number_result(fm_status_t rc, double value) {
+  JsNumberResult out;
+  out.status = status_from_rc(rc);
+  if (rc == 0) {
+    out.value = value;
+  }
+  return out;
+}
+
+JsStringResult string_result(fm_status_t rc, const char* value) {
+  JsStringResult out;
+  out.status = status_from_rc(rc);
+  if (rc == 0 && value != nullptr) {
+    out.value = value;
+  }
+  return out;
+}
+
 JsValue translate_value(const fm_value_t& v) {
   JsValue out;
   out.kind = static_cast<int32_t>(v.kind);

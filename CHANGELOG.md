@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the default build `recalcParallel` still succeeds but evaluates
   serially, reporting `workerThreadsStarted: 0`. A host that relies on
   parallel recalc imports `@libraz/formulon/threads` instead.
+- **Breaking (npm and native Node):** the `Workbook` accessors that used to
+  answer a rejected argument or a released handle with a plain zero, empty
+  string, `null` or default value now carry the call's `Status`, so a
+  failure no longer reads as a legitimate result. Every `*Count` accessor
+  and `calcMode()` return `NumberResult` (`{ status, value }`);
+  `excelProfileId()`, `localizeFunctionName()` and
+  `canonicalizeFunctionName()` return `StringResult`; `pinnedNow()` returns
+  `{ status, now }`; `precedents()`, `dependents()` and `functionNames()`
+  return `ListResult`; and `SpillInfo` gains `status`. Read `.value` (or
+  `.now`) where the bare value was used before. The Python binding already
+  raised `FormulonError` for these cases and is unchanged.
+- `getValue` / `get_value` rejects a row or column outside the sheet grid
+  with `kInvalidArgument` instead of reading it as a blank cell.
 
 ### Fixed
 

@@ -9,32 +9,29 @@
 #include <cstdint>
 
 #include "c_api/formulon_c.h"
+#include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
 namespace formulon {
 namespace wasm {
 namespace parts {
 
-uint32_t JsWorkbook::cellCount(uint32_t sheet) const {
+JsNumberResult JsWorkbook::cellCount(uint32_t sheet) const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   std::size_t count = 0;
-  if (fm_workbook_cell_count(handle_, sheet, &count) != 0) {
-    return 0U;
-  }
-  return static_cast<uint32_t>(count);
+  const fm_status_t rc = fm_workbook_cell_count(handle_, sheet, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
-uint32_t JsWorkbook::pivotCount(uint32_t sheet) const {
+JsNumberResult JsWorkbook::pivotCount(uint32_t sheet) const {
   if (handle_ == nullptr) {
-    return 0U;
+    return number_result(kBindingInvalidHandle, 0.0);
   }
   std::size_t count = 0;
-  if (fm_workbook_pivot_count(handle_, sheet, &count) != 0) {
-    return 0U;
-  }
-  return static_cast<uint32_t>(count);
+  const fm_status_t rc = fm_workbook_pivot_count(handle_, sheet, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
 }  // namespace parts

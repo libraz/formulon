@@ -15,27 +15,28 @@ namespace formulon_node {
 namespace {
 
 // Shared bridge for `precedents` / `dependents`: invokes the C ABI
-// entry point, copies the result into a JS array of {sheet, row, col}
-// objects, and frees the C-owned handle. Returns an empty array on any
-// error so the JS side needs no separate failure path.
+// entry point, copies the result into a `ListResult` of {sheet, row, col}
+// objects, and frees the C-owned handle.
 using TraceFn = fm_status_t (*)(const fm_workbook_t*, uint32_t, uint32_t, uint32_t, uint32_t, fm_cell_nodes_t**);
 
 Napi::Array TraceToArray(Napi::Env env, const fm_workbook_t* handle, TraceFn fn, uint32_t sheet, uint32_t row,
                          uint32_t col, uint32_t depth) {
   Napi::Array arr = Napi::Array::New(env);
   if (handle == nullptr) {
-    return arr;
+    return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   fm_cell_nodes_t* nodes = nullptr;
-  if (fn(handle, sheet, row, col, depth, &nodes) != 0) {
-    return arr;
+  fm_status_t rc = fn(handle, sheet, row, col, depth, &nodes);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
   }
   const std::size_t count = fm_cell_nodes_count(nodes);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_cell_node_t n{};
-    if (fm_cell_nodes_at(nodes, i, &n) != 0) {
-      continue;
+    rc = fm_cell_nodes_at(nodes, i, &n);
+    if (rc != 0) {
+      break;
     }
     Napi::Object item = Napi::Object::New(env);
     item.Set("sheet", Napi::Number::New(env, n.sheet));
@@ -45,7 +46,7 @@ Napi::Array TraceToArray(Napi::Env env, const fm_workbook_t* handle, TraceFn fn,
     ++emitted;
   }
   fm_cell_nodes_destroy(nodes);
-  return arr;
+  return FinishListResult(env, arr, rc);
 }
 
 }  // namespace
@@ -81,13 +82,16 @@ Napi::Value Workbook::SpillInfo(const Napi::CallbackInfo& info) {
   out.Set("rows", Napi::Number::New(env, 0));
   out.Set("cols", Napi::Number::New(env, 0));
   if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
     return out;
   }
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
   fm_spill_info_t spill{};
-  if (fm_workbook_spill_info(handle_, sheet, row, col, &spill) != 0) {
+  const fm_status_t rc = fm_workbook_spill_info(handle_, sheet, row, col, &spill);
+  out.Set("status", MakeStatus(env, rc));
+  if (rc != 0) {
     return out;
   }
   out.Set("engaged", Napi::Boolean::New(env, spill.engaged != 0));
@@ -168,16 +172,16 @@ Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   const std::size_t n = fm_function_count();
-  std::size_t emitted = 0;
+  fm_status_t rc = 0;
   for (std::size_t i = 0; i < n; ++i) {
     const char* name = nullptr;
-    if (fm_function_name_at(i, &name) != 0 || name == nullptr) {
-      continue;
+    rc = fm_function_name_at(i, &name);
+    if (rc != 0) {
+      break;
     }
-    arr.Set(static_cast<uint32_t>(emitted), Napi::String::New(env, name));
-    ++emitted;
+    arr.Set(static_cast<uint32_t>(i), Napi::String::New(env, name != nullptr ? name : ""));
   }
-  return arr;
+  return FinishListResult(env, arr, rc);
 }
 
 Napi::Value Workbook::LocalizeFunctionName(const Napi::CallbackInfo& info) {
@@ -185,10 +189,8 @@ Napi::Value Workbook::LocalizeFunctionName(const Napi::CallbackInfo& info) {
   const std::string canonical = ArgString(info, 0);
   const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
   const char* out = nullptr;
-  if (fm_function_localize(canonical.c_str(), locale, &out) != 0 || out == nullptr) {
-    return Napi::String::New(env, "");
-  }
-  return Napi::String::New(env, out);
+  const fm_status_t rc = fm_function_localize(canonical.c_str(), locale, &out);
+  return MakeStringResult(env, rc, out);
 }
 
 Napi::Value Workbook::CanonicalizeFunctionName(const Napi::CallbackInfo& info) {
@@ -196,10 +198,8 @@ Napi::Value Workbook::CanonicalizeFunctionName(const Napi::CallbackInfo& info) {
   const std::string localized = ArgString(info, 0);
   const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
   const char* out = nullptr;
-  if (fm_function_canonicalize(localized.c_str(), locale, &out) != 0 || out == nullptr) {
-    return Napi::String::New(env, "");
-  }
-  return Napi::String::New(env, out);
+  const fm_status_t rc = fm_function_canonicalize(localized.c_str(), locale, &out);
+  return MakeStringResult(env, rc, out);
 }
 
 }  // namespace formulon_node

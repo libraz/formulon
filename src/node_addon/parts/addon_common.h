@@ -123,6 +123,14 @@ Napi::Object MakeNumberFieldResult(Napi::Env env, Napi::Object status, const cha
 /// Builds `{ status, <field>: string }`. NULL `value` becomes "".
 Napi::Object MakeStringFieldResult(Napi::Env env, Napi::Object status, const char* field, const char* value);
 
+/// Builds the `{ status, value }` NumberResult from `code`; `value` is
+/// carried only on success and reads 0 otherwise.
+Napi::Object MakeNumberResult(Napi::Env env, fm_status_t code, double value);
+
+/// Builds the `{ status, value }` StringResult from `code`; `value` is
+/// carried only on success and reads "" otherwise (as does a NULL `value`).
+Napi::Object MakeStringResult(Napi::Env env, fm_status_t code, const char* value);
+
 /// Builds `{ status, value: TranslateValue(value) }`.
 Napi::Object MakeValueResult(Napi::Env env, Napi::Object status, const fm_value_t& value);
 
