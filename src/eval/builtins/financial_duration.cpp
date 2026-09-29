@@ -46,7 +46,7 @@ namespace {
 // Computes Macaulay duration with face = 1. Returns `#NUM!` on any
 // validation or numerical failure. The caller (DURATION) returns this
 // value directly; MDURATION divides it by `(1 + yld/frequency)`.
-Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t arity) {
+Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t arity, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
@@ -88,7 +88,7 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
   }
 
   CouponDates cd{};
-  if (!compute_coupon_dates(settlement.value(), maturity.value(), frequency, basis, &cd)) {
+  if (!compute_coupon_dates(settlement.value(), maturity.value(), frequency, basis, date1904, &cd)) {
     return ErrorCode::Num;
   }
   if (cd.coupons_remaining <= 0 || cd.period_days <= 0.0) {
@@ -132,8 +132,8 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
 // --- DURATION(settlement, maturity, coupon, yld, frequency, [basis=0]) -
 //
 // Macaulay duration in years.
-Value Duration(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto d = compute_macaulay(args, arity);
+Value Duration(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto d = compute_macaulay(args, arity, date1904);
   if (!d) {
     return Value::error(d.error());
   }
@@ -147,8 +147,8 @@ Value Duration(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // argument coercions are idempotent (any error inside an arg has already
 // been short-circuited by the dispatcher's `propagate_errors = true`
 // path).
-Value MDuration(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto d = compute_macaulay(args, arity);
+Value MDuration(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto d = compute_macaulay(args, arity, date1904);
   if (!d) {
     return Value::error(d.error());
   }

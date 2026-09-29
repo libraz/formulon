@@ -7,27 +7,27 @@
 // `compute_coupon_dates` engine in `eval/coupon_schedule.h`. Each
 // builtin only reads the relevant sub-field of the resulting
 // `CouponDates` struct.
+//
+// All six decompose a date serial via `compute_coupon_dates`, which needs
+// the calling workbook's date1904 flag -- unreachable through the eager
+// `FunctionDef` calling convention, so these are registered through the
+// lazy financial-date dispatch table (`eval/financial_lazy.h`) instead of
+// `register_builtin_functions`. Each impl takes a trailing `date1904`.
 
 #include "eval/builtins/financial_coupon.h"
 
 #include <cstdint>
 
 #include "eval/builtins/financial_helpers.h"
-#include "eval/builtins/registration_helpers.h"
 #include "eval/coupon_schedule.h"
-#include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
+namespace financial_detail {
 namespace {
-
-using financial_detail::finalize;
-using financial_detail::read_coupon_frequency;
-using financial_detail::read_day_count_basis;
-using financial_detail::read_financial_date;
 
 // Shared argument-validation helper for the COUP* family. Truncates
 // settlement / maturity to integer serials, validates the frequency
@@ -35,7 +35,7 @@ using financial_detail::read_financial_date;
 // coupon-schedule engine. On success the caller receives a populated
 // `CouponDates`; on any validation failure a `#NUM!` error is
 // returned for the caller to forward to Excel.
-Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t arity) {
+Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t arity, bool date1904) {
   auto s_e = read_financial_date(args, 0);
   if (!s_e) {
     return s_e.error();
@@ -63,17 +63,19 @@ Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t
   const int basis = b_e.value();
 
   CouponDates out{};
-  if (!compute_coupon_dates(s, m, frequency, basis, &out)) {
+  if (!compute_coupon_dates(s, m, frequency, basis, date1904, &out)) {
     return ErrorCode::Num;
   }
   return out;
 }
 
+}  // namespace
+
 // --- COUPPCD(settlement, maturity, frequency, [basis=0]) ---------------
 //
 // Excel serial of the previous coupon date on or before settlement.
-Value CoupPcd(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto ctx = resolve_coupon(args, arity);
+Value CoupPcd(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto ctx = resolve_coupon(args, arity, date1904);
   if (!ctx) {
     return Value::error(ctx.error());
   }
@@ -83,8 +85,8 @@ Value CoupPcd(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // --- COUPNCD(settlement, maturity, frequency, [basis=0]) ---------------
 //
 // Excel serial of the next coupon date strictly after settlement.
-Value CoupNcd(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto ctx = resolve_coupon(args, arity);
+Value CoupNcd(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto ctx = resolve_coupon(args, arity, date1904);
   if (!ctx) {
     return Value::error(ctx.error());
   }
@@ -96,8 +98,8 @@ Value CoupNcd(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Number of coupon dates strictly after settlement and up to (and
 // including) maturity. The shared engine already tracks this across
 // its backward walk, so the builtin just returns that counter.
-Value CoupNum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto ctx = resolve_coupon(args, arity);
+Value CoupNum(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto ctx = resolve_coupon(args, arity, date1904);
   if (!ctx) {
     return Value::error(ctx.error());
   }
@@ -108,8 +110,8 @@ Value CoupNum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //
 // Basis-adjusted days from the start of the current coupon period
 // (PCD) to settlement.
-Value CoupDayBs(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto ctx = resolve_coupon(args, arity);
+Value CoupDayBs(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto ctx = resolve_coupon(args, arity, date1904);
   if (!ctx) {
     return Value::error(ctx.error());
   }
@@ -119,8 +121,8 @@ Value CoupDayBs(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // --- COUPDAYSNC(settlement, maturity, frequency, [basis=0]) ------------
 //
 // Basis-adjusted days from settlement to the next coupon date (NCD).
-Value CoupDaysNc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto ctx = resolve_coupon(args, arity);
+Value CoupDaysNc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto ctx = resolve_coupon(args, arity, date1904);
   if (!ctx) {
     return Value::error(ctx.error());
   }
@@ -133,25 +135,14 @@ Value CoupDaysNc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // settlement. For the 30/360 bases and basis 2/3 this is a fixed
 // `360 / freq` or `365 / freq`; for basis 1 (actual/actual) it is the
 // raw NCD - PCD gap in days (an integer).
-Value CoupDays(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto ctx = resolve_coupon(args, arity);
+Value CoupDays(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto ctx = resolve_coupon(args, arity, date1904);
   if (!ctx) {
     return Value::error(ctx.error());
   }
   return finalize(ctx.value().period_days);
 }
 
-}  // namespace
-
-void register_financial_coupon_builtins(FunctionRegistry& registry) {
-  // All six: 3 required + 1 optional basis = min 3, max 4. Eager
-  // scalar, no range support.
-  static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"COUPPCD", 3u, 4u, &CoupPcd},     {"COUPNCD", 3u, 4u, &CoupNcd},       {"COUPNUM", 3u, 4u, &CoupNum},
-      {"COUPDAYBS", 3u, 4u, &CoupDayBs}, {"COUPDAYSNC", 3u, 4u, &CoupDaysNc}, {"COUPDAYS", 3u, 4u, &CoupDays},
-  };
-  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
-}
-
+}  // namespace financial_detail
 }  // namespace eval
 }  // namespace formulon

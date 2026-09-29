@@ -55,10 +55,10 @@ using date_time::days_in_month;
 // target month's last day when shorter. Matches the COUP* engine's
 // month-end-preservation rule: if last_interest is Aug-31 and we step
 // three months forward, we land on Nov-30 (Nov has only 30 days).
-double quasi_serial(int y, unsigned m, unsigned anchor_day) noexcept {
+double quasi_serial(int y, unsigned m, unsigned anchor_day, bool date1904) noexcept {
   const unsigned last = days_in_month(y, m);
   const unsigned d = anchor_day > last ? last : anchor_day;
-  return date_time::serial_from_ymd(y, m, d);
+  return date_time::serial_from_ymd(y, m, d, date1904);
 }
 
 // Shifts (y, m) forward by `months` (always positive). Uses
@@ -92,7 +92,7 @@ void shift_months_forward(int& y, unsigned& m, int months) noexcept {
 //     becomes inconsistent with the actual day counts, producing
 //     observable price drift versus Mac Excel for any coupon period
 //     whose actual length is not exactly 360/freq or 365/freq.)
-double normal_period_days(int basis, int frequency, double last_interest) noexcept {
+double normal_period_days(int basis, int frequency, double last_interest, bool date1904) noexcept {
   switch (basis) {
     case 0:
     case 4:
@@ -102,11 +102,11 @@ double normal_period_days(int basis, int frequency, double last_interest) noexce
     case 3: {
       // Actual length of the first quasi-period from `last_interest`
       // forward by `12/freq` months.
-      const date_time::YMD li = date_time::ymd_from_serial(last_interest);
+      const date_time::YMD li = date_time::ymd_from_serial(last_interest, date1904);
       int y = li.y;
       unsigned m = li.m;
       shift_months_forward(y, m, 12 / frequency);
-      const double q2 = quasi_serial(y, m, li.d);
+      const double q2 = quasi_serial(y, m, li.d, date1904);
       return q2 - last_interest;
     }
     default:
@@ -117,7 +117,7 @@ double normal_period_days(int basis, int frequency, double last_interest) noexce
 }  // namespace
 
 Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement, double maturity, double last_interest,
-                                                               int frequency, int basis) noexcept {
+                                                               int frequency, int basis, bool date1904) noexcept {
   const double s = std::trunc(settlement);
   const double m = std::trunc(maturity);
   const double li = std::trunc(last_interest);
@@ -131,9 +131,9 @@ Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement
   // for bases 0 / 4. For bases 1 / 2 / 3 the call returns the raw
   // serial difference (actual days), which agrees with Excel's
   // documented A / DC / DSC for those bases.
-  const double dc_total_raw = basis_days_between(li, m, basis);
-  const double a_total_raw = basis_days_between(li, s, basis);
-  const double dsc_raw = basis_days_between(s, m, basis);
+  const double dc_total_raw = basis_days_between(li, m, basis, date1904);
+  const double a_total_raw = basis_days_between(li, s, basis, date1904);
+  const double dsc_raw = basis_days_between(s, m, basis, date1904);
 
   // Round to integer days to match the COUP* engine's output style
   // (Excel reports COUPDAYBS / COUPDAYSNC / COUPDAYS as integers; the
@@ -144,7 +144,7 @@ Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement
   out.dc_total = std::round(dc_total_raw);
   out.a_total = std::round(a_total_raw);
   out.dsc = std::round(dsc_raw);
-  out.e = normal_period_days(basis, frequency, li);
+  out.e = normal_period_days(basis, frequency, li, date1904);
 
   if (std::isnan(out.dc_total) || std::isnan(out.a_total) || std::isnan(out.dsc) || std::isnan(out.e)) {
     return ErrorCode::Num;
@@ -156,7 +156,7 @@ Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement
 }
 
 Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::uint32_t arity,
-                                                        bool slot4_must_be_positive) {
+                                                        bool slot4_must_be_positive, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
@@ -212,7 +212,8 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
     return ErrorCode::Num;
   }
 
-  auto sched = compute_odd_last_schedule(settlement.value(), maturity.value(), last_interest.value(), frequency, basis);
+  auto sched = compute_odd_last_schedule(settlement.value(), maturity.value(), last_interest.value(), frequency, basis,
+                                         date1904);
   if (!sched) {
     return sched.error();
   }
@@ -229,8 +230,8 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
   return out;
 }
 
-Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uint32_t arity) {
-  auto in = read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/false);
+Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
+  auto in = read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/false, date1904);
   if (!in) {
     return in.error();
   }
@@ -251,8 +252,8 @@ Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uin
 // Clean price per 100 face for a security whose final coupon period is
 // irregular (the bond pays periodic coupons up to `last_interest` and a
 // single irregular coupon + redemption at `maturity`).
-Value OddlPrice(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto p = compute_oddl_clean_price(args, arity);
+Value OddlPrice(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto p = compute_oddl_clean_price(args, arity, date1904);
   if (!p) {
     return Value::error(p.error());
   }

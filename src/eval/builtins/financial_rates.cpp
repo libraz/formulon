@@ -50,8 +50,8 @@ struct TBillArgs {
 // the YEARFRAC builtin. Returns `#NUM!` for an unsupported basis (or if
 // the helper would yield a non-finite / zero value — the latter would
 // otherwise divide to infinity in the callers).
-Expected<double, ErrorCode> positive_yearfrac(double settlement, double maturity, int basis) {
-  auto yf = yearfrac_for_basis(settlement, maturity, basis);
+Expected<double, ErrorCode> positive_yearfrac(double settlement, double maturity, int basis, bool date1904) {
+  auto yf = yearfrac_for_basis(settlement, maturity, basis, date1904);
   if (!yf) {
     return yf.error();
   }
@@ -92,7 +92,7 @@ bool has_direct_bool_tbill_arg(const Value* args) {
   return args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool || args[2].kind() == ValueKind::Bool;
 }
 
-Expected<double, ErrorCode> t_bill_dsm(double settlement, double maturity) {
+Expected<double, ErrorCode> t_bill_dsm(double settlement, double maturity, bool date1904) {
   const double dsm = maturity - settlement;
   if (dsm <= 0.0) {
     return ErrorCode::Num;
@@ -101,15 +101,15 @@ Expected<double, ErrorCode> t_bill_dsm(double settlement, double maturity) {
   // year" anniversary of settlement, regardless of raw day count. This
   // matches Excel 365 (and is stricter than the naive `dsm > 366` rule,
   // which accepted 366-day spans that actually cross the anniversary).
-  const auto s_ymd = date_time::ymd_from_serial(std::floor(settlement));
-  const double anniversary = date_time::serial_from_ymd(s_ymd.y + 1, s_ymd.m, s_ymd.d);
+  const auto s_ymd = date_time::ymd_from_serial(std::floor(settlement), date1904);
+  const double anniversary = date_time::serial_from_ymd(s_ymd.y + 1, s_ymd.m, s_ymd.d, date1904);
   if (std::floor(maturity) > anniversary) {
     return ErrorCode::Num;
   }
   return dsm;
 }
 
-Expected<TBillArgs, ErrorCode> read_tbill_args(const Value* args) {
+Expected<TBillArgs, ErrorCode> read_tbill_args(const Value* args, bool date1904) {
   // Excel-quirk: T-Bill functions reject a direct Bool for settlement,
   // maturity, or the numeric rate/price argument with `#VALUE!` rather
   // than coercing TRUE/FALSE to 1/0. See the DEC2BIN precedent in
@@ -129,7 +129,7 @@ Expected<TBillArgs, ErrorCode> read_tbill_args(const Value* args) {
   if (!value) {
     return value.error();
   }
-  auto dsm = t_bill_dsm(settlement.value(), maturity.value());
+  auto dsm = t_bill_dsm(settlement.value(), maturity.value(), date1904);
   if (!dsm) {
     return dsm.error();
   }
@@ -148,7 +148,7 @@ Expected<TBillArgs, ErrorCode> read_tbill_args(const Value* args) {
 //   - settlement >= maturity  ->  #NUM!
 //   - pr <= 0 or redemption <= 0  ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}  ->  #NUM!
-Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto parsed = read_security_rate_args(args, arity);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -157,7 +157,7 @@ Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (pr <= 0.0 || redemption <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto yf = positive_yearfrac(settlement, maturity, basis);
+  auto yf = positive_yearfrac(settlement, maturity, basis, date1904);
   if (!yf) {
     return Value::error(yf.error());
   }
@@ -175,7 +175,7 @@ Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - settlement >= maturity  ->  #NUM!
 //   - investment <= 0 or redemption <= 0  ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}  ->  #NUM!
-Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto parsed = read_security_rate_args(args, arity);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -184,7 +184,7 @@ Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (investment <= 0.0 || redemption <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto yf = positive_yearfrac(settlement, maturity, basis);
+  auto yf = positive_yearfrac(settlement, maturity, basis, date1904);
   if (!yf) {
     return Value::error(yf.error());
   }
@@ -203,7 +203,7 @@ Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - investment <= 0 or discount <= 0  ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}  ->  #NUM!
 //   - 1 - discount*yearfrac == 0 (or negative)  ->  #NUM!
-Value Received(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value Received(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto parsed = read_security_rate_args(args, arity);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -212,7 +212,7 @@ Value Received(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (investment <= 0.0 || disc_rate <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto yf = positive_yearfrac(settlement, maturity, basis);
+  auto yf = positive_yearfrac(settlement, maturity, basis, date1904);
   if (!yf) {
     return Value::error(yf.error());
   }
@@ -241,8 +241,8 @@ Value Received(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //     e.g. 1902-09-26 -> 1903-09-27 is rejected even though DSM = 366.)
 //   - discount <= 0                 ->  #NUM!
 //   - result <= 0 (discount * DSM/360 >= 1)  ->  #NUM!
-Value TBillPrice(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_tbill_args(args);
+Value TBillPrice(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
+  auto parsed = read_tbill_args(args, date1904);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -269,8 +269,8 @@ Value TBillPrice(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //   - maturity > settlement + 1 calendar year  ->  #NUM!
 //     (same anniversary rule as TBILLPRICE).
 //   - pr <= 0                      ->  #NUM!
-Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_tbill_args(args);
+Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
+  auto parsed = read_tbill_args(args, date1904);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -305,8 +305,8 @@ Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //   - maturity > settlement + 1 calendar year  ->  #NUM!
 //     (same anniversary rule as TBILLPRICE / TBILLYIELD).
 //   - discount <= 0                ->  #NUM!
-Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_tbill_args(args);
+Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
+  auto parsed = read_tbill_args(args, date1904);
   if (!parsed) {
     return Value::error(parsed.error());
   }

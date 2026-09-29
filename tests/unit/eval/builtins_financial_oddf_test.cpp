@@ -10,11 +10,13 @@
 #include <string>
 #include <string_view>
 
+#include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "test_eval_helpers.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -25,6 +27,40 @@ namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+
+// Evaluates `src` under the 1904 date system. See
+// `builtins_financial_coupon_test.cpp` / `builtins_datetime_test.cpp` for
+// the same helper.
+Value EvalSource1904(std::string_view src) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), test::mac_context().with_date1904(true));
+}
+
+// ---------------------------------------------------------------------------
+// date1904 threading
+// ---------------------------------------------------------------------------
+
+TEST(FinancialOddf1904, OddfPriceAgreesWithThe1900EquivalentCalendarDate) {
+  // Exercises the odd-first schedule walker's own `ymd_from_serial` /
+  // `serial_from_ymd` decompositions (`compute_odd_first_schedule`), a
+  // hand-replicated walker separate from `coupon_schedule.cpp`'s.
+  const Value v1900 = EvalSource(
+      "=ODDFPRICE(DATE(2008,11,11), DATE(2021,3,1), DATE(2008,10,15), DATE(2009,3,1), 0.0785, 0.0625, 100, 2, 1)");
+  const Value v1904 = EvalSource1904(
+      "=ODDFPRICE(DATE(2008,11,11), DATE(2021,3,1), DATE(2008,10,15), DATE(2009,3,1), 0.0785, 0.0625, 100, 2, 1)");
+  ASSERT_TRUE(v1900.is_number());
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_NEAR(v1900.as_number(), v1904.as_number(), 1e-9);
+}
 
 // ---------------------------------------------------------------------------
 // ODDFPRICE -- canonical Microsoft documented case.
@@ -434,6 +470,18 @@ TEST(FinancialOddf, OddfYieldNegativePriceIsNum) {
 TEST(FinancialOddf, OddfYieldZeroRedemptionIsNum) {
   const Value v = EvalSource(
       "=ODDFYIELD(DATE(2008,11,11), DATE(2021,3,1), DATE(2008,10,15), DATE(2009,3,1), 0.0785, 113.5, 0, 2, 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialOddf, OddfYieldUnreachablePriceIsNum) {
+  // ODDFYIELD shares `solve_yield_by_newton` with YIELD (see
+  // FinancialYield.UnreachablePriceIsNum). No non-negative yield can reach
+  // a price this far above the bond's theoretical yld=0 ceiling, so the
+  // solver must surface #NUM! instead of the boundary-clamped 0 it used to
+  // return once its step underflowed there.
+  const Value v = EvalSource(
+      "=ODDFYIELD(DATE(2008,11,11), DATE(2021,3,1), DATE(2008,10,15), DATE(2009,3,1), 0.0785, 100000, 100, 2, 1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }

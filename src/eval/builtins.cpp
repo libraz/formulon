@@ -7,6 +7,13 @@
 //
 // `IF`, `IFERROR`, and `IFNA` are intentionally absent: they short-circuit
 // and are special-cased in the tree walker before the registry is consulted.
+// The date1904-sensitive calendar family (DATE / YEAR / ... / TEXT) and the
+// financial functions that decompose a date serial (COUPPCD..COUPDAYS,
+// ACCRINT[M], DISC/INTRATE/RECEIVED/TBILL*, PRICE*/YIELD*, DURATION/
+// MDURATION, ODDF*/ODDL*, AMORDEGRC/AMORLINC) are also absent: the eager
+// calling convention here cannot carry `EvalContext::date1904()`, so they
+// route through the lazy dispatch table instead (`eval/datetime_lazy.h`,
+// `eval/financial_lazy.h`).
 
 #include "eval/builtins.h"
 
@@ -20,7 +27,6 @@
 #include "eval/builtins/engineering_convert.h"
 #include "eval/builtins/engineering_special.h"
 #include "eval/builtins/financial.h"
-#include "eval/builtins/financial_coupon.h"
 #include "eval/builtins/info.h"
 #include "eval/builtins/logical.h"
 #include "eval/builtins/math.h"
@@ -58,7 +64,6 @@ void register_builtins(FunctionRegistry& registry) {
   register_datetime_builtins(registry);
   register_dynamic_array_builtins(registry);
   register_financial_builtins(registry);
-  register_financial_coupon_builtins(registry);
   register_distribution_builtins(registry);
   register_engineering_builtins(registry);
   register_engineering_convert_builtins(registry);

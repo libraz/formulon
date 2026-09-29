@@ -52,7 +52,7 @@ namespace financial_detail {
 // `Price` so YIELD (Newton iteration over yld in `financial_yield.cpp`)
 // can call the same closed form without re-parsing arguments. Declared in
 // `financial_clean_price.h` so the YIELD TU can include only that header.
-Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity) {
+Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
@@ -101,7 +101,7 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
   }
 
   CouponDates cd{};
-  if (!compute_coupon_dates(settlement.value(), maturity.value(), frequency, basis, &cd)) {
+  if (!compute_coupon_dates(settlement.value(), maturity.value(), frequency, basis, date1904, &cd)) {
     return ErrorCode::Num;
   }
   if (cd.coupons_remaining <= 0 || cd.period_days <= 0.0) {
@@ -157,8 +157,8 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
 //           [basis=0]) -----------------------------------------------------
 //
 // Clean price per 100 face for a security paying periodic interest.
-Value Price(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto p = compute_clean_price(args, arity);
+Value Price(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto p = compute_clean_price(args, arity, date1904);
   if (!p) {
     return Value::error(p.error());
   }

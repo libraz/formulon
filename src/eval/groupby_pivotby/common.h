@@ -175,6 +175,15 @@ const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t valu
 Value invoke_aggregator_for_group(const AggregatorRef& agg, const ArrayValue* slice, Arena& arena,
                                   const FunctionRegistry& registry, const EvalContext& ctx);
 
+/// Invokes a registry-backed function (Form C: a bare function name used as
+/// a callable) over one array slice, flattening its cells into the argument
+/// list `def->impl` expects. Row- and column-shaped slices with the same
+/// cells produce the same result. Shared with BYROW / BYCOL's callable
+/// resolution (`eval/lambda_helpers_lazy.cpp`), which needs the identical
+/// "bare function name applied to one row/column" invocation GROUPBY / PIVOTBY
+/// already implement for their own Form C aggregator.
+Value invoke_registry_function_over_slice(const FunctionDef* def, const ArrayValue* slice, Arena& arena);
+
 /// Aggregates each value column over the given row indices.
 std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32_t val_cols,
                                            const std::vector<std::uint32_t>& row_indices, const AggregatorRef& agg,

@@ -14,7 +14,13 @@
 //
 // IRR is intentionally absent — it needs the un-flattened AST of its
 // values argument to walk range/Ref/ArrayLiteral shapes, so it lives on
-// the lazy-dispatch seam in `eval/financial_lazy.cpp`.
+// the lazy-dispatch seam in `eval/financial_lazy.cpp`. The date1904-
+// sensitive bond family (AMORDEGRC/AMORLINC, ACCRINT/ACCRINTM, DISC/
+// INTRATE/RECEIVED/TBILL*, PRICE*/YIELD*, DURATION/MDURATION, ODDF*/
+// ODDL*, and COUPPCD..COUPDAYS) is absent for the same reason `IRR` is:
+// the eager calling convention here cannot carry
+// `EvalContext::date1904()`, so those route through the lazy dispatch
+// table too (`eval/financial_lazy.h`'s `find_financial_date_entry`).
 
 #include "eval/builtins/financial.h"
 
@@ -23,14 +29,7 @@
 #include <utility>
 
 #include "eval/builtins/financial_bond_simple.h"
-#include "eval/builtins/financial_duration.h"
 #include "eval/builtins/financial_helpers.h"
-#include "eval/builtins/financial_oddfprice.h"
-#include "eval/builtins/financial_oddfyield.h"
-#include "eval/builtins/financial_oddlprice.h"
-#include "eval/builtins/financial_oddlyield.h"
-#include "eval/builtins/financial_price.h"
-#include "eval/builtins/financial_yield.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -667,6 +666,13 @@ Value Cumprinc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }  // namespace
 
 void register_financial_builtins(FunctionRegistry& registry) {
+  // AMORDEGRC / AMORLINC, ACCRINT / ACCRINTM, DISC / INTRATE / RECEIVED /
+  // TBILL*, PRICE* / YIELD* (regular, discount, maturity, and odd-period
+  // variants), and DURATION / MDURATION are NOT registered here: they
+  // decompose a date serial and so need the workbook's
+  // `EvalContext::date1904()`, unreachable through this eager calling
+  // convention. They route through the lazy dispatch table instead (see
+  // `eval/financial_lazy.h`'s `find_financial_date_entry`).
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"PV", 3u, 5u, &Pv},
       {"FV", 3u, 5u, &Fv},
@@ -683,10 +689,6 @@ void register_financial_builtins(FunctionRegistry& registry) {
       {"DDB", 4u, 5u, &financial_detail::Ddb},
       {"DB", 4u, 5u, &financial_detail::Db},
       {"VDB", 5u, 7u, &financial_detail::Vdb},
-      {"AMORDEGRC", 6u, 7u, &financial_detail::Amordegrc},
-      {"AMORLINC", 6u, 7u, &financial_detail::Amorlinc},
-      {"ACCRINT", 6u, 8u, &financial_detail::Accrint},
-      {"ACCRINTM", 4u, 5u, &financial_detail::Accrintm},
       {"DOLLARDE", 2u, 2u, &financial_detail::DollarDe},
       {"DOLLARFR", 2u, 2u, &financial_detail::DollarFr},
       {"EFFECT", 2u, 2u, &financial_detail::Effect},
@@ -695,24 +697,6 @@ void register_financial_builtins(FunctionRegistry& registry) {
       {"RRI", 3u, 3u, &financial_detail::Rri},
       {"ISPMT", 4u, 4u, &financial_detail::IsPmt},
       {"FVSCHEDULE", 2u, kVariadic, &financial_detail::FvSchedule, true, true, true},
-      {"DISC", 4u, 5u, &financial_detail::Disc},
-      {"INTRATE", 4u, 5u, &financial_detail::Intrate},
-      {"RECEIVED", 4u, 5u, &financial_detail::Received},
-      {"TBILLPRICE", 3u, 3u, &financial_detail::TBillPrice},
-      {"TBILLYIELD", 3u, 3u, &financial_detail::TBillYield},
-      {"TBILLEQ", 3u, 3u, &financial_detail::TBillEq},
-      {"PRICEDISC", 4u, 5u, &financial_detail::PriceDisc},
-      {"PRICEMAT", 5u, 6u, &financial_detail::PriceMat},
-      {"YIELDDISC", 4u, 5u, &financial_detail::YieldDisc},
-      {"YIELDMAT", 5u, 6u, &financial_detail::YieldMat},
-      {"DURATION", 5u, 6u, &financial_detail::Duration},
-      {"MDURATION", 5u, 6u, &financial_detail::MDuration},
-      {"PRICE", 6u, 7u, &financial_detail::Price},
-      {"YIELD", 6u, 7u, &financial_detail::Yield},
-      {"ODDLPRICE", 7u, 8u, &financial_detail::OddlPrice},
-      {"ODDLYIELD", 7u, 8u, &financial_detail::OddlYield},
-      {"ODDFPRICE", 8u, 9u, &financial_detail::OddfPrice},
-      {"ODDFYIELD", 8u, 9u, &financial_detail::OddfYield},
       {"STOCKHISTORY", 2u, kVariadic, &financial_detail::StockHistory},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));

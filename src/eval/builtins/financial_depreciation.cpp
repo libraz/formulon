@@ -583,7 +583,7 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - period < 0                                 ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}               ->  #NUM!
 //   - life (= 1/rate) in the rejected buckets    ->  #NUM!
-Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto parsed = read_amor_args(args, arity);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -592,7 +592,7 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double salvage = parsed.value().salvage;
   const double period = parsed.value().period;
   const double rate = parsed.value().rate;
-  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0) {
+  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0 || period > kMaxDepreciationPeriods) {
     return Value::error(ErrorCode::Num);
   }
   // Computed life drives the French coefficient table. A coefficient of
@@ -605,7 +605,8 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double applied_rate = rate * coef;
 
   // First-period year fraction (YEARFRAC from purchase to first period).
-  auto yf = yearfrac_for_basis(parsed.value().date_purchased, parsed.value().first_period, parsed.value().basis);
+  auto yf =
+      yearfrac_for_basis(parsed.value().date_purchased, parsed.value().first_period, parsed.value().basis, date1904);
   if (!yf) {
     return Value::error(yf.error());
   }
@@ -669,7 +670,7 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //
 // Domain: same as AMORDEGRC minus the life-bucket rejection (AMORLINC
 // is valid for every positive rate).
-Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto parsed = read_amor_args(args, arity);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -678,11 +679,12 @@ Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double salvage = parsed.value().salvage;
   const double period = parsed.value().period;
   const double rate = parsed.value().rate;
-  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0) {
+  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0 || period > kMaxDepreciationPeriods) {
     return Value::error(ErrorCode::Num);
   }
 
-  auto yf = yearfrac_for_basis(parsed.value().date_purchased, parsed.value().first_period, parsed.value().basis);
+  auto yf =
+      yearfrac_for_basis(parsed.value().date_purchased, parsed.value().first_period, parsed.value().basis, date1904);
   if (!yf) {
     return Value::error(yf.error());
   }

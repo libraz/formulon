@@ -84,7 +84,7 @@ namespace {
 // to cover the optional basis without branching; `arity` is forwarded
 // unchanged so `read_optional_number` inside `compute_clean_price`
 // selects the correct value.
-Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arity, double yld_iterate) {
+Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arity, double yld_iterate, bool date1904) {
   Value buf[7] = {yield_args[0], yield_args[0], yield_args[0], yield_args[0],
                   yield_args[0], yield_args[0], yield_args[0]};
   buf[1] = yield_args[1];
@@ -95,12 +95,12 @@ Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arit
   if (arity == 7) {
     buf[6] = yield_args[6];
   }
-  return compute_clean_price(buf, arity);
+  return compute_clean_price(buf, arity, date1904);
 }
 
 // Computes the YIELD result. Returns the yield-to-maturity (decimal) on
 // success or `ErrorCode::Num` on any validation / numerical failure.
-Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity) {
+Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
@@ -151,7 +151,7 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   }
 
   CouponDates cd{};
-  if (!compute_coupon_dates(settlement.value(), maturity.value(), frequency, basis, &cd)) {
+  if (!compute_coupon_dates(settlement.value(), maturity.value(), frequency, basis, date1904, &cd)) {
     return ErrorCode::Num;
   }
   if (cd.coupons_remaining <= 0 || cd.period_days <= 0.0) {
@@ -212,7 +212,7 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   // price kernel to evaluate an invalid negative yield.
   yld = std::max(0.0, yld);
 
-  return solve_yield_by_newton(price_at, args, arity, pr_v, yld);
+  return solve_yield_by_newton(price_at, args, arity, pr_v, yld, date1904);
 }
 
 }  // namespace
@@ -222,8 +222,8 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
 //
 // Annual yield-to-maturity (decimal) for a security paying periodic
 // interest. The analytic inverse of PRICE.
-Value Yield(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto y = compute_yield(args, arity);
+Value Yield(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto y = compute_yield(args, arity, date1904);
   if (!y) {
     return Value::error(y.error());
   }

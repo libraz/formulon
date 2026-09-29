@@ -165,6 +165,16 @@ TEST(MathTrunc, NegativeDigits) {
   EXPECT_EQ(v.as_number(), 1230.0);
 }
 
+TEST(MathTrunc, SnapsBinaryRepresentationNoiseLikeRound) {
+  // 0.29 * 100 == 28.999999999999996 in IEEE-754 double; without the
+  // snap-to-integer compensation ROUND/CEILING/FLOOR already apply,
+  // TRUNC(0.29, 2) truncates the (wrong) 28.999... down to 28 and returns
+  // 0.28 instead of 0.29.
+  const Value v = EvalSource("=TRUNC(0.29, 2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.29);
+}
+
 TEST(MathTrunc, ZeroArgsIsArityViolation) {
   const Value v = EvalSource("=TRUNC()");
   ASSERT_TRUE(v.is_error());
@@ -428,6 +438,14 @@ TEST(MathRoundDown, NegativeDigits) {
   EXPECT_EQ(v.as_number(), 1200.0);
 }
 
+TEST(MathRoundDown, SnapsBinaryRepresentationNoiseLikeRound) {
+  // 4.35 * 100 == 434.99999999999994 in IEEE-754 double; without the snap
+  // compensation, ROUNDDOWN(4.35, 2) truncates to 4.34 instead of 4.35.
+  const Value v = EvalSource("=ROUNDDOWN(4.35, 2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.35);
+}
+
 TEST(MathRoundDown, ExtremePositiveDigitsIsNoOp) {
   const Value v = EvalSource("=ROUNDDOWN(1.5, 400)");
   ASSERT_TRUE(v.is_number());
@@ -467,6 +485,16 @@ TEST(MathRoundUp, NegativeDigits) {
   const Value v = EvalSource("=ROUNDUP(1201, -2)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 1300.0);
+}
+
+TEST(MathRoundUp, SnapsBinaryRepresentationNoiseLikeRound) {
+  // 0.07 * 100 == 7.000000000000001 in IEEE-754 double; without the snap
+  // compensation this is the sharpest of the three failures: `ceil` on
+  // the unsnapped product rounds a value already exact at 2 digits UP an
+  // extra step, so ROUNDUP(0.07, 2) returns 0.08 instead of 0.07.
+  const Value v = EvalSource("=ROUNDUP(0.07, 2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.07);
 }
 
 TEST(MathRoundUp, ExtremePositiveDigitsIsNoOp) {

@@ -155,6 +155,27 @@ TEST(LambdaHelpersByRow, GuardedLambdaRecoversFromAnErroredRow) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), -1.0);
 }
 
+TEST(LambdaHelpersByRow, BareFunctionNameAcceptedLikeGroupBy) {
+  // A bare built-in function name (eta-reduction) is resolved the same way
+  // GROUPBY / PIVOTBY already accept one for their own aggregator argument
+  // -- BYROW(data, SUM) needs no LAMBDA(r, SUM(r)) wrapper.
+  const Value v = EvalSrc("=BYROW({1,2,3;4,5,6;7,8,9}, SUM)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 6.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 24.0);
+}
+
+TEST(LambdaHelpersByRow, UnknownBareNameYieldsNameError) {
+  // A bare identifier that resolves to neither a bound name nor a
+  // registered function falls through to the ordinary #NAME? path.
+  const Value v = EvalSrc("=BYROW({1,2;3,4}, NOTAREALFUNCTION)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
 TEST(LambdaHelpersByRow, NonLambdaSecondArgYieldsValueError) {
   // The second arg must be a Lambda value; a plain number fails type check.
   const Value v = EvalSrc("=BYROW({1,2;3,4}, 42)");
@@ -194,6 +215,16 @@ TEST(LambdaHelpersByRow, ByrowMultiCellLambdaReturnStillCalc) {
 TEST(LambdaHelpersByCol, SumsEachColumn) {
   // 3x3 input; per-column SUM yields {12, 15, 18} as a 1x3 row.
   const Value v = EvalSrc("=BYCOL({1,2,3;4,5,6;7,8,9}, LAMBDA(c, SUM(c)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 18.0);
+}
+
+TEST(LambdaHelpersByCol, BareFunctionNameAcceptedLikeGroupBy) {
+  const Value v = EvalSrc("=BYCOL({1,2,3;4,5,6;7,8,9}, SUM)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 1U);
   EXPECT_EQ(v.as_array_cols(), 3U);
@@ -527,22 +558,24 @@ TEST(LambdaHelpersMakeArray, NByOneShape) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[3].as_number(), 4.0);
 }
 
-TEST(LambdaHelpersMakeArray, ZeroRowsYieldsNumError) {
+TEST(LambdaHelpersMakeArray, ZeroRowsYieldsValueError) {
+  // Microsoft's documented MAKEARRAY contract: rows/cols below 1 is
+  // #VALUE!, not #NUM! (#NUM! is reserved for exceeding the grid limit).
   const Value v = EvalSrc("=MAKEARRAY(0, 3, LAMBDA(r, c, r))");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(LambdaHelpersMakeArray, ZeroColsYieldsNumError) {
+TEST(LambdaHelpersMakeArray, ZeroColsYieldsValueError) {
   const Value v = EvalSrc("=MAKEARRAY(3, 0, LAMBDA(r, c, r))");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(LambdaHelpersMakeArray, NegativeRowsYieldsNumError) {
+TEST(LambdaHelpersMakeArray, NegativeRowsYieldsValueError) {
   const Value v = EvalSrc("=MAKEARRAY(-1, 3, LAMBDA(r, c, r))");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(LambdaHelpersMakeArray, RejectsShapesBeyondDynamicArrayCellLimit) {

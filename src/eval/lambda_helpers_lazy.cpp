@@ -10,6 +10,7 @@
 #include "eval/coerce.h"
 #include "eval/dynamic_array_limits.h"
 #include "eval/eval_context.h"
+#include "eval/groupby_pivotby/common.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
@@ -152,8 +153,9 @@ const ArrayValue* eval_array_arg(const parser::AstNode& node, Arena& arena, cons
 }
 
 // Coerces a scalar argument to a positive integer count for MAKEARRAY's
-// `rows` and `cols`. Negative / zero / non-numeric / out-of-grid values
-// surface `#NUM!`. Argument errors propagate verbatim.
+// `rows` and `cols`. Non-numeric or below-1 values surface `#VALUE!`
+// (Microsoft's documented contract); only exceeding the per-axis grid
+// limit surfaces `#NUM!`. Argument errors propagate verbatim.
 //
 // `max_value` is the per-axis Excel grid limit. The numeric value is
 // truncated toward zero (Excel rounds `2.9` down to 2 here, matching the
@@ -177,7 +179,11 @@ bool read_count_arg(const parser::AstNode& node, Arena& arena, const FunctionReg
     return false;
   }
   const double truncated = std::trunc(n);
-  if (truncated < 1.0 || truncated > static_cast<double>(max_value)) {
+  if (truncated < 1.0) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  if (truncated > static_cast<double>(max_value)) {
     *out_err = Value::error(ErrorCode::Num);
     return false;
   }
@@ -189,6 +195,12 @@ bool read_count_arg(const parser::AstNode& node, Arena& arena, const FunctionReg
 // parameter selects which dimension we iterate along: BYROW emits one
 // scalar per row, BYCOL emits one scalar per column. The output shape is
 // `(rows, 1)` for BYROW and `(1, cols)` for BYCOL.
+//
+// The callable argument accepts both an inline/name-bound `LAMBDA` and a
+// bare built-in function name (`BYROW(data, SUM)`), resolved through the
+// same `resolve_aggregator` GROUPBY / PIVOTBY use for their own callable
+// argument -- BYROW / BYCOL's "one slice, one required argument" shape is
+// exactly GROUPBY's per-group aggregator shape.
 Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
   if (call.as_call_arity() != 2U) {
@@ -199,8 +211,8 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   if (in == nullptr) {
     return err;
   }
-  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(1), /*call_arity=*/1U, arena, registry, ctx, &err);
-  if (lv == nullptr) {
+  AggregatorRef agg{};
+  if (!resolve_aggregator(call.as_call_arg(1), arena, registry, ctx, &agg, &err)) {
     return err;
   }
   if (in->rows == 0U || in->cols == 0U) {
@@ -239,18 +251,26 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
         slice_buf[r] = in->cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols_in) + i];
       }
     }
-    const Value slice = Value::array(slice_arr);
-    Value arg = slice;
-    // Bind the slice with both the Value and a synthetic ArrayLiteral AST
-    // so range-aware functions inside the body (`SUM(r)`, `AVERAGE(r)`,
-    // ...) flatten the slice through the dispatcher's ArrayLiteral branch
-    // instead of receiving an opaque `Value::Array` they cannot coerce.
-    const parser::AstNode* slice_ast = build_array_literal_for(slice.as_array(), arena);
-    if (slice_ast == nullptr) {
-      return Value::error(ErrorCode::Num);
+    Value res = Value::blank();
+    if (agg.kind == AggregatorRef::Kind::Function) {
+      // Form C (bare function name): flatten the slice into args and call
+      // the registry impl directly, exactly as GROUPBY does for its own
+      // Form C aggregator.
+      res = invoke_registry_function_over_slice(agg.function_def, slice_arr, arena);
+    } else {
+      const Value slice = Value::array(slice_arr);
+      Value arg = slice;
+      // Bind the slice with both the Value and a synthetic ArrayLiteral AST
+      // so range-aware functions inside the body (`SUM(r)`, `AVERAGE(r)`,
+      // ...) flatten the slice through the dispatcher's ArrayLiteral branch
+      // instead of receiving an opaque `Value::Array` they cannot coerce.
+      const parser::AstNode* slice_ast = build_array_literal_for(slice.as_array(), arena);
+      if (slice_ast == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+      const parser::AstNode* ast_args[1] = {slice_ast};
+      res = invoke_lambda_values_with_ast(agg.lambda, 1U, &arg, ast_args, arena, registry, ctx);
     }
-    const parser::AstNode* ast_args[1] = {slice_ast};
-    const Value res = invoke_lambda_values_with_ast(lv, 1U, &arg, ast_args, arena, registry, ctx);
     if (res.is_error()) {
       // Each row / column is reduced independently, so an error lands in
       // that slice's output cell only. Short-circuiting the whole call here

@@ -252,10 +252,10 @@ unsigned days_in_month(int y, unsigned m) noexcept {
   return kTable[m - 1u];
 }
 
-double basis_days_between(double a, double b, int basis) noexcept {
+double basis_days_between(double a, double b, int basis, bool date1904) noexcept {
   if (basis == 0 || basis == 4) {
-    const YMD ya = ymd_from_serial(a);
-    const YMD yb = ymd_from_serial(b);
+    const YMD ya = ymd_from_serial(a, date1904);
+    const YMD yb = ymd_from_serial(b, date1904);
     const double yf = basis == 0 ? yearfrac_us30_360(ya.y, ya.m, ya.d, yb.y, yb.m, yb.d)
                                  : yearfrac_eu30_360(ya.y, ya.m, ya.d, yb.y, yb.m, yb.d);
     return yf * 360.0;

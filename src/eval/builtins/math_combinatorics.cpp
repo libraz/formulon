@@ -25,6 +25,7 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -153,9 +154,14 @@ Value FactDouble(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // COMBIN / COMBINA / MULTINOMIAL
 // ---------------------------------------------------------------------------
 
-// Computes nCk exactly as a double using the factorial table when n <= 170,
-// and log-gamma otherwise. Returns +Inf on overflow; the caller must map
-// that to #NUM!.
+// Computes nCk exactly as a double via the multiplicative running product
+// C(n-k+i, i) = C(n-k+i-1, i-1) * (n-k+i) / i, falling back to log-gamma
+// only once that product overflows. A direct `n! / (k! * (n-k)!)` ratio
+// loses precision even for small results (e.g. C(28, 2) comes out as
+// 377.999999999999994), because n! stops being exactly representable well
+// before 170! does; every partial product here is instead an exact integer
+// whenever the final C(n, k) fits inside 2^53. Returns +Inf on overflow;
+// the caller must map that to #NUM!.
 inline double combin_exact(std::uint64_t n, std::uint64_t k) {
   if (k > n) {
     return 0.0;
@@ -166,14 +172,20 @@ inline double combin_exact(std::uint64_t n, std::uint64_t k) {
   if (k == 0) {
     return 1.0;
   }
-  if (n <= 170) {
-    // Direct factorial ratio is safe: denominator factorials both fit.
-    return factorial_lookup(static_cast<std::uint32_t>(n)) /
-           (factorial_lookup(static_cast<std::uint32_t>(k)) * factorial_lookup(static_cast<std::uint32_t>(n - k)));
+  double result = 1.0;
+  for (std::uint64_t i = 1; i <= k; ++i) {
+    result = result * static_cast<double>(n - k + i) / static_cast<double>(i);
+    if (!std::isfinite(result)) {
+      break;
+    }
   }
-  // Fallback via log-gamma for very large n.
-  const double log_combin = std::lgamma(static_cast<double>(n) + 1.0) - std::lgamma(static_cast<double>(k) + 1.0) -
-                            std::lgamma(static_cast<double>(n - k) + 1.0);
+  if (std::isfinite(result)) {
+    return result;
+  }
+  // Fallback via log-gamma once the exact multiplicative loop overflows.
+  const double log_combin = stats::log_gamma(static_cast<double>(n) + 1.0) -
+                            stats::log_gamma(static_cast<double>(k) + 1.0) -
+                            stats::log_gamma(static_cast<double>(n - k) + 1.0);
   return std::exp(log_combin);
 }
 

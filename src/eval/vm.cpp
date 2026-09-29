@@ -49,6 +49,7 @@
 #include "eval/datetime_lazy.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
+#include "eval/financial_lazy.h"
 #include "eval/function_registry.h"
 #include "eval/implicit_intersection.h"
 #include "eval/lambda_value.h"
@@ -540,6 +541,44 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
                                 ? date->clock_impl(ctx.wall_clock(), ctx.date1904())
                                 : date->impl(date_argv.empty() ? nullptr : date_argv.data(),
                                              static_cast<std::uint32_t>(date_argv.size()), arena, ctx.date1904());
+          RETURN_IF_ERROR(push_value(s, out));
+          ++pc;
+          break;
+        }
+        // Date1904-sensitive financial family (COUPPCD..COUPDAYS, ACCRINT/
+        // ACCRINTM, DISC/INTRATE/RECEIVED/TBILL*, PRICE*/YIELD*, DURATION/
+        // MDURATION, ODDF*/ODDL*, AMORDEGRC/AMORLINC). Same reasoning and
+        // shape as the calendar-family block above, but scalar-only with no
+        // clock_impl / broadcast variant.
+        if (const FinancialDateEntry* fin = find_financial_date_entry(name)) {
+          if (arity < fin->min_arity || arity > fin->max_arity) {
+            pop_values(s, arity);
+            RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+            ++pc;
+            break;
+          }
+          std::vector<Value> fin_argv;
+          fin_argv.reserve(arity);
+          for (std::uint32_t i = 0; i < arity; ++i) {
+            fin_argv.push_back(s.stack[s.stack.size() - arity + i]);
+          }
+          pop_values(s, arity);
+          bool fin_short_circuit = false;
+          Value fin_err = Value::blank();
+          for (const Value& a : fin_argv) {
+            if (a.is_error()) {
+              fin_err = a;
+              fin_short_circuit = true;
+              break;
+            }
+          }
+          if (fin_short_circuit) {
+            RETURN_IF_ERROR(push_value(s, fin_err));
+            ++pc;
+            break;
+          }
+          const Value out = fin->impl(fin_argv.empty() ? nullptr : fin_argv.data(),
+                                      static_cast<std::uint32_t>(fin_argv.size()), arena, ctx.date1904());
           RETURN_IF_ERROR(push_value(s, out));
           ++pc;
           break;

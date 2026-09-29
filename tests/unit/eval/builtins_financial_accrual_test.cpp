@@ -321,6 +321,16 @@ TEST(FinancialAmordegrc, NegativePeriodIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(FinancialAmordegrc, ExcessivePeriodIsNumNotAHang) {
+  // A period far beyond kMaxDepreciationPeriods must reject before ever
+  // entering the per-period loop, matching the cap DB/DDB/VDB already
+  // enforce in the same file -- this used to loop once per period (or hit
+  // UB on the int64 cast for period > 9.2e18).
+  const Value v = EvalSource("=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1E18, 0.15, 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 TEST(FinancialAmordegrc, NonPositiveRateIsNum) {
   const Value v = EvalSource("=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0, 1)");
   ASSERT_TRUE(v.is_error());
@@ -375,6 +385,12 @@ TEST(FinancialAmorlinc, SalvageGeCostIsNum) {
 
 TEST(FinancialAmorlinc, NegativePeriodIsNum) {
   const Value v = EvalSource("=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, -1, 0.15, 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialAmorlinc, ExcessivePeriodIsNumNotAHang) {
+  const Value v = EvalSource("=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1E18, 0.15, 1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }

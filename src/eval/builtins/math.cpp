@@ -149,7 +149,11 @@ Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (std::isinf(product)) {
     return Value::number(value.value());
   }
-  const double r = std::trunc(product) / factor;
+  // `snap_to_integer` absorbs the same IEEE-754 near-integer noise ROUND /
+  // CEILING / FLOOR already compensate for (e.g. `9.99 * 100 ==
+  // 998.9999999999999`), so TRUNC/ROUNDDOWN/ROUNDUP don't lose the last
+  // decimal digit that ROUND/CEILING/FLOOR keep on the same input.
+  const double r = std::trunc(snap_to_integer(product)) / factor;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }
@@ -297,7 +301,10 @@ Value RoundDown(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (std::isnan(factor) || std::isinf(factor)) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = std::trunc(value.value() * factor) / factor;
+  // `snap_to_integer` absorbs binary-representation noise the same way
+  // TRUNC does (see its comment); without it, e.g. `0.29 * 100 ==
+  // 28.999999999999996` truncates to 28 instead of 29.
+  const double r = std::trunc(snap_to_integer(value.value() * factor)) / factor;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }
@@ -330,7 +337,9 @@ Value RoundUp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (std::isnan(factor) || std::isinf(factor)) {
     return Value::error(ErrorCode::Num);
   }
-  const double scaled = value.value() * factor;
+  // `snap_to_integer` absorbs binary-representation noise the same way
+  // TRUNC / ROUNDDOWN do (see TRUNC's comment above).
+  const double scaled = snap_to_integer(value.value() * factor);
   const double r = (value.value() > 0.0) ? std::ceil(scaled) / factor : std::floor(scaled) / factor;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);

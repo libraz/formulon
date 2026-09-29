@@ -41,7 +41,7 @@ namespace financial_detail {
 //   - discount <= 0                  ->  #NUM!
 //   - redemption <= 0                ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}   ->  #NUM!
-Value PriceDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value PriceDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return Value::error(settlement.error());
@@ -68,7 +68,7 @@ Value PriceDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (discount.value() <= 0.0 || redemption.value() <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto yf = yearfrac_for_basis(settlement.value(), maturity.value(), basis.value());
+  auto yf = yearfrac_for_basis(settlement.value(), maturity.value(), basis.value(), date1904);
   if (!yf) {
     return Value::error(yf.error());
   }
@@ -96,7 +96,7 @@ Value PriceDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - yld  < 0                            ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}        ->  #NUM!
 //   - 1 + DSM * yld == 0 (degenerate)     ->  #NUM!
-Value PriceMat(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value PriceMat(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return Value::error(settlement.error());
@@ -130,15 +130,15 @@ Value PriceMat(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (rate.value() < 0.0 || yld.value() < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto a_yf = yearfrac_for_basis(issue.value(), settlement.value(), basis.value());
+  auto a_yf = yearfrac_for_basis(issue.value(), settlement.value(), basis.value(), date1904);
   if (!a_yf) {
     return Value::error(a_yf.error());
   }
-  auto dsm_yf = yearfrac_for_basis(settlement.value(), maturity.value(), basis.value());
+  auto dsm_yf = yearfrac_for_basis(settlement.value(), maturity.value(), basis.value(), date1904);
   if (!dsm_yf) {
     return Value::error(dsm_yf.error());
   }
-  auto dim_yf = yearfrac_for_basis(issue.value(), maturity.value(), basis.value());
+  auto dim_yf = yearfrac_for_basis(issue.value(), maturity.value(), basis.value(), date1904);
   if (!dim_yf) {
     return Value::error(dim_yf.error());
   }
@@ -161,7 +161,7 @@ Value PriceMat(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - pr <= 0                         ->  #NUM!
 //   - redemption <= 0                 ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}    ->  #NUM!
-Value YieldDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value YieldDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return Value::error(settlement.error());
@@ -188,7 +188,7 @@ Value YieldDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (pr.value() <= 0.0 || redemption.value() <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto yf = yearfrac_for_basis(settlement.value(), maturity.value(), basis.value());
+  auto yf = yearfrac_for_basis(settlement.value(), maturity.value(), basis.value(), date1904);
   if (!yf) {
     return Value::error(yf.error());
   }
@@ -218,7 +218,7 @@ Value YieldDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - basis not in {0, 1, 2, 3, 4}     ->  #NUM!
 //   - pr/100 + A * rate == 0           ->  #NUM!
 //   - DSM == 0                         ->  #NUM!
-Value YieldMat(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value YieldMat(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return Value::error(settlement.error());
@@ -255,15 +255,15 @@ Value YieldMat(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (pr.value() <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto a_yf = yearfrac_for_basis(issue.value(), settlement.value(), basis.value());
+  auto a_yf = yearfrac_for_basis(issue.value(), settlement.value(), basis.value(), date1904);
   if (!a_yf) {
     return Value::error(a_yf.error());
   }
-  auto dsm_yf = yearfrac_for_basis(settlement.value(), maturity.value(), basis.value());
+  auto dsm_yf = yearfrac_for_basis(settlement.value(), maturity.value(), basis.value(), date1904);
   if (!dsm_yf) {
     return Value::error(dsm_yf.error());
   }
-  auto dim_yf = yearfrac_for_basis(issue.value(), maturity.value(), basis.value());
+  auto dim_yf = yearfrac_for_basis(issue.value(), maturity.value(), basis.value(), date1904);
   if (!dim_yf) {
     return Value::error(dim_yf.error());
   }

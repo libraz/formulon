@@ -26,6 +26,14 @@
 
 #include "eval/stats/special_functions.h"
 
+// Apple's <math.h> (and traditionally other libcs) only declares the
+// reentrant lgamma_r/lgammaf_r/lgammal_r family when _REENTRANT is defined
+// before the header is first included; without it the plain (non-reentrant,
+// signgam-writing) lgamma is all that's visible.
+#ifndef _REENTRANT
+#define _REENTRANT
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -109,7 +117,7 @@ CfResult p_gamma_series(double a, double x) noexcept {
     del *= x / ap;
     sum += del;
     if (std::abs(del) < std::abs(sum) * kEps) {
-      return {sum * std::exp(-x + a * std::log(x) - std::lgamma(a)), true};
+      return {sum * std::exp(-x + a * std::log(x) - log_gamma(a)), true};
     }
   }
   return {std::numeric_limits<double>::quiet_NaN(), false};
@@ -139,7 +147,7 @@ CfResult q_gamma_cf(double a, double x) noexcept {
     const double del = d * c;
     h *= del;
     if (std::abs(del - 1.0) < kEps) {
-      return {h * std::exp(-x + a * std::log(x) - std::lgamma(a)), true};
+      return {h * std::exp(-x + a * std::log(x) - log_gamma(a)), true};
     }
   }
   return {std::numeric_limits<double>::quiet_NaN(), false};
@@ -204,6 +212,17 @@ CfResult beta_cf(double a, double b, double x) noexcept {
 
 }  // namespace
 
+double log_gamma(double x) noexcept {
+#if defined(_WIN32)
+  // The Microsoft CRT does not expose `signgam` at all, so its `lgamma`
+  // has no global side effect and is already thread-safe.
+  return std::lgamma(x);
+#else
+  int sign = 0;
+  return ::lgamma_r(x, &sign);
+#endif
+}
+
 double p_gamma(double a, double x) noexcept {
   if (a <= 0.0 || x < 0.0) {
     return std::numeric_limits<double>::quiet_NaN();
@@ -246,9 +265,9 @@ double regularized_incomplete_beta(double a, double b, double x) noexcept {
   // Shared prefactor: (x^a * (1-x)^b) / (a * B(a, b)), computed in log
   // space to stay stable for large a / b. This is the factor outside the
   // continued fraction in Numerical Recipes eq. (6.4.5).
-  const double lg_ab = std::lgamma(a + b);
-  const double lg_a = std::lgamma(a);
-  const double lg_b = std::lgamma(b);
+  const double lg_ab = log_gamma(a + b);
+  const double lg_a = log_gamma(a);
+  const double lg_b = log_gamma(b);
   const double a_log_x = a * std::log(x);
   const double b_log_1mx = b * std::log(1.0 - x);
   // Those five terms are individually huge for large shapes and cancel

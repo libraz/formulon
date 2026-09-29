@@ -68,7 +68,14 @@ struct LazyEntry {
 // by canonical UPPERCASE name so a quick visual diff catches accidental
 // duplicates. Comments preserved verbatim from the prior in-place table.
 constexpr LazyEntry kLazyDispatch[] = {
+    // Financial date1904-sensitive family: shares one lazy impl
+    // (`eval_financial_date_lazy`) the same way the calendar family shares
+    // `eval_datetime_lazy` -- see `eval/financial_lazy.h`.
+    {"ACCRINT", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"ACCRINTM", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"AGGREGATE", &eval_aggregate_lazy, LazyResultShape::kReduce},
+    {"AMORDEGRC", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"AMORLINC", &eval_financial_date_lazy, LazyResultShape::kScalar},
     // ANCHORARRAY is the OOXML internal encoding of the postfix `#`
     // spill operator. The xlsx-only `_xlfn.` prefix is stripped by
     // `strip_future_prefix`, so callers register the canonical bare name.
@@ -95,6 +102,12 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"COUNT", &eval_count_lazy, LazyResultShape::kReduce},
     {"COUNTIF", &eval_countif_lazy, LazyResultShape::kReduce},
     {"COUNTIFS", &eval_countifs_lazy, LazyResultShape::kReduce},
+    {"COUPDAYBS", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"COUPDAYS", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"COUPDAYSNC", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"COUPNCD", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"COUPNUM", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"COUPPCD", &eval_financial_date_lazy, LazyResultShape::kScalar},
     // COVAR is the pre-2010 legacy spelling of COVARIANCE.P; both compute
     // the population covariance with identical semantics.
     {"COVAR", &eval_covariance_p_lazy, LazyResultShape::kReduce},
@@ -114,6 +127,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DCOUNT", &eval_dcount_lazy, LazyResultShape::kReduce},
     {"DCOUNTA", &eval_dcounta_lazy, LazyResultShape::kReduce},
     {"DGET", &eval_dget_lazy, LazyResultShape::kReduce},
+    {"DISC", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"DMAX", &eval_dmax_lazy, LazyResultShape::kReduce},
     {"DMIN", &eval_dmin_lazy, LazyResultShape::kReduce},
     {"DPRODUCT", &eval_dproduct_lazy, LazyResultShape::kReduce},
@@ -121,6 +135,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DSTDEV", &eval_dstdev_lazy, LazyResultShape::kReduce},
     {"DSTDEVP", &eval_dstdevp_lazy, LazyResultShape::kReduce},
     {"DSUM", &eval_dsum_lazy, LazyResultShape::kReduce},
+    {"DURATION", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"DVAR", &eval_dvar_lazy, LazyResultShape::kReduce},
     {"DVARP", &eval_dvarp_lazy, LazyResultShape::kReduce},
     {"EDATE", &eval_datetime_lazy, LazyResultShape::kBroadcast},
@@ -164,6 +179,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"INDEX", &eval_index_lazy, LazyResultShape::kArray},
     {"INDIRECT", &eval_indirect_lazy, LazyResultShape::kArray},
     {"INTERCEPT", &eval_intercept_lazy, LazyResultShape::kScalar},
+    {"INTRATE", &eval_financial_date_lazy, LazyResultShape::kScalar},
     // ISFORMULA / ISREF inspect the un-evaluated AST of their argument;
     // they cannot ride the eager path because it flattens references to
     // `Value` before the impl runs.
@@ -181,6 +197,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"MATCH", &eval_match_lazy, LazyResultShape::kArray},
     {"MAXIFS", &eval_maxifs_lazy, LazyResultShape::kReduce},
     {"MDETERM", &eval_mdeterm_lazy, LazyResultShape::kScalar},
+    {"MDURATION", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"MINIFS", &eval_minifs_lazy, LazyResultShape::kReduce},
     {"MINVERSE", &eval_minverse_lazy, LazyResultShape::kArray},
     {"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar},
@@ -189,6 +206,10 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"NETWORKDAYS", &eval_networkdays_lazy, LazyResultShape::kScalar},
     {"NETWORKDAYS.INTL", &eval_networkdays_intl_lazy, LazyResultShape::kScalar},
     {"NOW", &eval_datetime_lazy, LazyResultShape::kScalar},
+    {"ODDFPRICE", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"ODDFYIELD", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"ODDLPRICE", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"ODDLYIELD", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"OFFSET", &eval_offset_lazy, LazyResultShape::kArray},
     {"OR", &eval_or_lazy, LazyResultShape::kReduce},
     // PEARSON is mathematically identical to CORREL (Pearson product-moment
@@ -203,10 +224,14 @@ constexpr LazyEntry kLazyDispatch[] = {
     // Value before the impl could consult `Cell::phonetic_text`.
     {"PHONETIC", &eval_phonetic_lazy, LazyResultShape::kScalar},
     {"PIVOTBY", &eval_pivotby_lazy, LazyResultShape::kArray},
+    {"PRICE", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"PRICEDISC", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"PRICEMAT", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"PROB", &eval_prob_lazy, LazyResultShape::kScalar},
     {"RANK", &eval_rank_eq_lazy, LazyResultShape::kScalar},
     {"RANK.AVG", &eval_rank_avg_lazy, LazyResultShape::kScalar},
     {"RANK.EQ", &eval_rank_eq_lazy, LazyResultShape::kScalar},
+    {"RECEIVED", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"REDUCE", &eval_reduce_lazy, LazyResultShape::kArray},
     {"REGEXEXTRACT", &eval_regexextract_lazy, LazyResultShape::kArray},
     {"REGEXREPLACE", &eval_regexreplace_lazy, LazyResultShape::kBroadcast},
@@ -245,6 +270,9 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SWITCH", &eval_switch_lazy, LazyResultShape::kBroadcast},
     {"T.TEST", &eval_t_test_lazy, LazyResultShape::kReduce},
     {"TAKE", &eval_take_lazy, LazyResultShape::kArray},
+    {"TBILLEQ", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"TBILLPRICE", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"TBILLYIELD", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"TEXT", &eval_text_lazy, LazyResultShape::kBroadcast},
     {"TEXTSPLIT", &eval_textsplit_lazy, LazyResultShape::kArray},
     {"TOCOL", &eval_tocol_lazy, LazyResultShape::kArray},
@@ -270,6 +298,9 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"XNPV", &eval_xnpv_lazy, LazyResultShape::kScalar},
     {"YEAR", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"YEARFRAC", &eval_datetime_lazy, LazyResultShape::kBroadcast},
+    {"YIELD", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"YIELDDISC", &eval_financial_date_lazy, LazyResultShape::kScalar},
+    {"YIELDMAT", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"Z.TEST", &eval_z_test_lazy, LazyResultShape::kReduce},
     // ZTEST is the pre-2010 legacy spelling of Z.TEST; same impl.
     {"ZTEST", &eval_z_test_lazy, LazyResultShape::kReduce},

@@ -40,8 +40,8 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 
-Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t arity) {
-  auto in = read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/true);
+Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t arity, bool date1904) {
+  auto in = read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/true, date1904);
   if (!in) {
     return in.error();
   }
@@ -63,8 +63,8 @@ Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t 
 //
 // Annual yield-to-maturity (decimal) for a security whose final coupon
 // period is irregular. The analytic closed-form inverse of ODDLPRICE.
-Value OddlYield(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto y = compute_oddl_yield(args, arity);
+Value OddlYield(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto y = compute_oddl_yield(args, arity, date1904);
   if (!y) {
     return Value::error(y.error());
   }

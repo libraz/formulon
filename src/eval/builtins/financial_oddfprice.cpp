@@ -78,10 +78,10 @@ using date_time::days_in_month;
 // month-end-preservation rule: if `first_coupon` is Aug-31 and we step
 // three months backward, we land on May-31; six months -> Feb-28 (or
 // Feb-29 in a leap year).
-double quasi_serial(int y, unsigned m, unsigned anchor_day) noexcept {
+double quasi_serial(int y, unsigned m, unsigned anchor_day, bool date1904) noexcept {
   const unsigned last = days_in_month(y, m);
   const unsigned d = anchor_day > last ? last : anchor_day;
-  return date_time::serial_from_ymd(y, m, d);
+  return date_time::serial_from_ymd(y, m, d, date1904);
 }
 
 // Shifts (y, m) backward by `months` (always positive). Uses
@@ -112,7 +112,7 @@ void shift_months_back(int& y, unsigned& m, int months) noexcept {
 // legacy `basis_days_between` path produced — the per-quasi-period
 // PV contributions would mix two different period lengths and drift
 // from Excel by ~0.012 per 100 face on the docs canonical case.
-double normal_period_days(int basis, int frequency, double first_coupon) noexcept {
+double normal_period_days(int basis, int frequency, double first_coupon, bool date1904) noexcept {
   switch (basis) {
     case 0:
     case 2:
@@ -123,11 +123,11 @@ double normal_period_days(int basis, int frequency, double first_coupon) noexcep
     case 1: {
       // Actual length of the regular quasi-period ending on
       // `first_coupon`: step back 12/freq months and measure the gap.
-      const date_time::YMD fc = date_time::ymd_from_serial(first_coupon);
+      const date_time::YMD fc = date_time::ymd_from_serial(first_coupon, date1904);
       int y = fc.y;
       unsigned m = fc.m;
       shift_months_back(y, m, 12 / frequency);
-      const double q_prev = quasi_serial(y, m, fc.d);
+      const double q_prev = quasi_serial(y, m, fc.d, date1904);
       return first_coupon - q_prev;
     }
     default:
@@ -141,15 +141,15 @@ double normal_period_days(int basis, int frequency, double first_coupon) noexcep
 // match `normal_period_days(...)` so that for full periods
 // `dc[i] / nl[i] == 1` (full coupon paid) — see the explanation
 // above for why bases 2 / 3 use the nominal length.
-double full_quasi_period_length(int basis, int frequency, double first_coupon) noexcept {
-  return normal_period_days(basis, frequency, first_coupon);
+double full_quasi_period_length(int basis, int frequency, double first_coupon, bool date1904) noexcept {
+  return normal_period_days(basis, frequency, first_coupon, date1904);
 }
 
 }  // namespace
 
 Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settlement, double maturity, double issue,
-                                                                 double first_coupon, int frequency,
-                                                                 int basis) noexcept {
+                                                                 double first_coupon, int frequency, int basis,
+                                                                 bool date1904) noexcept {
   const double s = std::trunc(settlement);
   const double mat = std::trunc(maturity);
   const double iss = std::trunc(issue);
@@ -158,7 +158,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
   // --- Walk quasi-coupon schedule backward from first_coupon by
   // 12/freq months until we cross or touch `issue`. We collect the
   // (start, end) serials, oldest first.
-  const date_time::YMD fc_ymd = date_time::ymd_from_serial(fc);
+  const date_time::YMD fc_ymd = date_time::ymd_from_serial(fc, date1904);
   const unsigned anchor_day = fc_ymd.d;
   const int step_months = 12 / frequency;
 
@@ -176,7 +176,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
       return ErrorCode::Num;
     }
     shift_months_back(y_walk, m_walk, step_months);
-    const double prev = quasi_serial(y_walk, m_walk, anchor_day);
+    const double prev = quasi_serial(y_walk, m_walk, anchor_day, date1904);
     end_serials[count + 1] = prev;
     ++count;
     if (prev <= iss) {
@@ -220,7 +220,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
   // they stay coherent with `e`; partial spans (issue->qend,
   // start->settle) keep their actual day counts because that is what
   // the published `dc / nl` and `a / nl` ratios assume.
-  const double full_nl = full_quasi_period_length(basis, frequency, fc);
+  const double full_nl = full_quasi_period_length(basis, frequency, fc, date1904);
   if (full_nl <= 0.0) {
     return ErrorCode::Num;
   }
@@ -231,7 +231,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
 
     out.qp[i].nl = full_nl;
     if (i == 0) {
-      out.qp[i].dc = std::round(basis_days_between(effective_start, qend, basis));
+      out.qp[i].dc = std::round(basis_days_between(effective_start, qend, basis, date1904));
     } else {
       out.qp[i].dc = out.qp[i].nl;
     }
@@ -240,7 +240,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
       if (i == 0 && qstart < iss) {
         // Issue is inside qp[0] *and* settlement is past qend ->
         // accrual is the partial issue-to-qend span (actual days).
-        out.qp[i].a = std::round(basis_days_between(effective_start, qend, basis));
+        out.qp[i].a = std::round(basis_days_between(effective_start, qend, basis, date1904));
       } else {
         // Full quasi-period accrued -> use the basis full-period
         // length so the ratio `a[i] / nl[i] == 1`.
@@ -248,7 +248,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
       }
     } else if (s > effective_start) {
       // Settlement falls inside qp[i] -> partial accrual (actual days).
-      out.qp[i].a = std::round(basis_days_between(effective_start, s, basis));
+      out.qp[i].a = std::round(basis_days_between(effective_start, s, basis, date1904));
     } else {
       // Settlement is at or before this quasi-period's effective start
       // -> no accrual on this or subsequent quasi-periods. (Shouldn't
@@ -270,10 +270,10 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
     }
     if (s > qstart) {
       // Settlement falls inside this quasi-period.
-      dsc += basis_days_between(s, qend, basis);
+      dsc += basis_days_between(s, qend, basis, date1904);
     } else {
       // Settlement is before this quasi-period entirely.
-      dsc += basis_days_between(qstart, qend, basis);
+      dsc += basis_days_between(qstart, qend, basis, date1904);
     }
   }
   out.dsc = std::round(dsc);
@@ -282,7 +282,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
   }
 
   // --- Normal period length E.
-  out.e = normal_period_days(basis, frequency, fc);
+  out.e = normal_period_days(basis, frequency, fc, date1904);
   if (out.e <= 0.0 || std::isnan(out.e) || std::isinf(out.e)) {
     return ErrorCode::Num;
   }
@@ -293,7 +293,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
   // (since first_coupon IS itself a coupon, the engine reports the
   // count of coupons strictly after settlement and <= maturity).
   CouponDates cd{};
-  if (!compute_coupon_dates(fc, mat, frequency, basis, &cd)) {
+  if (!compute_coupon_dates(fc, mat, frequency, basis, date1904, &cd)) {
     return ErrorCode::Num;
   }
   if (cd.coupons_remaining < 0) {
@@ -318,7 +318,8 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
 }
 
 Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::uint32_t arity,
-                                                        bool slot5_must_be_positive, OddFirstSchedule& sched_out) {
+                                                        bool slot5_must_be_positive, bool date1904,
+                                                        OddFirstSchedule& sched_out) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
@@ -387,7 +388,7 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
   }
 
   auto sched_e = compute_odd_first_schedule(settlement.value(), maturity.value(), issue.value(), first_coupon.value(),
-                                            frequency, basis);
+                                            frequency, basis, date1904);
   if (!sched_e) {
     return sched_e.error();
   }
@@ -401,9 +402,9 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
   return out;
 }
 
-Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity) {
+Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
   OddFirstSchedule sched{};
-  auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/false, sched);
+  auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/false, date1904, sched);
   if (!in) {
     return in.error();
   }
@@ -478,8 +479,8 @@ Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uin
 // is irregular (the bond is issued at `issue`, pays its first coupon
 // at `first_coupon`, and pays subsequent coupons on the regular grid
 // up to `maturity`).
-Value OddfPrice(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto p = compute_oddf_clean_price(args, arity);
+Value OddfPrice(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto p = compute_oddf_clean_price(args, arity, date1904);
   if (!p) {
     return Value::error(p.error());
   }

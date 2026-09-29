@@ -82,7 +82,7 @@ namespace {
 // `read_optional_number` inside `compute_oddf_clean_price` selects
 // the correct value. Mirrors the `price_at` helper in
 // `financial_yield.cpp`.
-Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arity, double yld_iterate) {
+Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arity, double yld_iterate, bool date1904) {
   Value buf[9] = {yield_args[0], yield_args[0], yield_args[0], yield_args[0], yield_args[0],
                   yield_args[0], yield_args[0], yield_args[0], yield_args[0]};
   buf[1] = yield_args[1];
@@ -95,18 +95,18 @@ Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arit
   if (arity == 9) {
     buf[8] = yield_args[8];
   }
-  return compute_oddf_clean_price(buf, arity);
+  return compute_oddf_clean_price(buf, arity, date1904);
 }
 
 }  // namespace
 
-Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t arity) {
+Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t arity, bool date1904) {
   // The schedule is built once here for the initial-guess heuristic. The
   // Newton iterate calls `price_at` (which rebuilds the schedule each time)
   // -- the schedule's structure is independent of yld so recomputing it per
   // iteration is cheap relative to the sum-of-powers in the price kernel.
   OddFirstSchedule sched{};
-  auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/true, sched);
+  auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/true, date1904, sched);
   if (!in) {
     return in.error();
   }
@@ -134,7 +134,7 @@ Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t 
   // one-sided derivative below rather than evaluating an invalid iterate.
   yld = std::max(0.0, yld);
 
-  return solve_yield_by_newton(price_at, args, arity, pr_v, yld);
+  return solve_yield_by_newton(price_at, args, arity, pr_v, yld, date1904);
 }
 
 // --- ODDFYIELD(settlement, maturity, issue, first_coupon, rate, pr,
@@ -143,8 +143,8 @@ Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t 
 // Annual yield-to-maturity (decimal) for a security whose first
 // coupon period is irregular. Numerically inverts ODDFPRICE via
 // Newton-Raphson.
-Value OddfYield(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto y = compute_oddf_yield(args, arity);
+Value OddfYield(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
+  auto y = compute_oddf_yield(args, arity, date1904);
   if (!y) {
     return Value::error(y.error());
   }

@@ -28,7 +28,7 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 
-Value OddfPrice(const Value* args, std::uint32_t arity, Arena& arena);
+Value OddfPrice(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 
 }  // namespace financial_detail
 }  // namespace eval

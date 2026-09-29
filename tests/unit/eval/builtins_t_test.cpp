@@ -245,6 +245,50 @@ TEST(BuiltinsTInv2T, ProbZeroIsNum) {
 }
 
 // ---------------------------------------------------------------------------
+// Large degrees of freedom (asymptotic path, df >= 1e6)
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsTLargeDf, CdfAtOneBillionDfMatchesScipy) {
+  // scipy.stats.t.cdf(2.0, 1e9) = 0.9772498679168434. Below the asymptotic
+  // threshold this used to reach #NUM! at df=9e8 (log-space cancellation in
+  // regularized_incomplete_beta's prefactor overflowing its NaN guard).
+  const Value v = EvalSource("=T.DIST(2, 1000000000, TRUE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.9772498679168434, 1e-9);
+}
+
+TEST(BuiltinsTLargeDf, RtAtOneBillionDfMatchesScipy) {
+  // scipy.stats.t.sf(2.0, 1e9) = 0.02275013208315662.
+  const Value v = EvalSource("=T.DIST.RT(2, 1000000000)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.02275013208315662, 1e-9);
+}
+
+TEST(BuiltinsTLargeDf, TwoTailedAtOneBillionDfMatchesScipy) {
+  // scipy: 2 * t.sf(2.0, 1e9) = 0.04550026416631324.
+  const Value v = EvalSource("=T.DIST.2T(2, 1000000000)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.04550026416631324, 1e-9);
+}
+
+TEST(BuiltinsTLargeDf, InvAtOneBillionDfConvergesTowardNormalQuantile) {
+  // scipy.stats.t.ppf(0.975, 1e9) = 1.9599639869123249, a hair past the
+  // standard normal quantile 1.959963984540054. The pre-fix bisection
+  // (walking a broken TDistRtCore) converged to ~1.745 instead.
+  const Value v = EvalSource("=T.INV(0.975, 1000000000)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1.9599639869123249, 1e-6);
+}
+
+TEST(BuiltinsTLargeDf, InvAtDfCapMatchesScipy) {
+  // scipy.stats.t.ppf(0.975, 1e10) = 1.959963984777281, at Excel's own
+  // documented df ceiling.
+  const Value v = EvalSource("=T.INV(0.975, 10000000000)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1.959963984777281, 1e-6);
+}
+
+// ---------------------------------------------------------------------------
 // Cross-function consistency
 // ---------------------------------------------------------------------------
 

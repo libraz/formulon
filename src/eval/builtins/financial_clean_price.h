@@ -41,11 +41,15 @@ namespace financial_detail {
 ///   args[5] = frequency  (1, 2, or 4)
 ///   args[6] = basis      (0..4, optional; only consulted when arity==7)
 ///
+/// `date1904` must be the calling workbook's date system; the coupon
+/// schedule decomposes `settlement` / `maturity` and needs it to land on
+/// the right calendar day.
+///
 /// Returns the clean price on success or `ErrorCode::Num` on any
 /// validation / numerical failure (date ordering, frequency / basis
 /// domain, negative rate / yld, non-positive redemption, coupon-schedule
 /// failure, non-finite intermediate or final value).
-Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity);
+Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity, bool date1904);
 
 }  // namespace financial_detail
 }  // namespace eval

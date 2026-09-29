@@ -8,11 +8,13 @@
 #include <string>
 #include <string_view>
 
+#include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "test_eval_helpers.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -23,6 +25,23 @@ namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+
+// Evaluates `src` under the 1904 date system. See
+// `builtins_financial_coupon_test.cpp` / `builtins_datetime_test.cpp` for
+// the same helper.
+Value EvalSource1904(std::string_view src) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), test::mac_context().with_date1904(true));
+}
 
 // ---------------------------------------------------------------------------
 // DISC
@@ -45,6 +64,17 @@ TEST(FinancialDisc, DefaultBasisZero) {
   ASSERT_TRUE(v.is_number());
   EXPECT_GT(v.as_number(), 0.0);
   EXPECT_LT(v.as_number(), 0.1);
+}
+
+TEST(FinancialDisc1904, AgreesWithThe1900EquivalentCalendarDate) {
+  // Exercises DISC's `yearfrac_for_basis` choke point: decomposing the
+  // serial without threading date1904 would shift the computed year
+  // fraction (and hence the rate) by the ~1462-day epoch gap.
+  const Value v1900 = EvalSource("=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 1)");
+  const Value v1904 = EvalSource1904("=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 1)");
+  ASSERT_TRUE(v1900.is_number());
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_EQ(v1900.as_number(), v1904.as_number());
 }
 
 TEST(FinancialDisc, SettlementAfterMaturityIsNum) {
@@ -229,6 +259,17 @@ TEST(FinancialTBillYield, MicrosoftDocExample) {
   const Value v = EvalSource("=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 98.45)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 0.09141, 1e-4);
+}
+
+TEST(FinancialTBillYield1904, AgreesWithThe1900EquivalentCalendarDate) {
+  // Exercises `t_bill_dsm`'s direct `ymd_from_serial` call (the
+  // anniversary-rule check), a separate choke point from
+  // `yearfrac_for_basis`.
+  const Value v1900 = EvalSource("=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 98.45)");
+  const Value v1904 = EvalSource1904("=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 98.45)");
+  ASSERT_TRUE(v1900.is_number());
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_EQ(v1900.as_number(), v1904.as_number());
 }
 
 TEST(FinancialTBillYield, SettlementAfterMaturityIsNum) {

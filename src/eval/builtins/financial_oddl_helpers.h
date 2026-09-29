@@ -88,7 +88,7 @@ struct OddLastSchedule {
 /// this path is not reachable in practice; the failure modes are
 /// pathological-input defenses.
 Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement, double maturity, double last_interest,
-                                                               int frequency, int basis) noexcept;
+                                                               int frequency, int basis, bool date1904) noexcept;
 
 /// Everything ODDLPRICE and ODDLYIELD read and derive before their closed
 /// forms diverge. Slot 4 is the one argument whose meaning differs between the
@@ -114,7 +114,7 @@ struct OddLastInputs {
 /// ODDLYIELD rejects a non-positive `pr` because a zero price implies an
 /// infinite yield. Any failure surfaces as `ErrorCode::Num`.
 Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::uint32_t arity,
-                                                        bool slot4_must_be_positive);
+                                                        bool slot4_must_be_positive, bool date1904);
 
 /// Computes the ODDLPRICE clean price per 100 face. Performs the same
 /// argument validation order as PRICE (date ordering -> frequency domain
@@ -132,13 +132,13 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
 ///   args[5] = redemption     (per 100 face, > 0)
 ///   args[6] = frequency      (1, 2, or 4)
 ///   args[7] = basis          (0..4, optional; only consulted when arity == 8)
-Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uint32_t arity);
+Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uint32_t arity, bool date1904);
 
 /// Computes the ODDLYIELD yield-to-maturity (decimal). Same arg layout as
 /// ODDLPRICE except slot 4 holds `pr` (clean market price, > 0) instead
 /// of `yld`. Returns `ErrorCode::Num` on any validation / numerical
 /// failure (including the closed-form denominator `pr + ai == 0`).
-Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t arity);
+Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t arity, bool date1904);
 
 }  // namespace financial_detail
 }  // namespace eval

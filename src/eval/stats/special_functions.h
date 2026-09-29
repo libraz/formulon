@@ -22,6 +22,17 @@ namespace formulon {
 namespace eval {
 namespace stats {
 
+/// Natural log of the gamma function, `ln(|Gamma(x)|)`.
+///
+/// A thread-safe wrapper around the platform log-gamma: plain `std::lgamma`
+/// additionally writes the sign of `Gamma(x)` to the global (non-atomic)
+/// `signgam` on glibc/musl/Apple's libm, which is a data race when two
+/// worker threads of a parallel recalc both evaluate a lgamma-based builtin
+/// (COMBIN, the Poisson/binomial/hypergeometric/gamma/beta/t/F/negative
+/// binomial family). This callable never reads that sign, so it always
+/// routes through the reentrant `lgamma_r` where the platform provides one.
+double log_gamma(double x) noexcept;
+
 /// Regularized lower incomplete gamma function
 /// `P(a, x) = γ(a, x) / Γ(a)`.
 ///

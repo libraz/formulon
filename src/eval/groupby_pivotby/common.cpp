@@ -86,17 +86,29 @@ bool check_aggregator_lambda(const LambdaValue* lv, Value* out_err) {
   return true;
 }
 
-// Invokes a registry-backed aggregator (Form C) for one group. The slice is
-// flattened into the args vector cellwise so a SUM-style impl sees the same
-// shape it would see from `=SUM({1;2;3})`.
-Value invoke_function_for_group(const FunctionDef* def, const ArrayValue* slice, Arena& arena) {
-  if (slice == nullptr || slice->rows == 0U) {
+}  // namespace
+
+// Invokes a registry-backed function (Form C: a bare function name used as
+// a callable) over one array slice. The slice is flattened into the args
+// vector cellwise so a SUM-style impl sees the same shape it would see from
+// `=SUM({1;2;3})`. Shared by GROUPBY / PIVOTBY's per-group aggregator
+// (`invoke_aggregator_for_group`, below) and by BYROW / BYCOL's per-slice
+// callable (see `eval/lambda_helpers_lazy.cpp`), since both reduce to
+// exactly this: a registry function called once per slice with the slice's
+// cells as its argument list.
+Value invoke_registry_function_over_slice(const FunctionDef* def, const ArrayValue* slice, Arena& arena) {
+  if (slice == nullptr || slice->rows == 0U || slice->cols == 0U) {
     // No values to aggregate; conservatively surface the aggregator's
     // empty-input behaviour by passing zero args. Most aggregate impls
     // (SUM, MIN, MAX, ...) check arity >= min_arity and return #VALUE!.
     return Value::error(ErrorCode::Calc);
   }
-  const std::uint32_t n = slice->rows;
+  // `slice->cells` is row-major regardless of orientation, and a flattened
+  // cell list is all `filter_range_sourced_values` / `def->impl` need -- a
+  // row slice (BYROW) and a column slice (GROUPBY) with the same cells
+  // therefore produce the same result, matching `SUM({1,2,3})` and
+  // `SUM({1;2;3})` agreeing in Excel.
+  const std::uint32_t n = slice->rows * slice->cols;
   if (n < def->min_arity || (def->max_arity != kVariadic && n > def->max_arity)) {
     return Value::error(ErrorCode::Value);
   }
@@ -113,8 +125,6 @@ Value invoke_function_for_group(const FunctionDef* def, const ArrayValue* slice,
   // cell, but the implementation still owns the zero-argument result.
   return def->impl(args, static_cast<std::uint32_t>(kept), arena);
 }
-
-}  // namespace
 
 std::string_view grand_total_label(const EvalContext& ctx) {
   if (ctx.excel_profile().locale == ExcelLocale::kJaJP) {
@@ -524,7 +534,7 @@ Value invoke_aggregator_for_group(const AggregatorRef& agg, const ArrayValue* sl
     const parser::AstNode* ast_args[1] = {slice_ast};
     res = invoke_lambda_values_with_ast(agg.lambda, kAggregatorCallArity, &slice_v, ast_args, arena, registry, ctx);
   } else {
-    res = invoke_function_for_group(agg.function_def, slice, arena);
+    res = invoke_registry_function_over_slice(agg.function_def, slice, arena);
   }
   if (res.is_array()) {
     return Value::error(ErrorCode::Calc);

@@ -24,10 +24,10 @@ using date_time::days_in_month;
 // coupon-date day-of-month preservation rule: if the maturity is
 // Aug-31 and we step back three months, we land on May-31; if we step
 // back six, we land on Feb-28 (or Feb-29 in a leap year).
-double coupon_serial(int y, unsigned m, unsigned anchor_day) noexcept {
+double coupon_serial(int y, unsigned m, unsigned anchor_day, bool date1904) noexcept {
   const unsigned last = days_in_month(y, m);
   const unsigned d = anchor_day > last ? last : anchor_day;
-  return date_time::serial_from_ymd(y, m, d);
+  return date_time::serial_from_ymd(y, m, d, date1904);
 }
 
 // Shifts (y, m) backward by `months` (always positive). Uses
@@ -46,7 +46,8 @@ void shift_months_back(int& y, unsigned& m, int months) noexcept {
 
 }  // namespace
 
-bool compute_coupon_dates(double settlement, double maturity, int frequency, int basis, CouponDates* out) noexcept {
+bool compute_coupon_dates(double settlement, double maturity, int frequency, int basis, bool date1904,
+                          CouponDates* out) noexcept {
   if (out == nullptr) {
     return false;
   }
@@ -56,7 +57,7 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
   // Decompose maturity into (y, m, d). The anchor day-of-month is
   // preserved across the backward walk and clamped to each target
   // month's last day as needed.
-  const date_time::YMD mat = date_time::ymd_from_serial(m);
+  const date_time::YMD mat = date_time::ymd_from_serial(m, date1904);
   const unsigned anchor_day = mat.d;
   const int step_months = 12 / frequency;
 
@@ -69,7 +70,7 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
   // we performed before reaching PCD.
   int y_walk = mat.y;
   unsigned m_walk = mat.m;
-  double current = date_time::serial_from_ymd(y_walk, m_walk, anchor_day);
+  double current = date_time::serial_from_ymd(y_walk, m_walk, anchor_day, date1904);
   std::int32_t coupons = 0;
 
   // If maturity's own serial is already <= settlement (shouldn't
@@ -81,7 +82,7 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
     ++coupons;
     // Step one period back.
     shift_months_back(y_walk, m_walk, step_months);
-    current = coupon_serial(y_walk, m_walk, anchor_day);
+    current = coupon_serial(y_walk, m_walk, anchor_day, date1904);
   }
 
   const double pcd = current;
@@ -100,13 +101,13 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
     y_ncd += static_cast<int>(year_shift);
     m_ncd = static_cast<unsigned>(rem + 1);
   }
-  const double ncd = coupon_serial(y_ncd, m_ncd, anchor_day);
+  const double ncd = coupon_serial(y_ncd, m_ncd, anchor_day, date1904);
 
   // Basis-adjusted day counts. `days_bs` = settlement - PCD;
   // `days_nc` = NCD - settlement. Rounded to match Excel's
   // integer day-count output.
-  const double days_bs_raw = basis_days_between(pcd, s, basis);
-  const double days_nc_raw = basis_days_between(s, ncd, basis);
+  const double days_bs_raw = basis_days_between(pcd, s, basis, date1904);
+  const double days_nc_raw = basis_days_between(s, ncd, basis, date1904);
 
   // Period length. Bases 0/4 always use 360/freq; basis 2 uses
   // 360/freq; basis 3 uses 365/freq; basis 1 uses the actual NCD-PCD

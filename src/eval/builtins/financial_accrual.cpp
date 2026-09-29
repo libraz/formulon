@@ -69,7 +69,7 @@ Expected<bool, ErrorCode> read_calc_method(const Value* args, std::uint32_t arit
 //   - par <= 0                       ->  #NUM!
 //   - frequency not in {1, 2, 4}     ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}   ->  #NUM!
-Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto issue = read_financial_date(args, 0);
   if (!issue) {
     return Value::error(issue.error());
@@ -117,7 +117,7 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   (void)calc_method;
   (void)first_interest;
   const double start = issue.value();
-  auto yf = yearfrac_for_basis(start, settlement.value(), basis.value());
+  auto yf = yearfrac_for_basis(start, settlement.value(), basis.value(), date1904);
   if (!yf) {
     return Value::error(yf.error());
   }
@@ -136,7 +136,7 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - rate <= 0                      ->  #NUM!
 //   - par <= 0                       ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}   ->  #NUM!
-Value Accrintm(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value Accrintm(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto issue = read_financial_date(args, 0);
   if (!issue) {
     return Value::error(issue.error());
@@ -163,7 +163,7 @@ Value Accrintm(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (rate.value() <= 0.0 || par.value() <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto yf = yearfrac_for_basis(issue.value(), settlement.value(), basis.value());
+  auto yf = yearfrac_for_basis(issue.value(), settlement.value(), basis.value(), date1904);
   if (!yf) {
     return Value::error(yf.error());
   }

@@ -29,10 +29,10 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 
-Value PriceDisc(const Value* args, std::uint32_t arity, Arena& arena);
-Value PriceMat(const Value* args, std::uint32_t arity, Arena& arena);
-Value YieldDisc(const Value* args, std::uint32_t arity, Arena& arena);
-Value YieldMat(const Value* args, std::uint32_t arity, Arena& arena);
+Value PriceDisc(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value PriceMat(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value YieldDisc(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value YieldMat(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 Value StockHistory(const Value* args, std::uint32_t arity, Arena& arena);
 
 }  // namespace financial_detail

@@ -156,8 +156,12 @@ double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned
 /// Bases 0 and 4 (the 30/360 family) decompose both serials and apply the
 /// NASD / EU day-count rules, scaled by 360 so the result is the integer day
 /// count Excel reports for COUPDAYBS / COUPDAYSNC. Bases 1, 2 and 3 are
-/// actual-day conventions and use the raw serial difference.
-double basis_days_between(double a, double b, int basis) noexcept;
+/// actual-day conventions and use the raw serial difference (date1904-
+/// invariant, since `a` and `b` share the workbook's epoch either way).
+/// `date1904` must be the calling workbook's date system: bases 0/4 decode
+/// `a` / `b` through `ymd_from_serial`, which needs it to land on the right
+/// calendar day.
+double basis_days_between(double a, double b, int basis, bool date1904) noexcept;
 
 }  // namespace date_time
 }  // namespace eval

@@ -14,7 +14,7 @@
 // bracket-then-Newton helper defined locally in this TU.
 //
 // Numerical notes:
-//   * Gamma / log-gamma: std::tgamma / std::lgamma handle the generic
+//   * Gamma / log-gamma: std::tgamma / stats::log_gamma handle the generic
 //     case. tgamma is NaN/Inf at non-positive integers (poles); we
 //     surface #NUM! explicitly before calling std::tgamma so the
 //     behaviour matches Excel regardless of the platform's tgamma
@@ -181,8 +181,8 @@ double BracketThenNewton(CdfFn cdf, PdfFn pdf, double lo, double hi, double p) {
 // Callers must pre-reject x <= 0 and x >= 1; the 0^(a-1) cases have
 // distribution-dependent boundary values that the wrappers handle directly.
 double BetaPdfStd(double x, double alpha, double beta_shape) noexcept {
-  const double log_pdf = (alpha - 1.0) * std::log(x) + (beta_shape - 1.0) * std::log(1.0 - x) - std::lgamma(alpha) -
-                         std::lgamma(beta_shape) + std::lgamma(alpha + beta_shape);
+  const double log_pdf = (alpha - 1.0) * std::log(x) + (beta_shape - 1.0) * std::log(1.0 - x) -
+                         stats::log_gamma(alpha) - stats::log_gamma(beta_shape) + stats::log_gamma(alpha + beta_shape);
   return std::exp(log_pdf);
 }
 
@@ -353,7 +353,7 @@ Value Gammaln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(std::lgamma(x));
+  return finalize(stats::log_gamma(x));
 }
 
 // Gamma PDF at x >= 0 with shape `alpha` and scale `beta`:
@@ -362,7 +362,7 @@ Value Gammaln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // x < 0, alpha <= 0, beta <= 0 up front.
 double GammaPdf(double x, double alpha, double beta_scale) noexcept {
   const double log_pdf =
-      -alpha * std::log(beta_scale) - std::lgamma(alpha) + (alpha - 1.0) * std::log(x) - x / beta_scale;
+      -alpha * std::log(beta_scale) - stats::log_gamma(alpha) + (alpha - 1.0) * std::log(x) - x / beta_scale;
   return std::exp(log_pdf);
 }
 
@@ -581,7 +581,7 @@ Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Log-combination log(C(n, k)) = lgamma(n+1) - lgamma(k+1) - lgamma(n-k+1).
 // Callers pre-validate 0 <= k <= n so the lgamma arguments stay positive.
 double LogCombination(double n, double k) noexcept {
-  return std::lgamma(n + 1.0) - std::lgamma(k + 1.0) - std::lgamma(n - k + 1.0);
+  return stats::log_gamma(n + 1.0) - stats::log_gamma(k + 1.0) - stats::log_gamma(n - k + 1.0);
 }
 
 // Hypergeometric PMF at k successes drawn from a population of N with K

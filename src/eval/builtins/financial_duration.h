@@ -25,8 +25,8 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 
-Value Duration(const Value* args, std::uint32_t arity, Arena& arena);
-Value MDuration(const Value* args, std::uint32_t arity, Arena& arena);
+Value Duration(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value MDuration(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 
 }  // namespace financial_detail
 }  // namespace eval

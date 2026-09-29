@@ -58,11 +58,16 @@ struct CouponDates {
 ///   - `frequency` in {1, 2, 4}
 ///   - `basis` in {0..4}
 ///
+/// `date1904` must be the calling workbook's date system: the schedule
+/// walk decomposes `maturity` via `ymd_from_serial`, which needs it to
+/// land on the right calendar day.
+///
 /// Returns `false` on an unrecoverable internal error (e.g. date
 /// decomposition failure). Given valid pre-validated inputs this path
 /// is not reachable in practice; callers translate a `false` return
 /// into `#NUM!` defensively.
-bool compute_coupon_dates(double settlement, double maturity, int frequency, int basis, CouponDates* out) noexcept;
+bool compute_coupon_dates(double settlement, double maturity, int frequency, int basis, bool date1904,
+                          CouponDates* out) noexcept;
 
 }  // namespace eval
 }  // namespace formulon

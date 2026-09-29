@@ -104,15 +104,17 @@ inline Expected<int, ErrorCode> read_coupon_frequency(const Value* args, std::ui
 
 // Computes YEARFRAC(start, end, basis) under the same rules as the
 // YEARFRAC builtin. Allows a zero result; callers that divide by the
-// year fraction should reject zero before use.
-inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, int basis) {
+// year fraction should reject zero before use. `date1904` must be the
+// calling workbook's date system so `start` / `end` decode to the right
+// calendar day.
+inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, int basis, bool date1904) {
   if (basis < 0 || basis > 4) {
     return ErrorCode::Num;
   }
   const double s = std::trunc(start);
   const double e = std::trunc(end);
-  const date_time::YMD a = date_time::ymd_from_serial(s);
-  const date_time::YMD b = date_time::ymd_from_serial(e);
+  const date_time::YMD a = date_time::ymd_from_serial(s, date1904);
+  const date_time::YMD b = date_time::ymd_from_serial(e, date1904);
   double yf = 0.0;
   switch (basis) {
     case 0:
@@ -265,13 +267,14 @@ Value Syd(const Value* args, std::uint32_t arity, Arena& arena);
 Value Ddb(const Value* args, std::uint32_t arity, Arena& arena);
 Value Db(const Value* args, std::uint32_t arity, Arena& arena);
 Value Vdb(const Value* args, std::uint32_t arity, Arena& arena);
-Value Amordegrc(const Value* args, std::uint32_t arity, Arena& arena);
-Value Amorlinc(const Value* args, std::uint32_t arity, Arena& arena);
+Value Amordegrc(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value Amorlinc(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 
 // A bond price kernel evaluated at one candidate yield, in the shape the
 // yield solvers below invert: the call's own argument vector with the
-// yield slot replaced by `yld`.
-using BondPriceFn = Expected<double, ErrorCode> (*)(const Value* args, std::uint32_t arity, double yld);
+// yield slot replaced by `yld`. `date1904` is the calling workbook's date
+// system, needed by any day-count decomposition the kernel performs.
+using BondPriceFn = Expected<double, ErrorCode> (*)(const Value* args, std::uint32_t arity, double yld, bool date1904);
 
 // Solves `price_at(yld) == target_price` by Newton-Raphson, shared by
 // YIELD and ODDFYIELD. The derivative is a central difference with step
@@ -284,13 +287,13 @@ using BondPriceFn = Expected<double, ErrorCode> (*)(const Value* args, std::uint
 // exhausting the iteration cap surfaces `#NUM!`, which is what Excel
 // reports for a price the bond cannot reach.
 inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, const Value* args, std::uint32_t arity,
-                                                         double target_price, double initial_guess) {
+                                                         double target_price, double initial_guess, bool date1904) {
   constexpr int kMaxIter = 100;
   constexpr double kStepTol = 1.0e-15;
   const double f_tol = 1.0e-12 * (std::fabs(target_price) + 1.0);
   double yld = initial_guess;
   for (int iter = 0; iter < kMaxIter; ++iter) {
-    auto f0 = price_at(args, arity, yld);
+    auto f0 = price_at(args, arity, yld, date1904);
     if (!f0) {
       return f0.error();
     }
@@ -302,7 +305,7 @@ inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, c
       return yld;
     }
     const double step = 1.0e-7 * std::fmax(1.0, std::fabs(yld));
-    auto f_plus = price_at(args, arity, yld + step);
+    auto f_plus = price_at(args, arity, yld + step, date1904);
     if (!f_plus) {
       return f_plus.error();
     }
@@ -310,7 +313,7 @@ inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, c
     if (yld < step) {
       df = (f_plus.value() - f0.value()) / step;
     } else {
-      auto f_minus = price_at(args, arity, yld - step);
+      auto f_minus = price_at(args, arity, yld - step, date1904);
       if (!f_minus) {
         return f_minus.error();
       }
@@ -330,7 +333,19 @@ inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, c
       return ErrorCode::Num;
     }
     if (std::fabs(damped_delta) < kStepTol) {
-      return new_yld;
+      // The step underflowed without the top-of-loop residual check ever
+      // firing -- typically because the iterate is pinned at the yld >= 0
+      // domain boundary and can shrink no further. Step-size convergence
+      // alone does not mean the target price was reached, so certify the
+      // residual here too before accepting the answer.
+      auto f_new = price_at(args, arity, new_yld, date1904);
+      if (!f_new) {
+        return f_new.error();
+      }
+      if (std::fabs(f_new.value() - target_price) < f_tol) {
+        return new_yld;
+      }
+      return ErrorCode::Num;
     }
     yld = new_yld;
   }
@@ -339,8 +354,8 @@ inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, c
 }
 
 // Value-returning builtins implemented in `financial_accrual.cpp`.
-Value Accrint(const Value* args, std::uint32_t arity, Arena& arena);
-Value Accrintm(const Value* args, std::uint32_t arity, Arena& arena);
+Value Accrint(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value Accrintm(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 
 // Value-returning builtins implemented in `financial_misc.cpp`.
 Value DollarDe(const Value* args, std::uint32_t arity, Arena& arena);
@@ -354,12 +369,12 @@ Value IsPmt(const Value* args, std::uint32_t arity, Arena& arena);
 
 // Value-returning builtins implemented in `financial_rates.cpp`
 // (security-rate and T-Bill family).
-Value Disc(const Value* args, std::uint32_t arity, Arena& arena);
-Value Intrate(const Value* args, std::uint32_t arity, Arena& arena);
-Value Received(const Value* args, std::uint32_t arity, Arena& arena);
-Value TBillPrice(const Value* args, std::uint32_t arity, Arena& arena);
-Value TBillYield(const Value* args, std::uint32_t arity, Arena& arena);
-Value TBillEq(const Value* args, std::uint32_t arity, Arena& arena);
+Value Disc(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value Intrate(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value Received(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value TBillPrice(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value TBillYield(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+Value TBillEq(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 
 }  // namespace financial_detail
 }  // namespace eval

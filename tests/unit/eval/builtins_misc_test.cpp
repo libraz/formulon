@@ -303,6 +303,38 @@ TEST(BuiltinsDays360, NegativeSerialIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(BuiltinsDays360, OutOfRangeSerialIsNum) {
+  const Value v = EvalSource("=DAYS360(1E300,DATE(2024,1,1))");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsDays360, Feb28NonLeapStartUsMethod) {
+  // US/NASD: a non-leap Feb 28 start is the last day of its month, so it
+  // becomes day 30 -- same as a day-31 start -- per date_time::yearfrac_us30_360.
+  // 360*0 + 30*(3-2) + (15-30) = 15.
+  const Value v = EvalSource("=DAYS360(DATE(2023,2,28),DATE(2023,3,15))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 15.0);
+}
+
+TEST(BuiltinsDays360, Feb29LeapStartUsMethod) {
+  // US/NASD: a leap-year Feb 29 start is also the last day of its month.
+  // 360*0 + 30*(3-2) + (15-30) = 15.
+  const Value v = EvalSource("=DAYS360(DATE(2024,2,29),DATE(2024,3,15))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 15.0);
+}
+
+TEST(BuiltinsDays360, Feb28NonLeapStartEndDay31UsMethod) {
+  // Once Feb 28 becomes day 30 (>= 30), the "end day 31" rule collapses
+  // the end day to 30 rather than rolling to the next month.
+  // 360*0 + 30*(3-2) + (30-30) = 30.
+  const Value v = EvalSource("=DAYS360(DATE(2023,2,28),DATE(2023,3,31))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 30.0);
+}
+
 TEST(BuiltinsDays360, ErrorPropagates) {
   const Value v = EvalSource("=DAYS360(\"abc\",DATE(2024,1,1))");
   ASSERT_TRUE(v.is_error());

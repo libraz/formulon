@@ -13,11 +13,13 @@
 
 #include <string_view>
 
+#include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "test_eval_helpers.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -28,6 +30,23 @@ namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+
+// Evaluates `src` under the 1904 date system. See
+// `builtins_financial_coupon_test.cpp` / `builtins_datetime_test.cpp` for
+// the same helper.
+Value EvalSource1904(std::string_view src) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), test::mac_context().with_date1904(true));
+}
 
 // ---------------------------------------------------------------------------
 // YIELD -- canonical Microsoft documented case.
@@ -113,6 +132,30 @@ TEST(FinancialYield, PremiumRoundTripViaPrice) {
       "100, 2, 0)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 0.05, 1e-9);
+}
+
+TEST(FinancialYield, UnreachablePriceIsNum) {
+  // PRICE at yld = 0 is 156.0625 for this bond (its theoretical maximum,
+  // since price decreases monotonically as yld increases over the
+  // solver's yld >= 0 domain). No non-negative yield reaches pr = 100000,
+  // so the Newton iterate gets pinned at the yld = 0 boundary and its step
+  // underflows there without ever certifying the residual -- the solver
+  // must surface #NUM! rather than silently returning the clamped 0.
+  const Value v = EvalSource("=YIELD(DATE(2008,2,15), DATE(2017,11,15), 0.0575, 100000, 100, 2, 0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialYield1904, AgreesWithThe1900EquivalentCalendarDate) {
+  // Exercises the n>1 Newton branch's `solve_yield_by_newton` /
+  // `price_at` -> `compute_clean_price` -> `compute_coupon_dates` chain:
+  // decomposing the serial without threading date1904 through every link
+  // would shift the coupon schedule by the ~1462-day epoch gap.
+  const Value v1900 = EvalSource("=YIELD(DATE(2008,2,15), DATE(2017,11,15), 0.0575, 94.6343616213, 100, 2, 0)");
+  const Value v1904 = EvalSource1904("=YIELD(DATE(2008,2,15), DATE(2017,11,15), 0.0575, 94.6343616213, 100, 2, 0)");
+  ASSERT_TRUE(v1900.is_number());
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_NEAR(v1900.as_number(), v1904.as_number(), 1e-9);
 }
 
 TEST(FinancialYield, DiscountRoundTrip) {

@@ -156,6 +156,19 @@ TEST(BuiltinsMath4Combin, FractionalTruncates) {
   EXPECT_EQ(v.as_number(), 10.0);
 }
 
+TEST(BuiltinsMath4Combin, ExactIntegerForSmallKLargeN) {
+  // A direct n!/(k!*(n-k)!) ratio loses precision here even though the
+  // true result is a small integer: n! is well beyond 2^53 by n=24, so
+  // dividing the (inexact) stored factorials used to yield 23.99999...
+  // and 377.99999... instead of the exact integers.
+  const Value a = EvalSource("=COMBIN(24, 1)");
+  ASSERT_TRUE(a.is_number());
+  EXPECT_EQ(a.as_number(), 24.0);
+  const Value b = EvalSource("=COMBIN(28, 2)");
+  ASSERT_TRUE(b.is_number());
+  EXPECT_EQ(b.as_number(), 378.0);
+}
+
 // ---------------------------------------------------------------------------
 // COMBINA
 // ---------------------------------------------------------------------------

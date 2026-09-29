@@ -9,11 +9,13 @@
 #include <string_view>
 
 #include "eval/coupon_schedule.h"
+#include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "test_eval_helpers.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -24,6 +26,24 @@ namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+
+// Evaluates `src` under the 1904 date system (mirrors
+// `builtins_datetime_test.cpp`'s `EvalSource1904`): the financial family
+// reads the epoch from `EvalContext::date1904()` the same way the calendar
+// family does.
+Value EvalSource1904(std::string_view src) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), test::mac_context().with_date1904(true));
+}
 
 // ---------------------------------------------------------------------------
 // Canonical bond example — 2011-01-25 settle, 2011-11-15 mature, semi-annual
@@ -320,7 +340,7 @@ TEST(FinancialCoupNum, QuarterlyFrequency) {
 TEST(CouponScheduleEngine, CanonicalExample) {
   CouponDates ctx{};
   // DATE(2011, 1, 25) = 40568; DATE(2011, 11, 15) = 40862.
-  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 1, &ctx));
+  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 1, false, &ctx));
   EXPECT_EQ(ctx.pcd, 40497.0);
   EXPECT_EQ(ctx.ncd, 40678.0);
   EXPECT_EQ(ctx.coupons_remaining, 2);
@@ -332,7 +352,7 @@ TEST(CouponScheduleEngine, CanonicalExample) {
 TEST(CouponScheduleEngine, EndOfMonthClampLeap) {
   CouponDates ctx{};
   // DATE(2020, 3, 1) = 43891; DATE(2020, 8, 31) = 44074.
-  ASSERT_TRUE(compute_coupon_dates(43891.0, 44074.0, 4, 1, &ctx));
+  ASSERT_TRUE(compute_coupon_dates(43891.0, 44074.0, 4, 1, false, &ctx));
   // PCD = 2020-02-29 = 43890.
   EXPECT_EQ(ctx.pcd, 43890.0);
   // NCD = 2020-05-31 = 43982.
@@ -342,7 +362,7 @@ TEST(CouponScheduleEngine, EndOfMonthClampLeap) {
 
 TEST(CouponScheduleEngine, AnnualFrequency) {
   CouponDates ctx{};
-  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 1, 0, &ctx));
+  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 1, 0, false, &ctx));
   EXPECT_EQ(ctx.pcd, 40497.0);  // 2010-11-15
   EXPECT_EQ(ctx.ncd, 40862.0);  // 2011-11-15 (maturity itself)
   EXPECT_EQ(ctx.coupons_remaining, 1);
@@ -352,14 +372,57 @@ TEST(CouponScheduleEngine, AnnualFrequency) {
 TEST(CouponScheduleEngine, PeriodDaysByBasis) {
   CouponDates ctx{};
   // Semi-annual.
-  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 0, &ctx));
+  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 0, false, &ctx));
   EXPECT_EQ(ctx.period_days, 180.0);
-  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 2, &ctx));
+  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 2, false, &ctx));
   EXPECT_EQ(ctx.period_days, 180.0);
-  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 3, &ctx));
+  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 3, false, &ctx));
   EXPECT_NEAR(ctx.period_days, 182.5, 1e-9);
-  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 4, &ctx));
+  ASSERT_TRUE(compute_coupon_dates(40568.0, 40862.0, 2, 4, false, &ctx));
   EXPECT_EQ(ctx.period_days, 180.0);
+}
+
+// ---------------------------------------------------------------------------
+// date1904 threading — the COUP* family must decompose the serial under
+// the calling workbook's date system, not silently assume 1900.
+// ---------------------------------------------------------------------------
+
+TEST(FinancialCoupon1904, CoupDayBsAgreesWithThe1900EquivalentCalendarDate) {
+  // DATE() is itself date1904-aware, so DATE(2011,1,25) under each system
+  // produces the correctly-shifted serial for the *same* calendar day.
+  // COUPDAYBS decomposing that serial without threading date1904 would
+  // shift the result by the ~1462-day epoch gap; with it, both systems
+  // agree on the day count exactly.
+  const Value v1900 = EvalSource("=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 1)");
+  const Value v1904 = EvalSource1904("=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 1)");
+  ASSERT_TRUE(v1900.is_number());
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_EQ(v1900.as_number(), v1904.as_number());
+  EXPECT_EQ(v1904.as_number(), 71.0);
+}
+
+TEST(FinancialCoupon1904, CoupDayBsBasisZeroAgreesAcrossDateSystems) {
+  // Basis 0 (unlike basis 1) routes through `basis_days_between`'s
+  // 30/360 branch, which decomposes both serials via `ymd_from_serial`
+  // directly -- a separate call site from `compute_coupon_dates`'s own
+  // decomposition, so this exercises that site specifically.
+  const Value v1900 = EvalSource("=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 0)");
+  const Value v1904 = EvalSource1904("=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 0)");
+  ASSERT_TRUE(v1900.is_number());
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_EQ(v1900.as_number(), v1904.as_number());
+}
+
+TEST(FinancialCoupon1904, CoupPcdReturnsThe1904SystemSerial) {
+  // The returned coupon-date serial must itself be in the *calling*
+  // workbook's date system: PCD = 2010-11-15, whose 1904-system serial is
+  // 1462 less than its 1900-system serial (40497).
+  const Value v1900 = EvalSource("=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 2, 1)");
+  const Value v1904 = EvalSource1904("=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 2, 1)");
+  ASSERT_TRUE(v1900.is_number());
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_EQ(v1900.as_number(), 40497.0);
+  EXPECT_EQ(v1904.as_number(), 40497.0 - 1462.0);
 }
 
 }  // namespace

@@ -122,8 +122,8 @@ struct OddFirstSchedule {
 /// failure). Given valid pre-validated inputs the failure modes are
 /// pathological-input defenses.
 Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settlement, double maturity, double issue,
-                                                                 double first_coupon, int frequency,
-                                                                 int basis) noexcept;
+                                                                 double first_coupon, int frequency, int basis,
+                                                                 bool date1904) noexcept;
 
 /// The scalar arguments ODDFPRICE and ODDFYIELD share. Slot 5 is the one
 /// argument whose meaning differs between the two — `yld` for the price
@@ -147,7 +147,8 @@ struct OddFirstArgs {
 /// because a zero price implies an infinite yield. Any failure surfaces as
 /// `ErrorCode::Num`, and `sched_out` is untouched on failure.
 Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::uint32_t arity,
-                                                        bool slot5_must_be_positive, OddFirstSchedule& sched_out);
+                                                        bool slot5_must_be_positive, bool date1904,
+                                                        OddFirstSchedule& sched_out);
 
 /// Computes the ODDFPRICE clean price per 100 face. Performs the same
 /// argument validation order as PRICE / ODDLPRICE (date ordering ->
@@ -166,14 +167,14 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
 ///   args[6] = redemption     (per 100 face, > 0)
 ///   args[7] = frequency      (1, 2, or 4)
 ///   args[8] = basis          (0..4, optional; only consulted when arity == 9)
-Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity);
+Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity, bool date1904);
 
 /// Computes the ODDFYIELD yield-to-maturity (decimal). Same arg layout
 /// as ODDFPRICE except slot 5 holds `pr` (clean market price, > 0)
 /// instead of `yld`. Returns `ErrorCode::Num` on any validation /
 /// numerical failure (degenerate derivative, iteration cap reached,
 /// non-finite intermediate).
-Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t arity);
+Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t arity, bool date1904);
 
 }  // namespace financial_detail
 }  // namespace eval

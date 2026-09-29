@@ -125,8 +125,8 @@ double BinomPmf(double k, double n, double prob) {
   if (prob == 1.0) {
     return k == n ? 1.0 : 0.0;
   }
-  const double log_pmf = std::lgamma(n + 1.0) - std::lgamma(k + 1.0) - std::lgamma(n - k + 1.0) + k * std::log(prob) +
-                         (n - k) * std::log(1.0 - prob);
+  const double log_pmf = stats::log_gamma(n + 1.0) - stats::log_gamma(k + 1.0) - stats::log_gamma(n - k + 1.0) +
+                         k * std::log(prob) + (n - k) * std::log(1.0 - prob);
   return std::exp(log_pmf);
 }
 
@@ -189,7 +189,7 @@ Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Log-space PMF of Poisson(mean) at k: exp(-mean + k*log(mean) - lgamma(k+1)).
 // Assumes `mean > 0` and `k >= 0`; callers enforce both.
 static double PoissonPmf(double k, double mean) {
-  const double log_pmf = -mean + k * std::log(mean) - std::lgamma(k + 1.0);
+  const double log_pmf = -mean + k * std::log(mean) - stats::log_gamma(k + 1.0);
   return std::exp(log_pmf);
 }
 
@@ -254,7 +254,7 @@ Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 // `(df/2 - 1) * log(x)` term is `0 * log(x)`, which is 0 at x == 0 but
 // surfaces as NaN via IEEE-754; callers short-circuit the boundary.
 static double ChisqPdf(double x, double df) noexcept {
-  return std::exp(-0.5 * x + (0.5 * df - 1.0) * std::log(x) - 0.5 * df * std::log(2.0) - std::lgamma(0.5 * df));
+  return std::exp(-0.5 * x + (0.5 * df - 1.0) * std::log(x) - 0.5 * df * std::log(2.0) - stats::log_gamma(0.5 * df));
 }
 
 // Upper bound for `df` accepted by Excel 365's CHISQ.* family. Values above
@@ -481,10 +481,42 @@ Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // domain checks readable at each callsite.
 static constexpr double kTFdfMax = 1.0e10;
 
-// Student's t right tail, evaluated directly through the regularized
-// incomplete beta. Keeping this probability separate avoids cancelling it
-// from one for large x, which is essential for inverse-tail bracketing.
+// Degrees-of-freedom threshold above which the right tail switches to the
+// asymptotic formula below instead of the regularized incomplete beta.
+// regularized_incomplete_beta(df/2, 1/2, y) derives its log-space prefactor
+// from three log_gamma(~df/2) calls that individually run to a magnitude of
+// ~df*log(df)/2 and are expected to cancel down to a value near zero; past
+// this threshold the residual rounding error in that cancellation dominates
+// the result (verified against scipy.stats.t.cdf: the asymptotic below
+// already agrees with it to within 1e-9 at df=1e4 and to double-precision
+// noise by df=1e6, so switching here never trades away accuracy the exact
+// path still had).
+static constexpr double kTDistAsymptoticDfThreshold = 1.0e6;
+
+// Right tail of the standard normal, `1 - Phi(x)`, via `erfc` rather than
+// `1 - normal_cdf(x)` so it stays accurate for the large positive `x` the
+// asymptotic path below is evaluated at.
+static double NormalRightTail(double x) noexcept {
+  return 0.5 * std::erfc(x / std::sqrt(2.0));
+}
+
+// Two-term asymptotic expansion of the Student's t right tail for large df
+// (DLMF 26.7.8 / Cornish-Fisher): `Q(x) = 1 - Phi(x) + phi(x)*(x^3+x)/(4*df)
+// + O(1/df^2)`. Self-symmetric (`Q(-x) == 1 - Q(x)`) for every x, so unlike
+// the incomplete-beta path this needs no separate sign branch.
+static double TDistRtAsymptotic(double x, double df) noexcept {
+  const double phi = std::exp(-0.5 * x * x) / std::sqrt(2.0 * kStatsPi);
+  return NormalRightTail(x) + phi * (x * x * x + x) / (4.0 * df);
+}
+
+// Student's t right tail. Below the asymptotic threshold this is evaluated
+// directly through the regularized incomplete beta, keeping the probability
+// separate from 1 for large x, which is essential for inverse-tail
+// bracketing.
 static double TDistRtCore(double x, double df) noexcept {
+  if (df >= kTDistAsymptoticDfThreshold) {
+    return TDistRtAsymptotic(x, df);
+  }
   const double t2 = x * x;
   const double y = df / (df + t2);
   const double half = 0.5 * stats::regularized_incomplete_beta(0.5 * df, 0.5, y);
@@ -499,7 +531,8 @@ static double TDistCdf(double x, double df) noexcept {
 // Student's t PDF at `x` with `df` degrees of freedom, computed in log
 // space via lgamma to stay stable for large df (tgamma overflows past ~170).
 static double TDistPdf(double x, double df) noexcept {
-  const double log_norm = std::lgamma(0.5 * (df + 1.0)) - std::lgamma(0.5 * df) - 0.5 * std::log(df * kStatsPi);
+  const double log_norm =
+      stats::log_gamma(0.5 * (df + 1.0)) - stats::log_gamma(0.5 * df) - 0.5 * std::log(df * kStatsPi);
   const double log_kernel = -0.5 * (df + 1.0) * std::log(1.0 + x * x / df);
   return std::exp(log_norm + log_kernel);
 }
@@ -538,9 +571,10 @@ Value TDist2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x < 0.0 || df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
-  // Two-tailed probability is `I_y(df/2, 1/2)` with y = df / (df + x*x).
-  const double y = df / (df + x * x);
-  return finite_number_result(stats::regularized_incomplete_beta(0.5 * df, 0.5, y));
+  // Two-tailed probability is `I_y(df/2, 1/2)` with y = df / (df + x*x),
+  // which for x >= 0 is exactly `2 * TDistRtCore(x, df)` -- routing through
+  // the shared helper picks up its large-df asymptotic path too.
+  return finite_number_result(2.0 * TDistRtCore(x, df));
 }
 
 // T.DIST.RT(x, deg_freedom) - right-tailed Student's t CDF, `1 - CDF(x)`.
@@ -660,8 +694,8 @@ static double FDistRtCore(double x, double d1, double d2) noexcept {
 // (divergent for d1 < 2, equal to 1 for d1 == 2, and 0 for d1 > 2).
 static double FDistPdf(double x, double d1, double d2) noexcept {
   const double log_pdf = 0.5 * d1 * std::log(d1) + 0.5 * d2 * std::log(d2) + (0.5 * d1 - 1.0) * std::log(x) -
-                         0.5 * (d1 + d2) * std::log(d1 * x + d2) + std::lgamma(0.5 * (d1 + d2)) -
-                         std::lgamma(0.5 * d1) - std::lgamma(0.5 * d2);
+                         0.5 * (d1 + d2) * std::log(d1 * x + d2) + stats::log_gamma(0.5 * (d1 + d2)) -
+                         stats::log_gamma(0.5 * d1) - stats::log_gamma(0.5 * d2);
   return std::exp(log_pdf);
 }
 

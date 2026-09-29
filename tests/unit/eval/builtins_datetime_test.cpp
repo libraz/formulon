@@ -250,23 +250,22 @@ TEST(DateTimeTime, EndOfDay) {
 }
 
 TEST(DateTimeTime, HourOverflowWrapsModuloDay) {
-  // TIME(25, 0, 0) == TIME(1, 0, 0) modulo the last ULP: fmod on the
-  // scaled-seconds path introduces a few ULPs of rounding versus the
-  // direct 3600/86400 division, so compare with a small tolerance.
+  // TIME(25, 0, 0) == TIME(1, 0, 0): the mod runs on raw total seconds
+  // before the division by 86400, so equal totals are bit-identical.
   const Value a = EvalSource("=TIME(25, 0, 0)");
   const Value b = EvalSource("=TIME(1, 0, 0)");
   ASSERT_TRUE(a.is_number());
   ASSERT_TRUE(b.is_number());
-  EXPECT_NEAR(a.as_number(), b.as_number(), 1e-12);
+  EXPECT_EQ(a.as_number(), b.as_number());
 }
 
 TEST(DateTimeTime, MinuteOverflowNormalises) {
-  // TIME(1, 60, 0) == TIME(2, 0, 0) (same ULP caveat as above).
+  // TIME(1, 60, 0) == TIME(2, 0, 0), bit-identical (same reasoning as above).
   const Value a = EvalSource("=TIME(1, 60, 0)");
   const Value b = EvalSource("=TIME(2, 0, 0)");
   ASSERT_TRUE(a.is_number());
   ASSERT_TRUE(b.is_number());
-  EXPECT_NEAR(a.as_number(), b.as_number(), 1e-12);
+  EXPECT_EQ(a.as_number(), b.as_number());
 }
 
 TEST(DateTimeTime, NegativeComponentProducesNum) {
@@ -755,6 +754,15 @@ TEST(DateTimeDays, ErrorPropagates) {
   const Value v = EvalSource("=DAYS(\"abc\", DATE(2026, 4, 23))");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(DateTimeDays, OutOfRangeSerialIsNum) {
+  // A serial far beyond Excel's max date (9999-12-31 = 2958465) must be
+  // rejected with #NUM! rather than reaching the int64 cast in
+  // ymd_from_serial with undefined behavior.
+  const Value v = EvalSource("=DAYS(1E300, DATE(2026, 4, 23))");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 // ---------------------------------------------------------------------------

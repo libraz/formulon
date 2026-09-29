@@ -19,6 +19,9 @@
 #ifndef FORMULON_EVAL_FINANCIAL_LAZY_H_
 #define FORMULON_EVAL_FINANCIAL_LAZY_H_
 
+#include <cstdint>
+#include <string_view>
+
 #include "utils/arena.h"
 #include "value.h"
 
@@ -79,6 +82,48 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 /// is Blank) are dropped before the sum.
 Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
+
+// ---------------------------------------------------------------------------
+// Date1904-sensitive financial family
+// ---------------------------------------------------------------------------
+//
+// COUPPCD / COUPNCD / COUPNUM / COUPDAYBS / COUPDAYSNC / COUPDAYS, ACCRINT /
+// ACCRINTM, DISC / INTRATE / RECEIVED / TBILLPRICE / TBILLYIELD / TBILLEQ,
+// PRICE* / YIELD* (regular, discount, maturity, and odd-period variants),
+// DURATION / MDURATION, and AMORDEGRC / AMORLINC all decompose a date
+// serial (directly, or through `yearfrac_for_basis` / `compute_coupon_dates`
+// in `eval/builtins/financial_helpers.h` / `eval/coupon_schedule.h`), so
+// they need the workbook's `EvalContext::date1904()` the same way the
+// calendar family does (see `eval/datetime_lazy.h`) -- unreachable through
+// the eager `FunctionDef` calling convention. They live in this TU rather
+// than a dedicated one so the financial family's lazy-dispatch machinery
+// stays in one place alongside IRR/MIRR/XIRR/XNPV.
+
+/// A date1904-aware financial-family impl. Same shape as an eager builtin
+/// plus a trailing `date1904` flag threaded from `EvalContext::date1904()`.
+using FinancialDateImplFn = Value (*)(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+
+/// One financial-date-family entry: the impl plus its arity bounds (the
+/// eager dispatcher's arity guard is replicated by the callers below).
+struct FinancialDateEntry {
+  FinancialDateImplFn impl;
+  std::uint32_t min_arity;
+  std::uint32_t max_arity;
+};
+
+/// Returns the financial-date entry for `name` (canonical UPPERCASE) or
+/// `nullptr` when `name` does not name one of these functions. Used by the
+/// VM to reuse the shared impl with `ctx.date1904()` since the VM has no
+/// call AST to drive the lazy path.
+const FinancialDateEntry* find_financial_date_entry(std::string_view name) noexcept;
+
+/// Single tree-walker lazy impl covering the whole date1904-sensitive
+/// financial family. Evaluates the call's arguments (scalar-only,
+/// left-most error wins, matching the eager dispatcher's contract), then
+/// invokes the matching `FinancialDateEntry::impl` with `ctx.date1904()`.
+/// Registered in the lazy dispatch table under each of the family's names.
+Value eval_financial_date_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

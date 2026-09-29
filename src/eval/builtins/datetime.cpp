@@ -305,7 +305,9 @@ Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   // Normalise modulo a full day so `TIME(25, 0, 0) == TIME(1, 0, 0)`.
-  const double day_fraction = std::fmod(total / 86400.0, 1.0);
+  // Mod first, then divide: dividing before the mod rounds the quotient
+  // and loses bit-identity between argument triples with equal totals.
+  const double day_fraction = std::fmod(total, 86400.0) / 86400.0;
   return Value::number(day_fraction);
 }
 
@@ -832,11 +834,11 @@ Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
 /// DAYS(end, start). Both arguments are truncated to their date component;
 /// the result is the signed day difference and may be negative.
 Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto end = coerce_date_arg(args[0], date1904);
+  auto end = coerce_bounded_date_arg(args[0], date1904);
   if (!end) {
     return Value::error(end.error());
   }
-  auto start = coerce_date_arg(args[1], date1904);
+  auto start = coerce_bounded_date_arg(args[1], date1904);
   if (!start) {
     return Value::error(start.error());
   }
@@ -852,19 +854,19 @@ Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
 /// `360*(ey - sy) + 30*(em - sm) + (ed - sd)` after the day components have
 /// been adjusted per the selected rule set.
 ///
-/// US/NASD adjustments (order matters: conditions use the pre-adjusted start
-/// day):
-///   1. end day 31 and start day < 30  -> end becomes 1, end month += 1
-///   2. end day 31 and start day >= 30 -> end day becomes 30
-///   3. start day 31                    -> start day becomes 30
+/// US/NASD adjustments mirror `date_time::yearfrac_us30_360` exactly (same
+/// convention, same day-count formula), so the two never drift apart:
+///   1. start day is the last day of February -> start day becomes 30
+///   2. end day 31 and (post-step-1) start day >= 30 -> end day becomes 30
+///   3. start day 31                                  -> start day becomes 30
 ///
 /// European adjustments: any day of 31 is capped at 30 on both sides.
 Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto start_n = coerce_date_arg(args[0], date1904);
+  auto start_n = coerce_bounded_date_arg(args[0], date1904);
   if (!start_n) {
     return Value::error(start_n.error());
   }
-  auto end_n = coerce_date_arg(args[1], date1904);
+  auto end_n = coerce_bounded_date_arg(args[1], date1904);
   if (!end_n) {
     return Value::error(end_n.error());
   }
@@ -878,11 +880,6 @@ Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   }
   const double start_f = std::floor(normal_date_serial(start_n.value(), date1904));
   const double end_f = std::floor(normal_date_serial(end_n.value(), date1904));
-  // `ymd_from_serial`'s contract requires a non-negative input; reject
-  // pre-1900 serials rather than triggering undefined behaviour downstream.
-  if (start_f < 0.0 || end_f < 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
   const date_time::YMD s = date_time::ymd_from_serial(start_f, /*date1904=*/false);
   const date_time::YMD e = date_time::ymd_from_serial(end_f, /*date1904=*/false);
   int sy = s.y;
@@ -899,20 +896,16 @@ Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
       ed = 30;
     }
   } else {
-    const bool start_is_last = (sd == 31);
-    if (ed == 31) {
-      if (sd < 30) {
-        ed = 1;
-        em += 1;
-        if (em > 12) {
-          em = 1;
-          ey += 1;
-        }
-      } else {
-        ed = 30;
-      }
+    // A start date on the last day of February is treated the same as day
+    // 31: it becomes day 30 before the day-31 rule below runs, so the
+    // "end day 31" check below sees the adjusted start day.
+    if (sm == 2 && sd == static_cast<int>(days_in_month(sy, 2u))) {
+      sd = 30;
     }
-    if (start_is_last) {
+    if (ed == 31 && sd >= 30) {
+      ed = 30;
+    }
+    if (sd == 31) {
       sd = 30;
     }
   }

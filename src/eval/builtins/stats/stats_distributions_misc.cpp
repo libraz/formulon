@@ -243,7 +243,8 @@ Value Phi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Caller must reject p == 0 (because s*log(p) diverges to -inf) and p == 1
 // (Excel surfaces #NUM! for the degenerate distribution).
 static double NegBinomLogPmf(double f, double s, double p) noexcept {
-  return std::lgamma(f + s) - std::lgamma(f + 1.0) - std::lgamma(s) + s * std::log(p) + f * std::log1p(-p);
+  return stats::log_gamma(f + s) - stats::log_gamma(f + 1.0) - stats::log_gamma(s) + s * std::log(p) +
+         f * std::log1p(-p);
 }
 
 // NEGBINOM.DIST(number_f, number_s, probability_s, cumulative) - negative

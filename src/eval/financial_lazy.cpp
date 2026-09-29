@@ -10,9 +10,20 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string_view>
 #include <utility>
 #include <vector>
 
+#include "eval/builtins/financial_bond_simple.h"
+#include "eval/builtins/financial_coupon.h"
+#include "eval/builtins/financial_duration.h"
+#include "eval/builtins/financial_helpers.h"
+#include "eval/builtins/financial_oddfprice.h"
+#include "eval/builtins/financial_oddfyield.h"
+#include "eval/builtins/financial_oddlprice.h"
+#include "eval/builtins/financial_oddlyield.h"
+#include "eval/builtins/financial_price.h"
+#include "eval/builtins/financial_yield.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -21,6 +32,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -748,6 +760,85 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Num);
   }
   return Value::number(result);
+}
+
+const FinancialDateEntry* find_financial_date_entry(std::string_view name) noexcept {
+  // Strip a leading future-function prefix, mirroring `find_date_entry` --
+  // none of these names ship `_xlfn.`-prefixed in practice, but a caller
+  // that already stripped or didn't strip a prefix must not matter here.
+  for (const std::string_view prefix :
+       {std::string_view("_xlfn."), std::string_view("_xlpm."), std::string_view("_xlws.")}) {
+    if (name.size() >= prefix.size() && strings::case_insensitive_eq(name.substr(0, prefix.size()), prefix)) {
+      name.remove_prefix(prefix.size());
+      break;
+    }
+  }
+  struct NamedEntry {
+    std::string_view name;
+    FinancialDateEntry entry;
+  };
+  static constexpr NamedEntry kEntries[] = {
+      {"COUPPCD", {&financial_detail::CoupPcd, 3u, 4u}},
+      {"COUPNCD", {&financial_detail::CoupNcd, 3u, 4u}},
+      {"COUPNUM", {&financial_detail::CoupNum, 3u, 4u}},
+      {"COUPDAYBS", {&financial_detail::CoupDayBs, 3u, 4u}},
+      {"COUPDAYSNC", {&financial_detail::CoupDaysNc, 3u, 4u}},
+      {"COUPDAYS", {&financial_detail::CoupDays, 3u, 4u}},
+      {"ACCRINT", {&financial_detail::Accrint, 6u, 8u}},
+      {"ACCRINTM", {&financial_detail::Accrintm, 4u, 5u}},
+      {"DISC", {&financial_detail::Disc, 4u, 5u}},
+      {"INTRATE", {&financial_detail::Intrate, 4u, 5u}},
+      {"RECEIVED", {&financial_detail::Received, 4u, 5u}},
+      {"TBILLPRICE", {&financial_detail::TBillPrice, 3u, 3u}},
+      {"TBILLYIELD", {&financial_detail::TBillYield, 3u, 3u}},
+      {"TBILLEQ", {&financial_detail::TBillEq, 3u, 3u}},
+      {"PRICEDISC", {&financial_detail::PriceDisc, 4u, 5u}},
+      {"PRICEMAT", {&financial_detail::PriceMat, 5u, 6u}},
+      {"YIELDDISC", {&financial_detail::YieldDisc, 4u, 5u}},
+      {"YIELDMAT", {&financial_detail::YieldMat, 5u, 6u}},
+      {"DURATION", {&financial_detail::Duration, 5u, 6u}},
+      {"MDURATION", {&financial_detail::MDuration, 5u, 6u}},
+      {"PRICE", {&financial_detail::Price, 6u, 7u}},
+      {"YIELD", {&financial_detail::Yield, 6u, 7u}},
+      {"ODDLPRICE", {&financial_detail::OddlPrice, 7u, 8u}},
+      {"ODDLYIELD", {&financial_detail::OddlYield, 7u, 8u}},
+      {"ODDFPRICE", {&financial_detail::OddfPrice, 8u, 9u}},
+      {"ODDFYIELD", {&financial_detail::OddfYield, 8u, 9u}},
+      {"AMORDEGRC", {&financial_detail::Amordegrc, 6u, 7u}},
+      {"AMORLINC", {&financial_detail::Amorlinc, 6u, 7u}},
+  };
+  for (const auto& e : kEntries) {
+    if (strings::case_insensitive_eq(e.name, name)) {
+      return &e.entry;
+    }
+  }
+  return nullptr;
+}
+
+Value eval_financial_date_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx) {
+  const FinancialDateEntry* entry = find_financial_date_entry(call.as_call_name());
+  if (entry == nullptr) {
+    // Registered names always resolve; a miss can only mean a table drift.
+    return Value::error(ErrorCode::Name);
+  }
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < entry->min_arity || arity > entry->max_arity) {
+    return Value::error(ErrorCode::Value);
+  }
+  // This family is scalar-only and propagates the left-most argument
+  // error (none opt out of that rule), matching the eager dispatcher's
+  // pre-evaluation contract.
+  std::vector<Value> args;
+  args.reserve(arity);
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    Value v = eval_node(call.as_call_arg(i), arena, registry, ctx);
+    if (v.is_error()) {
+      return v;
+    }
+    args.push_back(v);
+  }
+  return entry->impl(args.empty() ? nullptr : args.data(), arity, arena, ctx.date1904());
 }
 
 }  // namespace eval
