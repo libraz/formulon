@@ -238,127 +238,104 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
   }
 }
 
-// Invokes `visit_name(name)` for every `NameRef`, `[0]!Name` and `Call` callee (a
-// LAMBDA-valued defined name is called as `Fn(args)`; a built-in callee
-// simply matches no defined name) and `visit_table(table)` for every
-// `StructuredRef`'s table specifier found while walking `node`'s subtree.
-// Node-kind coverage mirrors `parser::TransformNode` (ast_shift.cpp)
-// exhaustively, so a reference nested inside any expression form (calls,
-// LET/LAMBDA bodies, array literals, unions...) is found; a reference
-// shadowed by an enclosing LET/LAMBDA parameter of the same spelling is still
-// visited -- treating it as a real reference only costs an unnecessary
-// reindex, never a missed one.
-template <typename VisitName, typename VisitTable>
-void for_each_name_and_table_ref(const parser::AstNode& node, const VisitName& visit_name,
-                                 const VisitTable& visit_table) {
+// Which reference spelling `references_any` compares against its candidates.
+enum class RefKind : std::uint8_t { kName, kTable };
+
+// True once any entry of `candidates` (case-insensitive) is named by a
+// reference of `kind` in `node`'s subtree. A name is a `NameRef`, a `[0]!Name`
+// or a `Call` callee (a LAMBDA-valued defined name is called as `Fn(args)`; a
+// built-in callee simply matches no defined name); a table is a
+// `StructuredRef`'s table specifier. Node-kind coverage mirrors
+// `parser::TransformNode` (ast_shift.cpp) exhaustively, so a reference nested
+// inside any expression form (calls, LET/LAMBDA bodies, array literals,
+// unions...) is found; a reference shadowed by an enclosing LET/LAMBDA
+// parameter of the same spelling still counts -- treating it as a real
+// reference only costs an unnecessary reindex, never a missed one.
+bool references_any(const parser::AstNode& node, const std::vector<std::string>& candidates, RefKind kind) {
+  const auto matches = [&](RefKind ref_kind, std::string_view ref) {
+    return ref_kind == kind && std::any_of(candidates.begin(), candidates.end(),
+                                           [&](const std::string& n) { return strings::case_insensitive_eq(n, ref); });
+  };
+  const auto any = [&](const parser::AstNode& child) { return references_any(child, candidates, kind); };
   switch (node.kind()) {
     case parser::NodeKind::NameRef:
-      visit_name(node.as_name());
-      return;
+      return matches(RefKind::kName, node.as_name());
     case parser::NodeKind::StructuredRef:
-      visit_table(node.as_structured_ref_table());
-      return;
+      return matches(RefKind::kTable, node.as_structured_ref_table());
     case parser::NodeKind::ExternalRef:
-      if (parser::is_self_book_name_ref(node)) {
-        visit_name(node.as_external_ref_name());
-      }
-      return;
+      return parser::is_self_book_name_ref(node) && matches(RefKind::kName, node.as_external_ref_name());
     case parser::NodeKind::Literal:
     case parser::NodeKind::ErrorLiteral:
     case parser::NodeKind::ErrorPlaceholder:
     case parser::NodeKind::Ref:
     case parser::NodeKind::SpillRef:
     case parser::NodeKind::Ref3D:
-      return;
+      return false;
     case parser::NodeKind::UnaryOp:
-      for_each_name_and_table_ref(node.as_unary_operand(), visit_name, visit_table);
-      return;
+      return any(node.as_unary_operand());
     case parser::NodeKind::BinaryOp:
-      for_each_name_and_table_ref(node.as_binary_lhs(), visit_name, visit_table);
-      for_each_name_and_table_ref(node.as_binary_rhs(), visit_name, visit_table);
-      return;
+      return any(node.as_binary_lhs()) || any(node.as_binary_rhs());
     case parser::NodeKind::RangeOp:
-      for_each_name_and_table_ref(node.as_range_lhs(), visit_name, visit_table);
-      for_each_name_and_table_ref(node.as_range_rhs(), visit_name, visit_table);
-      return;
+      return any(node.as_range_lhs()) || any(node.as_range_rhs());
     case parser::NodeKind::UnionOp:
       for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-        for_each_name_and_table_ref(node.as_union_child(i), visit_name, visit_table);
+        if (any(node.as_union_child(i))) {
+          return true;
+        }
       }
-      return;
+      return false;
     case parser::NodeKind::IntersectOp:
-      for_each_name_and_table_ref(node.as_intersect_lhs(), visit_name, visit_table);
-      for_each_name_and_table_ref(node.as_intersect_rhs(), visit_name, visit_table);
-      return;
+      return any(node.as_intersect_lhs()) || any(node.as_intersect_rhs());
     case parser::NodeKind::ImplicitIntersection:
-      for_each_name_and_table_ref(node.as_implicit_intersection_operand(), visit_name, visit_table);
-      return;
+      return any(node.as_implicit_intersection_operand());
     case parser::NodeKind::Call:
-      visit_name(node.as_call_name());
-      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-        for_each_name_and_table_ref(node.as_call_arg(i), visit_name, visit_table);
+      if (matches(RefKind::kName, node.as_call_name())) {
+        return true;
       }
-      return;
+      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+        if (any(node.as_call_arg(i))) {
+          return true;
+        }
+      }
+      return false;
     case parser::NodeKind::ArrayLiteral:
       for (std::uint32_t r = 0; r < node.as_array_rows(); ++r) {
         for (std::uint32_t c = 0; c < node.as_array_cols(); ++c) {
-          for_each_name_and_table_ref(node.as_array_element(r, c), visit_name, visit_table);
+          if (any(node.as_array_element(r, c))) {
+            return true;
+          }
         }
       }
-      return;
+      return false;
     case parser::NodeKind::Lambda:
-      for_each_name_and_table_ref(node.as_lambda_body(), visit_name, visit_table);
-      return;
+      return any(node.as_lambda_body());
     case parser::NodeKind::LetBinding:
       for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
-        for_each_name_and_table_ref(node.as_let_binding_expr(i), visit_name, visit_table);
+        if (any(node.as_let_binding_expr(i))) {
+          return true;
+        }
       }
-      for_each_name_and_table_ref(node.as_let_body(), visit_name, visit_table);
-      return;
+      return any(node.as_let_body());
     case parser::NodeKind::LambdaCall:
-      for_each_name_and_table_ref(node.as_lambda_call_callee(), visit_name, visit_table);
-      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
-        for_each_name_and_table_ref(node.as_lambda_call_arg(i), visit_name, visit_table);
+      if (any(node.as_lambda_call_callee())) {
+        return true;
       }
-      return;
+      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
+        if (any(node.as_lambda_call_arg(i))) {
+          return true;
+        }
+      }
+      return false;
   }
-}
-
-template <typename Visit>
-void for_each_name_ref(const parser::AstNode& node, const Visit& visit) {
-  for_each_name_and_table_ref(node, visit, [](std::string_view) {});
-}
-
-template <typename Visit>
-void for_each_table_ref(const parser::AstNode& node, const Visit& visit) {
-  for_each_name_and_table_ref(node, [](std::string_view) {}, visit);
-}
-
-// True once any entry of `candidates` (case-insensitive) is found among the
-// names `for_each` visits while walking `root`. Shared by the defined-name
-// closure test (`for_each_name_ref`) and the table-reference test
-// (`for_each_table_ref`) below.
-template <typename ForEach>
-bool references_any(const parser::AstNode& root, const std::vector<std::string>& candidates, const ForEach& for_each) {
-  bool found = false;
-  for_each(root, [&](std::string_view ref) {
-    if (found) {
-      return;
-    }
-    found = std::any_of(candidates.begin(), candidates.end(),
-                        [&](const std::string& n) { return strings::case_insensitive_eq(n, ref); });
-  });
-  return found;
+  return false;
 }
 
 bool references_any_name(const parser::AstNode& root, const std::vector<std::string>& candidates) {
-  return references_any(root, candidates,
-                        [](const parser::AstNode& n, const auto& visit) { for_each_name_ref(n, visit); });
+  return references_any(root, candidates, RefKind::kName);
 }
 
 bool references_any_table(const parser::AstNode& root, const std::vector<std::string>& candidates) {
-  return references_any(root, candidates,
-                        [](const parser::AstNode& n, const auto& visit) { for_each_table_ref(n, visit); });
+  return references_any(root, candidates, RefKind::kTable);
 }
 
 // Closure of defined names whose resolved value can change when
