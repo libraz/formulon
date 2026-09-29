@@ -150,6 +150,28 @@ double automatic_axis_position(double threshold_min, double threshold_max) {
   return (negative_span / total_span) * kAxisRight;
 }
 
+DataBarRender make_data_bar_render(const DataBarSpec& spec, double length_pct, double cell, double threshold_min,
+                                   double threshold_max) {
+  DataBarRender render;
+  render.length_pct = length_pct;
+  render.is_negative = cell < 0.0;
+  render.fill = render.is_negative ? spec.negative_fill : spec.fill;
+  render.border = render.is_negative ? spec.negative_border : spec.border;
+  render.gradient = spec.gradient;
+  switch (spec.axis_position) {
+    case DataBarAxisPosition::None:
+      render.axis_position_pct = kAxisLeft;
+      break;
+    case DataBarAxisPosition::Middle:
+      render.axis_position_pct = kAxisMid;
+      break;
+    case DataBarAxisPosition::Automatic:
+      render.axis_position_pct = automatic_axis_position(threshold_min, threshold_max);
+      break;
+  }
+  return render;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -226,24 +248,8 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
   // Excel renders a constant population as a full bar. Returning no match
   // here makes every data bar disappear for a range such as [42, 42, 42].
   if (*threshold_min == *threshold_max) {
-    DataBarRender render;
-    render.length_pct = static_cast<double>(spec.max_length_pct);
-    render.is_negative = cell_value.as_number() < 0.0;
-    render.fill = render.is_negative ? spec.negative_fill : spec.fill;
-    render.border = render.is_negative ? spec.negative_border : spec.border;
-    render.gradient = spec.gradient;
-    switch (spec.axis_position) {
-      case DataBarAxisPosition::None:
-        render.axis_position_pct = kAxisLeft;
-        break;
-      case DataBarAxisPosition::Middle:
-        render.axis_position_pct = kAxisMid;
-        break;
-      case DataBarAxisPosition::Automatic:
-        render.axis_position_pct = automatic_axis_position(*threshold_min, *threshold_max);
-        break;
-    }
-    return render;
+    return make_data_bar_render(spec, static_cast<double>(spec.max_length_pct), cell_value.as_number(), *threshold_min,
+                                *threshold_max);
   }
 
   const double cell = cell_value.as_number();
@@ -276,25 +282,8 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
     clamped_fraction = std::max(0.0, std::min(1.0, raw_fraction));
   }
 
-  DataBarRender render;
-  render.length_pct = min_len + clamped_fraction * (max_len - min_len);
-  render.is_negative = cell < 0.0;
-  render.fill = render.is_negative ? spec.negative_fill : spec.fill;
-  render.border = render.is_negative ? spec.negative_border : spec.border;
-  render.gradient = spec.gradient;
-
-  switch (spec.axis_position) {
-    case DataBarAxisPosition::None:
-      render.axis_position_pct = kAxisLeft;
-      break;
-    case DataBarAxisPosition::Middle:
-      render.axis_position_pct = kAxisMid;
-      break;
-    case DataBarAxisPosition::Automatic:
-      render.axis_position_pct = automatic_axis_position(*threshold_min, *threshold_max);
-      break;
-  }
-  return render;
+  return make_data_bar_render(spec, min_len + clamped_fraction * (max_len - min_len), cell, *threshold_min,
+                              *threshold_max);
 }
 
 bool match_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {

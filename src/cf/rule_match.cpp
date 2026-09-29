@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "cf/cf_evaluator.h"
@@ -26,12 +27,15 @@ namespace {
 // CellIs — literal-only fast path (value-only overload).
 // ---------------------------------------------------------------------------
 
-bool match_cell_is(const CFRule& rule, const Value& cell_value) {
+// Shared cellIs comparison; `resolve_operand` turns formula1 / formula2 text
+// into a comparison operand.
+template <typename ResolveOperand>
+bool match_cell_is_with(const CFRule& rule, const Value& cell_value, ResolveOperand resolve_operand) {
   if (!rule.op.has_value() || !rule.formula1.has_value()) {
     return false;
   }
 
-  const auto operand1 = helpers::parse_literal(*rule.formula1);
+  const auto operand1 = resolve_operand(*rule.formula1);
   if (!operand1.has_value()) {
     return false;
   }
@@ -41,7 +45,7 @@ bool match_cell_is(const CFRule& rule, const Value& cell_value) {
     if (!rule.formula2.has_value()) {
       return false;
     }
-    const auto operand2 = helpers::parse_literal(*rule.formula2);
+    const auto operand2 = resolve_operand(*rule.formula2);
     if (!operand2.has_value()) {
       return false;
     }
@@ -76,6 +80,10 @@ bool match_cell_is(const CFRule& rule, const Value& cell_value) {
       return false;  // Already handled above; here only for switch coverage.
   }
   return false;
+}
+
+bool match_cell_is(const CFRule& rule, const Value& cell_value) {
+  return match_cell_is_with(rule, cell_value, [](const std::string& source) { return helpers::parse_literal(source); });
 }
 
 // ---------------------------------------------------------------------------
@@ -161,55 +169,8 @@ bool match_text_rule(const CFRule& rule, const Value& cell_value) {
 // formula2 through the formula evaluator so cellIs rules with
 // references or arithmetic operands work end-to-end.
 bool match_cell_is_via_evaluator(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  if (!rule.op.has_value() || !rule.formula1.has_value()) {
-    return false;
-  }
-
-  const auto operand1 = helpers::cell_is_operand(*rule.formula1, ctx);
-  if (!operand1.has_value()) {
-    return false;
-  }
-
-  const CellIsOperator cell_op = *rule.op;
-  if (cell_op == CellIsOperator::Between || cell_op == CellIsOperator::NotBetween) {
-    if (!rule.formula2.has_value()) {
-      return false;
-    }
-    const auto operand2 = helpers::cell_is_operand(*rule.formula2, ctx);
-    if (!operand2.has_value()) {
-      return false;
-    }
-    const auto lo_cmp = helpers::compare_cell_to_literal(cell_value, *operand1);
-    const auto hi_cmp = helpers::compare_cell_to_literal(cell_value, *operand2);
-    if (!lo_cmp.has_value() || !hi_cmp.has_value()) {
-      return false;
-    }
-    const bool inside = (*lo_cmp >= 0) && (*hi_cmp <= 0);
-    return cell_op == CellIsOperator::Between ? inside : !inside;
-  }
-
-  const auto cmp = helpers::compare_cell_to_literal(cell_value, *operand1);
-  if (!cmp.has_value()) {
-    return false;
-  }
-  switch (cell_op) {
-    case CellIsOperator::LessThan:
-      return *cmp < 0;
-    case CellIsOperator::LessThanOrEqual:
-      return *cmp <= 0;
-    case CellIsOperator::Equal:
-      return *cmp == 0;
-    case CellIsOperator::NotEqual:
-      return *cmp != 0;
-    case CellIsOperator::GreaterThanOrEqual:
-      return *cmp >= 0;
-    case CellIsOperator::GreaterThan:
-      return *cmp > 0;
-    case CellIsOperator::Between:
-    case CellIsOperator::NotBetween:
-      return false;  // Already handled above; here only for switch coverage.
-  }
-  return false;
+  return match_cell_is_with(rule, cell_value,
+                            [&ctx](const std::string& source) { return helpers::cell_is_operand(source, ctx); });
 }
 
 // ---------------------------------------------------------------------------
