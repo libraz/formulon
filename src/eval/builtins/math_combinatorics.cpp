@@ -19,6 +19,7 @@
 #include <limits>
 #include <numeric>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "eval/builtins/numeric_helpers.h"
@@ -394,6 +395,18 @@ inline int roman_char_value(char c) {
   }
 }
 
+// Strips surrounding spaces and tabs only (not the wider set `strings::trim`
+// accepts), the padding ARABIC and DECIMAL tolerate.
+inline std::string_view trim_space_tab(std::string_view s) {
+  while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
+    s.remove_prefix(1);
+  }
+  while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) {
+    s.remove_suffix(1);
+  }
+  return s;
+}
+
 // ARABIC(text) - Roman numeral string -> integer. Accepts modern
 // subtractive forms (MCMXCIX = 1999) as well as additive forms (MDCCCCLXXXXVIIII).
 // Optional leading '-' produces a negative result. Empty / whitespace-only
@@ -403,16 +416,10 @@ Value Arabic(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!text) {
     return Value::error(text.error());
   }
-  const std::string& s = text.value();
-  // Strip surrounding ASCII whitespace (Excel is tolerant of padding).
+  // Excel is tolerant of surrounding padding.
+  const std::string_view s = trim_space_tab(text.value());
   std::size_t lo = 0;
-  std::size_t hi = s.size();
-  while (lo < hi && (s[lo] == ' ' || s[lo] == '\t')) {
-    ++lo;
-  }
-  while (hi > lo && (s[hi - 1] == ' ' || s[hi - 1] == '\t')) {
-    --hi;
-  }
+  const std::size_t hi = s.size();
   if (lo == hi) {
     return Value::number(0.0);
   }
@@ -622,24 +629,14 @@ Value Decimal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const int radix = static_cast<int>(rf);
-  const std::string& s = text.value();
-  // Trim surrounding ASCII whitespace.
-  std::size_t lo = 0;
-  std::size_t hi = s.size();
-  while (lo < hi && (s[lo] == ' ' || s[lo] == '\t')) {
-    ++lo;
-  }
-  while (hi > lo && (s[hi - 1] == ' ' || s[hi - 1] == '\t')) {
-    --hi;
-  }
-  if (lo == hi) {
+  const std::string_view s = trim_space_tab(text.value());
+  if (s.empty()) {
     // Excel 365 returns 0 for empty / whitespace-only input.
     return Value::number(0.0);
   }
   std::uint64_t acc = 0;
   const std::uint64_t kLimit = (static_cast<std::uint64_t>(1) << 53u) - 1;
-  for (std::size_t i = lo; i < hi; ++i) {
-    char c = s[i];
+  for (const char c : s) {
     int d = -1;
     if (c >= '0' && c <= '9') {
       d = c - '0';

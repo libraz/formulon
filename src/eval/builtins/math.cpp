@@ -24,6 +24,7 @@ namespace eval {
 namespace {
 
 using builtins_detail::snap_to_integer;
+using builtins_detail::to_finite_value;
 
 // --- Single-number transforms -------------------------------------------
 
@@ -101,6 +102,36 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
   return static_cast<int>(truncated);
 }
 
+// Shared frame of TRUNC and the ROUND family: coerces `value`, reads
+// `digits`, and returns `scale(value, 10^digits)` for the in-range cases.
+//
+// Extreme `digits` are clamped so `10^digits` cannot overflow to +-Inf:
+// beyond ~308 places a double has no digits left to round (a no-op), and
+// below ~-308 every finite double rounds to a multiple of 10^|digits|, i.e. 0.
+template <typename Scale>
+Value round_to_digits(const Value* args, std::uint32_t arity, Scale scale) {
+  auto value = coerce_to_number(args[0]);
+  if (!value) {
+    return Value::error(value.error());
+  }
+  auto digits = read_digits(args, arity, 1);
+  if (!digits) {
+    return Value::error(digits.error());
+  }
+  const int d = digits.value();
+  if (d >= 308) {
+    return Value::number(value.value());
+  }
+  if (d <= -308) {
+    return Value::number(0.0);
+  }
+  const double factor = std::pow(10.0, d);
+  if (std::isnan(factor) || std::isinf(factor)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return scale(value.value(), factor);
+}
+
 // TRUNC(value, digits?) - truncate toward zero. With no second arg or
 // `digits = 0`, equivalent to `std::trunc(value)`. With `digits != 0`, the
 // value is scaled by `10^digits`, truncated, then rescaled. `digits` may be
@@ -121,43 +152,22 @@ Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (is_empty(args[0]) || (arity >= 2 && is_empty(args[1]))) {
     return Value::error(ErrorCode::Value);
   }
-  auto value = coerce_to_number(args[0]);
-  if (!value) {
-    return Value::error(value.error());
-  }
-  auto digits = read_digits(args, arity, 1);
-  if (!digits) {
-    return Value::error(digits.error());
-  }
-  // Clamp extreme `digits` values so `10^digits` doesn't overflow to ±Inf.
-  // Positive digits beyond ~15 cannot truncate a double anyway (the mantissa
-  // runs out); negative digits below ~-308 would zero the number out.
-  const int d = digits.value();
-  if (d >= 308) {
-    return Value::number(value.value());  // Truncation is a no-op.
-  }
-  if (d <= -308) {
-    return Value::number(0.0);
-  }
-  const double factor = std::pow(10.0, d);
-  // Overflow on `value * factor` would truncate a no-op operation into a
-  // spurious `#NUM!`. When the product overflows, the double's mantissa
-  // already has no precision left for a fractional tail at this scale, so
-  // truncation is a no-op and we return the input unchanged. Verified
-  // against IronCalc TRUNC C57: `TRUNC(9.99999e+307, 5)` → 9.99999e+307.
-  const double product = value.value() * factor;
-  if (std::isinf(product)) {
-    return Value::number(value.value());
-  }
-  // `snap_to_integer` absorbs the same IEEE-754 near-integer noise ROUND /
-  // CEILING / FLOOR already compensate for (e.g. `9.99 * 100 ==
-  // 998.9999999999999`), so TRUNC/ROUNDDOWN/ROUNDUP don't lose the last
-  // decimal digit that ROUND/CEILING/FLOOR keep on the same input.
-  const double r = std::trunc(snap_to_integer(product)) / factor;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return round_to_digits(args, arity, [](double x, double factor) {
+    // Overflow on `value * factor` would truncate a no-op operation into a
+    // spurious `#NUM!`. When the product overflows, the double's mantissa
+    // already has no precision left for a fractional tail at this scale, so
+    // truncation is a no-op and we return the input unchanged. Verified
+    // against IronCalc TRUNC C57: `TRUNC(9.99999e+307, 5)` → 9.99999e+307.
+    const double product = x * factor;
+    if (std::isinf(product)) {
+      return Value::number(x);
+    }
+    // `snap_to_integer` absorbs the same IEEE-754 near-integer noise ROUND /
+    // CEILING / FLOOR already compensate for (e.g. `9.99 * 100 ==
+    // 998.9999999999999`), so TRUNC/ROUNDDOWN/ROUNDUP don't lose the last
+    // decimal digit that ROUND/CEILING/FLOOR keep on the same input.
+    return to_finite_value(std::trunc(snap_to_integer(product)) / factor);
+  });
 }
 
 // SQRT(value) - square root. Negative input -> `#NUM!`.
@@ -223,10 +233,9 @@ Value Power(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- Rounding -----------------------------------------------------------
 //
-// All three take `(value, digits)`. `digits` may be negative. The three
-// rounding modes deliberately use distinct formulas (not a single param-
-// terised function): the modes have different behaviour and inlining the
-// formula keeps each impl trivially auditable.
+// All three take `(value, digits)`. `digits` may be negative. They share the
+// `round_to_digits` frame, but each keeps its own inline formula: the modes
+// behave differently and a visible formula keeps each impl auditable.
 
 // ROUND - round half away from zero. `std::round` matches this on every
 // supported platform (it is mandated by C++11). `ROUND(2.5, 0) = 3`,
@@ -243,108 +252,34 @@ Value Power(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // halves at the same scale, so values that are truly off the boundary
 // are unaffected.
 Value Round(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto value = coerce_to_number(args[0]);
-  if (!value) {
-    return Value::error(value.error());
-  }
-  auto digits = read_digits(args, 2, 1);
-  if (!digits) {
-    return Value::error(digits.error());
-  }
-  // Clamp extreme `digits` the same way TRUNC does: beyond ~308 decimal
-  // places a double has no meaningful digits left, so rounding to (or
-  // away from) zero at that scale is indistinguishable from a no-op;
-  // below ~-308 every finite double rounds to the nearest multiple of
-  // 10^|digits|, which is always 0. Without this clamp, `10^digits`
-  // overflows to +-Inf and the function surfaces a spurious `#NUM!`.
-  const int d = digits.value();
-  if (d >= 308) {
-    return Value::number(value.value());
-  }
-  if (d <= -308) {
-    return Value::number(0.0);
-  }
-  const double factor = std::pow(10.0, d);
-  if (std::isnan(factor) || std::isinf(factor)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double scaled = value.value() * factor;
-  const double bias = std::copysign(std::fabs(scaled) * 2.0 * std::numeric_limits<double>::epsilon(), scaled);
-  const double r = std::round(scaled + bias) / factor;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return round_to_digits(args, 2, [](double x, double factor) {
+    const double scaled = x * factor;
+    const double bias = std::copysign(std::fabs(scaled) * 2.0 * std::numeric_limits<double>::epsilon(), scaled);
+    return to_finite_value(std::round(scaled + bias) / factor);
+  });
 }
 
 // ROUNDDOWN - always toward zero. `ROUNDDOWN(2.99, 0) = 2`,
 // `ROUNDDOWN(-2.99, 0) = -2`.
 Value RoundDown(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto value = coerce_to_number(args[0]);
-  if (!value) {
-    return Value::error(value.error());
-  }
-  auto digits = read_digits(args, 2, 1);
-  if (!digits) {
-    return Value::error(digits.error());
-  }
-  // Same clamp as TRUNC (see Round() above for the rationale); ROUNDDOWN
-  // is TRUNC's "toward zero" rounding mode under a different name.
-  const int d = digits.value();
-  if (d >= 308) {
-    return Value::number(value.value());
-  }
-  if (d <= -308) {
-    return Value::number(0.0);
-  }
-  const double factor = std::pow(10.0, d);
-  if (std::isnan(factor) || std::isinf(factor)) {
-    return Value::error(ErrorCode::Num);
-  }
-  // `snap_to_integer` absorbs binary-representation noise the same way
-  // TRUNC does (see its comment); without it, e.g. `0.29 * 100 ==
-  // 28.999999999999996` truncates to 28 instead of 29.
-  const double r = std::trunc(snap_to_integer(value.value() * factor)) / factor;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return round_to_digits(args, 2, [](double x, double factor) {
+    // `snap_to_integer` absorbs binary-representation noise the same way
+    // TRUNC does (see its comment); without it, e.g. `0.29 * 100 ==
+    // 28.999999999999996` truncates to 28 instead of 29.
+    return to_finite_value(std::trunc(snap_to_integer(x * factor)) / factor);
+  });
 }
 
 // ROUNDUP - always away from zero. `ROUNDUP(2.01, 0) = 3`,
 // `ROUNDUP(-2.01, 0) = -3`. Positive inputs use `std::ceil`, negative
 // inputs use `std::floor`; zero round-trips through either branch.
 Value RoundUp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto value = coerce_to_number(args[0]);
-  if (!value) {
-    return Value::error(value.error());
-  }
-  auto digits = read_digits(args, 2, 1);
-  if (!digits) {
-    return Value::error(digits.error());
-  }
-  // Same clamp as TRUNC (see Round() above for the rationale). At these
-  // extremes a double carries no meaningful digits past the clamp
-  // boundary, so "away from zero" and "no-op" / "zero" coincide.
-  const int d = digits.value();
-  if (d >= 308) {
-    return Value::number(value.value());
-  }
-  if (d <= -308) {
-    return Value::number(0.0);
-  }
-  const double factor = std::pow(10.0, d);
-  if (std::isnan(factor) || std::isinf(factor)) {
-    return Value::error(ErrorCode::Num);
-  }
-  // `snap_to_integer` absorbs binary-representation noise the same way
-  // TRUNC / ROUNDDOWN do (see TRUNC's comment above).
-  const double scaled = snap_to_integer(value.value() * factor);
-  const double r = (value.value() > 0.0) ? std::ceil(scaled) / factor : std::floor(scaled) / factor;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return round_to_digits(args, 2, [](double x, double factor) {
+    // `snap_to_integer` absorbs binary-representation noise the same way
+    // TRUNC / ROUNDDOWN do (see TRUNC's comment above).
+    const double scaled = snap_to_integer(x * factor);
+    return to_finite_value((x > 0.0) ? std::ceil(scaled) / factor : std::floor(scaled) / factor);
+  });
 }
 
 // --- Significance-aware rounding (legacy CEILING / FLOOR / MROUND) ------
@@ -388,6 +323,45 @@ inline double signum(double x) {
   return 0.0;
 }
 
+// Shared frame of legacy CEILING / FLOOR. `zero_significance` is the result
+// for `significance == 0`; `round` is `ceil` or `floor` on the quotient.
+//
+// Matching signs round the magnitude, then restore the sign; mismatched signs
+// round the signed quotient. `snap_to_integer` absorbs the quotient's
+// floating-point noise (`FLOOR(7.1, 0.1)` is 7.1, not 7).
+template <typename RoundFn>
+Value legacy_significance_round(const Value* args, const Value& zero_significance, RoundFn round) {
+  if (is_empty_text(args[0]) || is_empty_text(args[1])) {
+    return Value::error(ErrorCode::Value);
+  }
+  auto number = coerce_to_number(args[0]);
+  if (!number) {
+    return Value::error(number.error());
+  }
+  auto significance = coerce_to_number(args[1]);
+  if (!significance) {
+    return Value::error(significance.error());
+  }
+  const double n = number.value();
+  const double s = significance.value();
+  if (n == 0.0) {
+    return Value::number(0.0);
+  }
+  // Mac Excel 365 asymmetric sign-mismatch rule: positive number with
+  // negative significance is #NUM!; the reverse direction falls through to
+  // the signed branch. Runs before the `s == 0.0` check (s < 0 implies s != 0).
+  if (n > 0.0 && s < 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (s == 0.0) {
+    return zero_significance;
+  }
+  const double abs_s = std::fabs(s);
+  const double r = (signum(n) == signum(s)) ? signum(n) * round(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
+                                            : round(snap_to_integer(n / abs_s)) * abs_s;
+  return to_finite_value(r);
+}
+
 // CEILING(number, significance) - legacy: nearest multiple of
 // `|significance|` in the direction determined by sign matching:
 //
@@ -403,45 +377,8 @@ inline double signum(double x) {
 // reverse (neg-num, pos-sig) produces a numeric result. See the oracle
 // suite `floor_ceiling_edges.yaml` for the reference values.
 Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  if (is_empty_text(args[0]) || is_empty_text(args[1])) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto number = coerce_to_number(args[0]);
-  if (!number) {
-    return Value::error(number.error());
-  }
-  auto significance = coerce_to_number(args[1]);
-  if (!significance) {
-    return Value::error(significance.error());
-  }
-  const double n = number.value();
-  const double s = significance.value();
-  if (n == 0.0) {
-    return Value::number(0.0);
-  }
-  // Mac Excel 365 asymmetric sign-mismatch rule: positive number with
-  // negative significance is #NUM!. The reverse direction (negative
-  // number, positive significance) falls through to the math-ceil branch
-  // below and yields a numeric result. Must run before the `s == 0.0`
-  // check so the rule applies cleanly (s < 0 implies s != 0).
-  if (n > 0.0 && s < 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (s == 0.0) {
-    // Legacy CEILING: significance of zero yields zero (no #DIV/0!).
-    return Value::number(0.0);
-  }
-  const double abs_s = std::fabs(s);
-  // Matching signs: magnitude away-from-zero, then restore sign.
-  // Mismatched signs: math ceiling on the signed value. `snap_to_integer`
-  // absorbs the floating-point noise that would otherwise make e.g.
-  // `CEILING(-7.1, 0.1)` return `-7` instead of `-7.1`.
-  const double r = (signum(n) == signum(s)) ? signum(n) * std::ceil(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
-                                            : std::ceil(snap_to_integer(n / abs_s)) * abs_s;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  // Legacy CEILING: significance of zero yields zero (no #DIV/0!).
+  return legacy_significance_round(args, Value::number(0.0), [](double q) { return std::ceil(q); });
 }
 
 // FLOOR(number, significance) - legacy: nearest multiple of
@@ -457,43 +394,7 @@ Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // direction falls through to the math-floor branch and returns a numeric
 // value. See oracle suite `floor_ceiling_edges.yaml` for reference.
 Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  if (is_empty_text(args[0]) || is_empty_text(args[1])) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto number = coerce_to_number(args[0]);
-  if (!number) {
-    return Value::error(number.error());
-  }
-  auto significance = coerce_to_number(args[1]);
-  if (!significance) {
-    return Value::error(significance.error());
-  }
-  const double n = number.value();
-  const double s = significance.value();
-  if (n == 0.0) {
-    return Value::number(0.0);
-  }
-  // Mac Excel 365 asymmetric sign-mismatch rule: positive number with
-  // negative significance is #NUM!. Mirrors the CEILING branch above and
-  // must run before the `s == 0.0` short-circuit (which returns #DIV/0!
-  // for FLOOR) because s < 0 implies s != 0.
-  if (n > 0.0 && s < 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (s == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double abs_s = std::fabs(s);
-  // Matching signs: magnitude toward-zero, then restore sign.
-  // Mismatched signs: math floor on the signed value. `snap_to_integer`
-  // absorbs the floating-point noise that would otherwise make e.g.
-  // `FLOOR(7.1, 0.1)` return `7` instead of `7.1`.
-  const double r = (signum(n) == signum(s)) ? signum(n) * std::floor(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
-                                            : std::floor(snap_to_integer(n / abs_s)) * abs_s;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return legacy_significance_round(args, Value::error(ErrorCode::Div0), [](double q) { return std::floor(q); });
 }
 
 // MROUND(number, multiple) - nearest multiple of `|multiple|` to `number`,
