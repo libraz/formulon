@@ -205,6 +205,56 @@ void prune_top_level(std::vector<Node>& roots, const std::vector<bool>& keep) {
   roots = std::move(kept);
 }
 
+/// One axis node at a chosen depth, as the contiguous run of DFS pre-order
+/// leaves beneath it. `parent` numbers the node's depth-minus-one ancestor;
+/// every group of a depth-0 query shares parent 0.
+struct AxisLeafGroup {
+  std::size_t first_leaf = 0;
+  std::size_t leaf_count = 0;
+  std::size_t parent = 0;
+};
+
+template <class Node>
+std::size_t count_axis_leaves(const Node& node) {
+  if (node.children.empty()) {
+    return 1;
+  }
+  std::size_t n = 0;
+  for (const auto& child : node.children) {
+    n += count_axis_leaves(child);
+  }
+  return n;
+}
+
+template <class Node>
+void collect_axis_leaf_groups(const Node& node, std::size_t depth, std::size_t target_depth, std::size_t parent,
+                              std::size_t& next_parent, std::size_t& leaf_cursor, std::vector<AxisLeafGroup>& out) {
+  if (depth == target_depth || node.children.empty()) {
+    const std::size_t count = count_axis_leaves(node);
+    out.push_back({leaf_cursor, count, parent});
+    leaf_cursor += count;
+    return;
+  }
+  const std::size_t child_parent = depth + 1U == target_depth ? next_parent++ : parent;
+  for (const auto& child : node.children) {
+    collect_axis_leaf_groups(child, depth + 1U, target_depth, child_parent, next_parent, leaf_cursor, out);
+  }
+}
+
+/// Partitions the (possibly already pruned) axis tree `roots` into its
+/// nodes at `target_depth`, in document order. Grouping is structural: it
+/// does not depend on whether any field displays subtotals.
+template <class Node>
+std::vector<AxisLeafGroup> axis_leaf_groups_at_depth(const std::vector<Node>& roots, std::size_t target_depth) {
+  std::vector<AxisLeafGroup> groups;
+  std::size_t next_parent = target_depth == 0 ? 1U : 0U;
+  std::size_t leaf_cursor = 0;
+  for (const auto& root : roots) {
+    collect_axis_leaf_groups(root, 0, target_depth, 0, next_parent, leaf_cursor, groups);
+  }
+  return groups;
+}
+
 /// Walks `tree` in display order. At every non-leaf level whose
 /// `PivotField` declares `subtotal_top` or any `subtotal_fns`, calls
 /// `emit_subtotal(labels, depth, collected_start, stack_leaves)` after

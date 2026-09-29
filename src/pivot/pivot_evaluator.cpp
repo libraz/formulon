@@ -21,6 +21,7 @@
 
 #include "pivot/pivot_evaluator.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -768,11 +769,12 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // 7. Value-axis filters (Top-N, GreaterThan, Between).
   //
   // Applied last so the pre-aggregation filter set has already shaped
-  // `result.values`; the pruning here only drops surviving leaves.
-  // Multi-level hierarchies are honoured: we score each leaf in DFS
-  // pre-order (the order `finalize_hierarchy` assigned), compute the
-  // keep-mask for the whole leaf array, then collapse the row/col tree
-  // by dropping leaves whose mask is false and any interior node whose
+  // `result.values`; the pruning here only drops surviving leaves. A filter
+  // on the field at axis depth d keeps or drops whole depth-d items, scored
+  // by the item's own aggregate over the records still standing and ranked
+  // within each depth-(d-1) parent independently, as Excel does: Top 2 on an
+  // inner field keeps two items under every outer item. The row/col tree is
+  // then collapsed by dropping unkept leaves and any interior node whose
   // subtree becomes empty. A surviving subtotal is kept; a subtotal
   // whose group is filtered away entirely is dropped along with the
   // leaves it covered. Every total -- grand totals, per-leaf totals, and
@@ -812,11 +814,14 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     return 0.0;
   };
   // `basis` selects how a top-N entry counts: `Items` uses the
-  // leaf-count rule, the other two accumulate a running total. `top`
+  // item-count rule, the other two accumulate a running total. `top`
   // selects the ranking direction: `true` for Top N, `false` for Bottom
   // N. Both are only ever non-default for an authored entry, since the
   // dialog choice has no embedder-facing counterpart on `PivotFilter`.
-  const auto apply_value_filter = [&](const PivotFilter& f, TopNBasis basis = TopNBasis::Items, bool top = true) {
+  // `field_index` names the filtered field; one that is absent from the
+  // filter's axis falls back to that axis's innermost field.
+  const auto apply_value_filter = [&](const PivotFilter& f, std::optional<std::size_t> field_index,
+                                      TopNBasis basis = TopNBasis::Items, bool top = true) {
     if (f.type != FilterType::ValueTop10 && f.type != FilterType::ValueGreaterThan &&
         f.type != FilterType::ValueBetween) {
       return;  // Label/Date filters handled pre-aggregation.
@@ -831,64 +836,79 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     if (f.data_field_index >= data_field_count) {
       return;
     }
-    if (f.axis == PivotAxis::Row && !table.row_field_order().empty()) {
-      // `n` is the number of row leaves (DFS pre-order), which is what
-      // `result.values` is indexed by; `result.rows.size()` would be the
-      // number of top-level row nodes and would understate `n` whenever
-      // the row hierarchy is multi-level.
-      const std::size_t n = result.values.size();
-      if (n == 0) {
-        return;
+    const bool row_axis = f.axis == PivotAxis::Row;
+    const std::vector<std::uint32_t>& order = row_axis ? table.row_field_order() : table.col_field_order();
+    if (order.empty()) {
+      return;  // An axis with no fields has nothing to prune.
+    }
+    std::size_t depth = order.size() - 1U;
+    if (field_index) {
+      const auto it = std::find(order.begin(), order.end(), *field_index);
+      if (it != order.end()) {
+        depth = static_cast<std::size_t>(it - order.begin());
       }
-      const AxisScores axis = score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count, f.data_field_index);
-      const auto keep_or = basis == TopNBasis::Items ? build_value_filter_keep(f, axis, top)
-                                                     : build_running_total_keep(basis, filter_target(f), axis, top);
-      if (!keep_or) {
-        return;
+    }
+    // `leaf_count` is the number of leaves currently standing on the
+    // filtered axis, which is what `result.values` is indexed by along it.
+    const std::vector<std::size_t>& axis_leaves = row_axis ? surviving_row_leaves : surviving_col_leaves;
+    const std::vector<std::size_t>& cross_leaves = row_axis ? surviving_col_leaves : surviving_row_leaves;
+    const std::size_t leaf_count = axis_leaves.size();
+    if (leaf_count == 0 || cross_leaves.empty()) {
+      return;
+    }
+    const std::vector<AxisLeafGroup> groups =
+        row_axis ? axis_leaf_groups_at_depth(result.rows, depth) : axis_leaf_groups_at_depth(result.cols, depth);
+    // Each item's score is its own aggregate re-derived from the records,
+    // so a non-additive aggregation ranks by the value the item displays.
+    const PivotDataField& df = table.data_fields()[f.data_field_index];
+    AxisScores scores;
+    scores.scores.assign(groups.size(), 0.0);
+    scores.all_blank.assign(groups.size(), true);
+    for (std::size_t g = 0; g < groups.size(); ++g) {
+      std::vector<std::size_t> group_leaves;
+      for (std::size_t i = groups[g].first_leaf; i < groups[g].first_leaf + groups[g].leaf_count && i < leaf_count;
+           ++i) {
+        group_leaves.push_back(axis_leaves[i]);
       }
-      const std::vector<bool>& keep = *keep_or;
-      // Prune the row hierarchy: leaves survive when `keep[leaf] == true`
-      // and interior nodes survive when at least one descendant leaf
-      // does. Then re-express every leaf-indexed structure in the
-      // surviving-leaf index space, preserving DFS order.
+      std::vector<Value> column;
+      append_leaf_set_field_values(cache, buckets, row_axis ? group_leaves : cross_leaves,
+                                   row_axis ? cross_leaves : group_leaves, df.field_index, column);
+      if (column.empty()) {
+        continue;
+      }
+      if (const auto n = numeric_aggregate_value(apply_aggregation(df.aggregation, column))) {
+        scores.scores[g] = *n;
+        scores.all_blank[g] = false;
+      }
+    }
+    const auto keep_or = build_grouped_value_filter_keep(f, basis, filter_target(f), top, groups, scores, leaf_count);
+    if (!keep_or) {
+      return;
+    }
+    const std::vector<bool>& keep = *keep_or;
+    // Prune the hierarchy: leaves survive when `keep[leaf] == true` and
+    // interior nodes survive when at least one descendant leaf does. Then
+    // re-express every leaf-indexed structure in the surviving-leaf index
+    // space, preserving DFS order.
+    if (row_axis) {
       prune_top_level(result.rows, keep);
       compact_leaf_axis(result, keep, LeafAxis::Row, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
       CompactSurvivingLeaves(surviving_row_leaves, keep);
-      any_value_filter_applied = true;
-    } else if (f.axis == PivotAxis::Col && !table.col_field_order().empty()) {
-      // `n` is the number of column leaves (DFS pre-order). When the row
-      // axis has at least one materialised slot we read the leaf count
-      // from the first row's column slice; otherwise the matrix is empty
-      // and the filter is a no-op below.
-      const std::size_t n = result.values.empty() ? 0 : result.values[0].size();
-      if (n == 0) {
-        return;
-      }
-      const std::size_t row_n = row_levels.empty() ? 1u : result.values.size();
-      const AxisScores axis = score_col_axis(result, n, row_n, f.data_field_index);
-      const auto keep_or = basis == TopNBasis::Items ? build_value_filter_keep(f, axis, top)
-                                                     : build_running_total_keep(basis, filter_target(f), axis, top);
-      if (!keep_or) {
-        return;
-      }
-      const std::vector<bool>& keep = *keep_or;
-      // Prune the col hierarchy then re-express every column-leaf-indexed
-      // structure in the surviving-leaf index space.
+    } else {
       prune_top_level(result.cols, keep);
       compact_leaf_axis(result, keep, LeafAxis::Col, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
       CompactSurvivingLeaves(surviving_col_leaves, keep);
-      any_value_filter_applied = true;
     }
-    // Mixed-direction (e.g. row-axis filter referencing a column field)
-    // remains out of scope; such filters fall through here as a no-op.
+    any_value_filter_applied = true;
   };
 
   for (const PivotFilter& f : table.active_filters()) {
-    apply_value_filter(f);
+    apply_value_filter(f, resolve_field_by_any_name(table, f.field_name));
   }
   for (const AuthoredValueFilter& authored : table.authored_value_filters()) {
     if (const auto projected = authored_value_filter_as_pivot_filter(table, authored)) {
-      apply_value_filter(*projected, authored.top_n_basis, authored.top);
+      apply_value_filter(*projected, static_cast<std::size_t>(authored.field_index), authored.top_n_basis,
+                         authored.top);
     }
   }
   if (any_value_filter_applied) {

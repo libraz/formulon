@@ -3700,54 +3700,171 @@ TEST(PivotEvaluator, ValueTop10MultiLevelRowAxis) {
 
   PivotFilter f;
   f.axis = PivotAxis::Row;
-  f.field_name = "Region";
+  f.field_name = "Product";
   f.type = FilterType::ValueTop10;
-  f.value = 3;  // Top 3 leaves.
+  f.value = 2;  // Top 2 products under each region.
   table.mutable_active_filters().push_back(std::move(f));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   const PivotResult& r = r_or.value();
 
-  // Top-3 by Amount: South/A=80, North/B=50, South/B=30. The "C" leaves
-  // and North/A are pruned. After pruning North loses A and C (only B
-  // remains); South loses C (A and B remain).
+  // Ranked within each region, not across the flattened axis: North keeps
+  // B=50 and C=20 even though South/B=30 outranks North/C globally, and
+  // South keeps A=80 and B=30.
   ASSERT_EQ(r.rows.size(), 2U);
+  ASSERT_EQ(r.rows[0].label, "North");
+  ASSERT_EQ(r.rows[0].children.size(), 2U);
+  EXPECT_EQ(r.rows[0].children[0].label, "B");
+  EXPECT_EQ(r.rows[0].children[1].label, "C");
+  ASSERT_EQ(r.rows[1].label, "South");
+  ASSERT_EQ(r.rows[1].children.size(), 2U);
+  EXPECT_EQ(r.rows[1].children[0].label, "A");
+  EXPECT_EQ(r.rows[1].children[1].label, "B");
 
-  // Find Region nodes; ordering is alphabetical (North < South).
-  const RowHierarchyNode* north = nullptr;
-  const RowHierarchyNode* south = nullptr;
-  for (const auto& node : r.rows) {
-    if (node.label == "North") {
-      north = &node;
-    } else if (node.label == "South") {
-      south = &node;
-    }
+  ASSERT_EQ(r.values.size(), 4U);
+  const std::vector<double> expected = {50.0, 20.0, 80.0, 30.0};
+  for (std::size_t leaf = 0; leaf < expected.size(); ++leaf) {
+    ASSERT_EQ(r.values[leaf].size(), 1U);
+    EXPECT_DOUBLE_EQ(r.values[leaf][0][0].as_number(), expected[leaf]) << "leaf=" << leaf;
   }
-  ASSERT_NE(north, nullptr);
-  ASSERT_NE(south, nullptr);
+}
 
-  // North keeps only B.
-  ASSERT_EQ(north->children.size(), 1U);
-  EXPECT_EQ(north->children[0].label, "B");
-  // South keeps A and B.
-  ASSERT_EQ(south->children.size(), 2U);
-  EXPECT_EQ(south->children[0].label, "A");
-  EXPECT_EQ(south->children[1].label, "B");
+// Region -> Product -> Amount, one record per `(region, product, amount)`,
+// for the value-filter depth tests below.
+struct RegionProductAmount {
+  const char* region;
+  const char* product;
+  double amount;
+};
 
-  // Three surviving leaves -> three rows in `values`.
-  ASSERT_EQ(r.values.size(), 3U);
-  std::vector<double> totals;
-  totals.reserve(3);
-  for (const auto& row_slot : r.values) {
-    ASSERT_EQ(row_slot.size(), 1U);
-    ASSERT_EQ(row_slot[0].size(), 1U);
-    totals.push_back(row_slot[0][0].as_number());
+PivotCache build_region_product_cache(const std::vector<RegionProductAmount>& records) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  for (const RegionProductAmount& record : records) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, record.region));
+    rec.cells.push_back(owned_text(cache, record.product));
+    rec.cells.push_back(Value::number(record.amount));
+    cache.mutable_records().push_back(std::move(rec));
   }
-  std::sort(totals.begin(), totals.end());
-  EXPECT_DOUBLE_EQ(totals[0], 30.0);
-  EXPECT_DOUBLE_EQ(totals[1], 50.0);
-  EXPECT_DOUBLE_EQ(totals[2], 80.0);
+  return cache;
+}
+
+PivotTable build_region_product_table(Aggregation aggregation) {
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  const char* names[] = {"Region", "Product", "Amount"};
+  for (std::size_t i = 0; i < 3; ++i) {
+    PivotField field;
+    field.source_name = names[i];
+    field.axis = i == 2 ? PivotAxis::Value : PivotAxis::Row;
+    table.mutable_fields().push_back(std::move(field));
+  }
+  table.mutable_row_field_order() = {0, 1};
+  PivotDataField data;
+  data.name = "Amount";
+  data.field_index = 2;
+  data.aggregation = aggregation;
+  table.mutable_data_fields().push_back(std::move(data));
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  return table;
+}
+
+// A filter on the outer field ranks whole regions by their own total and
+// keeps every product under a surviving region.
+TEST(PivotEvaluator, ValueTop10OnOuterFieldKeepsWholeGroups) {
+  PivotCache cache = build_region_product_cache({{"North", "A", 10.0},
+                                                 {"North", "B", 50.0},
+                                                 {"North", "C", 20.0},
+                                                 {"South", "A", 80.0},
+                                                 {"South", "B", 30.0},
+                                                 {"South", "C", 5.0}});
+  PivotTable table = build_region_product_table(Aggregation::Sum);
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Region";
+  f.type = FilterType::ValueTop10;
+  f.value = 1;  // North=80, South=115.
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "South");
+  EXPECT_EQ(r.rows[0].children.size(), 3U);
+  EXPECT_EQ(r.values.size(), 3U);
+}
+
+// The per-parent partition is structural: turning the outer field's
+// subtotals off must not merge its groups back into one global ranking.
+TEST(PivotEvaluator, ValueTop10OnInnerFieldRanksPerParentWithoutSubtotals) {
+  PivotCache cache = build_region_product_cache(
+      {{"North", "A", 10.0}, {"North", "B", 50.0}, {"South", "A", 80.0}, {"South", "B", 30.0}});
+  PivotTable table = build_region_product_table(Aggregation::Sum);
+  table.mutable_fields()[0].default_subtotal = false;
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Product";
+  f.type = FilterType::ValueTop10;
+  f.value = 1;
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  EXPECT_TRUE(r.row_subtotals.empty());
+  ASSERT_EQ(r.rows.size(), 2U);
+  ASSERT_EQ(r.rows[0].children.size(), 1U);
+  EXPECT_EQ(r.rows[0].children[0].label, "B");  // North's best, below South/B.
+  ASSERT_EQ(r.rows[1].children.size(), 1U);
+  EXPECT_EQ(r.rows[1].children[0].label, "A");
+}
+
+// An authored `<filters>` entry names its field by index; the pass ranks at
+// that field's depth the same way it does for a named filter.
+TEST(PivotEvaluator, AuthoredTopCountOnInnerFieldRanksPerParent) {
+  PivotCache cache = build_region_product_cache(
+      {{"North", "A", 10.0}, {"North", "B", 50.0}, {"South", "A", 80.0}, {"South", "B", 30.0}});
+  PivotTable table = build_region_product_table(Aggregation::Sum);
+  AuthoredValueFilter f;
+  f.field_index = 1;
+  f.type = FilterType::ValueTop10;
+  f.value = 1.0;
+  table.mutable_authored_value_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  ASSERT_EQ(r.rows[0].children.size(), 1U);
+  EXPECT_EQ(r.rows[0].children[0].label, "B");
+  ASSERT_EQ(r.rows[1].children.size(), 1U);
+  EXPECT_EQ(r.rows[1].children[0].label, "A");
+}
+
+// A group is scored by its own aggregate, not by summing its leaves: under
+// Average, South (50) outranks North (40) although North's leaves sum higher.
+TEST(PivotEvaluator, ValueTop10OnOuterFieldScoresNonAdditiveAggregate) {
+  PivotCache cache = build_region_product_cache(
+      {{"North", "A", 40.0}, {"North", "B", 40.0}, {"North", "C", 40.0}, {"South", "A", 50.0}});
+  PivotTable table = build_region_product_table(Aggregation::Average);
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Region";
+  f.type = FilterType::ValueTop10;
+  f.value = 1;
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "South");
 }
 
 TEST(PivotEvaluator, ValueGreaterThanMultiLevelColAxis) {
@@ -3795,7 +3912,7 @@ TEST(PivotEvaluator, ValueGreaterThanMultiLevelColAxis) {
 
   PivotFilter f;
   f.axis = PivotAxis::Col;
-  f.field_name = "Year";
+  f.field_name = "Quarter";
   f.type = FilterType::ValueGreaterThan;
   f.value = 20.0;
   table.mutable_active_filters().push_back(std::move(f));
@@ -3864,7 +3981,7 @@ TEST(PivotEvaluator, ValueBetweenMultiLevelDropsEmptyParent) {
 
   PivotFilter f;
   f.axis = PivotAxis::Row;
-  f.field_name = "Region";
+  f.field_name = "Product";
   f.type = FilterType::ValueBetween;
   f.value = 10.0;
   f.value_high = 70.0;
@@ -4485,14 +4602,13 @@ TEST(PivotEvaluator, RowValueFilterCompactsEveryLeafIndexedStructure) {
   PivotCache cache = build_subtotal_grid_cache();
   PivotTable table = build_subtotal_grid_table();
 
-  // Row leaf scores are base * 33: North/A=33, North/B=66, South/A=330,
-  // South/B=660. Top-2 therefore keeps both South leaves and prunes the
-  // whole North group.
+  // Region scores are North=99 and South=990, so Top-1 keeps both South
+  // leaves and prunes the whole North group.
   PivotFilter f;
   f.axis = PivotAxis::Row;
   f.field_name = "Region";
   f.type = FilterType::ValueTop10;
-  f.value = 2;
+  f.value = 1;
   table.mutable_active_filters().push_back(std::move(f));
 
   auto r_or = evaluate(table, cache);
@@ -4536,14 +4652,13 @@ TEST(PivotEvaluator, ColValueFilterCompactsEveryLeafIndexedStructure) {
   PivotCache cache = build_subtotal_grid_cache();
   PivotTable table = build_subtotal_grid_table();
 
-  // Column leaf scores are multiplier * 33: 2024/Q1=33, 2024/Q2=66,
-  // 2025/Q1=330, 2025/Q2=660. Top-2 keeps the 2025 quarters and prunes the
-  // whole 2024 group.
+  // Year scores are 2024=99 and 2025=990, so Top-1 keeps the 2025 quarters
+  // and prunes the whole 2024 group.
   PivotFilter f;
   f.axis = PivotAxis::Col;
   f.field_name = "Year";
   f.type = FilterType::ValueTop10;
-  f.value = 2;
+  f.value = 1;
   table.mutable_active_filters().push_back(std::move(f));
 
   auto r_or = evaluate(table, cache);
@@ -4654,14 +4769,14 @@ TEST(PivotEvaluator, RowValueFilterCollapsesEmptiedBranchesOfAThreeLevelAxis) {
   table.mutable_col_field_order() = {3};
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
 
-  // Leaf scores across the two quarter columns are 3, 30, 6, 60, 30, 300,
-  // 60, 600. Top-2 keeps South/A/2025 and South/B/2025 only, so all of
-  // North and both 2024 leaves under South disappear.
+  // Year scores across the two quarter columns are 3, 30, 6, 60, 30, 300,
+  // 60, 600. Greater-than-100 keeps South/A/2025 and South/B/2025 only, so
+  // all of North and both 2024 leaves under South disappear.
   PivotFilter f;
   f.axis = PivotAxis::Row;
-  f.field_name = "Region";
-  f.type = FilterType::ValueTop10;
-  f.value = 2;
+  f.field_name = "Year";
+  f.type = FilterType::ValueGreaterThan;
+  f.value = 100.0;
   table.mutable_active_filters().push_back(std::move(f));
 
   auto r_or = evaluate(table, cache);

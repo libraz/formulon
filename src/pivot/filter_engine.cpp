@@ -14,7 +14,6 @@
 #include <vector>
 
 #include "eval/date_time.h"
-#include "pivot/aggregator.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
@@ -251,15 +250,6 @@ const Value* item_cache_value(const PivotCache& cache, std::size_t field_index, 
   return &shared[item.cache_index];
 }
 
-enum class ScoreAxis { Row, Col };
-
-Value leaf_score(const PivotResult& result, std::size_t r, std::size_t c, std::size_t data_field_index) {
-  if (r >= result.values.size() || c >= result.values[r].size() || data_field_index >= result.values[r][c].size()) {
-    return Value::blank();
-  }
-  return result.values[r][c][data_field_index];
-}
-
 // Drops the entries of `items` whose index is marked false in `keep`,
 // preserving the relative order of the survivors. An index past the end of
 // `keep` is kept: the mask only describes the leaves the filter scored.
@@ -303,24 +293,6 @@ std::vector<bool> remap_leaf_sets(std::vector<std::vector<std::size_t>>& leaf_se
     set = std::move(remapped);
   }
   return keep_set;
-}
-
-AxisScores score_axis(const PivotResult& result, ScoreAxis score_axis, std::size_t axis_count,
-                      std::size_t cross_axis_count, std::size_t data_field_index) {
-  AxisScores axis{{}, {}};
-  axis.scores.assign(axis_count, 0.0);
-  axis.all_blank.assign(axis_count, true);
-  for (std::size_t i = 0; i < axis_count; ++i) {
-    for (std::size_t j = 0; j < cross_axis_count; ++j) {
-      const std::size_t r = score_axis == ScoreAxis::Row ? i : j;
-      const std::size_t c = score_axis == ScoreAxis::Row ? j : i;
-      if (auto n = numeric_aggregate_value(leaf_score(result, r, c, data_field_index))) {
-        axis.scores[i] += *n;
-        axis.all_blank[i] = false;
-      }
-    }
-  }
-  return axis;
 }
 
 }  // namespace
@@ -614,19 +586,9 @@ std::optional<PivotFilter> authored_value_filter_as_pivot_filter(const PivotTabl
     out.value_high = *authored.value_high;
   }
   out.data_field_index = authored.data_field_index;
-  // `field_name` stays empty: the post-aggregation pass selects leaves by
-  // axis and score, never by name.
+  // `field_name` stays empty: the caller hands `authored.field_index` to the
+  // post-aggregation pass directly rather than re-resolving it by name.
   return out;
-}
-
-AxisScores score_row_axis(const PivotResult& result, std::size_t row_count, std::size_t col_count,
-                          std::size_t data_field_index) {
-  return score_axis(result, ScoreAxis::Row, row_count, col_count, data_field_index);
-}
-
-AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std::size_t row_count,
-                          std::size_t data_field_index) {
-  return score_axis(result, ScoreAxis::Col, col_count, row_count, data_field_index);
 }
 
 std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis,
@@ -720,6 +682,42 @@ std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, c
     return keep;
   }
   return std::nullopt;
+}
+
+std::optional<std::vector<bool>> build_grouped_value_filter_keep(const PivotFilter& f, TopNBasis basis, double target,
+                                                                 bool top, const std::vector<AxisLeafGroup>& groups,
+                                                                 const AxisScores& group_scores,
+                                                                 std::size_t leaf_count) {
+  std::vector<bool> keep(leaf_count, false);
+  std::size_t run_start = 0;
+  while (run_start < groups.size()) {
+    std::size_t run_end = run_start + 1U;
+    while (run_end < groups.size() && groups[run_end].parent == groups[run_start].parent) {
+      ++run_end;
+    }
+    AxisScores run;
+    run.scores.assign(group_scores.scores.begin() + static_cast<std::ptrdiff_t>(run_start),
+                      group_scores.scores.begin() + static_cast<std::ptrdiff_t>(run_end));
+    run.all_blank.assign(group_scores.all_blank.begin() + static_cast<std::ptrdiff_t>(run_start),
+                         group_scores.all_blank.begin() + static_cast<std::ptrdiff_t>(run_end));
+    const auto run_keep = basis == TopNBasis::Items ? build_value_filter_keep(f, run, top)
+                                                    : build_running_total_keep(basis, target, run, top);
+    if (!run_keep) {
+      return std::nullopt;
+    }
+    for (std::size_t g = run_start; g < run_end; ++g) {
+      if (!(*run_keep)[g - run_start]) {
+        continue;
+      }
+      const AxisLeafGroup& group = groups[g];
+      for (std::size_t leaf = group.first_leaf; leaf < group.first_leaf + group.leaf_count && leaf < leaf_count;
+           ++leaf) {
+        keep[leaf] = true;
+      }
+    }
+    run_start = run_end;
+  }
+  return keep;
 }
 
 void compact_leaf_axis(PivotResult& result, const std::vector<bool>& keep, LeafAxis axis,

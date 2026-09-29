@@ -7,8 +7,8 @@
 //     `items[]` visibility check on every field that hides something, then
 //     applies axis-level label / date filters from `active_filters`.
 //
-//   * Post-aggregation, per-leaf: `score_*_axis` + `build_value_filter_keep`
-//     score each axis leaf for the active value filter and produce a
+//   * Post-aggregation, per-item: `build_grouped_value_filter_keep` ranks
+//     the filtered field's items within each parent group and produces a
 //     boolean keep mask aligned to `result.values`'s DFS pre-order leaf
 //     enumeration; `compact_leaf_axis` then re-expresses the whole
 //     result in the surviving-leaf index space.
@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "eval/date_time.h"
+#include "pivot/hierarchy_builder.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
@@ -162,24 +163,14 @@ class PreparedRecordFilter {
 std::optional<PivotFilter> authored_value_filter_as_pivot_filter(const PivotTable& table,
                                                                  const AuthoredValueFilter& authored);
 
-/// Per-axis scoring intermediate used by `build_value_filter_keep`.
-/// `scores[i]` is the numeric aggregate sum at leaf `i`; `all_blank[i]`
-/// is true when leaf `i` had no numeric content (such leaves can be
-/// excluded even by `ValueGreaterThan`-style filters).
+/// Per-item scoring intermediate used by `build_value_filter_keep`.
+/// `scores[i]` is the numeric aggregate of item `i`; `all_blank[i]` is
+/// true when item `i` had no numeric content (such items can be excluded
+/// even by `ValueGreaterThan`-style filters).
 struct AxisScores {
   std::vector<double> scores;
   std::vector<bool> all_blank;
 };
-
-/// Sums leaf scores along the row axis (one entry per row leaf,
-/// reducing across the column axis). Used to back row-axis value
-/// filters such as `ValueTop10` and `ValueGreaterThan`.
-AxisScores score_row_axis(const PivotResult& result, std::size_t row_count, std::size_t col_count,
-                          std::size_t data_field_index = 0);
-
-/// Mirror of `score_row_axis` for the column axis.
-AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std::size_t row_count,
-                          std::size_t data_field_index = 0);
 
 /// Builds a per-leaf keep mask for `f`. Returns `nullopt` for filter
 /// shapes that should degrade to a no-op (e.g. unbounded `ValueBetween`).
@@ -202,6 +193,21 @@ std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, c
 /// accumulating them and is served by `build_value_filter_keep`.
 std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis,
                                                           bool top = true);
+
+/// Leaf keep mask for a value filter on the field whose axis nodes are
+/// `groups` (see `axis_leaf_groups_at_depth`), with `group_scores[g]`
+/// scoring group `g`.
+///
+/// Each run of groups sharing a parent is ranked or thresholded on its own,
+/// so a Top-N on an inner field keeps N items under every outer item; a
+/// kept group keeps all `leaf_count` of its leaves. `basis`, `target` and
+/// `top` select between `build_value_filter_keep` (`Items`) and
+/// `build_running_total_keep`. Returns `nullopt` when the filter shape is a
+/// no-op.
+std::optional<std::vector<bool>> build_grouped_value_filter_keep(const PivotFilter& f, TopNBasis basis, double target,
+                                                                 bool top, const std::vector<AxisLeafGroup>& groups,
+                                                                 const AxisScores& group_scores,
+                                                                 std::size_t leaf_count);
 
 /// Which leaf axis a value filter pruned.
 enum class LeafAxis : std::uint8_t {
