@@ -250,6 +250,14 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
     out.append(attr);
     out.append("=\"1\"");
   }
+  // `sortType` defaults to ascending-by-label; only emit it when the
+  // field's sort deviates from that (explicit descending, or manual
+  // order from `<items>` document order), matching the reader's default.
+  if (field.sort.manual) {
+    out.append(" sortType=\"manual\"");
+  } else if (!field.sort.ascending) {
+    out.append(" sortType=\"descending\"");
+  }
   // Re-emit any unmodelled `<pivotField>` attributes captured on read.
   append_raw_attrs(out, field.passthrough_attrs);
   if (field.items.empty()) {
@@ -305,17 +313,30 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
   out.append("</items></pivotField>");
 }
 
-/// Emits `<rowFields>` or `<colFields>` block. Only called when
-/// `order` is non-empty.
-void AppendFieldOrder(std::string& out, std::string_view tag, const std::vector<std::uint32_t>& order) {
+/// Emits `<rowFields>` or `<colFields>` block. Only called when `order`
+/// is non-empty or `values_position` is set.
+///
+/// `values_position`, when set, re-inserts `<field x="-2"/>` (the Values
+/// pseudo-field marker `PivotTable::row_values_position()` /
+/// `col_values_position()` records) at its original document position
+/// among `order`'s real field indices.
+void AppendFieldOrder(std::string& out, std::string_view tag, const std::vector<std::uint32_t>& order,
+                      std::optional<std::size_t> values_position) {
+  const std::size_t total = order.size() + (values_position.has_value() ? 1U : 0U);
   out.push_back('<');
   out.append(tag);
   out.append(" count=\"");
-  out.append(std::to_string(order.size()));
+  out.append(std::to_string(total));
   out.append("\">");
-  for (const std::uint32_t idx : order) {
+  std::size_t real_idx = 0;
+  for (std::size_t i = 0; i < total; ++i) {
     out.append("<field x=\"");
-    out.append(std::to_string(idx));
+    if (values_position.has_value() && *values_position == i) {
+      out.append(std::to_string(pivot::kValuesFieldPosition));
+    } else {
+      out.append(std::to_string(order[real_idx]));
+      ++real_idx;
+    }
     out.append("\"/>");
   }
   out.append("</");
@@ -465,14 +486,14 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
   }
   out.append("</pivotFields>");
 
-  if (!table.row_field_order().empty()) {
-    AppendFieldOrder(out, "rowFields", table.row_field_order());
+  if (!table.row_field_order().empty() || table.row_values_position().has_value()) {
+    AppendFieldOrder(out, "rowFields", table.row_field_order(), table.row_values_position());
   }
   // `<rowItems>` and any other post-rowFields unmodelled elements.
   out.append(table.raw_passthrough_after_row_fields());
 
-  if (!table.col_field_order().empty()) {
-    AppendFieldOrder(out, "colFields", table.col_field_order());
+  if (!table.col_field_order().empty() || table.col_values_position().has_value()) {
+    AppendFieldOrder(out, "colFields", table.col_field_order(), table.col_values_position());
   }
   // `<colItems>` / `<pageFields>` and other post-colFields unmodelled
   // elements, which the schema places before `<dataFields>`.

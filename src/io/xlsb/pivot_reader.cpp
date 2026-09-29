@@ -10,6 +10,7 @@
 
 #include "io/xlsb/record.h"
 #include "pivot/pivot_types.h"
+#include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -391,6 +392,9 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         }
         if (bounds[1] < bounds[0] || bounds[3] < bounds[2]) {
           return CorruptError("xlsb pivot table location rectangle is inverted");
+        }
+        if (bounds[1] >= Sheet::kMaxRows || bounds[3] >= Sheet::kMaxCols) {
+          return CorruptError("xlsb pivot table location rectangle exceeds sheet grid bounds");
         }
         table.set_anchor(bounds[0], bounds[2], bounds[1] - bounds[0] + 1U, bounds[3] - bounds[2] + 1U);
         // Excel wrote this extent for the report as it stood, so it is

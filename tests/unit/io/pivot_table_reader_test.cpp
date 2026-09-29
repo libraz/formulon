@@ -156,6 +156,83 @@ TEST(PivotTableReader, RowAndColFieldOrder) {
   EXPECT_EQ(table.col_field_order()[0], 2U);
 }
 
+TEST(PivotTableReader, SortTypeDescendingReversesTheField) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("  <location ref=\"A1:B2\"/>");
+  xml.append("  <pivotFields count=\"1\">");
+  xml.append("    <pivotField axis=\"axisRow\" sortType=\"descending\"/>");
+  xml.append("  </pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  ASSERT_EQ(table.fields().size(), 1U);
+  EXPECT_FALSE(table.fields()[0].sort.ascending);
+  EXPECT_FALSE(table.fields()[0].sort.manual);
+}
+
+TEST(PivotTableReader, SortTypeManualDefersToItemOrder) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("  <location ref=\"A1:B2\"/>");
+  xml.append("  <pivotFields count=\"1\">");
+  xml.append("    <pivotField axis=\"axisRow\" sortType=\"manual\"/>");
+  xml.append("  </pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  ASSERT_EQ(table.fields().size(), 1U);
+  EXPECT_TRUE(table.fields()[0].sort.manual);
+}
+
+TEST(PivotTableReader, MissingSortTypeKeepsAscendingDefault) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("  <location ref=\"A1:B2\"/>");
+  xml.append("  <pivotFields count=\"1\">");
+  xml.append("    <pivotField axis=\"axisRow\"/>");
+  xml.append("  </pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  ASSERT_EQ(table.fields().size(), 1U);
+  EXPECT_TRUE(table.fields()[0].sort.ascending);
+  EXPECT_FALSE(table.fields()[0].sort.manual);
+}
+
+// Excel writes `<field x="-2"/>` for the Values (Sigma) pseudo-field once
+// a pivot has two or more data fields. It must not be coerced into field
+// index 0, which would duplicate an unrelated field onto this axis.
+TEST(PivotTableReader, ValuesFieldMarkerIsKeptOutOfFieldOrder) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("  <location ref=\"A1:B2\"/>");
+  xml.append("  <pivotFields count=\"2\">");
+  xml.append("    <pivotField axis=\"axisCol\"/>");
+  xml.append("    <pivotField dataField=\"1\"/>");
+  xml.append("  </pivotFields>");
+  xml.append("  <colFields count=\"2\">");
+  xml.append("    <field x=\"0\"/>");
+  xml.append("    <field x=\"-2\"/>");
+  xml.append("  </colFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  ASSERT_EQ(table.col_field_order().size(), 1U);
+  EXPECT_EQ(table.col_field_order()[0], 0U);
+  ASSERT_TRUE(table.col_values_position().has_value());
+  EXPECT_EQ(table.col_values_position().value(), 1U);
+  EXPECT_FALSE(table.row_values_position().has_value());
+}
+
 TEST(PivotTableReader, MultipleDataFieldsOnSameSourceField) {
   // GETPIVOTDATA's display-name lookup requires that two data fields on
   // the same source column (Sum + Average of "Amount") survive as two
@@ -628,6 +705,31 @@ TEST(PivotTableReader, TopNFlavoursAreDistinguishedByTheirTypeAlone) {
   EXPECT_DOUBLE_EQ(filters[1].value, 70.0);
   EXPECT_EQ(filters[2].top_n_basis, pivot::TopNBasis::Sum);
   EXPECT_DOUBLE_EQ(filters[2].value, 100.0);
+}
+
+TEST(PivotTableReader, TopTenDirectionDecodesTopAttributeAndDefaultsToTop) {
+  // Excel's "Bottom N" dialog option writes `top="0"` on the same
+  // `<top10>` element as "Top N"; the attribute is absent for "Top N"
+  // itself, so a missing attribute must decode the same as `top="1"`.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"2\">");
+  xml.append(
+      "<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+      "<top10 val=\"2\"/></filterColumn></autoFilter></filter>");
+  xml.append(
+      "<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+      "<top10 top=\"0\" val=\"2\"/></filterColumn></autoFilter></filter>");
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const auto& filters = table_or.value().authored_value_filters();
+  ASSERT_EQ(filters.size(), 2U);
+  EXPECT_TRUE(filters[0].top);
+  EXPECT_FALSE(filters[1].top);
 }
 
 TEST(PivotTableReader, RelativePeriodFiltersDecodeFromTheTypeNameAlone) {

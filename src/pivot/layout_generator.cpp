@@ -59,22 +59,23 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
     }
     switch (mode) {
       case ShowValuesAs::PercentOfRow: {
-        // Per-leaf-row sums (used for both leaf cells and any
-        // col_subtotal cell that lives in that leaf row).
-        std::vector<double> row_sums(actual_row_count, 0.0);
+        // Per-leaf-row totals, re-aggregated from the underlying records
+        // by the evaluator (`result.row_leaf_totals`) rather than summed
+        // from this data field's already-aggregated cells here --
+        // summing would be wrong for a non-additive aggregation
+        // (Average/Max/Min/StdDev/Var). Used for both leaf cells and any
+        // col_subtotal cell that lives in that leaf row.
         std::vector<bool> row_any_numeric(actual_row_count, false);
         for (std::size_t r = 0; r < actual_row_count; ++r) {
-          for (std::size_t c = 0; c < actual_col_count; ++c) {
-            if (df_idx >= result.values[r][c].size()) {
-              continue;
-            }
-            auto [ok, n] = cell_num(result.values[r][c][df_idx]);
-            if (ok) {
-              row_sums[r] += n;
-              row_any_numeric[r] = true;
-            }
+          if (r < result.row_leaf_totals.size() && df_idx < result.row_leaf_totals[r].size()) {
+            row_any_numeric[r] = cell_num(result.row_leaf_totals[r][df_idx]).first;
           }
         }
+        const auto row_total = [&](std::size_t r) {
+          return (r < result.row_leaf_totals.size() && df_idx < result.row_leaf_totals[r].size())
+                     ? cell_num(result.row_leaf_totals[r][df_idx]).second
+                     : 0.0;
+        };
         for (std::size_t r = 0; r < actual_row_count; ++r) {
           for (std::size_t c = 0; c < actual_col_count; ++c) {
             if (df_idx >= result.values[r][c].size()) {
@@ -83,28 +84,20 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
             if (!row_any_numeric[r]) {
               continue;
             }
-            scale_cell(result.values[r][c][df_idx], row_sums[r]);
+            scale_cell(result.values[r][c][df_idx], row_total(r));
           }
         }
-        // Row subtotals: each is its own "row" with its own row sum
-        // taken over `col_values`. The total slot becomes 1.0 (all of
-        // the row's contribution lives within itself); col_values are
-        // their share of that sum; col_subtotal_values are partial
-        // shares of the same row sum, matching Excel's "% of row"
-        // treatment of intersection cells.
+        // Row subtotals: each is its own "row"; its re-aggregated total
+        // (`sub.values[df_idx]`, captured before this loop overwrites
+        // it) is the denominator for its col_values / col_subtotal_values
+        // shares, matching Excel's "% of row" treatment of intersection
+        // cells. The total slot itself becomes 1.0 (all of the row's
+        // contribution lives within itself).
         for (RowSubtotal& sub : result.row_subtotals) {
-          double sub_row_sum = 0.0;
-          bool sub_row_any_numeric = false;
-          for (const auto& col_slot : sub.col_values) {
-            if (df_idx >= col_slot.size()) {
-              continue;
-            }
-            auto [ok, n] = cell_num(col_slot[df_idx]);
-            if (ok) {
-              sub_row_sum += n;
-              sub_row_any_numeric = true;
-            }
+          if (df_idx >= sub.values.size()) {
+            continue;
           }
+          const auto [sub_row_any_numeric, sub_row_sum] = cell_num(sub.values[df_idx]);
           for (auto& col_slot : sub.col_values) {
             if (df_idx >= col_slot.size()) {
               continue;
@@ -123,7 +116,7 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
             }
             scale_cell(cs_slot[df_idx], sub_row_sum);
           }
-          if (df_idx < sub.values.size() && sub_row_any_numeric) {
+          if (sub_row_any_numeric) {
             if (sub_row_sum == 0.0) {
               sub.values[df_idx] = Value::error(ErrorCode::Div0);
             } else {
@@ -132,8 +125,7 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
           }
         }
         // Col subtotals: each cell sits in some leaf row `r`, so
-        // divide by the same `row_sums[r]` used for the leaf-row
-        // transform.
+        // divide by that row's re-aggregated total.
         for (ColSubtotal& csub : result.col_subtotals) {
           for (std::size_t r = 0; r < csub.values.size() && r < actual_row_count; ++r) {
             if (df_idx >= csub.values[r].size()) {
@@ -142,20 +134,60 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
             if (!row_any_numeric[r]) {
               continue;
             }
-            scale_cell(csub.values[r][df_idx], row_sums[r]);
+            scale_cell(csub.values[r][df_idx], row_total(r));
+          }
+        }
+        bool any_row_numeric = false;
+        for (std::size_t r = 0; r < actual_row_count; ++r) {
+          if (row_any_numeric[r]) {
+            any_row_numeric = true;
+            break;
+          }
+        }
+        // Margin totals: `row_leaf_totals[r]` renders as row `r`'s own
+        // cell in the right-hand "Grand Total" column, so it normalizes
+        // to 1.0 against itself -- the row's contribution lives entirely
+        // within itself. `col_leaf_totals[c]` and each col-subtotal's own
+        // total render in the bottom "Grand Total" row, which is itself
+        // just another row whose own total is the overall grand total,
+        // so those divide by it instead.
+        for (std::size_t r = 0; r < result.row_leaf_totals.size(); ++r) {
+          if (df_idx >= result.row_leaf_totals[r].size() || !row_any_numeric[r]) {
+            continue;
+          }
+          result.row_leaf_totals[r][df_idx] = row_total(r) == 0.0 ? Value::error(ErrorCode::Div0) : Value::number(1.0);
+        }
+        double total = 0.0;
+        bool total_known = false;
+        if (df_idx < result.grand_totals.size()) {
+          auto [ok, n] = cell_num(result.grand_totals[df_idx]);
+          if (ok) {
+            total = n;
+            total_known = true;
+          }
+        }
+        if (!total_known) {
+          for (std::size_t r = 0; r < actual_row_count; ++r) {
+            total += row_total(r);
+          }
+          total_known = any_row_numeric;
+        }
+        if (total_known) {
+          for (std::size_t c = 0; c < result.col_leaf_totals.size(); ++c) {
+            if (df_idx < result.col_leaf_totals[c].size()) {
+              scale_cell(result.col_leaf_totals[c][df_idx], total);
+            }
+          }
+          for (ColSubtotal& csub : result.col_subtotals) {
+            if (df_idx < csub.total.size()) {
+              scale_cell(csub.total[df_idx], total);
+            }
           }
         }
         // Grand total: under PercentOfRow the grand-total row sums to
         // itself, so the displayed value is 1.0 (Div0 if no row had
         // any numeric content).
         if (df_idx < result.grand_totals.size()) {
-          bool any_row_numeric = false;
-          for (std::size_t r = 0; r < actual_row_count; ++r) {
-            if (row_any_numeric[r]) {
-              any_row_numeric = true;
-              break;
-            }
-          }
           auto [ok, _n] = cell_num(result.grand_totals[df_idx]);
           (void)_n;
           if (ok) {
@@ -165,21 +197,21 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
         break;
       }
       case ShowValuesAs::PercentOfCol: {
-        // Per-leaf-col sums (mirror of PercentOfRow).
-        std::vector<double> col_sums(actual_col_count, 0.0);
+        // Per-leaf-col totals, re-aggregated from the underlying records
+        // by the evaluator (`result.col_leaf_totals`) rather than summed
+        // from this data field's already-aggregated cells here -- mirror
+        // of the PercentOfRow fix above.
         std::vector<bool> col_any_numeric(actual_col_count, false);
         for (std::size_t c = 0; c < actual_col_count; ++c) {
-          for (std::size_t r = 0; r < actual_row_count; ++r) {
-            if (c >= result.values[r].size() || df_idx >= result.values[r][c].size()) {
-              continue;
-            }
-            auto [ok, n] = cell_num(result.values[r][c][df_idx]);
-            if (ok) {
-              col_sums[c] += n;
-              col_any_numeric[c] = true;
-            }
+          if (c < result.col_leaf_totals.size() && df_idx < result.col_leaf_totals[c].size()) {
+            col_any_numeric[c] = cell_num(result.col_leaf_totals[c][df_idx]).first;
           }
         }
+        const auto col_total = [&](std::size_t c) {
+          return (c < result.col_leaf_totals.size() && df_idx < result.col_leaf_totals[c].size())
+                     ? cell_num(result.col_leaf_totals[c][df_idx]).second
+                     : 0.0;
+        };
         // Capture the grand total before any mutation; under
         // PercentOfCol the row-subtotal "row total" slot collapses to
         // its share of the grand total (the row's contribution to the
@@ -195,28 +227,26 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
         }
         if (!total_known) {
           for (std::size_t c = 0; c < actual_col_count; ++c) {
-            total += col_sums[c];
+            total += col_total(c);
             if (col_any_numeric[c]) {
               total_known = true;
             }
           }
         }
-        // Col-subtotal column totals: per col_subtotal, the
-        // subtotal-column total = sum across its `values[r][df_idx]`
-        // slots. Used for both the col_subtotal cells themselves and
-        // for any row_subtotal cell that lives in that col_subtotal.
+        // Col-subtotal column totals: each subtotal's own re-aggregated
+        // total (`ColSubtotal::total`), mirroring `RowSubtotal::values`
+        // for a row subtotal -- not summed from `values[r][df_idx]`,
+        // which would be wrong for a non-additive aggregation.
         std::vector<double> col_subtotal_totals(result.col_subtotals.size(), 0.0);
         std::vector<bool> col_subtotal_any_numeric(result.col_subtotals.size(), false);
         for (std::size_t cs = 0; cs < result.col_subtotals.size(); ++cs) {
-          for (const auto& row_slot : result.col_subtotals[cs].values) {
-            if (df_idx >= row_slot.size()) {
-              continue;
-            }
-            auto [ok, n] = cell_num(row_slot[df_idx]);
-            if (ok) {
-              col_subtotal_totals[cs] += n;
-              col_subtotal_any_numeric[cs] = true;
-            }
+          if (df_idx >= result.col_subtotals[cs].total.size()) {
+            continue;
+          }
+          auto [ok, n] = cell_num(result.col_subtotals[cs].total[df_idx]);
+          if (ok) {
+            col_subtotal_totals[cs] = n;
+            col_subtotal_any_numeric[cs] = true;
           }
         }
         for (std::size_t c = 0; c < actual_col_count; ++c) {
@@ -227,7 +257,7 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
             if (!col_any_numeric[c]) {
               continue;
             }
-            scale_cell(result.values[r][c][df_idx], col_sums[c]);
+            scale_cell(result.values[r][c][df_idx], col_total(c));
           }
         }
         // Col subtotals: each col_subtotal column's cells divide by
@@ -257,7 +287,7 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
             if (!col_any_numeric[c]) {
               continue;
             }
-            scale_cell(sub.col_values[c][df_idx], col_sums[c]);
+            scale_cell(sub.col_values[c][df_idx], col_total(c));
           }
           for (std::size_t cs = 0; cs < sub.col_subtotal_values.size() && cs < result.col_subtotals.size(); ++cs) {
             if (df_idx >= sub.col_subtotal_values[cs].size()) {
@@ -270,6 +300,34 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
           }
           if (df_idx < sub.values.size() && total_known) {
             scale_cell(sub.values[df_idx], total);
+          }
+        }
+        // Margin totals: `col_leaf_totals[c]` and each col-subtotal's own
+        // total render as that column's cell in the bottom "Grand Total"
+        // row, so they normalize to 1.0 against themselves -- mirror of
+        // `row_leaf_totals` under PercentOfRow. `row_leaf_totals[r]`
+        // renders in the right-hand "Grand Total" column, which is
+        // itself just another column whose own total is the overall
+        // grand total, so it divides by that instead -- mirror of how
+        // `RowSubtotal::values` collapses just above.
+        for (std::size_t c = 0; c < result.col_leaf_totals.size(); ++c) {
+          if (df_idx >= result.col_leaf_totals[c].size() || !col_any_numeric[c]) {
+            continue;
+          }
+          result.col_leaf_totals[c][df_idx] = col_total(c) == 0.0 ? Value::error(ErrorCode::Div0) : Value::number(1.0);
+        }
+        for (std::size_t cs = 0; cs < result.col_subtotals.size(); ++cs) {
+          if (df_idx >= result.col_subtotals[cs].total.size() || !col_subtotal_any_numeric[cs]) {
+            continue;
+          }
+          result.col_subtotals[cs].total[df_idx] =
+              col_subtotal_totals[cs] == 0.0 ? Value::error(ErrorCode::Div0) : Value::number(1.0);
+        }
+        if (total_known) {
+          for (std::size_t r = 0; r < result.row_leaf_totals.size(); ++r) {
+            if (df_idx < result.row_leaf_totals[r].size()) {
+              scale_cell(result.row_leaf_totals[r][df_idx], total);
+            }
           }
         }
         // Grand total: under PercentOfCol every column sums to itself,
@@ -348,6 +406,23 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
               scale_cell(row_slot[df_idx], total);
             }
           }
+          if (df_idx < csub.total.size()) {
+            scale_cell(csub.total[df_idx], total);
+          }
+        }
+        // Margin totals: the right-hand "Grand Total" column and the
+        // bottom "Grand Total" row are every bit as much a cell of this
+        // table as a leaf or subtotal is, so % of Grand Total applies to
+        // them the same way.
+        for (std::size_t r = 0; r < result.row_leaf_totals.size(); ++r) {
+          if (df_idx < result.row_leaf_totals[r].size()) {
+            scale_cell(result.row_leaf_totals[r][df_idx], total);
+          }
+        }
+        for (std::size_t c = 0; c < result.col_leaf_totals.size(); ++c) {
+          if (df_idx < result.col_leaf_totals[c].size()) {
+            scale_cell(result.col_leaf_totals[c][df_idx], total);
+          }
         }
         if (df_idx < result.grand_totals.size()) {
           auto [ok, _n] = cell_num(result.grand_totals[df_idx]);
@@ -419,11 +494,13 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
         break;
       }
       case ShowValuesAs::Index: {
-        // Index = (cell * grand_total) / (row_sum * col_sum). Compute
-        // partials on demand; if any partial is zero or non-numeric,
-        // surface Div0 / leave as-is. Subtotals + grand totals remain
-        // at their raw aggregate; see the header comment for this
-        // section.
+        // Index = (cell * grand_total) / (row_sum * col_sum). row_sum /
+        // col_sum are the evaluator's own re-aggregated per-leaf totals
+        // (`row_leaf_totals` / `col_leaf_totals`), not a sum of this
+        // data field's already-aggregated cells -- summing would be
+        // wrong for a non-additive aggregation (Average/Max/Min/StdDev/
+        // Var). Subtotals + grand totals remain at their raw aggregate;
+        // see the header comment for this section.
         double total = 0.0;
         bool total_known = false;
         if (df_idx < result.grand_totals.size()) {
@@ -433,28 +510,23 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
             total_known = true;
           }
         }
-        // Precompute row sums + col sums for this df.
-        std::vector<double> row_sums(actual_row_count, 0.0);
-        std::vector<double> col_sums(actual_col_count, 0.0);
-        for (std::size_t r = 0; r < actual_row_count; ++r) {
-          for (std::size_t c = 0; c < actual_col_count && c < result.values[r].size(); ++c) {
-            if (df_idx >= result.values[r][c].size()) {
-              continue;
-            }
-            auto [ok, n] = cell_num(result.values[r][c][df_idx]);
-            if (ok) {
-              row_sums[r] += n;
-              col_sums[c] += n;
-            }
-          }
-        }
+        const auto row_total = [&](std::size_t r) {
+          return (r < result.row_leaf_totals.size() && df_idx < result.row_leaf_totals[r].size())
+                     ? cell_num(result.row_leaf_totals[r][df_idx]).second
+                     : 0.0;
+        };
+        const auto col_total = [&](std::size_t c) {
+          return (c < result.col_leaf_totals.size() && df_idx < result.col_leaf_totals[c].size())
+                     ? cell_num(result.col_leaf_totals[c][df_idx]).second
+                     : 0.0;
+        };
         // When grand totals are turned off the grand-total slot is empty,
         // which would leave `total == 0` and collapse every Index cell to
-        // zero. Recompute the total from the surviving leaf cells, mirroring
-        // the PercentOfTotal fallback.
+        // zero. Recompute the total from the row totals, mirroring the
+        // PercentOfTotal fallback.
         if (!total_known) {
-          for (double rs : row_sums) {
-            total += rs;
+          for (std::size_t r = 0; r < actual_row_count; ++r) {
+            total += row_total(r);
           }
         }
         for (std::size_t r = 0; r < actual_row_count; ++r) {
@@ -467,7 +539,7 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
             if (!ok) {
               continue;
             }
-            const double denom = row_sums[r] * col_sums[c];
+            const double denom = row_total(r) * col_total(c);
             if (denom == 0.0) {
               cell = Value::error(ErrorCode::Div0);
             } else {

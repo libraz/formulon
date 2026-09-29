@@ -267,26 +267,62 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
         field.subtotal_fns.push_back(e.fn);
       }
     }
+    // `sortType="descending"` reverses sibling order; `"manual"` defers
+    // to this field's `<items>` document order instead of label order.
+    // A missing attribute keeps the ascending-by-label default already
+    // in force rather than the schema's nominal "manual" default: no
+    // fixture in this tree exercises the attribute, and treating
+    // absence as manual would reorder every field that has never set it
+    // for a spelling this reader cannot confirm against a real file.
+    // `"ascending"` (or any other spelling) leaves that default in place
+    // too.
+    if (pugi::xml_attribute sort_attr = f.attribute("sortType"); sort_attr) {
+      const std::string_view value = sort_attr.value();
+      if (value == "descending") {
+        field.sort.ascending = false;
+      } else if (value == "manual") {
+        field.sort.manual = true;
+      }
+    }
     if (pugi::xml_node items_node = f.child("items"); items_node) {
       RETURN_IF_ERROR(ParseItems(items_node, &field));
     }
     // Preserve unmodelled `<pivotField>` attributes (`compact`, `outline`,
     // `showAll`, `includeNewItemsInFilter`, ...) for verbatim round-trip.
-    capture_unknown_attrs(f,
-                          {"axis", "dataField", "name", "subtotalTop", "defaultSubtotal", "sumSubtotal",
-                           "countASubtotal", "avgSubtotal", "maxSubtotal", "minSubtotal", "productSubtotal",
-                           "countSubtotal", "stdDevSubtotal", "stdDevPSubtotal", "varSubtotal", "varPSubtotal"},
-                          field.passthrough_attrs);
+    capture_unknown_attrs(
+        f,
+        {"axis", "dataField", "name", "subtotalTop", "defaultSubtotal", "sumSubtotal", "countASubtotal", "avgSubtotal",
+         "maxSubtotal", "minSubtotal", "productSubtotal", "countSubtotal", "stdDevSubtotal", "stdDevPSubtotal",
+         "varSubtotal", "varPSubtotal", "sortType"},
+        field.passthrough_attrs);
     out->mutable_fields().push_back(std::move(field));
   }
   return Expected<void, Error>::Ok();
 }
 
-/// Walks `<rowFields>` / `<colFields>` and pushes each `<field x="N">`
-/// onto `out`. Missing `x` defaults to 0 (matches OOXML schema).
-void ParseFieldOrder(const pugi::xml_node& parent, std::vector<std::uint32_t>* out) {
-  for (pugi::xml_node f = parent.child("field"); f; f = f.next_sibling("field")) {
-    out->push_back(parse_xml_u32_attr(f.attribute("x"), 0U));
+/// Walks `<rowFields>` / `<colFields>` and pushes each real `<field
+/// x="N">` onto `out`. Missing `x` defaults to 0 (matches OOXML schema).
+///
+/// `x="-2"` (`pivot::kValuesFieldPosition`) is the Values pseudo-field
+/// marker Excel writes once the pivot has two or more data fields: it
+/// names no field in `fields()`, so it is kept out of `out` and its
+/// document position (counted over every `<field>` child including its
+/// own slot) is recorded in `*out_values_position` instead. Every
+/// consumer that walks `out` to build the row/column hierarchy
+/// therefore never needs to recognise it; the writer re-inserts it at
+/// that position on save.
+void ParseFieldOrder(const pugi::xml_node& parent, std::vector<std::uint32_t>* out,
+                     std::optional<std::size_t>* out_values_position) {
+  std::size_t position = 0;
+  for (pugi::xml_node f = parent.child("field"); f; f = f.next_sibling("field"), ++position) {
+    const std::int32_t x = parse_xml_i32_attr(f.attribute("x"), 0);
+    if (x == pivot::kValuesFieldPosition) {
+      if (!out_values_position->has_value()) {
+        *out_values_position = position;
+      }
+      continue;
+    }
+    out->push_back(x >= 0 ? static_cast<std::uint32_t>(x) : 0U);
   }
 }
 
@@ -484,6 +520,14 @@ std::optional<double> CollectTopCount(const pugi::xml_node& filter_node) {
   return parsed;
 }
 
+/// Reads a top-N filter's `<top10 top="...">` direction. Defaults to
+/// `true` (Top N) when the element or attribute is absent, matching the
+/// schema default; `top="0"` is Excel's "Bottom N" dialog option.
+bool CollectTopDirection(const pugi::xml_node& filter_node) {
+  const pugi::xml_node top = filter_node.child("autoFilter").child("filterColumn").child("top10");
+  return attr_bool(top, "top", true);
+}
+
 /// Parses one `<customFilter val="...">` payload, rejecting anything the
 /// sheet path's lexer would not accept as a number. Sharing that lexer
 /// keeps `0x10` from meaning sixteen here and nothing elsewhere.
@@ -640,6 +684,7 @@ void ParseAuthoredValueFilters(const pugi::xml_node& parent, pivot::PivotTable* 
         continue;
       }
       entry.value = *count_or;
+      entry.top = CollectTopDirection(node);
     } else {
       const bool ranged = *type_or == pivot::FilterType::ValueBetween || *type_or == pivot::FilterType::LabelDate;
       const std::vector<std::string_view> criteria = CollectFilterCriteria(node);
@@ -812,10 +857,14 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     RETURN_IF_ERROR(ParsePivotFields(fields, &table));
   }
   if (pugi::xml_node rows = root.child("rowFields"); rows) {
-    ParseFieldOrder(rows, &table.mutable_row_field_order());
+    std::optional<std::size_t> values_position;
+    ParseFieldOrder(rows, &table.mutable_row_field_order(), &values_position);
+    table.set_row_values_position(values_position);
   }
   if (pugi::xml_node cols = root.child("colFields"); cols) {
-    ParseFieldOrder(cols, &table.mutable_col_field_order());
+    std::optional<std::size_t> values_position;
+    ParseFieldOrder(cols, &table.mutable_col_field_order(), &values_position);
+    table.set_col_values_position(values_position);
   }
   // `<pageFields>` follows the same decode-but-do-not-own split as
   // `<filters>` below: it stays out of `kRecognized`, so the block still

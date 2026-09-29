@@ -183,17 +183,25 @@ AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std:
 
 /// Builds a per-leaf keep mask for `f`. Returns `nullopt` for filter
 /// shapes that should degrade to a no-op (e.g. unbounded `ValueBetween`).
-std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis);
+///
+/// `top` only affects `ValueTop10`: `true` keeps the N highest-scoring
+/// leaves, `false` keeps the N lowest-scoring ones (Excel's "Bottom N"
+/// dialog option). `PivotFilter` carries no direction of its own — like
+/// `TopNBasis`, it is an authored-file concept — so the caller supplies
+/// it alongside `f`.
+std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis, bool top = true);
 
 /// Keep mask for the two running-total flavours of the top-N dialog.
 ///
-/// Both walk the scoring leaves in descending order and stop once the
+/// Both walk the scoring leaves in ranked order and stop once the
 /// running total first reaches the target, so the last kept leaf is the
-/// one that crosses it. `Percent` reads `target` as a share of the axis
-/// total; `Sum` reads it as an absolute amount. Returns `nullopt` for
-/// `Items`, which counts leaves rather than accumulating them and is
-/// served by `build_value_filter_keep`.
-std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis);
+/// one that crosses it. `top` selects the ranking direction the same way
+/// it does for `build_value_filter_keep`. `Percent` reads `target` as a
+/// share of the axis total; `Sum` reads it as an absolute amount.
+/// Returns `nullopt` for `Items`, which counts leaves rather than
+/// accumulating them and is served by `build_value_filter_keep`.
+std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis,
+                                                          bool top = true);
 
 /// Which leaf axis a value filter pruned.
 enum class LeafAxis : std::uint8_t {

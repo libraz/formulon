@@ -387,6 +387,61 @@ TEST(PivotEvaluator, FieldSortByValueFieldReordersAxisAndValues) {
   EXPECT_DOUBLE_EQ(r.values[1][1][0].as_number(), 50.0);   // North/Gadget
 }
 
+// `SortSpec::manual` (OOXML `sortType="manual"`) orders siblings by the
+// field's `<items>` document position, resolved through the bound
+// cache's `shared_items` -- not by display label. "South" sorts after
+// "North" alphabetically, so this only passes if manual order actually
+// overrides the default ascending-by-label sort.
+TEST(PivotEvaluator, ManualSortOrdersByItemDocumentPosition) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  PivotCacheField region;
+  region.name = "Region";
+  region.shared_items.push_back(owned_text(cache, "South"));
+  region.shared_items.push_back(owned_text(cache, "North"));
+  cache.mutable_fields().push_back(std::move(region));
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+
+  auto add = [&](std::uint32_t region_index, double amount) {
+    PivotCacheRecord rec;
+    rec.cells = {Value::number(region_index), Value::number(amount)};
+    rec.cell_is_index = {true, false};
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add(0U, 200.0);  // South
+  add(1U, 100.0);  // North
+
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  PivotField region_f;
+  region_f.source_name = "Region";
+  region_f.axis = PivotAxis::Row;
+  region_f.sort.manual = true;
+  region_f.items.push_back(PivotItem{"South", true, /*has_cache_index=*/true, /*cache_index=*/0U});
+  region_f.items.push_back(PivotItem{"North", true, /*has_cache_index=*/true, /*cache_index=*/1U});
+  PivotField amount_f;
+  amount_f.source_name = "Amount";
+  amount_f.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(region_f));
+  table.mutable_fields().push_back(std::move(amount_f));
+
+  PivotDataField sum_amount;
+  sum_amount.name = "Sum of Amount";
+  sum_amount.field_index = 1;
+  sum_amount.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum_amount));
+  table.mutable_row_field_order() = {0};
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_EQ(r.rows[0].label, "South");
+  EXPECT_EQ(r.rows[1].label, "North");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 200.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 100.0);
+}
+
 TEST(PivotEvaluator, SortedSubtotalWalkPreservesTypedDuplicateDisplayLabels) {
   PivotCache cache;
   cache.set_cache_id(17);
@@ -813,6 +868,109 @@ TEST(PivotEvaluator, MaxMinProduct) {
   }
 }
 
+// The variance/stddev family already maps a non-finite intermediate result
+// to `#NUM!` (`variance_helper`); the arithmetic aggregates share the same
+// obligation and, until fixed, returned `Value::number(inf)` instead.
+TEST(PivotEvaluator, ArithmeticAggregatesMapOverflowToNumError) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  auto add = [&](const char* region, double amount) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(Value::number(amount));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  const double huge = std::numeric_limits<double>::max();
+  add("North", huge);
+  add("North", huge);  // huge + huge overflows a double to +inf.
+
+  auto run = [&](Aggregation agg) {
+    PivotTable table;
+    table.set_pivot_cache_id(1);
+    PivotField rf;
+    rf.source_name = "Region";
+    rf.axis = PivotAxis::Row;
+    PivotField af;
+    af.source_name = "Amount";
+    af.axis = PivotAxis::Value;
+    table.mutable_fields().push_back(std::move(rf));
+    table.mutable_fields().push_back(std::move(af));
+    table.mutable_row_field_order() = {0};
+    PivotDataField df;
+    df.name = "Agg";
+    df.field_index = 1;
+    df.aggregation = agg;
+    table.mutable_data_fields().push_back(std::move(df));
+    table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+    auto r_or = evaluate(table, cache);
+    EXPECT_TRUE(static_cast<bool>(r_or));
+    return r_or.value();
+  };
+
+  for (Aggregation agg : {Aggregation::Sum, Aggregation::Average, Aggregation::Product}) {
+    PivotResult r = run(agg);
+    ASSERT_TRUE(r.values[0][0][0].is_error()) << static_cast<int>(agg);
+    EXPECT_EQ(r.values[0][0][0].as_error(), ErrorCode::Num) << static_cast<int>(agg);
+  }
+}
+
+// Max/Min pick an existing value rather than compute one, so they only
+// see a non-finite result when the source cell itself already carries
+// one (a cached value from outside Excel's own write path, since Excel
+// never stores `Infinity`).
+TEST(PivotEvaluator, MaxMinMapAStoredNonFiniteValueToNumError) {
+  auto run = [&](Aggregation agg, double extreme) {
+    PivotCache cache;
+    cache.set_cache_id(1);
+    cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+    cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+    auto add = [&](const char* region, double amount) {
+      PivotCacheRecord rec;
+      rec.cells.push_back(owned_text(cache, region));
+      rec.cells.push_back(Value::number(amount));
+      cache.mutable_records().push_back(std::move(rec));
+    };
+    add("North", extreme);
+    add("North", 1.0);
+
+    PivotTable table;
+    table.set_pivot_cache_id(1);
+    PivotField rf;
+    rf.source_name = "Region";
+    rf.axis = PivotAxis::Row;
+    PivotField af;
+    af.source_name = "Amount";
+    af.axis = PivotAxis::Value;
+    table.mutable_fields().push_back(std::move(rf));
+    table.mutable_fields().push_back(std::move(af));
+    table.mutable_row_field_order() = {0};
+    PivotDataField df;
+    df.name = "Agg";
+    df.field_index = 1;
+    df.aggregation = agg;
+    table.mutable_data_fields().push_back(std::move(df));
+    table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+    auto r_or = evaluate(table, cache);
+    EXPECT_TRUE(static_cast<bool>(r_or));
+    return r_or.value();
+  };
+
+  {
+    // +Infinity beats every finite value, so it is the one MAX picks.
+    PivotResult r = run(Aggregation::Max, std::numeric_limits<double>::infinity());
+    ASSERT_TRUE(r.values[0][0][0].is_error());
+    EXPECT_EQ(r.values[0][0][0].as_error(), ErrorCode::Num);
+  }
+  {
+    // -Infinity is smaller than every finite value, so it is the one MIN picks.
+    PivotResult r = run(Aggregation::Min, -std::numeric_limits<double>::infinity());
+    ASSERT_TRUE(r.values[0][0][0].is_error());
+    EXPECT_EQ(r.values[0][0][0].as_error(), ErrorCode::Num);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 8b. StdDev / StdDevP / Var / VarP arithmetic
 // ---------------------------------------------------------------------------
@@ -1229,6 +1387,29 @@ TEST(PivotEvaluator, DateGroupingBySecond) {
   EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 2.0);
 }
 
+// A 1904-epoch workbook stores its cache serials on that epoch's scale.
+// Bucketing them as if they were 1900-epoch (the pre-fix default) would
+// misread the civil year by roughly four years; passing the workbook's
+// actual epoch through `PivotFilterEnv` keeps the bucket on the year the
+// record was actually authored under.
+TEST(PivotEvaluator, DateGroupingByYearHonorsDate1904Epoch) {
+  PivotCache cache = build_two_field_cache();
+  push_record(cache, eval::date_time::serial_from_ymd(2024, 3, 15, /*date1904=*/true), 10.0);
+  push_record(cache, eval::date_time::serial_from_ymd(2023, 6, 1, /*date1904=*/true), 20.0);
+
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  PivotFilterEnv env;
+  env.date1904 = true;
+  auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_EQ(r.rows[0].label, "2023");
+  EXPECT_EQ(r.rows[1].label, "2024");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 10.0);
+}
+
 // ---------------------------------------------------------------------------
 // 8d. PivotFilter (LabelContains / LabelBeginsWith / ValueTop10 / ValueGreaterThan)
 // ---------------------------------------------------------------------------
@@ -1390,6 +1571,26 @@ TEST(PivotEvaluator, AuthoredTopCountKeepsTheHighestScoringLeaf) {
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   ASSERT_EQ(r_or.value().rows.size(), 1U);
   EXPECT_EQ(r_or.value().rows[0].label, "South");
+}
+
+// Excel's "Bottom N" dialog option writes the identically shaped
+// `<top10>` with `top="0"`. Keeping the wrong direction here would keep
+// South (175 < 500 makes North the actual bottom) instead of North.
+TEST(PivotEvaluator, AuthoredTopCountWithTopFalseKeepsTheLowestScoringLeaf) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  AuthoredValueFilter f;
+  f.field_index = 0;
+  f.type = FilterType::ValueTop10;
+  f.value = 1.0;
+  f.top = false;
+  table.mutable_authored_value_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "North");
 }
 
 TEST(PivotEvaluator, AuthoredGreaterThanIsStrictOnTheThreshold) {
@@ -1957,6 +2158,29 @@ TEST(PivotEvaluator, ShowAsPercentOfRow) {
   EXPECT_DOUBLE_EQ(r.values[south][widget][0].as_number(), 200.0 / 500.0);
 }
 
+TEST(PivotEvaluator, ShowAsPercentOfRowReaggregatesNonAdditiveDenominator) {
+  // AVERAGE is non-additive: the row denominator must be
+  // AVERAGE(every North record) = (100+25+50)/3, not the sum of each
+  // product's own already-computed average (62.5 + 50 = 112.5), which
+  // is what summing per-cell aggregates would produce.
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.mutable_data_fields()[0].aggregation = Aggregation::Average;
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::PercentOfRow;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  const std::size_t north = row_index(r, "North");
+  const std::size_t gadget = (r.cols[0].label == "Gadget") ? 0U : 1U;
+  const std::size_t widget = 1U - gadget;
+  const double north_avg = (100.0 + 25.0 + 50.0) / 3.0;
+  EXPECT_DOUBLE_EQ(r.values[north][widget][0].as_number(), 62.5 / north_avg);
+  EXPECT_DOUBLE_EQ(r.values[north][gadget][0].as_number(), 50.0 / north_avg);
+}
+
 TEST(PivotEvaluator, ShowAsPercentOfCol) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
@@ -2213,6 +2437,58 @@ TEST(PivotEvaluator, ShowAsPercentOfRowGrandTotalIsOne) {
   EXPECT_NEAR(r.grand_total.as_number(), 1.0, 1e-9);
 }
 
+TEST(PivotEvaluator, ShowAsPercentOfRowTransformsMarginTotals) {
+  // The right-hand "Grand Total" column (row_leaf_totals) normalizes to
+  // 1.0 against itself; the bottom "Grand Total" row (col_leaf_totals)
+  // is itself just another row, so it divides by the overall grand
+  // total instead. Region totals: North=175, South=500; Product totals:
+  // Gadget=350, Widget=325; grand=675.
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::PercentOfRow;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  const std::size_t north = row_index(r, "North");
+  const std::size_t south = row_index(r, "South");
+  ASSERT_EQ(r.row_leaf_totals.size(), 2U);
+  EXPECT_DOUBLE_EQ(r.row_leaf_totals[north][0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(r.row_leaf_totals[south][0].as_number(), 1.0);
+
+  const std::size_t gadget = (r.cols[0].label == "Gadget") ? 0U : 1U;
+  const std::size_t widget = 1U - gadget;
+  ASSERT_EQ(r.col_leaf_totals.size(), 2U);
+  EXPECT_DOUBLE_EQ(r.col_leaf_totals[gadget][0].as_number(), 350.0 / 675.0);
+  EXPECT_DOUBLE_EQ(r.col_leaf_totals[widget][0].as_number(), 325.0 / 675.0);
+}
+
+TEST(PivotEvaluator, ShowAsPercentOfColTransformsMarginTotals) {
+  // Mirror of ShowAsPercentOfRowTransformsMarginTotals: col_leaf_totals
+  // normalizes to 1.0 against itself, row_leaf_totals divides by the
+  // overall grand total.
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::PercentOfCol;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.col_leaf_totals.size(), 2U);
+  EXPECT_DOUBLE_EQ(r.col_leaf_totals[0][0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(r.col_leaf_totals[1][0].as_number(), 1.0);
+
+  const std::size_t north = row_index(r, "North");
+  const std::size_t south = row_index(r, "South");
+  ASSERT_EQ(r.row_leaf_totals.size(), 2U);
+  EXPECT_DOUBLE_EQ(r.row_leaf_totals[north][0].as_number(), 175.0 / 675.0);
+  EXPECT_DOUBLE_EQ(r.row_leaf_totals[south][0].as_number(), 500.0 / 675.0);
+}
+
 TEST(PivotEvaluator, ShowAsPercentOfColTransformsColSubtotal) {
   // Use a col hierarchy (Region/Product) and a row axis (Channel) so
   // col_subtotals is populated.
@@ -2273,6 +2549,61 @@ TEST(PivotEvaluator, ShowAsPercentOfColTransformsColSubtotal) {
     }
     EXPECT_NEAR(col_sum, 1.0, 1e-9);
   }
+}
+
+TEST(PivotEvaluator, ShowAsPercentOfColReaggregatesNonAdditiveColSubtotalDenominator) {
+  // AVERAGE is non-additive: the North col-subtotal's own denominator
+  // must be AVERAGE(10,20,30,40) = 25 (every North record, re-
+  // aggregated), not the sum of its per-row-leaf averages
+  // (AVERAGE(10,30)=20 for Online + AVERAGE(20,40)=30 for Store = 50),
+  // which is what summing `ColSubtotal::values` would give.
+  PivotCache cache = build_show_as_cache();
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  PivotField region_f;
+  region_f.source_name = "Region";
+  region_f.axis = PivotAxis::Col;
+  PivotField product_f;
+  product_f.source_name = "Product";
+  product_f.axis = PivotAxis::Col;
+  PivotField channel_f;
+  channel_f.source_name = "Channel";
+  channel_f.axis = PivotAxis::Row;
+  PivotField amount_f;
+  amount_f.source_name = "Amount";
+  amount_f.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(region_f));
+  table.mutable_fields().push_back(std::move(product_f));
+  table.mutable_fields().push_back(std::move(channel_f));
+  table.mutable_fields().push_back(std::move(amount_f));
+  table.mutable_row_field_order() = {2};
+  table.mutable_col_field_order() = {0, 1};
+  PivotDataField avg_amount;
+  avg_amount.name = "Average of Amount";
+  avg_amount.field_index = 3;
+  avg_amount.aggregation = Aggregation::Average;
+  avg_amount.show_as = ShowValuesAs::PercentOfCol;
+  table.mutable_data_fields().push_back(std::move(avg_amount));
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.col_subtotals.size(), 2U);
+  const ColSubtotal* north_subtotal = nullptr;
+  for (const ColSubtotal& csub : r.col_subtotals) {
+    if (!csub.labels.empty() && csub.labels[0] == "North") {
+      north_subtotal = &csub;
+    }
+  }
+  ASSERT_NE(north_subtotal, nullptr);
+  const std::size_t online = row_index(r, "Online");
+  const std::size_t store = row_index(r, "Store");
+  ASSERT_TRUE(north_subtotal->values[online][0].is_number());
+  ASSERT_TRUE(north_subtotal->values[store][0].is_number());
+  EXPECT_DOUBLE_EQ(north_subtotal->values[online][0].as_number(), 20.0 / 25.0);
+  EXPECT_DOUBLE_EQ(north_subtotal->values[store][0].as_number(), 30.0 / 25.0);
 }
 
 TEST(PivotEvaluator, ShowAsPercentOfTotalAppliesToSubtotalsAndGrandTotal) {
@@ -2801,6 +3132,53 @@ TEST(PivotEvaluator, OutOfRangeFieldIndexYieldsInvalid) {
   auto r_or = evaluate(table, cache);
   ASSERT_FALSE(static_cast<bool>(r_or));
   EXPECT_EQ(r_or.error().code, FormulonErrorCode::kEvalPivotInvalid);
+}
+
+// ---------------------------------------------------------------------------
+// 13b. An axis field the reader could not decode grouping for
+// ---------------------------------------------------------------------------
+
+// The reader has no structural model for Excel's date/number grouping
+// (`databaseField="0"` cache fields backed by a `<fieldGroup>`); every
+// record's value for such a field is the placeholder `Value::blank()`.
+// Placing one on an axis must refuse evaluation rather than silently
+// collapse that axis to a single blank item.
+TEST(PivotEvaluator, GroupingDerivedAxisFieldWithNoDateGroupIsRefused) {
+  PivotCache cache = build_basic_cache();
+  cache.mutable_fields().push_back(PivotCacheField{"Region Years", {}});
+  cache.mutable_fields().back().is_database_field = false;
+  cache.mutable_fields().back().field_group_xml = "<fieldGroup base=\"0\"><rangePr groupBy=\"years\"/></fieldGroup>";
+
+  PivotTable table = build_sum_amount_table(/*row=*/{3}, /*col=*/{});
+  PivotField grouped_f;
+  grouped_f.source_name = "Region Years";
+  grouped_f.axis = PivotAxis::Row;
+  table.mutable_fields().push_back(std::move(grouped_f));
+  table.mutable_row_field_order() = {3};
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_FALSE(static_cast<bool>(r_or));
+  EXPECT_EQ(r_or.error().code, FormulonErrorCode::kEvalPivotInvalid);
+}
+
+// A caller that has supplied its own `date_group` (via the C API setter)
+// is exempt: evaluation proceeds using that grouping instead of refusing.
+TEST(PivotEvaluator, GroupingDerivedAxisFieldWithDateGroupSetEvaluatesNormally) {
+  PivotCache cache = build_basic_cache();
+  cache.mutable_fields().push_back(PivotCacheField{"Region Years", {}});
+  cache.mutable_fields().back().is_database_field = false;
+  cache.mutable_fields().back().field_group_xml = "<fieldGroup base=\"0\"><rangePr groupBy=\"years\"/></fieldGroup>";
+
+  PivotTable table = build_sum_amount_table(/*row=*/{3}, /*col=*/{});
+  PivotField grouped_f;
+  grouped_f.source_name = "Region Years";
+  grouped_f.axis = PivotAxis::Row;
+  grouped_f.date_group = PivotDateGroup{};
+  table.mutable_fields().push_back(std::move(grouped_f));
+  table.mutable_row_field_order() = {3};
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
 }
 
 // ---------------------------------------------------------------------------
@@ -4315,10 +4693,44 @@ TEST(PivotEvaluator, RowValueFilterCollapsesEmptiedBranchesOfAThreeLevelAxis) {
     EXPECT_EQ(r.row_subtotals[i].labels, expected_labels[i]) << "subtotal=" << i;
   }
   EXPECT_EQ(r.subtotals.size(), 3U);
-  // A surviving subtotal keeps its pre-filter aggregate, which is what lets
-  // a Top-N report still frame a leaf against its whole group.
-  EXPECT_DOUBLE_EQ(r.row_subtotals[0].values[0].as_number(), 330.0);
-  EXPECT_DOUBLE_EQ(r.row_subtotals[2].values[0].as_number(), 990.0);
+  // A surviving subtotal is re-aggregated from just its surviving leaves,
+  // matching Excel's own Top-N grand total (verified against
+  // pivot_value_date_filters.xlsx / pivot_recurring_period_filter.xlsx):
+  // South/A = 100 + 200 = 300; South (both products) = 300 + 200 + 400 = 900.
+  EXPECT_DOUBLE_EQ(r.row_subtotals[0].values[0].as_number(), 300.0);
+  EXPECT_DOUBLE_EQ(r.row_subtotals[2].values[0].as_number(), 900.0);
+}
+
+// Excel's own Top-N grand total covers only the visible rows, not the
+// pre-filter set -- verified against two real Excel-authored fixtures
+// (tests/fixtures/excel/pivot_value_date_filters.xlsx and
+// pivot_recurring_period_filter.xlsx): both cache a Top-2 filter whose
+// rendered Grand Total cell (675) equals the sum of the two surviving
+// rows (500 + 175), not all four source rows.
+TEST(PivotEvaluator, ValueFilterRecalculatesGrandTotalFromSurvivingLeavesOnly) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+
+  // North totals 175 (100+50+25), South totals 500 (200+300). Top-1
+  // keeps South only.
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Region";
+  f.type = FilterType::ValueTop10;
+  f.value = 1;
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "South");
+  ASSERT_FALSE(r.grand_totals.empty());
+  EXPECT_DOUBLE_EQ(r.grand_totals[0].as_number(), 500.0);
+  ASSERT_TRUE(r.grand_total.is_number());
+  EXPECT_DOUBLE_EQ(r.grand_total.as_number(), 500.0);
 }
 
 // ---------------------------------------------------------------------------

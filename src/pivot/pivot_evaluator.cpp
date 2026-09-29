@@ -23,8 +23,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
+#include <numeric>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -38,6 +41,7 @@
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
+#include "pivot/value_order.h"
 #include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -165,6 +169,154 @@ Aggregation aggregation_from_subtotal_fn(SubtotalFn fn) {
   return static_cast<Aggregation>(static_cast<std::uint8_t>(fn));
 }
 
+// Drops the entries of `leaves` whose index is marked false in `keep`,
+// preserving survivor order. Mirrors `filter_engine.cpp`'s `keep_marked`
+// for the one `std::vector<std::size_t>` case this file needs (see
+// `surviving_row_leaves` / `surviving_col_leaves` below); kept local
+// rather than exposed from `filter_engine.h` since nothing else needs
+// the general template.
+void CompactSurvivingLeaves(std::vector<std::size_t>& leaves, const std::vector<bool>& keep) {
+  std::vector<std::size_t> kept;
+  kept.reserve(leaves.size());
+  for (std::size_t i = 0; i < leaves.size(); ++i) {
+    if (i < keep.size() && !keep[i]) {
+      continue;
+    }
+    kept.push_back(leaves[i]);
+  }
+  leaves = std::move(kept);
+}
+
+// Maps a subtotal's leaf set (in current, post-filter leaf-position
+// space) to `buckets` coordinates via `original_of_position`.
+std::vector<std::size_t> ToOriginalLeaves(const std::vector<std::size_t>& leaf_set,
+                                          const std::vector<std::size_t>& original_of_position) {
+  std::vector<std::size_t> out;
+  out.reserve(leaf_set.size());
+  for (const std::size_t position : leaf_set) {
+    if (position < original_of_position.size()) {
+      out.push_back(original_of_position[position]);
+    }
+  }
+  return out;
+}
+
+// Recomputes every total `PivotResult` exposes -- grand totals, per-leaf
+// totals across the opposite axis, and every row/col subtotal value --
+// from `buckets` directly, restricted to the leaves that survived every
+// value-axis filter (evaluate()'s step 7). Re-deriving from records
+// rather than adjusting the already-computed per-cell aggregates is what
+// keeps a non-additive aggregation (Average/Max/Min/StdDev/Var) correct,
+// and it is the only way a filtered-out leaf's contribution is actually
+// removed rather than merely hidden from the rendered leaf list --
+// verified against tests/fixtures/excel/pivot_value_date_filters.xlsx
+// and pivot_recurring_period_filter.xlsx, both real Excel-authored
+// Top-2 filters whose cached Grand Total cell equals the sum of the two
+// surviving rows, not all four source rows.
+//
+// `surviving_row_leaves[i]` / `surviving_col_leaves[i]` map the current
+// (post-filter) leaf position `i` back to its original `buckets` row/col
+// index. `row_subtotal_leaf_sets` / `col_subtotal_leaf_sets` are already
+// in that same current-position space -- both are recompacted by the
+// same `keep` mask, at the same point in the filter loop, as
+// `surviving_row_leaves` / `surviving_col_leaves` themselves -- so a
+// subtotal's own leaf set maps to `buckets` coordinates through the same
+// lookup (`ToOriginalLeaves`).
+void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
+                                       const std::vector<std::size_t>& surviving_row_leaves,
+                                       const std::vector<std::size_t>& surviving_col_leaves,
+                                       const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                                       const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets,
+                                       PivotResult& result) {
+  const std::size_t data_field_count = table.data_fields().size();
+  if (data_field_count == 0) {
+    return;
+  }
+
+  for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < result.grand_totals.size(); ++df_idx) {
+    const PivotDataField& df = table.data_fields()[df_idx];
+    std::vector<Value> column;
+    append_leaf_set_field_values(cache, buckets, surviving_row_leaves, surviving_col_leaves, df.field_index, column);
+    result.grand_totals[df_idx] = aggregate_or_blank(df.aggregation, column, result);
+  }
+  if (!result.grand_totals.empty()) {
+    result.grand_total = result.grand_totals[0];
+  }
+
+  for (std::size_t r = 0; r < result.row_leaf_totals.size() && r < surviving_row_leaves.size(); ++r) {
+    for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < result.row_leaf_totals[r].size(); ++df_idx) {
+      const PivotDataField& df = table.data_fields()[df_idx];
+      std::vector<Value> column;
+      append_leaf_set_field_values(cache, buckets, {surviving_row_leaves[r]}, surviving_col_leaves, df.field_index,
+                                   column);
+      result.row_leaf_totals[r][df_idx] = aggregate_or_blank(df.aggregation, column, result);
+    }
+  }
+
+  for (std::size_t c = 0; c < result.col_leaf_totals.size() && c < surviving_col_leaves.size(); ++c) {
+    for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < result.col_leaf_totals[c].size(); ++df_idx) {
+      const PivotDataField& df = table.data_fields()[df_idx];
+      std::vector<Value> column;
+      append_leaf_set_field_values(cache, buckets, surviving_row_leaves, {surviving_col_leaves[c]}, df.field_index,
+                                   column);
+      result.col_leaf_totals[c][df_idx] = aggregate_or_blank(df.aggregation, column, result);
+    }
+  }
+
+  for (std::size_t rs = 0; rs < result.row_subtotals.size() && rs < row_subtotal_leaf_sets.size(); ++rs) {
+    RowSubtotal& subtotal = result.row_subtotals[rs];
+    const std::vector<std::size_t> rows = ToOriginalLeaves(row_subtotal_leaf_sets[rs], surviving_row_leaves);
+    for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values.size(); ++df_idx) {
+      const PivotDataField& df = table.data_fields()[df_idx];
+      std::vector<Value> column;
+      append_leaf_set_field_values(cache, buckets, rows, surviving_col_leaves, df.field_index, column);
+      subtotal.values[df_idx] = aggregate_or_blank(df.aggregation, column, result);
+    }
+    for (std::size_t c = 0; c < subtotal.col_values.size() && c < surviving_col_leaves.size(); ++c) {
+      for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_values[c].size(); ++df_idx) {
+        const PivotDataField& df = table.data_fields()[df_idx];
+        std::vector<Value> column;
+        append_leaf_set_field_values(cache, buckets, rows, {surviving_col_leaves[c]}, df.field_index, column);
+        subtotal.col_values[c][df_idx] = aggregate_or_blank(df.aggregation, column, result);
+      }
+    }
+    for (std::size_t cs = 0; cs < subtotal.col_subtotal_values.size() && cs < col_subtotal_leaf_sets.size(); ++cs) {
+      const std::vector<std::size_t> cols = ToOriginalLeaves(col_subtotal_leaf_sets[cs], surviving_col_leaves);
+      const ColSubtotal& col_subtotal = result.col_subtotals[cs];
+      for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_subtotal_values[cs].size();
+           ++df_idx) {
+        const PivotDataField& df = table.data_fields()[df_idx];
+        const Aggregation aggregation =
+            col_subtotal.aggregation.has_value() ? *col_subtotal.aggregation : df.aggregation;
+        std::vector<Value> column;
+        append_leaf_set_field_values(cache, buckets, rows, cols, df.field_index, column);
+        subtotal.col_subtotal_values[cs][df_idx] = aggregate_or_blank(aggregation, column, result);
+      }
+    }
+  }
+
+  for (std::size_t cs = 0; cs < result.col_subtotals.size() && cs < col_subtotal_leaf_sets.size(); ++cs) {
+    ColSubtotal& subtotal = result.col_subtotals[cs];
+    const std::vector<std::size_t> cols = ToOriginalLeaves(col_subtotal_leaf_sets[cs], surviving_col_leaves);
+    for (std::size_t r = 0; r < subtotal.values.size() && r < surviving_row_leaves.size(); ++r) {
+      for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values[r].size(); ++df_idx) {
+        const PivotDataField& df = table.data_fields()[df_idx];
+        const Aggregation aggregation = subtotal.aggregation.has_value() ? *subtotal.aggregation : df.aggregation;
+        std::vector<Value> column;
+        append_leaf_set_field_values(cache, buckets, {surviving_row_leaves[r]}, cols, df.field_index, column);
+        subtotal.values[r][df_idx] = aggregate_or_blank(aggregation, column, result);
+      }
+    }
+    for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.total.size(); ++df_idx) {
+      const PivotDataField& df = table.data_fields()[df_idx];
+      const Aggregation aggregation = subtotal.aggregation.has_value() ? *subtotal.aggregation : df.aggregation;
+      std::vector<Value> column;
+      append_leaf_set_field_values(cache, buckets, surviving_row_leaves, cols, df.field_index, column);
+      subtotal.total[df_idx] = aggregate_or_blank(aggregation, column, result);
+    }
+  }
+}
+
 }  // namespace
 
 Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache& cache,
@@ -181,6 +333,30 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       return make_error(FormulonErrorCode::kEvalPivotInvalid, "data field references out-of-range cache field",
                         "data_field=" + df.name + " field_index=" + std::to_string(df.field_index) +
                             " cache_fields=" + std::to_string(cache.fields().size()));
+    }
+  }
+  // Grouping-derived fields (`databaseField="0"`, backed by a
+  // `<fieldGroup>`) are not modelled by the reader: date grouping
+  // (Years/Quarters/Months/...) sets no `PivotField::date_group`, and
+  // number grouping has no representation in the model at all, so every
+  // record's value for such a field is the reader's `Value::blank()`
+  // placeholder. Evaluating a table that places one of these fields on
+  // an axis would silently collapse that axis to a single blank item
+  // instead of the groups Excel actually drew, so refuse outright
+  // rather than render a wrong answer.
+  for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
+    if (table.fields()[fi].axis == PivotAxis::None || fi >= cache.fields().size()) {
+      continue;
+    }
+    if (table.fields()[fi].date_group.has_value()) {
+      continue;  // The caller (C API) has already supplied a grouping.
+    }
+    const PivotCacheField& cache_field = cache.fields()[fi];
+    if (!cache_field.is_database_field && !cache_field.field_group_xml.empty()) {
+      return make_error(FormulonErrorCode::kEvalPivotInvalid,
+                        "pivot field is Excel date/number grouping, which this reader does not decode; refusing "
+                        "rather than evaluating every record as blank",
+                        "field=" + pivot_field_display_name(table.fields()[fi]) + " field_index=" + std::to_string(fi));
     }
   }
 
@@ -212,16 +388,46 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // hierarchy-insertion time; we plumb the optional through `HierLevel`
   // so `insert_path` can call the bucketer without re-walking the table
   // metadata.
+  //
+  // `manual_order_cache` backs `HierLevel::manual_order` for every field
+  // with `SortSpec::manual` set: a value->document-position map built
+  // once per field (from `<items>`'s authored `x=` cache indices, not
+  // from label text) and reused across every hierarchy level that field
+  // occupies. It has to outlive `row_levels`/`col_levels`, which is why
+  // it lives here rather than inside `level_for` itself; `unordered_map`
+  // element references stay valid across further insertions, so a
+  // pointer taken now stays good for the rest of this function.
+  std::unordered_map<std::uint32_t, std::map<Value, std::size_t, ValueLess>> manual_order_cache;
+  auto manual_order_for = [&](std::uint32_t fi) -> const std::map<Value, std::size_t, ValueLess>* {
+    if (auto it = manual_order_cache.find(fi); it != manual_order_cache.end()) {
+      return &it->second;
+    }
+    std::map<Value, std::size_t, ValueLess> positions;
+    if (fi < table.fields().size() && fi < cache.fields().size()) {
+      const std::vector<PivotItem>& items = table.fields()[fi].items;
+      const std::vector<Value>& shared_items = cache.fields()[fi].shared_items;
+      for (std::size_t i = 0; i < items.size(); ++i) {
+        if (items[i].has_cache_index && items[i].cache_index < shared_items.size()) {
+          positions.emplace(shared_items[items[i].cache_index], i);
+        }
+      }
+    }
+    return &manual_order_cache.emplace(fi, std::move(positions)).first->second;
+  };
   auto level_for = [&](std::uint32_t fi) -> HierLevel {
     const PivotDateGroup* dg = nullptr;
     if (fi < table.fields().size() && table.fields()[fi].date_group.has_value()) {
       dg = &*table.fields()[fi].date_group;
     }
+    const bool manual = fi < table.fields().size() && table.fields()[fi].sort.manual;
     const bool ascending = fi >= table.fields().size() || table.fields()[fi].sort.ascending;
     const std::optional<ValueSortSpec> value_sort = resolve_value_sort(table, fi);
-    return HierLevel{fi, dg, ascending,
+    return HierLevel{fi,
+                     dg,
+                     ascending,
                      value_sort.has_value() ? std::optional<std::uint32_t>(value_sort->field_index) : std::nullopt,
-                     value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt};
+                     value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt,
+                     manual ? manual_order_for(fi) : nullptr};
   };
   std::vector<HierLevel> row_levels;
   row_levels.reserve(table.row_field_order().size());
@@ -246,10 +452,12 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   for (std::size_t i = 0; i < surviving.size(); ++i) {
     const PivotCacheRecord& rec = cache.records()[surviving[i]];
     if (!row_levels.empty()) {
-      row_leaves_for_record[i] = insert_path(cache, row_levels, rec, surviving[i], row_tree, options.blank_item_label);
+      row_leaves_for_record[i] =
+          insert_path(cache, row_levels, rec, surviving[i], row_tree, options.blank_item_label, resolved_env.date1904);
     }
     if (!col_levels.empty()) {
-      col_leaves_for_record[i] = insert_path(cache, col_levels, rec, surviving[i], col_tree, options.blank_item_label);
+      col_leaves_for_record[i] =
+          insert_path(cache, col_levels, rec, surviving[i], col_tree, options.blank_item_label, resolved_env.date1904);
     }
   }
 
@@ -454,49 +662,66 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   if (!col_levels.empty() && data_field_count > 0) {
     std::vector<std::size_t> stack_col_leaves;
 
-    walk_subtotal_tree(col_tree, col_levels, table, stack_col_leaves,
-                       [&](const std::vector<std::string>& labels, std::size_t depth, std::size_t collected_start,
-                           const std::vector<std::size_t>& leaves) {
-                         // Mirror row-axis custom subtotal behavior: each selected
-                         // function emits a distinct subtotal column. An empty spec
-                         // retains the data field's own aggregation.
-                         std::vector<std::optional<Aggregation>> specs;
-                         if (depth < table.col_field_order().size()) {
-                           const std::uint32_t group_fi = table.col_field_order()[depth];
-                           if (group_fi < table.fields().size() && !table.fields()[group_fi].subtotal_fns.empty()) {
-                             for (const SubtotalFn fn : table.fields()[group_fi].subtotal_fns) {
-                               specs.push_back(aggregation_from_subtotal_fn(fn));
-                             }
-                           }
-                         }
-                         if (specs.empty()) {
-                           specs.push_back(std::nullopt);
-                         }
-                         for (const std::optional<Aggregation>& spec : specs) {
-                           ColSubtotal subtotal;
-                           subtotal.labels = labels;
-                           subtotal.depth = static_cast<std::uint32_t>(depth);
-                           subtotal.aggregation = spec;
-                           subtotal.values.assign(row_leaf_count, std::vector<Value>(data_field_count, Value::blank()));
+    walk_subtotal_tree(
+        col_tree, col_levels, table, stack_col_leaves,
+        [&](const std::vector<std::string>& labels, std::size_t depth, std::size_t collected_start,
+            const std::vector<std::size_t>& leaves) {
+          // Mirror row-axis custom subtotal behavior: each selected
+          // function emits a distinct subtotal column. An empty spec
+          // retains the data field's own aggregation.
+          std::vector<std::optional<Aggregation>> specs;
+          if (depth < table.col_field_order().size()) {
+            const std::uint32_t group_fi = table.col_field_order()[depth];
+            if (group_fi < table.fields().size() && !table.fields()[group_fi].subtotal_fns.empty()) {
+              for (const SubtotalFn fn : table.fields()[group_fi].subtotal_fns) {
+                specs.push_back(aggregation_from_subtotal_fn(fn));
+              }
+            }
+          }
+          if (specs.empty()) {
+            specs.push_back(std::nullopt);
+          }
+          for (const std::optional<Aggregation>& spec : specs) {
+            ColSubtotal subtotal;
+            subtotal.labels = labels;
+            subtotal.depth = static_cast<std::uint32_t>(depth);
+            subtotal.aggregation = spec;
+            subtotal.values.assign(row_leaf_count, std::vector<Value>(data_field_count, Value::blank()));
+            subtotal.total.assign(data_field_count, Value::blank());
 
-                           for (std::size_t r = 0; r < row_leaf_count; ++r) {
-                             for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
-                               const PivotDataField& df = table.data_fields()[df_idx];
-                               std::vector<Value> column;
-                               for (std::size_t leaf_idx_iter = collected_start; leaf_idx_iter < leaves.size();
-                                    ++leaf_idx_iter) {
-                                 const std::size_t leaf_idx = leaves[leaf_idx_iter];
-                                 append_bucket_field_values(cache, buckets, r, leaf_idx, df.field_index, column);
-                               }
-                               const Aggregation aggregation = spec.has_value() ? *spec : df.aggregation;
-                               subtotal.values[r][df_idx] = aggregate_or_blank(aggregation, column, result);
-                             }
-                           }
-                           col_subtotal_leaf_sets.emplace_back(
-                               leaves.begin() + static_cast<std::ptrdiff_t>(collected_start), leaves.end());
-                           result.col_subtotals.push_back(std::move(subtotal));
-                         }
-                       });
+            for (std::size_t r = 0; r < row_leaf_count; ++r) {
+              for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
+                const PivotDataField& df = table.data_fields()[df_idx];
+                std::vector<Value> column;
+                for (std::size_t leaf_idx_iter = collected_start; leaf_idx_iter < leaves.size(); ++leaf_idx_iter) {
+                  const std::size_t leaf_idx = leaves[leaf_idx_iter];
+                  append_bucket_field_values(cache, buckets, r, leaf_idx, df.field_index, column);
+                }
+                const Aggregation aggregation = spec.has_value() ? *spec : df.aggregation;
+                subtotal.values[r][df_idx] = aggregate_or_blank(aggregation, column, result);
+              }
+            }
+            // The subtotal's own total across every row leaf,
+            // re-aggregated the same way `RowSubtotal::values`
+            // is (never summed from `subtotal.values`, which
+            // would be wrong for a non-additive aggregation).
+            for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
+              const PivotDataField& df = table.data_fields()[df_idx];
+              std::vector<Value> column;
+              for (std::size_t r = 0; r < row_leaf_count; ++r) {
+                for (std::size_t leaf_idx_iter = collected_start; leaf_idx_iter < leaves.size(); ++leaf_idx_iter) {
+                  const std::size_t leaf_idx = leaves[leaf_idx_iter];
+                  append_bucket_field_values(cache, buckets, r, leaf_idx, df.field_index, column);
+                }
+              }
+              const Aggregation aggregation = spec.has_value() ? *spec : df.aggregation;
+              subtotal.total[df_idx] = aggregate_or_blank(aggregation, column, result);
+            }
+            col_subtotal_leaf_sets.emplace_back(leaves.begin() + static_cast<std::ptrdiff_t>(collected_start),
+                                                leaves.end());
+            result.col_subtotals.push_back(std::move(subtotal));
+          }
+        });
   }
 
   if (!result.row_subtotals.empty() && !result.col_subtotals.empty() && data_field_count > 0) {
@@ -548,10 +773,14 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // pre-order (the order `finalize_hierarchy` assigned), compute the
   // keep-mask for the whole leaf array, then collapse the row/col tree
   // by dropping leaves whose mask is false and any interior node whose
-  // subtree becomes empty. A surviving subtotal and the grand totals
-  // retain their pre-filter values so a Top-N report can still surface
-  // "X out of total" framing; a subtotal whose group is filtered away
-  // entirely is dropped along with the leaves it covered.
+  // subtree becomes empty. A surviving subtotal is kept; a subtotal
+  // whose group is filtered away entirely is dropped along with the
+  // leaves it covered. Every total -- grand totals, per-leaf totals, and
+  // surviving subtotal values -- is then recomputed from just the
+  // surviving leaves (`ReaggregateTotalsAfterValueFilter`, below the
+  // filter loop): Excel's own Top-N grand total covers only the visible
+  // rows, not the pre-filter set (verified against
+  // pivot_value_date_filters.xlsx / pivot_recurring_period_filter.xlsx).
   //
   // Both filter lists feed this pass. A slicer selection and a rule the
   // reader decoded out of `<filters>` prune identically once the latter
@@ -560,6 +789,19 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // copy of the pruning logic.
   // The running-total target rides in the same `value` slot the item count
   // uses, since the three flavours share one dialog field.
+  // Original-`buckets`-space indices of the row/col leaves still
+  // standing, maintained in lock-step with `row_subtotal_leaf_sets` /
+  // `col_subtotal_leaf_sets` (both recompacted by the same `keep` mask,
+  // at the same point, by every filter application) so the
+  // re-aggregation pass after the filter loop can map any leaf position
+  // -- a plain leaf or a subtotal's leaf set -- back to `buckets`
+  // coordinates regardless of how many filters ran or which axis each
+  // one pruned.
+  std::vector<std::size_t> surviving_row_leaves(row_leaf_count);
+  std::iota(surviving_row_leaves.begin(), surviving_row_leaves.end(), std::size_t{0});
+  std::vector<std::size_t> surviving_col_leaves(col_leaf_count);
+  std::iota(surviving_col_leaves.begin(), surviving_col_leaves.end(), std::size_t{0});
+  bool any_value_filter_applied = false;
   const auto filter_target = [](const PivotFilter& f) {
     if (const auto* as_double = std::get_if<double>(&f.value)) {
       return *as_double;
@@ -570,10 +812,11 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     return 0.0;
   };
   // `basis` selects how a top-N entry counts: `Items` uses the
-  // leaf-count rule, the other two accumulate a running total. It is
-  // only ever non-default for an authored entry, since the dialog
-  // choice has no embedder-facing counterpart on `PivotFilter`.
-  const auto apply_value_filter = [&](const PivotFilter& f, TopNBasis basis = TopNBasis::Items) {
+  // leaf-count rule, the other two accumulate a running total. `top`
+  // selects the ranking direction: `true` for Top N, `false` for Bottom
+  // N. Both are only ever non-default for an authored entry, since the
+  // dialog choice has no embedder-facing counterpart on `PivotFilter`.
+  const auto apply_value_filter = [&](const PivotFilter& f, TopNBasis basis = TopNBasis::Items, bool top = true) {
     if (f.type != FilterType::ValueTop10 && f.type != FilterType::ValueGreaterThan &&
         f.type != FilterType::ValueBetween) {
       return;  // Label/Date filters handled pre-aggregation.
@@ -598,8 +841,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
         return;
       }
       const AxisScores axis = score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count, f.data_field_index);
-      const auto keep_or = basis == TopNBasis::Items ? build_value_filter_keep(f, axis)
-                                                     : build_running_total_keep(basis, filter_target(f), axis);
+      const auto keep_or = basis == TopNBasis::Items ? build_value_filter_keep(f, axis, top)
+                                                     : build_running_total_keep(basis, filter_target(f), axis, top);
       if (!keep_or) {
         return;
       }
@@ -610,6 +853,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       // surviving-leaf index space, preserving DFS order.
       prune_top_level(result.rows, keep);
       compact_leaf_axis(result, keep, LeafAxis::Row, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+      CompactSurvivingLeaves(surviving_row_leaves, keep);
+      any_value_filter_applied = true;
     } else if (f.axis == PivotAxis::Col && !table.col_field_order().empty()) {
       // `n` is the number of column leaves (DFS pre-order). When the row
       // axis has at least one materialised slot we read the leaf count
@@ -621,8 +866,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       }
       const std::size_t row_n = row_levels.empty() ? 1u : result.values.size();
       const AxisScores axis = score_col_axis(result, n, row_n, f.data_field_index);
-      const auto keep_or = basis == TopNBasis::Items ? build_value_filter_keep(f, axis)
-                                                     : build_running_total_keep(basis, filter_target(f), axis);
+      const auto keep_or = basis == TopNBasis::Items ? build_value_filter_keep(f, axis, top)
+                                                     : build_running_total_keep(basis, filter_target(f), axis, top);
       if (!keep_or) {
         return;
       }
@@ -631,6 +876,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       // structure in the surviving-leaf index space.
       prune_top_level(result.cols, keep);
       compact_leaf_axis(result, keep, LeafAxis::Col, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+      CompactSurvivingLeaves(surviving_col_leaves, keep);
+      any_value_filter_applied = true;
     }
     // Mixed-direction (e.g. row-axis filter referencing a column field)
     // remains out of scope; such filters fall through here as a no-op.
@@ -641,8 +888,12 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   }
   for (const AuthoredValueFilter& authored : table.authored_value_filters()) {
     if (const auto projected = authored_value_filter_as_pivot_filter(table, authored)) {
-      apply_value_filter(*projected, authored.top_n_basis);
+      apply_value_filter(*projected, authored.top_n_basis, authored.top);
     }
+  }
+  if (any_value_filter_applied) {
+    ReaggregateTotalsAfterValueFilter(table, cache, buckets, surviving_row_leaves, surviving_col_leaves,
+                                      row_subtotal_leaf_sets, col_subtotal_leaf_sets, result);
   }
 
   // 8. Show-values-as transforms.

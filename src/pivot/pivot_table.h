@@ -73,6 +73,20 @@ class PivotTable {
   const std::vector<std::uint32_t>& col_field_order() const { return col_field_order_; }
   std::vector<std::uint32_t>& mutable_col_field_order() { return col_field_order_; }
 
+  /// Document position of the `<field x="-2"/>` Values pseudo-field
+  /// marker (`pivot::kValuesFieldPosition`) within `<rowFields>`, or
+  /// `nullopt` when the row axis carries none. Counted over the
+  /// original `<rowFields>` children including the marker's own slot,
+  /// so the writer can re-interleave it among `row_field_order()` at
+  /// the same position. Kept apart from `row_field_order()`, which
+  /// holds only real indices into `fields()`.
+  std::optional<std::size_t> row_values_position() const { return row_values_position_; }
+  void set_row_values_position(std::optional<std::size_t> position) { row_values_position_ = position; }
+
+  /// Same as `row_values_position()`, for `<colFields>`.
+  std::optional<std::size_t> col_values_position() const { return col_values_position_; }
+  void set_col_values_position(std::optional<std::size_t> position) { col_values_position_ = position; }
+
   // Page (report filter) axis -----------------------------------------------
   //
   // Decoded from `<pageFields>` for rendering only. The block itself stays
@@ -333,6 +347,8 @@ class PivotTable {
   std::vector<PivotDataField> data_fields_;
   std::vector<std::uint32_t> row_field_order_;
   std::vector<std::uint32_t> col_field_order_;
+  std::optional<std::size_t> row_values_position_;
+  std::optional<std::size_t> col_values_position_;
   std::vector<PivotPageField> page_fields_;
   PivotLayout layout_ = PivotLayout::Compact;
   std::uint32_t anchor_row_ = 0;

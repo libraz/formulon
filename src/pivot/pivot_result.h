@@ -57,6 +57,12 @@ struct ColSubtotal {
   /// when each data field uses its own configured aggregation.
   std::optional<Aggregation> aggregation;
   std::vector<std::vector<Value>> values;
+  /// The subtotal's own total across every row leaf, re-aggregated from
+  /// the underlying records rather than summed from `values`.
+  /// `total[data_field]`. Mirrors `RowSubtotal::values`, which is the
+  /// same quantity for a row subtotal; used as the PercentOfCol
+  /// denominator for this subtotal column.
+  std::vector<Value> total;
 };
 
 /// One page-axis (report filter) field as it is drawn above the report.

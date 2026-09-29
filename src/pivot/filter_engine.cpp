@@ -629,14 +629,15 @@ AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std:
   return score_axis(result, ScoreAxis::Col, col_count, row_count, data_field_index);
 }
 
-std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis) {
+std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis,
+                                                          bool top) {
   const std::size_t n = axis.scores.size();
   std::vector<bool> keep(n, false);
   if (basis == TopNBasis::Items) {
     return std::nullopt;  // Not a running-total flavour.
   }
-  // Rank the scoring leaves descending; all-blank leaves never contribute
-  // and never survive, matching the item-count flavour.
+  // Rank the scoring leaves in the requested direction; all-blank leaves
+  // never contribute and never survive, matching the item-count flavour.
   std::vector<std::uint32_t> order;
   order.reserve(n);
   double total = 0.0;
@@ -646,8 +647,10 @@ std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, doubl
       total += axis.scores[i];
     }
   }
-  const auto by_score_desc = [&](std::uint32_t lhs, std::uint32_t rhs) { return axis.scores[lhs] > axis.scores[rhs]; };
-  sort_index_order(order, make_index_less(by_score_desc));
+  const auto by_score = [&](std::uint32_t lhs, std::uint32_t rhs) {
+    return top ? axis.scores[lhs] > axis.scores[rhs] : axis.scores[lhs] < axis.scores[rhs];
+  };
+  sort_index_order(order, make_index_less(by_score));
   // `percent` is the same rule expressed as a share of the axis total,
   // not as a share of the leaf count. Only a threshold low enough for one
   // leaf to clear it alone tells the two apart, which is what the 50 %
@@ -664,7 +667,7 @@ std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, doubl
   return keep;
 }
 
-std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis) {
+std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis, bool top) {
   const std::size_t n = axis.scores.size();
   std::vector<bool> keep(n, false);
   if (f.type == FilterType::ValueTop10) {
@@ -675,16 +678,17 @@ std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, c
     const double requested = filter_number_value(f);
     const std::size_t top_n =
         index_from_double(requested, n + 1U).value_or(requested > static_cast<double>(n) ? n : 0U);
-    // Sort indices by score descending; all-blank leaves sink to the
-    // bottom regardless of N.
-    const auto by_score_desc = [&](std::uint32_t lhs, std::uint32_t rhs) {
+    // Sort indices by score in the requested direction; all-blank leaves
+    // sink to the bottom of the ranking regardless of N or direction, so
+    // a Bottom-N filter never picks a blank as one of its "lowest" items.
+    const auto by_score = [&](std::uint32_t lhs, std::uint32_t rhs) {
       if (axis.all_blank[lhs] != axis.all_blank[rhs]) {
         return !axis.all_blank[lhs];
       }
-      return axis.scores[lhs] > axis.scores[rhs];
+      return top ? axis.scores[lhs] > axis.scores[rhs] : axis.scores[lhs] < axis.scores[rhs];
     };
     std::vector<std::uint32_t> order;
-    sorted_index_order(order, static_cast<std::uint32_t>(n), make_index_less(by_score_desc));
+    sorted_index_order(order, static_cast<std::uint32_t>(n), make_index_less(by_score));
     const std::size_t k = std::min(top_n, n);
     for (std::size_t i = 0; i < k; ++i) {
       if (!axis.all_blank[order[i]]) {

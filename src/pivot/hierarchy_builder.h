@@ -57,6 +57,13 @@ struct HierLevel {
   bool ascending;                    ///< False reverses this field's item order.
   std::optional<std::uint32_t> value_sort_field;
   std::optional<Aggregation> value_sort_aggregation;
+  /// Non-null when this field's `SortSpec::manual` is set: maps each
+  /// `<items>`-enumerated cache value to its document position, so
+  /// `ordered_children` can sort siblings by authored order instead of
+  /// by label. A value the map does not contain (the cache carries data
+  /// `<items>` never enumerated) sorts after every mapped value, in the
+  /// field's natural ascending order.
+  const std::map<Value, std::size_t, ValueLess>* manual_order;
 };
 
 struct OrderedHierarchyChild {
@@ -77,7 +84,24 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
   }
   const bool ascending = depth >= levels.size() || levels[depth].ascending;
   const bool sort_by_value = depth < levels.size() && levels[depth].value_sort_field.has_value();
+  const std::map<Value, std::size_t, ValueLess>* manual_order =
+      depth < levels.size() ? levels[depth].manual_order : nullptr;
   sort_by_index(entries, [&](const OrderedHierarchyChild& lhs, const OrderedHierarchyChild& rhs) {
+    if (manual_order != nullptr) {
+      const auto lit = manual_order->find(*lhs.key);
+      const auto rit = manual_order->find(*rhs.key);
+      const bool l_mapped = lit != manual_order->end();
+      const bool r_mapped = rit != manual_order->end();
+      if (l_mapped && r_mapped) {
+        if (lit->second != rit->second) {
+          return lit->second < rit->second;
+        }
+        // Equal authored position (a malformed file): fall through to
+        // label order below.
+      } else if (l_mapped != r_mapped) {
+        return l_mapped;  // Authored items sort before ones the file never enumerated.
+      }
+    }
     if (sort_by_value && lhs.node->value_sort_key.has_value() && rhs.node->value_sort_key.has_value()) {
       const ValueLess less;
       if (less(*lhs.node->value_sort_key, *rhs.node->value_sort_key)) {
@@ -95,12 +119,14 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
 
 /// Inserts `record` into `tree`, walking `levels`. Returns the leaf
 /// `HierNode*`. The caller assigns leaf indices in a second pass. When
-/// a level carries a `date_group`, the cache value is bucketed first;
-/// the label is stashed on the inserted child for the renderer to
-/// surface. A blank cache value takes `blank_item_label` (the locale's
-/// placeholder) the same way, so no axis node is left unnamed.
+/// a level carries a `date_group`, the cache value is bucketed first,
+/// against the workbook's `date1904` epoch flag; the label is stashed on
+/// the inserted child for the renderer to surface. A blank cache value
+/// takes `blank_item_label` (the locale's placeholder) the same way, so
+/// no axis node is left unnamed.
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
-                      std::size_t record_index, HierNode& root, std::string_view blank_item_label);
+                      std::size_t record_index, HierNode& root, std::string_view blank_item_label,
+                      bool date1904 = false);
 
 /// Returns the display label for `(key, child)`: the override if set,
 /// otherwise the standard `display_string(key)`. Used by all hierarchy

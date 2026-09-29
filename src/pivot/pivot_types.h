@@ -284,6 +284,11 @@ struct AuthoredValueFilter {
   /// Which quantity `value` counts out. Only meaningful when `type` is
   /// `ValueTop10`, which is the one family the dialog offers a choice for.
   TopNBasis top_n_basis = TopNBasis::Items;
+  /// Source `<top10 top="...">` attribute: `true` keeps the N
+  /// highest-scoring leaves, `false` keeps the N lowest-scoring ones
+  /// (Excel's "Bottom N" dialog option). Only meaningful when `type` is
+  /// `ValueTop10`; defaults to `true`, matching the schema default.
+  bool top = true;
 };
 
 /// A date window named relative to when the pivot is computed.
@@ -355,11 +360,28 @@ struct AuthoredRecurringFilter {
 /// Sort directive for a pivot field.
 struct SortSpec {
   bool ascending = true;
+  /// True when sibling order at this field's hierarchy level comes from
+  /// `PivotField::items` document order rather than from label or
+  /// `by_field` order. Mirrors an explicit OOXML `sortType="manual"`.
+  /// `ascending` is not consulted while this is set.
+  bool manual = false;
   /// Empty selects display-label ordering. Otherwise this matches a data
   /// field's display name or source/custom field name and sorts sibling items
   /// by that field's aggregate.
   std::string by_field;
 };
+
+/// Sentinel `field x=` value on `<rowFields>`/`<colFields>` naming the
+/// Values (Sigma) pseudo-field position -- where the header selecting
+/// among two or more data fields sits in the row/column hierarchy. Never
+/// a real index into `PivotTable::fields()`, so it is kept out of
+/// `PivotTable::row_field_order()` / `col_field_order()` entirely; its
+/// document position lives in `PivotTable::row_values_position()` /
+/// `col_values_position()` instead. The rendering of multiple data
+/// fields is already driven by `PivotTable::data_fields()` independent
+/// of this marker, so nothing downstream of the reader needs to
+/// recognise the value `-2` itself.
+inline constexpr std::int32_t kValuesFieldPosition = -2;
 
 /// "Show values as" derivation applied to each cell after the raw
 /// aggregation finishes. Mirrors Excel's `dataField/@showDataAs`

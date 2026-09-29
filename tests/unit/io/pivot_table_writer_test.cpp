@@ -199,6 +199,77 @@ TEST(PivotTableWriter, DefinitionRoundTripsThroughReader) {
 }
 
 // ---------------------------------------------------------------------------
+// sortType
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, AscendingSortOmitsSortTypeAttribute) {
+  // The struct default (ascending, not manual) matches the schema's
+  // observed common case, so it must not gain a new attribute no
+  // existing Excel-authored file carries.
+  pivot::PivotTable table;
+  pivot::PivotField field;
+  field.axis = pivot::PivotAxis::Row;
+  table.mutable_fields().push_back(std::move(field));
+
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_EQ(xml.find("sortType"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, DescendingAndManualSortRoundTrip) {
+  pivot::PivotTable table;
+  pivot::PivotField descending;
+  descending.axis = pivot::PivotAxis::Row;
+  descending.sort.ascending = false;
+  table.mutable_fields().push_back(std::move(descending));
+
+  pivot::PivotField manual;
+  manual.axis = pivot::PivotAxis::Row;
+  manual.sort.manual = true;
+  table.mutable_fields().push_back(std::move(manual));
+
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("sortType=\"descending\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("sortType=\"manual\""), std::string::npos) << xml;
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  const pivot::PivotTable& parsed = parsed_or.value();
+  ASSERT_EQ(parsed.fields().size(), 2U);
+  EXPECT_FALSE(parsed.fields()[0].sort.ascending);
+  EXPECT_FALSE(parsed.fields()[0].sort.manual);
+  EXPECT_TRUE(parsed.fields()[1].sort.manual);
+}
+
+// ---------------------------------------------------------------------------
+// Values (Sigma) pseudo-field marker
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, ValuesFieldMarkerRoundTripsAtItsDocumentPosition) {
+  pivot::PivotTable table;
+  pivot::PivotField field0;
+  field0.axis = pivot::PivotAxis::Col;
+  table.mutable_fields().push_back(std::move(field0));
+  pivot::PivotField field1;
+  field1.axis = pivot::PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(field1));
+
+  table.mutable_col_field_order().push_back(0U);
+  table.set_col_values_position(1U);  // marker sits after the real field
+
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<colFields count=\"2\">"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<field x=\"0\"/><field x=\"-2\"/>"), std::string::npos) << xml;
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  const pivot::PivotTable& parsed = parsed_or.value();
+  ASSERT_EQ(parsed.col_field_order().size(), 1U);
+  EXPECT_EQ(parsed.col_field_order()[0], 0U);
+  ASSERT_TRUE(parsed.col_values_position().has_value());
+  EXPECT_EQ(parsed.col_values_position().value(), 1U);
+}
+
+// ---------------------------------------------------------------------------
 // Anchor encoding: range form, multi-letter columns
 // ---------------------------------------------------------------------------
 

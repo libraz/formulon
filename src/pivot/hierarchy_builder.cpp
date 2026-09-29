@@ -71,7 +71,7 @@ void append_year(std::string& out, int y) {
   out.append(std::to_string(y));
 }
 
-DateBucket bucket_date(double serial, const PivotDateGroup& dg) {
+DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
   using formulon::eval::date_time::civil_from_days;
   using formulon::eval::date_time::days_from_civil;
   using formulon::eval::date_time::HMS;
@@ -88,7 +88,7 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg) {
     return {raw, display_string(raw)};
   }
   const double serial_floor = std::floor(serial);
-  const YMD ymd = ymd_from_serial(serial_floor);
+  const YMD ymd = ymd_from_serial(serial_floor, date1904);
 
   switch (dg.granularity) {
     case DateGrouping::Year: {
@@ -221,14 +221,14 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg) {
 }  // namespace
 
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
-                      std::size_t record_index, HierNode& root, std::string_view blank_item_label) {
+                      std::size_t record_index, HierNode& root, std::string_view blank_item_label, bool date1904) {
   HierNode* cursor = &root;
   for (const HierLevel& level : levels) {
     const Value raw = cell_value(cache, record, level.field_index);
     Value key = raw;
     std::string label_override;
     if (level.date_group != nullptr && raw.is_number()) {
-      DateBucket bucket = bucket_date(raw.as_number(), *level.date_group);
+      DateBucket bucket = bucket_date(raw.as_number(), *level.date_group, date1904);
       key = bucket.sort_key;
       label_override = std::move(bucket.label);
     } else if (raw.is_blank()) {
