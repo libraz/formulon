@@ -33,6 +33,7 @@
 #include "io/future_functions.h"
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/phonetic_pr.h"
+#include "io/stored_cell_error.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "parser/ast.h"
@@ -66,42 +67,14 @@ void AppendStyleAttr(std::string& out, std::uint32_t xf_index) {
   out.append("\"");
 }
 
-// True for errors representable in the legacy `t="e"` enum, i.e. writable
-// as a bare `<v>#...#</v>`. The rich errors (#SPILL!, #CALC!, linked-data,
-// Python, ...) require a `vm=` value-metadata attribute plus a metadata
-// part; Excel rejects the whole workbook when such a code is written as a
-// plain `<v>`. For those we drop the cached value and let Excel recompute
-// from the formula (or emit a blank cell when there is no formula).
-bool IsLegacyErrorCode(ErrorCode code) noexcept {
-  switch (code) {
-    case ErrorCode::Null:
-    case ErrorCode::Div0:
-    case ErrorCode::Value:
-    case ErrorCode::Ref:
-    case ErrorCode::Name:
-    case ErrorCode::Num:
-    case ErrorCode::NA:
-    case ErrorCode::GettingData:
-      return true;
-    default:
-      return false;
-  }
-}
-
 // Emits the <c> element for an Error value at `addr`.
 void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code, std::uint32_t xf_index) {
   out.append("<c r=\"");
   out.append(addr);
   out.append("\"");
   AppendStyleAttr(out, xf_index);
-  if (!IsLegacyErrorCode(code)) {
-    // Rich error with no formula: not writable as a legacy <v>; emit a
-    // blank cell (keeping any style) so the workbook still opens.
-    out.append("/>");
-    return;
-  }
   out.append(" t=\"e\"><v>");
-  out.append(display_name(code));
+  out.append(display_name(stored_cell_error(code)));
   out.append("</v></c>");
 }
 
@@ -179,14 +152,8 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
     return;
   }
   if (value.is_error()) {
-    if (!IsLegacyErrorCode(value.as_error())) {
-      // Rich error literal: not writable as a legacy <v>; emit a blank
-      // cell, keeping any style already appended above.
-      out.append("/>");
-      return;
-    }
     out.append(" t=\"e\"><v>");
-    out.append(display_name(value.as_error()));
+    out.append(display_name(stored_cell_error(value.as_error())));
     out.append("</v></c>");
     return;
   }
@@ -262,14 +229,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // emits #NUM! for that branch.
     const Value& cached = cell.cached_value;
     if (cached.is_error()) {
-      // Only tag t="e" when the cached value will actually be written as a
-      // legacy <v> below; a rich error emits no <v>, so the cell has no
-      // typed body.
-      if (IsLegacyErrorCode(cached.as_error())) {
-        out.append(" t=\"e\">");
-      } else {
-        out.append(">");
-      }
+      out.append(" t=\"e\">");
     } else if (cached.is_text()) {
       out.append(" t=\"str\">");
     } else if (cached.is_boolean()) {
@@ -363,15 +323,9 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       AppendXmlEscaped(out, cv.as_text());
       out.append("</v>");
     } else if (cv.is_error()) {
-      // Legacy errors round-trip as a cached <v>; rich errors (#SPILL! /
-      // #CALC! / ...) are not writable there — omit the <v> and let Excel
-      // recompute from the formula (writing them would make Excel reject
-      // the whole workbook).
-      if (IsLegacyErrorCode(cv.as_error())) {
-        out.append("<v>");
-        out.append(display_name(cv.as_error()));
-        out.append("</v>");
-      }
+      out.append("<v>");
+      out.append(display_name(stored_cell_error(cv.as_error())));
+      out.append("</v>");
     }
     // Array / Ref / Lambda cached values fall through with no <v>; the
     // engine evaluates on load.

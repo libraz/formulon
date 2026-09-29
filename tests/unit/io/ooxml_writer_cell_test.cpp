@@ -380,7 +380,7 @@ TEST(BuildSheetDataXml, SpillPhantomsSuppressed) {
   EXPECT_EQ(xml.find("r=\"B2\""), std::string::npos) << xml;
 }
 
-TEST(BuildSheetDataXml, SpillCollisionOmitsRichErrorCachedValue) {
+TEST(BuildSheetDataXml, SpillCollisionStoresTheLegacyFallback) {
   Sheet s("Sheet1");
   // Pre-populate B1 so the 2x2 spill collides.
   s.set_cell_value(0U, 1U, Value::number(99.0));
@@ -388,19 +388,17 @@ TEST(BuildSheetDataXml, SpillCollisionOmitsRichErrorCachedValue) {
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0)};
   ASSERT_FALSE(s.commit_spill(0U, 0U, 2U, 2U, std::move(cells)));
 
-  // The anchor's cached value is now #SPILL! — a rich error that is NOT
-  // representable in the legacy `t="e"` enum. Writing it as a bare `<v>`
-  // makes real Excel reject the whole workbook, so the writer must emit
-  // the formula only (no `t="e"`, no `<v>`) and let Excel recompute.
+  // The anchor's cached value is now #SPILL!, which a cell value cannot
+  // hold; Excel stores it as #VALUE! (see `io::stored_cell_error`).
   const std::string xml = BuildSheetDataXml(s);
   const std::size_t a1_start = xml.find("<c r=\"A1\"");
   ASSERT_NE(a1_start, std::string::npos);
   const std::size_t a1_end = xml.find("</c>", a1_start);
   ASSERT_NE(a1_end, std::string::npos);
   const std::string a1_xml = xml.substr(a1_start, a1_end - a1_start);
-  EXPECT_EQ(a1_xml.find("t=\"e\""), std::string::npos) << a1_xml;
+  EXPECT_NE(a1_xml.find("t=\"e\""), std::string::npos) << a1_xml;
   EXPECT_EQ(a1_xml.find("#SPILL!"), std::string::npos) << a1_xml;
-  EXPECT_EQ(a1_xml.find("<v>"), std::string::npos) << "rich error must not emit a cached <v>: " << a1_xml;
+  EXPECT_NE(a1_xml.find("<v>#VALUE!</v>"), std::string::npos) << a1_xml;
   // The formula itself is preserved.
   EXPECT_NE(a1_xml.find("<f"), std::string::npos) << a1_xml;
 
@@ -420,14 +418,21 @@ TEST(BuildSheetDataXml, LegacyErrorStillEmitsCachedValue) {
   EXPECT_NE(xml.find("#DIV/0!"), std::string::npos) << xml;
 }
 
-TEST(BuildSheetDataXml, RichErrorLiteralEmitsBlankCell) {
-  // A literal rich-error value (no formula) cannot be written as a legacy
-  // `<v>`; it degrades to a blank cell so the workbook still opens.
+TEST(BuildSheetDataXml, NewerErrorsAreStoredAsTheirLegacyFallback) {
+  // Measured on backup/oracle_probe/dyn_err: Excel writes a cached #SPILL! or
+  // #CALC! as <v>#VALUE!</v> (the real error lives in a rich value this
+  // writer does not produce) and #GETTING_DATA as <v>#N/A</v>.
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::error(ErrorCode::Calc));
+  s.set_cell_formula(1U, 0U, "=A1:A2");
+  s.set_cell_cached_value(1U, 0U, Value::error(ErrorCode::Spill));
+  s.set_cell_value(2U, 0U, Value::error(ErrorCode::GettingData));
   const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("<c r=\"A1\" t=\"e\"><v>#VALUE!</v></c>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"A2\" t=\"e\"><f>A1:A2</f><v>#VALUE!</v></c>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"A3\" t=\"e\"><v>#N/A</v></c>"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("#CALC!"), std::string::npos) << xml;
-  EXPECT_EQ(xml.find("t=\"e\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("#SPILL!"), std::string::npos) << xml;
 }
 
 // Literal cell bodies used to be written twice — once by the helper and

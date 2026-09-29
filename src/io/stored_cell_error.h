@@ -32,6 +32,7 @@ constexpr ErrorCode stored_cell_error(ErrorCode e) noexcept {
       return ErrorCode::NA;
     case ErrorCode::Spill:
     case ErrorCode::Calc:
+    // Inferred from #SPILL! / #CALC!: Excel cannot be made to produce these.
     case ErrorCode::Field:
     case ErrorCode::Blocked:
     case ErrorCode::Connect:
