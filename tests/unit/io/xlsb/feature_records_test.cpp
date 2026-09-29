@@ -363,15 +363,13 @@ INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureFixture,
                          ::testing::Values("base", "cellis_ops", "text_rules", "flags", "cfvo", "iconbits", "rel",
                                            "dv_all", "prot", "prot2", "excelprot", "x14", "x14bars", "x14dir"));
 
-// Left out: `text_rules`, `flags` and `rel`, whose formulas differ from
-// Excel's only in the Ptg codec's canonical form, not in record layout:
+// Left out: `text_rules` and `flags`, whose timePeriod formulas Excel
+// generates itself and stores in a form the Ptg codec does not reproduce:
 // redundant parentheses the decoder does not keep, the PtgAttrSemi operand
-// (`00 00` where Excel writes `fe ff` or `fc ff`), a WEEKDAY result Excel
-// stores reference-class and EDATE as `PtgFuncVar` inside its own
-// timePeriod rules, and IF's PtgAttr jumps. `rel` without its IF rule is
-// checked below.
+// (`00 00` where Excel writes `fe ff` or `fc ff`), a reference-class WEEKDAY
+// result, and EDATE as `PtgFuncVar`.
 INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureWriterBytes,
-                         ::testing::Values("base", "cellis_ops", "cfvo", "iconbits", "dv_all", "prot", "prot2",
+                         ::testing::Values("base", "cellis_ops", "cfvo", "iconbits", "rel", "dv_all", "prot", "prot2",
                                            "excelprot", "x14", "x14bars", "x14dir"));
 
 /// Payload of the first `type` record in `part`, hex-encoded.
@@ -401,31 +399,6 @@ std::string RecordPayload(const std::vector<std::uint8_t>& xlsb, const std::stri
     }
   }
   return "absent";
-}
-
-// `rel`'s rules match Excel's bytes, classes included (an operand under AND
-// is array class, a cell and a name too), except the IF rule, whose
-// PtgAttrIf / PtgAttrGoto jumps (`19 02`, `19 08`) the encoder does not write.
-TEST(XlsbFeatureRecords, RelativeRulesMatchExcelBesideIfJumps) {
-  const std::vector<std::uint8_t> source = ReadFileBytes(FixturePath("rel", "xlsb"));
-  const Workbook wb = ReadXlsbBytes(source);
-  auto written = io::xlsb::write_xlsb(wb);
-  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
-  std::vector<std::string> expected = FeatureRecords(source, "xl/worksheets/sheet1.bin");
-  expected.erase(
-      std::remove_if(expected.begin(), expected.end(), [](const std::string& r) { return r.rfind("535:", 0) == 0; }),
-      expected.end());
-  const std::vector<std::string> actual = FeatureRecords(written.value(), "xl/worksheets/sheet1.bin");
-  ASSERT_EQ(actual.size(), expected.size());
-  std::size_t skipped = 0U;
-  for (std::size_t r = 0; r < actual.size(); ++r) {
-    if (expected[r].find(" 19 02 ") != std::string::npos) {
-      ++skipped;
-      continue;
-    }
-    EXPECT_TRUE(SameUpToFormulaSize(actual[r], expected[r])) << actual[r] << "\n" << expected[r];
-  }
-  EXPECT_EQ(skipped, 1U);
 }
 
 // `iconbits` and `rel` each keep an x14 block Excel writes only in its

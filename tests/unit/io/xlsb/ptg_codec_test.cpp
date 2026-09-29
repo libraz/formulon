@@ -493,10 +493,9 @@ TEST(XlsbPtgCodec, ArgumentClassesFollowTheParameter) {
                                0x00, 0xC0, 0x1E, 0x02, 0x00, 0x05, 0x42, 0x01, 0xE4, 0x00}},
       {"VLOOKUP(2,A1:A3,1,0)", {0x1E, 0x02, 0x00, 0x25, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
                                 0xC0, 0x00, 0xC0, 0x1E, 0x01, 0x00, 0x1E, 0x00, 0x00, 0x42, 0x04, 0x66, 0x00}},
-      // Excel also writes PtgAttrIf / PtgAttrGoto around IF's branches, which
-      // this encoder leaves out (no observable difference).
-      {"IF(A1>0,A2,A3)", {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x1E, 0x00, 0x00, 0x0D, 0x24, 0x01, 0x00, 0x00,
-                          0x00, 0x00, 0xC0, 0x24, 0x02, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x42, 0x03, 0x01, 0x00}},
+      {"IF(A1>0,A2,A3)", {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x1E, 0x00, 0x00, 0x0D, 0x19, 0x02, 0x0B,
+                          0x00, 0x24, 0x01, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x19, 0x08, 0x0E, 0x00, 0x24, 0x02,
+                          0x00, 0x00, 0x00, 0x00, 0xC0, 0x19, 0x08, 0x03, 0x00, 0x42, 0x03, 0x01, 0x00}},
   };
   for (const Case& c : cases) {
     EXPECT_EQ(EncodeOnSheet1(c.formula, PtgRootClass::kValue).rgce, c.rgce) << c.formula;
@@ -622,6 +621,45 @@ TEST(XlsbPtgCodec, LegacyFormulaStoresNoImpliedAt) {
   EXPECT_EQ(encode("@A1:A2", PtgEvaluation::kLegacy), encode("A1:A2", PtgEvaluation::kLegacy));
   EXPECT_NE(encode("SUM(@A1:A2)", PtgEvaluation::kLegacy), encode("SUM(A1:A2)", PtgEvaluation::kLegacy));
   EXPECT_NE(encode("@A1:A2", PtgEvaluation::kLegacyArray), encode("A1:A2", PtgEvaluation::kLegacyArray));
+}
+
+// IF, CHOOSE and IFERROR carry the jump attributes Excel writes around their
+// branches: PtgAttrIf past the true branch and its goto, a PtgAttrChoose
+// table, PtgAttrIfError past the fallback, and a PtgAttrGoto after each
+// branch landing on the call token's last byte. Bytes as Excel 365 saved them.
+TEST(XlsbPtgCodec, BranchingCallsCarryExcelsJumpAttributes) {
+  const std::vector<std::uint8_t> a1 = {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};
+  const std::vector<std::uint8_t> ref_a1 = {0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};
+  auto join = [](std::initializer_list<std::vector<std::uint8_t>> parts) {
+    std::vector<std::uint8_t> out;
+    for (const auto& part : parts) {
+      out.insert(out.end(), part.begin(), part.end());
+    }
+    return out;
+  };
+  EXPECT_EQ(EncodeOnSheet1("IF(A1,A1,A1)", PtgRootClass::kValue).rgce,
+            join({a1,
+                  {0x19, 0x02, 0x0B, 0x00},
+                  ref_a1,
+                  {0x19, 0x08, 0x0E, 0x00},
+                  ref_a1,
+                  {0x19, 0x08, 0x03, 0x00, 0x42, 0x03, 0x01, 0x00}}));
+  EXPECT_EQ(EncodeOnSheet1("CHOOSE(A1,A1,A1,A1,A1)", PtgRootClass::kValue).rgce,
+            join({a1,
+                  {0x19, 0x04, 0x04, 0x00, 0x0A, 0x00, 0x15, 0x00, 0x20, 0x00, 0x2B, 0x00, 0x36, 0x00},
+                  ref_a1,
+                  {0x19, 0x08, 0x24, 0x00},
+                  ref_a1,
+                  {0x19, 0x08, 0x19, 0x00},
+                  ref_a1,
+                  {0x19, 0x08, 0x0E, 0x00},
+                  ref_a1,
+                  {0x19, 0x08, 0x03, 0x00, 0x42, 0x05, 0x64, 0x00}}));
+  EXPECT_EQ(EncodeOnSheet1("IFERROR(A1,A1)", PtgRootClass::kValue).rgce,
+            join({a1, {0x19, 0x80, 0x07, 0x00}, ref_a1, {0x19, 0x08, 0x02, 0x00, 0x41, 0xE0, 0x01}}));
+  EXPECT_EQ(RoundTrip("IF(A1>0,CHOOSE(2,A1,B1),IFERROR(1/0,2))"), "IF(A1>0,CHOOSE(2,A1,B1),IFERROR(1/0,2))");
+  // Two-argument IF: Excel's jump attributes for it are unmeasured, so none are written.
+  EXPECT_EQ(EncodeOnSheet1("IF(A1,A1)", PtgRootClass::kValue).rgce, join({a1, ref_a1, {0x42, 0x02, 0x01, 0x00}}));
 }
 
 TEST(XlsbPtgCodec, SumOverArea) {

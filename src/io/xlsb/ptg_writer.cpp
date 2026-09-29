@@ -1356,10 +1356,45 @@ class Encoder {
                         std::string("context=xlsb_ptg_writer fn=") + std::string(name));
     }
     const std::uint32_t arity = node.as_call_arity();
-    for (std::uint32_t i = 0; i < arity; ++i) {
-      next_slot_ = Slot{xlsb_parameter_class(name, i), false};
-      RETURN_IF_ERROR(emit(node.as_call_arg(i)));
+    std::vector<std::size_t> gotos;
+    // A two-argument IF keeps no jump attributes: Excel's form for it is unmeasured.
+    if (strings::case_insensitive_eq(name, "IF") && arity == 3U) {
+      RETURN_IF_ERROR(emit_call_arg(node, name, 0U));
+      const std::size_t attr_if = emit_attr(0x02);
+      RETURN_IF_ERROR(emit_call_arg(node, name, 1U));
+      gotos.push_back(emit_attr(0x08));
+      patch_u16(attr_if + 2U, out_.size() - (attr_if + 4U));
+      RETURN_IF_ERROR(emit_call_arg(node, name, 2U));
+      gotos.push_back(emit_attr(0x08));
+    } else if (strings::case_insensitive_eq(name, "CHOOSE") && arity >= 2U) {
+      RETURN_IF_ERROR(emit_call_arg(node, name, 0U));
+      // PtgAttrChoose: the choice count, then one offset per choice and one
+      // past the last, each from the start of that offset table.
+      const std::size_t table = emit_attr(0x04, static_cast<std::uint16_t>(arity - 1U)) + 4U;
+      out_.resize(table + 2U * arity);
+      for (std::uint32_t i = 1; i < arity; ++i) {
+        patch_u16(table + 2U * (i - 1U), out_.size() - table);
+        RETURN_IF_ERROR(emit_call_arg(node, name, i));
+        gotos.push_back(emit_attr(0x08));
+      }
+      patch_u16(table + 2U * (arity - 1U), out_.size() - table);
+    } else if (strings::case_insensitive_eq(name, "IFERROR") && arity == 2U) {
+      RETURN_IF_ERROR(emit_call_arg(node, name, 0U));
+      const std::size_t attr_if_error = emit_attr(0x80);
+      RETURN_IF_ERROR(emit_call_arg(node, name, 1U));
+      patch_u16(attr_if_error + 2U, out_.size() - (attr_if_error + 4U));
+      gotos.push_back(emit_attr(0x08));
+    } else {
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        RETURN_IF_ERROR(emit_call_arg(node, name, i));
+      }
     }
+    // Each PtgAttrGoto lands on the last byte of the call token that follows.
+    const auto patch_gotos = [&]() {
+      for (const std::size_t at : gotos) {
+        patch_u16(at + 2U, out_.size() - (at + 4U) - 1U);
+      }
+    };
     // Excel 365 stores a one-argument SUM as `PtgAttrSum` rather than a call.
     if (arity == 1U && strings::case_insensitive_eq(name, "SUM")) {
       emit_u8(out_, 0x19);  // PtgAttr
@@ -1383,7 +1418,27 @@ class Encoder {
       emit_u8(out_, ValueClassPtg(0x21));  // PtgFunc result
       emit_u16(out_, entry->id);
     }
+    patch_gotos();
     return Expected<void, Error>::Ok();
+  }
+
+  Expected<void, Error> emit_call_arg(const parser::AstNode& node, std::string_view name, std::uint32_t i) {
+    next_slot_ = Slot{xlsb_parameter_class(name, i), false};
+    return emit(node.as_call_arg(i));
+  }
+
+  /// Emits `PtgAttr` of kind `bits` with `data` and returns its offset.
+  std::size_t emit_attr(std::uint8_t bits, std::uint16_t data = 0U) {
+    const std::size_t at = out_.size();
+    emit_u8(out_, 0x19);  // PtgAttr
+    emit_u8(out_, bits);
+    emit_u16(out_, data);
+    return at;
+  }
+
+  void patch_u16(std::size_t at, std::size_t value) {
+    out_[at] = static_cast<std::uint8_t>(value & 0xFFU);
+    out_[at + 1U] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
   }
 
   /// Encodes a call taking the hidden-name route (see
