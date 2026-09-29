@@ -259,6 +259,11 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_value"); rc != 0) {
     return rc;
   }
+  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_get_value: cell coordinate out of range",
+                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
   // `resolve_cell_value` is the spill-aware accessor: phantoms of a
   // dynamic-array spill surface their array cell rather than the raw
   // (blank) cached value.

@@ -679,6 +679,18 @@ TEST(FormulonCApi, NumberLiteralRoundTrip) {
   EXPECT_DOUBLE_EQ(v.u.number, 42.5);
 }
 
+TEST(FormulonCApi, GetValueRejectsCoordinatesOutsideTheGrid) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  fm_value_t v{};
+  EXPECT_EQ(fm_workbook_get_value(wb.handle, 0, formulon::Sheet::kMaxRows, 0, &v), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_value(wb.handle, 0, 0, formulon::Sheet::kMaxCols, &v), kInvalidArgument);
+  // The last addressable cell is still readable.
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, formulon::Sheet::kMaxRows - 1, formulon::Sheet::kMaxCols - 1, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_BLANK);
+}
+
 TEST(FormulonCApi, SetNumberRejectsNaNAndInfinity) {
   // A Number-kind cell must always hold a finite double: ISNUMBER,
   // arithmetic on the cell, and a save/reload round trip would otherwise

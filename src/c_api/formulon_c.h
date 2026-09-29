@@ -926,7 +926,8 @@ FM_API fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_index
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index`, `row` or `col` is out of
+ *         range.
  */
 FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                          fm_value_t* out);
