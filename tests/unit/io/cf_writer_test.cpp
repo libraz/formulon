@@ -593,7 +593,7 @@ std::vector<cf::ConditionalFormat> RoundTripWithOverlay(const std::vector<cf::Co
                                                         const std::string& existing_ext_lst = std::string()) {
   std::string xml = "<worksheet>";
   xml.append(write_conditional_formattings(input, kDxfCount));
-  xml.append(merge_x14_cf_entries(existing_ext_lst, build_x14_cf_overlay_entries(input)));
+  xml.append(merge_x14_cf_entries(existing_ext_lst, input));
   xml.append("</worksheet>");
   pugi::xml_document doc;
   pugi::xml_parse_result rc = doc.load_string(xml.c_str());
@@ -658,22 +658,52 @@ TEST(CFWriter, PlainDataBarProducesNoExtensionContent) {
   EXPECT_EQ(write_conditional_formattings({cf}, kDxfCount).find("x14:id"), std::string::npos);
 }
 
-TEST(CFWriter, LoadedOverlayWinsOverARebuiltEntry) {
-  // The captured overlay carries the whole `<x14:cfRule>` payload,
-  // including parts the model does not represent. Appending a rebuilt
-  // entry beside it would duplicate the id and drop those parts.
+TEST(CFWriter, EditedModelRewritesTheLoadedOverlayAndKeepsWhatItDoesNotModel) {
+  // The captured payload no longer matches the model (whose settings
+  // differ from it), so the model-owned attributes and colours are
+  // rewritten; thresholds and the unmodelled child stay.
   const auto input = DataBarWithExtensionSettings("{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}");
   const std::string loaded =
       "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
       "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
       "<x14:conditionalFormattings><x14:conditionalFormatting>"
       "<x14:cfRule type=\"dataBar\" id=\"{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}\">"
-      "<x14:dataBar minLength=\"0\" maxLength=\"100\"><x14:cfvo type=\"autoMin\"/>"
+      "<x14:dataBar minLength=\"0\" maxLength=\"100\" direction=\"rightToLeft\"><x14:cfvo type=\"autoMin\"/>"
       "<x14:cfvo type=\"autoMax\"/><x14:someUnmodelledThing/></x14:dataBar></x14:cfRule>"
       "<xm:sqref>A1:A5</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>";
 
-  const std::string merged = merge_x14_cf_entries(loaded, build_x14_cf_overlay_entries({input}));
-  EXPECT_EQ(merged, loaded);
+  const std::string merged = merge_x14_cf_entries(loaded, {input});
+  EXPECT_NE(merged.find("direction=\"rightToLeft\""), std::string::npos) << merged;
+  EXPECT_NE(merged.find("<x14:cfvo type=\"autoMin\"/>"), std::string::npos) << merged;
+  EXPECT_NE(merged.find("<x14:someUnmodelledThing/>"), std::string::npos) << merged;
+  EXPECT_NE(merged.find("axisPosition=\"middle\""), std::string::npos) << merged;
+  EXPECT_NE(merged.find("<x14:negativeFillColor rgb=\"FFFF0000\"/>"), std::string::npos) << merged;
+  EXPECT_EQ(merged.find("{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}"),
+            merged.rfind("{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}"))
+      << merged;
+
+  // Merging again against the same model changes nothing further.
+  EXPECT_EQ(merge_x14_cf_entries(merged, {input}), merged);
+}
+
+TEST(CFWriter, LoadedOverlayMatchingTheModelStaysByteIdentical) {
+  auto input = DataBarWithExtensionSettings("{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}");
+  cf::DataBarSpec& d = *input.rules[0].data_bar;
+  d.border.reset();
+  d.negative_border.reset();
+  d.negative_fill = d.fill;
+  d.axis_position = cf::DataBarAxisPosition::Automatic;
+  d.axis_color = cf::Color{0, 0, 0, 255};
+  d.gradient = true;
+  const std::string loaded =
+      "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+      "<x14:conditionalFormattings><x14:conditionalFormatting>"
+      "<x14:cfRule type=\"dataBar\" id=\"{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}\">"
+      "<x14:dataBar minLength=\"0\" maxLength=\"100\"><x14:cfvo type=\"autoMin\"/>"
+      "<x14:cfvo type=\"autoMax\"/></x14:dataBar></x14:cfRule>"
+      "<xm:sqref>A1:A5</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>";
+  EXPECT_EQ(merge_x14_cf_entries(loaded, {input}), loaded);
 }
 
 TEST(CFWriter, RebuiltEntryJoinsAnOverlayThatBelongsToAnotherRule) {
@@ -687,7 +717,7 @@ TEST(CFWriter, RebuiltEntryJoinsAnOverlayThatBelongsToAnotherRule) {
       "</x14:cfRule><xm:sqref>B1:B5</xm:sqref>"
       "</x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>";
 
-  const std::string merged = merge_x14_cf_entries(loaded, build_x14_cf_overlay_entries({input}));
+  const std::string merged = merge_x14_cf_entries(loaded, {input});
   EXPECT_NE(merged.find("{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}"), std::string::npos) << merged;
   EXPECT_NE(merged.find("{FC000000-0000-0000-0000-000000000001}"), std::string::npos) << merged;
   // One `<ext>`, not a second one alongside the existing block.
@@ -698,8 +728,8 @@ TEST(CFWriter, RebuiltEntryJoinsAnOverlayThatBelongsToAnotherRule) {
 
 TEST(CFWriter, EmptyEntryListLeavesTheOverlayByteIdentical) {
   const std::string loaded = "<extLst><ext uri=\"{some-future-extension}\"><futureThing/></ext></extLst>";
-  EXPECT_EQ(merge_x14_cf_entries(loaded, std::string()), loaded);
-  EXPECT_TRUE(merge_x14_cf_entries(std::string(), std::string()).empty());
+  EXPECT_EQ(merge_x14_cf_entries(loaded, {}), loaded);
+  EXPECT_TRUE(merge_x14_cf_entries(std::string(), {}).empty());
 }
 
 TEST(CFWriter, ExtensionEntryReusesTheRuleExtLstWhenTheRuleAlreadyHasOne) {

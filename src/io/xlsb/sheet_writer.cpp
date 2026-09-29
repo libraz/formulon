@@ -447,6 +447,11 @@ Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet
   return Expected<void, Error>::Ok();
 }
 
+bool NeedsDxfs(const cf::ConditionalFormat& format) {
+  return std::any_of(format.rules.begin(), format.rules.end(),
+                     [](const cf::CFRule& rule) { return rule.dxf_id.has_value(); });
+}
+
 /// Offset of the first framed record of `type` in `records`, or its size.
 std::size_t FindRecord(const std::vector<std::uint8_t>& records, std::uint16_t type) {
   ByteSpan cursor{records.data(), records.size()};
@@ -469,11 +474,16 @@ std::size_t FindRecord(const std::vector<std::uint8_t>& records, std::uint16_t t
 /// info, CF blocks, then the single DVals container.
 Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& body, const Sheet& sheet,
                                                   const std::vector<std::uint8_t>& retained,
-                                                  const FeatureFormulaWriteContext& ctx) {
+                                                  const FeatureFormulaWriteContext& ctx,
+                                                  const std::unordered_set<std::string>& x14_linked,
+                                                  bool styles_carry_dxfs) {
   const auto raw_dvals = static_cast<std::ptrdiff_t>(FindRecord(retained, kBrtBeginDVals));
   body.insert(body.end(), retained.begin(), retained.begin() + raw_dvals);
   for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
-    if (auto s = emit_cf_block(body, format, ctx); !s) {
+    if (!styles_carry_dxfs && NeedsDxfs(format)) {
+      continue;
+    }
+    if (auto s = emit_cf_block(body, format, ctx, x14_linked); !s) {
       return s;
     }
   }
@@ -543,7 +553,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
                                                       const std::vector<std::string>& sheet_names,
                                                       const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                                       std::uint32_t* downgraded_formula_count,
-                                                      std::uint32_t dynamic_array_ifmd) {
+                                                      std::uint32_t dynamic_array_ifmd, bool styles_carry_dxfs) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -727,7 +737,17 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   // an .xlsb keeps its conditional formatting, data validation, hyperlinks,
   // auto-filter and print setup in their original stream positions. The
   // buffers hold already-framed records, so this is a byte append.
-  const XlsbSheetTail& tail = sheet.xlsb_tail();
+  // The x14 data-bar rules follow the model: retained ones are brought in
+  // line with it, missing ones are added.
+  XlsbSheetTail tail = sheet.xlsb_tail();
+  std::unordered_set<std::string> x14_linked;
+  for (std::vector<std::uint8_t>* slot :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    reconcile_x14_data_bars(*slot, sheet.conditional_formats(), x14_linked);
+  }
+  if (auto added = add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked); !added) {
+    return added.error();
+  }
   const std::vector<std::string> hyperlink_rids = hyperlink_relationship_ids(sheet);
   // Protection, conditional formatting and data validation are emitted
   // from the model. Protection leads the tail: the one record the grammar
@@ -738,7 +758,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);
   if (auto features = EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks,
-                                                  FeatureFormulaWriteContext{sheet_names, sheet_ranges, name_table});
+                                                  FeatureFormulaWriteContext{sheet_names, sheet_ranges, name_table},
+                                                  x14_linked, styles_carry_dxfs);
       !features) {
     return features.error();
   }
@@ -748,6 +769,11 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   body.insert(body.end(), tail.after_hyperlinks.begin(), tail.after_hyperlinks.end());
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheet), ByteSpan{});
   return body;
+}
+
+std::size_t cf_blocks_needing_dxfs(const Sheet& sheet) {
+  return static_cast<std::size_t>(
+      std::count_if(sheet.conditional_formats().begin(), sheet.conditional_formats().end(), NeedsDxfs));
 }
 
 }  // namespace xlsb

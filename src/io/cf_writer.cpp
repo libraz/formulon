@@ -266,12 +266,18 @@ void AppendColorScale(std::string& out, const cf::ColorScaleSpec& s) {
   out.append("</colorScale>");
 }
 
-void AppendDataBar(std::string& out, const cf::DataBarSpec& d) {
-  out.append("<dataBar minLength=\"");
-  out.append(std::to_string(static_cast<unsigned>(d.min_length_pct)));
-  out.append("\" maxLength=\"");
-  out.append(std::to_string(static_cast<unsigned>(d.max_length_pct)));
-  out.push_back('"');
+/// `linked`: the bar has an x14 counterpart, which carries its lengths.
+/// Excel then leaves the legacy lengths at the pre-2010 defaults (10/90,
+/// omitted), and so does this writer.
+void AppendDataBar(std::string& out, const cf::DataBarSpec& d, bool linked) {
+  out.append("<dataBar");
+  if (!linked) {
+    out.append(" minLength=\"");
+    out.append(std::to_string(static_cast<unsigned>(d.min_length_pct)));
+    out.append("\" maxLength=\"");
+    out.append(std::to_string(static_cast<unsigned>(d.max_length_pct)));
+    out.push_back('"');
+  }
   if (!d.show_value) {
     out.append(" showValue=\"0\"");
   }
@@ -415,21 +421,11 @@ void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v) {
   out.append("</xm:f></x14:cfvo>");
 }
 
-/// Emits the `<x14:conditionalFormatting>` entry holding `r`'s data-bar
-/// extension payload, scoped to `sqref` (the enclosing block's range
-/// union, restated because the entry is a sibling of the legacy block
-/// rather than a child of it).
-void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vector<cf::CFCellRange>& sqref) {
-  const cf::DataBarSpec& d = r.data_bar.value();
-  out.append("<x14:conditionalFormatting xmlns:xm=\"");
-  out.append(kXmNs);
-  out.append("\"><x14:cfRule type=\"dataBar\" id=\"");
-  AppendXmlAttrEscaped(out, r.id);
-  // The bar-length bounds are restated because the reader lets the
-  // extension win over the legacy element, matching Excel: Excel omits
-  // them from `<dataBar>` (which means the pre-2010 defaults 10/90) and
-  // states the real bounds only here.
-  out.append("\"><x14:dataBar minLength=\"");
+/// Emits `d`'s `<x14:dataBar>` element. The bar lengths are always
+/// stated here: the legacy element of a linked bar leaves them at the
+/// pre-2010 defaults, as Excel does.
+void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d) {
+  out.append("<x14:dataBar minLength=\"");
   out.append(std::to_string(static_cast<unsigned>(d.min_length_pct)));
   out.append("\" maxLength=\"");
   out.append(std::to_string(static_cast<unsigned>(d.max_length_pct)));
@@ -468,7 +464,21 @@ void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vect
   if (d.axis_color != kDefaultAxisColor) {
     AppendX14Color(out, "x14:axisColor", d.axis_color);
   }
-  out.append("</x14:dataBar></x14:cfRule><xm:sqref>");
+  out.append("</x14:dataBar>");
+}
+
+/// Emits the `<x14:conditionalFormatting>` entry holding `r`'s data-bar
+/// extension payload, scoped to `sqref` (the enclosing block's range
+/// union, restated because the entry is a sibling of the legacy block
+/// rather than a child of it).
+void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vector<cf::CFCellRange>& sqref) {
+  out.append("<x14:conditionalFormatting xmlns:xm=\"");
+  out.append(kXmNs);
+  out.append("\"><x14:cfRule type=\"dataBar\" id=\"");
+  AppendXmlAttrEscaped(out, r.id);
+  out.append("\">");
+  AppendX14DataBar(out, r.data_bar.value());
+  out.append("</x14:cfRule><xm:sqref>");
   AppendXmlEscaped(out, EncodeSqref(sqref));
   out.append("</xm:sqref></x14:conditionalFormatting>");
 }
@@ -579,7 +589,7 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) 
     AppendColorScale(out, r.color_scale.value());
   }
   if (r.data_bar.has_value()) {
-    AppendDataBar(out, r.data_bar.value());
+    AppendDataBar(out, r.data_bar.value(), RuleNeedsX14Payload(r) || HasCapturedX14Link(r));
   }
   if (r.icon_set.has_value()) {
     AppendIconSet(out, r.icon_set.value());
@@ -615,6 +625,16 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
     }
     out.append("</conditionalFormatting>");
   }
+  return out;
+}
+
+bool data_bar_needs_x14(const cf::DataBarSpec& bar) {
+  return NeedsX14DataBarPayload(bar);
+}
+
+std::string build_x14_data_bar_element(const cf::DataBarSpec& bar) {
+  std::string out;
+  AppendX14DataBar(out, bar);
   return out;
 }
 

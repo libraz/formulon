@@ -84,6 +84,13 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
 /// sequences it that way.
 void normalize_cf_dxf_ids(std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count);
 
+/// Folds an `<x14:dataBar>` element onto a data bar decoded from its
+/// legacy `<dataBar>`: the settings only the extension carries (negative
+/// fill and border, border, axis position and colour, gradient, bar
+/// lengths). Attributes and colours the element omits leave `out`
+/// unchanged.
+void apply_x14_data_bar_overlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out);
+
 }  // namespace formulon::io
 
 #endif  // FORMULON_IO_CF_READER_H_

@@ -15,6 +15,8 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "cf/cf_types.h"
@@ -42,11 +44,32 @@ std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const Featu
 /// anything unmeasured leaves its legacy rule as decoded.
 void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFormat>& formats);
 
-/// Emits `format` as one framed block. Fails on a rule the records cannot
-/// carry (a formula the Ptg codec refuses, an x14 link id that is not a
-/// GUID, a malformed number threshold).
+/// Brings the x14 data-bar rules in a sheet's retained tail `records` in
+/// line with the model: a rule linked to a model data bar has its
+/// model-owned settings rewritten (thresholds and direction are kept), a
+/// data-bar rule whose model rule is gone is dropped, along with any block
+/// or container that leaves empty. Every data-bar id still present is
+/// added to `linked`. Records this does not recognise pass through.
+void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vector<cf::ConditionalFormat>& formats,
+                             std::unordered_set<std::string>& linked);
+
+/// Adds an x14 data-bar rule to `records` (the tail slot after the
+/// hyperlinks) for every model data bar that needs one and is not in
+/// `linked`, inside the retained x14 container when there is one, and adds
+/// its id to `linked`. Fails for a formula threshold, whose x14 form is
+/// unmeasured.
+Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
+                                        const std::vector<cf::ConditionalFormat>& formats,
+                                        std::unordered_set<std::string>& linked);
+
+/// Emits `format` as one framed block. A data bar whose id is in `linked`
+/// has an x14 counterpart carrying its lengths, and keeps the pre-2010
+/// 10/90 in the legacy record as Excel does. Fails on a rule the records
+/// cannot carry (a formula the Ptg codec refuses, an x14 link id that is
+/// not a GUID, a malformed number threshold).
 Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const cf::ConditionalFormat& format,
-                                    const FeatureFormulaWriteContext& ctx);
+                                    const FeatureFormulaWriteContext& ctx,
+                                    const std::unordered_set<std::string>& linked);
 
 }  // namespace xlsb
 }  // namespace io

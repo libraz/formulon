@@ -73,12 +73,18 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
 /// element alone produces no extension bytes, so a file that never had
 /// an x14 overlay does not grow one.
 ///
-/// A rule loaded from an x14-bearing file is included here too. Its
-/// entry is a rebuild of what the source file carried, and
-/// `merge_x14_cf_entries` drops it in favour of the captured original;
-/// deciding that here would need the worksheet `<extLst>`, which this
-/// writer does not see.
+/// A rule loaded from an x14-bearing file is included here too;
+/// `merge_x14_cf_entries` reconciles it with the captured original, which
+/// this writer does not see.
 std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat>& formats);
+
+/// True when `bar` carries a setting the legacy data-bar record has no
+/// field for, so the rule needs an x14 counterpart to survive a save.
+bool data_bar_needs_x14(const cf::DataBarSpec& bar);
+
+/// `bar`'s `<x14:dataBar>` element, as `build_x14_cf_overlay_entries`
+/// writes it.
+std::string build_x14_data_bar_element(const cf::DataBarSpec& bar);
 
 }  // namespace formulon::io
 

@@ -14,9 +14,9 @@
 // that removes a model rule leaves its x14 payload behind, which would
 // be re-emitted as a dangling reference and resurface the rule on
 // reopen — `reconcile_x14_cf_overlay` prunes it. A rule whose data-bar
-// settings were set programmatically has no payload at all, and those
-// settings are simply lost on save unless one is built —
-// `merge_x14_cf_entries` folds it in.
+// settings were set programmatically has no payload at all, and one whose
+// captured payload was edited through the model no longer matches it —
+// `merge_x14_cf_entries` builds the first and rewrites the second.
 //
 // Design references:
 //   * src/io/cf_reader.h (overlay decode; the nested-id link)
@@ -50,27 +50,24 @@ namespace formulon::io {
 /// dangling GUID surviving a mutation.
 std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats);
 
-/// Folds `entries` — `<x14:conditionalFormatting>` elements produced by
-/// `build_x14_cf_overlay_entries` — into the worksheet `<extLst>` given
-/// by `ext_lst_xml`, and returns the merged raw `<extLst>` element.
+/// Folds the model's x14 data-bar settings into the worksheet `<extLst>`
+/// given by `ext_lst_xml` and returns the merged raw `<extLst>` element.
 ///
-/// An entry whose `<x14:cfRule id>` already appears anywhere in
-/// `ext_lst_xml` is dropped rather than appended: that id came from a
-/// loaded file, so the overlay already holds the real payload, including
-/// whatever parts of it this engine does not model. The rebuilt entry
-/// would be a lossy duplicate.
+/// A captured `<x14:cfRule>` whose id matches a model data bar is kept
+/// byte-for-byte while its `<x14:dataBar>` decodes to the model's
+/// settings; once it does not (the model was edited after load), the
+/// model-owned attributes and colours are rewritten from the model, and
+/// the thresholds, `direction` and any unmodelled child are kept. A rule
+/// that needs a payload and has none gets one built by
+/// `build_x14_cf_overlay_entries`, placed in the first
+/// `<x14:conditionalFormattings>` the overlay already has (or a new
+/// `<ext>` / `<extLst>` around it).
 ///
-/// Surviving entries go into the first `<x14:conditionalFormattings>`
-/// the overlay already has; when there is none, the enclosing `<ext>`
-/// (and `<extLst>`, when `ext_lst_xml` is empty) is created around them.
-///
-/// Returns `ext_lst_xml` byte-for-byte when `entries` is empty or every
-/// entry was dropped, so a save that needs no new extension content
-/// cannot perturb the captured overlay's serialisation. An unparseable
-/// `ext_lst_xml` is likewise returned unchanged, with the entries
-/// dropped: preserving bytes that are known to round-trip beats
-/// rewriting them from a parse that already failed.
-std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::string& entries);
+/// Returns `ext_lst_xml` byte-for-byte when nothing changes, so a save
+/// that needs no new extension content cannot perturb the captured
+/// overlay's serialisation. An unparseable `ext_lst_xml` is likewise
+/// returned unchanged.
+std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats);
 
 }  // namespace formulon::io
 

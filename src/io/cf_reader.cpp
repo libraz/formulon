@@ -724,6 +724,10 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
   return out;
 }
 
+void apply_x14_data_bar_overlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out) {
+  ApplyX14DataBarOverlay(x14_bar, out);
+}
+
 void normalize_cf_dxf_ids(std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count) {
   for (cf::ConditionalFormat& cfmt : formats) {
     for (cf::CFRule& rule : cfmt.rules) {

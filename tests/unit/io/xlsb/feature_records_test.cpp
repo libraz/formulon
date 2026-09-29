@@ -41,6 +41,7 @@
 #include "cf/cf_types.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
@@ -258,8 +259,9 @@ std::vector<std::string> FeatureRecords(const std::vector<std::uint8_t>& xlsb, c
     if (!in_tail) {
       continue;
     }
+    const bool x14_cf = t == 1135 || t == 1136 || (t >= 1046 && t <= 1051) || t == 1055 || t == 1156;
     const bool feature = (t >= 461 && t <= 471) || t == 564 || t == 1146 || t == 573 || t == 574 || t == 64 ||
-                         t == 535 || t == 678 || t == 534 || t == 677 || ((t == 35 || t == 36) && !in_dvals);
+                         t == 535 || t == 678 || t == 534 || t == 677 || x14_cf || ((t == 35 || t == 36) && !in_dvals);
     if (feature) {
       std::string line = std::to_string(t) + ":";
       for (std::size_t i = 0; i < rec.value().payload.size; ++i) {
@@ -284,13 +286,10 @@ bool SameUpToPtgClass(const std::string& a, const std::string& b) {
     return false;
   }
   // The formula size fields (BrtBeginCFRule bytes 30-41, BrtCFVO 20-23),
-  // which the writer fills with `cce` (see `EncodedFeatureFormula`), and
-  // the legacy bar lengths (BrtBeginDataBar bytes 0-1): for an x14-linked
-  // bar Excel writes the pre-2010 10/90 there, while the writer, like the
-  // .xlsx writer, writes the model's lengths.
+  // which the writer fills with `cce` (see `EncodedFeatureFormula`).
   const std::string type = a.substr(0, colon);
   const std::size_t skip_from = type == "463" ? 30U : type == "471" ? 20U : 0U;
-  const std::size_t skip_to = type == "463" ? 42U : type == "471" ? 24U : type == "467" ? 2U : 0U;
+  const std::size_t skip_to = type == "463" ? 42U : type == "471" ? 24U : 0U;
   for (std::size_t i = colon + 2U; i + 1U < a.size(); i += 3U) {
     const std::size_t byte = (i - colon - 2U) / 3U;
     if (a.compare(i, 2, b, i, 2) == 0 || (byte >= skip_from && byte < skip_to)) {
@@ -425,6 +424,64 @@ TEST(XlsbFeatureRecords, RetainedX14SheetReferenceToARenamedSheetFailsClosed) {
   EXPECT_EQ(written.error().code, FormulonErrorCode::kIoXlsbRetainedPartStale);
 }
 
+std::size_t CountRecords(const std::vector<std::uint8_t>& xlsb, const std::string& part, std::uint16_t type) {
+  io::ZipReader zip;
+  if (!zip.open(SpanOf(xlsb))) {
+    return 0;
+  }
+  auto body = zip.read_entry(part);
+  std::size_t count = 0;
+  io::ByteSpan cursor = body ? SpanOf(body.value()) : io::ByteSpan{};
+  while (cursor.size != 0U) {
+    auto rec = io::xlsb::read_record(cursor);
+    if (!rec) {
+      break;
+    }
+    count += rec.value().type == type ? 1U : 0U;
+  }
+  return count;
+}
+
+// The model wins over a retained x14 data bar: edited settings are
+// written, a deleted rule's x14 half goes with it.
+TEST(XlsbFeatureRecords, EditedX14DataBarsReachTheSavedFile) {
+  Workbook wb = ReadXlsbBytes(ReadFileBytes(FixturePath("x14bars", "xlsb")));
+  std::vector<cf::ConditionalFormat>& formats = wb.sheet(0).mutable_conditional_formats();
+  ASSERT_EQ(formats.size(), 5U);
+  cf::DataBarSpec& bar = *formats[0].rules[0].data_bar;
+  bar.negative_fill = cf::Color{0x12, 0x34, 0x56, 255};
+  bar.axis_position = cf::DataBarAxisPosition::Middle;
+  bar.gradient = false;
+  bar.max_length_pct = 80;
+  formats.erase(formats.begin() + 1);
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const Workbook back = ReadXlsbBytes(written.value());
+  EXPECT_EQ(DescribeFeatures(back), DescribeFeatures(wb));
+  EXPECT_EQ(CountRecords(written.value(), "xl/worksheets/sheet1.bin", 1048), 4U);
+}
+
+// A model data bar with x14-only settings and no retained x14 record (an
+// .xlsx source here) gets one written.
+TEST(XlsbFeatureRecords, X14DataBarsFromAnXlsxSourceAreWritten) {
+  const Workbook from_xlsx = ReadXlsx("x14bars");
+  auto written = io::xlsb::write_xlsb(from_xlsx);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  EXPECT_EQ(DescribeCf(ReadXlsbBytes(written.value()).sheet(0)), DescribeCf(from_xlsx.sheet(0)));
+}
+
+TEST(XlsbFeatureRecords, EditedX14DataBarsReachASavedXlsx) {
+  Workbook wb = ReadXlsx("x14bars");
+  cf::DataBarSpec& bar = *wb.sheet(0).mutable_conditional_formats()[0].rules[0].data_bar;
+  bar.negative_fill = cf::Color{0x12, 0x34, 0x56, 255};
+  bar.axis_position = cf::DataBarAxisPosition::None;
+  auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto back = io::read_ooxml(SpanOf(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  EXPECT_EQ(DescribeCf(back.value().workbook.sheet(0)), DescribeCf(wb.sheet(0)));
+}
+
 TEST(XlsbFeatureRecords, WorkbookProtectionMatchesExcelsXlsxElement) {
   const Workbook legacy = ReadXlsbBytes(ReadFileBytes(FixturePath("prot", "xlsb")));
   EXPECT_EQ(legacy.workbook_protection_xml(), "<workbookProtection lockStructure=\"1\"/>");
@@ -455,12 +512,22 @@ TEST(XlsbFeatureRecords, ModelEditsReachTheSavedFile) {
   EXPECT_EQ(back.sheet(0).protection().legacy_password, "CC1A");
 }
 
+// A generated XLSB styles part carries no dxfs, so the CF blocks whose rules
+// reference one are left out -- Excel refuses a dangling dxf index -- and
+// reported; the visual block and every validation are written.
 TEST(XlsbFeatureRecords, XlsxSourcedFeaturesAreWrittenToXlsb) {
   const Workbook from_xlsx = ReadXlsx("base");
-  auto written = io::xlsb::write_xlsb(from_xlsx);
+  auto written = io::xlsb::write_xlsb_with_result(from_xlsx);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
-  const Workbook back = ReadXlsbBytes(written.value());
-  EXPECT_EQ(DescribeCf(back.sheet(0)), DescribeCf(from_xlsx.sheet(0)));
+  const Workbook back = ReadXlsbBytes(written.value().bytes);
+  ASSERT_EQ(back.sheet(0).conditional_formats().size(), 1U);
+  Workbook visual_only = ReadXlsx("base");
+  visual_only.sheet(0).mutable_conditional_formats().resize(1U);
+  auto baseline = io::xlsb::write_xlsb_with_result(visual_only);
+  ASSERT_TRUE(static_cast<bool>(baseline)) << baseline.error().message;
+  EXPECT_EQ(written.value().diagnostics.deferred_feature_count,
+            baseline.value().diagnostics.deferred_feature_count + 2U);
+  EXPECT_EQ(DescribeCf(back.sheet(0)), DescribeCf(visual_only.sheet(0)));
   EXPECT_EQ(DescribeDv(back.sheet(0)), DescribeDv(from_xlsx.sheet(0)));
 }
 

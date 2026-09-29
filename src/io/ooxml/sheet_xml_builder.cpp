@@ -752,8 +752,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // Data-bar settings with no legacy attribute live in the worksheet
   // `<extLst>`, which is emitted much further down; build them here so
   // the CF model is read once.
-  const std::string ext_lst_xml =
-      merge_x14_cf_entries(sheet.ext_lst_xml(), build_x14_cf_overlay_entries(sheet.conditional_formats()));
+  const std::string ext_lst_xml = merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats());
   const std::string merges_xml = BuildMergeCellsBlock(sheet);
   const std::string dv_xml = BuildDataValidationsBlock(sheet);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);

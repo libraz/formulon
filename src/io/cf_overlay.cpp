@@ -11,9 +11,12 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include "io/cf_reader.h"
+#include "io/cf_writer.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 
@@ -68,10 +71,81 @@ void CollectClaimedRuleIds(const pugi::xml_node& node, std::unordered_set<std::s
   }
 }
 
+/// Attributes and colour children of `<x14:dataBar>` the model owns.
+constexpr std::string_view kModelledBarAttributes[] = {"minLength",
+                                                       "maxLength",
+                                                       "gradient",
+                                                       "border",
+                                                       "negativeBarColorSameAsPositive",
+                                                       "negativeBarBorderColorSameAsPositive",
+                                                       "axisPosition"};
+constexpr std::string_view kModelledBarColors[] = {"x14:borderColor", "x14:negativeFillColor",
+                                                   "x14:negativeBorderColor", "x14:axisColor"};
+
+template <std::size_t N>
+bool Contains(const std::string_view (&names)[N], std::string_view name) {
+  for (std::string_view n : names) {
+    if (n == name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// True when `a` and `b` agree on every setting `<x14:dataBar>` carries.
+bool SameX14BarSettings(const cf::DataBarSpec& a, const cf::DataBarSpec& b) {
+  return a.min_length_pct == b.min_length_pct && a.max_length_pct == b.max_length_pct && a.gradient == b.gradient &&
+         a.axis_position == b.axis_position && a.axis_color == b.axis_color && a.negative_fill == b.negative_fill &&
+         a.border == b.border && a.negative_border == b.negative_border;
+}
+
+/// Rewrites the model-owned attributes and colours of a captured
+/// `<x14:dataBar>` from `bar`, keeping its thresholds, `direction` and any
+/// child this engine does not model.
+void PatchX14DataBar(pugi::xml_node captured, const cf::DataBarSpec& bar) {
+  pugi::xml_document built_doc;
+  const std::string built_xml = build_x14_data_bar_element(bar);
+  if (!built_doc.load_string(built_xml.c_str())) {
+    return;
+  }
+  const pugi::xml_node built = built_doc.child("x14:dataBar");
+  for (pugi::xml_attribute attr = captured.first_attribute(); attr;) {
+    const pugi::xml_attribute next = attr.next_attribute();
+    if (Contains(kModelledBarAttributes, attr.name())) {
+      captured.remove_attribute(attr);
+    }
+    attr = next;
+  }
+  for (pugi::xml_attribute attr = built.first_attribute(); attr; attr = attr.next_attribute()) {
+    captured.append_attribute(attr.name()) = attr.value();
+  }
+  for (std::string_view color : kModelledBarColors) {
+    RemoveMatchingChildren(captured, std::string(color).c_str(), [](const pugi::xml_node&) { return true; });
+  }
+  pugi::xml_node anchor;
+  for (pugi::xml_node cfvo = captured.child("x14:cfvo"); cfvo; cfvo = cfvo.next_sibling("x14:cfvo")) {
+    anchor = cfvo;
+  }
+  for (pugi::xml_node color = built.first_child(); color; color = color.next_sibling()) {
+    if (Contains(kModelledBarColors, color.name())) {
+      anchor = anchor ? captured.insert_copy_after(color, anchor) : captured.prepend_copy(color);
+    }
+  }
+}
+
 }  // namespace
 
-std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::string& entries) {
-  if (entries.empty()) {
+std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats) {
+  const std::string entries = build_x14_cf_overlay_entries(formats);
+  std::unordered_map<std::string, const cf::DataBarSpec*> model_bars;
+  for (const cf::ConditionalFormat& format : formats) {
+    for (const cf::CFRule& rule : format.rules) {
+      if (!rule.id.empty() && rule.data_bar.has_value()) {
+        model_bars.emplace(rule.id, &*rule.data_bar);
+      }
+    }
+  }
+  if (entries.empty() && (ext_lst_xml.empty() || model_bars.empty())) {
     return ext_lst_xml;
   }
 
@@ -97,11 +171,35 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::stri
     }
   }
 
+  // A captured data bar whose settings no longer decode to the model's is
+  // rewritten from the model: the model is the source of truth after load.
+  bool changed = false;
+  for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
+    for (pugi::xml_node formattings = ext.child("x14:conditionalFormattings"); formattings;
+         formattings = formattings.next_sibling("x14:conditionalFormattings")) {
+      for (pugi::xml_node block = formattings.child("x14:conditionalFormatting"); block;
+           block = block.next_sibling("x14:conditionalFormatting")) {
+        for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
+          const auto it = model_bars.find(rule.attribute("id").value());
+          const pugi::xml_node bar = rule.child("x14:dataBar");
+          if (it == model_bars.end() || !bar) {
+            continue;
+          }
+          cf::DataBarSpec decoded = *it->second;
+          apply_x14_data_bar_overlay(bar, &decoded);
+          if (!SameX14BarSettings(decoded, *it->second)) {
+            PatchX14DataBar(bar, *it->second);
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+
   std::unordered_set<std::string> claimed;
   CollectClaimedRuleIds(ext_lst, &claimed);
 
   pugi::xml_node formattings;
-  bool added = false;
   for (pugi::xml_node entry = entries_doc.child("entries").first_child(); entry; entry = entry.next_sibling()) {
     const char* id = entry.child("x14:cfRule").attribute("id").value();
     if (id[0] == '\0' || claimed.count(id) != 0U) {
@@ -120,10 +218,10 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::stri
     }
     formattings.append_copy(entry);
     claimed.insert(id);
-    added = true;
+    changed = true;
   }
 
-  if (!added) {
+  if (!changed) {
     // Nothing new: hand the original bytes back untouched rather than
     // re-serialising a document that only round-tripped through pugixml.
     return ext_lst_xml;

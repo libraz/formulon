@@ -7,8 +7,10 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
+#include "io/cf_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
@@ -57,6 +59,20 @@ constexpr std::uint16_t kBar14Border = 0x01;
 constexpr std::uint16_t kBar14Gradient = 0x02;
 constexpr std::uint16_t kBar14NegativeFill = 0x04;
 constexpr std::uint16_t kBar14NegativeBorder = 0x08;
+constexpr std::uint16_t kBeginCfs14 = 1135;
+constexpr std::uint16_t kEndCfs14 = 1136;
+constexpr std::uint16_t kBeginCondFmt14 = 1046;
+constexpr std::uint16_t kEndCondFmt14 = 1047;
+constexpr std::uint16_t kCfvo14 = 1050;
+constexpr std::uint16_t kEndDataBar14 = 1156;
+constexpr std::uint16_t kAcBegin = 37;
+constexpr std::uint16_t kPrintOptions = 477;
+constexpr std::uint16_t kMargins = 476;
+constexpr std::uint16_t kPageSetup = 478;
+constexpr std::uint8_t kLegacyMinLength = 10;
+constexpr std::uint8_t kLegacyMaxLength = 90;
+// BrtCFVO14 type, indexed by `cf::CfvoType`; 7 (formula) is not written.
+constexpr std::array<std::uint32_t, 8> kCfvo14Types = {1, 4, 5, 2, 3, 7, 8, 9};
 
 // BrtBeginCFRule flag bits; every other bit was zero in every sample.
 constexpr std::uint16_t kFlagStopIfTrue = 0x02;
@@ -614,7 +630,7 @@ Expected<std::array<std::uint32_t, 3>, Error> RuleCodes(const cf::CFRule& rule) 
 }
 
 Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule& rule, const MergeRange& base,
-                               const FeatureFormulaWriteContext& ctx) {
+                               const FeatureFormulaWriteContext& ctx, bool linked) {
   auto codes = RuleCodes(rule);
   if (!codes) {
     return codes.error();
@@ -687,7 +703,10 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
       return Refuse("xlsb data bar rule has no data bar");
     }
     const cf::DataBarSpec& bar = *rule.data_bar;
-    const std::vector<std::uint8_t> head = {bar.min_length_pct, bar.max_length_pct,
+    // A linked bar's lengths live in its x14 record; Excel leaves the
+    // legacy ones at the pre-2010 10/90.
+    const std::vector<std::uint8_t> head = {linked ? kLegacyMinLength : bar.min_length_pct,
+                                            linked ? kLegacyMaxLength : bar.max_length_pct,
                                             static_cast<std::uint8_t>(bar.show_value ? 1U : 0U)};
     emit_record(dst, kBeginDataBar, head);
     for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
@@ -849,8 +868,299 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
   }
 }
 
+namespace {
+
+/// One framed record of a buffer, by offset.
+struct FramedRecord {
+  std::uint16_t type = 0;
+  ByteSpan payload{};
+  std::size_t begin = 0;
+  std::size_t end = 0;
+};
+
+/// Splits `buf` into framed records; empty when it does not parse whole.
+std::vector<FramedRecord> SplitRecords(const std::vector<std::uint8_t>& buf) {
+  std::vector<FramedRecord> out;
+  ByteSpan cursor{buf.data(), buf.size()};
+  while (cursor.size != 0U) {
+    const std::size_t begin = static_cast<std::size_t>(cursor.data - buf.data());
+    auto rec = read_record(cursor);
+    if (!rec) {
+      return {};
+    }
+    out.push_back(
+        FramedRecord{rec.value().type, rec.value().payload, begin, static_cast<std::size_t>(cursor.data - buf.data())});
+  }
+  return out;
+}
+
+void Append(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& src, const FramedRecord& rec) {
+  dst.insert(dst.end(), src.begin() + static_cast<std::ptrdiff_t>(rec.begin),
+             src.begin() + static_cast<std::ptrdiff_t>(rec.end));
+}
+
+bool IsMeasuredDataBarRule14(const FramedRecord& rec) {
+  return rec.type == kBeginCfRule14 && rec.payload.size == kDataBarRule14Bytes && rec.payload.data[4] == 4U;
+}
+
+/// BrtBeginDataBar14 and the BrtColor14 run for `bar`. `keep` holds the
+/// source record's always-1 byte and direction, which the model does not
+/// carry.
+void EmitDataBar14(std::vector<std::uint8_t>& head, std::vector<std::uint8_t>& colors, const cf::DataBarSpec& bar,
+                   std::uint8_t always_one, std::uint8_t direction) {
+  const bool border = bar.border.has_value();
+  const bool negative_fill = bar.negative_fill != bar.fill;
+  const bool negative_border = border && bar.negative_border.has_value();
+  const std::uint16_t flags = static_cast<std::uint16_t>(
+      (border ? kBar14Border : 0U) | (bar.gradient ? kBar14Gradient : 0U) | (negative_fill ? kBar14NegativeFill : 0U) |
+      (negative_border ? kBar14NegativeBorder : 0U));
+  std::vector<std::uint8_t> p(4U, 0U);
+  p.push_back(bar.min_length_pct);
+  p.push_back(bar.max_length_pct);
+  p.push_back(always_one);
+  p.push_back(direction);
+  p.push_back(static_cast<std::uint8_t>(bar.axis_position));
+  emit_u16(p, flags);
+  emit_record(head, kBeginDataBar14, p);
+  const auto color = [&colors](cf::Color c) {
+    const std::vector<std::uint8_t> payload = {0x00, 0x00, 0x00, 0x00, 0x05, 0xFF, 0x00, 0x00, c.r, c.g, c.b, c.a};
+    emit_record(colors, kColor14, payload);
+  };
+  if (border) {
+    color(*bar.border);
+  }
+  if (negative_fill) {
+    color(bar.negative_fill);
+  }
+  if (negative_border) {
+    color(*bar.negative_border);
+  }
+  if (bar.axis_position != cf::DataBarAxisPosition::None) {
+    color(bar.axis_color);
+  }
+}
+
+/// A retained x14 data-bar rule (`recs[first..last]`, BrtBeginCFRule14 to
+/// BrtEndCFRule14) rewritten from `bar`, or the source bytes when its
+/// BrtBeginDataBar14 is not the measured shape.
+std::vector<std::uint8_t> RewriteRule14(const std::vector<std::uint8_t>& buf, const std::vector<FramedRecord>& recs,
+                                        std::size_t first, std::size_t last, const cf::DataBarSpec& bar) {
+  std::vector<std::uint8_t> out;
+  std::vector<std::uint8_t> colors;
+  bool colors_pending = false;
+  for (std::size_t i = first; i <= last; ++i) {
+    const FramedRecord& rec = recs[i];
+    if (rec.type == kBeginDataBar14) {
+      if (rec.payload.size != kDataBar14Bytes) {
+        std::vector<std::uint8_t> raw;
+        for (std::size_t k = first; k <= last; ++k) {
+          Append(raw, buf, recs[k]);
+        }
+        return raw;
+      }
+      EmitDataBar14(out, colors, bar, rec.payload.data[6], rec.payload.data[7]);
+      colors_pending = true;
+    } else if (rec.type == kColor14) {
+      continue;
+    } else {
+      if (colors_pending && rec.type != kCfvo14) {
+        out.insert(out.end(), colors.begin(), colors.end());
+        colors_pending = false;
+      }
+      Append(out, buf, rec);
+    }
+  }
+  return out;
+}
+
+std::size_t FindType(const std::vector<FramedRecord>& recs, std::size_t from, std::size_t until, std::uint16_t type) {
+  for (std::size_t i = from; i < until; ++i) {
+    if (recs[i].type == type) {
+      return i;
+    }
+  }
+  return until;
+}
+
+}  // namespace
+
+void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vector<cf::ConditionalFormat>& formats,
+                             std::unordered_set<std::string>& linked) {
+  const std::vector<FramedRecord> recs = SplitRecords(records);
+  std::unordered_map<std::string, const cf::DataBarSpec*> model;
+  for (const cf::ConditionalFormat& format : formats) {
+    for (const cf::CFRule& rule : format.rules) {
+      if (!rule.id.empty() && rule.data_bar) {
+        model.emplace(rule.id, &*rule.data_bar);
+      }
+    }
+  }
+  std::vector<std::uint8_t> out;
+  const std::size_t n = recs.size();
+  for (std::size_t i = 0; i < n;) {
+    const std::size_t close = FindType(recs, i, n, kEndCfs14);
+    const bool container = recs[i].type == kFrtBegin && i + 1U < n && recs[i + 1U].type == kBeginCfs14 &&
+                           close + 1U < n && recs[close + 1U].type == kFrtEnd;
+    if (!container) {
+      Append(out, records, recs[i]);
+      ++i;
+      continue;
+    }
+    std::vector<std::uint8_t> inner;
+    for (std::size_t k = i + 2U; k < close;) {
+      const std::size_t block_end = FindType(recs, k, close, kEndCondFmt14);
+      if (recs[k].type != kBeginCondFmt14 || block_end == close) {
+        Append(inner, records, recs[k]);
+        ++k;
+        continue;
+      }
+      std::vector<std::uint8_t> block;
+      std::size_t rules = 0;
+      std::size_t kept = 0;
+      for (std::size_t l = k + 1U; l < block_end;) {
+        const std::size_t rule_end = FindType(recs, l, block_end, kEndCfRule14);
+        if (recs[l].type != kBeginCfRule14 || rule_end == block_end) {
+          Append(block, records, recs[l]);
+          ++l;
+          continue;
+        }
+        ++rules;
+        std::vector<std::uint8_t> rule;
+        if (IsMeasuredDataBarRule14(recs[l])) {
+          const std::string id = FormatGuid(recs[l].payload.data + kRule14GuidOffset);
+          const auto it = model.find(id);
+          if (it != model.end()) {
+            rule = RewriteRule14(records, recs, l, rule_end, *it->second);
+            linked.insert(id);
+          }
+        } else {
+          for (std::size_t m = l; m <= rule_end; ++m) {
+            Append(rule, records, recs[m]);
+          }
+        }
+        if (!rule.empty()) {
+          block.insert(block.end(), rule.begin(), rule.end());
+          ++kept;
+        }
+        l = rule_end + 1U;
+      }
+      if (kept != 0U || rules == 0U) {
+        Append(inner, records, recs[k]);
+        inner.insert(inner.end(), block.begin(), block.end());
+        Append(inner, records, recs[block_end]);
+      }
+      k = block_end + 1U;
+    }
+    if (!inner.empty()) {
+      Append(out, records, recs[i]);
+      Append(out, records, recs[i + 1U]);
+      out.insert(out.end(), inner.begin(), inner.end());
+      Append(out, records, recs[close]);
+      Append(out, records, recs[close + 1U]);
+    }
+    i = close + 2U;
+  }
+  if (n != 0U) {
+    records = std::move(out);
+  }
+}
+
+Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
+                                        const std::vector<cf::ConditionalFormat>& formats,
+                                        std::unordered_set<std::string>& linked) {
+  std::vector<std::uint8_t> groups;
+  for (const cf::ConditionalFormat& format : formats) {
+    for (const cf::CFRule& rule : format.rules) {
+      if (rule.id.empty() || !rule.data_bar || linked.count(rule.id) != 0U || !data_bar_needs_x14(*rule.data_bar)) {
+        continue;
+      }
+      std::array<std::uint8_t, kGuidBytes> guid{};
+      if (!ParseGuid(rule.id, guid)) {
+        return Refuse("xlsb conditional format x14 link id is not a GUID: " + rule.id);
+      }
+      const cf::DataBarSpec& bar = *rule.data_bar;
+      std::vector<std::uint8_t> head = {0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00};
+      std::vector<MergeRange> ranges;
+      for (const cf::CFCellRange& r : format.sqref) {
+        ranges.push_back(MergeRange{r.first.row, r.first.col, r.last.row, r.last.col});
+      }
+      emit_sqref(head, ranges);
+      emit_u32(head, 1U);
+      emit_u32(head, 0U);
+      emit_record(groups, kBeginCondFmt14, head);
+      std::vector<std::uint8_t> rule14(kDataBarRule14Bytes, 0U);
+      rule14[4] = 4U;
+      std::fill(rule14.begin() + 16, rule14.begin() + 20, std::uint8_t{0xFF});
+      std::copy(guid.begin(), guid.end(), rule14.begin() + static_cast<std::ptrdiff_t>(kRule14GuidOffset));
+      rule14[66] = 1U;
+      emit_record(groups, kBeginCfRule14, rule14);
+      std::vector<std::uint8_t> colors;
+      EmitDataBar14(groups, colors, bar, 1U, 0U);
+      for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
+        double num = 0;
+        if (v->type == cf::CfvoType::Formula) {
+          return Refuse("xlsb x14 data bar with a formula threshold has no measured record form");
+        }
+        if (v->type == cf::CfvoType::Number || v->type == cf::CfvoType::Percent ||
+            v->type == cf::CfvoType::Percentile) {
+          if (!v->value.empty() && !parse_xsd_double(v->value, &num)) {
+            return Refuse("xlsb conditional format threshold is not a number: " + v->value);
+          }
+        }
+        std::vector<std::uint8_t> p(4U, 0U);
+        emit_u32(p, kCfvo14Types[static_cast<std::size_t>(v->type)]);
+        emit_double(p, num);
+        p.resize(p.size() + 12U, 0U);
+        emit_record(groups, kCfvo14, p);
+      }
+      groups.insert(groups.end(), colors.begin(), colors.end());
+      emit_record(groups, kEndDataBar14, ByteSpan{});
+      emit_record(groups, kEndCfRule14, ByteSpan{});
+      emit_record(groups, kEndCondFmt14, ByteSpan{});
+      linked.insert(rule.id);
+    }
+  }
+  if (groups.empty()) {
+    return Expected<void, Error>::Ok();
+  }
+  const std::vector<FramedRecord> recs = SplitRecords(records);
+  for (std::size_t i = 0; i + 1U < recs.size(); ++i) {
+    if (recs[i].type == kFrtBegin && recs[i + 1U].type == kBeginCfs14) {
+      const std::size_t close = FindType(recs, i, recs.size(), kEndCfs14);
+      if (close != recs.size()) {
+        records.insert(records.begin() + static_cast<std::ptrdiff_t>(recs[close].begin), groups.begin(), groups.end());
+        return Expected<void, Error>::Ok();
+      }
+    }
+  }
+  std::vector<std::uint8_t> block;
+  // Excel refuses an x14 container that directly follows the last legacy
+  // block (measured); every sheet it writes has BrtPrintOptions there, so
+  // a sheet without print records gets Excel's default one.
+  const bool has_print = std::any_of(recs.begin(), recs.end(), [](const FramedRecord& r) {
+    return r.type == kPrintOptions || r.type == kMargins || r.type == kPageSetup;
+  });
+  if (!has_print) {
+    const std::array<std::uint8_t, 2> default_print_options = {0x10, 0x00};
+    emit_record(block, kPrintOptions, ByteSpan{default_print_options.data(), default_print_options.size()});
+  }
+  emit_record(block, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
+  emit_record(block, kBeginCfs14, ByteSpan{});
+  block.insert(block.end(), groups.begin(), groups.end());
+  emit_record(block, kEndCfs14, ByteSpan{});
+  emit_record(block, kFrtEnd, ByteSpan{});
+  // Excel keeps the sheet's revision-uid wrapper last.
+  std::size_t at = records.size();
+  if (recs.size() >= 3U && recs[recs.size() - 3U].type == kAcBegin) {
+    at = recs[recs.size() - 3U].begin;
+  }
+  records.insert(records.begin() + static_cast<std::ptrdiff_t>(at), block.begin(), block.end());
+  return Expected<void, Error>::Ok();
+}
+
 Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const cf::ConditionalFormat& format,
-                                    const FeatureFormulaWriteContext& ctx) {
+                                    const FeatureFormulaWriteContext& ctx,
+                                    const std::unordered_set<std::string>& linked) {
   if (format.sqref.empty() || format.rules.empty()) {
     return Expected<void, Error>::Ok();
   }
@@ -866,7 +1176,7 @@ Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const cf::Co
   std::vector<std::uint8_t> body;
   emit_record(body, kBrtBeginConditionalFormatting, head);
   for (const cf::CFRule& rule : format.rules) {
-    if (auto s = EmitRule(body, rule, base, ctx); !s) {
+    if (auto s = EmitRule(body, rule, base, ctx, !rule.id.empty() && linked.count(rule.id) != 0U); !s) {
       return s;
     }
   }
