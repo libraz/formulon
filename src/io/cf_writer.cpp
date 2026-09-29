@@ -11,9 +11,14 @@
 #include <string_view>
 
 #include "cf/cf_types.h"
+#include "io/future_functions.h"
 #include "io/xml_escape.h"
+#include "parser/ast.h"
+#include "parser/ast_format.h"
+#include "parser/parser.h"
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
+#include "utils/arena.h"
 
 namespace formulon::io {
 namespace {
@@ -246,7 +251,7 @@ void AppendCfvo(std::string& out, const cf::CfValueObject& v) {
   out.push_back('"');
   if (!v.value.empty()) {
     out.append(" val=\"");
-    AppendXmlAttrEscaped(out, v.value);
+    AppendXmlAttrEscaped(out, v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value) : v.value);
     out.push_back('"');
   }
   if (!v.gte) {
@@ -418,7 +423,7 @@ void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v) {
     return;
   }
   out.append("><xm:f>");
-  AppendXmlEscaped(out, v.value);
+  AppendXmlEscaped(out, v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value) : v.value);
   out.append("</xm:f></x14:cfvo>");
 }
 
@@ -583,12 +588,12 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) 
 
   if (r.formula1.has_value()) {
     out.append("<formula>");
-    AppendXmlEscaped(out, r.formula1.value());
+    AppendXmlEscaped(out, storage_feature_formula(r.formula1.value()));
     out.append("</formula>");
   }
   if (r.formula2.has_value()) {
     out.append("<formula>");
-    AppendXmlEscaped(out, r.formula2.value());
+    AppendXmlEscaped(out, storage_feature_formula(r.formula2.value()));
     out.append("</formula>");
   }
   if (r.color_scale.has_value()) {
@@ -632,6 +637,18 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
     out.append("</conditionalFormatting>");
   }
   return out;
+}
+
+std::string storage_feature_formula(std::string_view formula) {
+  Arena arena;
+  parser::Parser parser(formula, arena);
+  const parser::AstNode* root = parser.parse();
+  if (root == nullptr || !parser.errors().empty()) {
+    return std::string(formula);
+  }
+  std::string storage = parser::format_formula_storage(*root, &storage_call_name);
+  // A classic formula is written verbatim, keeping its exact spelling.
+  return storage != parser::format_formula(*root) ? storage : std::string(formula);
 }
 
 bool data_bar_needs_x14(const cf::DataBarSpec& bar) {

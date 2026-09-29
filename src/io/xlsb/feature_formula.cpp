@@ -3,6 +3,7 @@
 #include <string>
 #include <utility>
 
+#include "io/cf_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "parser/ast.h"
@@ -89,7 +90,7 @@ Expected<std::string, Error> read_feature_formula(ByteSpan& cursor, std::uint32_
   if (!ast) {
     return ast.error();
   }
-  return parser::format_formula(*ast.value());
+  return canonical_feature_formula(parser::format_formula(*ast.value()));
 }
 
 Expected<EncodedFeatureFormula, Error> encode_feature_formula(std::string_view text, std::uint32_t base_row,

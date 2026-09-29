@@ -84,6 +84,12 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
 /// sequences it that way.
 void normalize_cf_dxf_ids(std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count);
 
+/// A CF / DV formula as the model holds it: the formula-bar spelling, with
+/// Excel's storage prefixes stripped from the names it knows and
+/// `_xlfn.SINGLE(x)` / `_xlfn.ANCHORARRAY(x)` shown as `@x` / `x#`, the same
+/// canonical form cell and defined-name formulas take on load.
+std::string canonical_feature_formula(std::string_view stored);
+
 /// Folds an `<x14:dataBar>` element onto a data bar decoded from its
 /// legacy `<dataBar>`: the settings only the extension carries (negative
 /// fill and border, border, axis position and colour, gradient, bar

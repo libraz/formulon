@@ -14,8 +14,11 @@
 
 #include "cf/cf_types.h"
 #include "io/cell_parser.h"
+#include "io/future_functions.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "parser/ast_format.h"
+#include "parser/formula_prefix.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
@@ -354,6 +357,9 @@ cf::CfValueObject ReadCfvo(const pugi::xml_node& cfvo) {
   cf::CfValueObject out{};
   out.type = ParseCfvoType(attr_str(cfvo, "type"));
   out.value = attr_str(cfvo, "val");
+  if (out.type == cf::CfvoType::Formula) {
+    out.value = canonical_feature_formula(out.value);
+  }
   // `gte` is "1" by default; only an explicit "0" / "false" toggles
   // it off. The OOXML schema only emits those two spellings, so an
   // unrecognised token (defensive case) is folded back to the default
@@ -633,9 +639,9 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
         body.erase(body.begin());
       }
       if (formula_idx == 0) {
-        out.formula1 = std::move(body);
+        out.formula1 = canonical_feature_formula(body);
       } else if (formula_idx == 1) {
-        out.formula2 = std::move(body);
+        out.formula2 = canonical_feature_formula(body);
       }
       ++formula_idx;
     } else if (name == "colorScale") {
@@ -726,6 +732,10 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
     out.push_back(std::move(cfmt));
   }
   return out;
+}
+
+std::string canonical_feature_formula(std::string_view stored) {
+  return parser::spell_storage_operators(parser::strip_storage_prefixes(stored, &has_storage_prefix));
 }
 
 void apply_x14_data_bar_overlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out) {

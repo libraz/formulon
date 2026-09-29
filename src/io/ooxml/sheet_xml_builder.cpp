@@ -216,12 +216,12 @@ std::string BuildDataValidationsBlock(const Sheet& sheet) {
     out.append("\">");
     if (!v.formula1.empty()) {
       out.append("<formula1>");
-      AppendXmlEscaped(out, v.formula1);
+      AppendXmlEscaped(out, storage_feature_formula(v.formula1));
       out.append("</formula1>");
     }
     if (!v.formula2.empty()) {
       out.append("<formula2>");
-      AppendXmlEscaped(out, v.formula2);
+      AppendXmlEscaped(out, storage_feature_formula(v.formula2));
       out.append("</formula2>");
     }
     out.append("</dataValidation>");

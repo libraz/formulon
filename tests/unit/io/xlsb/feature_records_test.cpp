@@ -542,6 +542,85 @@ TEST(XlsbFeatureRecords, DxfRecordsMatchExcel) {
   }
 }
 
+// CF and DV formulas are held in formula-bar spelling, like cell formulas:
+// storage prefixes stripped from known names, SINGLE / ANCHORARRAY shown as
+// `@` / `#`, an unknown `_xlfn.` name left as is. The .xlsx writer spells
+// them back the way Excel stores them.
+constexpr const char* kCanonicalFeatureFormula = "AND(XLOOKUP(A1,B1:B3,C1:C3)>0,@A1>0,SUM(A1#)>0,_xlfn.FOOBAR(1))";
+constexpr const char* kStoredFeatureFormula =
+    "AND(_xlfn.XLOOKUP(A1,B1:B3,C1:C3)&gt;0,_xlfn.SINGLE(A1)&gt;0,SUM(_xlfn.ANCHORARRAY(A1))&gt;0,_xlfn.FOOBAR(1))";
+
+Workbook FeatureFormulaWorkbook() {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.sheet(wb.add_sheet("S1"));
+  cf::ConditionalFormat format;
+  format.sqref.push_back(cf::CFCellRange{{0, 3}, {4, 3}});
+  cf::CFRule expression;
+  expression.type = cf::RuleType::Expression;
+  expression.formula1 = kCanonicalFeatureFormula;
+  format.rules.push_back(expression);
+  cf::CFRule scale;
+  scale.type = cf::RuleType::ColorScale;
+  scale.priority = 2;
+  cf::ColorScaleSpec spec;
+  spec.thresholds = {cf::CfValueObject{cf::CfvoType::Min, "", true},
+                     cf::CfValueObject{cf::CfvoType::Formula, "@A1", true}};
+  spec.colors = {cf::Color{1, 2, 3, 255}, cf::Color{4, 5, 6, 255}};
+  scale.color_scale = spec;
+  format.rules.push_back(scale);
+  sheet.mutable_conditional_formats().push_back(format);
+  DataValidation dv;
+  dv.ranges.push_back(MergeRange{0, 4, 4, 4});
+  dv.type = 7;  // custom
+  dv.formula1 = kCanonicalFeatureFormula;
+  sheet.mutable_validations().push_back(dv);
+  return wb;
+}
+
+void ExpectCanonicalFeatureFormulas(const Workbook& wb, const char* where) {
+  const Sheet& sheet = wb.sheet(0);
+  ASSERT_EQ(sheet.conditional_formats().size(), 1U) << where;
+  const cf::ConditionalFormat& format = sheet.conditional_formats()[0];
+  ASSERT_EQ(format.rules.size(), 2U) << where;
+  EXPECT_EQ(format.rules[0].formula1.value_or(""), kCanonicalFeatureFormula) << where;
+  ASSERT_TRUE(format.rules[1].color_scale.has_value()) << where;
+  EXPECT_EQ(format.rules[1].color_scale->thresholds[1].value, "@A1") << where;
+  ASSERT_EQ(sheet.validations().size(), 1U) << where;
+  EXPECT_EQ(sheet.validations()[0].formula1, kCanonicalFeatureFormula) << where;
+}
+
+void ExpectStoredFeatureFormulas(const std::vector<std::uint8_t>& xlsx, const char* where) {
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(xlsx)))) << where;
+  auto part = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(part)) << where;
+  const std::string xml(part.value().begin(), part.value().end());
+  EXPECT_NE(xml.find(std::string("<formula>") + kStoredFeatureFormula + "</formula>"), std::string::npos)
+      << where << "\n"
+      << xml;
+  EXPECT_NE(xml.find(std::string("<formula1>") + kStoredFeatureFormula + "</formula1>"), std::string::npos)
+      << where << "\n"
+      << xml;
+  EXPECT_NE(xml.find("<cfvo type=\"formula\" val=\"_xlfn.SINGLE(A1)\"/>"), std::string::npos) << where << "\n" << xml;
+}
+
+TEST(XlsbFeatureRecords, CfAndDvFormulasAreCanonicalInTheModel) {
+  auto first = io::write_ooxml(FeatureFormulaWorkbook());
+  ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
+  ExpectStoredFeatureFormulas(first.value(), "xlsx");
+  auto loaded = io::read_ooxml(SpanOf(first.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ExpectCanonicalFeatureFormulas(loaded.value().workbook, "xlsx -> model");
+
+  auto xlsb = io::xlsb::write_xlsb(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  const Workbook from_xlsb = ReadXlsbBytes(xlsb.value());
+  ExpectCanonicalFeatureFormulas(from_xlsb, "xlsx -> xlsb -> model");
+  auto again = io::write_ooxml(from_xlsb);
+  ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
+  ExpectStoredFeatureFormulas(again.value(), "xlsx -> xlsb -> xlsx");
+}
+
 TEST(XlsbFeatureRecords, WorkbookProtectionMatchesExcelsXlsxElement) {
   const Workbook legacy = ReadXlsbBytes(ReadFileBytes(FixturePath("prot", "xlsb")));
   EXPECT_EQ(legacy.workbook_protection_xml(), "<workbookProtection lockStructure=\"1\"/>");

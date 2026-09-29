@@ -21,7 +21,6 @@
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
-#include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "sheet.h"
 #include "utils/date_time.h"
@@ -189,15 +188,9 @@ Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx) 
     return Value::error(ErrorCode::Name);
   }
 
-  // OOXML stores cellIs / expression `formula1` without a leading `=`;
-  // the parser is happy with that, so no stripping is required. It may,
-  // however, carry Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
-  // storage prefixes (e.g. a rule using a post-2007 or dynamic-array
-  // function, or a LET / LAMBDA construct); canonicalise before parsing so
-  // the special-form and function-name grammar sees the same spelling the
-  // formula bar would show.
-  const std::string canonical_source = parser::strip_storage_prefixes(source);
-  parser::Parser parser(canonical_source, *ctx.arena);
+  // The model holds CF formulas in canonical formula-bar spelling (the
+  // readers strip Excel's storage prefixes on load), without a leading `=`.
+  parser::Parser parser(source, *ctx.arena);
   const parser::AstNode* root = parser.parse();
   if (root == nullptr || !parser.errors().empty()) {
     return Value::error(ErrorCode::Name);

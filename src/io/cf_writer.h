@@ -35,11 +35,18 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "cf/cf_types.h"
 
 namespace formulon::io {
+
+/// The inverse of `canonical_feature_formula` (cf_reader.h), for writing a
+/// CF / DV formula into .xlsx: storage prefixes
+/// re-applied, `@` / `#` spelled as the functions Excel stores. A formula
+/// that needs neither, or does not parse, is returned unchanged.
+std::string storage_feature_formula(std::string_view formula);
 
 /// Emits all `<conditionalFormatting>` blocks for one sheet as a single
 /// concatenated XML chunk. The output has neither outer XML declaration

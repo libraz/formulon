@@ -30,6 +30,7 @@
 
 #include "io/array_anchor_budget.h"
 #include "io/cell_parser.h"
+#include "io/cf_reader.h"
 #include "io/future_functions.h"
 #include "io/sax_xml_reader.h"
 #include "io/xml_escape.h"
@@ -1314,6 +1315,7 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
       if (!v.formula1.empty() && v.formula1.front() == '=') {
         v.formula1.erase(0, 1);
       }
+      v.formula1 = canonical_feature_formula(v.formula1);
     }
     if (pugi::xml_node f2 = dv.child("formula2"); f2) {
       v.formula2.clear();
@@ -1321,6 +1323,7 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
       if (!v.formula2.empty() && v.formula2.front() == '=') {
         v.formula2.erase(0, 1);
       }
+      v.formula2 = canonical_feature_formula(v.formula2);
     }
 
     out.push_back(std::move(v));
