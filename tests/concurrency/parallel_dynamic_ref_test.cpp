@@ -120,14 +120,12 @@ void ExpectFixtureResolved(const Workbook& wb) {
   }
 }
 
-// The topology assertion. Once the seeding pass has settled the literal
-// anchor, every super-node of the fixture is a singleton whose in-degree
-// inside the dirty subgraph is zero, so a pass is exactly one layer
-// holding all `3 * kRows` of them: the targets dispatched to the pool, the
-// volatile readers run afterwards on the caller. If a future change
-// separated the readers from their targets into different layers this
-// fixture would stop covering the race, and these counters are what would
-// say so.
+// The topology assertion. Once the seeding pass has settled, every reader
+// holds a learned dynamic-reference edge to the target it read, so a pass
+// is two layers over `3 * kRows` singletons: the targets dispatched to the
+// pool, then the readers, which run on the caller. The seeding pass, with
+// no learned edge yet, is the one where readers share their targets' layer
+// and rely on running after the pool drains.
 void ExpectSingleSharedLayer(const SchedulerStats& stats) {
   EXPECT_EQ(stats.sccs_processed, 3U * kRows);
   EXPECT_EQ(stats.parallel_steps, 1U);
@@ -144,13 +142,9 @@ TEST(ParallelDynamicRef, SharedLayerMatchesSerialRecalc) {
   SchedulerConfig cfg;
   cfg.num_threads = 4U;
 
-  // Settling pass. Neither engine orders a dynamic reference against the
-  // cell it reads — no edge exists to order it by — so a reader's first
-  // pass may legitimately precede its target's. What both engines must
-  // agree on is the steady state, which is what the measured pass below
-  // observes: the targets are re-evaluated to the values they already
-  // hold, so the readers see the same bytes whichever side of the write
-  // they land on.
+  // Settling pass. No edge orders a reader after its target yet, so a
+  // reader may run first; it is then found stale and re-run behind the edge
+  // it taught the graph. The measured pass below runs on those edges.
   ASSERT_TRUE(static_cast<bool>(serial.recalc(default_registry())));
   ASSERT_TRUE(static_cast<bool>(parallel.recalc_parallel(default_registry(), cfg, nullptr)));
 
