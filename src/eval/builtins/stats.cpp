@@ -219,37 +219,18 @@ Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
 
 ModeFrequencies build_mode_frequencies(const std::vector<double>& xs) {
   ModeFrequencies freq;
-  struct Entry {
-    double value;
-    std::size_t first;
-    std::size_t count;
-  };
-  std::vector<std::pair<double, std::size_t>> ranked;
-  ranked.reserve(xs.size());
-  for (std::size_t i = 0; i < xs.size(); ++i) {
-    ranked.emplace_back(xs[i], i);
+  std::vector<aggregate_kernels::ValueRun> runs = aggregate_kernels::group_equal_values(xs);
+  for (const aggregate_kernels::ValueRun& run : runs) {
+    freq.best_count = std::max(freq.best_count, run.count);
   }
-  std::sort(ranked.begin(), ranked.end(), aggregate_kernels::ValueThenPositionOrder{});
-  std::vector<Entry> entries;
-  entries.reserve(ranked.size());
-  for (std::size_t begin = 0; begin < ranked.size();) {
-    std::size_t end = begin + 1U;
-    std::size_t first = ranked[begin].second;
-    while (end < ranked.size() && ranked[end].first == ranked[begin].first) {
-      first = std::min(first, ranked[end].second);
-      ++end;
-    }
-    const std::size_t count = end - begin;
-    entries.push_back(Entry{ranked[begin].first, first, count});
-    freq.best_count = std::max(freq.best_count, count);
-    begin = end;
-  }
-  sort_by_index(entries, [](const Entry& lhs, const Entry& rhs) { return lhs.first < rhs.first; });
-  freq.values.reserve(entries.size());
-  freq.counts.reserve(entries.size());
-  for (const Entry& entry : entries) {
-    freq.values.push_back(entry.value);
-    freq.counts.push_back(entry.count);
+  sort_by_index(runs, [](const aggregate_kernels::ValueRun& lhs, const aggregate_kernels::ValueRun& rhs) {
+    return lhs.first < rhs.first;
+  });
+  freq.values.reserve(runs.size());
+  freq.counts.reserve(runs.size());
+  for (const aggregate_kernels::ValueRun& run : runs) {
+    freq.values.push_back(run.value);
+    freq.counts.push_back(run.count);
   }
   return freq;
 }

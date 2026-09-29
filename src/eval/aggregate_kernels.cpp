@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "utils/expected.h"
@@ -212,10 +213,7 @@ Expected<double, ErrorCode> run_median(std::vector<double> xs) {
   return m;
 }
 
-Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs) {
-  if (xs.empty()) {
-    return ErrorCode::NA;
-  }
+std::vector<ValueRun> group_equal_values(const std::vector<double>& xs) {
   // Sort a copy by value while carrying source positions. This groups equal
   // values in O(n log n), then the smallest source position implements
   // Excel's first-occurrence tie rule without a quadratic frequency table.
@@ -224,10 +222,11 @@ Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs)
   for (std::size_t i = 0; i < xs.size(); ++i) {
     ranked.emplace_back(xs[i], i);
   }
-  std::sort(ranked.begin(), ranked.end(), ValueThenPositionOrder{});
-  std::size_t best_count = 0;
-  std::size_t best_first = xs.size();
-  double best_value = 0.0;
+  std::sort(ranked.begin(), ranked.end(),
+            [](const std::pair<double, std::size_t>& lhs, const std::pair<double, std::size_t>& rhs) {
+              return lhs.first < rhs.first;
+            });
+  std::vector<ValueRun> runs;
   for (std::size_t begin = 0; begin < ranked.size();) {
     std::size_t end = begin + 1U;
     std::size_t first = ranked[begin].second;
@@ -235,13 +234,25 @@ Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs)
       first = std::min(first, ranked[end].second);
       ++end;
     }
-    const std::size_t count = end - begin;
-    if (count > best_count || (count == best_count && first < best_first)) {
-      best_count = count;
-      best_first = first;
-      best_value = ranked[begin].first;
-    }
+    runs.push_back(ValueRun{ranked[begin].first, first, end - begin});
     begin = end;
+  }
+  return runs;
+}
+
+Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs) {
+  if (xs.empty()) {
+    return ErrorCode::NA;
+  }
+  std::size_t best_count = 0;
+  std::size_t best_first = xs.size();
+  double best_value = 0.0;
+  for (const ValueRun& run : group_equal_values(xs)) {
+    if (run.count > best_count || (run.count == best_count && run.first < best_first)) {
+      best_count = run.count;
+      best_first = run.first;
+      best_value = run.value;
+    }
   }
   if (best_count < 2U) {
     return ErrorCode::NA;

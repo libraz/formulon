@@ -22,7 +22,6 @@
 #define FORMULON_EVAL_AGGREGATE_KERNELS_H_
 
 #include <cstddef>
-#include <utility>
 #include <vector>
 
 #include "utils/expected.h"
@@ -99,18 +98,18 @@ Expected<double, ErrorCode> run_median(std::vector<double> xs);
 /// diverge on the tie-break rule.
 Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs);
 
-/// Orders `(value, source position)` pairs by value, leaving equal values
-/// adjacent so a grouping pass can apply Excel's first-occurrence rule.
-///
-/// A named type rather than a lambda at each call site: the mode kernel
-/// here and `build_mode_frequencies` in `builtins/stats.cpp` sort the same
-/// vector the same way, and two closure types would put two copies of the
-/// sort body in the binary.
-struct ValueThenPositionOrder {
-  bool operator()(const std::pair<double, std::size_t>& lhs, const std::pair<double, std::size_t>& rhs) const {
-    return lhs.first < rhs.first;
-  }
+/// A run of exactly equal values: the value, the smallest source position
+/// holding it, and how many positions do.
+struct ValueRun {
+  double value;
+  std::size_t first;
+  std::size_t count;
 };
+
+/// Groups `xs` into runs of exactly equal values, in ascending value order.
+/// Shared by the mode kernel here and `build_mode_frequencies` in
+/// `builtins/stats.cpp` so both apply the same first-occurrence grouping.
+std::vector<ValueRun> group_equal_values(const std::vector<double>& xs);
 
 }  // namespace aggregate_kernels
 }  // namespace eval
