@@ -62,16 +62,18 @@ These are **permanent** non-goals, not "not yet." The scope is finite on purpose
 | PyPI | `formulon` | Python 3.9+ `py3-none-any` wheel that bundles `formulon_capi.wasm` plus a pure-Python wrapper. `pip` resolves the platform-specific `wasmtime` runtime. |
 | GitHub Releases | `formulon-<version>-<platform-arch>.tar.gz` | Standalone CLI binaries (`eval`, `recalc`, `dump`, `paginate`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
 
-Every surface computes the same results from the same input. One
-deliberate difference is worth knowing before you size a workload: the
-WASM builds — which is to say the npm and PyPI packages — read worksheet
-XML through the DOM parser only, whereas the native CLI switches to a
-streaming parser for worksheets past 256 KiB. Streaming costs binary
-size that the WASM budget does not have, so opening a worksheet in WASM
-needs memory proportional to that worksheet's XML rather than a fixed
-window. Peak use is per worksheet, not per workbook — sheets are read
-one at a time — and the practical ceiling is the host's 32-bit WASM
-address space.
+Every surface computes the same results from the same input. All three
+inflate each worksheet part into memory whole before parsing it (the zip
+reader caps this at 100 MiB per entry, 256 MiB per load); the WASM
+builds — the npm and PyPI packages — then always build a DOM tree from
+that buffer. The native CLI switches to a streaming parser for
+worksheets past 256 KiB instead, which skips building the DOM tree —
+that implementation costs binary size the WASM budget does not have —
+but still holds the same inflated XML buffer first, so its peak memory
+is not a fixed window either. Sheets are read one at a time on every
+surface, so the peak is per worksheet, not per workbook; the practical
+ceiling on WASM is the host's 32-bit address space. Results are
+identical either way.
 
 ## Command line
 
@@ -94,11 +96,11 @@ with `-`, for example `formulon dump --sheets -- -input.xlsx`.
 
 `recalc` accepts `.xlsx` or `.xlsb` input/output. It writes its success status
 to stderr as `formulon: recalc: ok, wrote M bytes to 'OUT'`; pass `--quiet` to
-suppress that status line. XLSB data-loss warnings remain visible under
-`--quiet`. By default it uses the serial recalc contract. `--threads N` opts
-into the parallel SCC scheduler (`0` auto-detects, `1` stays on the caller
-thread, and `2..8` sets a worker cap) and reports per-pass telemetry in the
-status line.
+suppress that status line. Load/save loss warnings — both XLSB and OOXML —
+remain visible under `--quiet`. By default it uses the serial recalc contract.
+`--threads N` opts into the parallel SCC scheduler (`0` auto-detects, `1`
+stays on the caller thread, and `2..8` sets a worker cap) and reports
+per-pass telemetry in the status line.
 
 ## Status
 
@@ -115,22 +117,22 @@ additional category (507 + 15 = 522, not 524).
 | &nbsp;&nbsp;↳ of which environment-bound | 2 | A real implementation whose result depends on host or workbook state, so a fixed golden cannot fully describe it. Counted within the 507 above. | `INFO`, `CELL` |
 | Unavailable stub | 15 | Requires external services, network I/O, COM providers, or OLAP connections that Formulon does not embed; returns a fixed unavailable error surface. | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
-**103 oracle categories** are defined. The formula and conditional-formatting tracks regenerate from Mac Excel 365 ja-JP; the workbook track regenerates from Windows Excel 365 ja-JP, and its goldens carry a capture identifier that pins every suite to a single verified Microsoft 365 session. Current local verification:
+**104 oracle categories** are defined. The formula and conditional-formatting tracks regenerate from Mac Excel 365 ja-JP; the workbook track regenerates from Windows Excel 365 ja-JP, and its goldens carry a capture identifier that pins every suite to a single verified Microsoft 365 session. Current local verification:
 
 | Check | Result |
 |-------|--------|
 | `ctest -LE "SLOW\|BENCH\|TSAN"` — `make test`, the PR gate | all passing |
 | `ctest -LE "BENCH\|TSAN"` — `make test-slow`, adds the `SLOW` tier | all passing |
-| Primary formula oracle | `4423/4423` passing, `125` documented skips |
+| Primary formula oracle | `4546/4546` passing, `125` documented skips |
 | Conditional-formatting oracle | `23/23` |
-| Workbook oracle (pivot + print) | `66/66` passing, `10` documented skips |
+| Workbook oracle (pivot + print) | `73/73` passing, `9` documented skips |
 | Imported third-party engine corpus (cross-check) | `12510/12510` passing, `168` documented divergences |
 
 Three labels partition the CTest suite: `SLOW` (minutes-scale integration and concurrency cases), `TSAN` (thread-sanitizer runs), and `BENCH` (microbenchmark regression checks, whose threshold is tunable, so they run on demand). Everything else is the unlabeled fast tier that CI gates on; there is no separate load-test tier. The libFuzzer harnesses also carry the `SLOW` label, but they exist only in a build configured with `-DFM_BUILD_FUZZ=ON` (`make fuzz`), not in a default build or in CI. They need a Clang that ships the libFuzzer runtime, which the Apple toolchain does not, so macOS needs a separate LLVM. AddressSanitizer is off by default there as well — it deadlocks in its own shadow-memory setup against recent macOS dynamic linkers — so a macOS fuzz run detects crashes, timeouts and undefined behaviour but not heap corruption.
 
 Every skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 522 catalogued functions, `518` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); the remaining `4` (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) fail only `behaviors_declared` — their behavior taxonomy is under-specified. `JIS` closes as a declared alias of `DBCS`: Excel rewrites that ja-JP formula-bar spelling before it stores or evaluates a formula, so no oracle case can name it, and the closure harness resolves the alias to the function it defers to rather than taking the declaration on trust.
 
-Beyond formula results, **pivot tables and print areas / pagination** have a dedicated **workbook oracle track**, captured through a WSL2 → Windows COM bridge. Its ten remaining skips are all the same Excel quirk: at a print scale or zoom of 50% or less, Excel's page-break preview emits column auto-breaks that do not follow geometric pagination, so the observed break set stops shrinking with the scale and grows again at 25%. Each skipped case records the Microsoft 365 observation it was measured against.
+Beyond formula results, **pivot tables and print areas / pagination** have a dedicated **workbook oracle track**, captured through a WSL2 → Windows COM bridge. Its nine remaining skips are all the same Excel quirk: at a print scale or zoom of 50% or less, Excel's page-break preview emits column auto-breaks that do not follow geometric pagination, so the observed break set stops shrinking with the scale and grows again at 25%. Each skipped case records the Microsoft 365 observation it was measured against.
 
 New workbooks use the `win-365-ja_JP` formula profile by default; callers can switch with the profile-id API (`mac-365-ja_JP`, `win-365-ja_JP`). English-locale profiles are intentionally not exposed until matching EN oracle data and verified locale-specific behavior are available. A bytecode compiler and stack-machine VM exist alongside the tree-walker as an opt-in build mode (`-DFORMULON_VM_PARITY_CHECK=ON`) that cross-checks every evaluation against the tree-walker's result; every shipped artifact evaluates through the tree-walker alone. The OOXML reader/writer round-trips sheets, styles, conditional formatting, comments, hyperlinks, merges, data validations, defined names, tables, and pivot tables; an MS-XLSB reader/writer covers cell values, styles, cross-sheet 3-D references, and common tokenized formulas, with array-constant literals and post-2007 "future function" IDs still limited compared to the OOXML path. Workbook operations are available through the C ABI and language bindings; the CLI deliberately exposes only `eval`, `recalc`, `dump`, and `paginate`.
 

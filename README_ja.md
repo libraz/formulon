@@ -62,7 +62,7 @@ Formulon は以下を **意図的にサポートしません**。
 | PyPI | [`formulon`](https://pypi.org/project/formulon/) | Python 3.9+ の `py3-none-any` wheel。`formulon_capi.wasm` と pure-Python wrapper を同梱し、`wasmtime` は `pip` が解決します。 |
 | GitHub Releases | `formulon-<version>-<platform-arch>.tar.gz` | 単体 CLI バイナリ (`eval` / `recalc` / `dump` / `paginate`)。`darwin-arm64` / `linux-x64` / `linux-arm64` 向け。 |
 
-同じ入力からはどの配布形態でも同じ結果が出ます。ただし規模を見積もる前に知っておくべき意図的な違いが 1 つあります。WASM ビルド（つまり npm と PyPI のパッケージ）はワークシート XML を DOM パーサだけで読みますが、ネイティブ CLI は 256 KiB を超えるワークシートをストリーミングパーサに切り替えます。ストリーミングの実装はバイナリサイズを消費し、WASM の予算にその余裕がないためです。したがって WASM でワークシートを開くときは、固定量ではなくそのシートの XML に比例したメモリが要ります。ピークはワークブック単位ではなくワークシート単位（シートは 1 枚ずつ読みます）で、実際の上限はホストの 32-bit WASM アドレス空間です。
+同じ入力からはどの配布形態でも同じ結果が出ます。3 つとも、ワークシートのパートをパース前にまるごとメモリへ展開します（zip リーダーは 1 エントリ 100 MiB、1 ロード 256 MiB を上限とします）。WASM ビルド（つまり npm と PyPI のパッケージ）はその後、常にそのバッファから DOM ツリーを構築します。ネイティブ CLI は 256 KiB を超えるワークシートでストリーミングパーサに切り替え、DOM ツリーの構築を省きます — この実装は WASM の予算にはない余裕を使ってバイナリサイズを消費します — が、展開済みの XML バッファ自体は先に保持するため、ネイティブ側のピークメモリも固定量ではありません。どちらの配布形態でもシートは 1 枚ずつ読むため、ピークはワークブック単位ではなくワークシート単位で、WASM での実際の上限はホストの 32-bit アドレス空間です。結果はどちらの経路でも同一です。
 
 ## コマンドライン
 
@@ -82,11 +82,11 @@ formulon paginate output.xlsx --sheet 0
 
 `recalc` は入出力とも `.xlsx` / `.xlsb` を受け付けます。成功時は stderr へ
 `formulon: recalc: ok, wrote M bytes to 'OUT'` を出力し、このステータス行は
-`--quiet` で抑制できます。XLSB のデータ損失警告は `--quiet` を付けても表示
-されます。既定では直列の recalc 契約で動作し、`--threads N` を渡すと並列 SCC
-スケジューラに切り替わります（`0` は自動検出、`1` は呼び出しスレッドのまま、
-`2..8` はワーカー数の上限指定）。このときステータス行にはパスごとの
-テレメトリも出ます。
+`--quiet` で抑制できます。読み込み・保存の損失警告は XLSB・OOXML のいずれも
+`--quiet` を付けても表示されます。既定では直列の recalc 契約で動作し、
+`--threads N` を渡すと並列 SCC スケジューラに切り替わります
+（`0` は自動検出、`1` は呼び出しスレッドのまま、`2..8` はワーカー数の
+上限指定）。このときステータス行にはパスごとのテレメトリも出ます。
 
 ## ステータス
 
@@ -100,7 +100,7 @@ formulon paginate output.xlsx --sheet 0
 | &nbsp;&nbsp;↳ うち環境依存 | 2 | 実装済みだが、ホスト環境やワークブック状態によって値が変わるため固定 golden だけでは完全に記述できない関数。上記 507 に含まれます。 | `INFO`, `CELL` |
 | unavailable stub | 15 | Formulon が内蔵しない外部サービス、ネットワーク、COM、OLAP 接続などが必要な関数。固定のエラー面だけを返します。 | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
-oracle は **103 カテゴリ** あります。数式 track と条件付き書式 track は Mac Excel 365 ja-JP から、workbook track は Windows Excel 365 ja-JP から再生成します。workbook track の golden には capture identifier があり、全 suite が単一の検証済み Microsoft 365 セッションに固定されます。
+oracle は **104 カテゴリ** あります。数式 track と条件付き書式 track は Mac Excel 365 ja-JP から、workbook track は Windows Excel 365 ja-JP から再生成します。workbook track の golden には capture identifier があり、全 suite が単一の検証済み Microsoft 365 セッションに固定されます。
 
 現在のローカル検証結果:
 
@@ -108,16 +108,16 @@ oracle は **103 カテゴリ** あります。数式 track と条件付き書�
 |------|------|
 | `ctest -LE "SLOW\|BENCH\|TSAN"` — `make test`、PR ゲート | すべて passed |
 | `ctest -LE "BENCH\|TSAN"` — `make test-slow`、`SLOW` 層を追加 | すべて passed |
-| primary formula oracle | `4423/4423` passed / `125` documented skips |
+| primary formula oracle | `4546/4546` passed / `125` documented skips |
 | 条件付き書式 oracle | `23/23` |
-| workbook oracle (pivot + print) | `66/66` passed / `10` documented skips |
+| workbook oracle (pivot + print) | `73/73` passed / `9` documented skips |
 | 取り込み済み外部エンジンコーパス (クロスチェック) | `12510/12510` passed / `168` documented divergences |
 
 CTest スイートを分けているラベルは 3 つです。`SLOW` (分オーダーの integration・concurrency ケース)、`TSAN` (thread sanitizer 実行)、`BENCH` (しきい値が可変なマイクロベンチ回帰チェックで、必要なときだけ実行) の 3 つで、残りはすべて CI がゲートする無ラベルの fast tier です。負荷試験専用の層はありません。libFuzzer ハーネスも `SLOW` ラベルを持ちますが、`-DFM_BUILD_FUZZ=ON` を指定したビルド (`make fuzz`) にしか存在せず、既定ビルドにも CI にも含まれません。libFuzzer ランタイムを同梱する Clang が必要で、Apple の toolchain はこれを持たないため、macOS では別途 LLVM が要ります。AddressSanitizer も既定では無効です (近年の macOS 動的リンカとの間で、shadow memory 初期化中にデッドロックするため)。したがって macOS での fuzz 実行が検出できるのは crash・timeout・未定義動作までで、ヒープ破壊は検出しません。
 
 残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `518` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る 4 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、behavior taxonomy の記述が不足しているためです。`JIS` は `DBCS` の alias として宣言され、closure が閉じています。Excel はこの ja-JP 数式バー綴りを保存・評価の前に書き換えるため、`JIS` を直接呼ぶ oracle case は作れません。closure harness は宣言を鵜呑みにせず、alias 先の関数を実際に評価して判定します。
 
-数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があり、WSL2 から Windows COM へ渡すブリッジ経由で採取します。残る 10 件の skip はいずれも同じ Excel の癖です。印刷倍率またはズームが 50% 以下のとき、Excel の改ページプレビューは幾何的なページ分割に従わない列の自動改ページを出すため、観測される改ページ位置は倍率を下げても縮まらず、25% では逆に増えます。skip した各ケースには、照合した Microsoft 365 の観測値を記録しています。
+数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があり、WSL2 から Windows COM へ渡すブリッジ経由で採取します。残る 9 件の skip はいずれも同じ Excel の癖です。印刷倍率またはズームが 50% 以下のとき、Excel の改ページプレビューは幾何的なページ分割に従わない列の自動改ページを出すため、観測される改ページ位置は倍率を下げても縮まらず、25% では逆に増えます。skip した各ケースには、照合した Microsoft 365 の観測値を記録しています。
 
 新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
 

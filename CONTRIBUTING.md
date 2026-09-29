@@ -283,7 +283,7 @@ Issues with a minimal reproducer are easiest to act on:
 - The **expected output** — and how you obtained it (Mac Excel,
   Windows Excel, LibreOffice, ...).
 - Formulon's **observed output**, plus the version of Formulon you're
-  on (`formulon_cli --version` or the `@libraz/formulon` package
+  on (`formulon --version` or the `@libraz/formulon` package
   version).
 - For divergences from Excel, ideally a YAML case in the format under
   `tests/oracle/cases/` so we can drop it straight into the suite.

@@ -3834,8 +3834,8 @@ typedef enum {
  * structural result at display time. Merging over a `NULL` is the whole
  * contract — a host never has to handle the engine winning that
  * precedence. The document contract lives in
- * `docs/function-metadata-schema.md`; the native Node and Python bindings
- * ship pure merge helpers (`mergeFunctionMetadata` /
+ * `docs/function-metadata-schema.md`; the WASM, native Node and Python
+ * bindings ship pure merge helpers (`mergeFunctionMetadata` /
  * `merge_function_metadata`) for it. This
  * metadata is display-only: formula input parsing stays fixed to the
  * English canonical names, so `fm_function_localize` /
