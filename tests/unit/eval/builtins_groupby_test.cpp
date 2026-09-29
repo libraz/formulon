@@ -30,16 +30,19 @@
 #include <string_view>
 
 #include "eval/eval_context.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "test_eval_helpers.h"
 #include "util/test_log_recorder.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -65,6 +68,23 @@ Value EvalSrc(std::string_view src) {
     return Value::error(ErrorCode::Name);
   }
   return evaluate(*root, eval_arena, default_registry(), test::mac_context());
+}
+
+// Same as `EvalSrc`, evaluated against a caller-supplied workbook/sheet so
+// a formula can reference real cells (e.g. a whole-column range).
+Value EvalSrcIn(std::string_view src, const Workbook& wb, const Sheet& sheet) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_TRUE(p.errors().empty()) << "unexpected parse errors for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalState state;
+  return evaluate(*root, eval_arena, default_registry(), test::mac_context(wb, sheet, state));
 }
 
 // Reads cell `(r, c)` from a 2D ArrayValue using row-major indexing.
@@ -433,6 +453,21 @@ TEST(GroupBy, FilterArrayLengthMismatchYieldsValueError) {
 
 TEST(GroupBy, FilterArrayAllExcludedYieldsValueError) {
   const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE})");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(GroupBy, FilterArrayWholeColumnRangePopulatedInOneRowIsValueError) {
+  // C:E is declared 2D (every row x 3 columns) even though only row 1 is
+  // populated; the walked array (1 populated row x 3 cols) must not be
+  // misread as a 1D vector just because the populated extent happens to
+  // collapse to one row.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 2, Value::boolean(true));
+  sheet.set_cell_value(0, 3, Value::boolean(true));
+  sheet.set_cell_value(0, 4, Value::boolean(true));
+  const Value v = EvalSrcIn("=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, , C:E)", wb, sheet);
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

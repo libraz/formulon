@@ -115,8 +115,17 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
     return false;
   }
   // `vector` must be 1D in either orientation; a 2D rectangle is rejected
-  // here (the WRAP family is for vectors only).
-  if (arr->rows != 1U && arr->cols != 1U) {
+  // here (the WRAP family is for vectors only). Decide 1D-ness from the
+  // argument's DECLARED shape when it is a static reference, not from the
+  // walked array `resolve_array_value` returns: a whole-column/whole-row
+  // reference spanning several columns but populated in only one row
+  // walks as a 1-row array, which would misread it as a vector even
+  // though its declared shape is 2D. Mirrors the same rule IFS / XLOOKUP /
+  // MATCH / LOOKUP already apply via `declared_range_rect`.
+  std::uint32_t declared_rows = arr->rows;
+  std::uint32_t declared_cols = arr->cols;
+  (void)static_reference_shape(call.as_call_arg(0), ctx, &declared_rows, &declared_cols);
+  if (declared_rows != 1U && declared_cols != 1U) {
     error_out = Value::error(ErrorCode::Value);
     return false;
   }

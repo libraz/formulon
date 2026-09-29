@@ -366,7 +366,16 @@ bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionR
     return false;
   }
   const std::uint32_t mask_n = (mask->rows >= mask->cols) ? mask->rows : mask->cols;
-  if (mask->rows != 1U && mask->cols != 1U) {
+  // Decide 1D-ness from `node`'s DECLARED shape when it is a static
+  // reference, not from the walked array `read_array_arg` returns: a
+  // multi-column whole reference populated in only one row walks as a
+  // 1-row array, which would misread it as a vector even though its
+  // declared shape is 2D. Mirrors the same rule IFS / XLOOKUP / MATCH /
+  // LOOKUP already apply via `declared_range_rect`.
+  std::uint32_t declared_rows = mask->rows;
+  std::uint32_t declared_cols = mask->cols;
+  (void)static_reference_shape(node, ctx, &declared_rows, &declared_cols);
+  if (declared_rows != 1U && declared_cols != 1U) {
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }

@@ -831,6 +831,25 @@ TEST(BuiltinsWrapcols, TwoDimensionalSourceReturnsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsWrapcols, WholeColumnRangePopulatedInOneRowIsStillTwoDimensional) {
+  // A:C is declared 2D (every row x 3 columns) even though only row 1 is
+  // populated; the walked array (1 populated row x 3 cols) must not be
+  // misread as a 1D vector just because the populated extent happens to
+  // collapse to one row.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1));
+  sheet.set_cell_value(0, 1, Value::number(2));
+  sheet.set_cell_value(0, 2, Value::number(3));
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=WRAPCOLS(A:C, 2)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsWrapcols, ExplicitPadValueIsUsed) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
