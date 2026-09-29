@@ -115,6 +115,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/eval_state_test.cpp
   unit/eval/dep_graph_test.cpp
   unit/eval/dep_extractor_test.cpp
+  unit/eval/dynamic_reference_deps_test.cpp
   unit/eval/dirty_set_test.cpp
   unit/eval/iterative_progress_test.cpp
   unit/eval/iterative_solver_test.cpp

@@ -112,7 +112,9 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
     std::uint32_t right = 0;
     bool is_range = false;
     ErrorCode err = ErrorCode::Value;
-    if (resolve_reference_call(arg_node, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+    // Only the shape is read, so the reference is no read of its cells.
+    if (resolve_reference_call(arg_node, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left,
+                               &bottom, &right, &is_range, &err)) {
       *out_rows = bottom - top + 1U;
       *out_cols = right - left + 1U;
       return true;
@@ -330,7 +332,8 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     std::uint32_t bottom = 0;
     std::uint32_t right = 0;
     ErrorCode err = ErrorCode::Value;
-    if (!resolve_reference_rect(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
+    if (!resolve_reference_rect(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left, &bottom,
+                                &right, &err)) {
       return Value::error(err);
     }
     return index_array(top, left, bottom, right);
@@ -346,7 +349,8 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     std::uint32_t right = 0;
     bool is_range = false;
     ErrorCode err = ErrorCode::Value;
-    if (resolve_reference_call(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+    if (resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left, &bottom,
+                               &right, &is_range, &err)) {
       if (is_range && !strings::case_insensitive_eq(arg.as_call_name(), "INDIRECT")) {
         return index_array(top, left, bottom, right);
       }

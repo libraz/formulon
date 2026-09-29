@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -18,6 +19,7 @@
 #include "eval/dep_extractor.h"
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
+#include "eval/dynamic_read_log.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_reentry.h"
@@ -244,6 +246,133 @@ DepGraph::DependencyDelta RecalcEngine::reconcile_spill_dependencies_locked(cons
   return graph_.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, desired);
 }
 
+std::vector<CellNodeId> RecalcEngine::reconcile_dynamic_reads_locked(
+    const Workbook& workbook, const DynamicReadLog& log, const std::unordered_set<CellNodeId, CellNodeIdHash>* closure,
+    std::unordered_set<CellNodeId, CellNodeIdHash>& refreshed) {
+  for (const auto& [reader, ordinal] : log.readers()) {
+    (void)ordinal;
+    // Edges accumulate across the waves of one recalc call, so a reader that
+    // is retried keeps ordering its targets in later waves.
+    if (refreshed.insert(reader).second) {
+      graph_.clear_dynamic_dependencies_of(reader);
+    }
+  }
+  std::vector<CellNodeId> stale;
+  std::unordered_set<CellNodeId, CellNodeIdHash> stale_seen;
+  std::vector<std::vector<SpillFootprint>> footprints(workbook.sheet_count());
+  std::vector<char> footprints_loaded(workbook.sheet_count(), 0);
+  for (const DynamicRead& read : log.reads()) {
+    const std::size_t sheet_id = read.sheet_id;
+    if (sheet_id >= workbook.sheet_count()) {
+      continue;
+    }
+    const Sheet& sheet = workbook.sheet(sheet_id);
+    const auto target_sheet = static_cast<std::uint16_t>(sheet_id);
+    std::vector<CellNodeId> targets;
+    for (const CellAddress& a :
+         sheet.formula_cells_in(read.rect.row_first, read.rect.col_first, read.rect.row_last, read.rect.col_last)) {
+      targets.push_back(CellNodeId{target_sheet, a.row, a.col});
+    }
+    // A phantom cell of a committed spill reads its anchor's result.
+    if (footprints_loaded[sheet_id] == 0) {
+      footprints[sheet_id] = sheet.committed_spill_footprints();
+      footprints_loaded[sheet_id] = 1;
+    }
+    const CellRangeDependency range{target_sheet, read.rect.row_first, read.rect.row_last, read.rect.col_first,
+                                    read.rect.col_last};
+    for (const SpillFootprint& footprint : footprints[sheet_id]) {
+      if (spill_intersects_range(footprint, range)) {
+        targets.push_back(CellNodeId{target_sheet, footprint.anchor_row, footprint.anchor_col});
+      }
+    }
+    const std::optional<std::uint64_t> reader_component = log.iterative_component(read.reader);
+    for (const CellNodeId target : targets) {
+      graph_.add_dynamic_dependency(read.reader, target);
+      if (stale_seen.count(read.reader) != 0U) {
+        continue;
+      }
+      if (reader_component && log.iterative_component(target) == reader_component) {
+        continue;
+      }
+      const std::optional<std::uint64_t> committed = log.commit_ordinal(target);
+      const bool read_too_early = committed && *committed >= read.ordinal;
+      const bool left_dirty = closure != nullptr && dirty_.contains(target) && !committed;
+      if (read_too_early || left_dirty) {
+        stale_seen.insert(read.reader);
+        stale.push_back(read.reader);
+      }
+    }
+  }
+  std::sort(stale.begin(), stale.end(), CellNodeIdOrder{});
+  return stale;
+}
+
+RecalcEngine::DynamicReadPass::DynamicReadPass(RecalcEngine& engine, const Workbook& workbook)
+    : engine_(engine), workbook_(workbook), log_(workbook, engine.volatiles_, engine.graph_) {}
+
+void RecalcEngine::DynamicReadPass::settle_sccs(std::vector<std::vector<CellNodeId>>& sccs,
+                                                const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) {
+  if (first_wave_ && engine_.drop_dynamic_only_cycles_locked(sccs)) {
+    sccs = engine_.graph_.tarjan_scc_subset(nodes);
+  }
+}
+
+const std::vector<CellNodeId>& RecalcEngine::DynamicReadPass::end_wave(
+    const std::unordered_set<CellNodeId, CellNodeIdHash>* closure) {
+  stale_ = engine_.reconcile_dynamic_reads_locked(workbook_, log_, closure, refreshed_);
+  log_.clear_wave();
+  first_wave_ = false;
+  return stale_;
+}
+
+void RecalcEngine::DynamicReadPass::mark_stale_dirty() {
+  for (const CellNodeId reader : stale_) {
+    engine_.dirty_.mark(reader);
+  }
+}
+
+void RecalcEngine::commit_unresolved_cycle_locked(Workbook& workbook, const std::vector<CellNodeId>& component,
+                                                  DynamicReadPass& dynamic, SpillReleaseCallback release_callback,
+                                                  void* release_user_data, RecalcStats& stats) {
+  // Excel shows a warning and leaves the cells as they were; with no UI to
+  // host that banner Formulon surfaces #REF!, keeping Excel's last value
+  // only for a cycle through an OFFSET / INDIRECT read.
+  const bool dynamic_cycle = closes_through_dynamic_edge(component, graph_);
+  const std::uint64_t ordinal = dynamic.next_ordinal();
+  if (dynamic_cycle) {
+    dynamic.log().restore_prior_values(workbook, component);
+  }
+  for (const CellNodeId c : component) {
+    if (c.sheet_id >= workbook.sheet_count()) {
+      continue;  // A virtual range node.
+    }
+    if (!dynamic_cycle) {
+      Sheet& sheet = workbook.sheet(c.sheet_id);
+      SpillCommitter committer(&sheet, c.row, c.col, release_callback, release_user_data);
+      sheet.set_cell_cached_value(c.row, c.col, committer.commit(Value::error(ErrorCode::Ref)));
+    }
+    dynamic.log().note_commit(c, ordinal);
+    ++stats.cycle_cells;
+  }
+}
+
+bool RecalcEngine::drop_dynamic_only_cycles_locked(const std::vector<std::vector<CellNodeId>>& sccs) {
+  if (!graph_.has_source_edges(DepGraph::DependencySource::kDynamicReference)) {
+    return false;
+  }
+  bool dropped = false;
+  for (const std::vector<CellNodeId>& component : sccs) {
+    if (!is_cyclic_component(component, graph_) || !closes_through_dynamic_edge(component, graph_)) {
+      continue;
+    }
+    for (const CellNodeId member : component) {
+      graph_.clear_dynamic_dependencies_of(member);
+    }
+    dropped = true;
+  }
+  return dropped;
+}
+
 // ---------------------------------------------------------------------------
 // Public mutating API: each entry acquires `mutex_` and delegates to the
 // `_locked` body. Internal callers (notably the parallel scheduler) take
@@ -421,6 +550,7 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
   std::vector<BlockedSpillState> previous_release_state;
   std::vector<CellNodeId> previous_release_targets;
   bool have_previous_release_state = false;
+  DynamicReadPass dynamic(*this, workbook);
 
   // Per-wave locals begin after this label and are destroyed on the backward
   // jump, while the counters, queue, and accumulated stats above persist.
@@ -473,7 +603,8 @@ recalc_next_wave:
   std::unordered_set<CellNodeId, CellNodeIdHash> dirty_nodes;
   dirty_nodes.reserve(dirty_.size());
   dirty_.for_each([&](CellNodeId c) { dirty_nodes.insert(c); });
-  const std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_nodes);
+  std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_nodes);
+  dynamic.settle_sccs(sccs, dirty_nodes);
 
   // Index sheet pointers once so we can resolve `CellNodeId::sheet_id` to
   // a `Sheet*` without a per-cell lookup. Workbook sheet count is small
@@ -510,20 +641,7 @@ recalc_next_wave:
       }
 
       if (!iterative_.enabled) {
-        // Cycle SCC, iterative calc disabled: surface #REF! on every
-        // member. Excel's analogous behaviour pops a warning dialog and
-        // leaves cells at zero; Formulon collapses the diagnostic into
-        // an Excel-visible error sentinel since we have no UI to host a
-        // banner.
-        for (CellNodeId c : component) {
-          if (c.sheet_id >= sheet_count) {
-            continue;  // Defensive — should not happen.
-          }
-          Sheet& sheet = workbook.sheet(c.sheet_id);
-          SpillCommitter committer(&sheet, c.row, c.col, release_callback, &release_queue);
-          sheet.set_cell_cached_value(c.row, c.col, committer.commit(Value::error(ErrorCode::Ref)));
-          ++stats.cycle_cells;
-        }
+        commit_unresolved_cycle_locked(workbook, component, dynamic, release_callback, &release_queue, stats);
         continue;
       }
 
@@ -539,6 +657,7 @@ recalc_next_wave:
       // into this buffer, and the solver consumes each result before asking
       // for the next one (which resets the arena).
       Cell staged;
+      const std::uint64_t component_ordinal = dynamic.next_ordinal();
       auto evaluate_one = [&](CellNodeId c) -> Value {
         if (c.sheet_id >= sheet_count) {
           return Value::error(ErrorCode::Ref);
@@ -560,7 +679,11 @@ recalc_next_wave:
         EvaluateCellOptions opts;
         opts.spill_release_callback = release_callback;
         opts.spill_release_user_data = &release_queue;
-        return evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
+        dynamic.log().observe(c, component_ordinal, opts, nullptr);
+        dynamic.log().note_iterative_member(c, component_ordinal);
+        Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
+        dynamic.log().end();
+        return result;
       };
       auto commit = [&](CellNodeId c, Value v) {
         if (c.sheet_id >= sheet_count) {
@@ -568,9 +691,13 @@ recalc_next_wave:
         }
         Sheet& sheet = workbook.sheet(c.sheet_id);
         sheet.set_cell_cached_value(c.row, c.col, v);
+        dynamic.log().note_commit(c, component_ordinal);
       };
 
       const std::vector<CellNodeId> cells = cells_of_component(component);
+      // A reader first evaluated as a singleton in this recalc has already
+      // stepped once; the solver starts from the value it showed before.
+      dynamic.log().restore_prior_values(workbook, cells);
       const IterativeOutcome outcome =
           run_iterative_solve(cells, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
       if (arena_->exhausted()) {
@@ -622,11 +749,15 @@ recalc_next_wave:
     EvaluateCellOptions opts;
     opts.spill_release_callback = release_callback;
     opts.spill_release_user_data = &release_queue;
+    const std::uint64_t ordinal = dynamic.next_ordinal();
+    dynamic.log().observe(only, ordinal, opts, &sheet);
     Value result = evaluate_cell_for_recalc(workbook, sheet, staged, only.row, only.col, registry, *arena_, opts);
+    dynamic.log().end();
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
     }
     sheet.set_cell_cached_value(only.row, only.col, result);
+    dynamic.log().note_commit(only, ordinal);
     ++stats.cells_evaluated;
   }
 
@@ -652,11 +783,15 @@ recalc_next_wave:
     EvaluateCellOptions opts;
     opts.spill_release_callback = release_callback;
     opts.spill_release_user_data = &release_queue;
+    const std::uint64_t ordinal = dynamic.next_ordinal();
+    dynamic.log().observe(c, ordinal, opts, &sheet);
     Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
+    dynamic.log().end();
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
     }
     sheet.set_cell_cached_value(c.row, c.col, result);
+    dynamic.log().note_commit(c, ordinal);
     ++stats.cells_evaluated;
   }
 
@@ -666,7 +801,10 @@ recalc_next_wave:
   // throughout the current wave, so a producer shrink still dirties and
   // orders its watcher correctly.
   const DepGraph::DependencyDelta dependency_delta = reconcile_spill_dependencies_locked(workbook);
-  const bool dependency_retry = !dependency_delta.added.empty();
+  // A reader that saw a target before its final value (or itself) runs
+  // again behind the edge it just taught the graph.
+  const bool dynamic_retry = !dynamic.end_wave(nullptr).empty();
+  const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
   if (dependency_retry) {
     ++dependency_waves;
     for (const DepGraph::Edge& edge : dependency_delta.added) {
@@ -700,8 +838,8 @@ recalc_next_wave:
       // release targets dirty for a caller retry after an external mutation.
       const LockedMutator mutator = locked_mutator();
       mark_spill_release_wave(mutator, released, graph_);
-      return make_error(FormulonErrorCode::kGraphScheduleFailed, "spill release waves made no progress",
-                        "dynamic-array spill recovery exceeded its bounded wave budget");
+      return make_error(FormulonErrorCode::kGraphScheduleFailed, "recalc waves made no progress",
+                        "spill recovery or dynamic-reference retries exceeded the bounded wave budget");
     }
     dirty_.clear();
     const LockedMutator mutator = locked_mutator();
@@ -709,6 +847,7 @@ recalc_next_wave:
     for (const DepGraph::Edge& edge : dependency_delta.added) {
       mutator.mark_dirty(edge.first);
     }
+    dynamic.mark_stale_dirty();
     goto recalc_next_wave;
   }
 
@@ -742,6 +881,7 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   std::vector<BlockedSpillState> previous_release_state;
   std::vector<CellNodeId> previous_release_targets;
   bool have_previous_release_state = false;
+  DynamicReadPass dynamic(*this, workbook);
 
   // ---- Phase 0: validate the viewport. ----
   // Empty viewport — collapsed row / column range, or unknown sheet —
@@ -955,7 +1095,8 @@ partial_recalc_next_wave:
       dirty_closure.insert(c);
     }
   });
-  const std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_closure);
+  std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_closure);
+  dynamic.settle_sccs(sccs, dirty_closure);
   std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
   for (const std::vector<CellNodeId>& component : sccs) {
     // Skip components that have no overlap with the closure: their
@@ -993,15 +1134,7 @@ partial_recalc_next_wave:
       }
 
       if (!iterative_.enabled) {
-        for (CellNodeId c : component) {
-          if (c.sheet_id >= sheet_count) {
-            continue;
-          }
-          Sheet& sheet = workbook.sheet(c.sheet_id);
-          SpillCommitter committer(&sheet, c.row, c.col, release_callback, &release_queue);
-          sheet.set_cell_cached_value(c.row, c.col, committer.commit(Value::error(ErrorCode::Ref)));
-          ++stats.cycle_cells;
-        }
+        commit_unresolved_cycle_locked(workbook, component, dynamic, release_callback, &release_queue, stats);
         continue;
       }
 
@@ -1010,6 +1143,7 @@ partial_recalc_next_wave:
       // string literal in the formula surfaces in the result as a view
       // into them.
       Cell staged;
+      const std::uint64_t component_ordinal = dynamic.next_ordinal();
       auto evaluate_one = [&](CellNodeId c) -> Value {
         if (c.sheet_id >= sheet_count) {
           return Value::error(ErrorCode::Ref);
@@ -1022,7 +1156,11 @@ partial_recalc_next_wave:
         EvaluateCellOptions opts;
         opts.spill_release_callback = release_callback;
         opts.spill_release_user_data = &release_queue;
-        return evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
+        dynamic.log().observe(c, component_ordinal, opts, nullptr);
+        dynamic.log().note_iterative_member(c, component_ordinal);
+        Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
+        dynamic.log().end();
+        return result;
       };
       auto commit = [&](CellNodeId c, Value v) {
         if (c.sheet_id >= sheet_count) {
@@ -1030,9 +1168,11 @@ partial_recalc_next_wave:
         }
         Sheet& sheet = workbook.sheet(c.sheet_id);
         sheet.set_cell_cached_value(c.row, c.col, v);
+        dynamic.log().note_commit(c, component_ordinal);
       };
 
       const std::vector<CellNodeId> cells = cells_of_component(component);
+      dynamic.log().restore_prior_values(workbook, cells);
       const IterativeOutcome outcome =
           run_iterative_solve(cells, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
       if (arena_->exhausted()) {
@@ -1068,11 +1208,15 @@ partial_recalc_next_wave:
     EvaluateCellOptions opts;
     opts.spill_release_callback = release_callback;
     opts.spill_release_user_data = &release_queue;
+    const std::uint64_t ordinal = dynamic.next_ordinal();
+    dynamic.log().observe(only, ordinal, opts, &sheet);
     Value result = evaluate_cell_for_recalc(workbook, sheet, staged, only.row, only.col, registry, *arena_, opts);
+    dynamic.log().end();
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
     }
     sheet.set_cell_cached_value(only.row, only.col, result);
+    dynamic.log().note_commit(only, ordinal);
     ++stats.cells_evaluated;
   }
 
@@ -1099,11 +1243,15 @@ partial_recalc_next_wave:
     EvaluateCellOptions opts;
     opts.spill_release_callback = release_callback;
     opts.spill_release_user_data = &release_queue;
+    const std::uint64_t ordinal = dynamic.next_ordinal();
+    dynamic.log().observe(c, ordinal, opts, &sheet);
     Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
+    dynamic.log().end();
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
     }
     sheet.set_cell_cached_value(c.row, c.col, result);
+    dynamic.log().note_commit(c, ordinal);
     ++stats.cells_evaluated;
   }
 
@@ -1116,6 +1264,14 @@ partial_recalc_next_wave:
   for (const DepGraph::Edge& edge : dependency_delta.added) {
     dirty_.mark(edge.first);
     if (closure.count(edge.first) != 0U) {
+      dependency_retry_in_closure = true;
+    }
+  }
+  // Judged before the closure is unmarked, so a target this viewport left
+  // dirty still reads as unevaluated.
+  const std::vector<CellNodeId>& stale_readers = dynamic.end_wave(&closure);
+  for (const CellNodeId reader : stale_readers) {
+    if (closure.count(reader) != 0U) {
       dependency_retry_in_closure = true;
     }
   }
@@ -1140,6 +1296,7 @@ partial_recalc_next_wave:
       dirty_.mark(edge.first);
     }
   }
+  dynamic.mark_stale_dirty();
 
   // A committed spill can release a pending producer while this viewport is
   // being evaluated. Preserve releases outside the closure for a later full
@@ -1176,8 +1333,8 @@ partial_recalc_next_wave:
       }
       if (release_waves > kMaxSpillReleaseWaves || dependency_waves > kMaxSpillReleaseWaves ||
           (!released.empty() && no_progress_waves >= kMaxNoProgressSpillWaves)) {
-        return make_error(FormulonErrorCode::kGraphScheduleFailed, "spill release waves made no progress",
-                          "partial dynamic-array spill recovery exceeded its bounded wave budget");
+        return make_error(FormulonErrorCode::kGraphScheduleFailed, "recalc waves made no progress",
+                          "partial spill recovery or dynamic-reference retries exceeded the bounded wave budget");
       }
       goto partial_recalc_next_wave;
     }

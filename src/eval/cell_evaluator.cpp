@@ -67,6 +67,7 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
                         .with_pinned_now(workbook.pinned_now())
                         .with_mutable_sheet(sheet)
                         .with_spill_release_callback(opts.spill_release_callback, opts.spill_release_user_data)
+                        .with_dynamic_read_callback(opts.dynamic_read_callback, opts.dynamic_read_user_data)
                         .with_formula_cell(row, col);
   // The recalc engine owns iterative-calc resolution (SCC detection + the
   // iterative solver). Each per-cell evaluation it issues must be a single

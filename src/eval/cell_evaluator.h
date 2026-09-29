@@ -20,6 +20,7 @@
 
 #include <cstdint>
 
+#include "eval/eval_context.h"
 #include "eval/spill_committer.h"
 #include "value.h"
 
@@ -39,6 +40,9 @@ class FunctionRegistry;
 struct EvaluateCellOptions {
   SpillReleaseCallback spill_release_callback = nullptr;
   void* spill_release_user_data = nullptr;
+  /// Observer of the rectangles OFFSET / INDIRECT resolve to.
+  DynamicReadCallback dynamic_read_callback = nullptr;
+  void* dynamic_read_user_data = nullptr;
 };
 
 /// Copies the formula cell at `(row, col)` out of `sheet` into `staged`,

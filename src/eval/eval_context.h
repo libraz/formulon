@@ -23,6 +23,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include "eval/declared_rect.h"
@@ -50,6 +51,12 @@ class EvalState;
 class FunctionRegistry;
 class NameEnv;
 struct DefinedNameFrame;
+
+/// Observes a rectangle an OFFSET / INDIRECT resolved to while a formula
+/// ran. `sheet` is the reference's qualifier as written, empty for the
+/// formula's own sheet. Recalc uses it to learn the cells such a formula
+/// read, which its formula text cannot tell.
+using DynamicReadCallback = void (*)(void* user_data, std::string_view sheet, const DeclaredRect& rect);
 
 /// How far every whole-axis reference among one call's arguments is walked:
 /// `rows` cells down a whole-column span, `cols` cells across a whole-row
@@ -515,6 +522,26 @@ class EvalContext {
     return copy;
   }
 
+  /// Installs the recalc-owned observer of OFFSET / INDIRECT reads.
+  EvalContext with_dynamic_read_callback(DynamicReadCallback callback, void* user_data) const noexcept {
+    EvalContext copy = *this;
+    copy.dynamic_read_callback_ = callback;
+    copy.dynamic_read_user_data_ = user_data;
+    return copy;
+  }
+
+  /// Drops the OFFSET / INDIRECT read observer, for a caller that consumes
+  /// only the shape or position of the resolved reference.
+  EvalContext without_dynamic_read_callback() const noexcept { return with_dynamic_read_callback(nullptr, nullptr); }
+
+  /// Reports a rectangle an OFFSET / INDIRECT resolved to; no-op without an
+  /// observer.
+  void note_dynamic_read(std::string_view sheet, const DeclaredRect& rect) const {
+    if (dynamic_read_callback_ != nullptr) {
+      dynamic_read_callback_(dynamic_read_user_data_, sheet, rect);
+    }
+  }
+
   /// Returns the 0-based row of the formula cell that owns the currently
   /// evaluated expression, or `kNoFormulaCell` when no cell is bound (e.g.
   /// ad-hoc expression evaluation in the CLI).
@@ -611,6 +638,8 @@ class EvalContext {
   Sheet* mutable_sheet_ = nullptr;
   SpillReleaseCallback spill_release_callback_ = nullptr;
   void* spill_release_user_data_ = nullptr;
+  DynamicReadCallback dynamic_read_callback_ = nullptr;
+  void* dynamic_read_user_data_ = nullptr;
   std::uint32_t formula_row_ = kNoFormulaCell;
   std::uint32_t formula_col_ = kNoFormulaCell;
   // Non-owning pointers to caller-stack-allocated depth counters. The

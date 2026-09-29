@@ -25,6 +25,7 @@
 
 #include "eval/a1_parse.h"
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
@@ -612,6 +613,8 @@ bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const
     out->right_col = parsed.col;
     out->is_range = false;
   }
+  ctx.note_dynamic_read(out->sheet, DeclaredRect{out->top_row, out->bottom_row, out->left_col, out->right_col,
+                                                 /*whole_axis=*/out->is_full_col || out->is_full_row});
   return true;
 }
 
@@ -711,7 +714,8 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
   }
   if (k == parser::NodeKind::Call) {
     // Nested INDIRECT / OFFSET as OFFSET's base: resolve to a rectangle
-    // without dereferencing, then adopt it as the base shape.
+    // without dereferencing, then adopt it as the base shape. Only its
+    // position is used, so it is no read of its cells.
     std::string_view sheet;
     std::uint32_t top = 0;
     std::uint32_t left = 0;
@@ -719,7 +723,8 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
     std::uint32_t right = 0;
     bool is_range = false;
     ErrorCode err = ErrorCode::Value;
-    if (!resolve_reference_call(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+    if (!resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left, &bottom,
+                                &right, &is_range, &err)) {
       *out_err = err;
       return false;
     }
@@ -863,6 +868,8 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
   *out_left_col = static_cast<std::uint32_t>(left_col);
   *out_height = abs_height;
   *out_width = abs_width;
+  ctx.note_dynamic_read(out_base->sheet, DeclaredRect{*out_top_row, *out_top_row + abs_height - 1U, *out_left_col,
+                                                      *out_left_col + abs_width - 1U, /*whole_axis=*/false});
   return true;
 }
 

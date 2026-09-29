@@ -24,6 +24,7 @@
 #include "eval/cell_evaluator.h"
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
+#include "eval/dynamic_read_log.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -194,18 +195,48 @@ struct SccOutcome {
   bool arena_exhausted = false;
 };
 
+// How a component's OFFSET / INDIRECT reads are observed. Only components
+// run on the calling thread carry a log; pooled ones hold no observed cell
+// (see the isolation split in `recalc_parallel_impl`).
+struct ReadObservation {
+  DynamicReadLog* log = nullptr;
+  std::uint64_t ordinal = 0U;
+
+  void observe(CellNodeId cell, EvaluateCellOptions& opts, const Sheet* sheet) const {
+    if (log != nullptr) {
+      log->observe(cell, ordinal, opts, sheet);
+    }
+  }
+  void note_commit(CellNodeId cell) const {
+    if (log != nullptr) {
+      log->note_commit(cell, ordinal);
+    }
+  }
+};
+
 SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, const DepGraph& graph,
                        const FunctionRegistry& registry, const IterativeOptions& iter_opts, Arena& arena,
                        IterativeProgressCb progress_cb, void* progress_user_data, std::mutex& write_mutex,
-                       SpillReleaseCallback release_callback, void* release_user_data) {
+                       SpillReleaseCallback release_callback, void* release_user_data, const ReadObservation& obs) {
   SccOutcome out;
   const std::size_t sheet_count = wb.sheet_count();
 
   if (is_cyclic_component(component, graph)) {
     if (!iter_opts.enabled) {
-      // Cycle SCC, iterative calc disabled: every member surfaces #REF!.
+      // Cycle SCC, iterative calc disabled: every member surfaces #REF!,
+      // except that a cycle closing through an OFFSET / INDIRECT read keeps
+      // its members at their last value, as Excel does.
+      const bool dynamic_cycle = obs.log != nullptr && closes_through_dynamic_edge(component, graph);
+      if (dynamic_cycle) {
+        std::lock_guard<std::mutex> guard(write_mutex);
+        obs.log->restore_prior_values(wb, component);
+      }
       for (CellNodeId c : component) {
         if (c.sheet_id >= sheet_count) {
+          continue;
+        }
+        obs.note_commit(c);
+        if (dynamic_cycle) {
           continue;
         }
         Sheet& sheet = wb.sheet(c.sheet_id);
@@ -240,7 +271,15 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       EvaluateCellOptions opts;
       opts.spill_release_callback = release_callback;
       opts.spill_release_user_data = release_user_data;
-      return evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
+      obs.observe(c, opts, nullptr);
+      if (obs.log != nullptr) {
+        obs.log->note_iterative_member(c, obs.ordinal);
+      }
+      Value result = evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
+      if (obs.log != nullptr) {
+        obs.log->end();
+      }
+      return result;
     };
     auto commit = [&](CellNodeId c, Value v) {
       if (c.sheet_id >= sheet_count) {
@@ -249,9 +288,16 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       Sheet& sheet = wb.sheet(c.sheet_id);
       std::lock_guard<std::mutex> guard(write_mutex);
       sheet.set_cell_cached_value(c.row, c.col, v);
+      obs.note_commit(c);
     };
 
     const std::vector<CellNodeId> cells = cells_of_component(component);
+    if (obs.log != nullptr) {
+      // A reader already evaluated as a singleton in this recalc starts the
+      // solve from the value it showed before.
+      std::lock_guard<std::mutex> guard(write_mutex);
+      obs.log->restore_prior_values(wb, cells);
+    }
     const IterativeOutcome outcome =
         run_iterative_solve(cells, iter_opts, evaluate_one, commit, progress_cb, progress_user_data);
     if (arena.exhausted()) {
@@ -282,7 +328,11 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
   EvaluateCellOptions opts;
   opts.spill_release_callback = release_callback;
   opts.spill_release_user_data = release_user_data;
+  obs.observe(only, opts, &sheet);
   Value result = evaluate_cell_for_recalc(wb, sheet, staged, only.row, only.col, registry, arena, opts);
+  if (obs.log != nullptr) {
+    obs.log->end();
+  }
   if (arena.exhausted()) {
     out.arena_exhausted = true;
     return out;
@@ -291,6 +341,7 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
     std::lock_guard<std::mutex> guard(write_mutex);
     sheet.set_cell_cached_value(only.row, only.col, result);
   }
+  obs.note_commit(only);
   ++out.cells_evaluated;
   return out;
 }
@@ -347,7 +398,7 @@ void worker_loop(std::size_t worker_id, LayerWork* work) {
     (*work->outcomes)[idx] =
         process_scc((*work->components)[(*work->tasks)[idx]], *work->wb, *work->graph, *work->registry,
                     *work->iter_opts, arena, work->progress_cb, work->progress_user_data, *work->write_mutex,
-                    work->release_callback, work->release_user_data);
+                    work->release_callback, work->release_user_data, ReadObservation{});
   }
 }
 
@@ -569,6 +620,14 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   std::unique_ptr<LayerWorkerPool> worker_pool;
   ThreadArenas arenas = make_thread_arenas(1U, cfg.max_arena_bytes);
   std::mutex write_mutex;
+  // OFFSET / INDIRECT reads observed on the calling thread, as in the serial
+  // pass. Ordinals are `layer << 32 | position`: a layer's pooled
+  // components share position 0 because every one of them has committed
+  // before the calling thread evaluates the layer's observed readers.
+  RecalcEngine::DynamicReadPass dynamic(engine, wb);
+  const auto observation = [&](std::size_t layer, std::size_t position) {
+    return ReadObservation{&dynamic.log(), (static_cast<std::uint64_t>(layer) << 32U) | position};
+  };
   const auto mark_release_targets_dirty = [&](const std::vector<CellNodeId>& anchors) {
     for (const CellNodeId anchor : anchors) {
       engine.dirty_.mark(anchor);
@@ -621,7 +680,8 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     std::unordered_set<CellNodeId, CellNodeIdHash> dirty_nodes;
     dirty_nodes.reserve(engine.dirty_.size());
     engine.dirty_.for_each([&](CellNodeId c) { dirty_nodes.insert(c); });
-    const std::vector<std::vector<CellNodeId>> dirty_sccs = engine.graph_.tarjan_scc_subset(dirty_nodes);
+    std::vector<std::vector<CellNodeId>> dirty_sccs = engine.graph_.tarjan_scc_subset(dirty_nodes);
+    dynamic.settle_sccs(dirty_sccs, dirty_nodes);
     scc_nodes_considered += dirty_nodes.size();
 
     // Assign condensed-graph indices. Every emitted component is dirty by
@@ -643,7 +703,8 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     const IterativeProgressCb progress_cb = engine.progress_cb_;
     void* const progress_user_data = engine.progress_user_data_;
 
-    for (const std::vector<std::size_t>& layer : layers) {
+    for (std::size_t layer_index = 0U; layer_index < layers.size(); ++layer_index) {
+      const std::vector<std::size_t>& layer = layers[layer_index];
       sccs_processed += layer.size();
 
       // A progress callback is user code and must stay on the caller. It is
@@ -678,14 +739,15 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       // property: the result changes every pass, but every cell read is
       // still described by an edge, so the layering is complete and those
       // super-nodes stay poolable. Only the dynamic-reference class loses
-      // parallelism.
+      // parallelism. Running them on the calling thread is also what lets
+      // their reads be observed without a per-worker log.
       std::vector<std::size_t> pooled;
       std::vector<std::size_t> isolated;
       pooled.reserve(layer.size());
       for (const std::size_t scc_id : layer) {
         bool dynamic_reference_bearing = false;
         for (const CellNodeId member : idx.components[scc_id]) {
-          if (engine.volatiles_.contains_dynamic_reference(member)) {
+          if (dynamic.log().observes(member)) {
             dynamic_reference_bearing = true;
             break;
           }
@@ -714,10 +776,11 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         // Tiny layer or single-worker mode: process serially on this thread.
         ++serial_fallback_steps;
         Arena& arena = *arenas[0U];
-        for (std::size_t scc_id : layer) {
-          const SccOutcome o =
-              process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena, progress_cb,
-                          progress_user_data, write_mutex, release_callback, &release_queue);
+        for (std::size_t position = 0U; position < layer.size(); ++position) {
+          const std::size_t scc_id = layer[position];
+          const SccOutcome o = process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena,
+                                           progress_cb, progress_user_data, write_mutex, release_callback,
+                                           &release_queue, observation(layer_index, position + 1U));
           if (o.arena_exhausted) {
             return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
           }
@@ -754,6 +817,11 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         cells_evaluated += o.cells_evaluated;
         cycle_recoveries += o.cycle_recoveries;
       }
+      for (const std::size_t scc_id : pooled) {
+        for (const CellNodeId member : idx.components[scc_id]) {
+          observation(layer_index, 0U).note_commit(member);
+        }
+      }
       ++parallel_steps;
 
       // `run()` returned, so every worker is back at the barrier and the
@@ -762,10 +830,11 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       if (!isolated.empty()) {
         ++serial_fallback_steps;
         Arena& arena = *arenas[0U];
-        for (const std::size_t scc_id : isolated) {
-          const SccOutcome o =
-              process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena, progress_cb,
-                          progress_user_data, write_mutex, release_callback, &release_queue);
+        for (std::size_t position = 0U; position < isolated.size(); ++position) {
+          const std::size_t scc_id = isolated[position];
+          const SccOutcome o = process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena,
+                                           progress_cb, progress_user_data, write_mutex, release_callback,
+                                           &release_queue, observation(layer_index, position + 1U));
           if (o.arena_exhausted) {
             return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
           }
@@ -787,7 +856,8 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     if (!standalone_dirty.empty()) {
       Arena& arena = *arenas[0U];
       const std::size_t sheet_count = wb.sheet_count();
-      for (CellNodeId c : standalone_dirty) {
+      for (std::size_t position = 0U; position < standalone_dirty.size(); ++position) {
+        const CellNodeId c = standalone_dirty[position];
         if (c.sheet_id >= sheet_count) {
           continue;
         }
@@ -800,11 +870,15 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         EvaluateCellOptions opts;
         opts.spill_release_callback = release_callback;
         opts.spill_release_user_data = &release_queue;
+        const ReadObservation obs = observation(layers.size(), position + 1U);
+        obs.observe(c, opts, &sheet);
         Value result = evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
+        dynamic.log().end();
         if (arena.exhausted()) {
           return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
         }
         sheet.set_cell_cached_value(c.row, c.col, result);
+        obs.note_commit(c);
         ++cells_evaluated;
         ++sccs_processed;  // Treat a standalone formula as its own component.
       }
@@ -812,7 +886,10 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     }
 
     const DepGraph::DependencyDelta dependency_delta = engine.reconcile_spill_dependencies_locked(wb);
-    const bool dependency_retry = !dependency_delta.added.empty();
+    // A reader that saw a target before its final value (or itself) runs
+    // again behind the edge it just taught the graph.
+    const bool dynamic_retry = !dynamic.end_wave(nullptr).empty();
+    const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
     if (dependency_retry) {
       ++dependency_waves;
       for (const DepGraph::Edge& edge : dependency_delta.added) {
@@ -842,14 +919,15 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         // retaining the release targets for a caller retry after an
         // external mutation.
         mark_release_targets_dirty(released);
-        return make_error(FormulonErrorCode::kGraphScheduleFailed, "spill release waves made no progress",
-                          "parallel dynamic-array spill recovery exceeded its bounded wave budget");
+        return make_error(FormulonErrorCode::kGraphScheduleFailed, "recalc waves made no progress",
+                          "parallel spill recovery or dynamic-reference retries exceeded the bounded wave budget");
       }
       engine.dirty_.clear();
       mark_release_targets_dirty(released);
       for (const DepGraph::Edge& edge : dependency_delta.added) {
         engine.dirty_.mark(edge.first);
       }
+      dynamic.mark_stale_dirty();
       continue;
     }
 

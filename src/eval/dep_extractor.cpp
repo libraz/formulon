@@ -550,14 +550,16 @@ std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkSt
 
 // Builtins that read only the position or shape of a reference argument,
 // never its values: a static reference there is no dependency, so `=ROW(A1)`
-// in A1 is not circular. CELL / FORMULATEXT / ISFORMULA read the cell and
-// stay out.
+// in A1 is not circular. OFFSET's base only anchors the rectangle it
+// returns, whose cells are recorded when the formula runs. CELL /
+// FORMULATEXT / ISFORMULA read the cell and stay out.
 struct ReferenceOnlyArg {
   std::string_view name;
   std::uint32_t arg_index;
 };
 constexpr ReferenceOnlyArg kReferenceOnlyArgs[] = {
-    {"ROW", 0U}, {"COLUMN", 0U}, {"ROWS", 0U}, {"COLUMNS", 0U}, {"AREAS", 0U}, {"ISREF", 0U}, {"SHEET", 0U},
+    {"ROW", 0U},   {"COLUMN", 0U}, {"ROWS", 0U},  {"COLUMNS", 0U},
+    {"AREAS", 0U}, {"ISREF", 0U},  {"SHEET", 0U}, {"OFFSET", 0U},
 };
 
 bool is_reference_only_arg(std::string_view call_name, std::uint32_t arg_index) {

@@ -548,7 +548,11 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     std::uint32_t col = 0;
     std::string_view sheet;
     Value early_result = Value::blank();
-    if (!resolve_topleft_or_formula_cell(call, arena, registry, ctx, &row, &col, &sheet, &early_result)) {
+    // Only "contents", "type" and "prefix" read the cell's value; the other
+    // keys read the reference's position or the cell's formatting.
+    const bool reads_value = key == "contents" || key == "type" || key == "prefix";
+    if (!resolve_topleft_or_formula_cell(call, arena, registry, reads_value ? ctx : ctx.without_dynamic_read_callback(),
+                                         &row, &col, &sheet, &early_result)) {
       return early_result;
     }
     if (key == "address") {

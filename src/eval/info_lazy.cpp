@@ -273,8 +273,8 @@ Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     std::uint32_t right = 0;
     bool is_range = false;
     ErrorCode err = ErrorCode::Value;
-    return Value::boolean(
-        resolve_reference_call(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err));
+    return Value::boolean(resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet,
+                                                 &top, &left, &bottom, &right, &is_range, &err));
   }
   return Value::boolean(false);
 }

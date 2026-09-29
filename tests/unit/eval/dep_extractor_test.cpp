@@ -134,21 +134,6 @@ TEST(DepExtractor, RandIsVolatile) {
   EXPECT_TRUE(deps.cell_deps.empty());
 }
 
-TEST(DepExtractor, OffsetIsVolatileAndStillVisitsArgRefs) {
-  Workbook wb = Workbook::create();
-  Arena arena;
-  // OFFSET(A1, 1, 1) — A1 is a literal Ref argument. Even though OFFSET
-  // produces a dynamic ref at evaluation time, the literal anchor is a
-  // direct dep at the AST level.
-  const parser::AstNode* root = ParseFormula("OFFSET(A1,1,1)", arena);
-  ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
-  EXPECT_TRUE(deps.is_volatile);
-  // A1 is registered as a static dep of the OFFSET call.
-  EXPECT_EQ(deps.cell_deps.size(), 1u);
-  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
-}
-
 TEST(DepExtractor, ValueVolatileCallsCarryNoDynamicReference) {
   // These read the clock, the RNG or workbook metadata; the cells they
   // read (none, or a reference the caller spelled out) are exactly what
@@ -1186,6 +1171,19 @@ TEST(DepExtractor, OffsetEndpointKeepsDynamicReference) {
   EXPECT_EQ(Sorted(deps.cell_deps), (std::vector<CellNodeId>{CellNodeId{0U, 0U, 0U}}));
   EXPECT_TRUE(deps.range_deps.empty());
   EXPECT_TRUE(deps.has_dynamic_reference);
+}
+
+TEST(DepExtractor, OffsetBaseIsNoRead) {
+  // OFFSET's base only positions the rectangle it returns: `=OFFSET(D2,-1,0)`
+  // in D2 reads D1, not D2, and is not circular (measured on Excel 365).
+  // The offsets and a non-static base are still read.
+  const Workbook wb = Workbook::create();
+  const ExtractedDeps plain = ExtractFrom("OFFSET(A1,1,1)", wb);
+  EXPECT_TRUE(plain.is_volatile);
+  EXPECT_TRUE(plain.has_dynamic_reference);
+  EXPECT_TRUE(plain.cell_deps.empty());
+  EXPECT_EQ(Sorted(ExtractFrom("OFFSET(A1,B1,1)", wb).cell_deps), (std::vector<CellNodeId>{CellNodeId{0U, 0U, 1U}}));
+  EXPECT_EQ(Sorted(ExtractFrom("OFFSET(INDEX(A1:A10,3),1,0)", wb).cell_deps), RectCells(0U, 0U, 9U, 0U, 0U));
 }
 
 TEST(DepExtractor, DynamicEndpointThroughLetBinding) {

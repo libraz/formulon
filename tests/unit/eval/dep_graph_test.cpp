@@ -127,6 +127,44 @@ TEST(DepGraph, SourceProvenancePreservesStaticOverlap) {
   EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kAuthored), 1U);
 }
 
+TEST(DepGraph, DynamicProvenanceCoexistsWithOtherSources) {
+  DepGraph g;
+  const CellNodeId reader = Make(0, 1, 0);
+  const CellNodeId authored = Make(0, 2, 0);
+  const CellNodeId learned = Make(0, 3, 0);
+  g.add_dependency(reader, authored);
+  EXPECT_TRUE(g.add_dynamic_dependency(reader, authored));
+  EXPECT_TRUE(g.add_dynamic_dependency(reader, learned));
+  EXPECT_FALSE(g.add_dynamic_dependency(reader, learned));
+  EXPECT_TRUE(g.has_dynamic_dependencies(reader));
+  EXPECT_FALSE(g.is_dynamic_only_edge(reader, authored));
+  EXPECT_TRUE(g.is_dynamic_only_edge(reader, learned));
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 2U);
+
+  g.clear_dynamic_dependencies_of(reader);
+  EXPECT_FALSE(g.has_dynamic_dependencies(reader));
+  EXPECT_TRUE(g.has_dependency_source(reader, authored, DepGraph::DependencySource::kAuthored));
+  EXPECT_EQ(g.dependencies_of(reader), std::vector<CellNodeId>{authored});
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 0U);
+}
+
+TEST(DepGraph, NodeRemovalPurgesDynamicProvenance) {
+  DepGraph g;
+  const CellNodeId reader = Make(0, 1, 0);
+  const CellNodeId other_reader = Make(0, 4, 0);
+  const CellNodeId target = Make(0, 3, 0);
+  g.add_dynamic_dependency(reader, target);
+  g.add_dynamic_dependency(other_reader, target);
+  g.remove_node(target);
+  EXPECT_FALSE(g.has_dynamic_dependencies(reader));
+  EXPECT_FALSE(g.has_dynamic_dependencies(other_reader));
+  g.add_dynamic_dependency(reader, target);
+  g.clear_dependencies_of(reader);
+  EXPECT_FALSE(g.has_dynamic_dependencies(reader));
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 0U);
+  EXPECT_TRUE(g.empty());
+}
+
 TEST(DepGraph, SourceReplacementIsIdempotentAndRemovesDerivedOnlyEdges) {
   DepGraph g;
   const CellNodeId watcher = Make(0, 1, 0);

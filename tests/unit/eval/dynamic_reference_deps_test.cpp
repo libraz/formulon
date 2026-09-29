@@ -1,0 +1,251 @@
+//
+// Recalculation through references OFFSET and INDIRECT resolve while the
+// formula runs. The circularity rules are measured on Mac Excel 365
+// (16.113.2): ROW / ROWS / ISREF / AREAS on their own cell are not
+// circular, OFFSET / INDIRECT resolving onto their own cell are, and the
+// verdict follows the resolved target; a circular cell keeps its last value.
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "calc_settings.h"
+#include "cell.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
+#include "eval/scheduler.h"
+#include "gtest/gtest.h"
+#include "sheet.h"
+#include "value.h"
+#include "workbook.h"
+
+namespace formulon {
+namespace {
+
+constexpr std::uint32_t kA = 0U;
+constexpr std::uint32_t kB = 1U;
+constexpr std::uint32_t kC = 2U;
+constexpr std::uint32_t kD = 3U;
+constexpr std::uint32_t kE = 4U;
+constexpr std::uint32_t kF = 5U;
+
+// Row / column of an A1 cell as 0-based coordinates.
+struct At {
+  std::uint32_t row;
+  std::uint32_t col;
+};
+
+void Formula(Workbook& wb, At at, const char* text) {
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, at.row, at.col, text))) << text;
+}
+
+void Number(Workbook& wb, At at, double v) {
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, at.row, at.col, Value::number(v))));
+}
+
+eval::RecalcStats Recalc(Workbook& wb) {
+  auto stats = wb.recalc(eval::default_registry());
+  EXPECT_TRUE(static_cast<bool>(stats)) << stats.error().message;
+  return stats ? stats.value() : eval::RecalcStats{};
+}
+
+Value At_(const Workbook& wb, At at) {
+  return wb.sheet(0).resolve_cell_value(at.row, at.col);
+}
+
+void ExpectNumberAt(const Workbook& wb, At at, double want, const char* what) {
+  const Value v = At_(wb, at);
+  ASSERT_TRUE(v.is_number()) << what << " -> " << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), want) << what;
+}
+
+TEST(DynamicReferenceRecalc, ReferenceOnlyFunctionsOnTheirOwnCellAreNotCircular) {
+  const char* formulas[] = {"=ROW(A1)", "=ROWS(A1)", "=AREAS(A1)", "=ROWS(OFFSET(A1,0,0))"};
+  for (const char* f : formulas) {
+    Workbook wb = Workbook::create();
+    Formula(wb, {0U, kA}, f);
+    const eval::RecalcStats stats = Recalc(wb);
+    EXPECT_EQ(stats.cycle_cells, 0U) << f;
+    ExpectNumberAt(wb, {0U, kA}, 1.0, f);
+  }
+  Workbook wb = Workbook::create();
+  Formula(wb, {0U, kA}, "=ISREF(A1)");
+  EXPECT_EQ(Recalc(wb).cycle_cells, 0U);
+  ASSERT_TRUE(At_(wb, {0U, kA}).is_boolean());
+  EXPECT_TRUE(At_(wb, {0U, kA}).as_boolean());
+}
+
+TEST(DynamicReferenceRecalc, SumOverItsOwnCellIsCircular) {
+  Workbook wb = Workbook::create();
+  Formula(wb, {0U, kA}, "=SUM(A1:A2)");
+  EXPECT_GT(Recalc(wb).cycle_cells, 0U);
+}
+
+TEST(DynamicReferenceRecalc, OffsetOntoAnotherCellIsNotCircular) {
+  // D1 = 7, D2 = OFFSET(D2,-1,0): 7, no circular reference.
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kD}, 7.0);
+  Formula(wb, {1U, kD}, "=OFFSET(D2,-1,0)");
+  EXPECT_EQ(Recalc(wb).cycle_cells, 0U);
+  ExpectNumberAt(wb, {1U, kD}, 7.0, "D2");
+  // A nested base only positions the outer OFFSET.
+  Formula(wb, {2U, kD}, "=OFFSET(OFFSET(D3,0,0),-2,0)");
+  EXPECT_EQ(Recalc(wb).cycle_cells, 0U);
+  ExpectNumberAt(wb, {2U, kD}, 7.0, "D3");
+}
+
+// The circular verdict follows the resolved target, and a circular cell
+// keeps the value it showed before it became circular.
+void ExpectCircularityFollowsTarget(const char* formula, At switch_cell, const Value& self, const Value& other) {
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kD}, 7.0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, switch_cell.row, switch_cell.col, other)));
+  Formula(wb, {1U, kD}, formula);
+  EXPECT_EQ(Recalc(wb).cycle_cells, 0U) << formula;
+  ExpectNumberAt(wb, {1U, kD}, 7.0, formula);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, switch_cell.row, switch_cell.col, self)));
+  EXPECT_GT(Recalc(wb).cycle_cells, 0U) << formula;
+  ExpectNumberAt(wb, {1U, kD}, 7.0, formula);
+  // Still circular on the next pass, still at its last value.
+  EXPECT_GT(Recalc(wb).cycle_cells, 0U) << formula;
+  ExpectNumberAt(wb, {1U, kD}, 7.0, formula);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, switch_cell.row, switch_cell.col, other)));
+  Number(wb, {0U, kD}, 5.0);
+  EXPECT_EQ(Recalc(wb).cycle_cells, 0U) << formula;
+  ExpectNumberAt(wb, {1U, kD}, 5.0, formula);
+}
+
+TEST(DynamicReferenceRecalc, OffsetCircularityFollowsItsTarget) {
+  ExpectCircularityFollowsTarget("=OFFSET(D2,E1,0)", {0U, kE}, Value::number(0.0), Value::number(-1.0));
+}
+
+TEST(DynamicReferenceRecalc, IndirectCircularityFollowsItsTarget) {
+  ExpectCircularityFollowsTarget("=INDIRECT(E1)", {0U, kE}, Value::text("D2"), Value::text("D1"));
+}
+
+TEST(DynamicReferenceRecalc, CircularCellKeepsItsLastValueEvenWhenItWouldChangeIt) {
+  // OFFSET(D2,E1,0)+1 onto itself must not step once per recalc.
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kD}, 7.0);
+  Number(wb, {0U, kE}, -1.0);
+  Formula(wb, {1U, kD}, "=OFFSET(D2,E1,0)+1");
+  Recalc(wb);
+  ExpectNumberAt(wb, {1U, kD}, 8.0, "D2");
+  Number(wb, {0U, kE}, 0.0);
+  for (int pass = 0; pass < 3; ++pass) {
+    EXPECT_GT(Recalc(wb).cycle_cells, 0U);
+    ExpectNumberAt(wb, {1U, kD}, 8.0, "D2 circular");
+  }
+}
+
+TEST(DynamicReferenceRecalc, IterativeOffsetOntoItselfMatchesADirectReference) {
+  IterativeOptions opts;
+  opts.enabled = true;
+  Workbook direct = Workbook::create();
+  direct.set_iterative_options(opts);
+  Formula(direct, {0U, kA}, "=A1+1");
+  Workbook through_offset = Workbook::create();
+  through_offset.set_iterative_options(opts);
+  Formula(through_offset, {0U, kA}, "=OFFSET(A1,0,0)+1");
+  // Only the entry pass is compared: OFFSET is volatile, so later passes
+  // iterate it again where the non-volatile A1+1 is left alone.
+  Recalc(direct);
+  Recalc(through_offset);
+  const Value want = At_(direct, {0U, kA});
+  ASSERT_TRUE(want.is_number()) << want.debug_to_string();
+  ExpectNumberAt(through_offset, {0U, kA}, want.as_number(), "OFFSET(A1,0,0)+1");
+}
+
+// Formulas that read, through OFFSET / INDIRECT, a formula whose value
+// changes see the new value after one recalc, including when the OFFSET
+// arguments move the target.
+Workbook FreshReadBook() {
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kB}, 3.0);
+  Number(wb, {0U, kF}, 5.0);
+  // The readers sit above and left of their targets so evaluation order
+  // alone would reach them first.
+  Formula(wb, {0U, kC}, "=OFFSET(A1,5,0)");
+  Formula(wb, {1U, kC}, "=INDIRECT(\"A6\")");
+  Formula(wb, {2U, kC}, "=OFFSET(A1,F1,0)");
+  Formula(wb, {3U, kC}, "=LET(r,A1,OFFSET(r,5,0))");
+  Formula(wb, {4U, kC}, "=SUM(A1:OFFSET(A1,5,0))");
+  Formula(wb, {5U, kA}, "=B1*2");
+  Formula(wb, {6U, kA}, "=B1*3");
+  return wb;
+}
+
+void ExpectFreshReads(const Workbook& wb, double b1) {
+  ExpectNumberAt(wb, {0U, kC}, b1 * 2.0, "OFFSET(A1,5,0)");
+  ExpectNumberAt(wb, {1U, kC}, b1 * 2.0, "INDIRECT(\"A6\")");
+  ExpectNumberAt(wb, {3U, kC}, b1 * 2.0, "LET(r,A1,OFFSET(r,5,0))");
+  ExpectNumberAt(wb, {4U, kC}, b1 * 2.0, "SUM(A1:OFFSET(A1,5,0))");
+}
+
+TEST(DynamicReferenceRecalc, ReadersSeeTheNewValueAfterOneRecalc) {
+  Workbook wb = FreshReadBook();
+  Recalc(wb);
+  ExpectFreshReads(wb, 3.0);
+  ExpectNumberAt(wb, {2U, kC}, 6.0, "OFFSET(A1,F1,0) -> A6");
+  Number(wb, {0U, kB}, 4.0);
+  Recalc(wb);
+  ExpectFreshReads(wb, 4.0);
+  ExpectNumberAt(wb, {2U, kC}, 8.0, "OFFSET(A1,F1,0) -> A6");
+  Number(wb, {0U, kF}, 6.0);
+  Number(wb, {0U, kB}, 5.0);
+  Recalc(wb);
+  ExpectFreshReads(wb, 5.0);
+  ExpectNumberAt(wb, {2U, kC}, 15.0, "OFFSET(A1,F1,0) -> A7");
+}
+
+TEST(DynamicReferenceRecalc, ParallelRecalcMatchesSerial) {
+  for (int run = 0; run < 8; ++run) {
+    Workbook wb = FreshReadBook();
+    eval::SchedulerConfig cfg;
+    cfg.num_threads = 2U;
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(eval::default_registry(), cfg, nullptr)));
+    ExpectFreshReads(wb, 3.0);
+    Number(wb, {0U, kB}, 4.0);
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(eval::default_registry(), cfg, nullptr)));
+    ExpectFreshReads(wb, 4.0);
+  }
+}
+
+TEST(DynamicReferenceRecalc, PartialRecalcReadsATargetOutsideTheStaticClosure) {
+  Workbook wb = FreshReadBook();
+  Recalc(wb);
+  Number(wb, {0U, kB}, 9.0);
+  auto stats = wb.partial_recalc(eval::default_registry(), eval::SheetCellRange{0U, 0U, 0U, kC, kC});
+  ASSERT_TRUE(static_cast<bool>(stats)) << stats.error().message;
+  ExpectNumberAt(wb, {0U, kC}, 18.0, "C1 in viewport");
+}
+
+TEST(DynamicReferenceRecalc, OffsetChainSettlesInOneRecalc) {
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kA}, 1.0);
+  for (std::uint32_t row = 1U; row < 100U; ++row) {
+    const std::string f = "=OFFSET(A" + std::to_string(row + 1U) + ",-1,0)+1";
+    Formula(wb, {row, kA}, f.c_str());
+  }
+  Recalc(wb);
+  ExpectNumberAt(wb, {99U, kA}, 100.0, "A100");
+  Number(wb, {0U, kA}, 11.0);
+  Recalc(wb);
+  ExpectNumberAt(wb, {99U, kA}, 110.0, "A100");
+}
+
+TEST(DynamicReferenceRecalc, ReplacingAReaderDropsItsLearnedEdges) {
+  Workbook wb = FreshReadBook();
+  Recalc(wb);
+  const eval::CellNodeId c1{0U, 0U, kC};
+  const eval::CellNodeId a6{0U, 5U, kA};
+  auto engine_graph = [&]() -> const eval::DepGraph& { return wb.recalc_engine().dep_graph(); };
+  EXPECT_TRUE(engine_graph().has_dependency_source(c1, a6, eval::DepGraph::DependencySource::kDynamicReference));
+  Number(wb, {0U, kC}, 1.0);
+  EXPECT_FALSE(engine_graph().has_dynamic_dependencies(c1));
+}
+
+}  // namespace
+}  // namespace formulon

@@ -207,6 +207,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/coerce.cpp
   src/eval/rng.cpp
   src/eval/dep_graph.cpp
+  src/eval/dynamic_read_log.cpp
   src/eval/dep_extractor.cpp
   src/eval/defined_name_resolve.cpp
   src/eval/dirty_set.cpp

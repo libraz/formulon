@@ -46,8 +46,10 @@
 #include "eval/dep_extractor.h"
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
+#include "eval/dynamic_read_log.h"
 #include "eval/iterative_solver.h"
 #include "eval/range_dep_index.h"
+#include "eval/spill_committer.h"
 #include "eval/spill_potential.h"
 #include "eval/volatile_tracker.h"
 #include "parser/ast.h"
@@ -412,6 +414,65 @@ class RecalcEngine {
   /// `mutex_`; each sheet lock is acquired only while copying geometry, and
   /// graph mutation happens after those snapshots have been released.
   DepGraph::DependencyDelta reconcile_spill_dependencies_locked(const Workbook& workbook);
+
+  /// Replaces the learned dynamic-reference edges of every reader `log`
+  /// saw (once per recalc call, tracked in `refreshed`) with edges to the
+  /// formula cells and spill anchors its reads covered, and returns the
+  /// readers whose read was stale: a target committed at or after the
+  /// reader in this wave (itself included), or, for a partial recalc with
+  /// `closure`, a target left dirty. Reads between members of one
+  /// iteratively solved component are exempt.
+  std::vector<CellNodeId> reconcile_dynamic_reads_locked(const Workbook& workbook, const DynamicReadLog& log,
+                                                         const std::unordered_set<CellNodeId, CellNodeIdHash>* closure,
+                                                         std::unordered_set<CellNodeId, CellNodeIdHash>& refreshed);
+
+  /// Forgets the learned dynamic-reference edges of every cyclic component
+  /// in `sccs` that closes through a dynamic-only edge, so a cycle learned
+  /// in an earlier recalc is re-derived from what the formulas read now.
+  /// Returns whether anything was forgotten.
+  bool drop_dynamic_only_cycles_locked(const std::vector<std::vector<CellNodeId>>& sccs);
+
+  /// Per-call state of OFFSET / INDIRECT read learning, shared by every
+  /// recalc driver: the wave's read log, the readers whose learned edges
+  /// this call already replaced, evaluation ordinals, and the stale readers
+  /// the last wave found.
+  class DynamicReadPass {
+   public:
+    DynamicReadPass(RecalcEngine& engine, const Workbook& workbook);
+
+    DynamicReadLog& log() noexcept { return log_; }
+    std::uint64_t next_ordinal() noexcept { return next_ordinal_++; }
+
+    /// On the call's first wave, forgets learned cycles made of
+    /// dynamic-only edges and re-derives `sccs` over `nodes` when it did.
+    void settle_sccs(std::vector<std::vector<CellNodeId>>& sccs,
+                     const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes);
+
+    /// Ends a wave: learns its reads and returns the stale readers (see
+    /// `reconcile_dynamic_reads_locked`, which takes `closure`).
+    const std::vector<CellNodeId>& end_wave(const std::unordered_set<CellNodeId, CellNodeIdHash>* closure);
+
+    /// Marks the readers the last `end_wave` found stale dirty.
+    void mark_stale_dirty();
+
+   private:
+    RecalcEngine& engine_;
+    const Workbook& workbook_;
+    DynamicReadLog log_;
+    std::unordered_set<CellNodeId, CellNodeIdHash> refreshed_;
+    std::vector<CellNodeId> stale_;
+    std::uint64_t next_ordinal_ = 0U;
+    bool first_wave_ = true;
+  };
+
+  /// Commits a cyclic component iterative calc does not resolve: `#REF!` on
+  /// every member, except that a cycle closing through an OFFSET / INDIRECT
+  /// read restores each member's value from before this recalc, as Excel
+  /// leaves a circular cell at its last value. Counts the members in
+  /// `stats.cycle_cells`.
+  void commit_unresolved_cycle_locked(Workbook& workbook, const std::vector<CellNodeId>& component,
+                                      DynamicReadPass& dynamic, SpillReleaseCallback release_callback,
+                                      void* release_user_data, RecalcStats& stats);
 
   // Serialises every mutating access to `graph_`, `volatiles_`, `dirty_`,
   // and `arena_`. Held for the full duration of each public entry; the

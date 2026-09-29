@@ -154,7 +154,8 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
       std::uint32_t c2 = 0;
       bool is_range = false;
       ErrorCode err = ErrorCode::Value;
-      if (!resolve_reference_call(n, arena, registry, ctx, &sheet, &r1, &c1, &r2, &c2, &is_range, &err)) {
+      if (!resolve_reference_call(n, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &r1, &c1, &r2, &c2,
+                                  &is_range, &err)) {
         *propagated = err;
         return kAreasPropagate;
       }

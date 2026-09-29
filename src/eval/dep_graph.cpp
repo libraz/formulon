@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -46,6 +47,10 @@ void DepGraph::add_dependency_source(CellNodeId dependent, CellNodeId dependency
     if ((existing->second & bit) == 0U && source == DependencySource::kAuthored) {
       ++authored_edge_count_;
     }
+    if ((existing->second & bit) == 0U && source == DependencySource::kDynamicReference) {
+      dynamic_by_dependent_[dependent].push_back(dependency);
+      ++dynamic_edge_count_;
+    }
     existing->second = static_cast<std::uint8_t>(existing->second | bit);
     return;
   }
@@ -57,6 +62,9 @@ void DepGraph::add_dependency_source(CellNodeId dependent, CellNodeId dependency
     spill_footprint_edges_.insert(edge);
   } else if (source == DependencySource::kAuthored) {
     ++authored_edge_count_;
+  } else if (source == DependencySource::kDynamicReference) {
+    dynamic_by_dependent_[dependent].push_back(dependency);
+    ++dynamic_edge_count_;
   }
   forward_[dependent].push_back(dependency);
   reverse_[dependency].push_back(dependent);
@@ -79,6 +87,15 @@ bool DepGraph::remove_dependency_source(CellNodeId dependent, CellNodeId depende
     spill_footprint_edges_.erase(edge);
   } else if (source == DependencySource::kAuthored) {
     --authored_edge_count_;
+  } else if (source == DependencySource::kDynamicReference) {
+    auto dyn = dynamic_by_dependent_.find(dependent);
+    if (dyn != dynamic_by_dependent_.end()) {
+      erase_first(dyn->second, dependency);
+      if (dyn->second.empty()) {
+        dynamic_by_dependent_.erase(dyn);
+      }
+    }
+    --dynamic_edge_count_;
   }
   existing->second = static_cast<std::uint8_t>(existing->second & static_cast<std::uint8_t>(~bit));
   if (existing->second != 0U) {
@@ -172,7 +189,43 @@ std::size_t DepGraph::source_edge_count(DependencySource source) const noexcept 
   if (source == DependencySource::kSpillFootprint) {
     return spill_footprint_edges_.size();
   }
+  if (source == DependencySource::kDynamicReference) {
+    return dynamic_edge_count_;
+  }
   return source == DependencySource::kAuthored ? authored_edge_count_ : 0U;
+}
+
+bool DepGraph::add_dynamic_dependency(CellNodeId dependent, CellNodeId dependency) {
+  if (has_dependency_source(dependent, dependency, DependencySource::kDynamicReference)) {
+    return false;
+  }
+  add_dependency_source(dependent, dependency, DependencySource::kDynamicReference);
+  return true;
+}
+
+void DepGraph::clear_dynamic_dependencies_of(CellNodeId dependent) {
+  const auto pos = dynamic_by_dependent_.find(dependent);
+  if (pos == dynamic_by_dependent_.end()) {
+    return;
+  }
+  const std::vector<CellNodeId> dependencies = pos->second;
+  for (CellNodeId dependency : dependencies) {
+    remove_dependency_source(dependent, dependency, DependencySource::kDynamicReference);
+  }
+}
+
+bool DepGraph::is_dynamic_only_edge(CellNodeId dependent, CellNodeId dependency) const noexcept {
+  const auto pos = edge_sources_.find(Edge{dependent, dependency});
+  return pos != edge_sources_.end() && pos->second == source_bit(DependencySource::kDynamicReference);
+}
+
+void DepGraph::remove_all_sources(CellNodeId dependent, CellNodeId dependency, std::uint8_t mask) {
+  for (const DependencySource source :
+       {DependencySource::kAuthored, DependencySource::kSpillFootprint, DependencySource::kDynamicReference}) {
+    if ((mask & source_bit(source)) != 0U) {
+      remove_dependency_source(dependent, dependency, source);
+    }
+  }
 }
 
 void DepGraph::clear_dependencies_of(CellNodeId dependent) {
@@ -187,13 +240,7 @@ void DepGraph::clear_dependencies_of(CellNodeId dependent) {
     if (pos == edge_sources_.end()) {
       continue;
     }
-    const std::uint8_t mask = pos->second;
-    if ((mask & source_bit(DependencySource::kAuthored)) != 0U) {
-      remove_dependency_source(dependent, dependency, DependencySource::kAuthored);
-    }
-    if ((mask & source_bit(DependencySource::kSpillFootprint)) != 0U) {
-      remove_dependency_source(dependent, dependency, DependencySource::kSpillFootprint);
-    }
+    remove_all_sources(dependent, dependency, pos->second);
   }
 }
 
@@ -213,13 +260,7 @@ void DepGraph::remove_node(CellNodeId node) {
     if (pos == edge_sources_.end()) {
       continue;
     }
-    const std::uint8_t mask = pos->second;
-    if ((mask & source_bit(DependencySource::kAuthored)) != 0U) {
-      remove_dependency_source(dependent, node, DependencySource::kAuthored);
-    }
-    if ((mask & source_bit(DependencySource::kSpillFootprint)) != 0U) {
-      remove_dependency_source(dependent, node, DependencySource::kSpillFootprint);
-    }
+    remove_all_sources(dependent, node, pos->second);
   }
 }
 
@@ -256,6 +297,19 @@ bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGrap
   const CellNodeId only = component.front();
   const std::vector<CellNodeId>& dependencies = graph.dependencies_of_ref(only);
   return std::find(dependencies.begin(), dependencies.end(), only) != dependencies.end();
+}
+
+bool closes_through_dynamic_edge(const std::vector<CellNodeId>& component, const DepGraph& graph) {
+  // Dynamic-only edges are rare, so membership is only searched for them.
+  for (const CellNodeId member : component) {
+    for (const CellNodeId dependency : graph.dependencies_of_ref(member)) {
+      if (graph.is_dynamic_only_edge(member, dependency) &&
+          std::find(component.begin(), component.end(), dependency) != component.end()) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 std::vector<CellNodeId> cells_of_component(const std::vector<CellNodeId>& component) {

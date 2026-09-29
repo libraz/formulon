@@ -392,7 +392,9 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
     std::string_view sheet;
     bool is_range = false;
     ErrorCode err = ErrorCode::Value;
-    if (resolve_reference_call(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+    // Only the position is read, so the reference is no read of its cells.
+    if (resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left, &bottom,
+                               &right, &is_range, &err)) {
       resolved_rect = true;
     } else {
       // Fall through to the scalar-evaluate branch so subtree errors propagate.

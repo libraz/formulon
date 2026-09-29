@@ -123,11 +123,13 @@ class DepGraph {
  public:
   /// The source of a directed dependency edge. Authored edges come from a
   /// formula's static dependency extraction; spill-footprint edges are
-  /// derived from committed dynamic-array geometry. Both sources share one
-  /// union adjacency pair.
+  /// derived from committed dynamic-array geometry; dynamic-reference edges
+  /// record the cells an OFFSET / INDIRECT resolved to when the formula last
+  /// ran. All sources share one union adjacency pair.
   enum class DependencySource : std::uint8_t {
     kAuthored = 1U,
     kSpillFootprint = 2U,
+    kDynamicReference = 4U,
   };
 
   using Edge = std::pair<CellNodeId, CellNodeId>;
@@ -171,6 +173,23 @@ class DepGraph {
 
   /// Returns whether at least one edge carries `source` provenance.
   bool has_source_edges(DependencySource source) const noexcept { return source_edge_count(source) != 0U; }
+
+  /// Records that `dependent` read `dependency` through a reference resolved
+  /// at evaluation time. Returns true when the pair did not already carry
+  /// that provenance.
+  bool add_dynamic_dependency(CellNodeId dependent, CellNodeId dependency);
+
+  /// Drops the dynamic-reference provenance of every outgoing edge of
+  /// `dependent`; a pair another source also owns stays in the adjacency.
+  void clear_dynamic_dependencies_of(CellNodeId dependent);
+
+  /// Whether `dependent` owns at least one dynamic-reference edge.
+  bool has_dynamic_dependencies(CellNodeId dependent) const noexcept {
+    return dynamic_by_dependent_.count(dependent) != 0U;
+  }
+
+  /// Whether the pair exists only because of a dynamic-reference read.
+  bool is_dynamic_only_edge(CellNodeId dependent, CellNodeId dependency) const noexcept;
 
   /// Drops every outgoing edge of `dependent`.
   ///
@@ -257,6 +276,8 @@ class DepGraph {
 
   void add_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
   bool remove_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
+  /// Removes every provenance bit in `mask` from the pair.
+  void remove_all_sources(CellNodeId dependent, CellNodeId dependency, std::uint8_t mask);
 
   /// Hash for an ordered pair of `CellNodeId`s. Used to dedupe directed
   /// edges in O(1) on `add_dependency`. Combines the two component
@@ -291,6 +312,10 @@ class DepGraph {
   // pair whose source mask carries kSpillFootprint, including pairs that
   // also carry kAuthored.
   std::unordered_set<Edge, EdgeHash> spill_footprint_edges_;
+  // Dynamic-reference pairs grouped by dependent, so a reader's learned
+  // edges are replaced without scanning the whole edge index.
+  AdjacencyMap dynamic_by_dependent_;
+  std::size_t dynamic_edge_count_ = 0U;
   // Authored ownership is counted separately so `source_edge_count` stays
   // O(1) for both source kinds; unlike spill ownership it does not need a
   // replacement iteration index.
@@ -305,6 +330,10 @@ class DepGraph {
 /// Returns whether an SCC is a real cycle: two or more nodes, or a
 /// singleton whose sole cell has a self-dependency.
 bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) noexcept;
+
+/// Returns whether a cyclic `component` closes through an edge that exists
+/// only because of a dynamic-reference read.
+bool closes_through_dynamic_edge(const std::vector<CellNodeId>& component, const DepGraph& graph);
 
 /// Returns the cell members of an SCC, dropping virtual range nodes, which
 /// have nothing to evaluate.
