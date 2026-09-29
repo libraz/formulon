@@ -142,5 +142,127 @@ TEST(WorkbookTest, SetDefinedNameUpdatesFormulasThatReferenceIt) {
   EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 2.0);
 }
 
+namespace {
+
+// Recalcs `wb` and returns A1's cached value.
+Value recalc_a1(Workbook& wb) {
+  EXPECT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Cell* cell = wb.sheet(0U).cell_at(0U, 0U);
+  return cell == nullptr ? Value::blank() : cell->cached_value;
+}
+
+}  // namespace
+
+TEST(WorkbookTest, RedefiningLambdaNameRecalcsItsCallers) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "=LAMBDA(x,x*2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Fn(3)")));
+  Value v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "=LAMBDA(x,x*10)")));
+  v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
+}
+
+TEST(WorkbookTest, AddingLambdaNameResolvesAnEarlierCall) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Fn(3)")));
+  Value v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "=LAMBDA(x,x*2)")));
+  v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+}
+
+TEST(WorkbookTest, RemovingLambdaNameTurnsItsCallersToNameError) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "=LAMBDA(x,x*2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Fn(3)")));
+  ASSERT_TRUE(recalc_a1(wb).is_number());
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "")));
+  const Value v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+TEST(WorkbookTest, RenamingLambdaNameRebindsItsCallers) {
+  // A rename is a removal of the old spelling plus an addition of the new
+  // one; a caller of the old spelling goes to #NAME?, a caller of the new
+  // one resolves.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "=LAMBDA(x,x*2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Fn(3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=Gn(4)")));
+  ASSERT_TRUE(recalc_a1(wb).is_number());
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Gn", "=LAMBDA(x,x*2)")));
+  const Value v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  const Cell* a2 = wb.sheet(0U).cell_at(1U, 0U);
+  ASSERT_NE(a2, nullptr);
+  ASSERT_TRUE(a2->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(a2->cached_value.as_number(), 8.0);
+}
+
+TEST(WorkbookTest, RedefiningLambdaNameRecalcsSheetQualifiedCallers) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Fn", "=LAMBDA(x,x*2)", 0)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Sheet1!Fn(3)")));
+  Value v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Fn", "=LAMBDA(x,x+1)", 0)));
+  v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
+TEST(WorkbookTest, RedefiningInnerNameRecalcsCallersOfLambdaUsingIt) {
+  // Fn's body calls Inner; redefining Inner must reach a formula that only
+  // mentions Fn.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Inner", "=LAMBDA(x,x*2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "=LAMBDA(x,Inner(x)+1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Fn(3)")));
+  Value v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Inner", "=LAMBDA(x,x*3)")));
+  v = recalc_a1(wb);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 10.0);
+}
+
+TEST(WorkbookTest, DefinedNameRangeEndpointTracksCellsInsideTheBox) {
+  // `A1:CellNm` reads A1:C3; B2 is named by neither endpoint.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("CellNm", "=Sheet1!$C$3")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(5.0))));   // B2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 9U, 0U, "=SUM(A1:CellNm)")));  // A10
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Cell* cell = wb.sheet(0U).cell_at(9U, 0U);
+  ASSERT_NE(cell, nullptr);
+  ASSERT_TRUE(cell->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 5.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(7.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  cell = wb.sheet(0U).cell_at(9U, 0U);
+  ASSERT_NE(cell, nullptr);
+  ASSERT_TRUE(cell->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 7.0);
+}
+
 }  // namespace
 }  // namespace formulon

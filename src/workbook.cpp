@@ -238,14 +238,16 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
   }
 }
 
-// Invokes `visit_name(name)` for every `NameRef` and `visit_table(table)`
-// for every `StructuredRef`'s table specifier found while walking `node`'s
-// subtree. Node-kind coverage mirrors `parser::TransformNode`
-// (ast_shift.cpp) exhaustively, so a reference nested inside any expression
-// form (calls, LET/LAMBDA bodies, array literals, unions...) is found; a
-// reference shadowed by an enclosing LET/LAMBDA parameter of the same
-// spelling is still visited -- treating it as a real reference only costs an
-// unnecessary reindex, never a missed one.
+// Invokes `visit_name(name)` for every `NameRef` and every `Call` callee (a
+// LAMBDA-valued defined name is called as `Fn(args)`; a built-in callee
+// simply matches no defined name) and `visit_table(table)` for every
+// `StructuredRef`'s table specifier found while walking `node`'s subtree.
+// Node-kind coverage mirrors `parser::TransformNode` (ast_shift.cpp)
+// exhaustively, so a reference nested inside any expression form (calls,
+// LET/LAMBDA bodies, array literals, unions...) is found; a reference
+// shadowed by an enclosing LET/LAMBDA parameter of the same spelling is still
+// visited -- treating it as a real reference only costs an unnecessary
+// reindex, never a missed one.
 template <typename VisitName, typename VisitTable>
 void for_each_name_and_table_ref(const parser::AstNode& node, const VisitName& visit_name,
                                  const VisitTable& visit_table) {
@@ -288,6 +290,7 @@ void for_each_name_and_table_ref(const parser::AstNode& node, const VisitName& v
       for_each_name_and_table_ref(node.as_implicit_intersection_operand(), visit_name, visit_table);
       return;
     case parser::NodeKind::Call:
+      visit_name(node.as_call_name());
       for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
         for_each_name_and_table_ref(node.as_call_arg(i), visit_name, visit_table);
       }
