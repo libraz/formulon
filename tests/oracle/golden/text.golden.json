@@ -1966,6 +1966,105 @@
       }
     },
     {
+      "id": "textafter_empty_delimiter",
+      "formula": "=TEXTAFTER(\"a-b-c\", \"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c"
+      }
+    },
+    {
+      "id": "textbefore_empty_delimiter",
+      "formula": "=TEXTBEFORE(\"a-b-c\", \"\")",
+      "setup": {},
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
+    },
+    {
+      "id": "textafter_empty_delimiter_second_instance",
+      "formula": "=TEXTAFTER(\"a-b-c\", \"\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c"
+      }
+    },
+    {
+      "id": "textafter_empty_delimiter_negative_instance",
+      "formula": "=TEXTAFTER(\"a-b-c\", \"\", -1)",
+      "setup": {},
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
+    },
+    {
+      "id": "textbefore_empty_delimiter_negative_instance",
+      "formula": "=TEXTBEFORE(\"a-b-c\", \"\", -1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c"
+      }
+    },
+    {
+      "id": "textafter_empty_delimiter_match_end",
+      "formula": "=TEXTAFTER(\"a-b-c\", \"\", 1, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c"
+      }
+    },
+    {
+      "id": "textbefore_empty_delimiter_match_end_negative",
+      "formula": "=TEXTBEFORE(\"a-b-c\", \"\", -1, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c"
+      }
+    },
+    {
+      "id": "textafter_empty_delimiter_large_instance",
+      "formula": "=TEXTAFTER(\"a-b-c\", \"\", 100)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c"
+      }
+    },
+    {
+      "id": "textbefore_empty_delimiter_large_negative_instance",
+      "formula": "=TEXTBEFORE(\"a-b-c\", \"\", -100)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c"
+      }
+    },
+    {
+      "id": "textafter_empty_delimiter_zero_instance_is_value",
+      "formula": "=TEXTAFTER(\"a-b-c\", \"\", 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "textafter_empty_text_empty_delimiter",
+      "formula": "=LEN(TEXTAFTER(\"\", \"\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
       "id": "hyperlink_link_only",
       "formula": "=HYPERLINK(\"http://example.com\")",
       "setup": {},

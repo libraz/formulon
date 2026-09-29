@@ -40,7 +40,9 @@ namespace {
 //     Any other value -> `#VALUE!`.
 //   * `if_not_found` optional: when the requested instance does not exist,
 //     return this value instead of `#N/A`.
-//   * Empty `delimiter` -> `#VALUE!` (matches Excel).
+//   * Empty `delimiter` matches at the start of `text` for any positive
+//     `instance_num` and at the end for any negative one, so it never falls
+//     through to not-found; `match_end` has no effect on it.
 //
 // The shared helper locates the match window for the Nth hit and returns
 // its byte range. The caller (TEXTBEFORE or TEXTAFTER) substrings around
@@ -59,12 +61,15 @@ struct TextMatchResult {
 // malformed. Returns `{found=false}` when the instance does not exist.
 TextMatchResult find_text_instance(std::string_view text, std::string_view delimiter, int instance_num, int match_mode,
                                    int match_end, bool* out_err_value) {
-  if (delimiter.empty() || instance_num == 0 || (match_mode != 0 && match_mode != 1) ||
-      (match_end != 0 && match_end != 1)) {
+  if (instance_num == 0 || (match_mode != 0 && match_mode != 1) || (match_end != 0 && match_end != 1)) {
     *out_err_value = true;
     return {};
   }
   *out_err_value = false;
+  if (delimiter.empty()) {
+    const std::size_t at = instance_num > 0 ? 0u : text.size();
+    return TextMatchResult{true, at, at};
+  }
   // Collect all literal delimiter byte offsets.
   std::vector<std::pair<std::size_t, std::size_t>> hits;  // [start, end)
   {
@@ -87,9 +92,6 @@ TextMatchResult find_text_instance(std::string_view text, std::string_view delim
       hits.emplace_back(pos, pos + needle.size());
       // Advance past the match to avoid overlapping counts.
       i = pos + needle.size();
-      if (needle.empty()) {
-        break;  // defensive; delimiter.empty() is rejected above
-      }
     }
   }
   // Virtual sentinels when match_end=1: for positive instance_num the end of

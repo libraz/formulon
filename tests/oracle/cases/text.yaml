@@ -839,6 +839,41 @@ cases:
     description: "Delimiter not present and no if_not_found -> #N/A"
     formula: "=TEXTAFTER(\"abc\", \"-\")"
 
+  - id: textafter_empty_delimiter
+    formula: "=TEXTAFTER(\"a-b-c\", \"\")"
+
+  - id: textbefore_empty_delimiter
+    formula: "=TEXTBEFORE(\"a-b-c\", \"\")"
+    compare_mode: empty_string_readback
+
+  - id: textafter_empty_delimiter_second_instance
+    formula: "=TEXTAFTER(\"a-b-c\", \"\", 2)"
+
+  - id: textafter_empty_delimiter_negative_instance
+    formula: "=TEXTAFTER(\"a-b-c\", \"\", -1)"
+    compare_mode: empty_string_readback
+
+  - id: textbefore_empty_delimiter_negative_instance
+    formula: "=TEXTBEFORE(\"a-b-c\", \"\", -1)"
+
+  - id: textafter_empty_delimiter_match_end
+    formula: "=TEXTAFTER(\"a-b-c\", \"\", 1, 0, 1)"
+
+  - id: textbefore_empty_delimiter_match_end_negative
+    formula: "=TEXTBEFORE(\"a-b-c\", \"\", -1, 0, 1)"
+
+  - id: textafter_empty_delimiter_large_instance
+    formula: "=TEXTAFTER(\"a-b-c\", \"\", 100)"
+
+  - id: textbefore_empty_delimiter_large_negative_instance
+    formula: "=TEXTBEFORE(\"a-b-c\", \"\", -100)"
+
+  - id: textafter_empty_delimiter_zero_instance_is_value
+    formula: "=TEXTAFTER(\"a-b-c\", \"\", 0)"
+
+  - id: textafter_empty_text_empty_delimiter
+    formula: "=LEN(TEXTAFTER(\"\", \"\"))"
+
   # -- HYPERLINK -----------------------------------------------------------
   - id: hyperlink_link_only
     description: "Single-arg HYPERLINK returns link_location as text"

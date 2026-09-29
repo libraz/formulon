@@ -278,8 +278,22 @@ TEST(BuiltinsText3TextBefore, InstanceZeroIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsText3TextBefore, EmptyDelimiterIsValueError) {
-  const Value v = EvalSource("=TEXTBEFORE(\"abc\", \"\")");
+// An empty delimiter matches at the start of the text for any positive
+// instance and at the end for any negative one (Excel 365).
+TEST(BuiltinsText3TextBefore, EmptyDelimiterMatchesAtStartOrEnd) {
+  const Value first = EvalSource("=TEXTBEFORE(\"a-b-c\", \"\")");
+  ASSERT_TRUE(first.is_text());
+  EXPECT_EQ(first.as_text(), "");
+  const Value last = EvalSource("=TEXTBEFORE(\"a-b-c\", \"\", -100)");
+  ASSERT_TRUE(last.is_text());
+  EXPECT_EQ(last.as_text(), "a-b-c");
+  const Value match_end = EvalSource("=TEXTBEFORE(\"a-b-c\", \"\", -1, 0, 1)");
+  ASSERT_TRUE(match_end.is_text());
+  EXPECT_EQ(match_end.as_text(), "a-b-c");
+}
+
+TEST(BuiltinsText3TextBefore, EmptyDelimiterInstanceZeroIsValueError) {
+  const Value v = EvalSource("=TEXTBEFORE(\"abc\", \"\", 0)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -355,6 +369,21 @@ TEST(BuiltinsText3TextAfter, IfNotFoundCustom) {
   const Value v = EvalSource("=TEXTAFTER(\"abc\", \"-\", 1, 0, 0, \"NA\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "NA");
+}
+
+TEST(BuiltinsText3TextAfter, EmptyDelimiterMatchesAtStartOrEnd) {
+  const Value first = EvalSource("=TEXTAFTER(\"a-b-c\", \"\")");
+  ASSERT_TRUE(first.is_text());
+  EXPECT_EQ(first.as_text(), "a-b-c");
+  const Value beyond = EvalSource("=TEXTAFTER(\"a-b-c\", \"\", 100)");
+  ASSERT_TRUE(beyond.is_text());
+  EXPECT_EQ(beyond.as_text(), "a-b-c");
+  const Value last = EvalSource("=TEXTAFTER(\"a-b-c\", \"\", -1)");
+  ASSERT_TRUE(last.is_text());
+  EXPECT_EQ(last.as_text(), "");
+  const Value empty_text = EvalSource("=TEXTAFTER(\"\", \"\")");
+  ASSERT_TRUE(empty_text.is_text());
+  EXPECT_EQ(empty_text.as_text(), "");
 }
 
 // ---------------------------------------------------------------------------
