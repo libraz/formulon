@@ -132,10 +132,18 @@ foreach(_formulon_ironcalc_golden IN LISTS _formulon_ironcalc_goldens)
   string(REGEX REPLACE "\\.golden\\.json$" "" _formulon_ironcalc_suffix "${_formulon_ironcalc_file}")
   string(REPLACE "__" "_" _formulon_ironcalc_suite_suffix "${_formulon_ironcalc_suffix}")
   set(_formulon_ironcalc_suite "ironcalc_${_formulon_ironcalc_suite_suffix}")
+  # PrintParamName (oracle_test.cpp) folds every character outside
+  # [A-Za-z0-9_] to '_' when it builds the registered gtest name, because a
+  # suite pulled from an upstream IronCalc sheet name can carry a '.' or '-'
+  # (e.g. "ERROR.TYPE", "ERF-PRECISE"). The filter below has to fold the
+  # same way or a literal '.'/'-' in it never matches the folded name, and
+  # the entry silently selects zero tests.
+  string(REGEX REPLACE "[^A-Za-z0-9_]" "_" _formulon_ironcalc_filter_suite "${_formulon_ironcalc_suite}")
   add_test(
     NAME "formulon_ironcalc_${_formulon_ironcalc_suffix}"
     COMMAND formulon_ironcalc_oracle_tests --gtest_brief=1
-            "--gtest_filter=Oracle/OracleTest.Matches/${_formulon_ironcalc_suite}_*"
+            --gtest_fail_if_no_test_selected
+            "--gtest_filter=Oracle/OracleTest.Matches/${_formulon_ironcalc_filter_suite}_*"
   )
   set_tests_properties("formulon_ironcalc_${_formulon_ironcalc_suffix}" PROPERTIES LABELS "ironcalc")
 endforeach()
@@ -273,6 +281,7 @@ endfunction()
 if(FORMULON_ORACLE_VARIANTS)
   set(_variant_root "${CMAKE_CURRENT_SOURCE_DIR}/variants")
   set(_variant_dirs_default "")
+  set(_variant_active_tags "")
   if(EXISTS "${_variant_root}")
     file(GLOB _variant_subdirs RELATIVE "${_variant_root}" "${_variant_root}/*")
     foreach(_tag IN LISTS _variant_subdirs)
@@ -284,8 +293,38 @@ if(FORMULON_ORACLE_VARIANTS)
         else()
           set(_variant_dirs_default "${_variant_dirs_default}:${_tag}=${_golden}")
         endif()
+        list(APPEND _variant_active_tags "${_tag}")
       endif()
     endforeach()
+  endif()
+
+  # Each active tag resolves `applies_to` against itself, not the primary
+  # Mac formula target: a win-only divergence entry must skip on the win
+  # variant and stay red everywhere else. Reusing `_formula_oracle_skip_file`
+  # here would resolve every tag's skips against mac-365-ja_JP instead.
+  # `--target` is repeated once per active tag so emit_skip_list.py unions
+  # each tag's own registry resolution (primary registry plus that tag's
+  # `tests/oracle/variants/<tag>/divergence.yaml` override) into the one
+  # file this binary's FORMULON_ORACLE_SKIP_FILE define points at.
+  set(_variant_oracle_skip_file "")
+  if(Python3_Interpreter_FOUND AND _variant_active_tags)
+    set(_variant_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/variant_oracle_skips.json")
+    set(_variant_skip_target_args "")
+    foreach(_tag IN LISTS _variant_active_tags)
+      list(APPEND _variant_skip_target_args --target "${_tag}")
+    endforeach()
+    execute_process(
+      COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+              --track formula
+              ${_variant_skip_target_args}
+              --out ${_variant_oracle_skip_file}
+      RESULT_VARIABLE _variant_skip_rc
+      OUTPUT_QUIET
+      ERROR_QUIET
+    )
+    if(NOT _variant_skip_rc EQUAL 0)
+      set(_variant_oracle_skip_file "")
+    endif()
   endif()
 
   add_executable(formulon_oracle_variant_tests ${FORMULON_ORACLE_TEST_SOURCES})
@@ -308,7 +347,7 @@ if(FORMULON_ORACLE_VARIANTS)
     PRIVATE
       FORMULON_ORACLE_GOLDEN_DIR=""
       FORMULON_ORACLE_VARIANT_DIRS_DEFAULT="${_variant_dirs_default}"
-      FORMULON_ORACLE_SKIP_FILE="${_formula_oracle_skip_file}"
+      FORMULON_ORACLE_SKIP_FILE="${_variant_oracle_skip_file}"
   )
 
   formulon_apply_warnings(formulon_oracle_variant_tests)
@@ -426,9 +465,40 @@ target_compile_definitions(formulon_cf_oracle_tests
 
 formulon_apply_warnings(formulon_cf_oracle_tests)
 
-gtest_discover_tests(formulon_cf_oracle_tests
-  PROPERTIES LABELS "oracle"
+# The CF golden's own cases (built programmatically by the fixtures) always
+# need to load, so unlike the workbook target above this cannot gate by
+# blanking the golden dir. Instead the `oracle` CTest label -- the one
+# `make oracle-verify` selects -- is granted only once golden_cf/PROVENANCE.json
+# opts in, using the same active_ctest gate the variant and workbook targets
+# already apply. Today's committed golden is `classification: reference-only`,
+# so it stays under the "cf-reference" label: discoverable, but not counted
+# as verified oracle coverage.
+set(_cf_oracle_provenance "${CMAKE_CURRENT_SOURCE_DIR}/golden_cf/PROVENANCE.json")
+set(_cf_oracle_active FALSE)
+if(EXISTS "${_cf_oracle_provenance}")
+  file(READ "${_cf_oracle_provenance}" _cf_oracle_record)
+  string(REGEX MATCH "\"status\"[ \t\r\n]*:[ \t\r\n]*\"(primary|scaffolded|wanted)\"" _cf_oracle_status "${_cf_oracle_record}")
+  string(REGEX MATCH "\"classification\"[ \t\r\n]*:[ \t\r\n]*\"(active|verified)\"" _cf_oracle_classification "${_cf_oracle_record}")
+  string(REGEX MATCH "\"verified\"[ \t\r\n]*:[ \t\r\n]*true" _cf_oracle_verified "${_cf_oracle_record}")
+  string(REGEX MATCH "\"active_ctest\"[ \t\r\n]*:[ \t\r\n]*true" _cf_oracle_active_ctest "${_cf_oracle_record}")
+  if(_cf_oracle_status AND NOT _cf_oracle_record MATCHES "\"status\"[ \t\r\n]*:[ \t\r\n]*\"wanted\"" AND _cf_oracle_classification AND _cf_oracle_verified AND _cf_oracle_active_ctest)
+    set(_cf_oracle_active TRUE)
+  endif()
+endif()
+set_property(
+  DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${_cf_oracle_provenance}"
 )
+
+if(_cf_oracle_active)
+  gtest_discover_tests(formulon_cf_oracle_tests
+    PROPERTIES LABELS "oracle"
+  )
+else()
+  gtest_discover_tests(formulon_cf_oracle_tests
+    PROPERTIES LABELS "cf-reference"
+  )
+endif()
 
 # ---------------------------------------------------------------------------
 # Workbook oracle target

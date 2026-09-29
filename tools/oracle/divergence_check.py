@@ -130,6 +130,28 @@ def load_case_ids() -> set[str]:
     return load_case_catalog()[0]
 
 
+def ambiguous_formula_case_ids() -> dict[str, list[str]]:
+    """Formula-track case IDs defined by more than one suite.
+
+    `id` is documented as unique only *within* a suite (`tests/oracle/
+    README.md`); an `id:` / `ids:` divergence entry names a bare case ID
+    with no suite qualifier, so an entry meant for one suite would also
+    match another suite's case of the same ID. Returns id -> the sorted
+    suite names that define it, for ids defined by two or more suites.
+    """
+
+    owners: dict[str, list[str]] = {}
+    for path in sorted(FORMULA_CASES_DIR.glob("*.yaml")):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        suite = doc.get("suite")
+        if not isinstance(suite, str) or not suite:
+            continue
+        for case in doc.get("cases") or []:
+            if isinstance(case, dict) and isinstance(case.get("id"), str):
+                owners.setdefault(case["id"], []).append(suite)
+    return {case_id: sorted(suites) for case_id, suites in owners.items() if len(suites) > 1}
+
+
 def load_observations(golden_dirs: "list[Path] | None" = None) -> dict[str, str]:
     """Load case-id -> where Excel's answer for a still-skipped case is recorded.
 
@@ -329,6 +351,7 @@ def validate(path: Path, *, strict: bool) -> int:
 
     try:
         case_ids, suite_case_counts = load_case_catalog()
+        ambiguous_ids = ambiguous_formula_case_ids()
     except (OSError, json.JSONDecodeError, yaml.YAMLError) as exc:
         print(f"FAIL case discovery: {exc}", file=sys.stderr)
         return 1
@@ -372,6 +395,20 @@ def validate(path: Path, *, strict: bool) -> int:
                 errors.append(f"{where}: duplicate selector {label!r}")
             seen.add(label)
         case_id = ", ".join(values)
+        if selector in {"id", "ids"}:
+            # A bare id/ids selector carries no suite qualifier, so an
+            # entry naming an id that two suites both define would also
+            # skip/re-tolerance the other suite's case of the same id --
+            # see `ambiguous_formula_case_ids`. Refusing the entry here
+            # keeps the skip registry a case_id -> policy map that is
+            # actually one-to-one, without a suite-qualified id syntax.
+            for value in values:
+                if value in ambiguous_ids:
+                    owners = ", ".join(ambiguous_ids[value])
+                    errors.append(
+                        f"{case_id}: id {value!r} is defined by more than one suite ({owners}); "
+                        "a bare id/ids selector cannot disambiguate which case it targets"
+                    )
         if not isinstance(entry.get("reason"), str) or not entry["reason"].strip():
             errors.append(f"{case_id}: missing non-empty reason")
         if not isinstance(entry.get("prefer"), str) or not entry["prefer"].strip():

@@ -731,9 +731,10 @@ groups:
   # -------------------------------------------------------------------------
   # CELL(info_type, [reference]) — 12 info_type keys split between reference
   # lookups (address/col/row/contents/type) and metadata defaults
-  # (format/color/parentheses/prefix/protect/filename/width). Empty-string
-  # defaults such as prefix/filename use empty_string_readback in oracle
-  # cases because xlwings reads Excel's "" result back as a blank cell.
+  # (format/color/parentheses/prefix/protect/filename/width). prefix/filename
+  # return empty text (never Blank); their oracle goldens record `kind: text,
+  # value: ""` directly rather than leaning on the xlwings ""-reads-back-as-
+  # blank readback artifact.
   # -------------------------------------------------------------------------
   - function: "CELL"
     aspect: "info_type dispatch"

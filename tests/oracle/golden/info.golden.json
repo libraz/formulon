@@ -253,27 +253,27 @@
       "formula": "=T(42)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "t_of_bool",
       "formula": "=T(TRUE)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "t_of_blank_cell",
       "formula": "=T(A1)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "n_of_number",

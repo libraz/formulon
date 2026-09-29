@@ -94,7 +94,6 @@ cases:
   - id: cell_prefix_default
     description: '"prefix" returns the alignment-prefix character (\ or "" when none)'
     formula: '=CELL("prefix", A1)'
-    compare_mode: empty_string_readback
 
   - id: cell_protect_default
     description: '"protect" returns 1 if the cell is locked, else 0'
@@ -103,7 +102,6 @@ cases:
   - id: cell_filename_default
     description: '"filename" returns the workbook filename (empty when not saved)'
     formula: '=CELL("filename")'
-    compare_mode: empty_string_readback
 
   # -- error / arity ------------------------------------------------------
   - id: cell_unknown_info_type

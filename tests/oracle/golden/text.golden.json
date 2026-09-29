@@ -99,9 +99,9 @@
       "formula": "=LEFT(\"abcdef\",0)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "left_negative_is_value",
@@ -135,9 +135,9 @@
       "formula": "=RIGHT(\"abcdef\",0)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "right_more_than_length",
@@ -171,18 +171,18 @@
       "formula": "=MID(\"ab\",10,3)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "mid_zero_length",
       "formula": "=MID(\"abcdef\",2,0)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "mid_start_zero_is_value",
@@ -301,9 +301,9 @@
       "formula": "=CONCATENATE(\"\",\"\",\"\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "exact_same",
@@ -544,9 +544,9 @@
       "formula": "=UPPER(\"\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "upper_already_upper",
@@ -580,9 +580,9 @@
       "formula": "=LOWER(\"\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "lower_already_lower",
@@ -616,9 +616,9 @@
       "formula": "=PROPER(\"\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "proper_single_word",
@@ -670,9 +670,9 @@
       "formula": "=TRIM(\"     \")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "trim_strips_fullwidth_space",
@@ -814,9 +814,9 @@
       "formula": "=TRIM(\"　　　\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "clean_strips_chr7",
@@ -913,9 +913,9 @@
       "formula": "=REPT(\"ab\",0)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "rept_negative_is_value",
@@ -940,9 +940,9 @@
       "formula": "=REPT(\"\",5)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "textjoin_simple",
@@ -1304,9 +1304,9 @@
       "formula": "=LEFTB(\"hello\", 0)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "leftb_split_kanji_one_byte",
@@ -1439,9 +1439,9 @@
       "formula": "=MIDB(\"abc\", 10, 3)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "midb_start_zero_is_value",
@@ -2006,9 +2006,9 @@
       "formula": "=HYPERLINK(\"http://example.com\", \"\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     }
   ]
 }

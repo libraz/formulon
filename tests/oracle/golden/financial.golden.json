@@ -9,7 +9,7 @@
     "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
-    "abs": 0.001,
+    "abs": 1e-09,
     "rel": 1e-06
   },
   "cases": [
@@ -417,6 +417,10 @@
       "expect": {
         "kind": "number",
         "value": -1.9576
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 0.0
       }
     },
     {

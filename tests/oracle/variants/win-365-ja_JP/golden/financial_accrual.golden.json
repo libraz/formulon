@@ -9,7 +9,7 @@
     "generated_at": "2026-08-15T18:52:11Z"
   },
   "tolerance": {
-    "abs": 0.001,
+    "abs": 1e-09,
     "rel": 1e-06
   },
   "cases": [

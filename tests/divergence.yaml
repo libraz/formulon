@@ -254,6 +254,22 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112"
 
+  # Capture-driver exceptions land in the golden's own `skipped` field
+  # (oracle_gen.py's driver-exception path), which is a permanent GTEST_SKIP
+  # but was never mirrored here -- so divergence_check.py's per-cause tally,
+  # the release gate's sole accounting of what is skipped and why, silently
+  # omitted these two. Same mechanism and evidence shape as
+  # rows_of_mixed_row_array_literal above: formula2 readback empty.
+  - ids:
+      - rows_of_two_endpoint_mixed_axis
+      - columns_of_two_endpoint_mixed_axis
+    cause: excel-no-value
+    mode: skip-oracle
+    reason: "Mac Excel refuses the two-endpoint mixed-axis spelling (=ROWS(A:1), =COLUMNS(A:1)) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The three-endpoint spelling (=ROWS(1:3:E5) / =COLUMNS(1:3:E5), cases rows_of_whole_row_chained_with_cell / columns_of_whole_row_chained_with_cell) is accepted and has a real golden. Formulon's parser surfaces #NAME? for the rejected two-endpoint spelling."
+    prefer: formulon
+    first_noted: 2026-08-21
+    last_verified_excel_version: "16.112.1"
+
   # Stale `phonetic_returns_input_text` removed: PHONETIC now substitutes
   # each annotated span and passes the rest of the string through, so a
   # partially annotated `東京都` reads `トウキョウ都` on both engines. The

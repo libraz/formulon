@@ -387,9 +387,9 @@
       "formula": "=ROMAN(0)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "roman_four",

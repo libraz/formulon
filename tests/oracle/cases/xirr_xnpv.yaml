@@ -2,9 +2,11 @@ suite: xirr_xnpv
 description: XIRR / XNPV — irregular cash-flow NPV and IRR over date schedules
 # XIRR runs Newton-Raphson; Mac xlwings round-trips the final rate through
 # Excel's display formatter so we cap verification at the usual financial
-# tolerance (1e-4 relative). XNPV is closed-form so the absolute slack can
-# afford to be tighter.
-tolerance: { abs: 1.0e-3, rel: 1.0e-4 }
+# tolerance (1e-4 relative), not full double precision. XNPV is closed-form
+# so the suite default's absolute slack can afford to be tight; a case that
+# genuinely needs more Newton-Raphson convergence slack gets its own
+# per-case `tolerance:` override.
+tolerance: { abs: 1.0e-9, rel: 1.0e-4 }
 locale: ja-JP
 cases:
   # -- XNPV ----------------------------------------------------------------

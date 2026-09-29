@@ -1,10 +1,11 @@
 suite: financial_ext
 description: Non-DCC financial builtins — DOLLARDE / DOLLARFR / EFFECT / NOMINAL / FVSCHEDULE / PDURATION / RRI / MIRR / ISPMT. See `eval/builtins/financial.cpp` and `eval/financial_lazy.cpp` (MIRR).
-# Matches the tolerance used by `financial.yaml`: Mac xlwings returns some
-# Excel-computed floats as their displayed value rather than the underlying
-# double, so 1e-3 absolute / 1e-6 relative comfortably covers display-
-# rounding error while still catching real formula divergence.
-tolerance: { abs: 1.0e-3, rel: 1.0e-6 }
+# Matches `financial.yaml`: xlwings returns some Excel-computed floats as
+# their displayed value rather than the underlying double, but a suite-wide
+# absolute band wide enough for that also widens the relative precision of
+# every sub-1 result here. Display-rounded cases carry a per-case
+# `tolerance:` override instead.
+tolerance: { abs: 1.0e-9, rel: 1.0e-6 }
 locale: ja-JP
 cases:
   # -- DOLLARDE -----------------------------------------------------------

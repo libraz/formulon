@@ -650,6 +650,23 @@ INSTANTIATE_TEST_SUITE_P(WorkbookOracle, WorkbookOracleTest, ::testing::ValuesIn
 // explicitly so an empty golden_wb tree builds and runs cleanly.
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(WorkbookOracleTest);
 
+// The allowance above is suite-wide, so once FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR
+// is provenance-activated and starts pointing at a real directory (see
+// tests/oracle/CMakeLists.txt), a misconfigured or moved path would still
+// register zero WorkbookOracleTest cases and exit 0 with nothing asserting
+// the directory actually loaded. This plain, non-parameterized TEST closes
+// that gap the same way OracleGoldenDirectory does for the formula track;
+// it is a no-op skip today because the directory is empty by design before
+// activation.
+TEST(WorkbookOracleGoldenDirectory, NonEmptyConfiguredDirYieldsCases) {
+  const std::string dir = FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR;
+  if (dir.empty()) {
+    GTEST_SKIP() << "no workbook golden directory configured (not yet provenance-activated, or the variant build)";
+  }
+  EXPECT_FALSE(load_workbook_oracle_cases(dir, "").empty())
+      << "configured workbook golden directory " << dir << " loaded zero oracle cases";
+}
+
 // ---------------------------------------------------------------------------
 // Sheet indices
 // ---------------------------------------------------------------------------

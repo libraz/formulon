@@ -201,9 +201,9 @@
       "formula": "=CELL(\"prefix\", A1)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "cell_protect_default",
@@ -219,9 +219,9 @@
       "formula": "=CELL(\"filename\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "cell_unknown_info_type",

@@ -360,9 +360,9 @@
       "formula": "=+\"\"",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "number_plus_empty_string",

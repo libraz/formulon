@@ -1,10 +1,11 @@
 suite: financial_accrual
 description: Accrued-interest and specialized-depreciation financial builtins — ACCRINT / ACCRINTM / VDB / AMORDEGRC / AMORLINC. See `eval/builtins/financial_accrual.cpp` and `eval/builtins/financial_depreciation.cpp`.
-# Tolerances follow the other financial suites: VDB / accrual results are
-# small-to-mid magnitude (tens to low thousands), and xlwings reports
-# about 4 decimal digits. AMORDEGRC/AMORLINC are integer-valued in the
-# canonical French examples so we stay at the same shape.
-tolerance: { abs: 1.0e-3, rel: 1.0e-6 }
+# Tolerances follow the other financial suites: xlwings reports about 4
+# decimal digits for some results, which the suite default's tight relative
+# band does not cover down at sub-2 magnitudes (e.g. VDB(...) ~ 1.3). Those
+# cases carry a per-case `tolerance:` override instead of widening the
+# suite default.
+tolerance: { abs: 1.0e-9, rel: 1.0e-6 }
 locale: ja-JP
 cases:
   # -- ACCRINT -------------------------------------------------------------
@@ -33,6 +34,9 @@ cases:
   - id: vdb_single_day
     description: "VDB one-day DDB: 2400/3650*2 ~ 1.3151"
     formula: "=VDB(2400, 300, 10*365, 0, 1, 2, FALSE)"
+    # xlwings returned the Excel-displayed value (1.3151, 4dp) rather than
+    # the underlying double; Formulon's 1.315068 differs by ~3.2e-5.
+    tolerance: { abs: 1.0e-4 }
 
   - id: vdb_fractional_factor15
     description: "VDB fractional end 0.875 * (2400 * 0.15) = 315.0"

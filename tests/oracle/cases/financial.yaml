@@ -2,11 +2,13 @@ suite: financial
 description: PV / FV / PMT / NPER / NPV / IRR / RATE / IPMT / PPMT / CUMIPMT / CUMPRINC / SLN / SYD / DDB / DB — time-value-of-money and depreciation builtins
 # Mac xlwings returns some Excel-computed floats as their displayed value
 # (about 4 decimal digits) rather than the underlying double, so we cannot
-# verify to full double precision from this oracle. 1e-3 comfortably covers
-# the display-rounding error on PMT / NPV / PV / FV while still catching
-# any real formula divergence (the magnitudes here are hundreds to tens of
-# thousands, so the relative precision remains strict).
-tolerance: { abs: 1.0e-3, rel: 1.0e-6 }
+# verify to full double precision from those cases. A suite-wide 1e-3
+# absolute band would cover that, but it also silently widens every other
+# case to a ~2% relative band wherever the result magnitude is under 1 (RATE
+# is fractional, near-zero identities land here too) -- so the display-
+# rounded and near-zero-residual cases carry their own per-case `tolerance:`
+# override instead, and the suite default stays tight.
+tolerance: { abs: 1.0e-9, rel: 1.0e-6 }
 locale: ja-JP
 cases:
   # -- PV ------------------------------------------------------------------
@@ -171,6 +173,9 @@ cases:
   - id: ipmt_last_period
     description: "Final-period interest is small (most of payment is principal)"
     formula: "=IPMT(0.05/12, 60, 60, 25000)"
+    # xlwings returned the Excel-displayed value (-1.9576, 4dp) rather than
+    # the underlying double; Formulon's -1.957597 differs by ~3e-6.
+    tolerance: { abs: 1.0e-4 }
 
   - id: ipmt_per_out_of_range_is_num
     description: "per > nper -> #NUM!"

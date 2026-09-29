@@ -1,9 +1,9 @@
 suite: financial_coupon
 description: Coupon-date financial builtins — COUPPCD / COUPNCD / COUPNUM / COUPDAYBS / COUPDAYSNC / COUPDAYS. See `eval/builtins/financial_coupon.cpp` and the shared engine in `eval/coupon_schedule.cpp`.
 # Coupon-date results are integer-valued serials / day counts (except
-# COUPDAYS at basis 3, which is 365/freq); the tolerance shape
-# matches `financial_rates.yaml`.
-tolerance: { abs: 1.0e-3, rel: 1.0e-6 }
+# COUPDAYS at basis 3, which is 365/freq); the tolerance shape matches
+# `financial_rates.yaml`'s tightened default.
+tolerance: { abs: 1.0e-9, rel: 1.0e-6 }
 locale: ja-JP
 cases:
   # -- Canonical bond example (Microsoft docs shape) ----------------------

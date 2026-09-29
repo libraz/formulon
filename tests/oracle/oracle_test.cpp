@@ -928,6 +928,23 @@ INSTANTIATE_TEST_SUITE_P(Oracle, OracleTest, ::testing::ValuesIn(oracle_cases())
 // no real coverage is lost by relaxing the check here.
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(OracleTest);
 
+// The allowance above is suite-wide (it applies to every binary this .cpp is
+// compiled into, not just the variant one), so a primary or IronCalc build
+// pointed at a golden directory that is misconfigured, moved, or simply
+// missing would register zero OracleTest cases and still exit 0 -- the
+// "2k+ cases" the comment above promises is nowhere actually asserted. This
+// plain, non-parameterized TEST closes that gap without touching the
+// variant binary's legitimately-empty state: `configured_golden_dir()` is
+// only non-empty for the primary and IronCalc binaries.
+TEST(OracleGoldenDirectory, NonEmptyConfiguredDirYieldsCases) {
+  const std::string dir = configured_golden_dir();
+  if (dir.empty()) {
+    GTEST_SKIP() << "no primary golden directory configured for this binary (e.g. the variant oracle build)";
+  }
+  EXPECT_FALSE(load_oracle_cases(dir, "").empty())
+      << "configured golden directory " << dir << " loaded zero oracle cases";
+}
+
 // ---------------------------------------------------------------------------
 // Divergence registry
 // ---------------------------------------------------------------------------

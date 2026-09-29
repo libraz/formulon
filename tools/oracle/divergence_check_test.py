@@ -227,6 +227,64 @@ class SkipCauseTest(unittest.TestCase):
         self.assertIn("skipped cases by cause: 0 total", output)
 
 
+class AmbiguousCaseIdTest(unittest.TestCase):
+    """A bare `id:`/`ids:` selector cannot disambiguate a shared case id.
+
+    `date_9999_12_31` is defined by both `datetime_bounds` and
+    `datetime_bounds_1904`; an entry naming it with no suite qualifier
+    would also skip/re-tolerance the other suite's case of the same id.
+    """
+
+    COMMON = 'reason: "r"\n    prefer: formulon\n    last_verified_excel_version: "16.112"\n'
+
+    def _run(self, body: str) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "divergence.yaml"
+            path.write_text(body, encoding="utf-8")
+            out = io.StringIO()
+            err = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                status = divergence_check.validate(path, strict=False)
+            return status, out.getvalue() + err.getvalue()
+
+    def test_ambiguous_case_ids_lists_every_owning_suite(self) -> None:
+        ambiguous = divergence_check.ambiguous_formula_case_ids()
+        self.assertEqual(ambiguous.get("date_9999_12_31"), ["datetime_bounds", "datetime_bounds_1904"])
+        self.assertEqual(ambiguous.get("year_serial_zero"), ["datetime", "datetime_1904_text"])
+
+    def test_bare_id_selector_on_a_shared_id_fails(self) -> None:
+        status, output = self._run(
+            f"entries:\n  - id: date_9999_12_31\n    tolerance: {{ abs: 1.0 }}\n    {self.COMMON}"
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("defined by more than one suite", output)
+        self.assertIn("datetime_bounds", output)
+        self.assertIn("datetime_bounds_1904", output)
+
+    def test_ids_selector_on_a_shared_id_fails(self) -> None:
+        status, output = self._run(
+            f"entries:\n  - ids:\n      - year_serial_zero\n    tolerance: {{ abs: 1.0 }}\n    {self.COMMON}"
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("defined by more than one suite", output)
+
+    def test_suite_selector_on_the_same_suite_is_unaffected(self) -> None:
+        # `suite:` already names exactly one suite, so it is immune to the
+        # bare-id ambiguity this guards against.
+        status, _ = self._run(
+            "entries:\n"
+            f"  - suite: datetime_bounds\n    mode: skip-oracle\n    cause: accepted-divergence\n    {self.COMMON}"
+        )
+        self.assertEqual(status, 0)
+
+    def test_committed_registry_has_no_ambiguous_id_selector(self) -> None:
+        out = io.StringIO()
+        err = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            divergence_check.validate(divergence_check.DEFAULT_DIVERGENCE, strict=False)
+        self.assertNotIn("defined by more than one suite", out.getvalue() + err.getvalue())
+
+
 class IronCalcRegistryTest(unittest.TestCase):
     """The IronCalc skip registry is held to the same three properties.
 
