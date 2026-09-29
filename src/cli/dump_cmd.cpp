@@ -65,8 +65,10 @@ void emit_last_error(std::ostream& err, const char* subcommand) {
   err << '\n';
 }
 
-// Emits every formula cell on every sheet as `Sheet!A1 =formula`.
-fm_status_t dump_formulas(const fm_workbook_t* wb, std::ostream& out) {
+// Emits every formula cell (`Sheet!A1 =formula`) or, for `kValues`, every
+// non-blank cell (`Sheet!A1 <rendered>`) on every sheet.
+fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out) {
+  const bool formulas = mode == DumpMode::kFormulas;
   const std::size_t n_sheets = fm_workbook_sheet_count(wb);
   for (std::size_t s = 0; s < n_sheets; ++s) {
     const char* sheet_name = nullptr;
@@ -85,42 +87,12 @@ fm_status_t dump_formulas(const fm_workbook_t* wb, std::ostream& out) {
       if (auto rc = fm_workbook_cell_at(wb, s, i, &row, &col, &formula, &v); rc != 0) {
         return rc;
       }
-      if (formula == nullptr) {
+      if (formulas ? formula == nullptr : v.kind == FM_VAL_BLANK) {
         continue;
       }
       out << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '!'
           << format_a1(row, col) << ' '
-          << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
-    }
-  }
-  return 0;
-}
-
-// Emits every non-blank cell on every sheet as `Sheet!A1 <rendered>`.
-fm_status_t dump_values(const fm_workbook_t* wb, std::ostream& out) {
-  const std::size_t n_sheets = fm_workbook_sheet_count(wb);
-  for (std::size_t s = 0; s < n_sheets; ++s) {
-    const char* sheet_name = nullptr;
-    if (auto rc = fm_workbook_sheet_name(wb, s, &sheet_name); rc != 0) {
-      return rc;
-    }
-    std::size_t cell_count = 0;
-    if (auto rc = fm_workbook_cell_count(wb, s, &cell_count); rc != 0) {
-      return rc;
-    }
-    for (std::size_t i = 0; i < cell_count; ++i) {
-      std::uint32_t row = 0;
-      std::uint32_t col = 0;
-      const char* formula = nullptr;
-      fm_value_t v{};
-      if (auto rc = fm_workbook_cell_at(wb, s, i, &row, &col, &formula, &v); rc != 0) {
-        return rc;
-      }
-      if (v.kind == FM_VAL_BLANK) {
-        continue;
-      }
-      out << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '!'
-          << format_a1(row, col) << ' ' << escape_single_line(render_value(v)) << '\n';
+          << (formulas ? escape_single_line(formula) : escape_single_line(render_value(v))) << '\n';
     }
   }
   return 0;
@@ -307,10 +279,8 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   fm_status_t rc = 0;
   switch (mode) {
     case DumpMode::kFormulas:
-      rc = dump_formulas(wb.handle, out);
-      break;
     case DumpMode::kValues:
-      rc = dump_values(wb.handle, out);
+      rc = dump_cells(wb.handle, mode, out);
       break;
     case DumpMode::kSheets:
       rc = dump_sheets(wb.handle, out);
