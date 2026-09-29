@@ -841,6 +841,343 @@ TEST(XlsbWriter, EmitsDynamicArrayMetadataForSingleCellArrayAnchors) {
   EXPECT_TRUE(found_array_formula);
 }
 
+// ---------------------------------------------------------------------------
+// Ptg class byte at the formula's own root position. Measured against real
+// Excel 365 `.xlsb` output (`backup/oracle_probe/xlsb_spill/*.xlsb`,
+// `backup/oracle_probe/self_book/self_book_name.xlsb`): a bare reference
+// that is the *entire* formula body -- nothing else consumes it -- is
+// written in value class, not reference class. A reference-class token
+// cannot stand alone as a formula's result; without this a cell whose
+// whole formula is a bare range reference reads back `#VALUE!` in Excel.
+// A reference used as a function argument, or as an operand the `:` fast
+// path collapses into an Area/Area3d from within an otherwise-nested
+// position, is unaffected -- see the "stays reference class" tests below.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Returns the `rgce` bytes of the first `BrtArrFmla` record whose `colFirst`
+// equals `want_col`, or an empty vector if none matches.
+std::vector<std::uint8_t> FindArrFmlaRgce(const std::vector<std::uint8_t>& sheet_bytes, std::uint32_t want_col) {
+  ByteSpan cursor = SpanOf(sheet_bytes);
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    if (!record_or) {
+      return {};
+    }
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtArrFmla)) {
+      continue;
+    }
+    ByteSpan p = record_or.value().payload;
+    auto rw_first_or = read_u32(p);
+    auto rw_last_or = read_u32(p);
+    auto col_first_or = read_u32(p);
+    auto col_last_or = read_u32(p);
+    (void)rw_first_or;
+    (void)rw_last_or;
+    (void)col_last_or;
+    if (!col_first_or || col_first_or.value() != want_col) {
+      continue;
+    }
+    if (p.size < 1) {
+      return {};
+    }
+    p.data += 1;  // flag byte
+    p.size -= 1;
+    auto cce_or = read_u32(p);
+    if (!cce_or || cce_or.value() > p.size) {
+      return {};
+    }
+    return std::vector<std::uint8_t>(p.data, p.data + cce_or.value());
+  }
+  return {};
+}
+
+// Returns the `rgce` bytes of the `BrtFmlaNum` record at `want_col` (a
+// plain, non-array formula cell), or an empty vector if none matches.
+std::vector<std::uint8_t> FindFmlaNumRgce(const std::vector<std::uint8_t>& sheet_bytes, std::uint32_t want_col) {
+  ByteSpan cursor = SpanOf(sheet_bytes);
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    if (!record_or) {
+      return {};
+    }
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtFmlaNum)) {
+      continue;
+    }
+    ByteSpan p = record_or.value().payload;
+    auto col_or = read_u32(p);
+    if (!col_or || col_or.value() != want_col) {
+      continue;
+    }
+    // Skip iStyleRef(3) + fPhShow(1) + the double value(8) + grbitFlags(2).
+    if (p.size < 14) {
+      return {};
+    }
+    p.data += 14;
+    p.size -= 14;
+    auto cce_or = read_u32(p);
+    if (!cce_or || cce_or.value() > p.size) {
+      return {};
+    }
+    return std::vector<std::uint8_t>(p.data, p.data + cce_or.value());
+  }
+  return {};
+}
+
+}  // namespace
+
+TEST(XlsbWriter, RootLevelSameSheetRangeUsesValueClassArea) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.sheet(wb.add_sheet("Sheet1"));
+  sheet.set_cell_formula(1U, 2U, "=A10:A11");  // C2
+  ASSERT_TRUE(sheet.commit_spill(1U, 2U, 2U, 1U, {Value::number(5.0), Value::number(7.0)}));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  const std::vector<std::uint8_t> rgce = FindArrFmlaRgce(sheet_or.value(), 2U);
+  ASSERT_FALSE(rgce.empty());
+  EXPECT_EQ(rgce[0], 0x45U);  // PtgArea, value class (0x25 | value-class bit)
+}
+
+TEST(XlsbWriter, RootLevelCrossSheetRangeUsesValueClassArea3d) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  Sheet& sheet2 = wb.sheet(wb.add_sheet("Sheet2"));
+  sheet2.set_cell_formula(1U, 1U, "=Sheet1!A10:A11");  // B2
+  ASSERT_TRUE(sheet2.commit_spill(1U, 1U, 2U, 1U, {Value::number(5.0), Value::number(7.0)}));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet2.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  const std::vector<std::uint8_t> rgce = FindArrFmlaRgce(sheet_or.value(), 1U);
+  ASSERT_FALSE(rgce.empty());
+  EXPECT_EQ(rgce[0], 0x5BU);  // PtgArea3d, value class (0x3B | value-class bit)
+}
+
+TEST(XlsbWriter, RootLevelSingleCellReferenceUsesValueClassRef) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.sheet(wb.add_sheet("Sheet1"));
+  sheet.set_cell_formula(1U, 2U, "=A10");  // C2, plain (non-array) formula cell
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  const std::vector<std::uint8_t> rgce = FindFmlaNumRgce(sheet_or.value(), 2U);
+  ASSERT_FALSE(rgce.empty());
+  EXPECT_EQ(rgce[0], 0x44U);  // PtgRef, value class (0x24 | value-class bit)
+}
+
+TEST(XlsbWriter, RootLevelCrossSheetSingleCellReferenceUsesValueClassRef3d) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  Sheet& sheet2 = wb.sheet(wb.add_sheet("Sheet2"));
+  sheet2.set_cell_formula(1U, 2U, "=Sheet1!A10");  // C2
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet2.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  const std::vector<std::uint8_t> rgce = FindFmlaNumRgce(sheet_or.value(), 2U);
+  ASSERT_FALSE(rgce.empty());
+  EXPECT_EQ(rgce[0], 0x5AU);  // PtgRef3d, value class (0x3A | value-class bit)
+}
+
+TEST(XlsbWriter, NestedRangeArgumentStaysReferenceClass) {
+  // A reference consumed as a function argument is unaffected by the
+  // root-position promotion above: it must stay reference class, exactly
+  // as before. Real Excel 365 reads a value/array-class 3-D reference used
+  // this way as `#REF!`.
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.sheet(wb.add_sheet("Sheet1"));
+  sheet.set_cell_formula(1U, 2U, "=SUM(A10:A11)");  // C2, plain (non-array) formula cell
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  const std::vector<std::uint8_t> rgce = FindFmlaNumRgce(sheet_or.value(), 2U);
+  ASSERT_FALSE(rgce.empty());
+  EXPECT_EQ(rgce[0], 0x25U);  // PtgArea, reference class -- SUM's argument
+}
+
+TEST(XlsbWriter, RootLevelChainedRangeWithDefinedNameWrapsInValueClassMemFunc) {
+  // The general (non-collapsible) form of a `:` range at root position:
+  // one endpoint is a defined name, so the fast-path Area/Area3d collapse
+  // in `emit_range` does not apply. Measured against
+  // `backup/oracle_probe/self_book/self_book_name.xlsb`'s Sheet2!D1
+  // (`=Sheet1!A10:Book!Rng`): real Excel wraps `operand + operand +
+  // PtgRange` in a value-class `PtgMemFunc` ("function returns a range",
+  // per ptg.h) carrying the wrapped run's byte length ahead of it, because
+  // `PtgRange` itself carries no class bits to promote directly.
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.sheet(wb.add_sheet("Sheet1"));
+  DefinedName dn;
+  dn.name = "Rng";
+  dn.formula = "$A$10:$A$11";
+  dn.local_sheet_id = -1;
+  wb.set_defined_names({dn});
+  sheet.set_cell_formula(1U, 2U, "=A10:Rng");  // C2
+  ASSERT_TRUE(sheet.commit_spill(1U, 2U, 2U, 1U, {Value::number(5.0), Value::number(7.0)}));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  const std::vector<std::uint8_t> rgce = FindArrFmlaRgce(sheet_or.value(), 2U);
+  ASSERT_GE(rgce.size(), 3U);
+  EXPECT_EQ(rgce[0], 0x49U);  // PtgMemFunc, value class (0x29 | value-class bit)
+  const std::uint16_t wrapped_len = static_cast<std::uint16_t>(rgce[1] | (rgce[2] << 8U));
+  ASSERT_EQ(static_cast<std::size_t>(wrapped_len), rgce.size() - 3U);
+  EXPECT_EQ(rgce.back(), 0x11U);  // the wrapped run ends with PtgRange (`:`)
+}
+
+namespace {
+
+// Returns the `rgce` bytes of the `BrtName` record spelling `want_name`, or
+// an empty vector if none matches.
+std::vector<std::uint8_t> FindNameRgce(const std::vector<std::uint8_t>& workbook_bin, std::string_view want_name) {
+  ByteSpan cursor = SpanOf(workbook_bin);
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    if (!record_or) {
+      return {};
+    }
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtName)) {
+      continue;
+    }
+    ByteSpan p = record_or.value().payload;
+    if (p.size < 9U) {
+      return {};
+    }
+    p.data += 9;  // grbit(4) + chKey(1) + itab(4)
+    p.size -= 9;
+    auto cch_or = read_u32(p);
+    if (!cch_or || cch_or.value() * 2U > p.size) {
+      return {};
+    }
+    std::string decoded;
+    decoded.reserve(cch_or.value());
+    for (std::uint32_t i = 0; i < cch_or.value(); ++i) {
+      decoded.push_back(static_cast<char>(p.data[i * 2U]));
+    }
+    p.data += cch_or.value() * 2U;
+    p.size -= cch_or.value() * 2U;
+    auto cce_or = read_u32(p);
+    if (!cce_or || cce_or.value() > p.size) {
+      return {};
+    }
+    if (decoded != want_name) {
+      continue;
+    }
+    return std::vector<std::uint8_t>(p.data, p.data + cce_or.value());
+  }
+  return {};
+}
+
+// Returns `xl/workbook.bin`'s `BrtWbView` `itabCur` field (u32 at payload
+// offset 24), or `0xFFFFFFFF` if the record is missing or truncated.
+std::uint32_t FindItabCur(const std::vector<std::uint8_t>& workbook_bin) {
+  ByteSpan cursor = SpanOf(workbook_bin);
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    if (!record_or) {
+      return 0xFFFFFFFFU;
+    }
+    if (record_or.value().type != 158U) {  // BrtWbView
+      continue;
+    }
+    ByteSpan p = record_or.value().payload;
+    if (p.size < 28U) {
+      return 0xFFFFFFFFU;
+    }
+    p.data += 24;
+    auto itab_or = read_u32(p);
+    return itab_or ? itab_or.value() : 0xFFFFFFFFU;
+  }
+  return 0xFFFFFFFFU;
+}
+
+}  // namespace
+
+TEST(XlsbWriter, DefinedNameBodyRootReferenceStaysReferenceClass) {
+  // Measured against backup/oracle_probe/self_book/self_book_name.xlsb's
+  // BrtName "Rng" (=Sheet1!$A$10:$A$11): unlike a cell formula, a defined
+  // name's own body keeps reference class at its root.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  DefinedName dn;
+  dn.name = "Rng";
+  dn.formula = "Sheet1!$A$10:$A$11";
+  dn.local_sheet_id = -1;
+  wb.set_defined_names({dn});
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto wb_bin_or = zip.read_entry("xl/workbook.bin");
+  ASSERT_TRUE(static_cast<bool>(wb_bin_or));
+
+  const std::vector<std::uint8_t> rgce = FindNameRgce(wb_bin_or.value(), "Rng");
+  const std::vector<std::uint8_t> want = {0x3B, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0A,
+                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  EXPECT_EQ(rgce, want);
+}
+
+TEST(XlsbWriter, ItabCurMatchesTheTabSelectedSheet) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  Sheet& sheet2 = wb.sheet(wb.add_sheet("Sheet2"));
+  sheet2.mutable_view().tab_selected = true;
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto wb_bin_or = zip.read_entry("xl/workbook.bin");
+  ASSERT_TRUE(static_cast<bool>(wb_bin_or));
+
+  EXPECT_EQ(FindItabCur(wb_bin_or.value()), 1U);
+}
+
+TEST(XlsbWriter, ItabCurIsZeroWhenNoSheetIsTabSelected) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto wb_bin_or = zip.read_entry("xl/workbook.bin");
+  ASSERT_TRUE(static_cast<bool>(wb_bin_or));
+
+  EXPECT_EQ(FindItabCur(wb_bin_or.value()), 0U);
+}
+
 TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
   // An engine-authored formula encodes to a Ptg stream, survives the
   // write, and decodes back to the same formula text on read.

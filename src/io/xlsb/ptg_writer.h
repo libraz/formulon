@@ -61,6 +61,16 @@ std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name);
 /// assignments.
 using SheetRangeTable = std::vector<std::pair<std::int32_t, std::int32_t>>;
 
+/// Ptg class of a formula's own root token (the whole formula, or a bare
+/// reference an enclosing function/operator does not consume). Measured
+/// against real Excel 365 output: a cell formula's root promotes to value
+/// class (`kValue`); a `BrtName` defined-name body's root stays reference
+/// class (`kReference`). See `encode_ptgs`'s doc comment.
+enum class PtgRootClass : std::uint8_t {
+  kValue,
+  kReference,
+};
+
 /// Result of `encode_ptgs`: the main token stream plus the array-
 /// constant extra-data area a `CellParsedFormula` appends after it.
 struct EncodedFormula {
@@ -126,13 +136,17 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
 /// the workbook, so any sheet referenced by a live formula resolves.)
 /// `name_table` resolves `NameRef` nodes and future-function `Call`
 /// callees to a `PtgName` `ilbl` (see `collect_ptg_names`); a name
-/// absent from the table fails the encode.
+/// absent from the table fails the encode. `root_class` selects whether
+/// a bare reference/range that is `node` itself (not consumed by any
+/// enclosing function or operator) promotes to value class -- see
+/// `PtgRootClass`.
 ///
 /// Returns `kIoXlsbUnsupportedPtg` for any node kind outside the
 /// supported set (see header banner). The error context names the
 /// offending node kind.
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
-                                            const SheetRangeTable& sheet_ranges, const NameTable& name_table);
+                                            const SheetRangeTable& sheet_ranges, const NameTable& name_table,
+                                            PtgRootClass root_class);
 
 }  // namespace xlsb
 }  // namespace io

@@ -75,7 +75,8 @@ Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::v
     return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb writer: formula failed to parse for Ptg encoding",
                       std::string("context=xlsb_cell_writer formula=") + cell.formula_text);
   }
-  return encode_ptgs(*root, sheet_names, sheet_ranges, name_table);
+  // Cell formulas: a bare reference/range as the whole formula promotes.
+  return encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kValue);
 }
 
 /// Emits a `BrtFmla*` record matching `cached`'s kind, with the encoded

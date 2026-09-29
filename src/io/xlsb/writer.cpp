@@ -1065,7 +1065,8 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
     if (root->kind() == parser::NodeKind::Lambda) {
       p[0] |= 0x10U;
     }
-    auto encoded_or = encode_ptgs(*root, sheet_names, sheet_ranges, name_table);
+    // Measured: a defined-name body's root reference stays reference class.
+    auto encoded_or = encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kReference);
     if (!encoded_or) {
       return encoded_or.error();
     }
@@ -1112,8 +1113,8 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   // `xl/workbook.bin`):
   //   * BrtFileVersion : appName "xl", lastEdited/lowestEdited "7", build.
   //   * BrtWbProp      : default flags + defaultThemeVersion 202300.
-  //   * BrtWbView      : a single window view; itabCur is left at 0 (first
-  //                      sheet) since the model does not track an active tab.
+  //   * BrtWbView      : a single window view; itabCur (offset 24, u32) is
+  //                      patched below to the tab-selected sheet.
   // Omitting these produced a workbook stream Excel rejected.
   static const std::vector<std::uint8_t> kFileVersionPayload = {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
@@ -1133,7 +1134,21 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   }
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtWbProp), wb_prop_payload);
   emit_record(body, kBrtBeginBookViews, ByteSpan{});
-  emit_record(body, kBrtWbView, kWbViewPayload);
+  // itabCur (u32 at offset 24): measured to equal the tab-selected sheet's
+  // index in every fixture; a mismatch made Excel show every tab selected.
+  std::vector<std::uint8_t> wb_view_payload = kWbViewPayload;
+  std::uint32_t itab_cur = 0U;
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    if (wb.sheet(i).view().tab_selected) {
+      itab_cur = static_cast<std::uint32_t>(i);
+      break;
+    }
+  }
+  wb_view_payload[24] = static_cast<std::uint8_t>(itab_cur & 0xFFU);
+  wb_view_payload[25] = static_cast<std::uint8_t>((itab_cur >> 8) & 0xFFU);
+  wb_view_payload[26] = static_cast<std::uint8_t>((itab_cur >> 16) & 0xFFU);
+  wb_view_payload[27] = static_cast<std::uint8_t>((itab_cur >> 24) & 0xFFU);
+  emit_record(body, kBrtWbView, wb_view_payload);
   emit_record(body, kBrtEndBookViews, ByteSpan{});
 
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginBundleShs), ByteSpan{});

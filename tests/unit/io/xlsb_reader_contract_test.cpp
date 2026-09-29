@@ -424,7 +424,7 @@ std::vector<std::uint8_t> EncodeRgce(std::string_view formula, const std::vector
   if (root == nullptr) {
     return {};
   }
-  auto encoded = io::xlsb::encode_ptgs(*root, sheet_names, sheet_ranges, {});
+  auto encoded = io::xlsb::encode_ptgs(*root, sheet_names, sheet_ranges, {}, io::xlsb::PtgRootClass::kValue);
   EXPECT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
   if (!encoded) {
     return {};

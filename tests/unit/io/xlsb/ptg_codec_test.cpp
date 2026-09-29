@@ -46,7 +46,7 @@ std::string RoundTrip(std::string_view formula, const std::vector<std::string>& 
   std::unordered_set<std::uint64_t> seen;
   collect_ptg_sheet_ranges(*root, sheet_names, sheet_ranges, seen);
 
-  auto encoded = encode_ptgs(*root, sheet_names, sheet_ranges, {});
+  auto encoded = encode_ptgs(*root, sheet_names, sheet_ranges, {}, PtgRootClass::kValue);
   EXPECT_TRUE(static_cast<bool>(encoded))
       << "encode failed for: " << formula << " | " << (encoded ? "" : encoded.error().message);
   if (!encoded) {
@@ -177,7 +177,7 @@ TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
     ASSERT_EQ(ranges.size(), 1U) << c.formula;
     EXPECT_EQ(ranges[0].first, -2);
     EXPECT_EQ(ranges[0].second, -2);
-    auto encoded = encode_ptgs(*root, sheets, ranges, table);
+    auto encoded = encode_ptgs(*root, sheets, ranges, table, PtgRootClass::kValue);
     ASSERT_TRUE(static_cast<bool>(encoded)) << c.formula << " | " << (encoded ? "" : encoded.error().message);
     EXPECT_EQ(encoded.value().rgce, c.want) << c.formula;
 
@@ -240,7 +240,7 @@ TEST(XlsbPtgCodec, GenuineThreeDimensionalRangeRoundTrips) {
   ASSERT_NE(node, nullptr);
 
   const SheetRangeTable sheet_ranges = {{0, 2}};  // Sheet1 (itab 0) : Sheet3 (itab 2)
-  auto encoded = encode_ptgs(*node, sheets, sheet_ranges, {});
+  auto encoded = encode_ptgs(*node, sheets, sheet_ranges, {}, PtgRootClass::kValue);
   ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
 
   Arena dec_arena;
@@ -269,7 +269,7 @@ TEST(XlsbPtgCodec, GenuineThreeDimensionalRangeTailRoundTrips) {
   parser::AstNode* node = parser::make_ref3d_range(arena, "Sheet1", "Sheet3", a, b);
   ASSERT_NE(node, nullptr);
   const SheetRangeTable sheet_ranges = {{0, 2}};
-  auto encoded = encode_ptgs(*node, sheets, sheet_ranges, {});
+  auto encoded = encode_ptgs(*node, sheets, sheet_ranges, {}, PtgRootClass::kValue);
   ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
   Arena dec_arena;
   ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
@@ -439,7 +439,7 @@ TEST(XlsbPtgCodec, PtgArrayCoversNumericElementsOnlyAndSaysSoBothWays) {
   parser::AstNode* root = parser_with_text.parse();
   ASSERT_NE(root, nullptr);
   ASSERT_TRUE(parser_with_text.errors().empty());
-  auto encoded = encode_ptgs(*root, {}, {}, {});
+  auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue);
   ASSERT_FALSE(static_cast<bool>(encoded));
   EXPECT_EQ(encoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
 
@@ -550,7 +550,7 @@ TEST(XlsbPtgCodec, DecoderRejectsAstDeeperThanSharedLimit) {
     root = parser::make_unary_op(enc_arena, parser::UnaryOp::Plus, root);
   }
   ASSERT_NE(root, nullptr);
-  auto encoded = encode_ptgs(*root, {}, {}, {});
+  auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue);
   ASSERT_TRUE(static_cast<bool>(encoded));
 
   Arena dec_arena;
@@ -567,7 +567,7 @@ TEST(XlsbPtgCodec, EncoderUsesExcelClassesForReferenceArgumentsAndFunctionResult
   parser::AstNode* root = p.parse();
   ASSERT_NE(root, nullptr);
   ASSERT_TRUE(p.errors().empty());
-  auto encoded = encode_ptgs(*root, {}, {}, {});
+  auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue);
   ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
 
   // Real Excel writes the range argument as reference-class PtgArea (0x25)
@@ -586,7 +586,7 @@ TEST(XlsbPtgCodec, EncoderRejectsUnregisteredDefinedName) {
   parser::Parser p("MyName", arena);
   parser::AstNode* root = p.parse();
   ASSERT_NE(root, nullptr);
-  auto encoded = encode_ptgs(*root, {}, {}, {});
+  auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue);
   ASSERT_FALSE(static_cast<bool>(encoded));
   EXPECT_EQ(encoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
 }
@@ -597,7 +597,7 @@ TEST(XlsbPtgCodec, EncoderLowersRegisteredDefinedName) {
   parser::AstNode* root = p.parse();
   ASSERT_NE(root, nullptr);
   const NameTable names = {{"MyName", 1U}};
-  auto encoded = encode_ptgs(*root, {}, {}, names);
+  auto encoded = encode_ptgs(*root, {}, {}, names, PtgRootClass::kValue);
   ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
 
   Arena dec_arena;
