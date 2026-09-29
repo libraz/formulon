@@ -1285,7 +1285,8 @@ TEST(XlsbWriter, DefinedNameWithFutureFunctionRoundTrips) {
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
   ASSERT_EQ(read_or.value().workbook.defined_names().size(), 1U);
   EXPECT_EQ(read_or.value().workbook.defined_names()[0].name, "Joined");
-  EXPECT_EQ(read_or.value().workbook.defined_names()[0].formula, "_xlfn.TEXTJOIN(\",\",TRUE,A1:A2)");
+  // Read back in formula-bar spelling, as the OOXML reader does.
+  EXPECT_EQ(read_or.value().workbook.defined_names()[0].formula, "TEXTJOIN(\",\",TRUE,A1:A2)");
 }
 
 // True when `haystack` contains `needle` encoded the way `BrtName`

@@ -272,6 +272,31 @@ TEST(StoragePrefixContainers, AtAndSpillOperatorsRoundTripInBothContainers) {
   }
 }
 
+TEST(StoragePrefixContainers, AtAndSpillOperatorsInNamesRoundTripInBothContainers) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("F");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("AtName", "@F!$A$1:$A$2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("SpillName", "F!$A$1#")));
+
+  auto xlsx_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(xlsx_or)) << xlsx_or.error().message;
+  auto from_xlsx = read_ooxml(test::span_of(xlsx_or.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  auto xlsb_or = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message << " | " << xlsb_or.error().context;
+  auto from_xlsb = xlsb::read_xlsb(test::span_of(xlsb_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  EXPECT_EQ(from_xlsb.value().undecoded_defined_name_count, 0U);
+
+  for (const Workbook* loaded : {&from_xlsx.value().workbook, &from_xlsb.value().workbook}) {
+    std::vector<std::string> formulas;
+    for (const DefinedName& dn : loaded->defined_names()) {
+      formulas.push_back(dn.name + "=" + dn.formula);
+    }
+    EXPECT_EQ(formulas, (std::vector<std::string>{"AtName=@F!$A$1:$A$2", "SpillName=F!$A$1#"}));
+  }
+}
+
 TEST(StoragePrefixContainers, IsoCeilingStaysBareOnOoxmlSave) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("F"));

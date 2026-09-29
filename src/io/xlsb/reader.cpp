@@ -30,6 +30,7 @@
 
 #include "default_content_type.h"
 #include "io/dynamic_array_formula.h"
+#include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
@@ -46,6 +47,7 @@
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "parser/formula_prefix.h"
 #include "passthrough_part.h"
 #include "phonetic.h"
 #include "pivot/pivot_cache.h"
@@ -869,7 +871,10 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     // `=`), matching the OOXML `<definedName>` element's text content.
     DefinedName dn;
     dn.name = entry.name;
-    dn.formula = parser::format_formula(*ast_or.value());
+    // The decoder names a hidden-name callee with its storage prefix; the
+    // text reads back in formula-bar spelling, like a cell's.
+    dn.formula = parser::spell_storage_operators(
+        parser::strip_storage_prefixes(parser::format_formula(*ast_or.value()), &has_storage_prefix));
     dn.local_sheet_id = entry.itab;
     dn.hidden = entry.hidden;
     dn.comment = std::move(comment_or.value());
