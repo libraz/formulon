@@ -640,6 +640,7 @@ bool CalleePrintsBare(const AstNode& callee) {
     case NodeKind::Lambda:
     case NodeKind::NameRef:
     case NodeKind::LambdaCall:
+    case NodeKind::UnionOp:  // prints its own parentheses
       return true;
     case NodeKind::Ref:
       return !callee.as_ref().sheet.empty() || !is_cellref_shaped_function_name(format_a1(callee.as_ref()));

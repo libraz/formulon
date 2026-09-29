@@ -699,7 +699,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // (chained curry) and a sheet- or self-book-qualified name
       // (`Sheet1!Fn(2)`, `[0]!Fn(2)`, whose unqualified spelling is an
       // ordinary `Call`) participate, plus a cell or area reference
-      // (`A1(1)`, `Sheet1!LOG10(100)`, `(A1:A2)(1)`).
+      // (`A1(1)`, `Sheet1!LOG10(100)`, `(A1:A2)(1)`, `(A1,B1)(1)`).
       // Parenthesised lambda expressions like `(LAMBDA(x, x))(5)` still
       // work because `parse_paren_atom` unwraps a single inner expression
       // to its own kind; the outer Lambda kind is preserved across the
@@ -709,13 +709,15 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // ever sees them.
       const NodeKind lk = lhs->kind();
       const bool sheet_name = (lk == NodeKind::NameRef && !lhs->as_name_sheet().empty()) || is_self_book_name_ref(*lhs);
-      // A cell or, parenthesised, an area invoked as a callee (`A1(1)`,
-      // `(A1:A2)(1)`), which Excel accepts and evaluates to #REF!.
+      // A cell or, parenthesised, an area, union or intersection invoked as
+      // a callee (`A1(1)`, `(A1:A2)(1)`, `(A1,B1)(1)`), which Excel accepts
+      // and evaluates to #REF!.
       auto is_cell = [](const AstNode& n) {
         return n.kind() == NodeKind::Ref && !n.as_ref().is_full_col && !n.as_ref().is_full_row;
       };
       const bool cell_callee =
-          is_cell(*lhs) || (lk == NodeKind::RangeOp && is_cell(lhs->as_range_lhs()) && is_cell(lhs->as_range_rhs()));
+          is_cell(*lhs) || lk == NodeKind::UnionOp || lk == NodeKind::IntersectOp ||
+          (lk == NodeKind::RangeOp && is_cell(lhs->as_range_lhs()) && is_cell(lhs->as_range_rhs()));
       if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall && !sheet_name && !cell_callee) {
         // Special-case: a *Bool* literal LHS followed by an empty `()` is
         // treated as a no-op so the surrounding Pratt loop can continue and

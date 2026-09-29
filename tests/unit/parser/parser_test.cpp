@@ -419,6 +419,8 @@ TEST(ParserCellRefCall, CellInvokedAsCallee) {
   EXPECT_EQ(ParseToSexpr("=Sheet1!LOG10(100)"), "(lambda-call (ref Sheet1!LOG10) (num 100))");
   EXPECT_EQ(ParseToSexpr("=(LOG10)(100)"), "(lambda-call (ref LOG10) (num 100))");
   EXPECT_EQ(ParseToSexpr("=(A1:A2)(1)"), "(lambda-call (range (ref A1) (ref A2)) (num 1))");
+  EXPECT_NE(ParseToSexpr("=(A1,B1)(1)").find("(lambda-call (union"), std::string::npos);
+  EXPECT_NE(ParseToSexpr("=(A1:B2 B1:B3)(1)").find("(lambda-call (intersect"), std::string::npos);
 }
 
 // ---------------------------------------------------------------------------

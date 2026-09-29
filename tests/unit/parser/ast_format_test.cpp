@@ -252,6 +252,8 @@ TEST(AstFormat, CellReferenceCallee) {
   ExpectRoundTripsToSame("=Sheet1!LOG10(100)");
   ExpectRoundTripsToSame("=(LOG10)(100)");
   ExpectRoundTripsToSame("=(A1:A2)(1)");
+  ExpectRoundTripsToSame("=(A1,B1)(1)");
+  ExpectRoundTripsToSame("=(A1:B2 B1:B3)(1)");
   ExpectRoundTripsToSame("=LOG10(100)");
 }
 
