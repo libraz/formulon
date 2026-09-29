@@ -24,6 +24,7 @@ tallied in cases so the removed population is visible.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
 import sys
@@ -99,6 +100,15 @@ SKIP_CAUSES = {
 }
 
 
+@functools.cache
+def _formula_case_docs() -> tuple[dict, ...]:
+    """Parsed formula-track case files, read once per process (read-only)."""
+
+    return tuple(
+        yaml.safe_load(path.read_text(encoding="utf-8")) or {} for path in sorted(FORMULA_CASES_DIR.glob("*.yaml"))
+    )
+
+
 def load_case_catalog() -> tuple[set[str], dict[str, int]]:
     """Load the raw case IDs and the per-suite case counts used by both tracks.
 
@@ -109,8 +119,7 @@ def load_case_catalog() -> tuple[set[str], dict[str, int]]:
 
     ids: set[str] = set()
     suites: dict[str, int] = {}
-    for path in sorted(FORMULA_CASES_DIR.glob("*.yaml")):
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    for doc in _formula_case_docs():
         cases = [case for case in doc.get("cases") or [] if isinstance(case, dict) and isinstance(case.get("id"), str)]
         if isinstance(doc.get("suite"), str):
             suites[doc["suite"]] = len(cases)
@@ -141,8 +150,7 @@ def ambiguous_formula_case_ids() -> dict[str, list[str]]:
     """
 
     owners: dict[str, list[str]] = {}
-    for path in sorted(FORMULA_CASES_DIR.glob("*.yaml")):
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    for doc in _formula_case_docs():
         suite = doc.get("suite")
         if not isinstance(suite, str) or not suite:
             continue
