@@ -571,7 +571,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   const auto mark_release_targets_dirty = [&](const std::vector<CellNodeId>& anchors) {
     for (const CellNodeId anchor : anchors) {
       engine.dirty_.mark(anchor);
-      for (const CellNodeId dependent : engine.graph_.dependents_of(anchor)) {
+      for (const CellNodeId dependent : engine.graph_.dependents_of_ref(anchor)) {
         engine.dirty_.mark(dependent);
       }
       engine.mark_range_dependents_dirty_locked(anchor);
@@ -605,7 +605,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     std::size_t bfs_head = 0;
     while (bfs_head < bfs_queue.size()) {
       const CellNodeId current = bfs_queue[bfs_head++];
-      for (CellNodeId dependent : engine.graph_.dependents_of(current)) {
+      for (CellNodeId dependent : engine.graph_.dependents_of_ref(current)) {
         if (!engine.dirty_.contains(dependent)) {
           engine.dirty_.mark(dependent);
           bfs_queue.push_back(dependent);

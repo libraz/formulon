@@ -224,11 +224,7 @@ void DepGraph::remove_node(CellNodeId node) {
 }
 
 std::vector<CellNodeId> DepGraph::dependents_of(CellNodeId node) const {
-  auto pos = reverse_.find(node);
-  if (pos == reverse_.end()) {
-    return {};
-  }
-  return pos->second;
+  return dependents_of_ref(node);
 }
 
 std::vector<CellNodeId> DepGraph::dependencies_of(CellNodeId node) const {
@@ -240,6 +236,15 @@ const std::vector<CellNodeId>& DepGraph::dependencies_of_ref(CellNodeId node) co
   auto pos = forward_.find(node);
   if (pos == forward_.end()) {
     return kEmptyDependencies;
+  }
+  return pos->second;
+}
+
+const std::vector<CellNodeId>& DepGraph::dependents_of_ref(CellNodeId node) const noexcept {
+  static const std::vector<CellNodeId> kEmptyDependents;
+  auto pos = reverse_.find(node);
+  if (pos == reverse_.end()) {
+    return kEmptyDependents;
   }
   return pos->second;
 }

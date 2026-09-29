@@ -187,6 +187,11 @@ class DepGraph {
   /// until this graph is mutated.
   const std::vector<CellNodeId>& dependencies_of_ref(CellNodeId node) const noexcept;
 
+  /// Borrowed version of `dependents_of`, for recalc internals that only
+  /// need to traverse an adjacency list (e.g. the dirtiness-propagation
+  /// BFS). The returned reference stays valid until this graph is mutated.
+  const std::vector<CellNodeId>& dependents_of_ref(CellNodeId node) const noexcept;
+
   /// Computes the strongly connected components of the graph using an
   /// iterative Tarjan algorithm. Each inner vector is one SCC; SCCs are
   /// emitted in **reverse-topological order**: a component appears before

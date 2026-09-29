@@ -51,7 +51,7 @@ void mark_spill_release_wave(const RecalcEngine::LockedMutator& mutator, const s
                              const DepGraph& graph) {
   for (const CellNodeId anchor : anchors) {
     mutator.mark_dirty(anchor);
-    for (const CellNodeId dependent : graph.dependents_of(anchor)) {
+    for (const CellNodeId dependent : graph.dependents_of_ref(anchor)) {
       mutator.mark_dirty(dependent);
     }
     mutator.mark_range_dependents_dirty(anchor);
@@ -354,7 +354,7 @@ void RecalcEngine::unregister_formula_locked(CellNodeId cell) {
   // would otherwise erase the only path that can wake compact range
   // watchers (including a watcher that was linked through a previous spill
   // footprint), leaving them with a stale cached aggregate.
-  for (CellNodeId dependent : graph_.dependents_of(cell)) {
+  for (CellNodeId dependent : graph_.dependents_of_ref(cell)) {
     dirty_.mark(dependent);
   }
   mark_range_dependents_dirty_locked(cell);
@@ -483,7 +483,7 @@ recalc_next_wave:
   std::size_t bfs_head = 0;
   while (bfs_head < bfs_queue.size()) {
     const CellNodeId current = bfs_queue[bfs_head++];
-    for (CellNodeId dependent : graph_.dependents_of(current)) {
+    for (CellNodeId dependent : graph_.dependents_of_ref(current)) {
       if (!dirty_.contains(dependent)) {
         dirty_.mark(dependent);
         bfs_queue.push_back(dependent);
@@ -964,7 +964,7 @@ partial_recalc_next_wave:
   std::size_t prop_head = 0;
   while (prop_head < propagation_queue.size()) {
     const CellNodeId current = propagation_queue[prop_head++];
-    for (CellNodeId dependent : graph_.dependents_of(current)) {
+    for (CellNodeId dependent : graph_.dependents_of_ref(current)) {
       if (closure.count(dependent) == 0U) {
         continue;
       }

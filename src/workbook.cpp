@@ -952,7 +952,7 @@ eval::CellNodeId make_node(std::size_t sheet_index, std::uint32_t row, std::uint
 // under a single critical section, which keeps the `Sheet` write that
 // follows from racing against a concurrent `recalc_parallel`.
 void mark_dependents_dirty(const eval::RecalcEngine::LockedMutator& mutator, eval::CellNodeId cell) {
-  for (eval::CellNodeId dep : mutator.dep_graph().dependents_of(cell)) {
+  for (eval::CellNodeId dep : mutator.dep_graph().dependents_of_ref(cell)) {
     mutator.mark_dirty(dep);
   }
   mutator.mark_range_dependents_dirty(cell);
