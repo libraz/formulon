@@ -32,6 +32,10 @@ namespace io {
 struct DefinedName;
 }  // namespace io
 
+namespace parser {
+class AstNode;
+}  // namespace parser
+
 namespace eval {
 
 class EvalContext;
@@ -77,6 +81,16 @@ const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_vie
 /// sheet of `workbook` or no definition is visible from it.
 const io::DefinedName* find_sheet_defined_name(const Workbook& workbook, std::string_view sheet,
                                                std::string_view name) noexcept;
+
+/// Parses the body of the already-located definition `def` into `arena` and
+/// writes the context it evaluates in to `*out_ctx`: the using formula's
+/// lexical scope cleared, `*frame` pushed onto the cycle chain, and a
+/// sheet-local definition's own sheet as the name scope. Returns null with
+/// `*out_err` set when `def` is null or its body is empty or unparsable
+/// (`#NAME?`), or `def` is already being expanded (`#REF!`). `*frame` must
+/// outlive every use of `*out_ctx`.
+const parser::AstNode* prepare_defined_name_body(const io::DefinedName* def, Arena& arena, const EvalContext& ctx,
+                                                 DefinedNameFrame* frame, EvalContext* out_ctx, ErrorCode* out_err);
 
 /// Resolves the defined name `name` by parsing and evaluating its definition
 /// in `ctx`. The definition may be a constant (`=0.1`), a reference

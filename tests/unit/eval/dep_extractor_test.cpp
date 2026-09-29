@@ -1201,6 +1201,16 @@ TEST(DepExtractor, DynamicEndpointThroughDefinedName) {
   EXPECT_EQ(Sorted(ExtractFrom("SUM(A1:INDEX(Rng,3))", wb).cell_deps), RectCells(0U, 0U, 9U, 0U, 2U));
 }
 
+TEST(DepExtractor, DefinedNameEndpointRegistersBoundingBox) {
+  // `A1:CellNm` reads A1:C3, including B2 which neither endpoint names.
+  Workbook wb = Workbook::create();
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"CellNm", "=Sheet1!$C$3", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+  const std::vector<CellNodeId> deps = Sorted(ExtractFrom("SUM(A1:CellNm)", wb).cell_deps);
+  EXPECT_EQ(deps, RectCells(0U, 0U, 2U, 0U, 2U));
+}
+
 TEST(DepExtractor, DynamicEndpointOnAnotherSheet) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");

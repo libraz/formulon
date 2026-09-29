@@ -377,11 +377,10 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
 
 // Resolves a bounded `RangeOp`'s two endpoints and hands back the union
 // rectangle as the corner Refs `expand_range` takes. Endpoints may be
-// plain Refs (the simple `A1:B2` form) or reference-producing calls
-// (`OFFSET(...)` / `INDIRECT(...)`); anything else surfaces as `#REF!` /
-// `#VALUE!` per `resolve_range_endpoint`'s error code. Each corner keeps
-// its own sheet qualifier so `expand_range` stays the single place that
-// rejects a mismatched pair.
+// plain Refs (the simple `A1:B2` form), reference-producing calls
+// (`OFFSET(...)` / `INDIRECT(...)`) or names standing for either; anything
+// else surfaces per `resolve_range_endpoint`'s error code. Both corners
+// carry the sheet `merge_range_endpoint_sheets` settles.
 //
 // Returns `false` with the endpoint's error code in `*out_err`.
 bool union_endpoint_refs(const parser::AstNode& lhs_ast, const parser::AstNode& rhs_ast, Arena& arena,
@@ -403,10 +402,14 @@ bool union_endpoint_refs(const parser::AstNode& lhs_ast, const parser::AstNode& 
                               out_err)) {
     return false;
   }
-  out_lhs->sheet = lhs_sheet;
+  std::string_view sheet;
+  if (!merge_range_endpoint_sheets(lhs_ast, lhs_sheet, rhs_ast, rhs_sheet, ctx, &sheet, out_err)) {
+    return false;
+  }
+  out_lhs->sheet = sheet;
   out_lhs->row = std::min(lhs_top, rhs_top);
   out_lhs->col = std::min(lhs_left, rhs_left);
-  out_rhs->sheet = rhs_sheet;
+  out_rhs->sheet = sheet;
   out_rhs->row = std::max(lhs_bottom, rhs_bottom);
   out_rhs->col = std::max(lhs_right, rhs_right);
   return true;

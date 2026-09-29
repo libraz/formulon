@@ -72,8 +72,8 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
 
 /// Resolves a `:` operator endpoint into a rectangle. `node` may be a
 /// plain `Ref` (1x1 rectangle), a reference-returning `Call`, in which
-/// case `resolve_reference_call` produces the rectangle, or a LET-bound
-/// name standing for either.
+/// case `resolve_reference_call` produces the rectangle, or a LET-bound or
+/// defined name standing for one of those.
 /// Returns `true` on success and writes the rectangle (0-based,
 /// inclusive) into the out parameters; the sheet qualifier (empty =
 /// bound sheet) is written to `*out_sheet`. On failure returns `false`
@@ -89,6 +89,16 @@ bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const Fun
                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                             ErrorCode* out_err);
+
+/// Combines the sheet qualifiers `resolve_range_endpoint` wrote for a `:`
+/// operator's endpoints `lhs` and `rhs` into the range's qualifier (empty =
+/// bound sheet). A qualifier spelled on a `Ref` or a `:` chain
+/// (`Sheet2!A1:B2`) carries to a bare partner; one produced by a name or a
+/// call leaves the bare partner on the formula's own sheet. Endpoints on
+/// two different sheets fail with `#VALUE!`, as measured on Excel 365.
+bool merge_range_endpoint_sheets(const parser::AstNode& lhs, std::string_view lhs_sheet, const parser::AstNode& rhs,
+                                 std::string_view rhs_sheet, const EvalContext& ctx, std::string_view* out_sheet,
+                                 ErrorCode* out_err);
 
 /// Resolves any reference-shaped `node` into the rectangle it names: a `Ref`
 /// (including whole-column / whole-row ones, which span the full grid axis),

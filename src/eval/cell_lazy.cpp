@@ -140,12 +140,12 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
       *out_err = Value::error(err);
       return false;
     }
+    if (!merge_range_endpoint_sheets(lhs_ast, lhs_sheet, rhs_ast, rhs_sheet, ctx, out_sheet, &err)) {
+      *out_err = Value::error(err);
+      return false;
+    }
     *out_row = lhs_top < rhs_top ? lhs_top : rhs_top;
     *out_col = lhs_left < rhs_left ? lhs_left : rhs_left;
-    // Prefer the lhs sheet qualifier when present; falls back to rhs's
-    // qualifier so `Sheet2!A1:B2` (parser's typical RangeOp shape) and
-    // the defensive `A1:Sheet2!B2` shape both surface the right sheet.
-    *out_sheet = lhs_sheet.empty() ? rhs_sheet : lhs_sheet;
     return true;
   }
 

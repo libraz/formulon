@@ -327,12 +327,11 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
         return true;
       }
     }
-    // Endpoints may be plain Refs or reference-producing calls
-    // (`OFFSET(...)` / `INDIRECT(...)`). `resolve_range_endpoint`
-    // normalises both shapes to a rectangle so we can union them and
-    // feed `expand_range` two synthetic Refs. Sheet-qualifier
-    // validation (mismatched qualifiers -> #REF!) is delegated to
-    // `expand_range` itself.
+    // Endpoints may be plain Refs, reference-producing calls
+    // (`OFFSET(...)` / `INDIRECT(...)`) or names standing for either.
+    // `resolve_range_endpoint` normalises every shape to a rectangle so we
+    // can union them and feed `expand_range` two synthetic Refs on the
+    // sheet `merge_range_endpoint_sheets` settles.
     std::string_view lhs_sheet;
     std::string_view rhs_sheet;
     std::uint32_t lhs_top = 0;
@@ -351,12 +350,17 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
       *out_err_code = endpoint_err;
       return false;
     }
+    std::string_view union_sheet;
+    if (!merge_range_endpoint_sheets(lhs_ast, lhs_sheet, rhs_ast, rhs_sheet, ctx, &union_sheet, &endpoint_err)) {
+      *out_err_code = endpoint_err;
+      return false;
+    }
     parser::Reference union_lhs{};
     parser::Reference union_rhs{};
-    union_lhs.sheet = lhs_sheet;
+    union_lhs.sheet = union_sheet;
     union_lhs.row = std::min(lhs_top, rhs_top);
     union_lhs.col = std::min(lhs_left, rhs_left);
-    union_rhs.sheet = rhs_sheet;
+    union_rhs.sheet = union_sheet;
     union_rhs.row = std::max(lhs_bottom, rhs_bottom);
     union_rhs.col = std::max(lhs_right, rhs_right);
     auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -1163,6 +1164,91 @@ TEST(ReferenceCall, IfsAndSwitchPassReferencesThrough) {
   // The value path is unchanged.
   ExpectNumber(EvalSourceIn("=SWITCH(2,1,A2,2,A4)", wb, wb.sheet(0)), 4.0, "SWITCH value");
   ExpectNumber(EvalSourceIn("=IFS(FALSE,A2,TRUE,A3)", wb, wb.sheet(0)), 3.0, "IFS value");
+}
+
+// Sheet1 and Sheet2 hold r*10+c (Sheet2: 100+r*10+c) over A1:D4, with the
+// names the Excel 365 measurement used.
+Workbook NamedEndpointBook() {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  for (std::uint32_t r = 0; r < 4U; ++r) {
+    for (std::uint32_t c = 0; c < 4U; ++c) {
+      const double v = static_cast<double>((r + 1U) * 10U + (c + 1U));
+      wb.sheet(0).set_cell_value(r, c, Value::number(v));
+      wb.sheet(1).set_cell_value(r, c, Value::number(100.0 + v));
+    }
+  }
+  const std::pair<const char*, const char*> names[] = {
+      {"CellNm", "=Sheet1!$C$3"},
+      {"RectNm", "=Sheet1!$C$3:$D$4"},
+      {"Konst", "=5"},
+      {"IdxNm", "=INDEX(Sheet1!$A$1:$D$4,3,3)"},
+      {"OtherNm", "=Sheet2!$C$3"},
+      {"ExprNm", "=Sheet1!$C$3+0"},
+      {"TextNm", "=\"abc\""},
+      {"OffNm", "=OFFSET(Sheet1!$A$1,2,2)"},
+      {"ErrNm", "=#N/A"},
+      {"NaNm", "=NA()"},
+  };
+  for (const auto& [name, formula] : names) {
+    EXPECT_TRUE(static_cast<bool>(wb.set_defined_name(name, formula)));
+  }
+  return wb;
+}
+
+void ExpectError(const Value& v, ErrorCode expected, std::string_view formula) {
+  ASSERT_TRUE(v.is_error()) << formula << " -> " << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), expected) << formula;
+}
+
+// Values measured on Excel 365 (Mac, ja-JP).
+TEST(ReferenceCall, DefinedNameAsRangeEndpoint) {
+  Workbook wb = NamedEndpointBook();
+  const Sheet& s1 = wb.sheet(0);
+  ExpectNumber(EvalSourceIn("=SUM(A1:CellNm)", wb, s1), 198.0, "SUM(A1:CellNm)");
+  ExpectNumber(EvalSourceIn("=SUM(CellNm:A1)", wb, s1), 198.0, "SUM(CellNm:A1)");
+  ExpectNumber(EvalSourceIn("=SUM(A1:RectNm)", wb, s1), 440.0, "SUM(A1:RectNm)");
+  ExpectNumber(EvalSourceIn("=SUM(A1:IdxNm)", wb, s1), 198.0, "SUM(A1:IdxNm)");
+  ExpectNumber(EvalSourceIn("=SUM(A1:OffNm)", wb, s1), 198.0, "SUM(A1:OffNm)");
+  ExpectNumber(EvalSourceIn("=ROWS(A1:RectNm)", wb, s1), 4.0, "ROWS(A1:RectNm)");
+  ExpectNumber(EvalSourceIn("=SUM(CellNm:RectNm)", wb, s1), 154.0, "SUM(CellNm:RectNm)");
+  ExpectNumber(EvalSourceIn("=SUM(A1:CellNm:B1)", wb, s1), 198.0, "SUM(A1:CellNm:B1)");
+  ExpectNumber(EvalSourceIn("=SUM(Sheet1!A1:CellNm)", wb, s1), 198.0, "SUM(Sheet1!A1:CellNm)");
+  ExpectNumber(EvalSourceIn("=SUM(Sheet2!A1:OtherNm)", wb, s1), 1098.0, "SUM(Sheet2!A1:OtherNm)");
+}
+
+TEST(ReferenceCall, NonReferenceNameAsRangeEndpoint) {
+  Workbook wb = NamedEndpointBook();
+  const Sheet& s1 = wb.sheet(0);
+  ExpectError(EvalSourceIn("=SUM(A1:Konst)", wb, s1), ErrorCode::Value, "SUM(A1:Konst)");
+  ExpectError(EvalSourceIn("=SUM(Konst:A1)", wb, s1), ErrorCode::Value, "SUM(Konst:A1)");
+  ExpectError(EvalSourceIn("=ROWS(A1:Konst)", wb, s1), ErrorCode::Value, "ROWS(A1:Konst)");
+  ExpectError(EvalSourceIn("=SUM(A1:ExprNm)", wb, s1), ErrorCode::Value, "SUM(A1:ExprNm)");
+  ExpectError(EvalSourceIn("=SUM(A1:TextNm)", wb, s1), ErrorCode::Value, "SUM(A1:TextNm)");
+  ExpectError(EvalSourceIn("=SUM(A1:Nope)", wb, s1), ErrorCode::Name, "SUM(A1:Nope)");
+  ExpectError(EvalSourceIn("=SUM(A1:ErrNm)", wb, s1), ErrorCode::NA, "SUM(A1:ErrNm)");
+  ExpectError(EvalSourceIn("=SUM(A1:NaNm)", wb, s1), ErrorCode::NA, "SUM(A1:NaNm)");
+  ExpectError(EvalSourceIn("=LET(r,5,SUM(A1:r))", wb, s1), ErrorCode::Value, "LET(r,5,SUM(A1:r))");
+}
+
+// A bare endpoint is the formula's own sheet when the other side's sheet
+// comes from a name or a call, and endpoints on two sheets are #VALUE!.
+TEST(ReferenceCall, RangeEndpointsOnDifferentSheets) {
+  Workbook wb = NamedEndpointBook();
+  const Sheet& s1 = wb.sheet(0);
+  const Sheet& s2 = wb.sheet(1);
+  ExpectError(EvalSourceIn("=SUM(A1:OtherNm)", wb, s1), ErrorCode::Value, "Sheet1: SUM(A1:OtherNm)");
+  ExpectError(EvalSourceIn("=SUM(Sheet1!A1:OtherNm)", wb, s1), ErrorCode::Value, "SUM(Sheet1!A1:OtherNm)");
+  ExpectError(EvalSourceIn("=SUM(A1:INDEX(Sheet2!A1:D4,3,3))", wb, s1), ErrorCode::Value,
+              "Sheet1: SUM(A1:INDEX(Sheet2!A1:D4,3,3))");
+  ExpectError(EvalSourceIn("=SUM(Sheet1!A1:INDEX(Sheet2!A1:D4,3,3))", wb, s1), ErrorCode::Value,
+              "SUM(Sheet1!A1:INDEX(Sheet2!A1:D4,3,3))");
+  ExpectNumber(EvalSourceIn("=SUM(A1:OtherNm)", wb, s2), 1098.0, "Sheet2: SUM(A1:OtherNm)");
+  ExpectNumber(EvalSourceIn("=SUM(A1:INDEX(Sheet2!A1:D4,3,3))", wb, s2), 1098.0,
+               "Sheet2: SUM(A1:INDEX(Sheet2!A1:D4,3,3))");
+  ExpectError(EvalSourceIn("=SUM(A1:CellNm)", wb, s2), ErrorCode::Value, "Sheet2: SUM(A1:CellNm)");
+  ExpectError(EvalSourceIn("=SUM(A1:INDEX(Sheet1!A1:D4,3,3))", wb, s2), ErrorCode::Value,
+              "Sheet2: SUM(A1:INDEX(Sheet1!A1:D4,3,3))");
 }
 
 }  // namespace

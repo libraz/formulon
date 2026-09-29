@@ -2,9 +2,7 @@
 // Recursive node visitor for the tree-walk evaluator. Holds the public
 // `evaluate()` overloads, the `eval_node` switch (declared with external
 // linkage in `eval/lazy_impls.h` so lazy-impl TUs can recurse back into
-// it), the read-only spill-collision detector, and — when the
-// `FORMULON_VM_PARITY_CHECK` build option is on — the bytecode-VM
-// parity diagnostic at the tail of `evaluate()`.
+// it), and the read-only spill-collision detector.
 //
 // The function-call dispatch path (`dispatch_call`, `invoke_lambda`,
 // range-argument expansion) lives in `tree_walker/dispatch.cpp`; the
@@ -53,117 +51,9 @@
 #include "value.h"
 #include "workbook.h"
 
-#ifdef FORMULON_VM_PARITY_CHECK
-#include <cstdio>
-#include <cstring>
-
-#include "eval/compiler.h"
-#include "eval/vm.h"
-#endif
-
 namespace formulon {
 namespace eval {
 namespace {
-
-#ifdef FORMULON_VM_PARITY_CHECK
-// Parity-harness honesty filter.
-//
-// Returns true when any function call reachable from `node` resolves through
-// the lazy-dispatch table (`find_lazy_impl`) but has NO eager `FunctionDef`
-// in `registry`. Such "lazy-only" functions — IRR / MIRR / XIRR / XNPV,
-// NETWORKDAYS / WORKDAY / REGEX* / TEXTSPLIT / PHONETIC, the higher-order
-// array forms MAP / REDUCE / SCAN / BYROW / BYCOL / MAKEARRAY, and the
-// AST-introspecting info functions — cannot be executed by the bytecode VM:
-// the IR carries no AST at runtime, so the VM has no eager registry impl to
-// call and surfaces `#NAME?`. That is a documented structural limitation of
-// the bytecode IR, not a tree-walker / VM divergence, so the parity
-// comparison must skip these formulas rather than report a false mismatch.
-//
-// IF / IFERROR / IFNA / AND / OR and the conditional aggregators are also in
-// the lazy table, but they additionally have eager registry entries (or are
-// lowered to dedicated opcodes), so they are NOT skipped — the VM evaluates
-// them and parity is meaningful.
-bool has_lazy_only_call(const parser::AstNode& node, const FunctionRegistry& registry) {
-  switch (node.kind()) {
-    case parser::NodeKind::Call: {
-      const std::string_view name = node.as_call_name();
-      if (find_lazy_impl(name) != nullptr && registry.lookup(name) == nullptr) {
-        return true;
-      }
-      const std::uint32_t arity = node.as_call_arity();
-      for (std::uint32_t i = 0; i < arity; ++i) {
-        if (has_lazy_only_call(node.as_call_arg(i), registry)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    case parser::NodeKind::UnaryOp:
-      return has_lazy_only_call(node.as_unary_operand(), registry);
-    case parser::NodeKind::BinaryOp:
-      return has_lazy_only_call(node.as_binary_lhs(), registry) || has_lazy_only_call(node.as_binary_rhs(), registry);
-    case parser::NodeKind::RangeOp:
-      // The IR cannot represent a `:` over a computed endpoint (`A1:INDEX(...)`).
-      if (node.as_range_lhs().kind() != parser::NodeKind::Ref || node.as_range_rhs().kind() != parser::NodeKind::Ref) {
-        return true;
-      }
-      return has_lazy_only_call(node.as_range_lhs(), registry) || has_lazy_only_call(node.as_range_rhs(), registry);
-    case parser::NodeKind::IntersectOp:
-      return has_lazy_only_call(node.as_intersect_lhs(), registry) ||
-             has_lazy_only_call(node.as_intersect_rhs(), registry);
-    case parser::NodeKind::ImplicitIntersection:
-      return has_lazy_only_call(node.as_implicit_intersection_operand(), registry);
-    case parser::NodeKind::UnionOp: {
-      const std::uint32_t arity = node.as_union_arity();
-      for (std::uint32_t i = 0; i < arity; ++i) {
-        if (has_lazy_only_call(node.as_union_child(i), registry)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    case parser::NodeKind::ArrayLiteral: {
-      const std::uint32_t rows = node.as_array_rows();
-      const std::uint32_t cols = node.as_array_cols();
-      for (std::uint32_t r = 0; r < rows; ++r) {
-        for (std::uint32_t c = 0; c < cols; ++c) {
-          if (has_lazy_only_call(node.as_array_element(r, c), registry)) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-    case parser::NodeKind::Lambda:
-      return has_lazy_only_call(node.as_lambda_body(), registry);
-    case parser::NodeKind::LetBinding: {
-      const std::uint32_t count = node.as_let_binding_count();
-      for (std::uint32_t i = 0; i < count; ++i) {
-        if (has_lazy_only_call(node.as_let_binding_expr(i), registry)) {
-          return true;
-        }
-      }
-      return has_lazy_only_call(node.as_let_body(), registry);
-    }
-    case parser::NodeKind::LambdaCall: {
-      if (has_lazy_only_call(node.as_lambda_call_callee(), registry)) {
-        return true;
-      }
-      const std::uint32_t arity = node.as_lambda_call_arity();
-      for (std::uint32_t i = 0; i < arity; ++i) {
-        if (has_lazy_only_call(node.as_lambda_call_arg(i), registry)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    default:
-      // Leaf nodes (Literal, Ref, NameRef, error literals, etc.) carry no
-      // nested calls.
-      return false;
-  }
-}
-#endif  // FORMULON_VM_PARITY_CHECK
 
 // Materialises the inclusive rectangle [`top_left`, `bottom_right`] as a
 // `Value::Array`. Both endpoints must be bounded (no `is_full_col` /
@@ -572,11 +462,10 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
             !resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rt, &rl, &rb, &rr, &err)) {
           return Value::error(err);
         }
-        if (!lhs_sheet.empty() && !rhs_sheet.empty() && !sheet_names::equal(lhs_sheet, rhs_sheet)) {
-          return Value::error(ErrorCode::Ref);
-        }
         parser::Reference top_left{};
-        top_left.sheet = lhs_sheet.empty() ? rhs_sheet : lhs_sheet;
+        if (!merge_range_endpoint_sheets(lhs, lhs_sheet, rhs, rhs_sheet, ctx, &top_left.sheet, &err)) {
+          return Value::error(err);
+        }
         top_left.row = std::min(lt, rt);
         top_left.col = std::min(ll, rl);
         parser::Reference bottom_right{};
@@ -825,8 +714,7 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 
     case parser::NodeKind::StructuredRef: {
       // Resolve the table reference (`Table[Col]`, `Table[#All]`, ...) to
-      // a concrete rectangle and read it through the shared projection,
-      // which the bytecode VM's `StructRef` opcode also runs.
+      // a concrete rectangle and read it through the shared projection.
       bool arena_exhausted = false;
       return project_structured_ref(node.as_structured_ref_table(), node.as_structured_ref_column(), arena, registry,
                                     ctx, &arena_exhausted);
@@ -914,8 +802,7 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       return eval_intersect_op(node, arena, registry, ctx, /*spill_position=*/false);
 
     case parser::NodeKind::ArrayLiteral: {
-      // A brace literal is a first-class dynamic array in modern Excel. The
-      // bytecode VM already lowers it to MakeArray; mirror that shape here so
+      // A brace literal is a first-class dynamic array in modern Excel, so
       // the tree walker can spill it, broadcast it through an operator, and
       // let `@` reduce it through the common implicit-intersection path.
       const std::uint32_t rows = node.as_array_rows();
@@ -1165,100 +1052,6 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
       v = Value::array(promoted);
     }
   }
-#ifdef FORMULON_VM_PARITY_CHECK
-  // Parity harness. Compile the same AST through the bytecode pipeline,
-  // run it through the VM, and compare the result. Mismatches are
-  // surfaced as a diagnostic on stderr; we deliberately do NOT abort or
-  // mutate the returned value so the production code path stays unchanged.
-  // The parity sweep test reads the same `evaluate()` entry point and asserts
-  // separately on its own corpus; this hook is the in-flight cross-check.
-  //
-  // Two classes of formula are skipped because the bytecode IR structurally
-  // cannot reproduce the tree-walker result, so comparing would emit a false
-  // mismatch:
-  //
-  //   1. Lazy-only calls (`has_lazy_only_call`): functions present in the
-  //      lazy-dispatch table but absent from the eager registry. The VM has
-  //      no AST at runtime and no eager impl to call, so it surfaces
-  //      `#NAME?`. This covers IRR / MIRR / XIRR / XNPV, NETWORKDAYS /
-  //      WORKDAY / REGEX* / TEXTSPLIT / PHONETIC, the higher-order array
-  //      forms (MAP / REDUCE / SCAN / BYROW / BYCOL / MAKEARRAY), and the
-  //      AST-introspecting info functions. Documented IR limitation.
-  //
-  //   2. IFERROR / IFNA eager-fallback drift: the bytecode lowers these as an
-  //      eager `Call` with both arguments pre-evaluated (see
-  //      `compiler.cpp::compile_iferror_or_ifna`), so the fallback is always
-  //      evaluated even when the primary succeeds. True short-circuit would
-  //      need a new "jump-if-not-error(-of-kind-NA)" opcode the IR does not
-  //      have; that is a deferred IR change, not a correctness bug in the
-  //      diagnostic-only VM. When the fallback raises a different error than
-  //      the primary, the two paths legitimately diverge, so we skip those
-  //      formulas here rather than chase a known limitation.
-  if (has_lazy_only_call(node, registry)) {
-    return v;
-  }
-  {
-    auto bc_or = compile(node, arena);
-    if (bc_or) {
-      auto vm_or = execute(bc_or.value(), arena, registry, ctx);
-      if (vm_or) {
-        const Value vm_v = vm_or.value();
-        // Apply the same Lambda-at-top / blank->0 surface contracts the
-        // tree-walker applies above so the two paths are compared on equal
-        // terms (the VM does not re-apply these wrappers).
-        Value vm_final = vm_v;
-        if (vm_final.is_lambda()) {
-          vm_final = Value::error(ErrorCode::Calc);
-        }
-        if (vm_final.is_blank() && node.kind() != parser::NodeKind::Literal) {
-          vm_final = Value::number(0.0);
-        }
-        // Bit-exact equality: same kind, same payload. For Number we use
-        // raw bit comparison so NaN payloads must agree exactly.
-        bool eq = (v.kind() == vm_final.kind());
-        if (eq) {
-          switch (v.kind()) {
-            case ValueKind::Number: {
-              const double a = v.as_number();
-              const double b = vm_final.as_number();
-              std::uint64_t ua = 0;
-              std::uint64_t ub = 0;
-              std::memcpy(&ua, &a, sizeof(ua));
-              std::memcpy(&ub, &b, sizeof(ub));
-              eq = (ua == ub);
-              break;
-            }
-            case ValueKind::Bool:
-              eq = (v.as_boolean() == vm_final.as_boolean());
-              break;
-            case ValueKind::Error:
-              eq = (v.as_error() == vm_final.as_error());
-              break;
-            case ValueKind::Text:
-              eq = (v.as_text() == vm_final.as_text());
-              break;
-            case ValueKind::Array: {
-              const ArrayValue* la = v.as_array();
-              const ArrayValue* ra = vm_final.as_array();
-              eq = (la->rows == ra->rows && la->cols == ra->cols);
-              break;
-            }
-            case ValueKind::Blank:
-            case ValueKind::Ref:
-            case ValueKind::Lambda:
-              break;
-          }
-        }
-        if (!eq) {
-          // Best-effort diagnostic: the harness does not have access to the
-          // formula text here, so we only print the divergent kind / payload.
-          std::fprintf(stderr, "[FORMULON_VM_PARITY] mismatch: tree=%s vm=%s\n", v.debug_to_string().c_str(),
-                       vm_final.debug_to_string().c_str());
-        }
-      }
-    }
-  }
-#endif  // FORMULON_VM_PARITY_CHECK
   return v;
 }
 

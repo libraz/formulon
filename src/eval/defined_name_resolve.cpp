@@ -90,40 +90,52 @@ const io::DefinedName* find_sheet_defined_name(const Workbook& workbook, std::st
   return find_defined_name(workbook, static_cast<std::uint16_t>(sheet_id), name);
 }
 
-namespace {
-
-// Evaluates the body of the already-located definition `def` in `ctx`.
-Value evaluate_defined_name(const io::DefinedName* def, Arena& arena, const FunctionRegistry& registry,
-                            const EvalContext& ctx) {
+const parser::AstNode* prepare_defined_name_body(const io::DefinedName* def, Arena& arena, const EvalContext& ctx,
+                                                 DefinedNameFrame* frame, EvalContext* out_ctx, ErrorCode* out_err) {
   if (def == nullptr) {
-    return Value::error(ErrorCode::Name);
+    *out_err = ErrorCode::Name;
+    return nullptr;
   }
   // Cycle guard: a name already being expanded on the active resolution chain
   // is a circular reference. Surface `#REF!` to match the cell-cycle policy in
   // `EvalContext::resolve_ref` rather than recursing until the stack blows.
   for (const DefinedNameFrame* f = ctx.defined_name_stack(); f != nullptr; f = f->prev) {
     if (f->definition == def) {
-      return Value::error(ErrorCode::Ref);
+      *out_err = ErrorCode::Ref;
+      return nullptr;
     }
   }
   const std::string_view src = strip_formula_prefix(def->formula);
-  if (src.empty()) {
-    return Value::error(ErrorCode::Name);
-  }
-  parser::AstNode* root = parser::parse_strict(src, arena);
+  parser::AstNode* root = src.empty() ? nullptr : parser::parse_strict(src, arena);
   if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
+    *out_err = ErrorCode::Name;
+    return nullptr;
   }
   // Evaluate the body as a top-level formula: clear the using formula's
   // lexical scope (a defined name never sees LET / LAMBDA bindings) and push
   // this definition onto the cycle chain.
-  const DefinedNameFrame frame{def, ctx.defined_name_stack()};
-  EvalContext def_ctx = ctx.with_name_env(nullptr).with_defined_name_frame(&frame);
+  *frame = DefinedNameFrame{def, ctx.defined_name_stack()};
+  *out_ctx = ctx.with_name_env(nullptr).with_defined_name_frame(frame);
   // A sheet-local name's body resolves its own unqualified names in the
   // owning sheet's scope, whichever sheet uses it; a workbook name's body
   // keeps the scope it is used from.
   if (def->local_sheet_id >= 0 && static_cast<std::size_t>(def->local_sheet_id) < ctx.workbook()->sheet_count()) {
-    def_ctx = def_ctx.with_name_scope_sheet(def->local_sheet_id);
+    *out_ctx = out_ctx->with_name_scope_sheet(def->local_sheet_id);
+  }
+  return root;
+}
+
+namespace {
+
+// Evaluates the body of the already-located definition `def` in `ctx`.
+Value evaluate_defined_name(const io::DefinedName* def, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx) {
+  DefinedNameFrame frame;
+  EvalContext def_ctx = ctx;
+  ErrorCode err = ErrorCode::Name;
+  const parser::AstNode* root = prepare_defined_name_body(def, arena, ctx, &frame, &def_ctx, &err);
+  if (root == nullptr) {
+    return Value::error(err);
   }
   // A range-shaped body (e.g. `Sheet1!$A$1:$A$5`) must surface as a
   // `Value::Array` so range-aware consumers (`SUM`, `COUNT`, `VLOOKUP`, ...)

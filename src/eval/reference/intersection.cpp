@@ -17,14 +17,17 @@
 
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
+#include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/classic.h"
 #include "eval/lookups/xlookup.h"
+#include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/reference/common.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/tree_walker/dispatch.h"
+#include "io/defined_names.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet_name.h"
@@ -341,7 +344,84 @@ bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const Func
                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                            ErrorCode* out_err);
 
+// A name standing as an endpoint (`A1:MyName`) denotes the reference its
+// value is. Measured on Excel 365: an undefined name is #NAME?, an
+// error-valued name surfaces its error, and any other non-reference value
+// (a constant, an expression, text) is #VALUE!.
+bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                           std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                           ErrorCode* out_err) {
+  const std::string_view sheet = node.as_name_sheet();
+  // `resolve_name_ast` already looked through a LET binding with a
+  // reference; one reaching here is bound to a plain value.
+  if (sheet.empty() && ctx.name_env() != nullptr) {
+    if (const Value* bound = ctx.name_env()->lookup(node.as_name()); bound != nullptr) {
+      *out_err = bound->is_error() ? bound->as_error() : ErrorCode::Value;
+      return false;
+    }
+  }
+  const Workbook* wb = ctx.workbook();
+  if (wb == nullptr) {
+    *out_err = ErrorCode::Name;
+    return false;
+  }
+  const io::DefinedName* def = nullptr;
+  if (sheet.empty()) {
+    def = find_defined_name(ctx, node.as_name());
+  } else if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {
+    *out_err = ErrorCode::Ref;
+    return false;
+  } else {
+    def = find_sheet_defined_name(*wb, sheet, node.as_name());
+  }
+  DefinedNameFrame frame;
+  EvalContext body_ctx = ctx;
+  const parser::AstNode* body = prepare_defined_name_body(def, arena, ctx, &frame, &body_ctx, out_err);
+  if (body == nullptr) {
+    return false;
+  }
+  const parser::NodeKind k = body->kind();
+  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::NameRef ||
+      (k == parser::NodeKind::Call && find_reference_call(body->as_call_name()) != nullptr)) {
+    return resolve_range_endpoint(*body, arena, registry, body_ctx, out_sheet, out_top_row, out_left_col,
+                                  out_bottom_row, out_right_col, out_err);
+  }
+  const Value v = eval_node(*body, arena, registry, body_ctx);
+  *out_err = v.is_error() ? v.as_error() : ErrorCode::Value;
+  return false;
+}
+
 }  // namespace
+
+bool merge_range_endpoint_sheets(const parser::AstNode& lhs, std::string_view lhs_sheet, const parser::AstNode& rhs,
+                                 std::string_view rhs_sheet, const EvalContext& ctx, std::string_view* out_sheet,
+                                 ErrorCode* out_err) {
+  if (lhs_sheet.empty() && rhs_sheet.empty()) {
+    *out_sheet = {};
+    return true;
+  }
+  if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
+    if (!sheet_names::equal(lhs_sheet, rhs_sheet)) {
+      *out_err = ErrorCode::Value;
+      return false;
+    }
+    *out_sheet = lhs_sheet;
+    return true;
+  }
+  const parser::AstNode& qualified = lhs_sheet.empty() ? rhs : lhs;
+  const std::string_view sheet = lhs_sheet.empty() ? rhs_sheet : lhs_sheet;
+  *out_sheet = sheet;
+  // `Sheet2!A1:B2` qualifies both corners; a qualifier that came out of a
+  // name or a call does not reach the bare side, which stays on the
+  // formula's own sheet.
+  const bool literal = qualified.kind() == parser::NodeKind::Ref || qualified.kind() == parser::NodeKind::RangeOp;
+  if (literal || ctx.current_sheet() == nullptr || sheet_names::equal(ctx.current_sheet()->name(), sheet)) {
+    return true;
+  }
+  *out_err = ErrorCode::Value;
+  return false;
+}
 
 bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
@@ -380,8 +460,12 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
     return resolve_reference_call(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
                                   out_right_col, &is_range_unused, out_err);
   }
-  // Anything else (NameRef, BinaryOp, ArrayLiteral, etc.) is
-  // not a recognized range endpoint shape.
+  if (node.kind() == parser::NodeKind::NameRef) {
+    return resolve_name_endpoint(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                                 out_right_col, out_err);
+  }
+  // Anything else (BinaryOp, ArrayLiteral, etc.) is not a recognized range
+  // endpoint shape.
   *out_err = ErrorCode::Ref;
   return false;
 }
@@ -408,18 +492,9 @@ bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const Func
                               &rhs_right, out_err)) {
     return false;
   }
-  // Two named sheets must agree; one bare endpoint inherits the other's
-  // sheet, and two bare endpoints leave the caller's own sheet in force.
-  if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
-    if (!sheet_names::equal(lhs_sheet, rhs_sheet)) {
-      *out_err = ErrorCode::Ref;
-      return false;
-    }
-    *out_sheet = lhs_sheet;
-  } else if (!lhs_sheet.empty()) {
-    *out_sheet = lhs_sheet;
-  } else {
-    *out_sheet = rhs_sheet;
+  if (!merge_range_endpoint_sheets(node.as_range_lhs(), lhs_sheet, node.as_range_rhs(), rhs_sheet, ctx, out_sheet,
+                                   out_err)) {
+    return false;
   }
   *out_top_row = std::min(lhs_top, rhs_top);
   *out_left_col = std::min(lhs_left, rhs_left);
