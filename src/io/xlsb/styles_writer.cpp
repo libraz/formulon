@@ -50,6 +50,7 @@ constexpr std::uint16_t kPropBorderRight = 9;
 constexpr std::uint16_t kPropBorderDiagonal = 10;
 constexpr std::uint16_t kPropDiagonalUp = 13;
 constexpr std::uint16_t kPropDiagonalDown = 14;
+constexpr std::uint16_t kPropFontName = 24;
 constexpr std::uint16_t kPropFontWeight = 25;
 constexpr std::uint16_t kPropUnderline = 26;
 constexpr std::uint16_t kPropVertAlign = 27;
@@ -229,6 +230,16 @@ void AppendProp(std::vector<std::uint8_t>& props, std::uint16_t& count, std::uin
   ++count;
 }
 
+/// A wide string with a u16 length rather than XLWideString's u32 one.
+std::vector<std::uint8_t> ShortWideString(std::string_view text) {
+  std::vector<std::uint8_t> wide;
+  emit_xlwidestring(wide, text);
+  std::vector<std::uint8_t> out;
+  emit_u16(out, static_cast<std::uint16_t>((wide.size() - 4U) / 2U));
+  out.insert(out.end(), wide.begin() + 4, wide.end());
+  return out;
+}
+
 std::vector<std::uint8_t> ColorProp(std::uint32_t argb, const ColorSpec& spec) {
   std::vector<std::uint8_t> data;
   EmitColor(data, argb, spec);
@@ -236,8 +247,8 @@ std::vector<std::uint8_t> ColorProp(std::uint32_t argb, const ColorSpec& spec) {
 }
 
 /// A dxf as Excel writes it: fill, font, number format, border, each only
-/// where the dxf states it. The font name, alignment and protection have
-/// no measured property and are left out.
+/// where the dxf states it. Alignment and protection are left out: Excel
+/// discards them from a CF dxf, so they have no measured property.
 void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
   std::vector<std::uint8_t> props;
   std::uint16_t count = 0;
@@ -256,6 +267,9 @@ void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
     // 0xFF000000 is the "automatic" sentinel an unstated colour carries.
     if (font.color.kind != ColorSpec::Kind::kNone || font.color_argb != 0xFF000000U) {
       AppendProp(props, count, kPropFontColor, ColorProp(font.color_argb, font.color));
+    }
+    if (!font.name.empty()) {
+      AppendProp(props, count, kPropFontName, ShortWideString(font.name));
     }
     if (font.has_bold && font.bold) {
       AppendProp(props, count, kPropFontWeight, {0xBC, 0x02});  // 700
@@ -282,13 +296,7 @@ void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
     std::vector<std::uint8_t> id;
     emit_u16(id, dxf.num_fmt_id);
     AppendProp(props, count, kPropNumFmtId, id);
-    // XLWideString with a u16 length rather than a u32 one.
-    std::vector<std::uint8_t> wide;
-    emit_xlwidestring(wide, dxf.num_fmt_code);
-    std::vector<std::uint8_t> code;
-    emit_u16(code, static_cast<std::uint16_t>((wide.size() - 4U) / 2U));
-    code.insert(code.end(), wide.begin() + 4, wide.end());
-    AppendProp(props, count, kPropNumFmtCode, code);
+    AppendProp(props, count, kPropNumFmtCode, ShortWideString(dxf.num_fmt_code));
   }
   if (dxf.has_border) {
     const BorderRecord& border = dxf.border;

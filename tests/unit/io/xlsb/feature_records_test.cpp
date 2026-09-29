@@ -31,6 +31,8 @@
 //   dxf        one CF dxf per property: font toggles, underline kinds, colour
 //              kinds, fill patterns, border sides and diagonals
 //   dxfnum     CF dxfs with number formats, alone and with a font
+//   dxfhand    CF dxfs with a font name, a size, alignment and protection;
+//              Excel keeps only the name
 
 #include <algorithm>
 #include <cstddef>
@@ -528,7 +530,7 @@ std::vector<std::string> DxfRecords(io::ByteSpan styles) {
 // The dxfs Excel wrote into its .xlsx, written to XLSB, match the BrtDXF
 // records Excel wrote into the .xlsb of the same book.
 TEST(XlsbFeatureRecords, DxfRecordsMatchExcel) {
-  for (const char* name : {"dxf", "dxfnum"}) {
+  for (const char* name : {"dxf", "dxfnum", "dxfhand"}) {
     const Workbook from_xlsx = ReadXlsx(name);
     const std::vector<std::uint8_t> written = io::xlsb::write_styles_bin(from_xlsx.styles());
     io::ZipReader zip;
