@@ -19,6 +19,9 @@
 #ifndef FORMULON_EVAL_MATRIX_OPS_LAZY_H_
 #define FORMULON_EVAL_MATRIX_OPS_LAZY_H_
 
+#include <cstdint>
+#include <vector>
+
 #include "utils/arena.h"
 #include "value.h"
 
@@ -72,6 +75,13 @@ Value eval_mdeterm_lazy(const parser::AstNode& call, Arena& arena, const Functio
 ///   * Result shape matches input (`n x n`).
 Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);
+
+/// One Gauss-Jordan step on a row-major `n x w` augmented matrix, shared
+/// by MINVERSE and LINEST: swaps row `pivot` into row `k`, normalises row
+/// `k` so its diagonal is 1, and eliminates column `k` from every other
+/// row. The caller has already chosen a non-zero `pivot`.
+void gauss_jordan_eliminate(std::vector<double>& aug, std::uint32_t n, std::uint32_t w, std::uint32_t k,
+                            std::uint32_t pivot);
 
 }  // namespace eval
 }  // namespace formulon

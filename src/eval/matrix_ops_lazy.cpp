@@ -270,6 +270,37 @@ Value eval_mdeterm_lazy(const parser::AstNode& call, Arena& arena, const Functio
   return Value::number(det);
 }
 
+void gauss_jordan_eliminate(std::vector<double>& aug, std::uint32_t n, std::uint32_t w, std::uint32_t k,
+                            std::uint32_t pivot) {
+  if (pivot != k) {
+    for (std::uint32_t c = 0; c < w; ++c) {
+      const std::size_t a_idx = static_cast<std::size_t>(k) * w + c;
+      const std::size_t b_idx = static_cast<std::size_t>(pivot) * w + c;
+      const double tmp = aug[a_idx];
+      aug[a_idx] = aug[b_idx];
+      aug[b_idx] = tmp;
+    }
+  }
+  // Normalise the pivot row so the diagonal entry becomes 1.
+  const double diag = aug[static_cast<std::size_t>(k) * w + k];
+  for (std::uint32_t c = 0; c < w; ++c) {
+    aug[static_cast<std::size_t>(k) * w + c] /= diag;
+  }
+  // Eliminate column `k` in every other row.
+  for (std::uint32_t r = 0; r < n; ++r) {
+    if (r == k) {
+      continue;
+    }
+    const double f = aug[static_cast<std::size_t>(r) * w + k];
+    if (f == 0.0) {
+      continue;
+    }
+    for (std::uint32_t c = 0; c < w; ++c) {
+      aug[static_cast<std::size_t>(r) * w + c] -= f * aug[static_cast<std::size_t>(k) * w + c];
+    }
+  }
+}
+
 Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
   std::vector<double> m;
@@ -317,33 +348,7 @@ Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const Functi
     if (pivot_abs == 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    if (pivot != k) {
-      for (std::uint32_t c = 0; c < w; ++c) {
-        const std::size_t a_idx = static_cast<std::size_t>(k) * w + c;
-        const std::size_t b_idx = static_cast<std::size_t>(pivot) * w + c;
-        const double tmp = aug[a_idx];
-        aug[a_idx] = aug[b_idx];
-        aug[b_idx] = tmp;
-      }
-    }
-    // Normalise the pivot row so the diagonal entry becomes 1.
-    const double diag = aug[static_cast<std::size_t>(k) * w + k];
-    for (std::uint32_t c = 0; c < w; ++c) {
-      aug[static_cast<std::size_t>(k) * w + c] /= diag;
-    }
-    // Eliminate column `k` in every other row.
-    for (std::uint32_t r = 0; r < n; ++r) {
-      if (r == k) {
-        continue;
-      }
-      const double f = aug[static_cast<std::size_t>(r) * w + k];
-      if (f == 0.0) {
-        continue;
-      }
-      for (std::uint32_t c = 0; c < w; ++c) {
-        aug[static_cast<std::size_t>(r) * w + c] -= f * aug[static_cast<std::size_t>(k) * w + c];
-      }
-    }
+    gauss_jordan_eliminate(aug, n, w, k, pivot);
   }
 
   std::vector<double> out(static_cast<std::size_t>(n) * static_cast<std::size_t>(n), 0.0);

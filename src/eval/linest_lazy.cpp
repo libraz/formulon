@@ -18,6 +18,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/lazy_impls.h"
+#include "eval/matrix_ops_lazy.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
@@ -177,31 +178,7 @@ bool gauss_jordan(std::vector<double>& aug, std::uint32_t n, std::uint32_t w) {
       }
       continue;
     }
-    if (pivot != k) {
-      for (std::uint32_t c = 0; c < w; ++c) {
-        const std::size_t a_idx = static_cast<std::size_t>(k) * w + c;
-        const std::size_t b_idx = static_cast<std::size_t>(pivot) * w + c;
-        const double tmp = aug[a_idx];
-        aug[a_idx] = aug[b_idx];
-        aug[b_idx] = tmp;
-      }
-    }
-    const double diag = aug[static_cast<std::size_t>(k) * w + k];
-    for (std::uint32_t c = 0; c < w; ++c) {
-      aug[static_cast<std::size_t>(k) * w + c] /= diag;
-    }
-    for (std::uint32_t r = 0; r < n; ++r) {
-      if (r == k) {
-        continue;
-      }
-      const double f = aug[static_cast<std::size_t>(r) * w + k];
-      if (f == 0.0) {
-        continue;
-      }
-      for (std::uint32_t c = 0; c < w; ++c) {
-        aug[static_cast<std::size_t>(r) * w + c] -= f * aug[static_cast<std::size_t>(k) * w + c];
-      }
-    }
+    gauss_jordan_eliminate(aug, n, w, k, pivot);
   }
   return true;
 }
@@ -682,6 +659,35 @@ bool read_known_xy(const parser::AstNode& call, Arena& arena, const FunctionRegi
   return true;
 }
 
+/// Builds the design matrix, applies the `ln(y)` transform when
+/// `log_form`, and solves the normal equations — the step shared by the
+/// fit and prediction families. Non-positive y under `log_form`, fewer
+/// observations than parameters, or a failed solve is `#NUM!`.
+///
+/// Returns `false` with the propagating error in `*out_err`.
+bool fit_coefficients(const ArrayValue& y_arr, const ArrayValue* x_arr, bool with_const, bool log_form, bool want_inv,
+                      DesignMatrix* out_dm, std::vector<double>* out_coeffs, std::vector<double>* out_inv_a,
+                      Value* out_err) {
+  if (!build_design_matrix(y_arr, x_arr, with_const, out_dm, out_err)) {
+    return false;
+  }
+  if (log_form && !log_transform_y(*out_dm)) {
+    *out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+  const std::uint32_t p = out_dm->k + (with_const ? 1U : 0U);
+  if (out_dm->m < p) {
+    // Fewer observations than parameters -> system is under-determined.
+    *out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+  if (!solve_normal_equations(*out_dm, want_inv, out_coeffs, out_inv_a)) {
+    *out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+  return true;
+}
+
 /// LINEST and LOGEST take the same four arguments — `known_y`,
 /// `known_x`, `const`, `stats` — and run the same regression. LOGEST
 /// fits `ln(y)` and reports the coefficients in exponential form;
@@ -711,23 +717,10 @@ Value eval_fit(const parser::AstNode& call, Arena& arena, const FunctionRegistry
   }
 
   DesignMatrix dm;
-  if (!build_design_matrix(*y_arr, x_arr, with_const, &dm, &err)) {
-    return err;
-  }
-  if (log_form && !log_transform_y(dm)) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
-  if (dm.m < p) {
-    // Fewer observations than parameters -> system is under-determined.
-    return Value::error(ErrorCode::Num);
-  }
-
   std::vector<double> coeffs;
   std::vector<double> inv_a;
-  if (!solve_normal_equations(dm, /*want_inv=*/want_stats, &coeffs, &inv_a)) {
-    return Value::error(ErrorCode::Num);
+  if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/want_stats, &dm, &coeffs, &inv_a, &err)) {
+    return err;
   }
 
   if (!want_stats) {
@@ -855,22 +848,12 @@ Value eval_prediction(const parser::AstNode& call, Arena& arena, const FunctionR
   }
 
   DesignMatrix dm;
-  if (!build_design_matrix(*y_arr, x_arr, with_const, &dm, &err)) {
-    return err;
-  }
-  if (log_form && !log_transform_y(dm)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
-  if (dm.m < p) {
-    return Value::error(ErrorCode::Num);
-  }
-
   std::vector<double> coeffs;
   std::vector<double> unused_inv;
-  if (!solve_normal_equations(dm, /*want_inv=*/false, &coeffs, &unused_inv)) {
-    return Value::error(ErrorCode::Num);
+  if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/false, &dm, &coeffs, &unused_inv, &err)) {
+    return err;
   }
+  const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
 
   // Build the prediction design buffer. When new_x is omitted, this is
   // the original design matrix (returns the fitted values y_hat at the
