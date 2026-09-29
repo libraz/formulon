@@ -17,6 +17,7 @@
 #include "print/page_setup.h"
 #include "print/print_area.h"
 #include "sheet.h"
+#include "utils/a1_column.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -442,6 +443,44 @@ TEST(PaginationTest, HiddenWidthlessColumnDoesNotConsumeFitToPageWidth) {
   EXPECT_EQ(hidden_widthless_result.value().page_count, hidden_explicit_result.value().page_count);
   EXPECT_EQ(hidden_widthless_result.value().page_count, visible_zero_result.value().page_count);
   EXPECT_GT(hidden_widthless_result.value().page_count, visible_absent_result.value().page_count);
+}
+
+TEST(PaginationTest, ManyHiddenColumnsDoNotShiftBreaksOrPageCount) {
+  // A hidden column's flat per-column padding term (kColumnPaddingPt,
+  // ~3.86 pt) used to leak through `ColumnCharsToPoints(0)` even though
+  // the column itself is 0 chars wide. A handful of hidden columns is too
+  // small a phantom width to move a break; 100 of them (~386 pt) is
+  // comparable to the ~494 pt A4 body width and would visibly shift
+  // v_breaks / page_count if the bug were still present.
+  const auto make_workbook = [](std::uint32_t trailing_hidden_cols) {
+    Workbook wb = Workbook::create();
+    Sheet& sheet = wb.sheet(0);
+    // Same wide-column setup as WideTableWrapsOntoFurtherPageColumns.
+    SetColumnWidth(&sheet, 0, 19, 60.0);
+    const std::uint32_t last_col = 19U + trailing_hidden_cols;
+    if (trailing_hidden_cols > 0U) {
+      ColumnLayout hidden;
+      hidden.first = 20U;
+      hidden.last = last_col;
+      hidden.hidden = true;
+      sheet.mutable_layout().columns.push_back(hidden);
+    }
+    std::string last_col_ref;
+    formulon::a1::append_column_letters(last_col_ref, last_col);
+    wb.set_defined_names({PrintArea("Sheet1!$A$1:$" + last_col_ref + "$5", 0)});
+    return wb;
+  };
+
+  Workbook baseline = make_workbook(0U);
+  Workbook with_hidden = make_workbook(100U);
+
+  auto baseline_result = paginate(baseline, 0);
+  auto with_hidden_result = paginate(with_hidden, 0);
+  ASSERT_TRUE(static_cast<bool>(baseline_result)) << baseline_result.error().message;
+  ASSERT_TRUE(static_cast<bool>(with_hidden_result)) << with_hidden_result.error().message;
+
+  EXPECT_EQ(with_hidden_result.value().v_breaks, baseline_result.value().v_breaks);
+  EXPECT_EQ(with_hidden_result.value().page_count, baseline_result.value().page_count);
 }
 
 TEST(PaginationTest, OutlineOnlyRowUsesDefaultHeight) {

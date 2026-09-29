@@ -83,7 +83,17 @@ constexpr double kStandardRowHeightPt = 102.0 / 7.0;
 constexpr double kMinScaleFactor = 0.01;
 
 /// Converts an Excel column width in character units to a width in points.
+///
+/// A hidden or explicit zero-width column resolves to `chars == 0`; it
+/// must convert to exactly `0.0` pt so it never advances a page break or
+/// shifts the fit-to-page scale (Excel excludes it from pagination
+/// extent entirely -- see `ColumnWidthChars`). The flat padding term
+/// below models the cell-border/margin allowance every *visible* column
+/// carries and does not apply to a column with no printed width at all.
 double ColumnCharsToPoints(double chars) {
+  if (chars == 0.0) {
+    return 0.0;
+  }
   return chars * kPointsPerColumnChar + kColumnPaddingPt;
 }
 
