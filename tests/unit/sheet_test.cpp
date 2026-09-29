@@ -11,6 +11,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "cell.h"
 #include "gtest/gtest.h"
@@ -209,6 +210,49 @@ TEST(SheetTest, OverwriteFormulaWithLiteralClearsFormulaText) {
   EXPECT_TRUE(cell->formula_text.empty());
   ASSERT_TRUE(cell->cached_value.is_number());
   EXPECT_EQ(cell->cached_value.as_number(), 6.0);
+}
+
+// ---------------------------------------------------------------------------
+// Formula-cell index
+// ---------------------------------------------------------------------------
+
+TEST(SheetTest, FormulaCellsInReportsOnlyFormulaCellsInsideTheRectangle) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  s.set_cell_formula(1U, 0U, "=A1");
+  s.set_cell_formula(5U, 0U, "=A2");
+  s.set_cell_formula(2U, 2U, "=A1");
+  s.set_cell_formula(9U, 2U, "=A1");
+  s.set_cell_formula(3U, 4U, "=A1");
+
+  // Columns A..C, rows 2..6: skips C10 below the band and E4 right of it.
+  const std::vector<CellAddress> hits = s.formula_cells_in(1U, 0U, 5U, 2U);
+  ASSERT_EQ(hits.size(), 3U);
+  EXPECT_EQ(hits[0], (CellAddress{1U, 0U}));
+  EXPECT_EQ(hits[1], (CellAddress{5U, 0U}));
+  EXPECT_EQ(hits[2], (CellAddress{2U, 2U}));
+
+  EXPECT_TRUE(s.formula_cells_in(0U, 1U, Sheet::kMaxRows - 1U, 1U).empty());
+  EXPECT_TRUE(s.formula_cells_in(5U, 0U, 1U, 0U).empty());
+}
+
+TEST(SheetTest, FormulaCellsInTracksOverwritesAndStructuralEdits) {
+  Sheet s("Sheet1");
+  s.set_cell_formula(2U, 1U, "=A1");
+  s.set_cell_formula(4U, 1U, "=A2");
+  s.set_cell_value(4U, 1U, Value::number(3.0));
+  s.set_cell_formula(6U, 1U, "=A3");
+  s.set_cell_text(6U, 1U, "text");
+  ASSERT_EQ(s.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U).size(), 1U);
+
+  s.insert_rows(0U, 2U);
+  s.insert_cols(0U, 1U);
+  std::vector<CellAddress> hits = s.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U);
+  ASSERT_EQ(hits.size(), 1U);
+  EXPECT_EQ(hits[0], (CellAddress{4U, 2U}));
+
+  s.delete_cols(2U, 1U);
+  EXPECT_TRUE(s.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U).empty());
 }
 
 // ---------------------------------------------------------------------------

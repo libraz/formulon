@@ -315,9 +315,20 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
       return Expected<void, Error>::Ok();
     }
   } else {
-    auto wv = workbook.set_cell_value(sheet_index, parsed.row, parsed.col, parsed.value);
-    if (!wv) {
-      return wv.error();
+    // A literal lands on a freshly built sheet, whose formulas are all dirty
+    // from registration, so write it straight to the sheet as the XLSB reader
+    // does. Routing it through `Workbook::set_cell_value` would revisit every
+    // formula watching a rectangle that covers it. Only a duplicate `<c>`
+    // replacing an earlier formula needs the workbook to drop its edges.
+    Sheet& sheet = workbook.sheet(sheet_index);
+    const Cell* existing = sheet.cell_at(parsed.row, parsed.col);
+    if (existing != nullptr && !existing->formula_text.empty()) {
+      auto wv = workbook.set_cell_value(sheet_index, parsed.row, parsed.col, parsed.value);
+      if (!wv) {
+        return wv.error();
+      }
+    } else {
+      sheet.set_cell_value(parsed.row, parsed.col, parsed.value);
     }
   }
 

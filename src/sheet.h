@@ -22,6 +22,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -1036,6 +1037,16 @@ class Sheet {
   std::optional<PopulatedExtent> populated_extent(std::uint32_t first_row, std::uint32_t first_col,
                                                   std::uint32_t last_row, std::uint32_t last_col) const noexcept;
 
+  /// Returns the coordinates of every cell with formula text inside
+  /// `[first_row..last_row] x [first_col..last_col]`, in column-major order.
+  ///
+  /// Answered from a per-sheet formula-cell index rather than a row walk, so
+  /// the cost is proportional to the formula cells found (plus one probe per
+  /// column holding a formula), never to the rectangle's area or to the
+  /// sheet's literal content. Takes `spill_mutex_` for the whole read.
+  std::vector<CellAddress> formula_cells_in(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                                            std::uint32_t last_col) const;
+
   /// Monotonically changes whenever the flat stored-cell / spill-phantom
   /// address set changes. C-ABI iteration uses it to invalidate its
   /// per-handle sorted-address cache after any sheet mutation.
@@ -1768,6 +1779,14 @@ class Sheet {
   /// Caller must hold `spill_mutex_`.
   void shift_blocked_spills_locked(const StructuralEdit& edit);
 
+  /// Records whether `(row, col)` holds formula text in `formula_cells_`.
+  /// Caller must hold `spill_mutex_`.
+  void index_formula_cell_locked(std::uint32_t row, std::uint32_t col, bool has_formula);
+
+  /// Rebuilds `formula_cells_` from `rows_` after a structural edit moved
+  /// cells wholesale. Caller must hold `spill_mutex_`.
+  void rebuild_formula_index_locked();
+
   std::string name_;
   // Non-empty only for chartsheets / dialog sheets / macro sheets and other
   // non-worksheet OOXML sheet types. Their XML and descendant parts are raw
@@ -1775,6 +1794,10 @@ class Sheet {
   std::string opaque_ooxml_part_path_;
   std::string opaque_ooxml_relationship_type_;
   std::unordered_map<std::uint32_t, RowCells> rows_;
+  // Every coordinate of `rows_` whose cell has formula text, keyed
+  // `(col << 32) | row` so a rectangle query walks one ordered row interval
+  // per column. Guarded by `spill_mutex_` together with `rows_`.
+  std::set<std::uint64_t> formula_cells_;
   // Bumped by every mutator while `spill_mutex_` is held, but read without
   // it (see `cell_enumeration_revision()`), so the type carries the
   // synchronisation the accessor cannot.

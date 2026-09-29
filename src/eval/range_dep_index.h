@@ -20,7 +20,9 @@
 // `(sheet_id, row / kBandRows)`, so a write inspects only the rectangles
 // sharing its band. A bounded rectangle occupies `span / kBandRows + 1`
 // buckets and a whole-column rectangle a fixed `kMaxRows / kBandRows`, which
-// keeps insertion bounded regardless of the referenced area.
+// keeps insertion bounded regardless of the referenced area. A coverage
+// lookup still visits every owner of each covering rectangle, so bulk
+// writers that need no dirty marking (workbook load) bypass it.
 //
 // Not thread-safe: the recalc engine owns the instance and mutates it under
 // its own mutex.

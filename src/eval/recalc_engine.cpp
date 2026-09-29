@@ -281,50 +281,15 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
     // the future); explicit graph edges are needed only for formula cells so
     // Tarjan evaluates their fresh cached values before this aggregate.
     //
-    // `populated_extent` bounds that search by the rectangle's real content
-    // instead of its area, so an empty rectangle — however large — costs one
-    // sheet query and a rectangle spanning a whole column costs its populated
-    // bounding box.
+    // The sheet's formula-cell index answers that directly, so the cost is
+    // the formula cells inside the rectangle — never its area, and never the
+    // literal content a whole-column reference spans.
     const Sheet& sheet = workbook.sheet(range.sheet_id);
-    const auto extent = sheet.populated_extent(range.row_first, range.col_first, range.row_last, range.col_last);
-    if (!extent.has_value()) {
-      continue;
-    }
-    const auto add_ordering_edges = [&](std::uint32_t row, const RowCells& cells) {
-      // `RowCells::size()` is an absolute, exclusive column bound while the
-      // dependency rectangle stores an inclusive `col_last`. Intersect the
-      // two as size_t half-open bounds and honour the row run's origin so a
-      // far-right row does not index its leading gap as if it were stored.
-      const std::size_t first_col =
-          std::max<std::size_t>(extent->first_col, static_cast<std::size_t>(cells.first_col()));
-      const std::size_t extent_end = static_cast<std::size_t>(extent->last_col) + 1U;
-      const std::size_t last_col = std::min(extent_end, cells.size());
-      for (std::size_t col = first_col; col < last_col; ++col) {
-        if (!cells[col].formula_text.empty()) {
-          const CellNodeId source{range.sheet_id, row, static_cast<std::uint32_t>(col)};
-          if (source != cell) {
-            graph_.add_dependency(cell, source);
-          }
-        }
-      }
-    };
-    // Whichever of "walk the populated rows" and "probe each row of the
-    // extent" is smaller wins: the first is proportional to the sheet, the
-    // second to the rectangle.
-    const std::uint64_t extent_rows = static_cast<std::uint64_t>(extent->last_row - extent->first_row) + 1U;
-    if (extent_rows <= sheet.rows().size()) {
-      for (std::uint32_t row = extent->first_row; row <= extent->last_row; ++row) {
-        const auto it = sheet.rows().find(row);
-        if (it != sheet.rows().end()) {
-          add_ordering_edges(row, it->second);
-        }
-      }
-    } else {
-      for (const auto& [row, cells] : sheet.rows()) {
-        if (row < extent->first_row || row > extent->last_row) {
-          continue;
-        }
-        add_ordering_edges(row, cells);
+    for (const CellAddress source :
+         sheet.formula_cells_in(range.row_first, range.col_first, range.row_last, range.col_last)) {
+      const CellNodeId source_node{range.sheet_id, source.row, source.col};
+      if (source_node != cell) {
+        graph_.add_dependency(cell, source_node);
       }
     }
   }

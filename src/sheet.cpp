@@ -249,6 +249,7 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   slot.phonetic_runs.clear();
   slot.phonetic_props = PhoneticProperties{};
   slot.cached_value = v;
+  index_formula_cell_locked(row, col, false);
   cell_enumeration_revision_.bump();
 }
 
@@ -273,6 +274,7 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
   auto owned = std::make_unique<std::string>(text);
   slot.cached_value = Value::text(*owned);
   slot.cached_text_owned = std::move(owned);
+  index_formula_cell_locked(row, col, false);
   cell_enumeration_revision_.bump();
 }
 
@@ -297,6 +299,7 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   slot.phonetic_runs.clear();
   slot.phonetic_props = PhoneticProperties{};
   slot.cached_value = Value::blank();
+  index_formula_cell_locked(row, col, !slot.formula_text.empty());
   cell_enumeration_revision_.bump();
 }
 
@@ -546,19 +549,32 @@ std::optional<Sheet::PopulatedExtent> Sheet::populated_extent(std::uint32_t firs
   // RowCells stores an absolute-origin run. Restrict the scan to the run's
   // materialised interval and inspect only non-blank/formula slots; leading
   // gaps are not represented and default-constructed slots are not content.
-  for (const auto& [row, cells] : rows_) {
-    if (row < first_row || row > last_row || cells.empty()) {
-      continue;
+  const auto scan_row = [&](std::uint32_t row, const RowCells& cells) {
+    if (cells.empty()) {
+      return;
     }
     const std::size_t begin = std::max<std::size_t>(first_col, cells.first_col());
     const std::size_t end = std::min<std::size_t>(static_cast<std::size_t>(last_col) + 1U, cells.size());
-    if (begin >= end) {
-      continue;
-    }
     for (std::size_t col = begin; col < end; ++col) {
       const Cell& cell = cells[col];
       if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
         include(row, static_cast<std::uint32_t>(col));
+      }
+    }
+  };
+  // Walk whichever of the stored rows and the rectangle's rows is smaller,
+  // as `materialised_cells_in_rect_locked` does.
+  if (static_cast<std::uint64_t>(rows_.size()) <= static_cast<std::uint64_t>(last_row - first_row) + 1U) {
+    for (const auto& [row, cells] : rows_) {
+      if (row >= first_row && row <= last_row) {
+        scan_row(row, cells);
+      }
+    }
+  } else {
+    for (std::uint32_t row = first_row; row <= last_row; ++row) {
+      const auto it = rows_.find(row);
+      if (it != rows_.end()) {
+        scan_row(row, it->second);
       }
     }
   }
@@ -587,6 +603,66 @@ std::optional<Sheet::PopulatedExtent> Sheet::populated_extent(std::uint32_t firs
     return std::nullopt;
   }
   return extent;
+}
+
+namespace {
+
+std::uint64_t formula_cell_key(std::uint32_t row, std::uint32_t col) noexcept {
+  return (static_cast<std::uint64_t>(col) << 32U) | row;
+}
+
+}  // namespace
+
+std::vector<CellAddress> Sheet::formula_cells_in(std::uint32_t first_row, std::uint32_t first_col,
+                                                 std::uint32_t last_row, std::uint32_t last_col) const {
+  std::vector<CellAddress> out;
+  if (!rect_in_grid(first_row, first_col, last_row, last_col)) {
+    return out;
+  }
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  // One ordered interval per column: seek to `(col, first_row)`, take rows up
+  // to `last_row`, then seek straight to the next column's `first_row`.
+  auto it = formula_cells_.lower_bound(formula_cell_key(first_row, first_col));
+  while (it != formula_cells_.end()) {
+    const auto col = static_cast<std::uint32_t>(*it >> 32U);
+    const auto row = static_cast<std::uint32_t>(*it & 0xFFFFFFFFU);
+    if (col > last_col) {
+      break;
+    }
+    if (row < first_row) {
+      it = formula_cells_.lower_bound(formula_cell_key(first_row, col));
+      continue;
+    }
+    if (row > last_row) {
+      if (col == last_col) {
+        break;
+      }
+      it = formula_cells_.lower_bound(formula_cell_key(first_row, col + 1U));
+      continue;
+    }
+    out.push_back(CellAddress{row, col});
+    ++it;
+  }
+  return out;
+}
+
+void Sheet::index_formula_cell_locked(std::uint32_t row, std::uint32_t col, bool has_formula) {
+  if (has_formula) {
+    formula_cells_.insert(formula_cell_key(row, col));
+  } else {
+    formula_cells_.erase(formula_cell_key(row, col));
+  }
+}
+
+void Sheet::rebuild_formula_index_locked() {
+  formula_cells_.clear();
+  for (const auto& [row, cells] : rows_) {
+    for (std::size_t col = cells.first_col(); col < cells.size(); ++col) {
+      if (!cells[col].formula_text.empty()) {
+        formula_cells_.insert(formula_cell_key(row, static_cast<std::uint32_t>(col)));
+      }
+    }
+  }
 }
 
 void Sheet::for_each_spill_phantom(void (*visit)(CellAddress address, void* ctx), void* ctx) const {
@@ -826,7 +902,7 @@ bool Sheet::footprint_holds_occupied_cell_locked(std::uint32_t anchor_row, std::
   // is smaller wins: the first is proportional to the sheet, the second to
   // the rectangle. A whole-column footprint spans every row of the grid, so
   // only the first strategy keeps it affordable. Mirrors the same choice in
-  // `RecalcEngine`'s ordering-edge walk.
+  // `populated_extent`.
   const std::uint64_t rect_rows = row_end - anchor_row;
   if (static_cast<std::uint64_t>(rows_.size()) <= rect_rows) {
     for (const auto& [row, cells] : rows_) {
@@ -1606,6 +1682,7 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
     rows_.insert(std::move(node));
   }
   clear_committed_spills_locked();
+  rebuild_formula_index_locked();
   const StructuralEdit edit{row, count, /*is_delete=*/false, /*row_axis=*/true};
   shift_blocked_spills_locked(edit);
   shift_sheet_metadata(edit);
@@ -1638,6 +1715,7 @@ void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
     rows_.insert(std::move(node));
   }
   clear_committed_spills_locked();
+  rebuild_formula_index_locked();
   const StructuralEdit edit{row, count, /*is_delete=*/true, /*row_axis=*/true};
   shift_blocked_spills_locked(edit);
   shift_sheet_metadata(edit);
@@ -1698,6 +1776,7 @@ void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
     }
   }
   clear_committed_spills_locked();
+  rebuild_formula_index_locked();
   const StructuralEdit edit{col, count, /*is_delete=*/false, /*row_axis=*/false};
   shift_blocked_spills_locked(edit);
   shift_sheet_metadata(edit);
@@ -1733,6 +1812,7 @@ void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
     }
   }
   clear_committed_spills_locked();
+  rebuild_formula_index_locked();
   const StructuralEdit edit{col, count, /*is_delete=*/true, /*row_axis=*/false};
   shift_blocked_spills_locked(edit);
   shift_sheet_metadata(edit);

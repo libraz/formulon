@@ -89,6 +89,28 @@ TEST(SheetReader, SimpleLiteralsAndFormulaRecalc) {
   EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 2U, 0U).as_number(), 3.0);
 }
 
+TEST(SheetReader, DuplicateLiteralCellDropsTheEarlierFormulaDependencies) {
+  // Literals bypass the workbook's dirty marking on load; a duplicate `<c>`
+  // replacing a formula must still unregister that formula's reads.
+  pugi::xml_document doc;
+  ASSERT_TRUE(
+      doc.load_string("<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><f>B1+SUM(C:C)</f></c><c r=\"A1\"><v>5</v></c>"
+                      "<c r=\"C1\"><v>7</v></c></row>"
+                      "</sheetData></worksheet>"));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+
+  EXPECT_TRUE(StoredFormula(wb, 0U, 0U, 0U).empty());
+  ASSERT_TRUE(StoredValue(wb, 0U, 0U, 0U).is_number());
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 0U).as_number(), 5.0);
+  const eval::CellNodeId a1{0U, 0U, 0U};
+  EXPECT_TRUE(wb.recalc_engine().dep_graph().dependencies_of(a1).empty());
+  EXPECT_TRUE(wb.recalc_engine().compact_range_precedents_of(a1, wb).empty());
+}
+
 TEST(SheetReader, EmptyNumericValueElementIsBlank) {
   pugi::xml_document doc;
   ASSERT_TRUE(doc.load_string("<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><v/></c></row></sheetData></worksheet>"));
