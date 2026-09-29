@@ -15,17 +15,17 @@
 #include <utility>
 #include <vector>
 
-#include "io/default_content_type.h"
-#include "io/external_links.h"
+#include "default_content_type.h"
+#include "external_link.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/sheet_xml_builder.h"
 #include "io/ooxml_defs.h"
-#include "io/passthrough_part.h"
-#include "io/tables_reader.h"
+#include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
+#include "table.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 

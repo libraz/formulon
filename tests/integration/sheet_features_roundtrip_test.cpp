@@ -144,9 +144,9 @@ TEST(SheetFeaturesRoundTrip, CommentsKeepVmlAfterEarlierCommentSheetIsRemoved) {
 
   // Give the surviving sheet's VML distinctive bytes. A planner that looks
   // up the newly-renumbered vmlDrawing1.vml would miss these and emit a stub.
-  std::vector<io::PassthroughPart> parts = restored.passthrough_parts();
+  std::vector<PassthroughPart> parts = restored.passthrough_parts();
   auto vml = std::find_if(parts.begin(), parts.end(),
-                          [](const io::PassthroughPart& part) { return part.path == "xl/drawings/vmlDrawing2.vml"; });
+                          [](const PassthroughPart& part) { return part.path == "xl/drawings/vmlDrawing2.vml"; });
   ASSERT_NE(vml, parts.end());
   const std::string expected_vml = "<xml xmlns:v=\"urn:schemas-microsoft-com:vml\"><v:shape id=\"survivor\"/></xml>\n";
   vml->bytes.assign(expected_vml.begin(), expected_vml.end());

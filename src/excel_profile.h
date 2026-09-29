@@ -1,12 +1,11 @@
 
-#ifndef FORMULON_EVAL_COMPAT_H_
-#define FORMULON_EVAL_COMPAT_H_
+#ifndef FORMULON_EXCEL_PROFILE_H_
+#define FORMULON_EXCEL_PROFILE_H_
 
 #include <cstdint>
 #include <string_view>
 
 namespace formulon {
-namespace eval {
 
 /// Excel host profile used for observed host-specific formula semantics.
 enum class ExcelHost : std::uint8_t {
@@ -67,7 +66,6 @@ inline bool uses_mac_jp_text_folding(ExcelProfile profile) noexcept {
   return profile.host == ExcelHost::kMac365 && profile.locale == ExcelLocale::kJaJP;
 }
 
-}  // namespace eval
 }  // namespace formulon
 
-#endif  // FORMULON_EVAL_COMPAT_H_
+#endif  // FORMULON_EXCEL_PROFILE_H_

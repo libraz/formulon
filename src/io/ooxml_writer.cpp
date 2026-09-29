@@ -32,9 +32,8 @@
 #include <utility>
 #include <vector>
 
-#include "eval/pivot_locale.h"
+#include "external_link.h"
 #include "io/comments_writer.h"
-#include "io/external_links.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
@@ -43,20 +42,21 @@
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_defs.h"
-#include "io/passthrough_part.h"
 #include "io/pivot_cache_writer.h"
 #include "io/pivot_table_writer.h"
 #include "io/styles_writer.h"
-#include "io/tables_reader.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_table.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "workbook.h"
@@ -100,7 +100,7 @@ std::string BuildPivotCacheDefinitionRels(std::string_view records_filename) {
 /// the table's own span, which is what it has always emitted; a workbook
 /// must not fail to save because one pivot could not be evaluated.
 std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivot::PivotTable& table) {
-  const pivot::PivotLayoutOptions options = eval::pivot_layout_options_for(wb.excel_profile());
+  const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(wb.excel_profile());
   // Reuse the memoised result when the host has already evaluated this
   // pivot; `last_result()` is the same cache GETPIVOTDATA and the layout
   // API read.

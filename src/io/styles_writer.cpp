@@ -1,197 +1,20 @@
 //
-// Implementation of the styles writer plus the single owning copy of
-// the built-in number-format table. `builtin_num_fmt(id)` is exported
-// here (declared in `styles_reader.h`) so reader and writer share one
-// `.rodata` definition; duplicating the table across translation units
-// would inflate the WASM binary unnecessarily.
+// Implementation of the styles writer.
 
 #include "io/styles_writer.h"
 
-#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <string>
 #include <string_view>
 
-#include "io/styles_reader.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "styles.h"
 
 namespace formulon {
 namespace io {
 namespace {
-
-// Built-in Excel number-format ids. The id space is sparse (Excel only
-// defines a subset of 0..163; the remaining slots are reserved). Empty
-// strings indicate "not a documented built-in" and behave the same way
-// as an out-of-range id.
-//
-// Source: ECMA-376 Part 1, §18.8.30 (numFmt) and §18.8.31 (numFmts).
-constexpr std::array<const char*, 164> kBuiltinNumFmts = {
-    /*  0 */ "General",
-    /*  1 */ "0",
-    /*  2 */ "0.00",
-    /*  3 */ "#,##0",
-    /*  4 */ "#,##0.00",
-    /*  5 */ "",
-    /*  6 */ "",
-    /*  7 */ "",
-    /*  8 */ "",
-    /*  9 */ "0%",
-    /* 10 */ "0.00%",
-    /* 11 */ "0.00E+00",
-    /* 12 */ "# ?/?",
-    /* 13 */ "# ?\?/?\?",
-    /* 14 */ "mm-dd-yy",
-    /* 15 */ "d-mmm-yy",
-    /* 16 */ "d-mmm",
-    /* 17 */ "mmm-yy",
-    /* 18 */ "h:mm AM/PM",
-    /* 19 */ "h:mm:ss AM/PM",
-    /* 20 */ "h:mm",
-    /* 21 */ "h:mm:ss",
-    /* 22 */ "m/d/yy h:mm",
-    /* 23 */ "",
-    /* 24 */ "",
-    /* 25 */ "",
-    /* 26 */ "",
-    /* 27 */ "",
-    /* 28 */ "",
-    /* 29 */ "",
-    /* 30 */ "",
-    /* 31 */ "",
-    /* 32 */ "",
-    /* 33 */ "",
-    /* 34 */ "",
-    /* 35 */ "",
-    /* 36 */ "",
-    /* 37 */ "#,##0 ;(#,##0)",
-    /* 38 */ "#,##0 ;[Red](#,##0)",
-    /* 39 */ "#,##0.00;(#,##0.00)",
-    /* 40 */ "#,##0.00;[Red](#,##0.00)",
-    /* 41 */ "",
-    /* 42 */ "",
-    /* 43 */ "",
-    /* 44 */ "",
-    /* 45 */ "mm:ss",
-    /* 46 */ "[h]:mm:ss",
-    /* 47 */ "mmss.0",
-    /* 48 */ "##0.0E+0",
-    /* 49 */ "@",
-    /* 50 */ "",
-    /* 51 */ "",
-    /* 52 */ "",
-    /* 53 */ "",
-    /* 54 */ "",
-    /* 55 */ "",
-    /* 56 */ "",
-    /* 57 */ "",
-    /* 58 */ "",
-    /* 59 */ "",
-    /* 60 */ "",
-    /* 61 */ "",
-    /* 62 */ "",
-    /* 63 */ "",
-    /* 64 */ "",
-    /* 65 */ "",
-    /* 66 */ "",
-    /* 67 */ "",
-    /* 68 */ "",
-    /* 69 */ "",
-    /* 70 */ "",
-    /* 71 */ "",
-    /* 72 */ "",
-    /* 73 */ "",
-    /* 74 */ "",
-    /* 75 */ "",
-    /* 76 */ "",
-    /* 77 */ "",
-    /* 78 */ "",
-    /* 79 */ "",
-    /* 80 */ "",
-    /* 81 */ "",
-    /* 82 */ "",
-    /* 83 */ "",
-    /* 84 */ "",
-    /* 85 */ "",
-    /* 86 */ "",
-    /* 87 */ "",
-    /* 88 */ "",
-    /* 89 */ "",
-    /* 90 */ "",
-    /* 91 */ "",
-    /* 92 */ "",
-    /* 93 */ "",
-    /* 94 */ "",
-    /* 95 */ "",
-    /* 96 */ "",
-    /* 97 */ "",
-    /* 98 */ "",
-    /* 99 */ "",
-    /*100 */ "",
-    /*101 */ "",
-    /*102 */ "",
-    /*103 */ "",
-    /*104 */ "",
-    /*105 */ "",
-    /*106 */ "",
-    /*107 */ "",
-    /*108 */ "",
-    /*109 */ "",
-    /*110 */ "",
-    /*111 */ "",
-    /*112 */ "",
-    /*113 */ "",
-    /*114 */ "",
-    /*115 */ "",
-    /*116 */ "",
-    /*117 */ "",
-    /*118 */ "",
-    /*119 */ "",
-    /*120 */ "",
-    /*121 */ "",
-    /*122 */ "",
-    /*123 */ "",
-    /*124 */ "",
-    /*125 */ "",
-    /*126 */ "",
-    /*127 */ "",
-    /*128 */ "",
-    /*129 */ "",
-    /*130 */ "",
-    /*131 */ "",
-    /*132 */ "",
-    /*133 */ "",
-    /*134 */ "",
-    /*135 */ "",
-    /*136 */ "",
-    /*137 */ "",
-    /*138 */ "",
-    /*139 */ "",
-    /*140 */ "",
-    /*141 */ "",
-    /*142 */ "",
-    /*143 */ "",
-    /*144 */ "",
-    /*145 */ "",
-    /*146 */ "",
-    /*147 */ "",
-    /*148 */ "",
-    /*149 */ "",
-    /*150 */ "",
-    /*151 */ "",
-    /*152 */ "",
-    /*153 */ "",
-    /*154 */ "",
-    /*155 */ "",
-    /*156 */ "",
-    /*157 */ "",
-    /*158 */ "",
-    /*159 */ "",
-    /*160 */ "",
-    /*161 */ "",
-    /*162 */ "",
-    /*163 */ ""};
 
 // The XML declaration comes from `xml_utils.h`, which every part writer
 // shares so the prologue stays byte-identical across the package.
@@ -906,13 +729,6 @@ void AppendDxfs(std::string& out, const StylesTable& table) {
 }
 
 }  // namespace
-
-const char* builtin_num_fmt(std::uint16_t id) {
-  if (id >= kBuiltinNumFmts.size()) {
-    return "";
-  }
-  return kBuiltinNumFmts[id];
-}
 
 std::string font_fragment(const FontRecord& font) {
   std::string out;

@@ -36,7 +36,6 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/xml_fragment.h"
-#include "io/a1_ref.h"
 #include "io/ooxml/print_settings_parse.h"
 #include "io/xml_utils.h"
 #include "parser/reference.h"
@@ -44,6 +43,7 @@
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/a1_column.h"
+#include "utils/a1_ref.h"
 #include "utils/double_format.h"
 #include "utils/error.h"
 #include "utils/resource_budget.h"
@@ -343,7 +343,7 @@ bool parse_row_span(std::string_view token, std::uint32_t* first, std::uint32_t*
     if (!part.empty() && part.front() == '$') {
       part.remove_prefix(1);
     }
-    return formulon::io::parse_uint(part, &pos, out) && pos == part.size() && *out >= 1U && *out <= Sheet::kMaxRows;
+    return formulon::a1::parse_uint(part, &pos, out) && pos == part.size() && *out >= 1U && *out <= Sheet::kMaxRows;
   };
   return to_row(token.substr(0, colon), first) && to_row(token.substr(colon + 1), last);
 }
@@ -360,7 +360,7 @@ bool parse_col_span(std::string_view token, std::uint32_t* first, std::uint32_t*
     if (!part.empty() && part.front() == '$') {
       part.remove_prefix(1);
     }
-    return formulon::io::parse_column_letters(part, &pos, out) && pos == part.size() && *out >= 1U &&
+    return formulon::a1::parse_column_letters(part, &pos, out) && pos == part.size() && *out >= 1U &&
            *out <= Sheet::kMaxCols;
   };
   return to_col(token.substr(0, colon), first) && to_col(token.substr(colon + 1), last);

@@ -37,12 +37,12 @@
 #include <utility>
 #include <vector>
 
-#include "io/a1_ref.h"
 #include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
 #include "io/xsd_int.h"
 #include "io/zip_reader.h"
 #include "phonetic.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -75,7 +75,7 @@ Error MakeXmlParseError(std::size_t /*offset*/, const char* /*what*/) {
 /// Wraps the shared `parse_a1_ref` helper. Preserved as a local thin
 /// shim so the rest of this TU keeps reading naturally.
 bool DecodeA1(std::string_view ref, std::uint32_t* row_out, std::uint32_t* col_out) noexcept {
-  return parse_a1_ref(ref, row_out, col_out);
+  return a1::parse_a1_ref(ref, row_out, col_out);
 }
 
 // ---------------------------------------------------------------------------

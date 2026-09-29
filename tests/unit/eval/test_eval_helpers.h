@@ -6,9 +6,9 @@
 #ifndef FORMULON_TESTS_UNIT_EVAL_TEST_EVAL_HELPERS_H_
 #define FORMULON_TESTS_UNIT_EVAL_TEST_EVAL_HELPERS_H_
 
-#include "eval/compat.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
+#include "excel_profile.h"
 #include "sheet.h"
 #include "workbook.h"
 

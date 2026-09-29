@@ -20,14 +20,14 @@
 
 #include "cell.h"
 #include "cf/cf_types.h"
-#include "eval/utf8_length.h"
-#include "io/a1_ref.h"
 #include "phonetic.h"
 #include "pivot/pivot_table.h"
 #include "utils/a1_column.h"
+#include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/index_sort.h"
 #include "utils/resource_budget.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 namespace formulon {
@@ -394,7 +394,7 @@ void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_
     // at write time because every value-mutating setter clears the
     // annotation, so the text it describes cannot change underneath it.
     const std::string_view surface = slot.cached_value.is_text() ? slot.cached_value.as_text() : std::string_view{};
-    slot.phonetic_runs.push_back(PhoneticRun{0U, eval::utf16_units_in(surface), std::string(phonetic)});
+    slot.phonetic_runs.push_back(PhoneticRun{0U, utf16_units_in(surface), std::string(phonetic)});
   }
   cell_enumeration_revision_.bump();
 }
@@ -1492,13 +1492,13 @@ void ShiftAutoFilterRef(std::string& xml, std::uint32_t index, std::uint32_t cou
   const std::string_view value(xml.data() + value_begin, value_end - value_begin);
   const std::size_t colon = value.find(':');
   MergeRange rect;
-  if (!io::parse_a1_ref(value.substr(0, colon), &rect.first_row, &rect.first_col)) {
+  if (!a1::parse_a1_ref(value.substr(0, colon), &rect.first_row, &rect.first_col)) {
     return;  // Not a plain A1 rectangle; leave the element untouched.
   }
   if (colon == std::string_view::npos) {
     rect.last_row = rect.first_row;
     rect.last_col = rect.first_col;
-  } else if (!io::parse_a1_ref(value.substr(colon + 1U), &rect.last_row, &rect.last_col)) {
+  } else if (!a1::parse_a1_ref(value.substr(colon + 1U), &rect.last_row, &rect.last_col)) {
     return;
   }
   if (rect.first_row > rect.last_row || rect.first_col > rect.last_col) {

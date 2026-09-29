@@ -18,7 +18,6 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
-#include "eval/date_time.h"
 #include "eval/function_registry.h"
 #include "eval/number_parse.h"
 #include "eval/shape_ops_lazy.h"
@@ -26,6 +25,7 @@
 #include "eval/text_format/rounding.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/date_time.h"
 #include "utils/expected.h"
 #include "value.h"
 

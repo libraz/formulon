@@ -103,7 +103,7 @@ TEST(RecalcTextLifetime, IterativeTextCycleSurvivesFullAndPartialArenaResets) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(B1=1,\"stable\",\"stable\")")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=IF(A1=1,\"stable\",\"stable\")")));
 
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 4U;
   opts.max_change = 0.001;

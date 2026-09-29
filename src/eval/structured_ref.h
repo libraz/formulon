@@ -35,10 +35,7 @@
 namespace formulon {
 
 class Workbook;
-
-namespace io {
 struct TableMetadata;
-}
 
 namespace eval {
 

@@ -11,9 +11,9 @@
 #include <vector>
 
 #include "cell.h"
-#include "eval/compat.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "value.h"
@@ -39,7 +39,7 @@ TEST(WorkbookRecalc, SmallChainEndToEnd) {
   // After recalc, A2 == 20 and A3 == 25. Also verify dirty propagation:
   // mutating A1 to 20 yields A2 == 40 and A3 == 45.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=A1*2")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=A2+5")));
@@ -90,7 +90,7 @@ TEST(WorkbookRecalc, ValidPrefixWithTrailingGarbageIsNameError) {
   // cell's value and dependency set from what was entered. The strict parse
   // gate surfaces #NAME? and registers no dependency on the prefix's refs.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(5.0))));  // A1 = 5
   // "=A1 3" parses to the prefix `A1` with a trailing `3` the parser cannot
   // consume. Pre-fix this evaluated to 5 (the prefix) and wired a dep on A1.
@@ -113,7 +113,7 @@ TEST(WorkbookRecalc, SumAcrossRange) {
   // B1 = =SUM(A1:A3) — exercises the range-flattening path in the dep
   // extractor. Filling A1..A3 with 1..3 should produce B1 == 6.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 2U, 0U, Value::number(3.0))));
@@ -139,7 +139,7 @@ TEST(WorkbookRecalc, DynamicArraySpillsToAdjacentCells) {
   // B1, C1 with values 1, 2, 3. The anchor cached_value is the first
   // array cell; phantoms surface through `Sheet::resolve_cell_value`.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
 
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
@@ -163,7 +163,7 @@ TEST(WorkbookRecalc, SpillCollisionSurfacesSpillError) {
   // B1 = 99 (literal). A1 = =SEQUENCE(1,3) would normally spill into B1,
   // but the collision must surface as #SPILL! at the anchor.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(99.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
 
@@ -184,7 +184,7 @@ TEST(WorkbookRecalc, SpillOffGridEdgeSurfacesSpillError) {
   // the sheet; Excel surfaces #SPILL!. The committer must set that error
   // deterministically rather than leave the anchor's prior value in place.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   // Anchor on the final row: =SEQUENCE(3,1) would spill down into two rows
   // that do not exist.
   const std::uint32_t last_row = Sheet::kMaxRows - 1U;
@@ -201,7 +201,7 @@ TEST(WorkbookRecalc, DirectLambdaCallTracksBodyCellDependency) {
   // A directly-invoked lambda evaluates its body, so a cell ref inside the
   // body (A1) is a real dependency. Editing A1 must re-evaluate the caller.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0))));      // A1 = 10
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=LAMBDA(x, x+A1)(5)")));  // B1
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
@@ -218,7 +218,7 @@ TEST(WorkbookRecalc, DefinedLambdaCallTracksBodyCellDependency) {
   // A workbook-defined Lambda has the same dependency contract as a direct
   // IIFE: the caller is dirtied when a cell read by the Lambda body changes.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0))));  // A1 = 10
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("AddA1", "LAMBDA(x,x+A1)")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=adda1(5)")));  // B1
@@ -236,7 +236,7 @@ TEST(WorkbookRecalc, DefinedNameInsideCallArgumentTracksItsCells) {
   // A defined name used as a call argument expands the ordinary way, so
   // the cell it names stays a dependency of the calling formula.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(4.0))));  // A1 = 4
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Base", "=A1")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(Base,1)")));  // B1
@@ -252,7 +252,7 @@ TEST(WorkbookRecalc, RedefiningDefinedNameInvalidatesDependents) {
   // A formula referencing a defined name must re-resolve after the name is
   // retargeted; the stale value from the old definition must not survive.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));  // A1 = 1
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));  // A2 = 2
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Target", "=A1")));
@@ -271,7 +271,7 @@ TEST(WorkbookRecalc, AddingDefinedNameRecalculatesNameErrorDependents) {
   // An initially unresolved name produces #NAME?. Adding its definition must
   // rebuild the formula graph so the already-entered formula becomes live.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Rate*10")));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   ASSERT_TRUE(StoredValue(wb, 0U, 0U, 0U).is_error());
@@ -286,7 +286,7 @@ TEST(WorkbookRecalc, AddingDefinedNameRecalculatesNameErrorDependents) {
 
 TEST(WorkbookRecalc, FormattingLiveSpillPhantomPreservesDynamicArray) {
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
 
@@ -313,7 +313,7 @@ TEST(WorkbookRecalc, WritingIntoLiveSpillPhantomResurfacesSpillError) {
   // footprint; the anchor A1 must re-evaluate to #SPILL! rather than keep
   // its old spilled value.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   ASSERT_TRUE(wb.sheet(0).resolve_cell_value(0U, 0U).is_number());  // A1 spilled

@@ -30,15 +30,11 @@
 #include <utility>
 #include <vector>
 
-#include "eval/text_ops.h"
-#include "eval/utf8_length.h"
+#include "default_content_type.h"
 #include "io/array_anchor_budget.h"
-#include "io/default_content_type.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
-#include "io/passthrough_part.h"
-#include "io/unknown_relationship.h"
 #include "io/xlsb/external_link_reader.h"
 #include "io/xlsb/pivot_reader.h"
 #include "io/xlsb/ptg_reader.h"
@@ -49,12 +45,14 @@
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "passthrough_part.h"
 #include "phonetic.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_table.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "unknown_relationship.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -62,6 +60,8 @@
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/structured_log.h"
+#include "utils/text_ops.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -803,7 +803,7 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
   const std::uint32_t run_count = count_or.value();
   if (run_count == 0U) {
     if (!phonetic.empty()) {
-      out.push_back(PhoneticRun{0U, eval::utf16_units_in(surface), phonetic});
+      out.push_back(PhoneticRun{0U, utf16_units_in(surface), phonetic});
     }
     DecodePhoneticProperties(cursor, out_props);
     return {};
@@ -833,7 +833,7 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
     runs.push_back(fields);
   }
 
-  const std::uint32_t phonetic_units = eval::utf16_units_in(phonetic);
+  const std::uint32_t phonetic_units = utf16_units_in(phonetic);
   for (std::size_t i = 0; i < runs.size(); ++i) {
     const std::uint32_t kana_start = runs[i][0];
     const std::uint32_t surface_start = runs[i][1];
@@ -843,8 +843,8 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
     // than an error: the surrounding cell is still usable, and the run
     // boundaries are Excel's own bookkeeping rather than user data.
     const std::uint32_t kana_length = kana_end > kana_start ? kana_end - kana_start : 0U;
-    out.push_back(PhoneticRun{surface_start, surface_start + surface_length,
-                              eval::utf16_substring(phonetic, kana_start, kana_length)});
+    out.push_back(
+        PhoneticRun{surface_start, surface_start + surface_length, utf16_substring(phonetic, kana_start, kana_length)});
   }
   DecodePhoneticProperties(cursor, out_props);
   return {};
@@ -984,7 +984,7 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
 /// LET/LAMBDA-parameter names `PtgName` resolves during Ptg decode — see
 /// `name_table`) are skipped; they are not user-visible names and never
 /// carry a Name Manager comment. A name Excel merely hides from the Name
-/// Manager keeps its `fHidden` bit on the produced `io::DefinedName` and
+/// Manager keeps its `fHidden` bit on the produced `DefinedName` and
 /// is registered like any other. Walks `xl/workbook.bin`'s `BrtName`
 /// records a second time (after `DecodeWorkbookNames` has already built
 /// the complete `name_table`), decoding each entry's own formula body so
@@ -1002,7 +1002,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
                                            std::uint32_t* undecoded_defined_name_count) {
   ByteSpan cursor{body.data(), body.size()};
   std::size_t name_index = 0;
-  std::vector<io::DefinedName> out;
+  std::vector<DefinedName> out;
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
@@ -1091,7 +1091,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     }
     // Defined-name formulas store the bare expression text (no leading
     // `=`), matching the OOXML `<definedName>` element's text content.
-    io::DefinedName dn;
+    DefinedName dn;
     dn.name = entry.name;
     dn.formula = parser::format_formula(*ast_or.value());
     dn.local_sheet_id = entry.itab;
@@ -1583,13 +1583,13 @@ RecordDisposition ResolveUnmodelledRecord(SheetDecodeState& state, XlsbRecordTyp
 /// relationship ids so the retained tail records still resolve. Internal
 /// targets are normalised to package-relative paths (matching what the OOXML
 /// reader stores); external targets stay verbatim.
-Expected<std::vector<io::UnknownRelationship>, Error> LoadSheetRelationships(const ZipReader& zip,
-                                                                             std::string_view rels_path,
-                                                                             std::string_view sheet_dir) {
-  std::vector<io::UnknownRelationship> out;
+Expected<std::vector<UnknownRelationship>, Error> LoadSheetRelationships(const ZipReader& zip,
+                                                                         std::string_view rels_path,
+                                                                         std::string_view sheet_dir) {
+  std::vector<UnknownRelationship> out;
   auto status =
       ooxml::visit_relationship_nodes(zip, rels_path, "sheet rels", "xlsb_reader", [&](const pugi::xml_node& rel) {
-        io::UnknownRelationship entry;
+        UnknownRelationship entry;
         entry.id = rel.attribute("Id").value();
         if (entry.id.empty()) {
           return Expected<void, Error>::Ok();
@@ -1775,12 +1775,12 @@ std::string ReadExternalLinkTarget(const ZipReader& zip, std::string_view part_p
 /// parts do -- the XLSB writer has no external-link output, so they must
 /// continue to round-trip verbatim through passthrough.
 void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector<XlsbSupBook>& books) {
-  std::vector<io::ExternalLinkRecord> links;
+  std::vector<ExternalLinkRecord> links;
   for (const XlsbSupBook& sup : books) {
     if (sup.external_book == 0) {
       continue;  // This workbook.
     }
-    io::ExternalLinkRecord record;
+    ExternalLinkRecord record;
     record.index = sup.external_book;
     record.rel_id = sup.rel_id;
     auto path_or = FindRelationshipById(zip, "xl/workbook.bin", sup.rel_id);
@@ -1792,7 +1792,7 @@ void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector
         const std::vector<std::uint8_t>& bytes = bytes_or.value();
         auto book_or = read_external_link_bin(ByteSpan{bytes.data(), bytes.size()});
         if (book_or) {
-          record.kind = io::ExternalLinkRecord::Kind::kExternalBook;
+          record.kind = ExternalLinkRecord::Kind::kExternalBook;
           record.book = std::move(book_or.value());
         }
       }
@@ -1810,11 +1810,11 @@ void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector
 XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
   XlsbExternalBooks books;
   books.reserve(wb.external_links().size());
-  for (const io::ExternalLinkRecord& link : wb.external_links()) {
+  for (const ExternalLinkRecord& link : wb.external_links()) {
     XlsbExternalBook entry;
     entry.sheet_names = link.book.sheet_names;
     entry.names.reserve(link.book.names.size());
-    for (const io::ExternalBookName& name : link.book.names) {
+    for (const ExternalBookName& name : link.book.names) {
       entry.names.push_back(name.name);
     }
     books.push_back(std::move(entry));
@@ -1826,7 +1826,7 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb) {
   std::unordered_map<std::string, std::uint32_t> loaded_caches;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     std::vector<std::string> pivot_table_paths;
-    for (const io::UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
+    for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
       if (rel.type == kRelPivotTable && !rel.target_external && !rel.target.empty()) {
         pivot_table_paths.push_back(rel.target);
       }
@@ -1862,7 +1862,7 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb) {
 /// Only relationships actually consumed by a hyperlink are removed from the
 /// sheet's unknown relationship list; unrelated drawing/table/custom rels,
 /// including unused hyperlink rels, remain available to the writer.
-Expected<void, Error> ResolveSheetHyperlinks(Sheet& sheet, std::vector<io::UnknownRelationship>& relationships) {
+Expected<void, Error> ResolveSheetHyperlinks(Sheet& sheet, std::vector<UnknownRelationship>& relationships) {
   std::unordered_set<std::string> consumed;
   for (Hyperlink& hyperlink : sheet.mutable_hyperlinks()) {
     if (hyperlink.rid.empty()) {
@@ -1870,8 +1870,8 @@ Expected<void, Error> ResolveSheetHyperlinks(Sheet& sheet, std::vector<io::Unkno
       // string carries the destination and no relationship is consumed.
       continue;
     }
-    const io::UnknownRelationship* matched = nullptr;
-    for (const io::UnknownRelationship& relationship : relationships) {
+    const UnknownRelationship* matched = nullptr;
+    for (const UnknownRelationship& relationship : relationships) {
       if (relationship.id != hyperlink.rid) {
         continue;
       }
@@ -1892,7 +1892,7 @@ Expected<void, Error> ResolveSheetHyperlinks(Sheet& sheet, std::vector<io::Unkno
   }
   if (!consumed.empty()) {
     relationships.erase(std::remove_if(relationships.begin(), relationships.end(),
-                                       [&consumed](const io::UnknownRelationship& relationship) {
+                                       [&consumed](const UnknownRelationship& relationship) {
                                          return consumed.count(relationship.id) != 0U;
                                        }),
                         relationships.end());
@@ -3004,7 +3004,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       wb.sheet(i).set_unknown_relationships(std::move(relationships));
       consumed_parts.insert(sheet_rels_path);
     } else {
-      std::vector<io::UnknownRelationship> no_relationships;
+      std::vector<UnknownRelationship> no_relationships;
       auto hyperlinks = ResolveSheetHyperlinks(wb.sheet(i), no_relationships);
       if (!hyperlinks) {
         return hyperlinks.error();

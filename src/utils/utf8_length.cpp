@@ -1,16 +1,15 @@
 //
 // Implementation of `utf16_units_in`. See `utf8_length.h` for the contract.
 
-#include "eval/utf8_length.h"
+#include "utils/utf8_length.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
 
-#include "eval/text_ops.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
-namespace eval {
 
 int byte_count_jajp(std::uint32_t codepoint) noexcept {
   if (codepoint <= 0x7Fu) {
@@ -62,5 +61,4 @@ std::uint32_t utf16_units_in(std::string_view s) noexcept {
   return units;
 }
 
-}  // namespace eval
 }  // namespace formulon

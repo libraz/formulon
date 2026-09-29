@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#include "io/external_links.h"
+#include "external_link.h"
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"

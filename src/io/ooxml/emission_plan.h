@@ -22,6 +22,9 @@
 namespace formulon {
 
 class Workbook;
+struct PassthroughPart;
+struct TableMetadata;
+struct ExternalLinkRecord;
 
 namespace pivot {
 class PivotCache;
@@ -29,10 +32,6 @@ class PivotTable;
 }  // namespace pivot
 
 namespace io {
-
-struct PassthroughPart;
-struct TableMetadata;
-struct ExternalLinkRecord;
 
 /// Result of building a single per-sheet `_rels` file: the serialised
 /// XML alongside the rId strings the writer assigned to each

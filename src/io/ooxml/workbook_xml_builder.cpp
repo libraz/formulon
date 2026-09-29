@@ -17,21 +17,21 @@
 #include <unordered_set>
 #include <vector>
 
-#include "eval/iterative_solver.h"
-#include "io/default_content_type.h"
-#include "io/defined_names.h"
+#include "calc_settings.h"
+#include "default_content_type.h"
+#include "defined_name.h"
 #include "io/future_functions.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
-#include "io/passthrough_part.h"
-#include "io/unknown_relationship.h"
-#include "io/workbook_kind.h"
+#include "io/workbook_kind_ooxml.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
+#include "passthrough_part.h"
+#include "unknown_relationship.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
 #include "utils/structured_log.h"
@@ -105,7 +105,7 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
     // on the enumerated future functions, `_xlpm.` on LET / LAMBDA
     // parameters), mirroring the cell <f> writer: `n.formula` was
     // normalised to the canonical formula-bar form on ingestion
-    // (io::strip_storage_prefixes in defined_names.cpp), and a real
+    // (parser::strip_storage_prefixes in defined_names.cpp), and a real
     // Excel reading this file needs the prefixed spelling back to resolve
     // modern functions instead of showing #NAME?. On any parse failure,
     // fall back to the canonical text unchanged.
@@ -404,10 +404,10 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   // oleSize, customWorkbookViews, pivotCaches, ...
   {
     const Workbook::CalcMode calc_mode = wb.calc_mode();
-    const eval::IterativeOptions& iter = wb.iterative_options();
+    const IterativeOptions& iter = wb.iterative_options();
     const bool calc_mode_default = calc_mode == Workbook::CalcMode::kAuto;
-    const bool iterate_default = !iter.enabled && iter.max_iterations == eval::kDefaultMaxIterations &&
-                                 iter.max_change == eval::kDefaultMaxChange;
+    const bool iterate_default =
+        !iter.enabled && iter.max_iterations == kDefaultMaxIterations && iter.max_change == kDefaultMaxChange;
     if (!calc_mode_default || !iterate_default) {
       out.append("  <calcPr");
       if (calc_mode == Workbook::CalcMode::kManual) {
@@ -418,12 +418,12 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
       if (iter.enabled) {
         out.append(" iterate=\"1\"");
       }
-      if (iter.max_iterations != eval::kDefaultMaxIterations) {
+      if (iter.max_iterations != kDefaultMaxIterations) {
         out.append(" iterateCount=\"");
         out.append(std::to_string(iter.max_iterations));
         out.push_back('"');
       }
-      if (iter.max_change != eval::kDefaultMaxChange) {
+      if (iter.max_change != kDefaultMaxChange) {
         out.append(" iterateDelta=\"");
         format_double(out, iter.max_change);
         out.push_back('"');

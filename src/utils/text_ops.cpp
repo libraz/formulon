@@ -6,7 +6,7 @@
 // sequences each consume one byte and one UTF-16 unit, matching the
 // behaviour of `utf16_units_in`.
 
-#include "eval/text_ops.h"
+#include "utils/text_ops.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -14,7 +14,6 @@
 #include <string_view>
 
 namespace formulon {
-namespace eval {
 namespace {
 
 // Decodes the leading byte at `text[i]` into a byte length and UTF-16 unit
@@ -242,5 +241,4 @@ Utf8DecodeResult decode_first_utf8_codepoint(std::string_view text) noexcept {
   return {true, value, need + 1};
 }
 
-}  // namespace eval
 }  // namespace formulon

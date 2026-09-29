@@ -19,8 +19,8 @@
 // removes them from a stored formula string, leaving string literals
 // untouched.
 
-#ifndef FORMULON_IO_FORMULA_PREFIX_H_
-#define FORMULON_IO_FORMULA_PREFIX_H_
+#ifndef FORMULON_PARSER_FORMULA_PREFIX_H_
+#define FORMULON_PARSER_FORMULA_PREFIX_H_
 
 #include <array>
 #include <cstddef>
@@ -28,7 +28,7 @@
 #include <string_view>
 
 namespace formulon {
-namespace io {
+namespace parser {
 
 /// True when `c` can continue an identifier (letters, digits, `_`, `.`,
 /// plus any non-ASCII UTF-8 byte, matching the tokenizer's identifier
@@ -116,7 +116,7 @@ inline std::string strip_storage_prefixes(std::string_view formula) {
   return out;
 }
 
-}  // namespace io
+}  // namespace parser
 }  // namespace formulon
 
-#endif  // FORMULON_IO_FORMULA_PREFIX_H_
+#endif  // FORMULON_PARSER_FORMULA_PREFIX_H_

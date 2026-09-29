@@ -16,13 +16,13 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_defs.h"
 #include "io/ooxml_reader.h"
-#include "io/passthrough_part.h"
-#include "io/tables_reader.h"
-#include "io/unknown_relationship.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "table.h"
+#include "unknown_relationship.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -235,12 +235,12 @@ TEST(OoxmlPassthroughRels, UnknownWorkbookRelsAreCaptured) {
   const std::vector<std::uint8_t> bytes = BuildPackageWithThemeAndCalcChain();
   auto load_or = io::read_ooxml(SpanOf(bytes));
   ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
-  const std::vector<io::UnknownRelationship>& rels = load_or.value().workbook.unknown_workbook_rels();
+  const std::vector<UnknownRelationship>& rels = load_or.value().workbook.unknown_workbook_rels();
   ASSERT_EQ(rels.size(), 2U);
 
   bool saw_theme = false;
   bool saw_calc_chain = false;
-  for (const io::UnknownRelationship& r : rels) {
+  for (const UnknownRelationship& r : rels) {
     EXPECT_FALSE(r.target_external);
     if (r.type == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme") {
       saw_theme = true;
@@ -260,7 +260,7 @@ TEST(OoxmlPassthroughRels, UnknownSheetRelationshipsAndTargetsRoundTrip) {
   auto load_or = io::read_ooxml(SpanOf(BuildPackageWithUnknownSheetRelationship()));
   ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
   ASSERT_EQ(load_or.value().workbook.sheet(0).unknown_relationships().size(), 1U);
-  const io::UnknownRelationship& relationship = load_or.value().workbook.sheet(0).unknown_relationships().front();
+  const UnknownRelationship& relationship = load_or.value().workbook.sheet(0).unknown_relationships().front();
   EXPECT_EQ(relationship.id, "rId9");
   EXPECT_EQ(relationship.type, "urn:example:relationships/control");
   EXPECT_EQ(relationship.target, "xl/controls/control1.xml");
@@ -430,7 +430,7 @@ TEST(OoxmlSheetRelsIntegrity, TablePartRidMatchesItsOwnTableRelationship) {
   s.set_cell_value(0U, 0U, Value::text("Region"));
   s.set_cell_value(1U, 0U, Value::text("North"));
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1U;
   table.name = "Regions";
   table.display_name = "Regions";
@@ -438,14 +438,14 @@ TEST(OoxmlSheetRelsIntegrity, TablePartRidMatchesItsOwnTableRelationship) {
   table.sheet_index = 0U;
   table.header_row = true;
   table.totals_row = false;
-  table.columns = {io::TableColumn{1U, "Region", "", "", ""}};
+  table.columns = {TableColumn{1U, "Region", "", "", ""}};
   wb.set_tables({std::move(table)});
 
   // An unknown relationship reserving the lowest rId ("rId1"): a writer
   // that hardcodes the table's r:id to its positional rId(i+1) would
   // collide with it instead of naming the id this rels file actually
   // assigned to the table relationship.
-  io::UnknownRelationship unknown;
+  UnknownRelationship unknown;
   unknown.id = "rId1";
   unknown.type = "urn:example:relationships/control";
   unknown.target = "xl/controls/control1.xml";
@@ -488,17 +488,17 @@ TEST(OoxmlSheetRelsIntegrity, MissingInternalTargetIsDroppedButValidPassthroughS
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
 
-  io::UnknownRelationship missing;
+  UnknownRelationship missing;
   missing.id = "rId7";
   missing.type = "urn:example:relationships/missing-control";
   missing.target = "xl/controls/missing.xml";
-  io::UnknownRelationship valid;
+  UnknownRelationship valid;
   valid.id = "rId8";
   valid.type = "urn:example:relationships/control";
   valid.target = "xl/controls/control1.xml";
   s.set_unknown_relationships({missing, valid});
 
-  io::PassthroughPart control;
+  PassthroughPart control;
   control.path = "xl/controls/control1.xml";
   control.content_type = "application/vnd.example.control+xml";
   control.bytes = {'<', 'c', 'o', 'n', 't', 'r', 'o', 'l', '/', '>'};
@@ -527,7 +527,7 @@ TEST(OoxmlSheetRelsIntegrity, MissingInternalTargetIsDroppedButValidPassthroughS
 
 TEST(OoxmlSheetRelsIntegrity, OnlyMissingInternalTargetProducesNoRelsPart) {
   Workbook wb = Workbook::create();
-  io::UnknownRelationship missing;
+  UnknownRelationship missing;
   missing.id = "rId7";
   missing.type = "urn:example:relationships/missing-control";
   missing.target = "xl/controls/missing.xml";
@@ -543,7 +543,7 @@ TEST(OoxmlSheetRelsIntegrity, OnlyMissingInternalTargetProducesNoRelsPart) {
 
 TEST(OoxmlSheetRelsIntegrity, ExternalUnknownRelationshipSurvivesWithoutPayload) {
   Workbook wb = Workbook::create();
-  io::UnknownRelationship external;
+  UnknownRelationship external;
   external.id = "rId9";
   external.type = "urn:example:relationships/external-control";
   external.target = "https://example.test/controls/control1.xml";
@@ -570,13 +570,13 @@ TEST(OoxmlSheetRelsIntegrity, ExternalUnknownRelationshipSurvivesWithoutPayload)
 
 TEST(OoxmlSheetRelsIntegrity, MissingInternalTargetDropsStrayReservedRelsPassthrough) {
   Workbook wb = Workbook::create();
-  io::UnknownRelationship missing;
+  UnknownRelationship missing;
   missing.id = "rId7";
   missing.type = "urn:example:relationships/missing-control";
   missing.target = "xl/controls/missing.xml";
   wb.sheet(0).set_unknown_relationships({missing});
 
-  io::PassthroughPart stray_rels;
+  PassthroughPart stray_rels;
   stray_rels.path = "xl/worksheets/_rels/sheet1.xml.rels";
   stray_rels.bytes = {'b', 'o', 'g', 'u', 's'};
   wb.set_passthrough_parts({std::move(stray_rels)});
@@ -592,13 +592,13 @@ TEST(OoxmlSheetRelsIntegrity, MissingInternalTargetDropsStrayReservedRelsPassthr
 
 TEST(OoxmlSheetRelsIntegrity, GeneratedStylesCollisionDropsUnknownRelationship) {
   Workbook wb = Workbook::create();
-  io::UnknownRelationship unknown;
+  UnknownRelationship unknown;
   unknown.id = "rId11";
   unknown.type = "urn:example:relationships/alternate-styles";
   unknown.target = "xl/styles.xml";
   wb.sheet(0).set_unknown_relationships({unknown});
 
-  io::PassthroughPart colliding_styles;
+  PassthroughPart colliding_styles;
   colliding_styles.path = "xl/styles.xml";
   colliding_styles.content_type = "application/vnd.example.styles+xml";
   colliding_styles.bytes = {'b', 'o', 'g', 'u', 's'};
@@ -709,7 +709,7 @@ TEST(OoxmlSheetRelsIntegrity, TwoVmlDrawingRelationshipsBothSurviveRoundTrip) {
   // The header/footer VML relationship is preserved as an unknown
   // relationship instead of being silently dropped.
   bool saw_hf_relationship = false;
-  for (const io::UnknownRelationship& rel : loaded.unknown_relationships()) {
+  for (const UnknownRelationship& rel : loaded.unknown_relationships()) {
     if (rel.id == "rId3") {
       saw_hf_relationship = true;
       EXPECT_EQ(rel.type, io::kRelVmlDrawing);
@@ -770,7 +770,7 @@ TEST(OoxmlSheetRelsIntegrity, HeaderFooterVmlWithoutCommentsSurvivesRoundTrip) {
   EXPECT_TRUE(loaded.comments().empty());
 
   bool saw_hf_relationship = false;
-  for (const io::UnknownRelationship& rel : loaded.unknown_relationships()) {
+  for (const UnknownRelationship& rel : loaded.unknown_relationships()) {
     if (rel.id == "rId3") {
       saw_hf_relationship = true;
       EXPECT_EQ(rel.type, io::kRelVmlDrawing);
@@ -809,7 +809,7 @@ TEST(OoxmlSheetRelsIntegrity, HeaderFooterVmlWithoutCommentsSurvivesRoundTrip) {
 TEST(OoxmlSheetRelsIntegrity, UnknownRelationshipsOnlySheetDoesNotDuplicateRelsEntry) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
-  io::UnknownRelationship unknown;
+  UnknownRelationship unknown;
   unknown.id = "rId9";
   unknown.type = "urn:example:relationships/control";
   unknown.target = "xl/controls/control1.xml";
@@ -817,13 +817,13 @@ TEST(OoxmlSheetRelsIntegrity, UnknownRelationshipsOnlySheetDoesNotDuplicateRelsE
 
   // A stray passthrough part deliberately placed at the exact path the
   // writer generates for this sheet's own rels file.
-  std::vector<io::PassthroughPart> parts = wb.passthrough_parts();
-  io::PassthroughPart control;
+  std::vector<PassthroughPart> parts = wb.passthrough_parts();
+  PassthroughPart control;
   control.path = "xl/controls/control1.xml";
   control.content_type = "application/vnd.example.control+xml";
   control.bytes = {'<', 'c', 'o', 'n', 't', 'r', 'o', 'l', '/', '>'};
   parts.push_back(std::move(control));
-  io::PassthroughPart bogus;
+  PassthroughPart bogus;
   bogus.path = "xl/worksheets/_rels/sheet1.xml.rels";
   bogus.bytes = {'b', 'o', 'g', 'u', 's'};
   parts.push_back(bogus);

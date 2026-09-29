@@ -19,9 +19,9 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
-#include "io/passthrough_part.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "workbook.h"
 
@@ -136,9 +136,9 @@ TEST(OoxmlDefaultPassthrough, VbaProjectBytesAndDefaultRoundTrip) {
   ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
 
   // The reader must have captured the Default-typed part.
-  const std::vector<io::PassthroughPart>& parts = load_or.value().workbook.passthrough_parts();
+  const std::vector<PassthroughPart>& parts = load_or.value().workbook.passthrough_parts();
   bool saw_vba = false;
-  for (const io::PassthroughPart& p : parts) {
+  for (const PassthroughPart& p : parts) {
     if (p.path == "xl/vbaProject.bin") {
       saw_vba = true;
       EXPECT_TRUE(p.content_type.empty()) << "Default-typed part must carry an empty content type";

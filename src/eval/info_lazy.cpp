@@ -31,7 +31,6 @@
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
-#include "eval/text_ops.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -39,6 +38,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
 #include "value.h"
 #include "workbook.h"
 

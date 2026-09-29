@@ -7,9 +7,9 @@
 #include <string_view>
 
 #include "cell.h"
-#include "io/a1_ref.h"
-#include "io/defined_names.h"
+#include "defined_name.h"
 #include "sheet.h"
+#include "utils/a1_ref.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -97,7 +97,7 @@ std::string_view Trim(std::string_view text) {
 /// Parses one anchor-free A1 reference (e.g. "A1", "BC42") into 0-based
 /// row/col. Returns false on any malformed input or trailing characters.
 bool ParseCellRef(std::string_view text, std::uint32_t* out_row, std::uint32_t* out_col) {
-  return io::parse_a1_ref(text, out_row, out_col);
+  return a1::parse_a1_ref(text, out_row, out_col);
 }
 
 /// Largest valid 0-based row / column index (Excel's grid ceiling). Used
@@ -117,7 +117,7 @@ bool ParseWholeAxisToken(std::string_view lhs, std::string_view rhs, CellRange* 
   std::size_t pj = 0;
   std::uint32_t c1 = 0;
   std::uint32_t c2 = 0;
-  if (io::parse_column_letters(lhs, &pi, &c1) && pi == lhs.size() && io::parse_column_letters(rhs, &pj, &c2) &&
+  if (a1::parse_column_letters(lhs, &pi, &c1) && pi == lhs.size() && a1::parse_column_letters(rhs, &pj, &c2) &&
       pj == rhs.size()) {
     out_range->first_col = std::min(std::min(c1, c2) - 1U, kMaxColIndex);
     out_range->last_col = std::min(std::max(c1, c2) - 1U, kMaxColIndex);
@@ -131,7 +131,7 @@ bool ParseWholeAxisToken(std::string_view lhs, std::string_view rhs, CellRange* 
   pj = 0;
   std::uint32_t r1 = 0;
   std::uint32_t r2 = 0;
-  if (io::parse_uint(lhs, &pi, &r1) && pi == lhs.size() && r1 != 0U && io::parse_uint(rhs, &pj, &r2) &&
+  if (a1::parse_uint(lhs, &pi, &r1) && pi == lhs.size() && r1 != 0U && a1::parse_uint(rhs, &pj, &r2) &&
       pj == rhs.size() && r2 != 0U) {
     out_range->first_row = std::min(std::min(r1, r2) - 1U, kMaxRowIndex);
     out_range->last_row = std::min(std::max(r1, r2) - 1U, kMaxRowIndex);
@@ -196,7 +196,7 @@ bool ParseRangeToken(std::string_view token, CellRange* out_range) {
 /// only on the comparison Excel performs; the built-in identifiers are
 /// stored verbatim, so a plain comparison suffices here.
 const std::string* FindSheetScopedFormula(const Workbook& wb, std::uint32_t sheet_index, std::string_view name) {
-  for (const io::DefinedName& dn : wb.defined_names()) {
+  for (const DefinedName& dn : wb.defined_names()) {
     if (dn.local_sheet_id < 0) {
       continue;
     }
@@ -233,10 +233,10 @@ bool ParseTitleToken(std::string_view token, PrintTitles* out_titles) {
     std::size_t pj = 0;
     std::uint32_t r1 = 0;
     std::uint32_t r2 = 0;
-    if (!io::parse_uint(lhs, &pi, &r1) || pi != lhs.size()) {
+    if (!a1::parse_uint(lhs, &pi, &r1) || pi != lhs.size()) {
       return false;
     }
-    if (!io::parse_uint(rhs, &pj, &r2) || pj != rhs.size()) {
+    if (!a1::parse_uint(rhs, &pj, &r2) || pj != rhs.size()) {
       return false;
     }
     if (r1 == 0U || r2 == 0U) {
@@ -259,10 +259,10 @@ bool ParseTitleToken(std::string_view token, PrintTitles* out_titles) {
   std::size_t pj = 0;
   std::uint32_t c1 = 0;
   std::uint32_t c2 = 0;
-  if (!io::parse_column_letters(lhs, &pi, &c1) || pi != lhs.size()) {
+  if (!a1::parse_column_letters(lhs, &pi, &c1) || pi != lhs.size()) {
     return false;
   }
-  if (!io::parse_column_letters(rhs, &pj, &c2) || pj != rhs.size()) {
+  if (!a1::parse_column_letters(rhs, &pj, &c2) || pj != rhs.size()) {
     return false;
   }
   const std::uint32_t lo = std::min(c1, c2) - 1U;

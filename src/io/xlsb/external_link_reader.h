@@ -1,6 +1,6 @@
 //
 // MS-XLSB external-link decoding: `xl/externalLinks/externalLink<N>.bin`
-// into the same `io::ExternalBook` model the OOXML reader builds, so a
+// into the same `ExternalBook` model the OOXML reader builds, so a
 // cross-workbook reference resolves against an XLSB-sourced cache the
 // same way it does against an xlsx one.
 //
@@ -30,7 +30,7 @@
 #ifndef FORMULON_IO_XLSB_EXTERNAL_LINK_READER_H_
 #define FORMULON_IO_XLSB_EXTERNAL_LINK_READER_H_
 
-#include "io/external_book.h"
+#include "external_book.h"
 #include "io/zip_reader.h"
 #include "utils/error.h"
 #include "utils/expected.h"

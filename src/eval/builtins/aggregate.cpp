@@ -23,11 +23,11 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
-#include "eval/utf8_length.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/strings.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 namespace formulon {

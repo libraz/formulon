@@ -5,20 +5,20 @@
 // agnostic; it leaves the choice of placeholders ("Row Labels" /
 // "Column Labels"), subtotal suffix, grand-total label, and data-field
 // name template up to the caller. This translation unit centralises
-// those strings per `eval::ExcelProfile`, and exposes the helper that
+// those strings per `ExcelProfile`, and exposes the helper that
 // turns a profile into a populated `pivot::PivotLayoutOptions`.
 
-#ifndef FORMULON_EVAL_PIVOT_LOCALE_H_
-#define FORMULON_EVAL_PIVOT_LOCALE_H_
+#ifndef FORMULON_PIVOT_PIVOT_LOCALE_H_
+#define FORMULON_PIVOT_PIVOT_LOCALE_H_
 
 #include <string>
 #include <string_view>
 
-#include "eval/compat.h"
+#include "excel_profile.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_types.h"
 
-namespace formulon::eval {
+namespace formulon::pivot {
 
 /// Returns the layout-option overrides appropriate for the locale of
 /// the given Excel profile.
@@ -46,6 +46,6 @@ std::string_view data_field_separator(ExcelProfile profile);
 /// the OOXML round-trip layer.
 std::string data_field_display_name(pivot::Aggregation agg, std::string_view field_name, ExcelProfile profile);
 
-}  // namespace formulon::eval
+}  // namespace formulon::pivot
 
-#endif  // FORMULON_EVAL_PIVOT_LOCALE_H_
+#endif  // FORMULON_PIVOT_PIVOT_LOCALE_H_

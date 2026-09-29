@@ -13,13 +13,12 @@
 // include the type without dragging in the pugixml-backed content-types
 // parser.
 
-#ifndef FORMULON_IO_DEFAULT_CONTENT_TYPE_H_
-#define FORMULON_IO_DEFAULT_CONTENT_TYPE_H_
+#ifndef FORMULON_DEFAULT_CONTENT_TYPE_H_
+#define FORMULON_DEFAULT_CONTENT_TYPE_H_
 
 #include <string>
 
 namespace formulon {
-namespace io {
 
 /// One `<Default>` entry from `[Content_Types].xml`.
 ///
@@ -31,7 +30,6 @@ struct DefaultContentType {
   std::string content_type;
 };
 
-}  // namespace io
 }  // namespace formulon
 
-#endif  // FORMULON_IO_DEFAULT_CONTENT_TYPE_H_
+#endif  // FORMULON_DEFAULT_CONTENT_TYPE_H_

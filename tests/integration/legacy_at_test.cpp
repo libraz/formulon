@@ -32,9 +32,9 @@
 #include <vector>
 
 #include "cell.h"
-#include "eval/compat.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/zip_reader.h"
@@ -76,7 +76,7 @@ TEST(LegacyAt, AtPrefixProjectsOntoFormulaRowInsideColumn) {
   // B3 = =@A1:A5 -- single-column range, formula row 3 (0-based 2) is
   // in [1..5], so the projection is A3 == 3.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   FillA1ToA5(wb);
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 1U, "=@A1:A5")));
 
@@ -91,7 +91,7 @@ TEST(LegacyAt, AtPrefixOutsideColumnReturnsValueError) {
   // B7 = =@A1:A5 -- formula row 7 (0-based 6) is OUTSIDE [0..4] ->
   // #VALUE!.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   FillA1ToA5(wb);
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 6U, 1U, "=@A1:A5")));
 
@@ -106,7 +106,7 @@ TEST(LegacyAt, AtPrefixOnSingleRowProjectsOntoFormulaCol) {
   // C7 = =@A1:E1 -- single-row range, formula col 3 (0-based 2) is
   // in [0..4], so the projection is C1 == 30.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0U, 0U, Value::number(10.0));
   s.set_cell_value(0U, 1U, Value::number(20.0));
@@ -127,7 +127,7 @@ TEST(LegacyAt, AtPrefixOn2DRangeReturnsValueError) {
   // #VALUE! on a 2D range. Verified Mac semantics in
   // tests/oracle/cases/implicit_intersection.yaml.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0U, 0U, Value::number(11.0));
   s.set_cell_value(0U, 1U, Value::number(12.0));
@@ -151,7 +151,7 @@ TEST(LegacyAt, BareColumnRangeSpillsAtTopLeftOutsideRange) {
   // Excel 365 spills the array; the anchor (F1) holds the top-left
   // element A1 == 1.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   FillA1ToA5(wb);
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 5U, "=A1:A5")));
 
@@ -171,7 +171,7 @@ TEST(LegacyAt, BareColumnRangeSpillsAtTopLeftEvenWhenRowAligned) {
   // the formula cell's row falls inside the range. The anchor (F3) holds
   // the top-left element A1 == 1; it is NOT the row-aligned cell A3.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   FillA1ToA5(wb);
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 5U, "=A1:A5")));
 
@@ -190,7 +190,7 @@ TEST(LegacyAt, AtPrefixOnScalarFunctionIsNoop) {
   // B1 = =@SUM(A1:A5) -- SUM returns a scalar, so the `@` operator is a
   // no-op. Result == 15.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   FillA1ToA5(wb);
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=@SUM(A1:A5)")));
 
@@ -218,7 +218,7 @@ TEST(LegacyAt, AtPrefixOnArrayFunctionCollapsesToAnchor) {
   // B2/B3). The test below pins the engine's *current* behaviour: the
   // anchor evaluates to 1.0 but a spill region IS committed.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=@SEQUENCE(3,1)")));
 
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
@@ -237,7 +237,7 @@ TEST(LegacyAt, FormulaTextWithAtPrefixRoundTrips) {
   // The reader should preserve the exact formula text including the
   // `@` so a follow-up recalc reproduces the legacy II semantics.
   Workbook src = Workbook::create();
-  src.set_excel_profile(eval::mac_365_ja_jp_profile());
+  src.set_excel_profile(mac_365_ja_jp_profile());
   FillA1ToA5(src);
   ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0U, 2U, 1U, "=@A1:A5")));
   ASSERT_TRUE(static_cast<bool>(src.recalc(eval::default_registry())));
@@ -269,7 +269,7 @@ TEST(LegacyAt, FormulaTextWithAtOnSumRoundTrips) {
   // Same as above but with `=@SUM(A1:A5)` -- the `@` should still
   // round-trip verbatim even though it's a no-op semantically.
   Workbook src = Workbook::create();
-  src.set_excel_profile(eval::mac_365_ja_jp_profile());
+  src.set_excel_profile(mac_365_ja_jp_profile());
   FillA1ToA5(src);
   ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0U, 0U, 1U, "=@SUM(A1:A5)")));
   ASSERT_TRUE(static_cast<bool>(src.recalc(eval::default_registry())));
@@ -309,7 +309,7 @@ TEST(LegacyAt, BareRangeBinaryOpMultipliesElementWise) {
   // wise). Engine collapses to a scalar; the spill engine refactor
   // will likely change this. Test pins current behaviour.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   FillA1ToA5(wb);
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0U, 1U, Value::number(10.0));
@@ -336,7 +336,7 @@ TEST(LegacyAt, AtPrefixBeforeBinaryOpTakesTopLeftOfComputedArray) {
   // to a direct range/reference operand; on a computed array `@` takes
   // the top-left element -- A1*2 == 2, not the row-aligned A3*2.
   Workbook wb = Workbook::create();
-  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   FillA1ToA5(wb);
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 2U, "=@(A1:A5*2)")));
 

@@ -12,8 +12,8 @@
 
 #include "c_api/formulon_c.h"
 #include "cf/cf_types.h"
-#include "io/styles_reader.h"
 #include "sheet.h"
+#include "styles.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -303,14 +303,14 @@ fm_status_t validate(const fm_data_validation& v, const char* api) {
   return check_enum_domain(v.error_style, 2, api, "error_style");
 }
 
-bool num_fmt_id_known(const formulon::io::StylesTable& styles, std::uint16_t id) {
+bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
   if (id < 164U) {
-    const char* builtin = formulon::io::builtin_num_fmt(id);
+    const char* builtin = formulon::builtin_num_fmt(id);
     if (builtin != nullptr && builtin[0] != '\0') {
       return true;
     }
   }
-  for (const formulon::io::NumFmtRecord& record : styles.num_fmts) {
+  for (const formulon::NumFmtRecord& record : styles.num_fmts) {
     if (record.id == id) {
       return true;
     }

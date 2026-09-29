@@ -234,7 +234,7 @@ TEST(EvalContextRecursive, ReadOnlyRangeUsesCommittedSpillAnchorScalar) {
 TEST(EvalContextRecursive, ReadOnlyEvalIgnoresIterativeCalcOnSelfReference) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(7.0))));  // A1
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 50U;
   wb.set_iterative_options(opts);

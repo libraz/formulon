@@ -45,8 +45,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "io/passthrough_part.h"
 #include "io/zip_reader.h"
+#include "passthrough_part.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "workbook.h"

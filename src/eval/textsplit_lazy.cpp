@@ -11,10 +11,10 @@
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
 #include "eval/shape_ops_lazy.h"
-#include "eval/text_ops.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/text_ops.h"
 #include "value.h"
 
 namespace formulon {

@@ -374,7 +374,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // against one day and its later ones against the next.
   PivotFilterEnv resolved_env = env;
   if (!resolved_env.pinned_now.has_value()) {
-    resolved_env.pinned_now = eval::date_time::host_civil_time();
+    resolved_env.pinned_now = date_time::host_civil_time();
   }
   const PreparedRecordFilter record_filter(table, cache, resolved_env);
   std::vector<std::size_t> surviving;

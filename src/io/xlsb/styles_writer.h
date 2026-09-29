@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "io/styles_reader.h"
+#include "styles.h"
 
 namespace formulon {
 namespace io {

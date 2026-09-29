@@ -9,12 +9,12 @@
 #include <string_view>
 #include <vector>
 
+#include "external_link.h"
 #include "gtest/gtest.h"
-#include "io/external_links.h"
 #include "io/ooxml_reader.h"
-#include "io/passthrough_part.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -83,23 +83,23 @@ std::size_t MarkZipEntryEncrypted(std::vector<std::uint8_t>& bytes, std::string_
 Workbook MakeSingleExternalLinkWorkbook(std::vector<std::uint8_t> body_bytes) {
   Workbook src = Workbook::create();
 
-  io::PassthroughPart body;
+  PassthroughPart body;
   body.path = "xl/externalLinks/externalLink1.xml";
   body.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
   body.bytes = std::move(body_bytes);
-  std::vector<io::PassthroughPart> parts;
+  std::vector<PassthroughPart> parts;
   parts.push_back(std::move(body));
   src.set_passthrough_parts(std::move(parts));
 
-  io::ExternalLinkRecord rec;
+  ExternalLinkRecord rec;
   rec.index = 1;
   rec.rel_id = "rId7";
   rec.part_path = "xl/externalLinks/externalLink1.xml";
   rec.body_rel_id = "rId1";
   rec.target = "file:///Users/example/RemoteBook.xlsx";
   rec.target_external = true;
-  rec.kind = io::ExternalLinkRecord::Kind::kExternalBook;
-  std::vector<io::ExternalLinkRecord> links;
+  rec.kind = ExternalLinkRecord::Kind::kExternalBook;
+  std::vector<ExternalLinkRecord> links;
   links.push_back(std::move(rec));
   src.set_external_links(std::move(links));
   return src;
@@ -109,25 +109,25 @@ TEST(ExternalLinksRoundTrip, PreservesSingleExternalBook) {
   Workbook src = Workbook::create();
 
   // 1. Body part lives in passthrough; it round-trips verbatim.
-  io::PassthroughPart body;
+  PassthroughPart body;
   body.path = "xl/externalLinks/externalLink1.xml";
   body.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
   body.bytes = MakeExternalBookBody("rId1");
 
-  std::vector<io::PassthroughPart> parts;
+  std::vector<PassthroughPart> parts;
   parts.push_back(std::move(body));
   src.set_passthrough_parts(std::move(parts));
 
   // 2. Metadata: one external book pointing at a remote file URL.
-  io::ExternalLinkRecord rec;
+  ExternalLinkRecord rec;
   rec.index = 1;
   rec.rel_id = "rId7";  // Reader replaces this on round-trip; value here is irrelevant.
   rec.part_path = "xl/externalLinks/externalLink1.xml";
   rec.body_rel_id = "rId1";
   rec.target = "file:///Users/example/RemoteBook.xlsx";
   rec.target_external = true;
-  rec.kind = io::ExternalLinkRecord::Kind::kExternalBook;
-  std::vector<io::ExternalLinkRecord> links;
+  rec.kind = ExternalLinkRecord::Kind::kExternalBook;
+  std::vector<ExternalLinkRecord> links;
   links.push_back(std::move(rec));
   src.set_external_links(std::move(links));
 
@@ -145,11 +145,11 @@ TEST(ExternalLinksRoundTrip, PreservesSingleExternalBook) {
   EXPECT_EQ(rt[0].body_rel_id, "rId1");
   EXPECT_EQ(rt[0].target, "file:///Users/example/RemoteBook.xlsx");
   EXPECT_TRUE(rt[0].target_external);
-  EXPECT_EQ(rt[0].kind, io::ExternalLinkRecord::Kind::kExternalBook);
+  EXPECT_EQ(rt[0].kind, ExternalLinkRecord::Kind::kExternalBook);
   // The body part must still be present in passthrough — the reader
   // should have left it alone (it consumes only the per-link rels file).
   bool body_present = false;
-  for (const io::PassthroughPart& p : load_or.value().workbook.passthrough_parts()) {
+  for (const PassthroughPart& p : load_or.value().workbook.passthrough_parts()) {
     if (p.path == "xl/externalLinks/externalLink1.xml") {
       body_present = true;
       break;
@@ -161,9 +161,9 @@ TEST(ExternalLinksRoundTrip, PreservesSingleExternalBook) {
 TEST(ExternalLinksRoundTrip, PreservesDocumentOrderAcrossMultipleLinks) {
   Workbook src = Workbook::create();
 
-  std::vector<io::PassthroughPart> parts;
+  std::vector<PassthroughPart> parts;
   for (int i = 1; i <= 3; ++i) {
-    io::PassthroughPart body;
+    PassthroughPart body;
     body.path = "xl/externalLinks/externalLink" + std::to_string(i) + ".xml";
     body.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
     body.bytes = MakeExternalBookBody("rId1");
@@ -171,16 +171,16 @@ TEST(ExternalLinksRoundTrip, PreservesDocumentOrderAcrossMultipleLinks) {
   }
   src.set_passthrough_parts(std::move(parts));
 
-  std::vector<io::ExternalLinkRecord> links;
+  std::vector<ExternalLinkRecord> links;
   for (int i = 1; i <= 3; ++i) {
-    io::ExternalLinkRecord rec;
+    ExternalLinkRecord rec;
     rec.index = static_cast<std::uint32_t>(i);
     rec.rel_id = "rId" + std::to_string(100 + i);
     rec.part_path = "xl/externalLinks/externalLink" + std::to_string(i) + ".xml";
     rec.body_rel_id = "rId1";
     rec.target = "file:///remote/book" + std::to_string(i) + ".xlsx";
     rec.target_external = true;
-    rec.kind = io::ExternalLinkRecord::Kind::kExternalBook;
+    rec.kind = ExternalLinkRecord::Kind::kExternalBook;
     links.push_back(std::move(rec));
   }
   src.set_external_links(std::move(links));
@@ -196,7 +196,7 @@ TEST(ExternalLinksRoundTrip, PreservesDocumentOrderAcrossMultipleLinks) {
     EXPECT_EQ(rt[i].index, i + 1U);
     EXPECT_EQ(rt[i].part_path, "xl/externalLinks/externalLink" + std::to_string(i + 1) + ".xml");
     EXPECT_EQ(rt[i].target, "file:///remote/book" + std::to_string(i + 1) + ".xlsx");
-    EXPECT_EQ(rt[i].kind, io::ExternalLinkRecord::Kind::kExternalBook);
+    EXPECT_EQ(rt[i].kind, ExternalLinkRecord::Kind::kExternalBook);
   }
 }
 
@@ -213,7 +213,7 @@ TEST(ExternalLinksRoundTrip, SuccessfullyReadMalformedBodyRemainsUnknown) {
       << "malformed external-link XML must remain compatible: " << load_or.error().message;
   const auto& links = load_or.value().workbook.external_links();
   ASSERT_EQ(links.size(), 1U);
-  EXPECT_EQ(links[0].kind, io::ExternalLinkRecord::Kind::kUnknown);
+  EXPECT_EQ(links[0].kind, ExternalLinkRecord::Kind::kUnknown);
   EXPECT_EQ(links[0].target, "file:///Users/example/RemoteBook.xlsx");
 }
 
@@ -258,7 +258,7 @@ TEST(ExternalLinksRoundTrip, RelsReadFailurePropagatesUnchanged) {
 TEST(ExternalLinksRoundTrip, InPackageTargetModeSurvivesRoundTrip) {
   Workbook src = MakeSingleExternalLinkWorkbook(MakeExternalBookBody("rId1"));
   {
-    std::vector<io::ExternalLinkRecord> links = src.external_links();
+    std::vector<ExternalLinkRecord> links = src.external_links();
     ASSERT_EQ(links.size(), 1U);
     links[0].target = "externalLinks/RemoteBook.xlsx";
     links[0].target_external = false;
@@ -298,7 +298,7 @@ TEST(ExternalLinksRoundTrip, ExternalTargetModeSurvivesRoundTrip) {
 TEST(ExternalLinksRoundTrip, TraversalShapedPartPathIsRefusedOnWrite) {
   Workbook src = MakeSingleExternalLinkWorkbook(MakeExternalBookBody("rId1"));
   {
-    std::vector<io::ExternalLinkRecord> links = src.external_links();
+    std::vector<ExternalLinkRecord> links = src.external_links();
     ASSERT_EQ(links.size(), 1U);
     links[0].part_path = "../../evil/externalLink1.xml";
     src.set_external_links(std::move(links));

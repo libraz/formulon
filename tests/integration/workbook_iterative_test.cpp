@@ -80,7 +80,7 @@ TEST(WorkbookIterative, EnabledIdentityCycleObservedBehaviour) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=B1+1")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1-1")));
 
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 100U;
   opts.max_change = 0.001;
@@ -111,7 +111,7 @@ TEST(WorkbookIterative, EnabledAveragingCycleConvergesToSharedValue) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=B1/2+10")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1")));
 
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 200U;
   opts.max_change = 0.0001;
@@ -138,7 +138,7 @@ TEST(WorkbookIterative, WholeColumnAggregateCycleConvergesAndCountsBothCells) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=C1*0.5+1")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(A:A)")));
 
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 200U;
   opts.max_change = 1e-9;
@@ -165,7 +165,7 @@ TEST(WorkbookIterative, EnabledGrowingCycleKeepsFiniteApproximation) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=2*A1+1")));
 
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 100U;
   opts.max_change = 0.001;
@@ -191,7 +191,7 @@ TEST(WorkbookIterative, MaxIterationsHonoured) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=(A1+1000)/2")));
 
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 3U;
   opts.max_change = 1e-9;
@@ -216,7 +216,7 @@ TEST(WorkbookIterative, OptionsRoundTrip) {
   EXPECT_EQ(wb.iterative_options().max_iterations, 100U);
   EXPECT_DOUBLE_EQ(wb.iterative_options().max_change, 0.001);
 
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 42U;
   opts.max_change = 0.5;
@@ -232,22 +232,22 @@ TEST(WorkbookIterative, OptionsRoundTrip) {
 TEST(WorkbookIterative, OptionsClampTheIterationBudgetOnTheWayIn) {
   Workbook wb = Workbook::create();
 
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_change = 0.0;  // unsatisfiable, so the count is the only bound
   opts.max_iterations = std::numeric_limits<std::uint32_t>::max();
   wb.set_iterative_options(opts);
-  EXPECT_EQ(wb.iterative_options().max_iterations, eval::kMaxIterationsCap);
+  EXPECT_EQ(wb.iterative_options().max_iterations, kMaxIterationsCap);
 
-  opts.max_iterations = eval::kMaxIterationsCap + 1U;
+  opts.max_iterations = kMaxIterationsCap + 1U;
   wb.set_iterative_options(opts);
-  EXPECT_EQ(wb.iterative_options().max_iterations, eval::kMaxIterationsCap);
+  EXPECT_EQ(wb.iterative_options().max_iterations, kMaxIterationsCap);
 
   // The cap itself and everything under it are stored verbatim; the clamp
   // must not round a legal request down.
-  opts.max_iterations = eval::kMaxIterationsCap;
+  opts.max_iterations = kMaxIterationsCap;
   wb.set_iterative_options(opts);
-  EXPECT_EQ(wb.iterative_options().max_iterations, eval::kMaxIterationsCap);
+  EXPECT_EQ(wb.iterative_options().max_iterations, kMaxIterationsCap);
 
   opts.max_iterations = 1U;
   wb.set_iterative_options(opts);

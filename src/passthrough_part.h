@@ -16,8 +16,8 @@
 // empty `content_type` and rely on the round-tripped `<Default>`
 // registration (see `DefaultContentType`).
 
-#ifndef FORMULON_IO_PASSTHROUGH_PART_H_
-#define FORMULON_IO_PASSTHROUGH_PART_H_
+#ifndef FORMULON_PASSTHROUGH_PART_H_
+#define FORMULON_PASSTHROUGH_PART_H_
 
 #include <cstdint>
 #include <string>
@@ -26,7 +26,6 @@
 #include "utils/index_sort.h"
 
 namespace formulon {
-namespace io {
 
 /// One Override-listed part the reader did not consume.
 ///
@@ -56,7 +55,6 @@ inline void sort_passthrough_parts(std::vector<PassthroughPart>& parts) {
   sort_by_index(parts, [](const PassthroughPart& lhs, const PassthroughPart& rhs) { return lhs.path < rhs.path; });
 }
 
-}  // namespace io
 }  // namespace formulon
 
-#endif  // FORMULON_IO_PASSTHROUGH_PART_H_
+#endif  // FORMULON_PASSTHROUGH_PART_H_

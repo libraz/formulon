@@ -30,7 +30,7 @@
 
 #include "c_api/formulon_c.h"
 #include "cli/file_io.h"
-#include "io/defined_names.h"
+#include "defined_name.h"
 #include "io/format_detect.h"
 #include "support/ooxml_package_fixture.h"
 #include "workbook.h"
@@ -346,10 +346,10 @@ bool write_out_of_range_defined_names_fixture(const std::string& path) {
     wb.add_sheet("Sheet" + std::to_string(i + 1));
   }
 
-  std::vector<formulon::io::DefinedName> names;
-  names.push_back(formulon::io::DefinedName{"Before", "=1", -1, false, ""});
-  names.push_back(formulon::io::DefinedName{"Bad", "=Sheet1!$A$1", 99, false, ""});
-  names.push_back(formulon::io::DefinedName{"After", "=2", -1, false, ""});
+  std::vector<formulon::DefinedName> names;
+  names.push_back(formulon::DefinedName{"Before", "=1", -1, false, ""});
+  names.push_back(formulon::DefinedName{"Bad", "=Sheet1!$A$1", 99, false, ""});
+  names.push_back(formulon::DefinedName{"After", "=2", -1, false, ""});
   wb.set_defined_names(std::move(names));
 
   auto saved = wb.save();
@@ -1315,7 +1315,7 @@ TEST(FormulonCli, RecalcXlsbOutputExtensionWritesXlsbContainer) {
   // The written package must declare `xl/workbook.bin` (xlsb), not
   // `xl/workbook.xml` (ooxml).
   formulon::io::ByteSpan span{bytes.data(), bytes.size()};
-  EXPECT_EQ(formulon::io::detect_workbook_format(span), formulon::io::WorkbookFormat::Xlsb);
+  EXPECT_EQ(formulon::io::detect_workbook_format(span), formulon::WorkbookFormat::Xlsb);
 
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);

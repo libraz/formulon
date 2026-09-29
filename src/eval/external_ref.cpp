@@ -8,8 +8,8 @@
 
 #include "eval/array_alloc.h"
 #include "eval/eval_context.h"
-#include "io/external_book.h"
-#include "io/external_links.h"
+#include "external_book.h"
+#include "external_link.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -31,8 +31,8 @@ Value ReifyCached(Value cached, Arena& arena) {
 
 /// Materialises `[row_first..row_last] x [col_first..col_last]` of
 /// `book`'s sheet `sheet` as an Array.
-Value MaterializeRect(const io::ExternalBook& book, std::uint32_t sheet, std::uint32_t row_first,
-                      std::uint32_t row_last, std::uint32_t col_first, std::uint32_t col_last, Arena& arena) {
+Value MaterializeRect(const ExternalBook& book, std::uint32_t sheet, std::uint32_t row_first, std::uint32_t row_last,
+                      std::uint32_t col_first, std::uint32_t col_last, Arena& arena) {
   const std::uint32_t rows = row_last - row_first + 1U;
   const std::uint32_t cols = col_last - col_first + 1U;
   Value* buffer = nullptr;
@@ -60,15 +60,15 @@ Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const Eval
   // `[N]` is 1-based and selects the N-th `<externalReference>`, which is
   // the N-th entry of this list because the reader builds it in document
   // order.
-  const std::vector<io::ExternalLinkRecord>& links = wb->external_links();
+  const std::vector<ExternalLinkRecord>& links = wb->external_links();
   const std::uint32_t book_index = node.as_external_ref_book();
   if (book_index == 0 || book_index > links.size()) {
     return Value::error(ErrorCode::Ref);
   }
-  const io::ExternalBook& book = links[book_index - 1U].book;
+  const ExternalBook& book = links[book_index - 1U].book;
 
   if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
-    const io::ExternalBookName* entry = book.find_name(name);
+    const ExternalBookName* entry = book.find_name(name);
     if (entry == nullptr) {
       return Value::error(ErrorCode::Name);
     }
@@ -82,7 +82,7 @@ Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const Eval
   }
 
   const std::uint32_t sheet = book.sheet_index(node.as_external_ref_sheet());
-  if (sheet == io::ExternalBook::kNoSheet) {
+  if (sheet == ExternalBook::kNoSheet) {
     return Value::error(ErrorCode::Ref);
   }
   const parser::Reference& first = node.as_external_ref_cell();

@@ -9,13 +9,13 @@
 #include <utility>
 #include <vector>
 
-#include "eval/compat.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
-#include "eval/pivot_locale.h"
 #include "eval/recalc_engine.h"
-#include "io/a1_ref.h"
-#include "io/defined_names.h"
+#include "excel_profile.h"
+#include "pivot/pivot_locale.h"
 #include "tests/oracle/oracle_runner.h"
+#include "utils/a1_ref.h"
 #include "utils/status_macros.h"
 #include "value.h"
 
@@ -461,7 +461,7 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
   if (data_v == nullptr || !data_v->is_array() || data_v->as_array().empty()) {
     return invalid("pivot block needs a non-empty 'data_fields' array");
   }
-  const eval::ExcelProfile profile = workbook->excel_profile();
+  const ExcelProfile profile = workbook->excel_profile();
   std::map<std::string, std::uint32_t> source_name_occurrences;
   for (const JsonValue& df : data_v->as_array()) {
     if (!df.is_object()) {
@@ -490,7 +490,7 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
     }
 
     PivotDataField data_field;
-    data_field.name = eval::data_field_display_name(agg, display_source, profile);
+    data_field.name = pivot::data_field_display_name(agg, display_source, profile);
     data_field.field_index = idx;
     data_field.aggregation = agg;
     table.mutable_data_fields().push_back(std::move(data_field));
@@ -678,7 +678,7 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* shee
       const std::string& key = item.as_string();
       std::size_t pos = 0;
       std::uint32_t col1 = 0;
-      if (!io::parse_column_letters(key, &pos, &col1) || pos != key.size()) {
+      if (!a1::parse_column_letters(key, &pos, &col1) || pos != key.size()) {
         return invalid("hidden_columns/" + key + ": malformed column key");
       }
       ColumnLayout col;
@@ -700,7 +700,7 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* shee
       const std::string& key = item.as_string();
       std::size_t pos = 0;
       std::uint32_t row1 = 0;
-      if (!io::parse_uint(key, &pos, &row1) || pos != key.size() || row1 == 0U) {
+      if (!a1::parse_uint(key, &pos, &row1) || pos != key.size() || row1 == 0U) {
         return invalid("hidden_rows/" + key + ": malformed 1-based row key");
       }
       RowLayout row;
@@ -729,8 +729,8 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* shee
       std::size_t p_rhs = 0;
       std::uint32_t first = 0;
       std::uint32_t last = 0;
-      if (!io::parse_column_letters(lhs, &p_lhs, &first) || p_lhs != lhs.size() ||
-          !io::parse_column_letters(rhs, &p_rhs, &last) || p_rhs != rhs.size()) {
+      if (!a1::parse_column_letters(lhs, &p_lhs, &first) || p_lhs != lhs.size() ||
+          !a1::parse_column_letters(rhs, &p_rhs, &last) || p_rhs != rhs.size()) {
         return invalid("column_widths/" + key + ": malformed column key");
       }
       // `parse_column_letters` yields a 1-based column ordinal.
@@ -752,7 +752,7 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* shee
       }
       std::size_t pos = 0;
       std::uint32_t row1 = 0;
-      if (!io::parse_uint(key, &pos, &row1) || pos != key.size() || row1 == 0U) {
+      if (!a1::parse_uint(key, &pos, &row1) || pos != key.size() || row1 == 0U) {
         return invalid("row_heights/" + key + ": malformed 1-based row key");
       }
       RowLayout row;
@@ -928,7 +928,7 @@ Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec) {
         const std::string& letters = item.as_string();
         std::size_t pos = 0;
         std::uint32_t col1 = 0;
-        if (!io::parse_column_letters(letters, &pos, &col1) || pos != letters.size() || col1 == 0U) {
+        if (!a1::parse_column_letters(letters, &pos, &col1) || pos != letters.size() || col1 == 0U) {
           return invalid("manual_breaks 'cols' has a malformed column letter '" + letters + "'");
         }
         ManualBreak brk;
@@ -944,12 +944,12 @@ Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec) {
   // names whose formula is a fully-qualified A1 range. The print-area
   // resolver strips the sheet qualifier and `$` anchors, so a plain
   // `Sheet1!A1:H80` form is sufficient here.
-  std::vector<io::DefinedName> defined_names = workbook->defined_names();
+  std::vector<DefinedName> defined_names = workbook->defined_names();
   if (const JsonValue* area_v = print.find("print_area"); area_v != nullptr && !area_v->is_null()) {
     if (!area_v->is_string()) {
       return invalid("print 'print_area' must be a string");
     }
-    io::DefinedName dn;
+    DefinedName dn;
     dn.name = kPrintAreaName;
     dn.formula = sheet_name + "!" + area_v->as_string();
     dn.local_sheet_id = static_cast<std::int32_t>(sheet_index);
@@ -976,7 +976,7 @@ Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec) {
       formula += sheet_name + "!" + cols_v->as_string();
     }
     if (!formula.empty()) {
-      io::DefinedName dn;
+      DefinedName dn;
       dn.name = kPrintTitlesName;
       dn.formula = std::move(formula);
       dn.local_sheet_id = static_cast<std::int32_t>(sheet_index);

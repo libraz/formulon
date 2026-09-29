@@ -16,15 +16,15 @@
 #include "cf/cf_evaluator.h"
 #include "cf/cf_types.h"
 #include "eval/coerce.h"
-#include "eval/date_time.h"
 #include "eval/eval_context.h"
 #include "eval/scalar_ops.h"
 #include "eval/tree_walker.h"
-#include "io/formula_prefix.h"
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "utils/date_time.h"
 #include "utils/rect_iterator.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -196,7 +196,7 @@ Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx) 
   // function, or a LET / LAMBDA construct); canonicalise before parsing so
   // the special-form and function-name grammar sees the same spelling the
   // formula bar would show.
-  const std::string canonical_source = io::strip_storage_prefixes(source);
+  const std::string canonical_source = parser::strip_storage_prefixes(source);
   parser::Parser parser(canonical_source, *ctx.arena);
   const parser::AstNode* root = parser.parse();
   if (root == nullptr || !parser.errors().empty()) {
@@ -462,8 +462,8 @@ constexpr int kDaysPerWeek = 7;
 }  // namespace
 
 int weekday_sunday_one(double serial_floor, bool date1904) {
-  const eval::date_time::YMD ymd = eval::date_time::ymd_from_serial(serial_floor, date1904);
-  const std::int64_t days = eval::date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
+  const date_time::YMD ymd = date_time::ymd_from_serial(serial_floor, date1904);
+  const std::int64_t days = date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
   // 1970-01-01 was a Thursday → Excel weekday 5. Adjust so days = 0
   // maps to 5, then take mod 7 and shift to the 1..7 range.
   const std::int64_t adjusted = ((days % kDaysPerWeek) + kDaysPerWeek + 4) % kDaysPerWeek;
@@ -476,7 +476,7 @@ double sunday_of_week(double serial_floor, bool date1904) {
 }
 
 YearMonth year_month_from_serial(double serial_floor, bool date1904) {
-  const eval::date_time::YMD ymd = eval::date_time::ymd_from_serial(serial_floor, date1904);
+  const date_time::YMD ymd = date_time::ymd_from_serial(serial_floor, date1904);
   return {ymd.y, ymd.m};
 }
 

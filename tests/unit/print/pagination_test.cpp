@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "defined_name.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "print/page_setup.h"
 #include "print/print_area.h"
 #include "sheet.h"
@@ -25,8 +25,8 @@ namespace formulon {
 namespace print {
 namespace {
 
-io::DefinedName PrintArea(std::string formula, std::int32_t sheet_id) {
-  io::DefinedName dn;
+DefinedName PrintArea(std::string formula, std::int32_t sheet_id) {
+  DefinedName dn;
   dn.name = "_xlnm.Print_Area";
   dn.formula = std::move(formula);
   dn.local_sheet_id = sheet_id;
@@ -34,8 +34,8 @@ io::DefinedName PrintArea(std::string formula, std::int32_t sheet_id) {
 }
 
 // A sheet-scoped built-in name (`_xlnm.Print_Titles` and friends).
-io::DefinedName SheetScopedName(std::string name, std::string formula, std::int32_t sheet_id) {
-  io::DefinedName dn;
+DefinedName SheetScopedName(std::string name, std::string formula, std::int32_t sheet_id) {
+  DefinedName dn;
   dn.name = std::move(name);
   dn.formula = std::move(formula);
   dn.local_sheet_id = sheet_id;
@@ -308,7 +308,7 @@ TEST(PaginationTest, FitToPageAccommodatesRepeatedTitlesOnEveryPage) {
     for (std::uint32_t row = 0; row < 200U; ++row) {
       sheet.set_cell_value(row, 0U, Value::number(1.0));
     }
-    std::vector<io::DefinedName> names{PrintArea("Sheet1!$A$1:$A$200", 0)};
+    std::vector<DefinedName> names{PrintArea("Sheet1!$A$1:$A$200", 0)};
     if (with_titles) {
       names.push_back(SheetScopedName("_xlnm.Print_Titles", "Sheet1!$1:$5", 0));
     }

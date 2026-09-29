@@ -13,10 +13,10 @@
 #include <string>
 #include <string_view>
 
-#include "eval/date_time.h"
-#include "eval/japanese_era.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
+#include "utils/date_time.h"
+#include "utils/japanese_era.h"
 
 namespace formulon {
 namespace text_format {
@@ -104,10 +104,10 @@ const char* weekday_ja_long(int sun0) noexcept {
 // `eval/japanese_era.{h,cpp}` so the pivot date-grouping path can share
 // the same anchors. We re-export the type as a local alias so the rest
 // of this TU keeps its idiomatic name.
-using EraInfo = formulon::eval::japanese_era::EraInfo;
+using EraInfo = formulon::japanese_era::EraInfo;
 
 const EraInfo& classify_era(int year, unsigned month, unsigned day) noexcept {
-  return formulon::eval::japanese_era::classify_era(year, month, day);
+  return formulon::japanese_era::classify_era(year, month, day);
 }
 
 }  // namespace
@@ -117,9 +117,9 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
     // Excel rejects out-of-range serials from TEXT.
     return;
   }
-  const ::formulon::eval::date_time::YMD ymd = ::formulon::eval::date_time::ymd_from_serial(serial, date1904);
+  const ::formulon::date_time::YMD ymd = ::formulon::date_time::ymd_from_serial(serial, date1904);
   // Weekday Sunday=0..Saturday=6 computed from the civil day count.
-  const std::int64_t days = ::formulon::eval::date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
+  const std::int64_t days = ::formulon::date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
   const int sun0 = static_cast<int>(((days + 4) % 7 + 7) % 7);
 
   // Decompose the time portion with optional fractional seconds.

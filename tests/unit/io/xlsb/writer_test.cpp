@@ -15,18 +15,18 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
-#include "io/passthrough_part.h"
-#include "io/styles_reader.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/styles_writer.h"
 #include "io/zip_reader.h"
+#include "passthrough_part.h"
 #include "print/pagination.h"
 #include "sheet.h"
+#include "styles.h"
 #include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
@@ -396,7 +396,7 @@ TEST(XlsbWriter, InvalidWorksheetFormatDefaultsUseSafeFallbacksAndAreDeferred) {
 TEST(XlsbWriter, DefinedNameCommentSurvivesWriteReadRoundTrip) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("S1");
-  io::DefinedName dn;
+  DefinedName dn;
   dn.name = "Rate";
   dn.formula = "0.1";
   dn.local_sheet_id = -1;
@@ -408,7 +408,7 @@ TEST(XlsbWriter, DefinedNameCommentSurvivesWriteReadRoundTrip) {
   auto read_or = read_xlsb(SpanOf(bytes_or.value()));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
 
-  const std::vector<io::DefinedName>& names = read_or.value().workbook.defined_names();
+  const std::vector<DefinedName>& names = read_or.value().workbook.defined_names();
   ASSERT_EQ(names.size(), 1U);
   EXPECT_EQ(names[0].name, "Rate");
   EXPECT_EQ(names[0].formula, "0.1");
@@ -424,7 +424,7 @@ TEST(XlsbWriter, DefinedNameAbsentCommentRoundTripsToEmptyString) {
   // "Rate" `BrtName` record).
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("S1");
-  io::DefinedName dn;
+  DefinedName dn;
   dn.name = "Rate";
   dn.formula = "0.1";
   dn.local_sheet_id = -1;
@@ -435,7 +435,7 @@ TEST(XlsbWriter, DefinedNameAbsentCommentRoundTripsToEmptyString) {
   auto read_or = read_xlsb(SpanOf(bytes_or.value()));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
 
-  const std::vector<io::DefinedName>& names = read_or.value().workbook.defined_names();
+  const std::vector<DefinedName>& names = read_or.value().workbook.defined_names();
   ASSERT_EQ(names.size(), 1U);
   EXPECT_TRUE(names[0].comment.empty());
 }
@@ -862,7 +862,7 @@ TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
 TEST(XlsbWriter, DefinedNameWithFutureFunctionRoundTrips) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Data");
-  wb.set_defined_names({io::DefinedName{"Joined", "TEXTJOIN(\",\",TRUE,A1:A2)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Joined", "TEXTJOIN(\",\",TRUE,A1:A2)", -1, false, ""}});
 
   auto bytes_or = write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;

@@ -11,7 +11,7 @@
 #include <utility>
 
 #include "eval/coerce.h"
-#include "eval/utf8_length.h"
+#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace eval {

@@ -43,15 +43,15 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/ooxml_reader.h"
-#include "io/passthrough_part.h"
-#include "io/tables_reader.h"
-#include "io/workbook_kind.h"
+#include "io/workbook_kind_ooxml.h"
+#include "passthrough_part.h"
 #include "sheet.h"
+#include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
@@ -335,8 +335,8 @@ Expected<Workbook, Error> build_workbook(std::uint32_t book_id, const AxisValues
 
   // Decorations: defined name + a single table on the first sheet.
   if (a.decorations == Decorations::kDefinedNamesAndTables) {
-    std::vector<io::DefinedName> names;
-    io::DefinedName n;
+    std::vector<DefinedName> names;
+    DefinedName n;
     n.name = std::string("Range_") + std::to_string(book_id);
     // Workbook-scope; reference the first row of the first sheet.
     n.formula = std::string("S1!$A$1:$") + col_letters(a.shape.cols - 1U) + "$1";
@@ -346,7 +346,7 @@ Expected<Workbook, Error> build_workbook(std::uint32_t book_id, const AxisValues
     // A table only makes sense when the populated rectangle is at
     // least 2 rows x 1 col (header row + body row).
     if (a.shape.rows >= 2U && a.shape.cols >= 1U) {
-      io::TableMetadata t;
+      TableMetadata t;
       t.id = 1U;
       t.name = std::string("Tbl_") + std::to_string(book_id);
       t.display_name = t.name;
@@ -355,9 +355,9 @@ Expected<Workbook, Error> build_workbook(std::uint32_t book_id, const AxisValues
       t.header_row = true;
       t.totals_row = false;
       for (std::uint32_t c = 0; c < a.shape.cols; ++c) {
-        t.columns.push_back(io::TableColumn{c + 1U, std::string("Col") + std::to_string(c + 1U), "", "", ""});
+        t.columns.push_back(TableColumn{c + 1U, std::string("Col") + std::to_string(c + 1U), "", "", ""});
       }
-      std::vector<io::TableMetadata> tables;
+      std::vector<TableMetadata> tables;
       tables.push_back(std::move(t));
       wb.set_tables(std::move(tables));
     }
@@ -475,8 +475,8 @@ bool values_equal(const Value& x, const Value& y) {
                                          << b.defined_names().size();
   }
   for (std::size_t i = 0; i < a.defined_names().size(); ++i) {
-    const io::DefinedName& x = a.defined_names()[i];
-    const io::DefinedName& y = b.defined_names()[i];
+    const DefinedName& x = a.defined_names()[i];
+    const DefinedName& y = b.defined_names()[i];
     if (x.name != y.name || x.formula != y.formula || x.local_sheet_id != y.local_sheet_id) {
       return ::testing::AssertionFailure()
              << "defined_names[" << i << "] differs: name='" << x.name << "' vs '" << y.name << "', formula='"
@@ -491,8 +491,8 @@ bool values_equal(const Value& x, const Value& y) {
     return ::testing::AssertionFailure() << "tables.size differs: " << a.tables().size() << " vs " << b.tables().size();
   }
   for (std::size_t i = 0; i < a.tables().size(); ++i) {
-    const io::TableMetadata& x = a.tables()[i];
-    const io::TableMetadata& y = b.tables()[i];
+    const TableMetadata& x = a.tables()[i];
+    const TableMetadata& y = b.tables()[i];
     if (x.name != y.name || x.ref != y.ref || x.sheet_index != y.sheet_index || x.columns.size() != y.columns.size()) {
       return ::testing::AssertionFailure() << "tables[" << i << "] structural mismatch";
     }
@@ -511,9 +511,9 @@ bool values_equal(const Value& x, const Value& y) {
     return ::testing::AssertionFailure() << "passthrough_parts.size differs: " << a.passthrough_parts().size() << " vs "
                                          << b.passthrough_parts().size();
   }
-  for (const io::PassthroughPart& x : a.passthrough_parts()) {
+  for (const PassthroughPart& x : a.passthrough_parts()) {
     auto it = std::find_if(b.passthrough_parts().begin(), b.passthrough_parts().end(),
-                           [&x](const io::PassthroughPart& y) { return y.path == x.path; });
+                           [&x](const PassthroughPart& y) { return y.path == x.path; });
     if (it == b.passthrough_parts().end()) {
       return ::testing::AssertionFailure() << "passthrough '" << x.path << "' missing on side B";
     }

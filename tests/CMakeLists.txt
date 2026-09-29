@@ -103,13 +103,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/parser_error_test.cpp
   unit/parser/let_test.cpp
   unit/parser/ref_transforms_test.cpp
-  unit/eval/bytecode_test.cpp
-  unit/eval/opcode_meta_test.cpp
   unit/eval/jp_kana_table_test.cpp
-  unit/eval/compiler_test.cpp
-  unit/eval/optimizer_test.cpp
-  unit/eval/vm_test.cpp
-  unit/eval/vm_parity_test.cpp
   unit/eval/tree_walker_test.cpp
   unit/eval/defined_name_resolve_test.cpp
   unit/eval/eval_sweep_batch_test.cpp
@@ -458,7 +452,8 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # the bounds-checked array-allocation seam (what keeps a wasm32
   # `rows * cols` from wrapping into a short buffer) and the raw-XML
   # retention helpers (what keeps a consumed part's unmodelled content from
-  # vanishing on save). Static regex analysis over src/.
+  # vanishing on save), plus the include layering of src/. Static regex
+  # analysis over src/.
   add_test(
     NAME SeamIntegrityArrayAlloc
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py array-alloc
@@ -467,6 +462,11 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME SeamIntegrityXmlPassthrough
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py xml-passthrough
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME SeamIntegrityLayers
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py layers
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(

@@ -11,13 +11,13 @@
 #include <string_view>
 #include <vector>
 
+#include "defined_name.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
@@ -46,7 +46,7 @@ TEST(DefinedNameResolve, WorkbookScopeConstant) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(200.0));  // A1
-  wb.set_defined_names({io::DefinedName{"Rate", "0.1", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Rate", "0.1", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -60,8 +60,8 @@ TEST(DefinedNameResolve, SheetScopeOverridesWorkbookScope) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));  // sheet index 0
   wb.set_defined_names({
-      io::DefinedName{"Rate", "0.1", -1, false, ""},  // workbook scope
-      io::DefinedName{"Rate", "0.2", 0, false, ""},   // Sheet1 scope
+      DefinedName{"Rate", "0.1", -1, false, ""},  // workbook scope
+      DefinedName{"Rate", "0.2", 0, false, ""},   // Sheet1 scope
   });
   EvalState state;
   EvalContext ctx(wb, s, state);
@@ -75,9 +75,9 @@ TEST(DefinedNameResolve, SheetScopeOverridesWorkbookScope) {
 // dep_extractor rule); resolution falls through to #NAME?.
 TEST(DefinedNameResolve, SheetScopedNameInvisibleFromOtherSheet) {
   Workbook wb = Workbook::create_empty();
-  wb.add_sheet("Sheet1");                                                // index 0
-  Sheet& s2 = wb.sheet(wb.add_sheet("Sheet2"));                          // index 1
-  wb.set_defined_names({io::DefinedName{"Local", "42", 0, false, ""}});  // Sheet1 scope
+  wb.add_sheet("Sheet1");                                            // index 0
+  Sheet& s2 = wb.sheet(wb.add_sheet("Sheet2"));                      // index 1
+  wb.set_defined_names({DefinedName{"Local", "42", 0, false, ""}});  // Sheet1 scope
   EvalState state;
   EvalContext ctx(wb, s2, state);
   Arena a;
@@ -96,9 +96,9 @@ TEST(DefinedNameResolve, SheetQualifiedNameUsesThatSheetsScope) {
   wb.add_sheet("My Sheet");  // index 1
   const Sheet& s1 = wb.sheet(0);
   wb.set_defined_names({
-      io::DefinedName{"Local", "5", 1, false, ""},
-      io::DefinedName{"G", "7", -1, false, ""},
-      io::DefinedName{"G", "9", 1, false, ""},
+      DefinedName{"Local", "5", 1, false, ""},
+      DefinedName{"G", "7", -1, false, ""},
+      DefinedName{"G", "9", 1, false, ""},
   });
   EvalState state;
   EvalContext ctx(wb, s1, state);
@@ -135,8 +135,8 @@ TEST(DefinedNameResolve, SameTextInOtherScopeIsNotACycle) {
   wb.add_sheet("Sheet2");
   const Sheet& s1 = wb.sheet(0);
   wb.set_defined_names({
-      io::DefinedName{"X", "Sheet2!X+1", 0, false, ""},
-      io::DefinedName{"X", "10", 1, false, ""},
+      DefinedName{"X", "Sheet2!X+1", 0, false, ""},
+      DefinedName{"X", "10", 1, false, ""},
   });
   EvalState state;
   EvalContext ctx(wb, s1, state);
@@ -184,12 +184,12 @@ class MeasuredSheetScopedNames : public ::testing::Test {
     wb_.add_sheet("Sheet2");
     wb_.sheet(1).set_cell_value(0U, 0U, Value::number(2.0));
     wb_.set_defined_names({
-        io::DefinedName{"G", "5", -1, false, ""},
-        io::DefinedName{"Inner", "1", -1, false, ""},
-        io::DefinedName{"Inner", "100", 1, false, ""},
-        io::DefinedName{"Local", "Sheet2!$A$1*10", 1, false, ""},
-        io::DefinedName{"Outer", "Inner+1", 1, false, ""},
-        io::DefinedName{"Fn", "LAMBDA(x,x*2)", 1, false, ""},
+        DefinedName{"G", "5", -1, false, ""},
+        DefinedName{"Inner", "1", -1, false, ""},
+        DefinedName{"Inner", "100", 1, false, ""},
+        DefinedName{"Local", "Sheet2!$A$1*10", 1, false, ""},
+        DefinedName{"Outer", "Inner+1", 1, false, ""},
+        DefinedName{"Fn", "LAMBDA(x,x*2)", 1, false, ""},
     });
   }
 
@@ -241,11 +241,11 @@ TEST(DefinedNameResolve, LocalNameBodyScopeReachesLambdaAndWorkbookNames) {
   wb.add_sheet("Sheet1");
   wb.add_sheet("Sheet2");
   wb.set_defined_names({
-      io::DefinedName{"Inner", "1", -1, false, ""},
-      io::DefinedName{"Inner", "100", 1, false, ""},
-      io::DefinedName{"Scale", "LAMBDA(x,x*Inner)", 1, false, ""},
-      io::DefinedName{"Twice", "Inner*2", -1, false, ""},
-      io::DefinedName{"ViaBook", "Twice+0", 1, false, ""},
+      DefinedName{"Inner", "1", -1, false, ""},
+      DefinedName{"Inner", "100", 1, false, ""},
+      DefinedName{"Scale", "LAMBDA(x,x*Inner)", 1, false, ""},
+      DefinedName{"Twice", "Inner*2", -1, false, ""},
+      DefinedName{"ViaBook", "Twice+0", 1, false, ""},
   });
   EvalState state;
   EvalContext ctx(wb, wb.sheet(0), state);
@@ -297,7 +297,7 @@ TEST(DefinedNameResolve, SheetScopedNameVisibleOnOwningSheet) {
   // Fetch the sheet reference only after every add_sheet: add_sheet may
   // reallocate the internal sheets vector and invalidate earlier references.
   const Sheet& s1 = wb.sheet(0);
-  wb.set_defined_names({io::DefinedName{"Local", "42", 0, false, ""}});
+  wb.set_defined_names({DefinedName{"Local", "42", 0, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s1, state);
   Arena a;
@@ -312,7 +312,7 @@ TEST(DefinedNameResolve, ReferenceDefinitionFollowsCellValue) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(5.0));  // A1
-  wb.set_defined_names({io::DefinedName{"Ref", "Sheet1!$A$1", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Ref", "Sheet1!$A$1", -1, false, ""}});
   {
     EvalState state;
     EvalContext ctx(wb, s, state);
@@ -338,7 +338,7 @@ TEST(DefinedNameResolve, FormulaDefinitionEvaluates) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(6.0));  // A1
-  wb.set_defined_names({io::DefinedName{"Doubled", "A1*2", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Doubled", "A1*2", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -363,7 +363,7 @@ TEST(DefinedNameResolve, UndefinedNameIsNameError) {
 TEST(DefinedNameResolve, CircularDefinitionDoesNotHang) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
-  wb.set_defined_names({io::DefinedName{"Loop", "Loop+1", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Loop", "Loop+1", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -377,8 +377,8 @@ TEST(DefinedNameResolve, MutualCycleDoesNotHang) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   wb.set_defined_names({
-      io::DefinedName{"AName", "BName", -1, false, ""},
-      io::DefinedName{"BName", "AName", -1, false, ""},
+      DefinedName{"AName", "BName", -1, false, ""},
+      DefinedName{"BName", "AName", -1, false, ""},
   });
   EvalState state;
   EvalContext ctx(wb, s, state);
@@ -392,7 +392,7 @@ TEST(DefinedNameResolve, MutualCycleDoesNotHang) {
 TEST(DefinedNameResolve, LetBindingShadowsDefinedName) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
-  wb.set_defined_names({io::DefinedName{"Rate", "0.1", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Rate", "0.1", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -406,8 +406,8 @@ TEST(DefinedNameResolve, NestedNameResolvesTransitively) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   wb.set_defined_names({
-      io::DefinedName{"Base", "10", -1, false, ""},
-      io::DefinedName{"Derived", "Base*3", -1, false, ""},
+      DefinedName{"Base", "10", -1, false, ""},
+      DefinedName{"Derived", "Base*3", -1, false, ""},
   });
   EvalState state;
   EvalContext ctx(wb, s, state);
@@ -427,7 +427,7 @@ TEST(DefinedNameResolve, RangeNameExpandsInAggregators) {
   s.set_cell_value(2U, 0U, Value::number(30.0));  // A3
   s.set_cell_value(3U, 0U, Value::number(40.0));  // A4
   s.set_cell_value(4U, 0U, Value::number(50.0));  // A5
-  wb.set_defined_names({io::DefinedName{"MyRange", "Sheet1!$A$1:$A$5", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"MyRange", "Sheet1!$A$1:$A$5", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -449,7 +449,7 @@ TEST(DefinedNameResolve, SheetScopedRangeNameExpands) {
   s1.set_cell_value(0U, 0U, Value::number(1.0));  // A1
   s1.set_cell_value(1U, 0U, Value::number(2.0));  // A2
   s1.set_cell_value(2U, 0U, Value::number(3.0));  // A3
-  wb.set_defined_names({io::DefinedName{"LocalRange", "Sheet1!$A$1:$A$3", 0, false, ""}});
+  wb.set_defined_names({DefinedName{"LocalRange", "Sheet1!$A$1:$A$3", 0, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s1, state);
   Arena a;
@@ -464,7 +464,7 @@ TEST(DefinedNameResolve, SingleCellNameStaysScalar) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(7.0));  // A1
-  wb.set_defined_names({io::DefinedName{"Cell", "Sheet1!$A$1", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Cell", "Sheet1!$A$1", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -480,7 +480,7 @@ TEST(DefinedNameResolve, WorkbookNamedLambdaCallIsCaseInsensitive) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   s.set_cell_value(0U, 0U, Value::number(10.0));  // A1
-  wb.set_defined_names({io::DefinedName{"AddA1", "LAMBDA(x,x+A1)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"AddA1", "LAMBDA(x,x+A1)", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -490,14 +490,14 @@ TEST(DefinedNameResolve, WorkbookNamedLambdaCallIsCaseInsensitive) {
 }
 
 // The parser recognises the `_xlfn.` storage prefix on LET / LAMBDA
-// directly (defence in depth on top of `io::strip_storage_prefixes` at the
+// directly (defence in depth on top of `parser::strip_storage_prefixes` at the
 // defined-names ingestion point tested in `DefinedNamesReader`). These two
-// cases construct `io::DefinedName` with the raw, un-normalised storage
+// cases construct `DefinedName` with the raw, un-normalised storage
 // spelling to exercise that parser-level recognition in isolation.
 TEST(DefinedNameResolve, XlfnPrefixedLambdaDefinedNameEvaluates) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
-  wb.set_defined_names({io::DefinedName{"Doubler", "_xlfn.LAMBDA(_xlpm.x,_xlpm.x*2)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Doubler", "_xlfn.LAMBDA(_xlpm.x,_xlpm.x*2)", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -509,7 +509,7 @@ TEST(DefinedNameResolve, XlfnPrefixedLambdaDefinedNameEvaluates) {
 TEST(DefinedNameResolve, XlfnPrefixedLetDefinedNameEvaluates) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
-  wb.set_defined_names({io::DefinedName{"Doubled", "_xlfn.LET(_xlpm.x,21,_xlpm.x*2)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Doubled", "_xlfn.LET(_xlpm.x,21,_xlpm.x*2)", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -525,8 +525,8 @@ TEST(DefinedNameResolve, SheetNamedLambdaShadowsWorkbookLambda) {
   const Sheet& s1 = wb.sheet(0);
   const Sheet& s2 = wb.sheet(1);
   wb.set_defined_names({
-      io::DefinedName{"Adder", "LAMBDA(x,x+1)", -1, false, ""},
-      io::DefinedName{"ADDER", "LAMBDA(x,x+10)", 0, false, ""},
+      DefinedName{"Adder", "LAMBDA(x,x+1)", -1, false, ""},
+      DefinedName{"ADDER", "LAMBDA(x,x+10)", 0, false, ""},
   });
 
   EvalState state1;
@@ -547,7 +547,7 @@ TEST(DefinedNameResolve, SheetNamedLambdaShadowsWorkbookLambda) {
 TEST(DefinedNameResolve, LexicalLambdaShadowsDefinedLambda) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
-  wb.set_defined_names({io::DefinedName{"f", "LAMBDA(x,x+100)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"f", "LAMBDA(x,x+100)", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -560,8 +560,8 @@ TEST(DefinedNameResolve, NamedLambdaNonLambdaAndArityErrors) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   wb.set_defined_names({
-      io::DefinedName{"Constant", "7", -1, false, ""},
-      io::DefinedName{"Pair", "LAMBDA(x,y,x+y)", -1, false, ""},
+      DefinedName{"Constant", "7", -1, false, ""},
+      DefinedName{"Pair", "LAMBDA(x,y,x+y)", -1, false, ""},
   });
   EvalState state;
   EvalContext ctx(wb, s, state);
@@ -580,7 +580,7 @@ TEST(DefinedNameResolve, NamedLambdaNonLambdaAndArityErrors) {
 TEST(DefinedNameResolve, NamedLambdaParseFailureIsNameError) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
-  wb.set_defined_names({io::DefinedName{"Broken", "LAMBDA(x,x+)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Broken", "LAMBDA(x,x+)", -1, false, ""}});
   EvalState state;
   EvalContext ctx(wb, s, state);
   Arena a;
@@ -593,7 +593,7 @@ TEST(DefinedNameResolve, NamedLambdaSupportsNamedRecursion) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   wb.set_defined_names({
-      io::DefinedName{"Fact", "LAMBDA(n,IF(n<=1,1,n*Fact(n-1)))", -1, false, ""},
+      DefinedName{"Fact", "LAMBDA(n,IF(n<=1,1,n*Fact(n-1)))", -1, false, ""},
   });
   EvalState state;
   EvalContext ctx(wb, s, state);
@@ -607,7 +607,7 @@ TEST(DefinedNameResolve, NamedLambdaRunawayRecursionHitsCalcCap) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   wb.set_defined_names({
-      io::DefinedName{"LoopFn", "LAMBDA(n,LoopFn(n+1))", -1, false, ""},
+      DefinedName{"LoopFn", "LAMBDA(n,LoopFn(n+1))", -1, false, ""},
   });
   EvalState state;
   EvalContext ctx(wb, s, state);

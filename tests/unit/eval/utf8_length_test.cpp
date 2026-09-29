@@ -2,7 +2,7 @@
 // Unit tests for the standalone UTF-16 unit counter used by `LEN` and
 // related text functions.
 
-#include "eval/utf8_length.h"
+#include "utils/utf8_length.h"
 
 #include <cstdint>
 #include <string_view>

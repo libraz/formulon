@@ -5,11 +5,10 @@
 // exactly 1462 less than the 1900 serial for the same calendar day, and
 // the fictitious 1900-02-29 ghost day never appears.
 
-#include "eval/date_time.h"
 #include "gtest/gtest.h"
+#include "utils/date_time.h"
 
 namespace formulon {
-namespace eval {
 namespace date_time {
 namespace {
 
@@ -69,5 +68,4 @@ TEST(DateTime1904, DefaultSystemUnaffected) {
 
 }  // namespace
 }  // namespace date_time
-}  // namespace eval
 }  // namespace formulon

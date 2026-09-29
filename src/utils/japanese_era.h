@@ -13,11 +13,10 @@
 // `date_text_parse.cpp`'s anonymous namespace because they are only
 // consumed there.
 
-#ifndef FORMULON_EVAL_JAPANESE_ERA_H_
-#define FORMULON_EVAL_JAPANESE_ERA_H_
+#ifndef FORMULON_UTILS_JAPANESE_ERA_H_
+#define FORMULON_UTILS_JAPANESE_ERA_H_
 
 namespace formulon {
-namespace eval {
 namespace japanese_era {
 
 /// Per-era metadata. `roman` / `kanji1` / `kanji2` are byte literals owned
@@ -56,7 +55,6 @@ struct EraInfo {
 const EraInfo& classify_era(int year, unsigned month, unsigned day) noexcept;
 
 }  // namespace japanese_era
-}  // namespace eval
 }  // namespace formulon
 
-#endif  // FORMULON_EVAL_JAPANESE_ERA_H_
+#endif  // FORMULON_UTILS_JAPANESE_ERA_H_

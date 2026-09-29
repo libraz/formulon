@@ -152,8 +152,8 @@ NPM_ENTRY_MJS = (
 ERROR_H = REPO_ROOT / "src" / "utils" / "error.h"
 VALUE_H = REPO_ROOT / "src" / "value.h"
 CF_MATCH_H = REPO_ROOT / "src" / "cf" / "cf_match.h"
-CALC_MODE_H = REPO_ROOT / "src" / "io" / "calc_mode.h"
-EXTERNAL_LINKS_H = REPO_ROOT / "src" / "io" / "external_links.h"
+CALC_MODE_H = REPO_ROOT / "src" / "calc_settings.h"
+EXTERNAL_LINKS_H = REPO_ROOT / "src" / "external_link.h"
 PYTHON_STRUCTS = PYTHON_PKG_DIR / "_structs.py"
 
 # embind auto-adds a `delete()` finaliser to every `class_<T>` -- it has no

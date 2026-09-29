@@ -3,12 +3,11 @@
 // pre-parsed `xl/workbook.xml` document, so each test builds the XML
 // from a string literal, parses it via pugixml, then calls the reader.
 
-#include "io/defined_names.h"
-
 #include <cstdint>
 #include <string>
 #include <string_view>
 
+#include "defined_name.h"
 #include "gtest/gtest.h"
 #include "io/defined_names_internal.h"
 #include "pugixml.hpp"

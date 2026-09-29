@@ -2,10 +2,9 @@
 // Japanese era classification. Anchors come from the Mac Excel 365 ja-JP
 // oracle; see header for the boundary table.
 
-#include "eval/japanese_era.h"
+#include "utils/japanese_era.h"
 
 namespace formulon {
-namespace eval {
 namespace japanese_era {
 
 const EraInfo& classify_era(int year, unsigned month, unsigned day) noexcept {
@@ -46,5 +45,4 @@ const EraInfo& classify_era(int year, unsigned month, unsigned day) noexcept {
 }
 
 }  // namespace japanese_era
-}  // namespace eval
 }  // namespace formulon

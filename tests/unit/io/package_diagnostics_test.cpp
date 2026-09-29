@@ -17,24 +17,24 @@
 #include <utility>
 #include <vector>
 
+#include "default_content_type.h"
 #include "eval/iterative_solver.h"
 #include "gtest/gtest.h"
 #include "io/cf_reader.h"
-#include "io/default_content_type.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
-#include "io/passthrough_part.h"
 #include "io/sheet_reader.h"
-#include "io/tables_reader.h"
-#include "io/unknown_relationship.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pugixml.hpp"
 #include "support/ooxml_package_fixture.h"
+#include "table.h"
+#include "unknown_relationship.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -292,7 +292,7 @@ TEST(XlsbWriteDiagnostics, NonAutoCalcModeCountsAsDeferred) {
 
 TEST(XlsbWriteDiagnostics, EnabledIterativeCalcCountsAsDeferred) {
   Workbook wb = OneSheetWorkbook();
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   wb.set_iterative_options(opts);
 

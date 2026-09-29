@@ -19,9 +19,9 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
-#include "eval/pivot_locale.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -106,7 +106,7 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
   // axis group with no source value is baked into the result rather than
   // synthesised by the projection.
   const formulon::pivot::PivotLayoutOptions layout_options =
-      formulon::eval::pivot_layout_options_for(wb->workbook().excel_profile());
+      formulon::pivot::pivot_layout_options_for(wb->workbook().excel_profile());
 
   std::shared_ptr<const formulon::pivot::PivotResult> result = table->last_result();
   if (!result) {

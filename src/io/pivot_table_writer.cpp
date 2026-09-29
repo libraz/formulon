@@ -12,11 +12,11 @@
 #include <string_view>
 #include <vector>
 
-#include "io/ooxml_writer_cell.h"  // EncodeA1
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "utils/a1_ref.h"
 
 namespace formulon::io {
 namespace {
@@ -35,9 +35,9 @@ std::string EncodeA1Range(std::uint32_t row, std::uint32_t col, std::uint32_t sp
   // the round trip.
   const std::uint32_t bot = span_rows == 0U ? row : row + span_rows - 1U;
   const std::uint32_t right = span_cols == 0U ? col : col + span_cols - 1U;
-  std::string out = EncodeA1(row, col);
+  std::string out = a1::encode_a1(row, col);
   out.push_back(':');
-  out.append(EncodeA1(bot, right));
+  out.append(a1::encode_a1(bot, right));
   return out;
 }
 

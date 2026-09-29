@@ -17,12 +17,10 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
-#include "eval/date_time.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "eval/scheduler.h"
-#include "io/a1_ref.h"
 #include "io/format_detect.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -31,6 +29,8 @@
 #include "io/xlsb/writer.h"
 #include "io/xml_escape.h"
 #include "sheet.h"
+#include "utils/a1_ref.h"
+#include "utils/date_time.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -84,10 +84,10 @@ std::size_t table_ref_column_count(std::string_view ref) {
   std::uint32_t last_col = 0;
   const std::size_t colon = ref.find(':');
   if (colon == std::string_view::npos) {
-    return formulon::io::parse_a1_ref(ref, &first_row, &first_col) ? 1U : 0U;
+    return formulon::a1::parse_a1_ref(ref, &first_row, &first_col) ? 1U : 0U;
   }
-  if (!formulon::io::parse_a1_ref(ref.substr(0, colon), &first_row, &first_col) ||
-      !formulon::io::parse_a1_ref(ref.substr(colon + 1), &last_row, &last_col)) {
+  if (!formulon::a1::parse_a1_ref(ref.substr(0, colon), &first_row, &first_col) ||
+      !formulon::a1::parse_a1_ref(ref.substr(colon + 1), &last_row, &last_col)) {
     return 0U;
   }
   if (last_col < first_col || last_row < first_row) {
@@ -334,7 +334,7 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
   // OOXML reader, which owns the authoritative "not a workbook" /
   // encryption / corruption diagnostics.
   auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
-  if (formulon::io::detect_workbook_format(span) == formulon::io::WorkbookFormat::Xlsb) {
+  if (formulon::io::detect_workbook_format(span) == formulon::WorkbookFormat::Xlsb) {
     auto result = formulon::io::xlsb::read_xlsb(span);
     if (!result) {
       return set_last_error(result.error());
@@ -653,7 +653,7 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
                              "ref=" + std::string(ref) + " column_count=" + std::to_string(column_count));
   }
   const std::string name_key = ascii_lower(name);
-  for (const formulon::io::TableMetadata& existing : book.tables()) {
+  for (const formulon::TableMetadata& existing : book.tables()) {
     if (ascii_lower(existing.name) == name_key || ascii_lower(existing.display_name) == name_key ||
         ascii_lower(existing.name) == ascii_lower(display_name) ||
         ascii_lower(existing.display_name) == ascii_lower(display_name)) {
@@ -661,7 +661,7 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
                                "fm_workbook_table_create: table name already exists");
     }
   }
-  formulon::io::TableMetadata table;
+  formulon::TableMetadata table;
   table.sheet_index = sheet_index;
   table.name = name;
   table.display_name = display_name;
@@ -669,7 +669,7 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
   table.header_row = header_row != 0;
   table.totals_row = totals_row != 0;
   uint32_t next_id = 1;
-  for (const formulon::io::TableMetadata& existing : book.tables()) {
+  for (const formulon::TableMetadata& existing : book.tables()) {
     next_id = std::max(next_id, existing.id + 1U);
   }
   table.id = next_id;
@@ -680,13 +680,13 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
                                "fm_workbook_table_create: column name is empty");
     }
     const std::string column_key = ascii_lower(column_names[i]);
-    for (const formulon::io::TableColumn& existing : table.columns) {
+    for (const formulon::TableColumn& existing : table.columns) {
       if (ascii_lower(existing.name) == column_key) {
         return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                  "fm_workbook_table_create: column name is duplicated");
       }
     }
-    formulon::io::TableColumn column;
+    formulon::TableColumn column;
     column.id = static_cast<uint32_t>(i + 1U);
     column.name = column_names[i];
     table.columns.push_back(std::move(column));
@@ -701,7 +701,7 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
   // until then, exactly like a forward-referenced defined name), so the new
   // table's name and display name both need the same scoped reindex a
   // defined-name edit gets.
-  const formulon::io::TableMetadata& created = tables.back();
+  const formulon::TableMetadata& created = tables.back();
   book.reindex_formulas_for_table_change({created.name, created.display_name});
   return 0;
 }
@@ -718,7 +718,7 @@ extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index,
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_table_update: table index or ref is invalid");
   }
-  formulon::io::TableMetadata& table = tables[index];
+  formulon::TableMetadata& table = tables[index];
   if (!table.columns.empty() && table_ref_column_count(ref) != table.columns.size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_table_update: ref width does not match the table's column count",
@@ -844,7 +844,7 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_iterative: wb is NULL");
   }
-  formulon::eval::IterativeOptions opts;
+  formulon::IterativeOptions opts;
   opts.enabled = (enabled != 0);
   // Clamped into Excel's own dialog range rather than rejected: the
   // pre-existing contract for this argument is "out-of-range values are
@@ -852,8 +852,8 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
   // solve, not an error. The upper bound is what keeps that from becoming
   // a hang the host cannot cancel without a progress callback.
   opts.max_iterations = max_iterations < 1 ? 1U
-                        : static_cast<std::uint32_t>(max_iterations) > formulon::eval::kMaxIterationsCap
-                            ? formulon::eval::kMaxIterationsCap
+                        : static_cast<std::uint32_t>(max_iterations) > formulon::kMaxIterationsCap
+                            ? formulon::kMaxIterationsCap
                             : static_cast<std::uint32_t>(max_iterations);
   opts.max_change = max_change;
   wb->workbook().set_iterative_options(opts);
@@ -866,7 +866,7 @@ extern "C" fm_status_t fm_workbook_set_iterative_enabled(fm_workbook_t* wb, int3
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_iterative_enabled: wb is NULL");
   }
-  formulon::eval::IterativeOptions opts = wb->workbook().iterative_options();
+  formulon::IterativeOptions opts = wb->workbook().iterative_options();
   opts.enabled = enabled != 0;
   wb->workbook().set_iterative_options(opts);
   return 0;
@@ -879,7 +879,7 @@ extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_get_iterative: NULL argument");
   }
-  const formulon::eval::IterativeOptions& opts = wb->workbook().iterative_options();
+  const formulon::IterativeOptions& opts = wb->workbook().iterative_options();
   *out_enabled = opts.enabled ? 1 : 0;
   *out_max_iterations = opts.max_iterations;
   *out_max_change = opts.max_change;
@@ -958,17 +958,17 @@ extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_ci
   // Validated rather than normalised: `days_from_civil` would happily roll
   // month 13 into the next January, and a pin that silently moved would make
   // every result computed under it unexplainable to the host that set it.
-  const bool in_range = now->year >= 1900 && now->year <= 9999 && now->month >= 1 && now->month <= 12 &&
-                        now->day >= 1 &&
-                        now->day <= static_cast<std::int32_t>(formulon::eval::date_time::days_in_month(
-                                        now->year, static_cast<unsigned>(now->month))) &&
-                        now->hour >= 0 && now->hour <= 23 && now->minute >= 0 && now->minute <= 59 &&
-                        now->second >= 0 && now->second <= 59;
+  const bool in_range =
+      now->year >= 1900 && now->year <= 9999 && now->month >= 1 && now->month <= 12 && now->day >= 1 &&
+      now->day <=
+          static_cast<std::int32_t>(formulon::date_time::days_in_month(now->year, static_cast<unsigned>(now->month))) &&
+      now->hour >= 0 && now->hour <= 23 && now->minute >= 0 && now->minute <= 59 && now->second >= 0 &&
+      now->second <= 59;
   if (!in_range) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_set_pinned_now: field out of range");
   }
-  wb->workbook().set_pinned_now(formulon::eval::date_time::CivilTime{
+  wb->workbook().set_pinned_now(formulon::date_time::CivilTime{
       {now->year, static_cast<unsigned>(now->month), static_cast<unsigned>(now->day)},
       {static_cast<unsigned>(now->hour), static_cast<unsigned>(now->minute), static_cast<unsigned>(now->second)}});
   return 0;
@@ -990,7 +990,7 @@ extern "C" fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, con
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_excel_profile_id: NULL argument");
   }
-  *out_profile_id = formulon::eval::excel_profile_id(wb->workbook().excel_profile());
+  *out_profile_id = formulon::excel_profile_id(wb->workbook().excel_profile());
   return 0;
 }
 
@@ -1000,13 +1000,13 @@ extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_excel_profile_id: NULL argument");
   }
-  formulon::eval::ExcelProfile profile;
-  if (!formulon::eval::parse_excel_profile_id(profile_id, &profile)) {
+  formulon::ExcelProfile profile;
+  if (!formulon::parse_excel_profile_id(profile_id, &profile)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_set_excel_profile_id: unknown profile");
   }
   formulon::Workbook& book = wb->workbook();
-  const bool changed = !formulon::eval::same_profile(book.excel_profile(), profile);
+  const bool changed = !formulon::same_profile(book.excel_profile(), profile);
   book.set_excel_profile(profile);
   if (changed) {
     // Profile-sensitive evaluation (SUMIF/COUNTIF criteria matching,

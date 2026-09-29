@@ -81,17 +81,17 @@ TEST(RoundtripSymmetry, RealFixtureWorkbookLevelSurvives) {
 
 TEST(RoundtripSymmetry, ConstructedCustomNumFmtIsIdempotent) {
   Workbook wb = Workbook::create();
-  io::StylesTable styles;
+  StylesTable styles;
   styles.fonts.emplace_back();
   styles.fills.emplace_back();
   styles.borders.emplace_back();
   styles.num_fmt_strings.emplace_back("0.000%");
-  io::NumFmtRecord nf;
+  NumFmtRecord nf;
   nf.id = 200;
   nf.format_string_index = 0;
   styles.num_fmts.push_back(nf);
   styles.cell_xfs.emplace_back();
-  io::CellXf xf;
+  CellXf xf;
   xf.num_fmt_id = 200;
   styles.cell_xfs.push_back(xf);
   wb.set_styles(std::move(styles));

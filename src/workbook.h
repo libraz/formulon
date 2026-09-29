@@ -20,38 +20,35 @@
 #include <string_view>
 #include <vector>
 
-#include "eval/compat.h"
-#include "eval/date_time.h"
-#include "io/calc_mode.h"
-#include "io/default_content_type.h"
-#include "io/defined_names.h"
-#include "io/external_links.h"
-#include "io/passthrough_part.h"
-#include "io/styles_reader.h"
-#include "io/tables_reader.h"
-#include "io/unknown_relationship.h"
+#include "calc_settings.h"
+#include "default_content_type.h"
+#include "defined_name.h"
+#include "excel_profile.h"
+#include "external_link.h"
+#include "passthrough_part.h"
 #include "sheet.h"
+#include "styles.h"
+#include "table.h"
+#include "unknown_relationship.h"
+#include "utils/date_time.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
 
-// `io::WorkbookKind` is held by value but is an enum class with an
-// explicit underlying type, so we can opaque-forward-declare it here.
-// Concrete callers that need to name enumerators include
-// `io/workbook_kind.h` directly. The default value is assigned in the
-// out-of-line `Workbook()` constructor in workbook.cpp so the header
-// itself never references an enumerator.
-namespace io {
+// `WorkbookKind` is held by value but is an enum class with an explicit
+// underlying type, so we can opaque-forward-declare it here. Concrete
+// callers that need to name enumerators include `workbook_kind.h`
+// directly. The default value is assigned in the out-of-line
+// `Workbook()` constructor in workbook.cpp so the header itself never
+// references an enumerator.
 enum class WorkbookKind : std::uint8_t;
 enum class WorkbookFormat : std::uint8_t;
-}  // namespace io
 
 namespace eval {
 class FunctionRegistry;
 class RecalcEngine;
-struct IterativeOptions;
 struct RecalcStats;
 struct SchedulerConfig;
 struct SchedulerStats;
@@ -273,15 +270,15 @@ class Workbook {
   /// Serialises the workbook to an in-memory `.xlsx` byte stream. Delegates
   /// to `io::write_ooxml`; see that function's documentation for the exact
   /// set of OOXML parts emitted by the empty-workbook writer slice.
-  /// Equivalent to `save_as(io::WorkbookFormat::Ooxml)`.
+  /// Equivalent to `save_as(WorkbookFormat::Ooxml)`.
   Expected<std::vector<std::uint8_t>, Error> save() const;
 
   /// Serialises the workbook using an explicit container `format`.
-  /// `io::WorkbookFormat::Ooxml` delegates to `io::write_ooxml` (the
-  /// `.xlsx` writer); `io::WorkbookFormat::Xlsb` delegates to
-  /// `io::xlsb::write_xlsb` (the MS-XLSB writer). `io::WorkbookFormat::Unknown`
+  /// `WorkbookFormat::Ooxml` delegates to `io::write_ooxml` (the
+  /// `.xlsx` writer); `WorkbookFormat::Xlsb` delegates to
+  /// `io::xlsb::write_xlsb` (the MS-XLSB writer). `WorkbookFormat::Unknown`
   /// is not a valid save target and returns `kInvalidArgument`.
-  Expected<std::vector<std::uint8_t>, Error> save_as(io::WorkbookFormat format) const;
+  Expected<std::vector<std::uint8_t>, Error> save_as(WorkbookFormat format) const;
 
   // ---------------------------------------------------------------------------
   // Recalc-engine integration
@@ -403,7 +400,7 @@ class Workbook {
   /// circular SCCs that previously surfaced `#REF!` will then be solved
   /// via fixed-point iteration up to `max_iterations` passes.
   ///
-  /// `max_iterations` is clamped to `eval::kMaxIterationsCap`, so a value
+  /// `max_iterations` is clamped to `kMaxIterationsCap`, so a value
   /// above it reads back as the cap. The clamp lives here because this is
   /// where the budget enters the model: an iteration loop elsewhere in the
   /// engine inherits the bound instead of restating it, and a caller
@@ -411,12 +408,12 @@ class Workbook {
   /// cancellation hook would ever stop. The cap is Excel's own dialog
   /// limit, so it costs no fidelity. The lower end is not clamped here:
   /// the solver documents `0` as meaning one pass.
-  void set_iterative_options(eval::IterativeOptions opts);
+  void set_iterative_options(IterativeOptions opts);
 
   /// Returns the active iterative-calc options. `max_iterations` is always
-  /// within `eval::kMaxIterationsCap` when the options were installed
+  /// within `kMaxIterationsCap` when the options were installed
   /// through `set_iterative_options`.
-  const eval::IterativeOptions& iterative_options() const noexcept;
+  const IterativeOptions& iterative_options() const noexcept;
 
   // --- Recalc ---
   // Pass-through wrappers that surface a few `RecalcEngine` knobs from
@@ -461,11 +458,11 @@ class Workbook {
 
   /// Read-only access to the workbook's defined-name list (in source
   /// declaration order).
-  const std::vector<io::DefinedName>& defined_names() const noexcept { return defined_names_; }
+  const std::vector<DefinedName>& defined_names() const noexcept { return defined_names_; }
 
   /// Replaces the workbook's defined-name list. Move-assigns to keep
   /// the I/O hand-off allocation-free for large name lists.
-  void set_defined_names(std::vector<io::DefinedName> names) { defined_names_ = std::move(names); }
+  void set_defined_names(std::vector<DefinedName> names) { defined_names_ = std::move(names); }
 
   /// Sets the formula text of the workbook-scoped defined name `name`,
   /// or appends it if it does not exist. An empty `formula` removes
@@ -490,15 +487,15 @@ class Workbook {
 
   /// Read-only access to the workbook's table-metadata list (in
   /// archive-discovery order, which matches the per-sheet rels walk).
-  const std::vector<io::TableMetadata>& tables() const noexcept { return tables_; }
+  const std::vector<TableMetadata>& tables() const noexcept { return tables_; }
 
   /// Mutable access for structural edits that update a table's owning sheet
   /// and A1 rectangle before the writer rebuilds its relationships.
-  std::vector<io::TableMetadata>& mutable_tables() noexcept { return tables_; }
+  std::vector<TableMetadata>& mutable_tables() noexcept { return tables_; }
 
   /// Replaces the workbook's table-metadata list. Move-assigns for the
   /// same reason as `set_defined_names`.
-  void set_tables(std::vector<io::TableMetadata> tables) { tables_ = std::move(tables); }
+  void set_tables(std::vector<TableMetadata> tables) { tables_ = std::move(tables); }
 
   /// Re-registers dep-graph edges and dirties every formula cell whose
   /// structured reference names one of `table_names` (typically a table's
@@ -516,12 +513,12 @@ class Workbook {
   /// Default-typed binary/media parts (vbaProject.bin, images, drawings,
   /// VML, and their rels) rely on the round-tripped `<Default>` entries
   /// exposed via `default_content_types()`.
-  const std::vector<io::PassthroughPart>& passthrough_parts() const noexcept { return passthrough_parts_; }
+  const std::vector<PassthroughPart>& passthrough_parts() const noexcept { return passthrough_parts_; }
 
   /// Replaces the workbook's passthrough-part list. Move-assigns to
   /// keep the I/O hand-off allocation-free for archives carrying many
   /// preserved parts.
-  void set_passthrough_parts(std::vector<io::PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
+  void set_passthrough_parts(std::vector<PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
 
   /// Read-only access to the verbatim workbook-level `<Relationship>`
   /// entries (from `xl/_rels/workbook.xml.rels`) whose Type URI the
@@ -530,33 +527,31 @@ class Workbook {
   /// vbaProject, customXml, ...) reachable through the relationship
   /// graph. The writer mints fresh rIds; the original `id` is
   /// preserved on the struct for diagnostics only.
-  const std::vector<io::UnknownRelationship>& unknown_workbook_rels() const noexcept { return unknown_workbook_rels_; }
+  const std::vector<UnknownRelationship>& unknown_workbook_rels() const noexcept { return unknown_workbook_rels_; }
 
   /// Replaces the workbook's unknown-relationship list. Move-assigns
   /// to keep the I/O hand-off allocation-free.
-  void set_unknown_workbook_rels(std::vector<io::UnknownRelationship> rels) {
-    unknown_workbook_rels_ = std::move(rels);
-  }
+  void set_unknown_workbook_rels(std::vector<UnknownRelationship> rels) { unknown_workbook_rels_ = std::move(rels); }
 
   /// Read-only access to unrecognised package-root relationships from
   /// `_rels/.rels` (for example thumbnails and digital-signature origins).
   /// Their targets reside in `passthrough_parts()`; preserving the edge keeps
   /// those parts reachable after an OOXML read-modify-write cycle.
-  const std::vector<io::UnknownRelationship>& unknown_package_rels() const noexcept { return unknown_package_rels_; }
+  const std::vector<UnknownRelationship>& unknown_package_rels() const noexcept { return unknown_package_rels_; }
 
   /// Replaces the captured package-root relationship list.
-  void set_unknown_package_rels(std::vector<io::UnknownRelationship> rels) { unknown_package_rels_ = std::move(rels); }
+  void set_unknown_package_rels(std::vector<UnknownRelationship> rels) { unknown_package_rels_ = std::move(rels); }
 
   /// Read-only access to the `<Default>` content-type registrations the
   /// reader captured from `[Content_Types].xml`. The writer re-emits the
   /// entries whose extension is used by a Default-typed passthrough part
   /// (vbaProject.bin, images, VML, ...) so those parts keep a resolvable
   /// content type in the round-tripped package.
-  const std::vector<io::DefaultContentType>& default_content_types() const noexcept { return default_content_types_; }
+  const std::vector<DefaultContentType>& default_content_types() const noexcept { return default_content_types_; }
 
   /// Replaces the workbook's captured `<Default>` content-type list.
   /// Move-assigns to keep the I/O hand-off allocation-free.
-  void set_default_content_types(std::vector<io::DefaultContentType> defaults) {
+  void set_default_content_types(std::vector<DefaultContentType> defaults) {
     default_content_types_ = std::move(defaults);
   }
 
@@ -564,11 +559,11 @@ class Workbook {
   /// `<externalReferences>` document order). Each entry surfaces the
   /// relationship metadata for one cross-workbook reference; the body
   /// part itself round-trips through `passthrough_parts()` unchanged.
-  const std::vector<io::ExternalLinkRecord>& external_links() const noexcept { return external_links_; }
+  const std::vector<ExternalLinkRecord>& external_links() const noexcept { return external_links_; }
 
   /// Replaces the workbook's external-link list. Move-assigns to keep
   /// the I/O hand-off allocation-free.
-  void set_external_links(std::vector<io::ExternalLinkRecord> links) { external_links_ = std::move(links); }
+  void set_external_links(std::vector<ExternalLinkRecord> links) { external_links_ = std::move(links); }
 
   // ---------------------------------------------------------------------------
   // Pivot caches
@@ -606,14 +601,14 @@ class Workbook {
   /// identically for cell evaluation; only the package envelope (and,
   /// for `.xlsm` / `.xltm`, the captured `xl/vbaProject.bin` carried in
   /// `passthrough_parts()`) differs.
-  io::WorkbookKind kind() const noexcept { return kind_; }
+  WorkbookKind kind() const noexcept { return kind_; }
 
   /// Sets the workbook variant. Plain data — no lifecycle implications,
   /// no recalc-engine interaction. Callers using the writer to emit a
   /// macro-enabled variant must additionally ensure `xl/vbaProject.bin`
   /// is present in `passthrough_parts()`; the writer does not synthesise
   /// the part.
-  void set_kind(io::WorkbookKind kind) noexcept { kind_ = kind; }
+  void set_kind(WorkbookKind kind) noexcept { kind_ = kind; }
 
   // ---------------------------------------------------------------------------
   // Calculation mode (workbook-level `<calcPr>` policy)
@@ -628,12 +623,12 @@ class Workbook {
   // and surfaced through the bindings so the host UI can mirror
   // Excel's user-visible state.
 
-  /// Workbook-level calc-mode enum. Type-aliased from `io::CalcMode`
-  /// (declared in `io/calc_mode.h`) so the C ABI, the OOXML
+  /// Workbook-level calc-mode enum. Type-aliased from `CalcMode`
+  /// (declared in `calc_settings.h`) so the C ABI, the OOXML
   /// reader/writer and the bindings can all reference the enum
   /// without pulling in the full `workbook.h`. Existing source that
   /// names `Workbook::CalcMode::kAuto` keeps compiling unchanged.
-  using CalcMode = io::CalcMode;
+  using CalcMode = formulon::CalcMode;
 
   /// Returns the workbook-level calc mode. Defaults to `kAuto`.
   CalcMode calc_mode() const noexcept { return calc_mode_; }
@@ -657,7 +652,7 @@ class Workbook {
 
   /// True when the workbook uses the 1904 date system. Defaults to false
   /// (1900 system). Consumed by date-serial conversions
-  /// (`eval::date_time::serial_from_ymd` / `ymd_from_serial`).
+  /// (`date_time::serial_from_ymd` / `ymd_from_serial`).
   bool date1904() const noexcept { return date1904_; }
 
   /// Sets the 1904-date-system flag. Plain model value; the raw
@@ -684,12 +679,12 @@ class Workbook {
   /// The pinned wall-clock reading, or `std::nullopt` when the workbook
   /// follows the host clock (the default). Threaded into `EvalContext` at
   /// the evaluator boundary and into the pivot filter engine.
-  const std::optional<eval::date_time::CivilTime>& pinned_now() const noexcept { return pinned_now_; }
+  const std::optional<date_time::CivilTime>& pinned_now() const noexcept { return pinned_now_; }
 
   /// Pins every clock-dependent result to `value`. Intended for tests and
   /// for hosts that need a reproducible recalc; production callers leave it
   /// unset so the host clock shows through.
-  void set_pinned_now(eval::date_time::CivilTime value) noexcept { pinned_now_ = value; }
+  void set_pinned_now(date_time::CivilTime value) noexcept { pinned_now_ = value; }
 
   /// Releases the pin so clock-dependent results follow the host clock again.
   void clear_pinned_now() noexcept { pinned_now_.reset(); }
@@ -748,10 +743,10 @@ class Workbook {
   // ja-JP; oracle tests can override this per golden set.
 
   /// Returns the full formula-behaviour profile. Defaults to `win-365-ja_JP`.
-  eval::ExcelProfile excel_profile() const noexcept { return excel_profile_; }
+  ExcelProfile excel_profile() const noexcept { return excel_profile_; }
 
   /// Sets the full formula-behaviour profile used by future recalc calls.
-  void set_excel_profile(eval::ExcelProfile profile) noexcept { excel_profile_ = profile; }
+  void set_excel_profile(ExcelProfile profile) noexcept { excel_profile_ = profile; }
 
   // ---------------------------------------------------------------------------
   // Styles
@@ -764,11 +759,11 @@ class Workbook {
   // wholesale during package load.
 
   /// Read-only access to the workbook's styles table.
-  const io::StylesTable& styles() const noexcept { return styles_; }
+  const StylesTable& styles() const noexcept { return styles_; }
 
   /// Replaces the workbook's styles table. Move-assigns to keep the
   /// reader hand-off allocation-free.
-  void set_styles(io::StylesTable styles) { styles_ = std::move(styles); }
+  void set_styles(StylesTable styles) { styles_ = std::move(styles); }
 
   /// Mutable access to the workbook's styles table.
   ///
@@ -776,7 +771,7 @@ class Workbook {
   /// `set_styles`; mutators added through the C ABI (font / fill /
   /// border / num-fmt / xf inserts) reach the underlying records
   /// through this accessor instead of round-tripping the whole table.
-  io::StylesTable& mutable_styles() noexcept { return styles_; }
+  StylesTable& mutable_styles() noexcept { return styles_; }
 
   // ---------------------------------------------------------------------------
   // Text storage (workbook-lifetime backing for `Value::text` views)
@@ -890,22 +885,22 @@ class Workbook {
   std::unique_ptr<eval::RecalcEngine> engine_;
   // Passive OOXML metadata; populated by the reader and consumed by
   // the writer for round-trip preservation. Empty by default.
-  std::vector<io::DefinedName> defined_names_;
-  std::vector<io::TableMetadata> tables_;
-  std::vector<io::PassthroughPart> passthrough_parts_;
-  std::vector<io::ExternalLinkRecord> external_links_;
+  std::vector<DefinedName> defined_names_;
+  std::vector<TableMetadata> tables_;
+  std::vector<PassthroughPart> passthrough_parts_;
+  std::vector<ExternalLinkRecord> external_links_;
   // Workbook-rels entries with unrecognised Type URIs (theme, calcChain,
   // vbaProject, customXml, ...). Round-trip metadata only; the parts
   // themselves live in `passthrough_parts_`.
-  std::vector<io::UnknownRelationship> unknown_workbook_rels_;
+  std::vector<UnknownRelationship> unknown_workbook_rels_;
   // Package-root relationships with unrecognised Type URIs (thumbnail,
   // digital-signature origin, and vendor extensions). Their target parts
   // remain in `passthrough_parts_`.
-  std::vector<io::UnknownRelationship> unknown_package_rels_;
+  std::vector<UnknownRelationship> unknown_package_rels_;
   // `<Default>` content-type registrations captured from
   // `[Content_Types].xml` (extension -> content type). Re-emitted by the
   // writer for Default-typed passthrough parts. Empty by default.
-  std::vector<io::DefaultContentType> default_content_types_;
+  std::vector<DefaultContentType> default_content_types_;
   // Pivot caches owned by the workbook. One cache may be referenced by
   // multiple pivot tables (per `Sheet::pivot_tables()`).
   std::vector<std::unique_ptr<pivot::PivotCache>> pivot_caches_;
@@ -914,8 +909,8 @@ class Workbook {
   // emitting the workbook content-type Override. Plain data; no
   // lifecycle implications. The default `kXlsx` value is assigned in
   // the out-of-line constructor (workbook.cpp) so `workbook.h` does
-  // not need the full `io/workbook_kind.h` definition.
-  io::WorkbookKind kind_;
+  // not need the full `workbook_kind.h` definition.
+  WorkbookKind kind_;
   // Workbook-level calc mode. Round-trip metadata mirroring `<calcPr
   // calcMode=...>`. Default `kAuto` matches a freshly created
   // workbook in Excel.
@@ -925,7 +920,7 @@ class Workbook {
   bool date1904_ = false;
   // Pinned wall-clock reading for the clock seam above. Empty by default so
   // an untouched workbook behaves exactly as it did before the seam existed.
-  std::optional<eval::date_time::CivilTime> pinned_now_;
+  std::optional<date_time::CivilTime> pinned_now_;
   // Raw workbook.xml level elements captured for verbatim re-emission
   // (see the `workbook_pr_xml` accessor group). Empty when absent from
   // the source.
@@ -940,13 +935,13 @@ class Workbook {
   // attributes in the raw captures above resolve. Empty by default.
   std::string workbook_root_extra_attrs_;
   // Formula compatibility profile. Runtime default is Windows Excel 365 ja-JP.
-  eval::ExcelProfile excel_profile_ = eval::default_excel_profile();
+  ExcelProfile excel_profile_ = default_excel_profile();
   // Workbook-scoped style records (fonts, fills, borders, num fmts,
   // and the cellXfs index that ties them together). The default table
   // is empty and the writer falls back to a minimal-but-valid styles
   // document; the OOXML reader replaces this wholesale via
   // `set_styles(...)` when an `xl/styles.xml` part is present.
-  io::StylesTable styles_;
+  StylesTable styles_;
   // Backing store for every `Value::text` view owned by cells in this
   // workbook. See the `intern_text` / `mutable_text_storage` block in
   // the public API for the contract. `std::deque` is required for

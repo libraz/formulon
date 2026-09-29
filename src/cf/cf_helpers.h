@@ -165,12 +165,12 @@ std::optional<double> parse_double(std::string_view source);
 // These mirror Excel's `WEEKDAY(_, 1)` (Sunday = 1) semantics and the
 // month-arithmetic used by the `LastMonth` / `NextMonth` buckets. They
 // live here for now; a later wave consolidates them into
-// `eval/date_time.h` (D-08).
+// `utils/date_time.h` (D-08).
 // ---------------------------------------------------------------------------
 
 /// Excel weekday with `WEEKDAY(date, 1)` semantics: Sunday = 1,
 /// Saturday = 7. `date1904` selects the epoch `serial_floor` is read
-/// against, matching `eval::date_time::ymd_from_serial`; defaults to the
+/// against, matching `date_time::ymd_from_serial`; defaults to the
 /// 1900 system for callers with no workbook to consult.
 int weekday_sunday_one(double serial_floor, bool date1904 = false);
 

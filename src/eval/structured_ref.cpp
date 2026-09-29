@@ -12,9 +12,9 @@
 #include <utility>
 #include <vector>
 
-#include "io/cell_parser.h"
-#include "io/tables_reader.h"
 #include "sheet.h"
+#include "table.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
@@ -179,7 +179,7 @@ bool split_column_range(std::string_view text, StructuredRefSelector* sel) {
 /// literal (`Bob''s` -> `Bob's`, `'#Items` -> `#Items`); every other byte,
 /// including an apostrophe not followed by one of those four, passes
 /// through unchanged. A table column name is never stored pre-escaped
-/// (`io::TableMetadata::columns[i].name` is the literal name), so a
+/// (`TableMetadata::columns[i].name` is the literal name), so a
 /// bracket payload read verbatim from formula text must be unescaped
 /// before comparison.
 std::string unescape_structured_ref_name(std::string_view raw) {
@@ -202,7 +202,7 @@ std::string unescape_structured_ref_name(std::string_view raw) {
 
 /// Looks up a column by case-insensitive name. Returns a 0-based index into
 /// `t.columns` on success, `-1u` on failure.
-std::uint32_t find_column_index(const io::TableMetadata& t, std::string_view name) noexcept {
+std::uint32_t find_column_index(const TableMetadata& t, std::string_view name) noexcept {
   const std::string unescaped = unescape_structured_ref_name(name);
   for (std::size_t i = 0; i < t.columns.size(); ++i) {
     if (strings::case_insensitive_eq(t.columns[i].name, unescaped)) {
@@ -223,15 +223,17 @@ bool parse_table_ref(std::string_view ref, std::uint32_t* row_top, std::uint32_t
   }
   const std::string_view a = ref.substr(0, colon);
   const std::string_view b = ref.substr(colon + 1);
-  auto a_rc = io::parse_a1(a);
-  auto b_rc = io::parse_a1(b);
-  if (!a_rc || !b_rc) {
+  std::uint32_t a_row = 0;
+  std::uint32_t a_col = 0;
+  std::uint32_t b_row = 0;
+  std::uint32_t b_col = 0;
+  if (!a1::parse_a1_ref(a, &a_row, &a_col) || !a1::parse_a1_ref(b, &b_row, &b_col)) {
     return false;
   }
-  *row_top = std::min(a_rc.value().first, b_rc.value().first);
-  *row_bot = std::max(a_rc.value().first, b_rc.value().first);
-  *col_left = std::min(a_rc.value().second, b_rc.value().second);
-  *col_right = std::max(a_rc.value().second, b_rc.value().second);
+  *row_top = std::min(a_row, b_row);
+  *row_bot = std::max(a_row, b_row);
+  *col_left = std::min(a_col, b_col);
+  *col_right = std::max(a_col, b_col);
   return true;
 }
 
@@ -308,8 +310,8 @@ Expected<StructuredRefRange, ErrorCode> resolve_structured_ref(const StructuredR
   // workbook-unique programmatic name; `display_name` is what users type
   // in formulas. Excel emits the two equal in practice but the spec
   // allows them to differ; accept either to match Excel.
-  const io::TableMetadata* table = nullptr;
-  for (const io::TableMetadata& t : wb.tables()) {
+  const TableMetadata* table = nullptr;
+  for (const TableMetadata& t : wb.tables()) {
     if (strings::case_insensitive_eq(t.display_name, selector.table_name) ||
         strings::case_insensitive_eq(t.name, selector.table_name)) {
       table = &t;

@@ -2,10 +2,9 @@
 // Implementation of the styles reader. See styles_reader.h for the
 // public contract.
 //
-// Built-in number-format ids (0..163) are owned by the writer's TU
-// (`styles_writer.cpp`) and exposed via `builtin_num_fmt(id)`; this
-// reader resolves builtins through that helper rather than carrying a
-// duplicate table.
+// Built-in number-format ids (0..163) are owned by `styles.cpp` and exposed
+// via `builtin_num_fmt(id)`; this reader resolves builtins through that
+// helper rather than carrying a duplicate table.
 
 #include "io/styles_reader.h"
 

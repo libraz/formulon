@@ -38,18 +38,18 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/ooxml_reader.h"
-#include "io/passthrough_part.h"
 #include "io/sheet_reader.h"
 #include "io/sst_reader.h"
-#include "io/tables_reader.h"
-#include "io/workbook_kind.h"
+#include "io/workbook_kind_ooxml.h"
 #include "io/zip_reader.h"
+#include "passthrough_part.h"
 #include "sheet.h"
+#include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
@@ -259,8 +259,8 @@ Expected<Workbook, Error> build_workbook(std::uint32_t book_id, const AxisValues
     RETURN_IF_ERROR(wb.set_cell_value(s, 0U, 0U, Value::number(static_cast<double>(s) + 0.25)));
   }
   if (a.decorations == Decorations::kDefinedNames) {
-    std::vector<io::DefinedName> names;
-    io::DefinedName n;
+    std::vector<DefinedName> names;
+    DefinedName n;
     n.name = std::string("Range_") + std::to_string(book_id);
     n.formula = std::string("S1!$A$1:$") + col_letters(a.shape.cols - 1U) + "$1";
     names.push_back(std::move(n));

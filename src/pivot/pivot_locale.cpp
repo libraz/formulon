@@ -2,18 +2,18 @@
 // Locale-driven labelling for the pivot-grid layout layer. See the
 // header for the contract.
 
-#include "eval/pivot_locale.h"
+#include "pivot/pivot_locale.h"
 
 #include <array>
 #include <cstddef>
 #include <string>
 #include <string_view>
 
-#include "eval/compat.h"
+#include "excel_profile.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_types.h"
 
-namespace formulon::eval {
+namespace formulon::pivot {
 namespace {
 
 constexpr std::size_t kAggregationCount = 11;
@@ -110,4 +110,4 @@ std::string data_field_display_name(pivot::Aggregation agg, std::string_view fie
   return out;
 }
 
-}  // namespace formulon::eval
+}  // namespace formulon::pivot

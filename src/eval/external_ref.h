@@ -8,7 +8,7 @@
 // shows when the source workbook is closed.
 //
 // Design references:
-//   * `io/external_book.h` for the cache model and its lookup rules.
+//   * `external_book.h` for the cache model and its lookup rules.
 
 #ifndef FORMULON_EVAL_EXTERNAL_REF_H_
 #define FORMULON_EVAL_EXTERNAL_REF_H_

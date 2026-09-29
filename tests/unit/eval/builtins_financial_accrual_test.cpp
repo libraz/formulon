@@ -3,7 +3,7 @@
 // financial built-ins: ACCRINT, ACCRINTM, VDB, AMORDEGRC, AMORLINC.
 // These live in `eval/builtins/financial_accrual.cpp` (ACCRINT family)
 // and `eval/builtins/financial_depreciation.cpp` (VDB, AMORDEGRC,
-// AMORLINC) and share the YEARFRAC helpers in `eval/date_time.h`.
+// AMORLINC) and share the YEARFRAC helpers in `utils/date_time.h`.
 
 #include <cmath>
 #include <string>

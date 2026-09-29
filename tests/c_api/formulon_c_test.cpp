@@ -24,11 +24,11 @@
 #include "c_api/parts/common.h"
 #include "gtest/gtest.h"
 #include "io/format_detect.h"
-#include "io/passthrough_part.h"
-#include "io/unknown_relationship.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "passthrough_part.h"
 #include "sheet.h"
+#include "unknown_relationship.h"
 #include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
@@ -994,7 +994,7 @@ TEST(FormulonCApi, SaveExXlsxMatchesSave) {
   // C ABI's own format sniff (used by `fm_workbook_load`) reports it as
   // such rather than xlsb.
   formulon::io::ByteSpan xlsx_span{xlsx_buf.data, xlsx_buf.len};
-  EXPECT_EQ(formulon::io::detect_workbook_format(xlsx_span), formulon::io::WorkbookFormat::Ooxml);
+  EXPECT_EQ(formulon::io::detect_workbook_format(xlsx_span), formulon::WorkbookFormat::Ooxml);
 }
 
 TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
@@ -1012,7 +1012,7 @@ TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
   // not `xl/workbook.xml`), and must load back through the byte-only
   // C ABI, which auto-detects the container from its contents.
   formulon::io::ByteSpan xlsb_span{xlsb_buf.data, xlsb_buf.len};
-  EXPECT_EQ(formulon::io::detect_workbook_format(xlsb_span), formulon::io::WorkbookFormat::Xlsb);
+  EXPECT_EQ(formulon::io::detect_workbook_format(xlsb_span), formulon::WorkbookFormat::Xlsb);
 
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(xlsb_buf.data, xlsb_buf.len, &loaded.handle), 0);
@@ -1071,12 +1071,12 @@ TEST(FormulonCApi, SaveWithDiagnosticsCarriesTheOoxmlWriterCountersAcrossTheAbi)
   // A preserved copy of a part the writer always generates loses the
   // collision and is dropped; a relationship whose target part is absent is
   // dropped rather than left dangling.
-  formulon::io::PassthroughPart stale;
+  formulon::PassthroughPart stale;
   stale.path = "xl/styles.xml";
   stale.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
   stale.bytes = {'<', '/', '>'};
   wb.handle->workbook().set_passthrough_parts({std::move(stale)});
-  formulon::io::UnknownRelationship orphan;
+  formulon::UnknownRelationship orphan;
   orphan.id = "rId9";
   orphan.type = "http://schemas.example.com/orphan";
   orphan.target = "xl/missing.xml";

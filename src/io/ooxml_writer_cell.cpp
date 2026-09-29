@@ -41,6 +41,7 @@
 #include "phonetic.h"
 #include "sheet.h"
 #include "utils/a1_column.h"
+#include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/index_sort.h"
 #include "value.h"
@@ -217,12 +218,12 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // Formula cells with non-finite cached values still emit the <f>; only
   // the <v> is downgraded.
   if (!has_formula && cell.cached_value.is_number() && !std::isfinite(cell.cached_value.as_number())) {
-    const std::string addr = EncodeA1(row, col);
+    const std::string addr = a1::encode_a1(row, col);
     AppendErrorCellXml(out, addr, ErrorCode::Num, cell.xf_index);
     return true;
   }
 
-  const std::string addr = EncodeA1(row, col);
+  const std::string addr = a1::encode_a1(row, col);
 
   // Style-only cells (blank value, formatting attached) round-trip as a
   // bare `<c r="..." s="N"/>` shape — Excel preserves these so empty
@@ -287,12 +288,12 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // strip it before serialisation.
     if (anchored != nullptr) {
       out.append("<f t=\"array\" ref=\"");
-      out.append(EncodeA1(row, col));
+      out.append(a1::encode_a1(row, col));
       const std::uint32_t last_row = row + (anchored->rows > 0U ? anchored->rows - 1U : 0U);
       const std::uint32_t last_col = col + (anchored->cols > 0U ? anchored->cols - 1U : 0U);
       if (last_row != row || last_col != col) {
         out.push_back(':');
-        out.append(EncodeA1(last_row, last_col));
+        out.append(a1::encode_a1(last_row, last_col));
       }
       out.append("\">");
     } else {
@@ -307,7 +308,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // parameters) so a real Excel reading this file resolves the modern
     // functions instead of showing #NAME?. `formula_text` was normalised
     // to the canonical formula-bar form on ingestion
-    // (io::strip_storage_prefixes). Parse it and re-serialise through the
+    // (parser::strip_storage_prefixes). Parse it and re-serialise through the
     // storage formatter; on any parse failure fall back to the canonical
     // text unchanged.
     Arena formula_arena;
@@ -471,16 +472,6 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
 
 bool CellIsEmitted(const Cell& cell) {
   return !cell.formula_text.empty() || !cell.cached_value.is_blank() || cell.xf_index != 0U;
-}
-
-std::string EncodeA1(std::uint32_t row, std::uint32_t col) {
-  std::string out;
-  out.reserve(10U);
-  if (!a1::append_column_letters(out, col)) {
-    return {};
-  }
-  out.append(std::to_string(row + 1U));
-  return out;
 }
 
 std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings,

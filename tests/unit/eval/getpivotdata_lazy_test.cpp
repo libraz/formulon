@@ -27,12 +27,12 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
-#include "eval/pivot_locale.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "sheet.h"
@@ -231,7 +231,7 @@ TEST(GetPivotDataLazy, BlankRowFieldGroupIsAddressableByItsPlaceholderLabel) {
   Workbook wb = BuildBlankRegionWorkbook();
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
-  const std::string placeholder = pivot_layout_options_for(wb.excel_profile()).blank_item_label;
+  const std::string placeholder = pivot::pivot_layout_options_for(wb.excel_profile()).blank_item_label;
   ASSERT_FALSE(placeholder.empty());
   const std::string formula = "=GETPIVOTDATA(\"Sum of Amount\", A3, \"Region\", \"" + placeholder + "\")";
   const Value v = EvalWith(formula, ctx);

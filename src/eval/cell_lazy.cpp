@@ -23,11 +23,11 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
-#include "io/ooxml_writer_cell.h"
-#include "io/styles_reader.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "styles.h"
+#include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -227,7 +227,7 @@ Value resolve_cell_locked(std::string_view sheet, std::uint32_t row, std::uint32
   }
   bool locked = true;
   if (workbook != nullptr) {
-    const std::vector<io::CellXf>& cell_xfs = workbook->styles().cell_xfs;
+    const std::vector<CellXf>& cell_xfs = workbook->styles().cell_xfs;
     if (xf_index < cell_xfs.size()) {
       locked = cell_xfs[xf_index].locked;
     }
@@ -235,8 +235,8 @@ Value resolve_cell_locked(std::string_view sheet, std::uint32_t row, std::uint32
   return Value::number(locked ? 1.0 : 0.0);
 }
 
-const io::CellXf* resolve_cell_xf(std::string_view sheet_name, std::uint32_t row, std::uint32_t col,
-                                  const EvalContext& ctx) {
+const CellXf* resolve_cell_xf(std::string_view sheet_name, std::uint32_t row, std::uint32_t col,
+                              const EvalContext& ctx) {
   const Workbook* workbook = ctx.workbook();
   const Sheet* target = ctx.current_sheet();
   if (!sheet_name.empty()) {
@@ -249,7 +249,7 @@ const io::CellXf* resolve_cell_xf(std::string_view sheet_name, std::uint32_t row
   if (const Cell* cell = target->cell_at(row, col); cell != nullptr) {
     xf_index = cell->xf_index;
   }
-  const std::vector<io::CellXf>& xfs = workbook->styles().cell_xfs;
+  const std::vector<CellXf>& xfs = workbook->styles().cell_xfs;
   return xf_index < xfs.size() ? &xfs[xf_index] : nullptr;
 }
 
@@ -304,7 +304,7 @@ bool number_format_colors_negative_values(std::string_view format) {
   return section_uses_color(format.substr(negative_start, negative_end - negative_start));
 }
 
-std::string_view cell_prefix(const io::CellXf* xf) {
+std::string_view cell_prefix(const CellXf* xf) {
   if (xf == nullptr) {
     return {};
   }
@@ -323,20 +323,20 @@ std::string_view cell_prefix(const io::CellXf* xf) {
   }
 }
 
-std::string_view number_format_for_xf(const io::CellXf* xf, const EvalContext& ctx) {
+std::string_view number_format_for_xf(const CellXf* xf, const EvalContext& ctx) {
   if (xf == nullptr || ctx.workbook() == nullptr) {
     return {};
   }
-  const io::StylesTable& styles = ctx.workbook()->styles();
-  for (const io::NumFmtRecord& custom : styles.num_fmts) {
+  const StylesTable& styles = ctx.workbook()->styles();
+  for (const NumFmtRecord& custom : styles.num_fmts) {
     if (custom.id == xf->num_fmt_id && custom.format_string_index < styles.num_fmt_strings.size()) {
       return styles.num_fmt_strings[custom.format_string_index];
     }
   }
-  return io::builtin_num_fmt(xf->num_fmt_id);
+  return builtin_num_fmt(xf->num_fmt_id);
 }
 
-std::string_view cell_format_code(const io::CellXf* xf) {
+std::string_view cell_format_code(const CellXf* xf) {
   if (xf == nullptr) {
     return "G";
   }
@@ -437,10 +437,10 @@ Value resolve_cell_width(std::string_view sheet_name, std::uint32_t col, Arena& 
 // the formatting minimal because the workbook has no filename to wrap
 // in `[Workbook]` brackets.
 Value build_address(Arena& arena, std::string_view sheet, std::uint32_t row, std::uint32_t col) {
-  // `EncodeA1` returns an unanchored address (e.g. "A1"); we splice the
+  // `a1::encode_a1` returns an unanchored address (e.g. "A1"); we splice the
   // `$` anchors in manually because the caller wants an absolute form.
   // The helper accepts 0-based (row, col) and produces 1-based output.
-  const std::string a1 = io::EncodeA1(row, col);
+  const std::string a1 = a1::encode_a1(row, col);
   // Find the boundary between the column letters and the row digits so
   // we can insert the leading `$` and the inner `$` for absolute form.
   std::size_t row_start = 0;

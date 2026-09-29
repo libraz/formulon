@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "defined_name.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -19,14 +19,14 @@ namespace {
 
 // Builds a workbook with a single sheet and the given sheet-scoped
 // defined names installed.
-Workbook MakeWorkbook(std::vector<io::DefinedName> names) {
+Workbook MakeWorkbook(std::vector<DefinedName> names) {
   Workbook wb = Workbook::create();
   wb.set_defined_names(std::move(names));
   return wb;
 }
 
-io::DefinedName SheetScoped(std::string name, std::string formula, std::int32_t sheet_id) {
-  io::DefinedName dn;
+DefinedName SheetScoped(std::string name, std::string formula, std::int32_t sheet_id) {
+  DefinedName dn;
   dn.name = std::move(name);
   dn.formula = std::move(formula);
   dn.local_sheet_id = sheet_id;

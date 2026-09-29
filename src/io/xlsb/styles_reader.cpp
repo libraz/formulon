@@ -30,7 +30,7 @@
 //                  sides in the order top, bottom, left, right,
 //                  diagonal, each u8 style + u8 unused + BrtColor.
 //
-// Every one of these is decoded into the shared `io::StylesTable`, so a
+// Every one of these is decoded into the shared `StylesTable`, so a
 // `.xlsb`-sourced workbook hands its consumers the same font / fill /
 // border / alignment attributes an `.xlsx`-sourced one does. The record
 // layouts are symmetric with `io/xlsb/styles_writer.cpp`, which emits them.
@@ -366,7 +366,7 @@ Expected<void, Error> DecodeXf(ByteSpan payload, XfTarget target, StylesTable& t
   // A `BrtXF` states every field unconditionally, so the OOXML presence
   // bits are derived from the value rather than read: a field holding its
   // schema default is what Excel writes as an omitted attribute, and the
-  // `Has*` predicates in `io/styles_reader.h` apply the same rule to the
+  // `Has*` predicates in `styles.h` apply the same rule to the
   // four attributes whose default is indistinguishable from their value.
   // Reproducing it is what makes a converted `.xlsx` carry the same `<xf>`
   // Excel's own `.xlsx` export of the workbook does.

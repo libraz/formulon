@@ -38,12 +38,12 @@
 #include <string>
 #include <vector>
 
-#include "eval/pivot_locale.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -213,10 +213,10 @@ TEST(PivotBlankItemFixture, TheBlankGroupSortsLastAndAggregatesItsRows) {
 // one observation `blank_item_label`'s spelling rests on.
 TEST(PivotBlankItemFixture, TheJaJpProfileNamesTheBlankGroupAsExcelDid) {
   const Workbook workbook = LoadFixture();
-  eval::ExcelProfile profile;
-  profile.locale = eval::ExcelLocale::kJaJP;
+  ExcelProfile profile;
+  profile.locale = ExcelLocale::kJaJP;
   const std::vector<std::pair<std::string, double>> rows =
-      EvaluateRows(workbook, eval::pivot_layout_options_for(profile));
+      EvaluateRows(workbook, pivot::pivot_layout_options_for(profile));
   ASSERT_EQ(rows.size(), 3U);
   EXPECT_EQ(rows[2].first, "(空白)");
   EXPECT_DOUBLE_EQ(rows[2].second, kBlank);

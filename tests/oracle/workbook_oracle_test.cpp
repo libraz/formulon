@@ -30,11 +30,11 @@
 #include <utility>
 #include <vector>
 
-#include "eval/pivot_locale.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_locale.h"
 #include "print/pagination.h"
 #include "print/print_area.h"
 #include "tests/oracle/json_reader.h"
@@ -547,7 +547,7 @@ TEST_P(WorkbookOracleTest, Matches) {
   // `layout` leaves a blank group spelled in English under a ja-JP profile
   // while every other label is localized. Both production call sites
   // (getpivotdata_lazy.cpp, c_api/parts/pivot_layout.cpp) pass them here.
-  const pivot::PivotLayoutOptions layout_options = eval::pivot_layout_options_for(built.workbook->excel_profile());
+  const pivot::PivotLayoutOptions layout_options = pivot::pivot_layout_options_for(built.workbook->excel_profile());
   auto result_or = pivot::evaluate(built.table, built.cache, layout_options);
   ASSERT_TRUE(static_cast<bool>(result_or)) << "pivot::evaluate failed: " << result_or.error().message;
 

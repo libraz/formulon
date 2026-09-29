@@ -449,7 +449,7 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet) {
   std::unordered_map<std::string, std::string> assigned_targets;
   used.reserve(sheet.unknown_relationships().size() + sheet.hyperlinks().size());
   assigned_targets.reserve(sheet.hyperlinks().size());
-  for (const io::UnknownRelationship& relationship : sheet.unknown_relationships()) {
+  for (const UnknownRelationship& relationship : sheet.unknown_relationships()) {
     if (!relationship.id.empty()) {
       used.insert(relationship.id);
     }

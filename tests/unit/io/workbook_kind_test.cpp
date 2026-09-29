@@ -1,5 +1,5 @@
 //
-// Unit tests for `io::WorkbookKind`. Spot-checks the content-type and
+// Unit tests for `WorkbookKind`. Spot-checks the content-type and
 // default-extension lookups for all four variants (xlsx / xlsm / xltx /
 // xltm). The four canonical content-type strings are referenced
 // verbatim from [OPC] part 1 §10 / [ECMA-376]; if the engine ever
@@ -7,11 +7,10 @@
 // emission, oracle parity) will silently desync, so this test stays
 // strict on byte-for-byte equality.
 
-#include "io/workbook_kind.h"
-
 #include <string_view>
 
 #include "gtest/gtest.h"
+#include "io/workbook_kind_ooxml.h"
 
 namespace formulon {
 namespace io {

@@ -43,11 +43,6 @@ bool CellIsEmitted(const Cell& cell);
 std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
                               std::uint32_t dynamic_array_cm_index = 0U);
 
-/// Encodes a 0-based (row, col) into the Excel A1 address (1-based, e.g.
-/// "A1", "AA1", "XFD1048576"). Exposed for unit testing; not consumed
-/// outside ooxml_writer_cell.cpp.
-std::string EncodeA1(std::uint32_t row, std::uint32_t col);
-
 }  // namespace io
 }  // namespace formulon
 

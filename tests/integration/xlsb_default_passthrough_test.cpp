@@ -15,11 +15,11 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "io/passthrough_part.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "value.h"
 #include "workbook.h"
@@ -258,8 +258,8 @@ std::vector<std::string> RelationshipSignatures(io::ZipReader& zip, std::string_
   return signatures;
 }
 
-const io::PassthroughPart* FindPart(const Workbook& wb, std::string_view path) {
-  for (const io::PassthroughPart& part : wb.passthrough_parts()) {
+const PassthroughPart* FindPart(const Workbook& wb, std::string_view path) {
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (part.path == path) {
       return &part;
     }
@@ -281,9 +281,9 @@ TEST(XlsbDefaultPassthrough, CapturesDefaultsAndRoundTripsTwoCycles) {
   ASSERT_TRUE(static_cast<bool>(first_or)) << first_or.error().message << " | " << first_or.error().context;
   EXPECT_EQ(first_or.value().dropped_part_count, 0U);
   const Workbook& first = first_or.value().workbook;
-  const io::PassthroughPart* image = FindPart(first, "xl/media/image1.PNG");
-  const io::PassthroughPart* ole = FindPart(first, "xl/embeddings/oleObject1.bin");
-  const io::PassthroughPart* custom = FindPart(first, "xl/customXml/item1.xml");
+  const PassthroughPart* image = FindPart(first, "xl/media/image1.PNG");
+  const PassthroughPart* ole = FindPart(first, "xl/embeddings/oleObject1.bin");
+  const PassthroughPart* custom = FindPart(first, "xl/customXml/item1.xml");
   ASSERT_NE(image, nullptr);
   ASSERT_NE(ole, nullptr);
   ASSERT_NE(custom, nullptr);
@@ -334,7 +334,7 @@ TEST(XlsbDefaultPassthrough, CapturesDefaultsAndRoundTripsTwoCycles) {
   EXPECT_EQ(third_or.value().dropped_part_count, 0U);
   for (const std::string_view path :
        {"xl/media/image1.PNG", "xl/embeddings/oleObject1.bin", "xl/customXml/item1.xml"}) {
-    const io::PassthroughPart* part = FindPart(third_or.value().workbook, path);
+    const PassthroughPart* part = FindPart(third_or.value().workbook, path);
     ASSERT_NE(part, nullptr) << path;
     EXPECT_TRUE(part->content_type.empty());
   }
@@ -416,10 +416,10 @@ TEST(XlsbDefaultPassthrough, RejectsDuplicatePassthroughPart) {
 TEST(XlsbDefaultPassthrough, WriterDropsGeneratedPathCollision) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
-  wb.set_default_content_types({io::DefaultContentType{"png", "image/png"}});
-  wb.set_passthrough_parts({io::PassthroughPart{"xl/workbook.bin", "", ToBytes("stale")},
-                            io::PassthroughPart{"xl/media/image1.png", "", ToBytes("image")},
-                            io::PassthroughPart{"xl/media/image1.png", "", ToBytes("duplicate")}});
+  wb.set_default_content_types({DefaultContentType{"png", "image/png"}});
+  wb.set_passthrough_parts({PassthroughPart{"xl/workbook.bin", "", ToBytes("stale")},
+                            PassthroughPart{"xl/media/image1.png", "", ToBytes("image")},
+                            PassthroughPart{"xl/media/image1.png", "", ToBytes("duplicate")}});
   auto save_or = io::xlsb::write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message << " | " << save_or.error().context;
   io::ZipReader zip;

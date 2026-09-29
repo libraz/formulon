@@ -22,10 +22,10 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
-#include "io/passthrough_part.h"
-#include "io/workbook_kind.h"
+#include "io/workbook_kind_ooxml.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "workbook.h"
 
 namespace formulon {

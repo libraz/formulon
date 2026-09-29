@@ -12,12 +12,12 @@
 #include <string_view>
 #include <vector>
 
+#include "defined_name.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/ooxml_reader.h"
-#include "io/tables_reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "table.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -247,7 +247,7 @@ TEST(OoxmlMetadata, TablesLandOnWorkbookAndPartIsConsumed) {
 
   // Table metadata landed.
   ASSERT_EQ(wb.tables().size(), 1U);
-  const io::TableMetadata& table = wb.tables()[0];
+  const TableMetadata& table = wb.tables()[0];
   EXPECT_EQ(table.id, 1U);
   EXPECT_EQ(table.name, "Sales");
   EXPECT_EQ(table.display_name, "Sales");
@@ -263,9 +263,9 @@ TEST(OoxmlMetadata, TablesLandOnWorkbookAndPartIsConsumed) {
   // unknown_parts must NOT include the table part — the reader
   // consumes tables and the writer re-emits them via the metadata
   // path, not the passthrough path.
-  const std::vector<io::PassthroughPart>& parts = result.workbook.passthrough_parts();
+  const std::vector<PassthroughPart>& parts = result.workbook.passthrough_parts();
   const auto leaked = std::find_if(parts.begin(), parts.end(),
-                                   [](const io::PassthroughPart& p) { return p.path == "xl/tables/table1.xml"; });
+                                   [](const PassthroughPart& p) { return p.path == "xl/tables/table1.xml"; });
   EXPECT_EQ(leaked, parts.end()) << "table1.xml leaked into unknown_parts";
 }
 
@@ -302,14 +302,14 @@ TEST(OoxmlMetadata, DefinedNamesRoundTripThroughWriter) {
   src.add_sheet("Alpha");
   src.add_sheet("Beta");
 
-  std::vector<io::DefinedName> names;
-  io::DefinedName workbook_scope;
+  std::vector<DefinedName> names;
+  DefinedName workbook_scope;
   workbook_scope.name = "WB_SCOPE";
   workbook_scope.formula = "Alpha!$A$1:$A$10";
   // Defaults: local_sheet_id = -1, hidden = false, comment empty.
   names.push_back(std::move(workbook_scope));
 
-  io::DefinedName sheet_scope;
+  DefinedName sheet_scope;
   sheet_scope.name = "Local_Range";
   sheet_scope.formula = "Beta!$B$1:$B$5";
   sheet_scope.local_sheet_id = 1;
@@ -341,7 +341,7 @@ TEST(OoxmlMetadata, DefinedNamesRoundTripThroughWriter) {
 TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
   Workbook src = Workbook::create();  // single sheet "Sheet1"
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Sales";
   table.display_name = "Sales";
@@ -349,9 +349,9 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
   table.sheet_index = 0;
   table.header_row = true;
   table.totals_row = true;
-  table.columns.push_back(io::TableColumn{1, "Region", "Total", "", ""});
-  table.columns.push_back(io::TableColumn{2, "Q1", "", "sum", ""});
-  table.columns.push_back(io::TableColumn{3, "Q2", "", "sum", ""});
+  table.columns.push_back(TableColumn{1, "Region", "Total", "", ""});
+  table.columns.push_back(TableColumn{2, "Q1", "", "sum", ""});
+  table.columns.push_back(TableColumn{3, "Q2", "", "sum", ""});
   table.auto_filter_xml =
       "<autoFilter ref=\"A1:C5\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
       "</autoFilter>";
@@ -361,7 +361,7 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
       "showRowStripes=\"1\" showColumnStripes=\"0\"/>";
   table.ext_lst_xml = "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>";
 
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(std::move(table));
   src.set_tables(std::move(tables));
 
@@ -371,7 +371,7 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
   ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
   const Workbook& dst = result_or.value().workbook;
   ASSERT_EQ(dst.tables().size(), 1U);
-  const io::TableMetadata& got = dst.tables()[0];
+  const TableMetadata& got = dst.tables()[0];
   EXPECT_EQ(got.id, 1U);
   EXPECT_EQ(got.name, "Sales");
   EXPECT_EQ(got.display_name, "Sales");
@@ -486,14 +486,14 @@ TEST(OoxmlMetadata, PassthroughPartRoundTripsBytesAndContentType) {
 
   // The theme part must surface as a passthrough entry on the workbook,
   // which is its sole owner.
-  auto find_theme = [](const std::vector<io::PassthroughPart>& parts) {
+  auto find_theme = [](const std::vector<PassthroughPart>& parts) {
     return std::find_if(parts.begin(), parts.end(),
-                        [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
+                        [](const PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
   };
   ASSERT_NE(find_theme(first.workbook.passthrough_parts()), first.workbook.passthrough_parts().end())
       << "theme not on workbook";
 
-  const io::PassthroughPart& read_back = *find_theme(first.workbook.passthrough_parts());
+  const PassthroughPart& read_back = *find_theme(first.workbook.passthrough_parts());
   EXPECT_EQ(read_back.content_type, "application/vnd.openxmlformats-officedocument.theme+xml");
   ASSERT_FALSE(read_back.bytes.empty());
 
@@ -526,19 +526,19 @@ TEST(OoxmlMetadata, PassthroughPayloadIsOwnedOnlyByTheWorkbook) {
   auto result_or = io::read_ooxml(SpanOf(input));
   ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
 
-  const std::vector<io::PassthroughPart>& parts = result_or.value().workbook.passthrough_parts();
+  const std::vector<PassthroughPart>& parts = result_or.value().workbook.passthrough_parts();
   const auto theme_count = std::count_if(parts.begin(), parts.end(),
-                                         [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
+                                         [](const PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
   ASSERT_EQ(theme_count, 1) << "theme captured more than once";
   const std::vector<std::uint8_t> expected_bytes =
-      std::find_if(parts.begin(), parts.end(), [](const io::PassthroughPart& p) {
+      std::find_if(parts.begin(), parts.end(), [](const PassthroughPart& p) {
         return p.path == "xl/theme/theme1.xml";
       })->bytes;
   ASSERT_FALSE(expected_bytes.empty());
 
   Workbook moved = std::move(result_or.value().workbook);
   const auto moved_it = std::find_if(moved.passthrough_parts().begin(), moved.passthrough_parts().end(),
-                                     [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
+                                     [](const PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
   ASSERT_NE(moved_it, moved.passthrough_parts().end()) << "theme lost when the workbook was moved out";
   EXPECT_EQ(moved_it->bytes, expected_bytes);
 
@@ -550,9 +550,9 @@ TEST(OoxmlMetadata, PassthroughPayloadIsOwnedOnlyByTheWorkbook) {
 
 TEST(OoxmlMetadata, WellKnownPassthroughPartsGetRelationships) {
   Workbook wb = Workbook::create();
-  std::vector<io::PassthroughPart> parts;
+  std::vector<PassthroughPart> parts;
   auto add_part = [&parts](std::string path, std::string content_type, std::string_view body) {
-    io::PassthroughPart part;
+    PassthroughPart part;
     part.path = std::move(path);
     part.content_type = std::move(content_type);
     part.bytes.assign(body.begin(), body.end());
@@ -585,14 +585,14 @@ TEST(OoxmlMetadata, WellKnownPassthroughPartsGetRelationships) {
 
 TEST(OoxmlMetadata, PackageLevelPassthroughRelationshipsSurviveReadWrite) {
   Workbook wb = Workbook::create();
-  io::PassthroughPart thumbnail;
+  PassthroughPart thumbnail;
   thumbnail.path = "docProps/thumbnail.jpeg";
   thumbnail.content_type = "image/jpeg";
   thumbnail.bytes = {0xffU, 0xd8U, 0xffU, 0xd9U};
   wb.set_passthrough_parts({thumbnail});
-  wb.set_unknown_package_rels({io::UnknownRelationship{
-      "rId9", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
-      "docProps/thumbnail.jpeg", false}});
+  wb.set_unknown_package_rels(
+      {UnknownRelationship{"rId9", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
+                           "docProps/thumbnail.jpeg", false}});
 
   const std::vector<std::uint8_t> first = SaveOrDie(wb);
   auto read_or = io::read_ooxml(SpanOf(first));
@@ -704,22 +704,22 @@ TEST(OoxmlMetadata, CombinedDefinedNamesTablesAndPassthrough) {
 
   // Add defined names + a table to exercise all three round-trip
   // surfaces in one pass.
-  std::vector<io::DefinedName> names;
-  io::DefinedName n;
+  std::vector<DefinedName> names;
+  DefinedName n;
   n.name = "Combo";
   n.formula = "Sheet1!$A$1";
   names.push_back(std::move(n));
   wb.set_defined_names(std::move(names));
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 7;
   table.name = "ComboTable";
   table.display_name = "ComboTable";
   table.ref = "A1:B2";
   table.sheet_index = 0;
-  table.columns.push_back(io::TableColumn{1, "X", "", "", ""});
-  table.columns.push_back(io::TableColumn{2, "Y", "", "", ""});
-  std::vector<io::TableMetadata> tables;
+  table.columns.push_back(TableColumn{1, "X", "", "", ""});
+  table.columns.push_back(TableColumn{2, "Y", "", "", ""});
+  std::vector<TableMetadata> tables;
   tables.push_back(std::move(table));
   wb.set_tables(std::move(tables));
 
@@ -740,14 +740,14 @@ TEST(OoxmlMetadata, CombinedDefinedNamesTablesAndPassthrough) {
   EXPECT_EQ(dst.tables()[0].name, "ComboTable");
   // The writer used the source id, so the file lives at table7.xml.
   // The reader does not surface the table part as unknown.
-  for (const io::PassthroughPart& p : result.workbook.passthrough_parts()) {
+  for (const PassthroughPart& p : result.workbook.passthrough_parts()) {
     EXPECT_NE(p.path, "xl/tables/table7.xml");
   }
 
   // Passthrough part still present.
-  const std::vector<io::PassthroughPart>& kept = result.workbook.passthrough_parts();
-  auto theme_it = std::find_if(kept.begin(), kept.end(),
-                               [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
+  const std::vector<PassthroughPart>& kept = result.workbook.passthrough_parts();
+  auto theme_it =
+      std::find_if(kept.begin(), kept.end(), [](const PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
   ASSERT_NE(theme_it, kept.end()) << "theme dropped during combined round-trip";
 }
 
@@ -758,23 +758,23 @@ TEST(OoxmlMetadata, TableCalculatedColumnFormulaRoundTrip) {
   // reads back with an empty formula string).
   Workbook src = Workbook::create();  // single sheet "Sheet1"
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 11;
   table.name = "MyTable";
   table.display_name = "MyTable";
   table.ref = "A1:B5";
   table.sheet_index = 0;
-  io::TableColumn item;
+  TableColumn item;
   item.id = 1;
   item.name = "Item";
   table.columns.push_back(std::move(item));
-  io::TableColumn total;
+  TableColumn total;
   total.id = 2;
   total.name = "Total";
   total.calculated_column_formula = "SUM(MyTable[Qty])";
   table.columns.push_back(std::move(total));
 
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(std::move(table));
   src.set_tables(std::move(tables));
 
@@ -802,7 +802,7 @@ TEST(OoxmlMetadata, TableCalculatedColumnFormulaRoundTrip) {
   ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
   const Workbook& dst = result_or.value().workbook;
   ASSERT_EQ(dst.tables().size(), 1U);
-  const io::TableMetadata& got = dst.tables()[0];
+  const TableMetadata& got = dst.tables()[0];
   ASSERT_EQ(got.columns.size(), 2U);
   EXPECT_EQ(got.columns[0].name, "Item");
   EXPECT_TRUE(got.columns[0].calculated_column_formula.empty());
@@ -817,8 +817,8 @@ TEST(OoxmlMetadata, PassthroughCollisionWithGeneratedPathDropsPassthrough) {
   // re-reading and checking that the styles part is the writer's
   // version, not the stale passthrough payload.
   Workbook wb = Workbook::create();
-  std::vector<io::PassthroughPart> parts;
-  io::PassthroughPart bogus;
+  std::vector<PassthroughPart> parts;
+  PassthroughPart bogus;
   bogus.path = "xl/styles.xml";
   bogus.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
   // Distinctive bytes; if the writer mistakenly emitted these we'd see

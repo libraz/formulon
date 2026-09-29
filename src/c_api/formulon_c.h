@@ -381,7 +381,7 @@ FM_API fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_bytes
 /**
  * @brief Container format selector for `fm_workbook_save_as`.
  *
- * Mirrors `formulon::io::WorkbookFormat`. `FM_WORKBOOK_FORMAT_UNKNOWN`
+ * Mirrors `formulon::WorkbookFormat`. `FM_WORKBOOK_FORMAT_UNKNOWN`
  * is not a valid save target; passing it to `fm_workbook_save_as`
  * returns `kInvalidArgument`.
  */

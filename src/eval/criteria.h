@@ -31,7 +31,7 @@
 #include <string>
 #include <string_view>
 
-#include "eval/compat.h"
+#include "excel_profile.h"
 #include "value.h"
 
 namespace formulon {

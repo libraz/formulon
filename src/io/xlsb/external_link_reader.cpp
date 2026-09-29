@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "io/external_book.h"
+#include "external_book.h"
 #include "io/xlsb/record.h"
 #include "utils/error.h"
 #include "value.h"

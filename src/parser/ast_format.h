@@ -71,7 +71,7 @@ using StorageFunctionNameSpeller = std::string (*)(std::string_view name);
 ///     way), and every LET binding name / LAMBDA parameter name — plus each
 ///     in-scope reference to one — is emitted with the `_xlpm.` prefix.
 ///
-/// This is the inverse of `io::strip_storage_prefixes` for the shapes the
+/// This is the inverse of `parser::strip_storage_prefixes` for the shapes the
 /// writer produces, so a save → load cycle round-trips the canonical text.
 std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell);
 

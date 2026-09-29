@@ -60,19 +60,19 @@
 
 #include "cell.h"
 #include "cf/cf_types.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/ooxml_reader.h"
-#include "io/passthrough_part.h"
-#include "io/styles_reader.h"
-#include "io/tables_reader.h"
-#include "io/workbook_kind.h"
+#include "io/workbook_kind_ooxml.h"
+#include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "sheet.h"
+#include "styles.h"
+#include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
@@ -184,8 +184,8 @@ Value pooled_text(const std::string& s) {
 }
 
 /// Builds a styles table for the `kBasic` / `kMixed` axes.
-io::StylesTable build_styles_table(StylesAxis axis) {
-  io::StylesTable styles;
+StylesTable build_styles_table(StylesAxis axis) {
+  StylesTable styles;
   // Indices 0 are the defaults; the corpus pushes one or three custom
   // records. The reader-fallback contract (a missing section yields a
   // single default) means we always populate slot 0 explicitly so the
@@ -200,7 +200,7 @@ io::StylesTable build_styles_table(StylesAxis axis) {
   }
 
   // Custom font 1: bold red Calibri.
-  io::FontRecord red;
+  FontRecord red;
   red.name = "Calibri";
   red.size = 11.0;
   red.bold = true;
@@ -208,7 +208,7 @@ io::StylesTable build_styles_table(StylesAxis axis) {
   styles.fonts.push_back(red);
 
   // CellXf 1 references font 1.
-  io::CellXf xf1;
+  CellXf xf1;
   xf1.font_index = 1U;
   styles.cell_xfs.push_back(xf1);
 
@@ -217,23 +217,23 @@ io::StylesTable build_styles_table(StylesAxis axis) {
   }
 
   // kMixed: one more font, one fill, two more CellXfs.
-  io::FontRecord blue;
+  FontRecord blue;
   blue.name = "Calibri";
   blue.italic = true;
   blue.color_argb = 0xFF0000FFU;
   styles.fonts.push_back(blue);
 
-  io::FillRecord solid_yellow;
+  FillRecord solid_yellow;
   solid_yellow.pattern = 1U;           // solid
   solid_yellow.fg_argb = 0xFFFFFF00U;  // ARGB: opaque yellow.
   styles.fills.push_back(solid_yellow);
 
-  io::CellXf xf2;
+  CellXf xf2;
   xf2.font_index = 2U;
   xf2.fill_index = 1U;
   styles.cell_xfs.push_back(xf2);
 
-  io::CellXf xf3;
+  CellXf xf3;
   xf3.font_index = 1U;
   xf3.fill_index = 1U;
   xf3.horizontal_align = 2U;  // center
@@ -520,8 +520,8 @@ bool values_equal(const Value& x, const Value& y) {
                                          << b.defined_names().size();
   }
   for (std::size_t i = 0; i < a.defined_names().size(); ++i) {
-    const io::DefinedName& x = a.defined_names()[i];
-    const io::DefinedName& y = b.defined_names()[i];
+    const DefinedName& x = a.defined_names()[i];
+    const DefinedName& y = b.defined_names()[i];
     if (x.name != y.name || x.formula != y.formula || x.local_sheet_id != y.local_sheet_id) {
       return ::testing::AssertionFailure()
              << "defined_names[" << i << "] differs: name='" << x.name << "' vs '" << y.name << "', formula='"
@@ -536,8 +536,8 @@ bool values_equal(const Value& x, const Value& y) {
     return ::testing::AssertionFailure() << "tables.size differs: " << a.tables().size() << " vs " << b.tables().size();
   }
   for (std::size_t i = 0; i < a.tables().size(); ++i) {
-    const io::TableMetadata& x = a.tables()[i];
-    const io::TableMetadata& y = b.tables()[i];
+    const TableMetadata& x = a.tables()[i];
+    const TableMetadata& y = b.tables()[i];
     if (x.name != y.name || x.ref != y.ref || x.sheet_index != y.sheet_index || x.columns.size() != y.columns.size()) {
       return ::testing::AssertionFailure() << "tables[" << i << "] structural mismatch";
     }
@@ -550,9 +550,9 @@ bool values_equal(const Value& x, const Value& y) {
     return ::testing::AssertionFailure() << "passthrough_parts.size differs: " << a.passthrough_parts().size() << " vs "
                                          << b.passthrough_parts().size();
   }
-  for (const io::PassthroughPart& x : a.passthrough_parts()) {
+  for (const PassthroughPart& x : a.passthrough_parts()) {
     auto it = std::find_if(b.passthrough_parts().begin(), b.passthrough_parts().end(),
-                           [&x](const io::PassthroughPart& y) { return y.path == x.path; });
+                           [&x](const PassthroughPart& y) { return y.path == x.path; });
     if (it == b.passthrough_parts().end()) {
       return ::testing::AssertionFailure() << "passthrough '" << x.path << "' missing on side B";
     }
@@ -574,7 +574,7 @@ bool values_equal(const Value& x, const Value& y) {
 //     CellXf font/fill/border/num_fmt/alignment fields).
 // ---------------------------------------------------------------------------
 
-::testing::AssertionResult fonts_equal_at(const io::FontRecord& x, const io::FontRecord& y, std::size_t i) {
+::testing::AssertionResult fonts_equal_at(const FontRecord& x, const FontRecord& y, std::size_t i) {
   if (x.name != y.name || x.size != y.size || x.bold != y.bold || x.italic != y.italic || x.strike != y.strike ||
       x.underline != y.underline || x.color_argb != y.color_argb) {
     return ::testing::AssertionFailure() << "fonts[" << i << "] differs";
@@ -582,14 +582,14 @@ bool values_equal(const Value& x, const Value& y) {
   return ::testing::AssertionSuccess();
 }
 
-::testing::AssertionResult fills_equal_at(const io::FillRecord& x, const io::FillRecord& y, std::size_t i) {
+::testing::AssertionResult fills_equal_at(const FillRecord& x, const FillRecord& y, std::size_t i) {
   if (x.pattern != y.pattern || x.fg_argb != y.fg_argb || x.bg_argb != y.bg_argb) {
     return ::testing::AssertionFailure() << "fills[" << i << "] differs";
   }
   return ::testing::AssertionSuccess();
 }
 
-::testing::AssertionResult cell_xfs_equal_at(const io::CellXf& x, const io::CellXf& y, std::size_t i) {
+::testing::AssertionResult cell_xfs_equal_at(const CellXf& x, const CellXf& y, std::size_t i) {
   if (x.font_index != y.font_index || x.fill_index != y.fill_index || x.border_index != y.border_index ||
       x.num_fmt_id != y.num_fmt_id || x.horizontal_align != y.horizontal_align ||
       x.vertical_align != y.vertical_align || x.wrap_text != y.wrap_text) {
@@ -599,8 +599,8 @@ bool values_equal(const Value& x, const Value& y) {
 }
 
 ::testing::AssertionResult styles_match(const Workbook& a, const Workbook& b) {
-  const io::StylesTable& sa = a.styles();
-  const io::StylesTable& sb = b.styles();
+  const StylesTable& sa = a.styles();
+  const StylesTable& sb = b.styles();
   if (sa.fonts.size() != sb.fonts.size()) {
     return ::testing::AssertionFailure() << "styles.fonts.size differs: " << sa.fonts.size() << " vs "
                                          << sb.fonts.size();

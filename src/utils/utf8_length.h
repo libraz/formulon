@@ -3,14 +3,13 @@
 // equivalent UTF-16 code-unit count. Used by `LEN` and other text functions
 // that report length in Excel's UTF-16-unit semantics.
 
-#ifndef FORMULON_EVAL_UTF8_LENGTH_H_
-#define FORMULON_EVAL_UTF8_LENGTH_H_
+#ifndef FORMULON_UTILS_UTF8_LENGTH_H_
+#define FORMULON_UTILS_UTF8_LENGTH_H_
 
 #include <cstdint>
 #include <string_view>
 
 namespace formulon {
-namespace eval {
 
 /// Returns the number of UTF-16 code units required to represent `s` after
 /// decoding it as UTF-8.
@@ -41,7 +40,6 @@ int byte_count_jajp(std::uint32_t codepoint) noexcept;
 /// `utf16_units_in`).
 std::uint64_t bytes_in_jajp(std::string_view s) noexcept;
 
-}  // namespace eval
 }  // namespace formulon
 
-#endif  // FORMULON_EVAL_UTF8_LENGTH_H_
+#endif  // FORMULON_UTILS_UTF8_LENGTH_H_

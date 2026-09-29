@@ -25,19 +25,19 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
-#include "io/styles_reader.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
+#include "styles.h"
 #include "support/roundtrip_symmetry.h"
 #include "value.h"
 #include "workbook.h"
@@ -153,21 +153,21 @@ TEST(XlsbCrossFormatSymmetry, StyleIndexMatches) {
 /// OOXML spells each as its own `<color>` attribute. `color_argb` is only a
 /// compatibility fallback for the non-RGB selectors, so it is compared
 /// through the spec rather than on its own.
-void ExpectColorSpecEqual(const io::ColorSpec& xlsb, const io::ColorSpec& xlsx) {
+void ExpectColorSpecEqual(const ColorSpec& xlsb, const ColorSpec& xlsx) {
   ASSERT_EQ(static_cast<int>(xlsb.kind), static_cast<int>(xlsx.kind));
   switch (xlsb.kind) {
-    case io::ColorSpec::Kind::kRgb:
+    case ColorSpec::Kind::kRgb:
       EXPECT_EQ(xlsb.rgb, xlsx.rgb);
       break;
-    case io::ColorSpec::Kind::kTheme:
+    case ColorSpec::Kind::kTheme:
       EXPECT_EQ(xlsb.theme, xlsx.theme);
       EXPECT_NEAR(xlsb.tint, xlsx.tint, 1e-9);
       break;
-    case io::ColorSpec::Kind::kIndexed:
+    case ColorSpec::Kind::kIndexed:
       EXPECT_EQ(xlsb.indexed, xlsx.indexed);
       break;
-    case io::ColorSpec::Kind::kNone:
-    case io::ColorSpec::Kind::kAuto:
+    case ColorSpec::Kind::kNone:
+    case ColorSpec::Kind::kAuto:
       break;
   }
 }
@@ -176,16 +176,16 @@ TEST(XlsbCrossFormatSymmetry, FontRecordContentsMatch) {
   Workbook xlsb = Workbook::create_empty();
   Workbook xlsx = Workbook::create_empty();
   ASSERT_TRUE(LoadBothFormats(&xlsb, &xlsx));
-  const std::vector<io::FontRecord>& fb = xlsb.styles().fonts;
-  const std::vector<io::FontRecord>& fx = xlsx.styles().fonts;
+  const std::vector<FontRecord>& fb = xlsb.styles().fonts;
+  const std::vector<FontRecord>& fx = xlsx.styles().fonts;
   ASSERT_EQ(fb.size(), fx.size());
 
   // The fixture has to carry a font that differs from the default record in
   // more than one attribute, or every field comparison below would hold on a
   // table of blanks.
   bool saw_non_default = false;
-  for (const io::FontRecord& font : fx) {
-    if (font.bold && font.color.kind == io::ColorSpec::Kind::kRgb) {
+  for (const FontRecord& font : fx) {
+    if (font.bold && font.color.kind == ColorSpec::Kind::kRgb) {
       saw_non_default = true;
     }
   }
@@ -216,16 +216,16 @@ TEST(XlsbCrossFormatSymmetry, FillRecordContentsMatch) {
   Workbook xlsb = Workbook::create_empty();
   Workbook xlsx = Workbook::create_empty();
   ASSERT_TRUE(LoadBothFormats(&xlsb, &xlsx));
-  const std::vector<io::FillRecord>& fb = xlsb.styles().fills;
-  const std::vector<io::FillRecord>& fx = xlsx.styles().fills;
+  const std::vector<FillRecord>& fb = xlsb.styles().fills;
+  const std::vector<FillRecord>& fx = xlsx.styles().fills;
   ASSERT_EQ(fb.size(), fx.size());
 
   // A patterned fill with an explicit foreground colour is the case that
   // distinguishes the two decode paths; the two placeholder fills Excel
   // always writes first would not.
   bool saw_coloured_pattern = false;
-  for (const io::FillRecord& fill : fx) {
-    if (fill.pattern != 0U && fill.fg.kind != io::ColorSpec::Kind::kNone) {
+  for (const FillRecord& fill : fx) {
+    if (fill.pattern != 0U && fill.fg.kind != ColorSpec::Kind::kNone) {
       saw_coloured_pattern = true;
     }
   }
@@ -243,14 +243,14 @@ TEST(XlsbCrossFormatSymmetry, CellXfRecordContentsMatch) {
   Workbook xlsb = Workbook::create_empty();
   Workbook xlsx = Workbook::create_empty();
   ASSERT_TRUE(LoadBothFormats(&xlsb, &xlsx));
-  const io::StylesTable& tb = xlsb.styles();
-  const io::StylesTable& tx = xlsx.styles();
+  const StylesTable& tb = xlsb.styles();
+  const StylesTable& tx = xlsx.styles();
   ASSERT_EQ(tb.cell_xfs.size(), tx.cell_xfs.size());
 
   // An xf table of nothing but copies of the default record would satisfy
   // every field comparison without exercising the decode.
   bool saw_non_default = false;
-  for (const io::CellXf& xf : tx.cell_xfs) {
+  for (const CellXf& xf : tx.cell_xfs) {
     if (xf.font_index != 0U || xf.fill_index != 0U || xf.num_fmt_id != 0U) {
       saw_non_default = true;
     }
@@ -262,8 +262,8 @@ TEST(XlsbCrossFormatSymmetry, CellXfRecordContentsMatch) {
   // bottom-aligned is the shape this comparison exists to reject.
   bool saw_alignment = false;
   bool saw_apply_flag = false;
-  for (const io::CellXf& xf : tx.cell_xfs) {
-    if (io::HasAlignment(xf)) {
+  for (const CellXf& xf : tx.cell_xfs) {
+    if (HasAlignment(xf)) {
       saw_alignment = true;
     }
     if (xf.apply_number_format || xf.apply_font || xf.apply_fill) {
@@ -275,8 +275,8 @@ TEST(XlsbCrossFormatSymmetry, CellXfRecordContentsMatch) {
 
   for (std::size_t i = 0; i < tb.cell_xfs.size(); ++i) {
     SCOPED_TRACE("cellXf index " + std::to_string(i));
-    const io::CellXf& b = tb.cell_xfs[i];
-    const io::CellXf& x = tx.cell_xfs[i];
+    const CellXf& b = tb.cell_xfs[i];
+    const CellXf& x = tx.cell_xfs[i];
     // The selector fields, which are what makes an xf name one font, fill,
     // border and number format rather than another.
     EXPECT_EQ(b.font_index, x.font_index);
@@ -309,11 +309,11 @@ TEST(XlsbCrossFormatSymmetry, CellXfRecordContentsMatch) {
     EXPECT_EQ(b.locked, x.locked);
     EXPECT_EQ(b.hidden, x.hidden);
     EXPECT_EQ(b.has_protection, x.has_protection);
-    EXPECT_EQ(io::HasAlignment(b), io::HasAlignment(x));
-    EXPECT_EQ(io::HasHorizontalAlign(b), io::HasHorizontalAlign(x));
-    EXPECT_EQ(io::HasVerticalAlign(b), io::HasVerticalAlign(x));
-    EXPECT_EQ(io::HasWrapText(b), io::HasWrapText(x));
-    EXPECT_EQ(io::HasJustifyLastLine(b), io::HasJustifyLastLine(x));
+    EXPECT_EQ(HasAlignment(b), HasAlignment(x));
+    EXPECT_EQ(HasHorizontalAlign(b), HasHorizontalAlign(x));
+    EXPECT_EQ(HasVerticalAlign(b), HasVerticalAlign(x));
+    EXPECT_EQ(HasWrapText(b), HasWrapText(x));
+    EXPECT_EQ(HasJustifyLastLine(b), HasJustifyLastLine(x));
   }
 }
 
@@ -380,9 +380,9 @@ TEST(XlsbCrossFormatSymmetry, CustomNumberFormatCodesMatch) {
   Workbook xlsb = Workbook::create_empty();
   Workbook xlsx = Workbook::create_empty();
   ASSERT_TRUE(LoadBothFormats(&xlsb, &xlsx));
-  const auto codes_by_id = [](const io::StylesTable& table) {
+  const auto codes_by_id = [](const StylesTable& table) {
     std::vector<std::pair<std::uint16_t, std::string>> out;
-    for (const io::NumFmtRecord& rec : table.num_fmts) {
+    for (const NumFmtRecord& rec : table.num_fmts) {
       if (rec.format_string_index >= table.num_fmt_strings.size()) {
         ADD_FAILURE() << "numFmt id " << rec.id << " interns past the string table";
         continue;
@@ -429,11 +429,11 @@ TEST(XlsbCrossFormatSymmetry, DefinedNamesMatch) {
   Workbook xlsb = Workbook::create_empty();
   Workbook xlsx = Workbook::create_empty();
   ASSERT_TRUE(LoadBothFormats(&xlsb, &xlsx));
-  const std::vector<io::DefinedName>& sb = xlsb.defined_names();
-  const std::vector<io::DefinedName>& sx = xlsx.defined_names();
+  const std::vector<DefinedName>& sb = xlsb.defined_names();
+  const std::vector<DefinedName>& sx = xlsx.defined_names();
   ASSERT_EQ(sb.size(), sx.size());
   // Field-level, not just count: the XLSB reader must fill the same
-  // `io::DefinedName` field set the OOXML reader does (name, formula,
+  // `DefinedName` field set the OOXML reader does (name, formula,
   // scope, hidden, comment) for the same source workbook, not merely
   // produce the same number of entries.
   for (std::size_t i = 0; i < sb.size(); ++i) {
@@ -453,7 +453,7 @@ std::uint32_t ResolvedNumFmtId(const Workbook& wb, std::uint32_t row, std::uint3
   if (c == nullptr) {
     return 0xFFFFFFFFU;
   }
-  const io::StylesTable& st = wb.styles();
+  const StylesTable& st = wb.styles();
   if (c->xf_index >= st.cell_xfs.size()) {
     return 0xFFFFFFFFU;  // dangling index -> style table did not round-trip
   }
@@ -589,7 +589,7 @@ TEST(XlsbWriteReadSymmetry, NamesSharingTextAcrossScopesKeepTheirOwnOrdinals) {
   Workbook after = std::move(reloaded.value().workbook);
 
   // All three names survive, in declaration order, with their scopes.
-  const std::vector<io::DefinedName>& names = after.defined_names();
+  const std::vector<DefinedName>& names = after.defined_names();
   ASSERT_EQ(names.size(), 3U);
   EXPECT_EQ(names[0].name, "Foo");
   EXPECT_EQ(names[0].formula, "Sheet1!$A$1");
@@ -1153,27 +1153,27 @@ TEST(XlsbWriteReadSymmetry, BorderRecordContentsSurviveBothFormatsAlike) {
   source.add_sheet("Sheet1");
   source.sheet(0).set_cell_value(0U, 0U, Value::number(1.0));
 
-  io::StylesTable styles;
-  styles.fonts.push_back(io::FontRecord{});
-  styles.fills.push_back(io::FillRecord{});
-  styles.borders.push_back(io::BorderRecord{});
-  io::BorderRecord boxed;
+  StylesTable styles;
+  styles.fonts.push_back(FontRecord{});
+  styles.fills.push_back(FillRecord{});
+  styles.borders.push_back(BorderRecord{});
+  BorderRecord boxed;
   boxed.left.style = 1U;  // thin
-  boxed.left.color.kind = io::ColorSpec::Kind::kRgb;
+  boxed.left.color.kind = ColorSpec::Kind::kRgb;
   boxed.left.color.rgb = 0xFF0000FFU;
   boxed.left.color_argb = 0xFF0000FFU;
   boxed.bottom.style = 2U;  // medium
-  boxed.bottom.color.kind = io::ColorSpec::Kind::kRgb;
+  boxed.bottom.color.kind = ColorSpec::Kind::kRgb;
   boxed.bottom.color.rgb = 0xFFFF0000U;
   boxed.bottom.color_argb = 0xFFFF0000U;
   boxed.diagonal.style = 3U;  // dashed
-  boxed.diagonal.color.kind = io::ColorSpec::Kind::kRgb;
+  boxed.diagonal.color.kind = ColorSpec::Kind::kRgb;
   boxed.diagonal.color.rgb = 0xFF00FF00U;
   boxed.diagonal.color_argb = 0xFF00FF00U;
   boxed.diagonal_up = true;
   styles.borders.push_back(boxed);
-  io::CellXf plain;
-  io::CellXf bordered;
+  CellXf plain;
+  CellXf bordered;
   bordered.border_index = 1U;
   bordered.apply_border = true;
   styles.cell_xfs = {plain, bordered};
@@ -1185,19 +1185,19 @@ TEST(XlsbWriteReadSymmetry, BorderRecordContentsSurviveBothFormatsAlike) {
   ASSERT_TRUE(ThroughXlsb(source, &via_xlsb));
   ASSERT_TRUE(ThroughXlsx(source, &via_xlsx));
 
-  const std::vector<io::BorderRecord>& bb = via_xlsb.styles().borders;
-  const std::vector<io::BorderRecord>& bx = via_xlsx.styles().borders;
+  const std::vector<BorderRecord>& bb = via_xlsb.styles().borders;
+  const std::vector<BorderRecord>& bx = via_xlsx.styles().borders;
   ASSERT_GT(bb.size(), 1U) << "the xlsb path lost the non-default border";
   ASSERT_GT(bx.size(), 1U) << "the xlsx path lost the non-default border";
   ASSERT_EQ(bb.size(), bx.size());
   for (std::size_t i = 0; i < bb.size(); ++i) {
     SCOPED_TRACE("border index " + std::to_string(i));
-    const io::BorderRecord& b = bb[i];
-    const io::BorderRecord& x = bx[i];
+    const BorderRecord& b = bb[i];
+    const BorderRecord& x = bx[i];
     EXPECT_EQ(b.diagonal_up, x.diagonal_up);
     EXPECT_EQ(b.diagonal_down, x.diagonal_down);
-    const io::BorderSide* b_sides[] = {&b.left, &b.right, &b.top, &b.bottom, &b.diagonal};
-    const io::BorderSide* x_sides[] = {&x.left, &x.right, &x.top, &x.bottom, &x.diagonal};
+    const BorderSide* b_sides[] = {&b.left, &b.right, &b.top, &b.bottom, &b.diagonal};
+    const BorderSide* x_sides[] = {&x.left, &x.right, &x.top, &x.bottom, &x.diagonal};
     const char* names[] = {"left", "right", "top", "bottom", "diagonal"};
     for (std::size_t side = 0; side < std::size(b_sides); ++side) {
       SCOPED_TRACE(names[side]);
@@ -1227,12 +1227,12 @@ TEST(XlsbWriteReadSymmetry, AlignmentAndApplyFlagsSurviveBothFormatsAlike) {
   source.add_sheet("Sheet1");
   source.sheet(0).set_cell_value(0U, 0U, Value::number(1.0));
 
-  io::StylesTable styles;
-  styles.fonts.push_back(io::FontRecord{});
-  styles.fills.push_back(io::FillRecord{});
-  styles.borders.push_back(io::BorderRecord{});
-  io::CellXf plain;
-  io::CellXf decorated;
+  StylesTable styles;
+  styles.fonts.push_back(FontRecord{});
+  styles.fills.push_back(FillRecord{});
+  styles.borders.push_back(BorderRecord{});
+  CellXf plain;
+  CellXf decorated;
   decorated.horizontal_align = 2U;  // center
   decorated.vertical_align = 0U;    // top -- not the schema default
   decorated.wrap_text = true;
@@ -1264,15 +1264,15 @@ TEST(XlsbWriteReadSymmetry, AlignmentAndApplyFlagsSurviveBothFormatsAlike) {
   ASSERT_TRUE(ThroughXlsb(source, &via_xlsb));
   ASSERT_TRUE(ThroughXlsx(source, &via_xlsx));
 
-  const std::vector<io::CellXf>& xb = via_xlsb.styles().cell_xfs;
-  const std::vector<io::CellXf>& xx = via_xlsx.styles().cell_xfs;
+  const std::vector<CellXf>& xb = via_xlsb.styles().cell_xfs;
+  const std::vector<CellXf>& xx = via_xlsx.styles().cell_xfs;
   ASSERT_GT(xb.size(), 1U) << "the xlsb path lost the decorated xf";
   ASSERT_GT(xx.size(), 1U) << "the xlsx path lost the decorated xf";
   ASSERT_EQ(xb.size(), xx.size());
   for (std::size_t i = 0; i < xb.size(); ++i) {
     SCOPED_TRACE("cellXf index " + std::to_string(i));
-    const io::CellXf& b = xb[i];
-    const io::CellXf& x = xx[i];
+    const CellXf& b = xb[i];
+    const CellXf& x = xx[i];
     EXPECT_EQ(b.horizontal_align, x.horizontal_align);
     EXPECT_EQ(b.vertical_align, x.vertical_align);
     EXPECT_EQ(b.wrap_text, x.wrap_text);
@@ -1294,7 +1294,7 @@ TEST(XlsbWriteReadSymmetry, AlignmentAndApplyFlagsSurviveBothFormatsAlike) {
   }
   // The authored values themselves: two equally lossy paths would satisfy
   // the comparison above on their own.
-  const io::CellXf& b = xb[1];
+  const CellXf& b = xb[1];
   EXPECT_EQ(b.horizontal_align, 2U);
   EXPECT_EQ(b.vertical_align, 0U);
   EXPECT_TRUE(b.wrap_text);

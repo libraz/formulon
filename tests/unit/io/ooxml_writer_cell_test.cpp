@@ -17,6 +17,7 @@
 #include "gtest/gtest.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/a1_ref.h"
 #include "value.h"
 
 namespace formulon {
@@ -28,27 +29,27 @@ namespace {
 // ---------------------------------------------------------------------------
 
 TEST(EncodeA1, FirstCell) {
-  EXPECT_EQ(EncodeA1(0U, 0U), "A1");
+  EXPECT_EQ(a1::encode_a1(0U, 0U), "A1");
 }
 
 TEST(EncodeA1, ColumnZ) {
-  EXPECT_EQ(EncodeA1(0U, 25U), "Z1");
+  EXPECT_EQ(a1::encode_a1(0U, 25U), "Z1");
 }
 
 TEST(EncodeA1, ColumnAA) {
-  EXPECT_EQ(EncodeA1(0U, 26U), "AA1");
+  EXPECT_EQ(a1::encode_a1(0U, 26U), "AA1");
 }
 
 TEST(EncodeA1, ColumnXFD) {
-  EXPECT_EQ(EncodeA1(0U, 16383U), "XFD1");
+  EXPECT_EQ(a1::encode_a1(0U, 16383U), "XFD1");
 }
 
 TEST(EncodeA1, MaxCell) {
-  EXPECT_EQ(EncodeA1(1048575U, 16383U), "XFD1048576");
+  EXPECT_EQ(a1::encode_a1(1048575U, 16383U), "XFD1048576");
 }
 
 TEST(EncodeA1, RejectsColumnOutsideExcelGrid) {
-  EXPECT_EQ(EncodeA1(0U, 16384U), "");
+  EXPECT_EQ(a1::encode_a1(0U, 16384U), "");
 }
 
 // ---------------------------------------------------------------------------

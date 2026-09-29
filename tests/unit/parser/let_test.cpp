@@ -57,7 +57,7 @@ TEST(ParserLet, LowerCaseKeyword) {
 
 TEST(ParserLet, XlfnStoragePrefixIsRecognizedAsSpecialForm) {
   // Excel's name manager stores a reusable LET as `_xlfn.LET(...)` so older
-  // Excel versions do not misinterpret it. `io::strip_storage_prefixes`
+  // Excel versions do not misinterpret it. `parser::strip_storage_prefixes`
   // canonicalises `formula_text` at every known ingestion point, but the
   // parser must also recognise the prefixed spelling directly: without
   // this, a caller handing the parser un-normalised text would get an

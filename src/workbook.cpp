@@ -17,36 +17,36 @@
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "defined_name.h"
 #include "eval/dep_graph.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "eval/scheduler.h"
-#include "eval/utf8_length.h"
-#include "io/defined_names.h"
-#include "io/external_links.h"
+#include "external_link.h"
 #include "io/format_detect.h"
-#include "io/formula_prefix.h"
 #include "io/ooxml_writer.h"
-#include "io/passthrough_part.h"
-#include "io/styles_reader.h"
-#include "io/tables_reader.h"
-#include "io/workbook_kind.h"
+#include "io/workbook_kind_ooxml.h"
 #include "io/xlsb/writer.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "parser/ref_transforms.h"
+#include "passthrough_part.h"
 #include "phonetic.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "sheet_name.h"
+#include "styles.h"
+#include "table.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 namespace formulon {
@@ -57,7 +57,7 @@ namespace {
 Expected<void, Error> validate_sheet_name(std::string_view name);
 }  // namespace
 
-Workbook::Workbook() : engine_(std::make_unique<eval::RecalcEngine>()), kind_(io::WorkbookKind::kXlsx) {}
+Workbook::Workbook() : engine_(std::make_unique<eval::RecalcEngine>()), kind_(WorkbookKind::kXlsx) {}
 Workbook::Workbook(Workbook&&) noexcept = default;
 Workbook& Workbook::operator=(Workbook&&) noexcept = default;
 Workbook::~Workbook() = default;
@@ -81,8 +81,8 @@ constexpr std::uint8_t kFillPatternGray125 = 17U;
 /// Seeding also makes index 0 a usable template: `get_font(0)` returns the
 /// default font, so "copy the default and change the size" works without a
 /// separate partial-input type.
-void seed_default_styles(io::StylesTable& styles) {
-  io::FontRecord font;
+void seed_default_styles(StylesTable& styles) {
+  FontRecord font;
   font.name = "Calibri";
   font.size = 11.0;
   font.has_family = true;
@@ -93,7 +93,7 @@ void seed_default_styles(io::StylesTable& styles) {
   // the no-fill default every unstyled cell points at, and `gray125` is a
   // legacy placeholder it writes unconditionally.
   styles.fills.emplace_back();
-  io::FillRecord gray125;
+  FillRecord gray125;
   gray125.pattern = kFillPatternGray125;
   styles.fills.push_back(gray125);
 
@@ -101,7 +101,7 @@ void seed_default_styles(io::StylesTable& styles) {
   styles.cell_style_xfs.emplace_back();
   styles.cell_xfs.emplace_back();
 
-  io::CellStyleRecord normal;
+  CellStyleRecord normal;
   normal.name = "Normal";
   normal.xf_id = 0U;
   normal.builtin_id = 0U;
@@ -364,14 +364,14 @@ bool references_any_table(const parser::AstNode& root, const std::vector<std::st
 // the O(names^2) fixpoint here is cheap next to reparsing every formula
 // cell in the workbook, which the caller below does exactly once per
 // affected cell rather than once per cell regardless of relevance.
-std::vector<std::string> collect_affected_names(const std::vector<io::DefinedName>& defined_names,
+std::vector<std::string> collect_affected_names(const std::vector<DefinedName>& defined_names,
                                                 std::string_view changed_name) {
   std::vector<std::string> affected{std::string(changed_name)};
   Arena arena;
   bool grew = true;
   while (grew) {
     grew = false;
-    for (const io::DefinedName& entry : defined_names) {
+    for (const DefinedName& entry : defined_names) {
       if (std::any_of(affected.begin(), affected.end(),
                       [&](const std::string& n) { return strings::case_insensitive_eq(n, entry.name); })) {
         continue;
@@ -505,7 +505,7 @@ Expected<void, Error> validate_sheet_name(std::string_view name) {
   if (!sheet_names::valid_utf8(name)) {
     return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name is not valid UTF-8", "name=invalid-utf8");
   }
-  if (eval::utf16_units_in(name) > kMaxSheetNameUnits) {
+  if (utf16_units_in(name) > kMaxSheetNameUnits) {
     return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name exceeds 31 characters",
                       "name=\"" + std::string(name) + "\"");
   }
@@ -517,10 +517,10 @@ Expected<void, Error> validate_sheet_name(std::string_view name) {
   return Expected<void, Error>::Ok();
 }
 
-void remove_and_reindex_tables(std::vector<io::TableMetadata>& tables, std::size_t removed_sheet_index) {
-  std::vector<io::TableMetadata> retained;
+void remove_and_reindex_tables(std::vector<TableMetadata>& tables, std::size_t removed_sheet_index) {
+  std::vector<TableMetadata> retained;
   retained.reserve(tables.size());
-  for (io::TableMetadata& table : tables) {
+  for (TableMetadata& table : tables) {
     if (table.sheet_index == removed_sheet_index) {
       continue;
     }
@@ -537,16 +537,16 @@ void remove_and_reindex_tables(std::vector<io::TableMetadata>& tables, std::size
 // mutations use this one path for cells and every formula-bearing metadata
 // holder, so string literals, unresolved names, and external references do
 // not accidentally participate in a sheet mutation.
-void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<io::DefinedName>& defined_names,
-                                 std::vector<io::TableMetadata>& tables,
+void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<DefinedName>& defined_names,
+                                 std::vector<TableMetadata>& tables,
                                  std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
                                  const parser::RefTransform& transform,
                                  const eval::RecalcEngine::LockedMutator& mutator, std::string_view direct_sheet_old,
                                  std::string_view direct_sheet_new, std::string_view removed_sheet_name,
                                  std::vector<std::uint32_t>& dropped_cache_ids, bool& defined_names_changed);
 
-void move_table_sheet_indices(std::vector<io::TableMetadata>& tables, std::size_t from_index, std::size_t to_index) {
-  for (io::TableMetadata& table : tables) {
+void move_table_sheet_indices(std::vector<TableMetadata>& tables, std::size_t from_index, std::size_t to_index) {
+  for (TableMetadata& table : tables) {
     if (table.sheet_index == from_index) {
       table.sheet_index = to_index;
     } else if (from_index < to_index && table.sheet_index > from_index && table.sheet_index <= to_index) {
@@ -647,9 +647,9 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
 
   // Sheet-scoped names owned by the removed sheet disappear; names scoped to
   // later sheets follow their owner as the sheet vector closes the gap.
-  std::vector<io::DefinedName> retained;
+  std::vector<DefinedName> retained;
   retained.reserve(defined_names_.size());
-  for (io::DefinedName& entry : defined_names_) {
+  for (DefinedName& entry : defined_names_) {
     if (entry.local_sheet_id == static_cast<std::int32_t>(index)) {
       continue;
     }
@@ -736,7 +736,7 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
   // so they need no update.
   const auto from_id = static_cast<std::int32_t>(from_index);
   const auto to_id = static_cast<std::int32_t>(to_index);
-  for (io::DefinedName& entry : defined_names_) {
+  for (DefinedName& entry : defined_names_) {
     if (entry.local_sheet_id < 0) {
       continue;
     }
@@ -812,7 +812,7 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   if (formula.empty()) {
     return Expected<void, Error>::Ok();
   }
-  io::DefinedName entry;
+  DefinedName entry;
   entry.name = std::move(name);
   entry.formula = std::move(formula);
   entry.local_sheet_id = local_sheet_id;
@@ -887,12 +887,12 @@ std::size_t Workbook::approximate_memory_bytes() const noexcept {
     total += sizeof(std::string) + text.capacity();
   }
 
-  for (const io::PassthroughPart& part : passthrough_parts_) {
-    total += sizeof(io::PassthroughPart) + part.path.capacity() + part.content_type.capacity() + part.bytes.capacity();
+  for (const PassthroughPart& part : passthrough_parts_) {
+    total += sizeof(PassthroughPart) + part.path.capacity() + part.content_type.capacity() + part.bytes.capacity();
   }
 
-  for (const io::DefinedName& name : defined_names_) {
-    total += sizeof(io::DefinedName) + name.name.capacity() + name.formula.capacity() + name.comment.capacity();
+  for (const DefinedName& name : defined_names_) {
+    total += sizeof(DefinedName) + name.name.capacity() + name.formula.capacity() + name.comment.capacity();
   }
 
   total += workbook_pr_xml_.capacity() + book_views_xml_.capacity() + workbook_protection_xml_.capacity();
@@ -917,16 +917,16 @@ const pivot::PivotCache* Workbook::find_pivot_cache(std::uint32_t cache_id) cons
 }
 
 Expected<std::vector<std::uint8_t>, Error> Workbook::save() const {
-  return save_as(io::WorkbookFormat::Ooxml);
+  return save_as(WorkbookFormat::Ooxml);
 }
 
-Expected<std::vector<std::uint8_t>, Error> Workbook::save_as(io::WorkbookFormat format) const {
+Expected<std::vector<std::uint8_t>, Error> Workbook::save_as(WorkbookFormat format) const {
   switch (format) {
-    case io::WorkbookFormat::Ooxml:
+    case WorkbookFormat::Ooxml:
       return io::write_ooxml(*this);
-    case io::WorkbookFormat::Xlsb:
+    case WorkbookFormat::Xlsb:
       return io::xlsb::write_xlsb(*this);
-    case io::WorkbookFormat::Unknown:
+    case WorkbookFormat::Unknown:
       break;
   }
   return make_error(FormulonErrorCode::kInvalidArgument, "Workbook::save_as: unsupported format",
@@ -1137,7 +1137,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   // formula, so hand-authored / test formulas are unaffected. The writer
   // re-applies the prefixes on save for Excel readability.
   {
-    std::string normalized = io::strip_storage_prefixes(formula);
+    std::string normalized = parser::strip_storage_prefixes(formula);
     if (normalized != formula) {
       formula = std::move(normalized);
     }
@@ -1266,7 +1266,7 @@ Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& re
   return eval::recalc_parallel(*this, registry, cfg, stats);
 }
 
-void Workbook::set_iterative_options(eval::IterativeOptions opts) {
+void Workbook::set_iterative_options(IterativeOptions opts) {
   // Bound the iteration budget where it enters the model rather than at
   // each producer. The solver has no wall-clock limit, and cancellation
   // exists only when the host registered a progress callback, so an
@@ -1276,11 +1276,11 @@ void Workbook::set_iterative_options(eval::IterativeOptions opts) {
   // the single-cell self-reference driver in the tree walker, which runs
   // its own loop without any cyclic component ever forming and so would
   // not be covered by a bound enforced inside the solver.
-  opts.max_iterations = std::min(opts.max_iterations, eval::kMaxIterationsCap);
+  opts.max_iterations = std::min(opts.max_iterations, kMaxIterationsCap);
   engine_->set_iterative_options(opts);
 }
 
-const eval::IterativeOptions& Workbook::iterative_options() const noexcept {
+const IterativeOptions& Workbook::iterative_options() const noexcept {
   return engine_->iterative_options();
 }
 
@@ -1449,7 +1449,7 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::Ref
 // leaves a formula holder describing pre-edit coordinates.
 void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
                                      const std::vector<const parser::RefTransform*>& per_sheet,
-                                     std::vector<io::TableMetadata>& tables,
+                                     std::vector<TableMetadata>& tables,
                                      std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
                                      std::string_view direct_sheet_old, std::string_view direct_sheet_new,
                                      std::string_view removed_sheet_name,
@@ -1537,10 +1537,10 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     }
   }
 
-  for (io::TableMetadata& table : tables) {
+  for (TableMetadata& table : tables) {
     const parser::RefTransform& transform = *per_sheet[table.sheet_index < per_sheet.size() ? table.sheet_index : 0U];
     rewrite_field(table.ref, transform);
-    for (io::TableColumn& column : table.columns) {
+    for (TableColumn& column : table.columns) {
       rewrite_field(column.calculated_column_formula, transform);
     }
   }
@@ -1581,8 +1581,8 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
 // Precondition: caller holds the engine mutex. Formula writes use
 // `Sheet::set_cell_formula` directly and never route through the public
 // Workbook setter (which would attempt to acquire this mutex again).
-void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<io::DefinedName>& defined_names,
-                                 std::vector<io::TableMetadata>& tables,
+void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<DefinedName>& defined_names,
+                                 std::vector<TableMetadata>& tables,
                                  std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
                                  const parser::RefTransform& transform,
                                  const eval::RecalcEngine::LockedMutator& mutator, std::string_view direct_sheet_old,
@@ -1624,7 +1624,7 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<io::Def
     mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(update.sheet_index), update.row, update.col});
   }
 
-  for (io::DefinedName& entry : defined_names) {
+  for (DefinedName& entry : defined_names) {
     const FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
     if (result.changed) {
       entry.formula = result.text;
@@ -1805,9 +1805,9 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
 /// Applies `transform` to every defined name's formula. Returns true when at
 /// least one definition changed, which means every formula that references a
 /// name now resolves to a different range than the dep graph was built from.
-bool rewrite_defined_names(std::vector<io::DefinedName>& names, const parser::RefTransform& transform) {
+bool rewrite_defined_names(std::vector<DefinedName>& names, const parser::RefTransform& transform) {
   bool any_changed = false;
-  for (io::DefinedName& entry : names) {
+  for (DefinedName& entry : names) {
     FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
     if (result.changed) {
       entry.formula = std::move(result.text);
@@ -1935,7 +1935,7 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
 // against the rewritten table.
 Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
                                                    const eval::RecalcEngine::LockedMutator& mutator,
-                                                   std::vector<io::DefinedName>& defined_names, std::size_t sheet_index,
+                                                   std::vector<DefinedName>& defined_names, std::size_t sheet_index,
                                                    parser::RowColAxis axis, parser::RowColEdit edit,
                                                    std::uint32_t origin, std::uint32_t count, const char* op_name) {
   RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, edit, origin, count, op_name));

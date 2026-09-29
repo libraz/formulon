@@ -11,8 +11,8 @@
 #include <string_view>
 #include <utility>
 
-#include "io/a1_ref.h"
 #include "sheet.h"
+#include "utils/a1_ref.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -108,7 +108,7 @@ Workbook WorkbookBuilder::build() {
 }
 
 bool WorkbookBuilder::ParseA1(std::string_view a1, std::uint32_t* out_row, std::uint32_t* out_col) {
-  if (!io::parse_a1_ref(a1, out_row, out_col)) {
+  if (!a1::parse_a1_ref(a1, out_row, out_col)) {
     ADD_FAILURE() << "WorkbookBuilder: malformed A1 reference \"" << a1 << "\"";
     return false;
   }

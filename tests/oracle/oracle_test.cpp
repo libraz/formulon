@@ -29,12 +29,12 @@
 #include <utility>
 #include <vector>
 
-#include "eval/compat.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -709,13 +709,13 @@ TEST_P(OracleTest, Matches) {
 
   // Build an in-memory workbook seeded with the case's setup cells.
   Workbook wb = Workbook::create();
-  eval::ExcelProfile profile;
-  if (!param.variant.empty() && eval::parse_excel_profile_id(param.variant, &profile)) {
+  ExcelProfile profile;
+  if (!param.variant.empty() && parse_excel_profile_id(param.variant, &profile)) {
     wb.set_excel_profile(profile);
   } else if (param.variant.rfind("win-", 0) == 0) {
-    wb.set_excel_profile(eval::profile_from_host(eval::ExcelHost::kWin365));
+    wb.set_excel_profile(profile_from_host(ExcelHost::kWin365));
   } else {
-    wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+    wb.set_excel_profile(mac_365_ja_jp_profile());
   }
   // The oracle generator records the suite-level date system in the
   // environment record. Keep the native workbook and every evaluator context
@@ -735,7 +735,7 @@ TEST_P(OracleTest, Matches) {
   // max-change 0.001.
   if (const JsonValue* iter_v = param.environment.find("iterative");
       iter_v != nullptr && iter_v->is_bool() && iter_v->as_bool()) {
-    eval::IterativeOptions iopts;
+    IterativeOptions iopts;
     iopts.enabled = true;
     wb.set_iterative_options(iopts);
   }

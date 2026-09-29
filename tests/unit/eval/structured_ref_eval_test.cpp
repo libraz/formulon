@@ -13,10 +13,10 @@
 #include "eval/structured_ref.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
-#include "io/tables_reader.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "table.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -58,7 +58,7 @@ Workbook MakeWorkbookWithSalesTable(bool with_totals_row) {
     s.set_cell_value(4, 2, Value::number(60.0));
   }
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Sales";
   table.display_name = "Sales";
@@ -66,17 +66,17 @@ Workbook MakeWorkbookWithSalesTable(bool with_totals_row) {
   table.sheet_index = 0;
   table.header_row = true;
   table.totals_row = with_totals_row;
-  io::TableColumn region;
+  TableColumn region;
   region.id = 1;
   region.name = "Region";
-  io::TableColumn product;
+  TableColumn product;
   product.id = 2;
   product.name = "Product";
-  io::TableColumn amount;
+  TableColumn amount;
   amount.id = 3;
   amount.name = "Amount";
   table.columns = {region, product, amount};
-  std::vector<io::TableMetadata> tables = {table};
+  std::vector<TableMetadata> tables = {table};
   wb.set_tables(std::move(tables));
   return wb;
 }
@@ -155,7 +155,7 @@ TEST(StructuredRefResolver, ParsePayloadUnknownSpecifierIsName) {
 
 TEST(StructuredRefResolver, OneRowTableIsRejectedBeforeTotalsRangeUnderflows) {
   Workbook wb = Workbook::create();
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Malformed";
   table.display_name = "Malformed";
@@ -163,7 +163,7 @@ TEST(StructuredRefResolver, OneRowTableIsRejectedBeforeTotalsRangeUnderflows) {
   table.sheet_index = 0;
   table.header_row = true;
   table.totals_row = true;
-  io::TableColumn column;
+  TableColumn column;
   column.id = 1;
   column.name = "Value";
   table.columns.push_back(std::move(column));
@@ -324,13 +324,13 @@ TEST(StructuredRefEval, EscapedApostropheColumnNameResolves) {
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0, 0, Value::text("Bob's"));
   s.set_cell_value(1, 0, Value::number(42.0));
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Sales";
   table.ref = "A1:A2";
   table.sheet_index = 0;
   table.header_row = true;
-  io::TableColumn col;
+  TableColumn col;
   col.id = 1;
   col.name = "Bob's";
   table.columns = {col};
@@ -348,7 +348,7 @@ TEST(StructuredRefEval, EscapedSpecialCharacterColumnNamesResolve) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
   const char* names[] = {"#Items", "Col[x]", "Bob's"};
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Table1";
   table.ref = "A1:C2";
@@ -357,7 +357,7 @@ TEST(StructuredRefEval, EscapedSpecialCharacterColumnNamesResolve) {
   for (std::uint32_t c = 0; c < 3; ++c) {
     s.set_cell_value(0, c, Value::text(names[c]));
     s.set_cell_value(1, c, Value::number(10.0 * (c + 1)));
-    io::TableColumn col;
+    TableColumn col;
     col.id = c + 1;
     col.name = names[c];
     table.columns.push_back(col);
@@ -390,7 +390,7 @@ TEST(StructuredRefEval, HeadersOnTableWithoutHeadersIsRef) {
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0, 0, Value::number(1.0));
   s.set_cell_value(1, 0, Value::number(2.0));
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "NoHead";
   table.display_name = "NoHead";
@@ -398,11 +398,11 @@ TEST(StructuredRefEval, HeadersOnTableWithoutHeadersIsRef) {
   table.sheet_index = 0;
   table.header_row = false;
   table.totals_row = false;
-  io::TableColumn c;
+  TableColumn c;
   c.id = 1;
   c.name = "Col1";
   table.columns = {c};
-  std::vector<io::TableMetadata> tables = {table};
+  std::vector<TableMetadata> tables = {table};
   wb.set_tables(std::move(tables));
 
   Arena arena;

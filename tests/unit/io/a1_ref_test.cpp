@@ -1,10 +1,10 @@
 //
-// Unit tests for the shared A1 reference decoder in `io/a1_ref.{h,cpp}`.
+// Unit tests for the shared A1 reference decoder in `utils/a1_ref.{h,cpp}`.
 // Covers the boundary cases shared by `cell_parser` and `sax_xml_reader`:
 // the "A1" / "XFD1048576" extremes, overflow on `XFE`, oversize letters,
 // and oversize / zero rows.
 
-#include "io/a1_ref.h"
+#include "utils/a1_ref.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -12,8 +12,7 @@
 
 #include "gtest/gtest.h"
 
-namespace formulon {
-namespace io {
+namespace formulon::a1 {
 namespace {
 
 TEST(A1RefParseColumnLetters, SingleLetter) {
@@ -170,5 +169,4 @@ TEST(A1RefParseA1, OverflowRow) {
 }
 
 }  // namespace
-}  // namespace io
-}  // namespace formulon
+}  // namespace formulon::a1

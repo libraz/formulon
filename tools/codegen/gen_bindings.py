@@ -244,8 +244,8 @@ def _emit_capi(entries: List[dict]) -> Dict[str, str]:
         out += "\n"
         out += '#include "c_api/formulon_c.h"\n'
         out += '#include "c_api/parts/common.h"\n'
-        out += '#include "io/styles_reader.h"\n'
         out += '#include "sheet.h"\n'
+        out += '#include "styles.h"\n'
         out += '#include "utils/error.h"\n'
         out += '#include "workbook.h"\n'
         out += "\n"

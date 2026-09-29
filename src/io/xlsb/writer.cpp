@@ -21,14 +21,13 @@
 #include <utility>
 #include <vector>
 
+#include "calc_settings.h"
 #include "cell.h"
 #include "cf/cf_types.h"
-#include "eval/iterative_solver.h"
-#include "io/default_content_type.h"
+#include "default_content_type.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/zip_part_writer.h"
-#include "io/passthrough_part.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
@@ -40,6 +39,7 @@
 #include "miniz.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "passthrough_part.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -821,12 +821,12 @@ void BuildOrderedNames(const Workbook& wb, std::vector<std::string>& ordered_nam
   std::vector<std::string> invisible;
   std::unordered_set<std::string> invisible_seen;
   std::unordered_map<std::string, std::vector<std::int32_t>> defined_scopes;
-  for (const io::DefinedName& dn : wb.defined_names()) {
+  for (const DefinedName& dn : wb.defined_names()) {
     ordered_names.push_back(dn.name);
     seen.insert(dn.name);
     defined_scopes[dn.name].push_back(dn.local_sheet_id);
   }
-  for (const io::DefinedName& dn : wb.defined_names()) {
+  for (const DefinedName& dn : wb.defined_names()) {
     CollectNamesFromFormula(dn.formula, dn.local_sheet_id, defined_scopes, ordered_names, seen, invisible,
                             invisible_seen);
   }
@@ -873,7 +873,7 @@ void BuildOrderedNames(const Workbook& wb, std::vector<std::string>& ordered_nam
 ///      that sheet's qualified name.
 NameTable BuildNameTableForScope(const Workbook& wb, const std::vector<std::string>& ordered_names,
                                  std::int32_t scope_sheet_id) {
-  const std::vector<io::DefinedName>& defined = wb.defined_names();
+  const std::vector<DefinedName>& defined = wb.defined_names();
   const std::size_t defined_count = std::min(defined.size(), ordered_names.size());
   NameTable name_table;
   name_table.reserve(ordered_names.size());
@@ -938,7 +938,7 @@ void CollectSheetRangesFromFormula(std::string_view formula, const std::vector<s
 SheetRangeTable BuildSheetRangeTable(const Workbook& wb, const std::vector<std::string>& sheet_names) {
   SheetRangeTable ranges;
   std::unordered_set<std::uint64_t> seen;
-  for (const io::DefinedName& dn : wb.defined_names()) {
+  for (const DefinedName& dn : wb.defined_names()) {
     CollectSheetRangesFromFormula(dn.formula, sheet_names, ranges, seen);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
@@ -1178,7 +1178,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   };
   for (std::size_t i = 0; i < ordered_names.size(); ++i) {
     if (i < defined_count) {
-      const io::DefinedName& dn = wb.defined_names()[i];
+      const DefinedName& dn = wb.defined_names()[i];
       if (auto r = EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, dn.comment, sheet_names,
                             sheet_ranges, table_for_scope(dn.local_sheet_id));
           !r) {

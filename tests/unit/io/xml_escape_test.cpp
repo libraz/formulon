@@ -11,15 +11,15 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
-#include "io/passthrough_part.h"
 #include "io/tables_reader.h"
-#include "io/unknown_relationship.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
+#include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "unknown_relationship.h"
 #include "workbook.h"
 
 namespace formulon::io {

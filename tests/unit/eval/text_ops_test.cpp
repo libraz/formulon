@@ -4,7 +4,7 @@
 // and the ASCII case-folding helpers in isolation, without going through
 // the parser or the function registry.
 
-#include "eval/text_ops.h"
+#include "utils/text_ops.h"
 
 #include <cstdint>
 #include <string>

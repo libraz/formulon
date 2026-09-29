@@ -40,16 +40,6 @@ option(FM_BUILD_NODE_ADDON    "Build Node.js N-API addon (.node)" OFF)
 option(FM_BUILD_FUZZ          "Build libFuzzer harnesses (clang only)" OFF)
 option(FM_ENABLE_COVERAGE     "Enable gcov/lcov" OFF)
 option(FM_USE_SYSTEM_DEPS     "Prefer system-installed third-party deps" OFF)
-option(FORMULON_BUILD_VM "Build the experimental bytecode VM (tests default to ON)" ${FM_BUILD_TESTING})
-# Tree-walker / VM parity harness: when ON, every `evaluate(...)` call also
-# compiles the AST through the bytecode pipeline and asserts the VM result
-# matches the tree-walker's. Defaults to OFF so production builds carry no
-# overhead; the parity sweep test (`vm_parity_test.cpp`) flips it on.
-option(FORMULON_VM_PARITY_CHECK "Enable tree-walker / VM parity assertions" OFF)
-
-if(FORMULON_VM_PARITY_CHECK AND NOT FORMULON_BUILD_VM)
-  message(FATAL_ERROR "FORMULON_VM_PARITY_CHECK requires FORMULON_BUILD_VM=ON")
-endif()
 
 include(FormulonWarnings)
 include(FormulonCommonDeps)
@@ -116,16 +106,22 @@ endif()
 # appended here as they are implemented.
 set(FORMULON_CORE_SOURCES
   src/utils/a1_column.cpp
+  src/utils/a1_ref.cpp
+  src/utils/date_time.cpp
   src/utils/double_format.cpp
   src/utils/index_sort.cpp
+  src/utils/japanese_era.cpp
   src/utils/structured_log.cpp
+  src/utils/text_ops.cpp
   src/utils/thread_launch.cpp
+  src/utils/utf8_length.cpp
+  src/external_book.cpp
+  src/styles.cpp
   src/value.cpp
   src/sheet.cpp
   src/sheet_name.cpp
   src/sheet_name_casefold_data.cpp
   src/workbook.cpp
-  src/io/a1_ref.cpp
   src/io/cell_parser.cpp
   src/io/cf_overlay.cpp
   src/io/cf_reader.cpp
@@ -133,7 +129,6 @@ set(FORMULON_CORE_SOURCES
   src/io/comments_reader.cpp
   src/io/comments_writer.cpp
   src/io/defined_names.cpp
-  src/io/external_book.cpp
   src/io/future_functions.cpp
   src/io/iso_date.cpp
   src/io/ooxml_reader.cpp
@@ -203,14 +198,12 @@ set(FORMULON_CORE_SOURCES
   src/pivot/pivot_evaluator.cpp
   src/pivot/pivot_index.cpp
   src/pivot/pivot_layout.cpp
-  src/eval/pivot_locale.cpp
+  src/pivot/pivot_locale.cpp
   src/print/page_setup.cpp
   src/print/print_area.cpp
   src/print/pagination.cpp
   src/eval/array_alloc.cpp
   src/eval/coerce.cpp
-  src/eval/utf8_length.cpp
-  src/eval/text_ops.cpp
   src/eval/rng.cpp
   src/eval/dep_graph.cpp
   src/eval/dep_extractor.cpp
@@ -299,10 +292,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/jis0208_table.cpp
   src/eval/jis0208_table_lookup.cpp
   src/eval/coupon_schedule.cpp
-  src/eval/date_time.cpp
   src/eval/date_text_parse.cpp
   src/eval/datetime_lazy.cpp
-  src/eval/japanese_era.cpp
   src/eval/number_parse.cpp
   src/eval/range_args.cpp
   src/eval/scalar_ops.cpp
@@ -375,17 +366,6 @@ src/eval/aggregate_lazy.cpp
   src/c_api/generated/workbook_counts.cpp
 )
 
-# The bytecode compiler/optimizer/VM is an experimental parity harness, not
-# the production evaluator. Keep it out of release CLI, WASM, and binding
-# binaries unless a test or an explicit developer build asks for it.
-if(FORMULON_BUILD_VM)
-  list(APPEND FORMULON_CORE_SOURCES
-    src/eval/compiler.cpp
-    src/eval/optimizer.cpp
-    src/eval/vm.cpp
-  )
-endif()
-
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
 
 # Engine core depends on miniz (zip/deflate), pugixml (XML), pcre2
@@ -395,10 +375,6 @@ add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
 formulon_apply_common_deps(formulon_core)
 
 formulon_apply_warnings(formulon_core)
-
-if(FORMULON_VM_PARITY_CHECK)
-  target_compile_definitions(formulon_core PUBLIC FORMULON_VM_PARITY_CHECK=1)
-endif()
 
 # ---------------------------------------------------------------------------
 # Static library aggregating the core objects

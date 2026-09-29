@@ -8,7 +8,7 @@
 // records cached cell values, sheet names and defined names from the
 // remote workbook — is read into `ExternalLinkRecord::book` so that
 // cross-workbook references can be evaluated against Excel's own cache
-// (see `io/external_book.h`). The part continues to round-trip verbatim
+// (see `external_book.h`). The part continues to round-trip verbatim
 // through `Workbook::passthrough_parts()` rather than being rebuilt on
 // save: nothing in the engine authors an external link, so re-emitting
 // Excel's bytes is strictly more faithful than regenerating them.
@@ -16,17 +16,16 @@
 // Design references:
 //   * ECMA-376 §18.14 (externalLink, externalBook, oleLink, ddeLink)
 
-#ifndef FORMULON_IO_EXTERNAL_LINKS_H_
-#define FORMULON_IO_EXTERNAL_LINKS_H_
+#ifndef FORMULON_EXTERNAL_LINK_H_
+#define FORMULON_EXTERNAL_LINK_H_
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-#include "io/external_book.h"
+#include "external_book.h"
 
 namespace formulon {
-namespace io {
 
 /// One entry in the workbook's `<externalReferences>` list, joined with
 /// the resolved relationship metadata.
@@ -82,7 +81,6 @@ struct ExternalLinkRecord {
   ExternalBook book;
 };
 
-}  // namespace io
 }  // namespace formulon
 
-#endif  // FORMULON_IO_EXTERNAL_LINKS_H_
+#endif  // FORMULON_EXTERNAL_LINK_H_

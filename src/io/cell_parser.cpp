@@ -30,7 +30,6 @@
 #include <utility>
 #include <vector>
 
-#include "io/a1_ref.h"
 #include "io/iso_date.h"
 #include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
@@ -40,6 +39,7 @@
 #include "phonetic.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -123,12 +123,12 @@ bool ParseErrorDisplay(std::string_view text, ErrorCode* out) {
   return false;
 }
 
-/// Thin wrappers over the shared A1 helpers in `io/a1_ref.h`, preserving
+/// Thin wrappers over the shared A1 helpers in `utils/a1_ref.h`, preserving
 /// the legacy "0 = error" sentinel that the original local helpers used.
 /// Excel rows are 1-based so a 0 result is unambiguously an error.
 std::uint32_t ParseUintAdvance(std::string_view text, std::size_t* i) {
   std::uint32_t v = 0;
-  if (!parse_uint(text, i, &v)) {
+  if (!a1::parse_uint(text, i, &v)) {
     return 0U;
   }
   return v;
@@ -136,7 +136,7 @@ std::uint32_t ParseUintAdvance(std::string_view text, std::size_t* i) {
 
 std::uint32_t ParseColumnLetters(std::string_view text, std::size_t* i) {
   std::uint32_t col = 0;
-  if (!parse_column_letters(text, i, &col)) {
+  if (!a1::parse_column_letters(text, i, &col)) {
     return 0U;
   }
   return col;

@@ -32,15 +32,15 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/ooxml_reader.h"
-#include "io/styles_reader.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "styles.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -289,7 +289,7 @@ TEST(RealExcelFixtureSmoke, J2NaFunctionIsNaError) {
 TEST(RealExcelFixtureSmoke, DefinedNameRateIsPresentAndUsedByH6) {
   Workbook wb = LoadFixture();
   bool found = false;
-  for (const io::DefinedName& dn : wb.defined_names()) {
+  for (const DefinedName& dn : wb.defined_names()) {
     if (dn.name == "Rate") {
       found = true;
       EXPECT_EQ(dn.formula, "0.1");
@@ -312,11 +312,11 @@ TEST(RealExcelFixtureSmoke, DefinedNameRateIsPresentAndUsedByH6) {
 // Resolves the effective `formatCode` for `num_fmt_id`: a built-in id
 // (0..163) resolves via the static builtin table; anything else is looked
 // up in the styles table's own `<numFmts>` records.
-std::string NumFmtStringFor(const io::StylesTable& styles, std::uint16_t num_fmt_id) {
-  if (const char* builtin = io::builtin_num_fmt(num_fmt_id); builtin != nullptr && *builtin != '\0') {
+std::string NumFmtStringFor(const StylesTable& styles, std::uint16_t num_fmt_id) {
+  if (const char* builtin = builtin_num_fmt(num_fmt_id); builtin != nullptr && *builtin != '\0') {
     return builtin;
   }
-  for (const io::NumFmtRecord& rec : styles.num_fmts) {
+  for (const NumFmtRecord& rec : styles.num_fmts) {
     if (rec.id == num_fmt_id && rec.format_string_index < styles.num_fmt_strings.size()) {
       return styles.num_fmt_strings[rec.format_string_index];
     }
@@ -326,7 +326,7 @@ std::string NumFmtStringFor(const io::StylesTable& styles, std::uint16_t num_fmt
 
 TEST(RealExcelFixtureSmoke, StylesSurviveLoad) {
   Workbook wb = LoadFixture();
-  const io::StylesTable& styles = wb.styles();
+  const StylesTable& styles = wb.styles();
   const Sheet& data = wb.sheet(0);
 
   const Cell* d1 = data.cell_at(0U, 3U);

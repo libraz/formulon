@@ -7,12 +7,12 @@
 #include <cstdint>
 #include <string_view>
 
+#include "defined_name.h"
 #include "eval/eval_context.h"
 #include "eval/formula_text_utils.h"
 #include "eval/lazy_impls.h"        // eval_node
 #include "eval/name_env_resolve.h"  // is_range_shaped_ast
 #include "eval/shape_ops_lazy.h"    // eval_node_as_array
-#include "io/defined_names.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
@@ -23,10 +23,10 @@
 namespace formulon {
 namespace eval {
 
-const io::DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t current_sheet_id,
-                                         std::string_view name) noexcept {
+const DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t current_sheet_id,
+                                     std::string_view name) noexcept {
   const auto& names = workbook.defined_names();
-  const io::DefinedName* workbook_match = nullptr;
+  const DefinedName* workbook_match = nullptr;
   for (const auto& entry : names) {
     if (!strings::case_insensitive_eq(entry.name, name)) {
       continue;
@@ -69,7 +69,7 @@ bool current_sheet_index(const EvalContext& ctx, std::uint16_t* out) noexcept {
 
 }  // namespace
 
-const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept {
+const DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept {
   const Workbook* wb = ctx.workbook();
   std::uint16_t sheet_id = 0;
   if (wb == nullptr || !current_sheet_index(ctx, &sheet_id)) {
@@ -81,8 +81,8 @@ const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_vie
   return find_defined_name(*wb, sheet_id, name);
 }
 
-const io::DefinedName* find_sheet_defined_name(const Workbook& workbook, std::string_view sheet,
-                                               std::string_view name) noexcept {
+const DefinedName* find_sheet_defined_name(const Workbook& workbook, std::string_view sheet,
+                                           std::string_view name) noexcept {
   const std::size_t sheet_id = workbook.sheet_index_by_name(sheet);
   if (sheet_id >= workbook.sheet_count()) {
     return nullptr;
@@ -90,7 +90,7 @@ const io::DefinedName* find_sheet_defined_name(const Workbook& workbook, std::st
   return find_defined_name(workbook, static_cast<std::uint16_t>(sheet_id), name);
 }
 
-const parser::AstNode* prepare_defined_name_body(const io::DefinedName* def, Arena& arena, const EvalContext& ctx,
+const parser::AstNode* prepare_defined_name_body(const DefinedName* def, Arena& arena, const EvalContext& ctx,
                                                  DefinedNameFrame* frame, EvalContext* out_ctx, ErrorCode* out_err) {
   if (def == nullptr) {
     *out_err = ErrorCode::Name;
@@ -128,7 +128,7 @@ const parser::AstNode* prepare_defined_name_body(const io::DefinedName* def, Are
 namespace {
 
 // Evaluates the body of the already-located definition `def` in `ctx`.
-Value evaluate_defined_name(const io::DefinedName* def, Arena& arena, const FunctionRegistry& registry,
+Value evaluate_defined_name(const DefinedName* def, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx) {
   DefinedNameFrame frame;
   EvalContext def_ctx = ctx;

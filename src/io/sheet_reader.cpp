@@ -30,7 +30,6 @@
 
 #include "io/array_anchor_budget.h"
 #include "io/cell_parser.h"
-#include "io/formula_prefix.h"
 #include "io/sax_xml_reader.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -39,6 +38,7 @@
 #include "io/xsd_int.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "phonetic.h"
 #include "pugixml.hpp"
@@ -140,7 +140,7 @@ std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint3
   // formula-length cap even though Excel's own limit is measured on the
   // canonical (formula-bar) text this produces.
   std::string source("=");
-  source.append(strip_storage_prefixes(master.text));
+  source.append(parser::strip_storage_prefixes(master.text));
   Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
   parser::Parser parser(source, arena);
   parser::AstNode* root = parser.parse();

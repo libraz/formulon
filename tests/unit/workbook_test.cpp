@@ -13,7 +13,7 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/passthrough_part.h"
+#include "passthrough_part.h"
 #include "sheet.h"
 #include "value.h"
 
@@ -88,9 +88,8 @@ TEST(WorkbookTest, ApproximateMemoryCountsPassthroughPayloads) {
   const std::size_t before = wb.approximate_memory_bytes();
 
   constexpr std::size_t kPayloadBytes = 256U * 1024U;
-  std::vector<io::PassthroughPart> parts;
-  parts.push_back(
-      io::PassthroughPart{"xl/media/image1.png", "image/png", std::vector<std::uint8_t>(kPayloadBytes, 0x7FU)});
+  std::vector<PassthroughPart> parts;
+  parts.push_back(PassthroughPart{"xl/media/image1.png", "image/png", std::vector<std::uint8_t>(kPayloadBytes, 0x7FU)});
   wb.set_passthrough_parts(std::move(parts));
 
   EXPECT_GE(wb.approximate_memory_bytes() - before, kPayloadBytes);

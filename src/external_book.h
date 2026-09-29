@@ -16,8 +16,8 @@
 // Design references:
 //   * ECMA-376 SS18.14 (externalLink, externalBook, sheetDataSet)
 
-#ifndef FORMULON_IO_EXTERNAL_BOOK_H_
-#define FORMULON_IO_EXTERNAL_BOOK_H_
+#ifndef FORMULON_EXTERNAL_BOOK_H_
+#define FORMULON_EXTERNAL_BOOK_H_
 
 #include <cstdint>
 #include <string>
@@ -28,7 +28,6 @@
 #include "value.h"
 
 namespace formulon {
-namespace io {
 
 /// One cached cell of a supporting workbook.
 ///
@@ -118,7 +117,6 @@ struct ExternalBook {
   static constexpr unsigned kSheetShift = 35U;
 };
 
-}  // namespace io
 }  // namespace formulon
 
-#endif  // FORMULON_IO_EXTERNAL_BOOK_H_
+#endif  // FORMULON_EXTERNAL_BOOK_H_

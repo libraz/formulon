@@ -20,9 +20,9 @@
 #include <string_view>
 #include <vector>
 
-#include "io/default_content_type.h"
+#include "default_content_type.h"
 #include "io/package_diagnostics.h"
-#include "io/workbook_kind.h"
+#include "io/workbook_kind_ooxml.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"

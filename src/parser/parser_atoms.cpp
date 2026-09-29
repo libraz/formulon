@@ -28,7 +28,7 @@ namespace {
 // Returns true iff `lexeme` names the special form `form`, ignoring an
 // optional case-insensitive `_xlfn.` storage prefix. Excel's name manager
 // stores a reusable LAMBDA / LET as `_xlfn.LAMBDA(...)` / `_xlfn.LET(...)`
-// so that older Excel versions do not misinterpret it; `io::strip_storage_prefixes`
+// so that older Excel versions do not misinterpret it; `parser::strip_storage_prefixes`
 // canonicalises `formula_text` at every known ingestion point, but the
 // parser also recognises the prefixed spelling directly so a caller that
 // hands it un-normalised text still gets LET / LAMBDA's dedicated

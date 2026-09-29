@@ -33,11 +33,11 @@
 #include <utility>
 #include <vector>
 
-#include "eval/iterative_solver.h"
+#include "calc_settings.h"
+#include "default_content_type.h"
+#include "defined_name.h"
 #include "io/cf_reader.h"
 #include "io/comments_reader.h"
-#include "io/default_content_type.h"
-#include "io/defined_names.h"
 #include "io/defined_names_internal.h"
 #include "io/ooxml/external_link_reader.h"
 #include "io/ooxml/package_validator.h"
@@ -46,18 +46,18 @@
 #include "io/ooxml/sheet_aux_rels_reader.h"
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/ooxml_defs.h"
-#include "io/passthrough_part.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
 #include "io/sheet_reader.h"
 #include "io/sst_reader.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
-#include "io/workbook_kind.h"
+#include "io/workbook_kind_ooxml.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
 #include "io/zip_reader.h"
+#include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_table.h"
@@ -390,7 +390,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   if (!kind_or) {
     return kind_or.error();
   }
-  const io::WorkbookKind workbook_kind = kind_or.value();
+  const WorkbookKind workbook_kind = kind_or.value();
   auto override_part_entries_or = ooxml::list_override_part_entries(ct_bytes);
   if (!override_part_entries_or) {
     return override_part_entries_or.error();
@@ -583,22 +583,21 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     } else {
       wb.set_calc_mode(Workbook::CalcMode::kAuto);
     }
-    eval::IterativeOptions opts;
+    IterativeOptions opts;
     if (pugi::xml_attribute iterate = calc_pr.attribute("iterate"); iterate) {
       opts.enabled = parse_xml_bool(iterate.value());
     }
     if (pugi::xml_attribute count = calc_pr.attribute("iterateCount"); count) {
-      const long long parsed = count.as_llong(static_cast<long long>(eval::kDefaultMaxIterations));
+      const long long parsed = count.as_llong(static_cast<long long>(kDefaultMaxIterations));
       // Clamp into Excel's own dialog range. The upper bound matters more
       // than the lower one: the file decides how much work the first
       // `recalc()` performs, the solver has no wall-clock limit, and the
       // cancellation callback is null unless the host opted in. Without
       // this, `iterateCount="4294967295"` on a two-cell cycle is an
       // unrecoverable hang rather than a slow load.
-      opts.max_iterations = parsed < 1 ? 1U
-                            : parsed > static_cast<long long>(eval::kMaxIterationsCap)
-                                ? eval::kMaxIterationsCap
-                                : static_cast<std::uint32_t>(parsed);
+      opts.max_iterations = parsed < 1                                           ? 1U
+                            : parsed > static_cast<long long>(kMaxIterationsCap) ? kMaxIterationsCap
+                                                                                 : static_cast<std::uint32_t>(parsed);
     }
     // The solver stops once the largest change falls below `max_change`.
     // A NaN tolerance makes that comparison false forever, so the workbook

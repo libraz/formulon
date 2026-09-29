@@ -7,14 +7,14 @@
 #include <utility>
 #include <vector>
 
-#include "io/a1_ref.h"
-#include "io/external_book.h"
-#include "io/external_links.h"
+#include "external_book.h"
+#include "external_link.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/ooxml_defs.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
+#include "utils/a1_ref.h"
 #include "value.h"
 
 namespace formulon {
@@ -84,7 +84,7 @@ bool ParseExternalRefersTo(std::string_view text, const ExternalBook& book, Exte
   std::uint32_t col = 0;
   std::uint32_t row_end = 0;
   std::uint32_t col_end = 0;
-  if (!parse_a1_ref(first, &row, &col) || !parse_a1_ref(last, &row_end, &col_end)) {
+  if (!a1::parse_a1_ref(first, &row, &col) || !a1::parse_a1_ref(last, &row_end, &col_end)) {
     return false;
   }
   out->sheet = sheet_index;
@@ -131,7 +131,7 @@ void DecodeExternalBook(const pugi::xml_node& book_node, ExternalBook* out) {
       for (pugi::xml_node cell = row.child("cell"); cell; cell = cell.next_sibling("cell")) {
         std::uint32_t cell_row = 0;
         std::uint32_t cell_col = 0;
-        if (!parse_a1_ref(cell.attribute("r").value(), &cell_row, &cell_col)) {
+        if (!a1::parse_a1_ref(cell.attribute("r").value(), &cell_row, &cell_col)) {
           continue;
         }
         const std::string_view type = cell.attribute("t").value();

@@ -12,8 +12,8 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
-#include "io/styles_reader.h"
 #include "sheet.h"
+#include "styles.h"
 #include "utils/error.h"
 #include "workbook.h"
 

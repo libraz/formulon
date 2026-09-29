@@ -25,11 +25,11 @@
 #include <unordered_set>
 #include <vector>
 
-#include "eval/date_time.h"
 #include "pivot/hierarchy_builder.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
+#include "utils/date_time.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -44,7 +44,7 @@ struct PivotFilterEnv {
   /// Pinned wall-clock reading (`Workbook::pinned_now()`), or empty to read
   /// the host clock. Pinning is what makes a pivot carrying a
   /// relative-period filter reproducible.
-  std::optional<eval::date_time::CivilTime> pinned_now;
+  std::optional<date_time::CivilTime> pinned_now;
   /// The workbook date epoch, so a window resolved from the clock lands on
   /// the same serial scale as the dates stored in the cache.
   bool date1904 = false;
@@ -62,7 +62,7 @@ struct DateWindow {
 /// the whole substance of the family — month lengths, quarter starts, the
 /// year-to-date half-open end — and they are worth asserting directly
 /// instead of only through a filtered pivot.
-DateWindow resolve_relative_period(RelativePeriod period, const eval::date_time::CivilTime& now, bool date1904);
+DateWindow resolve_relative_period(RelativePeriod period, const date_time::CivilTime& now, bool date1904);
 
 /// The pre-aggregation filter pass with everything that depends only on the
 /// table hoisted out of the per-record decision.

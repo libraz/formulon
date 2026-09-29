@@ -14,8 +14,8 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "miniz.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -770,7 +770,7 @@ TEST(XlsbReader, DecodableDefinedNameRegistersAndCountsNothing) {
   auto result = read_xlsb(SpanOf(archive));
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
 
-  const std::vector<io::DefinedName>& names = result.value().workbook.defined_names();
+  const std::vector<DefinedName>& names = result.value().workbook.defined_names();
   ASSERT_EQ(names.size(), 1U);
   EXPECT_EQ(names[0].name, "Rate");
   EXPECT_EQ(names[0].formula, "5");
@@ -795,7 +795,7 @@ TEST(XlsbReader, DefinedNameCommentSurvivesDecode) {
   auto result = read_xlsb(SpanOf(archive));
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
 
-  const std::vector<io::DefinedName>& names = result.value().workbook.defined_names();
+  const std::vector<DefinedName>& names = result.value().workbook.defined_names();
   ASSERT_EQ(names.size(), 1U);
   EXPECT_EQ(names[0].comment, "The annual interest rate");
 }

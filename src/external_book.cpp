@@ -1,5 +1,5 @@
 
-#include "io/external_book.h"
+#include "external_book.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +9,6 @@
 #include "value.h"
 
 namespace formulon {
-namespace io {
 
 std::uint32_t ExternalBook::sheet_index(std::string_view sheet) const noexcept {
   for (std::size_t i = 0; i < sheet_names.size(); ++i) {
@@ -37,5 +36,4 @@ Value ExternalBook::cached_cell(std::uint32_t sheet, std::uint32_t row, std::uin
   return found->second.resolved();
 }
 
-}  // namespace io
 }  // namespace formulon

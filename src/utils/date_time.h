@@ -20,13 +20,12 @@
 // by the C++20 <chrono> year_month_day calendar; we port it directly to keep
 // the engine C++17 and dependency-free.
 
-#ifndef FORMULON_EVAL_DATE_TIME_H_
-#define FORMULON_EVAL_DATE_TIME_H_
+#ifndef FORMULON_UTILS_DATE_TIME_H_
+#define FORMULON_UTILS_DATE_TIME_H_
 
 #include <cstdint>
 
 namespace formulon {
-namespace eval {
 namespace date_time {
 
 /// Calendar date triple used by the conversion helpers. Fields are *not*
@@ -163,7 +162,6 @@ double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned
 double basis_days_between(double a, double b, int basis, bool date1904) noexcept;
 
 }  // namespace date_time
-}  // namespace eval
 }  // namespace formulon
 
-#endif  // FORMULON_EVAL_DATE_TIME_H_
+#endif  // FORMULON_UTILS_DATE_TIME_H_

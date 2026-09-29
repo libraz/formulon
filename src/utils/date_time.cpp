@@ -4,7 +4,7 @@
 // (epoch 1970-01-01), wrapped by two Excel-aware offset constants that
 // absorb the 1900 leap-year bug.
 
-#include "eval/date_time.h"
+#include "utils/date_time.h"
 
 #include <chrono>
 #include <cmath>
@@ -12,7 +12,6 @@
 #include <ctime>
 
 namespace formulon {
-namespace eval {
 namespace date_time {
 namespace {
 
@@ -276,5 +275,4 @@ CivilTime host_civil_time() noexcept {
 }
 
 }  // namespace date_time
-}  // namespace eval
 }  // namespace formulon

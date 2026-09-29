@@ -33,17 +33,17 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/format_detect.h"
 #include "io/ooxml_reader.h"
-#include "io/styles_reader.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
+#include "styles.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -331,7 +331,7 @@ TEST(XlsbFidelity, J2NaFunctionIsNaError) {
 TEST(XlsbFidelity, DefinedNameRateIsPresentAndUsedByH6) {
   Workbook wb = LoadFixture();
   bool found = false;
-  for (const io::DefinedName& dn : wb.defined_names()) {
+  for (const DefinedName& dn : wb.defined_names()) {
     if (dn.name == "Rate") {
       found = true;
       EXPECT_EQ(dn.formula, "0.1");
@@ -354,11 +354,11 @@ TEST(XlsbFidelity, DefinedNameRateIsPresentAndUsedByH6) {
 // valid and distinct from the default).
 // ---------------------------------------------------------------------------
 
-std::string NumFmtStringFor(const io::StylesTable& styles, std::uint16_t num_fmt_id) {
-  if (const char* builtin = io::builtin_num_fmt(num_fmt_id); builtin != nullptr && *builtin != '\0') {
+std::string NumFmtStringFor(const StylesTable& styles, std::uint16_t num_fmt_id) {
+  if (const char* builtin = builtin_num_fmt(num_fmt_id); builtin != nullptr && *builtin != '\0') {
     return builtin;
   }
-  for (const io::NumFmtRecord& rec : styles.num_fmts) {
+  for (const NumFmtRecord& rec : styles.num_fmts) {
     if (rec.id == num_fmt_id && rec.format_string_index < styles.num_fmt_strings.size()) {
       return styles.num_fmt_strings[rec.format_string_index];
     }
@@ -368,7 +368,7 @@ std::string NumFmtStringFor(const io::StylesTable& styles, std::uint16_t num_fmt
 
 TEST(XlsbFidelity, StylesSurviveLoad) {
   Workbook wb = LoadFixture();
-  const io::StylesTable& styles = wb.styles();
+  const StylesTable& styles = wb.styles();
   const Sheet& data = wb.sheet(0);
 
   const Cell* d1 = data.cell_at(0U, 3U);
@@ -414,7 +414,7 @@ Workbook LoadXlsxTwin() {
   return std::move(result_or.value().workbook);
 }
 
-testing::AssertionResult FontsMatch(const io::FontRecord& lhs, const io::FontRecord& rhs) {
+testing::AssertionResult FontsMatch(const FontRecord& lhs, const FontRecord& rhs) {
   if (lhs.name != rhs.name) {
     return testing::AssertionFailure() << "name: " << lhs.name << " vs " << rhs.name;
   }
@@ -445,8 +445,8 @@ testing::AssertionResult FontsMatch(const io::FontRecord& lhs, const io::FontRec
 TEST(XlsbFidelity, FontTableMatchesTheXlsxTwin) {
   const Workbook from_binary = LoadFixture();
   const Workbook from_xml = LoadXlsxTwin();
-  const io::StylesTable& binary = from_binary.styles();
-  const io::StylesTable& xml = from_xml.styles();
+  const StylesTable& binary = from_binary.styles();
+  const StylesTable& xml = from_xml.styles();
   ASSERT_EQ(binary.fonts.size(), xml.fonts.size());
   for (std::size_t i = 0; i < binary.fonts.size(); ++i) {
     EXPECT_TRUE(FontsMatch(binary.fonts[i], xml.fonts[i])) << "font index " << i;
@@ -455,8 +455,8 @@ TEST(XlsbFidelity, FontTableMatchesTheXlsxTwin) {
   // The workbook's own authoring intent, restated so the comparison above
   // cannot pass by both sides being empty: D3 is bold and red.
   bool saw_bold_red = false;
-  for (const io::FontRecord& font : binary.fonts) {
-    if (font.bold && font.color.kind == io::ColorSpec::Kind::kRgb && font.color_argb == 0xFFFF0000U) {
+  for (const FontRecord& font : binary.fonts) {
+    if (font.bold && font.color.kind == ColorSpec::Kind::kRgb && font.color_argb == 0xFFFF0000U) {
       saw_bold_red = true;
     }
   }
@@ -473,8 +473,8 @@ TEST(XlsbFidelity, FontTableMatchesTheXlsxTwin) {
 TEST(XlsbFidelity, FillTableMatchesTheXlsxTwin) {
   const Workbook from_binary = LoadFixture();
   const Workbook from_xml = LoadXlsxTwin();
-  const io::StylesTable& binary = from_binary.styles();
-  const io::StylesTable& xml = from_xml.styles();
+  const StylesTable& binary = from_binary.styles();
+  const StylesTable& xml = from_xml.styles();
   ASSERT_EQ(binary.fills.size(), xml.fills.size());
   for (std::size_t i = 0; i < binary.fills.size(); ++i) {
     EXPECT_EQ(binary.fills[i].pattern, xml.fills[i].pattern) << "fill index " << i;
@@ -485,8 +485,8 @@ TEST(XlsbFidelity, FillTableMatchesTheXlsxTwin) {
   }
 
   bool saw_yellow_solid = false;
-  for (const io::FillRecord& fill : binary.fills) {
-    if (fill.pattern == 1U && fill.fg.kind == io::ColorSpec::Kind::kRgb && fill.fg_argb == 0xFFFFFF00U) {
+  for (const FillRecord& fill : binary.fills) {
+    if (fill.pattern == 1U && fill.fg.kind == ColorSpec::Kind::kRgb && fill.fg_argb == 0xFFFFFF00U) {
       saw_yellow_solid = true;
     }
   }
@@ -496,12 +496,12 @@ TEST(XlsbFidelity, FillTableMatchesTheXlsxTwin) {
 TEST(XlsbFidelity, BorderTableMatchesTheXlsxTwin) {
   const Workbook from_binary = LoadFixture();
   const Workbook from_xml = LoadXlsxTwin();
-  const io::StylesTable& binary = from_binary.styles();
-  const io::StylesTable& xml = from_xml.styles();
+  const StylesTable& binary = from_binary.styles();
+  const StylesTable& xml = from_xml.styles();
   ASSERT_EQ(binary.borders.size(), xml.borders.size());
   for (std::size_t i = 0; i < binary.borders.size(); ++i) {
-    const io::BorderRecord& lhs = binary.borders[i];
-    const io::BorderRecord& rhs = xml.borders[i];
+    const BorderRecord& lhs = binary.borders[i];
+    const BorderRecord& rhs = xml.borders[i];
     EXPECT_EQ(lhs.diagonal_up, rhs.diagonal_up) << "border index " << i;
     EXPECT_EQ(lhs.diagonal_down, rhs.diagonal_down) << "border index " << i;
     EXPECT_EQ(lhs.left.style, rhs.left.style) << "border index " << i;
@@ -541,7 +541,7 @@ TEST(XlsbFidelity, SpillFootprintDoesNotCountAsUndecodedFormulas) {
 TEST(XlsbFidelity, StylesBinSurvivesAsPassthroughPart) {
   Workbook wb = LoadFixture();
   bool found = false;
-  for (const io::PassthroughPart& part : wb.passthrough_parts()) {
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (part.path == "xl/styles.bin") {
       found = true;
       EXPECT_GT(part.bytes.size(), 0U);
@@ -562,11 +562,11 @@ TEST(XlsbFidelity, SaveReloadPreservesFormulaTextAndValues) {
   Workbook wb = LoadAndRecalcFixture();
   ASSERT_EQ(wb.sheet_count(), 2U);
 
-  auto saved_or = wb.save_as(io::WorkbookFormat::Xlsb);
+  auto saved_or = wb.save_as(WorkbookFormat::Xlsb);
   ASSERT_TRUE(static_cast<bool>(saved_or)) << "save_as(Xlsb) failed: " << saved_or.error().message;
 
   const std::vector<std::uint8_t>& saved = saved_or.value();
-  EXPECT_EQ(io::detect_workbook_format(SpanOf(saved)), io::WorkbookFormat::Xlsb);
+  EXPECT_EQ(io::detect_workbook_format(SpanOf(saved)), WorkbookFormat::Xlsb);
 
   auto reloaded_or = io::xlsb::read_xlsb(SpanOf(saved));
   ASSERT_TRUE(static_cast<bool>(reloaded_or)) << "reload after save_as failed: " << reloaded_or.error().message;
@@ -622,7 +622,7 @@ TEST(XlsbFidelity, SaveReloadPreservesFormulaTextAndValues) {
   EXPECT_EQ(j1_value.as_error(), ErrorCode::Div0);
 
   bool found_rate = false;
-  for (const io::DefinedName& dn : reloaded.defined_names()) {
+  for (const DefinedName& dn : reloaded.defined_names()) {
     if (dn.name == "Rate") {
       found_rate = true;
     }

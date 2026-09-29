@@ -16,12 +16,12 @@
 #include <utility>
 #include <vector>
 
-#include "eval/text_ops.h"
-#include "eval/utf8_length.h"
 #include "gtest/gtest.h"
 #include "io/xlsb/record.h"
 #include "io/zip_reader.h"
 #include "phonetic.h"
+#include "utils/text_ops.h"
+#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace io {
@@ -117,11 +117,11 @@ std::vector<DecodedSstItem> DecodeSstItems(const std::vector<std::uint8_t>& body
         }
         runs.push_back(fields);
       }
-      const std::uint32_t kana_units = eval::utf16_units_in(kana.value());
+      const std::uint32_t kana_units = utf16_units_in(kana.value());
       for (std::size_t i = 0; i < runs.size(); ++i) {
         const std::uint32_t end = (i + 1U < runs.size()) ? runs[i + 1U][0] : kana_units;
         item.phonetic.push_back(PhoneticRun{runs[i][1], static_cast<std::uint32_t>(runs[i][1] + runs[i][2]),
-                                            eval::utf16_substring(kana.value(), runs[i][0], end - runs[i][0])});
+                                            utf16_substring(kana.value(), runs[i][0], end - runs[i][0])});
       }
       auto ifnt = read_u16(p);
       auto tail_flags = read_u16(p);

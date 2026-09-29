@@ -2,16 +2,14 @@
 // Implementation of the shared A1 reference decoder. See `a1_ref.h` for
 // the contract.
 
-#include "io/a1_ref.h"
+#include "utils/a1_ref.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
-#include "sheet.h"
-
-namespace formulon {
-namespace io {
+namespace formulon::a1 {
 
 bool parse_column_letters(std::string_view text, std::size_t* pos, std::uint32_t* out_col) noexcept {
   std::uint32_t col = 0;
@@ -84,7 +82,7 @@ bool parse_a1_ref(std::string_view text, std::uint32_t* out_row, std::uint32_t* 
   // row past 1,048,576 both slip through the structural checks above, so
   // bound-check explicitly. This mirrors the DOM cell-ref path in
   // `cell_parser.cpp`, keeping the SAX and DOM readers convergent.
-  if (col_1based > Sheet::kMaxCols || row_1based > Sheet::kMaxRows) {
+  if (col_1based > kMaxCols || row_1based > kMaxRows) {
     return false;
   }
   *out_row = row_1based - 1U;
@@ -92,5 +90,14 @@ bool parse_a1_ref(std::string_view text, std::uint32_t* out_row, std::uint32_t* 
   return true;
 }
 
-}  // namespace io
-}  // namespace formulon
+std::string encode_a1(std::uint32_t row, std::uint32_t col) {
+  std::string out;
+  out.reserve(10U);
+  if (!append_column_letters(out, col)) {
+    return {};
+  }
+  out.append(std::to_string(row + 1U));
+  return out;
+}
+
+}  // namespace formulon::a1

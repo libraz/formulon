@@ -30,7 +30,8 @@
 #include <vector>
 
 #include "cell.h"
-#include "io/unknown_relationship.h"
+#include "unknown_relationship.h"
+#include "utils/a1_ref.h"
 #include "value.h"
 
 namespace formulon {
@@ -744,11 +745,11 @@ class EnumerationRevision {
 class Sheet {
  public:
   /// Excel 365 maximum row count (rows are addressable as 0..kMaxRows-1).
-  static constexpr std::uint32_t kMaxRows = 1048576U;
+  static constexpr std::uint32_t kMaxRows = a1::kMaxRows;
 
   /// Excel 365 maximum column count (columns are addressable as
   /// 0..kMaxCols-1, mapping to A..XFD).
-  static constexpr std::uint32_t kMaxCols = 16384U;
+  static constexpr std::uint32_t kMaxCols = a1::kMaxCols;
 
   /// Inclusive bounding box of populated coordinates returned by
   /// `populated_extent`. The fields are copies; no sheet storage is exposed
@@ -1582,8 +1583,8 @@ class Sheet {
   /// Their target parts travel through Workbook passthrough storage; keeping
   /// the original rIds lets raw worksheet XML which refers to them remain
   /// connected after a round trip.
-  const std::vector<io::UnknownRelationship>& unknown_relationships() const noexcept { return unknown_relationships_; }
-  void set_unknown_relationships(std::vector<io::UnknownRelationship> relationships) {
+  const std::vector<UnknownRelationship>& unknown_relationships() const noexcept { return unknown_relationships_; }
+  void set_unknown_relationships(std::vector<UnknownRelationship> relationships) {
     unknown_relationships_ = std::move(relationships);
   }
 
@@ -1866,7 +1867,7 @@ class Sheet {
   // original bytes in passthrough storage.
   std::string comment_vml_path_;
   // Unmodelled entries from `xl/worksheets/_rels/sheetN.xml.rels`.
-  std::vector<io::UnknownRelationship> unknown_relationships_;
+  std::vector<UnknownRelationship> unknown_relationships_;
   // Raw `<autoFilter>` element, or empty. Round-trips verbatim; filter
   // criteria are not modelled.
   std::string auto_filter_xml_;

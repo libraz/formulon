@@ -43,8 +43,8 @@
 
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
+#include "external_book.h"
 #include "gtest/gtest.h"
-#include "io/external_book.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/reader.h"
 #include "io/zip_reader.h"
@@ -161,7 +161,7 @@ TEST_P(ExternalLinkFixture, SupportingWorkbookCachesReachTheModel) {
   // them. Getting this order wrong would bind `[2]` to the first book.
   ASSERT_EQ(wb.external_links().size(), 2U);
 
-  const io::ExternalBook& first = wb.external_links()[0].book;
+  const ExternalBook& first = wb.external_links()[0].book;
   ASSERT_EQ(first.sheet_names.size(), 1U);
   EXPECT_EQ(first.sheet_names[0], "Data");
   ASSERT_NE(first.find_name("SrcTotal"), nullptr);
@@ -171,7 +171,7 @@ TEST_P(ExternalLinkFixture, SupportingWorkbookCachesReachTheModel) {
   EXPECT_TRUE(first.cached_cell(0, 0, 0).is_number());
   EXPECT_DOUBLE_EQ(first.cached_cell(0, 2, 0).as_number(), 30.0);
 
-  const io::ExternalBook& second = wb.external_links()[1].book;
+  const ExternalBook& second = wb.external_links()[1].book;
   ASSERT_NE(second.find_name("FarCell"), nullptr);
   EXPECT_DOUBLE_EQ(second.cached_cell(0, 6, 3).as_number(), 77.0);
 }
@@ -179,9 +179,9 @@ TEST_P(ExternalLinkFixture, SupportingWorkbookCachesReachTheModel) {
 TEST_P(ExternalLinkFixture, AnUncachedAddressReadsAsZeroNotBlank) {
   Workbook wb = LoadFixture("external_link_cell_kinds", GetParam());
   ASSERT_EQ(wb.external_links().size(), 1U);
-  const io::ExternalBook& book = wb.external_links()[0].book;
+  const ExternalBook& book = wb.external_links()[0].book;
   const std::uint32_t second = book.sheet_index("Second");
-  ASSERT_NE(second, io::ExternalBook::kNoSheet);
+  ASSERT_NE(second, ExternalBook::kNoSheet);
   // B4 (row index 3) was never cached; B5 was.
   const Value uncached = book.cached_cell(second, 3, 1);
   ASSERT_TRUE(uncached.is_number());

@@ -25,11 +25,11 @@
 #include <optional>
 #include <vector>
 
-#include "eval/compat.h"
-#include "eval/date_time.h"
 #include "eval/declared_rect.h"
 #include "eval/spill_committer.h"
+#include "excel_profile.h"
 #include "parser/reference.h"
+#include "utils/date_time.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -349,7 +349,7 @@ class EvalContext {
 
   /// True when the bound workbook uses the 1904 date system. Date-aware
   /// evaluators that decompose or compose serials (see
-  /// `eval::date_time::serial_from_ymd` / `ymd_from_serial`) must thread
+  /// `date_time::serial_from_ymd` / `ymd_from_serial`) must thread
   /// this through so 1904-system workbooks do not shift every date by the
   /// 1462-day epoch gap. Defaults to false (1900 system) for the unbound
   /// and sheet-only context shapes. Sourced from `Workbook::date1904()`

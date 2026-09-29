@@ -25,7 +25,7 @@
 
 #include <string>
 
-#include "io/styles_reader.h"
+#include "styles.h"
 
 namespace formulon {
 namespace io {

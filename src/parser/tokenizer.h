@@ -31,7 +31,7 @@
 //     to bind the file name against and falls through to the same
 //     bare-bracket handling as an unqualified structured ref, rejected as
 //     `UnsupportedConstruct`. What such a reference resolves to lives in
-//     the external link cache (see `io/external_book.h`).
+//     the external link cache (see `external_book.h`).
 //   * Column-only (`A:A`) and row-only (`1:1`) references: the lexer emits
 //     them as `Ident COLON Ident` and `Number COLON Number` respectively;
 //     the parser promotes the adjacent tokens to full range references.

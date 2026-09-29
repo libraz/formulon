@@ -11,8 +11,8 @@
 #include <string_view>
 
 #include "eval/jp_kana_table.h"
-#include "eval/text_ops.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
 namespace eval {

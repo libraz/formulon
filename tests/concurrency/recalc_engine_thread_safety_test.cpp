@@ -28,15 +28,15 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "eval/scheduler.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
-#include "io/tables_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
+#include "table.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -365,31 +365,31 @@ TEST(RecalcEngineThreadSafety, ParallelRecalcSerialisesAgainstRemoveSheetTransac
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 1U, 0U, Value::text("row-1"))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 1U, 1U, Value::number(1.0))));
 
-  std::vector<io::DefinedName> names;
+  std::vector<DefinedName> names;
   names.reserve(kMetadataCopies);
   for (std::size_t i = 0; i < kMetadataCopies; ++i) {
-    names.push_back(io::DefinedName{"DropName" + std::to_string(i), "Drop!A1", -1, false, ""});
+    names.push_back(DefinedName{"DropName" + std::to_string(i), "Drop!A1", -1, false, ""});
   }
   wb.set_defined_names(std::move(names));
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1U;
   table.name = "DropTable";
   table.display_name = "DropTable";
   table.ref = "A1:B2";
   table.sheet_index = 0U;
-  table.columns = {io::TableColumn{1U, "Label", {}, {}, {}}, io::TableColumn{2U, "Value", {}, {}, {}}};
-  std::vector<io::TableMetadata> tables;
+  table.columns = {TableColumn{1U, "Label", {}, {}, {}}, TableColumn{2U, "Value", {}, {}, {}}};
+  std::vector<TableMetadata> tables;
   tables.reserve(kMetadataCopies + 1U);
   tables.push_back(std::move(table));
   for (std::size_t i = 0; i < kMetadataCopies; ++i) {
-    io::TableMetadata survivor_table;
+    TableMetadata survivor_table;
     survivor_table.id = static_cast<std::uint32_t>(100U + i);
     survivor_table.name = "SurvivorTable" + std::to_string(i);
     survivor_table.display_name = survivor_table.name;
     survivor_table.ref = "A1:B2";
     survivor_table.sheet_index = 1U;
-    survivor_table.columns = {io::TableColumn{1U, "Label", {}, {}, {}}, io::TableColumn{2U, "Value", {}, {}, {}}};
+    survivor_table.columns = {TableColumn{1U, "Label", {}, {}, {}}, TableColumn{2U, "Value", {}, {}, {}}};
     tables.push_back(std::move(survivor_table));
   }
   wb.set_tables(std::move(tables));

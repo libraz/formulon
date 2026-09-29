@@ -21,13 +21,13 @@
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
 #include "cf/scale_evaluator.h"
-#include "eval/date_time.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "utils/date_time.h"
 #include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
@@ -769,7 +769,7 @@ CFEvalContext PinnedContext(CFEvalHarness& harness, double today_serial) {
 }
 
 double Serial(int year, unsigned month, unsigned day) {
-  return eval::date_time::serial_from_ymd(year, month, day);
+  return date_time::serial_from_ymd(year, month, day);
 }
 
 TEST(CFEvaluator, TimePeriodWithoutTodaySerialDoesNotMatch) {
@@ -920,7 +920,7 @@ TEST(CFEvaluator, TimePeriodNextMonthHandlesYearBoundary) {
 }
 
 double Date1904Serial(int year, unsigned month, unsigned day) {
-  return eval::date_time::serial_from_ymd(year, month, day, /*date1904=*/true);
+  return date_time::serial_from_ymd(year, month, day, /*date1904=*/true);
 }
 
 // Same anchor and boundary assertions as `TimePeriodThisWeekIsSundayThroughSaturday`,

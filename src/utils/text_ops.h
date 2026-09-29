@@ -11,8 +11,8 @@
 // from both the evaluator and any future text-rendering code, and keeps the
 // dependency graph tight for the WASM size budget.
 
-#ifndef FORMULON_EVAL_TEXT_OPS_H_
-#define FORMULON_EVAL_TEXT_OPS_H_
+#ifndef FORMULON_UTILS_TEXT_OPS_H_
+#define FORMULON_UTILS_TEXT_OPS_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -20,7 +20,6 @@
 #include <string_view>
 
 namespace formulon {
-namespace eval {
 
 /// Returns the byte offset in `text` that begins at UTF-16 unit `units_offset`.
 /// `units_offset` is clamped to `utf16_units_in(text)`. The returned byte offset
@@ -103,7 +102,6 @@ Utf8DecodeResult decode_first_utf8_codepoint(std::string_view text) noexcept;
 /// via a `valid=false` flag instead of advancing by one byte.
 std::uint32_t decode_utf8_step(std::string_view text, std::size_t i, std::size_t* out_bytes) noexcept;
 
-}  // namespace eval
 }  // namespace formulon
 
-#endif  // FORMULON_EVAL_TEXT_OPS_H_
+#endif  // FORMULON_UTILS_TEXT_OPS_H_

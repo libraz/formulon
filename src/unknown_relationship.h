@@ -14,13 +14,12 @@
 // represented here; only the unrecognised entries round-trip via
 // this struct.
 
-#ifndef FORMULON_IO_UNKNOWN_RELATIONSHIP_H_
-#define FORMULON_IO_UNKNOWN_RELATIONSHIP_H_
+#ifndef FORMULON_UNKNOWN_RELATIONSHIP_H_
+#define FORMULON_UNKNOWN_RELATIONSHIP_H_
 
 #include <string>
 
 namespace formulon {
-namespace io {
 
 /// One package `<Relationship>` entry the reader did not consume.
 ///
@@ -46,7 +45,6 @@ struct UnknownRelationship {
   bool target_external = false;
 };
 
-}  // namespace io
 }  // namespace formulon
 
-#endif  // FORMULON_IO_UNKNOWN_RELATIONSHIP_H_
+#endif  // FORMULON_UNKNOWN_RELATIONSHIP_H_

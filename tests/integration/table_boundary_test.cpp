@@ -31,8 +31,8 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/tables_reader.h"
 #include "sheet.h"
+#include "table.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -68,7 +68,7 @@ Workbook MakeSalesWorkbook() {
   s.set_cell_value(4U, 1U, Value::text("Durian"));
   s.set_cell_value(4U, 2U, Value::number(40.0));
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1U;
   table.name = "Sales";
   table.display_name = "Sales";
@@ -77,11 +77,11 @@ Workbook MakeSalesWorkbook() {
   table.header_row = true;
   table.totals_row = false;
   table.columns = {
-      io::TableColumn{1U, "Region", "", "", ""},
-      io::TableColumn{2U, "Product", "", "", ""},
-      io::TableColumn{3U, "Amount", "", "", ""},
+      TableColumn{1U, "Region", "", "", ""},
+      TableColumn{2U, "Product", "", "", ""},
+      TableColumn{3U, "Amount", "", "", ""},
   };
-  std::vector<io::TableMetadata> tables = {std::move(table)};
+  std::vector<TableMetadata> tables = {std::move(table)};
   wb.set_tables(std::move(tables));
   return wb;
 }
@@ -157,7 +157,7 @@ TEST(TableBoundary, TwoTablesSameSheetDoNotBleed) {
   s.set_cell_value(2U, 3U, Value::text("y"));
   s.set_cell_value(2U, 4U, Value::number(200.0));
 
-  io::TableMetadata t1;
+  TableMetadata t1;
   t1.id = 1U;
   t1.name = "Alpha";
   t1.display_name = "Alpha";
@@ -165,15 +165,15 @@ TEST(TableBoundary, TwoTablesSameSheetDoNotBleed) {
   t1.sheet_index = 0U;
   t1.header_row = true;
   t1.totals_row = false;
-  io::TableColumn t1_cat;
+  TableColumn t1_cat;
   t1_cat.id = 1U;
   t1_cat.name = "Cat";
-  io::TableColumn t1_val;
+  TableColumn t1_val;
   t1_val.id = 2U;
   t1_val.name = "Val";
   t1.columns = {t1_cat, t1_val};
 
-  io::TableMetadata t2;
+  TableMetadata t2;
   t2.id = 2U;
   t2.name = "Beta";
   t2.display_name = "Beta";
@@ -181,15 +181,15 @@ TEST(TableBoundary, TwoTablesSameSheetDoNotBleed) {
   t2.sheet_index = 0U;
   t2.header_row = true;
   t2.totals_row = false;
-  io::TableColumn t2_cat;
+  TableColumn t2_cat;
   t2_cat.id = 1U;
   t2_cat.name = "Cat";
-  io::TableColumn t2_val;
+  TableColumn t2_val;
   t2_val.id = 2U;
   t2_val.name = "Val";
   t2.columns = {t2_cat, t2_val};
 
-  std::vector<io::TableMetadata> tables = {std::move(t1), std::move(t2)};
+  std::vector<TableMetadata> tables = {std::move(t1), std::move(t2)};
   wb.set_tables(std::move(tables));
 
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 5U, 0U, "=SUM(Alpha[Val])")));
@@ -301,7 +301,7 @@ TEST(TableBoundary, ResizingTableExtendsDataRange) {
   // tables by value, so we replace the whole vector.) The resolver
   // re-reads `wb.tables()` on every evaluation, so the next recalc picks
   // up the new range.
-  std::vector<io::TableMetadata> tables = wb.tables();
+  std::vector<TableMetadata> tables = wb.tables();
   ASSERT_EQ(tables.size(), 1U);
   tables[0].ref = "A1:C8";
   wb.set_tables(std::move(tables));

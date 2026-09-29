@@ -10,12 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "eval/utf8_length.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace io {
@@ -100,7 +100,7 @@ void emit_phonetic_tail(std::vector<std::uint8_t>& payload, const std::vector<Ph
     emit_u16(payload, narrow_offset(kana_offset));
     emit_u16(payload, narrow_offset(run.sb));
     emit_u16(payload, narrow_offset(run.eb > run.sb ? run.eb - run.sb : 0U));
-    kana_offset += eval::utf16_units_in(run.text);
+    kana_offset += utf16_units_in(run.text);
   }
   emit_u16(payload, props.font_id);
   emit_u16(payload, pack_phonetic_flags(props));

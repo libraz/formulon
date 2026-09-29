@@ -60,12 +60,12 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
-#include "eval/pivot_locale.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_index.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -315,7 +315,7 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
     // named, and that label is what the (field, item) pairs below match, so it
     // has to be resolved before the hierarchy is built.
     Expected<pivot::PivotResult, Error> evaluated =
-        pivot::evaluate(*table, *cache, pivot_layout_options_for(ctx.workbook()->excel_profile()),
+        pivot::evaluate(*table, *cache, pivot::pivot_layout_options_for(ctx.workbook()->excel_profile()),
                         pivot::PivotFilterEnv{ctx.pinned_now(), ctx.date1904()});
     if (!evaluated) {
       // Hide internal evaluator error codes behind the Mac-visible

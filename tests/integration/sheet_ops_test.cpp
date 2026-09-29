@@ -10,15 +10,15 @@
 #include <string>
 
 #include "cf/cf_types.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/ooxml_writer.h"
-#include "io/tables_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
+#include "table.h"
 #include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
@@ -265,14 +265,14 @@ TEST(WorkbookSheetOps, RenameUpdatesWorkbookScopedDefinedNames) {
   // Pre-populate two defined names that both mention `Beta`. A sheet-scoped
   // name remains bound to its local sheet by ordinal, but its formula text
   // may still explicitly target the renamed sheet and must follow the name.
-  std::vector<io::DefinedName> names;
-  io::DefinedName wb_scoped;
+  std::vector<DefinedName> names;
+  DefinedName wb_scoped;
   wb_scoped.name = "TotalArea";
   wb_scoped.formula = "Beta!$A$1:$A$10";
   wb_scoped.local_sheet_id = -1;
   names.push_back(wb_scoped);
 
-  io::DefinedName sheet_scoped;
+  DefinedName sheet_scoped;
   sheet_scoped.name = "RegionA";
   sheet_scoped.formula = "Beta!$B$2";
   sheet_scoped.local_sheet_id = 2;
@@ -291,8 +291,8 @@ TEST(WorkbookSheetOps, RenameUpdatesQuotedSheetReferences) {
   wb.add_sheet("With Space");
   wb.add_sheet("Other");
 
-  std::vector<io::DefinedName> names;
-  io::DefinedName dn;
+  std::vector<DefinedName> names;
+  DefinedName dn;
   dn.name = "Q";
   dn.formula = "'With Space'!$A$1";
   dn.local_sheet_id = -1;
@@ -310,8 +310,8 @@ TEST(WorkbookSheetOps, RenameToNameRequiringQuotesAddsQuotes) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Beta");
 
-  std::vector<io::DefinedName> names;
-  io::DefinedName dn;
+  std::vector<DefinedName> names;
+  DefinedName dn;
   dn.name = "X";
   dn.formula = "Beta!$A$1";
   dn.local_sheet_id = -1;
@@ -330,8 +330,8 @@ TEST(WorkbookSheetOps, RenameAcrossExpressionAndCallArgs) {
   wb.add_sheet("Beta");
   wb.add_sheet("Other");
 
-  std::vector<io::DefinedName> names;
-  io::DefinedName dn;
+  std::vector<DefinedName> names;
+  DefinedName dn;
   dn.name = "Total";
   dn.formula = "SUM(Beta!$A$1:$A$10)+Beta!B2";
   dn.local_sheet_id = -1;
@@ -350,8 +350,8 @@ TEST(WorkbookSheetOps, RenameDoesNotMatchIdentifierSubstrings) {
   wb.add_sheet("Sheet1");
   wb.add_sheet("OtherSheet1");
 
-  std::vector<io::DefinedName> names;
-  io::DefinedName dn;
+  std::vector<DefinedName> names;
+  DefinedName dn;
   dn.name = "X";
   dn.formula = "OtherSheet1!$A$1";
   dn.local_sheet_id = -1;
@@ -386,7 +386,7 @@ TEST(WorkbookSheetOps, RenameRewritesReferencingCellFormulas) {
 
 TEST(WorkbookSheetOps, RenameRewritesSheetNamedMetadata) {
   Workbook wb = ThreeSheetWorkbook();  // Alpha(0), Beta(1), Gamma(2)
-  io::DefinedName local_name;
+  DefinedName local_name;
   local_name.name = "LocalRef";
   local_name.local_sheet_id = 0;
   local_name.formula = "Gamma!$A$1";
@@ -417,13 +417,13 @@ TEST(WorkbookSheetOps, RenameRewritesSheetNamedMetadata) {
   conditional_format.rules.push_back(std::move(rule));
   wb.sheet(0).mutable_conditional_formats().push_back(std::move(conditional_format));
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Table1";
   table.display_name = "Table1";
   table.ref = "A1:B2";
   table.sheet_index = 0;
-  table.columns.push_back(io::TableColumn{1, "Value", {}, {}, "Gamma!$A$1"});
+  table.columns.push_back(TableColumn{1, "Value", {}, {}, "Gamma!$A$1"});
   wb.set_tables({std::move(table)});
 
   auto cache = std::make_unique<pivot::PivotCache>();
@@ -489,7 +489,7 @@ TEST(WorkbookSheetOps, RemoveDropsPivotCacheWhoseWorksheetSourceWasRemoved) {
 
 TEST(WorkbookSheetOps, SheetOperationsKeepTablesAttachedToTheirOwningSheet) {
   Workbook wb = ThreeSheetWorkbook();
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Table1";
   table.display_name = "Table1";
@@ -511,7 +511,7 @@ TEST(WorkbookSheetOps, SheetOperationsKeepTablesAttachedToTheirOwningSheet) {
 
 TEST(WorkbookSheetOps, WriterRejectsTableDetachedFromAllSheets) {
   Workbook wb = Workbook::create();
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Detached";
   table.display_name = "Detached";
@@ -625,14 +625,14 @@ TEST(WorkbookSheetOps, RemoveRejectsOutOfRange) {
 
 TEST(WorkbookSheetOps, RemoveFreezesWorkbookScopedNamesTargetingRemovedSheet) {
   Workbook wb = ThreeSheetWorkbook();
-  std::vector<io::DefinedName> names;
-  io::DefinedName keep;
+  std::vector<DefinedName> names;
+  DefinedName keep;
   keep.name = "Keeper";
   keep.formula = "Alpha!$A$1";
   keep.local_sheet_id = -1;
   names.push_back(keep);
 
-  io::DefinedName frozen;
+  DefinedName frozen;
   frozen.name = "Goner";
   frozen.formula = "Beta!$A$1";
   frozen.local_sheet_id = -1;
@@ -649,14 +649,14 @@ TEST(WorkbookSheetOps, RemoveFreezesWorkbookScopedNamesTargetingRemovedSheet) {
 
 TEST(WorkbookSheetOps, RemoveAdjustsSheetScopedLocalIds) {
   Workbook wb = ThreeSheetWorkbook();
-  std::vector<io::DefinedName> names;
-  io::DefinedName scoped_alpha;
+  std::vector<DefinedName> names;
+  DefinedName scoped_alpha;
   scoped_alpha.name = "A";
   scoped_alpha.formula = "$A$1";
   scoped_alpha.local_sheet_id = 0;
   names.push_back(scoped_alpha);
 
-  io::DefinedName scoped_gamma;
+  DefinedName scoped_gamma;
   scoped_gamma.name = "G";
   scoped_gamma.formula = "$A$1";
   scoped_gamma.local_sheet_id = 2;
@@ -710,16 +710,16 @@ TEST(WorkbookSheetOps, MoveRejectsOutOfRange) {
 
 TEST(WorkbookSheetOps, MoveAdjustsSheetScopedLocalIds) {
   Workbook wb = ThreeSheetWorkbook();
-  std::vector<io::DefinedName> names;
-  io::DefinedName name_alpha;
+  std::vector<DefinedName> names;
+  DefinedName name_alpha;
   name_alpha.name = "A";
   name_alpha.formula = "$A$1";
   name_alpha.local_sheet_id = 0;
-  io::DefinedName name_beta;
+  DefinedName name_beta;
   name_beta.name = "B";
   name_beta.formula = "$A$1";
   name_beta.local_sheet_id = 1;
-  io::DefinedName name_gamma;
+  DefinedName name_gamma;
   name_gamma.name = "C";
   name_gamma.formula = "$A$1";
   name_gamma.local_sheet_id = 2;
@@ -912,13 +912,13 @@ TEST(WorkbookRowColEdits, InsertRowsShiftsConditionalFormatsLayoutAndBreaks) {
   sheet.mutable_layout().columns.push_back(ColumnLayout{1, 2, 18.0, true, 2});
   sheet.mutable_print_settings().manual_row_breaks.push_back(ManualBreak{3, 0, 10, true});
   sheet.mutable_print_settings().manual_col_breaks.push_back(ManualBreak{2, 0, 10, true});
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Table1";
   table.display_name = "Table1";
   table.sheet_index = 0;
   table.ref = "A2:B3";
-  table.columns.push_back(io::TableColumn{1, "Value", {}, {}, "A2"});
+  table.columns.push_back(TableColumn{1, "Value", {}, {}, "A2"});
   wb.set_tables({table});
   auto pivot = std::make_unique<pivot::PivotTable>();
   pivot->set_anchor(2, 1, 3, 2);
@@ -1139,9 +1139,9 @@ TEST(WorkbookRowColEdits, ThreeDDefinedNamesAndNamedLambdasRecalculateAfterRowEd
   wb.add_sheet("Second");
   wb.add_sheet("Summary");
   wb.set_defined_names({
-      io::DefinedName{"Inner", "SUM(First:Second!A1:A3)", -1, false, ""},
-      io::DefinedName{"Outer", "Inner+0", -1, false, ""},
-      io::DefinedName{"F", "LAMBDA(x,Outer+x)", -1, false, ""},
+      DefinedName{"Inner", "SUM(First:Second!A1:A3)", -1, false, ""},
+      DefinedName{"Outer", "Inner+0", -1, false, ""},
+      DefinedName{"F", "LAMBDA(x,Outer+x)", -1, false, ""},
   });
   for (std::uint32_t row = 0; row < 4U; ++row) {
     ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, row, 0, Value::number(static_cast<double>(row + 1U)))));
@@ -1234,7 +1234,7 @@ TEST(WorkbookRowColEdits, ThreeDOwnerMoveWithDefinedNameReindexKeepsRegistryCoor
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("First");
   wb.add_sheet("Second");
-  wb.set_defined_names({io::DefinedName{"Region", "First!A2:A3", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Region", "First!A2:A3", -1, false, ""}});
   for (std::uint32_t row = 0; row < 4U; ++row) {
     ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, row, 0, Value::number(static_cast<double>(row + 1U)))));
   }
@@ -1581,8 +1581,8 @@ TEST(WorkbookRowColEdits, DeleteRowsClampsStraddlingMerge) {
 
 TEST(WorkbookRowColEdits, InsertRowsRewritesDefinedName) {
   Workbook wb = Workbook::create();
-  std::vector<io::DefinedName> names;
-  io::DefinedName dn;
+  std::vector<DefinedName> names;
+  DefinedName dn;
   dn.name = "Region";
   dn.formula = "Sheet1!$A$5:$A$10";
   dn.local_sheet_id = -1;
@@ -1602,8 +1602,8 @@ TEST(WorkbookRowColEdits, InsertRowsRewritesDefinedName) {
 // the cells the name actually covers.
 TEST(WorkbookRowColEdits, InsertRowsReindexesFormulasThatReachRangesViaDefinedName) {
   Workbook wb = Workbook::create();
-  std::vector<io::DefinedName> names;
-  io::DefinedName dn;
+  std::vector<DefinedName> names;
+  DefinedName dn;
   dn.name = "Region";
   dn.formula = "Sheet1!$A$2:$A$3";
   dn.local_sheet_id = -1;
@@ -1787,7 +1787,7 @@ TEST(WorkbookSheetOps, RenameUsesAstForThreeDFormulaAndPreservesStringLiteral) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 0, 0, Value::number(3.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 0, 0, "=SUM(Alpha:Beta!A1)")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 1, 0, "=\"Alpha!x\"")));
-  wb.set_defined_names({io::DefinedName{"Span", "SUM(Alpha:Beta!A1)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Span", "SUM(Alpha:Beta!A1)", -1, false, ""}});
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   EXPECT_DOUBLE_EQ(wb.sheet(2).cell_at(0, 0)->cached_value.as_number(), 5.0);
 
@@ -1808,7 +1808,7 @@ TEST(WorkbookSheetOps, RenameQuotesApostropheInThreeDEndpoint) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(2.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 0, 0, Value::number(3.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 0, 0, "=SUM('2026 Q1:Feb'!A1)")));
-  wb.set_defined_names({io::DefinedName{"Span", "SUM('2026 Q1:Feb'!A1)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Span", "SUM('2026 Q1:Feb'!A1)", -1, false, ""}});
   ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "2026 Q1's")));
   EXPECT_EQ(wb.sheet(2).cell_at(0, 0)->formula_text, "=SUM('2026 Q1''s:Feb'!A1)");
   EXPECT_EQ(wb.defined_names()[0].formula, "SUM('2026 Q1''s:Feb'!A1)");
@@ -1894,22 +1894,22 @@ TEST(WorkbookSheetOps, RemoveTransformsAllFormulaMetadataAndDropsDanglingPivotSt
   validation.formula2 = "Drop!B1";
   wb.sheet(1).mutable_validations().push_back(validation);
 
-  io::TableMetadata dropped_table;
+  TableMetadata dropped_table;
   dropped_table.id = 1;
   dropped_table.name = "DropTable";
   dropped_table.display_name = "DropTable";
   dropped_table.ref = "A1:B2";
   dropped_table.sheet_index = 0;
-  io::TableMetadata survivor_table;
+  TableMetadata survivor_table;
   survivor_table.id = 2;
   survivor_table.name = "SurvivorTable";
   survivor_table.display_name = "SurvivorTable";
   survivor_table.ref = "A1:B2";
   survivor_table.sheet_index = 1;
-  survivor_table.columns.push_back(io::TableColumn{1, "Value", {}, {}, "Drop!A1"});
+  survivor_table.columns.push_back(TableColumn{1, "Value", {}, {}, "Drop!A1"});
   wb.set_tables({std::move(dropped_table), std::move(survivor_table)});
 
-  wb.set_defined_names({io::DefinedName{"DropName", "Drop!A1", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"DropName", "Drop!A1", -1, false, ""}});
   auto dropped_cache = std::make_unique<pivot::PivotCache>();
   dropped_cache->set_cache_id(11);
   dropped_cache->mutable_worksheet_source() = {true, "$A$1:$B$2", "Drop", ""};
@@ -1979,14 +1979,14 @@ TEST(WorkbookSheetOps, RemoveReindexesSurvivingScopedNameBeforeDependentRecalc) 
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 0, 1, Value::text("Value"))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 1, 0, Value::text("row-1"))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 1, 1, Value::number(2.0))));
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 7U;
   table.name = "SurvivorTable";
   table.display_name = "SurvivorTable";
   table.ref = "A1:B2";
   table.sheet_index = 1U;
   table.header_row = true;
-  table.columns = {io::TableColumn{1U, "Label", {}, {}, {}}, io::TableColumn{2U, "Value", {}, {}, {}}};
+  table.columns = {TableColumn{1U, "Label", {}, {}, {}}, TableColumn{2U, "Value", {}, {}, {}}};
   wb.set_tables({table});
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Local", "$B$2", 1)));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 0, 2, "=Local")));

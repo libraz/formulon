@@ -37,17 +37,17 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/ooxml_reader.h"
-#include "io/passthrough_part.h"
-#include "io/tables_reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "sheet.h"
+#include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
@@ -141,8 +141,8 @@ bool defined_names_equal(const Workbook& a, const Workbook& b) {
     return false;
   }
   for (std::size_t i = 0; i < a.defined_names().size(); ++i) {
-    const io::DefinedName& x = a.defined_names()[i];
-    const io::DefinedName& y = b.defined_names()[i];
+    const DefinedName& x = a.defined_names()[i];
+    const DefinedName& y = b.defined_names()[i];
     if (x.name != y.name || x.formula != y.formula || x.local_sheet_id != y.local_sheet_id || x.hidden != y.hidden ||
         x.comment != y.comment) {
       return false;
@@ -161,8 +161,8 @@ bool tables_equal(const Workbook& a, const Workbook& b) {
     return false;
   }
   for (std::size_t i = 0; i < a.tables().size(); ++i) {
-    const io::TableMetadata& x = a.tables()[i];
-    const io::TableMetadata& y = b.tables()[i];
+    const TableMetadata& x = a.tables()[i];
+    const TableMetadata& y = b.tables()[i];
     if (x.id != y.id || x.name != y.name || x.display_name != y.display_name || x.ref != y.ref ||
         x.sheet_index != y.sheet_index || x.header_row != y.header_row || x.totals_row != y.totals_row) {
       return false;
@@ -187,9 +187,9 @@ bool passthrough_parts_equal(const Workbook& a, const Workbook& b) {
   if (a.passthrough_parts().size() != b.passthrough_parts().size()) {
     return false;
   }
-  for (const io::PassthroughPart& x : a.passthrough_parts()) {
+  for (const PassthroughPart& x : a.passthrough_parts()) {
     auto it = std::find_if(b.passthrough_parts().begin(), b.passthrough_parts().end(),
-                           [&x](const io::PassthroughPart& y) { return y.path == x.path; });
+                           [&x](const PassthroughPart& y) { return y.path == x.path; });
     if (it == b.passthrough_parts().end()) {
       return false;
     }
@@ -532,7 +532,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildIterativeCircular() {
   // A1 = B1 + 1; B1 = A1.
   RETURN_IF_ERROR(wb.set_cell_formula(0U, 0U, 0U, "=B1+1"));
   RETURN_IF_ERROR(wb.set_cell_formula(0U, 0U, 1U, "=A1"));
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 20U;
   opts.max_change = 0.01;
@@ -542,8 +542,8 @@ Expected<std::vector<std::uint8_t>, Error> BuildIterativeCircular() {
 
 Expected<std::vector<std::uint8_t>, Error> BuildDefinedNamesWorkbookScope() {
   Workbook wb = Workbook::create();
-  std::vector<io::DefinedName> names;
-  io::DefinedName n;
+  std::vector<DefinedName> names;
+  DefinedName n;
   n.name = "Sales";
   n.formula = "Sheet1!$A$1:$A$10";
   names.push_back(std::move(n));
@@ -553,8 +553,8 @@ Expected<std::vector<std::uint8_t>, Error> BuildDefinedNamesWorkbookScope() {
 
 Expected<std::vector<std::uint8_t>, Error> BuildDefinedNamesSheetScope() {
   Workbook wb = Workbook::create();
-  std::vector<io::DefinedName> names;
-  io::DefinedName n;
+  std::vector<DefinedName> names;
+  DefinedName n;
   n.name = "LocalRange";
   n.formula = "Sheet1!$B$1:$B$5";
   n.local_sheet_id = 0;
@@ -567,7 +567,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildDefinedNamesSheetScope() {
 
 Expected<std::vector<std::uint8_t>, Error> BuildSingleTable() {
   Workbook wb = Workbook::create();
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1U;
   table.name = "SalesTable";
   table.display_name = "SalesTable";
@@ -575,10 +575,10 @@ Expected<std::vector<std::uint8_t>, Error> BuildSingleTable() {
   table.sheet_index = 0U;
   table.header_row = true;
   table.totals_row = true;
-  table.columns.push_back(io::TableColumn{1U, "Region", "Total", "", ""});
-  table.columns.push_back(io::TableColumn{2U, "Q1", "", "sum", ""});
-  table.columns.push_back(io::TableColumn{3U, "Q2", "", "sum", ""});
-  std::vector<io::TableMetadata> tables;
+  table.columns.push_back(TableColumn{1U, "Region", "Total", "", ""});
+  table.columns.push_back(TableColumn{2U, "Q1", "", "sum", ""});
+  table.columns.push_back(TableColumn{3U, "Q2", "", "sum", ""});
+  std::vector<TableMetadata> tables;
   tables.push_back(std::move(table));
   wb.set_tables(std::move(tables));
   return SaveBytes(wb);
@@ -589,34 +589,34 @@ Expected<std::vector<std::uint8_t>, Error> BuildMultipleTables() {
   wb.add_sheet("Sheet1");
   wb.add_sheet("Sheet2");
 
-  std::vector<io::TableMetadata> tables;
-  io::TableMetadata t1;
+  std::vector<TableMetadata> tables;
+  TableMetadata t1;
   t1.id = 1U;
   t1.name = "Tbl1";
   t1.display_name = "Tbl1";
   t1.ref = "A1:B3";
   t1.sheet_index = 0U;
-  t1.columns.push_back(io::TableColumn{1U, "X", "", "", ""});
-  t1.columns.push_back(io::TableColumn{2U, "Y", "", "", ""});
+  t1.columns.push_back(TableColumn{1U, "X", "", "", ""});
+  t1.columns.push_back(TableColumn{2U, "Y", "", "", ""});
   tables.push_back(std::move(t1));
 
-  io::TableMetadata t2;
+  TableMetadata t2;
   t2.id = 2U;
   t2.name = "Tbl2";
   t2.display_name = "Tbl2";
   t2.ref = "A1:B2";
   t2.sheet_index = 0U;
-  t2.columns.push_back(io::TableColumn{1U, "P", "", "", ""});
-  t2.columns.push_back(io::TableColumn{2U, "Q", "", "", ""});
+  t2.columns.push_back(TableColumn{1U, "P", "", "", ""});
+  t2.columns.push_back(TableColumn{2U, "Q", "", "", ""});
   tables.push_back(std::move(t2));
 
-  io::TableMetadata t3;
+  TableMetadata t3;
   t3.id = 3U;
   t3.name = "Tbl3";
   t3.display_name = "Tbl3";
   t3.ref = "A1:A2";
   t3.sheet_index = 1U;
-  t3.columns.push_back(io::TableColumn{1U, "Z", "", "", ""});
+  t3.columns.push_back(TableColumn{1U, "Z", "", "", ""});
   tables.push_back(std::move(t3));
 
   wb.set_tables(std::move(tables));
@@ -691,23 +691,23 @@ Expected<std::vector<std::uint8_t>, Error> BuildKitchenSink() {
   wb.add_sheet("\xE6\x97\xA5\xE6\x9C\xAC");  // "日本"
 
   // Defined name (workbook-scope).
-  std::vector<io::DefinedName> names;
-  io::DefinedName n;
+  std::vector<DefinedName> names;
+  DefinedName n;
   n.name = "ComboName";
   n.formula = "Sheet1!$A$1";
   names.push_back(std::move(n));
   wb.set_defined_names(std::move(names));
 
   // Table on Sheet1.
-  io::TableMetadata tab;
+  TableMetadata tab;
   tab.id = 1U;
   tab.name = "ComboTable";
   tab.display_name = "ComboTable";
   tab.ref = "A1:B2";
   tab.sheet_index = 0U;
-  tab.columns.push_back(io::TableColumn{1U, "Alpha", "", "", ""});
-  tab.columns.push_back(io::TableColumn{2U, "Beta", "", "", ""});
-  std::vector<io::TableMetadata> tables;
+  tab.columns.push_back(TableColumn{1U, "Alpha", "", "", ""});
+  tab.columns.push_back(TableColumn{2U, "Beta", "", "", ""});
+  std::vector<TableMetadata> tables;
   tables.push_back(std::move(tab));
   wb.set_tables(std::move(tables));
 
@@ -720,7 +720,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildKitchenSink() {
   // Iterative circular pair on Sheet2 (rows 5-6).
   RETURN_IF_ERROR(wb.set_cell_formula(1U, 5U, 0U, "=B6+0.5"));
   RETURN_IF_ERROR(wb.set_cell_formula(1U, 5U, 1U, "=A6"));
-  eval::IterativeOptions opts;
+  IterativeOptions opts;
   opts.enabled = true;
   opts.max_iterations = 20U;
   opts.max_change = 0.01;
@@ -930,7 +930,7 @@ void AssertDefinedNamesSheetScope(const Workbook& wb) {
 
 void AssertSingleTable(const Workbook& wb) {
   ASSERT_EQ(wb.tables().size(), 1U);
-  const io::TableMetadata& t = wb.tables()[0];
+  const TableMetadata& t = wb.tables()[0];
   EXPECT_EQ(t.name, "SalesTable");
   EXPECT_EQ(t.ref, "A1:C5");
   ASSERT_EQ(t.columns.size(), 3U);
@@ -977,7 +977,7 @@ void AssertPassthroughTheme(const Workbook& wb) {
   // Passthrough must include the theme1 part with non-empty bytes.
   const auto& parts = wb.passthrough_parts();
   auto it = std::find_if(parts.begin(), parts.end(),
-                         [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
+                         [](const PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
   ASSERT_NE(it, parts.end()) << "theme part missing from passthrough";
   EXPECT_FALSE(it->bytes.empty());
 }
@@ -1009,7 +1009,7 @@ void AssertKitchenSink(const Workbook& wb) {
   // Passthrough preserved.
   const auto& parts = wb.passthrough_parts();
   auto it = std::find_if(parts.begin(), parts.end(),
-                         [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
+                         [](const PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
   EXPECT_NE(it, parts.end());
   // Mixed formula present.
   const Cell* a2 = CellAt(wb, 0U, 1U, 0U);

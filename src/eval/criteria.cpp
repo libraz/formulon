@@ -12,9 +12,9 @@
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
 #include "eval/jp_fold.h"
-#include "eval/text_ops.h"
-#include "eval/utf8_length.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 namespace formulon {

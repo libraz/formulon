@@ -16,7 +16,6 @@
 #include <utility>
 #include <vector>
 
-#include "eval/pivot_locale.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -24,6 +23,7 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -556,7 +556,7 @@ TEST(OoxmlWriterPivot, LocationRefCoversTheRenderedGridNotThePlaceholderSpan) {
   const pivot::PivotTable& built = *source.sheet(0).pivot_tables().front();
   const pivot::PivotCache* cache = source.find_pivot_cache(built.pivot_cache_id());
   ASSERT_NE(cache, nullptr);
-  const pivot::PivotLayoutOptions options = eval::pivot_layout_options_for(source.excel_profile());
+  const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(source.excel_profile());
   auto eval_or = pivot::evaluate(built, *cache, options);
   ASSERT_TRUE(static_cast<bool>(eval_or)) << eval_or.error().message;
   auto cells_or = pivot::layout(built, eval_or.value(), options);

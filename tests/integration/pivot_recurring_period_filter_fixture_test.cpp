@@ -34,7 +34,6 @@
 #include <utility>
 #include <vector>
 
-#include "eval/date_time.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "pivot/filter_engine.h"
@@ -44,6 +43,7 @@
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "sheet.h"
+#include "utils/date_time.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -172,9 +172,9 @@ TEST(PivotRecurringPeriodFilterFixture, TheResultDoesNotMoveWithTheClock) {
   // A window filter over 2024 dates would be empty at both readings.
   Workbook wb = LoadFixture();
   pivot::PivotFilterEnv early;
-  early.pinned_now = eval::date_time::CivilTime{{2024, 5U, 20U}, {0U, 0U, 0U}};
+  early.pinned_now = date_time::CivilTime{{2024, 5U, 20U}, {0U, 0U, 0U}};
   pivot::PivotFilterEnv late;
-  late.pinned_now = eval::date_time::CivilTime{{2099, 11U, 3U}, {0U, 0U, 0U}};
+  late.pinned_now = date_time::CivilTime{{2099, 11U, 3U}, {0U, 0U, 0U}};
 
   const auto early_rows = EvaluateRows(wb, kRecurringSheet, early);
   const auto late_rows = EvaluateRows(wb, kRecurringSheet, late);

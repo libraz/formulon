@@ -11,9 +11,9 @@
 #include <string_view>
 
 #include "cf/cf_types.h"
-#include "io/ooxml_writer_cell.h"
 #include "io/xml_escape.h"
 #include "utils/a1_column.h"
+#include "utils/a1_ref.h"
 
 namespace formulon::io {
 namespace {
@@ -200,12 +200,12 @@ bool AppendA1Range(std::string& out, const cf::CFCellRange& r) {
     encoded.push_back(':');
     encoded.append(std::to_string(r.last.row + 1U));
   } else {
-    encoded = EncodeA1(r.first.row, r.first.col);
+    encoded = a1::encode_a1(r.first.row, r.first.col);
     if (encoded.empty()) {
       return false;
     }
     if (r.first != r.last) {
-      const std::string last = EncodeA1(r.last.row, r.last.col);
+      const std::string last = a1::encode_a1(r.last.row, r.last.col);
       if (last.empty()) {
         return false;
       }

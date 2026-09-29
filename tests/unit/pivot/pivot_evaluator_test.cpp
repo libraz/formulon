@@ -19,7 +19,6 @@
 #include <variant>
 #include <vector>
 
-#include "eval/date_time.h"
 #include "eval/groupby_pivotby/common.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
@@ -31,6 +30,7 @@
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
 #include "utils/checked_index.h"
+#include "utils/date_time.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -1394,8 +1394,8 @@ TEST(PivotEvaluator, DateGroupingBySecond) {
 // record was actually authored under.
 TEST(PivotEvaluator, DateGroupingByYearHonorsDate1904Epoch) {
   PivotCache cache = build_two_field_cache();
-  push_record(cache, eval::date_time::serial_from_ymd(2024, 3, 15, /*date1904=*/true), 10.0);
-  push_record(cache, eval::date_time::serial_from_ymd(2023, 6, 1, /*date1904=*/true), 20.0);
+  push_record(cache, date_time::serial_from_ymd(2024, 3, 15, /*date1904=*/true), 10.0);
+  push_record(cache, date_time::serial_from_ymd(2023, 6, 1, /*date1904=*/true), 20.0);
 
   PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
   PivotFilterEnv env;
@@ -1698,14 +1698,14 @@ namespace {
 
 // 2026-05-20 12:00:00. Mid-month, mid-quarter, so every window's two
 // boundaries are distinct from the reading itself.
-constexpr eval::date_time::CivilTime kMay20{{2026, 5U, 20U}, {12U, 0U, 0U}};
+constexpr date_time::CivilTime kMay20{{2026, 5U, 20U}, {12U, 0U, 0U}};
 
 double Serial(int year, unsigned month, unsigned day) {
-  return eval::date_time::serial_from_ymd(year, month, day, /*date1904=*/false);
+  return date_time::serial_from_ymd(year, month, day, /*date1904=*/false);
 }
 
-void ExpectWindow(RelativePeriod period, const eval::date_time::CivilTime& now, int low_y, unsigned low_m,
-                  unsigned low_d, int high_y, unsigned high_m, unsigned high_d) {
+void ExpectWindow(RelativePeriod period, const date_time::CivilTime& now, int low_y, unsigned low_m, unsigned low_d,
+                  int high_y, unsigned high_m, unsigned high_d) {
   const DateWindow window = resolve_relative_period(period, now, /*date1904=*/false);
   EXPECT_DOUBLE_EQ(window.low, Serial(low_y, low_m, low_d));
   EXPECT_DOUBLE_EQ(window.high, Serial(high_y, high_m, high_d));
@@ -1747,16 +1747,16 @@ TEST(RelativePeriod, YearToDateStopsAtTheReadingNotAtYearEnd) {
 TEST(RelativePeriod, WindowsRollOverTheYearBoundary) {
   // January is the case the explicit month arithmetic exists for: naive
   // subtraction would produce month 0 rather than the previous December.
-  constexpr eval::date_time::CivilTime kJan10{{2026, 1U, 10U}, {0U, 0U, 0U}};
+  constexpr date_time::CivilTime kJan10{{2026, 1U, 10U}, {0U, 0U, 0U}};
   ExpectWindow(RelativePeriod::LastMonth, kJan10, 2025, 12, 1, 2025, 12, 31);
   ExpectWindow(RelativePeriod::LastQuarter, kJan10, 2025, 10, 1, 2025, 12, 31);
-  constexpr eval::date_time::CivilTime kDec10{{2026, 12U, 10U}, {0U, 0U, 0U}};
+  constexpr date_time::CivilTime kDec10{{2026, 12U, 10U}, {0U, 0U, 0U}};
   ExpectWindow(RelativePeriod::NextMonth, kDec10, 2027, 1, 1, 2027, 1, 31);
   ExpectWindow(RelativePeriod::NextQuarter, kDec10, 2027, 1, 1, 2027, 3, 31);
 }
 
 TEST(RelativePeriod, LeapFebruaryKeepsItsTwentyNinthDay) {
-  constexpr eval::date_time::CivilTime kFeb2024{{2024, 2U, 5U}, {0U, 0U, 0U}};
+  constexpr date_time::CivilTime kFeb2024{{2024, 2U, 5U}, {0U, 0U, 0U}};
   ExpectWindow(RelativePeriod::ThisMonth, kFeb2024, 2024, 2, 1, 2024, 2, 29);
 }
 
@@ -1764,15 +1764,15 @@ TEST(RelativePeriod, TheWindowFollowsTheWorkbookEpoch) {
   // A 1904-system workbook stores every date 1462 lower, so the resolved
   // window has to shift with it or it would select the wrong records.
   const DateWindow window = resolve_relative_period(RelativePeriod::ThisMonth, kMay20, /*date1904=*/true);
-  EXPECT_DOUBLE_EQ(window.low, Serial(2026, 5, 1) - eval::date_time::kDate1904EpochGap);
-  EXPECT_DOUBLE_EQ(window.high, Serial(2026, 5, 31) - eval::date_time::kDate1904EpochGap);
+  EXPECT_DOUBLE_EQ(window.low, Serial(2026, 5, 1) - date_time::kDate1904EpochGap);
+  EXPECT_DOUBLE_EQ(window.high, Serial(2026, 5, 31) - date_time::kDate1904EpochGap);
 }
 
 TEST(RelativePeriod, WeekWindowsRunSundayThroughSaturday) {
   // Excel anchors the week group on the calendar week, so a reading taken
   // mid-week still starts the window on the preceding Sunday rather than
   // seven days back from the reading. 2026-08-21 is a Friday.
-  constexpr eval::date_time::CivilTime kAug21{{2026, 8U, 21U}, {9U, 30U, 0U}};
+  constexpr date_time::CivilTime kAug21{{2026, 8U, 21U}, {9U, 30U, 0U}};
   ExpectWindow(RelativePeriod::ThisWeek, kAug21, 2026, 8, 16, 2026, 8, 22);
   ExpectWindow(RelativePeriod::LastWeek, kAug21, 2026, 8, 9, 2026, 8, 15);
   ExpectWindow(RelativePeriod::NextWeek, kAug21, 2026, 8, 23, 2026, 8, 29);
@@ -1792,20 +1792,20 @@ TEST(RelativePeriod, WeekWindowsTileWithoutGapOrOverlap) {
 TEST(RelativePeriod, AWeekWindowStartingOnSundayDoesNotShiftBack) {
   // A Sunday reading is the boundary case: the week it belongs to is its
   // own, not the one that just ended.
-  constexpr eval::date_time::CivilTime kSunday{{2025, 12U, 28U}, {0U, 0U, 0U}};
+  constexpr date_time::CivilTime kSunday{{2025, 12U, 28U}, {0U, 0U, 0U}};
   ExpectWindow(RelativePeriod::ThisWeek, kSunday, 2025, 12, 28, 2026, 1, 3);
 }
 
 TEST(RelativePeriod, WeekWindowsCrossTheYearBoundary) {
-  constexpr eval::date_time::CivilTime kNewYear{{2026, 1U, 1U}, {0U, 0U, 0U}};
+  constexpr date_time::CivilTime kNewYear{{2026, 1U, 1U}, {0U, 0U, 0U}};
   ExpectWindow(RelativePeriod::ThisWeek, kNewYear, 2025, 12, 28, 2026, 1, 3);
   ExpectWindow(RelativePeriod::LastWeek, kNewYear, 2025, 12, 21, 2025, 12, 27);
 }
 
 TEST(RelativePeriod, TheWeekWindowFollowsTheWorkbookEpoch) {
   const DateWindow window = resolve_relative_period(RelativePeriod::ThisWeek, kMay20, /*date1904=*/true);
-  EXPECT_DOUBLE_EQ(window.low, Serial(2026, 5, 17) - eval::date_time::kDate1904EpochGap);
-  EXPECT_DOUBLE_EQ(window.high, Serial(2026, 5, 23) - eval::date_time::kDate1904EpochGap);
+  EXPECT_DOUBLE_EQ(window.low, Serial(2026, 5, 17) - date_time::kDate1904EpochGap);
+  EXPECT_DOUBLE_EQ(window.high, Serial(2026, 5, 23) - date_time::kDate1904EpochGap);
 }
 
 TEST(PivotEvaluator, RecurringMonthFilterKeepsEveryYearsMatchingMonth) {
@@ -1862,9 +1862,9 @@ TEST(PivotEvaluator, ARecurringFilterIsIndependentOfTheClock) {
   table.mutable_authored_recurring_filters().push_back(f);
 
   PivotFilterEnv early;
-  early.pinned_now = eval::date_time::CivilTime{{1900, 2U, 15U}, {0U, 0U, 0U}};
+  early.pinned_now = date_time::CivilTime{{1900, 2U, 15U}, {0U, 0U, 0U}};
   PivotFilterEnv late;
-  late.pinned_now = eval::date_time::CivilTime{{2099, 11U, 3U}, {0U, 0U, 0U}};
+  late.pinned_now = date_time::CivilTime{{2099, 11U, 3U}, {0U, 0U, 0U}};
   auto early_or = evaluate(table, cache, PivotLayoutOptions{}, early);
   auto late_or = evaluate(table, cache, PivotLayoutOptions{}, late);
   ASSERT_TRUE(static_cast<bool>(early_or)) << early_or.error().message;
@@ -1887,7 +1887,7 @@ TEST(PivotEvaluator, AuthoredPeriodFilterPrunesRecordsAgainstThePinnedClock) {
   table.mutable_authored_period_filters().push_back(f);
 
   PivotFilterEnv env;
-  env.pinned_now = eval::date_time::CivilTime{{1900, 2U, 15U}, {0U, 0U, 0U}};
+  env.pinned_now = date_time::CivilTime{{1900, 2U, 15U}, {0U, 0U, 0U}};
   auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   ASSERT_EQ(r_or.value().rows.size(), 1U);
@@ -1910,7 +1910,7 @@ TEST(PivotEvaluator, MovingThePinnedClockMovesWhichRecordsSurvive) {
   table.mutable_authored_period_filters().push_back(f);
 
   PivotFilterEnv env;
-  env.pinned_now = eval::date_time::CivilTime{{1900, 5U, 15U}, {0U, 0U, 0U}};
+  env.pinned_now = date_time::CivilTime{{1900, 5U, 15U}, {0U, 0U, 0U}};
   auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   ASSERT_EQ(r_or.value().rows.size(), 1U);
@@ -1931,7 +1931,7 @@ TEST(PivotEvaluator, APeriodFilterOnAnOutOfRangeFieldIsInert) {
   table.mutable_authored_period_filters().push_back(f);
 
   PivotFilterEnv env;
-  env.pinned_now = eval::date_time::CivilTime{{1900, 2U, 15U}, {0U, 0U, 0U}};
+  env.pinned_now = date_time::CivilTime{{1900, 2U, 15U}, {0U, 0U, 0U}};
   auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   EXPECT_EQ(r_or.value().rows.size(), 2U);
@@ -3477,10 +3477,10 @@ PivotCache build_label_date_filter_cache() {
     rec.cells.push_back(Value::number(amount));
     cache.mutable_records().push_back(std::move(rec));
   };
-  add(formulon::eval::date_time::serial_from_ymd(2024, 1, 1), 10.0);
-  add(formulon::eval::date_time::serial_from_ymd(2024, 6, 15), 20.0);
-  add(formulon::eval::date_time::serial_from_ymd(2024, 12, 31), 30.0);
-  add(formulon::eval::date_time::serial_from_ymd(2025, 3, 1), 40.0);
+  add(formulon::date_time::serial_from_ymd(2024, 1, 1), 10.0);
+  add(formulon::date_time::serial_from_ymd(2024, 6, 15), 20.0);
+  add(formulon::date_time::serial_from_ymd(2024, 12, 31), 30.0);
+  add(formulon::date_time::serial_from_ymd(2025, 3, 1), 40.0);
   return cache;
 }
 
@@ -3517,8 +3517,8 @@ TEST(PivotEvaluator, LabelDateFilterIncludesInRange) {
   f.axis = PivotAxis::Row;
   f.field_name = "Date";
   f.type = FilterType::LabelDate;
-  f.value = formulon::eval::date_time::serial_from_ymd(2024, 1, 1);
-  f.value_high = formulon::eval::date_time::serial_from_ymd(2024, 12, 31);
+  f.value = formulon::date_time::serial_from_ymd(2024, 1, 1);
+  f.value_high = formulon::date_time::serial_from_ymd(2024, 12, 31);
   table.mutable_active_filters().push_back(std::move(f));
 
   auto r_or = evaluate(table, cache);
@@ -3548,7 +3548,7 @@ TEST(PivotEvaluator, LabelDateFilterUnboundedHighIsNoOp) {
   f.axis = PivotAxis::Row;
   f.field_name = "Date";
   f.type = FilterType::LabelDate;
-  f.value = formulon::eval::date_time::serial_from_ymd(2024, 1, 1);
+  f.value = formulon::date_time::serial_from_ymd(2024, 1, 1);
   // value_high left as default monostate -> filter degrades to no-op.
   table.mutable_active_filters().push_back(std::move(f));
 

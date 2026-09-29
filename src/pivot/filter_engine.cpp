@@ -13,7 +13,6 @@
 #include <variant>
 #include <vector>
 
-#include "eval/date_time.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
@@ -23,6 +22,7 @@
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
 #include "utils/checked_index.h"
+#include "utils/date_time.h"
 #include "utils/index_sort.h"
 #include "value.h"
 
@@ -335,8 +335,7 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
   // midnight would otherwise filter its early records against one day and its
   // later ones against the next.
   if (!table.authored_period_filters().empty()) {
-    const eval::date_time::CivilTime now =
-        env.pinned_now.has_value() ? *env.pinned_now : eval::date_time::host_civil_time();
+    const date_time::CivilTime now = env.pinned_now.has_value() ? *env.pinned_now : date_time::host_civil_time();
     for (const AuthoredPeriodFilter& f : table.authored_period_filters()) {
       if (f.field_index >= table.fields().size()) {
         continue;
@@ -454,7 +453,7 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
     if (serial < 0.0) {
       continue;  // Outside the serial domain `ymd_from_serial` is defined on.
     }
-    const unsigned month = eval::date_time::ymd_from_serial(std::floor(serial), date1904_).m;
+    const unsigned month = date_time::ymd_from_serial(std::floor(serial), date1904_).m;
     if (month < resolved.month_low || month > resolved.month_high) {
       return false;
     }
@@ -462,9 +461,9 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
   return true;
 }
 
-DateWindow resolve_relative_period(RelativePeriod period, const eval::date_time::CivilTime& now, bool date1904) {
+DateWindow resolve_relative_period(RelativePeriod period, const date_time::CivilTime& now, bool date1904) {
   const auto serial = [date1904](int year, unsigned month, unsigned day) {
-    return eval::date_time::serial_from_ymd(year, month, day, date1904);
+    return date_time::serial_from_ymd(year, month, day, date1904);
   };
   // Normalised (year, month) arithmetic. `serial_from_ymd` normalises an
   // out-of-range *day*, but a month of 0 would fall outside the era math it
@@ -499,7 +498,7 @@ DateWindow resolve_relative_period(RelativePeriod period, const eval::date_time:
   // 1900 leap-year bug cannot shift it: 1970-01-01 was a Thursday, which
   // is index 4 when Sunday is 0.
   const auto week_span = [&](int weeks) {
-    const std::int64_t epoch_days = eval::date_time::days_from_civil(year, month, now.date.d);
+    const std::int64_t epoch_days = date_time::days_from_civil(year, month, now.date.d);
     const std::int64_t weekday = ((epoch_days + 4) % 7 + 7) % 7;
     const double start = today - static_cast<double>(weekday) + static_cast<double>(weeks) * 7.0;
     return DateWindow{start, start + 6.0};

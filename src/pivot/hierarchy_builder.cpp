@@ -9,12 +9,12 @@
 #include <utility>
 #include <vector>
 
-#include "eval/date_time.h"
-#include "eval/japanese_era.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
+#include "utils/date_time.h"
+#include "utils/japanese_era.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -72,14 +72,14 @@ void append_year(std::string& out, int y) {
 }
 
 DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
-  using formulon::eval::date_time::civil_from_days;
-  using formulon::eval::date_time::days_from_civil;
-  using formulon::eval::date_time::HMS;
-  using formulon::eval::date_time::hms_from_fraction;
-  using formulon::eval::date_time::YMD;
-  using formulon::eval::date_time::ymd_from_serial;
-  using formulon::eval::japanese_era::classify_era;
-  using formulon::eval::japanese_era::EraInfo;
+  using formulon::date_time::civil_from_days;
+  using formulon::date_time::days_from_civil;
+  using formulon::date_time::HMS;
+  using formulon::date_time::hms_from_fraction;
+  using formulon::date_time::YMD;
+  using formulon::date_time::ymd_from_serial;
+  using formulon::japanese_era::classify_era;
+  using formulon::japanese_era::EraInfo;
 
   // Negative / non-finite serials are not valid Excel dates; pass them
   // through so the existing display path renders the raw number.

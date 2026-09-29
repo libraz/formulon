@@ -13,10 +13,10 @@
 #include "eval/builtins/text_detail.h"
 #include "eval/coerce.h"
 #include "eval/criteria.h"
-#include "eval/text_ops.h"
-#include "eval/utf8_length.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/text_ops.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 namespace formulon {

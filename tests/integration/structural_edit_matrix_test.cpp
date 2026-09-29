@@ -32,14 +32,14 @@
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
-#include "io/tables_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
+#include "table.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -67,8 +67,8 @@ Workbook MakeWorkbook() {
   // A formula referencing them, parked out of the way at (0, 0).
   EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=SUM(D6:D7)")));
 
-  std::vector<io::DefinedName> names;
-  io::DefinedName dn;
+  std::vector<DefinedName> names;
+  DefinedName dn;
   dn.name = "Anchor";
   dn.formula = "Sheet1!$D$6:$D$7";
   dn.local_sheet_id = -1;
@@ -157,7 +157,7 @@ Workbook MakeWorkbook() {
   pivot->set_anchor(kAnchorRow, kAnchorCol, /*rows=*/2, /*cols=*/2);
   sheet.mutable_pivot_tables().push_back(std::move(pivot));
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 1;
   table.name = "Table1";
   table.display_name = "Table1";
@@ -281,13 +281,13 @@ Workbook MakeCrossSheetWorkbook() {
   cross_sheet_validation.formula1 = "Sheet1!$D$6:$D$7";
   other.mutable_validations().push_back(cross_sheet_validation);
 
-  io::TableMetadata table;
+  TableMetadata table;
   table.id = 2;
   table.name = "Table2";
   table.display_name = "Table2";
   table.ref = "A1:B2";
   table.sheet_index = 1;
-  table.columns.push_back(io::TableColumn{1, "Value", {}, {}, "Sheet1!D6*2"});
+  table.columns.push_back(TableColumn{1, "Value", {}, {}, "Sheet1!D6*2"});
   wb.mutable_tables().push_back(table);
 
   auto cache = std::make_unique<pivot::PivotCache>();

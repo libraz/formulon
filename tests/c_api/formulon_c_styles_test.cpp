@@ -372,8 +372,8 @@ TEST(FormulonCApiStyles, UnknownNumFmtIdRejected) {
 TEST(FormulonCApiStyles, DifferentialFormatGetterExposesCfDxfTable) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  formulon::io::StylesTable& styles = wb.handle->workbook().mutable_styles();
-  formulon::io::DifferentialFormat dxf;
+  formulon::StylesTable& styles = wb.handle->workbook().mutable_styles();
+  formulon::DifferentialFormat dxf;
   dxf.has_font = true;
   dxf.font.bold = true;
   dxf.font.color_argb = 0xFFFF0000U;
@@ -556,7 +556,7 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
 TEST(FormulonCApiStyles, DxfFontDistinguishesAnExplicitBoldOffFromAnAbsentToggle) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  formulon::io::DifferentialFormat stored;
+  formulon::DifferentialFormat stored;
   stored.has_font = true;
   stored.font.has_bold = true;  // `<b val="0"/>`: switch bold off
   stored.font.bold = false;
@@ -1285,7 +1285,7 @@ TEST(FormulonCApiStyles, AddNumFmtExhaustionReturnsPreconditionWithoutMutation) 
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   auto& styles = wb.handle->workbook().mutable_styles();
-  formulon::io::NumFmtRecord max_record;
+  formulon::NumFmtRecord max_record;
   max_record.id = 65535U;
   max_record.format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size());
   styles.num_fmt_strings.emplace_back("existing");
@@ -1304,7 +1304,7 @@ TEST(FormulonCApiStyles, AddBatchNumFmtExhaustionIsTransactional) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   auto& styles = wb.handle->workbook().mutable_styles();
-  formulon::io::NumFmtRecord max_record;
+  formulon::NumFmtRecord max_record;
   max_record.id = 65535U;
   max_record.format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size());
   styles.num_fmt_strings.emplace_back("existing");

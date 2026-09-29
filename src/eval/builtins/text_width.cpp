@@ -44,8 +44,8 @@
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/jp_kana_table.h"
-#include "eval/text_ops.h"
 #include "utils/arena.h"
+#include "utils/text_ops.h"
 #include "value.h"
 
 namespace formulon {

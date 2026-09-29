@@ -484,12 +484,12 @@ TEST(OoxmlReader, IterateDeltaOutsideTheLexicalSpaceKeepsTheEngineDefault) {
 
     auto loaded_or = read_ooxml(SpanOf(mutated));
     ASSERT_TRUE(static_cast<bool>(loaded_or)) << spelling << ": " << loaded_or.error().message;
-    const eval::IterativeOptions& opts = loaded_or.value().workbook.iterative_options();
+    const IterativeOptions& opts = loaded_or.value().workbook.iterative_options();
     // The attributes that do lex are still honoured, so the rejection is
     // scoped to the one value rather than to the whole element.
     EXPECT_TRUE(opts.enabled) << spelling;
     EXPECT_EQ(opts.max_iterations, 50U) << spelling;
-    EXPECT_DOUBLE_EQ(opts.max_change, eval::kDefaultMaxChange) << spelling;
+    EXPECT_DOUBLE_EQ(opts.max_change, kDefaultMaxChange) << spelling;
   }
 }
 
@@ -532,9 +532,9 @@ TEST(OoxmlReader, OversizedIterateCountIsClampedToExcelsLimit) {
 
     auto loaded_or = read_ooxml(SpanOf(mutated));
     ASSERT_TRUE(static_cast<bool>(loaded_or)) << spelling << ": " << loaded_or.error().message;
-    const eval::IterativeOptions& opts = loaded_or.value().workbook.iterative_options();
+    const IterativeOptions& opts = loaded_or.value().workbook.iterative_options();
     EXPECT_TRUE(opts.enabled) << spelling;
-    EXPECT_EQ(opts.max_iterations, eval::kMaxIterationsCap) << spelling;
+    EXPECT_EQ(opts.max_iterations, kMaxIterationsCap) << spelling;
   }
 }
 
@@ -552,7 +552,7 @@ TEST(OoxmlReader, IterateCountAtExcelsLimitIsUnchanged) {
 
   auto loaded_or = read_ooxml(SpanOf(mutated));
   ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
-  EXPECT_EQ(loaded_or.value().workbook.iterative_options().max_iterations, eval::kMaxIterationsCap);
+  EXPECT_EQ(loaded_or.value().workbook.iterative_options().max_iterations, kMaxIterationsCap);
 }
 
 // `spinCount` is carried verbatim, so a value wider than the model's

@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "defined_name.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
@@ -27,7 +28,6 @@
 #include "eval/reference/common.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/tree_walker/dispatch.h"
-#include "io/defined_names.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet_name.h"
@@ -366,7 +366,7 @@ bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const Func
     *out_err = ErrorCode::Name;
     return false;
   }
-  const io::DefinedName* def = nullptr;
+  const DefinedName* def = nullptr;
   if (sheet.empty()) {
     def = find_defined_name(ctx, node.as_name());
   } else if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {

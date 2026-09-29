@@ -8,7 +8,7 @@
 // older Excel then resolves the hidden name through the defined-name
 // table and shows `#NAME?` instead of mis-evaluating an unknown callee.
 // The formula bar never shows the prefix, so Formulon strips it on
-// ingestion (`io::strip_storage_prefixes`) and re-applies it on save
+// ingestion (`parser::strip_storage_prefixes`) and re-applies it on save
 // through this module.
 //
 // The prefixed set is enumerated by name. It is deliberately NOT derived

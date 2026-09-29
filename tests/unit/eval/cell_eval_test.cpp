@@ -24,10 +24,10 @@
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
-#include "io/styles_reader.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "styles.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -211,12 +211,12 @@ TEST(BuiltinsCellFormat, GeneralReturnsG) {
 
 TEST(BuiltinsCellFormat, BuiltinNumberFormatCodes) {
   Workbook wb = Workbook::create();
-  io::StylesTable styles;
-  styles.cell_xfs.push_back(io::CellXf{});
-  io::CellXf percent{};
+  StylesTable styles;
+  styles.cell_xfs.push_back(CellXf{});
+  CellXf percent{};
   percent.num_fmt_id = 10U;
   styles.cell_xfs.push_back(percent);
-  io::CellXf date{};
+  CellXf date{};
   date.num_fmt_id = 15U;
   styles.cell_xfs.push_back(date);
   wb.set_styles(std::move(styles));
@@ -235,11 +235,11 @@ TEST(BuiltinsCellColor, DefaultFormatReturnsZero) {
 
 TEST(BuiltinsCellColor, NegativeColorDirectiveReturnsOne) {
   Workbook wb = Workbook::create();
-  io::StylesTable styles;
-  styles.cell_xfs.push_back(io::CellXf{});
+  StylesTable styles;
+  styles.cell_xfs.push_back(CellXf{});
   styles.num_fmt_strings.push_back("0;[Red]0");
-  styles.num_fmts.push_back(io::NumFmtRecord{164U, 0U});
-  io::CellXf colored{};
+  styles.num_fmts.push_back(NumFmtRecord{164U, 0U});
+  CellXf colored{};
   colored.num_fmt_id = 164U;
   styles.cell_xfs.push_back(colored);
   wb.set_styles(std::move(styles));
@@ -249,11 +249,11 @@ TEST(BuiltinsCellColor, NegativeColorDirectiveReturnsOne) {
 
 TEST(BuiltinsCellColor, PositiveOnlyColorDirectiveReturnsZero) {
   Workbook wb = Workbook::create();
-  io::StylesTable styles;
-  styles.cell_xfs.push_back(io::CellXf{});
+  StylesTable styles;
+  styles.cell_xfs.push_back(CellXf{});
   styles.num_fmt_strings.push_back("[Red]0;0");
-  styles.num_fmts.push_back(io::NumFmtRecord{164U, 0U});
-  io::CellXf colored{};
+  styles.num_fmts.push_back(NumFmtRecord{164U, 0U});
+  CellXf colored{};
   colored.num_fmt_id = 164U;
   styles.cell_xfs.push_back(colored);
   wb.set_styles(std::move(styles));
@@ -281,9 +281,9 @@ TEST(BuiltinsCellPrefix, AlwaysEmpty) {
 
 TEST(BuiltinsCellPrefix, QuotePrefixReturnsApostrophe) {
   Workbook wb = Workbook::create();
-  io::StylesTable styles;
-  styles.cell_xfs.push_back(io::CellXf{});
-  io::CellXf quote_prefixed{};
+  StylesTable styles;
+  styles.cell_xfs.push_back(CellXf{});
+  CellXf quote_prefixed{};
   quote_prefixed.quote_prefix = true;
   styles.cell_xfs.push_back(quote_prefixed);
   wb.set_styles(std::move(styles));
@@ -295,10 +295,10 @@ TEST(BuiltinsCellPrefix, QuotePrefixReturnsApostrophe) {
 
 TEST(BuiltinsCellPrefix, AlignmentPrefixesAreReported) {
   Workbook wb = Workbook::create();
-  io::StylesTable styles;
-  styles.cell_xfs.push_back(io::CellXf{});
+  StylesTable styles;
+  styles.cell_xfs.push_back(CellXf{});
   for (uint8_t alignment : {uint8_t{1}, uint8_t{2}, uint8_t{3}}) {
-    io::CellXf xf{};
+    CellXf xf{};
     xf.horizontal_align = alignment;
     styles.cell_xfs.push_back(xf);
   }
@@ -322,9 +322,9 @@ TEST(BuiltinsCellProtect, DefaultCellIsLocked) {
 TEST(BuiltinsCellProtect, UnlockedCellReturnsZero) {
   // A cell whose xf carries `<protection locked="0"/>` -> 0.
   Workbook wb = Workbook::create();
-  io::StylesTable styles;
-  styles.cell_xfs.push_back(io::CellXf{});  // xf 0: default (locked).
-  io::CellXf unlocked{};
+  StylesTable styles;
+  styles.cell_xfs.push_back(CellXf{});  // xf 0: default (locked).
+  CellXf unlocked{};
   unlocked.has_protection = true;
   unlocked.locked = false;
   styles.cell_xfs.push_back(unlocked);  // xf 1: unlocked.
@@ -340,9 +340,9 @@ TEST(BuiltinsCellProtect, ProtectionElementAbsentIsLocked) {
   // An xf whose `<protection>` element is absent defaults to locked -> 1,
   // even when the cell references that xf explicitly.
   Workbook wb = Workbook::create();
-  io::StylesTable styles;
-  styles.cell_xfs.push_back(io::CellXf{});  // xf 0.
-  io::CellXf no_protection{};               // has_protection=false, locked=true.
+  StylesTable styles;
+  styles.cell_xfs.push_back(CellXf{});  // xf 0.
+  CellXf no_protection{};               // has_protection=false, locked=true.
   styles.cell_xfs.push_back(no_protection);
   wb.set_styles(std::move(styles));
   wb.sheet(0).set_cell_value(0, 0, Value::number(5.0));

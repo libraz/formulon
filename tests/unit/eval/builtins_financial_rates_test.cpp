@@ -2,7 +2,7 @@
 // End-to-end tests for the security-rate / T-Bill financial built-ins:
 // DISC, INTRATE, RECEIVED, TBILLPRICE, TBILLYIELD, TBILLEQ. These all
 // live in `eval/builtins/financial_rates.cpp` and share the day-count
-// helpers exported from `eval/date_time.h`.
+// helpers exported from `utils/date_time.h`.
 
 #include <cmath>
 #include <string>

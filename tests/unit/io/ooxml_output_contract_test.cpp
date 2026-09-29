@@ -17,17 +17,17 @@
 
 #include "c_api/formulon_c.h"
 #include "cell.h"
+#include "external_link.h"
 #include "gtest/gtest.h"
-#include "io/external_links.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/package_diagnostics.h"
-#include "io/passthrough_part.h"
-#include "io/unknown_relationship.h"
 #include "io/zip_reader.h"
+#include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "support/roundtrip_symmetry.h"
+#include "unknown_relationship.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -232,7 +232,7 @@ Workbook WorkbookWithExternalLink(bool with_body_part) {
   wb.add_sheet("Sheet1");
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
 
-  io::ExternalLinkRecord record;
+  ExternalLinkRecord record;
   record.index = 1;
   record.rel_id = "rId9";
   record.part_path = "xl/externalLinks/externalLink1.xml";
@@ -241,7 +241,7 @@ Workbook WorkbookWithExternalLink(bool with_body_part) {
   wb.set_external_links({record});
 
   if (with_body_part) {
-    io::PassthroughPart body;
+    PassthroughPart body;
     body.path = "xl/externalLinks/externalLink1.xml";
     body.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
     const std::string xml = "<externalLink/>";
@@ -266,7 +266,7 @@ Workbook WorkbookWithPrinterSettings(bool with_body_part) {
   print.printer_settings_path = "xl/printerSettings/printerSettings1.bin";
 
   if (with_body_part) {
-    io::PassthroughPart body;
+    PassthroughPart body;
     body.path = "xl/printerSettings/printerSettings1.bin";
     body.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
     body.bytes = {0x00, 0x01};
@@ -355,7 +355,7 @@ Workbook WorkbookWithDrawing(bool with_body_part) {
   wb.sheet(0).set_drawing_rel_target("xl/drawings/drawing1.xml");
 
   if (with_body_part) {
-    io::PassthroughPart body;
+    PassthroughPart body;
     body.path = "xl/drawings/drawing1.xml";
     body.content_type = "application/vnd.openxmlformats-officedocument.drawing+xml";
     const std::string xml = "<xdr:wsDr/>";
@@ -402,12 +402,12 @@ TEST(OoxmlSheetRels, EveryInternalRelationshipNamesAWrittenPart) {
   SheetPrintSettings& print = wb.sheet(0).mutable_print_settings();
   print.printer_settings_rid = "rId4";
   print.printer_settings_path = "xl/printerSettings/printerSettings1.bin";
-  io::UnknownRelationship rel;
+  UnknownRelationship rel;
   rel.id = "rId7";
   rel.type = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject";
   rel.target = "xl/embeddings/oleObject1.bin";
   wb.sheet(0).set_unknown_relationships({rel});
-  io::ExternalLinkRecord link;
+  ExternalLinkRecord link;
   link.index = 1;
   link.rel_id = "rId9";
   link.part_path = "xl/externalLinks/externalLink1.xml";
@@ -469,7 +469,7 @@ TEST(OoxmlSheetRels, DroppedUnknownRelationshipIsCounted) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
-  io::UnknownRelationship rel;
+  UnknownRelationship rel;
   rel.id = "rId7";
   rel.type = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject";
   rel.target = "xl/embeddings/oleObject1.bin";

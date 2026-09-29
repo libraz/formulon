@@ -24,8 +24,8 @@
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/xlsb/ptg_writer.h"
@@ -364,13 +364,13 @@ TEST(XlsbRowLayout, CustomHeightSurvivesAWriteReadCycle) {
 TEST(XlsbDefinedNames, HiddenNamesSurviveARoundTrip) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
-  std::vector<io::DefinedName> names;
-  io::DefinedName visible;
+  std::vector<DefinedName> names;
+  DefinedName visible;
   visible.name = "Vis";
   visible.formula = "Sheet1!$A$1";
   visible.local_sheet_id = -1;
   names.push_back(visible);
-  io::DefinedName hidden;
+  DefinedName hidden;
   hidden.name = "Hid";
   hidden.formula = "Sheet1!$B$1";
   hidden.local_sheet_id = -1;
@@ -383,7 +383,7 @@ TEST(XlsbDefinedNames, HiddenNamesSurviveARoundTrip) {
   auto reread = io::xlsb::read_xlsb(test::span_of(written.value()));
   ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
 
-  const std::vector<io::DefinedName>& out = reread.value().workbook.defined_names();
+  const std::vector<DefinedName>& out = reread.value().workbook.defined_names();
   ASSERT_EQ(out.size(), 2U);
   EXPECT_EQ(out[0].name, "Vis");
   EXPECT_EQ(out[0].formula, "Sheet1!$A$1");
@@ -403,7 +403,7 @@ TEST(XlsbDefinedNames, StoragePlaceholdersStayOutOfTheNameTable) {
   auto result = io::xlsb::read_xlsb(test::span_of(bytes));
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
 
-  const std::vector<io::DefinedName>& names = result.value().workbook.defined_names();
+  const std::vector<DefinedName>& names = result.value().workbook.defined_names();
   ASSERT_EQ(names.size(), 1U);
   EXPECT_EQ(names[0].name, "Rate");
   EXPECT_FALSE(names[0].hidden);

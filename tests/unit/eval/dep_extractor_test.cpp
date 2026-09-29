@@ -25,12 +25,12 @@
 #include <string_view>
 #include <vector>
 
+#include "defined_name.h"
 #include "eval/dep_graph.h"
 #include "gtest/gtest.h"
-#include "io/defined_names.h"
-#include "io/tables_reader.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "table.h"
 #include "utils/arena.h"
 #include "utils/resource_budget.h"
 #include "workbook.h"
@@ -291,8 +291,8 @@ TEST(DepExtractor, WholeAxisSpanNormalizesEveryAstForm) {
 
 TEST(DepExtractor, WholeAxisSpanNormalizationReachesNamesAndLambdas) {
   Workbook wb = Workbook::create();
-  wb.set_defined_names({io::DefinedName{"Cols", "A:C", -1, false, ""},
-                        io::DefinedName{"Apply", "LAMBDA(x,SUM(Cols)+x)", -1, false, ""}});
+  wb.set_defined_names(
+      {DefinedName{"Cols", "A:C", -1, false, ""}, DefinedName{"Apply", "LAMBDA(x,SUM(Cols)+x)", -1, false, ""}});
 
   Arena arena;
   const parser::AstNode* root = ParseFormula("Apply(1)", arena);
@@ -490,8 +490,8 @@ TEST(DepExtractor, LetNestedLetBodiesAreDescended) {
 TEST(DepExtractor, NameRefWorkbookScopedSingleCell) {
   Workbook wb = Workbook::create();
   // MyName -> =A1, workbook-scoped (local_sheet_id = -1).
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"MyName", "=A1", -1, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"MyName", "=A1", -1, false, ""});
   wb.set_defined_names(std::move(names));
 
   Arena arena;
@@ -507,8 +507,8 @@ TEST(DepExtractor, NameRefWorkbookScopedRangeFlattens) {
   Workbook wb = Workbook::create();
   // MyRange -> =A1:B2, workbook-scoped. SUM(MyRange) should flatten to
   // {A1, A2, B1, B2}.
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"MyRange", "=A1:B2", -1, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"MyRange", "=A1:B2", -1, false, ""});
   wb.set_defined_names(std::move(names));
 
   Arena arena;
@@ -528,9 +528,9 @@ TEST(DepExtractor, NameRefWorkbookScopedRangeFlattens) {
 TEST(DepExtractor, NameRefIndirectionResolves) {
   Workbook wb = Workbook::create();
   // Name1 -> =Name2, Name2 -> =A1. =Name1 must surface A1 as a dep.
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"Name1", "=Name2", -1, false, ""});
-  names.push_back(io::DefinedName{"Name2", "=A1", -1, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"Name1", "=Name2", -1, false, ""});
+  names.push_back(DefinedName{"Name2", "=A1", -1, false, ""});
   wb.set_defined_names(std::move(names));
 
   Arena arena;
@@ -549,9 +549,9 @@ TEST(DepExtractor, NameRefSheetScopedBeatsWorkbookScoped) {
   // sheet-scoped definition wins (B1); from sheet 1 the workbook-scoped
   // fallback applies (A1 on sheet 1, since unqualified refs resolve to the
   // current sheet).
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"Foo", "=A1", -1, false, ""});
-  names.push_back(io::DefinedName{"Foo", "=B1", 0, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"Foo", "=A1", -1, false, ""});
+  names.push_back(DefinedName{"Foo", "=B1", 0, false, ""});
   wb.set_defined_names(std::move(names));
 
   Arena arena;
@@ -571,8 +571,8 @@ TEST(DepExtractor, NameRefCycleTerminates) {
   Workbook wb = Workbook::create();
   // Loop -> =Loop+1 — self-referential. The walker must not infinite-loop;
   // policy is to break the cycle silently (no deps, no volatility flag).
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"Loop", "=Loop+1", -1, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"Loop", "=Loop+1", -1, false, ""});
   wb.set_defined_names(std::move(names));
 
   Arena arena;
@@ -600,8 +600,8 @@ TEST(DepExtractor, NameRefMissingNameIsSilentSkip) {
 TEST(DepExtractor, NameRefVolatileBodyPropagates) {
   Workbook wb = Workbook::create();
   // RandName -> =RAND(). =RandName must propagate volatility.
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"RandName", "=RAND()", -1, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"RandName", "=RAND()", -1, false, ""});
   wb.set_defined_names(std::move(names));
 
   Arena arena;
@@ -614,7 +614,7 @@ TEST(DepExtractor, NameRefVolatileBodyPropagates) {
 
 TEST(DepExtractor, NamedLambdaBodyCellsAndVolatilityAreExpandedOnce) {
   Workbook wb = Workbook::create();
-  wb.set_defined_names({io::DefinedName{"Named", "LAMBDA(x,x+A1+RAND())", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Named", "LAMBDA(x,x+A1+RAND())", -1, false, ""}});
   Arena arena;
   const parser::AstNode* root = ParseFormula("Named(5)", arena);
   ASSERT_NE(root, nullptr);
@@ -630,9 +630,9 @@ TEST(DepExtractor, ThreeDSpanMetadataIsNormalizedAndDeduplicatedAcrossExpansion)
   wb.add_sheet("Second");
   wb.add_sheet("Third");
   wb.set_defined_names({
-      io::DefinedName{"Inner", "First:Second!A1:A3", -1, false, ""},
-      io::DefinedName{"Outer", "Inner", -1, false, ""},
-      io::DefinedName{"F", "LAMBDA(x,SUM(Outer)+x)", -1, false, ""},
+      DefinedName{"Inner", "First:Second!A1:A3", -1, false, ""},
+      DefinedName{"Outer", "Inner", -1, false, ""},
+      DefinedName{"F", "LAMBDA(x,SUM(Outer)+x)", -1, false, ""},
   });
 
   Arena arena;
@@ -661,8 +661,8 @@ TEST(DepExtractor, ThreeDSpanMetadataIncludesWholeAxisReferences) {
 TEST(DepExtractor, NamedLambdaParameterShadowsDefinedName) {
   Workbook wb = Workbook::create();
   wb.set_defined_names({
-      io::DefinedName{"x", "B1", -1, false, ""},
-      io::DefinedName{"F", "LAMBDA(x,x+A1)", -1, false, ""},
+      DefinedName{"x", "B1", -1, false, ""},
+      DefinedName{"F", "LAMBDA(x,x+A1)", -1, false, ""},
   });
   Arena arena;
   const parser::AstNode* root = ParseFormula("F(5)", arena);
@@ -675,8 +675,8 @@ TEST(DepExtractor, NamedLambdaParameterShadowsDefinedName) {
 TEST(DepExtractor, NamedLambdaDoesNotInheritCallerLetScope) {
   Workbook wb = Workbook::create();
   wb.set_defined_names({
-      io::DefinedName{"x", "B1", -1, false, ""},
-      io::DefinedName{"F", "LAMBDA(y,y+x)", -1, false, ""},
+      DefinedName{"x", "B1", -1, false, ""},
+      DefinedName{"F", "LAMBDA(y,y+x)", -1, false, ""},
   });
   Arena arena;
   const parser::AstNode* root = ParseFormula("LET(x,A1,F(1))", arena);
@@ -691,7 +691,7 @@ TEST(DepExtractor, NamedLambdaDoesNotInheritCallerLetScope) {
 
 TEST(DepExtractor, NamedLambdaRecursiveBodyIsFinite) {
   Workbook wb = Workbook::create();
-  wb.set_defined_names({io::DefinedName{"Fact", "LAMBDA(n,IF(n<=1,1,n*Fact(n-1)+A1))", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Fact", "LAMBDA(n,IF(n<=1,1,n*Fact(n-1)+A1))", -1, false, ""}});
   Arena arena;
   const parser::AstNode* root = ParseFormula("Fact(5)", arena);
   ASSERT_NE(root, nullptr);
@@ -712,7 +712,7 @@ TEST(DepExtractor, LetBoundLambdaBodyIsExpandedOnCall) {
 
 TEST(DepExtractor, NamedLambdaExpansionRestoresCallerLetBindings) {
   Workbook wb = Workbook::create();
-  wb.set_defined_names({io::DefinedName{"Named", "LAMBDA(x,x+A1)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"Named", "LAMBDA(x,x+A1)", -1, false, ""}});
   Arena arena;
   const parser::AstNode* root = ParseFormula("LET(f,LAMBDA(x,B1+x),Named(1)+f(2))", arena);
   ASSERT_NE(root, nullptr);
@@ -726,7 +726,7 @@ TEST(DepExtractor, NamedLambdaExpansionRestoresCallerLetBindings) {
 
 TEST(DepExtractor, LambdaNamesShadowBuiltinVolatility) {
   Workbook wb = Workbook::create();
-  wb.set_defined_names({io::DefinedName{"NOW", "LAMBDA(x,x+1)", -1, false, ""}});
+  wb.set_defined_names({DefinedName{"NOW", "LAMBDA(x,x+1)", -1, false, ""}});
   Arena arena;
   const parser::AstNode* root = ParseFormula("LET(RAND,LAMBDA(x,x),NOW(1)+RAND(2))", arena);
   ASSERT_NE(root, nullptr);
@@ -738,8 +738,8 @@ TEST(DepExtractor, NameRefCaseInsensitive) {
   Workbook wb = Workbook::create();
   // Defined name authored as `Foo`; the formula references `foo` (lowercase).
   // Excel resolves names case-insensitively, so the walker must match.
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"Foo", "=A1", -1, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"Foo", "=A1", -1, false, ""});
   wb.set_defined_names(std::move(names));
 
   Arena arena;
@@ -755,9 +755,9 @@ TEST(DepExtractor, NameRefCaseInsensitive) {
 
 // Builds a `TableMetadata` with `display_name == name` and the given column
 // names. `ref` is the raw A1 footprint including header and totals rows.
-io::TableMetadata MakeTable(std::string name, std::string ref, std::size_t sheet_index, bool header_row,
-                            bool totals_row, std::vector<std::string> column_names) {
-  io::TableMetadata t;
+TableMetadata MakeTable(std::string name, std::string ref, std::size_t sheet_index, bool header_row, bool totals_row,
+                        std::vector<std::string> column_names) {
+  TableMetadata t;
   t.id = 1;
   t.name = name;
   t.display_name = std::move(name);
@@ -768,7 +768,7 @@ io::TableMetadata MakeTable(std::string name, std::string ref, std::size_t sheet
   t.columns.reserve(column_names.size());
   std::uint32_t next_id = 1;
   for (auto& cname : column_names) {
-    io::TableColumn col;
+    TableColumn col;
     col.id = next_id++;
     col.name = std::move(cname);
     t.columns.push_back(std::move(col));
@@ -781,7 +781,7 @@ TEST(DepExtractor, StructuredRefDefaultModifierFlattensDataColumn) {
   // Sales table at A1:C10 with header, no totals, columns Region/Amount/Date.
   // SUM(Sales[Amount]) defaults to the kData area on column 1 (Amount), so
   // deps must be B2..B10.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -804,7 +804,7 @@ TEST(DepExtractor, StructuredRefAboveLimitUsesCompactRangeDependency) {
   // A table column is as tall as the table, so the structured-ref path needs
   // the same graph-footprint ceiling the RangeOp path has: the data area of
   // this column is 4,000 cells.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C4001", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -827,7 +827,7 @@ TEST(DepExtractor, StructuredRefDataExcludesTotalsRow) {
   Workbook wb = Workbook::create();
   // Same table, now with a totals row. kData must skip both header (row 0)
   // and totals (row 9), so deps are B2..B9.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/true,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -848,7 +848,7 @@ TEST(DepExtractor, StructuredRefDataExcludesTotalsRow) {
 TEST(DepExtractor, StructuredRefHeadersOnly) {
   Workbook wb = Workbook::create();
   // Sales[#Headers] -> A1..C1.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -870,7 +870,7 @@ TEST(DepExtractor, StructuredRefHeadersOnly) {
 TEST(DepExtractor, StructuredRefTotalsOnly) {
   Workbook wb = Workbook::create();
   // Table with totals. Sales[#Totals] -> last row of `ref`, i.e. A10..C10.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/true,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -892,7 +892,7 @@ TEST(DepExtractor, StructuredRefTotalsOnly) {
 TEST(DepExtractor, StructuredRefAllCoversFullRectangle) {
   Workbook wb = Workbook::create();
   // Sales[#All] -> every row in the ref rect (A1..C10).
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -918,7 +918,7 @@ TEST(DepExtractor, StructuredRefAllAreaWithSpecificColumn) {
   // Sales[[#All],[Amount]] -> column 1 (Amount) across every row of the ref
   // rectangle, including header. Excel emits the bracket payload as
   // `[#All],[Amount]` so the parser stores that verbatim.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -942,7 +942,7 @@ TEST(DepExtractor, StructuredRefImplicitIntersectionSilentSkip) {
   // formula's row. The dep extractor cannot know the formula's row, so
   // it silently skips — the evaluator surfaces the actual dep when the
   // implicit intersection resolves at eval time.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -970,7 +970,7 @@ TEST(DepExtractor, StructuredRefUnknownTableSilentSkip) {
 TEST(DepExtractor, StructuredRefUnknownColumnSilentSkip) {
   Workbook wb = Workbook::create();
   // Table exists, column does not: silent skip, no deps.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -989,7 +989,7 @@ TEST(DepExtractor, StructuredRefCrossSheetTableLandsOnTableSheet) {
   wb.add_sheet("Sheet3");  // index 2
   // Table sits on sheet 2; formula is being analysed for a cell on sheet 0.
   // Deps must land on sheet 2.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/2, /*header_row=*/true, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -1015,7 +1015,7 @@ TEST(DepExtractor, StructuredRefHeadersOnHeaderlessTableSilentSkip) {
   Workbook wb = Workbook::create();
   // header_row=false: the table has no header band. Sales[#Headers] is
   // unresolvable; the resolver returns ErrorCode::Ref and we silent-skip.
-  std::vector<io::TableMetadata> tables;
+  std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/false, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
   wb.set_tables(std::move(tables));
@@ -1195,8 +1195,8 @@ TEST(DepExtractor, DynamicEndpointThroughLetBinding) {
 
 TEST(DepExtractor, DynamicEndpointThroughDefinedName) {
   Workbook wb = Workbook::create();
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"Rng", "=Sheet1!$C$1:$C$10", -1, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"Rng", "=Sheet1!$C$1:$C$10", -1, false, ""});
   wb.set_defined_names(std::move(names));
   EXPECT_EQ(Sorted(ExtractFrom("SUM(A1:INDEX(Rng,3))", wb).cell_deps), RectCells(0U, 0U, 9U, 0U, 2U));
 }
@@ -1204,8 +1204,8 @@ TEST(DepExtractor, DynamicEndpointThroughDefinedName) {
 TEST(DepExtractor, DefinedNameEndpointRegistersBoundingBox) {
   // `A1:CellNm` reads A1:C3, including B2 which neither endpoint names.
   Workbook wb = Workbook::create();
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"CellNm", "=Sheet1!$C$3", -1, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"CellNm", "=Sheet1!$C$3", -1, false, ""});
   wb.set_defined_names(std::move(names));
   const std::vector<CellNodeId> deps = Sorted(ExtractFrom("SUM(A1:CellNm)", wb).cell_deps);
   EXPECT_EQ(deps, RectCells(0U, 0U, 2U, 0U, 2U));
@@ -1233,8 +1233,8 @@ TEST(DepExtractor, ReferenceOnlyArgumentsRegisterNothing) {
 
 TEST(DepExtractor, ReferenceOnlyArgumentThroughDefinedName) {
   Workbook wb = Workbook::create();
-  std::vector<io::DefinedName> names;
-  names.push_back(io::DefinedName{"Rng", "=Sheet1!$C$1:$C$10", -1, false, ""});
+  std::vector<DefinedName> names;
+  names.push_back(DefinedName{"Rng", "=Sheet1!$C$1:$C$10", -1, false, ""});
   wb.set_defined_names(std::move(names));
   const ExtractedDeps deps = ExtractFrom("ROWS(Rng)", wb);
   EXPECT_TRUE(deps.cell_deps.empty());

@@ -1,6 +1,6 @@
 //
 // `xl/styles.bin` reader. Decodes the MS-XLSB styles part into
-// `io::StylesTable` so both the OOXML and XLSB readers hand the same
+// `StylesTable` so both the OOXML and XLSB readers hand the same
 // shape to `Workbook::set_styles`: custom `<numFmt>` entries (`BrtFmt`),
 // the font / fill / border tables (`BrtFont` / `BrtFill` / `BrtBorder`)
 // and the `<cellXfs>` / `<cellStyleXfs>` tables (`BrtXF`).
@@ -26,8 +26,8 @@
 
 #include <vector>
 
-#include "io/styles_reader.h"
 #include "io/zip_reader.h"
+#include "styles.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 

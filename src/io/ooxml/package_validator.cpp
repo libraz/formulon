@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "io/ooxml_defs.h"
-#include "io/workbook_kind.h"
+#include "io/workbook_kind_ooxml.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "utils/error.h"

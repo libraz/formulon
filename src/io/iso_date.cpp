@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <string_view>
 
-#include "eval/date_time.h"
+#include "utils/date_time.h"
 
 namespace formulon::io {
 namespace {
@@ -74,7 +74,7 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
     return false;
   }
 
-  double serial = eval::date_time::serial_from_ymd(year, static_cast<unsigned>(month), static_cast<unsigned>(day));
+  double serial = date_time::serial_from_ymd(year, static_cast<unsigned>(month), static_cast<unsigned>(day));
 
   if (pos < text.size()) {
     // A time component must follow, introduced by 'T' (strict OOXML) or a

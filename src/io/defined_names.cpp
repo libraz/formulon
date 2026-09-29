@@ -1,5 +1,5 @@
 //
-// Implementation of the defined-names reader. See defined_names.h for the
+// Implementation of the defined-names reader. See defined_name.h for the
 // public contract.
 
 #include <cctype>
@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "io/defined_names_internal.h"
-#include "io/formula_prefix.h"
 #include "io/xml_escape.h"
+#include "parser/formula_prefix.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -135,7 +135,7 @@ Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_doc
     // surfaced in `formula_text` the way Excel's formula bar shows it, and
     // so downstream consumers that re-parse `entry.formula` do not need to
     // special-case the prefixed spelling.
-    entry.formula = strip_storage_prefixes(entry.formula);
+    entry.formula = parser::strip_storage_prefixes(entry.formula);
 
     out.push_back(std::move(entry));
   }

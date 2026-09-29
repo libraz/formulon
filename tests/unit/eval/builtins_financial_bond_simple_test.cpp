@@ -2,7 +2,7 @@
 // End-to-end tests for the closed-form bond-pricing financial built-ins:
 // PRICEDISC, PRICEMAT, YIELDDISC, YIELDMAT, and the STOCKHISTORY stub.
 // All five live in `eval/builtins/financial_bond_simple.cpp` and share
-// the day-count helpers exported from `eval/date_time.h`.
+// the day-count helpers exported from `utils/date_time.h`.
 
 #include <string_view>
 

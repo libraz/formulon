@@ -27,10 +27,7 @@
 namespace formulon {
 
 class Workbook;
-
-namespace io {
 struct DefinedName;
-}  // namespace io
 
 namespace parser {
 class AstNode;
@@ -53,7 +50,7 @@ struct DefinedNameFrame {
   /// Definition currently being expanded, owned by the workbook, which
   /// outlives the evaluation. Compared by identity: a workbook-scoped and a
   /// sheet-local name spelling the same text are different definitions.
-  const io::DefinedName* definition = nullptr;
+  const DefinedName* definition = nullptr;
   /// Next frame further down the resolution stack, or null at the root.
   const DefinedNameFrame* prev = nullptr;
 };
@@ -64,8 +61,8 @@ struct DefinedNameFrame {
 /// workbook-scoped definition of the same name; matching is ASCII
 /// case-insensitive, mirroring Excel's name-resolution semantics. Returns
 /// `nullptr` when no definition matches.
-const io::DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t current_sheet_id,
-                                         std::string_view name) noexcept;
+const DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t current_sheet_id,
+                                     std::string_view name) noexcept;
 
 /// Finds the defined name visible from an evaluator context. This is the
 /// single context-aware lookup used by both ordinary NameRef evaluation and
@@ -73,14 +70,14 @@ const io::DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t
 /// `ctx.name_scope_sheet()` when set, else from the current sheet; it
 /// returns nullptr when the context is unbound, its current sheet is not
 /// owned by the workbook, or no definition is visible.
-const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept;
+const DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept;
 
 /// Finds the defined name a sheet-qualified reference `sheet!name` denotes:
 /// `name` as seen from `sheet`'s scope, so that sheet's local definition
 /// wins over a workbook-scoped one. Returns `nullptr` when `sheet` names no
 /// sheet of `workbook` or no definition is visible from it.
-const io::DefinedName* find_sheet_defined_name(const Workbook& workbook, std::string_view sheet,
-                                               std::string_view name) noexcept;
+const DefinedName* find_sheet_defined_name(const Workbook& workbook, std::string_view sheet,
+                                           std::string_view name) noexcept;
 
 /// Parses the body of the already-located definition `def` into `arena` and
 /// writes the context it evaluates in to `*out_ctx`: the using formula's
@@ -89,7 +86,7 @@ const io::DefinedName* find_sheet_defined_name(const Workbook& workbook, std::st
 /// `*out_err` set when `def` is null or its body is empty or unparsable
 /// (`#NAME?`), or `def` is already being expanded (`#REF!`). `*frame` must
 /// outlive every use of `*out_ctx`.
-const parser::AstNode* prepare_defined_name_body(const io::DefinedName* def, Arena& arena, const EvalContext& ctx,
+const parser::AstNode* prepare_defined_name_body(const DefinedName* def, Arena& arena, const EvalContext& ctx,
                                                  DefinedNameFrame* frame, EvalContext* out_ctx, ErrorCode* out_err);
 
 /// Resolves the defined name `name` by parsing and evaluating its definition
