@@ -15,12 +15,21 @@
 // the writer replicates the `<Override>`; Default-typed parts carry an
 // empty `content_type` and rely on the round-tripped `<Default>`
 // registration (see `DefaultContentType`).
+//
+// `retained_origin` / `model_fingerprint` are XLSB-only: the XLSB writer
+// re-emits pivot and styles parts verbatim, so each carries a fingerprint
+// of its model state at load and `write_xlsb` refuses a stale one (see
+// `io/xlsb/retained_part_fingerprint.h`). Every other part leaves them at
+// their defaults.
 
 #ifndef FORMULON_PASSTHROUGH_PART_H_
 #define FORMULON_PASSTHROUGH_PART_H_
 
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "utils/index_sort.h"
@@ -40,9 +49,37 @@ namespace formulon {
 ///                      The writer copies these straight into the
 ///                      output package.
 struct PassthroughPart {
+  PassthroughPart() = default;
+  /// A part that carries no duplicated model state.
+  PassthroughPart(std::string part_path, std::string part_content_type, std::vector<std::uint8_t> part_bytes)
+      : path(std::move(part_path)), content_type(std::move(part_content_type)), bytes(std::move(part_bytes)) {}
+
   std::string path;
   std::string content_type;
   std::vector<std::uint8_t> bytes;
+
+  /// Which piece of duplicated model state (if any) this part's bytes were
+  /// derived from at load time.
+  enum class RetainedOrigin : std::uint8_t {
+    kNone,
+    kPivotTable,
+    kPivotCacheDefinition,
+    kPivotCacheRecords,
+    kStyles,
+  };
+  RetainedOrigin retained_origin = RetainedOrigin::kNone;
+  /// Sheet index of the owning pivot table. Valid only for `kPivotTable`.
+  std::size_t origin_sheet_index = 0;
+  /// Index into that sheet's `pivot_tables()` at load time. Valid only for
+  /// `kPivotTable`.
+  std::size_t origin_pivot_index = 0;
+  /// `PivotCache::cache_id()` of the owning cache. Valid only for
+  /// `kPivotCacheDefinition` / `kPivotCacheRecords`.
+  std::uint32_t origin_cache_id = 0;
+  /// FNV-1a 64-bit fingerprint of the model state named by `retained_origin`
+  /// as it stood right after load. `nullopt` when `retained_origin` is
+  /// `kNone`.
+  std::optional<std::uint64_t> model_fingerprint;
 };
 
 /// Orders captured parts by package path, giving both readers a stable

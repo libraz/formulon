@@ -32,6 +32,7 @@
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/retained_part_fingerprint.h"
 #include "io/xlsb/sheet_writer.h"
 #include "io/xlsb/sst_writer.h"
 #include "io/xlsb/styles_writer.h"
@@ -160,8 +161,25 @@ bool IsRepresentableDefaultRowHeight(double value) {
   return std::isfinite(std::round(value * 20.0));
 }
 
+/// Fails a retained part (pivot table, pivot cache, styles) whose model
+/// state changed since load, including the model object having gone.
+/// Untracked passthrough parts always pass.
+Expected<void, Error> CheckRetainedPartFreshness(const Workbook& workbook, const PassthroughPart& part) {
+  if (part.retained_origin == PassthroughPart::RetainedOrigin::kNone) {
+    return Expected<void, Error>::Ok();
+  }
+  const std::optional<std::uint64_t> current = current_retained_part_fingerprint(workbook, part);
+  if (!current.has_value() || !part.model_fingerprint.has_value() || *current != *part.model_fingerprint) {
+    return make_error(FormulonErrorCode::kIoXlsbRetainedPartStale,
+                      "retained XLSB part no longer matches the model state it was loaded from",
+                      "context=write_xlsb part=" + part.path);
+  }
+  return Expected<void, Error>::Ok();
+}
+
 /// True when `workbook`'s passthrough set already carries at least one
-/// XLSB-native pivot part (`xl/pivotTables/*.bin` / `xl/pivotCache/*.bin`).
+/// XLSB-native pivot table part (`xl/pivotTables/*.bin`) that is still
+/// fresh against the current model.
 ///
 /// Unlike every other feature `ReportDeferredSheetFeatures` checks, a
 /// pivot table's *source* part can survive a save untouched: the XLSB
@@ -171,12 +189,17 @@ bool IsRepresentableDefaultRowHeight(double value) {
 /// has no pivot output of its own. `sheet.pivot_tables()` is non-empty
 /// whenever the source was `.xlsb` with intact pivots, which is exactly
 /// the case where nothing is actually lost -- so the deferred count below
-/// only fires when there is no such surviving part (the source was
-/// `.xlsx`, whose pivot parts are plain XML with no `.bin` counterpart
-/// for this passthrough set to carry).
+/// only fires when there is no such surviving, fresh part (the source was
+/// `.xlsx`, whose pivot parts are plain XML with no `.bin` counterpart for
+/// this passthrough set to carry, or the retained part is stale, in which
+/// case the save fails closed before this diagnostic ever reaches a
+/// caller).
 bool HasPivotPassthroughPart(const Workbook& workbook) {
   for (const PassthroughPart& part : workbook.passthrough_parts()) {
-    if (part.path.rfind("xl/pivotTables/", 0) == 0 || part.path.rfind("xl/pivotCache/", 0) == 0) {
+    if (part.retained_origin != PassthroughPart::RetainedOrigin::kPivotTable) {
+      continue;
+    }
+    if (CheckRetainedPartFreshness(workbook, part)) {
       return true;
     }
   }
@@ -1347,6 +1370,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     if (!ooxml::is_safe_part_name(part->path)) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
                         "context=write_xlsb part=" + part->path);
+    }
+    // Retained bytes must not silently drop a mutation made since load.
+    if (auto fresh = CheckRetainedPartFreshness(workbook, *part); !fresh) {
+      return fresh.error();
     }
     if (auto r = AddPartBytes(writer.get(), part->path, part->bytes); !r) {
       return r.error();

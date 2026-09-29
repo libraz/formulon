@@ -142,6 +142,10 @@ enum class FormulonErrorCode : int32_t {
   kIoXlsbUnknownRecord = 5019,
   kIoXlsbUnsupportedPtg = 5020,
   kIoXlsbCorrupt = 5021,
+  /// An XLSB save found a retained pivot or styles part whose model state
+  /// changed since load; the writer re-emits those bytes verbatim, so the
+  /// save is refused rather than dropping the change.
+  kIoXlsbRetainedPartStale = 5022,
 
   // ===== 6000-6999: Crypto / Security =====
   /// Allocated but not currently produced: Formulon does not decrypt
@@ -429,6 +433,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kIoXlsbUnsupportedPtg";
     case FormulonErrorCode::kIoXlsbCorrupt:
       return "kIoXlsbCorrupt";
+    case FormulonErrorCode::kIoXlsbRetainedPartStale:
+      return "kIoXlsbRetainedPartStale";
 
     // Crypto / Security
     case FormulonErrorCode::kCryptoAgileNotSupported:

@@ -39,6 +39,7 @@
 #include "io/xlsb/pivot_reader.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/retained_part_fingerprint.h"
 #include "io/xlsb/styles_reader.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -1650,6 +1651,18 @@ Expected<std::string, Error> FindRelationshipTarget(const ZipReader& zip, std::s
   return found;
 }
 
+/// Links a retained passthrough part's package path to the specific model
+/// object `PassthroughPart::model_fingerprint` must track for it. Built
+/// while pivot parts and styles load below; applied once, by the
+/// passthrough capture sweep, to tag each `PassthroughPart` as it is
+/// created (see `io/xlsb/retained_part_fingerprint.h`).
+struct RetainedPartOriginTag {
+  PassthroughPart::RetainedOrigin origin = PassthroughPart::RetainedOrigin::kNone;
+  std::size_t sheet_index = 0;
+  std::size_t pivot_index = 0;
+  std::uint32_t cache_id = 0;
+};
+
 /// Decodes the cache a pivot-table part binds to, returning the model id
 /// it was registered under. Caches already loaded are reused so two
 /// tables over one cache share it, as they do in the file.
@@ -1659,7 +1672,8 @@ Expected<std::string, Error> FindRelationshipTarget(const ZipReader& zip, std::s
 /// round-trip through passthrough rather than being rewritten from the
 /// model.
 std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& wb, std::string_view pivot_table_path,
-                                               std::unordered_map<std::string, std::uint32_t>& loaded) {
+                                               std::unordered_map<std::string, std::uint32_t>& loaded,
+                                               std::unordered_map<std::string, RetainedPartOriginTag>& origins) {
   auto def_path_or = FindRelationshipTarget(zip, pivot_table_path, kRelPivotCacheDefinition);
   if (!def_path_or || def_path_or.value().empty()) {
     return std::nullopt;
@@ -1695,6 +1709,8 @@ std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& w
   const auto cache_id = static_cast<std::uint32_t>(wb.pivot_caches().size());
   pivot::PivotCache cache = std::move(cache_or.value());
   cache.set_cache_id(cache_id);
+  origins[def_path] = RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotCacheDefinition, 0, 0, cache_id};
+  origins[rec_path] = RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotCacheRecords, 0, 0, cache_id};
   wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
   loaded.emplace(def_path, cache_id);
   return cache_id;
@@ -1822,7 +1838,8 @@ XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
   return books;
 }
 
-void LoadPivotParts(const ZipReader& zip, Workbook& wb) {
+void LoadPivotParts(const ZipReader& zip, Workbook& wb,
+                    std::unordered_map<std::string, RetainedPartOriginTag>& origins) {
   std::unordered_map<std::string, std::uint32_t> loaded_caches;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     std::vector<std::string> pivot_table_paths;
@@ -1844,12 +1861,14 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb) {
       if (!table_or) {
         continue;
       }
-      const std::optional<std::uint32_t> cache_id = LoadPivotCacheFor(zip, wb, path, loaded_caches);
+      const std::optional<std::uint32_t> cache_id = LoadPivotCacheFor(zip, wb, path, loaded_caches, origins);
       if (!cache_id) {
         continue;
       }
       pivot::PivotTable table = std::move(table_or.value());
       table.set_pivot_cache_id(*cache_id);
+      origins[path] =
+          RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotTable, i, wb.sheet(i).pivot_tables().size(), 0};
       wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(table)));
     }
   }
@@ -2931,6 +2950,11 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     sst_entries = std::move(sst_or.value());
   }
 
+  // Links each retained pivot / styles part's package path to the model
+  // object its `PassthroughPart::model_fingerprint` must track, so step 8
+  // below can tag the `PassthroughPart` it captures for that path.
+  std::unordered_map<std::string, RetainedPartOriginTag> retained_part_origins;
+
   // 6b. xl/styles.bin — numFmt + cellXfs/cellStyleXfs (see
   // `io/xlsb/styles_reader.h`). Deliberately NOT added to
   // `consumed_parts` below: leaving it out lets step 8's passthrough
@@ -2949,6 +2973,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (!styles_or) {
       return styles_or.error();
     }
+    retained_part_origins[wb_rels.styles_path] =
+        RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kStyles, 0, 0, 0};
     wb.set_styles(std::move(styles_or.value()));
   }
 
@@ -3015,7 +3041,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // Pivot caches and tables, reached through the sheet relationships the
   // loop above stored. Runs after every sheet is decoded because a table
   // is attached to its sheet and its cache is workbook-level.
-  LoadPivotParts(zip, wb);
+  LoadPivotParts(zip, wb, retained_part_origins);
 
   // 8. Passthrough parts. First capture every Override-listed part the
   // reader did not consume, retaining its explicit content type. A second
@@ -3023,6 +3049,24 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // Default registry. Default-typed parts intentionally carry an empty
   // content_type; the registry itself travels on the Workbook and the
   // writer re-emits the matching Default entry.
+  //
+  // A part named in `retained_part_origins` (pivot table/cache, styles) is
+  // tagged with the model object it depends on and fingerprinted against
+  // the now-fully-loaded workbook, so `write_xlsb` can tell an unmodified
+  // retained part from one whose model twin has since been mutated.
+  auto apply_retained_origin = [&retained_part_origins, &wb](PassthroughPart& part) {
+    const auto tag_it = retained_part_origins.find(part.path);
+    if (tag_it == retained_part_origins.end()) {
+      return;
+    }
+    const RetainedPartOriginTag& tag = tag_it->second;
+    part.retained_origin = tag.origin;
+    part.origin_sheet_index = tag.sheet_index;
+    part.origin_pivot_index = tag.pivot_index;
+    part.origin_cache_id = tag.cache_id;
+    part.model_fingerprint = current_retained_part_fingerprint(wb, part);
+  };
+
   std::vector<PassthroughPart> unknown_parts;
   unknown_parts.reserve(ct_view.overrides.size());
   std::unordered_set<std::string> captured_parts;
@@ -3051,6 +3095,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     part.path = part_name;
     part.content_type = content_type;
     part.bytes = std::move(bytes_or.value());
+    apply_retained_origin(part);
     unknown_parts.push_back(std::move(part));
     captured_parts.insert(part_name);
   }
@@ -3103,6 +3148,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     // type into the per-part record. This keeps Override and Default
     // semantics distinguishable on the write side.
     part.bytes = std::move(bytes_or.value());
+    apply_retained_origin(part);
     unknown_parts.push_back(std::move(part));
     captured_parts.insert(entry);
   }

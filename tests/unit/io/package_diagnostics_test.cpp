@@ -26,6 +26,7 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/sheet_reader.h"
+#include "io/xlsb/retained_part_fingerprint.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "passthrough_part.h"
@@ -322,7 +323,10 @@ TEST(XlsbWriteDiagnostics, PivotTableWithNoSurvivingPassthroughPartCountsAsDefer
 TEST(XlsbWriteDiagnostics, PivotTableWithASurvivingPassthroughPartIsNotCountedAsDeferred) {
   // A source `.xlsb`'s pivot `.bin` parts round-trip through passthrough
   // untouched (this writer has no pivot output to invalidate them with),
-  // so the pivot table is not actually lost.
+  // so the pivot table is not actually lost -- as long as the retained
+  // bytes are still fresh against the model, which is what
+  // `retained_origin` / `model_fingerprint` (set by the real XLSB reader
+  // on load) tell the writer.
   Workbook wb = OneSheetWorkbook();
   auto cache = std::make_unique<pivot::PivotCache>();
   cache->set_cache_id(0U);
@@ -333,12 +337,43 @@ TEST(XlsbWriteDiagnostics, PivotTableWithASurvivingPassthroughPartIsNotCountedAs
   PassthroughPart pivot_bin;
   pivot_bin.path = "xl/pivotTables/pivotTable1.bin";
   pivot_bin.bytes = {0x00};
+  pivot_bin.retained_origin = PassthroughPart::RetainedOrigin::kPivotTable;
+  pivot_bin.origin_sheet_index = 0;
+  pivot_bin.origin_pivot_index = 0;
+  pivot_bin.model_fingerprint = xlsb::current_retained_part_fingerprint(wb, pivot_bin);
   wb.set_default_content_types({DefaultContentType{"bin", "application/octet-stream"}});
   wb.set_passthrough_parts({std::move(pivot_bin)});
 
   auto result = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
+}
+
+TEST(XlsbWriteDiagnostics, StalePivotTablePassthroughPartFailsTheSaveInstead) {
+  // The counterpart of the test above: a retained pivot part whose
+  // fingerprint predates a mutation to the pivot table it names must fail
+  // the save closed rather than silently write the stale bytes.
+  Workbook wb = OneSheetWorkbook();
+  auto cache = std::make_unique<pivot::PivotCache>();
+  cache->set_cache_id(0U);
+  wb.add_pivot_cache(std::move(cache));
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_pivot_cache_id(0U);
+  wb.sheet(0).add_pivot_table(std::move(table));
+  PassthroughPart pivot_bin;
+  pivot_bin.path = "xl/pivotTables/pivotTable1.bin";
+  pivot_bin.bytes = {0x00};
+  pivot_bin.retained_origin = PassthroughPart::RetainedOrigin::kPivotTable;
+  pivot_bin.origin_sheet_index = 0;
+  pivot_bin.origin_pivot_index = 0;
+  pivot_bin.model_fingerprint = xlsb::current_retained_part_fingerprint(wb, pivot_bin);
+  wb.sheet(0).mutable_pivot_tables()[0]->set_name("Renamed");
+  wb.set_default_content_types({DefaultContentType{"bin", "application/octet-stream"}});
+  wb.set_passthrough_parts({std::move(pivot_bin)});
+
+  auto result = xlsb::write_xlsb_with_result(wb);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRetainedPartStale);
 }
 
 TEST(XlsbWriteDiagnostics, PassthroughPartCollidingWithAGeneratedPathIsCounted) {

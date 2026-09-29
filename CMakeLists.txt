@@ -173,6 +173,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/reader.cpp
   src/io/xlsb/record.cpp
   src/io/xlsb/record_writer.cpp
+  src/io/xlsb/retained_part_fingerprint.cpp
   src/io/xlsb/sheet_writer.cpp
   src/io/xlsb/sst_writer.cpp
   src/io/xlsb/styles_reader.cpp
