@@ -45,6 +45,7 @@
 #include "eval/series_sum_lazy.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
+#include "eval/textjoin_lazy.h"
 #include "eval/textsplit_lazy.h"
 #include "eval/trimrange_lazy.h"
 #include "eval/workdays_lazy.h"
@@ -274,6 +275,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"TBILLPRICE", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"TBILLYIELD", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"TEXT", &eval_text_lazy, LazyResultShape::kBroadcast},
+    {"TEXTJOIN", &eval_textjoin_lazy, LazyResultShape::kScalar},
     {"TEXTSPLIT", &eval_textsplit_lazy, LazyResultShape::kArray},
     {"TOCOL", &eval_tocol_lazy, LazyResultShape::kArray},
     {"TODAY", &eval_datetime_lazy, LazyResultShape::kScalar},
@@ -284,6 +286,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
     {"TTEST", &eval_t_test_lazy, LazyResultShape::kReduce},
     {"UNIQUE", &eval_unique_lazy, LazyResultShape::kArray},
+    {"VALUE", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"VLOOKUP", &eval_vlookup_lazy, LazyResultShape::kArray},
     {"VSTACK", &eval_vstack_lazy, LazyResultShape::kArray},
     {"WEEKDAY", &eval_datetime_lazy, LazyResultShape::kBroadcast},

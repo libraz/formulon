@@ -47,15 +47,16 @@ std::vector<double> collect_numerics(const Value* args, std::uint32_t count);
 // because the dispatcher short-circuits with `propagate_errors = true`.
 Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count);
 
-// Direct-scalar-aware collector used by SMALL / LARGE. Range-sourced cells
-// that are non-Number have already been dropped by the dispatcher's
+// Direct-scalar-aware collector used by SMALL / LARGE and by VAR.S / VAR.P /
+// STDEV.S / STDEV.P (and their legacy aliases). Range-sourced cells that
+// are non-Number have already been dropped by the dispatcher's
 // `range_filter_numeric_only` filter, so this helper only sees Number kinds
 // plus any direct scalar arguments. Direct Number -> kept; direct Bool ->
 // 1.0 / 0.0; direct Text -> strict `coerce_to_number` (propagates
 // `#VALUE!` on unparseable text). Direct Blank is dropped silently, which
 // is where this helper diverges from the "A"-family rule. Errors never
 // reach this helper (dispatcher short-circuits via `propagate_errors`).
-Expected<std::vector<double>, ErrorCode> collect_small_large(const Value* args, std::uint32_t count);
+Expected<std::vector<double>, ErrorCode> collect_direct_scalar_coerced(const Value* args, std::uint32_t count);
 
 // (mean, sum_of_squared_deviations) pair returned by `compute_mean_ss`.
 struct MeanSS {

@@ -42,44 +42,6 @@ using text_detail::read_optional_int_arg;
 // guard.
 constexpr std::uint64_t kExcelTextCapUnits = 32767u;
 
-// Longest UTF-8 sequence, and therefore the most trailing bytes of a buffer
-// whose decoding a later append can still change.
-constexpr std::size_t kMaxUtf8SequenceBytes = 4u;
-
-// Running UTF-16 unit count for a buffer that is appended to repeatedly.
-//
-// `utf16_units_in` walks the whole buffer, so calling it after every append
-// costs O(n^2) in the accumulated length. Summing the pieces' own counts
-// instead would be O(1) but not the same number: a truncated sequence at
-// the end of one piece counts as one malformed unit per byte until the
-// continuation bytes arrive, at which point the same bytes decode as a
-// single codepoint. Since the cap decides whether TEXTJOIN returns text or
-// `#VALUE!`, that difference is Excel-observable.
-//
-// So the count is committed only for the prefix a later append can no
-// longer affect — everything up to the last `kMaxUtf8SequenceBytes` — and
-// the short tail is re-decoded each round. `units_of` returns exactly what
-// `utf16_units_in` would, at O(1) amortised cost per append.
-class RunningUtf16Units {
- public:
-  std::uint64_t units_of(std::string_view buffer) {
-    while (committed_bytes_ + kMaxUtf8SequenceBytes <= buffer.size()) {
-      std::size_t step = 0;
-      const std::uint32_t cp = decode_utf8_step(buffer, committed_bytes_, &step);
-      if (step == 0) {
-        break;  // Defensive: the decoder only reports 0 past the end.
-      }
-      committed_units_ += cp > 0xFFFFu ? 2u : 1u;
-      committed_bytes_ += step;
-    }
-    return committed_units_ + utf16_units_in(buffer.substr(committed_bytes_));
-  }
-
- private:
-  std::size_t committed_bytes_ = 0;
-  std::uint64_t committed_units_ = 0;
-};
-
 // UPPER(text) / LOWER(text) - ASCII case fold. Multi-byte UTF-8 bytes are
 // preserved verbatim (see `text_ops::to_upper_ascii` for the contract).
 Value Upper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -467,55 +429,15 @@ Value Exact(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- Text manipulation, second batch ------------------------------------
 //
-// TEXTJOIN, UNICHAR, UNICODE, CLEAN, PROPER. The same conventions as the
-// first text batch apply: argument coercion via the helpers in
-// `eval/coerce.h`, error propagation through the dispatcher's left-most
-// rule, results interned into the call's arena.
-
-// TEXTJOIN(delimiter, ignore_empty, text1, [text2], ...)
+// UNICHAR, UNICODE, CLEAN, PROPER. The same conventions as the first text
+// batch apply: argument coercion via the helpers in `eval/coerce.h`, error
+// propagation through the dispatcher's left-most rule, results interned
+// into the call's arena.
 //
-// Joins every text argument with `delimiter`. When `ignore_empty` is TRUE
-// (the typical case), arguments whose text representation is the empty
-// string are skipped, so two consecutive empty inputs do NOT produce a
-// double delimiter. With `ignore_empty` FALSE every argument participates
-// even if empty (yielding consecutive delimiters). Result length is capped
-// at Excel's 32,767-unit limit; exceeding it surfaces `#VALUE!`.
-Value TextJoin(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto delimiter = coerce_to_text(args[0]);
-  if (!delimiter) {
-    return Value::error(delimiter.error());
-  }
-  auto ignore_empty = coerce_to_bool(args[1]);
-  if (!ignore_empty) {
-    return Value::error(ignore_empty.error());
-  }
-  std::string out;
-  bool first = true;
-  RunningUtf16Units counter;
-  for (std::uint32_t i = 2; i < arity; ++i) {
-    auto piece = coerce_to_text(args[i]);
-    if (!piece) {
-      return Value::error(piece.error());
-    }
-    if (ignore_empty.value() && piece.value().empty()) {
-      continue;
-    }
-    if (!first) {
-      out.append(delimiter.value());
-    }
-    out.append(piece.value());
-    first = false;
-    // Cap check after each appended piece, on the joined result rather than
-    // on the piece: the cap is a property of the whole string, and the first
-    // piece that carries it over is the one that fails the call. The counter
-    // carries the count forward instead of re-walking `out`, and reports the
-    // same number a full walk would.
-    if (counter.units_of(out) > kExcelTextCapUnits) {
-      return Value::error(ErrorCode::Value);
-    }
-  }
-  return Value::text(arena.intern(out));
-}
+// TEXTJOIN moved to `eval/textjoin_lazy.{h,cpp}` and the lazy dispatch
+// table: its `delimiter` / `ignore_empty` positions must not be flattened
+// by the generic `accepts_ranges` dispatcher the way `text1, [text2], ...`
+// is, which an eager FunctionDef registration cannot express.
 
 // UNICHAR(number) - returns the Unicode character whose codepoint is
 // `number`. Truncates the input to an integer. Out-of-range and surrogate
@@ -791,7 +713,9 @@ void register_text_builtins(FunctionRegistry& registry) {
       {"SEARCHB", 2u, 3u, &text_detail::SearchB_},
       {"TEXTBEFORE", 2u, 6u, &text_detail::TextBefore_, false},
       {"TEXTAFTER", 2u, 6u, &text_detail::TextAfter_, false},
-      {"TEXTJOIN", 3u, kVariadic, &TextJoin, true, true},
+      // TEXTJOIN is lazy (see eval/textjoin_lazy.h) so its delimiter /
+      // ignore_empty positions can be told apart from the flattened
+      // text1, [text2], ... positions; no FunctionDef entry here.
       {"UNICHAR", 1u, 1u, &Unichar},
       {"UNICODE", 1u, 1u, &Unicode_},
       {"CLEAN", 1u, 1u, &Clean},

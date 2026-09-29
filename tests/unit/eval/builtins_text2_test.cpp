@@ -224,6 +224,37 @@ TEST(BuiltinsText2TextJoin, RangeArgumentSkipsBlanksWhenIgnoreEmpty) {
   EXPECT_EQ(v.as_text(), "a,c");
 }
 
+// The delimiter position must not be flattened into the text-argument
+// list by the generic accepts_ranges dispatcher's per-position rule; a
+// range/array delimiter applies cyclically over the flattened text pieces
+// instead. Excel's documented example: {";",","} over {1,2,3} -> "1;2,3".
+TEST(BuiltinsText2TextJoin, ArrayLiteralDelimiterAppliesCyclically) {
+  const Value v = EvalSource("=TEXTJOIN({\";\",\",\"}, TRUE, {1,2,3})");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "1;2,3");
+}
+
+TEST(BuiltinsText2TextJoin, RangeDelimiterDoesNotShiftLaterArguments) {
+  // A range delimiter used to be spliced into the flattened positional
+  // arguments, shifting `ignore_empty` and every text argument to the
+  // right instead of being consumed as the delimiter.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 25, Value::text(";"));  // Z1
+  wb.sheet(0).set_cell_value(1, 25, Value::text(","));  // Z2
+  const Value v = EvalSourceIn("=TEXTJOIN(Z1:Z2, TRUE, 1, 2, 3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "1;2,3");
+}
+
+TEST(BuiltinsText2TextJoin, RangeDelimiterOfBlankCellsIsEmptyString) {
+  // An unpopulated range delimiter coerces every cell to "", so the
+  // pieces concatenate with no separator -- not a shape error.
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=TEXTJOIN(Z1:Z2, TRUE, 1, 2, 3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "123");
+}
+
 // ---------------------------------------------------------------------------
 // UNICHAR
 // ---------------------------------------------------------------------------

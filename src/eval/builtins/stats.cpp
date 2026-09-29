@@ -14,14 +14,18 @@
 // in `stats/stats_distributions.cpp` and `stats/stats_distributions_misc.cpp`.
 // All four TUs share `stats/stats_helpers.h` and register here.
 //
-// Argument-type rule (DIFFERENT from SUM / AVERAGE / MIN / MAX / PRODUCT):
-// these functions silently SKIP text, boolean, and blank inputs instead of
-// coercing them. Only values whose kind is `Number` participate. The
-// dispatcher runs with `propagate_errors = true` so error-typed arguments
-// still short-circuit before the impl executes; once inside the body we
-// only need to filter the non-numeric non-error kinds. Contrast this with
-// `Sum` in `builtins/aggregate.cpp`, which coerces every argument through
-// `coerce_to_number` and surfaces `#VALUE!` on text like `"abc"`.
+// Argument-type rule: MEDIAN / MODE / PERCENTILE / QUARTILE / TRIMMEAN
+// (`stats/stats_order.cpp`) silently SKIP text, boolean, and blank inputs
+// regardless of provenance -- only values whose kind is `Number`
+// participate. VAR.S / VAR.P / STDEV.S / STDEV.P (this file) and SMALL /
+// LARGE (`stats/stats_order.cpp`) instead follow the AVERAGE-family rule
+// Microsoft documents for these functions: a range/array-sourced non-
+// Number cell is dropped (via the dispatcher's `range_filter_numeric_only`
+// filter), but a DIRECT Bool or numeric-Text argument coerces the same way
+// `Sum` / `Average` coerce a direct argument -- see
+// `collect_direct_scalar_coerced`. The dispatcher runs with
+// `propagate_errors = true` so error-typed arguments always short-circuit
+// before the impl executes.
 
 #include "eval/builtins/stats.h"
 
@@ -71,20 +75,21 @@ std::vector<double> collect_numerics(const Value* args, std::uint32_t count) {
   return std::move(collected.value());
 }
 
-// Direct-scalar-aware collector for SMALL / LARGE. Mirrors the "A"-family
-// rule for direct scalar arguments but differs for the "anything else"
-// category: range-sourced Text / Bool / Blank cells have already been
-// dropped by the dispatcher's `range_filter_numeric_only` filter, so by
-// the time they reach this helper a Text or Bool kind can only come from
-// a direct scalar literal (e.g. `SMALL("3.4", 1)` or `SMALL(TRUE, 1)`)
-// or from an array-literal element that survived the filter (it cannot --
-// the filter drops those too, so those never appear here either).
-// Direct Number -> kept as-is; direct Bool -> 1.0 / 0.0;
-// direct Text -> strict `coerce_to_number` (propagates #VALUE! on
-// unparseable text like `"Hello"`). Anything else (Blank left over from
-// a dropped optional argument, unresolved Ref, Array, Lambda) is skipped
-// silently, matching AVERAGE-family leniency.
-Expected<std::vector<double>, ErrorCode> collect_small_large(const Value* args, std::uint32_t count) {
+// Direct-scalar-aware collector for SMALL / LARGE and VAR.S / VAR.P /
+// STDEV.S / STDEV.P (and their legacy VAR / VARP / STDEV / STDEVP
+// aliases). Mirrors the "A"-family rule for direct scalar arguments but
+// differs for the "anything else" category: range-sourced Text / Bool /
+// Blank cells have already been dropped by the dispatcher's
+// `range_filter_numeric_only` filter, so by the time they reach this
+// helper a Text or Bool kind can only come from a direct scalar literal
+// (e.g. `SMALL("3.4", 1)` or `VAR.S(2, TRUE)`) or from an array-literal
+// element that survived the filter (it cannot -- the filter drops those
+// too, so those never appear here either). Direct Number -> kept as-is;
+// direct Bool -> 1.0 / 0.0; direct Text -> strict `coerce_to_number`
+// (propagates #VALUE! on unparseable text like `"Hello"`). Anything else
+// (Blank left over from a dropped optional argument, unresolved Ref,
+// Array, Lambda) is skipped silently, matching AVERAGE-family leniency.
+Expected<std::vector<double>, ErrorCode> collect_direct_scalar_coerced(const Value* args, std::uint32_t count) {
   NumericCollectPolicy policy;
   policy.include_bool = true;                  // Direct Bool -> 1 / 0.
   policy.include_text_numeric_literal = true;  // Direct Text -> strict coerce.
@@ -323,31 +328,41 @@ double InverseStandardNormal(double p) {
 // `variance_or_stdev`.
 // ---------------------------------------------------------------------------
 
+// Shared entry for VAR.S / VAR.P / STDEV.S / STDEV.P: collects via
+// `collect_direct_scalar_coerced` (direct Bool / numeric-Text coerce; a
+// range-sourced non-Number cell was already dropped by the dispatcher's
+// `range_filter_numeric_only` filter) per Microsoft's documented rule that
+// "logical values and text representations of numbers that you type
+// directly into the list of arguments are counted".
+static Value var_or_stdev_dispatch(const Value* args, std::uint32_t arity, bool sample, bool square_root) {
+  auto collected = collect_direct_scalar_coerced(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  return variance_or_stdev(collected.value(), sample, square_root);
+}
+
 // VAR.S(value, ...) / VAR(value, ...) - sample variance with divisor n - 1.
 // Fewer than 2 numeric inputs yields `#DIV/0!`.
 static Value VarS(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  return variance_or_stdev(xs, true, false);
+  return var_or_stdev_dispatch(args, arity, true, false);
 }
 
 // VAR.P(value, ...) - population variance with divisor n. A single numeric
 // input yields 0; no numeric inputs yields `#DIV/0!`.
 static Value VarP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  return variance_or_stdev(xs, false, false);
+  return var_or_stdev_dispatch(args, arity, false, false);
 }
 
 // STDEV.S(value, ...) / STDEV(value, ...) - sample standard deviation,
 // `sqrt(VAR.S)`. Fewer than 2 numeric inputs yields `#DIV/0!`.
 static Value StdevS(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  return variance_or_stdev(xs, true, true);
+  return var_or_stdev_dispatch(args, arity, true, true);
 }
 
 // STDEV.P(value, ...) - population standard deviation, `sqrt(VAR.P)`.
 static Value StdevP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  return variance_or_stdev(xs, false, true);
+  return var_or_stdev_dispatch(args, arity, false, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -435,14 +450,18 @@ void register_stats_builtins(FunctionRegistry& registry) {
       {"QUARTILE.INC", 2u, kVariadic, &stats_detail::QuartileInc, true, true},
       {"QUARTILE", 2u, kVariadic, &stats_detail::QuartileInc, true, true},
       {"QUARTILE.EXC", 2u, kVariadic, &stats_detail::QuartileExc, true, true, true},
-      {"STDEV.S", 1u, kVariadic, &stats_detail::StdevS, true, true},
-      {"STDEV", 1u, kVariadic, &stats_detail::StdevS, true, true},
-      {"STDEV.P", 1u, kVariadic, &stats_detail::StdevP, true, true},
-      {"VAR.S", 1u, kVariadic, &stats_detail::VarS, true, true},
-      {"VAR", 1u, kVariadic, &stats_detail::VarS, true, true},
-      {"VAR.P", 1u, kVariadic, &stats_detail::VarP, true, true},
-      {"VARP", 1u, kVariadic, &stats_detail::VarP, true, true},
-      {"STDEVP", 1u, kVariadic, &stats_detail::StdevP, true, true},
+      // range_filter_numeric_only = true: a range/array-sourced Bool or
+      // Text cell is dropped, but a direct Bool/numeric-Text argument
+      // still coerces via `collect_direct_scalar_coerced` -- Microsoft's
+      // documented VAR.S/VAR.P/STDEV.S/STDEV.P rule for direct arguments.
+      {"STDEV.S", 1u, kVariadic, &stats_detail::StdevS, true, true, true},
+      {"STDEV", 1u, kVariadic, &stats_detail::StdevS, true, true, true},
+      {"STDEV.P", 1u, kVariadic, &stats_detail::StdevP, true, true, true},
+      {"VAR.S", 1u, kVariadic, &stats_detail::VarS, true, true, true},
+      {"VAR", 1u, kVariadic, &stats_detail::VarS, true, true, true},
+      {"VAR.P", 1u, kVariadic, &stats_detail::VarP, true, true, true},
+      {"VARP", 1u, kVariadic, &stats_detail::VarP, true, true, true},
+      {"STDEVP", 1u, kVariadic, &stats_detail::StdevP, true, true, true},
       {"AVERAGEA", 1u, kVariadic, &stats_detail::AverageA, true, true, false, false, true},
       {"MAXA", 1u, kVariadic, &stats_detail::MaxA, true, true, false, false, true},
       {"MINA", 1u, kVariadic, &stats_detail::MinA, true, true, false, false, true},

@@ -29,6 +29,14 @@ Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t
   if (entry.clock_impl != nullptr) {
     return entry.clock_impl(now, date1904);
   }
+  // Threads `now` alongside the (possibly per-cell) argument slice for an
+  // entry that needs both, e.g. DATEVALUE's year-less-date fallback year.
+  const auto invoke_impl = [&](const Value* a, std::uint32_t n) -> Value {
+    if (entry.clock_aware_impl != nullptr) {
+      return entry.clock_aware_impl(a, n, arena, date1904, now);
+    }
+    return entry.impl(a, n, arena, date1904);
+  };
   std::uint32_t rows = 1U;
   std::uint32_t cols = 1U;
   bool has_array = false;
@@ -41,7 +49,7 @@ Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t
     }
   }
   if (!has_array) {
-    return entry.impl(args, arity, arena, date1904);
+    return invoke_impl(args, arity);
   }
   Value* cells = nullptr;
   ArrayValue* out = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
@@ -79,7 +87,7 @@ Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t
           cells[idx] = v;
           goto next_cell;
         }
-      cells[idx] = entry.impl(cell_args.data(), arity, arena, date1904);
+      cells[idx] = invoke_impl(cell_args.data(), arity);
     next_cell:;
     }
   return Value::array(out);

@@ -46,6 +46,14 @@ using DateImplFn = Value (*)(const Value* args, std::uint32_t arity, Arena& aren
 /// signatures untouched.
 using ClockImplFn = Value (*)(const date_time::CivilTime& now, bool date1904);
 
+/// A date1904-aware calendar impl that ALSO needs the wall-clock reading
+/// alongside its own argument(s) -- unlike `ClockImplFn`, which replaces
+/// `impl` outright for the zero-arity clock builtins. `DATEVALUE` is the
+/// one entry that needs both: its `date_text` argument plus `now`'s year
+/// as the fallback for a year-less date ("3/15", "3月15日").
+using ClockAwareImplFn = Value (*)(const Value* args, std::uint32_t arity, Arena& arena, bool date1904,
+                                   const date_time::CivilTime& now);
+
 /// One calendar-family entry: the impl plus its arity bounds (the eager
 /// dispatcher's arity guard is replicated by the callers below).
 struct DateEntry {
@@ -57,6 +65,11 @@ struct DateEntry {
   /// so a pinned workbook stays deterministic. `impl` remains valid and
   /// reads the host clock, serving callers that have no context to offer.
   ClockImplFn clock_impl = nullptr;
+  /// Non-null only for entries that need both their own argument(s) and
+  /// the wall-clock reading (currently DATEVALUE only). When set, callers
+  /// invoke this instead of `impl`/`clock_impl`. `impl` remains valid,
+  /// reading the host clock, for callers that have no context to offer.
+  ClockAwareImplFn clock_aware_impl = nullptr;
 };
 
 /// Returns the calendar entry for `name` (canonical UPPERCASE, future-prefix

@@ -45,6 +45,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/shape_ops_lazy.h"
+#include "eval/text_ops.h"
 #include "eval/utf8_length.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -319,16 +320,20 @@ KernelResult regex_kernel(const CompiledPattern& program, std::string_view subje
       break;
     }
 
-    // Advance past the match. Zero-length matches at `start_offset`
-    // would loop forever; bump by one byte (UTF-8 safe because PCRE2
-    // refuses to match in the middle of a multi-byte sequence under
-    // PCRE2_UTF, so the next byte is a valid restart).
+    // Advance past the match. Zero-length matches at `start_offset` would
+    // loop forever; bump by one whole UTF-8 codepoint rather than one byte.
+    // Under PCRE2_UTF, `pcre2_match` rejects a `start_offset` that lands
+    // inside a multi-byte sequence with PCRE2_ERROR_BADUTFOFFSET (a
+    // negative rc, mapped to #CALC! above) — a raw one-byte bump is only
+    // safe before an ASCII byte.
     const std::size_t new_start = static_cast<std::size_t>(ovec[1]);
     if (new_start <= start_offset) {
       if (start_offset >= subject.size()) {
         break;
       }
-      start_offset = start_offset + 1;
+      std::size_t step = 0;
+      decode_utf8_step(subject, start_offset, &step);
+      start_offset = start_offset + static_cast<PCRE2_SIZE>(step == 0 ? 1 : step);
     } else {
       start_offset = new_start;
     }
@@ -688,12 +693,14 @@ Value substitute_global(const CompiledPattern& program, std::string_view subject
   return substitute_with_flags(program, subject, replacement, /*start_offset=*/0U, PCRE2_SUBSTITUTE_GLOBAL, arena);
 }
 
-// Replaces only the N-th match (occurrence == N > 0). Strategy: run the
-// kernel with find_all = true (subject to N matches), then substitute
-// at exactly the chosen match by passing `start_offset = match_start`
-// and NOT setting GLOBAL. Both steps run against the same compiled
-// program, so an occurrence-N replace costs no more compilation than a
-// global one.
+// Replaces only the N-th match (occurrence == N != 0). A positive N counts
+// matches from the start (1 = first); a negative N counts from the end
+// (-1 = last), matching Excel's documented REGEXREPLACE occurrence
+// semantics. Strategy: run the kernel with find_all = true (to know the
+// full match list either way), then substitute at exactly the chosen
+// match by passing `start_offset = match_start` and NOT setting GLOBAL.
+// Both steps run against the same compiled program, so an occurrence-N
+// replace costs no more compilation than a global one.
 Value substitute_nth(const CompiledPattern& program, std::string_view subject, std::string_view replacement,
                      long long occurrence, Arena& arena) {
   KernelResult kr = regex_kernel(program, subject, /*find_all=*/true,
@@ -701,12 +708,17 @@ Value substitute_nth(const CompiledPattern& program, std::string_view subject, s
   if (!kr.ok) {
     return kr.err;
   }
-  if (occurrence < 1 || static_cast<std::size_t>(occurrence) > kr.matches.size()) {
-    // N exceeds total matches OR no matches found — return original.
+  const std::size_t count = kr.matches.size();
+  // Positive: 1-based from the start (index = occurrence - 1). Negative:
+  // 1-based from the end (index = count - |occurrence|). Either way, an
+  // occurrence whose magnitude exceeds the match count leaves the text
+  // unchanged.
+  const long long index = occurrence > 0 ? occurrence - 1 : static_cast<long long>(count) + occurrence;
+  if (index < 0 || static_cast<std::size_t>(index) >= count) {
     return Value::text(arena.intern(subject));
   }
 
-  const std::size_t target_start = kr.matches[static_cast<std::size_t>(occurrence - 1)].whole_start;
+  const std::size_t target_start = kr.matches[static_cast<std::size_t>(index)].whole_start;
   // No GLOBAL: substituting from the N-th match's offset replaces just it.
   return substitute_with_flags(program, subject, replacement, target_start, /*sub_flags=*/0U, arena);
 }
@@ -947,17 +959,14 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // Excel's replacement dialect, spelled the way pcre2_substitute reads it.
   const std::string pcre2_replacement = normalize_replacement(replacement);
 
-  // occurrence (fourth arg, default 0). Mac Excel 365 is permissive on
-  // negative values: REGEXREPLACE("abc", "a", "x", -1) returns "xbc"
-  // (one substitution), matching the global behavior on this single-
-  // match input. Clamp negative occurrence to 0 (global) to match Mac.
+  // occurrence (fourth arg, default 0). 0 replaces every match; a positive
+  // N replaces only the N-th match counting from the start; a negative N
+  // replaces only the |N|-th match counting from the end (Excel's
+  // documented REGEXREPLACE occurrence semantics).
   long long occurrence = 0;
   if (arity >= 4) {
     if (!coerce_int_arg(call.as_call_arg(3), arena, registry, ctx, occurrence, err)) {
       return err;
-    }
-    if (occurrence < 0) {
-      occurrence = 0;
     }
   }
 

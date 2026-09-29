@@ -7,6 +7,9 @@
 #include <cmath>
 #include <string_view>
 
+#include "eval/date_time.h"
+#include "eval/eval_context.h"
+#include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -323,6 +326,22 @@ TEST(ValueFunction, DateAndTime) {
   const Value v = EvalSource("=VALUE(\"2024-03-15 12:00\")");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 45366.5);
+}
+
+// Year-less date_text ("3/15") falls back to the wall clock's year, sharing
+// DATEVALUE's rule (see DatevalueYearLess in
+// builtins_datevalue_timevalue_test.cpp for the pinned-clock coverage of
+// that rule itself). This confirms VALUE reaches the same fallback.
+TEST(ValueFunction, YearLessDateUsesCurrentYear) {
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser p("=VALUE(\"3/15\")", parse_arena);
+  parser::AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  constexpr date_time::CivilTime kPinned{{2026, 4U, 23U}, {15U, 30U, 45U}};
+  const Value v = evaluate(*root, eval_arena, default_registry(), EvalContext().with_pinned_now(kPinned));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 46096.0);  // 2026-03-15
 }
 
 // ---------------------------------------------------------------------------

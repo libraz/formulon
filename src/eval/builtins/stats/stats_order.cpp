@@ -5,12 +5,12 @@
 //
 // All entries share the skip-non-numeric rule: only `Number` kinds
 // participate (the dispatcher already short-circuits error arguments via
-// `propagate_errors = true`). LARGE / SMALL go through `collect_small_large`
+// `propagate_errors = true`). LARGE / SMALL go through `collect_direct_scalar_coerced`
 // which coerces direct scalar Bool / Text to numeric and lets the
 // dispatcher's `range_filter_numeric_only` filter the range-sourced cells.
 //
 // Registration lives in the sibling `stats.cpp` translation unit; the
-// shared helpers (`collect_numerics`, `collect_small_large`,
+// shared helpers (`collect_numerics`, `collect_direct_scalar_coerced`,
 // `build_mode_frequencies`, `percentile_inc_sorted`, `percentile_exc_sorted`)
 // are declared in `stats/stats_helpers.h` so this TU can call them by
 // reference without owning their bodies.
@@ -106,7 +106,7 @@ Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
 // applies the same rule on the lower end: `SMALL({10;20;30}, 3.0001)`
 // is `#NUM!` (probe `small_k_above_n_fractional`).
 //
-// Direct scalar Text / Bool arguments coerce through `collect_small_large`
+// Direct scalar Text / Bool arguments coerce through `collect_direct_scalar_coerced`
 // (Bool -> 1 / 0, Text -> strict numeric coercion with `#VALUE!` on
 // failure). Range-sourced and array-literal-sourced non-Number cells are
 // dropped by the dispatcher via `range_filter_numeric_only` before
@@ -118,7 +118,7 @@ static Value large_small(const Value* args, std::uint32_t arity, bool want_large
     return Value::error(k_raw.error());
   }
   const double k = k_raw.value();
-  auto xs_e = collect_small_large(args, data_count);
+  auto xs_e = collect_direct_scalar_coerced(args, data_count);
   if (!xs_e) {
     return Value::error(xs_e.error());
   }

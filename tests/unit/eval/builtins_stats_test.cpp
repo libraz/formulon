@@ -676,11 +676,36 @@ TEST(BuiltinsStdevS, SingleValueIsDiv0) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-TEST(BuiltinsStdevS, NonNumericSkipped) {
-  // Only 1, 2, 3 count. sample stdev of {1,2,3} = sqrt(2/2) = 1.
+TEST(BuiltinsStdevS, DirectNonNumericTextIsValueError) {
+  // Microsoft's documented rule: "text that cannot be translated into
+  // numbers cause errors" for DIRECT arguments. Unlike MEDIAN / MODE,
+  // STDEV.S does not silently skip an unparseable direct text argument.
   const Value v = EvalSource("=STDEV.S(1, \"a\", 2, TRUE, 3)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsStdevS, DirectBooleanAndNumericTextAreCounted) {
+  // Microsoft's documented rule: "Logical values and text representations
+  // of numbers that you type directly into the list of arguments are
+  // counted". {2, TRUE, "3"} -> {2, 1, 3}: mean=2, SS=2, sample stdev=1.
+  const Value v = EvalSource("=STDEV.S(2, TRUE, \"3\")");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
+}
+
+TEST(BuiltinsStdevS, RangeSourcedNonNumericStillSkipped) {
+  // The direct-argument coercion rule does not extend to range-sourced
+  // cells: A2 (TRUE) and A3 ("x") are dropped, leaving only {1, 3}.
+  // sample stdev of {1, 3} = sqrt(2/1) = sqrt(2).
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::boolean(true));
+  wb.sheet(0).set_cell_value(2, 0, Value::text("x"));
+  wb.sheet(0).set_cell_value(3, 0, Value::number(3.0));
+  const Value v = EvalSourceIn("=STDEV.S(A1:A4)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), std::sqrt(2.0), 1e-12);
 }
 
 TEST(BuiltinsStdevS, Range) {
@@ -706,10 +731,11 @@ TEST(BuiltinsStdevP, SingleValueIsZero) {
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
-TEST(BuiltinsStdevP, EmptyNumericIsDiv0) {
+TEST(BuiltinsStdevP, DirectNonNumericTextIsValueError) {
+  // "a" is a direct argument that does not parse as a number.
   const Value v = EvalSource("=STDEV.P(\"a\", \"b\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------
@@ -750,10 +776,19 @@ TEST(BuiltinsVarP, SingleValueIsZero) {
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
-TEST(BuiltinsVarP, EmptyNumericIsDiv0) {
+TEST(BuiltinsVarP, DirectNonNumericTextIsValueError) {
+  // "a" is a direct argument that does not parse as a number; TRUE would
+  // count (direct Bool -> 1) but "a" errors the whole call first.
   const Value v = EvalSource("=VAR.P(\"a\", TRUE)");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsVarP, DirectBooleanIsCounted) {
+  // {2, TRUE} -> {2, 1}: mean=1.5, SS=0.5, population variance=0.25.
+  const Value v = EvalSource("=VAR.P(2, TRUE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.25, 1e-12);
 }
 
 TEST(BuiltinsVarP, Range) {

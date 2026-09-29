@@ -5,6 +5,7 @@
 // coercion, text section, error propagation) live in
 // `value_numbervalue_test.cpp`.
 
+#include <cmath>
 #include <string>
 #include <string_view>
 
@@ -195,6 +196,21 @@ TEST(NumberFormatTies, BinaryResidueIsRemoved) {
 TEST(NumberFormatTies, LargeIntegerIsNotNudged) {
   // The tie correction must not perturb magnitudes whose ULP exceeds 0.5.
   EXPECT_EQ(Render(9.0e15, "0"), "9000000000000000");
+}
+
+TEST(NumberFormatTies, IntegerPast15SignificantDigitsIsZeroed) {
+  // 2^60 == 1152921504606846976 (19 digits) is exactly representable, so
+  // "%.0f" prints every digit verbatim; Excel shows only the first 15
+  // significant digits and zeros the rest, rounding the 15th against the
+  // 16th (here 115292150460684|6... rounds the last kept digit up).
+  const double v = std::pow(2.0, 60.0);
+  EXPECT_EQ(Render(v, "0"), "1152921504606850000");
+}
+
+TEST(NumberFormatTies, IntegerPast15SignificantDigitsRoundsDown) {
+  // 10^16 exactly: the first 15 significant digits are "100000000000000"
+  // followed by a 16th-digit "0", so no round-up carry fires.
+  EXPECT_EQ(Render(1.0e16, "0"), "10000000000000000");
 }
 
 TEST(NumberFormatTies, ScaledTieUsesScaledValue) {
@@ -525,6 +541,30 @@ TEST(NumberFormatGeneral, FractionTrimmedAndScientific) {
   EXPECT_EQ(Render(250000000000.0, "General"), "2.5E+11");
   EXPECT_EQ(Render(123456789012.0, "General"), "1.23457E+11");
   EXPECT_EQ(Render(-2.7e-18, "General"), "-2.7E-18");
+}
+
+TEST(NumberFormatGeneral, JaJpKeywordMatchesEnglishGeneral) {
+  // ja-JP spells the built-in General format code "G/標準" (this is the
+  // literal numFmtId=0 keyword Excel 365 ja-JP stores, not a translation
+  // applied at render time). Must render identically to "General", not be
+  // misread as an era-code token (a lone leading 'G' would otherwise scan
+  // as `EraG`, a date token).
+  EXPECT_EQ(Render(1234.0, "G/\xE6\xA8\x99\xE6\xBA\x96"), "1234");
+  EXPECT_EQ(Render(1.0 / 3.0, "G/\xE6\xA8\x99\xE6\xBA\x96"), "0.333333333");
+  // A leading 'g'/'G' not followed by "/標準" still scans as an era code,
+  // unaffected by this keyword's addition.
+  EXPECT_EQ(Render(1234.0, "General"), Render(1234.0, "G/\xE6\xA8\x99\xE6\xBA\x96"));
+}
+
+TEST(NumberFormatGeneral, JaJpKeywordHonoursDbNumQualifier) {
+  // A `[DBNum1-3]` qualifier applies to General's digit output the same
+  // way it applies to a digit-token format; oracle-verified as per-ASCII-
+  // digit substitution (see tests/oracle/cases/text_format.yaml
+  // text_dbnum1), not full positional kanji-numeral conversion.
+  EXPECT_EQ(Render(1234.0, "[DBNum1]G/\xE6\xA8\x99\xE6\xBA\x96"),
+            "\xE4\xB8\x80\xE4\xBA\x8C\xE4\xB8\x89\xE5\x9B\x9B");  // 一二三四
+  EXPECT_EQ(Render(1234.0, "[DBNum3]G/\xE6\xA8\x99\xE6\xBA\x96"),
+            "\xEF\xBC\x91\xEF\xBC\x92\xEF\xBC\x93\xEF\xBC\x94");  // １２３４
 }
 
 // ---------------------------------------------------------------------------

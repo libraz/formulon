@@ -10,6 +10,7 @@
 
 #include <cstdint>
 
+#include "eval/date_time.h"
 #include "eval/lazy_impls.h"
 
 namespace formulon {
@@ -17,8 +18,10 @@ namespace eval {
 
 class FunctionRegistry;
 
-/// Registers TEXT, VALUE, and NUMBERVALUE into `registry`. Intended to be
-/// invoked from `register_builtins`.
+/// Registers VALUETOTEXT, ARRAYTOTEXT, NUMBERVALUE, FIXED, DOLLAR, and the
+/// rest of the text-conversion family into `registry`. Intended to be
+/// invoked from `register_builtins`. TEXT and VALUE are NOT registered
+/// here -- see `text_builtin_impl` / `value_builtin_impl` below.
 void register_text_format_builtins(FunctionRegistry& registry);
 
 /// TEXT(value, format_text) impl. Not eager-registered: TEXT is
@@ -26,6 +29,21 @@ void register_text_format_builtins(FunctionRegistry& registry);
 /// served through the shared `find_date_entry` hook (VM) and the lazy TEXT
 /// wrapper (tree-walker), both of which pass `EvalContext::date1904()` here.
 Value text_builtin_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+
+/// VALUE(text) impl. Not eager-registered: a year-less date_text fallback
+/// ("3/15", "3月15日") needs the wall-clock reading for its current-year
+/// default, so it is served through the shared `find_date_entry` hook (VM)
+/// and the lazy VALUE wrapper (tree-walker), both of which pass
+/// `EvalContext::wall_clock()` here. `date1904` is accepted for signature
+/// parity with the rest of the `DateEntry` family but unused: VALUE's
+/// date-parse fallback has never rebased for the 1904 date system.
+Value value_builtin_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904,
+                         const date_time::CivilTime& now);
+
+/// Host-clock fallback for `value_builtin_impl`, matching the
+/// `DateImplFn` signature every plain `DateEntry::impl` uses. Serves a
+/// contextless caller (no `EvalContext` to offer a pinned reading).
+Value value_builtin_host_clock_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 
 /// ARRAYTOTEXT(array, [format]) must preserve the 2-D shape of range and
 /// inline-array arguments, so it rides the lazy dispatch path.

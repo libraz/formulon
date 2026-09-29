@@ -19,11 +19,14 @@
 #include <cmath>
 #include <string_view>
 
+#include "eval/date_time.h"
+#include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "util/test_arena.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -526,6 +529,69 @@ TEST(DatevalueDmmm, IsoPathStillWorks) {
   const Value v = EvalSource("=DATEVALUE(\"2024-03-15\")");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 45366.0);
+}
+
+// ---------------------------------------------------------------------------
+// DATEVALUE year-less date_text ("3/15", "3月15日"): Microsoft's documented
+// rule is "If the year portion of the date_text argument is omitted,
+// DATEVALUE uses the current year". Assertable only with a pinned clock
+// (see builtins_datetime_test.cpp's ClockSeam section for the same seam).
+// ---------------------------------------------------------------------------
+
+constexpr date_time::CivilTime kPinnedNowForDatevalue{{2026, 4U, 23U}, {15U, 30U, 45U}};
+
+Value EvalSourcePinned(std::string_view src, date_time::CivilTime pinned = kPinnedNowForDatevalue) {
+  Arena& parse_arena = formulon::test::test_parse_arena();
+  Arena& eval_arena = formulon::test::test_eval_arena();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), EvalContext().with_pinned_now(pinned));
+}
+
+TEST(DatevalueYearLess, SlashSeparatedUsesPinnedCurrentYear) {
+  const Value v = EvalSourcePinned("=DATEVALUE(\"3/15\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 46096.0);  // 2026-03-15
+}
+
+TEST(DatevalueYearLess, DashSeparatedUsesPinnedCurrentYear) {
+  const Value v = EvalSourcePinned("=DATEVALUE(\"3-15\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 46096.0);
+}
+
+TEST(DatevalueYearLess, KanjiFormUsesPinnedCurrentYear) {
+  const Value v = EvalSourcePinned(
+      "=DATEVALUE(\"3\xE6\x9C\x88"
+      "15\xE6\x97\xA5\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 46096.0);
+}
+
+TEST(DatevalueYearLess, InvalidMonthDayStillValueError) {
+  const Value v = EvalSourcePinned("=DATEVALUE(\"13/40\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(DatevalueYearLess, FullYearFormStillTakesPriorityOverMonthDay) {
+  // "2024/3/15" must not be reinterpreted as month/day off a truncated
+  // read; the 3-component yyyy-first parser still wins.
+  const Value v = EvalSourcePinned("=DATEVALUE(\"2024/3/15\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 45366.0);  // 2024-03-15, independent of the pinned year
+}
+
+TEST(DatevalueYearLess, WithoutAPinnedClockStillUsesTheHostYear) {
+  // The contextless entry point (no EvalContext offered at all) falls back
+  // to the host clock rather than rejecting the year-less form outright.
+  const Value v = EvalSource("=YEAR(DATEVALUE(\"3/15\"))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), static_cast<double>(date_time::host_civil_time().date.y));
 }
 
 }  // namespace

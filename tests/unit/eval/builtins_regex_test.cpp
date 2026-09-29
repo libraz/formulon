@@ -249,6 +249,26 @@ TEST(RegexExtract, Mode1NoMatchNA) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
+// A zero-length match immediately before a multibyte (CJK) codepoint used
+// to advance the find-all scan by one raw byte, landing `start_offset`
+// inside "日"'s 3-byte UTF-8 sequence and making the next `pcre2_match`
+// call return PCRE2_ERROR_BADUTFOFFSET -- surfaced as #CALC! instead of
+// completing the scan. The fix advances by a whole codepoint, so the scan
+// finds a zero-length match before each of "日"/"本"/"語", then "abc", then
+// a trailing zero-length match at the end of the string.
+TEST(RegexExtract, Mode1ZeroLengthMatchBeforeMultibyteDoesNotCalcError) {
+  const Value v = EvalSource("=REGEXEXTRACT(\"日本語abc\", \"[a-z]*\", 1)");
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  EXPECT_EQ(arr->rows, 1U);
+  ASSERT_EQ(arr->cols, 5U);
+  EXPECT_EQ(arr->cells[0].as_text(), "");
+  EXPECT_EQ(arr->cells[1].as_text(), "");
+  EXPECT_EQ(arr->cells[2].as_text(), "");
+  EXPECT_EQ(arr->cells[3].as_text(), "abc");
+  EXPECT_EQ(arr->cells[4].as_text(), "");
+}
+
 // ---------------------------------------------------------------------------
 // REGEXEXTRACT — return_mode 2 (first match's capture groups, row array)
 // ---------------------------------------------------------------------------
@@ -393,12 +413,33 @@ TEST(RegexReplace, OccurrenceExceedsTotalReturnsOriginal) {
   EXPECT_EQ(v.as_text(), "abc 123 def 456 ghi 789");
 }
 
-TEST(RegexReplace, NegativeOccurrenceIsPermissive) {
-  // Mac Excel 365 is permissive on negative occurrence: it folds to
-  // global replacement. Formulon clamps to 0 to match.
+TEST(RegexReplace, NegativeOccurrenceCountsFromTheEndSingleMatch) {
+  // A single match cannot distinguish "replace the last match" from
+  // "replace every match" -- this is the pre-existing oracle golden
+  // (regexreplace_negative_occurrence) and stays satisfied under either
+  // reading.
   const Value v = EvalSource("=REGEXREPLACE(\"abc\", \"a\", \"#\", -1)");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "#bc");
+}
+
+TEST(RegexReplace, NegativeOccurrenceCountsFromTheEndMultipleMatches) {
+  // Excel documents a negative occurrence as counting matches from the
+  // end of the text (-1 = final occurrence), replacing only that one
+  // match -- not folding to a global replace.
+  const Value last = EvalSource("=REGEXREPLACE(\"aaa\", \"a\", \"b\", -1)");
+  ASSERT_TRUE(last.is_text());
+  EXPECT_EQ(last.as_text(), "aab");
+
+  const Value second_to_last = EvalSource("=REGEXREPLACE(\"aaa\", \"a\", \"b\", -2)");
+  ASSERT_TRUE(second_to_last.is_text());
+  EXPECT_EQ(second_to_last.as_text(), "aba");
+}
+
+TEST(RegexReplace, NegativeOccurrenceMagnitudeExceedsTotalReturnsOriginal) {
+  const Value v = EvalSource("=REGEXREPLACE(\"aaa\", \"a\", \"b\", -4)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "aaa");
 }
 
 TEST(RegexReplace, EmptyReplacementDeletesMatches) {

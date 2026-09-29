@@ -989,7 +989,11 @@ struct ParsedDateTimeText {
   bool has_time;
 };
 
-Expected<ParsedDateTimeText, ErrorCode> parse_date_time_arg(const Value& arg) {
+// `current_year` enables the year-less `M/D` / `M月D日` date form (used by
+// DATEVALUE, per Microsoft's documented "uses the current year" rule); `0`
+// (the default, used by TIMEVALUE) disables it, matching the pre-existing
+// year-required behaviour.
+Expected<ParsedDateTimeText, ErrorCode> parse_date_time_arg(const Value& arg, int current_year = 0) {
   auto text = coerce_to_text(arg);
   if (!text) {
     return text.error();
@@ -999,7 +1003,8 @@ Expected<ParsedDateTimeText, ErrorCode> parse_date_time_arg(const Value& arg) {
     return ErrorCode::Value;
   }
   ParsedDateTimeText parsed{0.0, 0.0, false, false};
-  if (!date_parse::parse_date_time_text(trimmed, &parsed.serial, &parsed.frac, &parsed.has_date, &parsed.has_time)) {
+  if (!date_parse::parse_date_time_text(trimmed, &parsed.serial, &parsed.frac, &parsed.has_date, &parsed.has_time,
+                                        current_year)) {
     return ErrorCode::Value;
   }
   return parsed;
@@ -1010,9 +1015,11 @@ Expected<ParsedDateTimeText, ErrorCode> parse_date_time_arg(const Value& arg) {
 /// accepted and ignored — a string like "2024-03-15 13:30" returns the
 /// serial for 2024-03-15. Booleans / numbers coerce to text first, so
 /// `DATEVALUE(TRUE)` tries to parse the literal "TRUE" and fails with
-/// `#VALUE!`.
-Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto parsed = parse_date_time_arg(args[0]);
+/// `#VALUE!`. A year-less date_text ("3/15", "3月15日") uses `now`'s year,
+/// matching Microsoft's documented DATEVALUE rule.
+Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904,
+                 const date_time::CivilTime& now) {
+  auto parsed = parse_date_time_arg(args[0], now.date.y);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -1037,6 +1044,15 @@ Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
     return Value::error(ErrorCode::Value);
   }
   return Value::number(serial);
+}
+
+/// Host-clock fallback for `DATEVALUE`, registered as `DateEntry::impl` so
+/// a contextless caller (with no `EvalContext` to offer a pinned reading)
+/// still resolves a year-less date_text; callers holding a context reach
+/// `Datevalue_` directly through `DateEntry::clock_aware_impl`, matching
+/// the `Now_`/`NowAt_` split above.
+Value DatevalueHostClock_(const Value* args, std::uint32_t arity, Arena& arena, bool date1904) {
+  return Datevalue_(args, arity, arena, date1904, date_time::host_civil_time());
 }
 
 /// TIMEVALUE(text). Parses `text` as a time string and returns the
@@ -1097,7 +1113,7 @@ const DateEntry* find_date_entry(std::string_view name) noexcept {
       {"YEARFRAC", {&Yearfrac_, 2u, 3u}},
       {"DATEDIF", {&Datedif_, 3u, 3u}},
       {"DAYS360", {&Days360_, 2u, 3u}},
-      {"DATEVALUE", {&Datevalue_, 1u, 1u}},
+      {"DATEVALUE", {&DatevalueHostClock_, 1u, 1u, nullptr, &Datevalue_}},
       {"DAYS", {&Days_, 2u, 2u}},
       {"NOW", {&Now_, 0u, 0u, &NowAt_}},
       {"TODAY", {&Today_, 0u, 0u, &TodayAt_}},
@@ -1105,6 +1121,10 @@ const DateEntry* find_date_entry(std::string_view name) noexcept {
       // workbook epoch, so it shares this ctx-date1904 lookup. The impl lives
       // in builtins/text_format.cpp.
       {"TEXT", {&text_builtin_impl, 2u, 2u}},
+      // VALUE is not a calendar function either, but its year-less
+      // date_text fallback ("3/15", "3月15日") needs the wall-clock
+      // reading; the impl lives in builtins/text_format.cpp.
+      {"VALUE", {&value_builtin_host_clock_impl, 1u, 1u, nullptr, &value_builtin_impl}},
   };
   for (const auto& e : kEntries) {
     if (strings::case_insensitive_eq(e.name, name)) {

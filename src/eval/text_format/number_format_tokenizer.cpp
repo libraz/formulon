@@ -222,6 +222,23 @@ void tokenize_section(std::string_view fmt, Section& out) {
         i += 7;
         continue;
       }
+      // ja-JP spells the built-in General format code "G/標準" rather than
+      // the English "General" -- this is the literal numFmtId=0 keyword
+      // Excel 365 (ja-JP) stores and displays, not a translation applied
+      // at render time. Recognized as a single 8-byte unit (a case-
+      // insensitive 'G', '/', then the two kanji 標準, UTF-8
+      // E6 A8 99 E6 BA 96) so it is never reached by the single-`g`
+      // era-name scan below, which would otherwise misread the standalone
+      // 'G' as `EraG`.
+      static constexpr char kJaGeneralTail[] = "/\xE6\xA8\x99\xE6\xBA\x96";
+      constexpr std::size_t kJaGeneralTailLen = sizeof(kJaGeneralTail) - 1;
+      if (i + 1 + kJaGeneralTailLen <= fmt.size() && fmt.compare(i + 1, kJaGeneralTailLen, kJaGeneralTail) == 0) {
+        Token t;
+        t.kind = Tok::GeneralNumber;
+        toks.push_back(t);
+        i += 1 + kJaGeneralTailLen;
+        continue;
+      }
     }
     // AM/PM (case-insensitive). Match the longest valid prefix. We treat
     // `AM/PM`, `am/pm`, `A/P`, `a/p` as indivisible markers.

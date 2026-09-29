@@ -200,6 +200,10 @@ bool parse_mmm_month(std::string_view& s, int* out_month) noexcept {
 // in that case the caller should try the d-mmm-yyyy fall-back.
 bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept;
 
+// Parses the year-less `M/D` / `M-D` / `M月D日` shapes against
+// `current_year`. See the definition below for the full contract.
+bool parse_md_text(std::string_view s, int current_year, double* out_serial, std::string_view* rest) noexcept;
+
 // Parses the alternate `d-mmm-yyyy` / `d mmm yyyy` / `d/mmm/yyyy` shapes,
 // where the month is an English word (3-letter abbreviation or full name).
 // The separator must be one of `-`, `/`, ` `, and must match on both sides of
@@ -369,7 +373,9 @@ bool parse_era_text(std::string_view s, double* out_serial, std::string_view* re
 }
 
 // Parses a leading date token. See `parse_date_time_text` for the grammar.
-bool parse_date_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+// `current_year` is forwarded to `parse_md_text` only, the sole year-less
+// form; every other branch requires an explicit year and ignores it.
+bool parse_date_text(std::string_view s, int current_year, double* out_serial, std::string_view* rest) noexcept {
   if (parse_era_text(s, out_serial, rest)) {
     return true;
   }
@@ -379,7 +385,10 @@ bool parse_date_text(std::string_view s, double* out_serial, std::string_view* r
   if (parse_dmy_mmm_text(s, out_serial, rest)) {
     return true;
   }
-  return parse_mmm_d_yyyy_text(s, out_serial, rest);
+  if (parse_mmm_d_yyyy_text(s, out_serial, rest)) {
+    return true;
+  }
+  return parse_md_text(s, current_year, out_serial, rest);
 }
 
 bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
@@ -424,6 +433,49 @@ bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* re
     s.remove_prefix(3);
   }
   if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
+    return false;
+  }
+  *rest = s;
+  return true;
+}
+
+// Parses the year-less `M/D` / `M-D` / `M月D日` shapes, using `current_year`
+// as the year (Microsoft's documented DATEVALUE rule: "If the year portion
+// of the date_text argument is omitted, DATEVALUE uses the current year").
+// `current_year <= 0` means no fallback year is available, so this form is
+// never matched (the caller's default -- see the header doc). Reached only
+// after `parse_ymd_text` has already failed, so a genuine 3-component date
+// like `2024/3/15` is never reinterpreted as month/day.
+bool parse_md_text(std::string_view s, int current_year, double* out_serial, std::string_view* rest) noexcept {
+  if (current_year <= 0) {
+    return false;
+  }
+  int month = 0;
+  if (scan_digits(s, 2, &month) == 0) {
+    return false;
+  }
+  bool kanji_form = false;
+  if (!s.empty() && (s[0] == '-' || s[0] == '/')) {
+    s.remove_prefix(1);
+  } else if (starts_with_utf8(s, kKanjiGatsu)) {
+    s.remove_prefix(3);
+    kanji_form = true;
+  } else {
+    return false;
+  }
+  int day = 0;
+  if (scan_digits(s, 2, &day) == 0) {
+    return false;
+  }
+  if (kanji_form) {
+    if (!starts_with_utf8(s, kKanjiNichi)) {
+      return false;
+    }
+    s.remove_prefix(3);
+  }
+  // `year_digits = 4` bypasses the two-digit pivot unconditionally: a
+  // caller-supplied current year is already a real four-digit year.
+  if (!serial_from_parsed_ymd(current_year, 4, month, day, out_serial)) {
     return false;
   }
   *rest = s;
@@ -666,7 +718,7 @@ std::string_view trim_date_text(std::string_view s) noexcept {
 }
 
 bool parse_date_time_text(std::string_view s, double* out_date_serial, double* out_time_frac, bool* out_has_date,
-                          bool* out_has_time) noexcept {
+                          bool* out_has_time, int current_year) noexcept {
   // Fold `０..９` (U+FF10..U+FF19) to ASCII before tokenisation. Mac Excel
   // accepts full-width digits anywhere ASCII digits are expected; the
   // surrounding kanji terminators / era characters / punctuation pass
@@ -677,7 +729,7 @@ bool parse_date_time_text(std::string_view s, double* out_date_serial, double* o
   double frac = 0.0;
   bool has_date = false;
   bool has_time = false;
-  if (parse_date_text(rest, &serial, &rest)) {
+  if (parse_date_text(rest, current_year, &serial, &rest)) {
     has_date = true;
     std::size_t space_count = 0;
     while (!rest.empty() && (rest[0] == ' ' || rest[0] == '\t')) {

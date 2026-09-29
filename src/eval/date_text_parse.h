@@ -38,8 +38,16 @@ std::string_view trim_date_text(std::string_view s) noexcept;
 /// At least one of `*out_has_date` / `*out_has_time` is true on success.
 /// On any parse failure returns false and leaves the out parameters
 /// untouched. The recognised shapes are documented in the implementation.
+///
+/// `current_year` supplies the year for a month/day-only date token
+/// (`"3/15"`, `"3月15日"`), matching Microsoft's documented DATEVALUE
+/// rule ("If the year portion ... is omitted, DATEVALUE uses the current
+/// year"). `0` (the default) disables that form entirely, so a caller
+/// that does not carry a clock reading (e.g. the date1904 direct-text
+/// coercion used by EDATE-family arguments) keeps its pre-existing
+/// year-required behaviour unchanged.
 bool parse_date_time_text(std::string_view s, double* out_date_serial, double* out_time_frac, bool* out_has_date,
-                          bool* out_has_time) noexcept;
+                          bool* out_has_time, int current_year = 0) noexcept;
 
 }  // namespace date_parse
 }  // namespace eval

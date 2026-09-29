@@ -333,6 +333,7 @@ src/eval/aggregate_lazy.cpp
   src/eval/forecast_ets_lazy.cpp
   src/eval/getpivotdata_lazy.cpp
   src/eval/linest_lazy.cpp
+  src/eval/textjoin_lazy.cpp
   src/eval/textsplit_lazy.cpp
   src/eval/trimrange_lazy.cpp
   src/eval/reference/common.cpp

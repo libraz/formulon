@@ -252,7 +252,11 @@ Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
 // VALUE(text)
 // ---------------------------------------------------------------------------
 
-Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+// `current_year` supplies the fallback year for a year-less date_text
+// ("3/15", "3月15日"), matching Microsoft's documented DATEVALUE rule (which
+// VALUE's date-parse fallback shares). `0` disables that form, matching the
+// pre-existing year-required behaviour.
+Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, int current_year) {
   const Value& v = args[0];
   switch (v.kind()) {
     case ValueKind::Number:
@@ -289,7 +293,7 @@ Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
         double time_frac = 0.0;
         bool has_date = false;
         bool has_time = false;
-        if (date_parse::parse_date_time_text(trimmed, &date_serial, &time_frac, &has_date, &has_time)) {
+        if (date_parse::parse_date_time_text(trimmed, &date_serial, &time_frac, &has_date, &has_time, current_year)) {
           return Value::number(date_serial + time_frac);
         }
       }
@@ -599,6 +603,25 @@ Value ArrayToText_(const Value* args, std::uint32_t arity, Arena& arena) {
 
 }  // namespace
 
+// ---------------------------------------------------------------------------
+// VALUE(text). Exposed (not in the anonymous namespace) because it is
+// clock-sensitive (a year-less date_text fallback reads the wall clock) and
+// served through the shared calendar lookup (`find_date_entry`) + the lazy
+// VALUE wrapper, not the eager registry. Mirrors `text_builtin_impl` above.
+// ---------------------------------------------------------------------------
+
+Value value_builtin_impl(const Value* args, std::uint32_t arity, Arena& arena, bool /*date1904*/,
+                         const date_time::CivilTime& now) {
+  return Value_(args, arity, arena, now.date.y);
+}
+
+// Host-clock fallback for VALUE, registered as `DateEntry::impl` so a
+// contextless caller still resolves a year-less date_text. Mirrors
+// `DatevalueHostClock_` in `builtins/datetime.cpp`.
+Value value_builtin_host_clock_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904) {
+  return value_builtin_impl(args, arity, arena, date1904, date_time::host_civil_time());
+}
+
 Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -636,16 +659,15 @@ Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const Fun
 }
 
 void register_text_format_builtins(FunctionRegistry& registry) {
-  // TEXT is NOT registered here: it is date1904-sensitive (date format codes
-  // read the workbook epoch), so it routes through the lazy TEXT wrapper
-  // (`eval_text_lazy`) and the shared `find_date_entry` hook (VM), which pass
-  // `EvalContext::date1904()` into `text_builtin_impl`.
+  // TEXT and VALUE are NOT registered here: both are clock-sensitive (TEXT's
+  // date format codes read the workbook epoch; VALUE's year-less date_text
+  // fallback reads the wall clock), so they route through the lazy TEXT/
+  // VALUE wrappers (`eval_text_lazy`/`eval_datetime_lazy`) and the shared
+  // `find_date_entry` hook (VM), which pass `EvalContext::date1904()` /
+  // `EvalContext::wall_clock()` into `text_builtin_impl` / `value_builtin_impl`.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"VALUE", 1u, 1u, &Value_},
-      {"VALUETOTEXT", 1u, 2u, &ValueToText_},
-      {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_},
-      {"NUMBERVALUE", 1u, 3u, &NumberValue_},
-      {"FIXED", 1u, 3u, &Fixed_},
+      {"VALUETOTEXT", 1u, 2u, &ValueToText_}, {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_},
+      {"NUMBERVALUE", 1u, 3u, &NumberValue_}, {"FIXED", 1u, 3u, &Fixed_},
       {"DOLLAR", 1u, 2u, &Dollar_},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
