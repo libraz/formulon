@@ -438,6 +438,13 @@ AstNode* Parser::parse() {
     return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::LParen ||
            k == TokenKind::Number;
   };
+  // A `[` opens an intersection RHS only as a workbook-index qualifier
+  // (`A1:A5 [0]!Rng`); any other bracket belongs to a structured reference.
+  auto is_book_qualifier_at = [&raw](std::size_t j) noexcept {
+    return j + 3 < raw.size() && raw[j].kind == TokenKind::LBracket && raw[j + 1].kind == TokenKind::Number &&
+           raw[j + 2].kind == TokenKind::RBracket &&
+           (raw[j + 3].kind == TokenKind::Bang || raw[j + 3].kind == TokenKind::Ident);
+  };
   // A cell-shaped lexeme that is also an Excel function name. The two forms
   // overlap only where a function name matches the cell-reference pattern
   // `[A-Za-z]{1,3}[0-9]{1,7}` within the A1..XFD1048576 grid, which across
@@ -459,9 +466,11 @@ AstNode* Parser::parse() {
     }
     // Find the next non-whitespace token after this run.
     TokenKind next_kind = TokenKind::Eof;
+    bool next_book_qualifier = false;
     for (std::size_t j = i + 1; j < raw.size(); ++j) {
       if (raw[j].kind != TokenKind::Whitespace) {
         next_kind = raw[j].kind;
+        next_book_qualifier = is_book_qualifier_at(j);
         break;
       }
     }
@@ -477,7 +486,8 @@ AstNode* Parser::parse() {
     const bool cellref_call_space = next_kind == TokenKind::LParen && prev_kind == TokenKind::CellRef &&
                                     is_cellref_shaped_function_name(tokens_.back().lexeme) &&
                                     (tokens_.size() < 2 || tokens_[tokens_.size() - 2].kind != TokenKind::Colon);
-    if (is_ref_left_candidate(prev_kind) && is_ref_right_candidate(next_kind) && !cellref_call_space) {
+    if (is_ref_left_candidate(prev_kind) && (is_ref_right_candidate(next_kind) || next_book_qualifier) &&
+        !cellref_call_space) {
       tokens_.push_back(t);
     }
     // Otherwise: drop. Subsequent iterations resume on the next token.
@@ -876,7 +886,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       const NodeKind lk = lhs->kind();
       const bool lhs_ref_shaped = lk == NodeKind::Ref || lk == NodeKind::RangeOp || lk == NodeKind::NameRef ||
                                   lk == NodeKind::StructuredRef || lk == NodeKind::Call ||
-                                  lk == NodeKind::IntersectOp || lk == NodeKind::UnionOp;
+                                  lk == NodeKind::IntersectOp || lk == NodeKind::UnionOp || is_self_book_name_ref(*lhs);
       if (!lhs_ref_shaped) {
         // Treat the retained whitespace as layout: drop it and continue.
         advance();
@@ -928,7 +938,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       const NodeKind rk = rhs->kind();
       if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp &&
           rk != NodeKind::Call && rk != NodeKind::IntersectOp && rk != NodeKind::UnionOp &&
-          rk != NodeKind::ErrorPlaceholder) {
+          rk != NodeKind::ErrorPlaceholder && !is_self_book_name_ref(*rhs)) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_intersect_op(arena_, lhs, rhs);

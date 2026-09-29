@@ -248,6 +248,9 @@ TEST(AstFormat, SelfBookNameRef) {
   ExpectRoundTripsToSame("=SUM([0]!Rng)");
   ExpectRoundTripsToSame("=[0]!Fn(3)");
   ExpectRoundTripsToSame("=Sheet1!A10:[0]!Rng");
+  ExpectRoundTripsToSame("=[0]!Rng A1:A5");
+  ExpectRoundTripsToSame("=A1:A5 [0]!Rng");
+  ExpectRoundTripsToSame("=SUM([0]!Rng A1:A5)");
 }
 
 TEST(AstFormat, StorageFormNeverPrefixesSelfBookName) {
@@ -430,6 +433,8 @@ TEST(AstFormat, WholeAxisPairKeepsPerEndpointAnchoring) {
 
 TEST(AstFormat, IntersectOp) {
   ExpectRoundTripsToSame("=A1:A10 A2:A20");
+  ExpectRoundTripsToSame("=Rng A1:A5");
+  ExpectRoundTripsToSame("=Sheet1!Rng A1:A5");
 }
 // A bare cell reference on the left of an intersection formats without any
 // bracketing token between it and the right operand, so the re-parse has to

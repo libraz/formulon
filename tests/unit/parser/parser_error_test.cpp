@@ -283,6 +283,20 @@ TEST(ParserErrors, SelfBookNameParses) {
   }
 }
 
+TEST(ParserErrors, SelfBookNameIntersects) {
+  // The space operator takes a self-book name on either side, like every
+  // other name spelling (`Rng A1:A5`, `Sheet1!Rng A1:A5`).
+  for (const char* src : {"=[0]!Rng A1:A5", "=A1:A5 [0]!Rng", "=[0]!Rng [0]!Other", "=Rng A1:A5", "=Sheet1!Rng A1:A5",
+                          "=A1:A5 Sheet1!Rng"}) {
+    Arena a;
+    Parser p(src, a);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << src;
+    EXPECT_TRUE(p.errors().empty()) << src;
+    EXPECT_EQ(root->kind(), NodeKind::IntersectOp) << src;
+  }
+}
+
 TEST(ParserErrors, SelfBookCellReferenceIsInvalid) {
   // Excel never writes `[0]` in front of a sheet; the self-book qualifier
   // exists only in the name form.
