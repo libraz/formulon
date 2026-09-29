@@ -302,14 +302,7 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i) {
     out.append(" percent=\"0\"");
   }
   out.push_back('>');
-  // OOXML requires N `<cfvo>` children for an N-icon set, but the model
-  // only carries the N-1 real boundary thresholds (see cf_reader.cpp's
-  // `ReadIconSet`); re-synthesize the dropped floor cfvo here so the
-  // emitted XML stays schema-valid and round-trips through Excel.
-  cf::CfValueObject floor;
-  floor.type = cf::CfvoType::Percent;
-  floor.value = "0";
-  AppendCfvo(out, floor);
+  AppendCfvo(out, i.floor);
   for (const auto& th : i.thresholds) {
     AppendCfvo(out, th);
   }

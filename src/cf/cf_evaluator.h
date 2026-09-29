@@ -58,9 +58,10 @@
 //     proportional negative offset; `Middle` pins to 50; `None` pins
 //     to 0. `is_negative` is set when the cell value is < 0.
 //   * `IconSet` — resolves each `<cfvo>` threshold against the
-//     population, walks them in ascending order honouring each CFVO's
-//     `gte` flag (`>=` vs. `>`), and assigns an `icon_index` between
-//     `0` and `N-1` for an N-icon set. `rule.icon_set->reverse` flips
+//     population, draws no icon for a cell below the floor, walks the
+//     boundaries in ascending order honouring each CFVO's `gte` flag
+//     (`>=` vs. `>`), and assigns an `icon_index` between `0` and `N-1`
+//     for an N-icon set. `rule.icon_set->reverse` flips
 //     the index. The resolved `IconRender` carries the icon set name
 //     so the host can look up the glyph.
 //

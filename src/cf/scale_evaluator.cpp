@@ -318,11 +318,17 @@ std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell
   }
 
   auto resolved = resolve_cfvo_list(spec.thresholds, *pop, ctx);
-  if (!resolved.has_value()) {
+  const std::optional<double> floor = resolve_cfvo(spec.floor, *pop, ctx);
+  if (!resolved.has_value() || !floor.has_value()) {
     return std::nullopt;
   }
 
   const double cell = cell_value.as_number();
+  // Below the floor Excel draws no icon at all (measured for number,
+  // formula and percent floors, with and without `gte`).
+  if (spec.floor.gte ? cell < *floor : cell <= *floor) {
+    return std::nullopt;
+  }
   std::uint8_t icon_index = 0;
   for (std::size_t i = 0; i < resolved->size(); ++i) {
     const bool above = spec.thresholds[i].gte ? (cell >= (*resolved)[i]) : (cell > (*resolved)[i]);

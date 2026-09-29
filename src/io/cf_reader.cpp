@@ -549,15 +549,13 @@ void ReadIconSet(const pugi::xml_node& iset, cf::IconSetSpec* out) {
   out->reverse = attr_bool(iset, "reverse", out->reverse);
   out->show_value = attr_bool(iset, "showValue", out->show_value);
   out->percent = attr_bool(iset, "percent", out->percent);
-  // OOXML emits N `<cfvo>` children for an N-icon set. The first one is
-  // the floor of the lowest icon's bucket (conventionally `type="percent"
-  // val="0"`) and carries no boundary of its own — `IconSetSpec::thresholds`
-  // stores only the N-1 real boundaries, matching `resolve_icon_set()`'s
-  // bucket model. The writer re-synthesizes the floor cfvo on output.
-  bool skipped_floor = false;
+  // OOXML emits N `<cfvo>` children for an N-icon set: the floor of the
+  // lowest icon's bucket, then the N-1 boundaries between buckets.
+  bool floor_read = false;
   for (pugi::xml_node cfvo = iset.child("cfvo"); cfvo; cfvo = cfvo.next_sibling("cfvo")) {
-    if (!skipped_floor) {
-      skipped_floor = true;
+    if (!floor_read) {
+      out->floor = ReadCfvo(cfvo);
+      floor_read = true;
       continue;
     }
     out->thresholds.push_back(ReadCfvo(cfvo));

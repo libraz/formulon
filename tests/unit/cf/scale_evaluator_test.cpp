@@ -700,6 +700,28 @@ TEST(CFEvaluator, IconSetExactlyAtThresholdHonoursGteFlag) {
   EXPECT_EQ(at_threshold_gt.icon_render->icon_index, 0);
 }
 
+// Measured in Excel: a cell below the floor gets no icon at all, for a
+// number floor, and at the floor itself when the floor's gte is off.
+TEST(CFEvaluator, IconSetDrawsNoIconBelowTheFloor) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  IconSetSpec spec = ThreeIconNumberSet("20", "40");
+  spec.floor = IconCfvo(CfvoType::Number, "15", true);
+  r.icon_set = spec;
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_FALSE(make_match(r, Value::number(10.0), ctx).icon_render.has_value());
+  CFMatch at_floor = make_match(r, Value::number(15.0), ctx);
+  ASSERT_TRUE(at_floor.icon_render.has_value());
+  EXPECT_EQ(at_floor.icon_render->icon_index, 0);
+
+  spec.floor.gte = false;
+  r.icon_set = spec;
+  EXPECT_FALSE(make_match(r, Value::number(15.0), ctx).icon_render.has_value());
+  EXPECT_TRUE(make_match(r, Value::number(16.0), ctx).icon_render.has_value());
+}
+
 TEST(CFEvaluator, IconSetReverseFlipsBucketIndex) {
   // Without reverse: 10 → 0, 50 → 2. With reverse: 10 → 2, 50 → 0.
   CFEvalHarness harness;

@@ -470,9 +470,8 @@ TEST(CFReader, DataBarWithoutX14OverlayKeepsLegacyDefaults) {
 }
 
 TEST(CFReader, IconSetWithReverseAndPercent) {
-  // A 3-icon set carries 3 `<cfvo>` elements in the XML; the first is the
-  // floor of the lowest bucket and is dropped, leaving 2 real thresholds
-  // in the in-memory model (see `IconSetSpec::thresholds`).
+  // A 3-icon set carries 3 `<cfvo>` elements in the XML: the floor of the
+  // lowest bucket (`IconSetSpec::floor`) and 2 boundaries.
   pugi::xml_document doc = Load(R"(
     <worksheet>
       <conditionalFormatting sqref="D1:D10">
@@ -493,6 +492,8 @@ TEST(CFReader, IconSetWithReverseAndPercent) {
   EXPECT_EQ(r.icon_set->name, cf::IconSetName::Three_TrafficLights2);
   EXPECT_TRUE(r.icon_set->reverse);
   EXPECT_FALSE(r.icon_set->percent);
+  EXPECT_EQ(r.icon_set->floor.type, cf::CfvoType::Number);
+  EXPECT_EQ(r.icon_set->floor.value, "0");
   ASSERT_EQ(r.icon_set->thresholds.size(), 2u);
   EXPECT_EQ(r.icon_set->thresholds[0].value, "50");
   EXPECT_TRUE(r.icon_set->thresholds[0].gte);

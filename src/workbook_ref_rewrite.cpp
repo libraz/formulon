@@ -121,6 +121,7 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
           }
         }
         if (rule.icon_set.has_value()) {
+          rewrite_cfvo(rule.icon_set->floor);
           for (cf::CfValueObject& value : rule.icon_set->thresholds) {
             rewrite_cfvo(value);
           }

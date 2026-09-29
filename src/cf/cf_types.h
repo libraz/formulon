@@ -199,8 +199,12 @@ struct DataBarSpec {
 /// `<iconSet>` sub-element of a `cfRule`.
 struct IconSetSpec {
   IconSetName name = IconSetName::Three_Arrows;
-  /// N-1 thresholds for an N-icon set. For example, the default
-  /// `Three_Arrows` set carries two thresholds (33% / 67%).
+  /// Lower bound of the lowest icon's bucket (the first `<cfvo>`). A cell
+  /// below it gets no icon at all (measured in Excel, for number, formula
+  /// and percent floors); the usual `percent 0` floor admits every value.
+  CfValueObject floor{CfvoType::Percent, "0", true};
+  /// The N-1 boundaries between the buckets of an N-icon set. For example,
+  /// the default `Three_Arrows` set carries two thresholds (33% / 67%).
   std::vector<CfValueObject> thresholds;
   bool reverse = false;
   bool show_value = true;

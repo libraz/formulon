@@ -174,7 +174,8 @@ std::string DescribeCf(const Sheet& sheet) {
       }
       if (r.icon_set) {
         os << " icons=" << static_cast<int>(r.icon_set->name) << " rev=" << r.icon_set->reverse
-           << " show=" << r.icon_set->show_value << " pct=" << r.icon_set->percent;
+           << " show=" << r.icon_set->show_value << " pct=" << r.icon_set->percent << " floor";
+        DescribeCfvo(os, r.icon_set->floor);
         for (const auto& v : r.icon_set->thresholds) {
           DescribeCfvo(os, v);
         }
@@ -366,15 +367,12 @@ INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureFixture,
                          ::testing::Values("base", "cellis_ops", "text_rules", "flags", "cfvo", "iconbits", "rel",
                                            "dv_all", "prot", "prot2", "excelprot", "x14", "x14bars"));
 
-// Left out of the byte comparison, all for the Ptg encoder's canonical
-// form or the model's shape rather than the record layout: `flags` and
-// `text_rules` (Excel adds PtgParen, a volatile PtgAttrSemi and IF's
-// PtgAttr jumps, which the encoder never emits), `rel` (the same, plus
-// its own function-token classes) and `iconbits` (a `3Flags` set whose
-// `num 0` floor threshold the model drops, as the OOXML path does).
+// Left out: `text_rules`, `flags` and `rel`, whose formulas differ from
+// Excel's only in the Ptg encoder's canonical form (IF's PtgAttr jumps,
+// function-token classes, the PtgAttrSemi operand), not in record layout.
 INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureWriterBytes,
-                         ::testing::Values("base", "cellis_ops", "cfvo", "dv_all", "prot", "prot2", "excelprot", "x14",
-                                           "x14bars"));
+                         ::testing::Values("base", "cellis_ops", "cfvo", "iconbits", "dv_all", "prot", "prot2",
+                                           "excelprot", "x14", "x14bars"));
 
 /// Payload of the first `type` record in `part`, hex-encoded.
 std::string RecordPayload(const std::vector<std::uint8_t>& xlsb, const std::string& part, std::uint16_t type) {

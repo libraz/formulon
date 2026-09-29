@@ -348,7 +348,9 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
           if (!v || (index < 4U && ((flags.value() >> (3U + index)) & 1U) != (v->gte ? 1U : 0U))) {
             return false;
           }
-          if (index != 0U) {
+          if (index == 0U) {
+            spec.floor = std::move(*v);
+          } else {
             spec.thresholds.push_back(std::move(*v));
           }
           ++index;
@@ -700,12 +702,8 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
       return Refuse("xlsb icon set threshold count does not match its icons");
     }
     const cf::IconSetSpec& set = *rule.icon_set;
-    // The dropped floor threshold is re-synthesized as the cf_writer does.
-    cf::CfValueObject floor;
-    floor.type = cf::CfvoType::Percent;
-    floor.value = "0";
-    std::uint16_t set_flags =
-        static_cast<std::uint16_t>((set.show_value ? 0U : 0x02U) | (set.reverse ? 0x04U : 0U) | (1U << 3U));
+    std::uint16_t set_flags = static_cast<std::uint16_t>((set.show_value ? 0U : 0x02U) | (set.reverse ? 0x04U : 0U) |
+                                                         ((set.floor.gte ? 1U : 0U) << 3U));
     for (std::size_t i = 0; i < set.thresholds.size() && i < 3U; ++i) {
       set_flags = static_cast<std::uint16_t>(set_flags | ((set.thresholds[i].gte ? 1U : 0U) << (4U + i)));
     }
@@ -713,7 +711,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     emit_u32(head, static_cast<std::uint32_t>(set.name));
     emit_u16(head, set_flags);
     emit_record(dst, kBeginIconSet, head);
-    if (auto s = EmitCfvo(dst, floor, true, base, ctx); !s) {
+    if (auto s = EmitCfvo(dst, set.floor, true, base, ctx); !s) {
       return s;
     }
     for (const cf::CfValueObject& v : set.thresholds) {

@@ -206,10 +206,8 @@ TEST(CFWriter, DataBarRoundTrips) {
 }
 
 TEST(CFWriter, IconSetReverseAndPercentRoundTrip) {
-  // Three_TrafficLights2 is a 3-icon set: the model carries N-1 = 2 real
-  // thresholds; the writer must re-synthesize the floor cfvo so the
-  // emitted XML carries N = 3 `<cfvo>` elements (schema-valid, matches
-  // what Excel itself emits).
+  // Three_TrafficLights2 is a 3-icon set: the floor plus N-1 = 2
+  // boundaries, emitted as N = 3 `<cfvo>` elements as Excel writes them.
   cf::ConditionalFormat cf{};
   cf.sqref.push_back({{0, 3}, {9, 3}});
   cf::CFRule r;
@@ -224,7 +222,7 @@ TEST(CFWriter, IconSetReverseAndPercentRoundTrip) {
   cf.rules.push_back(std::move(r));
 
   std::string xml = write_conditional_formattings({cf}, kDxfCount);
-  // Floor cfvo (re-synthesized) plus the 2 real thresholds: 3 `<cfvo>`
+  // The default floor (percent 0) plus the 2 boundaries: 3 `<cfvo>`
   // elements for the 3-icon set. `gte` is omitted when true (the default)
   // and emitted as `gte="0"` only when false.
   EXPECT_NE(xml.find(R"(<cfvo type="percent" val="0"/>)"), std::string::npos) << xml;
@@ -236,11 +234,35 @@ TEST(CFWriter, IconSetReverseAndPercentRoundTrip) {
   EXPECT_EQ(out[0].rules[0].icon_set->name, cf::IconSetName::Three_TrafficLights2);
   EXPECT_TRUE(out[0].rules[0].icon_set->reverse);
   EXPECT_FALSE(out[0].rules[0].icon_set->percent);
+  EXPECT_EQ(out[0].rules[0].icon_set->floor.type, cf::CfvoType::Percent);
+  EXPECT_EQ(out[0].rules[0].icon_set->floor.value, "0");
   ASSERT_EQ(out[0].rules[0].icon_set->thresholds.size(), 2u);
   EXPECT_EQ(out[0].rules[0].icon_set->thresholds[0].value, "50");
   EXPECT_TRUE(out[0].rules[0].icon_set->thresholds[0].gte);
   EXPECT_EQ(out[0].rules[0].icon_set->thresholds[1].value, "100");
   EXPECT_FALSE(out[0].rules[0].icon_set->thresholds[1].gte);
+}
+
+TEST(CFWriter, IconSetFloorRoundTrips) {
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::IconSet;
+  cf::IconSetSpec i;
+  i.name = cf::IconSetName::Three_Flags;
+  i.floor = {cf::CfvoType::Formula, "$F$1", false};
+  i.thresholds.push_back({cf::CfvoType::Number, "7", true});
+  i.thresholds.push_back({cf::CfvoType::Number, "9", true});
+  r.icon_set = std::move(i);
+  cf.rules.push_back(std::move(r));
+
+  const std::string xml = write_conditional_formattings({cf}, kDxfCount);
+  EXPECT_NE(xml.find(R"(<cfvo type="formula" val="$F$1" gte="0"/>)"), std::string::npos) << xml;
+  auto out = RoundTrip({cf});
+  ASSERT_TRUE(out[0].rules[0].icon_set.has_value());
+  EXPECT_EQ(out[0].rules[0].icon_set->floor.type, cf::CfvoType::Formula);
+  EXPECT_EQ(out[0].rules[0].icon_set->floor.value, "$F$1");
+  EXPECT_FALSE(out[0].rules[0].icon_set->floor.gte);
 }
 
 TEST(CFWriter, Top10RoundTrip) {
