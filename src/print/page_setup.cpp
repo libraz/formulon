@@ -13,6 +13,8 @@ constexpr std::uint32_t kPaperLegal = 5U;
 constexpr std::uint32_t kPaperA3 = 8U;
 constexpr std::uint32_t kPaperA4 = 9U;
 constexpr std::uint32_t kPaperA5 = 11U;
+constexpr std::uint32_t kPaperB4Jis = 12U;
+constexpr std::uint32_t kPaperB5Jis = 13U;
 constexpr std::uint32_t kPaperA6 = 70U;
 
 // --- Imperial paper sizes, in inches (portrait: width x height). ---
@@ -30,6 +32,13 @@ constexpr double kA5WidthMm = 148.0;
 constexpr double kA5HeightMm = 210.0;
 constexpr double kA6WidthMm = 105.0;
 constexpr double kA6HeightMm = 148.0;
+
+// --- JIS B-series paper sizes, in millimetres (portrait: width x height).
+// The JIS B-series is its own standard, distinct from ISO B4/B5. ---
+constexpr double kB4JisWidthMm = 257.0;
+constexpr double kB4JisHeightMm = 364.0;
+constexpr double kB5JisWidthMm = 182.0;
+constexpr double kB5JisHeightMm = 257.0;
 
 constexpr double InchesToPoints(double inches) noexcept {
   return inches * kPointsPerInch;
@@ -53,6 +62,10 @@ PaperDimensions resolve_paper_dimensions(std::uint32_t paper_size) noexcept {
       return PaperDimensions{MmToPoints(kA4WidthMm), MmToPoints(kA4HeightMm)};
     case kPaperA5:
       return PaperDimensions{MmToPoints(kA5WidthMm), MmToPoints(kA5HeightMm)};
+    case kPaperB4Jis:
+      return PaperDimensions{MmToPoints(kB4JisWidthMm), MmToPoints(kB4JisHeightMm)};
+    case kPaperB5Jis:
+      return PaperDimensions{MmToPoints(kB5JisWidthMm), MmToPoints(kB5JisHeightMm)};
     case kPaperA6:
       return PaperDimensions{MmToPoints(kA6WidthMm), MmToPoints(kA6HeightMm)};
     default:

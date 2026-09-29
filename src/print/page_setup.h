@@ -41,8 +41,10 @@ struct PaperDimensions {
 /// Resolves an OOXML `paperSize` code to physical portrait dimensions.
 ///
 /// Recognised codes: 1 (Letter), 5 (Legal), 8 (A3), 9 (A4), 11 (A5),
-/// 70 (A6). Any unrecognised code falls back to A4, matching Excel's
-/// behaviour of treating an unknown printer paper as the locale default.
+/// 12 (B4, JIS), 13 (B5, JIS), 70 (A6). The JIS B-series sizes are their
+/// own standard, distinct from ISO B4/B5. Any unrecognised code falls
+/// back to A4, matching Excel's behaviour of treating an unknown printer
+/// paper as the locale default.
 PaperDimensions resolve_paper_dimensions(std::uint32_t paper_size) noexcept;
 
 /// Computes the printable body area for a page.

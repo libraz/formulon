@@ -32,6 +32,18 @@ TEST(PageSetupTest, LegalDimensions) {
   EXPECT_NEAR(legal.height_pt, 1008.0, kTol);
 }
 
+TEST(PageSetupTest, B4JisDimensions) {
+  const PaperDimensions b4 = resolve_paper_dimensions(/*B4 JIS=*/12);
+  EXPECT_NEAR(b4.width_pt, 728.50, kTol);
+  EXPECT_NEAR(b4.height_pt, 1031.81, kTol);
+}
+
+TEST(PageSetupTest, B5JisDimensions) {
+  const PaperDimensions b5 = resolve_paper_dimensions(/*B5 JIS=*/13);
+  EXPECT_NEAR(b5.width_pt, 515.91, kTol);
+  EXPECT_NEAR(b5.height_pt, 728.50, kTol);
+}
+
 TEST(PageSetupTest, UnknownPaperCodeFallsBackToA4) {
   const PaperDimensions unknown = resolve_paper_dimensions(/*nonexistent=*/9999);
   const PaperDimensions a4 = resolve_paper_dimensions(9);
