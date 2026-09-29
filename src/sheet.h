@@ -597,6 +597,10 @@ class Sheet {
   /// `set_cell_value` for the rationale.
   void set_cell_formula(std::uint32_t row, std::uint32_t col, std::string formula);
 
+  /// Marks the formula at `(row, col)` as a dynamic-array formula (see
+  /// `Cell::dynamic_array`). No-op for a cell that holds no formula.
+  void set_cell_dynamic_array(std::uint32_t row, std::uint32_t col, bool dynamic);
+
   /// Updates only the cached `Value` of an existing cell at `(row, col)`.
   ///
   /// The cell's `formula_text` is preserved exactly — this is the post-

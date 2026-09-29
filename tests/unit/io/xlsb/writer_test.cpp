@@ -19,6 +19,8 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
@@ -563,6 +565,7 @@ TEST(XlsbWriter, EmitsDynamicArrayMetadataForSpillAnchors) {
   Workbook wb = Workbook::create_empty();
   Sheet& sheet = wb.sheet(wb.add_sheet("Spill"));
   sheet.set_cell_formula(0U, 0U, "=SEQUENCE(2)");
+  sheet.set_cell_dynamic_array(0U, 0U, true);
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
 
   auto bytes_or = write_xlsb(wb);
@@ -669,6 +672,7 @@ Workbook SpillWorkbookWithRetainedMetadata(std::vector<std::uint8_t> metadata_by
   Workbook wb = Workbook::create_empty();
   Sheet& sheet = wb.sheet(wb.add_sheet("Spill"));
   sheet.set_cell_formula(0U, 0U, "=SEQUENCE(2)");
+  sheet.set_cell_dynamic_array(0U, 0U, true);
   EXPECT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
   PassthroughPart metadata;
   metadata.path = "xl/metadata.bin";
@@ -818,6 +822,7 @@ TEST(XlsbWriter, EmitsDynamicArrayMetadataForSingleCellArrayAnchors) {
   Workbook wb = Workbook::create_empty();
   Sheet& sheet = wb.sheet(wb.add_sheet("SingleArray"));
   sheet.set_cell_formula(0U, 0U, "=IFS(TRUE,\"yes\")");
+  sheet.set_cell_dynamic_array(0U, 0U, true);
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 1U, 1U, {Value::text("yes")}));
 
   auto bytes_or = write_xlsb(wb);
@@ -1370,6 +1375,53 @@ TEST(XlsbWriter, UnknownPrefixedNameKeepsItsPrefix) {
   const Sheet& back = read_or.value().workbook.sheet(0);
   EXPECT_EQ(back.cell_at(0U, 0U)->formula_text, "=_xlfn.FOOBAR(1)");
   EXPECT_EQ(back.cell_at(1U, 0U)->formula_text, "=XLOOKUP(1,B1:B2,C1:C2)");
+}
+
+// A loaded formula keeps the meaning its file gives it. With no dynamic-array
+// mark (`cm` / `BrtCellMeta`), a fixed-size CSE block and an
+// implicit-intersection =SUM(A1:A2*2) are not dynamic-array formulas, and a
+// save through either container keeps them so: the block its array range,
+// neither of them a mark. A formula entered through `Workbook` is marked and
+// keeps the mark across both containers.
+TEST(XlsbWriter, LegacyFormulasKeepTheirMeaningAcrossContainers) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  s.set_cell_value(1U, 0U, Value::number(2.0));
+  s.set_cell_formula(0U, 2U, "=A1:A2*2");
+  ASSERT_TRUE(s.commit_spill(0U, 2U, 2U, 1U, {Value::number(2.0), Value::number(4.0)}));
+  s.set_cell_formula(0U, 4U, "=SUM(A1:A2*2)");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0U, 5U, "=SUM(A1:A2*2)")));
+
+  auto check = [](const Workbook& back, const char* label) {
+    const Sheet& sheet = back.sheet(0);
+    EXPECT_FALSE(sheet.cell_at(0U, 2U)->dynamic_array) << label;
+    const SpillRegion* block = sheet.spill_region_at_anchor(0U, 2U);
+    ASSERT_NE(block, nullptr) << label;
+    EXPECT_EQ(block->rows, 2U) << label;
+    EXPECT_FALSE(sheet.cell_at(0U, 4U)->dynamic_array) << label;
+    EXPECT_TRUE(sheet.cell_at(0U, 5U)->dynamic_array) << label;
+  };
+
+  auto xlsx_or = write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx_or)) << xlsx_or.error().message;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(xlsx_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  const std::string sheet_xml(sheet_or.value().begin(), sheet_or.value().end());
+  EXPECT_NE(sheet_xml.find("<c r=\"C1\"><f t=\"array\" ref=\"C1:C2\">"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<c r=\"E1\"><f>SUM(A1:A2*2)</f>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<c r=\"F1\" cm=\"1\"><f t=\"array\" ref=\"F1\">"), std::string::npos) << sheet_xml;
+  auto from_xlsx = read_ooxml(SpanOf(xlsx_or.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  check(from_xlsx.value().workbook, "xlsx");
+
+  auto xlsb_or = write_xlsb(from_xlsx.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
+  auto from_xlsb = read_xlsb(SpanOf(xlsb_or.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  check(from_xlsb.value().workbook, "xlsb");
 }
 
 TEST(XlsbWriter, CubeFunctionsEncodeWithTheirFunctionIds) {

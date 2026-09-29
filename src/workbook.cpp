@@ -22,11 +22,13 @@
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "eval/scheduler.h"
+#include "eval/spill_potential.h"
 #include "external_link.h"
 #include "io/format_detect.h"
 #include "io/future_functions.h"
 #include "io/ooxml_writer.h"
 #include "io/workbook_kind_ooxml.h"
+#include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/writer.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
@@ -1145,6 +1147,12 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
     // reads what the user actually typed. This also resets `cached_value`
     // to blank.
     sheets_[sheet_index].set_cell_formula(row, col, std::move(formula));
+    // Entered as Excel 365 would: a formula that may evaluate to an array, or
+    // evaluates an area as one, is a dynamic-array formula (over-marking is
+    // harmless, measured). A reader replaces this with the file's own mark.
+    sheets_[sheet_index].set_cell_dynamic_array(
+        row, col,
+        root != nullptr && (eval::may_produce_spill(*root) || io::xlsb::formula_uses_array_evaluation(*root)));
 
     if (root != nullptr) {
       mutator.register_formula(node, *root, *this);

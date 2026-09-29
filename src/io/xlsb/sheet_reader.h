@@ -11,6 +11,7 @@
 #include <deque>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 #include "io/xlsb/ptg_reader.h"
@@ -67,6 +68,13 @@ struct SheetDecodeState {
   /// Source records this sheet could not carry whole (see
   /// `RecordDisposition::kAccounted`).
   std::uint32_t dropped_records = 0;
+  /// Cell-metadata index of the `BrtCellMeta` just read, which applies to
+  /// the next cell record; 0 when none is pending.
+  std::uint32_t pending_cell_meta = 0;
+  /// `(row, col, ifmd)` of every formula cell a `BrtCellMeta` preceded. The
+  /// caller keeps as dynamic-array formulas those whose `ifmd` is the
+  /// workbook's dynamic-array entry (`apply_loaded_dynamic_array_marks`).
+  std::vector<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>> cell_metadata;
 };
 
 /// Decodes one sheet binary part. Cells (literal + formula) flow into

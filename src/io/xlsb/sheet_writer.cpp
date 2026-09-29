@@ -19,6 +19,7 @@
 
 #include "cell.h"
 #include "cf/cf_types.h"
+#include "io/dynamic_array_formula.h"
 #include "io/xlsb/cell_writer.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"
@@ -693,12 +694,17 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
       const Cell* cell = row_cells != nullptr && col < row_cells->size() ? &(*row_cells)[col] : nullptr;
       if (cell != nullptr && !IsEmptySlot(*cell)) {
         const SpillRegion* region = cell->formula_text.empty() ? nullptr : sheet.spill_region_at_anchor(row, col);
-        if (region != nullptr) {
-          const std::uint32_t last_row = row + region->rows - 1U;
-          const std::uint32_t last_col = col + region->cols - 1U;
-          const Value& anchor_value = !region->cells.empty() ? region->cells.front() : cell->cached_value;
+        // A dynamic-array formula keeps that form (its `BrtCellMeta` naming
+        // the XLDAPR entry) even when it does not spill; a spill anchor that
+        // is not one (a loaded CSE block) keeps the array form alone.
+        const bool dynamic = dynamic_array_ifmd != 0U && is_dynamic_array_formula(*cell);
+        if (region != nullptr || dynamic) {
+          const std::uint32_t last_row = region != nullptr ? row + region->rows - 1U : row;
+          const std::uint32_t last_col = region != nullptr ? col + region->cols - 1U : col;
+          const Value& anchor_value =
+              region != nullptr && !region->cells.empty() ? region->cells.front() : cell->cached_value;
           bool downgraded_to_literal = false;
-          if (dynamic_array_ifmd != 0U) {
+          if (dynamic) {
             std::vector<std::uint8_t> metadata_index;
             emit_u32(metadata_index, dynamic_array_ifmd);  // XLDAPR dynamic-array metadata entry
             emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), metadata_index);

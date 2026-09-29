@@ -1178,6 +1178,9 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       if (!col_or) {
         return col_or.error();
       }
+      if (const std::uint32_t ifmd = std::exchange(state.pending_cell_meta, 0U); ifmd != 0U) {
+        state.cell_metadata.emplace_back(state.current_row, col_or.value().col, ifmd);
+      }
       // Decode the formula's cached result so we can PRESERVE it on the
       // cell even when the Ptg stream cannot be decoded to a formula.
       Value cached = Value::blank();
@@ -1282,6 +1285,15 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       }
       ++state.cells_decoded;
       return RecordDisposition::kModelled;
+    }
+    case XlsbRecordType::BrtCellMeta: {
+      // The cell-metadata index (the dynamic-array entry) of the next cell;
+      // the record itself is re-derived by the writer.
+      ByteSpan p = rec.payload;
+      if (auto ifmd = read_u32(p); ifmd) {
+        state.pending_cell_meta = ifmd.value();
+      }
+      return RecordDisposition::kRegenerated;
     }
     case XlsbRecordType::BrtArrFmla: {
       if (!state.row_seen) {

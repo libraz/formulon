@@ -34,6 +34,7 @@
 
 #include "external_link.h"
 #include "io/comments_writer.h"
+#include "io/dynamic_array_formula.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
@@ -263,6 +264,19 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   return out;
 }
 
+/// `xl/metadata.xml` carrying only the XLDAPR entry, byte for byte as Excel
+/// 365 writes it for a workbook whose metadata is dynamic arrays alone.
+constexpr std::string_view kDynamicArrayMetadataXml =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
+    "<metadata xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+    "xmlns:xda=\"http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray\"><metadataTypes count=\"1\">"
+    "<metadataType name=\"XLDAPR\" minSupportedVersion=\"120000\" copy=\"1\" pasteAll=\"1\" pasteValues=\"1\" "
+    "merge=\"1\" splitFirst=\"1\" rowColShift=\"1\" clearFormats=\"1\" clearComments=\"1\" assign=\"1\" "
+    "coerce=\"1\" cellMeta=\"1\"/></metadataTypes><futureMetadata name=\"XLDAPR\" count=\"1\"><bk><extLst>"
+    "<ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\"><xda:dynamicArrayProperties fDynamic=\"1\" "
+    "fCollapsed=\"0\"/></ext></extLst></bk></futureMetadata><cellMetadata count=\"1\"><bk><rc t=\"1\" v=\"0\"/>"
+    "</bk></cellMetadata></metadata>";
+
 /// Finds the 1-based `<cellMetadata>/<bk>` index a saved dynamic-array
 /// spill anchor's `<c cm="N">` must name to link it to a retained
 /// `xl/metadata.xml` passthrough part's XLDAPR entry.
@@ -276,43 +290,9 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
 /// anchor point at metadata Excel resolves to something unrelated (rich
 /// data, linked data types, ...).
 std::uint32_t FindDynamicArrayCellMetadataIndex(const std::vector<PassthroughPart>& passthrough_parts) {
-  const PassthroughPart* retained = nullptr;
   for (const PassthroughPart& part : passthrough_parts) {
     if (part.path == "xl/metadata.xml") {
-      retained = &part;
-      break;
-    }
-  }
-  if (retained == nullptr) {
-    return 0U;
-  }
-  pugi::xml_document doc;
-  if (!load_xml_buffer(doc, retained->bytes, "ooxml_writer", "xl/metadata.xml")) {
-    return 0U;
-  }
-  const pugi::xml_node root = doc.child("metadata");
-  if (!root) {
-    return 0U;
-  }
-  std::uint32_t xldapr_ordinal = 0U;
-  std::uint32_t type_ordinal = 0U;
-  for (pugi::xml_node type = root.child("metadataTypes").child("metadataType"); type;
-       type = type.next_sibling("metadataType")) {
-    ++type_ordinal;
-    if (xldapr_ordinal == 0U && std::string_view(type.attribute("name").value()) == "XLDAPR") {
-      xldapr_ordinal = type_ordinal;
-    }
-  }
-  if (xldapr_ordinal == 0U) {
-    return 0U;
-  }
-  std::uint32_t bk_index = 0U;
-  for (pugi::xml_node bk = root.child("cellMetadata").child("bk"); bk; bk = bk.next_sibling("bk")) {
-    ++bk_index;
-    for (pugi::xml_node rc = bk.child("rc"); rc; rc = rc.next_sibling("rc")) {
-      if (rc.attribute("t").as_uint(0U) == xldapr_ordinal) {
-        return bk_index;
-      }
+      return xldapr_cell_metadata_index(part.bytes);
     }
   }
   return 0U;
@@ -348,11 +328,19 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
 
   const SharedStrings shared_strings = BuildSharedStrings(wb);
-  const EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty(), &diagnostics);
-  // 0 when no retained `xl/metadata.xml` passthrough part names an
-  // XLDAPR entry; every spill anchor's `<f t="array">` then omits `cm=`,
-  // exactly as before this existed.
-  const std::uint32_t dynamic_array_cm_index = FindDynamicArrayCellMetadataIndex(wb.passthrough_parts());
+  EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty(), &diagnostics);
+  // The XLDAPR entry dynamic-array formulas' `cm=` names: a retained
+  // `xl/metadata.xml`'s own, else a generated part's first entry. A retained
+  // part without one leaves `cm=` off, as does a workbook with no such
+  // formula.
+  std::uint32_t dynamic_array_cm_index = FindDynamicArrayCellMetadataIndex(wb.passthrough_parts());
+  const bool retained_metadata =
+      std::any_of(wb.passthrough_parts().begin(), wb.passthrough_parts().end(),
+                  [](const PassthroughPart& part) { return part.path == "xl/metadata.xml"; });
+  if (!retained_metadata && has_dynamic_array_formula(wb)) {
+    plan.generated_dynamic_metadata = true;
+    dynamic_array_cm_index = 1U;
+  }
 
   ZipWriterGuard writer;
   if (!writer.init()) {
@@ -442,6 +430,14 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // 6. xl/styles.xml
   {
     auto result = AddPart(writer.get(), "xl/styles.xml", write_styles(wb.styles()), &written_paths);
+    if (!result) {
+      return result.error();
+    }
+  }
+
+  // 6.4. xl/metadata.xml — the dynamic-array metadata, as Excel 365 writes it.
+  if (plan.generated_dynamic_metadata) {
+    auto result = AddPart(writer.get(), "xl/metadata.xml", std::string(kDynamicArrayMetadataXml), &written_paths);
     if (!result) {
       return result.error();
     }

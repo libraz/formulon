@@ -131,6 +131,7 @@ set(FORMULON_CORE_SOURCES
   src/io/comments_reader.cpp
   src/io/comments_writer.cpp
   src/io/defined_names.cpp
+  src/io/dynamic_array_formula.cpp
   src/io/future_functions.cpp
   src/io/iso_date.cpp
   src/io/ooxml_reader.cpp

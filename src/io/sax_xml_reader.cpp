@@ -788,6 +788,7 @@ struct CellScratch {
   std::string c_attr_r;
   std::string c_attr_t;
   std::string c_attr_s;
+  std::string c_attr_cm;
   std::string f_attr_t;
   std::string f_attr_si;
   std::string f_attr_ref;
@@ -942,6 +943,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->col = col;
   record->t = AttrOfDecoded(cell_header, "t", &scratch->c_attr_t);
   record->s = AttrOfDecoded(cell_header, "s", &scratch->c_attr_s);
+  record->cm = AttrOfDecoded(cell_header, "cm", &scratch->c_attr_cm);
   record->formula = std::string_view{};
   record->f_t = std::string_view{};
   record->f_si = std::string_view{};

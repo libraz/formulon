@@ -39,6 +39,7 @@
 #include "io/cf_reader.h"
 #include "io/comments_reader.h"
 #include "io/defined_names_internal.h"
+#include "io/dynamic_array_formula.h"
 #include "io/ooxml/external_link_reader.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/pivot_target_reader.h"
@@ -1021,6 +1022,25 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
     if (auto r = RegisterArraySpills(wb.sheet(i), sheet_contexts[i].array_anchors); !r) {
       return r.error();
+    }
+  }
+
+  // 6c. A formula is a dynamic-array formula exactly when its `cm=` names
+  // the XLDAPR entry of `xl/metadata.xml`; any other (a legacy CSE block, an
+  // implicit-intersection formula) keeps its legacy meaning.
+  {
+    std::uint32_t xldapr = 0U;
+    if (auto metadata = zip.read_entry("xl/metadata.xml"); metadata) {
+      xldapr = xldapr_cell_metadata_index(metadata.value());
+    }
+    for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
+      std::unordered_set<std::uint64_t> marked;
+      for (const auto& [row, col, cm] : sheet_contexts[i].cell_metadata) {
+        if (xldapr != 0U && cm == xldapr) {
+          marked.insert(dynamic_array_cell_key(row, col));
+        }
+      }
+      apply_loaded_dynamic_array_marks(wb.sheet(i), marked);
     }
   }
 

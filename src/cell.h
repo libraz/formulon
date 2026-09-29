@@ -98,6 +98,9 @@ struct Cell {
   /// than beside the runs because it fits the tail padding `xf_index`
   /// leaves, so carrying it costs the cell store nothing.
   PhoneticProperties phonetic_props;
+  /// Dynamic-array formula: loaded from the file's array-formula form, set by
+  /// `Workbook::set_cell_formula` through `eval::may_produce_spill`.
+  bool dynamic_array = false;
 };
 
 }  // namespace formulon

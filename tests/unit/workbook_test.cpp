@@ -26,6 +26,18 @@ TEST(WorkbookTest, CreateYieldsSingleSheetNamedSheet1) {
   EXPECT_EQ(wb.sheet(0).name(), "Sheet1");
 }
 
+// A formula that may evaluate to an array is entered as a dynamic-array
+// formula, and a literal written over it clears the mark.
+TEST(WorkbookTest, FormulaEntryMarksDynamicArrayFormulas) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0U, 0U, "=SEQUENCE(2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1U, 0U, "=A5+1")));
+  EXPECT_TRUE(wb.sheet(0).cell_at(0U, 0U)->dynamic_array);
+  EXPECT_FALSE(wb.sheet(0).cell_at(1U, 0U)->dynamic_array);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0U, 0U, Value::number(1.0))));
+  EXPECT_FALSE(wb.sheet(0).cell_at(0U, 0U)->dynamic_array);
+}
+
 TEST(WorkbookTest, SheetCountReturnsOne) {
   Workbook wb = Workbook::create();
   EXPECT_EQ(wb.sheet_count(), static_cast<std::size_t>(1));

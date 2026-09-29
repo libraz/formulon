@@ -12,6 +12,7 @@
 //     disappear together with the part they point at.
 
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,7 @@
 #include "cell.h"
 #include "external_link.h"
 #include "gtest/gtest.h"
+#include "io/dynamic_array_formula.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/package_diagnostics.h"
@@ -132,18 +134,136 @@ TEST(OoxmlDynamicArrayMetadata, SpillAnchorsFromARealFixtureKeepCmOnResave) {
   EXPECT_NE(saved_sheet.find("<c r=\"I1\" cm=\"1\""), std::string::npos) << saved_sheet;
 }
 
-TEST(OoxmlDynamicArrayMetadata, FreshSpillWithNoRetainedMetadataPartOmitsCm) {
-  // A workbook built from scratch (no passthrough xl/metadata.xml to
-  // resolve an XLDAPR index from) must not emit a `cm=` that names
-  // nothing in the saved package.
+// Every formula Excel 365 marked dynamic-array (`cm=`) when entered is
+// stored so; the ones it did not mark may be too (measured harmless), and
+// those are listed so the set cannot grow unnoticed. Entered through the
+// same path as any formula (backup/oracle_probe/dyn_flag, Rng/Cel/Val/Fn
+// being a range, cell, constant and LAMBDA name there).
+TEST(OoxmlDynamicArrayMetadata, EnteredFormulasAreStoredDynamicWhereExcelDoes) {
+  struct Case {
+    const char* formula;
+    bool excel_cm;
+  };
+  const Case cases[] = {
+      {"=A1", false},
+      {"=A1+1", false},
+      {"=A1:A2", true},
+      {"=A1:A2*2", true},
+      {"=SUM(A1:A2)", false},
+      {"=SUM(A1:A2*2)", true},
+      {"=@A1:A2", false},
+      {"=Sheet1!A1", false},
+      {"=NOSUCH(1)", true},
+      {"=NOSUCHREF", true},
+      {"=Fn(1)", true},
+      {"=A1(1)", true},
+      {"=A1:B2 B2:C3", true},
+      {"=A1 B1", false},
+      {"=(A1:A2,B1:B2)", false},
+      {"=INDEX(A1:A2,1)", false},
+      {"=INDEX(A1:B2,1,0)", true},
+      {"=OFFSET(A1,0,0)", false},
+      {"=OFFSET(A1,0,0,2)", true},
+      {"=INDIRECT(\"A1\")", true},
+      {"=SEQUENCE(1)", true},
+      {"=SEQUENCE(2)", true},
+      {"=Rng", true},
+      {"=Cel", false},
+      {"=Val", false},
+      {"=IF(A1>0,1,0)", false},
+      {"=IF(A1:A2>0,1,0)", true},
+      {"=ROW()", false},
+      {"=ROW(A1:A2)", true},
+      {"=ROWS(A1:A2)", false},
+      {"=VLOOKUP(1,A1:B2,2,0)", false},
+      {"=TODAY()", false},
+      {"=RAND()", false},
+      {"=TRANSPOSE(A1)", true},
+      {"=LET(x,1,x)", false},
+      {"=LAMBDA(x,x)(1)", true},
+      {"=CHOOSE(1,A1)", false},
+      {"=CHOOSE(1,A1:A2)", true},
+      {"=IFERROR(A1,0)", false},
+      {"=N(A1)", false},
+      {"=ISNUMBER(A1:A2)", true},
+      {"=ABS(A1:A2)", true},
+      {"=ABS(A1)", false},
+      {"=MMULT(A1,A1)", true},
+      {"=SUMPRODUCT(A1:A2)", false},
+      {"=COUNTIF(A1:A2,1)", false},
+      {"=COUNTIF(A1:A2,A1:A2)", true},
+      {"=MATCH(1,A1:A2,0)", false},
+      {"=A1&\"x\"", false},
+      {"=\"x\"", false},
+      {"=1", false},
+      {"=TEXT(A1,\"0\")", false},
+      {"=LEN(A1:A2)", true},
+      {"=Rng+1", true},
+      {"=SUM(Rng)", false},
+      {"=1/0", false},
+      {"=NA()", false},
+      {"=XLOOKUP(1,A1:A2,B1:B2)", false},
+      {"=UNIQUE(A1)", true},
+      {"=MAX(A1:A2)", false},
+      {"=AND(A1:A2>0)", true},
+  };
+  const std::set<std::string> harmless_extra = {
+      "=(A1:A2,B1:B2)", "=INDEX(A1:A2,1)",   "=OFFSET(A1,0,0)",        "=Cel", "=Val", "=VLOOKUP(1,A1:B2,2,0)",
+      "=LET(x,1,x)",    "=MATCH(1,A1:A2,0)", "=XLOOKUP(1,A1:A2,B1:B2)"};
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
-  wb.sheet(0).set_cell_formula(0, 0, "=SEQUENCE(3)");
+  std::uint32_t row = 0;
+  for (const Case& c : cases) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row, 4U, c.formula)));
+    const Sheet& sheet = wb.sheet(0);
+    const bool stored_dynamic = io::is_dynamic_array_formula(*sheet.cell_at(row, 4U));
+    EXPECT_EQ(stored_dynamic, c.excel_cm || harmless_extra.count(c.formula) != 0U) << c.formula;
+    ++row;
+  }
+}
+
+TEST(OoxmlDynamicArrayMetadata, FreshWorkbookGeneratesTheMetadataItsCmNames) {
+  // A workbook built from scratch carries no xl/metadata.xml, so the writer
+  // generates the XLDAPR-only part Excel 365 writes (bytes from an
+  // Excel-saved workbook, backup/oracle_probe/callee2) and every
+  // dynamic-array formula names it: a spill anchor, and a one-value formula
+  // that evaluates an area as an array, which Excel would otherwise read as
+  // =SUM(@A1:A2*2).
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=SEQUENCE(3)")));
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(wb.sheet(0).commit_spill(0, 0, 3U, 1U, std::move(cells)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 1, "=SUM(A1:A2*2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 2, "=A1+1")));
 
   const std::string sheet_xml = SavedPart(wb, "xl/worksheets/sheet1.xml");
-  EXPECT_EQ(sheet_xml.find("cm="), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<c r=\"A1\" cm=\"1\"><f t=\"array\" ref=\"A1:A3\">"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<c r=\"B1\" cm=\"1\"><f t=\"array\" ref=\"B1\">"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<c r=\"C1\"><f>A1+1</f>"), std::string::npos) << sheet_xml;
+  const std::string metadata = SavedPart(wb, "xl/metadata.xml");
+  EXPECT_EQ(metadata.size(), 733U) << metadata;
+  EXPECT_NE(metadata.find("<cellMetadata count=\"1\"><bk><rc t=\"1\" v=\"0\"/></bk></cellMetadata>"),
+            std::string::npos);
+  EXPECT_NE(
+      SavedPart(wb, "[Content_Types].xml")
+          .find("<Override PartName=\"/xl/metadata.xml\" "
+                "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml\"/>"),
+      std::string::npos);
+  EXPECT_NE(SavedPart(wb, "xl/_rels/workbook.xml.rels")
+                .find("Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata\" "
+                      "Target=\"metadata.xml\""),
+            std::string::npos);
+
+  // The mark survives a reload, and the reloaded workbook (which now retains
+  // the part) names it again rather than generating a second one.
+  auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto reloaded = io::read_ooxml(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  EXPECT_TRUE(reloaded.value().workbook.sheet(0).cell_at(0, 1)->dynamic_array);
+  const std::string resaved = SavedPart(reloaded.value().workbook, "xl/worksheets/sheet1.xml");
+  EXPECT_NE(resaved.find("<c r=\"B1\" cm=\"1\"><f t=\"array\" ref=\"B1\">"), std::string::npos) << resaved;
 }
 
 // ---------------------------------------------------------------------------

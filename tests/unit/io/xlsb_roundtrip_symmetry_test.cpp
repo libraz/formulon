@@ -661,6 +661,19 @@ std::uint32_t IlblOfNameOnlyFormula(const std::vector<std::uint8_t>& sheet_bin, 
     if (!rec_or) {
       return 0U;
     }
+    // A name formula is entered as a dynamic-array formula, whose tokens a
+    // `BrtArrFmla` carries: rwFirst, rwLast, colFirst, colLast (u32 each),
+    // a flag byte, then cce + rgce.
+    if (rec_or.value().type == static_cast<std::uint16_t>(io::xlsb::XlsbRecordType::BrtArrFmla)) {
+      io::ByteSpan p = rec_or.value().payload;
+      if (p.size < 26U || p.data[8] != col || p.data[17] != 5U || p.data[21] != 0x43U) {
+        continue;
+      }
+      p.data += 22U;
+      p.size -= 22U;
+      auto ilbl = io::xlsb::read_u32(p);
+      return ilbl ? ilbl.value() : 0U;
+    }
     if (rec_or.value().type != static_cast<std::uint16_t>(io::xlsb::XlsbRecordType::BrtFmlaNum)) {
       continue;
     }
@@ -678,6 +691,9 @@ std::uint32_t IlblOfNameOnlyFormula(const std::vector<std::uint8_t>& sheet_bin, 
     p.data += 4U + 8U + 2U;  // iStyleRef + fPhShow, cached value, grbitFlags
     p.size -= 4U + 8U + 2U;
     auto cce = io::xlsb::read_u32(p);
+    if (cce && p.size > 0U && p.data[0] == 0x01U) {
+      continue;  // PtgExp: the tokens follow in the cell's BrtArrFmla.
+    }
     // `=Foo` lowers to exactly one value-class PtgName: opcode 0x43 + a u32 ilbl.
     if (!cce || cce.value() != 5U || p.size < 5U || p.data[0] != 0x43U) {
       return 0U;

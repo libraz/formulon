@@ -243,6 +243,7 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.formula_text.clear();
+  slot.dynamic_array = false;
   slot.phonetic_runs.clear();
   slot.phonetic_props = PhoneticProperties{};
   slot.cached_value = v;
@@ -266,6 +267,7 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.formula_text.clear();
+  slot.dynamic_array = false;
   slot.phonetic_runs.clear();
   slot.phonetic_props = PhoneticProperties{};
   auto owned = std::make_unique<std::string>(text);
@@ -298,6 +300,18 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   slot.cached_value = Value::blank();
   index_formula_cell_locked(row, col, !slot.formula_text.empty());
   cell_enumeration_revision_.bump();
+}
+
+void Sheet::set_cell_dynamic_array(std::uint32_t row, std::uint32_t col, bool dynamic) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const auto row_it = rows_.find(row);
+  if (row_it == rows_.end()) {
+    return;
+  }
+  Cell* cell = row_it->second.find(col);
+  if (cell != nullptr && !cell->formula_text.empty()) {
+    cell->dynamic_array = dynamic;
+  }
 }
 
 void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v) {

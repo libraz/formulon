@@ -538,6 +538,27 @@ TEST(XlsbPtgCodec, ReferenceOperationCalleeMatchesExcelBytes) {
   EXPECT_EQ(RoundTrip("(A1:B2 B1:B3)(1)"), "(A1:B2 B1:B3)(1)");
 }
 
+// Formulas Excel 365 marks dynamic-array on entry because an area is
+// evaluated as an array, and ones it does not (backup/oracle_probe/dyn_flag).
+TEST(XlsbPtgCodec, ArrayEvaluationFollowsTheParameterClasses) {
+  for (const char* formula : {"A1:A2", "A1:A2*2", "SUM(A1:A2*2)", "COUNTIF(A1:A2,A1:A2)", "AND(A1:A2>0)",
+                              "ISNUMBER(A1:A2)", "LEN(A1:A2)", "IF(A1:A2>0,1,0)", "A1:B2 B2:C3"}) {
+    Arena arena;
+    parser::Parser p(formula, arena);
+    const parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << formula;
+    EXPECT_TRUE(formula_uses_array_evaluation(*root)) << formula;
+  }
+  for (const char* formula : {"A1", "A1+1", "SUM(A1:A2)", "SUMPRODUCT(A1:A2)", "MATCH(1,A1:A2,0)",
+                              "VLOOKUP(1,A1:B2,2,0)", "INDEX(A1:A2,1)", "(A1:A2,B1:B2)", "A1 B1", "ROWS(A1:A2)"}) {
+    Arena arena;
+    parser::Parser p(formula, arena);
+    const parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << formula;
+    EXPECT_FALSE(formula_uses_array_evaluation(*root)) << formula;
+  }
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }

@@ -25,6 +25,7 @@
 #include "cell.h"
 #include "cf/cf_types.h"
 #include "default_content_type.h"
+#include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
@@ -299,19 +300,7 @@ bool HasModelledStyles(const Workbook& wb) {
 }
 
 bool HasDynamicArrayMetadata(const Workbook& wb) {
-  for (std::size_t sheet_index = 0; sheet_index < wb.sheet_count(); ++sheet_index) {
-    const Sheet& sheet = wb.sheet(sheet_index);
-    for (const auto& [row, cells] : sheet.rows()) {
-      for (std::uint32_t col = 0; col < cells.size(); ++col) {
-        if (!cells[col].formula_text.empty()) {
-          if (sheet.spill_region_at_anchor(row, col) != nullptr) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-  return false;
+  return has_dynamic_array_formula(wb);
 }
 
 // Whether a dynamic-array metadata part is needed, and which cell-metadata

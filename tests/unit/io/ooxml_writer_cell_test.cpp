@@ -358,6 +358,7 @@ TEST(BuildSheetDataXml, SpillAnchorCarriesCmWhenAMetadataIndexIsResolved) {
   // on reopen. Phantom cells (which carry no formula) never get one.
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=SEQUENCE(3)");
+  s.set_cell_dynamic_array(0U, 0U, true);
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
@@ -416,6 +417,27 @@ TEST(BuildSheetDataXml, LegacyErrorStillEmitsCachedValue) {
   const std::string xml = BuildSheetDataXml(s);
   EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("#DIV/0!"), std::string::npos) << xml;
+}
+
+// A marked dynamic-array formula keeps that form even when it is one value
+// (backup/oracle_probe/dyn_flag); written plainly, Excel shows it as =@...
+// and intersects.
+TEST(BuildSheetDataXml, DynamicArrayFormulaKeepsItsFormWithoutSpilling) {
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=SUM(A5:A6*2)");
+  s.set_cell_dynamic_array(0U, 0U, true);
+  s.set_cell_formula(1U, 0U, "=A5+1");
+  s.set_cell_formula(2U, 0U, "=MyFn(1)");
+  s.set_cell_dynamic_array(2U, 0U, true);
+  // Unmarked, a loaded implicit-intersection formula stays plain.
+  s.set_cell_formula(3U, 0U, "=SUM(A5:A6*2)");
+  const std::string xml = BuildSheetDataXml(s, nullptr, /*dynamic_array_cm_index=*/1U);
+  EXPECT_NE(xml.find("<c r=\"A1\" cm=\"1\"><f t=\"array\" ref=\"A1\">SUM(A5:A6*2)</f>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"A2\"><f>A5+1</f>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"A3\" cm=\"1\"><f t=\"array\" ref=\"A3\">MyFn(1)</f>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"A4\"><f>SUM(A5:A6*2)</f>"), std::string::npos) << xml;
+  // Without an XLDAPR entry to name, the plain form stays.
+  EXPECT_NE(BuildSheetDataXml(s).find("<c r=\"A1\"><f>SUM(A5:A6*2)</f>"), std::string::npos);
 }
 
 TEST(BuildSheetDataXml, NewerErrorsAreStoredAsTheirLegacyFallback) {

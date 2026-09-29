@@ -387,6 +387,74 @@ bool ContainsVolatileCall(const parser::AstNode& node) {
   return false;
 }
 
+/// Walker behind `formula_uses_array_evaluation`: true when `node`, at
+/// `slot` (`root` for the formula's own node), holds an area or a name a
+/// pre-dynamic-array Excel would have intersected: value class as an
+/// argument, value or array class as an operator's operand. An argument an
+/// array parameter takes whole (`SUMPRODUCT(A1:A2)`) is not one.
+bool UsesArrayEvaluation(const parser::AstNode& node, Slot slot, bool root) {
+  using parser::NodeKind;
+  auto array_class = [&](bool area) {
+    const std::uint8_t cls = SlotClass(slot, area);
+    return root || cls == kPtgValueClass || (slot.operand && cls == kPtgArrayClass);
+  };
+  switch (node.kind()) {
+    case NodeKind::Ref:
+      return (node.as_ref().is_full_col || node.as_ref().is_full_row) && array_class(true);
+    case NodeKind::RangeOp:
+      return array_class(true);
+    case NodeKind::NameRef:
+      return array_class(false);
+    case NodeKind::ExternalRef:
+      return parser::is_self_book_name_ref(node) && array_class(false);
+    case NodeKind::IntersectOp:
+      // A root intersection of two cells (`A1 B1`) is one cell either way.
+      return root &&
+             (node.as_intersect_lhs().kind() != NodeKind::Ref || node.as_intersect_rhs().kind() != NodeKind::Ref);
+    case NodeKind::UnaryOp:
+      return UsesArrayEvaluation(node.as_unary_operand(), Slot{slot.letter, true}, false);
+    case NodeKind::BinaryOp:
+      return UsesArrayEvaluation(node.as_binary_lhs(), Slot{slot.letter, true}, false) ||
+             UsesArrayEvaluation(node.as_binary_rhs(), Slot{slot.letter, true}, false);
+    case NodeKind::Call: {
+      const std::string_view name = canonical_function_name(node.as_call_name());
+      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+        if (UsesArrayEvaluation(node.as_call_arg(i), Slot{xlsb_parameter_class(name, i), false}, false)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    case NodeKind::LambdaCall:
+      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
+        if (UsesArrayEvaluation(node.as_lambda_call_arg(i), Slot{}, false)) {
+          return true;
+        }
+      }
+      return false;
+    case NodeKind::LetBinding:
+      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+        if (UsesArrayEvaluation(node.as_let_binding_expr(i), Slot{}, false)) {
+          return true;
+        }
+      }
+      return UsesArrayEvaluation(node.as_let_body(), Slot{}, root);
+    case NodeKind::Lambda:
+      return UsesArrayEvaluation(node.as_lambda_body(), Slot{}, false);
+    case NodeKind::Literal:
+    case NodeKind::Ref3D:
+    case NodeKind::StructuredRef:
+    case NodeKind::UnionOp:
+    case NodeKind::ImplicitIntersection:
+    case NodeKind::ArrayLiteral:
+    case NodeKind::SpillRef:
+    case NodeKind::ErrorLiteral:
+    case NodeKind::ErrorPlaceholder:
+      return false;
+  }
+  return false;
+}
+
 class Encoder {
  public:
   Encoder(const parser::AstNode& root, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
@@ -1525,6 +1593,10 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
     default:
       return;
   }
+}
+
+bool formula_uses_array_evaluation(const parser::AstNode& root) {
+  return UsesArrayEvaluation(root, Slot{}, /*root=*/true);
 }
 
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,

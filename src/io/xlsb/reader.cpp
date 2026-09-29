@@ -29,10 +29,12 @@
 #include <vector>
 
 #include "default_content_type.h"
+#include "io/dynamic_array_formula.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
 #include "io/xlsb/external_link_reader.h"
+#include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/pivot_reader.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
@@ -1455,6 +1457,17 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     consumed_parts.insert(wb_rels.sst_path);
   }
 
+  // A formula is a dynamic-array formula exactly when a `BrtCellMeta`
+  // naming this entry of `xl/metadata.bin` precedes it.
+  std::uint32_t dynamic_array_ifmd = 0U;
+  if (zip.has_entry("xl/metadata.bin")) {
+    auto metadata_or = zip.read_entry("xl/metadata.bin");
+    if (metadata_or) {
+      dynamic_array_ifmd =
+          find_dynamic_array_cell_meta_index(ByteSpan{metadata_or.value().data(), metadata_or.value().size()});
+    }
+  }
+
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
     if (!zip.has_entry(sheet_path)) {
@@ -1474,6 +1487,13 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     }
     cells_read += state_or.value().cells_decoded;
     dropped_record_count += state_or.value().dropped_records;
+    std::unordered_set<std::uint64_t> dynamic_cells;
+    for (const auto& [row, col, ifmd] : state_or.value().cell_metadata) {
+      if (dynamic_array_ifmd != 0U && ifmd == dynamic_array_ifmd) {
+        dynamic_cells.insert(dynamic_array_cell_key(row, col));
+      }
+    }
+    apply_loaded_dynamic_array_marks(wb.sheet(i), dynamic_cells);
     consumed_parts.insert(sheet_path);
 
     // The sheet's own rels file resolves the relationship ids carried by the

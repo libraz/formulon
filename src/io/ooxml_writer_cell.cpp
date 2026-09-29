@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/phonetic_pr.h"
@@ -206,6 +207,21 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 
   if (has_formula) {
     const SpillRegion* anchored = sheet.spill_region_at_anchor(row, col);
+    std::string_view formula = cell.formula_text;
+    if (!formula.empty() && formula.front() == '=') {
+      formula.remove_prefix(1);
+    }
+    Arena formula_arena;
+    parser::Parser formula_parser(formula, formula_arena);
+    parser::AstNode* formula_root = formula_parser.parse();
+    if (formula_root != nullptr && !formula_parser.errors().empty()) {
+      formula_root = nullptr;
+    }
+    // A dynamic-array formula keeps that form when it does not spill, or
+    // Excel reads it with implicit intersection (`=@...`); it needs the
+    // XLDAPR entry `cm=` names, so without one the plain form stays. A spill
+    // anchor that is not one (a loaded CSE block) keeps `t="array"` alone.
+    const bool dynamic = dynamic_array_cm_index != 0U && is_dynamic_array_formula(cell);
     out.append("<c r=\"");
     out.append(addr);
     out.append("\"");
@@ -214,7 +230,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // ooxml_writer.cpp) that tells Excel this `t="array"` is a modern
     // spill rather than a legacy CSE array on reopen. Emitted only when
     // the saved package actually carries a resolved entry for it.
-    if (anchored != nullptr && dynamic_array_cm_index != 0U) {
+    if (dynamic) {
       out.append(" cm=\"");
       out.append(std::to_string(dynamic_array_cm_index));
       out.append("\"");
@@ -246,11 +262,13 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // the region on open (a bare `t="array"` reads back as a legacy
     // single-cell CSE array). The formula text always begins with '=';
     // strip it before serialisation.
-    if (anchored != nullptr) {
+    if (anchored != nullptr || dynamic) {
       out.append("<f t=\"array\" ref=\"");
       out.append(a1::encode_a1(row, col));
-      const std::uint32_t last_row = row + (anchored->rows > 0U ? anchored->rows - 1U : 0U);
-      const std::uint32_t last_col = col + (anchored->cols > 0U ? anchored->cols - 1U : 0U);
+      const std::uint32_t rows = anchored != nullptr ? anchored->rows : 1U;
+      const std::uint32_t cols = anchored != nullptr ? anchored->cols : 1U;
+      const std::uint32_t last_row = row + (rows > 0U ? rows - 1U : 0U);
+      const std::uint32_t last_col = col + (cols > 0U ? cols - 1U : 0U);
       if (last_row != row || last_col != col) {
         out.push_back(':');
         out.append(a1::encode_a1(last_row, last_col));
@@ -258,10 +276,6 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       out.append("\">");
     } else {
       out.append("<f>");
-    }
-    std::string_view formula = cell.formula_text;
-    if (!formula.empty() && formula.front() == '=') {
-      formula.remove_prefix(1);
     }
     // Re-apply Excel's hidden storage prefixes (`_xlfn.` / `_xlfn._xlws.`
     // on the enumerated future functions, `_xlpm.` on LET / LAMBDA
@@ -271,11 +285,8 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // (parser::strip_storage_prefixes). Parse it and re-serialise through the
     // storage formatter; on any parse failure fall back to the canonical
     // text unchanged.
-    Arena formula_arena;
-    parser::Parser formula_parser(formula, formula_arena);
-    parser::AstNode* formula_root = formula_parser.parse();
     bool storage_emitted = false;
-    if (formula_root != nullptr && formula_parser.errors().empty()) {
+    if (formula_root != nullptr) {
       const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name);
       // Only re-serialise when a storage prefix was actually added (the
       // formula uses a future function or LET / LAMBDA). For a classic

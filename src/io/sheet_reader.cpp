@@ -490,6 +490,9 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       if (pugi::xml_node f = c.child("f"); f && std::string_view(f.attribute("t").value()) == "array") {
         RecordArrayAnchor(ctx, f.attribute("ref").value(), parsed.row, parsed.col);
       }
+      if (const pugi::xml_attribute cm = c.attribute("cm"); cm && !formula_text.empty()) {
+        ctx.cell_metadata.emplace_back(parsed.row, parsed.col, cm.as_uint(0U));
+      }
     }
   }
   // Spill registration is the caller's job (see `SheetReadContext::
@@ -937,6 +940,13 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   // back as blocking literals (see `RegisterArraySpills`).
   if (rec.f_t == "array" && !rec.f_ref.empty()) {
     RecordArrayAnchor(ctx, rec.f_ref, rec.row, rec.col);
+  }
+  if (!rec.cm.empty() && !formula_text.empty()) {
+    std::uint32_t cm = 0;
+    for (const char c : rec.cm) {
+      cm = (c >= '0' && c <= '9') ? cm * 10U + static_cast<std::uint32_t>(c - '0') : 0U;
+    }
+    ctx.cell_metadata.emplace_back(rec.row, rec.col, cm);
   }
   return applied;
 }

@@ -74,6 +74,9 @@ struct CellRecord {
   std::string_view t;
   /// Decoded `s=` attribute value (style index). Empty when absent.
   std::string_view s;
+  /// Decoded `cm=` attribute value (1-based cell-metadata index, e.g. the
+  /// dynamic-array entry). Empty when absent.
+  std::string_view cm;
   /// `<f>` body, with leading `=` stripped if present. Empty when no
   /// `<f>` child existed, and also empty for a shared-formula follower
   /// (`<f t="shared" si="N"/>`), whose body lives on the group master.

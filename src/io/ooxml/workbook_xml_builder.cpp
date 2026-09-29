@@ -58,6 +58,10 @@ constexpr std::string_view kCtWorksheet = "application/vnd.openxmlformats-office
 constexpr std::string_view kCtStyles = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
 constexpr std::string_view kCtSharedStrings =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
+constexpr std::string_view kCtSheetMetadata =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml";
+constexpr std::string_view kRelSheetMetadata =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
 constexpr std::string_view kCtTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
 constexpr std::string_view kCtPivotCacheDefinition =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
@@ -214,6 +218,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     AppendOverride(out, sheet_path, kCtWorksheet);
   }
   AppendOverride(out, "xl/styles.xml", kCtStyles);
+  if (plan.generated_dynamic_metadata) {
+    AppendOverride(out, "xl/metadata.xml", kCtSheetMetadata);
+  }
   if (plan.generated_shared_strings) {
     AppendOverride(out, "xl/sharedStrings.xml", kCtSharedStrings);
   }
@@ -525,6 +532,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   }
   if (!plan.generated_shared_strings && HasPassthroughPart(plan, "xl/sharedStrings.xml")) {
     AppendRelationship(out, next_rid++, kRelSharedStrings, "sharedStrings.xml");
+  }
+  if (plan.generated_dynamic_metadata) {
+    AppendRelationship(out, next_rid++, kRelSheetMetadata, "metadata.xml");
   }
   for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
     // Only emit a relationship whose target actually exists in the

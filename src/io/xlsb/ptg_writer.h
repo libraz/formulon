@@ -138,6 +138,13 @@ void collect_sheet_qualified_names(const parser::AstNode& node,
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                               SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen);
 
+/// True when a cell formula `root` evaluates an area or a name as an array:
+/// one that sits, under the measured parameter classes, where it takes value
+/// or array class (`=A1:A2`, `=SUM(A1:A2*2)`, `=COUNTIF(A1:A2,A1:A2)`), or a
+/// root intersection. Excel stores such a formula as a dynamic array even
+/// when its result is one value, or reads it with implicit intersection.
+bool formula_uses_array_evaluation(const parser::AstNode& root);
+
 /// Encodes the AST rooted at `node` into an `rgce` Ptg byte stream (plus
 /// its `rgcb` array-constant extra data, see `EncodedFormula`).
 /// `sheet_names` maps a sheet display name to its 0-based index.

@@ -75,6 +75,9 @@ struct EmissionPlan {
   // True when the writer generated xl/sharedStrings.xml from literal text
   // cells. This also reserves the path from passthrough collision handling.
   bool generated_shared_strings = false;
+  // True when the writer generates xl/metadata.xml (the XLDAPR entry a
+  // dynamic-array formula's `cm=` names) because no retained part carries it.
+  bool generated_dynamic_metadata = false;
   // For each sheet (by 0-based index), the in-source TableMetadata
   // entries that target it, paired with the package-relative path the
   // writer assigned (`xl/tables/tableN.xml`). `(table_ref, path)` is

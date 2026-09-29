@@ -64,6 +64,10 @@ struct SheetReadContext {
   /// an SST-typed phantom's unresolved `Text("")` placeholder into the
   /// region permanently.
   std::vector<ArrayAnchor> array_anchors;
+  /// `(row, col, cm)` of every formula cell carrying `cm=`. The caller keeps
+  /// as dynamic-array formulas those whose `cm` names the XLDAPR entry of
+  /// `xl/metadata.xml` (`apply_loaded_dynamic_array_marks`).
+  std::vector<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>> cell_metadata;
 };
 
 /// Registers each of `anchors` as a spill region on `sheet`, so the cached
