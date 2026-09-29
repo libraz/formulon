@@ -137,7 +137,7 @@ entries:
   # spill the whole array; this is a deliberate Phase 1 API-shape choice,
   # not an Excel-compatibility bug, and not implicit intersection (which
   # selects the anchor-row/column element and yields #VALUE! when there is
-  # none). Multi-cell results are a Phase 2 follow-up. No oracle case is
+  # none). evaluateFormulaArray returns the whole result. No oracle case is
   # generated for this behaviour; the entry documents the intent for
   # reviewers.
   - id: evaluate_formula_array_scalar_reduction

@@ -42,12 +42,11 @@ class FunctionRegistry;
 /// it. Parser failure beyond panic-mode recovery surfaces as `#NAME?`,
 /// matching the recursive resolver in `EvalContext::resolve_ref`.
 ///
-/// Array-to-scalar reduction is a pragmatic Phase 1 API-shape choice: it
-/// takes the first (top-left) element of a multi-cell result. It is NOT
-/// Excel implicit intersection (which selects the range element sharing the
-/// anchor's row / column and yields `#VALUE!` when there is none) and NOT
-/// dynamic-array spilling (which returns the whole array). Multi-cell
-/// results (an array/spill envelope) are a Phase 2 follow-up.
+/// Array-to-scalar reduction takes the first (top-left) element of a
+/// multi-cell result. It is NOT Excel implicit intersection (which selects
+/// the range element sharing the anchor's row / column and yields `#VALUE!`
+/// when there is none) and NOT dynamic-array spilling (which returns the
+/// whole array). `evaluate_formula_text_array` returns the whole result.
 Value evaluate_formula_text(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
                             std::string_view formula, Arena& arena, const FunctionRegistry& registry);
 

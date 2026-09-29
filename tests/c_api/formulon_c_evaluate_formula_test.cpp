@@ -54,7 +54,7 @@ TEST(EvaluateFormula, LeadingEqualsOptional) {
   EXPECT_DOUBLE_EQ(v.u.number, 20.0);
 }
 
-// Correction 4: the anchor reaches ROW()/COLUMN(). ROW()/COLUMN() are
+// The anchor reaches ROW()/COLUMN(). ROW()/COLUMN() are
 // 1-based; the (row, col) arguments are 0-based.
 TEST(EvaluateFormula, RowColumnAnchoredAtTarget) {
   WorkbookGuard wb;
@@ -95,7 +95,7 @@ TEST(EvaluateFormula, WorkbookScopedDefinedName) {
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
 }
 
-// Correction 1: an array/spill result is reduced to its top-left element.
+// An array/spill result is reduced to its top-left element.
 // This is the pragmatic API shape, documented as an intentional divergence
 // (see divergence.yaml: evaluate_formula_array_scalar_reduction). It is NOT
 // implicit intersection and NOT spilling.
@@ -109,7 +109,7 @@ TEST(EvaluateFormula, ArrayResultReducesToTopLeft) {
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
 
-// Correction 1: SINGLE()/@ perform true intersection inside the evaluated
+// SINGLE()/@ perform true intersection inside the evaluated
 // formula, independent of the outer scalar reduction.
 TEST(EvaluateFormula, SingleOperatorEvaluates) {
   WorkbookGuard wb;
@@ -121,7 +121,7 @@ TEST(EvaluateFormula, SingleOperatorEvaluates) {
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
 
-// Correction 2: a self-reference reads the target cell's cached value
+// A self-reference reads the target cell's cached value
 // rather than raising #REF! or engaging iterative calc. A1 holds a literal
 // 7; evaluating "=A1" anchored at A1's own address returns 7 (stale read),
 // NOT an error. This asserts the documented limitation so a future change
@@ -402,7 +402,7 @@ TEST(EvaluateFormulaArray, SheetIndexOutOfRange) {
 // Conditional-formula (CF predicate) entry point.
 // ---------------------------------------------------------------------------
 
-// Correction 3: CF result coercion. Error / blank / text / numeric-zero
+// CF result coercion. Error / blank / text / numeric-zero
 // yield FALSE (rule does not fire); non-zero number and TRUE booleans yield
 // TRUE — the generic evaluator would instead propagate the raw error/value.
 TEST(EvaluateCfFormula, ExcelPredicateCoercion) {
@@ -425,7 +425,7 @@ TEST(EvaluateCfFormula, ExcelPredicateCoercion) {
   EXPECT_TRUE(fires("=3>1"));         // TRUE boolean -> TRUE
 }
 
-// Correction 4: relative references in a CF rule are written relative to
+// Relative references in a CF rule are written relative to
 // the anchor (top-left of the applied range) and shifted to the target
 // cell. Rule "=A1=1" anchored at (0,0): at target A1 it stays A1 (=0, does
 // not fire); at target A2 it shifts to A2 (=1, fires).
