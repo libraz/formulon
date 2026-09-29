@@ -75,6 +75,83 @@ TEST(DynamicReferenceRecalc, ReferenceOnlyFunctionsOnTheirOwnCellAreNotCircular)
   EXPECT_TRUE(At_(wb, {0U, kA}).as_boolean());
 }
 
+// A reference bound to a LET name, a LAMBDA parameter or a helper callback
+// parameter reads its cell only where the name is used as a value, so a
+// position-only use of the formula's own cell is not circular. Measured on
+// Mac Excel 365 with each formula in A1 and A2 = 5.
+Workbook OwnCellBook(const char* formula) {
+  Workbook wb = Workbook::create();
+  EXPECT_TRUE(static_cast<bool>(wb.set_defined_name("RowOf", "=LAMBDA(r,ROW(r))")));
+  EXPECT_TRUE(static_cast<bool>(wb.set_defined_name("ValOf", "=LAMBDA(r,r+1)")));
+  Number(wb, {1U, kA}, 5.0);
+  Formula(wb, {0U, kA}, formula);
+  return wb;
+}
+
+TEST(DynamicReferenceRecalc, PositionOnlyUseOfBoundOwnCellIsNotCircular) {
+  struct Case {
+    const char* formula;
+    double want;
+  };
+  const Case cases[] = {
+      {"=LET(r,A1,ROW(r))", 1.0},
+      {"=LET(r,A1,ROW(OFFSET(r,1,0)))", 2.0},
+      {"=LET(r,A1,OFFSET(r,1,0))", 5.0},
+      {"=LET(r,A1,ROWS(r)+COLUMNS(r)+AREAS(r))", 3.0},
+      {"=LET(r,A1,s,r,ROW(s))", 1.0},
+      {"=LET(r,A1,SUM(ROW(r),1))", 2.0},
+      {"=LET(r,A1,LAMBDA(q,ROW(q))(r))", 1.0},
+      {"=LET(f,LAMBDA(r,ROW(r)),f(A1))", 1.0},
+      {"=LAMBDA(r,ROW(r))(A1)", 1.0},
+      {"=RowOf(A1)", 1.0},
+      {"=MAP(A1,LAMBDA(x,ROW(x)))", 1.0},
+      {"=BYROW(A1,LAMBDA(x,ROW(x)))", 1.0},
+      {"=REDUCE(0,A1,LAMBDA(a,v,ROW(v)))", 1.0},
+      {"=SCAN(0,A1,LAMBDA(a,v,ROW(v)))", 1.0},
+  };
+  for (const Case& c : cases) {
+    Workbook wb = OwnCellBook(c.formula);
+    EXPECT_EQ(Recalc(wb).cycle_cells, 0U) << c.formula;
+    ExpectNumberAt(wb, {0U, kA}, c.want, c.formula);
+  }
+  Workbook wb = OwnCellBook("=LET(r,A1,ISREF(r))");
+  EXPECT_EQ(Recalc(wb).cycle_cells, 0U);
+  ASSERT_TRUE(At_(wb, {0U, kA}).is_boolean());
+  EXPECT_TRUE(At_(wb, {0U, kA}).as_boolean());
+}
+
+TEST(DynamicReferenceRecalc, ValueUseOfBoundOwnCellIsCircular) {
+  const char* formulas[] = {
+      "=LET(r,A1,r+1)",           "=LET(r,A1,ROW(r)+r)",
+      "=LET(r,A1,OFFSET(r,0,0))", "=LET(r,A1,CELL(\"contents\",r))",
+      "=LET(r,A1,INDEX(r,1,1))",  "=LET(r,A1,s,r,s+1)",
+      "=LAMBDA(r,ROW(r)+r)(A1)",  "=ValOf(A1)",
+      "=MAP(A1,LAMBDA(x,x+1))",   "=REDUCE(0,A1,LAMBDA(a,v,a+v))",
+  };
+  for (const char* f : formulas) {
+    Workbook wb = OwnCellBook(f);
+    EXPECT_GT(Recalc(wb).cycle_cells, 0U) << f;
+  }
+}
+
+// A reference bound unwalked still reaches the graph through a value use.
+TEST(DynamicReferenceRecalc, ValueUseOfBoundReferenceRecalcs) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("ValOf", "=LAMBDA(r,r+1)")));
+  Number(wb, {0U, kB}, 3.0);
+  const char* formulas[] = {"=LET(r,B1,s,r,s+1)", "=LAMBDA(r,r+1)(B1)", "=ValOf(B1)", "=MAP(B1,LAMBDA(x,x+1))",
+                            "=LET(f,LAMBDA(r,r+1),LET(q,B1,f(q)))"};
+  for (std::uint32_t row = 0U; row < 5U; ++row) {
+    Formula(wb, {row, kD}, formulas[row]);
+  }
+  Recalc(wb);
+  Number(wb, {0U, kB}, 9.0);
+  Recalc(wb);
+  for (std::uint32_t row = 0U; row < 5U; ++row) {
+    ExpectNumberAt(wb, {row, kD}, 10.0, formulas[row]);
+  }
+}
+
 TEST(DynamicReferenceRecalc, SumOverItsOwnCellIsCircular) {
   Workbook wb = Workbook::create();
   Formula(wb, {0U, kA}, "=SUM(A1:A2)");

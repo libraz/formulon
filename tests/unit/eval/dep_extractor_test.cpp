@@ -664,11 +664,11 @@ TEST(DepExtractor, NamedLambdaDoesNotInheritCallerLetScope) {
       DefinedName{"F", "LAMBDA(y,y+x)", -1, false, ""},
   });
   Arena arena;
-  const parser::AstNode* root = ParseFormula("LET(x,A1,F(1))", arena);
+  const parser::AstNode* root = ParseFormula("LET(x,A1,F(1)+x)", arena);
   ASSERT_NE(root, nullptr);
   const ExtractedDeps deps = extract_deps(*root, 0U, wb);
   std::vector<CellNodeId> expected = {
-      CellNodeId{0U, 0U, 0U},  // LET initializer A1
+      CellNodeId{0U, 0U, 0U},  // LET initializer A1, read through x
       CellNodeId{0U, 0U, 1U},  // defined x -> B1 inside F
   };
   EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));

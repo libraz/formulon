@@ -63,6 +63,10 @@ struct WalkState {
     /// The reference a LET initialiser can name; empty for LAMBDA parameters
     /// and for initialisers that are not references.
     std::optional<Footprint> footprint;
+    /// A reference written in the formula that this name binds, left unwalked:
+    /// a value use of the name walks it, a position-only use (`ROW(r)`) does
+    /// not, exactly as for the reference written in place.
+    const parser::AstNode* deferred = nullptr;
   };
 
   ExtractedDeps* out;
@@ -221,6 +225,21 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
 // Forward decl for the recursive walker.
 void walk(const parser::AstNode& node, WalkState& state);
 
+// Per-parameter reference arguments a lambda invocation binds unwalked.
+using DeferredArgs = std::vector<const parser::AstNode*>;
+
+// Walks, as value reads, the deferred arguments from index `first` on.
+void walk_deferred_args(const DeferredArgs* args, std::size_t first, WalkState& state) {
+  if (args == nullptr) {
+    return;
+  }
+  for (std::size_t i = first; i < args->size(); ++i) {
+    if ((*args)[i] != nullptr) {
+      walk(*(*args)[i], state);
+    }
+  }
+}
+
 // Walks a LAMBDA body as an *invoked* body. Parameter names are pushed
 // onto the shadow stack for the duration so a parameter that collides
 // with a workbook-scoped defined name short-circuits the `NameRef`
@@ -229,20 +248,29 @@ void walk(const parser::AstNode& node, WalkState& state);
 // Only call this where the body is genuinely evaluated. A bare lambda
 // *value* is not (see the `Lambda` case in `walk()`), and walking it
 // would invent dependencies the formula never reads.
-void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state) {
+//
+// `args` holds, per parameter, the deferred reference argument it binds
+// (nullptr for an argument the caller walked itself). A deferred argument no
+// parameter takes -- the body is already being walked, or the call passes too
+// many -- is walked here as a value read.
+void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state, const DeferredArgs* args) {
   if (lambda_is_active(&lambda, state)) {
+    walk_deferred_args(args, 0U, state);
     return;
   }
   state.lambda_stack.push_back(&lambda);
   const std::uint32_t param_count = lambda.as_lambda_param_count();
   for (std::uint32_t i = 0; i < param_count; ++i) {
-    state.lexical_stack.push_back({strings::to_ascii_lower(lambda.as_lambda_param(i)), nullptr, std::nullopt});
+    const parser::AstNode* deferred = (args != nullptr && i < args->size()) ? (*args)[i] : nullptr;
+    state.lexical_stack.push_back(
+        {strings::to_ascii_lower(lambda.as_lambda_param(i)), nullptr, std::nullopt, deferred});
   }
   walk(lambda.as_lambda_body(), state);
   for (std::uint32_t i = 0; i < param_count; ++i) {
     state.lexical_stack.pop_back();
   }
   state.lambda_stack.pop_back();
+  walk_deferred_args(args, param_count, state);
 }
 
 // Parses a defined name's formula text in the extractor-local arena and
@@ -299,34 +327,40 @@ void visit_defined_name_body(const DefinedName& def, WalkState& state, Visit&& v
 
 // Expands a defined-name reference, recursing into its body through the
 // shared `walk()`.
-void expand_defined_name(const DefinedName& def, WalkState& state, bool invoked) {
+void expand_defined_name(const DefinedName& def, WalkState& state, bool invoked, const DeferredArgs* args = nullptr) {
+  bool bound = false;
   visit_defined_name_body(def, state, [&](const parser::AstNode& root) {
     if (invoked && root.kind() == parser::NodeKind::Lambda) {
+      bound = true;
       // A direct defined-name LAMBDA body is evaluated by a call, so descend
       // into it with parameter names shadowing workbook names. A bare NameRef
       // to the same definition remains a lambda value and must not invent
       // dependencies from its body.
-      walk_invoked_lambda_body(root, state);
+      walk_invoked_lambda_body(root, state, args);
     } else if (invoked && (root.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(root))) {
       // Preserve the common alias shape (`Alias = NamedLambda`) without
       // repeatedly walking the lambda body. Any non-defined alias is handled
       // by the ordinary NameRef walker and contributes no static deps.
       const DefinedName* aliased = find_name_ref_definition(root, state);
       if (aliased != nullptr) {
-        expand_defined_name(*aliased, state, /*invoked=*/true);
+        bound = true;
+        expand_defined_name(*aliased, state, /*invoked=*/true, args);
       }
     } else {
       walk(root, state);
     }
   });
+  if (!bound) {
+    walk_deferred_args(args, 0U, state);
+  }
 }
 
 // A builtin can use a lambda argument only by calling it (MAP, BYROW, REDUCE,
 // GROUPBY, ...), so a lambda written inline, bound by LET or named by a defined
 // name is walked as an invoked body. Returns false for any other argument.
-bool walk_callable_arg(const parser::AstNode& arg, WalkState& state) {
+bool walk_callable_arg(const parser::AstNode& arg, WalkState& state, const DeferredArgs* args) {
   if (arg.kind() == parser::NodeKind::Lambda) {
-    walk_invoked_lambda_body(arg, state);
+    walk_invoked_lambda_body(arg, state, args);
     return true;
   }
   if (arg.kind() == parser::NodeKind::NameRef && arg.as_name_sheet().empty()) {
@@ -334,7 +368,7 @@ bool walk_callable_arg(const parser::AstNode& arg, WalkState& state) {
       if (lexical->lambda == nullptr) {
         return false;
       }
-      walk_invoked_lambda_body(*lexical->lambda, state);
+      walk_invoked_lambda_body(*lexical->lambda, state, args);
       return true;
     }
   }
@@ -346,7 +380,7 @@ bool walk_callable_arg(const parser::AstNode& arg, WalkState& state) {
     return false;
   }
   // A definition that is not a LAMBDA walks exactly as a non-invoked one.
-  expand_defined_name(*def, state, /*invoked=*/true);
+  expand_defined_name(*def, state, /*invoked=*/true, args);
   return true;
 }
 
@@ -600,8 +634,8 @@ bool is_reference_only_arg(std::string_view call_name, std::uint32_t arg_index) 
 
 // True for a reference whose rectangle is fixed by the formula text: a `Ref`,
 // a static `:` chain, a 3-D or structured reference, a union of those, or a
-// defined name standing for one. A spill, a computed endpoint or a LET name
-// is not.
+// defined name standing for one, or a LET / LAMBDA name bound to such a
+// reference written in the formula. A spill or a computed endpoint is not.
 bool is_static_reference(const parser::AstNode& node, WalkState& state) {
   switch (node.kind()) {
     case parser::NodeKind::Ref:
@@ -622,9 +656,10 @@ bool is_static_reference(const parser::AstNode& node, WalkState& state) {
       return true;
     case parser::NodeKind::NameRef:
     case parser::NodeKind::ExternalRef: {
-      if (node.kind() == parser::NodeKind::NameRef && node.as_name_sheet().empty() &&
-          lookup_lexical(node.as_name(), state) != nullptr) {
-        return false;
+      if (node.kind() == parser::NodeKind::NameRef && node.as_name_sheet().empty()) {
+        if (const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_name(), state); lexical != nullptr) {
+          return lexical->deferred != nullptr;
+        }
       }
       const DefinedName* def = find_name_ref_definition(node, state);
       if (def == nullptr) {
@@ -638,6 +673,59 @@ bool is_static_reference(const parser::AstNode& node, WalkState& state) {
     default:
       return false;
   }
+}
+
+// The reference written in the formula that binding `node` to a LET name or
+// a LAMBDA parameter can leave unwalked: a static reference spelled without
+// names, or a name already bound to one. nullptr for anything else, which is
+// walked where it is bound.
+const parser::AstNode* deferrable_reference(const parser::AstNode& node, WalkState& state) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::Ref3D:
+    case parser::NodeKind::StructuredRef:
+    case parser::NodeKind::RangeOp:
+      return is_static_reference(node, state) ? &node : nullptr;
+    case parser::NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        if (deferrable_reference(node.as_union_child(i), state) != &node.as_union_child(i)) {
+          return nullptr;
+        }
+      }
+      return &node;
+    case parser::NodeKind::NameRef:
+      if (node.as_name_sheet().empty()) {
+        if (const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_name(), state); lexical != nullptr) {
+          return lexical->deferred;
+        }
+      }
+      return nullptr;
+    default:
+      return nullptr;
+  }
+}
+
+// The lambda helpers whose last argument is a callback fed element by element
+// from source arguments.
+bool is_callback_helper(std::string_view call_name) {
+  const std::string_view bare = strip_future_prefix(call_name);
+  return strings::case_insensitive_eq(bare, "MAP") || strings::case_insensitive_eq(bare, "BYROW") ||
+         strings::case_insensitive_eq(bare, "BYCOL") || strings::case_insensitive_eq(bare, "REDUCE") ||
+         strings::case_insensitive_eq(bare, "SCAN");
+}
+
+// The source argument whose cells callback parameter `param` of helper
+// `call_name` receives: MAP's arrays in order, BYROW / BYCOL's array, REDUCE /
+// SCAN's array (their accumulator is a result, not a source). -1 for none.
+int callback_source_arg(std::string_view call_name, std::uint32_t arity, std::uint32_t param) {
+  const std::string_view bare = strip_future_prefix(call_name);
+  if (strings::case_insensitive_eq(bare, "MAP")) {
+    return param + 1U < arity ? static_cast<int>(param) : -1;
+  }
+  if (strings::case_insensitive_eq(bare, "BYROW") || strings::case_insensitive_eq(bare, "BYCOL")) {
+    return (arity == 2U && param == 0U) ? 0 : -1;
+  }
+  return (arity == 3U && param == 1U) ? 1 : -1;
 }
 
 // Handles `NodeKind::RangeOp` specifically so the inner Ref endpoints are
@@ -780,12 +868,16 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
 
     case parser::NodeKind::NameRef: {
-      // Lexical LET / LAMBDA bindings shadow workbook names. The binding
-      // itself is already accounted for by its initializer (or by the
-      // invoked lambda body), so a bare lexical NameRef contributes no
-      // additional workbook dependency.
-      if (node.as_name_sheet().empty() && lookup_lexical(node.as_name(), state) != nullptr) {
-        return;
+      // Lexical LET / LAMBDA bindings shadow workbook names. A binding's
+      // initializer or argument was walked where it was bound, unless it is a
+      // deferred reference, which this value read walks now.
+      if (node.as_name_sheet().empty()) {
+        if (const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_name(), state); lexical != nullptr) {
+          if (lexical->deferred != nullptr) {
+            walk(*lexical->deferred, state);
+          }
+          return;
+        }
       }
       // Resolve against the workbook's defined-name list. A miss (the name
       // is undefined, scoped to a different sheet, or hidden behind a cycle
@@ -837,15 +929,42 @@ void walk(const parser::AstNode& node, WalkState& state) {
           lexical == nullptr ? find_defined_name(*state.workbook, state.name_scope_sheet_id, node.as_call_name())
                              : nullptr;
       const bool builtin = lexical == nullptr && defined == nullptr;
+      // Read before the arguments are walked: a LET among them grows the stack.
+      const parser::AstNode* lexical_lambda = lexical != nullptr ? lexical->lambda : nullptr;
       const std::uint32_t arity = node.as_call_arity();
+      // A reference argument a lambda binds -- the call's own, or a helper's
+      // source feeding its callback -- is walked only where it is read as a value.
+      DeferredArgs deferred(arity, nullptr);
+      DeferredArgs callback_args;
+      const bool helper = builtin && arity > 0U && is_callback_helper(node.as_call_name());
+      if (lexical_lambda != nullptr || defined != nullptr) {
+        for (std::uint32_t i = 0; i < arity; ++i) {
+          deferred[i] = deferrable_reference(node.as_call_arg(i), state);
+        }
+      } else if (helper) {
+        for (std::uint32_t param = 0; param + 1U < arity; ++param) {
+          const int source = callback_source_arg(node.as_call_name(), arity, param);
+          const parser::AstNode* ref =
+              source >= 0 ? deferrable_reference(node.as_call_arg(static_cast<std::uint32_t>(source)), state) : nullptr;
+          callback_args.push_back(ref);
+          if (ref != nullptr) {
+            deferred[static_cast<std::uint32_t>(source)] = ref;
+          }
+        }
+      }
       for (std::uint32_t i = 0; i < arity; ++i) {
         const parser::AstNode& arg = node.as_call_arg(i);
         if (builtin && is_reference_only_arg(node.as_call_name(), i) && is_static_reference(arg, state)) {
           continue;
         }
-        if (builtin && walk_callable_arg(arg, state)) {
+        if (deferred[i] != nullptr) {
           continue;
         }
+        const DeferredArgs* bound = (helper && i + 1U == arity) ? &callback_args : nullptr;
+        if (builtin && walk_callable_arg(arg, state, bound)) {
+          continue;
+        }
+        walk_deferred_args(bound, 0U, state);
         walk(arg, state);
       }
 
@@ -859,16 +978,16 @@ void walk(const parser::AstNode& node, WalkState& state) {
         }
       }
       if (lexical != nullptr) {
-        if (lexical->lambda != nullptr) {
-          walk_invoked_lambda_body(*lexical->lambda, state);
+        if (lexical_lambda != nullptr) {
+          walk_invoked_lambda_body(*lexical_lambda, state, &deferred);
         }
         return;
       }
       if (defined != nullptr) {
         // `Name(args)` is the only call shape for a workbook-defined
         // LAMBDA. Expanding its body once is enough: recursive re-entry is
-        // blocked by `name_stack` while its arguments remain ordinary deps.
-        expand_defined_name(*defined, state, /*invoked=*/true);
+        // blocked by `name_stack`, which then walks the deferred arguments.
+        expand_defined_name(*defined, state, /*invoked=*/true, &deferred);
       }
       return;
     }
@@ -909,8 +1028,11 @@ void walk(const parser::AstNode& node, WalkState& state) {
       const std::uint32_t binding_count = node.as_let_binding_count();
       const std::size_t saved_lexical_depth = state.lexical_stack.size();
       for (std::uint32_t i = 0; i < binding_count; ++i) {
-        walk(node.as_let_binding_expr(i), state);
         const parser::AstNode& expr = node.as_let_binding_expr(i);
+        const parser::AstNode* deferred = deferrable_reference(expr, state);
+        if (deferred == nullptr) {
+          walk(expr, state);
+        }
         std::optional<Footprint> footprint = reference_footprint(expr, state);
         const parser::AstNode* lambda = nullptr;
         if (expr.kind() == parser::NodeKind::Lambda) {
@@ -920,7 +1042,8 @@ void walk(const parser::AstNode& node, WalkState& state) {
             lambda = prior->lambda;
           }
         }
-        state.lexical_stack.push_back({strings::to_ascii_lower(node.as_let_binding_name(i)), lambda, footprint});
+        state.lexical_stack.push_back(
+            {strings::to_ascii_lower(node.as_let_binding_name(i)), lambda, footprint, deferred});
       }
       walk(node.as_let_body(), state);
       state.lexical_stack.resize(saved_lexical_depth);
@@ -929,16 +1052,27 @@ void walk(const parser::AstNode& node, WalkState& state) {
 
     case parser::NodeKind::LambdaCall: {
       const parser::AstNode& callee = node.as_lambda_call_callee();
+      const std::uint32_t arity = node.as_lambda_call_arity();
+      DeferredArgs deferred(arity, nullptr);
+      const DefinedName* def = nullptr;
+      if (callee.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(callee)) {
+        def = find_name_ref_definition(callee, state);
+      }
+      if (callee.kind() == parser::NodeKind::Lambda || def != nullptr) {
+        for (std::uint32_t i = 0; i < arity; ++i) {
+          deferred[i] = deferrable_reference(node.as_lambda_call_arg(i), state);
+        }
+      }
       if (callee.kind() == parser::NodeKind::Lambda) {
         // Directly-invoked lambda (`=LAMBDA(x, x+A1)(5)`): unlike a bare
         // lambda *value*, the body IS evaluated here, so its cell refs and
         // volatile calls are genuine dependencies that must reach the graph.
-        walk_invoked_lambda_body(callee, state);
+        walk_invoked_lambda_body(callee, state, &deferred);
       } else if (callee.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(callee)) {
         // `Sheet1!Fn(5)` / `[0]!Fn(5)`: qualified spellings of `Fn(5)`, which
         // invoke the definition just as the `Call` case does.
-        if (const DefinedName* def = find_name_ref_definition(callee, state); def != nullptr) {
-          expand_defined_name(*def, state, /*invoked=*/true);
+        if (def != nullptr) {
+          expand_defined_name(*def, state, /*invoked=*/true, &deferred);
         }
       } else {
         // The remaining callee kind is a nested `LambdaCall` (currying,
@@ -951,9 +1085,10 @@ void walk(const parser::AstNode& node, WalkState& state) {
         // and volatile calls.
         walk(callee, state);
       }
-      const std::uint32_t arity = node.as_lambda_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        walk(node.as_lambda_call_arg(i), state);
+        if (deferred[i] == nullptr) {
+          walk(node.as_lambda_call_arg(i), state);
+        }
       }
       return;
     }
