@@ -259,12 +259,25 @@ def _error_display_from_cell(cell) -> Optional[str]:
     return None
 
 
-def _classify_value(cell) -> CaseResult:
+def _is_empty_text_result(evaluate, cell) -> bool:
+    """Tells an empty-text result apart from a blank cell via ``TYPE()``.
+
+    The Mac bridge reads both as ``''`` from every property (value, value2,
+    string_value), so only an in-Excel probe separates them: ``TYPE`` is 2
+    for text and 1 for a blank. Verified on Excel 16.113.2.
+    """
+
+    return evaluate(f"TYPE({cell.get_address(external=True)})") == 2
+
+
+def _classify_value(cell, evaluate) -> CaseResult:
     """Converts an xlwings cell observation into a CaseResult.
 
     The `cell.value` read happens once up front; subsequent checks may
     consult the AppleScript `.text` fallback for Mac edge cases (error
     cells, pre-1900 serials) where the Python-side value is lossy.
+    ``evaluate`` is the Application.Evaluate adapter used to resolve an
+    empty read-back into ``""`` or blank.
     """
 
     err = _error_display_from_cell(cell)
@@ -300,6 +313,8 @@ def _classify_value(cell) -> CaseResult:
             # blank here; the YAML case should be rewritten to force a
             # non-date display if a serial is needed.
             pass
+        if _is_empty_text_result(evaluate, cell):
+            return CaseResult(id="", kind="text", value="")
         return CaseResult(id="", kind="blank")
 
     if isinstance(v, str):
@@ -356,10 +371,16 @@ def _array_cell_from_scalar(result: CaseResult) -> Any:
     return {"kind": result.kind, "value": result.value}
 
 
+def _app_evaluate(app):
+    """Mac Application.Evaluate adapter shared by the result probes."""
+
+    return lambda expression: app.api.evaluate(name=expression)
+
+
 def _evaluate_spill_shape(app, anchor, *, max_cells: Optional[int] = MAX_CAPTURE_CELLS) -> tuple[int, int]:
     """Mac adapter for the shared Application.Evaluate shape probe."""
 
-    return probe_spill_shape(lambda expression: app.api.evaluate(name=expression), anchor, max_cells=max_cells)
+    return probe_spill_shape(_app_evaluate(app), anchor, max_cells=max_cells)
 
 
 def _classify_shape_result(app, sht, anchor_addr: str, samples: List[str]) -> CaseResult:
@@ -371,7 +392,8 @@ def _classify_shape_result(app, sht, anchor_addr: str, samples: List[str]) -> Ca
     """
 
     rows, cols = _evaluate_spill_shape(app, sht.range(anchor_addr), max_cells=None)
-    values = {addr: _array_cell_from_scalar(_classify_value(sht.range(addr))) for addr in samples}
+    evaluate = _app_evaluate(app)
+    values = {addr: _array_cell_from_scalar(_classify_value(sht.range(addr), evaluate)) for addr in samples}
     return CaseResult(id="", kind="array_shape", value=values, array_shape=[rows, cols])
 
 
@@ -390,13 +412,14 @@ def _classify_result_cell(app, sht, anchor_addr: str = DEFAULT_FORMULA_CELL) -> 
 
     shape = _evaluate_spill_shape(app, sht.range(anchor_addr))
     rows, cols = shape
+    evaluate = _app_evaluate(app)
     if rows == 1 and cols == 1:
-        return _classify_value(sht.range(anchor_addr))
+        return _classify_value(sht.range(anchor_addr), evaluate)
     anchor = sht.range(anchor_addr)
     flat: List[Any] = []
     for r in range(rows):
         for c in range(cols):
-            flat.append(_array_cell_from_scalar(_classify_value(anchor.offset(r, c))))
+            flat.append(_array_cell_from_scalar(_classify_value(anchor.offset(r, c), evaluate)))
     return CaseResult(id="", kind="array", value=flat, array_shape=[rows, cols])
 
 

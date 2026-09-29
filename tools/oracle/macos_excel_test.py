@@ -42,6 +42,9 @@ class _FakeCell:
     def formula(self) -> object:
         return self._formula_readback
 
+    def get_address(self, *, external=False):
+        return "'[Book.xlsx]Sheet1'!$Z$1"
+
 
 class _FakeAnchor:
     def __init__(
@@ -309,12 +312,37 @@ class MacExcelFormulaAssignmentTest(unittest.TestCase):
 
         self.assertEqual(cell.assigned_formula, "=SUM(1, 2)")
 
-    def test_retained_formula_can_calculate_to_a_legitimate_blank(self) -> None:
+    def test_retained_formula_can_calculate_to_an_empty_read_back(self) -> None:
         cell = _FakeCell(formula2_readback='=IF(FALSE,1,"")', value="")
 
         macos_excel._assign_formula(cell, '=IF(FALSE,1,"")', context="case blank-result")
 
-        self.assertEqual(macos_excel._classify_value(cell).kind, "blank")
+        result = macos_excel._classify_value(cell, lambda _expression: 2)
+        self.assertEqual((result.kind, result.value), ("text", ""))
+
+    def test_empty_read_back_is_split_into_empty_text_and_blank_by_type(self) -> None:
+        # The Mac bridge reads "" and a blank cell identically; TYPE() is the arbiter.
+        for value in ("", None):
+            for type_code, expected in ((2, ("text", "")), (1, ("blank", None))):
+                with self.subTest(value=value, type_code=type_code):
+                    anchor = _FakeAnchor(value)
+                    calls = []
+
+                    def evaluate(expression, type_code=type_code):
+                        calls.append(expression)
+                        return type_code
+
+                    result = macos_excel._classify_value(anchor, evaluate)
+                    self.assertEqual((result.kind, result.value), expected)
+                    self.assertEqual(calls, ["TYPE('[Book.xlsx]Sheet O''Clock'!$Z$1)"])
+
+    def test_non_empty_value_does_not_probe_type(self) -> None:
+        def evaluate(expression):
+            raise AssertionError(f"unexpected probe: {expression}")
+
+        for value, kind in ((0, "number"), ("x", "text"), (False, "bool")):
+            with self.subTest(value=value):
+                self.assertEqual(macos_excel._classify_value(_FakeAnchor(value), evaluate).kind, kind)
 
     def test_formula_readback_falls_back_when_formula2_is_unavailable(self) -> None:
         cell = _FakeCell(

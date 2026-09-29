@@ -2,11 +2,11 @@
   "suite": "text",
   "description": "LEN / LEFT / RIGHT / MID / CONCAT / EXACT / FIND / SEARCH / UPPER / LOWER / PROPER / TRIM / CLEAN / SUBSTITUTE / REPT / TEXTJOIN / UNICHAR / UNICODE",
   "environment": {
-    "excel_version": "16.112.1",
+    "excel_version": "16.113.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-21T16:32:47Z"
+    "generated_at": "2026-09-29T07:46:13Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1979,7 +1979,8 @@
       "formula": "=TEXTBEFORE(\"a-b-c\", \"\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
+        "kind": "text",
+        "value": ""
       },
       "compare_mode": "empty_string_readback"
     },
@@ -1997,7 +1998,8 @@
       "formula": "=TEXTAFTER(\"a-b-c\", \"\", -1)",
       "setup": {},
       "expect": {
-        "kind": "blank"
+        "kind": "text",
+        "value": ""
       },
       "compare_mode": "empty_string_readback"
     },
