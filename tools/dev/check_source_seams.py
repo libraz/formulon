@@ -42,9 +42,10 @@ Checks:
 
                    Bottom to top: utils < value < parser < model < pivot
                    engine < eval < {cf engine, print}. `io/` sits beside
-                   `eval/` and never includes it, `workbook.cpp` is the
-                   facade over all of them, and the app surfaces (c_api, cli,
-                   wasm, node_addon) sit on top. Each layer's allowed
+                   `eval/` and never includes it, `workbook.cpp` (with its
+                   `workbook_ref_rewrite` helper) is the facade over all of
+                   them, and the app surfaces (c_api, cli, wasm, node_addon)
+                   sit on top. Each layer's allowed
                    includes are listed in `LAYER_ALLOWED`. A second rule bans
                    the `io::` namespace token (outside comments) below `io/`,
                    so a model or engine type never depends on a reader or
@@ -113,8 +114,11 @@ LAYER_ALLOWED: dict[str, frozenset[str]] = {
 LAYER_NO_IO = frozenset({"value", "parser", "model", "pivot", "eval", "cf", "print"})
 
 # Top-level files that belong to the value layer; every other top-level file
-# except `workbook.cpp` is model.
+# except the facade files is model.
 _VALUE_FILES = ("value.", "sheet_name", "phonetic.h", "value_sort_order.h")
+
+# Top-level files that implement the `Workbook` facade.
+_FACADE_FILES = frozenset({"workbook.cpp", "workbook_ref_rewrite.h", "workbook_ref_rewrite.cpp"})
 
 # Headers under `pivot/` and `cf/` that are model types rather than engine.
 _MODEL_HEADERS = frozenset(
@@ -144,7 +148,7 @@ def _layer_of(rel: Path) -> str | None:
     """Returns the layer group of a path relative to `src/`, or None."""
     top = rel.parts[0]
     if len(rel.parts) == 1:
-        if rel.name == "workbook.cpp":
+        if rel.name in _FACADE_FILES:
             return "facade"
         return "value" if rel.name.startswith(_VALUE_FILES) else "model"
     if top in ("pivot", "cf"):
