@@ -163,6 +163,11 @@ bool xlsb_uses_hidden_name(std::string_view canonical_name) {
   return BlobContains(kXlsbHiddenNameFunctions, AsciiUpper(canonical_name));
 }
 
+bool has_storage_prefix(std::string_view canonical_name) {
+  return classify_storage_prefix(canonical_name) != parser::StoragePrefixKind::None ||
+         xlsb_uses_hidden_name(canonical_name);
+}
+
 std::string xlsb_hidden_function_name(std::string_view canonical_name) {
   const std::string upper = AsciiUpper(canonical_name);
   if (classify_storage_prefix(upper) != parser::StoragePrefixKind::None) {

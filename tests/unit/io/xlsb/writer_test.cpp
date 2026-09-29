@@ -1341,6 +1341,25 @@ TEST(XlsbWriter, NewerErrorsAreStoredAsTheirLegacyFallback) {
   }
 }
 
+// Measured on backup/oracle_probe/root_ops: Excel keeps `_xlfn.` on a name it
+// does not know, in the formula bar and in the file.
+TEST(XlsbWriter, UnknownPrefixedNameKeepsItsPrefix) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0U, 0U, "=_xlfn.FOOBAR(1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1U, 0U, "=_xlfn.XLOOKUP(1,B1:B2,C1:C2)")));
+  EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->formula_text, "=_xlfn.FOOBAR(1)");
+  EXPECT_EQ(wb.sheet(0).cell_at(1U, 0U)->formula_text, "=XLOOKUP(1,B1:B2,C1:C2)");
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Sheet& back = read_or.value().workbook.sheet(0);
+  EXPECT_EQ(back.cell_at(0U, 0U)->formula_text, "=_xlfn.FOOBAR(1)");
+  EXPECT_EQ(back.cell_at(1U, 0U)->formula_text, "=XLOOKUP(1,B1:B2,C1:C2)");
+}
+
 TEST(XlsbWriter, CubeFunctionsEncodeWithTheirFunctionIds) {
   // Excel 365 saves `CUBEVALUE("c","m")` as two strings and
   // `PtgFuncVar(2, 380)`, not through a hidden `_xlfn.` name.

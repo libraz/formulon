@@ -96,6 +96,12 @@ std::string storage_function_name(std::string_view canonical_name);
 /// `_xlfn.<NAME>` that real Excel resolves to `#NAME?`.
 bool xlsb_uses_hidden_name(std::string_view canonical_name);
 
+/// True when a file stores `canonical_name` (any case) under a storage
+/// prefix: an `_xlfn.` / `_xlfn._xlws.` function, or one XLSB reaches
+/// through the hidden `_xlfn.` name. The prefix is dropped on ingestion only
+/// for these (`parser::strip_storage_prefixes`).
+bool has_storage_prefix(std::string_view canonical_name);
+
 /// Returns the name the hidden `BrtName` carries for a call to
 /// `canonical_name` encoded through the XLSB hidden-name route.
 ///

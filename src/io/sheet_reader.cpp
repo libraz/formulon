@@ -30,6 +30,7 @@
 
 #include "io/array_anchor_budget.h"
 #include "io/cell_parser.h"
+#include "io/future_functions.h"
 #include "io/sax_xml_reader.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -140,7 +141,7 @@ std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint3
   // formula-length cap even though Excel's own limit is measured on the
   // canonical (formula-bar) text this produces.
   std::string source("=");
-  source.append(parser::strip_storage_prefixes(master.text));
+  source.append(parser::strip_storage_prefixes(master.text, &has_storage_prefix));
   Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
   parser::Parser parser(source, arena);
   parser::AstNode* root = parser.parse();

@@ -66,7 +66,13 @@ inline bool formula_prefix_ci_eq(std::string_view s, std::string_view lit) noexc
 /// merely embeds the letters (`foo_xlfn.bar`) is not disturbed. A leading
 /// `=` and every other character pass through unchanged, so the transform
 /// is safe to run on an already-canonical formula (it is a no-op there).
-inline std::string strip_storage_prefixes(std::string_view formula) {
+///
+/// With `known`, a function prefix (`_xlfn.`, `_xlfn._xlws.`, `_xlws.`) is
+/// removed only before a name `known` accepts: Excel keeps it on a name it
+/// does not recognise (`_xlfn.FOOBAR(1)` stays so in the formula bar and the
+/// file), and the writers re-apply it only to the names they know. `_xlpm.`
+/// always goes.
+inline std::string strip_storage_prefixes(std::string_view formula, bool (*known)(std::string_view) = nullptr) {
   // Longest first so `_xlfn._xlws.` is consumed as a unit before `_xlfn.`.
   static constexpr std::array<std::string_view, 4> kPrefixes = {"_xlfn._xlws.", "_xlfn.", "_xlws.", "_xlpm."};
   std::string out;
@@ -100,6 +106,14 @@ inline std::string strip_storage_prefixes(std::string_view formula) {
         bool matched = false;
         for (const std::string_view prefix : kPrefixes) {
           if (i + prefix.size() <= formula.size() && formula_prefix_ci_eq(formula.substr(i, prefix.size()), prefix)) {
+            std::size_t end = i + prefix.size();
+            while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
+              ++end;
+            }
+            const std::string_view name = formula.substr(i + prefix.size(), end - i - prefix.size());
+            if (prefix != "_xlpm." && known != nullptr && !known(name)) {
+              break;
+            }
             i += prefix.size();
             matched = true;
             break;

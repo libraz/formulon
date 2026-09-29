@@ -12,6 +12,7 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/ast_dump.h"
+#include "parser/formula_prefix.h"
 #include "utils/arena.h"
 
 namespace formulon {
@@ -713,6 +714,21 @@ TEST(ParserComposite, RoundExpression) {
 
 TEST(ParserComposite, NestedFunctions) {
   EXPECT_EQ(ParseToSexpr("=MAX(MIN(A1,B1),C1)"), "(call MAX (call MIN (ref A1) (ref B1)) (ref C1))");
+}
+
+// Knows XLOOKUP and FILTER only, standing in for `io::has_storage_prefix`.
+bool KnownForTest(std::string_view name) {
+  return name == "XLOOKUP" || name == "FILTER";
+}
+
+// Excel keeps `_xlfn.` on a name it does not know (`=_xlfn.FOOBAR(1)` in the
+// formula bar and the file), so only a classified name loses the prefix;
+// `_xlpm.` always goes.
+TEST(StoragePrefix, ClassifierKeepsThePrefixOfAnUnknownName) {
+  EXPECT_EQ(strip_storage_prefixes("=_xlfn.XLOOKUP(1,_xlfn.FOOBAR(2),_xlfn._xlws.FILTER(A1:A2,1))", &KnownForTest),
+            "=XLOOKUP(1,_xlfn.FOOBAR(2),FILTER(A1:A2,1))");
+  EXPECT_EQ(strip_storage_prefixes("=_xlfn.LAMBDA(_xlpm.x,_xlpm.x)", &KnownForTest), "=_xlfn.LAMBDA(x,x)");
+  EXPECT_EQ(strip_storage_prefixes("=_xlfn.FOOBAR(1)"), "=FOOBAR(1)");
 }
 
 }  // namespace

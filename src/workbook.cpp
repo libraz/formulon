@@ -24,6 +24,7 @@
 #include "eval/scheduler.h"
 #include "external_link.h"
 #include "io/format_detect.h"
+#include "io/future_functions.h"
 #include "io/ooxml_writer.h"
 #include "io/workbook_kind_ooxml.h"
 #include "io/xlsb/writer.h"
@@ -1106,7 +1107,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   // formula, so hand-authored / test formulas are unaffected. The writer
   // re-applies the prefixes on save for Excel readability.
   {
-    std::string normalized = parser::strip_storage_prefixes(formula);
+    std::string normalized = parser::strip_storage_prefixes(formula, &io::has_storage_prefix);
     if (normalized != formula) {
       formula = std::move(normalized);
     }
