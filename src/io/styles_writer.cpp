@@ -642,10 +642,16 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
     out.append("\"/>");
   }
   AppendVertAlign(out, f.vert_align);
-  out.append("<sz val=\"");
-  append_xml_number(out, f.size);
-  out.append("\"/>");
-  AppendColor(out, "color", f.color, f.color_argb);
+  if (f.has_size) {
+    out.append("<sz val=\"");
+    append_xml_number(out, f.size);
+    out.append("\"/>");
+  }
+  // A differential font without a colour leaves the colour unchanged;
+  // 0xFF000000 is the "automatic" sentinel an unstated colour carries.
+  if (f.color.kind != ColorSpec::Kind::kNone || f.color_argb != 0xFF000000U) {
+    AppendColor(out, "color", f.color, f.color_argb);
+  }
   if (!f.name.empty()) {
     out.append("<name val=\"");
     AppendXmlAttrEscaped(out, f.name);

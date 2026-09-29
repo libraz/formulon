@@ -33,6 +33,32 @@ constexpr std::uint16_t kBrtEndFmts = 616;
 constexpr std::uint16_t kBrtBeginStyles = 619;
 constexpr std::uint16_t kBrtEndStyles = 620;
 constexpr std::uint16_t kBrtStyle = 48;
+constexpr std::uint16_t kBrtBeginDxfs = 505;
+constexpr std::uint16_t kBrtEndDxfs = 506;
+constexpr std::uint16_t kBrtDxf = 507;
+
+// BrtDXF property types, measured against Excel-saved dxfs (each checked
+// against the <dxf> Excel wrote for the same book).
+constexpr std::uint16_t kPropFillPattern = 0;
+constexpr std::uint16_t kPropFillFg = 1;
+constexpr std::uint16_t kPropFillBg = 2;
+constexpr std::uint16_t kPropFontColor = 5;
+constexpr std::uint16_t kPropBorderTop = 6;
+constexpr std::uint16_t kPropBorderBottom = 7;
+constexpr std::uint16_t kPropBorderLeft = 8;
+constexpr std::uint16_t kPropBorderRight = 9;
+constexpr std::uint16_t kPropBorderDiagonal = 10;
+constexpr std::uint16_t kPropDiagonalUp = 13;
+constexpr std::uint16_t kPropDiagonalDown = 14;
+constexpr std::uint16_t kPropFontWeight = 25;
+constexpr std::uint16_t kPropUnderline = 26;
+constexpr std::uint16_t kPropVertAlign = 27;
+constexpr std::uint16_t kPropItalic = 28;
+constexpr std::uint16_t kPropStrike = 29;
+constexpr std::uint16_t kPropFontSize = 36;
+constexpr std::uint16_t kPropNumFmtCode = 38;
+constexpr std::uint16_t kPropNumFmtId = 41;
+constexpr std::uint8_t kUnderlineMap[] = {0U, 1U, 2U, 0x21U, 0x22U};
 
 std::uint16_t ClampIndex(std::uint32_t value) {
   return static_cast<std::uint16_t>(std::min<std::uint32_t>(value, std::numeric_limits<std::uint16_t>::max()));
@@ -52,7 +78,7 @@ void EmitColor(std::vector<std::uint8_t>& payload, std::uint32_t argb, const Col
   // literal RGB for an RGB selector or a compatibility fallback; this writer
   // does not resolve theme, indexed, or auto colours.
   std::uint8_t kind = 0x02U;
-  std::uint8_t index = 0U;
+  std::uint8_t index = 0xFFU;  // what Excel writes beside an RGB colour
   std::int16_t tint = 0;
   switch (spec.kind) {
     case ColorSpec::Kind::kTheme:
@@ -66,6 +92,7 @@ void EmitColor(std::vector<std::uint8_t>& payload, std::uint32_t argb, const Col
       break;
     case ColorSpec::Kind::kAuto:
       kind = 0x00U;
+      index = 0x40U;  // the system colour Excel writes for `auto`
       break;
     case ColorSpec::Kind::kNone:
     case ColorSpec::Kind::kRgb:
@@ -95,7 +122,6 @@ void EmitFont(std::vector<std::uint8_t>& out, const FontRecord& font) {
   emit_u16(payload, flags);
   emit_u16(payload, font.bold ? 700U : 400U);
   emit_u16(payload, font.vert_align == 1U ? 1U : (font.vert_align == 2U ? 2U : 0U));
-  constexpr std::uint8_t kUnderlineMap[] = {0U, 1U, 2U, 0x21U, 0x22U};
   emit_u8(payload, kUnderlineMap[std::min<std::uint8_t>(font.underline, 4U)]);
   emit_u8(payload, font.has_family ? font.family : 0U);
   emit_u8(payload, font.has_charset ? font.charset : 0U);
@@ -194,6 +220,110 @@ void EmitXf(std::vector<std::uint8_t>& out, const CellXf& xf, bool is_style_xf) 
 // a caller's temporary to a reference parameter of a reference-returning
 // function is what -Wdangling-reference reports, whether or not that reference
 // can actually escape.
+/// One XFProp of a BrtDXF: u16 type, u16 total size, then `data`.
+void AppendProp(std::vector<std::uint8_t>& props, std::uint16_t& count, std::uint16_t type,
+                const std::vector<std::uint8_t>& data) {
+  emit_u16(props, type);
+  emit_u16(props, static_cast<std::uint16_t>(4U + data.size()));
+  props.insert(props.end(), data.begin(), data.end());
+  ++count;
+}
+
+std::vector<std::uint8_t> ColorProp(std::uint32_t argb, const ColorSpec& spec) {
+  std::vector<std::uint8_t> data;
+  EmitColor(data, argb, spec);
+  return data;
+}
+
+/// A dxf as Excel writes it: fill, font, number format, border, each only
+/// where the dxf states it. The font name, alignment and protection have
+/// no measured property and are left out; Excel drops a CF rule whose dxf
+/// carries any of them (or a font size) anyway.
+void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
+  std::vector<std::uint8_t> props;
+  std::uint16_t count = 0;
+  if (dxf.has_fill) {
+    const FillRecord& fill = dxf.fill;
+    AppendProp(props, count, kPropFillPattern, {static_cast<std::uint8_t>(fill.pattern <= 18U ? fill.pattern : 0U)});
+    if (fill.fg.kind != ColorSpec::Kind::kNone) {
+      AppendProp(props, count, kPropFillFg, ColorProp(fill.fg_argb, fill.fg));
+    }
+    if (fill.bg.kind != ColorSpec::Kind::kNone) {
+      AppendProp(props, count, kPropFillBg, ColorProp(fill.bg_argb, fill.bg));
+    }
+  }
+  if (dxf.has_font) {
+    const FontRecord& font = dxf.font;
+    // 0xFF000000 is the "automatic" sentinel an unstated colour carries.
+    if (font.color.kind != ColorSpec::Kind::kNone || font.color_argb != 0xFF000000U) {
+      AppendProp(props, count, kPropFontColor, ColorProp(font.color_argb, font.color));
+    }
+    if (font.has_bold && font.bold) {
+      AppendProp(props, count, kPropFontWeight, {0xBC, 0x02});  // 700
+    }
+    if (font.underline != 0U) {
+      AppendProp(props, count, kPropUnderline, {kUnderlineMap[std::min<std::uint8_t>(font.underline, 4U)], 0x00});
+    }
+    if (font.vert_align == 1U || font.vert_align == 2U) {
+      AppendProp(props, count, kPropVertAlign, {font.vert_align, 0x00});
+    }
+    if (font.has_italic && font.italic) {
+      AppendProp(props, count, kPropItalic, {0x01});
+    }
+    if (font.has_strike && font.strike) {
+      AppendProp(props, count, kPropStrike, {0x01});
+    }
+    if (font.has_size) {
+      std::vector<std::uint8_t> twips;
+      emit_u32(twips, FontHeightTwips(font.size));
+      AppendProp(props, count, kPropFontSize, twips);
+    }
+  }
+  if (dxf.has_num_fmt) {
+    std::vector<std::uint8_t> id;
+    emit_u16(id, dxf.num_fmt_id);
+    AppendProp(props, count, kPropNumFmtId, id);
+    // XLWideString with a u16 length rather than a u32 one.
+    std::vector<std::uint8_t> wide;
+    emit_xlwidestring(wide, dxf.num_fmt_code);
+    std::vector<std::uint8_t> code;
+    emit_u16(code, static_cast<std::uint16_t>((wide.size() - 4U) / 2U));
+    code.insert(code.end(), wide.begin() + 4, wide.end());
+    AppendProp(props, count, kPropNumFmtCode, code);
+  }
+  if (dxf.has_border) {
+    const BorderRecord& border = dxf.border;
+    const std::pair<std::uint16_t, const BorderSide*> sides[] = {{kPropBorderTop, &border.top},
+                                                                 {kPropBorderBottom, &border.bottom},
+                                                                 {kPropBorderLeft, &border.left},
+                                                                 {kPropBorderRight, &border.right},
+                                                                 {kPropBorderDiagonal, &border.diagonal}};
+    for (const auto& [type, side] : sides) {
+      if (side->style == 0U) {
+        continue;
+      }
+      ColorSpec auto_color;
+      auto_color.kind = ColorSpec::Kind::kAuto;
+      const bool stated = side->color.kind != ColorSpec::Kind::kNone;
+      std::vector<std::uint8_t> data = ColorProp(stated ? side->color_argb : 0U, stated ? side->color : auto_color);
+      emit_u16(data, std::min<std::uint8_t>(side->style, 13U));
+      AppendProp(props, count, type, data);
+    }
+    if (border.diagonal_down) {
+      AppendProp(props, count, kPropDiagonalDown, {0x01});
+    }
+    if (border.diagonal_up) {
+      AppendProp(props, count, kPropDiagonalUp, {0x01});
+    }
+  }
+  std::vector<std::uint8_t> payload;
+  emit_u16(payload, 0x8000U);
+  emit_u16(payload, 0U);
+  emit_u16(payload, count);
+  payload.insert(payload.end(), props.begin(), props.end());
+  emit_record(out, kBrtDxf, payload);
+}
+
 template <typename T>
 const std::vector<T>& Normalized(const std::vector<T>& entries, std::vector<T>& storage) {
   if (!entries.empty())
@@ -295,6 +425,15 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table) {
     }
   }
   emit_record(out, kBrtEndStyles, empty);
+  if (!table.dxfs.empty()) {
+    std::vector<std::uint8_t> dxf_count;
+    emit_u32(dxf_count, static_cast<std::uint32_t>(table.dxfs.size()));
+    emit_record(out, kBrtBeginDxfs, dxf_count);
+    for (const DifferentialFormat& dxf : table.dxfs) {
+      EmitDxf(out, dxf);
+    }
+    emit_record(out, kBrtEndDxfs, empty);
+  }
   emit_record(out, kBrtEndStyleSheet, empty);
   return out;
 }

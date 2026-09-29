@@ -54,6 +54,9 @@ struct ColorSpec {
 struct FontRecord {
   std::string name;
   double size = 11.0;
+  /// False only for a parsed `<font>` with no `<sz>`: a differential font
+  /// without one leaves the size unchanged. The fonts table always writes one.
+  bool has_size = true;
   /// Presence bits preserve an explicit `val="0"` in differential fonts,
   /// where absence means "leave the source formatting unchanged".
   bool has_bold = false;

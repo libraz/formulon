@@ -241,6 +241,7 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
     rec.name = name.attribute("val").value();
   }
   pugi::xml_node sz = f.child("sz");
+  rec.has_size = static_cast<bool>(sz);
   if (sz) {
     // A font cannot be smaller than nothing, and a non-finite size feeds
     // the row-height estimate, so an unusable value keeps Excel's default.

@@ -53,6 +53,19 @@ Workbook ReadXlsx(const std::string& name) {
   return result ? std::move(result.value().workbook) : Workbook::create_empty();
 }
 
+std::string PartXml(const Workbook& wb, const char* part) {
+  auto saved = io::write_ooxml(wb);
+  EXPECT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
+  if (!saved) {
+    return {};
+  }
+  io::ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(io::ByteSpan{saved.value().data(), saved.value().size()})));
+  auto bytes = zip.read_entry(part);
+  EXPECT_TRUE(static_cast<bool>(bytes));
+  return bytes ? std::string(bytes.value().begin(), bytes.value().end()) : std::string();
+}
+
 std::string SheetXml(const Workbook& wb) {
   auto saved = io::write_ooxml(wb);
   EXPECT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
@@ -84,6 +97,27 @@ TEST(OoxmlFeatureDefaults, AbsentAllowBlankIsOff) {
   const std::string xml = SheetXml(wb);
   EXPECT_EQ(xml.find("allowBlank=\"0\""), std::string::npos);
   EXPECT_NE(xml.find("allowBlank=\"1\""), std::string::npos);
+}
+
+// Excel drops a CF rule whose dxf states a font size, so a dxf font that
+// had no <sz> must not gain one on save; nor may it gain a colour it did
+// not state, which would force the formatted text black.
+TEST(OoxmlFeatureDefaults, DxfFontWithoutASizeIsSavedWithoutOne) {
+  const Workbook wb = ReadXlsx("base");
+  ASSERT_FALSE(wb.styles().dxfs.empty());
+  const std::string styles = PartXml(wb, "xl/styles.xml");
+  const std::size_t dxfs = styles.find("<dxfs");
+  ASSERT_NE(dxfs, std::string::npos) << styles;
+  const std::string block = styles.substr(dxfs, styles.find("</dxfs>") - dxfs);
+  EXPECT_NE(block.find("<b/>"), std::string::npos) << block;
+  EXPECT_EQ(block.find("<sz"), std::string::npos) << block;
+  EXPECT_EQ(block.find("<color"), std::string::npos) << block;
+}
+
+TEST(OoxmlFeatureDefaults, DxfFontSizeStatedInTheSourceIsKept) {
+  const Workbook wb = ReadXlsx("dxf");
+  const std::string styles = PartXml(wb, "xl/styles.xml");
+  EXPECT_NE(styles.find("<sz val=\"14\"/>"), std::string::npos);
 }
 
 TEST(OoxmlFeatureDefaults, OtherDefaultsMatchExcel) {

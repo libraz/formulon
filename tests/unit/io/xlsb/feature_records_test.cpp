@@ -28,6 +28,9 @@
 //   x14bars    x14 data-bar fields varied one per rule: border, gradient,
 //              axis position and colour, negative fill and border, lengths
 //   x14dir     each x14 data-bar direction: leftToRight, context, rightToLeft
+//   dxf        one CF dxf per property: font toggles, underline kinds, colour
+//              kinds, fill patterns, border sides and diagonals
+//   dxfnum     CF dxfs with number formats, alone and with a font
 
 #include <algorithm>
 #include <cstddef>
@@ -45,6 +48,7 @@
 #include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/styles_writer.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "parser/ast.h"
@@ -483,6 +487,57 @@ TEST(XlsbFeatureRecords, EditedX14DataBarsReachASavedXlsx) {
   auto back = io::read_ooxml(SpanOf(saved.value()));
   ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
   EXPECT_EQ(DescribeCf(back.value().workbook.sheet(0)), DescribeCf(wb.sheet(0)));
+}
+
+/// Every BrtDXF payload of a styles part, hex-encoded. Excel writes the
+/// resolved RGB beside a theme, indexed or automatic colour; the model does
+/// not carry it, so those four bytes are masked.
+std::vector<std::string> DxfRecords(io::ByteSpan styles) {
+  std::vector<std::string> out;
+  while (styles.size != 0U) {
+    auto rec = io::xlsb::read_record(styles);
+    if (!rec) {
+      ADD_FAILURE() << "record walk failed";
+      break;
+    }
+    if (rec.value().type == 507) {
+      std::vector<std::uint8_t> p(rec.value().payload.data, rec.value().payload.data + rec.value().payload.size);
+      static constexpr std::uint16_t kColorProps[] = {1, 2, 5, 6, 7, 8, 9, 10};
+      for (std::size_t at = 6; at + 4U <= p.size();) {
+        const std::uint16_t type = static_cast<std::uint16_t>(p[at] | (p[at + 1] << 8U));
+        const std::uint16_t size = static_cast<std::uint16_t>(p[at + 2] | (p[at + 3] << 8U));
+        const bool color = std::find(std::begin(kColorProps), std::end(kColorProps), type) != std::end(kColorProps);
+        if (color && size >= 12U && (p[at + 4] >> 1U) != 2U) {
+          std::fill(p.begin() + static_cast<std::ptrdiff_t>(at + 8), p.begin() + static_cast<std::ptrdiff_t>(at + 12),
+                    std::uint8_t{0});
+        }
+        at += size == 0U ? p.size() : size;
+      }
+      std::string line;
+      for (std::uint8_t byte : p) {
+        char hex[4];
+        std::snprintf(hex, sizeof(hex), "%02x ", byte);
+        line += hex;
+      }
+      out.push_back(std::move(line));
+    }
+  }
+  return out;
+}
+
+// The dxfs Excel wrote into its .xlsx, written to XLSB, match the BrtDXF
+// records Excel wrote into the .xlsb of the same book.
+TEST(XlsbFeatureRecords, DxfRecordsMatchExcel) {
+  for (const char* name : {"dxf", "dxfnum"}) {
+    const Workbook from_xlsx = ReadXlsx(name);
+    const std::vector<std::uint8_t> written = io::xlsb::write_styles_bin(from_xlsx.styles());
+    io::ZipReader zip;
+    const std::vector<std::uint8_t> excel = ReadFileBytes(FixturePath(name, "xlsb"));
+    ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(excel))));
+    auto styles = zip.read_entry("xl/styles.bin");
+    ASSERT_TRUE(static_cast<bool>(styles));
+    EXPECT_EQ(Joined(DxfRecords(SpanOf(written))), Joined(DxfRecords(SpanOf(styles.value())))) << name;
+  }
 }
 
 TEST(XlsbFeatureRecords, WorkbookProtectionMatchesExcelsXlsxElement) {
