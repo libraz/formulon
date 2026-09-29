@@ -315,6 +315,33 @@ TEST(StructuredRefEval, UnknownColumnIsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+TEST(StructuredRefEval, EscapedApostropheColumnNameResolves) {
+  // ECMA-376 18.5.1.10: a column name containing an apostrophe is spelled
+  // with a doubled apostrophe inside the bracket (`Bob''s`), which must
+  // unescape to `Bob's` before comparing against the table's real column
+  // name -- not compared verbatim with the doubled spelling still in it.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::text("Bob's"));
+  s.set_cell_value(1, 0, Value::number(42.0));
+  io::TableMetadata table;
+  table.id = 1;
+  table.name = "Sales";
+  table.ref = "A1:A2";
+  table.sheet_index = 0;
+  table.header_row = true;
+  io::TableColumn col;
+  col.id = 1;
+  col.name = "Bob's";
+  table.columns = {col};
+  wb.set_tables({table});
+
+  Arena arena;
+  const Value v = EvalAt(wb, "=Sales[Bob''s]", /*formula_row=*/1, arena);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
+}
+
 TEST(StructuredRefEval, HeadersOnTableWithoutHeadersIsRef) {
   // Build a table with header_row=false so `[#Headers]` produces #REF!.
   Workbook wb = Workbook::create();

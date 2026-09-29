@@ -48,8 +48,11 @@ class FunctionRegistry;
 namespace refs_internal {
 
 // Shape of the base `reference` argument to OFFSET. Populated by
-// `resolve_offset_base` from either a bare Ref (1x1) or a literal
-// `RangeOp` rectangle. Stored as 0-based indices.
+// `resolve_offset_base` from a bare Ref (1x1, or the full grid axis for a
+// whole-column/-row Ref), a literal `RangeOp` rectangle (same whole-axis
+// handling per endpoint), a nested reference-returning Call, or a
+// LET-bound NameRef looked through to one of those shapes. Stored as
+// 0-based indices.
 struct OffsetBase {
   std::string_view sheet;
   std::uint32_t row = 0;
@@ -95,10 +98,12 @@ bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const
                                 const EvalContext& ctx, IndirectReference* out, ErrorCode* out_err);
 
 // Normalises the base reference from OFFSET's first argument. Literal
-// Ref and `Ref:Ref` RangeOp shapes are accepted directly; INDIRECT /
-// OFFSET nested calls go through `resolve_reference_call` so
-// `OFFSET(INDIRECT("A1"), …)` and `OFFSET(OFFSET(A1,0,0,2,2), …)`
-// resolve without dereferencing the base.
+// Ref and `Ref:Ref` RangeOp shapes are accepted directly, including a
+// whole-column/whole-row endpoint (resolved to the full grid axis rather
+// than `#VALUE!`); a LET-bound NameRef is looked through to its bound
+// AST first. INDIRECT / OFFSET nested calls go through
+// `resolve_reference_call` so `OFFSET(INDIRECT("A1"), …)` and
+// `OFFSET(OFFSET(A1,0,0,2,2), …)` resolve without dereferencing the base.
 bool resolve_offset_base(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, OffsetBase* out, ErrorCode* out_err);
 

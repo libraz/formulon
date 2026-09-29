@@ -27,6 +27,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -614,20 +615,37 @@ bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const
   return true;
 }
 
-bool resolve_offset_base(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, OffsetBase* out, ErrorCode* out_err) {
+  // LET-bound NameRef lookthrough: `LET(r, A1:A3, OFFSET(r, 1, 0))` must see
+  // the underlying RangeOp, not the opaque NameRef the scalar path would
+  // collapse to its spill anchor. Every sibling reference/shape function
+  // (ROW, COLUMN, AREAS, the conditional aggregators, PERCENTOF) already
+  // applies this lookthrough; OFFSET's base resolver had not.
+  const parser::AstNode& arg = resolve_name_ast(raw_arg, ctx.name_env());
   const parser::NodeKind k = arg.kind();
   if (k == parser::NodeKind::Ref) {
     const parser::Reference& r = arg.as_ref();
-    if (r.is_full_col || r.is_full_row) {
-      *out_err = ErrorCode::Value;
-      return false;
-    }
     out->sheet = r.sheet;
-    out->row = r.row;
-    out->col = r.col;
-    out->rows = 1U;
-    out->cols = 1U;
+    if (r.is_full_col) {
+      // `A:A`: declared shape spans the full row axis, matching Excel's
+      // OFFSET semantics (no used-range clamp -- OFFSET is pure reference
+      // arithmetic, not a value walk).
+      out->row = 0U;
+      out->col = r.col;
+      out->rows = Sheet::kMaxRows;
+      out->cols = 1U;
+    } else if (r.is_full_row) {
+      out->row = r.row;
+      out->col = 0U;
+      out->rows = 1U;
+      out->cols = Sheet::kMaxCols;
+    } else {
+      out->row = r.row;
+      out->col = r.col;
+      out->rows = 1U;
+      out->cols = 1U;
+    }
     return true;
   }
   if (k == parser::NodeKind::RangeOp) {
@@ -639,9 +657,34 @@ bool resolve_offset_base(const parser::AstNode& arg, Arena& arena, const Functio
     }
     const parser::Reference& lhs = lhs_ast.as_ref();
     const parser::Reference& rhs = rhs_ast.as_ref();
-    if (lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row) {
-      *out_err = ErrorCode::Value;
-      return false;
+    // Multi-column (`A:C`) / multi-row (`1:3`) whole references: the
+    // parser produces a RangeOp over two whole-column / whole-row Refs.
+    // The bounded axis (columns for `A:C`, rows for `1:3`) is the pair's
+    // min/max; the open axis spans the full grid, mirroring the
+    // single-Ref branch above.
+    if (lhs.is_full_col || rhs.is_full_col) {
+      if (!lhs.is_full_col || !rhs.is_full_col) {
+        *out_err = ErrorCode::Ref;
+        return false;
+      }
+      out->sheet = !lhs.sheet.empty() ? lhs.sheet : rhs.sheet;
+      out->row = 0U;
+      out->rows = Sheet::kMaxRows;
+      out->col = std::min(lhs.col, rhs.col);
+      out->cols = std::max(lhs.col, rhs.col) - out->col + 1U;
+      return true;
+    }
+    if (lhs.is_full_row || rhs.is_full_row) {
+      if (!lhs.is_full_row || !rhs.is_full_row) {
+        *out_err = ErrorCode::Ref;
+        return false;
+      }
+      out->sheet = !lhs.sheet.empty() ? lhs.sheet : rhs.sheet;
+      out->col = 0U;
+      out->cols = Sheet::kMaxCols;
+      out->row = std::min(lhs.row, rhs.row);
+      out->rows = std::max(lhs.row, rhs.row) - out->row + 1U;
+      return true;
     }
     // The effective sheet qualifier mirrors `expand_range`: whichever
     // endpoint carries it wins, and mismatched qualifiers are `#REF!`.
@@ -687,8 +730,10 @@ bool resolve_offset_base(const parser::AstNode& arg, Arena& arena, const Functio
     out->cols = right - left + 1U;
     return true;
   }
-  // Anything else (literal, scalar expr, array literal, named ref) is
-  // not a valid reference shape for OFFSET. Excel returns `#VALUE!`.
+  // Anything else (literal, scalar expr, array literal, or a NameRef
+  // whose LET binding -- already looked through above -- has no AST or is
+  // scalar-valued) is not a valid reference shape for OFFSET. Excel
+  // returns `#VALUE!`.
   *out_err = ErrorCode::Value;
   return false;
 }

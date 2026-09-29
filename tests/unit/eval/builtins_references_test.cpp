@@ -799,6 +799,75 @@ TEST(BuiltinsOffset, NonRefBaseIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsOffset, WholeColumnBaseResolvesInsteadOfValueError) {
+  // OFFSET(A:A, 1, 0, 1, 1) anchors one row below A1: A2.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 0, Value::number(7.0));
+  const Value v = EvalSourceIn("=OFFSET(A:A,1,0,1,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.0);
+}
+
+TEST(BuiltinsOffset, WholeColumnBaseDefaultHeightIsFullAxis) {
+  // Without an explicit height/width, OFFSET reuses the base's own shape
+  // -- a whole column's declared shape spans the full row axis, so
+  // ROWS(OFFSET(A:A,0,1)) (column-only shift, to B:B) reports the grid
+  // height rather than #VALUE!. A *row* offset on a whole column is
+  // rejected with #REF! regardless of this fix: the column already spans
+  // every row, so shifting it down by even one pushes the bottom edge
+  // past the grid, matching Excel.
+  const Value v = EvalSource("=ROWS(OFFSET(A:A,0,1))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), static_cast<double>(Sheet::kMaxRows));
+
+  const Value shifted_down = EvalSource("=OFFSET(A:A,1,0)");
+  ASSERT_TRUE(shifted_down.is_error());
+  EXPECT_EQ(shifted_down.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsOffset, WholeRowBaseResolvesInsteadOfValueError) {
+  // OFFSET(1:1, 0, 1, 1, 1) anchors one column right of row 1: B1.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 1, Value::number(9.0));
+  const Value v = EvalSourceIn("=OFFSET(1:1,0,1,1,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 9.0);
+}
+
+TEST(BuiltinsOffset, MultiColumnWholeRangeBaseUnionsTheColumnSpan) {
+  // OFFSET(A:C, 0, 0, 1, 1) keeps the full row axis and the A..C column
+  // span, anchored at A1.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 2, Value::number(3.0));
+  const Value v = EvalSourceIn("=OFFSET(A:C,0,2,1,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsOffset, LetBoundRangeBaseIsLookedThrough) {
+  // LET(r, A1:A3, ROWS(OFFSET(r, 1, 0))) -- the LET binding's underlying
+  // RangeOp shape (3 rows) must reach resolve_offset_base rather than
+  // collapsing to its scalar spill anchor.
+  const Value v = EvalSource("=LET(r,A1:A3,ROWS(OFFSET(r,1,0)))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsOffset, LetBoundNameBaseWithExplicitHeightIsLookedThrough) {
+  // The dynamic-named-range idiom (OFFSET(name,0,0,COUNTA(...))), scoped
+  // to what `resolve_offset_base` actually looks through: a LET/LAMBDA
+  // binding via `ctx.name_env()`, the same mechanism ROW / COLUMN / AREAS
+  // / the conditional aggregators use. A workbook Name Manager entry is a
+  // separate resolution path (`resolve_defined_name`) this finding's
+  // invariant does not cover.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  const Value v = EvalSourceIn("=LET(data,A1:A2,SUM(OFFSET(data,0,0,2,1)))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
+}
+
 // ---------------------------------------------------------------------------
 // OFFSET inside lazy aggregators (range-producing path)
 // ---------------------------------------------------------------------------
