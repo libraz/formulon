@@ -105,6 +105,19 @@ TEST(WorkbookTest, ApproximateMemoryIsStableWithoutMutation) {
   EXPECT_EQ(wb.approximate_memory_bytes(), first);
 }
 
+TEST(WorkbookTest, QualifiedBuiltinCallIsTreatedAsAParseFailure) {
+  // Excel refuses `=Sheet1!SUM(1)` at entry; the engine keeps the text and
+  // evaluates it as a formula that failed to parse.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(4.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Sheet1!SUM(A2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Cell* cell = wb.sheet(0U).cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  ASSERT_TRUE(cell->cached_value.is_error());
+  EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Name);
+}
+
 TEST(WorkbookTest, SetDefinedNameLeavesUnrelatedSpillIntact) {
   // A defined-name edit used to route through `reindex_all_formulas`,
   // which cleared every sheet's committed spills workbook-wide regardless

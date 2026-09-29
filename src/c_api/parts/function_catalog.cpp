@@ -18,7 +18,8 @@
 // (`eval::lazy_form_names()` — IF / XLOOKUP / SUMIFS / VLOOKUP / ...),
 // or the parser's special forms (`eval::parser_special_form_names()` —
 // LET / LAMBDA). All three are enumerated and de-duplicated so the
-// catalog matches what the evaluator actually accepts. Lazy and
+// catalog matches what the evaluator actually accepts; a single name
+// resolves through `eval::resolve_builtin_function_name`. Lazy and
 // special forms carry no `FunctionDef`, so they have no arity data;
 // they report `min_arity = 0` and the unbounded `max_arity` sentinel.
 //
@@ -28,7 +29,6 @@
 // order.
 
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -36,6 +36,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "eval/builtin_names.h"
 #include "eval/function_registry.h"
 #include "eval/special_forms_catalog.h"
 #include "eval/tree_walker.h"
@@ -80,50 +81,6 @@ fm_function_availability_t function_availability(std::string_view canonical_name
   return FM_FUNCTION_IMPLEMENTED;
 }
 
-// Case-insensitive ASCII equality. Canonical catalog names are already
-// UPPERCASE, so this only has to fold the incoming query.
-bool ascii_iequals(std::string_view a, std::string_view b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    if (std::toupper(static_cast<unsigned char>(a[i])) != std::toupper(static_cast<unsigned char>(b[i]))) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// Returns the static canonical-name pointer for `name` if it belongs to the
-// lazy-dispatch or parser special-form tables (matched case-insensitively),
-// or nullptr otherwise. The returned pointer has program lifetime.
-const char* lookup_lazy_or_special(std::string_view name) {
-  for (const char* const* p = formulon::eval::lazy_form_names(); p != nullptr && *p != nullptr; ++p) {
-    if (ascii_iequals(name, *p)) {
-      return *p;
-    }
-  }
-  for (const char* const* p = formulon::eval::parser_special_form_names(); p != nullptr && *p != nullptr; ++p) {
-    if (ascii_iequals(name, *p)) {
-      return *p;
-    }
-  }
-  return nullptr;
-}
-
-// Resolves `name` to its canonical static-storage name pointer across the
-// same three sources the enumeration draws from: the eager
-// `FunctionRegistry` first, then the lazy-dispatch and parser
-// special-form tables. Returns nullptr when the name is recognised by
-// none. Used so canonicalize / localize accept every enumerated function
-// (XLOOKUP / SUMIFS / LET / LAMBDA / ...), not just the eager subset.
-const char* resolve_canonical_name(std::string_view name) {
-  if (const auto* def = formulon::eval::default_registry().lookup(name); def != nullptr) {
-    return def->canonical_name.data();
-  }
-  return lookup_lazy_or_special(name);
-}
-
 const std::vector<std::string>& sorted_function_names() {
   static const std::vector<std::string> names = []() {
     std::vector<std::string> out;
@@ -164,7 +121,7 @@ extern "C" fm_status_t fm_function_metadata(const char* name, std::int32_t local
     // (XLOOKUP / SUMIFS / VLOOKUP / ...) or a parser special form (LET /
     // LAMBDA). Those have no `FunctionDef`, so arity is unknown and is
     // reported as `min_arity = 0` with the unbounded `max_arity` sentinel.
-    const char* canonical = lookup_lazy_or_special(std::string_view(name));
+    const char* canonical = formulon::eval::resolve_builtin_function_name(std::string_view(name));
     if (canonical == nullptr) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_metadata: unknown function",
                                std::string("name=") + name);
@@ -220,7 +177,7 @@ extern "C" fm_status_t fm_function_localize(const char* canonical_name, std::int
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_localize: invalid locale",
                              "locale=" + std::to_string(locale));
   }
-  const char* canonical = resolve_canonical_name(std::string_view(canonical_name));
+  const char* canonical = formulon::eval::resolve_builtin_function_name(std::string_view(canonical_name));
   if (canonical == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_localize: unknown function",
                              std::string("canonical_name=") + canonical_name);
@@ -248,7 +205,7 @@ extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, std:
   // No alias table, so this is a case-insensitive canonical-name match
   // across the registry, lazy, and special-form tables, in every locale,
   // so that each enumerated function canonicalizes to itself.
-  const char* canonical = resolve_canonical_name(std::string_view(localized_name));
+  const char* canonical = formulon::eval::resolve_builtin_function_name(std::string_view(localized_name));
   if (canonical == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_function_canonicalize: unknown function",

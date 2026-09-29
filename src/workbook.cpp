@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "defined_name.h"
+#include "eval/builtin_names.h"
 #include "eval/dep_graph.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -1123,6 +1124,11 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
 
   Arena tmp_arena;
   parser::AstNode* root = parser::parse_strict(src, tmp_arena);
+  // Excel refuses a sheet- or book-qualified call to a built-in at entry;
+  // treat it like any other formula that fails to parse.
+  if (root != nullptr && eval::find_qualified_builtin_call(*root) != nullptr) {
+    root = nullptr;
+  }
 
   // The compound mutation runs under a single hold of the engine mutex
   // so a concurrent `recalc_parallel` does not see a half-applied

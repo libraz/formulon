@@ -230,6 +230,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/volatile_tracker.cpp
   src/eval/function_registry.cpp
   src/eval/special_forms_catalog.cpp
+  src/eval/builtin_names.cpp
   src/eval/builtins.cpp
   src/eval/builtins/aggregate.cpp
   src/eval/builtins/complex_num.cpp
