@@ -1445,6 +1445,20 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     return spills.error();
   }
   if (!state.tail.empty()) {
+    for (const XlsbSheetRange& range : sheet_ranges) {
+      XlsbExternSheetEntry entry;
+      const bool sheetless = range.itab_first == -2 && range.itab_last == -2;
+      const auto in_book = [&sheet_names](std::int32_t itab) {
+        return itab >= 0 && static_cast<std::size_t>(itab) < sheet_names.size();
+      };
+      entry.unresolved =
+          range.external_book != 0U || (!sheetless && !(in_book(range.itab_first) && in_book(range.itab_last)));
+      if (!sheetless && !entry.unresolved) {
+        entry.first = sheet_names[static_cast<std::size_t>(range.itab_first)];
+        entry.last = sheet_names[static_cast<std::size_t>(range.itab_last)];
+      }
+      state.tail.extern_sheets.push_back(std::move(entry));
+    }
     wb.sheet(sheet_index).set_xlsb_tail(state.tail);
   }
   return state;

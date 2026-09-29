@@ -363,6 +363,57 @@ INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureWriterBytes,
                          ::testing::Values("base", "cellis_ops", "cfvo", "dv_all", "prot", "prot2", "excelprot",
                                            "x14"));
 
+/// Payload of the first `type` record in `part`, hex-encoded.
+std::string RecordPayload(const std::vector<std::uint8_t>& xlsb, const std::string& part, std::uint16_t type) {
+  io::ZipReader zip;
+  if (!zip.open(SpanOf(xlsb))) {
+    return "no zip";
+  }
+  auto body = zip.read_entry(part);
+  if (!body) {
+    return "no part";
+  }
+  io::ByteSpan cursor = SpanOf(body.value());
+  while (cursor.size != 0U) {
+    auto rec = io::xlsb::read_record(cursor);
+    if (!rec) {
+      break;
+    }
+    if (rec.value().type == type) {
+      std::string out;
+      for (std::size_t i = 0; i < rec.value().payload.size; ++i) {
+        char hex[4];
+        std::snprintf(hex, sizeof(hex), "%02x ", rec.value().payload.data[i]);
+        out += hex;
+      }
+      return out;
+    }
+  }
+  return "absent";
+}
+
+// `iconbits` and `rel` each keep an x14 block Excel writes only in its
+// extension form, whose formula names sheet S2 through a BrtExternSheet
+// index. The written table has to keep that index naming S2, or Excel
+// refuses the file.
+TEST(XlsbFeatureRecords, RetainedX14SheetReferencesKeepTheirIndices) {
+  for (const char* name : {"iconbits", "rel"}) {
+    const std::vector<std::uint8_t> source = ReadFileBytes(FixturePath(name, "xlsb"));
+    auto written = io::xlsb::write_xlsb(ReadXlsbBytes(source));
+    ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+    EXPECT_EQ(RecordPayload(written.value(), "xl/workbook.bin", 362), RecordPayload(source, "xl/workbook.bin", 362))
+        << name;
+  }
+}
+
+TEST(XlsbFeatureRecords, RetainedX14SheetReferenceToARenamedSheetFailsClosed) {
+  Workbook wb = ReadXlsbBytes(ReadFileBytes(FixturePath("iconbits", "xlsb")));
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(1U, "Renamed")));
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_FALSE(static_cast<bool>(written));
+  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoXlsbRetainedPartStale);
+}
+
 TEST(XlsbFeatureRecords, WorkbookProtectionMatchesExcelsXlsxElement) {
   const Workbook legacy = ReadXlsbBytes(ReadFileBytes(FixturePath("prot", "xlsb")));
   EXPECT_EQ(legacy.workbook_protection_xml(), "<workbookProtection lockStructure=\"1\"/>");

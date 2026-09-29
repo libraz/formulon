@@ -106,6 +106,18 @@ struct WorksheetRawChild {
 /// from silently damaging an Excel-authored sheet.
 using WorksheetRawExtensions = std::vector<WorksheetRawChild>;
 
+/// One entry of a source `.xlsb` workbook's `BrtExternSheet` table, by
+/// sheet name so it survives sheet reordering.
+struct XlsbExternSheetEntry {
+  /// Sheet names the entry spans; both empty for the sheetless entry a
+  /// book-scope `PtgNameX` resolves through.
+  std::string first;
+  std::string last;
+  /// True for an entry the writer cannot reproduce: another workbook's
+  /// sheets, or a sheet index outside the source workbook.
+  bool unresolved = false;
+};
+
 /// Worksheet records captured verbatim from an `.xlsb` sheet part that the
 /// calculation model does not express: conditional formatting, data
 /// validation, hyperlinks, auto-filter, print setup, manual breaks, and the
@@ -122,11 +134,11 @@ using WorksheetRawExtensions = std::vector<WorksheetRawChild>;
 /// keeping these slots preserves source order even when a source omits one of
 /// those blocks.
 ///
-/// Retention is byte-verbatim, with the same consequences the raw-XML
+/// Retention is byte-verbatim, with the same consequence the raw-XML
 /// retention already carries: a row/column edit does not remap coordinates
-/// inside these records, and a retained formula blob's sheet-qualified
-/// references resolve through the regenerated `BrtExternSheet` table rather
-/// than the source one.
+/// inside these records. A retained formula blob's sheet-qualified
+/// references are `ixti` indices into the source `BrtExternSheet` table,
+/// which `extern_sheets` records so the writer can keep those indices.
 struct XlsbSheetTail {
   /// Records between the end of the cell table and the merged-cell block.
   std::vector<std::uint8_t> before_merges;
@@ -136,6 +148,8 @@ struct XlsbSheetTail {
   std::vector<std::uint8_t> after_merges_before_hyperlinks;
   /// Records after the model-owned `BrtHLink` block, up to `BrtEndSheet`.
   std::vector<std::uint8_t> after_hyperlinks;
+  /// The source workbook's `BrtExternSheet` table, in `ixti` order.
+  std::vector<XlsbExternSheetEntry> extern_sheets;
 
   bool empty() const noexcept {
     return before_merges.empty() && after_merges_before_hyperlinks.empty() && after_hyperlinks.empty();

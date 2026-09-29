@@ -112,6 +112,11 @@ constexpr std::uint16_t kBrtFileVersion = 128;
 constexpr std::uint16_t kBrtBeginBookViews = 135;
 constexpr std::uint16_t kBrtWbView = 158;
 constexpr std::uint16_t kBrtEndBookViews = 136;
+// Opens a future-record block in a sheet tail (x14 extensions).
+constexpr std::uint16_t kBrtFrtBegin = 35;
+// `BrtExternSheet` sheet index of the sheetless entry a book-scope
+// `PtgNameX` resolves through.
+constexpr std::int32_t kXtiNoSheet = -2;
 
 // ---------------------------------------------------------------------------
 // Emission plan: where do passthrough parts land, do any collide?
@@ -1036,6 +1041,57 @@ void CollectSheetRangesFromFormula(std::string_view formula, const std::vector<s
   collect_ptg_sheet_ranges(*root, sheet_names, ranges, seen);
 }
 
+/// True when `records` holds a future-record block (BrtFRTBegin). Such
+/// blocks -- x14 conditional formats and validations -- are the retained
+/// content that carries sheet-qualified formulas.
+bool HoldsFrtBlock(const std::vector<std::uint8_t>& records) {
+  ByteSpan cursor{records.data(), records.size()};
+  while (cursor.size != 0U) {
+    auto rec = read_record(cursor);
+    if (!rec) {
+      return false;
+    }
+    if (rec.value().type == kBrtFrtBegin) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// The leading entries of the `BrtExternSheet` table: the source
+/// workbook's table, in its `ixti` order, when a retained sheet tail holds
+/// a block that may reference it, so those verbatim indices keep naming
+/// the same sheets. Fails when an entry no longer names a sheet of this
+/// workbook (renamed or removed since load, or another workbook's), since
+/// the retained bytes would then reference the wrong sheet.
+Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb) {
+  SheetRangeTable seed;
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    const XlsbSheetTail& tail = wb.sheet(i).xlsb_tail();
+    if (tail.extern_sheets.empty() ||
+        !(HoldsFrtBlock(tail.before_merges) || HoldsFrtBlock(tail.after_merges_before_hyperlinks) ||
+          HoldsFrtBlock(tail.after_hyperlinks))) {
+      continue;
+    }
+    for (const XlsbExternSheetEntry& entry : tail.extern_sheets) {
+      if (entry.first.empty() && entry.last.empty() && !entry.unresolved) {
+        seed.emplace_back(kXtiNoSheet, kXtiNoSheet);
+        continue;
+      }
+      const std::size_t first = wb.sheet_index_by_name(entry.first);
+      const std::size_t last = wb.sheet_index_by_name(entry.last);
+      if (entry.unresolved || first >= wb.sheet_count() || last >= wb.sheet_count()) {
+        return make_error(FormulonErrorCode::kIoXlsbRetainedPartStale,
+                          "retained XLSB sheet records reference a sheet this workbook no longer has",
+                          "context=write_xlsb sheet=" + wb.sheet(i).name() + " ref=" + entry.first);
+      }
+      seed.emplace_back(static_cast<std::int32_t>(first), static_cast<std::int32_t>(last));
+    }
+    break;
+  }
+  return seed;
+}
+
 /// Builds the `BrtExternSheet` table for the whole workbook: every
 /// distinct sheet-qualified reference span (single-sheet `(itab, itab)`
 /// or a genuine 3-D range `(itabFirst, itabLast)`) any sheet formula (see
@@ -1047,16 +1103,25 @@ void CollectSheetRangesFromFormula(std::string_view formula, const std::vector<s
 /// sheet index (see `ptg_reader.cpp`'s `sheet_for_ixti` /
 /// `sheet_range_for_ixti`), so single- and multi-sheet references
 /// cannot use two different numbering schemes in the same file.
-SheetRangeTable BuildSheetRangeTable(const Workbook& wb, const std::vector<std::string>& sheet_names) {
-  SheetRangeTable ranges;
+Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const std::vector<std::string>& sheet_names) {
+  SheetRangeTable collected;
   std::unordered_set<std::uint64_t> seen;
   for (const DefinedName& dn : wb.defined_names()) {
-    CollectSheetRangesFromFormula(dn.formula, sheet_names, ranges, seen);
+    CollectSheetRangesFromFormula(dn.formula, sheet_names, collected, seen);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula) {
-      CollectSheetRangesFromFormula(formula, sheet_names, ranges, seen);
+      CollectSheetRangesFromFormula(formula, sheet_names, collected, seen);
     });
+  }
+  auto ranges = SeedFromRetainedTails(wb);
+  if (!ranges) {
+    return ranges.error();
+  }
+  for (const auto& range : collected) {
+    if (std::find(ranges.value().begin(), ranges.value().end(), range) == ranges.value().end()) {
+      ranges.value().push_back(range);
+    }
   }
   return ranges;
 }
@@ -1358,7 +1423,11 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // `ixti` for, built once so the assignment is shared between the
   // sheet bodies below and the `BrtExternSheet` record `BuildWorkbookBin`
   // emits into `xl/workbook.bin`.
-  const SheetRangeTable sheet_ranges = BuildSheetRangeTable(workbook, sheet_names);
+  auto sheet_ranges_or = BuildSheetRangeTable(workbook, sheet_names);
+  if (!sheet_ranges_or) {
+    return sheet_ranges_or.error();
+  }
+  const SheetRangeTable& sheet_ranges = sheet_ranges_or.value();
 
   SstBuilder sst;
   const DynamicArrayMetadataPlan dynamic_array = BuildDynamicArrayMetadataPlan(workbook);
