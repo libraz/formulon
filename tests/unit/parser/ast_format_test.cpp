@@ -211,6 +211,36 @@ TEST(AstFormat, NameRef) {
   ExpectRoundTripsToSame("=foo");
 }
 
+TEST(AstFormat, SheetQualifiedNameRef) {
+  ExpectRoundTripsToSame("=Sheet1!Rate");
+  ExpectRoundTripsToSame("='My Sheet'!Rate*2");
+  ExpectRoundTripsToSame("='It''s'!Rate");
+  ExpectRoundTripsToSame("=SUM(Sheet2!Rng,Rng)");
+}
+
+// A qualified name whose text reads as a column still needs the parens that
+// keep `Sheet1!AB:CD` from folding into a whole-column range.
+TEST(AstFormat, SheetQualifiedColumnLikeNameInRangeKeepsParens) {
+  Arena a;
+  AstNode* lhs = make_sheet_name_ref(a, "Sheet1", "AB", false);
+  AstNode* rhs = make_name_ref(a, "CD");
+  ASSERT_NE(lhs, nullptr);
+  ASSERT_NE(rhs, nullptr);
+  AstNode* range = make_range_op(a, lhs, rhs);
+  ASSERT_NE(range, nullptr);
+  EXPECT_EQ(format_formula(*range), "(Sheet1!AB):CD");
+}
+
+TEST(AstFormat, StorageFormNeverPrefixesSheetQualifiedName) {
+  Arena a;
+  Parser p("=LET(Rate,2,Rate*Sheet1!Rate)", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(p.errors().empty());
+  const std::string stored = format_formula_storage(*root, [](std::string_view n) { return std::string(n); });
+  EXPECT_NE(stored.find("_xlpm.Rate*Sheet1!Rate"), std::string::npos) << stored;
+}
+
 TEST(AstFormat, SpillRef) {
   ExpectRoundTripsToSame("=A1#");
 }
@@ -234,6 +264,12 @@ TEST(AstFormat, StructuredRefRoundTripsAll) {
 }
 TEST(AstFormat, StructuredRefRoundTripsHeaderColumn) {
   ExpectRoundTripsToSame("=Tbl[[#Headers],[Region]]");
+}
+TEST(AstFormat, StructuredRefRoundTripsEscapedColumnNames) {
+  ExpectRoundTripsToSame("=Table1['#Items]");
+  ExpectRoundTripsToSame("=Table1[Col'[x']]");
+  ExpectRoundTripsToSame("=Table1[[#This Row],[Bob''s]]");
+  ExpectRoundTripsToSame("=SUM(Table1['#Items],'My Sheet'!A1)");
 }
 
 // ---------------------------------------------------------------------------

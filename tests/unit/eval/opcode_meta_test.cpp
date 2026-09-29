@@ -116,6 +116,8 @@ TEST(OpcodeMeta, PoolReferencesMatchCompilerEncoding) {
   EXPECT_EQ(opcode_meta(OpCode::LoadRef).a, OperandA::RefsIndex);
   EXPECT_EQ(opcode_meta(OpCode::LoadSpillRef).a, OperandA::RefsIndex);
   EXPECT_EQ(opcode_meta(OpCode::LoadName).a, OperandA::NamesIndex);
+  // A non-zero `b` carries the sheet qualifier of `Sheet2!Name`.
+  EXPECT_EQ(opcode_meta(OpCode::LoadName).b, OperandB::Packed);
   // Structured-ref packs the column-name index plus a modifier into `b`.
   EXPECT_EQ(opcode_meta(OpCode::LoadStructRef).a, OperandA::NamesIndex);
   EXPECT_EQ(opcode_meta(OpCode::LoadStructRef).b, OperandB::Packed);

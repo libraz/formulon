@@ -42,6 +42,10 @@ std::optional<RefTransform::Ref3DSheetSpan> RefTransform::apply_ref3d_span(std::
   return Ref3DSheetSpan{begin, end};
 }
 
+std::optional<std::string_view> RefTransform::apply_name_sheet(std::string_view sheet) const {
+  return sheet;
+}
+
 namespace {
 
 // Excel's coordinate ceilings. Used by the relative-shift transform to
@@ -158,6 +162,21 @@ const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransf
     return make_ref3d_range(arena, final_begin, final_end, *rewritten_first, *rewritten_last);
   }
   return make_ref3d(arena, final_begin, final_end, *rewritten_first);
+}
+
+const AstNode* TransformNameRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const std::string_view sheet = node.as_name_sheet();
+  if (sheet.empty()) {
+    return &node;
+  }
+  const std::optional<std::string_view> mapped = transform.apply_name_sheet(sheet);
+  if (!mapped.has_value()) {
+    return MakeRefError(arena);
+  }
+  if (*mapped == sheet) {
+    return &node;
+  }
+  return make_sheet_name_ref(arena, *mapped, node.as_name(), sheet_name_needs_quoting(*mapped));
 }
 
 const AstNode* TransformUnary(const AstNode& node, Arena& arena, const RefTransform& transform) {
@@ -438,7 +457,6 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
     case NodeKind::Literal:
     case NodeKind::ErrorLiteral:
     case NodeKind::ErrorPlaceholder:
-    case NodeKind::NameRef:
     case NodeKind::StructuredRef:
     // A cross-workbook reference addresses another file's grid. Inserting
     // or deleting rows here cannot move a cell there, and Excel leaves
@@ -451,6 +469,8 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
       return TransformSpillRef(node, arena, transform);
     case NodeKind::Ref3D:
       return TransformRef3D(node, arena, transform);
+    case NodeKind::NameRef:
+      return TransformNameRef(node, arena, transform);
     case NodeKind::UnaryOp:
       return TransformUnary(node, arena, transform);
     case NodeKind::BinaryOp:

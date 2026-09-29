@@ -347,6 +347,15 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // agree. An unbound identifier surfaces #NAME? from the resolver.
         Value v = Value::error(ErrorCode::Name);
         bool bound_in_env = false;
+        if (ins.b != 0U) {
+          auto sheet = name_at(bc, ins.b - 1U);
+          if (!sheet) {
+            return sheet.error();
+          }
+          RETURN_IF_ERROR(push_value(s, resolve_sheet_defined_name(*sheet.value(), *n.value(), arena, registry, ctx)));
+          ++pc;
+          break;
+        }
         if (const NameEnv* env = ctx.name_env(); env != nullptr) {
           if (const Value* bound = env->lookup(*n.value()); bound != nullptr) {
             v = *bound;

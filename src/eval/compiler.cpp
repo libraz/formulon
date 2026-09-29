@@ -316,6 +316,14 @@ Expected<void, Error> compile_structured_ref(BodyState& bs, const parser::AstNod
 
 Expected<void, Error> compile_name_ref(BodyState& bs, const parser::AstNode& node) {
   std::string_view name = node.as_name();
+  // `Sheet1!Name`: b = 1 + names-pool index of the sheet qualifier. It is
+  // never a lexical binding.
+  if (const std::string_view sheet = node.as_name_sheet(); !sheet.empty()) {
+    ASSIGN_OR_RETURN(auto idx, push_name(bs, name));
+    ASSIGN_OR_RETURN(auto sheet_idx, push_name(bs, sheet));
+    RETURN_IF_ERROR(emit(bs, node, OpCode::LoadName, idx, sheet_idx + 1U));
+    return {};
+  }
   // Resolve against active LET / Lambda scope first (innermost wins).
   const LexicalBinding binding = lookup_lexical_binding(bs, name);
   if (binding.kind != LexicalBinding::Kind::None) {

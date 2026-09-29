@@ -144,6 +144,42 @@ TEST(ParserStructuredRef, EmptyBracketsAcceptedAsWholeTableData) {
   EXPECT_EQ(root->as_structured_ref_column(), "");
 }
 
+TEST(ParserStructuredRef, EscapedCharactersKeepBracketBoundaries) {
+  // ECMA-376 18.5.1.10: inside the brackets an apostrophe escapes the next
+  // `#`, `'`, `[` or `]`; it never opens a quoted sheet name.
+  struct Case {
+    const char* src;
+    const char* payload;
+  };
+  const Case cases[] = {
+      {"=Table1['#Items]", "'#Items"},
+      {"=Table1[Col'[x']]", "Col'[x']"},
+      {"=Table1[[#This Row],[Bob''s]]", "[#This Row],[Bob''s]"},
+      {"=Table1[[#This Row],['#Items]]", "[#This Row],['#Items]"},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(c.src);
+    Arena a;
+    Parser p(c.src, a);
+    AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr);
+    EXPECT_TRUE(p.errors().empty());
+    ASSERT_EQ(root->kind(), NodeKind::StructuredRef);
+    EXPECT_EQ(root->as_structured_ref_table(), "Table1");
+    EXPECT_EQ(root->as_structured_ref_column(), c.payload);
+  }
+}
+
+TEST(ParserStructuredRef, QuotedSheetAfterEscapedBracketStillParses) {
+  // Leaving the bracket restores sheet-name quoting.
+  Arena a;
+  Parser p("=Table1['#Items]+'My Sheet'!A1", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(p.errors().empty());
+  ASSERT_EQ(root->kind(), NodeKind::BinaryOp);
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

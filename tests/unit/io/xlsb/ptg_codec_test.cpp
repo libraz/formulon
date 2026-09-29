@@ -119,6 +119,36 @@ TEST(XlsbPtgCodec, AttrChooseWithMultipleBranchesSkipsU16JumpOffsets) {
   EXPECT_EQ(parser::format_formula(*decoded.value()), "CHOOSE(2,10,20,30)");
 }
 
+// A `BrtName` record local to a sheet other than the formula's own is only
+// reachable as `Sheet!Name`; one local to the host sheet, or workbook
+// scoped, stays unqualified. `PtgNameX` through this workbook's own
+// ExternSheet entry names the same records.
+TEST(XlsbPtgCodec, NameLocalToAnotherSheetDecodesSheetQualified) {
+  const std::vector<std::string> sheets = {"Sheet1", "My Sheet"};
+  const std::vector<XlsbName> names = {XlsbName{1, "Local", false}, XlsbName{0, "Own", false},
+                                       XlsbName{-1, "Global", false}};
+  std::vector<XlsbSheetRange> ranges(1);
+  ranges[0].itab_first = 1;
+  ranges[0].itab_last = 1;
+  struct Case {
+    std::vector<std::uint8_t> rgce;
+    const char* want;
+  };
+  const Case cases[] = {
+      {{0x23, 0x01, 0x00, 0x00, 0x00}, "'My Sheet'!Local"},
+      {{0x23, 0x02, 0x00, 0x00, 0x00}, "Own"},
+      {{0x23, 0x03, 0x00, 0x00, 0x00}, "Global"},
+      {{0x39, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}, "'My Sheet'!Local"},
+  };
+  for (const Case& c : cases) {
+    Arena arena;
+    auto decoded = decode_ptgs(ByteSpan{c.rgce.data(), c.rgce.size()}, {}, arena, sheets, names, ranges, {},
+                               /*host_itab=*/0);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
+    EXPECT_EQ(parser::format_formula(*decoded.value()), c.want);
+  }
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }

@@ -37,7 +37,7 @@ namespace {
 
 // Walker state: collects results into `out` and tracks already-emitted cells
 // in `seen` so the dedup runs in one O(N) pass. `name_stack` holds the
-// lowercase names currently being expanded so a self-referential or mutually
+// definitions currently being expanded so a self-referential or mutually
 // recursive defined name (`Loop = Loop + 1`) is broken silently rather than
 // driving the walker into unbounded recursion. `arena` owns the parsed ASTs
 // produced for defined-name expansion; it is local to a single
@@ -53,7 +53,7 @@ struct WalkState {
   std::uint16_t current_sheet_id;
   const Workbook* workbook;
   Arena* name_arena;
-  std::vector<std::string> name_stack;
+  std::vector<const io::DefinedName*> name_stack;
   std::vector<LexicalBinding> lexical_stack;
   std::vector<const parser::AstNode*> lambda_stack;
 };
@@ -66,6 +66,16 @@ const WalkState::LexicalBinding* lookup_lexical(std::string_view name, const Wal
     }
   }
   return nullptr;
+}
+
+// The definition a `NameRef` denotes: `Sheet1!Name` in Sheet1's scope, an
+// unqualified name in the formula's own.
+const io::DefinedName* find_name_ref_definition(const parser::AstNode& name_ref, const WalkState& state) {
+  const std::string_view sheet = name_ref.as_name_sheet();
+  if (!sheet.empty()) {
+    return find_sheet_defined_name(*state.workbook, sheet, name_ref.as_name());
+  }
+  return find_defined_name(*state.workbook, state.current_sheet_id, name_ref.as_name());
 }
 
 bool lambda_is_active(const parser::AstNode* lambda, const WalkState& state) noexcept {
@@ -216,8 +226,8 @@ void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state) {
 // Expands a defined-name reference: parses its formula text in the
 // extractor-local arena and recurses into the resulting AST through the
 // shared `walk()`. Cycles (`Loop = Loop + 1`, `A = B; B = A`) are detected
-// via `state.name_stack`: the lowercase form of every name currently being
-// expanded is pushed before recursion and popped after. A repeated entry
+// via `state.name_stack`: every definition currently being expanded is
+// pushed before recursion and popped after. A repeated entry
 // causes a silent skip — no volatility flag, no diagnostic — matching the
 // "graceful skip on unresolvable refs" policy already used for unknown
 // sheets and out-of-bounds coordinates. Parser failures on the defined-
@@ -225,11 +235,11 @@ void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state) {
 // formulas exist in the wild and the dep extractor is not the right layer
 // to surface them.
 void expand_defined_name(const io::DefinedName& def, WalkState& state, bool invoked) {
-  // Cycle detection. Lowercase the name for the stack comparison so a
-  // mixed-case re-entry (`Foo` -> `=foo+1`) is still caught.
-  std::string lowered = strings::to_ascii_lower(def.name);
-  for (const auto& active : state.name_stack) {
-    if (active == lowered) {
+  // Cycle detection by definition identity: a mixed-case re-entry
+  // (`Foo` -> `=foo+1`) resolves to the same entry, while `Sheet1!X` naming
+  // `Sheet2!X` reaches a different one.
+  for (const io::DefinedName* active : state.name_stack) {
+    if (active == &def) {
       return;
     }
   }
@@ -252,7 +262,7 @@ void expand_defined_name(const io::DefinedName& def, WalkState& state, bool invo
   // definition body.
   std::vector<WalkState::LexicalBinding> saved_lexical;
   saved_lexical.swap(state.lexical_stack);
-  state.name_stack.push_back(std::move(lowered));
+  state.name_stack.push_back(&def);
   if (invoked && root->kind() == parser::NodeKind::Lambda) {
     // A direct defined-name LAMBDA body is evaluated by a call, so descend
     // into it with parameter names shadowing workbook names. A bare NameRef
@@ -263,7 +273,7 @@ void expand_defined_name(const io::DefinedName& def, WalkState& state, bool invo
     // Preserve the common alias shape (`Alias = NamedLambda`) without
     // repeatedly walking the lambda body. Any non-defined alias is handled
     // by the ordinary NameRef walker and contributes no static deps.
-    const io::DefinedName* aliased = find_defined_name(*state.workbook, state.current_sheet_id, root->as_name());
+    const io::DefinedName* aliased = find_name_ref_definition(*root, state);
     if (aliased != nullptr) {
       expand_defined_name(*aliased, state, /*invoked=*/true);
     }
@@ -503,7 +513,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
       // itself is already accounted for by its initializer (or by the
       // invoked lambda body), so a bare lexical NameRef contributes no
       // additional workbook dependency.
-      if (lookup_lexical(node.as_name(), state) != nullptr) {
+      if (node.as_name_sheet().empty() && lookup_lexical(node.as_name(), state) != nullptr) {
         return;
       }
       // Resolve against the workbook's defined-name list. A miss (the name
@@ -512,7 +522,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
       // unknown sheet qualifiers and out-of-bounds coordinates. On a hit we
       // re-enter `walk()` with the parsed body so cells, ranges, volatility,
       // and nested NameRefs all surface naturally.
-      const io::DefinedName* def = find_defined_name(*state.workbook, state.current_sheet_id, node.as_name());
+      const io::DefinedName* def = find_name_ref_definition(node, state);
       if (def == nullptr) {
         return;
       }
@@ -625,7 +635,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
         const parser::AstNode* lambda = nullptr;
         if (expr.kind() == parser::NodeKind::Lambda) {
           lambda = &expr;
-        } else if (expr.kind() == parser::NodeKind::NameRef) {
+        } else if (expr.kind() == parser::NodeKind::NameRef && expr.as_name_sheet().empty()) {
           if (const WalkState::LexicalBinding* prior = lookup_lexical(expr.as_name(), state); prior != nullptr) {
             lambda = prior->lambda;
           }

@@ -243,7 +243,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                                               const std::vector<std::string>& sheet_names,
                                               const std::vector<XlsbName>& name_table,
                                               const std::vector<XlsbSheetRange>& sheet_ranges,
-                                              const XlsbExternalBooks& external_books) {
+                                              const XlsbExternalBooks& external_books, std::int32_t host_itab) {
   std::vector<parser::AstNode*> stack;
   // `PtgArray` stores only an 8-byte placeholder inline (see its case
   // below); the real dimensions + elements are consumed from this
@@ -343,6 +343,24 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       return {};
     }
     return name_table[ilbl - 1].name;
+  };
+
+  // Builds the `NameRef` for this workbook's `name_table[ilbl - 1]`,
+  // qualifying it when the entry is local to a sheet other than the host.
+  auto make_local_name_ref = [&arena, &name_table, &sheet_names, host_itab](std::uint32_t ilbl) -> parser::AstNode* {
+    const XlsbName& entry = name_table[ilbl - 1];
+    // `_xlpm.`-prefixed names are LET/LAMBDA-local parameter references;
+    // strip the storage prefix at every use site (not just the LET
+    // binding-name slot decoded_future_function handles) so a bare `x*3`
+    // reference inside a LET body matches the plain-identifier `NameRef`
+    // the text parser would have produced for the same formula.
+    const std::string_view name = entry.name;
+    const std::string_view display_name = starts_with_ci(name, "_xlpm.") ? name.substr(6) : name;
+    if (entry.itab >= 0 && entry.itab != host_itab && static_cast<std::size_t>(entry.itab) < sheet_names.size()) {
+      const std::string& sheet = sheet_names[static_cast<std::size_t>(entry.itab)];
+      return parser::make_sheet_name_ref(arena, sheet, display_name, /*sheet_quoted=*/false);
+    }
+    return parser::make_name_ref(arena, arena.intern(display_name));
   };
 
   // Resolves a `PtgFuncVar` with the `id == 255` future-function
@@ -679,14 +697,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb PtgName: ilbl out of range",
                             "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
         }
-        // `_xlpm.`-prefixed names are LET/LAMBDA-local parameter
-        // references; strip the storage prefix at every use site (not
-        // just the LET binding-name slot decoded_future_function
-        // handles) so a bare `x*3` reference inside a LET body matches
-        // the plain-identifier `NameRef` the text parser would have
-        // produced for the same formula.
-        const std::string_view display_name = starts_with_ci(name, "_xlpm.") ? name.substr(6) : name;
-        parser::AstNode* n = parser::make_name_ref(arena, arena.intern(display_name));
+        parser::AstNode* n = make_local_name_ref(ilbl_or.value());
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgName)", "context=xlsb_ptg_reader");
         }
@@ -710,6 +721,20 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           return ilbl_or.error();
         }
         const std::uint32_t ixti = ixti_or.value();
+        // An ExternSheet entry of this workbook names one of its own
+        // `BrtName` records; that record's own scope decides the qualifier.
+        if (ixti < sheet_ranges.size() && sheet_ranges[ixti].external_book == 0U) {
+          if (resolve_name(ilbl_or.value()).empty()) {
+            return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb PtgNameX: ilbl out of range",
+                              "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
+          }
+          parser::AstNode* n = make_local_name_ref(ilbl_or.value());
+          if (n == nullptr) {
+            return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNameX)", "context=xlsb_ptg_reader");
+          }
+          stack.push_back(n);
+          break;
+        }
         const std::uint32_t book = ixti < sheet_ranges.size() ? sheet_ranges[ixti].external_book : 0U;
         if (book == 0 || book > external_books.size()) {
           return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,

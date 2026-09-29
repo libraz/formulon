@@ -230,7 +230,8 @@ const LambdaValue* check_callable(const LambdaValue* lv, std::uint32_t call_arit
 
 const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t call_arity, Arena& arena,
                                     const FunctionRegistry& registry, const EvalContext& ctx, Value* out_err) {
-  if (arg.kind() == parser::NodeKind::NameRef) {
+  // `Sheet1!Fn` is neither a binding nor a built-in; it evaluates below.
+  if (arg.kind() == parser::NodeKind::NameRef && arg.as_name_sheet().empty()) {
     const std::string_view name = arg.as_name();
     const NameEnv* env = ctx.name_env();
     // A name bound in scope shadows any built-in of the same spelling.

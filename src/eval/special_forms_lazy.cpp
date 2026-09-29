@@ -743,7 +743,7 @@ Value eval_isomitted_lazy(const parser::AstNode& call, Arena& /*arena*/, const F
     return Value::error(ErrorCode::Value);
   }
   const parser::AstNode& arg = call.as_call_arg(0);
-  if (arg.kind() != parser::NodeKind::NameRef) {
+  if (arg.kind() != parser::NodeKind::NameRef || !arg.as_name_sheet().empty()) {
     return Value::boolean(false);
   }
   const NameEnv* env = ctx.name_env();

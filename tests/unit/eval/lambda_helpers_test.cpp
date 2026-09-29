@@ -846,10 +846,13 @@ TEST(LambdaHelpersEta, MakearrayAcceptsBareFunctionName) {
 TEST(LambdaHelpersEta, BareNameMatchesExplicitLambda) {
   // A row slice wider than a function's direct-argument limit still reaches
   // SUM as one range, exactly as `LAMBDA(r, SUM(r))` does.
+  // `EvalSrc` resets its arenas on every call, so render each result before
+  // the next evaluation reuses the memory an array result points into.
   const Value eta = EvalSrc("=BYROW(SEQUENCE(1,300),SUM)");
-  const Value explicit_lambda = EvalSrc("=BYROW(SEQUENCE(1,300),LAMBDA(r,SUM(r)))");
   ASSERT_TRUE(eta.is_number() || eta.is_array()) << eta.debug_to_string();
-  EXPECT_EQ(eta.debug_to_string(), explicit_lambda.debug_to_string());
+  const std::string eta_text = eta.debug_to_string();
+  const Value explicit_lambda = EvalSrc("=BYROW(SEQUENCE(1,300),LAMBDA(r,SUM(r)))");
+  EXPECT_EQ(eta_text, explicit_lambda.debug_to_string());
 }
 
 TEST(LambdaHelpersEta, BoundNameShadowsBuiltin) {

@@ -954,7 +954,8 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
     return {};
   }
   Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
-  auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books);
+  auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books,
+                            static_cast<std::int32_t>(sheet_index));
   if (!ast_or) {
     StructuredLog("xlsb.formula.not_decoded")
         .field("sheet_index", static_cast<std::int64_t>(sheet_index))

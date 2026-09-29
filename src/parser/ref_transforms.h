@@ -46,6 +46,7 @@ class SheetRenameTransform final : public RefTransform {
 
   std::optional<Reference> apply(const Reference& ref) const override;
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
+  std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override;
 
  private:
   std::string_view old_name_;
@@ -78,6 +79,7 @@ class SheetRemovalTransform final : public RefTransform {
 
   std::optional<Reference> apply(const Reference& ref) const override;
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
+  std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override;
 
  private:
   static constexpr std::size_t kInvalidSheetIndex = static_cast<std::size_t>(-1);

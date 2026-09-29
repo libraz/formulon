@@ -135,7 +135,12 @@ using XlsbExternalBooks = std::vector<XlsbExternalBook>;
 /// `sheet_names` maps a 0-based sheet index to a display name.
 ///
 /// `name_table` is the workbook's `BrtName` list in declaration order;
-/// `PtgName`'s 1-based `ilbl` indexes it (`name_table[ilbl - 1]`).
+/// `PtgName`'s 1-based `ilbl` indexes it (`name_table[ilbl - 1]`). An
+/// entry local to a sheet other than `host_itab` decodes to the
+/// sheet-qualified `Sheet2!Local`, the only spelling that reaches it from
+/// the formula's sheet. `host_itab` is the 0-based sheet of a cell formula,
+/// or `-1` (the default) where no sheet scope applies, such as a
+/// defined-name body.
 ///
 /// `sheet_ranges` is the workbook's `BrtExternSheet` list; `PtgRef3d` /
 /// `PtgArea3d`'s `ixti` directly indexes it (0-based) to resolve the
@@ -164,7 +169,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                                               const std::vector<std::string>& sheet_names,
                                               const std::vector<XlsbName>& name_table,
                                               const std::vector<XlsbSheetRange>& sheet_ranges,
-                                              const XlsbExternalBooks& external_books);
+                                              const XlsbExternalBooks& external_books, std::int32_t host_itab = -1);
 
 }  // namespace xlsb
 }  // namespace io

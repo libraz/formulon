@@ -653,7 +653,11 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       // workbook / sheet-scoped defined name, so `=LET(Rate, 2, Rate)` reads
       // the binding, not a `Rate` defined name. When no binding matches, fall
       // through to defined-name resolution, which returns `#NAME?` itself when
-      // the name is undefined in scope.
+      // the name is undefined in scope. `Sheet1!Name` is never a lexical
+      // binding and is looked up in Sheet1's scope.
+      if (const std::string_view sheet = node.as_name_sheet(); !sheet.empty()) {
+        return resolve_sheet_defined_name(sheet, node.as_name(), arena, registry, ctx);
+      }
       const NameEnv* env = ctx.name_env();
       if (env != nullptr) {
         if (const Value* bound = env->lookup(node.as_name()); bound != nullptr) {
@@ -707,7 +711,7 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
         const parser::AstNode* expr_for_binding = nullptr;
         if (expr_node.kind() == parser::NodeKind::Ref || is_range_shaped_ast(expr_node)) {
           expr_for_binding = &expr_node;
-        } else if (expr_node.kind() == parser::NodeKind::NameRef) {
+        } else if (expr_node.kind() == parser::NodeKind::NameRef && expr_node.as_name_sheet().empty()) {
           // `env` already reflects every previously bound name in this LET
           // (and, via `parent`, any outer LETs); a single lookup walks the
           // whole chain.

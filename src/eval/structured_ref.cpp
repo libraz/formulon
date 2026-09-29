@@ -75,7 +75,9 @@ bool split_top_level_commas(std::string_view payload, std::vector<std::string_vi
   std::size_t start = 0;
   for (std::size_t i = 0; i < payload.size(); ++i) {
     const char c = payload[i];
-    if (c == '[') {
+    if (c == '\'') {
+      ++i;  // an escaped character is never bracket or comma punctuation.
+    } else if (c == '[') {
       ++depth;
     } else if (c == ']') {
       if (depth == 0) {
@@ -98,11 +100,21 @@ bool split_top_level_commas(std::string_view payload, std::vector<std::string_vi
 /// input is returned unchanged. Single-sided brackets are malformed.
 bool strip_outer_brackets(std::string_view s, std::string_view* out) {
   s = ascii_trim(s);
-  if (s.size() >= 2 && s.front() == '[' && s.back() == ']') {
+  // A trailing `]` is punctuation only when the escape grammar does not
+  // consume it as the literal half of `']` (`Col'[x']` is unbracketed).
+  bool closes = false;
+  for (std::size_t i = 0; i < s.size(); ++i) {
+    if (s[i] == '\'') {
+      ++i;
+    } else if (i + 1 == s.size()) {
+      closes = s[i] == ']';
+    }
+  }
+  if (s.size() >= 2 && s.front() == '[' && closes) {
     *out = s.substr(1, s.size() - 2);
     return true;
   }
-  if (!s.empty() && (s.front() == '[' || s.back() == ']')) {
+  if (!s.empty() && (s.front() == '[' || closes)) {
     return false;
   }
   *out = s;
@@ -123,7 +135,9 @@ bool split_column_range(std::string_view text, StructuredRefSelector* sel) {
   std::size_t colon_at = std::string_view::npos;
   for (std::size_t i = 0; i < text.size(); ++i) {
     const char c = text[i];
-    if (c == '[') {
+    if (c == '\'') {
+      ++i;
+    } else if (c == '[') {
       ++depth;
     } else if (c == ']') {
       if (depth == 0) {

@@ -37,7 +37,8 @@ inline const parser::AstNode& resolve_name_ast(const parser::AstNode& node, cons
   // in the single digits). A bounded loop also defends against a future
   // pathological `LET(a, b, LET(b, a, ...))` without per-call cycle state.
   for (int hops = 0; hops < 32; ++hops) {
-    if (current->kind() != parser::NodeKind::NameRef) {
+    // A sheet-qualified name (`Sheet1!r`) is a workbook name, never a binding.
+    if (current->kind() != parser::NodeKind::NameRef || !current->as_name_sheet().empty()) {
       return *current;
     }
     const parser::AstNode* next = env->lookup_ast(current->as_name());

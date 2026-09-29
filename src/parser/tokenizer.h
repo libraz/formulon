@@ -130,6 +130,10 @@ class Tokenizer {
   void scan_whitespace();
   void scan_string();
   void scan_quoted_sheet_name();
+  // Consumes an apostrophe inside `[...]` together with the codepoint it
+  // escapes (`'#`, `''`, `'[`, `']`) as one `Ident` token, so an escaped
+  // bracket never reaches the parser as bracket punctuation.
+  void scan_structured_ref_escape();
   void scan_number();
   void scan_error_literal();
   void scan_ident_or_cellref_or_bool();
@@ -187,6 +191,11 @@ class Tokenizer {
   // `A1#`, `OFFSET(A1,1,0)#`, `(A4)#`, `Anchor#` -- so a `CellRef`, a
   // closing parenthesis and an identifier all arm it.
   std::size_t last_anchor_tail_end_byte_ = static_cast<std::size_t>(-1);
+
+  // Number of `[` not yet closed by a `]`. Positive while scanning a
+  // structured-reference (or external-book index) bracket payload, where
+  // an apostrophe is an escape prefix rather than a sheet-name quote.
+  std::uint32_t bracket_depth_ = 0;
 };
 
 }  // namespace parser

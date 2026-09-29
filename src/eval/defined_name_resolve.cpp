@@ -78,13 +78,20 @@ const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_vie
   return find_defined_name(*wb, sheet_id, name);
 }
 
-Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx) {
-  const Workbook* wb = ctx.workbook();
-  if (wb == nullptr) {
-    return Value::error(ErrorCode::Name);
+const io::DefinedName* find_sheet_defined_name(const Workbook& workbook, std::string_view sheet,
+                                               std::string_view name) noexcept {
+  const std::size_t sheet_id = workbook.sheet_index_by_name(sheet);
+  if (sheet_id >= workbook.sheet_count()) {
+    return nullptr;
   }
-  const io::DefinedName* def = find_defined_name(ctx, name);
+  return find_defined_name(workbook, static_cast<std::uint16_t>(sheet_id), name);
+}
+
+namespace {
+
+// Evaluates the body of the already-located definition `def` in `ctx`.
+Value evaluate_defined_name(const io::DefinedName* def, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx) {
   if (def == nullptr) {
     return Value::error(ErrorCode::Name);
   }
@@ -92,7 +99,7 @@ Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRe
   // is a circular reference. Surface `#REF!` to match the cell-cycle policy in
   // `EvalContext::resolve_ref` rather than recursing until the stack blows.
   for (const DefinedNameFrame* f = ctx.defined_name_stack(); f != nullptr; f = f->prev) {
-    if (strings::case_insensitive_eq(f->name, def->name)) {
+    if (f->definition == def) {
       return Value::error(ErrorCode::Ref);
     }
   }
@@ -106,9 +113,8 @@ Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRe
   }
   // Evaluate the body as a top-level formula: clear the using formula's
   // lexical scope (a defined name never sees LET / LAMBDA bindings) and push
-  // this name onto the cycle chain. `def->name` is owned by the workbook and
-  // outlives this call, so the frame's `string_view` stays valid.
-  const DefinedNameFrame frame{def->name, ctx.defined_name_stack()};
+  // this definition onto the cycle chain.
+  const DefinedNameFrame frame{def, ctx.defined_name_stack()};
   const EvalContext def_ctx = ctx.with_name_env(nullptr).with_defined_name_frame(&frame);
   // A range-shaped body (e.g. `Sheet1!$A$1:$A$5`) must surface as a
   // `Value::Array` so range-aware consumers (`SUM`, `COUNT`, `VLOOKUP`, ...)
@@ -120,6 +126,28 @@ Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRe
     return eval_node_as_array(*root, arena, registry, def_ctx);
   }
   return eval_node(*root, arena, registry, def_ctx);
+}
+
+}  // namespace
+
+Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx) {
+  if (ctx.workbook() == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate_defined_name(find_defined_name(ctx, name), arena, registry, ctx);
+}
+
+Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, Arena& arena,
+                                 const FunctionRegistry& registry, const EvalContext& ctx) {
+  const Workbook* wb = ctx.workbook();
+  if (wb == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {
+    return Value::error(ErrorCode::Ref);
+  }
+  return evaluate_defined_name(find_sheet_defined_name(*wb, sheet, name), arena, registry, ctx);
 }
 
 }  // namespace eval

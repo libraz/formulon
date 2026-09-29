@@ -22,6 +22,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -42,6 +43,12 @@ namespace xlsb {
 /// the top-level writer (which emits the matching `BrtName` records
 /// into `xl/workbook.bin`'s globals).
 using NameTable = std::unordered_map<std::string, std::uint32_t>;
+
+/// `NameTable` key of the defined-name record scoped to 0-based sheet
+/// `itab` (`-1`: workbook scope) spelling `name`, ASCII case-folded. A
+/// sheet-qualified reference (`Sheet2!Local`) encodes through these keys;
+/// `!` never occurs in a defined name, so they cannot collide with one.
+std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name);
 
 /// Ordered `(itabFirst, itabLast)` pairs, mirroring `xl/workbook.bin`'s
 /// `BrtExternSheet` table: entry `i` is the range a `PtgRef3d` /
@@ -84,6 +91,11 @@ struct EncodedFormula {
 /// encoder does not yet lower them — see `ptg_writer.cpp`'s `emit`).
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
                        std::unordered_set<std::string>& seen);
+
+/// `collect_ptg_names` without sheet-qualified references (`Sheet2!Rate`):
+/// every name the formula resolves from its own scope.
+void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
+                                  std::unordered_set<std::string>& seen);
 
 /// Walks `node`'s AST appending, in encounter order, every distinct
 /// `(itabFirst, itabLast)` sheet-range pair a qualified reference will

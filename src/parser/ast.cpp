@@ -343,15 +343,31 @@ AstNode* make_name_ref(Arena& arena, std::string_view name) {
     return nullptr;
   }
   n->kind_ = NodeKind::NameRef;
-  n->data_.name = arena.intern(name);
+  n->data_.name.name = arena.intern(name);
+  n->data_.name.sheet = {};
+  n->data_.name.sheet_quoted = false;
   // `intern` returns an empty view both for empty input and for allocation
   // failure. A non-empty source name that comes back empty therefore means
   // the arena could not allocate; propagate that as a null node so the
   // parser surfaces an allocation failure instead of silently minting a
   // node whose name is empty (a different, valid-looking reference).
-  if (!name.empty() && n->data_.name.empty()) {
+  if (!name.empty() && n->data_.name.name.empty()) {
     return nullptr;
   }
+  return n;
+}
+
+AstNode* make_sheet_name_ref(Arena& arena, std::string_view sheet, std::string_view name, bool sheet_quoted) {
+  FM_CHECK(!sheet.empty(), "make_sheet_name_ref: sheet must be non-empty");
+  AstNode* n = make_name_ref(arena, name);
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->data_.name.sheet = arena.intern(sheet);
+  if (n->data_.name.sheet.empty()) {
+    return nullptr;
+  }
+  n->data_.name.sheet_quoted = sheet_quoted;
   return n;
 }
 
@@ -671,7 +687,17 @@ StructuredRefModifier AstNode::as_structured_ref_modifier() const {
 
 std::string_view AstNode::as_name() const {
   FM_CHECK(kind_ == NodeKind::NameRef, "AstNode::as_name on non-NameRef");
-  return data_.name;
+  return data_.name.name;
+}
+
+std::string_view AstNode::as_name_sheet() const {
+  FM_CHECK(kind_ == NodeKind::NameRef, "AstNode::as_name_sheet on non-NameRef");
+  return data_.name.sheet;
+}
+
+bool AstNode::as_name_sheet_quoted() const {
+  FM_CHECK(kind_ == NodeKind::NameRef, "AstNode::as_name_sheet_quoted on non-NameRef");
+  return data_.name.sheet_quoted;
 }
 
 UnaryOp AstNode::as_unary_op() const {

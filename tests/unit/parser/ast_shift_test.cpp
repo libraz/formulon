@@ -250,6 +250,26 @@ TEST(ShiftRefsWithSheetRename, RenamesQualifiedRefs) {
   EXPECT_EQ(format_formula(*shifted), "Renamed!A1+Renamed!$B$2");
 }
 
+TEST(ShiftRefsWithSheetRename, RenamesSheetQualifiedNames) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=Sheet1!Rate+Other!Rate+Rate", arena);
+  ASSERT_NE(root, nullptr);
+  SheetRenameTransform transform("sheet1", "My Sheet");
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "'My Sheet'!Rate+Other!Rate+Rate");
+}
+
+TEST(ShiftRefsWithSheetRemoval, SheetQualifiedNameOnRemovedSheetBecomesRef) {
+  EXPECT_EQ(ParseSheetRemovalFormula("=Sheet2!Rate+Sheet1!Rate+Rate", {"Sheet1", "Sheet2"}, 1U),
+            "#REF!+Sheet1!Rate+Rate");
+}
+
+TEST(ShiftRefsWithRowColShift, SheetQualifiedNameIsUntouched) {
+  EXPECT_EQ(ParseRowColShiftFormula("=Sheet1!Rate+A2", RowColAxis::kRow, RowColEdit::kInsert, 0U, 1U),
+            "Sheet1!Rate+A3");
+}
+
 TEST(ShiftRefsWithSheetRename, RenameMatchIsCaseInsensitive) {
   Arena arena;
   const AstNode* root = ParseOrNull("=sheet1!A1", arena);

@@ -144,7 +144,7 @@ SpillPotential spill_potential_impl(const AstNode& root, const FunctionRegistry*
       return combine_potential(spill_potential_impl(root.as_intersect_lhs(), registry, let_env),
                                spill_potential_impl(root.as_intersect_rhs(), registry, let_env));
     case NodeKind::NameRef:
-      return lookup_let_shape(root.as_name(), let_env);
+      return root.as_name_sheet().empty() ? lookup_let_shape(root.as_name(), let_env) : SpillPotential::kMaySpill;
     case NodeKind::LetBinding: {
       std::vector<LetShape> local_env = let_env == nullptr ? std::vector<LetShape>{} : *let_env;
       for (std::uint32_t i = 0; i < root.as_let_binding_count(); ++i) {

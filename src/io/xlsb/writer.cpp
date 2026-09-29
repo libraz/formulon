@@ -762,8 +762,18 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
 /// silently skipped here — `EncodeCellFormula` / the defined-name
 /// encode pass below surface the same failure as a proper `Expected`
 /// error when the formula is actually encoded.
-void CollectNamesFromFormula(std::string_view formula, std::vector<std::string>& names,
-                             std::unordered_set<std::string>& seen) {
+///
+/// `scope_sheet_id` is the scope the formula resolves names from (see
+/// `BuildNameTableForScope`). Every referenced text defined only as the
+/// local name of sheets other than that scope is added to `invisible`:
+/// Excel resolves such a reference to `#NAME?`, so it needs a
+/// workbook-scope record of its own rather than an ordinal borrowed from
+/// another sheet's definition, which would read back as that sheet's
+/// qualified name.
+void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_id,
+                             const std::unordered_map<std::string, std::vector<std::int32_t>>& defined_scopes,
+                             std::vector<std::string>& names, std::unordered_set<std::string>& seen,
+                             std::vector<std::string>& invisible, std::unordered_set<std::string>& invisible_seen) {
   if (!formula.empty() && formula.front() == '=') {
     formula.remove_prefix(1);
   }
@@ -774,14 +784,31 @@ void CollectNamesFromFormula(std::string_view formula, std::vector<std::string>&
     return;
   }
   collect_ptg_names(*root, names, seen);
+  std::vector<std::string> referenced;
+  std::unordered_set<std::string> referenced_seen;
+  collect_scope_resolved_names(*root, referenced, referenced_seen);
+  for (std::string& text : referenced) {
+    const auto it = defined_scopes.find(text);
+    if (it == defined_scopes.end()) {
+      continue;
+    }
+    const std::vector<std::int32_t>& scopes = it->second;
+    const bool visible = std::any_of(scopes.begin(), scopes.end(),
+                                     [scope_sheet_id](std::int32_t s) { return s < 0 || s == scope_sheet_id; });
+    if (!visible && invisible_seen.insert(text).second) {
+      invisible.push_back(std::move(text));
+    }
+  }
 }
 
 /// Builds the workbook's `BrtName` record order: every genuine defined
 /// name (`Workbook::defined_names()`, in declaration order) occupies the
 /// leading slots, followed by every future-function callee / `NameRef`
 /// `collect_ptg_names` discovers across defined-name and sheet formulas
-/// (in first-encounter order) that is not already a defined name. Slot
-/// `i` is the record a `PtgName` reaches with `ilbl == i + 1`.
+/// (in first-encounter order) that is not already a defined name, then a
+/// workbook-scope placeholder for each name referenced where none of its
+/// definitions is visible. Slot `i` is the record a `PtgName` reaches with
+/// `ilbl == i + 1`.
 ///
 /// Defined names take one slot each, duplicate name text included:
 /// `Workbook::set_defined_name_scoped` deliberately admits a
@@ -791,12 +818,17 @@ void CollectNamesFromFormula(std::string_view formula, std::vector<std::string>&
 /// the `ilbl` values encoded into formulas.
 void BuildOrderedNames(const Workbook& wb, std::vector<std::string>& ordered_names) {
   std::unordered_set<std::string> seen;
+  std::vector<std::string> invisible;
+  std::unordered_set<std::string> invisible_seen;
+  std::unordered_map<std::string, std::vector<std::int32_t>> defined_scopes;
   for (const io::DefinedName& dn : wb.defined_names()) {
     ordered_names.push_back(dn.name);
     seen.insert(dn.name);
+    defined_scopes[dn.name].push_back(dn.local_sheet_id);
   }
   for (const io::DefinedName& dn : wb.defined_names()) {
-    CollectNamesFromFormula(dn.formula, ordered_names, seen);
+    CollectNamesFromFormula(dn.formula, dn.local_sheet_id, defined_scopes, ordered_names, seen, invisible,
+                            invisible_seen);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     for (const auto& [row, cells] : wb.sheet(i).rows()) {
@@ -805,9 +837,13 @@ void BuildOrderedNames(const Workbook& wb, std::vector<std::string>& ordered_nam
         if (cell.formula_text.empty()) {
           continue;
         }
-        CollectNamesFromFormula(cell.formula_text, ordered_names, seen);
+        CollectNamesFromFormula(cell.formula_text, static_cast<std::int32_t>(i), defined_scopes, ordered_names, seen,
+                                invisible, invisible_seen);
       }
     }
+  }
+  for (std::string& text : invisible) {
+    ordered_names.push_back(std::move(text));
   }
 }
 
@@ -828,13 +864,13 @@ void BuildOrderedNames(const Workbook& wb, std::vector<std::string>& ordered_nam
 /// leaving an entry that is already present alone:
 ///   1. names local to `scope_sheet_id` — these shadow everything;
 ///   2. workbook-scoped names, filling any text no local one claimed;
-///   3. every remaining slot in declaration order. This covers the
-///      hidden `_xlfn.*` / `_xlpm.*` placeholders (which have no scope)
-///      and, as a fallback, a text that exists only as another sheet's
-///      local name. Excel resolves that reference to `#NAME?` and so
-///      does the reader — which re-resolves by name text, not by
-///      ordinal — so pointing at the out-of-scope record keeps the
-///      formula intact instead of failing the whole save.
+///   3. every placeholder slot, then every remaining defined slot. The
+///      placeholders are the hidden `_xlfn.*` / `_xlpm.*` names (which
+///      have no scope), undefined names, and the workbook-scope record
+///      `BuildOrderedNames` adds for a text that exists only as another
+///      sheet's local name: that reference is `#NAME?` in Excel, and
+///      reaching the other sheet's record instead would read back as
+///      that sheet's qualified name.
 NameTable BuildNameTableForScope(const Workbook& wb, const std::vector<std::string>& ordered_names,
                                  std::int32_t scope_sheet_id) {
   const std::vector<io::DefinedName>& defined = wb.defined_names();
@@ -853,8 +889,16 @@ NameTable BuildNameTableForScope(const Workbook& wb, const std::vector<std::stri
       name_table.emplace(defined[i].name, static_cast<std::uint32_t>(i + 1));
     }
   }
-  for (std::size_t i = 0; i < ordered_names.size(); ++i) {
+  for (std::size_t i = defined_count; i < ordered_names.size(); ++i) {
     name_table.emplace(ordered_names[i], static_cast<std::uint32_t>(i + 1));
+  }
+  for (std::size_t i = 0; i < defined_count; ++i) {
+    name_table.emplace(ordered_names[i], static_cast<std::uint32_t>(i + 1));
+  }
+  // Scope-independent keys for sheet-qualified references (`Sheet2!Local`).
+  for (std::size_t i = 0; i < defined_count; ++i) {
+    name_table.emplace(sheet_scoped_name_key(defined[i].local_sheet_id, defined[i].name),
+                       static_cast<std::uint32_t>(i + 1));
   }
   return name_table;
 }

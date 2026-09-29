@@ -86,7 +86,9 @@ enum class OpCode : std::uint8_t {
 
   /// `LoadName N` -- resolve `names[N]` against the active name
   /// environment, push the resulting value (or a deferred lookup that the
-  /// VM materialises into a body bytecode at first use).
+  /// VM materialises into a body bytecode at first use). A non-zero `b`
+  /// marks the sheet-qualified form `names[b - 1]!names[N]`, which is
+  /// looked up in that sheet's scope and skips the name environment.
   LoadName = 3,
 
   /// `LoadStructRef a=N(table) b=lo16(N column)|hi16(modifier)` -- a

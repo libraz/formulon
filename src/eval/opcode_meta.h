@@ -113,7 +113,7 @@ constexpr std::array<OpcodeMeta, kOpcodeTableSize> make_opcode_table() noexcept 
   t[static_cast<std::size_t>(OpCode::LoadRange)] =
       OpcodeMeta{"LoadRange", OpClass::Combine, OperandA::RefsIndex, OperandB::None};
   t[static_cast<std::size_t>(OpCode::LoadName)] =
-      OpcodeMeta{"LoadName", OpClass::Load, OperandA::NamesIndex, OperandB::None};
+      OpcodeMeta{"LoadName", OpClass::Load, OperandA::NamesIndex, OperandB::Packed};
   t[static_cast<std::size_t>(OpCode::LoadStructRef)] =
       OpcodeMeta{"LoadStructRef", OpClass::Load, OperandA::NamesIndex, OperandB::Packed};
   t[static_cast<std::size_t>(OpCode::LoadSpillRef)] =

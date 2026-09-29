@@ -13,6 +13,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "io/defined_names.h"
@@ -82,6 +83,92 @@ TEST(DefinedNameResolve, SheetScopedNameInvisibleFromOtherSheet) {
   const Value v = EvalOrDie("=Local", a, ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+// `Sheet2!Name` reads the name as seen from Sheet2's scope: Sheet2's local
+// definition first, then the workbook-scoped one. It is never a LET binding;
+// an unknown qualifier is #REF! (as `NoSuchSheet!A1` is) and an undefined
+// name #NAME?.
+TEST(DefinedNameResolve, SheetQualifiedNameUsesThatSheetsScope) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");    // index 0
+  wb.add_sheet("My Sheet");  // index 1
+  const Sheet& s1 = wb.sheet(0);
+  wb.set_defined_names({
+      io::DefinedName{"Local", "5", 1, false, ""},
+      io::DefinedName{"G", "7", -1, false, ""},
+      io::DefinedName{"G", "9", 1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, s1, state);
+  struct Case {
+    const char* src;
+    double want;
+  };
+  for (const Case& c :
+       {Case{"='My Sheet'!Local", 5.0}, Case{"='My Sheet'!G", 9.0}, Case{"=Sheet1!G", 7.0}, Case{"=G", 7.0},
+        Case{"=LET(Local, 1, 'My Sheet'!Local)", 5.0}, Case{"=SUM('My Sheet'!Local, Sheet1!G)", 12.0}}) {
+    Arena a;
+    const Value v = EvalOrDie(c.src, a, ctx);
+    ASSERT_TRUE(v.is_number()) << c.src << " -> " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.want) << c.src;
+  }
+  struct ErrCase {
+    const char* src;
+    ErrorCode want;
+  };
+  for (const ErrCase& c : {ErrCase{"=Local", ErrorCode::Name}, ErrCase{"=Sheet1!Local", ErrorCode::Name},
+                           ErrCase{"=NoSuchSheet!Local", ErrorCode::Ref}}) {
+    Arena a;
+    const Value v = EvalOrDie(c.src, a, ctx);
+    ASSERT_TRUE(v.is_error()) << c.src << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), c.want) << c.src;
+  }
+}
+
+// Two definitions spelling the same text in different scopes are distinct:
+// one reaching the other through a sheet qualifier is not a cycle.
+TEST(DefinedNameResolve, SameTextInOtherScopeIsNotACycle) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  const Sheet& s1 = wb.sheet(0);
+  wb.set_defined_names({
+      io::DefinedName{"X", "Sheet2!X+1", 0, false, ""},
+      io::DefinedName{"X", "10", 1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, s1, state);
+  Arena a;
+  const Value v = EvalOrDie("=X", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 11.0);
+}
+
+// Workbook-level wiring of a cross-sheet local name: the dependency graph
+// sees the cell behind it, a sheet rename rewrites the qualifier, and
+// removing the qualifying sheet collapses the reference to #REF!.
+TEST(DefinedNameResolve, SheetQualifiedNameRecalcsRenamesAndRemoves) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Local", "Sheet2!$A$1", 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(3.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Sheet2!Local*2")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 6.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(5.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 10.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(1U, "Data 2")));
+  EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->formula_text, "='Data 2'!Local*2");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 10.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1U)));
+  EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->formula_text, "=#REF!*2");
 }
 
 // (c') The same sheet-scoped name resolves on its owning sheet.

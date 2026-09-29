@@ -49,6 +49,10 @@ std::optional<RefTransform::Ref3DSheetSpan> SheetRenameTransform::apply_ref3d_sp
   return Ref3DSheetSpan{mapped_begin, mapped_end};
 }
 
+std::optional<std::string_view> SheetRenameTransform::apply_name_sheet(std::string_view sheet) const {
+  return remap_sheet(sheet).value_or(sheet);
+}
+
 SheetRemovalTransform::SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order,
                                              std::uint32_t removed_index)
     : pre_removal_sheet_order_(pre_removal_sheet_order), removed_index_(removed_index) {}
@@ -75,6 +79,13 @@ std::optional<Reference> SheetRemovalTransform::apply(const Reference& ref) cons
     return std::nullopt;
   }
   return ref;
+}
+
+std::optional<std::string_view> SheetRemovalTransform::apply_name_sheet(std::string_view sheet) const {
+  if (is_removed(find_sheet(sheet))) {
+    return std::nullopt;
+  }
+  return sheet;
 }
 
 std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_span(std::string_view begin,

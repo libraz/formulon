@@ -176,6 +176,24 @@ void AppendQuoteEscaped(std::string_view s, std::string& out) {
   }
 }
 
+// Appends the `Sheet1!` / `'My Sheet'!` qualifier of a sheet-scoped NameRef;
+// nothing for an unqualified one.
+void AppendNameSheetQualifier(const AstNode& node, std::string& out) {
+  const std::string_view sheet = node.as_name_sheet();
+  if (sheet.empty()) {
+    return;
+  }
+  const bool quoted = node.as_name_sheet_quoted() || sheet_name_needs_quoting(sheet);
+  if (quoted) {
+    out.push_back('\'');
+    AppendQuoteEscaped(sheet, out);
+    out.push_back('\'');
+  } else {
+    out.append(sheet);
+  }
+  out.push_back('!');
+}
+
 void FormatExternalRef(const AstNode& node, std::string& out) {
   // Excel stores a cross-workbook reference with the supporting book
   // named by its 1-based position in `<externalReferences>`, never by
@@ -394,6 +412,11 @@ bool IsBareColumnToken(std::string_view name) noexcept {
 std::string_view LeadingIdentifier(const AstNode& node) noexcept {
   switch (node.kind()) {
     case NodeKind::NameRef:
+      // `Sheet1!Name` opens with its sheet; a quoted qualifier is no identifier.
+      if (!node.as_name_sheet().empty()) {
+        return node.as_name_sheet_quoted() || sheet_name_needs_quoting(node.as_name_sheet()) ? std::string_view{}
+                                                                                             : node.as_name_sheet();
+      }
       return node.as_name();
     case NodeKind::Call:
       return node.as_call_name();
@@ -673,6 +696,7 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
       FormatStructuredRef(node, out);
       return;
     case NodeKind::NameRef:
+      AppendNameSheetQualifier(node, out);
       out.append(node.as_name());
       return;
     case NodeKind::UnaryOp:
@@ -782,9 +806,12 @@ struct StorageEmitter {
         return;
       case NodeKind::NameRef: {
         const std::string_view name = node.as_name();
-        if (in_scope(name)) {
+        // A sheet-qualified name is a workbook name, never a LET / LAMBDA
+        // parameter.
+        if (node.as_name_sheet().empty() && in_scope(name)) {
           out.append("_xlpm.");
         }
+        AppendNameSheetQualifier(node, out);
         out.append(name);
         return;
       }

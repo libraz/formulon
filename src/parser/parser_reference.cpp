@@ -752,13 +752,16 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
     return n;
   }
 
-  // Four possibilities:
+  // Five possibilities:
   //   1. CellRef: `Sheet1!A1`.
   //   2. Ident Colon Ident with matching column letters: `Sheet1!A:A`.
   //   3. Number Colon Number with matching row digits: `Sheet1!1:1`.
   //   4. `#REF!`: Excel's spelling after the sheet itself is deleted
   //      (`Sheet1!#REF!`). The whole reference has already collapsed to
   //      one error, so the sheet qualifier carries no surviving meaning.
+  //   5. Any other Ident: a defined name looked up in that sheet's scope
+  //      (`Sheet1!Rate`), the only spelling that reaches another sheet's
+  //      local name.
   // Anything else is an error.
   const TokenKind k = peek_kind();
   if (k == TokenKind::ErrorLiteral && peek().error_code == ErrorCode::Ref) {
@@ -909,6 +912,15 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
         return n;
       }
     }
+  }
+  if (k == TokenKind::Ident && peek_kind_at(1) != TokenKind::LParen) {
+    const Token& name = advance();
+    AstNode* n = make_sheet_name_ref(arena_, sheet, name.lexeme, quoted);
+    if (n == nullptr) {
+      return nullptr;
+    }
+    n->set_range(SpanRange(sheet_range, name.range));
+    return n;
   }
   record_error_with_token(ParseErrorCode::InvalidReference, peek().range, peek().lexeme);
   return nullptr;

@@ -134,6 +134,16 @@ TEST(CompilerRef, NameRefEmitsLoadName) {
   EXPECT_EQ(bc.names[0], "MyName");
 }
 
+TEST(CompilerRef, SheetQualifiedNameRefCarriesSheetInOperandB) {
+  ByteCode bc = CompileOrDie("=Sheet2!MyName");
+  EXPECT_EQ(bc.code[0].op, OpCode::LoadName);
+  ASSERT_EQ(bc.names.size(), 2u);
+  EXPECT_EQ(bc.names[bc.code[0].a], "MyName");
+  ASSERT_NE(bc.code[0].b, 0u);
+  EXPECT_EQ(bc.names[bc.code[0].b - 1u], "Sheet2");
+  EXPECT_EQ(CompileOrDie("=MyName").code[0].b, 0u);
+}
+
 TEST(CompilerRef, SpillRefEmitsLoadSpillRef) {
   ByteCode bc = CompileOrDie("=A1#");
   EXPECT_EQ(bc.code[0].op, OpCode::LoadSpillRef);

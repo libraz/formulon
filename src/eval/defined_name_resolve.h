@@ -46,9 +46,10 @@ class FunctionRegistry;
 /// stack overflows. Frames live on the C++ call stack of the resolver, so the
 /// chain is valid only for the duration of the resolution that built it.
 struct DefinedNameFrame {
-  /// Authored name currently being expanded. Borrows the `DefinedName::name`
-  /// string owned by the workbook, which outlives the evaluation.
-  std::string_view name;
+  /// Definition currently being expanded, owned by the workbook, which
+  /// outlives the evaluation. Compared by identity: a workbook-scoped and a
+  /// sheet-local name spelling the same text are different definitions.
+  const io::DefinedName* definition = nullptr;
   /// Next frame further down the resolution stack, or null at the root.
   const DefinedNameFrame* prev = nullptr;
 };
@@ -69,6 +70,13 @@ const io::DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t
 /// is visible.
 const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept;
 
+/// Finds the defined name a sheet-qualified reference `sheet!name` denotes:
+/// `name` as seen from `sheet`'s scope, so that sheet's local definition
+/// wins over a workbook-scoped one. Returns `nullptr` when `sheet` names no
+/// sheet of `workbook` or no definition is visible from it.
+const io::DefinedName* find_sheet_defined_name(const Workbook& workbook, std::string_view sheet,
+                                               std::string_view name) noexcept;
+
 /// Resolves the defined name `name` by parsing and evaluating its definition
 /// in `ctx`. The definition may be a constant (`=0.1`), a reference
 /// (`=Sheet1!$A$1`), or an arbitrary formula (`=A1*2`).
@@ -86,6 +94,12 @@ const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_vie
 /// formula and does not see the using formula's LET / LAMBDA bindings).
 Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx);
+
+/// `resolve_defined_name` for the sheet-qualified spelling `sheet!name`
+/// (see `find_sheet_defined_name`). A `sheet` naming no sheet yields
+/// `#REF!`, as `NoSuchSheet!A1` does; an undefined name yields `#NAME?`.
+Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, Arena& arena,
+                                 const FunctionRegistry& registry, const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

@@ -848,6 +848,32 @@ TEST(Vm, ResultMatchesTreeWalker_WorkbookNamedLambda) {
   EXPECT_DOUBLE_EQ(vm.as_number(), tree.as_number());
 }
 
+TEST(VmParity, SheetQualifiedNameResolvesInThatSheetsScope) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  Sheet& s = wb.sheet(0);
+  wb.sheet(1).set_cell_value(0U, 0U, Value::number(4.0));
+  wb.set_defined_names({io::DefinedName{"Local", "Sheet2!$A$1", 1, false, ""}});
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, s, state);
+
+  for (const char* src : {"=Sheet2!Local*3", "=LET(Local, 100, Sheet2!Local*3)"}) {
+    Arena tree_arena;
+    Arena vm_arena;
+    const Value tree = RunTreeWithCtx(src, tree_arena, ctx);
+    const Value vm = RunVmWithCtx(src, vm_arena, ctx);
+    ASSERT_TRUE(tree.is_number()) << src << " -> " << tree.debug_to_string();
+    ASSERT_TRUE(vm.is_number()) << src << " -> " << vm.debug_to_string();
+    EXPECT_DOUBLE_EQ(tree.as_number(), 12.0);
+    EXPECT_DOUBLE_EQ(vm.as_number(), tree.as_number());
+  }
+  Arena vm_arena;
+  const Value missing = RunVmWithCtx("=Nope!Local", vm_arena, ctx);
+  ASSERT_TRUE(missing.is_error());
+  EXPECT_EQ(missing.as_error(), ErrorCode::Ref);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

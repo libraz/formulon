@@ -400,7 +400,13 @@ const std::vector<Token>& Tokenizer::tokens() {
         scan_string();
         continue;
       case '\'':
-        scan_quoted_sheet_name();
+        // Inside a bracket an apostrophe is the ECMA-376 18.5.1.10
+        // structured-reference escape prefix, never a sheet-name quote.
+        if (bracket_depth_ > 0) {
+          scan_structured_ref_escape();
+        } else {
+          scan_quoted_sheet_name();
+        }
         continue;
       case '#':
         scan_error_literal();
@@ -422,9 +428,13 @@ const std::vector<Token>& Tokenizer::tokens() {
         continue;
       case '[':
         emit_single_char(TokenKind::LBracket);
+        ++bracket_depth_;
         continue;
       case ']':
         emit_single_char(TokenKind::RBracket);
+        if (bracket_depth_ > 0) {
+          --bracket_depth_;
+        }
         continue;
       case ',':
         emit_single_char(TokenKind::Comma);
@@ -792,6 +802,16 @@ void Tokenizer::scan_quoted_sheet_name() {
   if (!terminated) {
     record_error(LexerErrorCode::UnterminatedSheetQuote, start);
   }
+}
+
+void Tokenizer::scan_structured_ref_escape() {
+  const std::size_t start = byte_pos_;
+  mark_start();
+  advance_one();  // consume the escape apostrophe.
+  if (byte_pos_ < source_.size()) {
+    advance_one();  // the escaped codepoint is literal, whatever it is.
+  }
+  emit(TokenKind::Ident, start);
 }
 
 void Tokenizer::scan_number() {

@@ -342,6 +342,48 @@ TEST(StructuredRefEval, EscapedApostropheColumnNameResolves) {
   EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
 }
 
+TEST(StructuredRefEval, EscapedSpecialCharacterColumnNamesResolve) {
+  // Column names containing `#`, `[`, `]` and `'` are spelled with the
+  // ECMA-376 18.5.1.10 apostrophe escape in formula text.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  const char* names[] = {"#Items", "Col[x]", "Bob's"};
+  io::TableMetadata table;
+  table.id = 1;
+  table.name = "Table1";
+  table.ref = "A1:C2";
+  table.sheet_index = 0;
+  table.header_row = true;
+  for (std::uint32_t c = 0; c < 3; ++c) {
+    s.set_cell_value(0, c, Value::text(names[c]));
+    s.set_cell_value(1, c, Value::number(10.0 * (c + 1)));
+    io::TableColumn col;
+    col.id = c + 1;
+    col.name = names[c];
+    table.columns.push_back(col);
+  }
+  wb.set_tables({table});
+
+  struct Case {
+    const char* src;
+    double want;
+  };
+  const Case cases[] = {
+      {"=Table1['#Items]", 10.0},
+      {"=Table1[Col'[x']]", 20.0},
+      {"=Table1[[#This Row],[Bob''s]]", 30.0},
+      {"=Table1[[#This Row],['#Items]]", 10.0},
+      {"=Table1[@[Col'[x']]]", 20.0},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(c.src);
+    Arena arena;
+    const Value v = EvalAt(wb, c.src, /*formula_row=*/1, arena);
+    ASSERT_TRUE(v.is_number());
+    EXPECT_DOUBLE_EQ(v.as_number(), c.want);
+  }
+}
+
 TEST(StructuredRefEval, HeadersOnTableWithoutHeadersIsRef) {
   // Build a table with header_row=false so `[#Headers]` produces #REF!.
   Workbook wb = Workbook::create();

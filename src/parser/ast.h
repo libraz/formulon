@@ -199,6 +199,11 @@ class AstNode final {
 
   // --- NameRef -------------------------------------------------------------
   std::string_view as_name() const;
+  /// Sheet qualifier of `Sheet1!Name`, naming the sheet whose scope the
+  /// name is looked up in; empty for an unqualified name.
+  std::string_view as_name_sheet() const;
+  /// Round-trip hint: true if the source spelled the qualifier in quotes.
+  bool as_name_sheet_quoted() const;
 
   // --- UnaryOp -------------------------------------------------------------
   UnaryOp as_unary_op() const;
@@ -273,6 +278,7 @@ class AstNode final {
   friend AstNode* make_external_name_ref(Arena&, std::uint32_t, std::string_view);
   friend AstNode* make_structured_ref(Arena&, std::string_view, std::string_view, StructuredRefModifier);
   friend AstNode* make_name_ref(Arena&, std::string_view);
+  friend AstNode* make_sheet_name_ref(Arena&, std::string_view, std::string_view, bool);
   friend AstNode* make_unary_op(Arena&, UnaryOp, AstNode*);
   friend AstNode* make_binary_op(Arena&, BinOp, AstNode*, AstNode*);
   friend AstNode* make_range_op(Arena&, AstNode*, AstNode*);
@@ -331,6 +337,13 @@ class AstNode final {
     std::string_view table;
     std::string_view column;
     StructuredRefModifier modifier;
+  };
+  /// `sheet` is empty for an unqualified name. Inline like
+  /// `StructuredRefPayload`, which it matches in size.
+  struct NameRefPayload {
+    std::string_view name;
+    std::string_view sheet;
+    bool sheet_quoted;
   };
   struct UnaryPayload {
     UnaryOp op;
@@ -391,7 +404,7 @@ class AstNode final {
     const Ref3DPayload* ref3d;
     const ExternalRefPayload* external_ref;
     StructuredRefPayload structured_ref;
-    std::string_view name;
+    NameRefPayload name;
     UnaryPayload unary;
     BinaryPayload binary;
     RangePayload range;
@@ -490,6 +503,11 @@ AstNode* make_structured_ref(Arena& arena, std::string_view table, std::string_v
 
 /// Builds a `NameRef` node referencing the defined name `name`.
 AstNode* make_name_ref(Arena& arena, std::string_view name);
+
+/// Builds a `NameRef` node for `sheet!name`: the defined name `name` as seen
+/// from `sheet`'s scope. `sheet` must be non-empty; both views are
+/// re-interned into `arena`.
+AstNode* make_sheet_name_ref(Arena& arena, std::string_view sheet, std::string_view name, bool sheet_quoted);
 
 /// Builds a `UnaryOp` node. `operand` must be non-null.
 AstNode* make_unary_op(Arena& arena, UnaryOp op, AstNode* operand);

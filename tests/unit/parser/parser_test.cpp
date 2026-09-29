@@ -143,6 +143,29 @@ TEST(ParserAtoms, QuotedSheetQualifiedRef) {
   EXPECT_EQ(ParseToSexpr("='Sheet 1'!A1"), "(ref 'Sheet 1'!A1)");
 }
 
+TEST(ParserAtoms, SheetQualifiedName) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1!MyName"), "(name Sheet1!MyName)");
+  EXPECT_EQ(ParseToSexpr("='My Sheet'!MyName"), "(name 'My Sheet'!MyName)");
+  EXPECT_EQ(ParseToSexpr("=Sheet1!MyName+1"), "(binary + (name Sheet1!MyName) (num 1))");
+  EXPECT_EQ(ParseToSexpr("=SUM(Sheet1!Rng:B2)"), "(call SUM (range (name Sheet1!Rng) (ref B2)))");
+}
+
+TEST(ParserAtoms, SheetQualifiedNameCarriesScope) {
+  Arena a;
+  Parser p("='My Sheet'!Rate", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(p.errors().empty());
+  ASSERT_EQ(root->kind(), NodeKind::NameRef);
+  EXPECT_EQ(root->as_name(), "Rate");
+  EXPECT_EQ(root->as_name_sheet(), "My Sheet");
+  EXPECT_TRUE(root->as_name_sheet_quoted());
+  Parser bare("=Rate", a);
+  AstNode* bare_root = bare.parse();
+  ASSERT_NE(bare_root, nullptr);
+  EXPECT_TRUE(bare_root->as_name_sheet().empty());
+}
+
 TEST(ParserAtoms, FullColumnRef) {
   EXPECT_EQ(ParseToSexpr("=A:A"), "(ref A:A)");
 }

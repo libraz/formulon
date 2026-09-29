@@ -778,6 +778,37 @@ TEST(XlsbWriteReadSymmetry, UnqualifiedNameScopeIgnoresDeclarationOrder) {
   RunScopeResolutionCase(/*local_first=*/true);
 }
 
+// `Sheet2!Local` from Sheet1 encodes the ordinal of Sheet2's own record and
+// reads back as the same qualified text. An unqualified `Local` on Sheet1,
+// which Excel resolves to #NAME? because the only definition is Sheet2's,
+// must not borrow that record: it would then read back as `Sheet2!Local`.
+TEST(XlsbWriteReadSymmetry, SheetQualifiedNameKeepsItsScope) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Local", "Sheet2!$A$1", 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(4.0))));   // Sheet2!A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Sheet2!Local*2")));  // Sheet1!A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=ISERROR(Local)")));  // Sheet1!B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 1U, "=Local+1")));         // Sheet2!B1
+
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << "read_xlsb failed: " << reloaded.error().message;
+  EXPECT_EQ(reloaded.value().undecoded_formula_count, 0U);
+  Workbook after = std::move(reloaded.value().workbook);
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 0U)->formula_text, "=Sheet2!Local*2");
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 1U)->formula_text, "=ISERROR(Local)");
+  EXPECT_EQ(after.sheet(1).cell_at(0U, 1U)->formula_text, "=Local+1");
+
+  auto recalc_or = after.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(recalc_or)) << recalc_or.error().message;
+  EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 0U).as_number(), 8.0);
+  EXPECT_TRUE(after.sheet(0).resolve_cell_value(0U, 1U).as_boolean());
+  EXPECT_EQ(after.sheet(1).resolve_cell_value(0U, 1U).as_number(), 5.0);
+}
+
 // Reinterprets `v`'s object representation so two doubles can be
 // compared for bit equality rather than numeric equality.
 std::uint64_t BitsOf(double v) {

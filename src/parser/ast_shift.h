@@ -42,8 +42,8 @@ namespace parser {
 /// Generic reference-rewriting policy for `shift_refs`.
 ///
 /// Implementations override `apply` for the common case (sheet-local cell
-/// references). The `apply_range` and `apply_ref3d_span` hooks below cover
-/// the shapes whose payload is not a single `Reference`.
+/// references). The `apply_range`, `apply_ref3d_span` and `apply_name_sheet`
+/// hooks below cover the shapes whose payload is not a single `Reference`.
 class RefTransform {
  public:
   virtual ~RefTransform() = default;
@@ -82,6 +82,11 @@ class RefTransform {
     std::string_view end;
   };
   virtual std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const;
+
+  /// Rewrites the sheet qualifier of a sheet-scoped name (`Sheet1!Rate`).
+  /// Only called for a non-empty qualifier. The default is an identity
+  /// mapping; returning `std::nullopt` collapses the name to `#REF!`.
+  virtual std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const;
 };
 
 /// Walks `root` and produces a new tree with every reference rewritten via

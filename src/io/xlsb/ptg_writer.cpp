@@ -229,6 +229,9 @@ class Encoder {
       case parser::NodeKind::ArrayLiteral:
         return emit_array(node);
       case parser::NodeKind::NameRef:
+        if (!node.as_name_sheet().empty()) {
+          return emit_sheet_name_ref(node.as_name_sheet(), node.as_name());
+        }
         return emit_name_ref(node.as_name());
       case parser::NodeKind::ExternalRef:
         return unsupported_node("ExternalRef");
@@ -309,6 +312,32 @@ class Encoder {
       }
     }
     const auto it = name_table_.find(std::string(name));
+    if (it == name_table_.end()) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
+                        std::string("context=xlsb_ptg_writer name=") + std::string(name));
+    }
+    emit_u8(out_, 0x23);  // PtgName (reference-class base)
+    emit_u32(out_, it->second);
+    return Expected<void, Error>::Ok();
+  }
+
+  /// Emits `PtgName` for `sheet!name`: the record local to `sheet` when one
+  /// exists, else the workbook-scoped one, which is what the reference
+  /// resolves to. A name defined in neither falls back to its placeholder
+  /// record, as an undefined unqualified name does.
+  Expected<void, Error> emit_sheet_name_ref(std::string_view sheet, std::string_view name) {
+    const int itab = resolve_ixti(sheet_names_, sheet);
+    if (itab < 0) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet-qualified name names no sheet",
+                        std::string("context=xlsb_ptg_writer sheet=") + std::string(sheet));
+    }
+    auto it = name_table_.find(sheet_scoped_name_key(itab, name));
+    if (it == name_table_.end()) {
+      it = name_table_.find(sheet_scoped_name_key(-1, name));
+    }
+    if (it == name_table_.end()) {
+      it = name_table_.find(std::string(name));
+    }
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
@@ -777,10 +806,17 @@ void AddSheetRange(std::int32_t itab_first, std::int32_t itab_last, SheetRangeTa
 /// `Encoder::emit_name_ref`), so it must not be registered as an ordinary
 /// workbook defined name.
 void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& names,
-                        std::unordered_set<std::string>& seen, std::vector<std::string_view>& scope) {
+                        std::unordered_set<std::string>& seen, std::vector<std::string_view>& scope,
+                        bool skip_sheet_qualified) {
   switch (node.kind()) {
     case parser::NodeKind::NameRef: {
       const std::string_view name = node.as_name();
+      if (!node.as_name_sheet().empty()) {
+        if (!skip_sheet_qualified) {
+          AddName(name, names, seen);  // never a LET / LAMBDA parameter.
+        }
+        return;
+      }
       // Case-insensitive: see `Encoder::emit_name_ref`.
       for (const std::string_view param : scope) {
         if (strings::case_insensitive_eq(param, name)) {
@@ -797,41 +833,41 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       }
       const std::uint32_t arity = node.as_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_call_arg(i), names, seen, scope);
+        CollectNamesScoped(node.as_call_arg(i), names, seen, scope, skip_sheet_qualified);
       }
       return;
     }
     case parser::NodeKind::UnaryOp:
-      CollectNamesScoped(node.as_unary_operand(), names, seen, scope);
+      CollectNamesScoped(node.as_unary_operand(), names, seen, scope, skip_sheet_qualified);
       return;
     case parser::NodeKind::BinaryOp:
-      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope);
-      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope);
+      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope, skip_sheet_qualified);
       return;
     case parser::NodeKind::RangeOp:
-      CollectNamesScoped(node.as_range_lhs(), names, seen, scope);
-      CollectNamesScoped(node.as_range_rhs(), names, seen, scope);
+      CollectNamesScoped(node.as_range_lhs(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_range_rhs(), names, seen, scope, skip_sheet_qualified);
       return;
     case parser::NodeKind::IntersectOp:
-      CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope);
-      CollectNamesScoped(node.as_intersect_rhs(), names, seen, scope);
+      CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope, skip_sheet_qualified);
+      CollectNamesScoped(node.as_intersect_rhs(), names, seen, scope, skip_sheet_qualified);
       return;
     case parser::NodeKind::UnionOp: {
       const std::uint32_t arity = node.as_union_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_union_child(i), names, seen, scope);
+        CollectNamesScoped(node.as_union_child(i), names, seen, scope, skip_sheet_qualified);
       }
       return;
     }
     case parser::NodeKind::ImplicitIntersection:
-      CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope);
+      CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope, skip_sheet_qualified);
       return;
     case parser::NodeKind::ArrayLiteral: {
       const std::uint32_t rows = node.as_array_rows();
       const std::uint32_t cols = node.as_array_cols();
       for (std::uint32_t r = 0; r < rows; ++r) {
         for (std::uint32_t c = 0; c < cols; ++c) {
-          CollectNamesScoped(node.as_array_element(r, c), names, seen, scope);
+          CollectNamesScoped(node.as_array_element(r, c), names, seen, scope, skip_sheet_qualified);
         }
       }
       return;
@@ -842,7 +878,7 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       // registration any other future-function callee gets.
       AddName(xlsb_hidden_function_name("ANCHORARRAY"), names, seen);
       if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        CollectNamesScoped(*anchor, names, seen, scope);
+        CollectNamesScoped(*anchor, names, seen, scope, skip_sheet_qualified);
       }
       return;
     }
@@ -854,10 +890,10 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
         AddName(std::string("_xlpm.") + std::string(node.as_let_binding_name(i)), names, seen);
         // Excel LET binds sequentially: a value expression sees only the
         // earlier bindings, so collect it before pushing this parameter.
-        CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope);
+        CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope, skip_sheet_qualified);
         scope.push_back(node.as_let_binding_name(i));
       }
-      CollectNamesScoped(node.as_let_body(), names, seen, scope);
+      CollectNamesScoped(node.as_let_body(), names, seen, scope, skip_sheet_qualified);
       scope.resize(scope_base);
       return;
     }
@@ -872,10 +908,23 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
 
 }  // namespace
 
+std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name) {
+  std::string key = std::to_string(itab);
+  key.push_back('!');
+  key.append(strings::to_ascii_lower(name));
+  return key;
+}
+
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
                        std::unordered_set<std::string>& seen) {
   std::vector<std::string_view> scope;
-  CollectNamesScoped(node, names, seen, scope);
+  CollectNamesScoped(node, names, seen, scope, /*skip_sheet_qualified=*/false);
+}
+
+void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
+                                  std::unordered_set<std::string>& seen) {
+  std::vector<std::string_view> scope;
+  CollectNamesScoped(node, names, seen, scope, /*skip_sheet_qualified=*/true);
 }
 
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
