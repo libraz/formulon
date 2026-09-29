@@ -254,17 +254,17 @@ PivotTable build_deep_layout_table() {
 }
 
 PivotResult build_deep_layout_result(bool multiple_subtotals) {
-  auto leaf = [](const char* label) { return RowHierarchyNode{label, {}}; };
-  RowHierarchyNode a1x{"A1x", {leaf("A1x-1"), leaf("A1x-2")}};
-  RowHierarchyNode a1y{"A1y", {leaf("A1y-1")}};
-  RowHierarchyNode a1{"A1", {std::move(a1x), std::move(a1y)}};
-  RowHierarchyNode a2x{"A2x", {leaf("A2x-1")}};
-  RowHierarchyNode a2{"A2", {std::move(a2x)}};
-  RowHierarchyNode b1x{"B1x", {leaf("B1x-1")}};
-  RowHierarchyNode b1{"B1", {std::move(b1x)}};
+  auto leaf = [](const char* label) { return AxisHierarchyNode{label, {}}; };
+  AxisHierarchyNode a1x{"A1x", {leaf("A1x-1"), leaf("A1x-2")}};
+  AxisHierarchyNode a1y{"A1y", {leaf("A1y-1")}};
+  AxisHierarchyNode a1{"A1", {std::move(a1x), std::move(a1y)}};
+  AxisHierarchyNode a2x{"A2x", {leaf("A2x-1")}};
+  AxisHierarchyNode a2{"A2", {std::move(a2x)}};
+  AxisHierarchyNode b1x{"B1x", {leaf("B1x-1")}};
+  AxisHierarchyNode b1{"B1", {std::move(b1x)}};
 
   PivotResult result;
-  result.rows = {RowHierarchyNode{"A", {std::move(a1), std::move(a2)}}, RowHierarchyNode{"B", {std::move(b1)}}};
+  result.rows = {AxisHierarchyNode{"A", {std::move(a1), std::move(a2)}}, AxisHierarchyNode{"B", {std::move(b1)}}};
   for (double value : {1.0, 2.0, 3.0, 4.0, 5.0}) {
     result.values.push_back({{Value::number(value)}});
   }
@@ -988,7 +988,7 @@ TEST(PivotLayout, RejectsStrayAndMalformedSubtotalMetadata) {
   {
     PivotTable table = build_table(/*row=*/{0}, /*col=*/{});
     PivotResult result;
-    result.rows = {RowHierarchyNode{"North", {}}};
+    result.rows = {AxisHierarchyNode{"North", {}}};
     result.values = {{{Value::number(1.0)}}};
     ColSubtotal stray;
     stray.labels = {"Orphan"};

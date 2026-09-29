@@ -164,25 +164,24 @@ std::size_t depth_in_axis(const std::vector<std::uint32_t>& axis_order, std::siz
   return static_cast<std::size_t>(-1);
 }
 
-// Walks a hierarchy tree of `Node` (either `RowHierarchyNode` or
-// `ColHierarchyNode`) following `path`. Each `path[i]` is the label
-// expected at depth `i`. Returns the leaf index assigned to the
+// Walks an axis hierarchy tree following `path`. Each `path[i]` is the
+// label expected at depth `i`. Returns the leaf index assigned to the
 // matching leaf, or `static_cast<std::size_t>(-1)` on any mismatch.
 //
 // The leaf index is computed by counting leaves in document order,
 // matching the dense indexing used by `pivot::evaluate` in
-// `finalize_hierarchy<Node>`.
-template <class Node>
-std::size_t walk_hierarchy(const std::vector<Node>& roots, const std::vector<std::string>& path) noexcept {
+// `finalize_hierarchy`.
+std::size_t walk_hierarchy(const std::vector<pivot::AxisHierarchyNode>& roots,
+                           const std::vector<std::string>& path) noexcept {
   if (path.empty() || roots.empty()) {
     return static_cast<std::size_t>(-1);
   }
   std::size_t leaf_index = 0;
-  const std::vector<Node>* level = &roots;
+  const std::vector<pivot::AxisHierarchyNode>* level = &roots;
   for (std::size_t depth = 0; depth < path.size(); ++depth) {
     const std::string& want = path[depth];
     bool matched = false;
-    for (const Node& node : *level) {
+    for (const pivot::AxisHierarchyNode& node : *level) {
       if (node.label == want) {
         // Descend.
         if (depth + 1 == path.size()) {
@@ -210,15 +209,15 @@ std::size_t walk_hierarchy(const std::vector<Node>& roots, const std::vector<std
         ++leaf_index;
       } else {
         // Count all leaves in this subtree.
-        std::vector<const Node*> stack;
+        std::vector<const pivot::AxisHierarchyNode*> stack;
         stack.push_back(&node);
         while (!stack.empty()) {
-          const Node* top = stack.back();
+          const pivot::AxisHierarchyNode* top = stack.back();
           stack.pop_back();
           if (top->children.empty()) {
             ++leaf_index;
           } else {
-            for (const Node& c : top->children) {
+            for (const pivot::AxisHierarchyNode& c : top->children) {
               stack.push_back(&c);
             }
           }
@@ -453,14 +452,14 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
 
   std::size_t row_leaf = 0;
   if (row_complete) {
-    row_leaf = walk_hierarchy<pivot::RowHierarchyNode>(pivot_result.rows, row_path);
+    row_leaf = walk_hierarchy(pivot_result.rows, row_path);
     if (row_leaf == static_cast<std::size_t>(-1)) {
       return Value::error(kPivotRefError);
     }
   }
   std::size_t col_leaf = 0;
   if (col_complete) {
-    col_leaf = walk_hierarchy<pivot::ColHierarchyNode>(pivot_result.cols, col_path);
+    col_leaf = walk_hierarchy(pivot_result.cols, col_path);
     if (col_leaf == static_cast<std::size_t>(-1)) {
       return Value::error(kPivotRefError);
     }

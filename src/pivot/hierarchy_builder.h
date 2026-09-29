@@ -4,7 +4,7 @@
 // The hierarchy is built as a nested `std::map<Value, HierNode, ValueLess>`
 // so the ordering emerges naturally from `ValueLess`. After every record
 // is inserted, `finalize_hierarchy` flattens the tree into the public
-// `RowHierarchyNode` / `ColHierarchyNode` shape and remembers the leaf
+// `AxisHierarchyNode` shape and remembers the leaf
 // path that each surviving record lands on so the per-leaf aggregation
 // pass can reuse the work without rewalking the tree.
 //
@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot/value_order.h"
@@ -134,76 +135,17 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
 /// formatted label rather than the synthetic numeric sort key.
 std::string node_label(const Value& key, const HierNode& child);
 
-/// Recursively flattens a hierarchy into `Node` form (templated so we
-/// can produce both `RowHierarchyNode` and `ColHierarchyNode` from one
-/// implementation). On the way, assigns each leaf a dense index and
-/// pushes the corresponding `HierNode*` into `leaves` so a second pass
-/// can attach record indices.
-template <class Node>
-void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, std::size_t depth, std::vector<Node>& out,
-                        std::vector<HierNode*>& leaves) {
-  if (tree.children.empty()) {
-    return;
-  }
-  out.reserve(tree.children.size());
-  const std::vector<OrderedHierarchyChild> entries = ordered_children(tree, levels, depth);
-  const auto append = [&](const Value& key, HierNode& child) {
-    Node node;
-    node.label = node_label(key, child);
-    if (child.children.empty()) {
-      child.leaf_index = leaves.size();
-      leaves.push_back(&child);
-    } else {
-      finalize_hierarchy<Node>(child, levels, depth + 1U, node.children, leaves);
-    }
-    out.push_back(std::move(node));
-  };
-  for (const OrderedHierarchyChild& entry : entries) {
-    append(*entry.key, *entry.node);
-  }
-}
+/// Recursively flattens a hierarchy into `AxisHierarchyNode` form. On the
+/// way, assigns each leaf a dense index and pushes the corresponding
+/// `HierNode*` into `leaves` so a second pass can attach record indices.
+void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, std::size_t depth,
+                        std::vector<AxisHierarchyNode>& out, std::vector<HierNode*>& leaves);
 
-/// Removes leaves at positions where `keep[i]` is false, then prunes
-/// any interior node whose subtree becomes empty. `leaf_cursor` is
-/// advanced once per visited leaf so the caller's flat `keep` vector
-/// lines up with the DFS pre-order leaf enumeration produced by
-/// `finalize_hierarchy`. Returns true iff `node` (or any of its
-/// descendants) survives the prune.
-template <class Node>
-bool prune_node(Node& node, const std::vector<bool>& keep, std::size_t& leaf_cursor) {
-  if (node.children.empty()) {
-    const bool survives = (leaf_cursor < keep.size()) ? keep[leaf_cursor] : true;
-    ++leaf_cursor;
-    return survives;
-  }
-  std::vector<Node> kept;
-  kept.reserve(node.children.size());
-  for (auto& child : node.children) {
-    if (prune_node(child, keep, leaf_cursor)) {
-      kept.push_back(std::move(child));
-    }
-  }
-  node.children = std::move(kept);
-  return !node.children.empty();
-}
-
-/// Top-level driver for `prune_node`: walks each root in document order
-/// while threading a single leaf cursor through the whole tree so the
-/// caller's `keep` vector, indexed by DFS pre-order leaf position, lines
-/// up correctly across roots. Roots whose subtrees become empty are
-/// discarded.
-template <class Node>
-void prune_top_level(std::vector<Node>& roots, const std::vector<bool>& keep) {
-  std::size_t cursor = 0;
-  std::vector<Node> kept;
-  kept.reserve(roots.size());
-  for (auto& root : roots) {
-    if (prune_node(root, keep, cursor)) {
-      kept.push_back(std::move(root));
-    }
-  }
-  roots = std::move(kept);
-}
+/// Removes the leaves at DFS pre-order positions where `keep[i]` is false,
+/// then drops any node whose subtree becomes empty, including roots. One
+/// leaf cursor is threaded through every root so `keep` lines up with the
+/// leaf enumeration `finalize_hierarchy` produced.
+void prune_top_level(std::vector<AxisHierarchyNode>& roots, const std::vector<bool>& keep);
 
 /// One axis node at a chosen depth, as the contiguous run of DFS pre-order
 /// leaves beneath it. `parent` numbers the node's depth-minus-one ancestor;
@@ -214,46 +156,11 @@ struct AxisLeafGroup {
   std::size_t parent = 0;
 };
 
-template <class Node>
-std::size_t count_axis_leaves(const Node& node) {
-  if (node.children.empty()) {
-    return 1;
-  }
-  std::size_t n = 0;
-  for (const auto& child : node.children) {
-    n += count_axis_leaves(child);
-  }
-  return n;
-}
-
-template <class Node>
-void collect_axis_leaf_groups(const Node& node, std::size_t depth, std::size_t target_depth, std::size_t parent,
-                              std::size_t& next_parent, std::size_t& leaf_cursor, std::vector<AxisLeafGroup>& out) {
-  if (depth == target_depth || node.children.empty()) {
-    const std::size_t count = count_axis_leaves(node);
-    out.push_back({leaf_cursor, count, parent});
-    leaf_cursor += count;
-    return;
-  }
-  const std::size_t child_parent = depth + 1U == target_depth ? next_parent++ : parent;
-  for (const auto& child : node.children) {
-    collect_axis_leaf_groups(child, depth + 1U, target_depth, child_parent, next_parent, leaf_cursor, out);
-  }
-}
-
 /// Partitions the (possibly already pruned) axis tree `roots` into its
 /// nodes at `target_depth`, in document order. Grouping is structural: it
 /// does not depend on whether any field displays subtotals.
-template <class Node>
-std::vector<AxisLeafGroup> axis_leaf_groups_at_depth(const std::vector<Node>& roots, std::size_t target_depth) {
-  std::vector<AxisLeafGroup> groups;
-  std::size_t next_parent = target_depth == 0 ? 1U : 0U;
-  std::size_t leaf_cursor = 0;
-  for (const auto& root : roots) {
-    collect_axis_leaf_groups(root, 0, target_depth, 0, next_parent, leaf_cursor, groups);
-  }
-  return groups;
-}
+std::vector<AxisLeafGroup> axis_leaf_groups_at_depth(const std::vector<AxisHierarchyNode>& roots,
+                                                     std::size_t target_depth);
 
 /// Walks `tree` in display order. At every non-leaf level whose
 /// `PivotField` declares `subtotal_top` or any `subtotal_fns`, calls

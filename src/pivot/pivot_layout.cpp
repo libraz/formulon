@@ -83,28 +83,28 @@ void append_cell(PivotCells& cells, std::uint32_t row, std::uint32_t col, Value 
   cells.cells.push_back(std::move(cell));
 }
 
-void collect_row_leaves_impl(const RowHierarchyNode& node, std::vector<std::string>& path,
-                             std::vector<AxisLeaf>& leaves) {
+void collect_axis_leaves_impl(const AxisHierarchyNode& node, std::vector<std::string>& path,
+                              std::vector<AxisLeaf>& leaves) {
   path.push_back(node.label);
   if (node.children.empty()) {
     leaves.push_back({path});
   } else {
-    for (const RowHierarchyNode& child : node.children) {
-      collect_row_leaves_impl(child, path, leaves);
+    for (const AxisHierarchyNode& child : node.children) {
+      collect_axis_leaves_impl(child, path, leaves);
     }
   }
   path.pop_back();
 }
 
-std::vector<AxisLeaf> collect_row_leaves(const std::vector<RowHierarchyNode>& roots, std::size_t depth) {
+std::vector<AxisLeaf> collect_axis_leaves(const std::vector<AxisHierarchyNode>& roots, std::size_t depth) {
   std::vector<AxisLeaf> leaves;
   if (depth == 0) {
     leaves.push_back(AxisLeaf{});
     return leaves;
   }
   std::vector<std::string> path;
-  for (const RowHierarchyNode& root : roots) {
-    collect_row_leaves_impl(root, path, leaves);
+  for (const AxisHierarchyNode& root : roots) {
+    collect_axis_leaves_impl(root, path, leaves);
   }
   return leaves;
 }
@@ -127,7 +127,7 @@ std::vector<std::size_t> subtotal_counts_for_axis(const PivotTable& table,
   return counts;
 }
 
-Expected<void, Error> collect_row_entries_impl(const RowHierarchyNode& node, std::vector<std::string>& path,
+Expected<void, Error> collect_row_entries_impl(const AxisHierarchyNode& node, std::vector<std::string>& path,
                                                const std::vector<RowSubtotal>& subtotals, std::size_t& subtotal_cursor,
                                                std::vector<RowEntry>& rows,
                                                const std::vector<bool>& subtotal_first_by_depth,
@@ -146,7 +146,7 @@ Expected<void, Error> collect_row_entries_impl(const RowHierarchyNode& node, std
     // count as the boundary also preserves distinct nodes whose display
     // labels happen to be identical after formatting.
     const std::size_t subtree_begin = rows.size();
-    for (const RowHierarchyNode& child : node.children) {
+    for (const AxisHierarchyNode& child : node.children) {
       auto child_or = collect_row_entries_impl(child, path, subtotals, subtotal_cursor, rows, subtotal_first_by_depth,
                                                subtotal_counts);
       if (!child_or) {
@@ -201,7 +201,7 @@ Expected<std::vector<RowEntry>, Error> collect_row_entries(const PivotResult& re
   }
   if (!include_subtotals) {
     std::vector<RowEntry> entries;
-    for (AxisLeaf& leaf : collect_row_leaves(result.rows, depth)) {
+    for (AxisLeaf& leaf : collect_axis_leaves(result.rows, depth)) {
       entries.push_back({std::move(leaf), false, 0});
     }
     return entries;
@@ -210,7 +210,7 @@ Expected<std::vector<RowEntry>, Error> collect_row_entries(const PivotResult& re
   std::vector<RowEntry> entries;
   std::vector<std::string> path;
   std::size_t subtotal_cursor = 0;
-  for (const RowHierarchyNode& root : result.rows) {
+  for (const AxisHierarchyNode& root : result.rows) {
     auto root_or = collect_row_entries_impl(root, path, result.row_subtotals, subtotal_cursor, entries,
                                             subtotal_first_by_depth, subtotal_counts);
     if (!root_or) {
@@ -226,33 +226,7 @@ Expected<std::vector<RowEntry>, Error> collect_row_entries(const PivotResult& re
   return entries;
 }
 
-void collect_col_leaves_impl(const ColHierarchyNode& node, std::vector<std::string>& path,
-                             std::vector<AxisLeaf>& leaves) {
-  path.push_back(node.label);
-  if (node.children.empty()) {
-    leaves.push_back({path});
-  } else {
-    for (const ColHierarchyNode& child : node.children) {
-      collect_col_leaves_impl(child, path, leaves);
-    }
-  }
-  path.pop_back();
-}
-
-std::vector<AxisLeaf> collect_col_leaves(const std::vector<ColHierarchyNode>& roots, std::size_t depth) {
-  std::vector<AxisLeaf> leaves;
-  if (depth == 0) {
-    leaves.push_back(AxisLeaf{});
-    return leaves;
-  }
-  std::vector<std::string> path;
-  for (const ColHierarchyNode& root : roots) {
-    collect_col_leaves_impl(root, path, leaves);
-  }
-  return leaves;
-}
-
-Expected<void, Error> collect_col_entries_impl(const ColHierarchyNode& node, std::vector<std::string>& path,
+Expected<void, Error> collect_col_entries_impl(const AxisHierarchyNode& node, std::vector<std::string>& path,
                                                const std::vector<ColSubtotal>& subtotals, std::size_t& subtotal_cursor,
                                                const std::vector<std::size_t>& subtotal_counts,
                                                std::vector<ColEntry>& cols) {
@@ -260,7 +234,7 @@ Expected<void, Error> collect_col_entries_impl(const ColHierarchyNode& node, std
   if (node.children.empty()) {
     cols.push_back({AxisLeaf{path}, false, 0});
   } else {
-    for (const ColHierarchyNode& child : node.children) {
+    for (const AxisHierarchyNode& child : node.children) {
       auto child_or = collect_col_entries_impl(child, path, subtotals, subtotal_cursor, subtotal_counts, cols);
       if (!child_or) {
         path.pop_back();
@@ -306,7 +280,7 @@ Expected<std::vector<ColEntry>, Error> collect_col_entries(const PivotResult& re
   }
   if (!include_subtotals) {
     std::vector<ColEntry> entries;
-    for (AxisLeaf& leaf : collect_col_leaves(result.cols, depth)) {
+    for (AxisLeaf& leaf : collect_axis_leaves(result.cols, depth)) {
       entries.push_back({std::move(leaf), false, 0});
     }
     return entries;
@@ -314,7 +288,7 @@ Expected<std::vector<ColEntry>, Error> collect_col_entries(const PivotResult& re
   std::vector<ColEntry> entries;
   std::vector<std::string> path;
   std::size_t subtotal_cursor = 0;
-  for (const ColHierarchyNode& root : result.cols) {
+  for (const AxisHierarchyNode& root : result.cols) {
     auto root_or =
         collect_col_entries_impl(root, path, result.col_subtotals, subtotal_cursor, subtotal_counts, entries);
     if (!root_or) {
@@ -381,8 +355,8 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   const std::string subtotal_suffix =
       options.subtotal_suffix.empty() ? std::string(" ") + options.grand_total_label : options.subtotal_suffix;
 
-  std::vector<AxisLeaf> row_leaves = collect_row_leaves(result.rows, row_depth);
-  std::vector<AxisLeaf> col_leaves = collect_col_leaves(result.cols, col_depth);
+  std::vector<AxisLeaf> row_leaves = collect_axis_leaves(result.rows, row_depth);
+  std::vector<AxisLeaf> col_leaves = collect_axis_leaves(result.cols, col_depth);
   const bool include_row_subtotals = !result.row_subtotals.empty();
   // Compact and outline layouts honour the owner field's `subtotal_top`
   // flag. Tabular (and the historical English projection) retains its

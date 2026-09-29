@@ -16,20 +16,14 @@
 
 namespace formulon::pivot {
 
-/// Tree node for the row-axis hierarchy. Children of a node represent the
-/// next row field nested under this label (left-to-right in the rendered
-/// pivot). Leaves correspond to rows in the `values` matrix.
-struct RowHierarchyNode {
+/// Tree node for one axis hierarchy. Children of a node represent the next
+/// field nested under this label on the same axis: left-to-right on the row
+/// axis, top-to-bottom on the column axis. Leaves correspond to rows (row
+/// axis) or columns (column axis) in the `values` matrix. Both axes share
+/// the one type so every tree walk is linked once, not once per axis.
+struct AxisHierarchyNode {
   std::string label;
-  std::vector<RowHierarchyNode> children;
-};
-
-/// Tree node for the column-axis hierarchy. Children represent the next
-/// column field nested under this label (top-to-bottom in the rendered
-/// pivot). Leaves correspond to columns in the `values` matrix.
-struct ColHierarchyNode {
-  std::string label;
-  std::vector<ColHierarchyNode> children;
+  std::vector<AxisHierarchyNode> children;
 };
 
 /// One row-axis subtotal emitted after all descendant leaves for `labels`.
@@ -91,11 +85,11 @@ struct PivotPageSelection {
 struct PivotResult {
   /// Row hierarchy: tree of unique row-field values (left-to-right
   /// nesting). Leaves index into the rows of `values`.
-  std::vector<RowHierarchyNode> rows;
+  std::vector<AxisHierarchyNode> rows;
 
   /// Column hierarchy: tree of unique column-field values (top-to-bottom
   /// nesting). Leaves index into the columns of `values`.
-  std::vector<ColHierarchyNode> cols;
+  std::vector<AxisHierarchyNode> cols;
 
   /// Aggregated values. `values[r][c][a]` is the aggregation slot `a` at
   /// row leaf `r` and column leaf `c`.

@@ -490,8 +490,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   PivotResult result;
   std::vector<HierNode*> row_leaves;
   std::vector<HierNode*> col_leaves;
-  finalize_hierarchy<RowHierarchyNode>(row_tree, row_levels, 0U, result.rows, row_leaves);
-  finalize_hierarchy<ColHierarchyNode>(col_tree, col_levels, 0U, result.cols, col_leaves);
+  finalize_hierarchy(row_tree, row_levels, 0U, result.rows, row_leaves);
+  finalize_hierarchy(col_tree, col_levels, 0U, result.cols, col_leaves);
   resolve_page_selections(table, cache, options, result);
 
   // Degenerate axis: if a side has no field configured, treat it as a

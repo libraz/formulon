@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_result.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
@@ -218,6 +219,52 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
   return {raw, display_string(raw)};
 }
 
+/// Removes the leaves of `node`'s subtree whose position in `keep` is
+/// false and any interior node left empty. `leaf_cursor` advances once per
+/// visited leaf. Returns true iff `node` or any descendant survives.
+bool prune_node(AxisHierarchyNode& node, const std::vector<bool>& keep, std::size_t& leaf_cursor) {
+  if (node.children.empty()) {
+    const bool survives = (leaf_cursor < keep.size()) ? keep[leaf_cursor] : true;
+    ++leaf_cursor;
+    return survives;
+  }
+  std::vector<AxisHierarchyNode> kept;
+  kept.reserve(node.children.size());
+  for (auto& child : node.children) {
+    if (prune_node(child, keep, leaf_cursor)) {
+      kept.push_back(std::move(child));
+    }
+  }
+  node.children = std::move(kept);
+  return !node.children.empty();
+}
+
+std::size_t count_axis_leaves(const AxisHierarchyNode& node) {
+  if (node.children.empty()) {
+    return 1;
+  }
+  std::size_t n = 0;
+  for (const auto& child : node.children) {
+    n += count_axis_leaves(child);
+  }
+  return n;
+}
+
+void collect_axis_leaf_groups(const AxisHierarchyNode& node, std::size_t depth, std::size_t target_depth,
+                              std::size_t parent, std::size_t& next_parent, std::size_t& leaf_cursor,
+                              std::vector<AxisLeafGroup>& out) {
+  if (depth == target_depth || node.children.empty()) {
+    const std::size_t count = count_axis_leaves(node);
+    out.push_back({leaf_cursor, count, parent});
+    leaf_cursor += count;
+    return;
+  }
+  const std::size_t child_parent = depth + 1U == target_depth ? next_parent++ : parent;
+  for (const auto& child : node.children) {
+    collect_axis_leaf_groups(child, depth + 1U, target_depth, child_parent, next_parent, leaf_cursor, out);
+  }
+}
+
 }  // namespace
 
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
@@ -254,6 +301,52 @@ std::string node_label(const Value& key, const HierNode& child) {
     return child.label_override;
   }
   return display_string(key);
+}
+
+void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, std::size_t depth,
+                        std::vector<AxisHierarchyNode>& out, std::vector<HierNode*>& leaves) {
+  if (tree.children.empty()) {
+    return;
+  }
+  out.reserve(tree.children.size());
+  const std::vector<OrderedHierarchyChild> entries = ordered_children(tree, levels, depth);
+  const auto append = [&](const Value& key, HierNode& child) {
+    AxisHierarchyNode node;
+    node.label = node_label(key, child);
+    if (child.children.empty()) {
+      child.leaf_index = leaves.size();
+      leaves.push_back(&child);
+    } else {
+      finalize_hierarchy(child, levels, depth + 1U, node.children, leaves);
+    }
+    out.push_back(std::move(node));
+  };
+  for (const OrderedHierarchyChild& entry : entries) {
+    append(*entry.key, *entry.node);
+  }
+}
+
+void prune_top_level(std::vector<AxisHierarchyNode>& roots, const std::vector<bool>& keep) {
+  std::size_t cursor = 0;
+  std::vector<AxisHierarchyNode> kept;
+  kept.reserve(roots.size());
+  for (auto& root : roots) {
+    if (prune_node(root, keep, cursor)) {
+      kept.push_back(std::move(root));
+    }
+  }
+  roots = std::move(kept);
+}
+
+std::vector<AxisLeafGroup> axis_leaf_groups_at_depth(const std::vector<AxisHierarchyNode>& roots,
+                                                     std::size_t target_depth) {
+  std::vector<AxisLeafGroup> groups;
+  std::size_t next_parent = target_depth == 0 ? 1U : 0U;
+  std::size_t leaf_cursor = 0;
+  for (const auto& root : roots) {
+    collect_axis_leaf_groups(root, 0, target_depth, 0, next_parent, leaf_cursor, groups);
+  }
+  return groups;
 }
 
 }  // namespace formulon::pivot

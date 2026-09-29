@@ -595,7 +595,7 @@ TEST(PivotEvaluator, BlankAxisItemTakesThePlaceholderLabel) {
   ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
   const PivotResult& result = result_or.value();
 
-  for (const RowHierarchyNode& row : result.rows) {
+  for (const AxisHierarchyNode& row : result.rows) {
     EXPECT_FALSE(row.label.empty());
   }
   const std::size_t blank_leaf = row_index(result, PivotLayoutOptions{}.blank_item_label);
@@ -4882,7 +4882,7 @@ TEST(PivotEvaluator, RowValueFilterCollapsesEmptiedBranchesOfAThreeLevelAxis) {
   ASSERT_EQ(r.rows.size(), 1U);
   EXPECT_EQ(r.rows[0].label, "South");
   ASSERT_EQ(r.rows[0].children.size(), 2U);
-  for (const RowHierarchyNode& product : r.rows[0].children) {
+  for (const AxisHierarchyNode& product : r.rows[0].children) {
     ASSERT_EQ(product.children.size(), 1U);
     EXPECT_EQ(product.children[0].label, "2025");
   }
