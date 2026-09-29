@@ -5,6 +5,7 @@
 
 #include "eval/eval_context.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -16,6 +17,7 @@
 #include "eval/formula_text_utils.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
+#include "eval/range_args.h"
 #include "eval/spill_committer.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
@@ -255,7 +257,9 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     // inside the referenced formula return the referenced cell's coordinates
     // rather than inheriting the caller's anchor. The new context inherits
     // `mutable_sheet_` (regular member, copied by `with_formula_cell`).
-    const EvalContext child_ctx = this->with_formula_cell(ref.row, ref.col);
+    // The referenced formula is not an argument of the call being
+    // dispatched, so it does not inherit that call's whole-axis scope.
+    const EvalContext child_ctx = this->with_formula_cell(ref.row, ref.col).with_whole_axis_scope(nullptr);
     result = evaluate(*root, arena, registry, child_ctx);
 
     // Route every mutable recursive result through SpillCommitter. Arrays are
@@ -289,12 +293,24 @@ Value EvalContext::dispatch_array_result(Value v) const {
       .commit(std::move(v));
 }
 
-Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::Reference& lhs,
-                                                                  const parser::Reference& rhs, Arena& arena,
-                                                                  const FunctionRegistry& registry,
-                                                                  std::uint32_t* out_rows,
-                                                                  std::uint32_t* out_cols) const {
-  if (current_sheet_ == nullptr) {
+namespace {
+
+// The rectangle range expansion walks for `[lhs : rhs]`, together with the
+// sheet it walks and that sheet's qualifier as the expansion resolves it.
+struct WalkedRange {
+  const Sheet* sheet = nullptr;
+  std::string_view sheet_name;
+  // Empty for a whole-axis reference with nothing to walk.
+  std::optional<DeclaredRect> rect;
+};
+
+// `shared` yields the call's shared extent; it is consulted only for a
+// whole-axis reference.
+template <typename SharedExtent>
+Expected<WalkedRange, ErrorCode> walk_range(const parser::Reference& lhs, const parser::Reference& rhs,
+                                            const Sheet* current_sheet, const Workbook* workbook,
+                                            const SharedExtent& shared_extent) {
+  if (current_sheet == nullptr) {
     return ErrorCode::Name;
   }
 
@@ -302,11 +318,12 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   if (!effective_sheet) {
     return effective_sheet.error();
   }
-  const std::string_view effective_sheet_name = effective_sheet.value();
+  WalkedRange walked;
+  walked.sheet_name = effective_sheet.value();
 
   ErrorCode sheet_err = ErrorCode::Ref;
-  const Sheet* target_sheet = resolve_target_sheet(effective_sheet_name, current_sheet_, workbook_, &sheet_err);
-  if (target_sheet == nullptr) {
+  walked.sheet = resolve_target_sheet(walked.sheet_name, current_sheet, workbook, &sheet_err);
+  if (walked.sheet == nullptr) {
     return sheet_err;
   }
 
@@ -317,37 +334,76 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   if (!declared) {
     return declared.error();
   }
-  std::uint32_t r_min = declared.value().row_first;
-  std::uint32_t r_max = declared.value().row_last;
-  std::uint32_t c_min = declared.value().col_first;
-  std::uint32_t c_max = declared.value().col_last;
-  if (declared.value().whole_axis) {
-    // Enumeration-only narrowing. A whole-column (`A:A` / `A:C`) or
-    // whole-row (`1:1` / `1:3`) reference declares a whole grid axis; the
-    // values worth walking end at the target sheet's populated extent, so
-    // the unbounded axis is clamped to it and the expansion never physically
-    // touches all `kMaxRows` / `kMaxCols` cells. `SUM(A:A)` on an empty
-    // sheet is 0 without any per-row work.
-    //
-    // The bounded axis keeps its natural origin (row 0 for a column, column
-    // 0 for a row) so positional consumers (INDEX / VLOOKUP column offsets)
-    // see the reference's true top-left.
-    //
-    // The clamp is invisible to a consumer of the values — the cells it
-    // drops are empty — and must stay invisible to everything else. It is
-    // not the reference's shape, and `declared_range_rect` exists so that no
-    // caller needing a shape has to reach for it.
-    const std::optional<Sheet::PopulatedExtent> extent = target_sheet->populated_extent(r_min, c_min, r_max, c_max);
-    if (!extent.has_value()) {
-      set_shape(out_rows, out_cols, 0, 0);
-      return std::vector<Value>{};
-    }
-    if (declared.value().rows() == Sheet::kMaxRows) {
-      r_max = extent->last_row;
-    } else {
-      c_max = extent->last_col;
+  DeclaredRect rect = declared.value();
+  if (!rect.whole_axis) {
+    walked.rect = rect;
+    return walked;
+  }
+  // Enumeration-only narrowing. A whole-column (`A:A` / `A:C`) or
+  // whole-row (`1:1` / `1:3`) reference declares a whole grid axis; the
+  // values worth walking end at the target sheet's populated extent, so
+  // the unbounded axis is clamped to it and the expansion never physically
+  // touches all `kMaxRows` / `kMaxCols` cells. `SUM(A:A)` on an empty
+  // sheet is 0 without any per-row work.
+  //
+  // The bounded axis keeps its natural origin (row 0 for a column, column
+  // 0 for a row) so positional consumers (INDEX / VLOOKUP column offsets)
+  // see the reference's true top-left.
+  //
+  // The clamp is invisible to a consumer of the values — the cells it
+  // drops are empty — and must stay invisible to everything else. It is
+  // not the reference's shape, and `declared_range_rect` exists so that no
+  // caller needing a shape has to reach for it. Where one call reads several
+  // whole-axis references, `shared` walks them all to one length so they
+  // stay the same shape as each other.
+  const WholeAxisExtent shared = shared_extent();
+  const bool column_span = rect.rows() == Sheet::kMaxRows;
+  const std::uint32_t axis_len = column_span ? Sheet::kMaxRows : Sheet::kMaxCols;
+  const std::uint32_t shared_len = std::min(column_span ? shared.rows : shared.cols, axis_len);
+  const Sheet* band_sheet = column_span ? shared.rows_sheet : shared.cols_sheet;
+  const std::uint32_t band_first = column_span ? shared.rows_band_first : shared.cols_band_first;
+  const std::uint32_t band_last = column_span ? shared.rows_band_last : shared.cols_band_last;
+  const std::uint32_t span_first = column_span ? rect.col_first : rect.row_first;
+  const std::uint32_t span_last = column_span ? rect.col_last : rect.row_last;
+  const bool covered =
+      shared_len == axis_len || (band_sheet == walked.sheet && span_first >= band_first && span_last <= band_last);
+  std::uint32_t walk_len = shared_len;
+  if (!covered) {
+    const std::optional<Sheet::PopulatedExtent> extent =
+        walked.sheet->populated_extent(rect.row_first, rect.col_first, rect.row_last, rect.col_last);
+    if (extent.has_value()) {
+      walk_len = std::max(walk_len, (column_span ? extent->last_row : extent->last_col) + 1U);
     }
   }
+  if (walk_len == 0U) {
+    return walked;
+  }
+  (column_span ? rect.row_last : rect.col_last) = walk_len - 1U;
+  walked.rect = rect;
+  return walked;
+}
+
+}  // namespace
+
+Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::Reference& lhs,
+                                                                  const parser::Reference& rhs, Arena& arena,
+                                                                  const FunctionRegistry& registry,
+                                                                  std::uint32_t* out_rows,
+                                                                  std::uint32_t* out_cols) const {
+  auto walked = walk_range(lhs, rhs, current_sheet_, workbook_, [this] { return shared_whole_axis_extent(); });
+  if (!walked) {
+    return walked.error();
+  }
+  if (!walked.value().rect.has_value()) {
+    set_shape(out_rows, out_cols, 0, 0);
+    return std::vector<Value>{};
+  }
+  const Sheet* target_sheet = walked.value().sheet;
+  const std::string_view effective_sheet_name = walked.value().sheet_name;
+  const std::uint32_t r_min = walked.value().rect->row_first;
+  const std::uint32_t r_max = walked.value().rect->row_last;
+  const std::uint32_t c_min = walked.value().rect->col_first;
+  const std::uint32_t c_max = walked.value().rect->col_last;
 
   // Accepted divergence: callers such as SUM / AVERAGE coerce every
   // expanded Value via `coerce_to_number`, so a range cell holding TRUE
@@ -421,6 +477,32 @@ Expected<DeclaredRect, ErrorCode> EvalContext::declared_range_rect(const parser:
     return sheet_err;
   }
   return declared_rect(lhs, rhs);
+}
+
+WholeAxisExtent EvalContext::shared_whole_axis_extent() const {
+  if (whole_axis_scope_ == nullptr) {
+    return WholeAxisExtent{};
+  }
+  if (!whole_axis_scope_->resolved) {
+    // Marked first: measuring the arguments expands nothing under this scope.
+    whole_axis_scope_->resolved = true;
+    whole_axis_scope_->extent =
+        eval::shared_whole_axis_extent(*whole_axis_scope_->call, with_whole_axis_scope(nullptr));
+  }
+  return whole_axis_scope_->extent;
+}
+
+Expected<std::optional<DeclaredRect>, ErrorCode> EvalContext::walked_range_rect(const parser::Reference& lhs,
+                                                                                const parser::Reference& rhs,
+                                                                                const Sheet** out_sheet) const {
+  auto walked = walk_range(lhs, rhs, current_sheet_, workbook_, [this] { return shared_whole_axis_extent(); });
+  if (!walked) {
+    return walked.error();
+  }
+  if (out_sheet != nullptr) {
+    *out_sheet = walked.value().sheet;
+  }
+  return walked.value().rect;
 }
 
 }  // namespace eval

@@ -118,7 +118,13 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
 
 // Exact-equality test with optional DOS-style wildcard expansion on Text vs
 // Text pairs. For non-text / cross-type kinds this is a literal equality
-// compare with the same "Blank acts as numeric 0" rule MATCH / VLOOKUP use.
+// compare with the same "Blank acts as numeric 0" rule VLOOKUP / HLOOKUP use
+// (classic.cpp's `lookup_scan`) -- but NOT the rule MATCH's own exact-match
+// branch (match_type 0) uses: a blank lookup_value there returns #N/A
+// unconditionally rather than matching a blank cell as 0 (classic.cpp,
+// exact-match block). MATCH's approximate modes (match_type +-1) do fold a
+// blank lookup_value to 0 for ordering purposes, which is the rule this
+// comment used to (over-)generalize to MATCH as a whole.
 // When `wildcards` is true AND lookup_value is text, pattern matching is
 // always routed through `wildcard_match` so that `~*` continues to mean
 // "literal *". See the VLOOKUP comment at the top of `lookup_scan` for why
@@ -399,14 +405,14 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (!lookup_resolved) {
     return Value::error(lookup_resolved.error());
   }
-  const std::uint32_t l_rows = lookup_resolved.value().rows;
-  const std::uint32_t l_cols = lookup_resolved.value().cols;
+  // A static reference is judged by its declared shape: `A:C` is 2-D
+  // however few rows hold values, and `1:1` is a row even with one cell.
+  std::uint32_t l_rows = lookup_resolved.value().rows;
+  std::uint32_t l_cols = lookup_resolved.value().cols;
+  const bool lookup_declared = static_reference_shape(call.as_call_arg(1), ctx, &l_rows, &l_cols);
   std::vector<Value> lookup_cells = std::move(lookup_resolved.value().cells);
   if (l_rows != 1U && l_cols != 1U) {
     return Value::error(ErrorCode::Value);
-  }
-  if (lookup_cells.empty()) {
-    return Value::error(ErrorCode::NA);
   }
 
   // 3) return_array — its match axis must equal the lookup axis length.
@@ -428,6 +434,14 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const std::uint32_t lookup_len = static_cast<std::uint32_t>(lookup_cells.size());
   const std::uint32_t match_extent = horizontal_lookup ? r_cols : r_rows;
   const std::uint32_t slice_extent = horizontal_lookup ? r_rows : r_cols;
+  // Two static references agree by declared shape (`A:A` never pairs with
+  // `B1:B5`); the walked cells must then line up lane for lane.
+  std::uint32_t r_shape_rows = r_rows;
+  std::uint32_t r_shape_cols = r_cols;
+  if (lookup_declared && static_reference_shape(call.as_call_arg(2), ctx, &r_shape_rows, &r_shape_cols) &&
+      (horizontal_lookup ? r_shape_cols : r_shape_rows) != (horizontal_lookup ? l_cols : l_rows)) {
+    return Value::error(ErrorCode::Value);
+  }
   if (match_extent != lookup_len) {
     return Value::error(ErrorCode::Value);
   }
@@ -619,7 +633,10 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
   const std::uint32_t rows = resolved.value().rows;
   const std::uint32_t cols = resolved.value().cols;
   std::vector<Value> cells = std::move(resolved.value().cells);
-  if (rows != 1U && cols != 1U) {
+  std::uint32_t shape_rows = rows;
+  std::uint32_t shape_cols = cols;
+  static_reference_shape(call.as_call_arg(1), ctx, &shape_rows, &shape_cols);
+  if (shape_rows != 1U && shape_cols != 1U) {
     return Value::error(ErrorCode::Value);
   }
   if (cells.empty()) {

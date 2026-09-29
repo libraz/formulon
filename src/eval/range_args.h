@@ -34,6 +34,7 @@ namespace eval {
 class EvalContext;
 class FunctionRegistry;
 struct FunctionDef;
+struct WholeAxisExtent;
 
 /// Applies the FunctionDef's provenance-aware range filter to one cell.
 bool append_range_sourced_value(const FunctionDef& def, const Value& value, std::vector<Value>* values, Value* out_err);
@@ -96,6 +97,27 @@ Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_no
 Expected<RangeResult, ErrorCode> resolve_range_arg_no_scalar(const parser::AstNode& arg_node, Arena& arena,
                                                              const FunctionRegistry& registry, const EvalContext& ctx,
                                                              ErrorCode scalar_error);
+
+/// Writes the declared shape of `arg_node` when it is a static reference
+/// (after LET passthrough) and returns true; returns false, leaving the
+/// out-params untouched, for any other shape or a reference that does not
+/// resolve. A whole-axis reference's declared shape spans the grid axis,
+/// whatever `resolve_range_arg` walks, so this is what decides orientation
+/// and dimensionality for such an argument.
+bool static_reference_shape(const parser::AstNode& arg_node, const EvalContext& ctx, std::uint32_t* out_rows,
+                            std::uint32_t* out_cols);
+
+/// Computes the walk length the whole-axis references among `call`'s
+/// arguments share (see `WholeAxisExtent`), so that range expansion resolves
+/// them to one shape. Range expansion asks for it through the call's
+/// `WholeAxisScope`; a call reading fewer than two spans on an axis gets zero
+/// there.
+///
+/// Every static reference whose declared rectangle spans a grid axis counts,
+/// including one inside an operator (`A:A>1`), a LET binding, or a
+/// reference-shaped `IF` / `CHOOSE`. A bounded span (`A1:A1048576`) already
+/// materialises the whole axis and so walks every whole-axis sibling there.
+WholeAxisExtent shared_whole_axis_extent(const parser::AstNode& call, const EvalContext& ctx);
 
 /// Materialises an AST argument as an `ArrayValue` via the standard
 /// `eval_node_as_array` seam. Scalar inputs wrap to a 1x1 array. On

@@ -51,19 +51,31 @@ struct CriteriaShape {
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   bool rectangular = false;
+  // The declared shape, when the range is a static reference.
+  bool declared = false;
+  std::uint32_t declared_rows = 0;
+  std::uint32_t declared_cols = 0;
 
-  static CriteriaShape of(const RangeResult& resolved) {
+  /// Two static references compare declared shapes, so `A:A` and `B1:B5`
+  /// disagree even when column A holds five values. Whole-axis references
+  /// among one call's arguments are walked to one length, so their cell
+  /// counts agree whenever their declared shapes do.
+  static CriteriaShape of(const RangeResult& resolved, const parser::AstNode& arg, const EvalContext& ctx) {
     CriteriaShape shape;
     shape.size = resolved.cells.size();
     shape.rows = resolved.rows;
     shape.cols = resolved.cols;
     shape.rectangular = static_cast<std::size_t>(resolved.rows) * static_cast<std::size_t>(resolved.cols) == shape.size;
+    shape.declared = static_reference_shape(arg, ctx, &shape.declared_rows, &shape.declared_cols);
     return shape;
   }
 
   bool agrees_with(const CriteriaShape& other) const {
     if (size != other.size) {
       return false;
+    }
+    if (declared && other.declared) {
+      return declared_rows == other.declared_rows && declared_cols == other.declared_cols;
     }
     if (rectangular && other.rectangular) {
       return rows == other.rows && cols == other.cols;
@@ -105,7 +117,7 @@ bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pai
       *out_err_value = Value::error(resolved.error());
       return false;
     }
-    if (!CriteriaShape::of(resolved.value()).agrees_with(expected)) {
+    if (!CriteriaShape::of(resolved.value(), call.as_call_arg(range_idx), ctx).agrees_with(expected)) {
       *out_err_value = Value::error(ErrorCode::Value);
       return false;
     }
@@ -187,7 +199,7 @@ bool resolve_ifs_inputs(const parser::AstNode& call, Arena& arena, const Functio
     *out_err_value = Value::error(value_resolved.error());
     return false;
   }
-  const CriteriaShape expected = CriteriaShape::of(value_resolved.value());
+  const CriteriaShape expected = CriteriaShape::of(value_resolved.value(), call.as_call_arg(0), ctx);
   out->value_cells = std::move(value_resolved.value().cells);
   out->expected_size = expected.size;
 
@@ -483,7 +495,7 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
   if (!first_resolved) {
     return Value::error(first_resolved.error());
   }
-  const CriteriaShape expected = CriteriaShape::of(first_resolved.value());
+  const CriteriaShape expected = CriteriaShape::of(first_resolved.value(), call.as_call_arg(0), ctx);
   std::vector<Value> first_cells = std::move(first_resolved.value().cells);
   const std::size_t expected_size = expected.size;
   // Error criterion is NOT propagated; it filters error cells (see

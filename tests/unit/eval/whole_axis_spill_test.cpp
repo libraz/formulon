@@ -419,6 +419,175 @@ TEST(WholeAxisSpill, WholeAxisAsRangeAggregatorArgumentIsUnchanged) {
   EXPECT_EQ(v.as_number(), 6.0);
 }
 
+// ---------------------------------------------------------------------------
+// A whole-axis reference passed to a function has its declared shape: two
+// whole columns agree however far each is populated, and a positional read
+// beyond the populated extent sees a blank cell rather than falling off the
+// end of a trimmed rectangle.
+// ---------------------------------------------------------------------------
+
+// Column A holds 1..5, column B holds 10, 20, 30: the two whole columns are
+// populated to different depths.
+Workbook UnevenColumns() {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 5U; ++r) {
+    SeedNumber(wb, r, 0U, static_cast<double>(r + 1U));
+  }
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    SeedNumber(wb, r, 1U, 10.0 * static_cast<double>(r + 1U));
+  }
+  return wb;
+}
+
+Value UnevenValue(const std::string& formula) {
+  const Workbook wb = UnevenColumns();
+  Arena arena;
+  const Value v = evaluate_formula_text_array(wb, wb.sheet(0), 0U, 25U, formula, arena, default_registry());
+  // Only scalar results are returned by value; arrays borrow the arena.
+  EXPECT_FALSE(v.is_array()) << formula;
+  return v;
+}
+
+void ExpectNumber(const Value& v, double expected, const std::string& formula) {
+  ASSERT_TRUE(v.is_number()) << formula << " kind=" << static_cast<int>(v.kind());
+  EXPECT_EQ(v.as_number(), expected) << formula;
+}
+
+TEST(WholeAxisArgumentShape, XlookupOverUnevenColumns) {
+  ExpectNumber(UnevenValue("=XLOOKUP(2,A:A,B:B)"), 20.0, "XLOOKUP(2,A:A,B:B)");
+  ExpectNumber(UnevenValue("=XLOOKUP(20,B:B,A:A)"), 2.0, "XLOOKUP(20,B:B,A:A)");
+}
+
+TEST(WholeAxisArgumentShape, ConditionalAggregatesOverUnevenColumns) {
+  ExpectNumber(UnevenValue("=SUMIFS(B:B,A:A,\">1\")"), 50.0, "SUMIFS(B:B,A:A,\">1\")");
+  ExpectNumber(UnevenValue("=SUMIFS(A:A,B:B,\">10\")"), 5.0, "SUMIFS(A:A,B:B,\">10\")");
+  ExpectNumber(UnevenValue("=COUNTIFS(A:A,\">1\",B:B,\">0\")"), 2.0, "COUNTIFS(A:A,\">1\",B:B,\">0\")");
+  ExpectNumber(UnevenValue("=AVERAGEIFS(B:B,A:A,\">1\")"), 25.0, "AVERAGEIFS(B:B,A:A,\">1\")");
+  ExpectNumber(UnevenValue("=MAXIFS(B:B,A:A,\">1\")"), 30.0, "MAXIFS(B:B,A:A,\">1\")");
+  // Column C is empty: every row of A beyond the first matches `">1"` and
+  // meets a blank C cell.
+  ExpectNumber(UnevenValue("=COUNTIFS(A:A,\">1\",C:C,\"\")"), 4.0, "COUNTIFS(A:A,\">1\",C:C,\"\")");
+  ExpectNumber(UnevenValue("=SUMPRODUCT((A:A>1)*B:B)"), 50.0, "SUMPRODUCT((A:A>1)*B:B)");
+}
+
+TEST(WholeAxisArgumentShape, FilterOverUnevenColumns) {
+  const Workbook wb = UnevenColumns();
+  Arena arena;
+  const Value kept =
+      evaluate_formula_text_array(wb, wb.sheet(0), 0U, 25U, "=FILTER(A:A,B:B>10)", arena, default_registry());
+  ASSERT_TRUE(kept.is_array());
+  ASSERT_EQ(kept.as_array_rows(), 2U);
+  ASSERT_EQ(kept.as_array_cols(), 1U);
+  EXPECT_EQ(kept.as_array_cells()[0].as_number(), 2.0);
+  EXPECT_EQ(kept.as_array_cells()[1].as_number(), 3.0);
+
+  // Rows 2..5 of A pass; B holds values in only two of them.
+  const Value padded =
+      evaluate_formula_text_array(wb, wb.sheet(0), 0U, 25U, "=FILTER(B:B,A:A>1)", arena, default_registry());
+  ASSERT_TRUE(padded.is_array());
+  ASSERT_EQ(padded.as_array_rows(), 4U);
+  EXPECT_EQ(padded.as_array_cells()[0].as_number(), 20.0);
+  EXPECT_EQ(padded.as_array_cells()[1].as_number(), 30.0);
+  EXPECT_FALSE(padded.as_array_cells()[2].is_error());
+  EXPECT_FALSE(padded.as_array_cells()[3].is_error());
+}
+
+TEST(WholeAxisArgumentShape, IndexMatchAcrossSheetsReadsPastThePopulatedExtent) {
+  Workbook wb = Workbook::create();
+  const std::size_t data = wb.add_sheet("Data");
+  for (std::uint32_t r = 0; r < 5U; ++r) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(data, r, 0U, Value::number(static_cast<double>(r + 1U)))));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(data, 0U, 1U, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(data, 1U, 1U, Value::number(20.0))));
+  Arena arena;
+  const Value hit = evaluate_formula_text_array(wb, wb.sheet(0), 0U, 0U, "=INDEX(Data!B:B,MATCH(2,Data!A:A,0))", arena,
+                                                default_registry());
+  ExpectNumber(hit, 20.0, "INDEX(Data!B:B,MATCH(2,Data!A:A,0))");
+  // Data!B4 is blank: INDEX reads it, it does not fall off a trimmed column.
+  const Value blank = evaluate_formula_text_array(wb, wb.sheet(0), 0U, 0U, "=INDEX(Data!B:B,MATCH(4,Data!A:A,0))",
+                                                  arena, default_registry());
+  ExpectNumber(blank, 0.0, "INDEX(Data!B:B,MATCH(4,Data!A:A,0))");
+  // A two-column whole reference populated in one row is still two-dimensional.
+  const Value row2 =
+      evaluate_formula_text_array(wb, wb.sheet(0), 0U, 0U, "=INDEX(Data!A:B,2,2)", arena, default_registry());
+  ExpectNumber(row2, 20.0, "INDEX(Data!A:B,2,2)");
+}
+
+TEST(WholeAxisArgumentShape, DeclaredShapeDecidesAgreementAndOrientation) {
+  // `A:A` declares 1,048,576 rows, so it never pairs with a five-row range
+  // even though column A holds exactly five values.
+  const Value sumifs = UnevenValue("=SUMIFS(A1:A5,B:B,\">0\")");
+  ASSERT_TRUE(sumifs.is_error());
+  EXPECT_EQ(sumifs.as_error(), ErrorCode::Value);
+  const Value xlookup = UnevenValue("=XLOOKUP(2,A:A,A1:A5)");
+  ASSERT_TRUE(xlookup.is_error());
+  EXPECT_EQ(xlookup.as_error(), ErrorCode::Value);
+
+  // Only the first two rows of A:C hold values, yet the reference is taller
+  // than wide: LOOKUP scans column A and returns from column C, and XLOOKUP
+  // rejects it as two-dimensional.
+  Workbook wb = Workbook::create();
+  SeedNumber(wb, 0U, 0U, 1.0);
+  SeedNumber(wb, 1U, 0U, 2.0);
+  SeedNumber(wb, 0U, 2U, 10.0);
+  SeedNumber(wb, 1U, 2U, 20.0);
+  Arena arena;
+  ExpectNumber(evaluate_formula_text_array(wb, wb.sheet(0), 0U, 25U, "=LOOKUP(2,A:C)", arena, default_registry()), 20.0,
+               "LOOKUP(2,A:C)");
+  const Value flat =
+      evaluate_formula_text_array(wb, wb.sheet(0), 0U, 25U, "=XLOOKUP(1,A:B,C:C)", arena, default_registry());
+  ASSERT_TRUE(flat.is_error());
+  EXPECT_EQ(flat.as_error(), ErrorCode::Value);
+}
+
+TEST(WholeAxisArgumentShape, EmptyWholeColumnsStillHonourIfNotFound) {
+  Workbook wb = Workbook::create();
+  SeedNumber(wb, 0U, 25U, 1.0);
+  Arena arena;
+  const Value v =
+      evaluate_formula_text_array(wb, wb.sheet(0), 0U, 24U, "=XLOOKUP(1,A:A,B:B,\"none\")", arena, default_registry());
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "none");
+}
+
+// Column A holds 1..700 and the reference spans A:XFD, so the rectangle the
+// lookups name holds 700 * 16384 cells -- past the range-expansion ceiling --
+// while the lookups only ever read one column and one cell.
+Workbook WideTable() {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 700U; ++r) {
+    SeedNumber(wb, r, 0U, static_cast<double>(r + 1U));
+    SeedNumber(wb, r, 1U, static_cast<double>(r + 1U) * 2.0);
+  }
+  return wb;
+}
+
+TEST(WholeAxisArgumentShape, LookupsOverAWideTableReadOnlyWhatTheyNeed) {
+  const Workbook wb = WideTable();
+  Arena arena;
+  const auto eval = [&](const char* formula) {
+    return evaluate_formula_text_array(wb, wb.sheet(0), 0U, 25U, formula, arena, default_registry());
+  };
+  ExpectNumber(eval("=VLOOKUP(650,A:XFD,2,FALSE)"), 1300.0, "VLOOKUP(650,A:XFD,2,FALSE)");
+  ExpectNumber(eval("=VLOOKUP(650.5,A:XFD,1,TRUE)"), 650.0, "VLOOKUP(650.5,A:XFD,1,TRUE)");
+  ExpectNumber(eval("=INDEX(A:XFD,650,2)"), 1300.0, "INDEX(A:XFD,650,2)");
+  ExpectNumber(eval("=MATCH(650,A:A,0)"), 650.0, "MATCH(650,A:A,0)");
+  // A 2-D whole reference is rejected by its shape without being read.
+  const Value two_d = eval("=MATCH(650,A:XFD,0)");
+  ASSERT_TRUE(two_d.is_error());
+  EXPECT_EQ(two_d.as_error(), ErrorCode::NA);
+  // The row-axis mirror: rows 1..1000 of a 10001-column table.
+  Workbook row_wb = Workbook::create();
+  for (std::uint32_t c = 0; c < 10001U; ++c) {
+    ASSERT_TRUE(static_cast<bool>(row_wb.set_cell_value(0U, 0U, c, Value::number(static_cast<double>(c + 1U)))));
+    ASSERT_TRUE(static_cast<bool>(row_wb.set_cell_value(0U, 1U, c, Value::number(static_cast<double>(c + 1U) * 3.0))));
+  }
+  const Value h = evaluate_formula_text_array(row_wb, row_wb.sheet(0), 1500U, 0U, "=HLOOKUP(7,1:1000,2,FALSE)", arena,
+                                              default_registry());
+  ExpectNumber(h, 21.0, "HLOOKUP(7,1:1000,2,FALSE)");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -631,5 +631,159 @@ Expected<RangeResult, ErrorCode> resolve_array_arg_na(const parser::AstNode& arg
   return std::move(resolved.value());
 }
 
+namespace {
+
+// A static reference among a call's arguments whose declared rectangle spans
+// a whole grid axis.
+struct AxisSpan {
+  parser::Reference lhs;
+  parser::Reference rhs;
+  bool column = false;
+  bool whole_axis = false;
+};
+
+// Collects the axis-spanning static references `node` reads without a call
+// dispatch of its own: operands of operators, LET-bound names, and the
+// reference-shaped calls `resolve_range_arg` expands in place. Any other call
+// is dispatched, and so computes its own shared extent.
+void collect_axis_spans(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t depth,
+                        std::vector<AxisSpan>* out) {
+  constexpr std::uint32_t kMaxDepth = 32U;
+  if (depth > kMaxDepth) {
+    return;
+  }
+  if (node.kind() == parser::NodeKind::NameRef) {
+    const parser::AstNode& bound = resolve_name_ast(node, ctx.name_env());
+    if (&bound != &node) {
+      collect_axis_spans(bound, ctx, depth + 1U, out);
+    }
+    return;
+  }
+  AxisSpan span;
+  if (declared_rect_endpoint_pair(node, &span.lhs, &span.rhs)) {
+    const auto rect = declared_rect(span.lhs, span.rhs);
+    if (!rect) {
+      return;
+    }
+    span.whole_axis = rect.value().whole_axis;
+    if (rect.value().rows() == Sheet::kMaxRows) {
+      span.column = true;
+      out->push_back(span);
+    } else if (rect.value().cols() == Sheet::kMaxCols) {
+      out->push_back(span);
+    }
+    return;
+  }
+  switch (node.kind()) {
+    case parser::NodeKind::BinaryOp:
+      collect_axis_spans(node.as_binary_lhs(), ctx, depth + 1U, out);
+      collect_axis_spans(node.as_binary_rhs(), ctx, depth + 1U, out);
+      return;
+    case parser::NodeKind::UnaryOp:
+      collect_axis_spans(node.as_unary_operand(), ctx, depth + 1U, out);
+      return;
+    case parser::NodeKind::Call:
+      if (is_range_shaped_ast(node)) {
+        for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+          collect_axis_spans(node.as_call_arg(i), ctx, depth + 1U, out);
+        }
+      }
+      return;
+    default:
+      return;
+  }
+}
+
+// Walks the spans on one axis to their longest length, recording in
+// `*shared` where that length was measured. A bounded span already covers
+// the whole axis. Whole-axis spans are measured once per sheet, over the
+// bounding band of that sheet's spans: the band's populated extent is the
+// longest of theirs, or longer only by cells blank in all of them.
+void share_longest_walk(const std::vector<AxisSpan>& spans, bool column, const EvalContext& ctx,
+                        WholeAxisExtent* shared) {
+  std::uint32_t& length = column ? shared->rows : shared->cols;
+  std::vector<AxisSpan> bands;
+  for (const AxisSpan& span : spans) {
+    if (span.column != column) {
+      continue;
+    }
+    if (!span.whole_axis) {
+      length = column ? Sheet::kMaxRows : Sheet::kMaxCols;
+      return;
+    }
+    const std::string_view sheet = span.lhs.sheet.empty() ? span.rhs.sheet : span.lhs.sheet;
+    const auto same_sheet = [sheet](const AxisSpan& band) { return band.lhs.sheet == sheet; };
+    const auto band = std::find_if(bands.begin(), bands.end(), same_sheet);
+    const std::uint32_t first = column ? std::min(span.lhs.col, span.rhs.col) : std::min(span.lhs.row, span.rhs.row);
+    const std::uint32_t last = column ? std::max(span.lhs.col, span.rhs.col) : std::max(span.lhs.row, span.rhs.row);
+    if (band == bands.end()) {
+      AxisSpan fresh = span;
+      fresh.lhs.sheet = sheet;
+      fresh.rhs.sheet = sheet;
+      (column ? fresh.lhs.col : fresh.lhs.row) = first;
+      (column ? fresh.rhs.col : fresh.rhs.row) = last;
+      bands.push_back(fresh);
+      continue;
+    }
+    std::uint32_t& band_first = column ? band->lhs.col : band->lhs.row;
+    std::uint32_t& band_last = column ? band->rhs.col : band->rhs.row;
+    band_first = std::min(band_first, first);
+    band_last = std::max(band_last, last);
+  }
+  for (const AxisSpan& band : bands) {
+    // A reference that cannot be walked reports its own error when the
+    // callee resolves it.
+    const Sheet* sheet = nullptr;
+    const auto walked = ctx.walked_range_rect(band.lhs, band.rhs, &sheet);
+    if (!walked) {
+      continue;
+    }
+    const std::uint32_t band_length =
+        !walked.value().has_value() ? 0U : (column ? walked.value()->rows() : walked.value()->cols());
+    length = std::max(length, band_length);
+    if (bands.size() == 1U) {
+      (column ? shared->rows_sheet : shared->cols_sheet) = sheet;
+      (column ? shared->rows_band_first : shared->cols_band_first) = column ? band.lhs.col : band.lhs.row;
+      (column ? shared->rows_band_last : shared->cols_band_last) = column ? band.rhs.col : band.rhs.row;
+    }
+  }
+}
+
+}  // namespace
+
+bool static_reference_shape(const parser::AstNode& arg_node, const EvalContext& ctx, std::uint32_t* out_rows,
+                            std::uint32_t* out_cols) {
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  if (!declared_rect_endpoint_pair(resolve_name_ast(arg_node, ctx.name_env()), &lhs, &rhs)) {
+    return false;
+  }
+  const auto rect = ctx.declared_range_rect(lhs, rhs);
+  if (!rect) {
+    return false;
+  }
+  *out_rows = rect.value().rows();
+  *out_cols = rect.value().cols();
+  return true;
+}
+
+WholeAxisExtent shared_whole_axis_extent(const parser::AstNode& call, const EvalContext& ctx) {
+  std::vector<AxisSpan> spans;
+  for (std::uint32_t i = 0; i < call.as_call_arity(); ++i) {
+    collect_axis_spans(call.as_call_arg(i), ctx, 0U, &spans);
+  }
+  const auto columns = std::count_if(spans.begin(), spans.end(), [](const AxisSpan& span) { return span.column; });
+  const auto rows = static_cast<std::ptrdiff_t>(spans.size()) - columns;
+  // A lone span has nothing to agree with; its own extent is walked as is.
+  WholeAxisExtent shared;
+  if (columns >= 2) {
+    share_longest_walk(spans, /*column=*/true, ctx, &shared);
+  }
+  if (rows >= 2) {
+    share_longest_walk(spans, /*column=*/false, ctx, &shared);
+  }
+  return shared;
+}
+
 }  // namespace eval
 }  // namespace formulon

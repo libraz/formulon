@@ -326,6 +326,11 @@ bool union_endpoint_refs(const parser::AstNode& lhs_ast, const parser::AstNode& 
 
 Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
+  // A whole-axis scope belongs to the arguments of the call that installed
+  // it; a nested call starts from its own references.
+  if (ctx.whole_axis_scope() != nullptr) {
+    return dispatch_call(node, arena, registry, ctx.with_whole_axis_scope(nullptr));
+  }
   const std::string_view name = strip_future_prefix(node.as_call_name());
   const std::uint32_t arity = node.as_call_arity();
 
@@ -381,7 +386,13 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   }
 
   if (LazyImpl lazy = find_lazy_impl(name); lazy != nullptr) {
-    return lazy(node, arena, registry, ctx);
+    // Lazy callees read their arguments as rectangles, so whole-axis
+    // references among them are walked to one shared length and agree on
+    // shape however far each is populated. Eager callees flatten ranges and
+    // have no shape to agree on.
+    WholeAxisScope scope;
+    scope.call = &node;
+    return lazy(node, arena, registry, ctx.with_whole_axis_scope(&scope));
   }
 
   const FunctionDef* def = registry.lookup(name);

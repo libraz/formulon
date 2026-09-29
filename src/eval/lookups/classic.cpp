@@ -11,12 +11,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "eval/coerce.h"
 #include "eval/criteria.h"
+#include "eval/declared_rect.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
@@ -25,7 +28,10 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
+#include "parser/reference.h"
+#include "sheet.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -237,8 +243,10 @@ struct IndexTile {
   std::uint32_t source_row = 0U;
 };
 
-IndexTile index_tile_for(std::uint32_t rows, std::uint32_t cols, std::uint32_t row_idx, std::uint32_t col_idx,
-                         bool col_explicit) {
+// `rows` x `cols` is the source's shape, which decides the selection; a tile
+// spans `span_rows` x `span_cols`, the part of the source that holds values.
+IndexTile index_tile_for(std::uint32_t rows, std::uint32_t cols, std::uint32_t span_rows, std::uint32_t span_cols,
+                         std::uint32_t row_idx, std::uint32_t col_idx, bool col_explicit) {
   IndexTile tile;
   if (!col_explicit) {
     if (rows == 1U && cols == 1U) {
@@ -247,14 +255,14 @@ IndexTile index_tile_for(std::uint32_t rows, std::uint32_t cols, std::uint32_t r
     if (rows == 1U) {
       if (row_idx == 0U) {
         tile.kind = IndexTileKind::kRow;
-        tile.cols = cols;
+        tile.cols = span_cols;
       }
       return tile;
     }
     if (cols == 1U) {
       if (row_idx == 0U) {
         tile.kind = IndexTileKind::kColumn;
-        tile.rows = rows;
+        tile.rows = span_rows;
       }
       return tile;
     }
@@ -264,12 +272,12 @@ IndexTile index_tile_for(std::uint32_t rows, std::uint32_t cols, std::uint32_t r
     // the explicit `INDEX(src, 0, 0)`. Matches the scalar path.
     if (row_idx == 0U) {
       tile.kind = IndexTileKind::kWhole;
-      tile.rows = rows;
-      tile.cols = cols;
+      tile.rows = span_rows;
+      tile.cols = span_cols;
       return tile;
     }
     tile.kind = IndexTileKind::kRow;
-    tile.cols = cols;
+    tile.cols = span_cols;
     tile.source_row = row_idx - 1U;
     return tile;
   }
@@ -280,39 +288,39 @@ IndexTile index_tile_for(std::uint32_t rows, std::uint32_t cols, std::uint32_t r
   if (rows == 1U) {
     if (col_idx == 0U) {
       tile.kind = IndexTileKind::kRow;
-      tile.cols = cols;
+      tile.cols = span_cols;
     }
     return tile;
   }
   if (cols == 1U) {
     if (row_idx == 0U) {
       tile.kind = IndexTileKind::kColumn;
-      tile.rows = rows;
+      tile.rows = span_rows;
     }
     return tile;
   }
   if (row_idx == 0U && col_idx == 0U) {
     tile.kind = IndexTileKind::kWhole;
-    tile.rows = rows;
-    tile.cols = cols;
+    tile.rows = span_rows;
+    tile.cols = span_cols;
   } else if (row_idx == 0U) {
     tile.kind = IndexTileKind::kColumn;
-    tile.rows = rows;
+    tile.rows = span_rows;
   } else if (col_idx == 0U) {
     tile.kind = IndexTileKind::kRow;
-    tile.cols = cols;
+    tile.cols = span_cols;
   }
   return tile;
 }
 
-Value index_tile_cell(const std::vector<Value>& cells, std::uint32_t source_rows, std::uint32_t source_cols,
-                      std::uint32_t row_idx, std::uint32_t col_idx, bool col_explicit, const IndexTile& tile,
-                      std::uint32_t output_row, std::uint32_t output_col) {
+template <typename CellAt>
+Value index_tile_cell(const CellAt& cell_at, std::uint32_t source_rows, std::uint32_t span_rows,
+                      std::uint32_t span_cols, std::uint32_t row_idx, std::uint32_t col_idx, bool col_explicit,
+                      const IndexTile& tile, std::uint32_t output_row, std::uint32_t output_col) {
   if (tile.kind == IndexTileKind::kScalar) {
     const std::uint32_t source_row = col_explicit ? row_idx - 1U : (source_rows == 1U ? 0U : row_idx - 1U);
     const std::uint32_t source_col = col_explicit ? col_idx - 1U : (source_rows == 1U ? row_idx - 1U : 0U);
-    const std::size_t flat = static_cast<std::size_t>(source_row) * source_cols + source_col;
-    return flat < cells.size() ? cells[flat] : Value::error(ErrorCode::Ref);
+    return cell_at(source_row, source_col);
   }
 
   std::uint32_t source_row = 0U;
@@ -333,10 +341,13 @@ Value index_tile_cell(const std::vector<Value>& cells, std::uint32_t source_rows
     case IndexTileKind::kScalar:
       break;
   }
-  if (source_row >= source_rows || source_col >= source_cols) {
+  if (source_row >= span_rows && tile.kind != IndexTileKind::kRow) {
     return Value::error(ErrorCode::NA);
   }
-  return cells[static_cast<std::size_t>(source_row) * source_cols + source_col];
+  if (source_col >= span_cols && tile.kind != IndexTileKind::kColumn) {
+    return Value::error(ErrorCode::NA);
+  }
+  return cell_at(source_row, source_col);
 }
 
 // ---------------------------------------------------------------------------
@@ -401,6 +412,80 @@ bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const Fu
   *out_rows = 1U;
   *out_cols = 1U;
   return true;
+}
+
+// A table argument spelled as a static reference. The lookup family reads it
+// by coordinate instead of materialising it whole: the declared rectangle is
+// its shape, and only the lines a lookup reads are expanded, so a wide
+// whole-column table costs what the lookup touches.
+struct ReferenceTable {
+  parser::Reference lhs;
+  parser::Reference rhs;
+  DeclaredRect declared;
+  // What a full expansion would walk. A whole-axis reference with nothing
+  // populated walks its first line. Every cell beyond it is blank.
+  DeclaredRect walked;
+};
+
+// True with `*out` filled when `arg` (after LET passthrough) is a static
+// reference; false for every other shape. A static reference that does not
+// resolve reports the error its expansion would.
+Expected<bool, ErrorCode> resolve_reference_table(const parser::AstNode& arg, const EvalContext& ctx,
+                                                  ReferenceTable* out) {
+  const parser::AstNode& node = resolve_name_ast(arg, ctx.name_env());
+  if (!declared_rect_endpoint_pair(node, &out->lhs, &out->rhs)) {
+    return false;
+  }
+  const auto declared = ctx.declared_range_rect(out->lhs, out->rhs);
+  if (!declared) {
+    return declared.error();
+  }
+  const auto walked = ctx.walked_range_rect(out->lhs, out->rhs);
+  if (!walked) {
+    return walked.error();
+  }
+  out->declared = declared.value();
+  if (walked.value().has_value()) {
+    out->walked = *walked.value();
+  } else {
+    out->walked = declared.value();
+    if (out->walked.rows() == Sheet::kMaxRows) {
+      out->walked.row_last = out->walked.row_first;
+    } else {
+      out->walked.col_last = out->walked.col_first;
+    }
+  }
+  return true;
+}
+
+// Expands the bounded sheet rectangle `[row_first..row_last] x
+// [col_first..col_last]` of `table`'s sheet, row-major.
+Expected<std::vector<Value>, ErrorCode> read_table_block(const ReferenceTable& table, std::uint32_t row_first,
+                                                         std::uint32_t row_last, std::uint32_t col_first,
+                                                         std::uint32_t col_last, Arena& arena,
+                                                         const FunctionRegistry& registry, const EvalContext& ctx) {
+  parser::Reference lhs = table.lhs;
+  parser::Reference rhs = table.rhs;
+  lhs.is_full_col = lhs.is_full_row = false;
+  rhs.is_full_col = rhs.is_full_row = false;
+  lhs.row = row_first;
+  lhs.col = col_first;
+  rhs.row = row_last;
+  rhs.col = col_last;
+  return ctx.expand_range(lhs, rhs, arena, registry);
+}
+
+// Reads the cell at (`row`, `col`), 0-based within `table`'s declared
+// rectangle.
+Value read_table_cell(const ReferenceTable& table, std::uint32_t row, std::uint32_t col, Arena& arena,
+                      const FunctionRegistry& registry, const EvalContext& ctx) {
+  const std::uint32_t sheet_row = table.declared.row_first + row;
+  const std::uint32_t sheet_col = table.declared.col_first + col;
+  auto cell = read_table_block(table, sheet_row, sheet_row, sheet_col, sheet_col, arena, registry, ctx);
+  if (!cell) {
+    return Value::error(cell.error());
+  }
+  return cell.value().front();
 }
 
 // Linear scan for VLOOKUP / HLOOKUP. Walks the first column (axis=Column) or
@@ -584,7 +669,19 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_table_array(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
+  ReferenceTable table;
+  const auto by_reference = resolve_reference_table(call.as_call_arg(1), ctx, &table);
+  bool table_ok = false;
+  if (!by_reference) {
+    range_err = by_reference.error();
+  } else if (by_reference.value()) {
+    rows = table.declared.rows();
+    cols = table.declared.cols();
+    table_ok = true;
+  } else {
+    table_ok = resolve_table_array(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols);
+  }
+  if (!table_ok) {
     if (array_lookup) {
       return map_lookup_query_array(lookup, arena, [range_err](const Value& query) {
         return query.is_error() ? query : Value::error(range_err);
@@ -659,38 +756,162 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
     approximate = rl_bool.value();
   }
 
+  // A reference table is scanned along its walked extent -- the same cells
+  // a full expansion would scan -- and only the scanned line is read.
+  const std::vector<Value>* scan_cells = &cells;
+  std::uint32_t scan_rows = rows;
+  std::uint32_t scan_cols = cols;
+  std::vector<Value> scan_line;
+  if (by_reference && by_reference.value()) {
+    const DeclaredRect& walked = table.walked;
+    auto line = axis == LookupAxis::Column
+                    ? read_table_block(table, walked.row_first, walked.row_last, table.declared.col_first,
+                                       table.declared.col_first, arena, registry, ctx)
+                    : read_table_block(table, table.declared.row_first, table.declared.row_first, walked.col_first,
+                                       walked.col_last, arena, registry, ctx);
+    if (!line) {
+      return Value::error(line.error());
+    }
+    scan_line = std::move(line.value());
+    scan_cells = &scan_line;
+    scan_rows = axis == LookupAxis::Column ? walked.rows() : 1U;
+    scan_cols = axis == LookupAxis::Column ? 1U : walked.cols();
+  }
+  const auto fetch = [&](std::size_t off) -> Value {
+    if (scan_cells == &scan_line) {
+      if (result_index == 1U) {
+        return scan_line[off];
+      }
+      const auto along = static_cast<std::uint32_t>(off);
+      return axis == LookupAxis::Column ? read_table_cell(table, along, result_index - 1U, arena, registry, ctx)
+                                        : read_table_cell(table, result_index - 1U, along, arena, registry, ctx);
+    }
+    const std::size_t flat = axis == LookupAxis::Column
+                                 ? (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(result_index - 1U)
+                                 : (static_cast<std::size_t>(result_index - 1U) * static_cast<std::size_t>(cols)) + off;
+    if (flat >= cells.size()) {
+      return Value::error(ErrorCode::Ref);
+    }
+    return cells[flat];
+  };
+
   if (array_lookup) {
     return map_lookup_query_array(lookup, arena, [&](const Value& query) {
       if (query.is_error()) {
         return query;
       }
-      const std::size_t off = lookup_scan(cells, rows, cols, axis, query, approximate, ctx.excel_profile());
+      const std::size_t off =
+          lookup_scan(*scan_cells, scan_rows, scan_cols, axis, query, approximate, ctx.excel_profile());
       if (off == SIZE_MAX) {
         return Value::error(ErrorCode::NA);
       }
-      const std::size_t flat =
-          axis == LookupAxis::Column
-              ? (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(result_index - 1U)
-              : (static_cast<std::size_t>(result_index - 1U) * static_cast<std::size_t>(cols)) + off;
-      if (flat >= cells.size()) {
-        return Value::error(ErrorCode::Ref);
-      }
-      return cells[flat];
+      return fetch(off);
     });
   }
 
-  const std::size_t off = lookup_scan(cells, rows, cols, axis, lookup, approximate, ctx.excel_profile());
+  const std::size_t off =
+      lookup_scan(*scan_cells, scan_rows, scan_cols, axis, lookup, approximate, ctx.excel_profile());
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }
-  const std::size_t flat = axis == LookupAxis::Column
-                               ? (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(result_index - 1U)
-                               : (static_cast<std::size_t>(result_index - 1U) * static_cast<std::size_t>(cols)) + off;
-  if (flat >= cells.size()) {
-    return Value::error(ErrorCode::Ref);
-  }
-  return cells[flat];
+  return fetch(off);
 }
+
+// The rectangle INDEX selects from, in its declared shape. A static
+// reference is read on demand, so a single-cell selection reads one cell; a
+// whole row, column or array spans the walked extent, as a full expansion
+// would. Every other argument arrives materialised.
+class IndexSource {
+ public:
+  IndexSource(std::vector<Value> cells, std::uint32_t rows, std::uint32_t cols)
+      : cells_(std::move(cells)), rows_(rows), cols_(cols), stored_rows_(rows), stored_cols_(cols) {}
+  explicit IndexSource(const ReferenceTable& table)
+      : table_(&table), rows_(table.declared.rows()), cols_(table.declared.cols()) {}
+
+  std::uint32_t rows() const noexcept { return rows_; }
+  std::uint32_t cols() const noexcept { return cols_; }
+  // The part of the rectangle that can hold values.
+  std::uint32_t span_rows() const noexcept { return table_ != nullptr ? table_->walked.rows() : rows_; }
+  std::uint32_t span_cols() const noexcept { return table_ != nullptr ? table_->walked.cols() : cols_; }
+
+  // Reads the whole walked rectangle, for selections that may touch any of it.
+  bool load(Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, ErrorCode* out_err) {
+    if (table_ == nullptr || loaded_) {
+      return true;
+    }
+    const DeclaredRect& walked = table_->walked;
+    auto block = read_table_block(*table_, walked.row_first, walked.row_last, walked.col_first, walked.col_last, arena,
+                                  registry, ctx);
+    if (!block) {
+      *out_err = block.error();
+      return false;
+    }
+    cells_ = std::move(block.value());
+    stored_rows_ = walked.rows();
+    stored_cols_ = walked.cols();
+    loaded_ = true;
+    return true;
+  }
+
+  // The cell at (`row`, `col`) of a materialised or loaded source.
+  Value at(std::uint32_t row, std::uint32_t col) const {
+    if (table_ != nullptr && (row >= stored_rows_ || col >= stored_cols_)) {
+      return Value::blank(BlankGridProjection::kReferenceGridZero);
+    }
+    const std::size_t flat = (static_cast<std::size_t>(row) * stored_cols_) + col;
+    return flat < cells_.size() ? cells_[flat] : Value::error(ErrorCode::Ref);
+  }
+
+  Value cell(std::uint32_t row, std::uint32_t col, Arena& arena, const FunctionRegistry& registry,
+             const EvalContext& ctx) const {
+    if (table_ != nullptr && !loaded_) {
+      return read_table_cell(*table_, row, col, arena, registry, ctx);
+    }
+    return at(row, col);
+  }
+
+  Value row(std::uint32_t row, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) const {
+    if (table_ == nullptr) {
+      return index_whole_row(cells_, cols_, row, arena);
+    }
+    const std::uint32_t sheet_row = table_->declared.row_first + row;
+    return block_array(sheet_row, sheet_row, table_->walked.col_first, table_->walked.col_last, arena, registry, ctx);
+  }
+
+  Value column(std::uint32_t col, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) const {
+    if (table_ == nullptr) {
+      return index_whole_column(cells_, rows_, cols_, col, arena);
+    }
+    const std::uint32_t sheet_col = table_->declared.col_first + col;
+    return block_array(table_->walked.row_first, table_->walked.row_last, sheet_col, sheet_col, arena, registry, ctx);
+  }
+
+  Value whole(Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) const {
+    if (table_ == nullptr) {
+      return index_whole_array(cells_, rows_, cols_, arena);
+    }
+    const DeclaredRect& walked = table_->walked;
+    return block_array(walked.row_first, walked.row_last, walked.col_first, walked.col_last, arena, registry, ctx);
+  }
+
+ private:
+  Value block_array(std::uint32_t row_first, std::uint32_t row_last, std::uint32_t col_first, std::uint32_t col_last,
+                    Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) const {
+    auto block = read_table_block(*table_, row_first, row_last, col_first, col_last, arena, registry, ctx);
+    if (!block) {
+      return Value::error(block.error());
+    }
+    return index_whole_array(block.value(), row_last - row_first + 1U, col_last - col_first + 1U, arena);
+  }
+
+  const ReferenceTable* table_ = nullptr;
+  std::vector<Value> cells_;
+  std::uint32_t rows_ = 0U;
+  std::uint32_t cols_ = 0U;
+  std::uint32_t stored_rows_ = 0U;
+  std::uint32_t stored_cols_ = 0U;
+  bool loaded_ = false;
+};
 
 bool index_domain_valid(std::uint32_t rows, std::uint32_t cols, std::uint32_t row_idx, std::uint32_t col_idx,
                         bool col_explicit) {
@@ -718,9 +939,10 @@ bool index_domain_valid(std::uint32_t rows, std::uint32_t cols, std::uint32_t ro
   return row_idx <= rows && col_idx <= cols;
 }
 
-Value eval_index_array_selector(const std::vector<Value>& cells, std::uint32_t source_rows, std::uint32_t source_cols,
-                                bool source_ok, ErrorCode source_error, const Value& row_value, const Value* col_value,
-                                bool col_explicit, Arena& arena) {
+Value eval_index_array_selector(const IndexSource& source, bool source_ok, ErrorCode source_error,
+                                const Value& row_value, const Value* col_value, bool col_explicit, Arena& arena) {
+  const std::uint32_t source_rows = source.rows();
+  const std::uint32_t source_cols = source.cols();
   const SelectorView row_selector = make_selector_view(row_value);
   const Value implicit_col = Value::number(0.0);
   const SelectorView col_selector = col_explicit ? make_selector_view(*col_value) : make_selector_view(implicit_col);
@@ -755,7 +977,8 @@ Value eval_index_array_selector(const std::vector<Value>& cells, std::uint32_t s
         if (!index_domain_valid(source_rows, source_cols, row.index, col.index, col_explicit)) {
           continue;
         }
-        const IndexTile tile = index_tile_for(source_rows, source_cols, row.index, col.index, col_explicit);
+        const IndexTile tile = index_tile_for(source_rows, source_cols, source.span_rows(), source.span_cols(),
+                                              row.index, col.index, col_explicit);
         out_rows = std::max(out_rows, tile.rows);
         out_cols = std::max(out_cols, tile.cols);
       }
@@ -807,8 +1030,11 @@ Value eval_index_array_selector(const std::vector<Value>& cells, std::uint32_t s
         output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(ErrorCode::Ref);
         continue;
       }
-      const IndexTile tile = index_tile_for(source_rows, source_cols, row.index, col.index, col_explicit);
-      result = index_tile_cell(cells, source_rows, source_cols, row.index, col.index, col_explicit, tile, r, c);
+      const IndexTile tile = index_tile_for(source_rows, source_cols, source.span_rows(), source.span_cols(), row.index,
+                                            col.index, col_explicit);
+      result = index_tile_cell(
+          [&source](std::uint32_t row_at, std::uint32_t col_at) { return source.at(row_at, col_at); }, source_rows,
+          source.span_rows(), source.span_cols(), row.index, col.index, col_explicit, tile, r, c);
       output_cells[static_cast<std::size_t>(r) * out_cols + c] = promote_array_result_cell(result);
     }
   }
@@ -956,22 +1182,25 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
-  auto resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
-  const bool source_ok = resolved.has_value();
-  const ErrorCode source_error = source_ok ? ErrorCode::Value : resolved.error();
-  std::uint32_t rows = 0U;
-  std::uint32_t cols = 0U;
-  std::vector<Value> cells;
-  if (source_ok) {
-    rows = resolved.value().rows;
-    cols = resolved.value().cols;
-    cells = std::move(resolved.value().cells);
-    if (rows == 0U || cols == 0U) {
-      // Defensive: expand_range always produces a positive rectangle today.
-      rows = 0U;
-      cols = 0U;
+  ReferenceTable table;
+  const auto by_reference = resolve_reference_table(call.as_call_arg(0), ctx, &table);
+  ErrorCode source_error = ErrorCode::Value;
+  std::optional<IndexSource> source;
+  if (!by_reference) {
+    source_error = by_reference.error();
+  } else if (by_reference.value()) {
+    source.emplace(table);
+  } else {
+    auto resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+    if (resolved) {
+      source.emplace(std::move(resolved.value().cells), resolved.value().rows, resolved.value().cols);
+    } else {
+      source_error = resolved.error();
     }
   }
+  const std::uint32_t rows = source.has_value() ? source->rows() : 0U;
+  const std::uint32_t cols = source.has_value() ? source->cols() : 0U;
+  bool source_ok = source.has_value();
 
   // row_num is required (arity 2 or 3), col_num is optional.
   const Value row_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
@@ -980,8 +1209,12 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     col_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
   }
   if (row_val.is_array() || col_val.is_array()) {
-    return eval_index_array_selector(cells, rows, cols, source_ok && rows != 0U && cols != 0U, source_error, row_val,
-                                     arity == 3 ? &col_val : nullptr, arity == 3, arena);
+    if (source_ok && !source->load(arena, registry, ctx, &source_error)) {
+      source_ok = false;
+    }
+    const IndexSource no_source(std::vector<Value>{}, 0U, 0U);
+    return eval_index_array_selector(source_ok ? *source : no_source, source_ok && rows != 0U && cols != 0U,
+                                     source_error, row_val, arity == 3 ? &col_val : nullptr, arity == 3, arena);
   }
   if (!source_ok || rows == 0U || cols == 0U) {
     return Value::error(source_error == ErrorCode::Value ? ErrorCode::Ref : source_error);
@@ -1041,7 +1274,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       // 1x1 range: row_num must be 1 (or 0 "whole", which collapses to the
       // sole cell).
       if (row_idx == 0U) {
-        return cells[0];
+        return source->cell(0U, 0U, arena, registry, ctx);
       }
       if (row_idx != 1U) {
         return Value::error(ErrorCode::Ref);
@@ -1052,7 +1285,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       // Row vector: sole index selects the column. Index 0 spills the
       // whole vector (a 1xN horizontal array).
       if (row_idx == 0U) {
-        return index_whole_row(cells, cols, 0U, arena);
+        return source->row(0U, arena, registry, ctx);
       }
       if (row_idx > cols) {
         return Value::error(ErrorCode::Ref);
@@ -1063,7 +1296,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       // Column vector: sole index selects the row. Index 0 spills the
       // whole vector (an Nx1 vertical array).
       if (row_idx == 0U) {
-        return index_whole_column(cells, rows, cols, 0U, arena);
+        return source->column(0U, arena, registry, ctx);
       }
       if (row_idx > rows) {
         return Value::error(ErrorCode::Ref);
@@ -1076,12 +1309,12 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       // then spans both dimensions and spills the entire array, the same
       // result the explicit `INDEX(array, 0, 0)` produces below.
       if (row_idx == 0U) {
-        return index_whole_array(cells, rows, cols, arena);
+        return source->whole(arena, registry, ctx);
       }
       if (row_idx > rows) {
         return Value::error(ErrorCode::Ref);
       }
-      return index_whole_row(cells, cols, row_idx - 1U, arena);
+      return source->row(row_idx - 1U, arena, registry, ctx);
     }
   } else {
     // Three-arg form.
@@ -1093,7 +1326,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       }
       if (col_idx == 0U) {
         // Whole row of a 1-row source -> spill the entire vector.
-        return index_whole_row(cells, cols, 0U, arena);
+        return source->row(0U, arena, registry, ctx);
       }
       if (col_idx > cols) {
         return Value::error(ErrorCode::Ref);
@@ -1108,7 +1341,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       }
       if (row_idx == 0U) {
         // Whole column of a 1-column source -> spill the entire vector.
-        return index_whole_column(cells, rows, cols, 0U, arena);
+        return source->column(0U, arena, registry, ctx);
       }
       if (row_idx > rows) {
         return Value::error(ErrorCode::Ref);
@@ -1118,21 +1351,21 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     } else {
       // 2-D array. Zero indices spill the spanned dimension.
       if (row_idx == 0U && col_idx == 0U) {
-        return index_whole_array(cells, rows, cols, arena);
+        return source->whole(arena, registry, ctx);
       }
       if (row_idx == 0U) {
         // Whole column at col_idx -> spill the column as a vertical array.
         if (col_idx > cols) {
           return Value::error(ErrorCode::Ref);
         }
-        return index_whole_column(cells, rows, cols, col_idx - 1U, arena);
+        return source->column(col_idx - 1U, arena, registry, ctx);
       }
       if (col_idx == 0U) {
         // Whole row at row_idx -> spill the row as a horizontal array.
         if (row_idx > rows) {
           return Value::error(ErrorCode::Ref);
         }
-        return index_whole_row(cells, cols, row_idx - 1U, arena);
+        return source->row(row_idx - 1U, arena, registry, ctx);
       }
       if (row_idx > rows || col_idx > cols) {
         return Value::error(ErrorCode::Ref);
@@ -1142,11 +1375,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     }
   }
 
-  const std::size_t flat = (static_cast<std::size_t>(r) * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(c);
-  if (flat >= cells.size()) {
-    return Value::error(ErrorCode::Ref);
-  }
-  return cells[flat];
+  return source->cell(r, c, arena, registry, ctx);
 }
 
 Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int match_type, ExcelProfile profile) {
@@ -1318,7 +1547,17 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   const bool array_lookup = lookup.is_array();
 
-  // lookup_array: must be a range / Ref with a 1-D shape.
+  // lookup_array: must be a range / Ref with a 1-D shape. A static
+  // reference is judged by its declared shape, and a 2-D one is not read.
+  ReferenceTable table;
+  const auto by_reference = resolve_reference_table(call.as_call_arg(1), ctx, &table);
+  if (by_reference && by_reference.value() && table.declared.rows() != 1U && table.declared.cols() != 1U) {
+    if (array_lookup) {
+      return map_lookup_query_array(
+          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::NA); });
+    }
+    return Value::error(ErrorCode::NA);
+  }
   auto resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
   if (!resolved) {
     if (array_lookup) {
@@ -1492,7 +1731,12 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Ref);
   }
 
-  const LookupAxis axis = lrows >= lcols ? LookupAxis::Column : LookupAxis::Row;
+  // The orientation is the declared one: `A:C` is taller than wide however
+  // few of its rows hold values.
+  std::uint32_t lshape_rows = lrows;
+  std::uint32_t lshape_cols = lcols;
+  static_reference_shape(call.as_call_arg(1), ctx, &lshape_rows, &lshape_cols);
+  const LookupAxis axis = lshape_rows >= lshape_cols ? LookupAxis::Column : LookupAxis::Row;
   const std::size_t off =
       lookup_scan(lookup_cells, lrows, lcols, axis, lookup, /*approximate=*/true, ctx.excel_profile());
   if (off == SIZE_MAX) {
@@ -1531,7 +1775,10 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Index the result vector along its own long axis. Excel treats the
   // result vector as parallel to the lookup vector, so the "axis position"
   // maps to the same offset regardless of orientation.
-  const LookupAxis raxis = rrows >= rcols ? LookupAxis::Column : LookupAxis::Row;
+  std::uint32_t rshape_rows = rrows;
+  std::uint32_t rshape_cols = rcols;
+  static_reference_shape(call.as_call_arg(2), ctx, &rshape_rows, &rshape_cols);
+  const LookupAxis raxis = rshape_rows >= rshape_cols ? LookupAxis::Column : LookupAxis::Row;
   const std::size_t flat = raxis == LookupAxis::Column ? (off * static_cast<std::size_t>(rcols)) : off;
   return flat < result_cells.size() ? result_cells[flat] : Value::error(ErrorCode::NA);
 }

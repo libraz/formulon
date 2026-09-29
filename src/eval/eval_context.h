@@ -40,12 +40,51 @@ class Arena;
 class Sheet;
 class Workbook;
 
+namespace parser {
+class AstNode;
+}  // namespace parser
+
 namespace eval {
 
 class EvalState;
 class FunctionRegistry;
 class NameEnv;
 struct DefinedNameFrame;
+
+/// How far every whole-axis reference among one call's arguments is walked:
+/// `rows` cells down a whole-column span, `cols` cells across a whole-row
+/// span. Zero leaves that axis to the reference's own populated extent.
+///
+/// A whole-axis reference declares the full grid axis, and range expansion
+/// only walks it to the populated extent to stay affordable. Two such
+/// references populated to different depths would then disagree on a shape
+/// they declare identically, so a call reading several of them walks all of
+/// them to one shared length; the extra cells are blank, as they are on the
+/// sheet.
+struct WholeAxisExtent {
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  // Where `rows` / `cols` was measured: the populated extent of this sheet
+  // over the bounded-axis band [first, last]. A span inside the band cannot
+  // reach further, so its own extent need not be measured again.
+  const Sheet* rows_sheet = nullptr;
+  std::uint32_t rows_band_first = 0;
+  std::uint32_t rows_band_last = 0;
+  const Sheet* cols_sheet = nullptr;
+  std::uint32_t cols_band_first = 0;
+  std::uint32_t cols_band_last = 0;
+
+  constexpr bool any() const noexcept { return rows != 0U || cols != 0U; }
+};
+
+/// The shared whole-axis extent of one dispatched call, owned by the
+/// dispatch frame. It is computed on the first whole-axis expansion under
+/// the call, so a call that never expands one pays nothing for it.
+struct WholeAxisScope {
+  const parser::AstNode* call = nullptr;
+  bool resolved = false;
+  WholeAxisExtent extent;
+};
 
 /// Evaluator-side view of the data a formula needs to resolve cell
 /// references.
@@ -200,7 +239,8 @@ class EvalContext {
   ///
   /// Whole-column / whole-row endpoints (`A:A`, `A:C`, `1:1`, `1:3`) are
   /// expanded against the target sheet's used range: the unbounded axis is
-  /// clamped to the sheet's populated extent, and the bounded axis keeps
+  /// clamped to the sheet's populated extent (or walked to the dispatched
+  /// call's shared `WholeAxisExtent` when that is longer), and the bounded axis keeps
   /// its natural origin (row 0 for a column, column 0 for a row) so
   /// positional consumers (INDEX / VLOOKUP offsets) see the reference's
   /// true top-left. A sheet with no content in range yields an empty
@@ -247,6 +287,34 @@ class EvalContext {
   /// `#VALUE!` for an endpoint pair that declares no rectangle.
   Expected<DeclaredRect, ErrorCode> declared_range_rect(const parser::Reference& lhs,
                                                         const parser::Reference& rhs) const;
+
+  /// Resolves the rectangle `expand_range` walks for `[lhs : rhs]`, without
+  /// reading a cell: the declared rectangle, with a whole-axis span narrowed
+  /// to the populated extent and widened to the call's shared extent.
+  /// `std::nullopt` means an empty whole-axis walk. Errors are
+  /// `expand_range`'s.
+  ///
+  /// This is an enumeration bound, never a shape. It lets a consumer that
+  /// reads a few lines of a large rectangle materialise only those lines
+  /// while agreeing cell-for-cell with a full expansion.
+  /// When non-null, `out_sheet` receives the sheet the walk reads.
+  Expected<std::optional<DeclaredRect>, ErrorCode> walked_range_rect(const parser::Reference& lhs,
+                                                                     const parser::Reference& rhs,
+                                                                     const Sheet** out_sheet = nullptr) const;
+
+  /// The whole-axis scope of the call being dispatched, or `nullptr` outside
+  /// a lazily dispatched call. See `WholeAxisScope`.
+  WholeAxisScope* whole_axis_scope() const noexcept { return whole_axis_scope_; }
+
+  /// Returns a copy of `*this` whose whole-axis expansions share `scope`'s
+  /// extent. Call dispatch installs one per lazy call and clears it for every
+  /// nested call, so an extent never outlives the arguments it was derived
+  /// from. `scope` must outlive every evaluator call observing the copy.
+  EvalContext with_whole_axis_scope(WholeAxisScope* scope) const noexcept {
+    EvalContext copy = *this;
+    copy.whole_axis_scope_ = scope;
+    return copy;
+  }
 
   /// Returns the sheet this context is bound to, or `nullptr` when the
   /// context was default-constructed.
@@ -498,6 +566,10 @@ class EvalContext {
   Value dispatch_array_result(Value v) const;
 
  private:
+  // The shared extent of the current call's whole-axis arguments, computed
+  // on first use.
+  WholeAxisExtent shared_whole_axis_extent() const;
+
   const Sheet* current_sheet_ = nullptr;
   EvalState* state_ = nullptr;
   const Workbook* workbook_ = nullptr;
@@ -536,6 +608,8 @@ class EvalContext {
   // is skipped. Set by the recalc engine, which drives iterative calc
   // itself; left false for direct-`evaluate()` callers.
   bool suppress_iterative_driver_ = false;
+  // Whole-axis scope of the call being dispatched; see `WholeAxisScope`.
+  WholeAxisScope* whole_axis_scope_ = nullptr;
 };
 
 /// Fluent builder for the workbook-aware, state-carrying flavour of
