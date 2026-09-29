@@ -503,6 +503,30 @@ TEST(FormulonCApiSheetLayout, RowOverridesUpsert) {
   EXPECT_EQ(row9.style_xf, 0U);
 }
 
+TEST(FormulonCApiSheetLayout, RowHiddenDirtiesSubtotalOverTheRow) {
+  // SUBTOTAL(109, ...) sums while skipping manually hidden rows; that
+  // dependency on row-visibility state is invisible to the ordinary
+  // dep-graph edges a cell-value write dirties, so `fm_sheet_set_row_hidden`
+  // has to dirty it some other way.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 10.0), 0);                     // A1
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 1, 0, 20.0), 0);                     // A2
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 2, 0, "=SUBTOTAL(109,A1:A2)"), 0);  // A3
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 2, 0, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 30.0);
+
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 1), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 2, 0, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 20.0) << "A1's row is now hidden; SUBTOTAL(109,...) must exclude it";
+}
+
 TEST(FormulonCApiSheetLayout, InvalidSheetIndexRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

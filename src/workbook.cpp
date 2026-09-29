@@ -238,6 +238,228 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
   }
 }
 
+// Invokes `visit_name(name)` for every `NameRef` and `visit_table(table)`
+// for every `StructuredRef`'s table specifier found while walking `node`'s
+// subtree. Node-kind coverage mirrors `parser::TransformNode`
+// (ast_shift.cpp) exhaustively, so a reference nested inside any expression
+// form (calls, LET/LAMBDA bodies, array literals, unions...) is found; a
+// reference shadowed by an enclosing LET/LAMBDA parameter of the same
+// spelling is still visited -- treating it as a real reference only costs an
+// unnecessary reindex, never a missed one.
+template <typename VisitName, typename VisitTable>
+void for_each_name_and_table_ref(const parser::AstNode& node, const VisitName& visit_name,
+                                 const VisitTable& visit_table) {
+  switch (node.kind()) {
+    case parser::NodeKind::NameRef:
+      visit_name(node.as_name());
+      return;
+    case parser::NodeKind::StructuredRef:
+      visit_table(node.as_structured_ref_table());
+      return;
+    case parser::NodeKind::Literal:
+    case parser::NodeKind::ErrorLiteral:
+    case parser::NodeKind::ErrorPlaceholder:
+    case parser::NodeKind::ExternalRef:
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::SpillRef:
+    case parser::NodeKind::Ref3D:
+      return;
+    case parser::NodeKind::UnaryOp:
+      for_each_name_and_table_ref(node.as_unary_operand(), visit_name, visit_table);
+      return;
+    case parser::NodeKind::BinaryOp:
+      for_each_name_and_table_ref(node.as_binary_lhs(), visit_name, visit_table);
+      for_each_name_and_table_ref(node.as_binary_rhs(), visit_name, visit_table);
+      return;
+    case parser::NodeKind::RangeOp:
+      for_each_name_and_table_ref(node.as_range_lhs(), visit_name, visit_table);
+      for_each_name_and_table_ref(node.as_range_rhs(), visit_name, visit_table);
+      return;
+    case parser::NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        for_each_name_and_table_ref(node.as_union_child(i), visit_name, visit_table);
+      }
+      return;
+    case parser::NodeKind::IntersectOp:
+      for_each_name_and_table_ref(node.as_intersect_lhs(), visit_name, visit_table);
+      for_each_name_and_table_ref(node.as_intersect_rhs(), visit_name, visit_table);
+      return;
+    case parser::NodeKind::ImplicitIntersection:
+      for_each_name_and_table_ref(node.as_implicit_intersection_operand(), visit_name, visit_table);
+      return;
+    case parser::NodeKind::Call:
+      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+        for_each_name_and_table_ref(node.as_call_arg(i), visit_name, visit_table);
+      }
+      return;
+    case parser::NodeKind::ArrayLiteral:
+      for (std::uint32_t r = 0; r < node.as_array_rows(); ++r) {
+        for (std::uint32_t c = 0; c < node.as_array_cols(); ++c) {
+          for_each_name_and_table_ref(node.as_array_element(r, c), visit_name, visit_table);
+        }
+      }
+      return;
+    case parser::NodeKind::Lambda:
+      for_each_name_and_table_ref(node.as_lambda_body(), visit_name, visit_table);
+      return;
+    case parser::NodeKind::LetBinding:
+      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+        for_each_name_and_table_ref(node.as_let_binding_expr(i), visit_name, visit_table);
+      }
+      for_each_name_and_table_ref(node.as_let_body(), visit_name, visit_table);
+      return;
+    case parser::NodeKind::LambdaCall:
+      for_each_name_and_table_ref(node.as_lambda_call_callee(), visit_name, visit_table);
+      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
+        for_each_name_and_table_ref(node.as_lambda_call_arg(i), visit_name, visit_table);
+      }
+      return;
+  }
+}
+
+template <typename Visit>
+void for_each_name_ref(const parser::AstNode& node, const Visit& visit) {
+  for_each_name_and_table_ref(node, visit, [](std::string_view) {});
+}
+
+template <typename Visit>
+void for_each_table_ref(const parser::AstNode& node, const Visit& visit) {
+  for_each_name_and_table_ref(node, [](std::string_view) {}, visit);
+}
+
+// True once any entry of `candidates` (case-insensitive) is found among the
+// names `for_each` visits while walking `root`. Shared by the defined-name
+// closure test (`for_each_name_ref`) and the table-reference test
+// (`for_each_table_ref`) below.
+template <typename ForEach>
+bool references_any(const parser::AstNode& root, const std::vector<std::string>& candidates, const ForEach& for_each) {
+  bool found = false;
+  for_each(root, [&](std::string_view ref) {
+    if (found) {
+      return;
+    }
+    found = std::any_of(candidates.begin(), candidates.end(),
+                        [&](const std::string& n) { return strings::case_insensitive_eq(n, ref); });
+  });
+  return found;
+}
+
+bool references_any_name(const parser::AstNode& root, const std::vector<std::string>& candidates) {
+  return references_any(root, candidates,
+                        [](const parser::AstNode& n, const auto& visit) { for_each_name_ref(n, visit); });
+}
+
+bool references_any_table(const parser::AstNode& root, const std::vector<std::string>& candidates) {
+  return references_any(root, candidates,
+                        [](const parser::AstNode& n, const auto& visit) { for_each_table_ref(n, visit); });
+}
+
+// Closure of defined names whose resolved value can change when
+// `changed_name` is added, retargeted, or removed: `changed_name` itself,
+// plus every other defined name whose own formula references it
+// (transitively). `defined_names` is a handful of entries in practice, so
+// the O(names^2) fixpoint here is cheap next to reparsing every formula
+// cell in the workbook, which the caller below does exactly once per
+// affected cell rather than once per cell regardless of relevance.
+std::vector<std::string> collect_affected_names(const std::vector<io::DefinedName>& defined_names,
+                                                std::string_view changed_name) {
+  std::vector<std::string> affected{std::string(changed_name)};
+  Arena arena;
+  bool grew = true;
+  while (grew) {
+    grew = false;
+    for (const io::DefinedName& entry : defined_names) {
+      if (std::any_of(affected.begin(), affected.end(),
+                      [&](const std::string& n) { return strings::case_insensitive_eq(n, entry.name); })) {
+        continue;
+      }
+      std::string_view body = entry.formula;
+      if (!body.empty() && body.front() == '=') {
+        body.remove_prefix(1);
+      }
+      if (body.empty()) {
+        continue;
+      }
+      arena.reset();
+      const parser::AstNode* root = parser::parse_strict(body, arena);
+      if (root != nullptr && references_any_name(*root, affected)) {
+        affected.emplace_back(entry.name);
+        grew = true;
+      }
+    }
+  }
+  return affected;
+}
+
+// Re-registers and dirties only the formula cells whose value can change
+// when `changed_name` (and every name that transitively references it, per
+// `collect_affected_names`) is added, retargeted, or removed. Unlike
+// `reindex_all_formulas`, this leaves every unaffected formula's dep-graph
+// edges, cached value, and spill geometry untouched, so setting a print
+// area/print titles/unrelated name no longer wipes spills workbook-wide or
+// forces every formula to recompute. Shared by every scoped-reindex caller
+// below (defined names, table structure) via `affected`, which tests the
+// already-parsed AST; the parse itself cannot be skipped for the unaffected
+// majority (no per-name/per-table dependent index exists in the recalc
+// engine to look this up directly), so cost is proportional to the
+// workbook's formula count regardless of how few are actually affected. It
+// no longer re-registers dep-graph edges, resets the graph, or clears
+// spills for that unaffected majority, unlike `reindex_all_formulas`.
+template <typename Affected>
+void reindex_formulas_if(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                         const Workbook& workbook, const Affected& affected) {
+  Arena parser_arena;
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    Sheet& sheet = sheets[sheet_idx];
+    for (const auto& [row, cells] : sheet.rows()) {
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        const Cell& cell = cells[col];
+        if (cell.formula_text.empty()) {
+          continue;
+        }
+        std::string_view body = cell.formula_text;
+        if (!body.empty() && body.front() == '=') {
+          body.remove_prefix(1);
+        }
+        if (body.empty()) {
+          continue;
+        }
+        parser_arena.reset();
+        parser::AstNode* root = parser::parse_strict(body, parser_arena);
+        if (root == nullptr || !affected(*root)) {
+          continue;
+        }
+        const eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
+        // No-op when `(row, col)` is not a spill anchor.
+        sheet.clear_spill(row, static_cast<std::uint32_t>(col));
+        mutator.register_formula(node, *root, workbook);
+        mutator.mark_dirty(node);
+      }
+    }
+  }
+}
+
+void reindex_formulas_referencing_name(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                                       const Workbook& workbook, std::string_view changed_name) {
+  const std::vector<std::string> affected = collect_affected_names(workbook.defined_names(), changed_name);
+  reindex_formulas_if(sheets, mutator, workbook,
+                      [&](const parser::AstNode& root) { return references_any_name(root, affected); });
+}
+
+// Re-registers and dirties only the formula cells whose structured
+// reference resolves through `dep_extractor` into a static rectangle
+// derived from a table's current `ref`/columns (see
+// `eval/dep_extractor.cpp`'s `StructuredRef` handling), so a table create,
+// ref/column edit, or removal needs the same scoped treatment as a defined-
+// name edit: only a formula naming one of `table_names` (a table's `name`
+// and `display_name` can each appear in a structured reference) can be
+// affected.
+void reindex_formulas_referencing_table(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                                        const Workbook& workbook, const std::vector<std::string>& table_names) {
+  reindex_formulas_if(sheets, mutator, workbook,
+                      [&](const parser::AstNode& root) { return references_any_table(root, table_names); });
+}
+
 // Excel's structural validation for sheet names: strict UTF-8, non-empty,
 // ≤ 31 UTF-16 units, and no `: \ / ? * [ ]`. The forbidden-character scan is
 // a byte-level check (the forbidden set is ASCII), so it works correctly on
@@ -570,14 +792,14 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
         it->formula = std::move(formula);
       }
       // Retargeting or removing an existing name changes what every formula
-      // that references it resolves to, so their dep-graph edges (extracted
-      // by expanding the old definition) and cached values are now stale.
-      // Rebuild the graph from the current definitions and mark all formulas
-      // dirty so the next recalc re-resolves the name. Redefinition is a rare
-      // user edit; workbook load appends fresh unique names and never reaches
-      // this branch, so the load path keeps its per-name cost.
+      // that references it (directly or through another name that expands
+      // to it) resolves to, so their dep-graph edges and cached values are
+      // now stale; a formula that never mentions this name is unaffected.
+      // Re-register and dirty just that subset, and clear spill geometry
+      // only where one of them anchors a spill, rather than the workbook-
+      // wide rebuild `reindex_all_formulas` would force.
       const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-      reindex_all_formulas(sheets_, mutator, *this);
+      reindex_formulas_referencing_name(sheets_, mutator, *this, name);
       return Expected<void, Error>::Ok();
     }
   }
@@ -593,12 +815,21 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   entry.local_sheet_id = local_sheet_id;
   defined_names_.push_back(std::move(entry));
   // Adding a name can make an already-calculated #NAME? formula resolvable.
-  // Its old dependency entry was extracted without this definition, so use
-  // the same full rebuild as name updates and removals before the next
-  // recalc.
+  // Only a formula that actually mentions this name (or another name that
+  // expands to it) could have produced that stale #NAME?, so scope the
+  // re-register/dirty pass to that subset rather than every formula.
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  reindex_all_formulas(sheets_, mutator, *this);
+  reindex_formulas_referencing_name(sheets_, mutator, *this, defined_names_.back().name);
   return Expected<void, Error>::Ok();
+}
+
+void Workbook::reindex_formulas_for_table_change(const std::vector<std::string>& table_names) {
+  if (table_names.empty()) {
+    return;
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  reindex_formulas_referencing_table(sheets_, mutator, *this, table_names);
 }
 
 const Sheet* Workbook::sheet_by_name(std::string_view name) const noexcept {
@@ -954,6 +1185,16 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   return Expected<void, Error>::Ok();
 }
 
+void Workbook::mark_cell_dependents_dirty(std::size_t sheet_index, std::uint32_t row, std::uint32_t col) {
+  if (sheet_index >= sheets_.size() || !Sheet::coord_in_grid(row, col)) {
+    return;
+  }
+  const eval::CellNodeId node = make_node(sheet_index, row, col);
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  mark_dependents_dirty(mutator, node);
+}
+
 Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange merge) {
   if (sheet_index >= sheets_.size()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "add_merge: sheet_index out of range",
@@ -1047,6 +1288,48 @@ Expected<eval::RecalcStats, Error> Workbook::partial_recalc(const eval::Function
 
 void Workbook::set_iterative_progress(eval::IterativeProgressCb cb, void* user_data) noexcept {
   engine_->set_iterative_progress(cb, user_data);
+}
+
+void Workbook::mark_row_visibility_dependents_dirty() {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets_.size(); ++sheet_idx) {
+    const Sheet& sheet = sheets_[sheet_idx];
+    for (const auto& [row, cells] : sheet.rows()) {
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        const Cell& cell = cells[col];
+        if (cell.formula_text.empty()) {
+          continue;
+        }
+        // SUBTOTAL/AGGREGATE can only be called by literally spelling one
+        // of these names, so this text scan has no false negatives; a
+        // string literal that happens to contain one costs a harmless
+        // extra dirty mark rather than reparsing every formula in the
+        // workbook to test more precisely.
+        if (strings::case_insensitive_contains(cell.formula_text, "SUBTOTAL") ||
+            strings::case_insensitive_contains(cell.formula_text, "AGGREGATE")) {
+          mutator.mark_dirty(
+              eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
+        }
+      }
+    }
+  }
+}
+
+void Workbook::mark_all_formulas_dirty() {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets_.size(); ++sheet_idx) {
+    for (const auto& [row, cells] : sheets_[sheet_idx].rows()) {
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        if (cells[col].formula_text.empty()) {
+          continue;
+        }
+        mutator.mark_dirty(
+            eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
+      }
+    }
+  }
 }
 
 namespace {

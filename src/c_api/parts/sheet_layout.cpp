@@ -310,7 +310,16 @@ extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_i
     return rc;
   }
   formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
-  entry->hidden = (hidden != 0);
+  const bool next_hidden = (hidden != 0);
+  if (entry->hidden == next_hidden) {
+    return 0;
+  }
+  entry->hidden = next_hidden;
+  // SUBTOTAL(101..111, ...) and AGGREGATE's hidden-row-skipping option read
+  // this row's hidden state without that state appearing anywhere in the
+  // dep graph's cell/range edges, so the ordinary dirty propagation a
+  // cell-value write triggers cannot reach them.
+  wb->workbook().mark_row_visibility_dependents_dirty();
   return 0;
 }
 

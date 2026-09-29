@@ -156,6 +156,28 @@ TEST(FormulonCApiCalcMode, ExcelProfileIdDefaultsToWinJaAndRoundTrips) {
   EXPECT_STREQ(profile, "win-365-ja_JP");
 }
 
+TEST(FormulonCApiCalcMode, ExcelProfileSwitchDirtiesProfileSensitiveFormulas) {
+  // CODE() special-cases U+9AD9 to 38526 only under the win-365-ja_JP host
+  // (eval/info_lazy.cpp); recalc alone is dirty-only, so a profile switch
+  // has to mark every formula dirty itself or the cached win-profile value
+  // survives the switch unrecomputed.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=CODE(\"\xe9\xab\x99\")"), 0);  // U+9AD9
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_DOUBLE_EQ(v.u.number, 38526.0);
+
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_NE(v.u.number, 38526.0) << "the profile switch must dirty CODE() so it re-evaluates under the new host";
+}
+
 TEST(FormulonCApiCalcMode, UnknownExcelProfileIdRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

@@ -147,6 +147,15 @@ fm_status_t check_row_index(std::uint32_t row, const char* api);
 // legitimate metric of a zero-width column or zero-height row.
 fm_status_t check_finite_non_negative(double value, const char* api, const char* field);
 
+// Rejects a value that is not a finite double. A Number-kind `Value` is
+// otherwise the engine's own invariant everywhere else -- every arithmetic
+// result that would be NaN/Inf is converted to `#NUM!` before it can be
+// observed (`eval/scalar_ops.cpp`) -- and `save()` downgrades a non-finite
+// literal to `#NUM!` on write (`io/ooxml_writer_cell.cpp`), so a number
+// setter that skipped this check would let ISNUMBER and arithmetic
+// disagree about the cell right up until the first save.
+fm_status_t check_finite(double value, const char* api, const char* field);
+
 // Rejects an ordinal outside `[0, max]`. `max` is the last declared
 // enumerator of the model enum the field mirrors, so extending that enum
 // widens the domain at the same time. A value past it would otherwise be

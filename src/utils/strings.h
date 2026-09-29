@@ -218,6 +218,24 @@ inline bool ends_with(std::string_view haystack, std::string_view suffix) noexce
   return haystack.compare(haystack.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
+/// Returns true iff `haystack` contains `needle` anywhere, comparing ASCII
+/// letters case-insensitively (same fold as `case_insensitive_eq`).
+inline bool case_insensitive_contains(std::string_view haystack, std::string_view needle) noexcept {
+  if (needle.empty()) {
+    return true;
+  }
+  if (needle.size() > haystack.size()) {
+    return false;
+  }
+  const std::size_t last_start = haystack.size() - needle.size();
+  for (std::size_t start = 0; start <= last_start; ++start) {
+    if (case_insensitive_eq(haystack.substr(start, needle.size()), needle)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace strings
 }  // namespace formulon
 

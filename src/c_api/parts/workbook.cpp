@@ -44,9 +44,11 @@ namespace {
 
 // Engine-side shim for the C ABI iterative-solver progress callback. The
 // engine passes the registering handle as `user_data`; the caller's own
-// opaque pointer is stored beside the callback on that handle. A cleared
-// callback is never installed, so the null check here only guards a racing
-// clear from another thread and defaults to continuing the solve.
+// opaque pointer is stored beside the callback on that handle. Per the
+// threading model (formulon_c.h), a caller must not race a clear against a
+// solve on the same handle; the null check here is not a guard against
+// such a race, only against `fm_workbook_set_iterative_progress(wb,
+// nullptr, ...)` having cleared the callback before this solve started.
 bool iterative_progress_adapter(std::uint32_t iteration, double max_residual, std::uint32_t max_iterations,
                                 void* user_data) {
   auto* handle = static_cast<fm_workbook_t*>(user_data);
@@ -694,6 +696,13 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
   auto& tables = book.mutable_tables();
   tables.push_back(std::move(table));
   *out_index = tables.size() - 1U;
+  // A structured reference can already exist in a formula authored ahead of
+  // its table (Excel resolves it once the table appears, surfacing #NAME?
+  // until then, exactly like a forward-referenced defined name), so the new
+  // table's name and display name both need the same scoped reindex a
+  // defined-name edit gets.
+  const formulon::io::TableMetadata& created = tables.back();
+  book.reindex_formulas_for_table_change({created.name, created.display_name});
   return 0;
 }
 
@@ -730,6 +739,11 @@ extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index,
   table.totals_row = next_totals_row;
   table.auto_filter_xml = next_auto_filter_xml;
   table.table_style_info_xml = next_style_xml;
+  // The `ref` just changed, so every structured reference into this table
+  // resolves to a different rectangle (`eval/dep_extractor.cpp`); reindex
+  // the formulas that name it rather than leave their dep-graph edges and
+  // cached values pointing at the pre-edit extent.
+  wb->workbook().reindex_formulas_for_table_change({table.name, table.display_name});
   return 0;
 }
 
@@ -743,7 +757,14 @@ extern "C" fm_status_t fm_workbook_table_remove(fm_workbook_t* wb, size_t index)
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_table_remove: table index out of range");
   }
+  // Capture identity before erasing: a formula naming the removed table now
+  // resolves to nothing (Excel surfaces #NAME? / #REF! at the structured
+  // reference), so it needs the same scoped reindex a table create/update
+  // triggers, using the name it can no longer find.
+  const std::string removed_name = tables[index].name;
+  const std::string removed_display_name = tables[index].display_name;
   tables.erase(tables.begin() + static_cast<std::ptrdiff_t>(index));
+  wb->workbook().reindex_formulas_for_table_change({removed_name, removed_display_name});
   return 0;
 }
 
@@ -984,7 +1005,16 @@ extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_set_excel_profile_id: unknown profile");
   }
-  wb->workbook().set_excel_profile(profile);
+  formulon::Workbook& book = wb->workbook();
+  const bool changed = !formulon::eval::same_profile(book.excel_profile(), profile);
+  book.set_excel_profile(profile);
+  if (changed) {
+    // Profile-sensitive evaluation (SUMIF/COUNTIF criteria matching,
+    // INFO/CELL, other host-dependent branches) is not confined to a
+    // enumerable set of function names the way SUBTOTAL/AGGREGATE are, so
+    // every formula cell needs the recompute rather than a scoped subset.
+    book.mark_all_formulas_dirty();
+  }
   return 0;
 }
 

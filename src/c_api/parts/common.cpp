@@ -127,6 +127,14 @@ fm_status_t check_finite_non_negative(double value, const char* api, const char*
                            std::string(api) + ": " + field + "=" + std::to_string(value));
 }
 
+fm_status_t check_finite(double value, const char* api, const char* field) {
+  if (std::isfinite(value)) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value must be finite",
+                           std::string(api) + ": " + field + "=" + std::to_string(value));
+}
+
 fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* api, const char* field) {
   if (value >= 0 && value <= max) {
     return 0;

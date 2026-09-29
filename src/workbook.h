@@ -335,6 +335,17 @@ class Workbook {
   Expected<void, Error> set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                          std::string formula);
 
+  /// Dirties every existing dependent of `(sheet_index, row, col)` via the
+  /// engine's ordinary dep-graph edges, without touching the cell's own
+  /// value, formula, or registration. Out-of-range coordinates are a no-op.
+  ///
+  /// Call after a mutation that changes something a formula can read about
+  /// a cell without changing the cell's own `Value` -- currently the
+  /// phonetic-run/phonetic-reading setters, which `PHONETIC()` reads
+  /// through the same reference edge any other function argument creates,
+  /// so no dep-graph re-registration is needed here, only the dirty mark.
+  void mark_cell_dependents_dirty(std::size_t sheet_index, std::uint32_t row, std::uint32_t col);
+
   /// Adds a normalized merge range through the workbook mutation path.  The
   /// engine mutex is held while the sheet merge vector is updated so a spill
   /// collision check cannot observe a partially-written metadata mutation.
@@ -422,6 +433,23 @@ class Workbook {
   /// to `RecalcEngine::set_iterative_progress`. Pass `nullptr` to clear.
   void set_iterative_progress(eval::IterativeProgressCb cb, void* user_data) noexcept;
 
+  /// Dirties every formula cell in the workbook whose text mentions
+  /// SUBTOTAL or AGGREGATE (case-insensitive), without touching dep-graph
+  /// edges. Call after a row's hidden flag actually changes: both
+  /// functions can read row-visibility state that no ordinary dep-graph
+  /// edge models, so the edit cannot reach them through the dirty
+  /// propagation an ordinary cell-value write triggers.
+  void mark_row_visibility_dependents_dirty();
+
+  /// Dirties every formula cell in the workbook, without touching dep-graph
+  /// edges or spill geometry. Call after a workbook-wide setting that
+  /// changes how a formula evaluates without changing any cell's own text
+  /// or the dep graph's shape -- currently the Excel-compatibility profile
+  /// switch, whose reach (SUMIF/COUNTIF criteria matching, INFO/CELL, and
+  /// other host-dependent branches) is too broad to scope the way a
+  /// defined-name or table edit can.
+  void mark_all_formulas_dirty();
+
   // ---------------------------------------------------------------------------
   // Passive round-trip metadata (Bundle 2.4)
   // ---------------------------------------------------------------------------
@@ -471,6 +499,16 @@ class Workbook {
   /// Replaces the workbook's table-metadata list. Move-assigns for the
   /// same reason as `set_defined_names`.
   void set_tables(std::vector<io::TableMetadata> tables) { tables_ = std::move(tables); }
+
+  /// Re-registers dep-graph edges and dirties every formula cell whose
+  /// structured reference names one of `table_names` (typically a table's
+  /// `name` and `display_name`). Call after a `mutable_tables()` edit
+  /// (create, ref/column change, remove) so structured references' dep-
+  /// graph edges and cached values reflect the current table metadata --
+  /// mirrors `set_defined_name_scoped`'s scoped reindex, since a
+  /// `StructuredRef` resolves to a static rectangle at registration time
+  /// the same way a `NameRef` does. An empty `table_names` is a no-op.
+  void reindex_formulas_for_table_change(const std::vector<std::string>& table_names);
 
   /// Read-only access to the verbatim parts the reader did not model.
   /// The writer emits each entry as-is. `<Override>`-listed parts

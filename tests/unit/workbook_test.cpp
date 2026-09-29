@@ -10,6 +10,8 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/passthrough_part.h"
 #include "sheet.h"
@@ -102,6 +104,42 @@ TEST(WorkbookTest, ApproximateMemoryIsStableWithoutMutation) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
   const std::size_t first = wb.approximate_memory_bytes();
   EXPECT_EQ(wb.approximate_memory_bytes(), first);
+}
+
+TEST(WorkbookTest, SetDefinedNameLeavesUnrelatedSpillIntact) {
+  // A defined-name edit used to route through `reindex_all_formulas`,
+  // which cleared every sheet's committed spills workbook-wide regardless
+  // of whether any formula actually referenced the changed name.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_NE(wb.sheet(0U).spill_region_at_anchor(0U, 0U), nullptr);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Unrelated", "=Sheet1!$A$1")));
+
+  EXPECT_NE(wb.sheet(0U).spill_region_at_anchor(0U, 0U), nullptr)
+      << "setting a name the spill's formula never mentions must not clear it";
+}
+
+TEST(WorkbookTest, SetDefinedNameUpdatesFormulasThatReferenceIt) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("MyName", "=1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=MyName")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Cell* cell = wb.sheet(0U).cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  ASSERT_TRUE(cell->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 1.0);
+
+  // Retargeting the name a formula actually depends on must still dirty
+  // and re-resolve that formula, even though the reindex is now scoped to
+  // formulas referencing the changed name rather than the whole workbook.
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("MyName", "=2")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  cell = wb.sheet(0U).cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  ASSERT_TRUE(cell->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 2.0);
 }
 
 }  // namespace

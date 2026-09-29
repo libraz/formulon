@@ -239,6 +239,50 @@ TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
   EXPECT_EQ(fm_workbook_table_count(loaded.handle), 0U);
 }
 
+TEST(FormulonCApi, TableMutationsReindexStructuredRefDependents) {
+  // A `StructuredRef` resolves to a static rectangle once, at formula
+  // registration time (`eval/dep_extractor.cpp`'s `walk_structured_ref`),
+  // and does not re-resolve on its own; table create/update/remove must
+  // reindex the formulas that name the table or their dep-graph edges and
+  // cached values go stale.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "Product"), 0);                 // A1
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 1, "Amount"), 0);                  // B1
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 1, 0, "Widget"), 0);                  // A2
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 1, 1, 10.0), 0);                    // B2
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 2, 0, "Gadget"), 0);                  // A3
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 2, 1, 20.0), 0);                    // B3
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 3, "=SUM(Sales[Amount])"), 0);  // D1
+
+  const char* columns[] = {"Product", "Amount"};
+  size_t index = 99;
+  ASSERT_EQ(fm_workbook_table_create(wb.handle, 0, "A1:B3", "Sales", "Sales", columns, 2, "", 1, 0, &index), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 3, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 30.0);
+
+  // Widen the table to include a new data row and update it; the formula's
+  // pinned rectangle must be re-derived from the new `ref`, not left
+  // pointing at the pre-update B2:B3.
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 3, 1, 5.0), 0);  // B4
+  ASSERT_EQ(fm_workbook_table_update(wb.handle, index, "A1:B4", "", 1, 0), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 3, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 35.0) << "table_update must reindex the formula onto the widened range";
+
+  // Removing the table invalidates the reference outright; the stale 35.0
+  // must not survive as a silently-uncomputed cached value.
+  ASSERT_EQ(fm_workbook_table_remove(wb.handle, index), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 3, &v), 0);
+  EXPECT_NE(v.kind, FM_VAL_NUMBER)
+      << "table_remove must reindex the formula so it re-evaluates against a missing table";
+}
+
 TEST(FormulonCApi, TableRangeMustMatchTheColumnList) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -396,6 +440,38 @@ TEST(FormulonCApi, CellPhoneticCanBeReadClearedAndRejectsInvalidArguments) {
   EXPECT_NE(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, nullptr), 0);
   EXPECT_NE(fm_workbook_set_cell_phonetic(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "x"), 0);
   EXPECT_NE(fm_workbook_get_cell_phonetic(wb.handle, 0, 0, 0, nullptr), 0);
+}
+
+TEST(FormulonCApi, CellPhoneticSettersDirtyPhoneticFormulaDependents) {
+  // `PHONETIC(A1)` depends on A1 through the same reference edge any other
+  // function argument creates, so changing what A1's reading is (without
+  // changing A1's own text) must still re-dirty that dependent -- recalc
+  // alone is dirty-only and cannot discover the change on its own.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "漢字"), 0);              // A1
+  ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);   // A1 reading
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=PHONETIC(A1)"), 0);  // B1
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 1, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_TEXT);
+  EXPECT_STREQ(v.u.text, "かんじ");
+
+  ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, "べつのよみ"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 1, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_TEXT);
+  EXPECT_STREQ(v.u.text, "べつのよみ") << "changing A1's phonetic reading must dirty PHONETIC(A1)";
+
+  // The runs and properties setters are the same seam and must dirty too.
+  const fm_phonetic_run_t run{0U, 3U, "らん"};
+  ASSERT_EQ(fm_workbook_set_cell_phonetic_runs(wb.handle, 0, 0, 0, &run, 1U), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 1, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_TEXT);
+  EXPECT_STREQ(v.u.text, "らん") << "changing A1's phonetic runs must dirty PHONETIC(A1)";
 }
 
 TEST(FormulonCApi, CellPhoneticRunsPreserveTheirSpans) {
@@ -601,6 +677,28 @@ TEST(FormulonCApi, NumberLiteralRoundTrip) {
   ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 42.5);
+}
+
+TEST(FormulonCApi, SetNumberRejectsNaNAndInfinity) {
+  // A Number-kind cell must always hold a finite double: ISNUMBER,
+  // arithmetic on the cell, and a save/reload round trip would otherwise
+  // disagree about whether it is a number or an error (save() downgrades a
+  // non-finite literal to #NUM!, per io/ooxml_writer_cell.cpp).
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, std::numeric_limits<double>::quiet_NaN()), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, std::numeric_limits<double>::infinity()), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, -std::numeric_limits<double>::infinity()), kInvalidArgument);
+
+  // A rejected call must not have written anything: the cell stays blank.
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_BLANK);
+
+  // A finite value still succeeds.
+  EXPECT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.5), 0);
 }
 
 TEST(FormulonCApi, ParallelRecalcMatchesSerialOnWideIndependentDag) {

@@ -204,9 +204,11 @@ FM_API fm_status_t fm_workbook_create(fm_workbook_t** out);
  * The only difference from `fm_workbook_create` is the missing sheet:
  * the style table is seeded with Excel's reserved defaults either way
  * (font 0, fill 0 = `none`, fill 1 = `gray125`, border 0, cell-style xf
- * 0, cell xf 0, the `Normal` cell style). Style records added through
- * `fm_styles_add_*` therefore always land after the reserved slots, so
- * the first index handed back is non-zero.
+ * 0, cell xf 0, the `Normal` cell style). A record added through
+ * `fm_styles_add_*` that deduplicates against one of those reserved
+ * slots -- including slot 0 -- returns that slot's own index rather than
+ * a new one past it; see `fm_styles_add_font`'s own doc for the dedup
+ * rule.
  *
  * @param out  On success receives a freshly allocated handle.
  * @return `kOk` on success; `kBindingNullPointer` if `out == NULL`.
@@ -363,8 +365,9 @@ FM_API void fm_workbook_destroy(fm_workbook_t* wb);
  *
  * On success the caller receives a heap-allocated buffer that MUST be
  * released with `fm_buffer_free` (NOT `free`). This ownership rule applies
- * to every save API returning bytes, including the diagnostics and legacy
- * XLSB-result variants. Mixing allocators across the boundary is undefined.
+ * to every save API returning bytes -- `fm_workbook_save_as` (XLSX or
+ * XLSB) and `fm_workbook_save_with_diagnostics` alike. Mixing allocators
+ * across the boundary is undefined.
  *
  * @param wb         Workbook handle. Must be non-NULL.
  * @param out_bytes  Receives a pointer to the freshly allocated buffer.
@@ -715,9 +718,19 @@ FM_API fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, ui
  * Mirrors `Workbook::set_cell_value(... Value::number)`. Marks the
  * cell and any existing dependents dirty for the next recalc.
  *
+ * `value` must be finite: a Number-kind cell always holds a finite
+ * IEEE-754 double, matching the engine's own invariant that every
+ * arithmetic result which would be NaN/Infinity becomes `#NUM!` before
+ * it can be observed (see `eval/scalar_ops.cpp`) and that `save()`
+ * downgrades a non-finite literal to a `#NUM!` error cell on write.
+ * NaN or infinity is rejected rather than silently accepted and later
+ * downgraded, so `ISNUMBER`, arithmetic on the cell, and a save/reload
+ * round trip never disagree about whether it is a number or an error.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range, or
+ *         `value` is NaN or infinite.
  */
 FM_API fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                           double value);
@@ -1052,7 +1065,8 @@ FM_API fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_in
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb`, `formula`, or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kOutOfMemory` when the evaluation arena is exhausted.
  */
 FM_API fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                 const char* formula, fm_value_t* out);
@@ -1077,7 +1091,8 @@ FM_API fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, size_t 
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb`, `formula`, or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kOutOfMemory` when the evaluation arena is exhausted.
  */
 FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                    uint32_t col, uint32_t anchor_row, uint32_t anchor_col,
@@ -1120,7 +1135,10 @@ FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb`, `formula`, `out_rows`, or
  *         `out_cols` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kOutOfMemory` when the evaluation arena is exhausted (the
+ *         handle's array stash is left untouched, per the "a rejected call
+ *         does not refresh storage" rule above).
  */
 FM_API fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                       uint32_t col, const char* formula, uint32_t* out_rows,
@@ -1219,8 +1237,10 @@ FM_API size_t fm_workbook_defined_name_count(const fm_workbook_t* wb);
  *
  * On success `*out_name` and `*out_formula` are model-backed views into the
  * workbook handle. Both are valid until the next mutation of the
- * defined-name list or until the handle is destroyed. Reads do not
- * invalidate them.
+ * defined-name list -- `fm_workbook_set_defined_name`/`_scoped`, or any
+ * workbook edit that rewrites defined names as a side effect (a structural
+ * row/column insert/delete, or a sheet rename/removal) -- or until the
+ * handle is destroyed. Reads do not invalidate them.
  *
  * `out_local_sheet_id` is optional: when non-NULL it receives `-1` for
  * workbook scope, or a 0-based sheet index for sheet-local scope.
@@ -1245,8 +1265,11 @@ FM_API size_t fm_workbook_table_count(const fm_workbook_t* wb);
  * @brief Reads the `idx`-th table's identifying metadata.
  *
  * On success `*out_name`, `*out_display_name`, and `*out_ref` are
- * model-backed views into the workbook handle. They have the same lifetime
- * contract as `fm_workbook_defined_name_at`.
+ * model-backed views into the workbook handle. They are valid until the
+ * next mutation of the table list -- `fm_workbook_table_create`/`_update`/
+ * `_remove`, or any workbook edit that rewrites table metadata as a side
+ * effect (a structural row/column insert/delete, or a sheet rename/removal)
+ * -- or until the handle is destroyed. Reads do not invalidate them.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -2633,12 +2656,14 @@ typedef struct {
  *
  * Wide POD covering both differential-format rules and visual rules.
  * `fm_sheet_cf_add_rule` deep-copies every pointer-backed payload into
- * the engine model. `fm_sheet_cf_get_at` returns a mixed view for the
- * selected rule: ids, sqref ranges, and ordinary formula/text strings are
- * model-backed; visual threshold arrays and their value strings are
- * read-scratch-backed and may be invalidated by the next successful
- * scratch-backed read on the same handle. A validation-rejected call does
- * not refresh the scratch storage.
+ * the engine model. `fm_sheet_cf_get_at` returns every pointer in the
+ * selected rule -- id, sqref, formula/text strings, and the visual
+ * threshold arrays and their value strings alike -- as a view into
+ * handle-owned storage, not the workbook model; see that function's own
+ * doc for the full lifetime contract (valid until the next successful
+ * `fm_sheet_cf_get_at` on the same handle, or handle destruction; CF
+ * mutations, unrelated reads, and a validation-rejected call do not
+ * invalidate it).
  *
  * Active fields by `type`:
  *   - `Expression` (0): `formula1`.
@@ -2665,19 +2690,17 @@ typedef struct {
  * String fields use C-string convention: `NULL` means "absent",
  * non-`NULL` is a NUL-terminated view. On the input path
  * (`fm_sheet_cf_add_rule`) the caller owns the buffer until the call
- * returns; on the output path (`fm_sheet_cf_get_at`) model-backed fields
- * remain valid until the next CF-list mutation or handle destruction, while
- * read-scratch-backed visual fields may be invalidated by the next successful
- * scratch-backed read on the same handle as well. A validation-rejected call
- * does not refresh the scratch storage.
+ * returns; on the output path (`fm_sheet_cf_get_at`) every field is a
+ * view into handle-owned storage per that function's lifetime contract
+ * (see its doc), not the workbook model.
  */
 typedef struct {
   /* Stable rule id, linking the rule to the `<x14:cfRule id="...">`
    * block that carries whatever settings the legacy OOXML schema cannot
    * express. On input, pass `NULL` or `""` to auto-generate one; a
    * supplied id must be GUID-shaped, since that is the schema type of
-   * the attribute it becomes. On output, always a model-backed, non-NULL
-   * view.
+   * the attribute it becomes. On output, always a non-NULL view into
+   * `fm_sheet_cf_get_at`'s handle-owned storage (see that function's doc).
    *
    * Only rules that need such a block put their id in the saved file, so
    * for most rules this is an in-memory handle and nothing more. */
@@ -2692,8 +2715,8 @@ typedef struct {
   uint32_t dxf_id;
 
   /* sqref union — at least one entry. On input, must be non-NULL with
-   * range_count >= 1. On output, points to the engine's model-backed vector
-   * buffer for the containing block. */
+   * sqref_count >= 1. On output, points to `fm_sheet_cf_get_at`'s
+   * handle-owned storage (see that function's doc), not the model. */
   const fm_cf_cell_range_t* sqref;
   uint32_t sqref_count;
 
@@ -4474,8 +4497,9 @@ typedef struct {
  * @brief Plain-data projection of a `formulon::io::FontRecord`.
  *
  * `name` is a NUL-terminated UTF-8 model-backed view into the workbook's
- * styles table; it is valid until the next mutation that replaces the
- * styles table or until the handle is destroyed. Reads do not invalidate it.
+ * styles table; it is valid until the next mutation of the font list
+ * (`fm_styles_add_font`, `fm_styles_set_font`) or until the handle is
+ * destroyed. Reads do not invalidate it.
  *
  * The `has_*` flags distinguish an absent OOXML element from an explicit
  * `val="0"`. They matter for a differential font, where an absent `<b>`
@@ -4627,8 +4651,9 @@ typedef struct {
  *        (one OOXML `<cellStyle>` entry).
  *
  * `name` is a NUL-terminated UTF-8 model-backed view into the workbook's
- * styles table; it is valid until the next styles-replacing mutation or
- * until the handle is destroyed. `xf_id` indexes into the parallel
+ * styles table; it is valid until the next mutation of the cell-style
+ * list (`fm_styles_set_cell_style`) or until the handle is destroyed.
+ * `xf_id` indexes into the parallel
  * `<cellStyleXfs>` table (queryable via
  * `fm_styles_get_cell_style_xf_count` / `fm_styles_get_cell_style_xf`).
  *
@@ -4733,8 +4758,9 @@ FM_API fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm
  * When no valid custom record matches, a non-empty built-in code in the
  * `0..163` range is used as the fallback. On success `*out` is either a
  * model-backed view into the custom record's format string (valid until the
- * next styles-replacing mutation or until handle destruction), or a static
- * built-in view with program lifetime. The styles writer intentionally emits
+ * next mutation of the numFmt list, `fm_styles_add_num_fmt`, or until
+ * handle destruction), or a static built-in view with program lifetime.
+ * The styles writer intentionally emits
  * only custom records with ids >= 164, so a below-164 override is not
  * promised to survive save/load. Returns `kInvalidArgument` when no effective
  * mapping exists for `num_fmt_id`.

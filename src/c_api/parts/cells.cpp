@@ -22,6 +22,7 @@
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
@@ -38,6 +39,9 @@ extern "C" fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_in
                                               double value) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_number"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_finite(value, "fm_workbook_set_number", "value"); rc != 0) {
     return rc;
   }
   auto r = wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::number(value));
@@ -111,6 +115,12 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t s
                              "fm_workbook_set_cell_phonetic: cell coordinate out of range");
   }
   wb->workbook().sheet(sheet_index).set_cell_phonetic(row, col, utf8);
+  // `PHONETIC()` reads this cell's phonetic reading through the same
+  // reference edge any other function argument creates, so its dependents
+  // need the same dirty mark a value/text write gives them -- the reading
+  // itself changed without the cell's own Value changing, so the dep-graph
+  // registration is untouched.
+  wb->workbook().mark_cell_dependents_dirty(sheet_index, row, col);
   return 0;
 }
 
@@ -161,6 +171,7 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, siz
   }
 
   wb->workbook().sheet(sheet_index).set_cell_phonetic_runs(row, col, std::move(parsed));
+  wb->workbook().mark_cell_dependents_dirty(sheet_index, row, col);
   return 0;
 }
 
@@ -202,6 +213,7 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic_properties(fm_workbook_t* w
           row, col,
           formulon::PhoneticProperties{static_cast<std::uint16_t>(font_id), static_cast<std::uint8_t>(type),
                                        static_cast<std::uint8_t>(alignment)});
+  wb->workbook().mark_cell_dependents_dirty(sheet_index, row, col);
   return 0;
 }
 
