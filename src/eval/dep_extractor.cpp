@@ -80,6 +80,9 @@ struct WalkState {
   std::vector<const DefinedName*> name_stack;
   std::vector<LexicalBinding> lexical_stack;
   std::vector<const parser::AstNode*> lambda_stack;
+  /// Set just before walking a call that sits in a position-only slot, and
+  /// consumed by that call: the reference it returns is only positioned too.
+  bool position_only_call = false;
 };
 
 const WalkState::LexicalBinding* lookup_lexical(std::string_view name, const WalkState& state) {
@@ -611,24 +614,39 @@ std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkSt
   }
 }
 
+// CELL reads its reference's value only for info_type "contents" and "type"
+// (measured on Mac Excel 365); a non-constant info_type is not known here.
+bool cell_info_is_positional(const parser::AstNode& call) {
+  if (call.as_call_arity() < 1U || call.as_call_arg(0).kind() != parser::NodeKind::Literal ||
+      !call.as_call_arg(0).as_literal().is_text()) {
+    return false;
+  }
+  const std::string_view info = call.as_call_arg(0).as_literal().as_text();
+  return !strings::case_insensitive_eq(info, "contents") && !strings::case_insensitive_eq(info, "type");
+}
+
 // Builtins that read only the position or shape of a reference argument,
 // never its values: a static reference there is no dependency, so `=ROW(A1)`
 // in A1 is not circular. OFFSET's base only anchors the rectangle it
-// returns, whose cells are recorded when the formula runs. CELL /
-// FORMULATEXT / ISFORMULA read the cell and stay out.
+// returns, whose cells are recorded when the formula runs. FORMULATEXT /
+// ISFORMULA read the cell and stay out.
 struct ReferenceOnlyArg {
   std::string_view name;
   std::uint32_t arg_index;
+  /// Further condition on the call, or nullptr when the slot always qualifies.
+  bool (*applies)(const parser::AstNode& call);
 };
 constexpr ReferenceOnlyArg kReferenceOnlyArgs[] = {
-    {"ROW", 0U},   {"COLUMN", 0U}, {"ROWS", 0U},  {"COLUMNS", 0U},
-    {"AREAS", 0U}, {"ISREF", 0U},  {"SHEET", 0U}, {"OFFSET", 0U},
+    {"ROW", 0U, nullptr},     {"COLUMN", 0U, nullptr}, {"ROWS", 0U, nullptr},
+    {"COLUMNS", 0U, nullptr}, {"AREAS", 0U, nullptr},  {"ISREF", 0U, nullptr},
+    {"SHEET", 0U, nullptr},   {"OFFSET", 0U, nullptr}, {"CELL", 1U, &cell_info_is_positional},
 };
 
-bool is_reference_only_arg(std::string_view call_name, std::uint32_t arg_index) {
-  const std::string_view bare = strip_future_prefix(call_name);
+bool is_reference_only_arg(const parser::AstNode& call, std::uint32_t arg_index) {
+  const std::string_view bare = strip_future_prefix(call.as_call_name());
   return std::any_of(std::begin(kReferenceOnlyArgs), std::end(kReferenceOnlyArgs), [&](const ReferenceOnlyArg& e) {
-    return e.arg_index == arg_index && strings::case_insensitive_eq(bare, e.name);
+    return e.arg_index == arg_index && strings::case_insensitive_eq(bare, e.name) &&
+           (e.applies == nullptr || e.applies(call));
   });
 }
 
@@ -924,6 +942,8 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
 
     case parser::NodeKind::Call: {
+      const bool in_position_only = state.position_only_call;
+      state.position_only_call = false;
       const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_call_name(), state);
       const DefinedName* defined =
           lexical == nullptr ? find_defined_name(*state.workbook, state.name_scope_sheet_id, node.as_call_name())
@@ -954,7 +974,12 @@ void walk(const parser::AstNode& node, WalkState& state) {
       }
       for (std::uint32_t i = 0; i < arity; ++i) {
         const parser::AstNode& arg = node.as_call_arg(i);
-        if (builtin && is_reference_only_arg(node.as_call_name(), i) && is_static_reference(arg, state)) {
+        // A reference-returning call whose result is only positioned passes
+        // that on to the arguments it can return (`ROW(INDEX(A1:A3,2))`).
+        const bool position_only =
+            builtin && (is_reference_only_arg(node, i) ||
+                        (in_position_only && is_reference_carrying_arg(node.as_call_name(), i, arity)));
+        if (position_only && is_static_reference(arg, state)) {
           continue;
         }
         if (deferred[i] != nullptr) {
@@ -965,7 +990,9 @@ void walk(const parser::AstNode& node, WalkState& state) {
           continue;
         }
         walk_deferred_args(bound, 0U, state);
+        state.position_only_call = position_only && arg.kind() == parser::NodeKind::Call;
         walk(arg, state);
+        state.position_only_call = false;
       }
 
       // A lexical binding or a visible defined name shadows a built-in name;

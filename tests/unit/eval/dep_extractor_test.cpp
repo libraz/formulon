@@ -1176,14 +1176,18 @@ TEST(DepExtractor, OffsetEndpointKeepsDynamicReference) {
 TEST(DepExtractor, OffsetBaseIsNoRead) {
   // OFFSET's base only positions the rectangle it returns: `=OFFSET(D2,-1,0)`
   // in D2 reads D1, not D2, and is not circular (measured on Excel 365).
-  // The offsets and a non-static base are still read.
+  // A reference-returning base only positions what it can return, so
+  // `=OFFSET(INDEX(A1:A10,3),1,0)` in A3 is not circular either; the offsets
+  // and the base's other arguments are still read.
   const Workbook wb = Workbook::create();
   const ExtractedDeps plain = ExtractFrom("OFFSET(A1,1,1)", wb);
   EXPECT_TRUE(plain.is_volatile);
   EXPECT_TRUE(plain.has_dynamic_reference);
   EXPECT_TRUE(plain.cell_deps.empty());
   EXPECT_EQ(Sorted(ExtractFrom("OFFSET(A1,B1,1)", wb).cell_deps), (std::vector<CellNodeId>{CellNodeId{0U, 0U, 1U}}));
-  EXPECT_EQ(Sorted(ExtractFrom("OFFSET(INDEX(A1:A10,3),1,0)", wb).cell_deps), RectCells(0U, 0U, 9U, 0U, 0U));
+  EXPECT_TRUE(ExtractFrom("OFFSET(INDEX(A1:A10,3),1,0)", wb).cell_deps.empty());
+  EXPECT_EQ(Sorted(ExtractFrom("OFFSET(INDEX(A1:A10,B1),1,0)", wb).cell_deps),
+            (std::vector<CellNodeId>{CellNodeId{0U, 0U, 1U}}));
 }
 
 TEST(DepExtractor, DynamicEndpointThroughLetBinding) {

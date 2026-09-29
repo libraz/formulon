@@ -152,6 +152,38 @@ TEST(DynamicReferenceRecalc, ValueUseOfBoundReferenceRecalcs) {
   }
 }
 
+// CELL reads its reference's value only for "contents" and "type", and a
+// reference-returning call in a position-only slot only positions the
+// arguments it can return; its other arguments are value reads. Measured on
+// Mac Excel 365 with each formula in A1 and B1 = 1.
+TEST(DynamicReferenceRecalc, PositionOnlyCellInfoAndReferenceCallsOnOwnCell) {
+  const char* not_circular[] = {
+      "=CELL(\"address\",A1)",     "=CELL(\"col\",A1)",          "=CELL(\"Row\",A1)",
+      "=CELL(\"filename\",A1)",    "=CELL(\"format\",A1)",       "=CELL(\"color\",A1)",
+      "=CELL(\"prefix\",A1)",      "=CELL(\"protect\",A1)",      "=CELL(\"width\",A1)",
+      "=CELL(\"parentheses\",A1)", "=LET(r,A1,CELL(\"row\",r))", "=ROW(INDEX(A1,1,1))",
+      "=ROW(IF(TRUE,A1,B1))",      "=ROW(CHOOSE(1,A1,B1))",      "=CELL(\"row\",INDEX(A1:A2,1))",
+      "=ISREF(INDEX(A1:A2,1))",    "=ROW(INDEX((A1,B1),1,1,2))", "=LET(r,A1,ROW(INDEX(r,1,1)))",
+  };
+  for (const char* f : not_circular) {
+    Workbook wb = Workbook::create();
+    Number(wb, {0U, kB}, 1.0);
+    Formula(wb, {0U, kA}, f);
+    EXPECT_EQ(Recalc(wb).cycle_cells, 0U) << f;
+  }
+  const char* circular[] = {
+      "=CELL(\"contents\",A1)",        "=CELL(\"CONTENTS\",A1)", "=CELL(\"Type\",A1)",
+      "=ROW(INDEX(A1:A3,A1+1))",       "=ROW(OFFSET(A1,A1,0))",  "=ROW(IF(A1=0,A1,B1))",
+      "=ROWS(XLOOKUP(1,A1:A3,B1:B3))",
+  };
+  for (const char* f : circular) {
+    Workbook wb = Workbook::create();
+    Number(wb, {0U, kB}, 1.0);
+    Formula(wb, {0U, kA}, f);
+    EXPECT_GT(Recalc(wb).cycle_cells, 0U) << f;
+  }
+}
+
 TEST(DynamicReferenceRecalc, SumOverItsOwnCellIsCircular) {
   Workbook wb = Workbook::create();
   Formula(wb, {0U, kA}, "=SUM(A1:A2)");
