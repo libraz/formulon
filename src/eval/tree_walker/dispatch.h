@@ -63,6 +63,11 @@ std::string_view strip_future_prefix(std::string_view name) noexcept;
 Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx);
 
+/// True for an AST written as a reference -- a cell, a `:` range, a union, an
+/// intersection, a 3-D or spill reference -- which Excel refuses to call
+/// (`A1(1)`, `(A1:A2)(1)`) with #REF!.
+bool is_reference_shape(const parser::AstNode& node) noexcept;
+
 /// Returns the static `Ref` / `RangeOp` a reference-valued `expr` denotes (`A1`,
 /// `A1:B2`, a reference-returning call resolved to its rectangle, a name bound
 /// to one), or nullptr for any other source.

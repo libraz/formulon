@@ -600,6 +600,13 @@ TEST(EvalLambdaReferenceParam, CallingAReferenceIsRef) {
   ExpectParamError("=LET(f,5,f(1))", ErrorCode::Value);
 }
 
+// Every reference shape is #REF! as a callee (measured on Mac Excel 365).
+TEST(EvalLambdaReferenceParam, CallingAReferenceShapeIsRef) {
+  for (const char* src : {"=(A1)(1)", "=(A1:A2)(1)", "=LET(f,(A1,B1),f(1))", "=LET(f,A1:B2 B1:B3,f(1))"}) {
+    ExpectParamError(src, ErrorCode::Ref);
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

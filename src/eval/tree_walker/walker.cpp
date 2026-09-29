@@ -826,9 +826,9 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     }
 
     case parser::NodeKind::LambdaCall: {
-      // Calling a cell (`A1(1)`, `Sheet1!LOG10(100)`) is #REF! in Excel,
-      // whatever the cell holds.
-      if (node.as_lambda_call_callee().kind() == parser::NodeKind::Ref) {
+      // Calling a reference (`A1(1)`, `Sheet1!LOG10(100)`, `(A1:A2)(1)`) is
+      // #REF! in Excel, whatever the cells hold.
+      if (is_reference_shape(node.as_lambda_call_callee())) {
         return Value::error(ErrorCode::Ref);
       }
       // Evaluate the callee expression. Excel rejects calling a non-lambda

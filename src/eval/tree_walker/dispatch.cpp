@@ -105,24 +105,21 @@ bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode
 
 }  // namespace
 
-namespace {
-
-// True when a binding recorded `ast` for a reference rather than for an
-// array literal or a value.
-bool is_reference_binding(const parser::AstNode* ast) {
-  if (ast == nullptr) {
-    return false;
-  }
-  switch (ast->kind()) {
+bool is_reference_shape(const parser::AstNode& node) noexcept {
+  switch (node.kind()) {
     case parser::NodeKind::Ref:
+    case parser::NodeKind::Ref3D:
     case parser::NodeKind::RangeOp:
     case parser::NodeKind::UnionOp:
+    case parser::NodeKind::IntersectOp:
     case parser::NodeKind::SpillRef:
       return true;
     default:
       return false;
   }
 }
+
+namespace {
 
 // `syntax_args` is the call site's argument AST, consulted for one thing
 // only: telling a syntactically omitted slot (`f(1, , 3)`) from a supplied
@@ -455,7 +452,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   // Unbound names fall through to the existing registry path.
   if (const NameEnv* env = ctx.name_env(); env != nullptr) {
     if (const Value* bound = env->lookup(name); bound != nullptr) {
-      if (is_reference_binding(env->lookup_ast(name))) {
+      if (const parser::AstNode* ast = env->lookup_ast(name); ast != nullptr && is_reference_shape(*ast)) {
         return Value::error(ErrorCode::Ref);
       }
       if (bound->is_lambda()) {
