@@ -787,6 +787,7 @@ class CfMatch:
     bar_gradient: bool
     icon_set_name: int
     icon_index: int
+    bar_direction: int = 0  # 0=context, 1=left to right, 2=right to left
 
 
 @dataclass(frozen=True)
@@ -847,6 +848,7 @@ class DataBar:
     border: Optional[CfColor] = None
     negative_border: Optional[CfColor] = None
     axis_color: Optional[CfColor] = None
+    direction: int = 0  # edge the bar grows from: 0=context, 1=left to right, 2=right to left
 
 
 @dataclass(frozen=True)
@@ -857,6 +859,10 @@ class IconSet:
     but never consulted during evaluation. Each threshold in
     ``thresholds`` carries its own ``type``, and that type is what
     interprets it.
+
+    ``floor`` is the lower bound of the lowest icon's bucket; a cell below
+    it gets no icon. ``None`` means Excel's default, ``percent 0``; reading
+    a rule back always populates it.
     """
 
     name: int
@@ -864,6 +870,7 @@ class IconSet:
     reverse: bool = False
     show_value: bool = True
     percent: bool = True
+    floor: Optional[CfValueObject] = None
 
 
 @dataclass(frozen=True)
@@ -4068,6 +4075,7 @@ class Workbook:
                                 bar_gradient=bool(d["bar_gradient"]),
                                 icon_set_name=d["icon_set_name"],
                                 icon_index=d["icon_index"],
+                                bar_direction=d["bar_direction"],
                             )
                         )
                     cells.append(CfCellResult(row=row, col=col, matches=matches))
@@ -4184,6 +4192,7 @@ class Workbook:
                     self._decode_cf_color_at(ptr + offsets["data_bar_axis_color"][1])
                     if d["data_bar_axis_color_engaged"]
                     else None,
+                    d["data_bar_direction"],
                 )
             icon_set = None
             if d["icon_set_engaged"]:
@@ -4196,6 +4205,7 @@ class Workbook:
                     bool(d["icon_set_reverse"]),
                     bool(d["icon_set_show_value"]),
                     bool(d["icon_set_percent"]),
+                    self._decode_cfvo(ptr + offsets["icon_set_floor"][1]) if d["icon_set_floor_engaged"] else None,
                 )
             return ConditionalFormat(
                 id=LIB.read_cstr(d["id"]),
@@ -4322,6 +4332,7 @@ class Workbook:
                     if color is not None:
                         LIB.write_bytes(ptr + ro[f"data_bar_{field}_engaged"][1], struct.pack("<i", 1))
                         self._write_cf_color(ptr + ro[f"data_bar_{field}"][1], color)
+                LIB.write_bytes(ptr + ro["data_bar_direction"][1], struct.pack("<B", int(data_bar.direction)))
             if rule.icon_set is not None:
                 icon_set = rule.icon_set
                 count = len(icon_set.thresholds)
@@ -4336,6 +4347,9 @@ class Workbook:
                 LIB.write_bytes(ptr + ro["icon_set_reverse"][1], struct.pack("<i", 1 if icon_set.reverse else 0))
                 LIB.write_bytes(ptr + ro["icon_set_show_value"][1], struct.pack("<i", 1 if icon_set.show_value else 0))
                 LIB.write_bytes(ptr + ro["icon_set_percent"][1], struct.pack("<i", 1 if icon_set.percent else 0))
+                if icon_set.floor is not None:
+                    LIB.write_bytes(ptr + ro["icon_set_floor_engaged"][1], struct.pack("<i", 1))
+                    self._write_cfvo(ptr + ro["icon_set_floor"][1], icon_set.floor, owned)
             _check(
                 LIB.fm_sheet_cf_add_rule(h, _uint(sheet, "sheet_index"), ptr, out),
                 "fm_sheet_cf_add_rule",

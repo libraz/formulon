@@ -158,6 +158,7 @@ DataBarRender make_data_bar_render(const DataBarSpec& spec, double length_pct, d
   render.fill = render.is_negative ? spec.negative_fill : spec.fill;
   render.border = render.is_negative ? spec.negative_border : spec.border;
   render.gradient = spec.gradient;
+  render.direction = spec.direction;
   switch (spec.axis_position) {
     case DataBarAxisPosition::None:
       render.axis_position_pct = kAxisLeft;

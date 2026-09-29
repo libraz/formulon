@@ -1886,7 +1886,9 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   assert.ok(xlsb.status.ok, JSON.stringify(xlsb.status));
   assert.ok(xlsb.bytes instanceof Uint8Array);
   assert.equal(xlsb.downgradedFormulaCount, 1);
-  assert.ok(xlsb.deferredFeatureCount >= 2);
+  // The validation is written; the CF rule is deferred because a generated
+  // XLSB styles part carries no dxf for it to reference.
+  assert.equal(xlsb.deferredFeatureCount, 1);
   // The binary writer never reassigns a part id.
   assert.equal(xlsb.renumberedPartCount, 0);
 
@@ -2057,6 +2059,7 @@ test('data bar x14 fields survive save and load', async () => {
       border: { r: 9, g: 9, b: 9 },
       negativeBorder: { r: 8, g: 8, b: 8 },
       axisColor: { r: 1, g: 2, b: 3 },
+      direction: 2,
     },
   });
   assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
@@ -2071,6 +2074,7 @@ test('data bar x14 fields survive save and load', async () => {
   assert.equal(bar.border.r, 9);
   assert.equal(bar.negativeBorder.r, 8);
   assert.equal(bar.axisColor.b, 3);
+  assert.equal(bar.direction, 2);
 
   // The decoded bar fed straight back must reproduce the same rule.
   const again = loaded.addConditionalFormat(0, {
@@ -2083,7 +2087,35 @@ test('data bar x14 fields survive save and load', async () => {
   assert.equal(reread.gradient, false);
   assert.equal(reread.axisPosition, 1);
   assert.equal(reread.axisColor.b, 3);
+  assert.equal(reread.direction, 2);
 
+  loaded.dispose();
+  wb.dispose();
+});
+
+test('icon set floor survives save and load', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const add = wb.addConditionalFormat(0, {
+    sqref: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
+    type: 4,
+    iconSet: {
+      name: 2,
+      thresholds: [
+        { type: 0, value: '7' },
+        { type: 0, value: '9' },
+      ],
+      floor: { type: 0, value: '5', gte: false },
+    },
+  });
+  assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
+  const saved = wb.save();
+  assert.ok(saved.status.ok);
+  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  const floor = loaded.getConditionalFormats(0)[0].iconSet.floor;
+  assert.equal(floor.type, 0);
+  assert.equal(floor.value, '5');
+  assert.equal(floor.gte, false);
   loaded.dispose();
   wb.dispose();
 });

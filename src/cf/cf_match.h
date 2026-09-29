@@ -44,6 +44,9 @@ struct DataBarRender {
   Color fill{};
   std::optional<Color> border;
   bool gradient = true;
+  /// The rule's direction; a host mirrors the bar for `RightToLeft` (and for
+  /// `Context` on a right-to-left sheet).
+  DataBarDirection direction = DataBarDirection::Context;
 };
 
 /// Resolved icon-set render payload.

@@ -72,6 +72,14 @@ enum class DataBarAxisPosition : std::uint8_t {
   None = 2,
 };
 
+/// `<x14:dataBar>` `direction` attribute: which edge the bar grows from.
+/// `Context` follows the sheet's reading direction.
+enum class DataBarDirection : std::uint8_t {
+  Context = 0,
+  LeftToRight = 1,
+  RightToLeft = 2,
+};
+
 /// Built-in icon set. Names follow ECMA-376 / OOXML
 /// (`iconSet` element `iconSet` attribute).
 enum class IconSetName : std::uint8_t {
@@ -188,6 +196,7 @@ struct DataBarSpec {
   Color negative_fill{};
   std::optional<Color> negative_border;
   DataBarAxisPosition axis_position = DataBarAxisPosition::Automatic;
+  DataBarDirection direction = DataBarDirection::Context;
   Color axis_color{0, 0, 0, 255};
   bool gradient = true;
   bool show_value = true;

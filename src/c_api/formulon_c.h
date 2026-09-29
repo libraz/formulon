@@ -2093,7 +2093,9 @@ typedef struct {
  *   * `FM_CF_COLOR_SCALE` — `color` is the interpolated cell-fill RGBA.
  *   * `FM_CF_DATA_BAR` — `bar_length_pct`, `bar_axis_position_pct`,
  *     `bar_is_negative`, `bar_fill`, `bar_border_engaged` (and
- *     `bar_border` when engaged), and `bar_gradient`.
+ *     `bar_border` when engaged), `bar_gradient`, and `bar_direction`
+ *     (the rule's `data_bar_direction`; the geometry is stated from the
+ *     left edge, and a host mirrors it for a right-to-left bar).
  *   * `FM_CF_ICON_SET` — `icon_set_name` is the
  *     `formulon::cf::IconSetName` ordinal; `icon_index` is `0..N-1`
  *     after the rule's `reverse` flag has been applied.
@@ -2122,7 +2124,8 @@ typedef struct {
   int32_t bar_gradient;  /* 0/1 */
   int32_t icon_set_name; /* formulon::cf::IconSetName ordinal */
   uint8_t icon_index;
-  uint8_t _pad[3]; /* padding for alignment determinism */
+  uint8_t bar_direction; /* 0=context, 1=leftToRight, 2=rightToLeft */
+  uint8_t _pad[2];       /* padding for alignment determinism */
 } fm_cf_match_t;
 
 /* -------------------------------------------------------------------------- */
@@ -2686,7 +2689,8 @@ typedef struct {
  *     block at the end of this struct (axis, gradient, negative and
  *     border colours), each governed by its own `*_engaged` flag.
  *   - `IconSet` (4): `icon_set_name` plus N-1
- *     `icon_set_thresholds`.
+ *     `icon_set_thresholds`, and the `icon_set_floor` at the end of this
+ *     struct.
  *
  * String fields use C-string convention: `NULL` means "absent",
  * non-`NULL` is a NUL-terminated view. On the input path
@@ -2804,6 +2808,22 @@ typedef struct {
   fm_cf_color_t data_bar_negative_border;
   int32_t data_bar_axis_color_engaged; /* 0/1; when 0 the axis is black */
   fm_cf_color_t data_bar_axis_color;
+
+  /* Appended after the extension block for the same reason: every earlier
+   * field keeps its offset.
+   *
+   * `icon_set_floor` is the icon set's first threshold, the lower bound of
+   * the lowest icon's bucket: a cell below it gets no icon at all. When
+   * `icon_set_floor_engaged` is 0 the floor is Excel's default, `percent 0`,
+   * which every value clears. `fm_sheet_cf_get_at` always engages it.
+   *
+   * `data_bar_direction` is the edge the bar grows from: 0=context (follows
+   * the sheet's reading direction; the default), 1=leftToRight,
+   * 2=rightToLeft. */
+  int32_t icon_set_floor_engaged; /* 0/1 */
+  fm_cfvo_t icon_set_floor;
+  uint8_t data_bar_direction;
+  uint8_t _pad4[3];
 } fm_cf_rule_t;
 
 /**

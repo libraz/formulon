@@ -225,6 +225,7 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
       if (rule.data_bar_axis_color_engaged != 0) {
         data_bar.set("axisColor", cf_color_to_js(rule.data_bar_axis_color));
       }
+      data_bar.set("direction", static_cast<uint32_t>(rule.data_bar_direction));
       item.set("dataBar", data_bar);
     }
     if (rule.icon_set_engaged != 0) {
@@ -238,6 +239,9 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
       icon_set.set("reverse", rule.icon_set_reverse != 0);
       icon_set.set("showValue", rule.icon_set_show_value != 0);
       icon_set.set("percent", rule.icon_set_percent != 0);
+      if (rule.icon_set_floor_engaged != 0) {
+        icon_set.set("floor", cfvo_to_js(rule.icon_set_floor));
+      }
       item.set("iconSet", icon_set);
     }
     arr.set(static_cast<uint32_t>(i), item);
@@ -375,6 +379,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
       rule.data_bar_axis_color_engaged = 1;
       rule.data_bar_axis_color = js_pull_cf_color(db["axisColor"]);
     }
+    rule.data_bar_direction = js_pull_u8(db, "direction", 0U);
   }
   if (!v["iconSet"].isUndefined() && !v["iconSet"].isNull()) {
     emscripten::val is = v["iconSet"];
@@ -392,6 +397,11 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     rule.icon_set_reverse = js_pull_bool(is, "reverse", false) ? 1 : 0;
     rule.icon_set_show_value = js_pull_bool(is, "showValue", true) ? 1 : 0;
     rule.icon_set_percent = js_pull_bool(is, "percent", true) ? 1 : 0;
+    // An omitted floor keeps Excel's default, `percent 0`.
+    if (!is["floor"].isUndefined() && !is["floor"].isNull()) {
+      rule.icon_set_floor_engaged = 1;
+      rule.icon_set_floor = js_pull_cfvo(is["floor"], &cfvo_strings);
+    }
   }
   std::size_t new_index = 0;
   fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);

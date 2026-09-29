@@ -244,6 +244,12 @@ fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
         return rc;
       }
     }
+    if (auto rc =
+            check_enum_domain(rule.data_bar_direction, static_cast<std::int64_t>(cf::DataBarDirection::RightToLeft),
+                              api, "data_bar_direction");
+        rc != 0) {
+      return rc;
+    }
   }
   // The colour-scale scan is bounded by the array shape the entry point
   // accepts, so a record that declares more thresholds than the schema
@@ -265,6 +271,11 @@ fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
       if (auto rc = check_cfvo_types(rule.icon_set_thresholds, rule.icon_set_threshold_count, api,
                                      "icon_set_thresholds[].type");
           rc != 0) {
+        return rc;
+      }
+    }
+    if (rule.icon_set_floor_engaged != 0) {
+      if (auto rc = check_cfvo_types(&rule.icon_set_floor, 1U, api, "icon_set_floor.type"); rc != 0) {
         return rc;
       }
     }

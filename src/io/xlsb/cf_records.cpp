@@ -45,7 +45,8 @@ constexpr std::size_t kGuidBytes = 16;
 // x14 conditional-format records (inside a sheet-level FRT block).
 // BrtBeginCFRule14 for a data bar is 70 bytes with the rule GUID at offset
 // 50; BrtBeginDataBar14 is a zero u32, minLength, maxLength, a byte always
-// 1, direction, axis position (0 automatic, 1 middle, 2 none) and a u16
+// 1, direction (0 context, 1 left-to-right, 2 right-to-left), axis
+// position (0 automatic, 1 middle, 2 none) and a u16
 // flag word; each BrtColor14 is a zero u32 and a BrtColor, positional in
 // the order border, negative fill, negative border, axis.
 constexpr std::uint16_t kBeginCfRule14 = 1048;
@@ -817,11 +818,13 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
       }
     } else if (rec.type == kBeginDataBar14 && rule14.measured) {
       rule14.measured = rec.payload.size == kDataBar14Bytes && d[0] == 0U && d[1] == 0U && d[2] == 0U && d[3] == 0U &&
-                        d[4] <= 100U && d[5] <= 100U && d[6] == 1U && d[8] <= 2U && (d[9] & 0xF0U) == 0U && d[10] == 0U;
+                        d[4] <= 100U && d[5] <= 100U && d[6] == 1U && d[7] <= 2U && d[8] <= 2U &&
+                        (d[9] & 0xF0U) == 0U && d[10] == 0U;
       if (rule14.measured) {
         rule14.has_bar = true;
         rule14.bar.min_length_pct = d[4];
         rule14.bar.max_length_pct = d[5];
+        rule14.bar.direction = static_cast<cf::DataBarDirection>(d[7]);
         rule14.bar.axis_position = static_cast<cf::DataBarAxisPosition>(d[8]);
         rule14.flags = d[9];
         rule14.bar.gradient = (rule14.flags & kBar14Gradient) != 0U;
@@ -858,6 +861,7 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
             out.axis_color = rule14.colors[next++];
           }
           out.axis_position = rule14.bar.axis_position;
+          out.direction = rule14.bar.direction;
           out.gradient = rule14.bar.gradient;
           out.min_length_pct = rule14.bar.min_length_pct;
           out.max_length_pct = rule14.bar.max_length_pct;
@@ -903,11 +907,10 @@ bool IsMeasuredDataBarRule14(const FramedRecord& rec) {
   return rec.type == kBeginCfRule14 && rec.payload.size == kDataBarRule14Bytes && rec.payload.data[4] == 4U;
 }
 
-/// BrtBeginDataBar14 and the BrtColor14 run for `bar`. `keep` holds the
-/// source record's always-1 byte and direction, which the model does not
-/// carry.
+/// BrtBeginDataBar14 and the BrtColor14 run for `bar`. `always_one` is the
+/// source record's byte that was 1 in every sample and is not modelled.
 void EmitDataBar14(std::vector<std::uint8_t>& head, std::vector<std::uint8_t>& colors, const cf::DataBarSpec& bar,
-                   std::uint8_t always_one, std::uint8_t direction) {
+                   std::uint8_t always_one) {
   const bool border = bar.border.has_value();
   const bool negative_fill = bar.negative_fill != bar.fill;
   const bool negative_border = border && bar.negative_border.has_value();
@@ -918,7 +921,7 @@ void EmitDataBar14(std::vector<std::uint8_t>& head, std::vector<std::uint8_t>& c
   p.push_back(bar.min_length_pct);
   p.push_back(bar.max_length_pct);
   p.push_back(always_one);
-  p.push_back(direction);
+  p.push_back(static_cast<std::uint8_t>(bar.direction));
   p.push_back(static_cast<std::uint8_t>(bar.axis_position));
   emit_u16(p, flags);
   emit_record(head, kBeginDataBar14, p);
@@ -958,7 +961,7 @@ std::vector<std::uint8_t> RewriteRule14(const std::vector<std::uint8_t>& buf, co
         }
         return raw;
       }
-      EmitDataBar14(out, colors, bar, rec.payload.data[6], rec.payload.data[7]);
+      EmitDataBar14(out, colors, bar, rec.payload.data[6]);
       colors_pending = true;
     } else if (rec.type == kColor14) {
       continue;
@@ -1095,7 +1098,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       rule14[66] = 1U;
       emit_record(groups, kBeginCfRule14, rule14);
       std::vector<std::uint8_t> colors;
-      EmitDataBar14(groups, colors, bar, 1U, 0U);
+      EmitDataBar14(groups, colors, bar, 1U);
       for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
         double num = 0;
         if (v->type == cf::CfvoType::Formula) {

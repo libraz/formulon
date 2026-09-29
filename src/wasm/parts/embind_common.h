@@ -184,6 +184,7 @@ struct JsCfMatch {
   int32_t barBorderEngaged = 0;
   JsCfColor barBorder{};
   int32_t barGradient = 0;
+  int32_t barDirection = 0;
   int32_t iconSetName = 0;
   int32_t iconIndex = 0;
 };

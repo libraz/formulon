@@ -130,7 +130,7 @@ class StructLayoutTests(unittest.TestCase):
         "CF_CELL_RANGE": 16,
         "CF_COLOR": 4,
         "CF_MATCH": 72,
-        "CF_RULE": 216,
+        "CF_RULE": 240,
         "PIVOT_CELL": 40,
         "PIVOT_FIELD_SPEC": 20,
         "PIVOT_DATA_FIELD_SPEC": 28,
@@ -1102,6 +1102,7 @@ class ConditionalFormatTests(unittest.TestCase):
             border=CfColor(9, 9, 9),
             negative_border=CfColor(8, 8, 8),
             axis_color=CfColor(1, 2, 3),
+            direction=2,
         )
         with Workbook.create_default() as wb:
             wb.add_conditional_format(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 2, 0)], type=3, data_bar=bar))
@@ -1115,11 +1116,21 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertEqual(got.border, CfColor(9, 9, 9))
             self.assertEqual(got.negative_border, CfColor(8, 8, 8))
             self.assertEqual(got.axis_color, CfColor(1, 2, 3))
+            self.assertEqual(got.direction, 2)
             # Feeding the decoded bar straight back must reproduce it.
             reloaded.add_conditional_format(
                 0, ConditionalFormatInput(sqref=[MergeRange(4, 0, 6, 0)], type=3, data_bar=got)
             )
             self.assertEqual(reloaded.get_conditional_formats(0)[1].data_bar, got)
+
+    def test_icon_set_floor_survives_save_and_load(self) -> None:
+        icons = IconSet(2, [CfValueObject(0, "7"), CfValueObject(0, "9")], floor=CfValueObject(0, "5", gte=False))
+        with Workbook.create_default() as wb:
+            wb.add_conditional_format(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 9, 0)], type=4, icon_set=icons))
+            saved = wb.save()
+        with Workbook.load(saved) as reloaded:
+            got = reloaded.get_conditional_formats(0)[0].icon_set
+            self.assertEqual(got.floor, CfValueObject(0, "5", gte=False))
 
     def test_omitted_data_bar_x14_fields_keep_the_model_defaults(self) -> None:
         with Workbook.create_default() as wb:
@@ -1871,7 +1882,8 @@ class PackageDiagnosticsTests(unittest.TestCase):
 
             xlsb = wb.save_with_diagnostics(WorkbookFormat.XLSB)
             self.assertEqual(xlsb.downgraded_formula_count, 1)
-            self.assertGreaterEqual(xlsb.deferred_feature_count, 2)
+            # The validation and the CF rule (no dxf) are both written.
+            self.assertEqual(xlsb.deferred_feature_count, 0)
             # The binary writer never reassigns a part id.
             self.assertEqual(xlsb.renumbered_part_count, 0)
 

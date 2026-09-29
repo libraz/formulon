@@ -662,7 +662,8 @@ TEST(CFWriter, EditedModelRewritesTheLoadedOverlayAndKeepsWhatItDoesNotModel) {
   // The captured payload no longer matches the model (whose settings
   // differ from it), so the model-owned attributes and colours are
   // rewritten; thresholds and the unmodelled child stay.
-  const auto input = DataBarWithExtensionSettings("{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}");
+  auto input = DataBarWithExtensionSettings("{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}");
+  input.rules[0].data_bar->direction = cf::DataBarDirection::LeftToRight;
   const std::string loaded =
       "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
       "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
@@ -673,7 +674,8 @@ TEST(CFWriter, EditedModelRewritesTheLoadedOverlayAndKeepsWhatItDoesNotModel) {
       "<xm:sqref>A1:A5</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>";
 
   const std::string merged = merge_x14_cf_entries(loaded, {input});
-  EXPECT_NE(merged.find("direction=\"rightToLeft\""), std::string::npos) << merged;
+  EXPECT_NE(merged.find("direction=\"leftToRight\""), std::string::npos) << merged;
+  EXPECT_EQ(merged.find("rightToLeft"), std::string::npos) << merged;
   EXPECT_NE(merged.find("<x14:cfvo type=\"autoMin\"/>"), std::string::npos) << merged;
   EXPECT_NE(merged.find("<x14:someUnmodelledThing/>"), std::string::npos) << merged;
   EXPECT_NE(merged.find("axisPosition=\"middle\""), std::string::npos) << merged;

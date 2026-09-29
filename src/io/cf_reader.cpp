@@ -434,6 +434,10 @@ void ApplyX14DataBarOverlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out)
   if (const pugi::xml_attribute gradient = x14_bar.attribute("gradient"); gradient) {
     out->gradient = parse_xml_bool_attr(gradient);
   }
+  const std::string_view direction = attr_str(x14_bar, "direction");
+  out->direction = direction == "leftToRight"   ? cf::DataBarDirection::LeftToRight
+                   : direction == "rightToLeft" ? cf::DataBarDirection::RightToLeft
+                                                : cf::DataBarDirection::Context;
   const std::string_view axis_position = attr_str(x14_bar, "axisPosition");
   if (axis_position == "middle") {
     out->axis_position = cf::DataBarAxisPosition::Middle;

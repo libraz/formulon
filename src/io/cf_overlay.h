@@ -57,7 +57,7 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml, const std::
 /// byte-for-byte while its `<x14:dataBar>` decodes to the model's
 /// settings; once it does not (the model was edited after load), the
 /// model-owned attributes and colours are rewritten from the model, and
-/// the thresholds, `direction` and any unmodelled child are kept. A rule
+/// the thresholds and any unmodelled child are kept. A rule
 /// that needs a payload and has none gets one built by
 /// `build_x14_cf_overlay_entries`, placed in the first
 /// `<x14:conditionalFormattings>` the overlay already has (or a new

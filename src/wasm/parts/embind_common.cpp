@@ -120,6 +120,7 @@ JsCfMatch translate_cf_match(const fm_cf_match_t& m) {
   out.barBorderEngaged = m.bar_border_engaged;
   out.barBorder = translate_cf_color(m.bar_border);
   out.barGradient = m.bar_gradient;
+  out.barDirection = static_cast<int32_t>(m.bar_direction);
   out.iconSetName = m.icon_set_name;
   out.iconIndex = static_cast<int32_t>(m.icon_index);
   return out;

@@ -1052,9 +1052,9 @@ TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnes
   ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len, &xlsb),
             0);
   EXPECT_EQ(xlsb.downgraded_formula_count, 1U);
-  // Validation and auto-filter state remain deferred. Hyperlinks emit as
-  // BrtHLink records and are therefore not counted here.
-  EXPECT_EQ(xlsb.deferred_feature_count, 2U);
+  // Auto-filter state remains deferred. Hyperlinks and validations are
+  // written from the model and are therefore not counted here.
+  EXPECT_EQ(xlsb.deferred_feature_count, 1U);
   // `renumbered_part_count` has no XLSB source: the binary writer never
   // reassigns a part id.
   EXPECT_EQ(xlsb.renumbered_part_count, 0U);

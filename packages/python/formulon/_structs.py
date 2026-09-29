@@ -244,6 +244,7 @@ CF_MATCH = Struct(
         ("bar_gradient", I32),
         ("icon_set_name", I32),
         ("icon_index", U8),
+        ("bar_direction", U8),
     ],
 )
 
@@ -305,6 +306,9 @@ CF_RULE = Struct(
         ("data_bar_negative_border", CF_COLOR_BLOB),
         ("data_bar_axis_color_engaged", I32),
         ("data_bar_axis_color", CF_COLOR_BLOB),
+        ("icon_set_floor_engaged", I32),
+        ("icon_set_floor", CFVO_BLOB),
+        ("data_bar_direction", U8),
     ],
 )
 

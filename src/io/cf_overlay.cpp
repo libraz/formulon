@@ -78,7 +78,8 @@ constexpr std::string_view kModelledBarAttributes[] = {"minLength",
                                                        "border",
                                                        "negativeBarColorSameAsPositive",
                                                        "negativeBarBorderColorSameAsPositive",
-                                                       "axisPosition"};
+                                                       "axisPosition",
+                                                       "direction"};
 constexpr std::string_view kModelledBarColors[] = {"x14:borderColor", "x14:negativeFillColor",
                                                    "x14:negativeBorderColor", "x14:axisColor"};
 
@@ -95,12 +96,12 @@ bool Contains(const std::string_view (&names)[N], std::string_view name) {
 /// True when `a` and `b` agree on every setting `<x14:dataBar>` carries.
 bool SameX14BarSettings(const cf::DataBarSpec& a, const cf::DataBarSpec& b) {
   return a.min_length_pct == b.min_length_pct && a.max_length_pct == b.max_length_pct && a.gradient == b.gradient &&
-         a.axis_position == b.axis_position && a.axis_color == b.axis_color && a.negative_fill == b.negative_fill &&
-         a.border == b.border && a.negative_border == b.negative_border;
+         a.axis_position == b.axis_position && a.direction == b.direction && a.axis_color == b.axis_color &&
+         a.negative_fill == b.negative_fill && a.border == b.border && a.negative_border == b.negative_border;
 }
 
 /// Rewrites the model-owned attributes and colours of a captured
-/// `<x14:dataBar>` from `bar`, keeping its thresholds, `direction` and any
+/// `<x14:dataBar>` from `bar`, keeping its thresholds and any
 /// child this engine does not model.
 void PatchX14DataBar(pugi::xml_node captured, const cf::DataBarSpec& bar) {
   pugi::xml_document built_doc;

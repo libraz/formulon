@@ -1315,6 +1315,25 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   unknown_color_cfvo.color_scale_count = 2;
   expect_rejected(unknown_color_cfvo, "color_scale_thresholds[].type");
 
+  fm_cf_rule_t unknown_floor = base;
+  unknown_floor.type = 4;  // IconSet
+  unknown_floor.icon_set_engaged = 1;
+  unknown_floor.icon_set_thresholds = legal_thresholds;
+  unknown_floor.icon_set_threshold_count = 2;
+  unknown_floor.icon_set_floor_engaged = 1;
+  unknown_floor.icon_set_floor.type = static_cast<std::uint8_t>(formulon::cf::CfvoType::AutoMax) + 1U;
+  expect_rejected(unknown_floor, "icon_set_floor.type");
+
+  fm_cf_rule_t unknown_direction = base;
+  unknown_direction.type = 3;  // DataBar
+  unknown_direction.data_bar_engaged = 1;
+  unknown_direction.data_bar_max.type = 4;  // Max
+  unknown_direction.data_bar_min.type = 3;  // Min
+  unknown_direction.data_bar_min_length_pct = 10;
+  unknown_direction.data_bar_max_length_pct = 90;
+  unknown_direction.data_bar_direction = static_cast<std::uint8_t>(formulon::cf::DataBarDirection::RightToLeft) + 1U;
+  expect_rejected(unknown_direction, "data_bar_direction");
+
   // Every rejection left the sheet as it was.
   std::size_t count = 99U;
   ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
@@ -1547,6 +1566,7 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   rule.data_bar_negative_border = fm_cf_color_t{4, 5, 6, 255};
   rule.data_bar_axis_color_engaged = 1;
   rule.data_bar_axis_color = fm_cf_color_t{7, 8, 9, 255};
+  rule.data_bar_direction = 2;  // right to left
   std::size_t rule_index = 0;
   ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
 
@@ -1567,4 +1587,65 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   EXPECT_EQ(back.data_bar_negative_border.b, 6U);
   EXPECT_EQ(back.data_bar_axis_color.r, 7U);
   EXPECT_EQ(back.data_bar_axis_color.b, 9U);
+  EXPECT_EQ(back.data_bar_direction, 2U);
+}
+
+TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 4;  // IconSet
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  rule.icon_set_engaged = 1;
+  rule.icon_set_name = 2;  // Three_Flags
+  fm_cfvo_t thresholds[2]{};
+  thresholds[0].type = 0;  // Number
+  thresholds[0].value = "7";
+  thresholds[0].gte = 1;
+  thresholds[1].type = 0;
+  thresholds[1].value = "9";
+  thresholds[1].gte = 1;
+  rule.icon_set_thresholds = thresholds;
+  rule.icon_set_threshold_count = 2;
+  rule.icon_set_show_value = 1;
+  rule.icon_set_percent = 1;
+  rule.icon_set_floor_engaged = 1;
+  rule.icon_set_floor.type = 0;  // Number
+  rule.icon_set_floor.value = "5";
+  rule.icon_set_floor.gte = 0;
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  fm_cf_rule_t back{};
+  ASSERT_EQ(fm_sheet_cf_get_at(reloaded.handle, 0, 0, &back), 0) << fm_last_error_message();
+  EXPECT_EQ(back.icon_set_floor_engaged, 1);
+  EXPECT_EQ(back.icon_set_floor.type, 0U);
+  EXPECT_STREQ(back.icon_set_floor.value, "5");
+  EXPECT_EQ(back.icon_set_floor.gte, 0);
+}
+
+TEST(FormulonCApiCfMutate, UnengagedIconSetFloorIsExcelsDefault) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 4;  // IconSet
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  rule.icon_set_engaged = 1;
+  fm_cfvo_t thresholds[2]{};
+  rule.icon_set_thresholds = thresholds;
+  rule.icon_set_threshold_count = 2;
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  const auto& floor = wb.handle->workbook().sheet(0).conditional_formats()[0].rules[0].icon_set->floor;
+  EXPECT_EQ(floor.type, formulon::cf::CfvoType::Percent);
+  EXPECT_EQ(floor.value, "0");
+  EXPECT_TRUE(floor.gte);
 }

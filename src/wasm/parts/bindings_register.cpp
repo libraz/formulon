@@ -104,6 +104,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("barBorderEngaged", &JsCfMatch::barBorderEngaged)
       .field("barBorder", &JsCfMatch::barBorder)
       .field("barGradient", &JsCfMatch::barGradient)
+      .field("barDirection", &JsCfMatch::barDirection)
       .field("iconSetName", &JsCfMatch::iconSetName)
       .field("iconIndex", &JsCfMatch::iconIndex);
 

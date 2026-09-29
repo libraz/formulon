@@ -332,7 +332,8 @@ constexpr cf::Color kDefaultAxisColor{0, 0, 0, 255};
 /// legacy-only across a round trip.
 bool NeedsX14DataBarPayload(const cf::DataBarSpec& d) {
   return d.border.has_value() || d.negative_border.has_value() || d.negative_fill != d.fill ||
-         d.axis_position != cf::DataBarAxisPosition::Automatic || !d.gradient || d.axis_color != kDefaultAxisColor;
+         d.axis_position != cf::DataBarAxisPosition::Automatic || !d.gradient || d.axis_color != kDefaultAxisColor ||
+         d.direction != cf::DataBarDirection::Context;
 }
 
 /// True when the rule both needs an x14 counterpart and has an id to
@@ -446,6 +447,11 @@ void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d) {
     out.append(" axisPosition=\"middle\"");
   } else if (d.axis_position == cf::DataBarAxisPosition::None) {
     out.append(" axisPosition=\"none\"");
+  }
+  if (d.direction == cf::DataBarDirection::LeftToRight) {
+    out.append(" direction=\"leftToRight\"");
+  } else if (d.direction == cf::DataBarDirection::RightToLeft) {
+    out.append(" direction=\"rightToLeft\"");
   }
   out.push_back('>');
   // Schema order inside `<x14:dataBar>`: two cfvo, then the colour slots

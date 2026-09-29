@@ -555,6 +555,9 @@ export interface CfMatch {
   barBorderEngaged: number;
   barBorder: CfColor;
   barGradient: number;
+  /** The rule's direction (0 = context, 1 = left to right, 2 = right to
+   *  left); the bar geometry is stated from the left edge. */
+  barDirection: number;
   /** Active when `kind === IconSet`; ordinal of `formulon::cf::IconSetName`. */
   iconSetName: number;
   iconIndex: number;
@@ -1335,6 +1338,9 @@ export interface ConditionalFormatEntry {
     readonly border?: CfColor;
     readonly negativeBorder?: CfColor;
     readonly axisColor?: CfColor;
+    /** Edge the bar grows from: 0 = context (the sheet's reading
+     *  direction), 1 = left to right, 2 = right to left. */
+    readonly direction: number;
   };
   /** Engaged for `iconSet` rules. */
   readonly iconSet?: {
@@ -1346,6 +1352,9 @@ export interface ConditionalFormatEntry {
      *  and save but never consulted during evaluation. Each threshold
      *  carries its own `type`, and that type is what interprets it. */
     readonly percent: boolean;
+    /** Lower bound of the lowest icon's bucket; a cell below it gets no
+     *  icon. Always present on a rule read back from a workbook. */
+    readonly floor?: CfValueObjectInput;
   };
 }
 
@@ -1397,6 +1406,8 @@ export interface ConditionalFormatInput {
     border?: CfColor;
     negativeBorder?: CfColor;
     axisColor?: CfColor;
+    /** 0 = context (default), 1 = left to right, 2 = right to left. */
+    direction?: number;
   };
   /** Payload for type 4 (`iconSet`). `name` is `formulon::cf::IconSetName` ordinal. */
   iconSet?: {
@@ -1408,6 +1419,9 @@ export interface ConditionalFormatInput {
      *  consulted during evaluation (each threshold's own `type` is
      *  authoritative). */
     percent?: boolean;
+    /** Lower bound of the lowest icon's bucket; a cell below it gets no
+     *  icon. Omit for Excel's default, `percent 0`. */
+    floor?: CfValueObjectInput;
   };
 }
 

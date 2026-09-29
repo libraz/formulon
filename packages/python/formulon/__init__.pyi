@@ -446,6 +446,8 @@ class CfMatch:
     bar_gradient: bool
     icon_set_name: int
     icon_index: int
+    # The rule's direction: 0 = context, 1 = left to right, 2 = right to left.
+    bar_direction: int
 
 class CfCellResult:
     row: int
@@ -486,6 +488,9 @@ class DataBar:
     border: Optional[CfColor]
     negative_border: Optional[CfColor]
     axis_color: Optional[CfColor]
+    # Edge the bar grows from: 0 = context (default), 1 = left to right,
+    # 2 = right to left.
+    direction: int
     def __init__(
         self,
         minimum: CfValueObject,
@@ -500,6 +505,7 @@ class DataBar:
         border: Optional[CfColor] = ...,
         negative_border: Optional[CfColor] = ...,
         axis_color: Optional[CfColor] = ...,
+        direction: int = ...,
     ) -> None: ...
 
 class IconSet:
@@ -510,6 +516,9 @@ class IconSet:
     # Round-trip only: preserved across load and save but never consulted
     # during evaluation; each threshold's own `type` is authoritative.
     percent: bool
+    # Lower bound of the lowest icon's bucket; a cell below it gets no icon.
+    # `None` means Excel's default, `percent 0`.
+    floor: Optional[CfValueObject]
     def __init__(
         self,
         name: int,
@@ -517,6 +526,7 @@ class IconSet:
         reverse: bool = ...,
         show_value: bool = ...,
         percent: bool = ...,
+        floor: Optional[CfValueObject] = ...,
     ) -> None: ...
 
 class ConditionalFormat:

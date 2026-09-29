@@ -886,6 +886,7 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
       if (rule.data_bar_axis_color_engaged != 0) {
         data_bar.Set("axisColor", CfColorToJs(env, rule.data_bar_axis_color));
       }
+      data_bar.Set("direction", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_direction)));
       item.Set("dataBar", data_bar);
     }
     if (rule.icon_set_engaged != 0) {
@@ -899,6 +900,9 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
       icon_set.Set("reverse", Napi::Boolean::New(env, rule.icon_set_reverse != 0));
       icon_set.Set("showValue", Napi::Boolean::New(env, rule.icon_set_show_value != 0));
       icon_set.Set("percent", Napi::Boolean::New(env, rule.icon_set_percent != 0));
+      if (rule.icon_set_floor_engaged != 0) {
+        icon_set.Set("floor", CfvoToJs(env, rule.icon_set_floor));
+      }
       item.Set("iconSet", icon_set);
     }
     arr.Set(static_cast<uint32_t>(emitted), item);
@@ -1057,6 +1061,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
       rule.data_bar_axis_color_engaged = 1;
       rule.data_bar_axis_color = PullCfColor(db.Get("axisColor").As<Napi::Object>());
     }
+    rule.data_bar_direction = static_cast<uint8_t>(SpecPullU32(db, "direction", 0U) & 0xFFU);
   }
   if (SpecHas(v, "iconSet") && v.Get("iconSet").IsObject()) {
     Napi::Object is = v.Get("iconSet").As<Napi::Object>();
@@ -1076,6 +1081,11 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     rule.icon_set_reverse = SpecPullBool(is, "reverse", false) ? 1 : 0;
     rule.icon_set_show_value = SpecPullBool(is, "showValue", true) ? 1 : 0;
     rule.icon_set_percent = SpecPullBool(is, "percent", true) ? 1 : 0;
+    // An omitted floor keeps Excel's default, `percent 0`.
+    if (SpecHas(is, "floor") && is.Get("floor").IsObject()) {
+      rule.icon_set_floor_engaged = 1;
+      rule.icon_set_floor = PullCfvo(is.Get("floor").As<Napi::Object>(), &cfvo_strings);
+    }
   }
   if (env.IsExceptionPending()) {
     // See the matching guard in AddFont. The return value is discarded

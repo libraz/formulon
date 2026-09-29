@@ -46,7 +46,7 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
 
 /// Brings the x14 data-bar rules in a sheet's retained tail `records` in
 /// line with the model: a rule linked to a model data bar has its
-/// model-owned settings rewritten (thresholds and direction are kept), a
+/// model-owned settings rewritten (thresholds are kept), a
 /// data-bar rule whose model rule is gone is dropped, along with any block
 /// or container that leaves empty. Every data-bar id still present is
 /// added to `linked`. Records this does not recognise pass through.

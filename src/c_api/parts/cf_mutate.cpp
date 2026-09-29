@@ -190,6 +190,7 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
     }
     out->data_bar_axis_color_engaged = 1;
     out->data_bar_axis_color = from_cf_color(spec.axis_color);
+    out->data_bar_direction = static_cast<std::uint8_t>(spec.direction);
   }
   if (rule.icon_set.has_value()) {
     const auto& spec = *rule.icon_set;
@@ -205,6 +206,8 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
     out->icon_set_reverse = spec.reverse ? 1 : 0;
     out->icon_set_show_value = spec.show_value ? 1 : 0;
     out->icon_set_percent = spec.percent ? 1 : 0;
+    out->icon_set_floor_engaged = 1;
+    out->icon_set_floor = from_cfvo(spec.floor, text_arena);
   }
 }
 
@@ -223,7 +226,8 @@ formulon::cf::CfValueObject to_cfvo(const fm_cfvo_t& src) {
 // The three payload copiers below check payload *shape* only - counts,
 // pointers, and the length ordering the bar geometry needs. Every enum
 // domain a payload carries (`fm_cfvo_t::type`, `icon_set_name`,
-// `data_bar_axis_position`) is checked by `validate(rule, ...)`, which
+// `data_bar_axis_position`, `data_bar_direction`) is checked by
+// `validate(rule, ...)`, which
 // `fm_sheet_cf_add_rule` runs before it reaches here.
 bool copy_color_scale_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
   if (rule.color_scale_count < 2 || rule.color_scale_count > 3 || rule.color_scale_thresholds == nullptr ||
@@ -269,6 +273,7 @@ bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   if (rule.data_bar_gradient_engaged != 0) {
     spec.gradient = rule.data_bar_gradient != 0;
   }
+  spec.direction = static_cast<formulon::cf::DataBarDirection>(rule.data_bar_direction);
   spec.show_value = rule.data_bar_show_value != 0;
   spec.min_length_pct = rule.data_bar_min_length_pct;
   spec.max_length_pct = rule.data_bar_max_length_pct;
@@ -289,6 +294,9 @@ bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   spec.reverse = rule.icon_set_reverse != 0;
   spec.show_value = rule.icon_set_show_value != 0;
   spec.percent = rule.icon_set_percent != 0;
+  if (rule.icon_set_floor_engaged != 0) {
+    spec.floor = to_cfvo(rule.icon_set_floor);
+  }
   out_rule->icon_set = std::move(spec);
   return true;
 }

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Conditional-format rules carry an icon set's floor (its first threshold,
+  below which a cell gets no icon) and a data bar's direction. The C ABI
+  appends `icon_set_floor_engaged`, `icon_set_floor` and
+  `data_bar_direction` to `fm_cf_rule_t`, so earlier fields keep their
+  offsets while the struct grows, and `fm_cf_match_t` reports
+  `bar_direction` in a former padding byte. They surface as
+  `iconSet.floor`, `dataBar.direction` and `barDirection` in npm and
+  native Node, and as `IconSet.floor`, `DataBar.direction` and
+  `CfMatch.bar_direction` in Python.
+
 ### Changed
 
 - `@libraz/formulon` now resolves to a single-threaded build that loads

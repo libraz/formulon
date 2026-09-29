@@ -205,6 +205,7 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
   o.Set("barBorderEngaged", Napi::Number::New(env, m.bar_border_engaged));
   o.Set("barBorder", TranslateCfColor(env, m.bar_border));
   o.Set("barGradient", Napi::Number::New(env, m.bar_gradient));
+  o.Set("barDirection", Napi::Number::New(env, static_cast<int32_t>(m.bar_direction)));
   o.Set("iconSetName", Napi::Number::New(env, m.icon_set_name));
   o.Set("iconIndex", Napi::Number::New(env, static_cast<int32_t>(m.icon_index)));
   return o;

@@ -27,6 +27,7 @@
 //   x14        data bars linked to x14 counterparts
 //   x14bars    x14 data-bar fields varied one per rule: border, gradient,
 //              axis position and colour, negative fill and border, lengths
+//   x14dir     each x14 data-bar direction: leftToRight, context, rightToLeft
 
 #include <algorithm>
 #include <cstddef>
@@ -159,7 +160,8 @@ std::string DescribeCf(const Sheet& sheet) {
         DescribeColor(os, r.data_bar->fill);
         const cf::DataBarSpec& b = *r.data_bar;
         os << " len=" << static_cast<int>(b.min_length_pct) << "-" << static_cast<int>(b.max_length_pct)
-           << " show=" << b.show_value << " grad=" << b.gradient << " axis=" << static_cast<int>(b.axis_position);
+           << " show=" << b.show_value << " grad=" << b.gradient << " axis=" << static_cast<int>(b.axis_position)
+           << " dir=" << static_cast<int>(b.direction);
         os << " neg";
         DescribeColor(os, b.negative_fill);
         os << " axiscol";
@@ -364,14 +366,15 @@ TEST_P(XlsbFeatureWriterBytes, MatchExcelUpToPtgClass) {
 
 INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureFixture,
                          ::testing::Values("base", "cellis_ops", "text_rules", "flags", "cfvo", "iconbits", "rel",
-                                           "dv_all", "prot", "prot2", "excelprot", "x14", "x14bars"));
+                                           "dv_all", "prot", "prot2", "excelprot", "x14", "x14bars", "x14dir"));
 
 // Left out: `text_rules`, `flags` and `rel`, whose formulas differ from
-// Excel's only in the Ptg encoder's canonical form (IF's PtgAttr jumps,
-// function-token classes, the PtgAttrSemi operand), not in record layout.
+// Excel's only in the Ptg codec's canonical form, not in record layout:
+// redundant parentheses the decoder does not keep, the PtgAttrSemi operand
+// (`00 00` where Excel writes `fe ff`), and IF's PtgAttr jumps.
 INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureWriterBytes,
                          ::testing::Values("base", "cellis_ops", "cfvo", "iconbits", "dv_all", "prot", "prot2",
-                                           "excelprot", "x14", "x14bars"));
+                                           "excelprot", "x14", "x14bars", "x14dir"));
 
 /// Payload of the first `type` record in `part`, hex-encoded.
 std::string RecordPayload(const std::vector<std::uint8_t>& xlsb, const std::string& part, std::uint16_t type) {
