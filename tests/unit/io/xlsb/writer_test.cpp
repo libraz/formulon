@@ -1353,6 +1353,18 @@ TEST(XlsbWriter, UnknownPrefixedNameKeepsItsPrefix) {
 
   auto bytes_or = write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  // `_xlfn.FOOBAR` is a plain undefined-name stub (flags 0, empty body), and
+  // only a function Excel knows gets the hidden future-function record.
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto wb_bin_or = zip.read_entry("xl/workbook.bin");
+  ASSERT_TRUE(static_cast<bool>(wb_bin_or));
+  EXPECT_EQ(FindNameRecordPrefix(wb_bin_or.value(), "_xlfn.FOOBAR"),
+            (std::vector<std::uint8_t>{0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF}));
+  EXPECT_TRUE(FindNameRgce(wb_bin_or.value(), "_xlfn.FOOBAR").empty());
+  EXPECT_EQ(FindNameRecordPrefix(wb_bin_or.value(), "_xlfn.XLOOKUP"),
+            (std::vector<std::uint8_t>{0x0B, 0x00, 0x02, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF}));
+
   auto read_or = read_xlsb(SpanOf(bytes_or.value()));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
   const Sheet& back = read_or.value().workbook.sheet(0);

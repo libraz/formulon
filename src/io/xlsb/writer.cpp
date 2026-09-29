@@ -25,6 +25,7 @@
 #include "cell.h"
 #include "cf/cf_types.h"
 #include "default_content_type.h"
+#include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/zip_part_writer.h"
@@ -1171,9 +1172,16 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
   // placeholder body, and five trailing null strings. A cell's future-
   // function call resolves through the matching BrtName's ilbl, so these
   // flags and the placeholder body must match Excel byte-for-byte or the
-  // callee shows up as #NAME? on load.
+  // callee shows up as #NAME? on load. A prefixed name Excel does not know
+  // (`_xlfn.FOOBAR`) is an ordinary undefined-name stub instead (measured).
   const bool is_param = name.rfind("_xlpm.", 0) == 0;
-  const bool is_future_fn = name.rfind("_xlfn.", 0) == 0;
+  std::string_view callee(name);
+  const bool xlfn = callee.rfind("_xlfn.", 0) == 0;
+  callee.remove_prefix(xlfn ? 6U : 0U);
+  if (callee.rfind("_xlws.", 0) == 0) {
+    callee.remove_prefix(6U);
+  }
+  const bool is_future_fn = xlfn && has_storage_prefix(callee);
   const bool is_placeholder = is_param || is_future_fn;
   std::uint32_t flags;
   if (is_param) {
