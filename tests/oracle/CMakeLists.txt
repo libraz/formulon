@@ -653,6 +653,12 @@ if(Python3_Interpreter_FOUND)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   set_tests_properties(formulon_macos_excel_formula_unit PROPERTIES LABELS "oracle;oracle-metadata")
+  add_test(
+    NAME formulon_windows_excel_driver_unit
+    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.windows_excel_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(formulon_windows_excel_driver_unit PROPERTIES LABELS "oracle;oracle-metadata")
   option(FORMULON_ORACLE_RELEASE_GATES
     "Register strict external-capture oracle gates (release CI only)"
     OFF
