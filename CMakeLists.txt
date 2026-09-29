@@ -339,6 +339,8 @@ src/eval/aggregate_lazy.cpp
   src/eval/info_lazy.cpp
   src/eval/phonetic_lazy.cpp
   src/eval/lookups/classic.cpp
+  src/eval/lookups/common.cpp
+  src/eval/lookups/index.cpp
   src/eval/lookups/xlookup.cpp
   src/c_api/parts/cells.cpp
   src/c_api/parts/cf_eval.cpp
