@@ -74,7 +74,8 @@ Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::v
                       std::string("context=xlsb_cell_writer formula=") + cell.formula_text);
   }
   // Cell formulas: a bare reference/range as the whole formula promotes.
-  return encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kValue);
+  return encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kValue, std::nullopt,
+                     cell.dynamic_array ? PtgEvaluation::kDynamicArray : PtgEvaluation::kLegacy);
 }
 
 /// Emits a `BrtFmla*` record matching `cached`'s kind, with the encoded

@@ -73,6 +73,17 @@ enum class PtgRootClass : std::uint8_t {
   kReference,
 };
 
+/// How the formula evaluates arrays, which decides an operator's operand
+/// class inside a function (measured): a dynamic-array formula gives an area
+/// operand array class where the parameter takes arrays
+/// (`SUM(A1:A2*2)` -> 0x65); a legacy formula (`Cell::dynamic_array` clear)
+/// intersects it, value class (0x45), except under a forced-array parameter
+/// such as SUMPRODUCT's.
+enum class PtgEvaluation : std::uint8_t {
+  kDynamicArray,
+  kLegacy,
+};
+
 /// Result of `encode_ptgs`: the main token stream plus the array-
 /// constant extra-data area a `CellParsedFormula` appends after it.
 struct EncodedFormula {
@@ -173,7 +184,8 @@ bool formula_uses_array_evaluation(const parser::AstNode& root);
 /// offending node kind.
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                            PtgRootClass root_class, std::optional<PtgBaseCell> base = std::nullopt);
+                                            PtgRootClass root_class, std::optional<PtgBaseCell> base = std::nullopt,
+                                            PtgEvaluation evaluation = PtgEvaluation::kDynamicArray);
 
 }  // namespace xlsb
 }  // namespace io

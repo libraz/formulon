@@ -87,7 +87,11 @@ struct Slot {
 /// `slot` (measured per parameter; see `xlsb_parameter_class`). Outside
 /// every built-in an operand is value class and a direct argument keeps
 /// reference class.
-std::uint8_t SlotClass(Slot slot, bool area) {
+std::uint8_t SlotClass(Slot slot, bool area, bool legacy = false) {
+  if (slot.operand && legacy) {
+    // A legacy formula intersects an operand unless the parameter forces arrays.
+    return slot.letter == 'F' ? kPtgArrayClass : kPtgValueClass;
+  }
   if (slot.operand) {
     switch (slot.letter) {
       case 'S':
@@ -458,11 +462,13 @@ bool UsesArrayEvaluation(const parser::AstNode& node, Slot slot, bool root) {
 class Encoder {
  public:
   Encoder(const parser::AstNode& root, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
-          const NameTable& name_table, PtgRootClass root_class, std::optional<PtgBaseCell> base)
+          const NameTable& name_table, PtgRootClass root_class, std::optional<PtgBaseCell> base,
+          PtgEvaluation evaluation)
       : sheet_names_(sheet_names),
         sheet_ranges_(sheet_ranges),
         name_table_(name_table),
         base_(base),
+        legacy_(evaluation == PtgEvaluation::kLegacy),
         promote_root_(root_class == PtgRootClass::kValue) {
     parser::collect_parenthesized_nodes(root, parens_);
   }
@@ -498,7 +504,7 @@ class Encoder {
       if (promote) {
         return kPtgValueClass;
       }
-      return promote_root_ ? SlotClass(slot, area) : kPtgReferenceClass;
+      return promote_root_ ? SlotClass(slot, area, legacy_) : kPtgReferenceClass;
     };
     switch (node.kind()) {
       case parser::NodeKind::Literal:
@@ -1274,6 +1280,8 @@ class Encoder {
   Slot next_slot_;
   /// Base cell of `PtgRefN` / `PtgAreaN` offsets, when the formula has one.
   const std::optional<PtgBaseCell> base_;
+  /// See `PtgEvaluation`.
+  const bool legacy_;
   /// See `emit()`'s `promote` local. Cleared on the first call.
   bool is_root_ = true;
   const bool promote_root_;
@@ -1601,8 +1609,9 @@ bool formula_uses_array_evaluation(const parser::AstNode& root) {
 
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                            PtgRootClass root_class, std::optional<PtgBaseCell> base) {
-  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base);
+                                            PtgRootClass root_class, std::optional<PtgBaseCell> base,
+                                            PtgEvaluation evaluation) {
+  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation);
   // A formula calling a volatile function itself (not through a name) opens
   // with `PtgAttrSemi`, without which Excel does not recalculate it
   // (measured for cells and name bodies; the u16 is unused).

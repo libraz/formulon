@@ -559,6 +559,34 @@ TEST(XlsbPtgCodec, ArrayEvaluationFollowsTheParameterClasses) {
   }
 }
 
+// A legacy formula (no dynamic-array mark) intersects an operator's area
+// operand, so SUM(A1:A2*2) stores it value class where a dynamic-array one
+// stores it array class; bytes as Excel 365 saved a legacy workbook's E1 and
+// its CSE block {=A1:A2*2} (backup/oracle_probe/dyn_write/legacy_excel.xlsb).
+TEST(XlsbPtgCodec, LegacyFormulaIntersectsOperatorOperands) {
+  const std::vector<std::uint8_t> area = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0xC0};
+  auto encode = [](const char* formula, PtgEvaluation evaluation) {
+    Arena arena;
+    parser::Parser p(formula, arena);
+    parser::AstNode* root = p.parse();
+    EXPECT_NE(root, nullptr) << formula;
+    auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue, std::nullopt, evaluation);
+    EXPECT_TRUE(static_cast<bool>(encoded)) << formula;
+    return encoded ? encoded.value().rgce : std::vector<std::uint8_t>{};
+  };
+  auto with_class = [&area](std::uint8_t area_ptg, std::initializer_list<std::uint8_t> tail) {
+    std::vector<std::uint8_t> out = {area_ptg};
+    out.insert(out.end(), area.begin(), area.end());
+    out.insert(out.end(), tail);
+    return out;
+  };
+  EXPECT_EQ(encode("SUM(A1:A2*2)", PtgEvaluation::kLegacy),
+            with_class(0x45, {0x1E, 0x02, 0x00, 0x05, 0x19, 0x10, 0x00, 0x00}));
+  EXPECT_EQ(encode("A1:A2*2", PtgEvaluation::kLegacy), with_class(0x45, {0x1E, 0x02, 0x00, 0x05}));
+  EXPECT_EQ(encode("SUM(A1:A2*2)", PtgEvaluation::kDynamicArray),
+            with_class(0x65, {0x1E, 0x02, 0x00, 0x05, 0x19, 0x10, 0x00, 0x00}));
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }
