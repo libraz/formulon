@@ -94,12 +94,7 @@ Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
   }
   fm_value_t v{};
   rc = fm_workbook_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v);
-  if (rc != 0) {
-    Napi::Object out = MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
-    fm_workbook_destroy(wb);
-    return out;
-  }
-  Napi::Object out = MakeValueResult(env, MakeOkStatus(env), v);
+  Napi::Object out = MakeValueResult(env, rc, v);
   fm_workbook_destroy(wb);
   return out;
 }

@@ -5,22 +5,50 @@
 
 namespace formulon_node {
 
-Napi::Object MakeOkStatus(Napi::Env env) {
+namespace {
+
+// Builds `{ ok, status, message, context }`; NULL strings become "".
+Napi::Object MakeStatusEnvelope(Napi::Env env, bool ok, fm_status_t code, const char* message, const char* context) {
   Napi::Object o = Napi::Object::New(env);
-  o.Set("ok", Napi::Boolean::New(env, true));
-  o.Set("status", Napi::Number::New(env, 0));
-  o.Set("message", Napi::String::New(env, ""));
-  o.Set("context", Napi::String::New(env, ""));
+  o.Set("ok", Napi::Boolean::New(env, ok));
+  o.Set("status", Napi::Number::New(env, static_cast<int32_t>(code)));
+  o.Set("message", Napi::String::New(env, message != nullptr ? message : ""));
+  o.Set("context", Napi::String::New(env, context != nullptr ? context : ""));
   return o;
 }
 
+// Reads the number at `key` into `out`. Returns false when the key is
+// missing / undefined / null, or (after throwing a TypeError) not a number.
+bool SpecPullNumber(const Napi::Object& spec, const char* key, Napi::Number& out) {
+  if (!spec.Has(key)) {
+    return false;
+  }
+  Napi::Value v = spec.Get(key);
+  if (v.IsUndefined() || v.IsNull()) {
+    return false;
+  }
+  if (!v.IsNumber()) {
+    // `.As<Napi::Number>()` below is an unchecked cast: under
+    // NAPI_DISABLE_CPP_EXCEPTIONS it does not throw a C++ exception on a
+    // non-number value, it leaves a *pending* JS exception and returns a
+    // default -- indistinguishable, to this function's caller, from a
+    // successful parse. Throwing here explicitly makes the failure
+    // immediate and deterministic instead of implementation-defined.
+    Napi::TypeError::New(spec.Env(), std::string(key) + " must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+  out = v.As<Napi::Number>();
+  return true;
+}
+
+}  // namespace
+
+Napi::Object MakeOkStatus(Napi::Env env) {
+  return MakeStatusEnvelope(env, true, 0, "", "");
+}
+
 Napi::Object MakeBindingError(Napi::Env env, fm_status_t code, const char* message) {
-  Napi::Object o = Napi::Object::New(env);
-  o.Set("ok", Napi::Boolean::New(env, false));
-  o.Set("status", Napi::Number::New(env, static_cast<int32_t>(code)));
-  o.Set("message", Napi::String::New(env, message != nullptr ? message : ""));
-  o.Set("context", Napi::String::New(env, ""));
-  return o;
+  return MakeStatusEnvelope(env, false, code, message, "");
 }
 
 Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message) {
@@ -28,12 +56,9 @@ Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message) {
 }
 
 Napi::Object MakeCallbackThrewStatus(Napi::Env env) {
-  Napi::Object o = Napi::Object::New(env);
-  o.Set("ok", Napi::Boolean::New(env, false));
-  o.Set("status", Napi::Number::New(env, static_cast<int32_t>(kBindingCallbackException)));
-  o.Set("message", Napi::String::New(env, "the iterative progress callback threw; the solve was aborted"));
-  o.Set("context", Napi::String::New(env, "Workbook.setIterativeProgress"));
-  return o;
+  return MakeStatusEnvelope(env, false, kBindingCallbackException,
+                            "the iterative progress callback threw; the solve was aborted",
+                            "Workbook.setIterativeProgress");
 }
 
 Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code) {
@@ -42,14 +67,7 @@ Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code) {
     // whatever call came before. Synthesise the message here instead.
     return MakeBindingError(env, code, "the workbook handle was already destroyed");
   }
-  const char* msg = fm_last_error_message();
-  const char* ctx = fm_last_error_context();
-  Napi::Object o = Napi::Object::New(env);
-  o.Set("ok", Napi::Boolean::New(env, false));
-  o.Set("status", Napi::Number::New(env, static_cast<int32_t>(code)));
-  o.Set("message", Napi::String::New(env, msg != nullptr ? msg : ""));
-  o.Set("context", Napi::String::New(env, ctx != nullptr ? ctx : ""));
-  return o;
+  return MakeStatusEnvelope(env, false, code, fm_last_error_message(), fm_last_error_context());
 }
 
 Napi::Object MakeStatus(Napi::Env env, fm_status_t code) {
@@ -129,6 +147,11 @@ Napi::Object MakeEmptyValueResult(Napi::Env env, Napi::Object status) {
   return MakeValueResult(env, status, empty);
 }
 
+Napi::Object MakeValueResult(Napi::Env env, fm_status_t code, const fm_value_t& value) {
+  return code == 0 ? MakeValueResult(env, MakeOkStatus(env), value)
+                   : MakeEmptyValueResult(env, MakeErrorStatus(env, code));
+}
+
 Napi::Object MakeIndexResult(Napi::Env env, Napi::Object status, uint32_t index) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", status);
@@ -188,54 +211,18 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
 }
 
 int32_t SpecPullInt32(const Napi::Object& spec, const char* key, int32_t dflt) {
-  if (!spec.Has(key)) {
-    return dflt;
-  }
-  Napi::Value v = spec.Get(key);
-  if (v.IsUndefined() || v.IsNull()) {
-    return dflt;
-  }
-  if (!v.IsNumber()) {
-    // `.As<Napi::Number>()` below is an unchecked cast: under
-    // NAPI_DISABLE_CPP_EXCEPTIONS it does not throw a C++ exception on a
-    // non-number value, it leaves a *pending* JS exception and returns a
-    // default -- indistinguishable, to this function's caller, from a
-    // successful parse. Throwing here explicitly makes the failure
-    // immediate and deterministic instead of implementation-defined.
-    Napi::TypeError::New(spec.Env(), std::string(key) + " must be a number").ThrowAsJavaScriptException();
-    return dflt;
-  }
-  return v.As<Napi::Number>().Int32Value();
+  Napi::Number n;
+  return SpecPullNumber(spec, key, n) ? n.Int32Value() : dflt;
 }
 
 uint32_t SpecPullU32(const Napi::Object& spec, const char* key, uint32_t dflt) {
-  if (!spec.Has(key)) {
-    return dflt;
-  }
-  Napi::Value v = spec.Get(key);
-  if (v.IsUndefined() || v.IsNull()) {
-    return dflt;
-  }
-  if (!v.IsNumber()) {
-    Napi::TypeError::New(spec.Env(), std::string(key) + " must be a number").ThrowAsJavaScriptException();
-    return dflt;
-  }
-  return v.As<Napi::Number>().Uint32Value();
+  Napi::Number n;
+  return SpecPullNumber(spec, key, n) ? n.Uint32Value() : dflt;
 }
 
 double SpecPullDouble(const Napi::Object& spec, const char* key, double dflt) {
-  if (!spec.Has(key)) {
-    return dflt;
-  }
-  Napi::Value v = spec.Get(key);
-  if (v.IsUndefined() || v.IsNull()) {
-    return dflt;
-  }
-  if (!v.IsNumber()) {
-    Napi::TypeError::New(spec.Env(), std::string(key) + " must be a number").ThrowAsJavaScriptException();
-    return dflt;
-  }
-  return v.As<Napi::Number>().DoubleValue();
+  Napi::Number n;
+  return SpecPullNumber(spec, key, n) ? n.DoubleValue() : dflt;
 }
 
 bool SpecPullBool(const Napi::Object& spec, const char* key, bool dflt) {

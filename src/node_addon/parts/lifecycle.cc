@@ -32,6 +32,30 @@ Napi::Object MakeParallelRecalcResult(Napi::Env env, Napi::Object status, const 
   return result;
 }
 
+// Copies an engine-owned save buffer onto the JS heap and releases it.
+Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* buf, std::size_t len) {
+  Napi::Uint8Array dst = Napi::Uint8Array::New(env, len);
+  if (len != 0 && buf != nullptr) {
+    std::memcpy(dst.Data(), buf, len);
+  }
+  fm_buffer_free(buf);
+  return dst;
+}
+
+// Builds `{ status, bytes }` for a save call; `bytes` is null on failure.
+Napi::Object MakeSaveResult(Napi::Env env, fm_status_t rc, uint8_t* buf, std::size_t len) {
+  Napi::Object out = Napi::Object::New(env);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("bytes", env.Null());
+    return out;
+  }
+  Napi::Uint8Array dst = TakeSavedBytes(env, buf, len);
+  out.Set("status", MakeOkStatus(env));
+  out.Set("bytes", dst);
+  return out;
+}
+
 bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {
   if (info.Length() == 0 || !info[0].IsNumber()) {
     return false;
@@ -237,10 +261,7 @@ Napi::Value Workbook::GetValue(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 2);
   fm_value_t v{};
   fm_status_t rc = fm_workbook_get_value(handle_, sheet, row, col, &v);
-  if (rc != 0) {
-    return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
-  }
-  return MakeValueResult(env, MakeOkStatus(env), v);
+  return MakeValueResult(env, rc, v);
 }
 
 Napi::Value Workbook::GetCellPhonetic(const Napi::CallbackInfo& info) {
@@ -328,10 +349,7 @@ Napi::Value Workbook::EvaluateFormulaText(const Napi::CallbackInfo& info) {
   const std::string formula = ArgString(info, 3);
   fm_value_t v{};
   fm_status_t rc = fm_workbook_evaluate_formula(handle_, sheet, row, col, formula.c_str(), &v);
-  if (rc != 0) {
-    return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
-  }
-  return MakeValueResult(env, MakeOkStatus(env), v);
+  return MakeValueResult(env, rc, v);
 }
 
 Napi::Value Workbook::EvaluateFormulaArray(const Napi::CallbackInfo& info) {
@@ -402,10 +420,7 @@ Napi::Value Workbook::EvaluateConditionalFormula(const Napi::CallbackInfo& info)
   fm_value_t v{};
   fm_status_t rc =
       fm_workbook_evaluate_cf_formula(handle_, sheet, row, col, anchor_row, anchor_col, formula.c_str(), &v);
-  if (rc != 0) {
-    return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
-  }
-  return MakeValueResult(env, MakeOkStatus(env), v);
+  return MakeValueResult(env, rc, v);
 }
 
 Napi::Value Workbook::GetLambdaText(const Napi::CallbackInfo& info) {
@@ -712,31 +727,10 @@ Napi::Value Workbook::MemoryUsage(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::Save(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("bytes", env.Null());
-    return out;
-  }
   uint8_t* buf = nullptr;
   std::size_t len = 0;
-  fm_status_t rc = fm_workbook_save(handle_, &buf, &len);
-  if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("bytes", env.Null());
-    return out;
-  }
-  // Copy into a fresh Uint8Array on the JS heap; the C-side buffer is
-  // owned by the engine and must be released with `fm_buffer_free`.
-  Napi::Uint8Array dst = Napi::Uint8Array::New(env, len);
-  if (len != 0 && buf != nullptr) {
-    std::memcpy(dst.Data(), buf, len);
-  }
-  fm_buffer_free(buf);
-  out.Set("status", MakeOkStatus(env));
-  out.Set("bytes", dst);
-  return out;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_save(handle_, &buf, &len) : kBindingInvalidHandle;
+  return MakeSaveResult(info.Env(), rc, buf, len);
 }
 
 Napi::Value Workbook::SaveAs(const Napi::CallbackInfo& info) {
@@ -749,29 +743,14 @@ Napi::Value Workbook::SaveAs(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "saveAs requires 1 argument (format)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("bytes", env.Null());
-    return out;
-  }
-  const std::int32_t format = info[0].As<Napi::Number>().Int32Value();
   uint8_t* buf = nullptr;
   std::size_t len = 0;
-  fm_status_t rc = fm_workbook_save_as(handle_, format, &buf, &len);
-  if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("bytes", env.Null());
-    return out;
+  fm_status_t rc = kBindingInvalidHandle;
+  if (handle_ != nullptr) {
+    const std::int32_t format = info[0].As<Napi::Number>().Int32Value();
+    rc = fm_workbook_save_as(handle_, format, &buf, &len);
   }
-  Napi::Uint8Array dst = Napi::Uint8Array::New(env, len);
-  if (len != 0 && buf != nullptr) {
-    std::memcpy(dst.Data(), buf, len);
-  }
-  fm_buffer_free(buf);
-  out.Set("status", MakeOkStatus(env));
-  out.Set("bytes", dst);
-  return out;
+  return MakeSaveResult(env, rc, buf, len);
 }
 
 Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
@@ -800,11 +779,7 @@ Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
   }
-  Napi::Uint8Array dst = Napi::Uint8Array::New(env, len);
-  if (len != 0 && buf != nullptr) {
-    std::memcpy(dst.Data(), buf, len);
-  }
-  fm_buffer_free(buf);
+  Napi::Uint8Array dst = TakeSavedBytes(env, buf, len);
   out.Set("status", MakeOkStatus(env));
   out.Set("bytes", dst);
   out.Set("downgradedFormulaCount", Napi::Number::New(env, static_cast<double>(d.downgraded_formula_count)));

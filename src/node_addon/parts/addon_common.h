@@ -137,6 +137,10 @@ Napi::Object MakeValueResult(Napi::Env env, Napi::Object status, const fm_value_
 /// Builds `{ status, value: TranslateValue(blank) }`.
 Napi::Object MakeEmptyValueResult(Napi::Env env, Napi::Object status);
 
+/// Builds the `{ status, value }` ValueResult from `code`; `value` is
+/// carried only on success and reads as blank otherwise.
+Napi::Object MakeValueResult(Napi::Env env, fm_status_t code, const fm_value_t& value);
+
 /// Builds `{ status, index }` (used by `*_create` / `*_add` style entries).
 Napi::Object MakeIndexResult(Napi::Env env, Napi::Object status, uint32_t index);
 

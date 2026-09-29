@@ -443,21 +443,32 @@ Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
 
 // ---- Merges ---------------------------------------------------------
 
+namespace {
+
+// Reads a `{ firstRow, lastRow, firstCol, lastCol }` range object.
+fm_merge_range ReadMergeRange(const Napi::Object& range) {
+  fm_merge_range m{};
+  m.first_row = range.Get("firstRow").ToNumber().Uint32Value();
+  m.last_row = range.Get("lastRow").ToNumber().Uint32Value();
+  m.first_col = range.Get("firstCol").ToNumber().Uint32Value();
+  m.last_col = range.Get("lastCol").ToNumber().Uint32Value();
+  return m;
+}
+
+// Reads the range at `info[idx]`; a missing or non-object argument reads as all zeros.
+fm_merge_range MergeRangeArg(const Napi::CallbackInfo& info, size_t idx) {
+  return info.Length() > idx && info[idx].IsObject() ? ReadMergeRange(info[idx].As<Napi::Object>()) : fm_merge_range{};
+}
+
+}  // namespace
+
 Napi::Value Workbook::AddMerge(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
   const uint32_t sheet = ArgU32(info, 0);
-  fm_merge_range m{};
-  if (info.Length() > 1 && info[1].IsObject()) {
-    Napi::Object range = info[1].As<Napi::Object>();
-    m.first_row = range.Get("firstRow").ToNumber().Uint32Value();
-    m.last_row = range.Get("lastRow").ToNumber().Uint32Value();
-    m.first_col = range.Get("firstCol").ToNumber().Uint32Value();
-    m.last_col = range.Get("lastCol").ToNumber().Uint32Value();
-  }
-  fm_status_t rc = fm_sheet_add_merge(handle_, sheet, m);
+  fm_status_t rc = fm_sheet_add_merge(handle_, sheet, MergeRangeArg(info, 1));
   return MakeStatus(env, rc);
 }
 
@@ -467,15 +478,7 @@ Napi::Value Workbook::RemoveMerge(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const uint32_t sheet = ArgU32(info, 0);
-  fm_merge_range m{};
-  if (info.Length() > 1 && info[1].IsObject()) {
-    Napi::Object range = info[1].As<Napi::Object>();
-    m.first_row = range.Get("firstRow").ToNumber().Uint32Value();
-    m.last_row = range.Get("lastRow").ToNumber().Uint32Value();
-    m.first_col = range.Get("firstCol").ToNumber().Uint32Value();
-    m.last_col = range.Get("lastCol").ToNumber().Uint32Value();
-  }
-  fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, m);
+  fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, MergeRangeArg(info, 1));
   return MakeStatus(env, rc);
 }
 
@@ -626,6 +629,38 @@ Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
 
 // ---- Hyperlinks -----------------------------------------------------
 
+namespace {
+
+// Adds the hyperlink described by the already type-checked arguments
+// `(sheet, row, col[, lastRow, lastCol], target, display, tooltip, location)`.
+// Empty strings are forwarded as NULL.
+fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& info, bool ranged) {
+  const uint32_t sheet = Workbook::ArgU32(info, 0);
+  const uint32_t row = Workbook::ArgU32(info, 1);
+  const uint32_t col = Workbook::ArgU32(info, 2);
+  const uint32_t last_row = ranged ? Workbook::ArgU32(info, 3) : row;
+  const uint32_t last_col = ranged ? Workbook::ArgU32(info, 4) : col;
+  const std::size_t text_idx = ranged ? 5 : 3;
+  // Keep the std::string buffers alive until after the C ABI call so the
+  // borrowed `const char*` pointers in `fm_hyperlink` stay valid.
+  const std::string target = Workbook::ArgString(info, text_idx);
+  const std::string display = Workbook::ArgString(info, text_idx + 1);
+  const std::string tooltip = Workbook::ArgString(info, text_idx + 2);
+  const std::string location = Workbook::ArgString(info, text_idx + 3);
+  fm_hyperlink hl{};
+  hl.row = row;
+  hl.col = col;
+  hl.last_row = last_row;
+  hl.last_col = last_col;
+  hl.target = target.empty() ? nullptr : target.c_str();
+  hl.location = location.empty() ? nullptr : location.c_str();
+  hl.display = display.empty() ? nullptr : display.c_str();
+  hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
+  return fm_sheet_add_hyperlink(wb, sheet, hl);
+}
+
+}  // namespace
+
 Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -639,26 +674,7 @@ Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  // Keep the std::string buffers alive until after the C ABI call so the
-  // borrowed `const char*` pointers in `fm_hyperlink` stay valid.
-  const std::string target = ArgString(info, 3);
-  const std::string display = ArgString(info, 4);
-  const std::string tooltip = ArgString(info, 5);
-  const std::string location = ArgString(info, 6);
-  fm_hyperlink hl{};
-  hl.row = row;
-  hl.col = col;
-  hl.last_row = row;
-  hl.last_col = col;
-  hl.target = target.empty() ? nullptr : target.c_str();
-  hl.location = location.empty() ? nullptr : location.c_str();
-  hl.display = display.empty() ? nullptr : display.c_str();
-  hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
-  fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
-  return MakeStatus(env, rc);
+  return MakeStatus(env, AddHyperlinkFromArgs(handle_, info, /*ranged=*/false));
 }
 
 Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
@@ -675,26 +691,7 @@ Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  const uint32_t last_row = ArgU32(info, 3);
-  const uint32_t last_col = ArgU32(info, 4);
-  const std::string target = ArgString(info, 5);
-  const std::string display = ArgString(info, 6);
-  const std::string tooltip = ArgString(info, 7);
-  const std::string location = ArgString(info, 8);
-  fm_hyperlink hl{};
-  hl.row = row;
-  hl.col = col;
-  hl.last_row = last_row;
-  hl.last_col = last_col;
-  hl.target = target.empty() ? nullptr : target.c_str();
-  hl.location = location.empty() ? nullptr : location.c_str();
-  hl.display = display.empty() ? nullptr : display.c_str();
-  hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
-  fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
-  return MakeStatus(env, rc);
+  return MakeStatus(env, AddHyperlinkFromArgs(handle_, info, /*ranged=*/true));
 }
 
 Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
@@ -842,13 +839,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
         if (!rng_v.IsObject()) {
           continue;
         }
-        Napi::Object rng = rng_v.As<Napi::Object>();
-        fm_merge_range m{};
-        m.first_row = rng.Get("firstRow").ToNumber().Uint32Value();
-        m.last_row = rng.Get("lastRow").ToNumber().Uint32Value();
-        m.first_col = rng.Get("firstCol").ToNumber().Uint32Value();
-        m.last_col = rng.Get("lastCol").ToNumber().Uint32Value();
-        ranges_buf.push_back(m);
+        ranges_buf.push_back(ReadMergeRange(rng_v.As<Napi::Object>()));
       }
     }
   }
