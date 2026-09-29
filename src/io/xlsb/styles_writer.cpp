@@ -237,8 +237,7 @@ std::vector<std::uint8_t> ColorProp(std::uint32_t argb, const ColorSpec& spec) {
 
 /// A dxf as Excel writes it: fill, font, number format, border, each only
 /// where the dxf states it. The font name, alignment and protection have
-/// no measured property and are left out; Excel drops a CF rule whose dxf
-/// carries any of them (or a font size) anyway.
+/// no measured property and are left out.
 void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
   std::vector<std::uint8_t> props;
   std::uint16_t count = 0;

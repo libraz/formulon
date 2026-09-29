@@ -62,22 +62,11 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet);
 /// no identifiable dynamic-array entry — or that no part ships at all — and
 /// every anchor is then written as a plain `BrtArrFmla` with no `BrtCellMeta`
 /// record, because a dangling index makes Excel repair the file.
-///
-/// `styles_carry_dxfs` says whether the styles part the package ships holds
-/// the differential formats conditional-format rules index. When it does
-/// not (the part is generated from the model, which writes no dxfs), a
-/// block with a rule that references one is left out -- Excel refuses a
-/// dangling dxf index -- and is reported by `cf_blocks_needing_dxfs`.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBuilder& sst,
                                                       const std::vector<std::string>& sheet_names,
                                                       const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                                       std::uint32_t* downgraded_formula_count = nullptr,
-                                                      std::uint32_t dynamic_array_ifmd = 0,
-                                                      bool styles_carry_dxfs = true);
-
-/// Number of `sheet`'s conditional-format blocks with a rule that references
-/// a differential format.
-std::size_t cf_blocks_needing_dxfs(const Sheet& sheet);
+                                                      std::uint32_t dynamic_array_ifmd = 0);
 
 }  // namespace xlsb
 }  // namespace io

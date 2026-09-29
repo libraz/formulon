@@ -99,9 +99,9 @@ TEST(OoxmlFeatureDefaults, AbsentAllowBlankIsOff) {
   EXPECT_NE(xml.find("allowBlank=\"1\""), std::string::npos);
 }
 
-// Excel drops a CF rule whose dxf states a font size, so a dxf font that
-// had no <sz> must not gain one on save; nor may it gain a colour it did
-// not state, which would force the formatted text black.
+// A dxf only changes what it states, so a dxf font without <sz> or <color>
+// must not gain either on save: Excel keeps a stated size and applies it,
+// and an added colour would force the formatted text black.
 TEST(OoxmlFeatureDefaults, DxfFontWithoutASizeIsSavedWithoutOne) {
   const Workbook wb = ReadXlsx("base");
   ASSERT_FALSE(wb.styles().dxfs.empty());

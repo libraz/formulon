@@ -1886,9 +1886,8 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   assert.ok(xlsb.status.ok, JSON.stringify(xlsb.status));
   assert.ok(xlsb.bytes instanceof Uint8Array);
   assert.equal(xlsb.downgradedFormulaCount, 1);
-  // The validation is written; the CF rule is deferred because a generated
-  // XLSB styles part carries no dxf for it to reference.
-  assert.equal(xlsb.deferredFeatureCount, 1);
+  // The validation and the CF rule, with its dxf, are both written.
+  assert.equal(xlsb.deferredFeatureCount, 0);
   // The binary writer never reassigns a part id.
   assert.equal(xlsb.renumberedPartCount, 0);
 

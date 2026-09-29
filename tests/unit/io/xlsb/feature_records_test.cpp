@@ -570,23 +570,20 @@ TEST(XlsbFeatureRecords, ModelEditsReachTheSavedFile) {
   EXPECT_EQ(back.sheet(0).protection().legacy_password, "CC1A");
 }
 
-// A generated XLSB styles part carries no dxfs, so the CF blocks whose rules
-// reference one are left out -- Excel refuses a dangling dxf index -- and
-// reported; the visual block and every validation are written.
+// Every CF block of an .xlsx source reaches the .xlsb, the ones whose rules
+// reference a dxf included: the generated styles part carries the dxfs.
 TEST(XlsbFeatureRecords, XlsxSourcedFeaturesAreWrittenToXlsb) {
   const Workbook from_xlsx = ReadXlsx("base");
   auto written = io::xlsb::write_xlsb_with_result(from_xlsx);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
   const Workbook back = ReadXlsbBytes(written.value().bytes);
-  ASSERT_EQ(back.sheet(0).conditional_formats().size(), 1U);
-  Workbook visual_only = ReadXlsx("base");
-  visual_only.sheet(0).mutable_conditional_formats().resize(1U);
-  auto baseline = io::xlsb::write_xlsb_with_result(visual_only);
-  ASSERT_TRUE(static_cast<bool>(baseline)) << baseline.error().message;
-  EXPECT_EQ(written.value().diagnostics.deferred_feature_count,
-            baseline.value().diagnostics.deferred_feature_count + 2U);
-  EXPECT_EQ(DescribeCf(back.sheet(0)), DescribeCf(visual_only.sheet(0)));
+  EXPECT_EQ(DescribeCf(back.sheet(0)), DescribeCf(from_xlsx.sheet(0)));
   EXPECT_EQ(DescribeDv(back.sheet(0)), DescribeDv(from_xlsx.sheet(0)));
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(written.value().bytes))));
+  auto styles = zip.read_entry("xl/styles.bin");
+  ASSERT_TRUE(static_cast<bool>(styles));
+  EXPECT_EQ(DxfRecords(SpanOf(styles.value())).size(), from_xlsx.styles().dxfs.size());
 }
 
 }  // namespace

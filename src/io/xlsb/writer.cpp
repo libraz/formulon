@@ -214,18 +214,11 @@ bool HasPivotPassthroughPart(const Workbook& workbook) {
   return false;
 }
 
-bool HasRawStylesPart(const Workbook& wb);
-
 std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   std::uint32_t count = 0U;
   const bool pivots_survive_via_passthrough = HasPivotPassthroughPart(workbook);
-  // A generated styles part writes no dxfs, so a CF block that references
-  // one is left out of the sheet (see `emit_sheet`).
-  const bool styles_carry_dxfs = HasRawStylesPart(workbook);
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
-    ReportDeferred(&count, "conditional_formats_needing_dxfs", styles_carry_dxfs ? 0U : cf_blocks_needing_dxfs(sheet),
-                   i);
     ReportDeferred(&count, "auto_filter", sheet.auto_filter_xml().empty() ? 0U : 1U, i);
     ReportDeferred(&count, "comments", sheet.comments().size(), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
@@ -296,7 +289,8 @@ bool HasModelledStyles(const Workbook& wb) {
   // including an explicitly-created default XF, needs a styles part because
   // worksheet iStyleRef values resolve only through its relationship.
   return !styles.fonts.empty() || !styles.fills.empty() || !styles.borders.empty() || !styles.num_fmts.empty() ||
-         !styles.cell_xfs.empty() || !styles.cell_style_xfs.empty() || !styles.cell_styles.empty();
+         !styles.cell_xfs.empty() || !styles.cell_style_xfs.empty() || !styles.cell_styles.empty() ||
+         !styles.dxfs.empty();
 }
 
 bool HasDynamicArrayMetadata(const Workbook& wb) {
@@ -1443,7 +1437,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
     auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table,
-                                    &downgraded_formula_count, dynamic_array.ifmd, HasRawStylesPart(workbook));
+                                    &downgraded_formula_count, dynamic_array.ifmd);
     if (!sheet_body_or) {
       return sheet_body_or.error();
     }
