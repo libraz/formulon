@@ -282,6 +282,69 @@ Value eval_ifs_numeric_lazy(const parser::AstNode& call, Arena& arena, const Fun
   return aggregate_matching_numbers(inputs, ctx.excel_profile(), aggregate);
 }
 
+/// Shared body of SUMIF / AVERAGEIF: resolves the criteria range, the
+/// criterion and the optional value range (defaulting to the criteria
+/// range), then sums the matching numeric cells. Errors at matching
+/// positions propagate; a non-finite running sum is #NUM!.
+bool sum_matching_if(const parser::AstNode& call, std::uint32_t arity, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, double* out_sum, double* out_count, Value* out_err) {
+  auto crit_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!crit_resolved) {
+    *out_err = Value::error(crit_resolved.error());
+    return false;
+  }
+  std::vector<Value> criteria_cells = std::move(crit_resolved.value().cells);
+  const std::uint32_t crit_rows = crit_resolved.value().rows;
+  const std::uint32_t crit_cols = crit_resolved.value().cols;
+  // Error criterion is NOT propagated; `parse_criterion` converts it to a
+  // filter over error cells with the same code.
+  const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  const ParsedCriterion parsed = parse_criterion(criterion_val);
+
+  // Choose the effective value range: either the explicit third arg, or
+  // the criteria range when it is omitted.
+  const std::vector<Value>* value_cells_ptr = nullptr;
+  std::vector<Value> explicit_value_cells;
+  if (arity == 3) {
+    if (!resolve_optional_value_range(call.as_call_arg(2), crit_rows, crit_cols, arena, registry, ctx,
+                                      &explicit_value_cells, out_err)) {
+      return false;
+    }
+    value_cells_ptr = &explicit_value_cells;
+  } else {
+    value_cells_ptr = &criteria_cells;
+  }
+  const std::vector<Value>& value_cells = *value_cells_ptr;
+
+  const std::size_t n = criteria_cells.size() < value_cells.size() ? criteria_cells.size() : value_cells.size();
+  double sum = 0.0;
+  double count = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    if (!matches_criterion(criteria_cells[i], parsed, ctx.excel_profile())) {
+      continue;
+    }
+    const Value& v = value_cells[i];
+    // Non-matching errors are ignored, and non-numeric matches (text /
+    // bool / blank) are silently skipped, same as Excel.
+    if (v.is_error()) {
+      *out_err = v;
+      return false;
+    }
+    if (!v.is_number()) {
+      continue;
+    }
+    sum += v.as_number();
+    if (!std::isfinite(sum)) {
+      *out_err = Value::error(ErrorCode::Num);
+      return false;
+    }
+    count += 1.0;
+  }
+  *out_sum = sum;
+  *out_count = count;
+  return true;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -351,55 +414,11 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
-  auto crit_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
-  if (!crit_resolved) {
-    return Value::error(crit_resolved.error());
-  }
-  std::vector<Value> criteria_cells = std::move(crit_resolved.value().cells);
-  const std::uint32_t crit_rows = crit_resolved.value().rows;
-  const std::uint32_t crit_cols = crit_resolved.value().cols;
-  // Error criterion is NOT propagated; `parse_criterion` converts it to a
-  // filter over error cells with the same code.
-  const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  const ParsedCriterion parsed = parse_criterion(criterion_val);
-
-  // Choose the effective sum range: either the explicit third arg, or a
-  // copy of the criteria range when sum_range is omitted.
-  const std::vector<Value>* sum_cells_ptr = nullptr;
-  std::vector<Value> explicit_sum_cells;
-  if (arity == 3) {
-    Value err = Value::blank();
-    if (!resolve_optional_value_range(call.as_call_arg(2), crit_rows, crit_cols, arena, registry, ctx,
-                                      &explicit_sum_cells, &err)) {
-      return err;
-    }
-    sum_cells_ptr = &explicit_sum_cells;
-  } else {
-    sum_cells_ptr = &criteria_cells;
-  }
-  const std::vector<Value>& sum_cells = *sum_cells_ptr;
-
-  const std::size_t n = criteria_cells.size() < sum_cells.size() ? criteria_cells.size() : sum_cells.size();
   double sum = 0.0;
-  for (std::size_t i = 0; i < n; ++i) {
-    if (!matches_criterion(criteria_cells[i], parsed, ctx.excel_profile())) {
-      continue;
-    }
-    const Value& sv = sum_cells[i];
-    // Excel propagates errors that live at a matching position in the
-    // sum range (e.g. a `#N/A` cell whose criterion-side row matches).
-    // Non-matching errors are ignored, and non-numeric matches (text /
-    // bool / blank) are silently skipped, same as Excel's SUMIF.
-    if (sv.is_error()) {
-      return sv;
-    }
-    if (!sv.is_number()) {
-      continue;
-    }
-    sum += sv.as_number();
-    if (!std::isfinite(sum)) {
-      return Value::error(ErrorCode::Num);
-    }
+  double count = 0.0;
+  Value err = Value::blank();
+  if (!sum_matching_if(call, arity, arena, registry, ctx, &sum, &count, &err)) {
+    return err;
   }
   return Value::number(sum);
 }
@@ -421,52 +440,11 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
-  auto crit_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
-  if (!crit_resolved) {
-    return Value::error(crit_resolved.error());
-  }
-  std::vector<Value> criteria_cells = std::move(crit_resolved.value().cells);
-  const std::uint32_t crit_rows = crit_resolved.value().rows;
-  const std::uint32_t crit_cols = crit_resolved.value().cols;
-  // Error criterion is NOT propagated; `parse_criterion` converts it to a
-  // filter over error cells with the same code.
-  const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  const ParsedCriterion parsed = parse_criterion(criterion_val);
-
-  const std::vector<Value>* avg_cells_ptr = nullptr;
-  std::vector<Value> explicit_avg_cells;
-  if (arity == 3) {
-    Value err = Value::blank();
-    if (!resolve_optional_value_range(call.as_call_arg(2), crit_rows, crit_cols, arena, registry, ctx,
-                                      &explicit_avg_cells, &err)) {
-      return err;
-    }
-    avg_cells_ptr = &explicit_avg_cells;
-  } else {
-    avg_cells_ptr = &criteria_cells;
-  }
-  const std::vector<Value>& avg_cells = *avg_cells_ptr;
-
-  const std::size_t n = criteria_cells.size() < avg_cells.size() ? criteria_cells.size() : avg_cells.size();
   double sum = 0.0;
   double count = 0.0;
-  for (std::size_t i = 0; i < n; ++i) {
-    if (!matches_criterion(criteria_cells[i], parsed, ctx.excel_profile())) {
-      continue;
-    }
-    const Value& av = avg_cells[i];
-    if (av.is_error()) {
-      // Errors at matching positions propagate, matching Excel AVERAGEIF.
-      return av;
-    }
-    if (!av.is_number()) {
-      continue;
-    }
-    sum += av.as_number();
-    if (!std::isfinite(sum)) {
-      return Value::error(ErrorCode::Num);
-    }
-    count += 1.0;
+  Value err = Value::blank();
+  if (!sum_matching_if(call, arity, arena, registry, ctx, &sum, &count, &err)) {
+    return err;
   }
   if (count == 0.0) {
     return Value::error(ErrorCode::Div0);

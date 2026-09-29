@@ -113,10 +113,16 @@ std::variant<Value, NumericPairs> prepare_pairs(const parser::AstNode& call, Are
 }
 
 // Computes slope / intercept together since INTERCEPT is just
-// `mean_y - slope * mean_x`. Returns `false` on a degenerate data set
-// (n < 2 or sum_xx == 0) with `#DIV/0!` written to `*out_err`;
-// otherwise writes the slope / intercept and returns `true`.
-bool compute_slope_intercept(const NumericPairs& pairs, double* out_slope, double* out_intercept, Value* out_err) {
+// `mean_y - slope * mean_x`. Returns `false` with the collection error,
+// or `#DIV/0!` on a degenerate data set (n < 2 or sum_xx == 0), written
+// to `*out_err`; otherwise writes the slope / intercept and returns `true`.
+bool compute_slope_intercept(const std::variant<Value, NumericPairs>& prepared, double* out_slope,
+                             double* out_intercept, Value* out_err) {
+  if (std::holds_alternative<Value>(prepared)) {
+    *out_err = std::get<Value>(prepared);
+    return false;
+  }
+  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
   if (pairs.second.size() < 2U) {
     *out_err = Value::error(ErrorCode::Div0);
     return false;
@@ -187,15 +193,10 @@ Value eval_covariance_s_lazy(const parser::AstNode& call, Arena& arena, const Fu
 
 Value eval_slope_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
   double slope = 0.0;
   double intercept = 0.0;
   Value err = Value::blank();
-  if (!compute_slope_intercept(pairs, &slope, &intercept, &err)) {
+  if (!compute_slope_intercept(prepare_pairs(call, arena, registry, ctx), &slope, &intercept, &err)) {
     return err;
   }
   return finite_number(slope);
@@ -203,15 +204,10 @@ Value eval_slope_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 
 Value eval_intercept_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
   double slope = 0.0;
   double intercept = 0.0;
   Value err = Value::blank();
-  if (!compute_slope_intercept(pairs, &slope, &intercept, &err)) {
+  if (!compute_slope_intercept(prepare_pairs(call, arena, registry, ctx), &slope, &intercept, &err)) {
     return err;
   }
   return finite_number(intercept);
@@ -261,37 +257,16 @@ Value eval_steyx_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   return finite_number(std::sqrt(clamped / static_cast<double>(pairs.second.size() - 2U)));
 }
 
-namespace {
-
-// Shared front-end for SUMX2PY2 / SUMX2MY2 / SUMXMY2. These take a pair
-// of arrays in `(array_x, array_y)` order — the opposite of the rest of
-// this file's `(known_y, known_x)` convention — so the impls cannot
-// reuse `prepare_pairs` directly. Error propagation must still run in
-// Excel's left-to-right order (array_x first), so we pass the arguments
-// to `collect_numeric_pairs` in their declared order; that leaves
-// array_x's cells in `pairs.first` and array_y's cells in `pairs.second`. The
-// caller unpacks both fields with explicit local names to keep the
-// subsequent arithmetic readable.
-std::variant<Value, NumericPairs> prepare_sumx_pairs(const parser::AstNode& call, Arena& arena,
-                                                     const FunctionRegistry& registry, const EvalContext& ctx) {
-  if (call.as_call_arity() != 2U) {
-    return Value{Value::error(ErrorCode::Value)};
-  }
-  return collect_regression_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
-}
-
-}  // namespace
-
 Value eval_sumx2py2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  auto prepared = prepare_sumx_pairs(call, arena, registry, ctx);
+  auto prepared = prepare_pairs(call, arena, registry, ctx);
   if (std::holds_alternative<Value>(prepared)) {
     return std::get<Value>(prepared);
   }
   const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  // Unpack with Excel-facing names: the first argument (array_x) lives in
-  // `pairs.first`, and the second (array_y) lives in `pairs.second`. See
-  // `prepare_sumx_pairs` for the reason.
+  // SUMX2PY2 / SUMX2MY2 / SUMXMY2 take `(array_x, array_y)`, the opposite
+  // of `(known_y, known_x)`; collection still runs left to right, so
+  // array_x lands in `pairs.first` and array_y in `pairs.second`.
   const std::vector<double>& x = pairs.first;
   const std::vector<double>& y = pairs.second;
   if (x.empty()) {
@@ -306,7 +281,7 @@ Value eval_sumx2py2_lazy(const parser::AstNode& call, Arena& arena, const Functi
 
 Value eval_sumx2my2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  auto prepared = prepare_sumx_pairs(call, arena, registry, ctx);
+  auto prepared = prepare_pairs(call, arena, registry, ctx);
   if (std::holds_alternative<Value>(prepared)) {
     return std::get<Value>(prepared);
   }
@@ -325,7 +300,7 @@ Value eval_sumx2my2_lazy(const parser::AstNode& call, Arena& arena, const Functi
 
 Value eval_sumxmy2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  auto prepared = prepare_sumx_pairs(call, arena, registry, ctx);
+  auto prepared = prepare_pairs(call, arena, registry, ctx);
   if (std::holds_alternative<Value>(prepared)) {
     return std::get<Value>(prepared);
   }
@@ -364,14 +339,10 @@ Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const
   const double x = x_val.as_number();
 
   const auto prepared = collect_regression_pairs(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
   double slope = 0.0;
   double intercept = 0.0;
   Value err = Value::blank();
-  if (!compute_slope_intercept(pairs, &slope, &intercept, &err)) {
+  if (!compute_slope_intercept(prepared, &slope, &intercept, &err)) {
     return err;
   }
   return finite_number(intercept + slope * x);

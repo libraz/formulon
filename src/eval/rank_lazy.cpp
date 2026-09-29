@@ -329,6 +329,25 @@ std::variant<Value, PercentRankInputs> prepare_percentrank(const parser::AstNode
   return out;
 }
 
+// Finds the lowest index k such that sorted[k] <= x < sorted[k + 1], then
+// scans back over an equal run so k points at the first occurrence of the
+// value (Excel reports the lowest rank for duplicates). Requires a
+// non-empty `sorted` with `sorted.front() <= x`.
+std::size_t percentrank_floor_index(const std::vector<double>& sorted, double x) {
+  std::size_t k = 0U;
+  for (std::size_t i = 0; i < sorted.size(); ++i) {
+    if (sorted[i] <= x) {
+      k = i;
+    } else {
+      break;
+    }
+  }
+  while (k > 0U && sorted[k - 1U] == sorted[k]) {
+    --k;
+  }
+  return k;
+}
+
 }  // namespace
 
 Value eval_percentrank_inc_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -347,22 +366,7 @@ Value eval_percentrank_inc_lazy(const parser::AstNode& call, Arena& arena, const
   if (in.x < in.sorted.front() || in.x > in.sorted.back()) {
     return Value::error(ErrorCode::NA);
   }
-  // Find the lowest index k such that sorted[k] <= x < sorted[k + 1].
-  // When x equals an element exactly, we want the lowest index of that
-  // element (Excel reports the lowest rank for duplicates).
-  std::size_t k = 0U;
-  for (std::size_t i = 0; i < n; ++i) {
-    if (in.sorted[i] <= in.x) {
-      k = i;
-    } else {
-      break;
-    }
-  }
-  // Scan backwards over an equal run so k points at the first occurrence
-  // of the value, matching Excel's observed "lowest rank wins" rule.
-  while (k > 0U && in.sorted[k - 1U] == in.sorted[k]) {
-    --k;
-  }
+  const std::size_t k = percentrank_floor_index(in.sorted, in.x);
   double raw = 0.0;
   if (in.sorted[k] == in.x) {
     raw = static_cast<double>(k) / static_cast<double>(n - 1U);
@@ -392,17 +396,7 @@ Value eval_percentrank_exc_lazy(const parser::AstNode& call, Arena& arena, const
   }
   // Exclusive uses divisor (N + 1) and 1-based positions, so an exact
   // match at sorted[k] yields raw = (k + 1) / (N + 1).
-  std::size_t k = 0U;
-  for (std::size_t i = 0; i < n; ++i) {
-    if (in.sorted[i] <= in.x) {
-      k = i;
-    } else {
-      break;
-    }
-  }
-  while (k > 0U && in.sorted[k - 1U] == in.sorted[k]) {
-    --k;
-  }
+  const std::size_t k = percentrank_floor_index(in.sorted, in.x);
   const double denom = static_cast<double>(n + 1U);
   double raw = 0.0;
   if (in.sorted[k] == in.x) {

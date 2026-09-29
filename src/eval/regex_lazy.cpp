@@ -116,6 +116,23 @@ bool coerce_int_arg(const parser::AstNode& node, Arena& arena, const FunctionReg
   return true;
 }
 
+// Reads a case_sensitivity argument. Mac Excel 365 convention (matching
+// MS docs): 0/FALSE = case-sensitive, 1/TRUE = case-insensitive; any other
+// integer -> #VALUE!.
+bool read_case_insensitive(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, bool& out, Value& out_err) {
+  long long cs = 0;
+  if (!coerce_int_arg(node, arena, registry, ctx, cs, out_err)) {
+    return false;
+  }
+  if (cs != 0 && cs != 1) {
+    out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  out = (cs == 1);
+  return true;
+}
+
 // --- Match-result accumulator --------------------------------------------
 //
 // The kernel is a generator: it yields one match at a time to the
@@ -723,6 +740,40 @@ Value substitute_nth(const CompiledPattern& program, std::string_view subject, s
   return substitute_with_flags(program, subject, replacement, target_start, /*sub_flags=*/0U, arena);
 }
 
+// Array broadcast: runs `per_cell` once per text-coerced cell of `in`,
+// output shape = input shape. Error cells and failed coercions pass
+// through as the cell's error.
+template <typename PerCell>
+Value broadcast_over_text(const ArrayValue* in, Arena& arena, PerCell&& per_cell) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
+  // Per-cell subject buffers must outlive any result built from a span of
+  // them; keep them around for the whole loop.
+  std::vector<std::string> subjects;
+  subjects.reserve(n);
+  for (std::size_t i = 0; i < n; ++i) {
+    const Value& cell = in->cells[i];
+    if (cell.is_error()) {
+      cells[i] = cell;
+      subjects.emplace_back();
+      continue;
+    }
+    auto t = coerce_to_text(cell);
+    if (!t) {
+      cells[i] = Value::error(t.error());
+      subjects.emplace_back();
+      continue;
+    }
+    subjects.push_back(std::move(t.value()));
+    cells[i] = per_cell(std::string_view(subjects.back()));
+  }
+  return Value::array(out);
+}
+
 }  // namespace
 
 std::uint64_t regex_compile_count() noexcept {
@@ -757,19 +808,10 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return err;
   }
 
-  // Optional case_sensitivity (third arg). Coerce + bound to {0, 1};
-  // out-of-range -> #VALUE!. Mac Excel 365 convention (matching MS docs):
-  // 0/FALSE (default) = case-sensitive; 1/TRUE = case-insensitive.
+  // Optional case_sensitivity (third arg, default case-sensitive).
   bool case_insensitive = false;
-  if (arity == 3) {
-    long long cs = 0;
-    if (!coerce_int_arg(call.as_call_arg(2), arena, registry, ctx, cs, err)) {
-      return err;
-    }
-    if (cs != 0 && cs != 1) {
-      return Value::error(ErrorCode::Value);
-    }
-    case_insensitive = (cs == 1);
+  if (arity == 3 && !read_case_insensitive(call.as_call_arg(2), arena, registry, ctx, case_insensitive, err)) {
+    return err;
   }
 
   // Compile once for the whole call: the pattern and the case flag are
@@ -785,35 +827,14 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return Value::boolean(!kr.matches.empty());
   }
 
-  // Array broadcast: one regex evaluation per cell, output shape =
-  // input shape.
-  const ArrayValue* in = text_arg.array;
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, cells, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& cell = in->cells[i];
-    if (cell.is_error()) {
-      cells[i] = cell;
-      continue;
-    }
-    auto t = coerce_to_text(cell);
-    if (!t) {
-      cells[i] = Value::error(t.error());
-      continue;
-    }
-    KernelResult kr = regex_kernel(program, t.value(), /*find_all=*/false,
+  return broadcast_over_text(text_arg.array, arena, [&](std::string_view subject) -> Value {
+    KernelResult kr = regex_kernel(program, subject, /*find_all=*/false,
                                    /*on_match_limit_returns_no_match=*/true);
     if (!kr.ok) {
-      cells[i] = kr.err;
-      continue;
+      return kr.err;
     }
-    cells[i] = Value::boolean(!kr.matches.empty());
-  }
-  return Value::array(out);
+    return Value::boolean(!kr.matches.empty());
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -850,18 +871,10 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
     }
   }
 
-  // case_sensitivity (fourth arg, default 0). Mac Excel 365 convention:
-  // 0 = case-sensitive (default), 1 = case-insensitive.
+  // case_sensitivity (fourth arg, default case-sensitive).
   bool case_insensitive = false;
-  if (arity == 4) {
-    long long cs = 0;
-    if (!coerce_int_arg(call.as_call_arg(3), arena, registry, ctx, cs, err)) {
-      return err;
-    }
-    if (cs != 0 && cs != 1) {
-      return Value::error(ErrorCode::Value);
-    }
-    case_insensitive = (cs == 1);
+  if (arity == 4 && !read_case_insensitive(call.as_call_arg(3), arena, registry, ctx, case_insensitive, err)) {
+    return err;
   }
 
   // For modes 1 and 3 a single match already yields an array — so
@@ -894,40 +907,14 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return Value::error(ErrorCode::Calc);
   }
 
-  const ArrayValue* in = text_arg.array;
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, cells, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
-  // Per-cell subject buffers must outlive the text_from_span calls
-  // below; keep them around for the whole loop.
-  std::vector<std::string> subjects;
-  subjects.reserve(n);
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& cell = in->cells[i];
-    if (cell.is_error()) {
-      cells[i] = cell;
-      subjects.emplace_back();
-      continue;
-    }
-    auto t = coerce_to_text(cell);
-    if (!t) {
-      cells[i] = Value::error(t.error());
-      subjects.emplace_back();
-      continue;
-    }
-    subjects.push_back(std::move(t.value()));
-    KernelResult kr = regex_kernel(program, subjects.back(), /*find_all=*/(mode == 1 || mode == 3),
+  return broadcast_over_text(text_arg.array, arena, [&](std::string_view subject) -> Value {
+    KernelResult kr = regex_kernel(program, subject, /*find_all=*/(mode == 1 || mode == 3),
                                    /*on_match_limit_returns_no_match=*/false);
     if (!kr.ok) {
-      cells[i] = kr.err;
-      continue;
+      return kr.err;
     }
-    cells[i] = extract_dispatch(kr, subjects.back(), mode, arena);
-  }
-  return Value::array(out);
+    return extract_dispatch(kr, subject, mode, arena);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -970,18 +957,10 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
     }
   }
 
-  // case_sensitivity (fifth arg, default 0). Mac Excel 365 convention:
-  // 0 = case-sensitive (default), 1 = case-insensitive.
+  // case_sensitivity (fifth arg, default case-sensitive).
   bool case_insensitive = false;
-  if (arity == 5) {
-    long long cs = 0;
-    if (!coerce_int_arg(call.as_call_arg(4), arena, registry, ctx, cs, err)) {
-      return err;
-    }
-    if (cs != 0 && cs != 1) {
-      return Value::error(ErrorCode::Value);
-    }
-    case_insensitive = (cs == 1);
+  if (arity == 5 && !read_case_insensitive(call.as_call_arg(4), arena, registry, ctx, case_insensitive, err)) {
+    return err;
   }
 
   // Compile once for the whole call; every subject reuses the program,
@@ -999,32 +978,7 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return run_one(text_arg.scalar);
   }
 
-  const ArrayValue* in = text_arg.array;
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, cells, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
-  std::vector<std::string> subjects;
-  subjects.reserve(n);
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& cell = in->cells[i];
-    if (cell.is_error()) {
-      cells[i] = cell;
-      subjects.emplace_back();
-      continue;
-    }
-    auto t = coerce_to_text(cell);
-    if (!t) {
-      cells[i] = Value::error(t.error());
-      subjects.emplace_back();
-      continue;
-    }
-    subjects.push_back(std::move(t.value()));
-    cells[i] = run_one(subjects.back());
-  }
-  return Value::array(out);
+  return broadcast_over_text(text_arg.array, arena, run_one);
 }
 
 }  // namespace eval

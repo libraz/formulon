@@ -1352,6 +1352,42 @@ double seasonal_correction(const std::vector<double>& season, std::uint32_t m, s
   return season[static_cast<std::size_t>(shifted)];
 }
 
+// Shared tail of FORECAST.ETS and FORECAST.ETS.CONFINT: reads the options
+// from `first_optional`, preprocesses (values, timeline) from args 1-2,
+// rejects `target_date < t0` with #NUM!, fits Holt-Winters, and writes
+// the horizon h counted from the last training point.
+bool fit_to_target(const parser::AstNode& call, std::uint32_t arity, std::uint32_t first_optional, Arena& arena,
+                   const FunctionRegistry& registry, const EvalContext& ctx, double target_date,
+                   HoltWintersFit* out_fit, std::int64_t* out_h, Value* out_err) {
+  ForecastOptions opts;
+  if (!read_forecast_options(call, arity, first_optional, arena, registry, ctx, &opts, out_err)) {
+    return false;
+  }
+
+  Preprocessed pre;
+  if (!preprocess(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, opts.seasonality,
+                  opts.data_completion, opts.aggregation, &pre, out_err)) {
+    return false;
+  }
+
+  // target_date must lie at or after the first timeline value.
+  if (target_date < pre.t0) {
+    *out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+
+  if (!fit_holt_winters(pre.resampled.y, pre.m, out_fit, out_err)) {
+    return false;
+  }
+
+  // The last training point lives at grid index `n - 1`; `target_date`
+  // lives at grid index `target_idx`.
+  const std::int64_t n = static_cast<std::int64_t>(pre.resampled.y.size());
+  const std::int64_t target_idx = target_step_index(target_date, pre.t0, pre.step);
+  *out_h = target_idx - (n - 1);
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Front-end impls
 // ---------------------------------------------------------------------------
@@ -1372,35 +1408,14 @@ Value eval_forecast_ets_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return err;
   }
 
-  ForecastOptions opts;
-  if (!read_forecast_options(call, arity, 3U, arena, registry, ctx, &opts, &err)) {
-    return err;
-  }
-
-  Preprocessed pre;
-  if (!preprocess(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, opts.seasonality,
-                  opts.data_completion, opts.aggregation, &pre, &err)) {
-    return err;
-  }
-
-  // target_date must lie at or after the first timeline value.
-  if (target_date < pre.t0) {
-    return Value::error(ErrorCode::Num);
-  }
-
   HoltWintersFit fit;
-  if (!fit_holt_winters(pre.resampled.y, pre.m, &fit, &err)) {
+  std::int64_t h = 0;
+  if (!fit_to_target(call, arity, 3U, arena, registry, ctx, target_date, &fit, &h, &err)) {
     return err;
   }
 
-  // Derive forecast horizon. The last training point lives at grid index
-  // `n - 1`; `target_date` lives at grid index `target_idx`. Negative h
-  // (i.e. target_date inside the training window) returns an interpolated
-  // in-sample value; we still treat that as a valid query and compute
-  // L + h*B + S correction.
-  const std::int64_t n = static_cast<std::int64_t>(pre.resampled.y.size());
-  const std::int64_t target_idx = target_step_index(target_date, pre.t0, pre.step);
-  const std::int64_t h = target_idx - (n - 1);
+  // Negative h (target_date inside the training window) returns an
+  // interpolated in-sample value computed as L + h*B + S correction.
   const double level_term = fit.level + static_cast<double>(h) * fit.trend;
   const double seasonal_term = seasonal_correction(fit.season, fit.m, h);
   const double forecast = level_term + seasonal_term;
@@ -1437,28 +1452,11 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
     return Value::error(ErrorCode::Num);
   }
 
-  ForecastOptions opts;
-  if (!read_forecast_options(call, arity, 4U, arena, registry, ctx, &opts, &err)) {
-    return err;
-  }
-
-  Preprocessed pre;
-  if (!preprocess(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, opts.seasonality,
-                  opts.data_completion, opts.aggregation, &pre, &err)) {
-    return err;
-  }
-  if (target_date < pre.t0) {
-    return Value::error(ErrorCode::Num);
-  }
-
   HoltWintersFit fit;
-  if (!fit_holt_winters(pre.resampled.y, pre.m, &fit, &err)) {
+  std::int64_t h = 0;
+  if (!fit_to_target(call, arity, 4U, arena, registry, ctx, target_date, &fit, &h, &err)) {
     return err;
   }
-
-  const std::int64_t n = static_cast<std::int64_t>(pre.resampled.y.size());
-  const std::int64_t target_idx = target_step_index(target_date, pre.t0, pre.step);
-  const std::int64_t h = target_idx - (n - 1);
   // Mac Excel 365 rejects target_date inside the training window with
   // #NUM!. The half-width formula z * RMSE * sqrt(h) is only meaningful
   // for strictly positive horizons.
