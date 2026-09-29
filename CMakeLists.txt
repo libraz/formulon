@@ -120,6 +120,7 @@ set(FORMULON_CORE_SOURCES
   src/value.cpp
   src/sheet.cpp
   src/sheet_name.cpp
+  src/sheet_row_col_edit.cpp
   src/sheet_name_casefold_data.cpp
   src/workbook.cpp
   src/workbook_ref_rewrite.cpp
