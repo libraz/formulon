@@ -305,8 +305,7 @@ silently and reads back like a healthy one; leaving alerts on just hangs
 the automation. That judgement stays with the mechanical checks on our
 side -- ECMA-376 child-element order, relationship resolution, schema
 validation -- plus a one-off manual open before a release. The same
-conclusion was reached for the pivot `<location>` case in
-`backup/oracle-capture-windows.md`.
+conclusion holds for the pivot `<location>` case.
 
 ## Status
 

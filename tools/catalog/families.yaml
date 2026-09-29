@@ -6,7 +6,7 @@
 #
 # Used by:
 #   - tools/oracle/closure_check.py            (closure-unit resolution)
-#   - .claude/commands/oracle-close.md          (`/oracle-close family=NAME`)
+#   - the `/oracle-close family=NAME` harness
 #
 # Schema:
 #
