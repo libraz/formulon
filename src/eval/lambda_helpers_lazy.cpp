@@ -10,7 +10,6 @@
 #include "eval/coerce.h"
 #include "eval/dynamic_array_limits.h"
 #include "eval/eval_context.h"
-#include "eval/groupby_pivotby/common.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
@@ -94,47 +93,6 @@ const parser::AstNode* build_array_literal_for(const ArrayValue* arr, Arena& are
   return parser::make_array_literal(arena, rows, cols, children);
 }
 
-// Evaluates a single argument as a `LambdaValue*` closure. Returns nullptr
-// and writes a scalar error to `*out_err` on failure paths:
-//   * argument error -> propagate verbatim;
-//   * argument is not a Lambda -> `#VALUE!`;
-//   * the lambda cannot accept `call_arity` arguments -> `#VALUE!`;
-//   * the lambda has no body -> `#NAME?`.
-//
-// `call_arity` is the number of arguments the helper's own contract will
-// supply per invocation (1 for BYROW / BYCOL, the array count for MAP, 2
-// for REDUCE / SCAN / MAKEARRAY). Acceptance follows the single rule
-// published on `LambdaValue`: `param_count - optional_count <= call_arity
-// <= param_count`, so a lambda declaring trailing `[optional]` params is
-// accepted and those params bind to the omitted sentinel inside the body.
-//
-// `invoke_lambda_values_with_ast` re-checks the same conditions per call;
-// checking here as well keeps a rejection a scalar error for the whole
-// helper rather than an array whose every cell holds that error.
-const LambdaValue* eval_lambda_arg(const parser::AstNode& node, std::uint32_t call_arity, Arena& arena,
-                                   const FunctionRegistry& registry, const EvalContext& ctx, Value* out_err) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return nullptr;
-  }
-  if (!v.is_lambda()) {
-    *out_err = Value::error(ErrorCode::Value);
-    return nullptr;
-  }
-  const LambdaValue* lv = v.as_lambda();
-  const std::uint32_t required = lv->param_count - lv->optional_count;
-  if (call_arity < required || call_arity > lv->param_count) {
-    *out_err = Value::error(ErrorCode::Value);
-    return nullptr;
-  }
-  if (lv->body == nullptr) {
-    *out_err = Value::error(ErrorCode::Name);
-    return nullptr;
-  }
-  return lv;
-}
-
 // Evaluates an argument in array context, returning the `ArrayValue*` on
 // success. On failure paths (argument error, non-array result) writes the
 // appropriate scalar error to `*out_err` and returns nullptr.
@@ -196,11 +154,9 @@ bool read_count_arg(const parser::AstNode& node, Arena& arena, const FunctionReg
 // scalar per row, BYCOL emits one scalar per column. The output shape is
 // `(rows, 1)` for BYROW and `(1, cols)` for BYCOL.
 //
-// The callable argument accepts both an inline/name-bound `LAMBDA` and a
-// bare built-in function name (`BYROW(data, SUM)`), resolved through the
-// same `resolve_aggregator` GROUPBY / PIVOTBY use for their own callable
-// argument -- BYROW / BYCOL's "one slice, one required argument" shape is
-// exactly GROUPBY's per-group aggregator shape.
+// The callable argument, like every lambda helper's, resolves through
+// `resolve_callable`, so a bare built-in name (`BYROW(data, SUM)`) is the
+// eta-reduced lambda Excel reads it as.
 Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
   if (call.as_call_arity() != 2U) {
@@ -211,8 +167,8 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   if (in == nullptr) {
     return err;
   }
-  AggregatorRef agg{};
-  if (!resolve_aggregator(call.as_call_arg(1), arena, registry, ctx, &agg, &err)) {
+  const LambdaValue* lv = resolve_callable(call.as_call_arg(1), /*call_arity=*/1U, arena, registry, ctx, &err);
+  if (lv == nullptr) {
     return err;
   }
   if (in->rows == 0U || in->cols == 0U) {
@@ -251,26 +207,17 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
         slice_buf[r] = in->cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols_in) + i];
       }
     }
-    Value res = Value::blank();
-    if (agg.kind == AggregatorRef::Kind::Function) {
-      // Form C (bare function name): flatten the slice into args and call
-      // the registry impl directly, exactly as GROUPBY does for its own
-      // Form C aggregator.
-      res = invoke_registry_function_over_slice(agg.function_def, slice_arr, arena);
-    } else {
-      const Value slice = Value::array(slice_arr);
-      Value arg = slice;
-      // Bind the slice with both the Value and a synthetic ArrayLiteral AST
-      // so range-aware functions inside the body (`SUM(r)`, `AVERAGE(r)`,
-      // ...) flatten the slice through the dispatcher's ArrayLiteral branch
-      // instead of receiving an opaque `Value::Array` they cannot coerce.
-      const parser::AstNode* slice_ast = build_array_literal_for(slice.as_array(), arena);
-      if (slice_ast == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      const parser::AstNode* ast_args[1] = {slice_ast};
-      res = invoke_lambda_values_with_ast(agg.lambda, 1U, &arg, ast_args, arena, registry, ctx);
+    const Value slice = Value::array(slice_arr);
+    // Bind the slice with both the Value and a synthetic ArrayLiteral AST
+    // so range-aware functions inside the body (`SUM(r)`, `AVERAGE(r)`,
+    // ...) flatten the slice through the dispatcher's ArrayLiteral branch
+    // instead of receiving an opaque `Value::Array` they cannot coerce.
+    const parser::AstNode* slice_ast = build_array_literal_for(slice_arr, arena);
+    if (slice_ast == nullptr) {
+      return Value::error(ErrorCode::Num);
     }
+    const parser::AstNode* ast_args[1] = {slice_ast};
+    const Value res = invoke_lambda_values_with_ast(lv, 1U, &slice, ast_args, arena, registry, ctx);
     if (res.is_error()) {
       // Each row / column is reduced independently, so an error lands in
       // that slice's output cell only. Short-circuiting the whole call here
@@ -343,7 +290,7 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   // one argument per array — required params no more than `array_count`,
   // declared params no fewer; anything else surfaces #VALUE!.
   const LambdaValue* lv =
-      eval_lambda_arg(call.as_call_arg(arity - 1U), /*call_arity=*/array_count, arena, registry, ctx, &err);
+      resolve_callable(call.as_call_arg(arity - 1U), /*call_arity=*/array_count, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }
@@ -412,7 +359,7 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (in == nullptr) {
     return err;
   }
-  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
+  const LambdaValue* lv = resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }
@@ -454,7 +401,7 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (in == nullptr) {
     return err;
   }
-  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
+  const LambdaValue* lv = resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }
@@ -522,7 +469,7 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxSequenceCells) {
     return Value::error(ErrorCode::Num);
   }
-  const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
+  const LambdaValue* lv = resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }

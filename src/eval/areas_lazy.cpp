@@ -13,8 +13,9 @@
 // evaluated: it builds at most one rectangle, so a successful resolution is
 // 1 area and a failure — including a comma union such as `"A1,B2"`, which
 // is not a reference INDIRECT can build — surfaces through AREAS as that
-// same error. Other reference-returning calls (OFFSET, INDEX, XLOOKUP, ...)
-// are recognised by static name and counted as 1 area.
+// same error. Every other reference-returning call (`is_reference_call_name`)
+// resolves through `resolve_reference_call`: 1 area on success, its error
+// otherwise.
 
 #include "eval/areas_lazy.h"
 
@@ -43,19 +44,6 @@ constexpr std::int64_t kAreasInvalid = -1;    // -> #VALUE!
 constexpr std::int64_t kAreasNull = -2;       // -> #NULL! (disjoint intersection)
 constexpr std::int64_t kAreasRef = -3;        // -> #REF! (cross-sheet intersection)
 constexpr std::int64_t kAreasPropagate = -4;  // -> the error stored in `*propagated`
-
-// Function names whose return value Excel treats as a reference for the
-// purposes of AREAS but whose multi-area count we cannot determine
-// statically. Membership counts the call as exactly 1 area. CHOOSE / IF
-// are intentionally absent: they are handled by recursing into the
-// selected branch (see `count_areas`). Names are uppercase canonical
-// forms; AREAS arguments are matched case-insensitively below.
-bool returns_single_reference(std::string_view name) noexcept {
-  using strings::case_insensitive_eq;
-  return case_insensitive_eq(name, "OFFSET") || case_insensitive_eq(name, "IFS") ||
-         case_insensitive_eq(name, "SWITCH") || case_insensitive_eq(name, "INDEX") ||
-         case_insensitive_eq(name, "XLOOKUP");
-}
 
 // Recursively sums the leaf rectangles in a reference-shaped AST subtree.
 // Returns a negative sentinel on structural mismatch so callers can
@@ -156,7 +144,20 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
       }
       return 1;
     }
-    if (returns_single_reference(fname)) {
+    // Every other reference-returning call names one rectangle when it
+    // resolves; the resolution error is what AREAS reports otherwise.
+    if (is_reference_call_name(fname)) {
+      std::string_view sheet;
+      std::uint32_t r1 = 0;
+      std::uint32_t c1 = 0;
+      std::uint32_t r2 = 0;
+      std::uint32_t c2 = 0;
+      bool is_range = false;
+      ErrorCode err = ErrorCode::Value;
+      if (!resolve_reference_call(n, arena, registry, ctx, &sheet, &r1, &c1, &r2, &c2, &is_range, &err)) {
+        *propagated = err;
+        return kAreasPropagate;
+      }
       return 1;
     }
   }

@@ -36,7 +36,9 @@
 // formulas stay readable and exercise the dispatch path lazily — the
 // helpers belong to the `kLazyDispatch` table in `tree_walker.cpp`.
 
+#include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 
@@ -804,6 +806,67 @@ TEST(LambdaHelpersOptionalParams, ByRowKeepsRangeShapedBindingWithOptional) {
   EXPECT_DOUBLE_EQ(with_opt.as_array_cells()[1].as_number(), 15.0);
   EXPECT_DOUBLE_EQ(plain_rows[0], with_opt.as_array_cells()[0].as_number());
   EXPECT_DOUBLE_EQ(plain_rows[1], with_opt.as_array_cells()[1].as_number());
+}
+
+// ---------------------------------------------------------------------------
+// Bare function names (eta-reduced lambdas) across every helper
+// ---------------------------------------------------------------------------
+
+void ExpectNumbers(const Value& v, std::uint32_t rows, std::uint32_t cols, std::initializer_list<double> expected,
+                   std::string_view formula) {
+  ASSERT_TRUE(v.is_array()) << formula << ": " << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), rows) << formula;
+  ASSERT_EQ(v.as_array_cols(), cols) << formula;
+  std::size_t i = 0;
+  for (const double e : expected) {
+    ASSERT_TRUE(v.as_array_cells()[i].is_number()) << formula << " cell " << i;
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[i].as_number(), e) << formula << " cell " << i;
+    ++i;
+  }
+}
+
+TEST(LambdaHelpersEta, MapAcceptsBareFunctionName) {
+  ExpectNumbers(EvalSrc("=MAP({-1,2},ABS)"), 1U, 2U, {1.0, 2.0}, "MAP ABS");
+  // One parameter per array: SUM receives both elements.
+  ExpectNumbers(EvalSrc("=MAP({1,2},{10,20},SUM)"), 1U, 2U, {11.0, 22.0}, "MAP SUM over two arrays");
+}
+
+TEST(LambdaHelpersEta, ReduceAndScanAcceptBareFunctionName) {
+  const Value reduced = EvalSrc("=REDUCE(0,{1,2,3},SUM)");
+  ASSERT_TRUE(reduced.is_number()) << reduced.debug_to_string();
+  EXPECT_DOUBLE_EQ(reduced.as_number(), 6.0);
+  ExpectNumbers(EvalSrc("=SCAN(0,{1,2,3},SUM)"), 1U, 3U, {1.0, 3.0, 6.0}, "SCAN SUM");
+  ExpectNumbers(EvalSrc("=SCAN(1,{1,2,3},PRODUCT)"), 1U, 3U, {1.0, 2.0, 6.0}, "SCAN PRODUCT");
+}
+
+TEST(LambdaHelpersEta, MakearrayAcceptsBareFunctionName) {
+  ExpectNumbers(EvalSrc("=MAKEARRAY(2,2,PRODUCT)"), 2U, 2U, {1.0, 2.0, 2.0, 4.0}, "MAKEARRAY PRODUCT");
+}
+
+TEST(LambdaHelpersEta, BareNameMatchesExplicitLambda) {
+  // A row slice wider than a function's direct-argument limit still reaches
+  // SUM as one range, exactly as `LAMBDA(r, SUM(r))` does.
+  const Value eta = EvalSrc("=BYROW(SEQUENCE(1,300),SUM)");
+  const Value explicit_lambda = EvalSrc("=BYROW(SEQUENCE(1,300),LAMBDA(r,SUM(r)))");
+  ASSERT_TRUE(eta.is_number() || eta.is_array()) << eta.debug_to_string();
+  EXPECT_EQ(eta.debug_to_string(), explicit_lambda.debug_to_string());
+}
+
+TEST(LambdaHelpersEta, BoundNameShadowsBuiltin) {
+  // A LET-bound lambda named like a built-in wins over the built-in.
+  ExpectNumbers(EvalSrc("=LET(ABS,LAMBDA(x,x*10),MAP({1,2},ABS))"), 1U, 2U, {10.0, 20.0}, "shadowed ABS");
+  const Value scalar_bound = EvalSrc("=LET(ABS,5,MAP({1,2},ABS))");
+  ASSERT_TRUE(scalar_bound.is_error()) << scalar_bound.debug_to_string();
+  EXPECT_EQ(scalar_bound.as_error(), ErrorCode::Value);
+}
+
+TEST(LambdaHelpersEta, UnknownNameIsNameErrorInEveryHelper) {
+  for (const char* formula : {"=MAP({1,2},NOTAREALFUNCTION)", "=REDUCE(0,{1,2},NOTAREALFUNCTION)",
+                              "=SCAN(0,{1,2},NOTAREALFUNCTION)", "=MAKEARRAY(2,2,NOTAREALFUNCTION)"}) {
+    const Value v = EvalSrc(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Name) << formula;
+  }
 }
 
 }  // namespace

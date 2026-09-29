@@ -46,24 +46,9 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Case-insensitive match against the fixed set of Excel calls whose
-// result is a reference (and therefore count as "ref" for ISREF).
-// INDEX and CHOOSE ride here too because both can return refs when
-// invoked with reference arguments; our MVP treats any static Call
-// with these names as ref-producing.
-bool is_reference_call_name(std::string_view name) noexcept {
-  constexpr std::string_view kNames[] = {"INDIRECT", "OFFSET", "INDEX", "CHOOSE", "IF"};
-  for (const auto& n : kNames) {
-    if (strings::case_insensitive_eq(name, n)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // Returns true when `node` is a static reference-shaped AST. Does NOT
-// include reference-returning calls (INDIRECT/OFFSET/INDEX/CHOOSE);
-// those need evaluation to confirm they produce a ref at runtime.
+// include reference-returning calls (`is_reference_call_name`); those need
+// evaluation to confirm they produce a ref at runtime.
 //
 // A bare `NameRef` is intentionally NOT treated as ref-shaped here: a LET
 // binding such as `=LET(x, 5, ISREF(x))` carries a scalar value, not a
@@ -193,15 +178,6 @@ Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return Value::error(target.error());
   }
 
-  // Reference-returning calls: `=ISFORMULA(INDIRECT("C9"))` must inspect
-  // the *target* cell's formula_text rather than evaluating the call (which
-  // would recurse into the target cell's value and risk a cycle when the
-  // target is the formula-under-test itself). For INDIRECT we parse the
-  // text argument and look up the resolved cell directly. OFFSET / INDEX /
-  // CHOOSE do not currently produce a `Value::Ref` at runtime, so the
-  // generic evaluation path below catches their result and returns FALSE
-  // when the result is a non-error scalar (matching Excel's behaviour for
-  // a non-reference scrutinee).
   // Excel: `ISFORMULA(1)` and `ISFORMULA("A1")` both surface `#VALUE!`.
   // RangeOp would need array-spill to answer cell-by-cell; not in the MVP.
   return Value::error(ErrorCode::Value);

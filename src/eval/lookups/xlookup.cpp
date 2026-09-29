@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "eval/array_alloc.h"
@@ -21,6 +22,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/range_resolvers.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -365,6 +367,133 @@ bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, 
   return false;
 }
 
+// The validated operands of an XLOOKUP call: everything but the match
+// itself and the fallback, which stay lazy. Shared by the value path and the
+// reference path so both judge argument shape and modes identically.
+struct XlookupPlan {
+  Value lookup = Value::blank();
+  std::vector<Value> lookup_cells;
+  std::vector<Value> return_cells;
+  std::uint32_t r_rows = 0U;
+  std::uint32_t r_cols = 0U;
+  bool horizontal_lookup = false;
+  // The width of the slice returned per match.
+  std::uint32_t slice_extent = 0U;
+  XMatchMode match_mode = XMatchMode::Exact;
+  XSearchMode search_mode = XSearchMode::FirstToLast;
+};
+
+Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena& arena,
+                                              const FunctionRegistry& registry, const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 3U || arity > 6U) {
+    return ErrorCode::Value;
+  }
+
+  // 1) lookup_value — errors propagate; Blank acts as numeric 0 via the
+  //    comparison primitives.
+  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (lookup.is_error()) {
+    return lookup.as_error();
+  }
+
+  // 2) lookup_array — must be a 1-D range.
+  auto lookup_resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
+  if (!lookup_resolved) {
+    return lookup_resolved.error();
+  }
+  // A static reference is judged by its declared shape: `A:C` is 2-D
+  // however few rows hold values, and `1:1` is a row even with one cell.
+  std::uint32_t l_rows = lookup_resolved.value().rows;
+  std::uint32_t l_cols = lookup_resolved.value().cols;
+  const bool lookup_declared = static_reference_shape(call.as_call_arg(1), ctx, &l_rows, &l_cols);
+  std::vector<Value> lookup_cells = std::move(lookup_resolved.value().cells);
+  if (l_rows != 1U && l_cols != 1U) {
+    return ErrorCode::Value;
+  }
+
+  // 3) return_array — its match axis must equal the lookup axis length.
+  //    The lookup_array is 1-D; a vertical lookup (l_cols == 1) matches
+  //    rows of return_array and may carry multiple columns (the matched
+  //    row spills horizontally), a horizontal lookup (l_rows == 1) matches
+  //    columns and may carry multiple rows (the matched column spills
+  //    vertically). A 1x1 lookup defaults to the vertical convention.
+  auto return_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
+  if (!return_resolved) {
+    return return_resolved.error();
+  }
+  const std::uint32_t r_rows = return_resolved.value().rows;
+  const std::uint32_t r_cols = return_resolved.value().cols;
+  std::vector<Value> return_cells = std::move(return_resolved.value().cells);
+  const bool horizontal_lookup = l_rows == 1U && l_cols != 1U;
+  // The number of result lanes parallel to the lookup axis, and the width
+  // of the slice returned per match.
+  const std::uint32_t lookup_len = static_cast<std::uint32_t>(lookup_cells.size());
+  const std::uint32_t match_extent = horizontal_lookup ? r_cols : r_rows;
+  const std::uint32_t slice_extent = horizontal_lookup ? r_rows : r_cols;
+  // Two static references agree by declared shape (`A:A` never pairs with
+  // `B1:B5`); the walked cells must then line up lane for lane.
+  std::uint32_t r_shape_rows = r_rows;
+  std::uint32_t r_shape_cols = r_cols;
+  if (lookup_declared && static_reference_shape(call.as_call_arg(2), ctx, &r_shape_rows, &r_shape_cols) &&
+      (horizontal_lookup ? r_shape_cols : r_shape_rows) != (horizontal_lookup ? l_cols : l_rows)) {
+    return ErrorCode::Value;
+  }
+  if (match_extent != lookup_len) {
+    return ErrorCode::Value;
+  }
+
+  // 5) match_mode (optional, default Exact). Validate the whitelist before
+  //    casting into the enum.
+  static constexpr int kMatchModes[] = {-1, 0, 1, 2};
+  int match_raw = 0;
+  if (arity >= 5U && !is_omitted_arg(call.as_call_arg(4))) {
+    const Value mm_val = eval_node(call.as_call_arg(4), arena, registry, ctx);
+    if (mm_val.is_error()) {
+      return mm_val.as_error();
+    }
+    if (!coerce_mode_int(mm_val, kMatchModes, sizeof(kMatchModes) / sizeof(kMatchModes[0]), &match_raw)) {
+      return ErrorCode::Value;
+    }
+  }
+
+  // 6) search_mode (optional, default FirstToLast).
+  static constexpr int kSearchModes[] = {-2, -1, 1, 2};
+  int search_raw = 1;
+  if (arity >= 6U && !is_omitted_arg(call.as_call_arg(5))) {
+    const Value sm_val = eval_node(call.as_call_arg(5), arena, registry, ctx);
+    if (sm_val.is_error()) {
+      return sm_val.as_error();
+    }
+    if (!coerce_mode_int(sm_val, kSearchModes, sizeof(kSearchModes) / sizeof(kSearchModes[0]), &search_raw)) {
+      return ErrorCode::Value;
+    }
+  }
+
+  const auto match_mode = static_cast<XMatchMode>(match_raw);
+  const auto search_mode = static_cast<XSearchMode>(search_raw);
+
+  // Excel 365 rejects the Wildcard (+2) match_mode combined with either
+  // Binary search_mode (±2) as #VALUE!: binary search has no defined
+  // meaning when the pattern contains `*` / `?` metacharacters.
+  if (match_mode == XMatchMode::Wildcard &&
+      (search_mode == XSearchMode::BinaryAsc || search_mode == XSearchMode::BinaryDesc)) {
+    return ErrorCode::Value;
+  }
+
+  XlookupPlan plan;
+  plan.lookup = lookup;
+  plan.lookup_cells = std::move(lookup_cells);
+  plan.return_cells = std::move(return_cells);
+  plan.r_rows = r_rows;
+  plan.r_cols = r_cols;
+  plan.horizontal_lookup = horizontal_lookup;
+  plan.slice_extent = slice_extent;
+  plan.match_mode = match_mode;
+  plan.search_mode = search_mode;
+  return plan;
+}
+
 }  // namespace
 
 /// XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found],
@@ -389,100 +518,20 @@ bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, 
 Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
-  if (arity < 3U || arity > 6U) {
-    return Value::error(ErrorCode::Value);
+  auto planned = plan_xlookup(call, arena, registry, ctx);
+  if (!planned) {
+    return Value::error(planned.error());
   }
-
-  // 1) lookup_value — errors propagate; Blank acts as numeric 0 via the
-  //    comparison primitives.
-  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (lookup.is_error()) {
-    return lookup;
-  }
-
-  // 2) lookup_array — must be a 1-D range.
-  auto lookup_resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
-  if (!lookup_resolved) {
-    return Value::error(lookup_resolved.error());
-  }
-  // A static reference is judged by its declared shape: `A:C` is 2-D
-  // however few rows hold values, and `1:1` is a row even with one cell.
-  std::uint32_t l_rows = lookup_resolved.value().rows;
-  std::uint32_t l_cols = lookup_resolved.value().cols;
-  const bool lookup_declared = static_reference_shape(call.as_call_arg(1), ctx, &l_rows, &l_cols);
-  std::vector<Value> lookup_cells = std::move(lookup_resolved.value().cells);
-  if (l_rows != 1U && l_cols != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  // 3) return_array — its match axis must equal the lookup axis length.
-  //    The lookup_array is 1-D; a vertical lookup (l_cols == 1) matches
-  //    rows of return_array and may carry multiple columns (the matched
-  //    row spills horizontally), a horizontal lookup (l_rows == 1) matches
-  //    columns and may carry multiple rows (the matched column spills
-  //    vertically). A 1x1 lookup defaults to the vertical convention.
-  auto return_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
-  if (!return_resolved) {
-    return Value::error(return_resolved.error());
-  }
-  const std::uint32_t r_rows = return_resolved.value().rows;
-  const std::uint32_t r_cols = return_resolved.value().cols;
-  std::vector<Value> return_cells = std::move(return_resolved.value().cells);
-  const bool horizontal_lookup = l_rows == 1U && l_cols != 1U;
-  // The number of result lanes parallel to the lookup axis, and the width
-  // of the slice returned per match.
-  const std::uint32_t lookup_len = static_cast<std::uint32_t>(lookup_cells.size());
-  const std::uint32_t match_extent = horizontal_lookup ? r_cols : r_rows;
-  const std::uint32_t slice_extent = horizontal_lookup ? r_rows : r_cols;
-  // Two static references agree by declared shape (`A:A` never pairs with
-  // `B1:B5`); the walked cells must then line up lane for lane.
-  std::uint32_t r_shape_rows = r_rows;
-  std::uint32_t r_shape_cols = r_cols;
-  if (lookup_declared && static_reference_shape(call.as_call_arg(2), ctx, &r_shape_rows, &r_shape_cols) &&
-      (horizontal_lookup ? r_shape_cols : r_shape_rows) != (horizontal_lookup ? l_cols : l_rows)) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (match_extent != lookup_len) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  // 5) match_mode (optional, default Exact). Validate the whitelist before
-  //    casting into the enum.
-  static constexpr int kMatchModes[] = {-1, 0, 1, 2};
-  int match_raw = 0;
-  if (arity >= 5U && !is_omitted_arg(call.as_call_arg(4))) {
-    const Value mm_val = eval_node(call.as_call_arg(4), arena, registry, ctx);
-    if (mm_val.is_error()) {
-      return mm_val;
-    }
-    if (!coerce_mode_int(mm_val, kMatchModes, sizeof(kMatchModes) / sizeof(kMatchModes[0]), &match_raw)) {
-      return Value::error(ErrorCode::Value);
-    }
-  }
-
-  // 6) search_mode (optional, default FirstToLast).
-  static constexpr int kSearchModes[] = {-2, -1, 1, 2};
-  int search_raw = 1;
-  if (arity >= 6U && !is_omitted_arg(call.as_call_arg(5))) {
-    const Value sm_val = eval_node(call.as_call_arg(5), arena, registry, ctx);
-    if (sm_val.is_error()) {
-      return sm_val;
-    }
-    if (!coerce_mode_int(sm_val, kSearchModes, sizeof(kSearchModes) / sizeof(kSearchModes[0]), &search_raw)) {
-      return Value::error(ErrorCode::Value);
-    }
-  }
-
-  const auto match_mode = static_cast<XMatchMode>(match_raw);
-  const auto search_mode = static_cast<XSearchMode>(search_raw);
-
-  // Excel 365 rejects the Wildcard (+2) match_mode combined with either
-  // Binary search_mode (±2) as #VALUE!: binary search has no defined
-  // meaning when the pattern contains `*` / `?` metacharacters.
-  if (match_mode == XMatchMode::Wildcard &&
-      (search_mode == XSearchMode::BinaryAsc || search_mode == XSearchMode::BinaryDesc)) {
-    return Value::error(ErrorCode::Value);
-  }
+  const XlookupPlan& plan = planned.value();
+  const Value& lookup = plan.lookup;
+  const std::vector<Value>& lookup_cells = plan.lookup_cells;
+  const std::vector<Value>& return_cells = plan.return_cells;
+  const std::uint32_t r_rows = plan.r_rows;
+  const std::uint32_t r_cols = plan.r_cols;
+  const bool horizontal_lookup = plan.horizontal_lookup;
+  const std::uint32_t slice_extent = plan.slice_extent;
+  const XMatchMode match_mode = plan.match_mode;
+  const XSearchMode search_mode = plan.search_mode;
 
   // A match is deliberately represented separately from the returned value:
   // array-valued lookup_value lanes need to distinguish a query-cell error
@@ -606,6 +655,46 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     buffer[col] = return_cells[(static_cast<std::size_t>(off) * r_cols) + col];
   }
   return Value::array(out);
+}
+
+bool resolve_xlookup_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                               std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                               ErrorCode* out_err) {
+  auto planned = plan_xlookup(call, arena, registry, ctx);
+  if (!planned) {
+    *out_err = planned.error();
+    return false;
+  }
+  const XlookupPlan& plan = planned.value();
+  // An array lookup_value yields one value per query, not one reference.
+  if (plan.lookup.is_array()) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  const std::size_t offset =
+      xlookup_scan(plan.lookup_cells, plan.lookup, plan.match_mode, plan.search_mode, ctx.excel_profile());
+  if (offset == SIZE_MAX) {
+    const std::uint32_t arity = call.as_call_arity();
+    if (arity < 4U || is_omitted_arg(call.as_call_arg(3))) {
+      *out_err = ErrorCode::NA;
+      return false;
+    }
+    return resolve_reference_rect(call.as_call_arg(3), arena, registry, ctx, out_sheet, out_top_row, out_left_col,
+                                  out_bottom_row, out_right_col, out_err);
+  }
+  if (!resolve_reference_rect(call.as_call_arg(2), arena, registry, ctx, out_sheet, out_top_row, out_left_col,
+                              out_bottom_row, out_right_col, out_err)) {
+    return false;
+  }
+  // The matched slice: a column of return_array for a horizontal lookup, a
+  // row for a vertical one.
+  if (plan.horizontal_lookup) {
+    *out_left_col = *out_right_col = *out_left_col + static_cast<std::uint32_t>(offset);
+  } else {
+    *out_top_row = *out_bottom_row = *out_top_row + static_cast<std::uint32_t>(offset);
+  }
+  return true;
 }
 
 /// XMATCH(lookup_value, lookup_array, [match_mode], [search_mode])

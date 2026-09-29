@@ -489,11 +489,11 @@ Value eval_ifs_array_cond(const parser::AstNode& call, std::uint32_t first, cons
   return Value::array(out);
 }
 
-Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                    const EvalContext& ctx) {
+SelectedBranch select_ifs_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                 const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
   if (arity < 2) {
-    return Value::error(ErrorCode::Value);
+    return SelectedBranch::result(Value::error(ErrorCode::Value));
   }
   // Iterate in (cond, value) pairs. If the count is odd, the trailing
   // condition has no paired value; we still evaluate it for error
@@ -501,24 +501,24 @@ Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   for (std::uint32_t i = 0; i + 1 < arity; i += 2) {
     const Value cond = eval_node(call.as_call_arg(i), arena, registry, ctx);
     if (cond.is_error()) {
-      return cond;
+      return SelectedBranch::result(cond);
     }
     if (cond.is_array()) {
       // The scan stays lazy until an array condition is actually reached,
       // so a scalar condition that already won never causes the later arms
       // to be evaluated.
-      return eval_ifs_array_cond(call, i, cond, arena, registry, ctx);
+      return SelectedBranch::array_subject(i, cond);
     }
     bool truth = false;
     ErrorCode err = ErrorCode::Value;
     const LogicalCoerce lc = logical_coerce_for_host(cond, ctx, &truth, &err);
     if (lc == LogicalCoerce::Error) {
-      return Value::error(err);
+      return SelectedBranch::result(Value::error(err));
     }
     // Skip (Blank / empty-text) is treated as FALSE: fall through to the
     // next branch.
     if (lc == LogicalCoerce::HasValue && truth) {
-      return eval_node(call.as_call_arg(i + 1), arena, registry, ctx);
+      return SelectedBranch::argument(i + 1);
     }
   }
   if ((arity % 2) == 1) {
@@ -526,10 +526,24 @@ Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     // then fall through to #N/A regardless of its truth value.
     const Value trailing = eval_node(call.as_call_arg(arity - 1), arena, registry, ctx);
     if (trailing.is_error()) {
-      return trailing;
+      return SelectedBranch::result(trailing);
     }
   }
-  return Value::error(ErrorCode::NA);
+  return SelectedBranch::result(Value::error(ErrorCode::NA));
+}
+
+Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx) {
+  const SelectedBranch picked = select_ifs_branch(call, arena, registry, ctx);
+  switch (picked.kind) {
+    case SelectedBranch::Kind::kArgument:
+      return eval_node(call.as_call_arg(picked.arg), arena, registry, ctx);
+    case SelectedBranch::Kind::kArraySubject:
+      return eval_ifs_array_cond(call, picked.arg, picked.value, arena, registry, ctx);
+    case SelectedBranch::Kind::kResult:
+      break;
+  }
+  return picked.value;
 }
 
 // Equality test for SWITCH. This is type-strict and deliberately NOT the
@@ -654,6 +668,42 @@ Value eval_switch_array_subject(const parser::AstNode& call, const Value& subjec
   return Value::array(out);
 }
 
+SelectedBranch select_switch_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                    const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  // Minimum useful form is SWITCH(expr, case, val): 3 args. A bare
+  // SWITCH(expr) or SWITCH(expr, default) is rejected as an arity
+  // violation (matches Excel's "You've entered too few arguments").
+  if (arity < 3) {
+    return SelectedBranch::result(Value::error(ErrorCode::Value));
+  }
+  const Value expr = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (expr.is_error()) {
+    return SelectedBranch::result(expr);
+  }
+  if (expr.is_array()) {
+    return SelectedBranch::array_subject(0, expr);
+  }
+  // Walk (case, value) pairs starting at index 1. If a trailing single
+  // argument remains at the end it is the default.
+  std::uint32_t i = 1;
+  while (i + 1 < arity) {
+    const Value case_val = eval_node(call.as_call_arg(i), arena, registry, ctx);
+    if (case_val.is_error()) {
+      return SelectedBranch::result(case_val);
+    }
+    if (switch_equal(expr, case_val)) {
+      return SelectedBranch::argument(i + 1);
+    }
+    i += 2;
+  }
+  if (i < arity) {
+    // Trailing default argument.
+    return SelectedBranch::argument(i);
+  }
+  return SelectedBranch::result(Value::error(ErrorCode::NA));
+}
+
 // SWITCH(expr, case1, val1, ..., [default]) - first case that equals
 // `expr` wins; only that branch's value subtree is evaluated. An extra
 // trailing argument (odd arity after expr) is the default. No match and
@@ -662,38 +712,16 @@ Value eval_switch_array_subject(const parser::AstNode& call, const Value& subjec
 // `eval_switch_array_subject` above, which cannot short-circuit.
 Value eval_switch_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  // Minimum useful form is SWITCH(expr, case, val): 3 args. A bare
-  // SWITCH(expr) or SWITCH(expr, default) is rejected as an arity
-  // violation (matches Excel's "You've entered too few arguments").
-  if (arity < 3) {
-    return Value::error(ErrorCode::Value);
+  const SelectedBranch picked = select_switch_branch(call, arena, registry, ctx);
+  switch (picked.kind) {
+    case SelectedBranch::Kind::kArgument:
+      return eval_node(call.as_call_arg(picked.arg), arena, registry, ctx);
+    case SelectedBranch::Kind::kArraySubject:
+      return eval_switch_array_subject(call, picked.value, arena, registry, ctx);
+    case SelectedBranch::Kind::kResult:
+      break;
   }
-  const Value expr = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (expr.is_error()) {
-    return expr;
-  }
-  if (expr.is_array()) {
-    return eval_switch_array_subject(call, expr, arena, registry, ctx);
-  }
-  // Walk (case, value) pairs starting at index 1. If a trailing single
-  // argument remains at the end it is the default.
-  std::uint32_t i = 1;
-  while (i + 1 < arity) {
-    const Value case_val = eval_node(call.as_call_arg(i), arena, registry, ctx);
-    if (case_val.is_error()) {
-      return case_val;
-    }
-    if (switch_equal(expr, case_val)) {
-      return eval_node(call.as_call_arg(i + 1), arena, registry, ctx);
-    }
-    i += 2;
-  }
-  if (i < arity) {
-    // Trailing default argument.
-    return eval_node(call.as_call_arg(i), arena, registry, ctx);
-  }
-  return Value::error(ErrorCode::NA);
+  return picked.value;
 }
 
 // ISOMITTED returns TRUE only when the argument resolves to a trailing

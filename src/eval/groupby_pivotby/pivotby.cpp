@@ -138,8 +138,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // ("Field N" / "Value N") rather than ja-JP labels.
 
   // -- arg 3: aggregator ----------------------------------------------------
-  AggregatorRef agg;
-  if (!resolve_aggregator(call.as_call_arg(3), arena, registry, ctx, &agg, &err)) {
+  const LambdaValue* agg = resolve_aggregator(call.as_call_arg(3), arena, registry, ctx, &err);
+  if (agg == nullptr) {
     return err;
   }
 

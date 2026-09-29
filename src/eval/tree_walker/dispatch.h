@@ -27,6 +27,7 @@
 #define FORMULON_EVAL_TREE_WALKER_DISPATCH_H_
 
 #include <cstdint>
+#include <string_view>
 
 #include "utils/arena.h"
 #include "value.h"
@@ -53,6 +54,12 @@ struct LambdaValue;
 // Unknown names yield `#NAME?`; arity violations yield `#VALUE!`;
 // argument errors propagate left-to-right unless the function opted out
 // of `propagate_errors` (the IS* type-predicate family).
+/// Strips the xlsx-only `_xlfn.` / `_xlfn._xlws.` storage prefixes from a
+/// function name (ASCII case-insensitively). xlsx tags post-2007 functions
+/// with them and Excel strips the tag on load, so the bare name is the only
+/// one the registry and every name-keyed table know.
+std::string_view strip_future_prefix(std::string_view name) noexcept;
+
 Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx);
 
@@ -88,6 +95,17 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
 /// `#VALUE!`; a null `body` is `#NAME?`.
 Value invoke_lambda_values(const LambdaValue* lv, std::uint32_t arity, const Value* args, Arena& arena,
                            const FunctionRegistry& registry, const EvalContext& ctx);
+
+/// Resolves the callable argument of a lambda helper (MAP, BYROW, BYCOL,
+/// REDUCE, SCAN, MAKEARRAY, GROUPBY, PIVOTBY) to a lambda that accepts
+/// `call_arity` arguments. Accepts an inline or name-bound `LAMBDA`, and a
+/// bare built-in function name, which Excel reads as the eta-reduced
+/// `LAMBDA(p1, ..., pn, FN(p1, ..., pn))` and is expanded to exactly that.
+/// On failure returns nullptr and writes the scalar error to `*out_err`: the
+/// argument's own error, `#VALUE!` for a non-lambda or an arity the lambda
+/// cannot accept, `#NAME?` for an unknown name or a body-less lambda.
+const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t call_arity, Arena& arena,
+                                    const FunctionRegistry& registry, const EvalContext& ctx, Value* out_err);
 
 /// `invoke_lambda_values` with an optional parallel array of AST nodes
 /// (length `arity`) recorded alongside each binding. When non-null, the AST

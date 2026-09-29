@@ -312,8 +312,8 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         RETURN_IF_ERROR(require_stack_depth(s, 2));
         if (pc < 2U || bc.code[pc - 1U].op != OpCode::LoadRef || bc.code[pc - 2U].op != OpCode::LoadRef) {
           // Complex range endpoints (e.g. `OFFSET(...):B5`) are not
-          // reconstructable from the IR; mirror the tree-walker's #VALUE!
-          // fallback for non-Ref range endpoints.
+          // reconstructable from the IR, which cannot resolve a
+          // reference-returning call to its rectangle; surface #VALUE!.
           s.stack.pop_back();
           s.stack.pop_back();
           RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));

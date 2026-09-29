@@ -1,6 +1,6 @@
 //
 // Range resolvers: turn a reference-shaped AST node (Ref / RangeOp /
-// OFFSET-call / INDIRECT-call / IntersectOp) into a rectangular
+// reference-returning call / IntersectOp) into a rectangular
 // (sheet, top, left, bottom, right) tuple WITHOUT dereferencing the
 // cells. Used by:
 //
@@ -37,9 +37,17 @@ namespace eval {
 class EvalContext;
 class FunctionRegistry;
 
-/// Attempts to resolve `node` as a reference-returning call, producing a
-/// rectangular reference without dereferencing. Recognises INDIRECT (A1-style)
-/// and nested OFFSET. On success writes the rectangle (0-based, inclusive)
+/// True when `name` (with or without an `_xlfn.` storage prefix) is a
+/// builtin whose result can be a reference: INDIRECT, OFFSET, IF, CHOOSE,
+/// IFS, SWITCH, INDEX and XLOOKUP. Answers from the same table
+/// `resolve_reference_call` dispatches through, so every consumer that asks
+/// "is this call a reference?" sees one list.
+bool is_reference_call_name(std::string_view name) noexcept;
+
+/// Attempts to resolve `node` as a reference-returning call (see
+/// `is_reference_call_name`), producing a rectangular reference without
+/// dereferencing. A call whose arguments select a non-reference (e.g.
+/// `INDEX` over an array literal) fails with `#VALUE!`. On success writes the rectangle (0-based, inclusive)
 /// into `*out_top_row`/`*out_left_col`/`*out_bottom_row`/`*out_right_col` with
 /// the sheet qualifier (empty = bound sheet) in `*out_sheet`. Returns true
 /// on success. On failure returns false and sets `*out_err` to the Excel
@@ -55,8 +63,8 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
                             bool* out_is_range, ErrorCode* out_err);
 
 /// Resolves a `:` operator endpoint into a rectangle. `node` may be a
-/// plain `Ref` (1x1 rectangle) or a `Call` to `OFFSET` / `INDIRECT`,
-/// in which case `resolve_reference_call` produces the rectangle.
+/// plain `Ref` (1x1 rectangle) or a reference-returning `Call`, in which
+/// case `resolve_reference_call` produces the rectangle.
 /// Returns `true` on success and writes the rectangle (0-based,
 /// inclusive) into the out parameters; the sheet qualifier (empty =
 /// bound sheet) is written to `*out_sheet`. On failure returns `false`
@@ -69,6 +77,17 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
 /// `#VALUE!` because the resulting union would be unbounded; that
 /// matches `expand_range`'s existing degradation for those shapes.
 bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                            ErrorCode* out_err);
+
+/// Resolves any reference-shaped `node` into the rectangle it names: a `Ref`
+/// (including whole-column / whole-row ones, which span the full grid axis),
+/// a `RangeOp`, an `IntersectOp`, a reference-returning `Call`, or a LET-bound
+/// name standing for one of those. This is what a function reads when an
+/// argument must be a reference (INDEX's source, XLOOKUP's return_array).
+/// Fails with `#VALUE!` / `#REF!` for any other shape.
+bool resolve_reference_rect(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                             ErrorCode* out_err);

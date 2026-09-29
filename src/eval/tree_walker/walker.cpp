@@ -490,9 +490,39 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       const auto& lhs = node.as_range_lhs();
       const auto& rhs = node.as_range_rhs();
       if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
-        // Complex range expressions (OFFSET-based, INDIRECT, named ranges)
-        // are not yet resolved at this level; surface #VALUE! as before.
-        return Value::error(ErrorCode::Value);
+        // An endpoint that is a reference-returning call (`A1:INDEX(...)`,
+        // `A1:OFFSET(...)`) names its rectangle only once resolved; the
+        // union then spills like any bounded range.
+        std::string_view lhs_sheet;
+        std::string_view rhs_sheet;
+        std::uint32_t lt = 0;
+        std::uint32_t ll = 0;
+        std::uint32_t lb = 0;
+        std::uint32_t lr = 0;
+        std::uint32_t rt = 0;
+        std::uint32_t rl = 0;
+        std::uint32_t rb = 0;
+        std::uint32_t rr = 0;
+        ErrorCode err = ErrorCode::Value;
+        if (!resolve_range_endpoint(lhs, arena, registry, ctx, &lhs_sheet, &lt, &ll, &lb, &lr, &err) ||
+            !resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rt, &rl, &rb, &rr, &err)) {
+          return Value::error(err);
+        }
+        if (!lhs_sheet.empty() && !rhs_sheet.empty() && !sheet_names::equal(lhs_sheet, rhs_sheet)) {
+          return Value::error(ErrorCode::Ref);
+        }
+        parser::Reference top_left{};
+        top_left.sheet = lhs_sheet.empty() ? rhs_sheet : lhs_sheet;
+        top_left.row = std::min(lt, rt);
+        top_left.col = std::min(ll, rl);
+        parser::Reference bottom_right{};
+        bottom_right.sheet = top_left.sheet;
+        bottom_right.row = std::max(lb, rb);
+        bottom_right.col = std::max(lr, rr);
+        if (top_left.row == bottom_right.row && top_left.col == bottom_right.col) {
+          return ctx.resolve_ref(top_left, arena, registry);
+        }
+        return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
       }
       const auto& lhs_ref = lhs.as_ref();
       const auto& rhs_ref = rhs.as_ref();

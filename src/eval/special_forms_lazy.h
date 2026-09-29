@@ -12,6 +12,8 @@
 #ifndef FORMULON_EVAL_SPECIAL_FORMS_LAZY_H_
 #define FORMULON_EVAL_SPECIAL_FORMS_LAZY_H_
 
+#include <cstdint>
+
 #include "eval/lazy_impls.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -48,6 +50,33 @@ Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 Value eval_and_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx);
 Value eval_or_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
+
+/// The branch a multi-way special form (IFS / SWITCH) selects for a scalar
+/// subject, without evaluating it. The value path evaluates the picked
+/// argument and the reference path resolves it as a rectangle, so both
+/// read one selection rule.
+struct SelectedBranch {
+  enum class Kind : std::uint8_t {
+    kArgument,      ///< `arg` is the index of the picked argument.
+    kResult,        ///< No argument is picked; `value` is the call's result.
+    kArraySubject,  ///< `arg` indexes an array subject held in `value`.
+  };
+  Kind kind = Kind::kResult;
+  std::uint32_t arg = 0;
+  Value value = Value::blank();
+
+  static SelectedBranch argument(std::uint32_t index) { return {Kind::kArgument, index, Value::blank()}; }
+  static SelectedBranch result(const Value& v) { return {Kind::kResult, 0, v}; }
+  static SelectedBranch array_subject(std::uint32_t index, const Value& v) { return {Kind::kArraySubject, index, v}; }
+};
+
+/// Picks the IFS arm whose condition is the first TRUE one.
+SelectedBranch select_ifs_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                 const EvalContext& ctx);
+
+/// Picks the SWITCH value paired with the first matching case, or the default.
+SelectedBranch select_switch_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                    const EvalContext& ctx);
 
 // IFS(cond1, val1, cond2, val2, ...) - multi-branch short-circuit. Each
 // condition is evaluated in turn; the first TRUE wins and the paired value

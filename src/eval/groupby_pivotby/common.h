@@ -39,17 +39,6 @@ namespace eval {
 
 class EvalContext;
 
-// Discriminated reference to the aggregator selected for the call. Form C
-// (bare function name) cannot be wrapped in a synthetic LambdaValue because a
-// LambdaValue requires an AST body; per-group dispatch therefore branches on
-// the kind tag and either invokes the lambda body or calls the registry impl.
-struct AggregatorRef {
-  enum class Kind { Lambda, Function };
-  Kind kind = Kind::Lambda;
-  const LambdaValue* lambda = nullptr;        // valid when kind == Lambda
-  const FunctionDef* function_def = nullptr;  // valid when kind == Function
-};
-
 struct HeaderLayout {
   bool inputs_have_header = false;
   bool output_emits_header = false;
@@ -87,13 +76,13 @@ struct OuterGrouping {
 OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
                                    const std::vector<std::vector<std::uint32_t>>& group_rows);
 
-/// Resolves the aggregator argument (3rd for GROUPBY, 4th for PIVOTBY) into
-/// an `AggregatorRef`. Returns true on success and writes the resolved
-/// aggregator to `*out`. Returns false on failure and writes the appropriate
-/// scalar error to `*out_err`. See implementation for the Form A / B / C
-/// resolution order.
-bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, AggregatorRef* out, Value* out_err);
+/// Resolves the aggregator argument (3rd for GROUPBY, 4th for PIVOTBY)
+/// through the shared lambda-helper resolver (`resolve_callable`) at the
+/// aggregator's arity of one: an inline or name-bound `LAMBDA`, or a bare
+/// built-in name. Returns nullptr and writes the scalar error to `*out_err`
+/// on failure.
+const LambdaValue* resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                                      const EvalContext& ctx, Value* out_err);
 
 /// Reads an array argument via the standard `eval_node_as_array` seam so a
 /// Ref / RangeOp / ArrayLiteral / OFFSET-call argument keeps its 2D shape.
@@ -172,21 +161,12 @@ const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t valu
 /// Invokes the resolved aggregator for one group's column slice and returns
 /// whatever it produced. Errors are returned verbatim (the per-group error
 /// isolation seam). A multi-cell array return surfaces as `#CALC!`.
-Value invoke_aggregator_for_group(const AggregatorRef& agg, const ArrayValue* slice, Arena& arena,
+Value invoke_aggregator_for_group(const LambdaValue* agg, const ArrayValue* slice, Arena& arena,
                                   const FunctionRegistry& registry, const EvalContext& ctx);
-
-/// Invokes a registry-backed function (Form C: a bare function name used as
-/// a callable) over one array slice, flattening its cells into the argument
-/// list `def->impl` expects. Row- and column-shaped slices with the same
-/// cells produce the same result. Shared with BYROW / BYCOL's callable
-/// resolution (`eval/lambda_helpers_lazy.cpp`), which needs the identical
-/// "bare function name applied to one row/column" invocation GROUPBY / PIVOTBY
-/// already implement for their own Form C aggregator.
-Value invoke_registry_function_over_slice(const FunctionDef* def, const ArrayValue* slice, Arena& arena);
 
 /// Aggregates each value column over the given row indices.
 std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32_t val_cols,
-                                           const std::vector<std::uint32_t>& row_indices, const AggregatorRef& agg,
+                                           const std::vector<std::uint32_t>& row_indices, const LambdaValue* agg,
                                            Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                                            ErrorCode empty_error);
 

@@ -26,7 +26,9 @@
 #include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/range_resolvers.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -1046,6 +1048,161 @@ Value eval_index_array_selector(const IndexSource& source, bool source_ok, Error
   return Value::array(output);
 }
 
+// What a scalar (row, col) selection names inside an INDEX source: one cell,
+// one whole row, one whole column, or the whole source.
+enum class IndexPickKind : std::uint8_t { kCell, kRow, kColumn, kWhole };
+
+struct IndexPick {
+  IndexPickKind kind = IndexPickKind::kCell;
+  std::uint32_t row = 0U;  // 0-based; meaningful for kCell / kRow.
+  std::uint32_t col = 0U;  // 0-based; meaningful for kCell / kColumn.
+};
+
+// Resolves a scalar (row_idx, col_idx) pair against a `rows` x `cols` source.
+// Zero indices are "whole dimension" in Excel's spill model. The value path
+// reads the pick out of the source and the reference path maps it onto the
+// source rectangle, so the two cannot disagree on what INDEX selects.
+Expected<IndexPick, ErrorCode> index_pick(std::uint32_t rows, std::uint32_t cols, std::uint32_t row_idx,
+                                          std::uint32_t col_idx, bool col_explicit) {
+  if (!col_explicit) {
+    // Two-arg form.
+    if (rows == 1U && cols == 1U) {
+      // 1x1 range: row_num must be 1 (or 0 "whole", which collapses to the
+      // sole cell).
+      if (row_idx > 1U) {
+        return ErrorCode::Ref;
+      }
+      return IndexPick{IndexPickKind::kCell, 0U, 0U};
+    }
+    if (rows == 1U) {
+      // Row vector: sole index selects the column. Index 0 spills the
+      // whole vector (a 1xN horizontal array).
+      if (row_idx == 0U) {
+        return IndexPick{IndexPickKind::kRow, 0U, 0U};
+      }
+      if (row_idx > cols) {
+        return ErrorCode::Ref;
+      }
+      return IndexPick{IndexPickKind::kCell, 0U, row_idx - 1U};
+    }
+    if (cols == 1U) {
+      // Column vector: sole index selects the row. Index 0 spills the
+      // whole vector (an Nx1 vertical array).
+      if (row_idx == 0U) {
+        return IndexPick{IndexPickKind::kColumn, 0U, 0U};
+      }
+      if (row_idx > rows) {
+        return ErrorCode::Ref;
+      }
+      return IndexPick{IndexPickKind::kCell, row_idx - 1U, 0U};
+    }
+    // 2-D array with only a row selector: the omitted column argument is
+    // read as zero, so the selected row spills whole. A zero row selector
+    // then spans both dimensions and spills the entire array, the same
+    // result the explicit `INDEX(array, 0, 0)` produces below.
+    if (row_idx == 0U) {
+      return IndexPick{IndexPickKind::kWhole, 0U, 0U};
+    }
+    if (row_idx > rows) {
+      return ErrorCode::Ref;
+    }
+    return IndexPick{IndexPickKind::kRow, row_idx - 1U, 0U};
+  }
+  // Three-arg form.
+  if (rows == 1U) {
+    // Row vector: row_num must be 1 (or 0 "whole row", which spans the
+    // single row anyway).
+    if (row_idx != 1U && row_idx != 0U) {
+      return ErrorCode::Ref;
+    }
+    if (col_idx == 0U) {
+      // Whole row of a 1-row source -> spill the entire vector.
+      return IndexPick{IndexPickKind::kRow, 0U, 0U};
+    }
+    if (col_idx > cols) {
+      return ErrorCode::Ref;
+    }
+    return IndexPick{IndexPickKind::kCell, 0U, col_idx - 1U};
+  }
+  if (cols == 1U) {
+    // Column vector: col_num must be 1 (or 0 "whole column", which spans
+    // the single column anyway).
+    if (col_idx != 1U && col_idx != 0U) {
+      return ErrorCode::Ref;
+    }
+    if (row_idx == 0U) {
+      // Whole column of a 1-column source -> spill the entire vector.
+      return IndexPick{IndexPickKind::kColumn, 0U, 0U};
+    }
+    if (row_idx > rows) {
+      return ErrorCode::Ref;
+    }
+    return IndexPick{IndexPickKind::kCell, row_idx - 1U, 0U};
+  }
+  // 2-D array. Zero indices spill the spanned dimension.
+  if (row_idx == 0U && col_idx == 0U) {
+    return IndexPick{IndexPickKind::kWhole, 0U, 0U};
+  }
+  if (row_idx == 0U) {
+    if (col_idx > cols) {
+      return ErrorCode::Ref;
+    }
+    return IndexPick{IndexPickKind::kColumn, 0U, col_idx - 1U};
+  }
+  if (col_idx == 0U) {
+    if (row_idx > rows) {
+      return ErrorCode::Ref;
+    }
+    return IndexPick{IndexPickKind::kRow, row_idx - 1U, 0U};
+  }
+  if (row_idx > rows || col_idx > cols) {
+    return ErrorCode::Ref;
+  }
+  return IndexPick{IndexPickKind::kCell, row_idx - 1U, col_idx - 1U};
+}
+
+// Appends the areas of a (possibly nested) parenthesised union to `out`, in
+// source order.
+void collect_union_areas(const parser::AstNode& node, const EvalContext& ctx,
+                         std::vector<const parser::AstNode*>* out) {
+  const parser::AstNode& resolved = resolve_name_ast(node, ctx.name_env());
+  if (resolved.kind() != parser::NodeKind::UnionOp) {
+    out->push_back(&resolved);
+    return;
+  }
+  const std::uint32_t arity = resolved.as_union_arity();
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    collect_union_areas(resolved.as_union_child(i), ctx, out);
+  }
+}
+
+// The area INDEX reads from: the `area_num`-th area of its first argument
+// (default 1), where a parenthesised union supplies several areas and any
+// other argument is its only area. An area past the end is `#REF!`.
+Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstNode& call, Arena& arena,
+                                                              const FunctionRegistry& registry,
+                                                              const EvalContext& ctx) {
+  std::vector<const parser::AstNode*> areas;
+  collect_union_areas(call.as_call_arg(0), ctx, &areas);
+  std::uint32_t area_idx = 1U;
+  if (call.as_call_arity() == 4U && !is_omitted_arg(call.as_call_arg(3))) {
+    const DecodedIndex area = decode_index_cell(eval_node(call.as_call_arg(3), arena, registry, ctx));
+    if (area.state == IndexAxisState::kError) {
+      return area.error;
+    }
+    if (area.index == 0U) {
+      return ErrorCode::Value;
+    }
+    area_idx = area.index;
+  }
+  if (area_idx > areas.size()) {
+    return ErrorCode::Ref;
+  }
+  // A lone first argument keeps its own node so a LET binding reaches the
+  // lookup seams through their usual name look-through.
+  return areas.size() == 1U ? &call.as_call_arg(0) : areas[area_idx - 1U];
+}
+
 }  // namespace
 
 // Array-index CHOOSE compositor. The index has already been evaluated by the
@@ -1184,11 +1341,16 @@ Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
-  if (arity != 2 && arity != 3) {
+  if (arity < 2U || arity > 4U) {
     return Value::error(ErrorCode::Value);
   }
+  const auto area = select_index_area(call, arena, registry, ctx);
+  if (!area) {
+    return Value::error(area.error());
+  }
+  const parser::AstNode& source_node = *area.value();
   ReferenceTable table;
-  const auto by_reference = resolve_reference_table(call.as_call_arg(0), ctx, &table);
+  const auto by_reference = resolve_reference_table(source_node, ctx, &table);
   ErrorCode source_error = ErrorCode::Value;
   std::optional<IndexSource> source;
   if (!by_reference) {
@@ -1196,7 +1358,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   } else if (by_reference.value()) {
     source.emplace(table);
   } else {
-    auto resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+    auto resolved = resolve_range_arg(source_node, arena, registry, ctx);
     if (resolved) {
       source.emplace(std::move(resolved.value().cells), resolved.value().rows, resolved.value().cols);
     } else {
@@ -1207,10 +1369,11 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   const std::uint32_t cols = source.has_value() ? source->cols() : 0U;
   bool source_ok = source.has_value();
 
-  // row_num is required (arity 2 or 3), col_num is optional.
+  // row_num is required, col_num is optional.
+  const bool col_explicit = arity >= 3U;
   const Value row_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
   Value col_val = Value::number(0.0);
-  if (arity == 3) {
+  if (col_explicit) {
     col_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
   }
   if (row_val.is_array() || col_val.is_array()) {
@@ -1219,168 +1382,100 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     }
     const IndexSource no_source(std::vector<Value>{}, 0U, 0U);
     return eval_index_array_selector(source_ok ? *source : no_source, source_ok && rows != 0U && cols != 0U,
-                                     source_error, row_val, arity == 3 ? &col_val : nullptr, arity == 3, arena);
+                                     source_error, row_val, col_explicit ? &col_val : nullptr, col_explicit, arena);
   }
   if (!source_ok || rows == 0U || cols == 0U) {
     return Value::error(source_error == ErrorCode::Value ? ErrorCode::Ref : source_error);
   }
-  if (row_val.is_error()) {
-    return row_val;
+  const DecodedIndex row = decode_index_cell(row_val);
+  if (row.state == IndexAxisState::kError) {
+    return Value::error(row.error);
   }
-  auto row_num_exp = coerce_to_number(row_val);
-  if (!row_num_exp) {
-    return Value::error(row_num_exp.error());
+  DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
+  if (col_explicit) {
+    col = decode_index_cell(col_val);
+    if (col.state == IndexAxisState::kError) {
+      return Value::error(col.error);
+    }
   }
-  const double row_orig = row_num_exp.value();
-  const double row_raw = truncate_index(row_orig);
-  if (row_orig < 0.0) {
-    return Value::error(ErrorCode::Value);
+  const auto pick = index_pick(rows, cols, row.index, col.index, col_explicit);
+  if (!pick) {
+    return Value::error(pick.error());
   }
-  // Fractional sub-1 values (`row_num` in (0, 1)) truncate to 0 but Excel
-  // rejects them with #VALUE!. The "whole-vector" / "whole-array" sentinel
-  // meaning of row_num == 0 only applies when the user explicitly passed 0.
-  if (row_raw == 0.0 && row_orig != 0.0) {
-    return Value::error(ErrorCode::Value);
+  switch (pick.value().kind) {
+    case IndexPickKind::kRow:
+      return source->row(pick.value().row, arena, registry, ctx);
+    case IndexPickKind::kColumn:
+      return source->column(pick.value().col, arena, registry, ctx);
+    case IndexPickKind::kWhole:
+      return source->whole(arena, registry, ctx);
+    case IndexPickKind::kCell:
+      break;
   }
-  const auto row_idx = static_cast<std::uint32_t>(row_raw);
+  return source->cell(pick.value().row, pick.value().col, arena, registry, ctx);
+}
 
-  std::uint32_t col_idx = 0;
-  bool col_explicit = false;
-  if (arity == 3) {
-    if (col_val.is_error()) {
-      return col_val;
-    }
-    auto col_num_exp = coerce_to_number(col_val);
-    if (!col_num_exp) {
-      return Value::error(col_num_exp.error());
-    }
-    const double col_orig = col_num_exp.value();
-    const double col_raw = truncate_index(col_orig);
-    if (col_orig < 0.0) {
-      return Value::error(ErrorCode::Value);
-    }
-    // Symmetric guard for sub-1 fractional col_num.
-    if (col_raw == 0.0 && col_orig != 0.0) {
-      return Value::error(ErrorCode::Value);
-    }
-    col_idx = static_cast<std::uint32_t>(col_raw);
-    col_explicit = true;
+bool resolve_index_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                             ErrorCode* out_err) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > 4U) {
+    *out_err = ErrorCode::Value;
+    return false;
   }
-
-  // Resolve (row_idx, col_idx) into a (0-based) row / column within the
-  // rectangle. The logic depends on shape and how many indices the caller
-  // provided. Zero values are "whole dimension" in Excel's spill model —
-  // unsupported here.
-  std::uint32_t r = 0;
-  std::uint32_t c = 0;
-  if (!col_explicit) {
-    // Two-arg form.
-    if (rows == 1U && cols == 1U) {
-      // 1x1 range: row_num must be 1 (or 0 "whole", which collapses to the
-      // sole cell).
-      if (row_idx == 0U) {
-        return source->cell(0U, 0U, arena, registry, ctx);
-      }
-      if (row_idx != 1U) {
-        return Value::error(ErrorCode::Ref);
-      }
-      r = 0;
-      c = 0;
-    } else if (rows == 1U) {
-      // Row vector: sole index selects the column. Index 0 spills the
-      // whole vector (a 1xN horizontal array).
-      if (row_idx == 0U) {
-        return source->row(0U, arena, registry, ctx);
-      }
-      if (row_idx > cols) {
-        return Value::error(ErrorCode::Ref);
-      }
-      r = 0;
-      c = row_idx - 1U;
-    } else if (cols == 1U) {
-      // Column vector: sole index selects the row. Index 0 spills the
-      // whole vector (an Nx1 vertical array).
-      if (row_idx == 0U) {
-        return source->column(0U, arena, registry, ctx);
-      }
-      if (row_idx > rows) {
-        return Value::error(ErrorCode::Ref);
-      }
-      r = row_idx - 1U;
-      c = 0;
-    } else {
-      // 2-D array with only a row selector: the omitted column argument is
-      // read as zero, so the selected row spills whole. A zero row selector
-      // then spans both dimensions and spills the entire array, the same
-      // result the explicit `INDEX(array, 0, 0)` produces below.
-      if (row_idx == 0U) {
-        return source->whole(arena, registry, ctx);
-      }
-      if (row_idx > rows) {
-        return Value::error(ErrorCode::Ref);
-      }
-      return source->row(row_idx - 1U, arena, registry, ctx);
-    }
-  } else {
-    // Three-arg form.
-    if (rows == 1U) {
-      // Row vector: row_num must be 1 (or 0 "whole row", which spans the
-      // single row anyway).
-      if (row_idx != 1U && row_idx != 0U) {
-        return Value::error(ErrorCode::Ref);
-      }
-      if (col_idx == 0U) {
-        // Whole row of a 1-row source -> spill the entire vector.
-        return source->row(0U, arena, registry, ctx);
-      }
-      if (col_idx > cols) {
-        return Value::error(ErrorCode::Ref);
-      }
-      r = 0;
-      c = col_idx - 1U;
-    } else if (cols == 1U) {
-      // Column vector: col_num must be 1 (or 0 "whole column", which spans
-      // the single column anyway).
-      if (col_idx != 1U && col_idx != 0U) {
-        return Value::error(ErrorCode::Ref);
-      }
-      if (row_idx == 0U) {
-        // Whole column of a 1-column source -> spill the entire vector.
-        return source->column(0U, arena, registry, ctx);
-      }
-      if (row_idx > rows) {
-        return Value::error(ErrorCode::Ref);
-      }
-      r = row_idx - 1U;
-      c = 0;
-    } else {
-      // 2-D array. Zero indices spill the spanned dimension.
-      if (row_idx == 0U && col_idx == 0U) {
-        return source->whole(arena, registry, ctx);
-      }
-      if (row_idx == 0U) {
-        // Whole column at col_idx -> spill the column as a vertical array.
-        if (col_idx > cols) {
-          return Value::error(ErrorCode::Ref);
-        }
-        return source->column(col_idx - 1U, arena, registry, ctx);
-      }
-      if (col_idx == 0U) {
-        // Whole row at row_idx -> spill the row as a horizontal array.
-        if (row_idx > rows) {
-          return Value::error(ErrorCode::Ref);
-        }
-        return source->row(row_idx - 1U, arena, registry, ctx);
-      }
-      if (row_idx > rows || col_idx > cols) {
-        return Value::error(ErrorCode::Ref);
-      }
-      r = row_idx - 1U;
-      c = col_idx - 1U;
+  const auto area = select_index_area(call, arena, registry, ctx);
+  if (!area) {
+    *out_err = area.error();
+    return false;
+  }
+  std::string_view sheet;
+  std::uint32_t top = 0U;
+  std::uint32_t left = 0U;
+  std::uint32_t bottom = 0U;
+  std::uint32_t right = 0U;
+  if (!resolve_reference_rect(*area.value(), arena, registry, ctx, &sheet, &top, &left, &bottom, &right, out_err)) {
+    return false;
+  }
+  const bool col_explicit = arity >= 3U;
+  const Value row_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  const Value col_val = col_explicit ? eval_node(call.as_call_arg(2), arena, registry, ctx) : Value::number(0.0);
+  // An array selector yields an array of values, not one reference.
+  if (row_val.is_array() || col_val.is_array()) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  const DecodedIndex row = decode_index_cell(row_val);
+  if (row.state == IndexAxisState::kError) {
+    *out_err = row.error;
+    return false;
+  }
+  DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
+  if (col_explicit) {
+    col = decode_index_cell(col_val);
+    if (col.state == IndexAxisState::kError) {
+      *out_err = col.error;
+      return false;
     }
   }
-
-  return source->cell(r, c, arena, registry, ctx);
+  const auto pick = index_pick(bottom - top + 1U, right - left + 1U, row.index, col.index, col_explicit);
+  if (!pick) {
+    *out_err = pick.error();
+    return false;
+  }
+  const IndexPick& p = pick.value();
+  *out_sheet = sheet;
+  *out_top_row = top;
+  *out_left_col = left;
+  *out_bottom_row = bottom;
+  *out_right_col = right;
+  if (p.kind == IndexPickKind::kCell || p.kind == IndexPickKind::kRow) {
+    *out_top_row = *out_bottom_row = top + p.row;
+  }
+  if (p.kind == IndexPickKind::kCell || p.kind == IndexPickKind::kColumn) {
+    *out_left_col = *out_right_col = left + p.col;
+  }
+  return true;
 }
 
 Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int match_type, ExcelProfile profile) {

@@ -19,7 +19,12 @@
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/lookups/classic.h"
+#include "eval/lookups/xlookup.h"
+#include "eval/name_env_resolve.h"
 #include "eval/reference/common.h"
+#include "eval/special_forms_lazy.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet_name.h"
@@ -33,6 +38,242 @@
 namespace formulon {
 namespace eval {
 
+namespace {
+
+// Resolves the reference a pass-through call picks (`IF`, `CHOOSE`, `IFS`,
+// `SWITCH` each return one of their arguments verbatim) as a range endpoint,
+// so plain Refs, `RangeOp`s and nested reference calls all reduce to a
+// rectangle.
+bool resolve_picked_reference(const parser::AstNode& picked, Arena& arena, const FunctionRegistry& registry,
+                              const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                              std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                              bool* out_is_range, ErrorCode* out_err) {
+  if (!resolve_range_endpoint(picked, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                              out_right_col, out_err)) {
+    return false;
+  }
+  *out_is_range = (*out_top_row != *out_bottom_row) || (*out_left_col != *out_right_col);
+  return true;
+}
+
+bool resolve_indirect_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                           std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                           bool* out_is_range, ErrorCode* out_err) {
+  refs_internal::IndirectReference indirect{};
+  if (!refs_internal::resolve_indirect_reference(node, arena, registry, ctx, &indirect, out_err)) {
+    return false;
+  }
+  // A sheet qualifier is only valid if the workbook actually holds a
+  // matching sheet. Without this check a caller like `ROW(INDIRECT(
+  // "NonExistent!A1"))` would happily report row 1 for a sheet that
+  // doesn't exist; Excel surfaces `#REF!` in that case.
+  if (!indirect.sheet.empty()) {
+    const Workbook* wb = ctx.workbook();
+    if (wb == nullptr || wb->sheet_by_name(indirect.sheet) == nullptr) {
+      *out_err = ErrorCode::Ref;
+      return false;
+    }
+  }
+  *out_sheet = indirect.sheet;
+  *out_top_row = indirect.top_row;
+  *out_left_col = indirect.left_col;
+  *out_bottom_row = indirect.bottom_row;
+  *out_right_col = indirect.right_col;
+  *out_is_range = indirect.is_range;
+  return true;
+}
+
+bool resolve_offset_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                         bool* out_is_range, ErrorCode* out_err) {
+  refs_internal::OffsetBase base{};
+  std::uint32_t top_row = 0;
+  std::uint32_t left_col = 0;
+  std::uint32_t height = 0;
+  std::uint32_t width = 0;
+  ErrorCode err = ErrorCode::Value;
+  if (!refs_internal::compute_offset_rect(node, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
+                                          &err)) {
+    *out_err = err;
+    return false;
+  }
+  *out_sheet = base.sheet;
+  *out_top_row = top_row;
+  *out_left_col = left_col;
+  *out_bottom_row = top_row + height - 1U;
+  *out_right_col = left_col + width - 1U;
+  *out_is_range = (height > 1U) || (width > 1U);
+  return true;
+}
+
+bool resolve_if_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                     std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                     bool* out_is_range, ErrorCode* out_err) {
+  // `IF(cond, then, [else])` preserves reference-shape: when both
+  // branches are range references Excel routes the picked branch
+  // through verbatim, so `ROWS(IF(TRUE, A1:B3, A1:B3))` reports 3
+  // rather than degrading to the scalar-fallback 1x1. We short-circuit
+  // on `cond` exactly like `eval_if_lazy`.
+  const std::uint32_t arity = node.as_call_arity();
+  if (arity != 2U && arity != 3U) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  const Value cond = eval_node(node.as_call_arg(0), arena, registry, ctx);
+  if (cond.is_error()) {
+    *out_err = cond.as_error();
+    return false;
+  }
+  auto coerced = coerce_to_bool(cond);
+  if (!coerced) {
+    *out_err = coerced.error();
+    return false;
+  }
+  if (!coerced.value() && arity == 2U) {
+    // `IF(FALSE, then)` returns boolean FALSE in Excel's scalar path,
+    // which is not a reference. Surface `#VALUE!` so the caller falls
+    // back to the scalar / non-reference branch.
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  const std::uint32_t pick = coerced.value() ? 1U : 2U;
+  return resolve_picked_reference(node.as_call_arg(pick), arena, registry, ctx, out_sheet, out_top_row, out_left_col,
+                                  out_bottom_row, out_right_col, out_is_range, out_err);
+}
+
+bool resolve_choose_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                         bool* out_is_range, ErrorCode* out_err) {
+  const std::uint32_t arity = node.as_call_arity();
+  if (arity < 2U) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  // Evaluate the index argument; CHOOSE expects a 1-based integer
+  // selector. Anything that fails coercion (text, blank-as-strict,
+  // error) propagates with its original code.
+  const Value idx_val = eval_node(node.as_call_arg(0), arena, registry, ctx);
+  if (idx_val.is_error()) {
+    *out_err = idx_val.as_error();
+    return false;
+  }
+  auto idx_int = refs_internal::read_int(idx_val);
+  if (!idx_int) {
+    *out_err = idx_int.error();
+    return false;
+  }
+  const int idx = idx_int.value();
+  const std::uint32_t n_choices = arity - 1U;
+  if (idx < 1 || static_cast<std::uint32_t>(idx) > n_choices) {
+    // Excel: out-of-range index -> #VALUE!
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  // The picked choice is at slot `idx` (0 = index, 1..n = choices).
+  return resolve_picked_reference(node.as_call_arg(static_cast<std::uint32_t>(idx)), arena, registry, ctx, out_sheet,
+                                  out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
+}
+
+// IFS / SWITCH pick through the same selector their value path uses; an
+// array subject selects per cell and so names no single reference.
+bool resolve_selected_branch(const parser::AstNode& node, const SelectedBranch& picked, Arena& arena,
+                             const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
+                             std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
+                             std::uint32_t* out_right_col, bool* out_is_range, ErrorCode* out_err) {
+  switch (picked.kind) {
+    case SelectedBranch::Kind::kArgument:
+      return resolve_picked_reference(node.as_call_arg(picked.arg), arena, registry, ctx, out_sheet, out_top_row,
+                                      out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
+    case SelectedBranch::Kind::kResult:
+      *out_err = picked.value.is_error() ? picked.value.as_error() : ErrorCode::Value;
+      return false;
+    case SelectedBranch::Kind::kArraySubject:
+      break;
+  }
+  *out_err = ErrorCode::Value;
+  return false;
+}
+
+bool resolve_ifs_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                      std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                      bool* out_is_range, ErrorCode* out_err) {
+  return resolve_selected_branch(node, select_ifs_branch(node, arena, registry, ctx), arena, registry, ctx, out_sheet,
+                                 out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
+}
+
+bool resolve_switch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                         bool* out_is_range, ErrorCode* out_err) {
+  return resolve_selected_branch(node, select_switch_branch(node, arena, registry, ctx), arena, registry, ctx,
+                                 out_sheet, out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range,
+                                 out_err);
+}
+
+using LookupReferenceResolver = bool (*)(const parser::AstNode&, Arena&, const FunctionRegistry&, const EvalContext&,
+                                         std::string_view*, std::uint32_t*, std::uint32_t*, std::uint32_t*,
+                                         std::uint32_t*, ErrorCode*);
+
+// INDEX / XLOOKUP own their selection logic; this adapts their resolvers to
+// the table's shape.
+template <LookupReferenceResolver kResolve>
+bool resolve_lookup_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                         bool* out_is_range, ErrorCode* out_err) {
+  if (!kResolve(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row, out_right_col,
+                out_err)) {
+    return false;
+  }
+  *out_is_range = (*out_top_row != *out_bottom_row) || (*out_left_col != *out_right_col);
+  return true;
+}
+
+using ReferenceCallResolver = bool (*)(const parser::AstNode&, Arena&, const FunctionRegistry&, const EvalContext&,
+                                       std::string_view*, std::uint32_t*, std::uint32_t*, std::uint32_t*,
+                                       std::uint32_t*, bool*, ErrorCode*);
+
+struct ReferenceCall {
+  std::string_view name;
+  ReferenceCallResolver resolve;
+};
+
+// Every builtin whose result can be a reference. This table is the one list
+// the engine keeps: `is_reference_call_name` answers from it and
+// `resolve_reference_call` dispatches through it, so a name cannot be
+// reference-returning to one consumer and not to another.
+constexpr ReferenceCall kReferenceCalls[] = {
+    {"INDIRECT", &resolve_indirect_call},
+    {"OFFSET", &resolve_offset_call},
+    {"IF", &resolve_if_call},
+    {"CHOOSE", &resolve_choose_call},
+    {"IFS", &resolve_ifs_call},
+    {"SWITCH", &resolve_switch_call},
+    {"INDEX", &resolve_lookup_call<&resolve_index_reference>},
+    {"XLOOKUP", &resolve_lookup_call<&resolve_xlookup_reference>},
+};
+
+const ReferenceCall* find_reference_call(std::string_view name) noexcept {
+  const std::string_view bare = strip_future_prefix(name);
+  for (const ReferenceCall& entry : kReferenceCalls) {
+    if (strings::case_insensitive_eq(bare, entry.name)) {
+      return &entry;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+bool is_reference_call_name(std::string_view name) noexcept {
+  return find_reference_call(name) != nullptr;
+}
+
 bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
@@ -43,131 +284,14 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
     *out_err = ErrorCode::Value;
     return false;
   }
-  const std::string_view name = node.as_call_name();
-  if (strings::case_insensitive_eq(name, "INDIRECT")) {
-    refs_internal::IndirectReference indirect{};
-    if (!refs_internal::resolve_indirect_reference(node, arena, registry, ctx, &indirect, out_err)) {
-      return false;
-    }
-    // A sheet qualifier is only valid if the workbook actually holds a
-    // matching sheet. Without this check a caller like `ROW(INDIRECT(
-    // "NonExistent!A1"))` would happily report row 1 for a sheet that
-    // doesn't exist; Excel surfaces `#REF!` in that case.
-    if (!indirect.sheet.empty()) {
-      const Workbook* wb = ctx.workbook();
-      if (wb == nullptr || wb->sheet_by_name(indirect.sheet) == nullptr) {
-        *out_err = ErrorCode::Ref;
-        return false;
-      }
-    }
-    *out_sheet = indirect.sheet;
-    *out_top_row = indirect.top_row;
-    *out_left_col = indirect.left_col;
-    *out_bottom_row = indirect.bottom_row;
-    *out_right_col = indirect.right_col;
-    *out_is_range = indirect.is_range;
-    return true;
+  const ReferenceCall* entry = find_reference_call(node.as_call_name());
+  if (entry == nullptr) {
+    // Not a reference-returning builtin.
+    *out_err = ErrorCode::Value;
+    return false;
   }
-  if (strings::case_insensitive_eq(name, "OFFSET")) {
-    refs_internal::OffsetBase base{};
-    std::uint32_t top_row = 0;
-    std::uint32_t left_col = 0;
-    std::uint32_t height = 0;
-    std::uint32_t width = 0;
-    ErrorCode err = ErrorCode::Value;
-    if (!refs_internal::compute_offset_rect(node, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
-                                            &err)) {
-      *out_err = err;
-      return false;
-    }
-    *out_sheet = base.sheet;
-    *out_top_row = top_row;
-    *out_left_col = left_col;
-    *out_bottom_row = top_row + height - 1U;
-    *out_right_col = left_col + width - 1U;
-    *out_is_range = (height > 1U) || (width > 1U);
-    return true;
-  }
-  if (strings::case_insensitive_eq(name, "IF")) {
-    // `IF(cond, then, [else])` preserves reference-shape: when both
-    // branches are range references Excel routes the picked branch
-    // through verbatim, so `ROWS(IF(TRUE, A1:B3, A1:B3))` reports 3
-    // rather than degrading to the scalar-fallback 1x1. We short-circuit
-    // on `cond` exactly like `eval_if_lazy`, then resolve the chosen
-    // branch as a range endpoint (which handles Ref / RangeOp / nested
-    // INDIRECT / OFFSET / CHOOSE / IF transparently).
-    const std::uint32_t arity = node.as_call_arity();
-    if (arity != 2U && arity != 3U) {
-      *out_err = ErrorCode::Value;
-      return false;
-    }
-    const Value cond = eval_node(node.as_call_arg(0), arena, registry, ctx);
-    if (cond.is_error()) {
-      *out_err = cond.as_error();
-      return false;
-    }
-    auto coerced = coerce_to_bool(cond);
-    if (!coerced) {
-      *out_err = coerced.error();
-      return false;
-    }
-    const std::uint32_t pick = coerced.value() ? 1U : (arity == 3U ? 2U : 1U);
-    if (!coerced.value() && arity == 2U) {
-      // `IF(FALSE, then)` returns boolean FALSE in Excel's scalar path,
-      // which is not a reference. Surface `#VALUE!` so the caller falls
-      // back to the scalar / non-reference branch.
-      *out_err = ErrorCode::Value;
-      return false;
-    }
-    const parser::AstNode& picked = node.as_call_arg(pick);
-    if (!resolve_range_endpoint(picked, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
-                                out_right_col, out_err)) {
-      return false;
-    }
-    *out_is_range = (*out_top_row != *out_bottom_row) || (*out_left_col != *out_right_col);
-    return true;
-  }
-  if (strings::case_insensitive_eq(name, "CHOOSE")) {
-    const std::uint32_t arity = node.as_call_arity();
-    if (arity < 2U) {
-      *out_err = ErrorCode::Value;
-      return false;
-    }
-    // Evaluate the index argument; CHOOSE expects a 1-based integer
-    // selector. Anything that fails coercion (text, blank-as-strict,
-    // error) propagates with its original code.
-    const Value idx_val = eval_node(node.as_call_arg(0), arena, registry, ctx);
-    if (idx_val.is_error()) {
-      *out_err = idx_val.as_error();
-      return false;
-    }
-    auto idx_int = refs_internal::read_int(idx_val);
-    if (!idx_int) {
-      *out_err = idx_int.error();
-      return false;
-    }
-    const int idx = idx_int.value();
-    const std::uint32_t n_choices = arity - 1U;
-    if (idx < 1 || static_cast<std::uint32_t>(idx) > n_choices) {
-      // Excel: out-of-range index -> #VALUE!
-      *out_err = ErrorCode::Value;
-      return false;
-    }
-    // The picked choice is at slot `idx` (0 = index, 1..n = choices).
-    // Recurse via `resolve_range_endpoint` so plain Ref / nested
-    // OFFSET-INDIRECT-CHOOSE endpoints all reduce to a rectangle.
-    const parser::AstNode& picked = node.as_call_arg(static_cast<std::uint32_t>(idx));
-    if (!resolve_range_endpoint(picked, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
-                                out_right_col, out_err)) {
-      return false;
-    }
-    *out_is_range = (*out_top_row != *out_bottom_row) || (*out_left_col != *out_right_col);
-    return true;
-  }
-  // Any other call name is not a reference-returning builtin we know
-  // how to handle here.
-  *out_err = ErrorCode::Value;
-  return false;
+  return entry->resolve(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row, out_right_col,
+                        out_is_range, out_err);
 }
 
 namespace {
@@ -325,6 +449,15 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
 }
 
 }  // namespace
+
+bool resolve_reference_rect(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                            ErrorCode* out_err) {
+  const parser::AstNode& target = resolve_name_ast(node, ctx.name_env());
+  return resolve_intersect_operand(target, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                                   out_right_col, out_err);
+}
 
 bool compute_intersect_rect(const parser::AstNode& lhs, const parser::AstNode& rhs, Arena& arena,
                             const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,

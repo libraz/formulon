@@ -52,8 +52,8 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // -- arg 2: aggregator ----------------------------------------------------
-  AggregatorRef agg;
-  if (!resolve_aggregator(call.as_call_arg(2), arena, registry, ctx, &agg, &err)) {
+  const LambdaValue* agg = resolve_aggregator(call.as_call_arg(2), arena, registry, ctx, &err);
+  if (agg == nullptr) {
     return err;
   }
 

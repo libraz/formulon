@@ -17,7 +17,6 @@
 #include "eval/jp_fold.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
-#include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
@@ -59,72 +58,11 @@ const parser::AstNode* build_array_literal_for_slice(const ArrayValue* arr, Aren
   return parser::make_array_literal(arena, arr->rows, arr->cols, children);
 }
 
-// Number of arguments a Lambda aggregator receives per group: the group's
-// value slice, and nothing else.
+// Number of arguments an aggregator receives per group: the group's value
+// slice, and nothing else.
 constexpr std::uint32_t kAggregatorCallArity = 1U;
 
-// Checks that `lv` can be called as a per-group aggregator, writing the
-// matching scalar error to `*out_err` when it cannot.
-//
-// Acceptance is the single rule published on `LambdaValue`:
-// `param_count - optional_count <= kAggregatorCallArity <= param_count`.
-// A lambda declaring trailing `[optional]` params therefore qualifies, and
-// the params GROUPBY / PIVOTBY do not supply bind to the sentinel
-// `ISOMITTED` detects. Checking here rather than only at invocation time
-// keeps a rejection one scalar error for the whole call instead of one per
-// output cell.
-bool check_aggregator_lambda(const LambdaValue* lv, Value* out_err) {
-  const std::uint32_t required = lv->param_count - lv->optional_count;
-  if (kAggregatorCallArity < required || kAggregatorCallArity > lv->param_count) {
-    *out_err = Value::error(ErrorCode::Value);
-    return false;
-  }
-  if (lv->body == nullptr) {
-    *out_err = Value::error(ErrorCode::Name);
-    return false;
-  }
-  return true;
-}
-
 }  // namespace
-
-// Invokes a registry-backed function (Form C: a bare function name used as
-// a callable) over one array slice. The slice is flattened into the args
-// vector cellwise so a SUM-style impl sees the same shape it would see from
-// `=SUM({1;2;3})`. Shared by GROUPBY / PIVOTBY's per-group aggregator
-// (`invoke_aggregator_for_group`, below) and by BYROW / BYCOL's per-slice
-// callable (see `eval/lambda_helpers_lazy.cpp`), since both reduce to
-// exactly this: a registry function called once per slice with the slice's
-// cells as its argument list.
-Value invoke_registry_function_over_slice(const FunctionDef* def, const ArrayValue* slice, Arena& arena) {
-  if (slice == nullptr || slice->rows == 0U || slice->cols == 0U) {
-    // No values to aggregate; conservatively surface the aggregator's
-    // empty-input behaviour by passing zero args. Most aggregate impls
-    // (SUM, MIN, MAX, ...) check arity >= min_arity and return #VALUE!.
-    return Value::error(ErrorCode::Calc);
-  }
-  // `slice->cells` is row-major regardless of orientation, and a flattened
-  // cell list is all `filter_range_sourced_values` / `def->impl` need -- a
-  // row slice (BYROW) and a column slice (GROUPBY) with the same cells
-  // therefore produce the same result, matching `SUM({1,2,3})` and
-  // `SUM({1;2;3})` agreeing in Excel.
-  const std::uint32_t n = slice->rows * slice->cols;
-  if (n < def->min_arity || (def->max_arity != kVariadic && n > def->max_arity)) {
-    return Value::error(ErrorCode::Value);
-  }
-  Value* args = arena.create_array<Value>(n);
-  if (args == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::size_t kept = 0;
-  Value filter_err = Value::blank();
-  if (!filter_range_sourced_values(*def, slice->cells, n, args, &kept, &filter_err)) {
-    return filter_err;
-  }
-  // The initial group arity was validated above. Filtering may remove every
-  // cell, but the implementation still owns the zero-argument result.
-  return def->impl(args, static_cast<std::uint32_t>(kept), arena);
-}
 
 std::string_view grand_total_label(const EvalContext& ctx) {
   if (ctx.excel_profile().locale == ExcelLocale::kJaJP) {
@@ -171,79 +109,9 @@ OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std
   return out;
 }
 
-// Resolves the third argument (the aggregator) into an `AggregatorRef`.
-// Returns true on success and writes the resolved aggregator to `*out`.
-// Returns false on failure and writes the appropriate scalar error to
-// `*out_err`.
-//
-// Resolution order:
-//   1. If the raw arg AST is a `NameRef`, try the name environment first.
-//      A bound name shadows any registry function with the same identifier.
-//      If the binding evaluates to a callable Lambda, that is Form B.
-//   2. If still unresolved AND the raw arg AST is a `NameRef`, look the
-//      name up in the registry. A hit is Form C.
-//   3. Otherwise (LAMBDA literal, LET-bound lambda the parser surfaced via
-//      something other than NameRef, or any other expression), evaluate the
-//      arg via `eval_node`. A callable Lambda value is Form A. Anything
-//      else surfaces `#VALUE!`.
-//
-// "Callable" is `check_aggregator_lambda`: the Lambda must accept exactly
-// one argument, counting trailing `[optional]` params as satisfiable. Both
-// Lambda forms go through that one check, so Form A and Form B cannot
-// disagree about which aggregators are legal.
-bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, AggregatorRef* out, Value* out_err) {
-  // Step 1 + 2: NameRef short-circuit. A name bound in scope evaluates as the
-  // bound Value (Form B); an unbound name falls through to the registry
-  // (Form C) before we ever touch `eval_node` (which would surface #NAME?).
-  if (arg.kind() == parser::NodeKind::NameRef) {
-    const std::string_view name = arg.as_name();
-    const NameEnv* env = ctx.name_env();
-    const Value* bound = (env != nullptr) ? env->lookup(name) : nullptr;
-    if (bound != nullptr) {
-      if (bound->is_error()) {
-        *out_err = *bound;
-        return false;
-      }
-      if (!bound->is_lambda()) {
-        *out_err = Value::error(ErrorCode::Value);
-        return false;
-      }
-      const LambdaValue* lv = bound->as_lambda();
-      if (!check_aggregator_lambda(lv, out_err)) {
-        return false;
-      }
-      out->kind = AggregatorRef::Kind::Lambda;
-      out->lambda = lv;
-      return true;
-    }
-    // Not bound in scope; consult the registry. Hit -> Form C.
-    if (const FunctionDef* def = registry.lookup(name); def != nullptr) {
-      out->kind = AggregatorRef::Kind::Function;
-      out->function_def = def;
-      return true;
-    }
-    // Miss in both scopes: fall through to general eval, which produces
-    // `#NAME?`. The caller surfaces that verbatim.
-  }
-
-  // Step 3: evaluate the arg expression normally. Arity-1 Lambda -> Form A.
-  const Value v = eval_node(arg, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  if (!v.is_lambda()) {
-    *out_err = Value::error(ErrorCode::Value);
-    return false;
-  }
-  const LambdaValue* lv = v.as_lambda();
-  if (!check_aggregator_lambda(lv, out_err)) {
-    return false;
-  }
-  out->kind = AggregatorRef::Kind::Lambda;
-  out->lambda = lv;
-  return true;
+const LambdaValue* resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                                      const EvalContext& ctx, Value* out_err) {
+  return resolve_callable(arg, kAggregatorCallArity, arena, registry, ctx, out_err);
 }
 
 const ArrayValue* read_array_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -527,24 +395,20 @@ const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t valu
   return arr;
 }
 
-Value invoke_aggregator_for_group(const AggregatorRef& agg, const ArrayValue* slice, Arena& arena,
+Value invoke_aggregator_for_group(const LambdaValue* agg, const ArrayValue* slice, Arena& arena,
                                   const FunctionRegistry& registry, const EvalContext& ctx) {
-  Value res = Value::blank();
-  if (agg.kind == AggregatorRef::Kind::Lambda) {
-    const parser::AstNode* slice_ast = build_array_literal_for_slice(slice, arena);
-    if (slice_ast == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    // The slice is bound with both its Value and a synthetic ArrayLiteral
-    // AST so a body written as `SUM(v)` flattens it through the
-    // dispatcher's ArrayLiteral branch. Errors are not filtered: whatever
-    // the body produced — including an error — lands in this group's cell.
-    const Value slice_v = Value::array(slice);
-    const parser::AstNode* ast_args[1] = {slice_ast};
-    res = invoke_lambda_values_with_ast(agg.lambda, kAggregatorCallArity, &slice_v, ast_args, arena, registry, ctx);
-  } else {
-    res = invoke_registry_function_over_slice(agg.function_def, slice, arena);
+  const parser::AstNode* slice_ast = build_array_literal_for_slice(slice, arena);
+  if (slice_ast == nullptr) {
+    return Value::error(ErrorCode::Num);
   }
+  // The slice is bound with both its Value and a synthetic ArrayLiteral
+  // AST so a body written as `SUM(v)` -- or the eta-expanded `SUM` --
+  // flattens it through the dispatcher's ArrayLiteral branch. Errors are
+  // not filtered: whatever the body produced -- including an error -- lands
+  // in this group's cell.
+  const Value slice_v = Value::array(slice);
+  const parser::AstNode* ast_args[1] = {slice_ast};
+  const Value res = invoke_lambda_values_with_ast(agg, kAggregatorCallArity, &slice_v, ast_args, arena, registry, ctx);
   if (res.is_array()) {
     return Value::error(ErrorCode::Calc);
   }
@@ -555,7 +419,7 @@ Value invoke_aggregator_for_group(const AggregatorRef& agg, const ArrayValue* sl
 }
 
 std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32_t val_cols,
-                                           const std::vector<std::uint32_t>& row_indices, const AggregatorRef& agg,
+                                           const std::vector<std::uint32_t>& row_indices, const LambdaValue* agg,
                                            Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                                            ErrorCode empty_error) {
   std::vector<Value> cells(val_cols, Value::blank());

@@ -17,6 +17,9 @@
 #ifndef FORMULON_EVAL_LOOKUPS_CLASSIC_H_
 #define FORMULON_EVAL_LOOKUPS_CLASSIC_H_
 
+#include <cstdint>
+#include <string_view>
+
 #include "eval/lazy_impls.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -43,6 +46,17 @@ Value eval_choose_array_index_lazy(const parser::AstNode& call, const Value& ind
                                    const FunctionRegistry& registry, const EvalContext& ctx);
 Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx);
+/// Resolves an `INDEX(reference, row_num, [col_num], [area_num])` call to
+/// the rectangle it selects, without reading any cell: one cell, or a whole
+/// row / column / area for a zero index. `area_num` picks from a
+/// parenthesised union in source order. Fails with `#VALUE!` when the
+/// selected area is not a reference or a selector is an array, and with the
+/// value path's error otherwise. Writes the 0-based inclusive rectangle and
+/// its sheet qualifier (empty = bound sheet).
+bool resolve_index_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                             ErrorCode* out_err);
 Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx);
 Value eval_vlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

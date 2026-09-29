@@ -18,6 +18,9 @@
 #ifndef FORMULON_EVAL_LOOKUPS_XLOOKUP_H_
 #define FORMULON_EVAL_LOOKUPS_XLOOKUP_H_
 
+#include <cstdint>
+#include <string_view>
+
 #include "eval/lazy_impls.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -35,6 +38,17 @@ class FunctionRegistry;
 
 Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);
+/// Resolves a scalar-lookup `XLOOKUP` call to the reference it returns: the
+/// matched row (vertical lookup) or column (horizontal lookup) of
+/// `return_array`, or `if_not_found` on a miss when that argument is itself a
+/// reference. Fails with `#VALUE!` when the selected operand is not a
+/// reference or `lookup_value` is an array, and with the value path's error
+/// otherwise. Writes the 0-based inclusive rectangle and its sheet qualifier
+/// (empty = bound sheet).
+bool resolve_xlookup_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                               std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                               ErrorCode* out_err);
 Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 
