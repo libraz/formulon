@@ -1536,18 +1536,13 @@ TEST(XlsbWriter, HarvestedFuncIdCallsRoundTripWithIdenticalFormulaText) {
 }
 
 TEST(XlsbWriter, UnencodableFormulaDowngradesToCachedLiteralAndReportsIt) {
-  // An implicit-intersection formula (`@A1:A10`) has no Ptg lowering in
-  // the common-token codec (the encoder's `NodeKind::ImplicitIntersection`
-  // case still returns `unsupported_node`, unlike `NodeKind::NameRef` --
-  // any defined-name reference now lowers to `PtgName`, including
-  // references to names that turn out not to be genuine defined names,
-  // since `collect_ptg_names` registers every `NameRef` it sees as a
-  // hidden placeholder). A single unsupported formula must not make the
+  // A structured reference (`T[C]`) has no Ptg lowering in the
+  // common-token codec. A single unsupported formula must not make the
   // whole workbook unsaveable: it degrades to its cached literal and the
   // explicit result count records the loss.
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("F"));
-  s.set_cell_formula(0U, 0U, "=@A1:A10");
+  s.set_cell_formula(0U, 0U, "=T[C]");
   s.set_cell_cached_value(0U, 0U, Value::number(42.0));
 
   auto write_or = write_xlsb_with_result(wb);
@@ -1565,7 +1560,7 @@ TEST(XlsbWriter, UnencodableFormulaDowngradesToCachedLiteralAndReportsIt) {
 TEST(XlsbWriter, UnencodableSpillFormulaDowngradesAnchorWithoutPhantoms) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("F"));
-  s.set_cell_formula(0U, 0U, "=@A1:A10");
+  s.set_cell_formula(0U, 0U, "=T[C]");
   ASSERT_TRUE(s.commit_spill(0U, 0U, 1U, 2U, {Value::number(11.0), Value::number(12.0)}));
 
   auto write_or = write_xlsb_with_result(wb);

@@ -587,6 +587,24 @@ TEST(XlsbPtgCodec, LegacyFormulaIntersectsOperatorOperands) {
             with_class(0x65, {0x1E, 0x02, 0x00, 0x05, 0x19, 0x10, 0x00, 0x00}));
 }
 
+// A written `@` is a call to the hidden `_xlfn.SINGLE` name in either
+// evaluation mode; bytes as Excel 365 saved `=@A1`
+// (backup/oracle_probe/legacy_at/typed_at.xlsb C5).
+TEST(XlsbPtgCodec, WrittenAtStoresAsSingleCall) {
+  const NameTable names = {{"_xlfn.SINGLE", 2U}};
+  const std::vector<std::uint8_t> expected = {0x23, 0x02, 0x00, 0x00, 0x00, 0x24, 0x00, 0x00,
+                                              0x00, 0x00, 0x00, 0xC0, 0x42, 0x02, 0xFF, 0x00};
+  for (const PtgEvaluation evaluation : {PtgEvaluation::kLegacy, PtgEvaluation::kDynamicArray}) {
+    Arena arena;
+    parser::Parser p("@A1", arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr);
+    auto encoded = encode_ptgs(*root, {}, {}, names, PtgRootClass::kValue, std::nullopt, evaluation);
+    ASSERT_TRUE(static_cast<bool>(encoded)) << encoded.error().message;
+    EXPECT_EQ(encoded.value().rgce, expected);
+  }
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }

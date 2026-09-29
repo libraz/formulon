@@ -240,6 +240,21 @@ TEST(StoragePrefixContainers, ModelHoldingJisSavesAsDbcsInBothContainers) {
   EXPECT_EQ(xlsb_a1->formula_text, "=DBCS(\"ABC\")");
 }
 
+TEST(StoragePrefixContainers, WrittenAtKeepsItsFormulaInXlsb) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
+  s.set_cell_formula(0U, 1U, "=@A1:A2");
+
+  auto xlsb_or = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message << " | " << xlsb_or.error().context;
+  EXPECT_EQ(xlsb_or.value().diagnostics.downgraded_formula_count, 0U);
+  auto from_xlsb = xlsb::read_xlsb(test::span_of(xlsb_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  const Cell* b1 = from_xlsb.value().workbook.sheet(0).cell_at(0U, 1U);
+  ASSERT_NE(b1, nullptr);
+  EXPECT_FALSE(b1->formula_text.empty());
+}
+
 TEST(StoragePrefixContainers, IsoCeilingStaysBareOnOoxmlSave) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("F"));

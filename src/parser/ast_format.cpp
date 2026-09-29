@@ -950,12 +950,16 @@ struct StorageEmitter {
         emit_binary_ref(node, out, min_bp, kBpIntersect, ' ');
         return;
       case NodeKind::ImplicitIntersection: {
+        // Excel stores a written `@` as a call to `_xlfn.SINGLE`; the
+        // parentheses stay where the `@` form has them, as XLSB `PtgParen`s do.
         const bool wrap = kBpAtPrefix < min_bp;
         if (wrap) {
           out.push_back('(');
         }
-        out.push_back('@');
+        append_function_name(out, "SINGLE");
+        out.push_back('(');
         emit(node.as_implicit_intersection_operand(), out, kBpAtPrefix);
+        out.push_back(')');
         if (wrap) {
           out.push_back(')');
         }

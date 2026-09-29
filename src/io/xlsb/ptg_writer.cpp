@@ -545,7 +545,7 @@ class Encoder {
       case parser::NodeKind::SpillRef:
         return emit_spill_ref(node);
       case parser::NodeKind::ImplicitIntersection:
-        return unsupported_node("ImplicitIntersection");
+        return emit_implicit_intersection(node);
       case parser::NodeKind::Lambda:
         return emit_lambda(node);
       case parser::NodeKind::LetBinding:
@@ -1234,6 +1234,25 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
+  /// Encodes a written `@` as a call to the hidden `_xlfn.SINGLE` name,
+  /// as Excel 365 saves `=@A1` (`23 <ilbl> 24 .. 42 02 ff 00`).
+  Expected<void, Error> emit_implicit_intersection(const parser::AstNode& node) {
+    const auto it = name_table_.find(xlsb_hidden_function_name("SINGLE"));
+    if (it == name_table_.end()) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                        "xlsb encoder: hidden-name callee has no BrtName registered",
+                        "context=xlsb_ptg_writer fn=SINGLE");
+    }
+    emit_u8(out_, 0x23);  // PtgName (reference-class): the callee name-ref
+    emit_u32(out_, it->second);
+    next_slot_ = Slot{xlsb_parameter_class("SINGLE", 0), false};
+    RETURN_IF_ERROR(emit(node.as_implicit_intersection_operand()));
+    emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
+    emit_u8(out_, 2);                    // cparams: name-ref + the operand
+    emit_u16(out_, 255);
+    return Expected<void, Error>::Ok();
+  }
+
   Expected<void, Error> emit_array(const parser::AstNode& node) {
     // The main token stream carries only a 15-byte placeholder (opcode
     // + 14 reserved bytes, contents unconstrained); the real dimensions
@@ -1404,6 +1423,7 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       return;
     }
     case parser::NodeKind::ImplicitIntersection:
+      add(xlsb_hidden_function_name("SINGLE"));
       CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope, mode);
       return;
     case parser::NodeKind::ArrayLiteral: {

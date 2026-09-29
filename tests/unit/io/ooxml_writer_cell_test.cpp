@@ -299,6 +299,14 @@ TEST(BuildSheetDataXml, FormulaCellSpillRefStoresAsAnchorarrayCall) {
   EXPECT_NE(xml.find("<f>SUM(_xlfn.ANCHORARRAY(A1))</f>"), std::string::npos) << xml;
 }
 
+TEST(BuildSheetDataXml, FormulaCellWrittenAtStoresAsSingleCall) {
+  // Excel stores a written `@` as a call to `_xlfn.SINGLE`.
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=@A2+1");
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("<f>_xlfn.SINGLE(A2)+1</f>"), std::string::npos) << xml;
+}
+
 TEST(BuildSheetDataXml, FormulaCellLetParameterPrefixedCaseInsensitively) {
   // LET/LAMBDA parameters resolve case-insensitively at eval time, so a
   // reference spelled in a different case than its binding must still get
