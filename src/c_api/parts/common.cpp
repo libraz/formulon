@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -11,6 +12,7 @@
 
 #include "c_api/formulon_c.h"
 #include "cf/cf_types.h"
+#include "io/styles_reader.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
@@ -299,6 +301,47 @@ fm_status_t validate(const fm_data_validation& v, const char* api) {
     return rc;
   }
   return check_enum_domain(v.error_style, 2, api, "error_style");
+}
+
+bool num_fmt_id_known(const formulon::io::StylesTable& styles, std::uint16_t id) {
+  if (id < 164U) {
+    const char* builtin = formulon::io::builtin_num_fmt(id);
+    if (builtin != nullptr && builtin[0] != '\0') {
+      return true;
+    }
+  }
+  for (const formulon::io::NumFmtRecord& record : styles.num_fmts) {
+    if (record.id == id) {
+      return true;
+    }
+  }
+  return false;
+}
+
+fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text, const char* api) {
+  if (text == nullptr || text[0] == '\0') {
+    return 0;
+  }
+  std::uint32_t id = 0;
+  for (const char* p = text; *p != '\0'; ++p) {
+    if (*p < '0' || *p > '9') {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               (std::string(api) + ": number_format is not a numFmtId").c_str(),
+                               "number_format=" + std::string(text));
+    }
+    id = id * 10U + static_cast<std::uint32_t>(*p - '0');
+    if (id > std::numeric_limits<std::uint16_t>::max()) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               (std::string(api) + ": number_format is out of the numFmtId range").c_str(),
+                               "number_format=" + std::string(text));
+    }
+  }
+  if (!num_fmt_id_known(wb.styles(), static_cast<std::uint16_t>(id))) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(api) + ": number_format names an unregistered numFmtId").c_str(),
+                             "number_format=" + std::string(text));
+  }
+  return 0;
 }
 
 fm_status_t validate(const fm_pivot_field_spec_t& spec, const char* api) {

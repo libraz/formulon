@@ -38,6 +38,7 @@
 #include "pivot/hierarchy_builder.h"
 #include "pivot/layout_generator.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_index.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -111,19 +112,19 @@ Value aggregate_or_blank(Aggregation aggregation, const std::vector<Value>& valu
 ///
 /// Settled here rather than in the projection for the same reason a blank
 /// axis item is: the answer comes from the bound cache, which `layout` is
-/// never handed. `resolve_pivot_names` has already copied each shared
-/// item's rendering into `PivotItem::name`, so the cache is not re-read —
-/// what the evaluation supplies is the timing, not the data.
+/// never handed. An item built by cache index has no name until a load
+/// resolves it, so labels are read through `pivot_item_label`.
 ///
 /// Excel records the selection two different ways and both are honoured:
 /// a single chosen item as `<pageField item="N">`, and any wider selection
 /// as visibility flags on the field's own items. A field that hides
 /// nothing is unfiltered, which is also what an empty item list means — a
 /// table assembled in memory lists items only once something filters them.
-std::string page_item_label(const PivotField& field, std::optional<std::uint32_t> selected,
-                            const PivotLayoutOptions& options) {
-  const auto label_of = [&options](const PivotItem& item) {
-    return item.name.empty() ? options.blank_item_label : item.name;
+std::string page_item_label(const PivotCache& cache, std::size_t field_index, const PivotField& field,
+                            std::optional<std::uint32_t> selected, const PivotLayoutOptions& options) {
+  const auto label_of = [&](const PivotItem& item) {
+    std::string label = pivot_item_label(cache, field_index, item);
+    return label.empty() ? options.blank_item_label : label;
   };
   if (selected.has_value() && *selected < field.items.size()) {
     return label_of(field.items[*selected]);
@@ -146,7 +147,8 @@ std::string page_item_label(const PivotField& field, std::optional<std::uint32_t
   return options.multiple_items_label;
 }
 
-void resolve_page_selections(const PivotTable& table, const PivotLayoutOptions& options, PivotResult& result) {
+void resolve_page_selections(const PivotTable& table, const PivotCache& cache, const PivotLayoutOptions& options,
+                             PivotResult& result) {
   const std::vector<std::uint32_t> order = table.page_field_order();
   result.page_selections.reserve(order.size());
   for (const std::uint32_t field_index : order) {
@@ -158,8 +160,8 @@ void resolve_page_selections(const PivotTable& table, const PivotLayoutOptions& 
         break;
       }
     }
-    result.page_selections.push_back(
-        PivotPageSelection{field_index, pivot_field_display_name(field), page_item_label(field, selected, options)});
+    result.page_selections.push_back(PivotPageSelection{field_index, pivot_field_display_name(field),
+                                                        page_item_label(cache, field_index, field, selected, options)});
   }
 }
 
@@ -490,7 +492,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   std::vector<HierNode*> col_leaves;
   finalize_hierarchy<RowHierarchyNode>(row_tree, row_levels, 0U, result.rows, row_leaves);
   finalize_hierarchy<ColHierarchyNode>(col_tree, col_levels, 0U, result.cols, col_leaves);
-  resolve_page_selections(table, options, result);
+  resolve_page_selections(table, cache, options, result);
 
   // Degenerate axis: if a side has no field configured, treat it as a
   // single implicit leaf so the values matrix still has a slot per
@@ -917,7 +919,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   }
 
   // 8. Show-values-as transforms.
-  apply_show_values_as_transforms(table, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+  apply_show_values_as_transforms(table, cache, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
 
   return result;
 }

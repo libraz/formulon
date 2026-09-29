@@ -57,6 +57,7 @@ struct PivotRenderedSpan {
 ///         Excel files emit; the reader folds both `axisValues` and
 ///         "no axis attribute + dataField=1" to `PivotAxis::Value`).
 ///       - `name="..."` from `field.custom_name` (omitted when empty).
+///       - `numFmtId="..."` from `field.number_format` (omitted when empty).
 ///       - `subtotalTop="1"` only when `field.subtotal_top` is true.
 ///       - `<items count="M">` only when `field.items` is non-empty.
 ///         Each item emits `<item x="I"/>` where `I` is the document-

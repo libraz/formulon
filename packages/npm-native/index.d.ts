@@ -226,7 +226,7 @@ export interface PivotCell {
   depth: number;
   /** Source field name when known. */
   fieldName: string;
-  /** Excel number-format code when known. */
+  /** The data field's `numFmtId` as a decimal string; empty when unset. */
   numberFormat: string;
 }
 
@@ -348,6 +348,7 @@ export interface PivotFieldSpec {
   /** One of `PivotAxis.*`. */
   axis: number;
   subtotalTop?: boolean;
+  /** `numFmtId` as a decimal string (built-in or from `addNumFmt`). */
   numberFormat?: string;
 }
 
@@ -359,6 +360,7 @@ export interface PivotDataFieldSpec {
   fieldIndex: number;
   /** One of `PivotAggregation.*`. */
   aggregation: number;
+  /** `numFmtId` as a decimal string (built-in or from `addNumFmt`). */
   numberFormat?: string;
   /** One of `PivotShowValuesAs.*`. */
   showAs?: number;
@@ -1632,8 +1634,8 @@ export interface Workbook {
    *  single scalar result, without mutating the workbook. Local and
    *  cross-sheet references, defined names, and `ROW()` / `COLUMN()` resolve
    *  relative to the anchor. An array / spill result is reduced to its
-   *  top-left element (a pragmatic API shape, not Excel implicit
-   *  intersection or spilling; multi-cell results are a Phase 2 follow-up).
+   *  top-left element (not Excel implicit intersection or spilling; use
+   *  `evaluateFormulaArray` for the whole multi-cell result).
    *  Note: a self-reference reads the target cell's cached value rather than
    *  raising `#REF!`, since the ad-hoc formula never joins the dep graph. */
   evaluateFormulaText(sheet: number, row: number, col: number, formula: string): EvalResult;
@@ -1889,10 +1891,6 @@ export interface Workbook {
   pivotFieldSetSort(sheet: number, pivotIdx: number, fieldIdx: number, ascending: boolean, byField: string): Status;
   /** Sets the `subtotal_top` flag on pivot field `fieldIdx`. */
   pivotFieldSetSubtotalTop(sheet: number, pivotIdx: number, fieldIdx: number, top: boolean): Status;
-  /** Appends an aggregation to pivot field `fieldIdx`. */
-  pivotFieldAddAggregation(sheet: number, pivotIdx: number, fieldIdx: number, agg: number): Status;
-  /** Drops every aggregation from pivot field `fieldIdx`. */
-  pivotFieldClearAggregations(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
    *  its label. The item carries no cache binding, so the filter engine
    *  matches source records by comparing their rendered label against
@@ -1934,8 +1932,9 @@ export interface Workbook {
   ): Status;
   /** Removes the date-grouping config from pivot field `fieldIdx`. */
   pivotFieldClearDateGroup(sheet: number, pivotIdx: number, fieldIdx: number): Status;
-  /** Sets the OOXML number-format string on pivot field `fieldIdx`.
-   *  Pass an empty string to clear. */
+  /** Sets the `numFmtId` of pivot field `fieldIdx`, as a decimal string
+   *  naming a built-in id or one returned by `addNumFmt`. Pass an empty
+   *  string to clear; any other unknown id is rejected. */
   pivotFieldSetNumberFormat(sheet: number, pivotIdx: number, fieldIdx: number, utf8: string): Status;
 
   /** Replaces the row-axis field order with `indices`. Each entry must

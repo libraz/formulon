@@ -173,6 +173,15 @@ fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* 
 // whole block when such an attribute holds anything else.
 fm_status_t check_guid(const char* text, const char* api, const char* field);
 
+// Returns whether `id` is a documented built-in number-format id or one
+// registered in `styles.num_fmts`.
+bool num_fmt_id_known(const formulon::io::StylesTable& styles, std::uint16_t id);
+
+// Rejects a `numFmtId` string that is not decimal digits naming an id
+// `num_fmt_id_known` accepts. NULL and the empty string pass: both mean
+// "no number format".
+fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text, const char* api);
+
 // Validates a conditional-formatting rule record: sqref shape and every
 // rectangle in it, plus the `type` / `op` / `time_period` /
 // `icon_set_name` / `data_bar_axis_position` / `fm_cfvo_t::type` domains

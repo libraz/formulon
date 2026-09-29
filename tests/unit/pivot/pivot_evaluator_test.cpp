@@ -2794,6 +2794,71 @@ TEST(PivotEvaluator, HidingPlaceholderSpelledTextKeepsTheBlankItem) {
   EXPECT_DOUBLE_EQ(r.values[blank_leaf][0][0].as_number(), 10.0);
 }
 
+// `build_basic_cache()` with Region shared the way it arrives from a file:
+// records store an index into `shared_items` {North, South}.
+PivotCache build_shared_north_south_cache() {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  PivotCacheField region;
+  region.name = "Region";
+  region.shared_items.push_back(owned_text(cache, "North"));
+  region.shared_items.push_back(owned_text(cache, "South"));
+  cache.mutable_fields().push_back(std::move(region));
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  auto add = [&](std::uint32_t region_index, const char* product, double amount) {
+    PivotCacheRecord rec;
+    rec.cells = {Value::number(region_index), owned_text(cache, product), Value::number(amount)};
+    rec.cell_is_index = {true, false, false};
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add(0U, "Widget", 100.0);
+  add(0U, "Gadget", 50.0);
+  add(1U, "Widget", 200.0);
+  add(1U, "Gadget", 300.0);
+  add(0U, "Widget", 25.0);
+  return cache;
+}
+
+// An item built by cache index carries no name until a load resolves it; the
+// filter reads its label from the binding, so it hides the bound value
+// without `resolve_pivot_names` ever running.
+TEST(PivotEvaluator, UnnamedItemBoundByCacheIndexHidesItsValue) {
+  PivotCache cache = build_shared_north_south_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  PivotItem hidden_south;
+  hidden_south.visible = false;
+  hidden_south.has_cache_index = true;
+  hidden_south.cache_index = 1U;
+  table.mutable_fields()[0].items.push_back(hidden_south);
+  ASSERT_TRUE(table.fields()[0].items[0].name.empty());
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "North");
+  ASSERT_TRUE(r.grand_total.is_number());
+  EXPECT_DOUBLE_EQ(r.grand_total.as_number(), 175.0);
+}
+
+TEST(PivotItemLabel, NameWinsThenBindingThenEmpty) {
+  const PivotCache cache = build_shared_north_south_cache();
+  PivotItem named;
+  named.name = "Renamed";
+  named.cache_index = 1U;
+  EXPECT_EQ(pivot_item_label(cache, 0U, named), "Renamed");
+  PivotItem bound;
+  bound.has_cache_index = true;
+  bound.cache_index = 1U;
+  EXPECT_EQ(pivot_item_label(cache, 0U, bound), "South");
+  PivotItem dangling;
+  dangling.has_cache_index = true;
+  dangling.cache_index = 9U;
+  EXPECT_EQ(pivot_item_label(cache, 0U, dangling), "");
+  EXPECT_EQ(pivot_item_label(cache, 7U, bound), "");
+}
+
 TEST(PivotEvaluator, ManualFilterMatchesNumericDisplayLabel) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
@@ -2927,9 +2992,9 @@ TEST(PivotEvaluator, OneFieldHidesTheBlankAndANamedItemTogether) {
 }
 
 // The blank rule keys off the binding, not off the missing label: an unlabelled
-// hidden item bound to a value that is not blank hides nothing at all. A record
-// carrying that value stays, and so does a blank one.
-TEST(PivotEvaluator, AnUnlabelledHiddenItemBoundToAValueHidesNothing) {
+// hidden item bound to a value that is not blank hides that value, labelled
+// from its binding, and leaves the blank group alone.
+TEST(PivotEvaluator, AnUnlabelledHiddenItemBoundToAValueHidesThatValue) {
   PivotCache cache = build_shared_region_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
@@ -2943,16 +3008,16 @@ TEST(PivotEvaluator, AnUnlabelledHiddenItemBoundToAValueHidesNothing) {
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   const PivotResult& r = r_or.value();
 
-  // All three groups survive: the blank one, the text one spelled like the
-  // placeholder, and North. The first two draw the same label, so they are
-  // counted through the total rather than looked up by it.
-  ASSERT_EQ(r.rows.size(), 3U);
+  // North is gone; the blank group and the text value spelled like the
+  // placeholder both survive. They draw the same label, so they are counted
+  // through the total rather than looked up by it.
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_EQ(row_index(r, "North"), static_cast<std::size_t>(-1));
   double total = 0.0;
   for (std::size_t i = 0; i < r.rows.size(); ++i) {
     total += r.values[i][0][0].as_number();
   }
-  EXPECT_DOUBLE_EQ(total, 100.0 + 10.0 + 7.0);
-  EXPECT_DOUBLE_EQ(r.values[row_index(r, "North")][0][0].as_number(), 100.0);
+  EXPECT_DOUBLE_EQ(total, 10.0 + 7.0);
 }
 
 // A hidden numeric item is matched by the label the grid draws for it, and that
@@ -4123,6 +4188,35 @@ TEST(PivotEvaluator, ShowAsDifferenceFromSpecificItem) {
   EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 30.0);  // C - A = 40 - 10.
 }
 
+TEST(PivotEvaluator, ShowAsDifferenceFromUnnamedItemMatchesItsBoundLabel) {
+  PivotCache cache = build_diff_from_cache();
+  for (const char* label : {"A", "B", "C"}) {
+    cache.mutable_fields()[0].shared_items.push_back(owned_text(cache, label));
+  }
+  PivotTable table = build_diff_from_table();
+  std::vector<PivotItem>& items = table.mutable_fields()[0].items;
+  for (std::uint32_t i = 0; i < items.size(); ++i) {
+    items[i].name.clear();
+    items[i].has_cache_index = true;
+    items[i].cache_index = i;
+  }
+  auto& df = table.mutable_data_fields()[0];
+  df.show_as = ShowValuesAs::DifferenceFrom;
+  df.show_as_base_field = 0U;
+  df.show_as_base_item = 1U;  // -> shared_items[1] = "B"
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.values.size(), 3U);
+  ASSERT_TRUE(r.values[0][0][0].is_number());
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), -15.0);  // A - B = 10 - 25.
+  ASSERT_TRUE(r.values[1][0][0].is_number());
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 0.0);
+  ASSERT_TRUE(r.values[2][0][0].is_number());
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 15.0);  // C - B = 40 - 25.
+}
+
 // 2-level row hierarchy (Region -> Product) with subtotal_top on Region.
 // Records:
 //   N/A = 10, N/B = 20, S/A = 30, S/B = 60.
@@ -4972,6 +5066,25 @@ TEST(PivotPageSelection, SoleVisibleItemNamesItself) {
   // filter path rather than anything the selection label drives.
   ASSERT_TRUE(r_or.value().grand_total.is_number());
   EXPECT_DOUBLE_EQ(r_or.value().grand_total.as_number(), 175.0);
+}
+
+TEST(PivotPageSelection, SoleVisibleUnnamedItemIsLabelledFromItsBinding) {
+  PivotCache cache = build_shared_north_south_cache();
+  PivotTable table = build_page_axis_table();
+  for (std::uint32_t index : {0U, 1U}) {
+    PivotItem item;
+    item.visible = index == 1U;
+    item.has_cache_index = true;
+    item.cache_index = index;
+    table.mutable_fields()[0].items.push_back(item);
+  }
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().page_selections.size(), 1U);
+  EXPECT_EQ(r_or.value().page_selections[0].item_label, "South");
+  ASSERT_TRUE(r_or.value().grand_total.is_number());
+  EXPECT_DOUBLE_EQ(r_or.value().grand_total.as_number(), 500.0);
 }
 
 TEST(PivotPageSelection, SeveralVisibleItemsUseTheMultiplePlaceholder) {

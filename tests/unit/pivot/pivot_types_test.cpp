@@ -77,7 +77,6 @@ TEST(PivotTypes, PivotFieldDefault) {
   EXPECT_TRUE(f.source_name.empty());
   EXPECT_TRUE(f.custom_name.empty());
   EXPECT_EQ(f.axis, PivotAxis::Row);
-  EXPECT_TRUE(f.aggregations.empty());
   EXPECT_TRUE(f.sort.ascending);
   EXPECT_TRUE(f.items.empty());
   // subtotalTop defaults to true in OOXML (subtotals render above the group).

@@ -3211,7 +3211,11 @@ typedef enum {
  *   * `custom_name`   — nullable; pass `NULL` or the empty string for none.
  *   * `axis`          — initial axis for the field.
  *   * `subtotal_top`  — non-zero to render subtotals at the group head.
- *   * `number_format` — nullable; `NULL` means "leave blank".
+ *   * `number_format` — nullable; the field's `numFmtId` as a decimal string,
+ *                       e.g. an id returned by `fm_styles_add_num_fmt` or a
+ *                       built-in id. `NULL` or `""` means none; any other
+ *                       string that is not a built-in or registered id is
+ *                       `kInvalidArgument`.
  */
 typedef struct {
   const char* source_name;
@@ -3229,7 +3233,9 @@ typedef struct {
  *   * `field_index`   — index into `PivotTable::fields()` of the source
  *                       pivot field.
  *   * `aggregation`   — aggregation function applied to the source.
- *   * `number_format` — nullable.
+ *   * `number_format` — nullable; the data field's `numFmtId` as a decimal
+ *                       string, under the same rules as
+ *                       `fm_pivot_field_spec_t::number_format`.
  *   * `show_as`       — derivation mode.
  *   * `show_as_base_field` — `-1` means unset; otherwise an index into
  *                       `PivotTable::fields()`.
@@ -3534,18 +3540,6 @@ FM_API fm_status_t fm_workbook_pivot_field_set_subtotal_top(fm_workbook_t* wb, s
                                                             size_t field_idx, int32_t top);
 
 /**
- * @brief Appends an aggregation to pivot field `field_idx`. Only
- *        meaningful for value-axis fields. `agg` is a raw signed 32-bit
- *        ordinal; unknown values return `kInvalidArgument`.
- */
-FM_API fm_status_t fm_workbook_pivot_field_add_aggregation(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                           size_t field_idx, int32_t agg);
-
-/** @brief Drops every aggregation from pivot field `field_idx`. */
-FM_API fm_status_t fm_workbook_pivot_field_clear_aggregations(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                              size_t field_idx);
-
-/**
  * @brief Appends a manual-filter item to pivot field `field_idx`, addressed
  *        by its label.
  *        `utf8_name` must be non-NULL. `visible` is a 32-bit boolean.
@@ -3616,8 +3610,10 @@ FM_API fm_status_t fm_workbook_pivot_field_clear_date_group(fm_workbook_t* wb, s
                                                             size_t field_idx);
 
 /**
- * @brief Sets the OOXML number-format string on pivot field `field_idx`.
- *        `utf8` must be non-NULL (use the empty string to clear).
+ * @brief Sets the `numFmtId` of pivot field `field_idx`, as a decimal string
+ *        naming a built-in id or one returned by `fm_styles_add_num_fmt`.
+ *        `utf8` must be non-NULL (use the empty string to clear); any other
+ *        string that is not a known id returns `kInvalidArgument`.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                              size_t field_idx, const char* utf8);

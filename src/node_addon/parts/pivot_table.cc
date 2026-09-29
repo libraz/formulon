@@ -1,6 +1,6 @@
 // PivotTable mutation bindings: pivot create/remove, anchor / name /
 // totals, per-field configuration (axis, sort, items, subtotals,
-// aggregations, date grouping, number format), data fields, filters,
+// date grouping, number format), data fields, filters,
 // and the row/column field-order setters.
 
 #include <cstddef>
@@ -221,31 +221,6 @@ Napi::Value Workbook::PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info) {
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   const bool top = ArgBool(info, 3);
   fm_status_t rc = fm_workbook_pivot_field_set_subtotal_top(handle_, sheet, pivot_idx, field_idx, top ? 1 : 0);
-  return MakeStatus(env, rc);
-}
-
-Napi::Value Workbook::PivotFieldAddAggregation(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  const std::int32_t agg = info.Length() > 3 ? info[3].ToNumber().Int32Value() : 0;
-  fm_status_t rc = fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivot_idx, field_idx, agg);
-  return MakeStatus(env, rc);
-}
-
-Napi::Value Workbook::PivotFieldClearAggregations(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  fm_status_t rc = fm_workbook_pivot_field_clear_aggregations(handle_, sheet, pivot_idx, field_idx);
   return MakeStatus(env, rc);
 }
 

@@ -229,6 +229,11 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
     AppendXmlAttrEscaped(out, field.custom_name);
     out.append("\"");
   }
+  if (!field.number_format.empty()) {
+    out.append(" numFmtId=\"");
+    AppendXmlAttrEscaped(out, field.number_format);
+    out.append("\"");
+  }
   // `subtotalTop` defaults to true in OOXML; only emit it when turned OFF
   // so an explicit "subtotals at bottom" choice survives the round trip.
   if (!field.subtotal_top) {

@@ -413,8 +413,6 @@ class JsWorkbook {
   JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool ascending,
                              const std::string& byField);
   JsStatus pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool top);
-  JsStatus pivotFieldAddAggregation(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t agg);
-  JsStatus pivotFieldClearAggregations(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx);
   JsStatus pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
                              bool visible);
   /// Appends a manual-filter item addressed by its position in the bound

@@ -206,8 +206,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotFieldSetAxis(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetSort(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldAddAggregation(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldClearAggregations(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAddItem(const Napi::CallbackInfo& info);
   /// Appends a manual-filter item addressed by its position in the bound
   /// cache field's shared items. The only form that can express the blank

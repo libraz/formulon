@@ -26,6 +26,7 @@
 
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::num_fmt_id_known;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -565,21 +566,7 @@ fm_status_t validate_xf_references(const formulon::io::StylesTable& styles, cons
     return reject("border_index out of range", "border_index=" + std::to_string(record.border_index) +
                                                    " borders_count=" + std::to_string(styles.borders.size()));
   }
-  // num_fmt_id must be a documented built-in or a registered custom id.
-  bool num_fmt_ok = false;
-  if (record.num_fmt_id < 164U) {
-    const char* s = formulon::io::builtin_num_fmt(record.num_fmt_id);
-    num_fmt_ok = (s != nullptr && s[0] != '\0');
-  }
-  if (!num_fmt_ok) {
-    for (const formulon::io::NumFmtRecord& n : styles.num_fmts) {
-      if (n.id == record.num_fmt_id) {
-        num_fmt_ok = true;
-        break;
-      }
-    }
-  }
-  if (!num_fmt_ok) {
+  if (!num_fmt_id_known(styles, record.num_fmt_id)) {
     return reject("num_fmt_id not registered", "num_fmt_id=" + std::to_string(record.num_fmt_id));
   }
   return 0;

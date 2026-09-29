@@ -251,6 +251,9 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     if (pugi::xml_attribute name_attr = f.attribute("name"); name_attr) {
       field.custom_name = name_attr.value();
     }
+    if (pugi::xml_attribute nf = f.attribute("numFmtId"); nf) {
+      field.number_format = nf.value();
+    }
     // `subtotalTop` defaults to true in OOXML (subtotals render above the
     // group). Only an explicit "0" moves them to the bottom.
     field.subtotal_top = attr_bool(f, "subtotalTop", true);
@@ -291,9 +294,9 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     // `showAll`, `includeNewItemsInFilter`, ...) for verbatim round-trip.
     capture_unknown_attrs(
         f,
-        {"axis", "dataField", "name", "subtotalTop", "defaultSubtotal", "sumSubtotal", "countASubtotal", "avgSubtotal",
-         "maxSubtotal", "minSubtotal", "productSubtotal", "countSubtotal", "stdDevSubtotal", "stdDevPSubtotal",
-         "varSubtotal", "varPSubtotal", "sortType"},
+        {"axis", "dataField", "name", "numFmtId", "subtotalTop", "defaultSubtotal", "sumSubtotal", "countASubtotal",
+         "avgSubtotal", "maxSubtotal", "minSubtotal", "productSubtotal", "countSubtotal", "stdDevSubtotal",
+         "stdDevPSubtotal", "varSubtotal", "varPSubtotal", "sortType"},
         field.passthrough_attrs);
     out->mutable_fields().push_back(std::move(field));
   }

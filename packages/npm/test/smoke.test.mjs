@@ -1191,10 +1191,7 @@ function packagePart(bytes, name) {
 }
 
 // [method, { setup, act, after, expect }]. `act` performs the one call
-// under test; `expect` reads the result back. Three mutators write
-// configuration no read surface projects -- the field-level aggregation
-// list and number format reach neither the layout nor the saved file -- so
-// their rows prove the arguments cross by what the C ABI rejects instead.
+// under test; `expect` reads the result back.
 const PIVOT_MUTATORS = [
   [
     'pivotCacheCreate',
@@ -1492,27 +1489,6 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'pivotFieldAddAggregation',
-    {
-      act: (b) => b.wb.pivotFieldAddAggregation(0, b.pivot, b.amount, 3),
-      expect: (b) => {
-        assert.equal(b.wb.pivotFieldAddAggregation(0, b.pivot, b.amount, 99).status, 2);
-        assert.equal(b.wb.pivotFieldAddAggregation(0, b.pivot, 99, 3).status, 2);
-        assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
-      },
-    },
-  ],
-  [
-    'pivotFieldClearAggregations',
-    {
-      act: (b) => b.wb.pivotFieldClearAggregations(0, b.pivot, b.amount),
-      expect: (b) => {
-        assert.equal(b.wb.pivotFieldClearAggregations(0, b.pivot, 99).status, 2);
-        assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
-      },
-    },
-  ],
-  [
     'pivotFieldAddItem',
     {
       act: (b) => b.wb.pivotFieldAddItem(0, b.pivot, b.region, 'East', false),
@@ -1598,9 +1574,14 @@ const PIVOT_MUTATORS = [
   [
     'pivotFieldSetNumberFormat',
     {
-      act: (b) => b.wb.pivotFieldSetNumberFormat(0, b.pivot, b.amount, '0.00'),
+      act: (b) => b.wb.pivotFieldSetNumberFormat(0, b.pivot, b.amount, '4'),
+      // A field's numFmtId is only observable in the part the writer emits.
       expect: (b) => {
-        assert.equal(b.wb.pivotFieldSetNumberFormat(0, b.pivot, 99, '0.00').status, 2);
+        assert.equal(b.wb.pivotFieldSetNumberFormat(0, b.pivot, 99, '4').status, 2);
+        assert.equal(b.wb.pivotFieldSetNumberFormat(0, b.pivot, b.amount, '0.00').status, 2);
+        const saved = b.wb.save();
+        assert.ok(saved.status.ok, JSON.stringify(saved.status));
+        assert.match(packagePart(saved.bytes, 'xl/pivotTables/pivotTable1.xml'), /<pivotField [^>]*numFmtId="4"/);
         assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
       },
     },
@@ -1656,14 +1637,14 @@ const PIVOT_MUTATORS = [
           name: 'Count of Amount',
           fieldIndex: b.amount,
           aggregation: 1,
-          numberFormat: '0.0',
+          numberFormat: '2',
         }),
       expect: (b) => {
         assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Count of Amount', 'East|2', 'West|2', '総計|4']);
         const counts = b.wb.pivotLayout(0, b.pivot).cells.filter((c) => c.value.kind === 1);
         assert.deepEqual(
           counts.map((c) => c.numberFormat),
-          ['0.0', '0.0', '0.0'],
+          ['2', '2', '2'],
         );
       },
     },

@@ -43,6 +43,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 
@@ -52,8 +53,9 @@ namespace formulon::pivot {
 /// `result`. `row_subtotal_leaf_sets` / `col_subtotal_leaf_sets` are
 /// the per-subtotal leaf-set vectors the evaluator built when emitting
 /// `result.row_subtotals` / `result.col_subtotals`; PercentOfParent*
-/// uses them to locate the right subtotal for each leaf.
-void apply_show_values_as_transforms(const PivotTable& table, PivotResult& result,
+/// uses them to locate the right subtotal for each leaf. `cache` is the
+/// table's bound cache, which labels a specific `baseItem`.
+void apply_show_values_as_transforms(const PivotTable& table, const PivotCache& cache, PivotResult& result,
                                      const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
                                      const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);
 

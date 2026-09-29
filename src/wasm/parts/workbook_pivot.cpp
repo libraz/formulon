@@ -458,23 +458,6 @@ JsStatus JsWorkbook::pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIdx,
   return status_from_rc(rc);
 }
 
-JsStatus JsWorkbook::pivotFieldAddAggregation(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t agg) {
-  if (handle_ == nullptr) {
-    return error_status(7000);
-  }
-  fm_status_t rc =
-      fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivotIdx, fieldIdx, static_cast<std::int32_t>(agg));
-  return status_from_rc(rc);
-}
-
-JsStatus JsWorkbook::pivotFieldClearAggregations(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
-  if (handle_ == nullptr) {
-    return error_status(7000);
-  }
-  fm_status_t rc = fm_workbook_pivot_field_clear_aggregations(handle_, sheet, pivotIdx, fieldIdx);
-  return status_from_rc(rc);
-}
-
 JsStatus JsWorkbook::pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
                                        bool visible) {
   if (handle_ == nullptr) {

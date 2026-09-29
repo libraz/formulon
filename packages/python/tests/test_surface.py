@@ -1310,9 +1310,6 @@ def _package_part(data: bytes, name: str) -> str:
 class PivotMutatorTableTests(unittest.TestCase):
     # name -> (setup, act, after, expect). `act` is the one call under test
     # and returns its result; `expect(test, fixture, result)` reads it back.
-    # The field-level aggregation list and number format reach neither the
-    # layout nor the saved file, so their rows prove the arguments cross by
-    # what the C ABI rejects instead.
     def _rows(self) -> Dict[str, Tuple[Any, Any, Any, Any]]:
         eq = self.assertEqual
 
@@ -1387,15 +1384,6 @@ class PivotMutatorTableTests(unittest.TestCase):
             eq(f.wb.pivot_field_count(0, f.pivot), 0)
             eq(f.grid(), _BASE_GRID)
 
-        def add_aggregation(t: Any, f: _PivotFixture, r: None) -> None:
-            rejects(lambda: f.wb.pivot_field_add_aggregation(0, f.pivot, f.amount, 99))
-            rejects(lambda: f.wb.pivot_field_add_aggregation(0, f.pivot, 99, PivotAggregation.MAX))
-            eq(f.grid(), _BASE_GRID)
-
-        def clear_aggregations(t: Any, f: _PivotFixture, r: None) -> None:
-            rejects(lambda: f.wb.pivot_field_clear_aggregations(0, f.pivot, 99))
-            eq(f.grid(), _BASE_GRID)
-
         def add_item_at_setup(f: _PivotFixture) -> None:
             # Only the index-addressed form can name the blank item.
             f.wb.pivot_cache_field_add_shared_item_blank(f.cache, 0)
@@ -1410,7 +1398,11 @@ class PivotMutatorTableTests(unittest.TestCase):
             f.wb.pivot_field_set_date_group(0, f.pivot, f.date, PivotDateGrouping.YEAR, PivotCalendar.GREGORIAN)
 
         def number_format(t: Any, f: _PivotFixture, r: None) -> None:
-            rejects(lambda: f.wb.pivot_field_set_number_format(0, f.pivot, 99, "0.00"))
+            rejects(lambda: f.wb.pivot_field_set_number_format(0, f.pivot, 99, "4"))
+            rejects(lambda: f.wb.pivot_field_set_number_format(0, f.pivot, f.amount, "0.00"))
+            # A field's numFmtId is only observable in the part the writer emits.
+            part = _package_part(f.wb.save(), "xl/pivotTables/pivotTable1.xml")
+            self.assertRegex(part, r'<pivotField [^>]*numFmtId="4"')
             eq(f.grid(), _BASE_GRID)
 
         def data_field_add(t: Any, f: _PivotFixture, r: int) -> None:
@@ -1423,7 +1415,7 @@ class PivotMutatorTableTests(unittest.TestCase):
         def data_field_set(t: Any, f: _PivotFixture, r: None) -> None:
             eq(f.grid(), ["行ラベル|Count of Amount", "East|2", "West|2", "総計|4"])
             formats = [c.number_format for c in f.wb.pivot_layout(0, f.pivot).cells if c.value.kind == ValueKind.NUMBER]
-            eq(formats, ["0.0", "0.0", "0.0"])
+            eq(formats, ["2", "2", "2"])
 
         def filter_remove_setup(f: _PivotFixture) -> None:
             # Each filter alone keeps a different region, so removing the
@@ -1583,18 +1575,6 @@ class PivotMutatorTableTests(unittest.TestCase):
                     ]
                 ),
             ),
-            "pivot_field_add_aggregation": (
-                None,
-                lambda f: f.wb.pivot_field_add_aggregation(0, f.pivot, f.amount, W.MAX),
-                None,
-                add_aggregation,
-            ),
-            "pivot_field_clear_aggregations": (
-                None,
-                lambda f: f.wb.pivot_field_clear_aggregations(0, f.pivot, f.amount),
-                None,
-                clear_aggregations,
-            ),
             "pivot_field_add_item": (
                 None,
                 lambda f: f.wb.pivot_field_add_item(0, f.pivot, f.region, "East", False),
@@ -1658,7 +1638,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             ),
             "pivot_field_set_number_format": (
                 None,
-                lambda f: f.wb.pivot_field_set_number_format(0, f.pivot, f.amount, "0.00"),
+                lambda f: f.wb.pivot_field_set_number_format(0, f.pivot, f.amount, "4"),
                 None,
                 number_format,
             ),
@@ -1703,7 +1683,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                     f.pivot,
                     0,
                     PivotDataFieldSpec(
-                        name="Count of Amount", field_index=f.amount, aggregation=W.COUNT, number_format="0.0"
+                        name="Count of Amount", field_index=f.amount, aggregation=W.COUNT, number_format="2"
                     ),
                 ),
                 None,

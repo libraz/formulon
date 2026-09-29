@@ -28,3 +28,6 @@
 # current baseline, and empties again when the baseline is rebased onto the
 # release that shipped them -- at that point the new surface *is* what a
 # consumer compiled against, so there is nothing left to excuse.
+
+removed fm_workbook_pivot_field_add_aggregation :: wrote a field-level aggregation list nothing read; value aggregation is the data field's, subtotals are fm_workbook_pivot_field_add_subtotal_fn
+removed fm_workbook_pivot_field_clear_aggregations :: counterpart of the removed fm_workbook_pivot_field_add_aggregation

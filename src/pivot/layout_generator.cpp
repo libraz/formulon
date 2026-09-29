@@ -5,10 +5,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "pivot/aggregator.h"
+#include "pivot/pivot_index.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -17,7 +19,7 @@
 
 namespace formulon::pivot {
 
-void apply_show_values_as_transforms(const PivotTable& table, PivotResult& result,
+void apply_show_values_as_transforms(const PivotTable& table, const PivotCache& cache, PivotResult& result,
                                      const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
                                      const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets) {
   const std::size_t data_field_count = table.data_fields().size();
@@ -601,7 +603,7 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
         // Build base_pos[p] -> optional reference position along the
         // base axis. Sentinels resolve to (p-1) / (p+1); a specific
         // item index resolves to the leaf whose label matches the
-        // base field's `items[index].name`.
+        // base field item's `pivot_item_label`.
         std::vector<std::optional<std::size_t>> base_pos(axis_n);
         const std::uint32_t base_item = df.show_as_base_item.value_or(kShowAsBasePrev);
         if (base_item == kShowAsBasePrev) {
@@ -623,15 +625,15 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
             const std::uint32_t bf = *df.show_as_base_field;
             if (bf < table.fields().size()) {
               const auto& items = table.fields()[bf].items;
-              const std::string* target = nullptr;
+              std::optional<std::string> target;
               for (std::size_t j = 0; j < items.size(); ++j) {
                 const bool hit = items[j].has_cache_index ? (items[j].cache_index == base_item) : (j == base_item);
                 if (hit) {
-                  target = &items[j].name;
+                  target = pivot_item_label(cache, bf, items[j]);
                   break;
                 }
               }
-              if (target != nullptr) {
+              if (target.has_value()) {
                 if (base_axis == BaseAxis::Row) {
                   for (std::size_t p = 0; p < result.rows.size() && p < axis_n; ++p) {
                     if (result.rows[p].label == *target) {

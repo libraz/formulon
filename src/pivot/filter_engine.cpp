@@ -16,6 +16,7 @@
 #include "eval/date_time.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_index.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -234,22 +235,6 @@ bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view labe
   return true;
 }
 
-// Resolves the cache value a manual-filter item binds to, using the same
-// index `resolve_pivot_names` reads when it derives `PivotItem::name`, so the
-// two cannot disagree about which shared item an entry denotes. Returns
-// `nullptr` when the cache does not cover the field or the index falls outside
-// `shared_items`: such an item has no trustworthy binding.
-const Value* item_cache_value(const PivotCache& cache, std::size_t field_index, const PivotItem& item) {
-  if (field_index >= cache.fields().size()) {
-    return nullptr;
-  }
-  const std::vector<Value>& shared = cache.fields()[field_index].shared_items;
-  if (item.cache_index >= shared.size()) {
-    return nullptr;
-  }
-  return &shared[item.cache_index];
-}
-
 // Drops the entries of `items` whose index is marked false in `keep`,
 // preserving the relative order of the survivors. An index past the end of
 // `keep` is kept: the mask only describes the leaves the filter scored.
@@ -312,19 +297,23 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
       }
       if (item.name.empty()) {
         // The one axis item with no label of its own is the blank: it binds to
-        // a cache value that renders to nothing, so `resolve_pivot_names`
-        // leaves the name empty. Identify it by that binding rather than by the
-        // label it is drawn with — the placeholder is an ordinary string a
-        // genuine text value is free to spell identically, and matching on it
-        // would hide that value too. An item whose binding does not resolve is
-        // merely malformed and must not filter anything.
-        const Value* bound = item_cache_value(cache, fi, item);
+        // a cache value that renders to nothing. Identify it by that binding
+        // rather than by the label it is drawn with — the placeholder is an
+        // ordinary string a genuine text value is free to spell identically,
+        // and matching on it would hide that value too.
+        const Value* bound = pivot_item_cache_value(cache, fi, item);
         if (bound != nullptr && bound->is_blank()) {
           hidden.hides_blank = true;
+          continue;
         }
+      }
+      // An item whose binding does not resolve has no label and is merely
+      // malformed; it must not filter anything.
+      std::string label = pivot_item_label(cache, fi, item);
+      if (label.empty()) {
         continue;
       }
-      hidden.labels.insert(std::string_view{item.name});
+      hidden.labels.insert(std::string_view{hidden_labels_.emplace_back(std::move(label))});
     }
     if (hidden.labels.empty() && !hidden.hides_blank) {
       continue;

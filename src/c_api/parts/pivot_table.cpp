@@ -23,6 +23,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_num_fmt_id_text;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
@@ -281,6 +282,9 @@ extern "C" fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, std::size_
   if (auto rc = validate(*spec, "fm_workbook_pivot_field_add"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format, "fm_workbook_pivot_field_add"); rc != 0) {
+    return rc;
+  }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_field_add");
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
@@ -395,43 +399,6 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_subtotal_top(fm_workbook_t* w
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_field_add_aggregation(fm_workbook_t* wb, std::size_t sheet_index,
-                                                               std::size_t pivot_index, std::size_t field_idx,
-                                                               std::int32_t agg) {
-  clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_add_aggregation: wb is NULL");
-  }
-  fm_status_t enum_status = check_enum_domain(agg, 10, "fm_workbook_pivot_field_add_aggregation", "aggregation");
-  if (enum_status != 0) {
-    return enum_status;
-  }
-  formulon::pivot::PivotTable* table = nullptr;
-  auto* field = lookup_pivot_field_mut(wb, sheet_index, pivot_index, field_idx,
-                                       "fm_workbook_pivot_field_add_aggregation", &table);
-  if (field == nullptr) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  }
-  field->aggregations.push_back(pivot_agg_from_fm(static_cast<fm_pivot_aggregation_t>(agg)));
-  invalidate_pivot_result(*table);
-  return 0;
-}
-
-extern "C" fm_status_t fm_workbook_pivot_field_clear_aggregations(fm_workbook_t* wb, std::size_t sheet_index,
-                                                                  std::size_t pivot_index, std::size_t field_idx) {
-  clear_last_error();
-  formulon::pivot::PivotTable* table = nullptr;
-  auto* field = lookup_pivot_field_mut(wb, sheet_index, pivot_index, field_idx,
-                                       "fm_workbook_pivot_field_clear_aggregations", &table);
-  if (field == nullptr) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  }
-  field->aggregations.clear();
-  invalidate_pivot_result(*table);
-  return 0;
-}
-
 extern "C" fm_status_t fm_workbook_pivot_field_add_item(fm_workbook_t* wb, std::size_t sheet_index,
                                                         std::size_t pivot_index, std::size_t field_idx,
                                                         const char* utf8_name, std::int32_t visible) {
@@ -464,9 +431,9 @@ extern "C" fm_status_t fm_workbook_pivot_field_add_item_at(fm_workbook_t* wb, st
   if (field == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  // The label is left empty so `resolve_pivot_names` fills it from the bound
-  // shared item. A binding that resolves to a blank value keeps it empty,
-  // which is what makes this the constructor for the blank item.
+  // The label is left empty: evaluation derives it from the bound shared item
+  // (`pivot_item_label`). A binding that resolves to a blank value has no
+  // label, which is what makes this the constructor for the blank item.
   formulon::pivot::PivotItem item;
   item.visible = visible != 0;
   item.has_cache_index = true;
@@ -613,6 +580,9 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* 
   if (field == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
+  if (auto rc = check_num_fmt_id_text(wb->workbook(), utf8, "fm_workbook_pivot_field_set_number_format"); rc != 0) {
+    return rc;
+  }
   field->number_format = utf8;
   invalidate_pivot_result(*table);
   return 0;
@@ -691,8 +661,8 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_count(const fm_workbook_t* w
 namespace {
 
 // Materialises a `fm_pivot_data_field_spec_t` into a `PivotDataField`.
-// The spec is already validated by `validate(*spec, api)` at the entry
-// point, so this only copies.
+// The spec is already validated by `validate(*spec, api)` and
+// `check_num_fmt_id_text` at the entry point, so this only copies.
 void fill_data_field(const fm_pivot_data_field_spec_t& spec, formulon::pivot::PivotDataField* out) {
   out->name = spec.name;
   out->field_index = spec.field_index;
@@ -722,6 +692,10 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, std::
                              "fm_workbook_pivot_data_field_add: NULL argument");
   }
   if (auto rc = validate(*spec, "fm_workbook_pivot_data_field_add"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format, "fm_workbook_pivot_data_field_add");
+      rc != 0) {
     return rc;
   }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_data_field_add");
@@ -761,6 +735,10 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, std::
                              "fm_workbook_pivot_data_field_set: NULL argument");
   }
   if (auto rc = validate(*spec, "fm_workbook_pivot_data_field_set"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format, "fm_workbook_pivot_data_field_set");
+      rc != 0) {
     return rc;
   }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_data_field_set");

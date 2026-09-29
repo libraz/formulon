@@ -18,7 +18,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <unordered_set>
 #include <vector>
@@ -77,12 +79,16 @@ DateWindow resolve_relative_period(RelativePeriod period, const eval::date_time:
 /// Built once, a record costs one hash lookup per field that hides something,
 /// and renders its label at most once per such field.
 ///
-/// Borrows `table` and `cache`: neither may be destroyed, and `table` may not
-/// be mutated, while the filter is alive — the hidden-label set holds views
-/// into `PivotItem::name`.
+/// Borrows `table` and `cache`: neither may be destroyed while the filter is
+/// alive. The hidden-label set views labels the filter owns, so it is neither
+/// copyable nor movable.
 class PreparedRecordFilter {
  public:
   PreparedRecordFilter(const PivotTable& table, const PivotCache& cache, const PivotFilterEnv& env);
+  PreparedRecordFilter(const PreparedRecordFilter&) = delete;
+  PreparedRecordFilter& operator=(const PreparedRecordFilter&) = delete;
+  PreparedRecordFilter(PreparedRecordFilter&&) = delete;
+  PreparedRecordFilter& operator=(PreparedRecordFilter&&) = delete;
 
   /// True iff `record` survives the manual `items[]` filter on every field
   /// that hides something, AND the axis-level label / date filters in
@@ -91,13 +97,14 @@ class PreparedRecordFilter {
   /// authors the list for any field it places on an axis, hidden items or
   /// not).
   ///
-  /// A hidden item normally matches records by its label. The blank item is
-  /// the exception: it has no label of its own, so it is matched by the cache
-  /// value it binds to (`shared_items[cache_index]`, the same binding
-  /// `resolve_pivot_names` reads) being blank. Identifying it by the
-  /// placeholder the grid draws instead would also hide any genuine text value
-  /// spelled the same way. An item that is unlabelled *and* binds to nothing
-  /// resolvable is malformed and filters nothing.
+  /// A hidden item normally matches records by its label (`pivot_item_label`,
+  /// so an item built by cache index matches its bound value's rendering).
+  /// The blank item is the exception: it has no label of its own, so it is
+  /// matched by the cache value it binds to (`pivot_item_cache_value`) being
+  /// blank. Identifying it by the placeholder the grid draws instead would
+  /// also hide any genuine text value spelled the same way. An item that is
+  /// unlabelled *and* binds to nothing resolvable is malformed and filters
+  /// nothing.
   ///
   /// An axis filter names its field under the shared resolution rule
   /// (`resolve_field_by_any_name`); a name that resolves to nothing filters
@@ -146,6 +153,9 @@ class PreparedRecordFilter {
   /// record's month back out of its serial at match time rather than
   /// resolving to serials up front the way a window does.
   bool date1904_ = false;
+  /// Owns every hidden label `HiddenItems::labels` views. A deque, so a
+  /// later label never relocates an earlier one.
+  std::deque<std::string> hidden_labels_;
   std::vector<HiddenItems> hidden_items_;
   std::vector<ResolvedFilter> label_filters_;
   std::vector<ResolvedPeriod> period_windows_;

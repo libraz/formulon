@@ -33,6 +33,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raised `FormulonError` for these cases and is unchanged.
 - `getValue` / `get_value` rejects a row or column outside the sheet grid
   with `kInvalidArgument` instead of reading it as a blank cell.
+- **Breaking (C ABI and every binding):** `fm_workbook_pivot_field_add_aggregation`
+  and `fm_workbook_pivot_field_clear_aggregations` are removed, with
+  `pivotFieldAddAggregation` / `pivotFieldClearAggregations` (npm and
+  native Node) and `pivot_field_add_aggregation` /
+  `pivot_field_clear_aggregations` (Python). They wrote a field-level list
+  that neither evaluation nor the saved file ever read, and Excel has no
+  such concept: a value's aggregation belongs to its data field, and a
+  field's subtotal functions are set with `pivotFieldAddSubtotalFn`.
+- **Breaking (C ABI and every binding):** a pivot field's and a pivot data
+  field's `number_format` is a `numFmtId` as a decimal string -- a
+  built-in id or one returned by `addNumFmt` / `add_num_fmt` -- and any
+  other non-empty string is rejected with `kInvalidArgument`. A pivot
+  field's id now reaches the saved file as `<pivotField numFmtId>` and is
+  read back from it; it was previously accepted and silently dropped.
 
 ### Fixed
 

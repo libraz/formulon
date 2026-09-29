@@ -1,12 +1,13 @@
 //
-// Implementation of `find_pivot_at_anchor`. See pivot_index.h for the
-// public contract.
+// Implementation of the workbook-level pivot lookups and item-label
+// resolution. See pivot_index.h for the public contract.
 
 #include "pivot/pivot_index.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -15,6 +16,7 @@
 #include "pivot/pivot_types.h"
 #include "pivot/value_order.h"
 #include "sheet.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -39,6 +41,25 @@ const PivotTable* find_pivot_at_anchor(const Workbook& wb, std::string_view shee
   return nullptr;
 }
 
+const Value* pivot_item_cache_value(const PivotCache& cache, std::size_t field_index, const PivotItem& item) {
+  if (field_index >= cache.fields().size()) {
+    return nullptr;
+  }
+  const std::vector<Value>& shared = cache.fields()[field_index].shared_items;
+  if (item.cache_index >= shared.size()) {
+    return nullptr;
+  }
+  return &shared[item.cache_index];
+}
+
+std::string pivot_item_label(const PivotCache& cache, std::size_t field_index, const PivotItem& item) {
+  if (!item.name.empty()) {
+    return item.name;
+  }
+  const Value* bound = pivot_item_cache_value(cache, field_index, item);
+  return bound != nullptr ? display_string(*bound) : std::string();
+}
+
 void resolve_pivot_names(PivotTable& table, const PivotCache& cache) {
   const std::vector<PivotCacheField>& cache_fields = cache.fields();
   std::vector<PivotField>& fields = table.mutable_fields();
@@ -47,16 +68,12 @@ void resolve_pivot_names(PivotTable& table, const PivotCache& cache) {
       break;
     }
     PivotField& field = fields[fi];
-    const PivotCacheField& cache_field = cache_fields[fi];
     if (field.source_name.empty()) {
-      field.source_name = cache_field.name;
+      field.source_name = cache_fields[fi].name;
     }
     for (PivotItem& item : field.items) {
-      if (!item.name.empty()) {
-        continue;
-      }
-      if (item.cache_index < cache_field.shared_items.size()) {
-        item.name = display_string(cache_field.shared_items[item.cache_index]);
+      if (item.name.empty()) {
+        item.name = pivot_item_label(cache, fi, item);
       }
     }
   }

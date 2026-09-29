@@ -464,14 +464,10 @@ struct PivotDataField {
 };
 
 /// Field-level configuration as authored in the OOXML pivot definition.
-///
-/// `aggregations` is non-empty only for fields placed on
-/// `PivotAxis::Value`; for other axes it is intentionally empty.
 struct PivotField {
   std::string source_name;
   std::string custom_name;
   PivotAxis axis = PivotAxis::Row;
-  std::vector<Aggregation> aggregations;
   SortSpec sort;
   std::vector<PivotItem> items;
   /// Position of the subtotal row relative to its group: true = above
@@ -491,6 +487,7 @@ struct PivotField {
   /// any entries in `subtotal_fns` then describe the explicit custom set.
   bool default_subtotal = true;
 
+  /// `<pivotField numFmtId>` as its decimal string; empty when absent.
   std::string number_format;
   std::optional<PivotDateGroup> date_group;
 

@@ -11,6 +11,7 @@
 // must not collapse to an `<x v="100"/>` index), pivotField item `x=`
 // ordering + hidden `h="1"`, and the subtotalTop / defaultSubtotal tri-state.
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -172,6 +173,38 @@ TEST(PivotSymmetry, TableDefinitionAttributesItemsAndTriStateSurvive) {
   // rowFields / dataFields references.
   EXPECT_TRUE(test::attributes_preserved(before, after, "//rowFields/field[1]", {"x"}));
   EXPECT_TRUE(test::attributes_preserved(before, after, "//dataField[1]", {"name", "fld"}));
+}
+
+// `<pivotField numFmtId>` is modelled, so it must reach `number_format` and
+// not also the passthrough bin, or the writer would emit it twice.
+TEST(PivotSymmetry, PivotFieldNumFmtIdIsModelledAndEmittedOnce) {
+  const std::string before_str = std::string("<?xml version=\"1.0\"?><pivotTableDefinition") + kNs +
+                                 " name=\"P\" cacheId=\"0\">"
+                                 "<location ref=\"A1:B3\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>"
+                                 "<pivotFields count=\"2\"><pivotField axis=\"axisRow\" showAll=\"0\"/>"
+                                 "<pivotField dataField=\"1\" numFmtId=\"4\" showAll=\"0\"/></pivotFields>"
+                                 "<rowFields count=\"1\"><field x=\"0\"/></rowFields>"
+                                 "<dataFields count=\"1\"><dataField name=\"Sum of Amount\" fld=\"1\"/></dataFields>"
+                                 "</pivotTableDefinition>";
+  auto table = io::read_pivot_table_definition(Bytes(before_str));
+  ASSERT_TRUE(static_cast<bool>(table)) << "read failed: " << table.error().message;
+  const pivot::PivotField& amount = table.value().fields()[1];
+  EXPECT_EQ(amount.number_format, "4");
+  for (const auto& [name, value] : amount.passthrough_attrs) {
+    EXPECT_NE(name, "numFmtId");
+  }
+  EXPECT_TRUE(table.value().fields()[0].number_format.empty());
+
+  const std::string after_str = io::write_pivot_table_definition(table.value());
+  const std::string attr = "numFmtId=\"4\"";
+  const std::size_t first = after_str.find(attr);
+  ASSERT_NE(first, std::string::npos) << after_str;
+  EXPECT_EQ(after_str.find(attr, first + 1U), std::string::npos) << after_str;
+  pugi::xml_document before;
+  pugi::xml_document after;
+  ASSERT_TRUE(test::parse_xml(before_str, &before));
+  ASSERT_TRUE(test::parse_xml(after_str, &after));
+  EXPECT_TRUE(test::attributes_preserved(before, after, "(//pivotField)[2]", {"dataField", "numFmtId", "showAll"}));
 }
 
 }  // namespace

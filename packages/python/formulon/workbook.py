@@ -5484,32 +5484,6 @@ class Workbook:
             "fm_workbook_pivot_field_set_subtotal_top",
         )
 
-    def pivot_field_add_aggregation(
-        self, sheet: int, pivot_index: int, field_idx: int, agg: "PivotAggregation | int"
-    ) -> None:
-        """Append an aggregation to pivot field ``field_idx``."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_pivot_field_add_aggregation(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_idx, "field_idx"),
-                _sint(agg, "agg"),
-            ),
-            "fm_workbook_pivot_field_add_aggregation",
-        )
-
-    def pivot_field_clear_aggregations(self, sheet: int, pivot_index: int, field_idx: int) -> None:
-        """Drop every aggregation from pivot field ``field_idx``."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_pivot_field_clear_aggregations(
-                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_idx, "field_idx")
-            ),
-            "fm_workbook_pivot_field_clear_aggregations",
-        )
-
     def pivot_field_add_item(self, sheet: int, pivot_index: int, field_idx: int, name: str, visible: bool) -> None:
         """Append a manual-filter item addressed by its label.
 
@@ -5653,7 +5627,11 @@ class Workbook:
         )
 
     def pivot_field_set_number_format(self, sheet: int, pivot_index: int, field_idx: int, fmt: str) -> None:
-        """Set the OOXML number-format string on pivot field ``field_idx``."""
+        """Set the ``numFmtId`` of pivot field ``field_idx``.
+
+        ``fmt`` is a decimal id string naming a built-in format or one returned
+        by :meth:`add_num_fmt`; the empty string clears it.
+        """
         h = self._require()
         fmt_ptr, _ = LIB.alloc_utf8(fmt)
         try:

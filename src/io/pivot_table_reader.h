@@ -42,6 +42,7 @@ namespace formulon::io {
 ///       - `name` attribute -> custom_name (Excel uses this when
 ///         the user has renamed the field; falls back to the cache
 ///         field name when absent — the caller resolves that).
+///       - `numFmtId` -> number_format, kept as the decimal id string.
 ///       - `subtotalTop` "1" / "0" -> subtotal_top.
 ///       - `<items>` walked in document order. `<item t="default">` /
 ///         `<item t="grand">` are skipped (subtotal/grand-total
