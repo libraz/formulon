@@ -24,12 +24,8 @@
 // is correct precisely because the filtering happened upstream.
 //
 // The lazy entry precedes the eager one in `dispatch_call`, so the tree
-// walker always takes the filtered path. The eager registration at the
-// bottom stays for the bytecode VM, which has no call AST and so reaches
-// this impl through the registry with unfiltered cells. That path cannot
-// honour row visibility — the same IR limitation already documented for the
-// range-aware aggregators — and it is diagnostic only: the VM runs behind
-// `FORMULON_VM_PARITY_CHECK`, never in production recalc.
+// walker always takes the filtered path; the eager registration at the
+// bottom supplies the registry entry the function catalog reads.
 //
 // SUBTOTAL is registered with `accepts_ranges = true` and an explicit opt-out
 // of the dispatcher's `range_filter_numeric_only` flag: code 3 (COUNTA) needs

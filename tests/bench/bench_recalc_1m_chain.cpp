@@ -45,7 +45,7 @@ namespace {
 // Debug build, where stack frames are several times larger than Release.
 //
 // Until both are addressed (iterative Tarjan, batched dep-graph updates
-// in `set_cell_formula`, bytecode VM dispatch on hot paths), we ship a
+// in `set_cell_formula`), we ship a
 // 1,000-cell baseline. The default lands well below the Debug-mode
 // stack-overflow threshold and gives a reproducible measurement that
 // the regression gate can anchor against on either build configuration.

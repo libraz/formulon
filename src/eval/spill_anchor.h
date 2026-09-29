@@ -1,11 +1,10 @@
 //
 // Projection of a spilled range onto the value model, shared by every
-// path that can name a spill anchor: the `#` spill operator in the tree
-// walker and in the bytecode VM, and ANCHORARRAY.
+// path that can name a spill anchor: the `#` spill operator and ANCHORARRAY.
 //
-// Keeping one implementation is what stops the three from drifting: the
-// error each failure mode reports is Excel-observable, and the three
-// paths must agree on it cell for cell.
+// Keeping one implementation is what stops the two from drifting: the
+// error each failure mode reports is Excel-observable, and both paths
+// must agree on it cell for cell.
 
 #ifndef FORMULON_EVAL_SPILL_ANCHOR_H_
 #define FORMULON_EVAL_SPILL_ANCHOR_H_

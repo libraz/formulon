@@ -12,8 +12,8 @@
 //   - `-fno-exceptions` means we cannot rely on `operator new` to throw on
 //     allocation failure. We use `std::malloc` so failure is a clean
 //     `nullptr` which we propagate back to the caller.
-//   - Trivially-destructible objects dominate AST / bytecode payloads; a bump
-//     allocator removes per-node `delete` traffic and keeps parse/compile
+//   - Trivially-destructible objects dominate AST payloads; a bump
+//     allocator removes per-node `delete` traffic and keeps parse
 //     working-set memory contiguous.
 //
 // The implementation is header-only and inline so the arena can be used from

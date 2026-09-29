@@ -16,7 +16,7 @@
 // in walker.cpp) and the name-bound dispatch path (in dispatch.cpp).
 // Its already-evaluated-arguments siblings `invoke_lambda_values` /
 // `invoke_lambda_values_with_ast` are the single lambda-invocation entry
-// point for the bytecode VM and the lazy lambda helpers, so the arity and
+// point for the lazy lambda helpers, so the arity and
 // omitted-parameter rules are stated once.
 //
 // This header is internal to the tree-walker family and is not part of
@@ -79,14 +79,11 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
                     const FunctionRegistry& registry, const EvalContext& ctx);
 
 /// Invokes an AST-backed runtime lambda with arguments that have already
-/// been evaluated. This is the safe bridge used by the bytecode VM when a
-/// direct `Call` names a workbook-defined LAMBDA, and by the lazy lambda
+/// been evaluated. This is the bridge used by the lazy lambda
 /// helpers (`MAP` / `BYROW` / `BYCOL` / `REDUCE` / `SCAN` / `MAKEARRAY`),
 /// which have cell payloads rather than argument AST nodes. Argument values
 /// are copied into the lambda environment and the AST body is then evaluated
-/// by the tree walker. The helper deliberately accepts only the normal
-/// AST-backed LambdaValue representation; VM-internal closure records never
-/// pass through this interface.
+/// by the tree walker.
 ///
 /// Arity follows the one rule published on `LambdaValue`:
 /// `param_count - optional_count <= arity <= param_count`. Trailing params

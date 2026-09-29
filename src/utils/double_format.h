@@ -4,7 +4,7 @@
 //
 // `format_double` exists so multiple subsystems (the AST S-expression dumper,
 // the tree-walk evaluator's `coerce_to_text`, the CLI JSON renderer, IM*
-// complex-number formatting, future bytecode-level text coercion) emit
+// complex-number formatting) emit
 // numeric strings identically. The contract:
 //
 //   * NaN  -> "nan"

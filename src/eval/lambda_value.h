@@ -48,7 +48,7 @@ struct LambdaValue {
   /// `nullptr` is legal when `param_count == 0`.
   const std::string_view* params;
   /// Number of declared parameters. Every invocation path — `LambdaCall`,
-  /// the name-bound dispatch path, the bytecode VM, and the lazy lambda
+  /// the name-bound dispatch path, and the lazy lambda
   /// helpers (`MAP` / `BYROW` / `BYCOL` / `REDUCE` / `SCAN` / `MAKEARRAY`)
   /// — must satisfy `param_count - optional_count <= arity <= param_count`;
   /// anything outside that window surfaces `#VALUE!`. The rule is enforced

@@ -50,7 +50,7 @@ enum class FormulonErrorCode : int32_t {
   kParserBomNotSupported = 1013,
   kParserTooManyErrors = 1014,
 
-  // ===== 2000-2999: Evaluator / VM =====
+  // ===== 2000-2999: Evaluator =====
   kEvalStackOverflow = 2000,
   kEvalCircularReference = 2001,
   kEvalLambdaArityMismatch = 2002,
@@ -68,54 +68,6 @@ enum class FormulonErrorCode : int32_t {
   /// a `PivotDataField::field_index` that points outside
   /// `PivotCache::fields()`.
   kEvalPivotInvalid = 2010,
-  // --- AST -> ByteCode compiler (2050-2069) -------------------------------
-  /// Generic compile failure that does not match a more specific code below.
-  kVmCompileFailed = 2050,
-  /// The compiler encountered an AST node it cannot lower (e.g. an
-  /// `ErrorPlaceholder` from panic-mode parser recovery, or a node kind
-  /// not yet supported by the backend).
-  kVmUnsupportedNode = 2051,
-  /// The constants pool has overflowed its 24-bit operand budget (more than
-  /// 2^24 distinct constants in a single bytecode body).
-  kVmConstPoolOverflow = 2052,
-  /// The names pool has overflowed its 24-bit operand budget.
-  kVmNamePoolOverflow = 2053,
-  /// The instruction stream has overflowed its 32-bit operand budget (jump
-  /// targets > 2^32 instructions).
-  kVmInstructionLimit = 2054,
-  /// A `LetBinding` references more local slots than the compiler can
-  /// encode in 24 bits (more than 2^24 LET-bound names in a single body).
-  kVmLetSlotOverflow = 2055,
-  /// A `Lambda` declares more parameters than the operand encoding allows
-  /// (more than 2^16 params).
-  kVmLambdaParamOverflow = 2056,
-  /// The bytecode body has no instructions; the VM cannot decide what to
-  /// return. Indicates a compiler bug, since `compile()` always emits at
-  /// least a `Return`.
-  kVmEmptyBytecode = 2057,
-  /// An opcode that pops `N` operands found fewer than `N` values on the
-  /// operand stack.
-  kVmStackUnderflow = 2058,
-  /// The operand stack grew past the VM's hard cap. Defends against runaway
-  /// `Union` / pathological array literals in handcrafted bytecode.
-  kVmStackOverflow = 2059,
-  /// An instruction word carries an opcode value outside the declared
-  /// `OpCode` enum. Indicates corrupted or hand-rolled bytecode.
-  kVmInvalidOpcode = 2060,
-  /// A `Jump` / `JumpIfFalse` target points outside the current code stream.
-  kVmInvalidJumpTarget = 2061,
-  /// `LoadLet` referenced a slot that no `StoreLet` has populated yet.
-  kVmLetSlotMissing = 2062,
-  /// `CallLambda` was invoked with an argument count that does not satisfy
-  /// the closure's `[required..param_count]` arity range.
-  kVmLambdaArityMismatch = 2063,
-  /// The bytecode optimiser failed to lower a pass (constant fold / name
-  /// inline / range canonicalise / branch hoist) without producing
-  /// behaviour-preserving output. The raw input bytecode is returned
-  /// unchanged whenever this is observed; the error is reserved for hard
-  /// failures (e.g. constants-pool overflow when re-pooling a folded
-  /// result). The optimiser never invents Excel-visible faults.
-  kVmOptimizerFailed = 2064,
 
   // ===== 3000-3999: Functions =====
   kFnNotRegistered = 3000,
@@ -395,36 +347,6 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kEvalPivotMissing";
     case FormulonErrorCode::kEvalPivotInvalid:
       return "kEvalPivotInvalid";
-    case FormulonErrorCode::kVmCompileFailed:
-      return "kVmCompileFailed";
-    case FormulonErrorCode::kVmUnsupportedNode:
-      return "kVmUnsupportedNode";
-    case FormulonErrorCode::kVmConstPoolOverflow:
-      return "kVmConstPoolOverflow";
-    case FormulonErrorCode::kVmNamePoolOverflow:
-      return "kVmNamePoolOverflow";
-    case FormulonErrorCode::kVmInstructionLimit:
-      return "kVmInstructionLimit";
-    case FormulonErrorCode::kVmLetSlotOverflow:
-      return "kVmLetSlotOverflow";
-    case FormulonErrorCode::kVmLambdaParamOverflow:
-      return "kVmLambdaParamOverflow";
-    case FormulonErrorCode::kVmEmptyBytecode:
-      return "kVmEmptyBytecode";
-    case FormulonErrorCode::kVmStackUnderflow:
-      return "kVmStackUnderflow";
-    case FormulonErrorCode::kVmStackOverflow:
-      return "kVmStackOverflow";
-    case FormulonErrorCode::kVmInvalidOpcode:
-      return "kVmInvalidOpcode";
-    case FormulonErrorCode::kVmInvalidJumpTarget:
-      return "kVmInvalidJumpTarget";
-    case FormulonErrorCode::kVmLetSlotMissing:
-      return "kVmLetSlotMissing";
-    case FormulonErrorCode::kVmLambdaArityMismatch:
-      return "kVmLambdaArityMismatch";
-    case FormulonErrorCode::kVmOptimizerFailed:
-      return "kVmOptimizerFailed";
 
     // Functions
     case FormulonErrorCode::kFnNotRegistered:

@@ -259,8 +259,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SORTBY", &eval_sortby_lazy, LazyResultShape::kArray},
     {"STEYX", &eval_steyx_lazy, LazyResultShape::kScalar},
     // SUBTOTAL is lazy so codes 101..111 can read row visibility off the
-    // sheet; the eager registration stays for the bytecode VM. See
-    // `eval_subtotal_lazy`.
+    // sheet. See `eval_subtotal_lazy`.
     {"SUBTOTAL", &eval_subtotal_lazy, LazyResultShape::kReduce},
     {"SUMIF", &eval_sumif_lazy, LazyResultShape::kReduce},
     {"SUMIFS", &eval_sumifs_lazy, LazyResultShape::kReduce},

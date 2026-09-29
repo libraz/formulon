@@ -1,9 +1,8 @@
 //
 // Tree-walk evaluator for the Formulon AST.
 //
-// This is the simple recursive interpreter used during early development,
-// before the bytecode VM lands, and as the fallback evaluation path for
-// LAMBDA bodies. It supports scalar arithmetic, comparison, concatenation,
+// This is the engine's only evaluator; LAMBDA bodies run through it too.
+// It supports scalar arithmetic, comparison, concatenation,
 // unary operators, and Excel error propagation.
 //
 // AST node kinds that need a `FunctionRegistry` or `Workbook` (calls,

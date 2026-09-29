@@ -1,10 +1,6 @@
 //
-// Projection of a structured (table) reference onto the value model,
-// shared by the tree walker and the bytecode VM.
-//
-// The two evaluators are held to cell-for-cell parity, so the rectangle
-// resolution, the single-cell shortcut and the blank padding all have to
-// be one implementation rather than two that agree today.
+// Projection of a structured (table) reference onto the value model:
+// rectangle resolution, the single-cell shortcut and the blank padding.
 
 #ifndef FORMULON_EVAL_STRUCTURED_REF_PROJECT_H_
 #define FORMULON_EVAL_STRUCTURED_REF_PROJECT_H_

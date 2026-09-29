@@ -57,6 +57,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   boot from the Emscripten module itself, and `"sideEffects"` names that
   module, whose top level starts the pthread runtime.
 
+### Removed
+
+- The experimental bytecode compiler, optimizer and VM, together with the
+  `FORMULON_BUILD_VM` and `FORMULON_VM_PARITY_CHECK` CMake options and the
+  `kVm*` error codes (2050-2064). They never shipped in a release artifact;
+  the tree-walker is the engine's only evaluator.
+
 ## [0.11.1] - 2026-08-22
 
 ### Added
