@@ -206,6 +206,9 @@ address space. Results are identical either way.
 Documentation — guides, compatibility notes, and the per-runtime API
 reference — is at <https://formulon.libraz.net>. Source, design notes,
 and the oracle test suite live at <https://github.com/libraz/formulon>.
+[formulon-cell](https://github.com/libraz/formulon-cell) is a browser
+spreadsheet UI built on this package; it doubles as an integration test
+and a worked example of embedding the engine.
 
 ## License
 
