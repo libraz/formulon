@@ -58,6 +58,57 @@ std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
   return group;
 }
 
+// Orders one axis's groups into `*out_order`. Error-keyed groups sink to the
+// bottom; sort_order=0 otherwise keeps first-occurrence order, and ±1 sorts
+// by the first value column's axis total (aggregated on the fly when
+// `totals_emitted` is false), ties broken by key. Other values are #VALUE!.
+bool order_axis_groups(int sort_order, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
+                       const std::vector<std::vector<std::uint32_t>>& members, const std::vector<bool>& is_error,
+                       const std::vector<std::vector<Value>>& totals, bool totals_emitted, const ArrayValue& values,
+                       const LambdaValue* agg, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                       std::vector<std::size_t>* out_order) {
+  std::vector<std::size_t>& order = *out_order;
+  order.resize(repr.size());
+  for (std::size_t i = 0; i < order.size(); ++i) {
+    order[i] = i;
+  }
+  if (sort_order == 0) {
+    sort_group_order(order, [&](std::size_t a, std::size_t b) {
+      if (is_error[a] != is_error[b]) {
+        return !is_error[a];
+      }
+      return false;
+    });
+    return true;
+  }
+  if (sort_order != 1 && sort_order != -1) {
+    // Only ±1 / 0 are supported. With V > 1 the spec for |sort_order|
+    // indexing a specific value column is not yet captured by the
+    // oracle; reserved for future work.
+    return false;
+  }
+  const bool descending = (sort_order < 0);
+  sort_group_order(order, [&](std::size_t a, std::size_t b) {
+    if (is_error[a] != is_error[b]) {
+      return !is_error[a];
+    }
+    Value va = totals[a][0];
+    Value vb = totals[b][0];
+    if (!totals_emitted) {
+      const ArrayValue* sa = build_group_slice(values, 0U, members[a], arena);
+      const ArrayValue* sb = build_group_slice(values, 0U, members[b], arena);
+      va = (sa != nullptr) ? invoke_aggregator_for_group(agg, sa, arena, registry, ctx) : Value::error(ErrorCode::Num);
+      vb = (sb != nullptr) ? invoke_aggregator_for_group(agg, sb, arena, registry, ctx) : Value::error(ErrorCode::Num);
+    }
+    const int c = cmp_value_asc(va, vb);
+    if (c != 0) {
+      return descending ? (c > 0) : (c < 0);
+    }
+    return cmp_keys_asc(keys, repr[a], repr[b]) < 0;
+  });
+  return true;
+}
+
 }  // namespace
 
 Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -326,92 +377,18 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     grand_totals = aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
   }
 
-  // -- Sort row groups ----------------------------------------------------
-  // Sort by row-total (the "first/only value column" reduces to the row
-  // total in single-column-values scope). Error-keyed groups sink to the
-  // bottom; sort_order=0 preserves first-occurrence order modulo that
-  // sink.
-  std::vector<std::size_t> row_order(n_rows);
-  for (std::size_t i = 0; i < n_rows; ++i) {
-    row_order[i] = i;
+  // -- Sort row and col groups -------------------------------------------
+  // The first/only value column reduces to the axis total in
+  // single-column-values scope.
+  std::vector<std::size_t> row_order;
+  if (!order_axis_groups(row_sort_order, *row_fields, row_repr, row_members, row_is_error, row_totals,
+                         emit_row_totals_col, *values, agg, arena, registry, ctx, &row_order)) {
+    return Value::error(ErrorCode::Value);
   }
-  if (row_sort_order != 0) {
-    if (row_sort_order != 1 && row_sort_order != -1) {
-      // Only ±1 / 0 are supported. With V > 1 the spec for |sort_order|
-      // indexing a specific value column is not yet captured by the
-      // oracle; reserved for future work.
-      return Value::error(ErrorCode::Value);
-    }
-    const bool descending = (row_sort_order < 0);
-    sort_group_order(row_order, [&](std::size_t a, std::size_t b) {
-      if (row_is_error[a] != row_is_error[b]) {
-        return !row_is_error[a];
-      }
-      // Sort by the first value column's row total. Compute on the fly if
-      // row totals weren't emitted (col_total_depth == 0).
-      Value va = row_totals[a][0];
-      Value vb = row_totals[b][0];
-      if (!emit_row_totals_col) {
-        const ArrayValue* sa = build_group_slice(*values, 0U, row_members[a], arena);
-        const ArrayValue* sb = build_group_slice(*values, 0U, row_members[b], arena);
-        va =
-            (sa != nullptr) ? invoke_aggregator_for_group(agg, sa, arena, registry, ctx) : Value::error(ErrorCode::Num);
-        vb =
-            (sb != nullptr) ? invoke_aggregator_for_group(agg, sb, arena, registry, ctx) : Value::error(ErrorCode::Num);
-      }
-      const int c = cmp_value_asc(va, vb);
-      if (c != 0) {
-        return descending ? (c > 0) : (c < 0);
-      }
-      return cmp_keys_asc(*row_fields, row_repr[a], row_repr[b]) < 0;
-    });
-  } else {
-    sort_group_order(row_order, [&](std::size_t a, std::size_t b) {
-      if (row_is_error[a] != row_is_error[b]) {
-        return !row_is_error[a];
-      }
-      return false;
-    });
-  }
-
-  // -- Sort col groups ----------------------------------------------------
-  std::vector<std::size_t> col_order(n_cols);
-  for (std::size_t i = 0; i < n_cols; ++i) {
-    col_order[i] = i;
-  }
-  if (col_sort_order != 0) {
-    if (col_sort_order != 1 && col_sort_order != -1) {
-      // Only ±1 / 0 are supported; see row_sort_order note above.
-      return Value::error(ErrorCode::Value);
-    }
-    const bool descending = (col_sort_order < 0);
-    sort_group_order(col_order, [&](std::size_t a, std::size_t b) {
-      if (col_is_error[a] != col_is_error[b]) {
-        return !col_is_error[a];
-      }
-      Value va = col_totals[a][0];
-      Value vb = col_totals[b][0];
-      if (!emit_col_totals_row) {
-        const ArrayValue* sa = build_group_slice(*values, 0U, col_members[a], arena);
-        const ArrayValue* sb = build_group_slice(*values, 0U, col_members[b], arena);
-        va =
-            (sa != nullptr) ? invoke_aggregator_for_group(agg, sa, arena, registry, ctx) : Value::error(ErrorCode::Num);
-        vb =
-            (sb != nullptr) ? invoke_aggregator_for_group(agg, sb, arena, registry, ctx) : Value::error(ErrorCode::Num);
-      }
-      const int c = cmp_value_asc(va, vb);
-      if (c != 0) {
-        return descending ? (c > 0) : (c < 0);
-      }
-      return cmp_keys_asc(*col_fields, col_repr[a], col_repr[b]) < 0;
-    });
-  } else {
-    sort_group_order(col_order, [&](std::size_t a, std::size_t b) {
-      if (col_is_error[a] != col_is_error[b]) {
-        return !col_is_error[a];
-      }
-      return false;
-    });
+  std::vector<std::size_t> col_order;
+  if (!order_axis_groups(col_sort_order, *col_fields, col_repr, col_members, col_is_error, col_totals,
+                         emit_col_totals_row, *values, agg, arena, registry, ctx, &col_order)) {
+    return Value::error(ErrorCode::Value);
   }
 
   // A two-level column axis can expose one value-wide subtotal block for

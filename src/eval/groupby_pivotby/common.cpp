@@ -128,34 +128,6 @@ const ArrayValue* read_array_arg(const parser::AstNode& node, Arena& arena, cons
   return v.as_array();
 }
 
-bool read_int_in_set(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, const int* allowed, std::size_t count, int* out, Value* out_err) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    *out_err = Value::error(coerced.error());
-    return false;
-  }
-  const double n = coerced.value();
-  if (std::isnan(n) || std::isinf(n)) {
-    *out_err = Value::error(ErrorCode::Value);
-    return false;
-  }
-  const int truncated = static_cast<int>(std::trunc(n));
-  for (std::size_t i = 0; i < count; ++i) {
-    if (allowed[i] == truncated) {
-      *out = truncated;
-      return true;
-    }
-  }
-  *out_err = Value::error(ErrorCode::Value);
-  return false;
-}
-
 bool read_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
               int* out, Value* out_err) {
   const Value v = eval_node(node, arena, registry, ctx);
@@ -175,6 +147,22 @@ bool read_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry&
   }
   *out = static_cast<int>(std::trunc(n));
   return true;
+}
+
+bool read_int_in_set(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, const int* allowed, std::size_t count, int* out, Value* out_err) {
+  int truncated = 0;
+  if (!read_int(node, arena, registry, ctx, &truncated, out_err)) {
+    return false;
+  }
+  for (std::size_t i = 0; i < count; ++i) {
+    if (allowed[i] == truncated) {
+      *out = truncated;
+      return true;
+    }
+  }
+  *out_err = Value::error(ErrorCode::Value);
+  return false;
 }
 
 bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity,
