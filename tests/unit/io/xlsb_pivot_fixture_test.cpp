@@ -343,6 +343,50 @@ TEST(XlsbPivotFixture, CacheFieldOutsideDefinitionIsRejected) {
   EXPECT_EQ(cache_or.error().message, "xlsb pivot cache field outside a cache definition");
 }
 
+// A cache definition holding one field named "F" whose body is `inner`.
+std::vector<std::uint8_t> OneFieldCacheDefinition(const std::vector<std::vector<std::uint8_t>>& inner) {
+  constexpr std::uint16_t kBeginPCDefinition = 179;
+  constexpr std::uint16_t kEndPCDefinition = 180;
+  constexpr std::uint16_t kEndPCDField = 184;
+  std::vector<std::uint8_t> field_header(20, 0U);  // bytes preceding the name
+  AppendU32(field_header, 1U);
+  field_header.push_back(static_cast<std::uint8_t>('F'));
+  field_header.push_back(0U);
+  std::vector<std::uint8_t> bytes;
+  for (const auto& rec : {EncodeRecord(kBeginPCDefinition, {}), EncodeRecord(kBeginPCDField, field_header)}) {
+    bytes.insert(bytes.end(), rec.begin(), rec.end());
+  }
+  for (const auto& rec : inner) {
+    bytes.insert(bytes.end(), rec.begin(), rec.end());
+  }
+  for (const auto& rec : {EncodeRecord(kEndPCDField, {}), EncodeRecord(kEndPCDefinition, {})}) {
+    bytes.insert(bytes.end(), rec.begin(), rec.end());
+  }
+  return bytes;
+}
+
+TEST(XlsbPivotFixture, CacheFieldWithOnlyCharacterisedRecordsDecodes) {
+  constexpr std::uint16_t kBeginPCDFAtbl = 189;
+  constexpr std::uint16_t kEndPCDFAtbl = 190;
+  const std::vector<std::uint8_t> bytes =
+      OneFieldCacheDefinition({EncodeRecord(kBeginPCDFAtbl, {}), EncodeRecord(kEndPCDFAtbl, {})});
+  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{});
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  ASSERT_EQ(cache_or.value().fields().size(), 1U);
+  EXPECT_EQ(cache_or.value().fields()[0].name, "F");
+}
+
+TEST(XlsbPivotFixture, CacheFieldWithAnUncharacterisedRecordIsRejected) {
+  // An id the measured fixture never carries inside a field, standing in for
+  // a grouping block whose layout has not been decoded.
+  constexpr std::uint16_t kUncharacterised = 373;
+  const std::vector<std::uint8_t> bytes = OneFieldCacheDefinition({EncodeRecord(kUncharacterised, {0U, 0U})});
+  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{});
+  ASSERT_FALSE(static_cast<bool>(cache_or));
+  EXPECT_EQ(cache_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+  EXPECT_EQ(cache_or.error().message, "xlsb pivot cache field carries an uncharacterised record (grouping?)");
+}
+
 TEST(XlsbPivotFixture, FieldCountMismatchIsRejected) {
   std::vector<std::uint8_t> bytes;
   std::vector<std::uint8_t> count_payload;

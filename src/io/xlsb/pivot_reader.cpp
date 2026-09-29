@@ -186,6 +186,15 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
       return rec_or.error();
     }
     const XlsbRecord& rec = rec_or.value();
+    // Inside a cache field only the records the measured fixture carries are
+    // accepted. Anything else (a grouping block, a non-string shared item)
+    // has an unmeasured layout and would otherwise be skipped silently.
+    if (in_field && rec.type != kEndPCDField && rec.type != kBeginPCDFAtbl && rec.type != kEndPCDFAtbl &&
+        rec.type != kPCDIString) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
+                        "xlsb pivot cache field carries an uncharacterised record (grouping?)",
+                        "context=xlsb_pivot_reader record_id=" + std::to_string(rec.type));
+    }
     switch (rec.type) {
       case kBeginPCDefinition:
         in_definition = true;
@@ -251,12 +260,9 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
         break;
       }
       default:
-        // Records outside this module's remit (source range, styling,
-        // future-record wrappers) are skipped. A shared item of a type
-        // other than string is the one skip that would be unsafe, and it
-        // cannot pass unnoticed: it leaves `shared_items` short of what
-        // the records index into, which the bounds check in
-        // `DecodeCacheRecords` rejects.
+        // Records outside a cache field (source range, styling,
+        // future-record wrappers) are outside this module's remit and are
+        // skipped; inside a field they were rejected above.
         break;
     }
   }
