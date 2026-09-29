@@ -1108,9 +1108,20 @@ TEST(ReferenceCall, IndexAreaNumSelectsFromUnion) {
     ASSERT_TRUE(v.is_error()) << formula;
     EXPECT_EQ(v.as_error(), ErrorCode::Ref) << formula;
   }
-  const Value zero_area = EvalSourceIn("=INDEX((A1:B2,D1:E2),1,1,0)", wb, wb.sheet(0));
-  ASSERT_TRUE(zero_area.is_error());
-  EXPECT_EQ(zero_area.as_error(), ErrorCode::Value);
+  for (const char* formula :
+       {"=INDEX((A1:B2,D1:E2),1,1,0)", "=INDEX(A1:B2,1,1,0)", "=INDEX((A1:B2,D1:E2),1,1,-1)", "=INDEX(A1:B2,1,1,-1)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+  // A fractional area_num truncates toward zero, like row_num / column_num.
+  ExpectNumber(EvalSourceIn("=INDEX((A1:B2,D1:E2),2,1,1.9)", wb, wb.sheet(0)), 3.0, "area_num truncates");
+  // area_num on a whole-area selection (row=0, col=0) picks that area's
+  // own shape and top-left address, not the union's.
+  ExpectNumber(EvalSourceIn("=ROWS(INDEX((A1:B2,D1:E2),0,0,2))", wb, wb.sheet(0)), 2.0, "ROWS of whole area 2");
+  ExpectNumber(EvalSourceIn("=SUM(INDEX((A1:B2,D1:E2),0,0,2))", wb, wb.sheet(0)), 100.0, "SUM of whole area 2");
+  ExpectText(EvalSourceIn("=CELL(\"address\",INDEX((A1:B2,D1:E2),0,0,2))", wb, wb.sheet(0)), "$D$1",
+             "CELL of whole area 2");
 }
 
 TEST(ReferenceCall, XlookupAsReference) {
