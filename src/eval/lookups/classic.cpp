@@ -291,6 +291,15 @@ Value map_lookup_query_array(const Value& lookup, Arena& arena, const Mapper& ma
   return Value::array(output);
 }
 
+// Fails the whole call with `err`. An array lookup fails lane by lane, so a
+// query cell holding its own error keeps it.
+Value fail_lookup(const Value& lookup, Arena& arena, const Value& err) {
+  if (lookup.is_array()) {
+    return map_lookup_query_array(lookup, arena, [&err](const Value& query) { return query.is_error() ? query : err; });
+  }
+  return err;
+}
+
 Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx, LookupAxis axis) {
   const std::uint32_t arity = call.as_call_arity();
@@ -322,54 +331,27 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
     table_ok = resolve_table_array(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols);
   }
   if (!table_ok) {
-    if (array_lookup) {
-      return map_lookup_query_array(lookup, arena, [range_err](const Value& query) {
-        return query.is_error() ? query : Value::error(range_err);
-      });
-    }
-    return Value::error(range_err);
+    return fail_lookup(lookup, arena, Value::error(range_err));
   }
   if (rows == 0U || cols == 0U) {
-    if (array_lookup) {
-      return map_lookup_query_array(
-          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::Ref); });
-    }
-    return Value::error(ErrorCode::Ref);
+    return fail_lookup(lookup, arena, Value::error(ErrorCode::Ref));
   }
 
   const Value index_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
   if (index_val.is_error()) {
-    if (array_lookup) {
-      return map_lookup_query_array(lookup, arena,
-                                    [&index_val](const Value& query) { return query.is_error() ? query : index_val; });
-    }
-    return index_val;
+    return fail_lookup(lookup, arena, index_val);
   }
   auto index_num = coerce_to_number(index_val);
   if (!index_num) {
-    if (array_lookup) {
-      const ErrorCode index_err = index_num.error();
-      return map_lookup_query_array(lookup, arena, [index_err](const Value& query) {
-        return query.is_error() ? query : Value::error(index_err);
-      });
-    }
-    return Value::error(index_num.error());
+    return fail_lookup(lookup, arena, Value::error(index_num.error()));
   }
   const double index_raw = truncate_index(index_num.value());
   if (index_raw < 1.0) {
-    if (array_lookup) {
-      return map_lookup_query_array(
-          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::Value); });
-    }
-    return Value::error(ErrorCode::Value);
+    return fail_lookup(lookup, arena, Value::error(ErrorCode::Value));
   }
   const std::uint32_t result_extent = axis == LookupAxis::Column ? cols : rows;
   if (index_raw > static_cast<double>(result_extent)) {
-    if (array_lookup) {
-      return map_lookup_query_array(
-          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::Ref); });
-    }
-    return Value::error(ErrorCode::Ref);
+    return fail_lookup(lookup, arena, Value::error(ErrorCode::Ref));
   }
   const auto result_index = static_cast<std::uint32_t>(index_raw);
 
@@ -377,21 +359,11 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   if (arity == 4) {
     const Value rl_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
     if (rl_val.is_error()) {
-      if (array_lookup) {
-        return map_lookup_query_array(lookup, arena,
-                                      [&rl_val](const Value& query) { return query.is_error() ? query : rl_val; });
-      }
-      return rl_val;
+      return fail_lookup(lookup, arena, rl_val);
     }
     auto rl_bool = coerce_to_bool(rl_val);
     if (!rl_bool) {
-      if (array_lookup) {
-        const ErrorCode range_lookup_err = rl_bool.error();
-        return map_lookup_query_array(lookup, arena, [range_lookup_err](const Value& query) {
-          return query.is_error() ? query : Value::error(range_lookup_err);
-        });
-      }
-      return Value::error(rl_bool.error());
+      return fail_lookup(lookup, arena, Value::error(rl_bool.error()));
     }
     approximate = rl_bool.value();
   }
@@ -636,32 +608,18 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   ReferenceTable table;
   const auto by_reference = resolve_reference_table(call.as_call_arg(1), ctx, &table);
   if (by_reference && by_reference.value() && table.declared.rows() != 1U && table.declared.cols() != 1U) {
-    if (array_lookup) {
-      return map_lookup_query_array(
-          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::NA); });
-    }
-    return Value::error(ErrorCode::NA);
+    return fail_lookup(lookup, arena, Value::error(ErrorCode::NA));
   }
   auto resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
   if (!resolved) {
-    if (array_lookup) {
-      const ErrorCode lookup_array_err = resolved.error();
-      return map_lookup_query_array(lookup, arena, [lookup_array_err](const Value& query) {
-        return query.is_error() ? query : Value::error(lookup_array_err);
-      });
-    }
-    return Value::error(resolved.error());
+    return fail_lookup(lookup, arena, Value::error(resolved.error()));
   }
   const std::uint32_t rows = resolved.value().rows;
   const std::uint32_t cols = resolved.value().cols;
   std::vector<Value> cells = std::move(resolved.value().cells);
   if (rows != 1U && cols != 1U) {
     // 2-D array to MATCH is not supported and Excel reports #N/A.
-    if (array_lookup) {
-      return map_lookup_query_array(
-          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::NA); });
-    }
-    return Value::error(ErrorCode::NA);
+    return fail_lookup(lookup, arena, Value::error(ErrorCode::NA));
   }
 
   // match_type: default 1. The scalar path retains its existing {-1, 0, 1}
@@ -672,21 +630,11 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (arity == 3) {
     const Value mt_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
     if (mt_val.is_error()) {
-      if (array_lookup) {
-        return map_lookup_query_array(lookup, arena,
-                                      [&mt_val](const Value& query) { return query.is_error() ? query : mt_val; });
-      }
-      return mt_val;
+      return fail_lookup(lookup, arena, mt_val);
     }
     auto mt_num = coerce_to_number(mt_val);
     if (!mt_num) {
-      if (array_lookup) {
-        const ErrorCode match_type_err = mt_num.error();
-        return map_lookup_query_array(lookup, arena, [match_type_err](const Value& query) {
-          return query.is_error() ? query : Value::error(match_type_err);
-        });
-      }
-      return Value::error(mt_num.error());
+      return fail_lookup(lookup, arena, Value::error(mt_num.error()));
     }
     const double mt_raw = truncate_index(mt_num.value());
     if (mt_raw == -1.0) {
@@ -700,21 +648,13 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     } else if (array_lookup && mt_raw < 0.0) {
       match_type = -1;
     } else {
-      if (array_lookup) {
-        return map_lookup_query_array(
-            lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::NA); });
-      }
-      return Value::error(ErrorCode::NA);
+      return fail_lookup(lookup, arena, Value::error(ErrorCode::NA));
     }
   }
 
   const std::size_t n = cells.size();
   if (n == 0) {
-    if (array_lookup) {
-      return map_lookup_query_array(
-          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::NA); });
-    }
-    return Value::error(ErrorCode::NA);
+    return fail_lookup(lookup, arena, Value::error(ErrorCode::NA));
   }
 
   if (array_lookup) {

@@ -494,6 +494,46 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
   return plan;
 }
 
+// One query lane's scan result. A miss is kept apart from a query-cell error
+// so only a true miss reaches XLOOKUP's if_not_found.
+enum class MatchOutcomeKind : std::uint8_t { Hit, Miss, Error };
+struct MatchOutcome {
+  MatchOutcomeKind kind;
+  std::size_t offset;
+  Value error;
+};
+
+MatchOutcome match_query(const std::vector<Value>& cells, const Value& query, XMatchMode match_mode,
+                         XSearchMode search_mode, ExcelProfile profile) {
+  if (query.is_error()) {
+    return {MatchOutcomeKind::Error, SIZE_MAX, query};
+  }
+  const std::size_t offset = xlookup_scan(cells, query, match_mode, search_mode, profile);
+  if (offset == SIZE_MAX) {
+    return {MatchOutcomeKind::Miss, SIZE_MAX, Value::blank()};
+  }
+  return {MatchOutcomeKind::Hit, offset, Value::blank()};
+}
+
+// Spills `per_lane(query)` for every cell of an array-valued lookup_value,
+// in the query array's shape. Lanes run in row-major order.
+template <typename PerLane>
+Value map_query_lanes(const Value& lookup, Arena& arena, const PerLane& per_lane) {
+  const std::uint32_t query_rows = lookup.as_array_rows();
+  const std::uint32_t query_cols = lookup.as_array_cols();
+  const Value* query_cells = lookup.as_array_cells();
+  Value* output_cells = nullptr;
+  ArrayValue* output = allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
+  if (output == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t query_count = static_cast<std::size_t>(query_rows) * query_cols;
+  for (std::size_t i = 0; i < query_count; ++i) {
+    output_cells[i] = per_lane(query_cells[i]);
+  }
+  return Value::array(output);
+}
+
 }  // namespace
 
 /// XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found],
@@ -533,24 +573,8 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const XMatchMode match_mode = plan.match_mode;
   const XSearchMode search_mode = plan.search_mode;
 
-  // A match is deliberately represented separately from the returned value:
-  // array-valued lookup_value lanes need to distinguish a query-cell error
-  // from a true miss so only the latter can evaluate if_not_found.
-  enum class MatchOutcomeKind : std::uint8_t { Hit, Miss, Error };
-  struct MatchOutcome {
-    MatchOutcomeKind kind;
-    std::size_t offset;
-    Value error;
-  };
-  const auto match_one = [&](const Value& query) -> MatchOutcome {
-    if (query.is_error()) {
-      return {MatchOutcomeKind::Error, SIZE_MAX, query};
-    }
-    const std::size_t offset = xlookup_scan(lookup_cells, query, match_mode, search_mode, ctx.excel_profile());
-    if (offset == SIZE_MAX) {
-      return {MatchOutcomeKind::Miss, SIZE_MAX, Value::blank()};
-    }
-    return {MatchOutcomeKind::Hit, offset, Value::blank()};
+  const auto match_one = [&](const Value& query) {
+    return match_query(lookup_cells, query, match_mode, search_mode, ctx.excel_profile());
   };
 
   // Evaluate if_not_found at most once, and only after the first true miss.
@@ -586,17 +610,8 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   };
 
   if (lookup.is_array()) {
-    const std::uint32_t query_rows = lookup.as_array_rows();
-    const std::uint32_t query_cols = lookup.as_array_cols();
-    const Value* query_cells = lookup.as_array_cells();
-    Value* output_cells = nullptr;
-    ArrayValue* output = allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
-    if (output == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    const std::size_t query_count = static_cast<std::size_t>(query_rows) * query_cols;
-    for (std::size_t i = 0; i < query_count; ++i) {
-      const MatchOutcome match = match_one(query_cells[i]);
+    return map_query_lanes(lookup, arena, [&](const Value& query) {
+      const MatchOutcome match = match_one(query);
       Value output_value = Value::error(ErrorCode::NA);
       switch (match.kind) {
         case MatchOutcomeKind::Error:
@@ -609,9 +624,8 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
           output_value = first_cell_of_slice(match.offset);
           break;
       }
-      output_cells[i] = output_value.promote_reference_blank_to_value_array();
-    }
-    return Value::array(output);
+      return output_value.promote_reference_blank_to_value_array();
+    });
   }
 
   const MatchOutcome match = match_one(lookup);
@@ -767,58 +781,20 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Value);
   }
 
-  enum class MatchOutcomeKind : std::uint8_t { Hit, Miss, Error };
-  struct MatchOutcome {
-    MatchOutcomeKind kind;
-    std::size_t offset;
-    Value error;
-  };
-  const auto match_one = [&](const Value& query) -> MatchOutcome {
-    if (query.is_error()) {
-      return {MatchOutcomeKind::Error, SIZE_MAX, query};
+  const auto match_position = [&](const Value& query) -> Value {
+    const MatchOutcome match = match_query(cells, query, match_mode, search_mode, ctx.excel_profile());
+    if (match.kind == MatchOutcomeKind::Error) {
+      return match.error;
     }
-    const std::size_t offset = xlookup_scan(cells, query, match_mode, search_mode, ctx.excel_profile());
-    if (offset == SIZE_MAX) {
-      return {MatchOutcomeKind::Miss, SIZE_MAX, Value::blank()};
+    if (match.kind == MatchOutcomeKind::Miss) {
+      return Value::error(ErrorCode::NA);
     }
-    return {MatchOutcomeKind::Hit, offset, Value::blank()};
+    return Value::number(static_cast<double>(match.offset + 1U));
   };
-
   if (lookup.is_array()) {
-    const std::uint32_t query_rows = lookup.as_array_rows();
-    const std::uint32_t query_cols = lookup.as_array_cols();
-    const Value* query_cells = lookup.as_array_cells();
-    Value* output_cells = nullptr;
-    ArrayValue* output = allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
-    if (output == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    const std::size_t query_count = static_cast<std::size_t>(query_rows) * query_cols;
-    for (std::size_t i = 0; i < query_count; ++i) {
-      const MatchOutcome match = match_one(query_cells[i]);
-      switch (match.kind) {
-        case MatchOutcomeKind::Error:
-          output_cells[i] = match.error;
-          break;
-        case MatchOutcomeKind::Miss:
-          output_cells[i] = Value::error(ErrorCode::NA);
-          break;
-        case MatchOutcomeKind::Hit:
-          output_cells[i] = Value::number(static_cast<double>(match.offset + 1U));
-          break;
-      }
-    }
-    return Value::array(output);
+    return map_query_lanes(lookup, arena, match_position);
   }
-
-  const MatchOutcome match = match_one(lookup);
-  if (match.kind == MatchOutcomeKind::Error) {
-    return match.error;
-  }
-  if (match.kind == MatchOutcomeKind::Miss) {
-    return Value::error(ErrorCode::NA);
-  }
-  return Value::number(static_cast<double>(match.offset + 1U));
+  return match_position(lookup);
 }
 
 }  // namespace eval
