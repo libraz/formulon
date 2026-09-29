@@ -394,9 +394,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     const std::uint32_t real_count = cparams - 1;
     // `LAMBDA(z,z*z)(4)` and a curried call store the callee expression
     // itself as the first operand; `[0]!Fn(3)` stores the self-book name,
-    // and `A1(1)` / `Sheet1!LOG10(100)` the cell reference.
+    // and `A1(1)` / `(A1:A2)(1)` the cell or area reference.
     if (ops[0]->kind() == parser::NodeKind::Lambda || ops[0]->kind() == parser::NodeKind::LambdaCall ||
-        ops[0]->kind() == parser::NodeKind::Ref || parser::is_self_book_name_ref(*ops[0])) {
+        ops[0]->kind() == parser::NodeKind::Ref || ops[0]->kind() == parser::NodeKind::RangeOp ||
+        parser::is_self_book_name_ref(*ops[0])) {
       parser::AstNode* n = parser::make_lambda_call(arena, const_cast<parser::AstNode*>(ops[0]), ops + 1, real_count);
       if (n == nullptr) {
         return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (LAMBDA call)", "context=xlsb_ptg_reader");

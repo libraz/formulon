@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "parser/ast.h"
@@ -759,6 +760,108 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
   }
 }
 
+// Records every node `FormatNode` wraps in parentheses it adds, slot by slot
+// with the same binding-power demands, so a token encoder marks the same
+// spots.
+void CollectParens(const AstNode& node, int min_bp, std::unordered_set<const AstNode*>& out) {
+  auto wrap_if = [&](int bp) {
+    if (bp < min_bp) {
+      out.insert(&node);
+    }
+  };
+  switch (node.kind()) {
+    case NodeKind::Literal:
+      if (node.as_literal().is_number() && node.as_literal().as_number() < 0.0) {
+        out.insert(&node);
+      }
+      return;
+    case NodeKind::SpillRef:
+      wrap_if(kBpPostfixHash);
+      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        CollectParens(*anchor, kBpPostfixHash, out);
+      }
+      return;
+    case NodeKind::UnaryOp: {
+      const int bp = node.as_unary_op() == UnaryOp::Percent ? kBpPostfixPercent : kBpUnaryPrefix;
+      wrap_if(bp);
+      CollectParens(node.as_unary_operand(), bp, out);
+      return;
+    }
+    case NodeKind::BinaryOp: {
+      const int bp = BinOpBp(node.as_binary_op());
+      wrap_if(bp);
+      CollectParens(node.as_binary_lhs(), bp, out);
+      CollectParens(node.as_binary_rhs(), bp + 1, out);
+      return;
+    }
+    case NodeKind::RangeOp: {
+      wrap_if(kBpRange);
+      const AstNode& lhs = node.as_range_lhs();
+      const AstNode& rhs = node.as_range_rhs();
+      std::string scratch;
+      if (TrySpliceWholeAxisPair(lhs, rhs, scratch)) {
+        return;
+      }
+      if (ColonEndpointsWouldFold(lhs, rhs)) {
+        out.insert(&lhs);
+      }
+      CollectParens(lhs, kBpRange, out);
+      CollectParens(rhs, kBpRange + 1, out);
+      return;
+    }
+    case NodeKind::UnionOp:
+      out.insert(&node);
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        CollectParens(node.as_union_child(i), 0, out);
+      }
+      return;
+    case NodeKind::IntersectOp:
+      wrap_if(kBpIntersect);
+      CollectParens(node.as_intersect_lhs(), kBpIntersect, out);
+      CollectParens(node.as_intersect_rhs(), kBpIntersect + 1, out);
+      return;
+    case NodeKind::ImplicitIntersection:
+      wrap_if(kBpAtPrefix);
+      CollectParens(node.as_implicit_intersection_operand(), kBpAtPrefix, out);
+      return;
+    case NodeKind::Call:
+      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+        CollectParens(node.as_call_arg(i), 0, out);
+      }
+      return;
+    case NodeKind::Lambda:
+      CollectParens(node.as_lambda_body(), 0, out);
+      return;
+    case NodeKind::LetBinding:
+      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+        CollectParens(node.as_let_binding_expr(i), 0, out);
+      }
+      CollectParens(node.as_let_body(), 0, out);
+      return;
+    case NodeKind::LambdaCall: {
+      const AstNode& callee = node.as_lambda_call_callee();
+      if (!CalleePrintsBare(callee)) {
+        out.insert(&callee);
+      }
+      CollectParens(callee, 0, out);
+      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
+        CollectParens(node.as_lambda_call_arg(i), 0, out);
+      }
+      return;
+    }
+    // Leaves, and array constants, whose elements never take parentheses.
+    case NodeKind::Ref:
+    case NodeKind::Ref3D:
+    case NodeKind::ExternalRef:
+    case NodeKind::StructuredRef:
+    case NodeKind::NameRef:
+    case NodeKind::ArrayLiteral:
+    case NodeKind::ErrorLiteral:
+    case NodeKind::ErrorPlaceholder:
+      return;
+  }
+}
+
 // Storage-form emitter: mirrors `FormatNode`'s dispatch but spells each
 // function name the way the file stores it (via the injected speller,
 // which owns both the `_xlfn.` / `_xlfn._xlws.` prefixes and any
@@ -1083,6 +1186,12 @@ struct StorageEmitter {
 };
 
 }  // namespace
+
+void collect_parenthesized_nodes(const AstNode& root, std::unordered_set<const AstNode*>& out) {
+  if (ast_depth_within_limit(root, kMaxFormulaAstDepth)) {
+    CollectParens(root, 0, out);
+  }
+}
 
 std::string format_formula(const AstNode& node) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {

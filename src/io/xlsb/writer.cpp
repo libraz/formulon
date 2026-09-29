@@ -1234,8 +1234,8 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   // BrtName table: every genuine defined name (hidden per its own OOXML
   // `hidden` flag) followed by every future-function callee / defined
   // name `collect_ptg_names` needed a `PtgName` reference for that
-  // wasn't already a defined name (always hidden — these are never
-  // user-visible). `ordered_names` is built once by `BuildOrderedNames`
+  // wasn't already a defined name (the `_xlfn.` / `_xlpm.` records
+  // hidden, a stub for an undefined name not). `ordered_names` is built once by `BuildOrderedNames`
   // and shared with every sheet's cell encoder so `ilbl` assignments
   // stay consistent workbook-wide. The leading `defined_count` slots are
   // `wb.defined_names()` element-for-element, so every defined name
@@ -1266,9 +1266,9 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
     } else {
       // Placeholders carry no formula body, so the table they are handed is
       // never consulted; the workbook-scope one keeps the call uniform. A
-      // sheet-scoped stub is visible, as Excel saves it.
+      // stub for an undefined name is not hidden, as Excel saves it.
       const OrderedName& slot = ordered_names[i];
-      if (auto r = EmitName(body, slot.name, /*formula=*/{}, slot.itab, /*hidden=*/slot.itab < 0,
+      if (auto r = EmitName(body, slot.name, /*formula=*/{}, slot.itab, /*hidden=*/false,
                             /*comment=*/{}, sheet_names, sheet_ranges, table_for_scope(-1));
           !r) {
         return r.error();

@@ -27,7 +27,7 @@ namespace {
 /// Sentinel for "no documented upper bound" used by variadic functions.
 constexpr std::uint8_t kVariadicMax = 255;
 
-constexpr std::size_t kEntriesCountConst = 357;
+constexpr std::size_t kEntriesCountConst = 364;
 using FuncEntryArray = std::array<XlsbFuncEntry, kEntriesCountConst>;
 
 constexpr FuncEntryArray kEntries = {{
@@ -295,6 +295,12 @@ constexpr FuncEntryArray kEntries = {{
     {377, "ROUNDBAHTUP", 1, 1, false},
     {378, "THAIYEAR", 1, 1, false},
     {379, "RTD", 2, kVariadicMax, true},
+    // Ids and the PtgFunc / PtgFuncVar choice decoded from an Excel-365-saved
+    // .xlsb; the arity bounds are the documented signatures.
+    {380, "CUBEVALUE", 1, kVariadicMax, true},
+    {381, "CUBEMEMBER", 2, 3, true},
+    {382, "CUBEMEMBERPROPERTY", 3, 3, false},
+    {383, "CUBERANKEDMEMBER", 3, 4, true},
     // ---- Analysis ToolPak functions Excel 2007 made native ---------------
     // These ids were decoded from the `PtgFunc` / `PtgFuncVar` tokens of an
     // Excel-365-produced workbook (`tests/fixtures/excel/xlsb_func_ids.xlsb`,
@@ -396,6 +402,9 @@ constexpr FuncEntryArray kEntries = {{
     {474, "MULTINOMIAL", 1, kVariadicMax, true},
     {475, "LCM", 1, kVariadicMax, true},
     {476, "FVSCHEDULE", 2, 2, false},
+    {477, "CUBEKPIMEMBER", 3, 4, true},
+    {478, "CUBESET", 2, 5, true},
+    {479, "CUBESETCOUNT", 1, 1, false},
     {480, "IFERROR", 2, 2, false},
     {481, "COUNTIFS", 2, kVariadicMax, true},
     {482, "SUMIFS", 3, kVariadicMax, true},

@@ -418,6 +418,7 @@ TEST(ParserCellRefCall, CellInvokedAsCallee) {
   EXPECT_EQ(ParseToSexpr("=Sheet1!A1(1)"), "(lambda-call (ref Sheet1!A1) (num 1))");
   EXPECT_EQ(ParseToSexpr("=Sheet1!LOG10(100)"), "(lambda-call (ref Sheet1!LOG10) (num 100))");
   EXPECT_EQ(ParseToSexpr("=(LOG10)(100)"), "(lambda-call (ref LOG10) (num 100))");
+  EXPECT_EQ(ParseToSexpr("=(A1:A2)(1)"), "(lambda-call (range (ref A1) (ref A2)) (num 1))");
 }
 
 // ---------------------------------------------------------------------------

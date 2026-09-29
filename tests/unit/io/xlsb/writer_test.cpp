@@ -1099,6 +1099,35 @@ std::vector<std::uint8_t> FindNameRgce(const std::vector<std::uint8_t>& workbook
   return {};
 }
 
+// Returns the first nine payload bytes (grbit, chKey, itab) of the `BrtName`
+// record spelling `want_name`, or an empty vector if none matches.
+std::vector<std::uint8_t> FindNameRecordPrefix(const std::vector<std::uint8_t>& workbook_bin,
+                                               std::string_view want_name) {
+  ByteSpan cursor = SpanOf(workbook_bin);
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    if (!record_or) {
+      return {};
+    }
+    const ByteSpan p = record_or.value().payload;
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtName) || p.size < 13U) {
+      continue;
+    }
+    const std::uint32_t cch = static_cast<std::uint32_t>(p.data[9]) | (static_cast<std::uint32_t>(p.data[10]) << 8);
+    if (cch != want_name.size() || p.size < 13U + cch * 2U) {
+      continue;
+    }
+    std::string decoded;
+    for (std::uint32_t i = 0; i < cch; ++i) {
+      decoded.push_back(static_cast<char>(p.data[13U + i * 2U]));
+    }
+    if (decoded == want_name) {
+      return std::vector<std::uint8_t>(p.data, p.data + 9);
+    }
+  }
+  return {};
+}
+
 // Returns `xl/workbook.bin`'s `BrtWbView` `itabCur` field (u32 at payload
 // offset 24), or `0xFFFFFFFF` if the record is missing or truncated.
 std::uint32_t FindItabCur(const std::vector<std::uint8_t>& workbook_bin) {
@@ -1282,36 +1311,58 @@ TEST(XlsbWriter, FutureFunctionCallRegistersHiddenName) {
   EXPECT_TRUE(ContainsUtf16Le(workbook_or.value(), "_xlfn.XLOOKUP"));
 }
 
-TEST(XlsbWriter, CallWithNoKnownFuncIdIsNotEncodedAsAFutureFunction) {
-  // `CUBEVALUE` is a classic (pre-2007) Excel function whose id
-  // `func_id_table` does not carry. Encoding it as a future function
-  // would register a hidden `_xlfn.CUBEVALUE` name real Excel cannot
-  // resolve (`#NAME?`); the encoder reports the missing id instead and
-  // the cell degrades to its cached literal, which the write result
-  // counts. Absence from the table says nothing about whether Excel has
-  // an id, which is exactly why the hidden-name route is reachable only
-  // by enumeration.
+TEST(XlsbWriter, CubeFunctionsEncodeWithTheirFunctionIds) {
+  // Excel 365 saves `CUBEVALUE("c","m")` as two strings and
+  // `PtgFuncVar(2, 380)`, not through a hidden `_xlfn.` name.
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("F"));
   s.set_cell_formula(0U, 0U, "=CUBEVALUE(\"c\",\"m\")");
-  s.set_cell_cached_value(0U, 0U, Value::number(42.0));
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 1U);
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
   ZipReader zip;
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
   auto workbook_or = zip.read_entry("xl/workbook.bin");
   ASSERT_TRUE(static_cast<bool>(workbook_or));
-  EXPECT_FALSE(ContainsUtf16Le(workbook_or.value(), "_xlfn.CUBEVALUE"));
+  EXPECT_FALSE(ContainsUtf16Le(workbook_or.value(), "CUBEVALUE"));
 
   auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
   const Cell* cell = read_or.value().workbook.sheet(0).cell_at(0U, 0U);
   ASSERT_NE(cell, nullptr);
-  EXPECT_TRUE(cell->formula_text.empty());
-  ASSERT_TRUE(cell->cached_value.is_number());
-  EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 42.0);
+  EXPECT_EQ(cell->formula_text, "=CUBEVALUE(\"c\",\"m\")");
+}
+
+TEST(XlsbWriter, UndefinedNameCallIsStoredAgainstAWorkbookStub) {
+  // Measured on backup/oracle_probe/root_ops: a lone `NOSUCH(1)` is
+  // `PtgName` + the argument + `PtgFuncVar(255)`, the name an empty,
+  // visible, workbook-scoped BrtName.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0U, 0U, "=NOSUCH(1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1U, 0U, "=NOSUCHREF")));
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
+  auto workbook_or = zip.read_entry("xl/workbook.bin");
+  ASSERT_TRUE(static_cast<bool>(workbook_or));
+  EXPECT_EQ(FindNameRecordPrefix(workbook_or.value(), "NOSUCH"),
+            (std::vector<std::uint8_t>{0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF}));
+
+  auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  Workbook& back = read_or.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(back.recalc(eval::default_registry())));
+  for (std::uint32_t row = 0; row < 2U; ++row) {
+    const Cell* cell = back.sheet(0).cell_at(row, 0U);
+    ASSERT_NE(cell, nullptr);
+    EXPECT_EQ(cell->formula_text, row == 0U ? "=NOSUCH(1)" : "=NOSUCHREF");
+    EXPECT_EQ(cell->cached_value, Value::error(ErrorCode::Name));
+  }
 }
 
 TEST(XlsbWriter, LocalisedJisSpellingSavesAsTheStoredDbcsSpelling) {

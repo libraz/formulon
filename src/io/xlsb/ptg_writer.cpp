@@ -12,6 +12,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -203,18 +204,97 @@ int resolve_ixti(const std::vector<std::string>& sheet_names, std::string_view s
   return -1;
 }
 
+/// One rectangle of a precomputed reference result (`PtgMemArea`'s cache).
+struct Rect {
+  std::uint32_t row_first;
+  std::uint32_t row_last;
+  std::uint32_t col_first;
+  std::uint32_t col_last;
+};
+
+/// Fills `out` with the rectangles `node` denotes when it is built from
+/// plain same-sheet cell and area references by `,` and single-area ` `
+/// alone, so they can be computed without evaluation; an empty
+/// intersection leaves no rectangle. False for anything else.
+bool StaticRects(const parser::AstNode& node, std::vector<Rect>& out) {
+  auto plain = [](const parser::AstNode& n) {
+    return n.kind() == parser::NodeKind::Ref && n.as_ref().sheet.empty() && !n.as_ref().is_full_col &&
+           !n.as_ref().is_full_row;
+  };
+  switch (node.kind()) {
+    case parser::NodeKind::Ref:
+      if (!plain(node)) {
+        return false;
+      }
+      out.push_back(Rect{node.as_ref().row, node.as_ref().row, node.as_ref().col, node.as_ref().col});
+      return true;
+    case parser::NodeKind::RangeOp: {
+      const parser::AstNode& lhs = node.as_range_lhs();
+      const parser::AstNode& rhs = node.as_range_rhs();
+      if (!plain(lhs) || !plain(rhs)) {
+        return false;
+      }
+      const parser::Reference& a = lhs.as_ref();
+      const parser::Reference& b = rhs.as_ref();
+      out.push_back(
+          Rect{std::min(a.row, b.row), std::max(a.row, b.row), std::min(a.col, b.col), std::max(a.col, b.col)});
+      return true;
+    }
+    case parser::NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        if (!StaticRects(node.as_union_child(i), out)) {
+          return false;
+        }
+      }
+      return true;
+    case parser::NodeKind::IntersectOp: {
+      std::vector<Rect> lhs;
+      std::vector<Rect> rhs;
+      if (!StaticRects(node.as_intersect_lhs(), lhs) || !StaticRects(node.as_intersect_rhs(), rhs) ||
+          lhs.size() != 1U || rhs.size() != 1U) {
+        return false;
+      }
+      const Rect r{std::max(lhs[0].row_first, rhs[0].row_first), std::min(lhs[0].row_last, rhs[0].row_last),
+                   std::max(lhs[0].col_first, rhs[0].col_first), std::min(lhs[0].col_last, rhs[0].col_last)};
+      if (r.row_first <= r.row_last && r.col_first <= r.col_last) {
+        out.push_back(r);
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
 class Encoder {
  public:
-  Encoder(const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-          PtgRootClass root_class)
+  Encoder(const parser::AstNode& root, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
+          const NameTable& name_table, PtgRootClass root_class)
       : sheet_names_(sheet_names),
         sheet_ranges_(sheet_ranges),
         name_table_(name_table),
-        promote_root_(root_class == PtgRootClass::kValue) {}
+        promote_root_(root_class == PtgRootClass::kValue) {
+    parser::collect_parenthesized_nodes(root, parens_);
+  }
 
+  /// Emits `node`, then `PtgParen` wherever the formula text parenthesises
+  /// it: Excel renders a formula from its tokens, and without `PtgParen`
+  /// shows `(1+2)*3` as `1+2*3`.
   Expected<void, Error> emit(const parser::AstNode& node) {
-    // True only for the single outermost node, and only when the caller wants root promotion.
-    const bool promote = std::exchange(is_root_, false) && promote_root_;
+    RETURN_IF_ERROR(emit_node(node));
+    if (parens_.count(&node) != 0) {
+      emit_u8(out_, 0x15);  // PtgParen
+    }
+    return Expected<void, Error>::Ok();
+  }
+
+  EncodedFormula take() { return EncodedFormula{std::move(out_), std::move(extra_)}; }
+
+ private:
+  Expected<void, Error> emit_node(const parser::AstNode& node) {
+    const bool root = std::exchange(is_root_, false);
+    // Root promotion applies only to the single outermost node, and only when the caller wants it.
+    const bool promote = root && promote_root_;
     switch (node.kind()) {
       case parser::NodeKind::Literal:
         return emit_literal(node.as_literal());
@@ -233,9 +313,8 @@ class Encoder {
       case parser::NodeKind::RangeOp:
         return emit_range(node, promote);
       case parser::NodeKind::UnionOp:
-        return emit_union(node);
       case parser::NodeKind::IntersectOp:
-        return emit_intersect(node);
+        return emit_reference_operation(node, root);
       case parser::NodeKind::Call:
         return emit_call(node);
       case parser::NodeKind::ArrayLiteral:
@@ -268,9 +347,6 @@ class Encoder {
     return unsupported_node("unknown");
   }
 
-  EncodedFormula take() { return EncodedFormula{std::move(out_), std::move(extra_)}; }
-
- private:
   Expected<void, Error> emit_literal(const Value& v) {
     switch (v.kind()) {
       case ValueKind::Blank:
@@ -729,7 +805,13 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
-  Expected<void, Error> emit_union(const parser::AstNode& node) {
+  Expected<void, Error> emit_union_or_intersect(const parser::AstNode& node) {
+    if (node.kind() == parser::NodeKind::IntersectOp) {
+      RETURN_IF_ERROR(emit(node.as_intersect_lhs()));
+      RETURN_IF_ERROR(emit(node.as_intersect_rhs()));
+      emit_u8(out_, 0x0F);  // PtgIsect
+      return Expected<void, Error>::Ok();
+    }
     const std::uint32_t arity = node.as_union_arity();
     if (arity < 2) {
       return unsupported_node("UnionOp(arity<2)");
@@ -743,10 +825,62 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
-  Expected<void, Error> emit_intersect(const parser::AstNode& node) {
-    RETURN_IF_ERROR(emit(node.as_intersect_lhs()));
-    RETURN_IF_ERROR(emit(node.as_intersect_rhs()));
-    emit_u8(out_, 0x0F);  // PtgIsect
+  /// A union or intersection, inside the memory token Excel 365 puts in
+  /// front of it (measured):
+  ///   * a cell formula over plain same-sheet references stores the result
+  ///     it precomputes: `PtgMemArea` with the rectangles in `rgcb`, or at
+  ///     the root, where the value is taken, `PtgMemErr` when that is an
+  ///     error (#VALUE! for several areas, #NULL! for an empty intersection);
+  ///   * a defined-name body's root takes `PtgMemFunc`.
+  /// Other positions and operands stay unwrapped, which Excel also reads.
+  Expected<void, Error> emit_reference_operation(const parser::AstNode& node, bool root) {
+    if (in_memory_token_) {
+      return emit_union_or_intersect(node);  // Only the outermost operation carries one.
+    }
+    std::vector<Rect> rects;
+    if (promote_root_ && StaticRects(node, rects)) {
+      if (root && rects.size() != 1U) {
+        emit_u8(out_, ValueClassPtg(0x27));  // PtgMemErr
+        emit_u8(out_, error_wire_code(rects.empty() ? ErrorCode::Null : ErrorCode::Value));
+        emit_u8(out_, 0);
+        emit_u16(out_, 0);
+        return emit_wrapped(node);
+      }
+      if (!rects.empty()) {
+        emit_u8(out_, root ? ValueClassPtg(0x26) : 0x26);  // PtgMemArea
+        emit_u32(out_, 0);                                 // unused
+        emit_u32(extra_, static_cast<std::uint32_t>(rects.size()));
+        for (const Rect& r : rects) {
+          emit_u32(extra_, r.row_first);
+          emit_u32(extra_, r.row_last);
+          emit_u32(extra_, r.col_first);
+          emit_u32(extra_, r.col_last);
+        }
+        return emit_wrapped(node);
+      }
+    }
+    if (!promote_root_ && root) {
+      emit_u8(out_, 0x29);  // PtgMemFunc
+      return emit_wrapped(node);
+    }
+    return emit_union_or_intersect(node);
+  }
+
+  /// Emits `node` after the memory token just written, then back-fills the
+  /// token's trailing `cce` with the byte length of what it covers.
+  Expected<void, Error> emit_wrapped(const parser::AstNode& node) {
+    const std::size_t cce_at = out_.size();
+    emit_u16(out_, 0);
+    in_memory_token_ = true;
+    const auto status = emit_union_or_intersect(node);
+    in_memory_token_ = false;
+    RETURN_IF_ERROR(status);
+    const std::size_t cce = out_.size() - cce_at - 2U;
+    if (cce > 0xFFFFU) {
+      return unsupported_node("memory token (cce>65535)");
+    }
+    out_[cce_at] = static_cast<std::uint8_t>(cce & 0xFFU);
+    out_[cce_at + 1U] = static_cast<std::uint8_t>(cce >> 8);
     return Expected<void, Error>::Ok();
   }
 
@@ -766,19 +900,25 @@ class Encoder {
       return emit_name_call(node);
     }
     if (entry == nullptr) {
-      // A classic callee whose id `func_id_table` does not yet carry.
-      // Encoding it through the hidden-name route would make real Excel
-      // resolve a hidden `_xlfn.<NAME>` that does not exist (#NAME?),
-      // and guessing an id would silently substitute a different
-      // function — so the encode fails instead. A callee Excel really
-      // has no id for takes that route only by being enumerated in
-      // `io::xlsb_uses_hidden_name`, which requires an observation.
+      // A callee with no id whose name the caller's table lacks. Encoding it
+      // through the hidden-name route would make real Excel resolve a
+      // hidden `_xlfn.<NAME>` that does not exist (#NAME?), and guessing an
+      // id would silently substitute a different function — so the encode
+      // fails instead. A callee Excel really has no id for takes that route
+      // only by being enumerated in `io::xlsb_uses_hidden_name`.
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: no XLSB function id known for callee",
                         std::string("context=xlsb_ptg_writer fn=") + std::string(name));
     }
     const std::uint32_t arity = node.as_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
       RETURN_IF_ERROR(emit(node.as_call_arg(i)));
+    }
+    // Excel 365 stores a one-argument SUM as `PtgAttrSum` rather than a call.
+    if (arity == 1U && strings::case_insensitive_eq(name, "SUM")) {
+      emit_u8(out_, 0x19);  // PtgAttr
+      emit_u8(out_, 0x10);  // bitSum
+      emit_u16(out_, 0);
+      return Expected<void, Error>::Ok();
     }
     const bool use_var = entry->variadic || entry->arg_min != entry->arg_max;
     if (use_var) {
@@ -900,6 +1040,10 @@ class Encoder {
   const std::vector<std::string>& sheet_names_;
   const SheetRangeTable& sheet_ranges_;
   const NameTable& name_table_;
+  /// Nodes the formula text parenthesises (`parser::collect_parenthesized_nodes`).
+  std::unordered_set<const parser::AstNode*> parens_;
+  /// True while emitting the operation a memory token covers.
+  bool in_memory_token_ = false;
   /// See `emit()`'s `promote` local. Cleared on the first call.
   bool is_root_ = true;
   const bool promote_root_;
@@ -954,11 +1098,12 @@ bool InParamScope(const std::vector<std::string_view>& scope, std::string_view n
 /// matching an in-scope parameter resolves at encode time to that
 /// parameter's hidden `_xlpm.<name>` placeholder (see
 /// `Encoder::emit_name_ref`), so it must not be registered as an ordinary
-/// workbook defined name. `mode` selects the view: every unqualified name a
-/// `PtgName` or self-book `PtgNameX` needs (`kPtg`); only names resolved from
-/// the formula's own scope, including a callee with no function id (`Fn(3)`,
-/// possibly a named LAMBDA) (`kScopeResolved`); or only sheet-qualified
-/// names, each added as `sheet` NUL `name` (`kSheetQualified`).
+/// workbook defined name. A callee with no function id (`Fn(3)`: a named
+/// LAMBDA, or a name no one defined) is a name too. `mode` selects the view:
+/// every unqualified name a `PtgName` or self-book `PtgNameX` needs
+/// (`kPtg`); only names resolved from the formula's own scope
+/// (`kScopeResolved`); or only sheet-qualified names, each added as `sheet`
+/// NUL `name` (`kSheetQualified`).
 void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& names,
                         std::unordered_set<std::string>& seen, std::vector<std::string_view>& scope,
                         NameCollectMode mode) {
@@ -989,9 +1134,8 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       const std::string_view name = canonical_function_name(node.as_call_name());
       if (UsesHiddenNameRoute(name)) {
         add(xlsb_hidden_function_name(name));
-      } else if (mode == NameCollectMode::kScopeResolved && lookup_func_by_name(name) == nullptr &&
-                 !InParamScope(scope, node.as_call_name())) {
-        AddName(node.as_call_name(), names, seen);
+      } else if (lookup_func_by_name(name) == nullptr && !InParamScope(scope, node.as_call_name())) {
+        add(node.as_call_name());
       }
       const std::uint32_t arity = node.as_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
@@ -1224,7 +1368,7 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class) {
-  Encoder enc(sheet_names, sheet_ranges, name_table, root_class);
+  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class);
   auto status = enc.emit(node);
   if (!status) {
     return status.error();

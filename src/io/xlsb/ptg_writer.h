@@ -95,6 +95,10 @@ struct EncodedFormula {
 ///     `Rate`) or a self-book `[0]!Rate`. A sheet-qualified one resolves
 ///     through a scoped key instead (`collect_sheet_qualified_names`).
 ///
+///   * A callee with no function id (`Fn(3)`): a named LAMBDA, or a name no
+///     one defined, which Excel stores against an empty BrtName stub. Every
+///     built-in has an id or a hidden-name route, so this is never one.
+///
 ///   * The hidden `_xlfn.LET` / `_xlfn.LAMBDA` callee and one
 ///     `_xlpm.<param>` placeholder per LET binding or LAMBDA parameter.
 ///
@@ -104,9 +108,8 @@ struct EncodedFormula {
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
                        std::unordered_set<std::string>& seen);
 
-/// `collect_ptg_names` without the self-book `[0]!Rate` and with every
-/// callee that has no function id (`Fn(3)`): every name the formula
-/// resolves from its own scope.
+/// `collect_ptg_names` without the self-book `[0]!Rate`: every name the
+/// formula resolves from its own scope.
 void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
                                   std::unordered_set<std::string>& seen);
 
