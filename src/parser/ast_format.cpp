@@ -17,6 +17,7 @@
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "utils/double_format.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -731,8 +732,13 @@ struct StorageEmitter {
   std::vector<std::string_view> scope;  // in-scope LET binding / LAMBDA param names
 
   bool in_scope(std::string_view name) const {
+    // Case-insensitive: LET/LAMBDA parameter names resolve case-insensitively
+    // (Excel folds ASCII case on name resolution -- see
+    // `lookup_lexical_binding` in eval/compiler.cpp), so a NameRef spelled
+    // in a different case than its binding is still the same parameter and
+    // must carry the `_xlpm.` prefix, not be written as a free name.
     for (const std::string_view s : scope) {
-      if (s == name) {
+      if (strings::case_insensitive_eq(s, name)) {
         return true;
       }
     }
@@ -750,21 +756,19 @@ struct StorageEmitter {
         FormatRef(node.as_ref(), out);
         return;
       case NodeKind::SpillRef: {
-        const bool wrap = kBpPostfixHash < min_bp;
-        if (wrap) {
-          out.push_back('(');
-        }
+        // Excel's on-disk spelling of the postfix `#` operator is a call to
+        // the internal `ANCHORARRAY` function (see
+        // eval/dynamic_array/anchor.h), not the bare `<ref>#` the canonical
+        // formatter uses. `append_function_name` supplies the `_xlfn.`
+        // prefix the same way it does for any other future function.
+        append_function_name(out, "ANCHORARRAY");
+        out.push_back('(');
         if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-          // Recurse through `emit`, not `FormatNode`: a computed anchor may
-          // itself call a function whose stored spelling carries a prefix.
-          emit(*anchor, out, kBpPostfixHash);
+          emit(*anchor, out, 0);
         } else {
           FormatRef(node.as_spill_ref(), out);
         }
-        out.push_back('#');
-        if (wrap) {
-          out.push_back(')');
-        }
+        out.push_back(')');
         return;
       }
       case NodeKind::Ref3D:

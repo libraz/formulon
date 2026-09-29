@@ -67,6 +67,17 @@ TEST(TokenizerNumberLiterals, LeadingDot) {
   EXPECT_FALSE(v[0].is_integer);
 }
 
+TEST(TokenizerNumberLiterals, TrailingDot) {
+  // `1.` -- an empty fractional part -- is a valid Excel literal equal to 1,
+  // not the degenerate case `RejectBareDot` below covers.
+  Tokenizer tz("1.");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 2u);
+  EXPECT_EQ(v[0].kind, TokenKind::Number);
+  EXPECT_DOUBLE_EQ(v[0].number, 1.0);
+  EXPECT_TRUE(tz.errors().empty());
+}
+
 TEST(TokenizerNumberLiterals, LowerExponent) {
   Tokenizer tz("1e5");
   const auto& v = tz.tokens();
@@ -128,13 +139,37 @@ TEST(TokenizerNumberLiterals, OverflowMagnitudeBecomesNumError) {
 }
 
 TEST(TokenizerNumberLiterals, UnderflowMagnitudeRoundsToZero) {
-  // `1E-400` underflows to a finite 0 / subnormal; Excel accepts it as a
-  // rounded-to-zero number rather than an error.
+  // `1E-400` is well past even the smallest subnormal, so strtod itself
+  // already floors it to 0.0.
   Tokenizer tz("1E-400");
   const auto& v = tz.tokens();
   ASSERT_EQ(v.size(), 2u);  // Number + Eof
   EXPECT_EQ(v[0].kind, TokenKind::Number);
   EXPECT_EQ(v[0].number, 0.0);
+}
+
+TEST(TokenizerNumberLiterals, SubnormalMagnitudeFlushesToZero) {
+  // Measured directly against Excel 365 (Mac, via xlwings): every literal
+  // below DBL_MIN (~2.2250738585072014E-308) -- the whole subnormal range,
+  // not just the underflow-to-zero tail strtod already floors -- evaluates
+  // to exactly 0 in Excel, which does not keep denormalized precision.
+  for (const char* lex : {"2.5E-310", "1E-320", "1E-310", "4.9E-324", "1E-308"}) {
+    Tokenizer tz(lex);
+    const auto& v = tz.tokens();
+    ASSERT_EQ(v.size(), 2u) << lex;
+    EXPECT_EQ(v[0].kind, TokenKind::Number) << lex;
+    EXPECT_EQ(v[0].number, 0.0) << lex;
+  }
+}
+
+TEST(TokenizerNumberLiterals, MagnitudeAboveDblMinIsKeptExactly) {
+  // `2.3E-308` is above DBL_MIN and must survive as a genuine (non-flushed)
+  // double, matching Excel.
+  Tokenizer tz("2.3E-308");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 2u);
+  EXPECT_EQ(v[0].kind, TokenKind::Number);
+  EXPECT_DOUBLE_EQ(v[0].number, 2.3e-308);
 }
 
 TEST(TokenizerNumberLiterals, RejectTrailingSignOnly) {
@@ -391,6 +426,17 @@ TEST(TokenizerIdentifiers, Japanese) {
   const auto& v = tz.tokens();
   ASSERT_EQ(v.size(), 2u);
   EXPECT_EQ(v[0].kind, TokenKind::Ident);
+}
+
+TEST(TokenizerIdentifiers, BackslashStartIsExcelsThirdLegalNameCharacter) {
+  // Excel's name-manager rule accepts a letter, underscore, or backslash as
+  // the first character of a defined name.
+  Tokenizer tz("\\foo");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 2u);
+  EXPECT_EQ(v[0].kind, TokenKind::Ident);
+  EXPECT_EQ(std::string(v[0].lexeme), "\\foo");
+  EXPECT_TRUE(tz.errors().empty());
 }
 
 TEST(TokenizerIdentifiers, XlfnPrefix) {
@@ -836,6 +882,28 @@ TEST(TokenizerExcessiveLength, MultibyteRunStopsNearTheCap) {
     saw_excessive_length = saw_excessive_length || err.code == LexerErrorCode::ExcessiveLength;
   }
   EXPECT_TRUE(saw_excessive_length);
+}
+
+TEST(TokenizerExcessiveLength, DefaultCapMatchesExcelsFormulaLengthLimit) {
+  // Excel 365's real per-formula ceiling is 8,192 characters (Microsoft 365
+  // Excel specifications and limits; see tests/divergence.yaml's
+  // left_associative_chain_default_depth_cap entry for the directly
+  // measured Excel observation). A formula one character over that limit
+  // is truncated with ExcessiveLength using the *default* options, and one
+  // at exactly the limit is accepted.
+  {
+    const std::string over(8193, 'a');
+    Tokenizer tz(over);
+    (void)tz.tokens();
+    ASSERT_FALSE(tz.errors().empty());
+    EXPECT_EQ(tz.errors().front().code, LexerErrorCode::ExcessiveLength);
+  }
+  {
+    const std::string at_cap(8192, 'a');
+    Tokenizer tz(at_cap);
+    (void)tz.tokens();
+    EXPECT_TRUE(tz.errors().empty());
+  }
 }
 
 TEST(TokenizerExcessiveLength, InputAtExactlyTheCapIsAccepted) {

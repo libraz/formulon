@@ -96,6 +96,28 @@ TEST(AstNodeRef, QuotesAmbiguousSheetNamesWithoutRoundTripHint) {
   EXPECT_EQ(format_a1(n->as_ref()), "'2026'!A1");
 }
 
+TEST(AstNodeRef, QuotesReservedWordSheetNamesWithoutRoundTripHint) {
+  // A sheet named TRUE/FALSE (any ASCII case) tokenizes as a Bool literal
+  // before the tokenizer ever looks at a following `!`, so an unquoted
+  // spelling re-parses as `(bool true)` followed by a dangling `!`.
+  Arena a;
+  Reference r;
+  r.sheet = "TRUE";
+  r.col = 0;
+  r.row = 0;
+  AstNode* n = make_ref(a, r);
+  ASSERT_NE(n, nullptr);
+  EXPECT_EQ(format_a1(n->as_ref()), "'TRUE'!A1");
+
+  Reference r2;
+  r2.sheet = "false";  // case-insensitive
+  r2.col = 0;
+  r2.row = 0;
+  AstNode* n2 = make_ref(a, r2);
+  ASSERT_NE(n2, nullptr);
+  EXPECT_EQ(format_a1(n2->as_ref()), "'false'!A1");
+}
+
 TEST(AstNodeRef, FormatsMultiLetterColumn) {
   Arena a;
   Reference r;

@@ -113,8 +113,18 @@ int InfixBindingPower(TokenKind kind, int* right_bp) noexcept {
 }
 
 bool is_range_endpoint_kind(NodeKind kind) noexcept {
+  // IntersectOp / UnionOp: a parenthesised intersection or union is itself
+  // reference-shaped and can close a `:` range (`(A1:B2 B1:C3):D4`,
+  // `(A1 B1):C3`) -- the same shapes the whitespace-intersection operand
+  // check just above already admits on both its LHS and RHS. The XLSB Ptg
+  // decoder can already build a PtgRange over a PtgIsect/PtgUnion operand
+  // (make_range_op called on the make_intersect_op / make_union_op result
+  // with no shape restriction), so the text parser rejecting the same AST
+  // on reparse would break format_formula's round-trip promise for an AST
+  // shape the project's own reader can construct.
   return kind == NodeKind::Ref || kind == NodeKind::NameRef || kind == NodeKind::StructuredRef ||
-         kind == NodeKind::RangeOp || kind == NodeKind::Call || kind == NodeKind::ErrorPlaceholder;
+         kind == NodeKind::RangeOp || kind == NodeKind::Call || kind == NodeKind::ErrorPlaceholder ||
+         kind == NodeKind::IntersectOp || kind == NodeKind::UnionOp;
 }
 
 // Maps a binary token kind to its `BinOp` enum value.
@@ -416,9 +426,17 @@ AstNode* Parser::parse() {
     return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::RParen ||
            k == TokenKind::RBracket || k == TokenKind::Number;
   };
+  // `RParen` / `RBracket` are deliberately absent here even though they are
+  // reference-shaped on the left: an intersection RHS is an expression, and
+  // neither token can ever start one. Admitting them made a trailing space
+  // before a closing paren or bracket (`SUM(A1 )`, `SUM(A1:A10 )`) retain
+  // the whitespace as a candidate operator; the Pratt loop then tried to
+  // parse an RHS starting at `)`/`]`, produced an error/placeholder node,
+  // and wrapped the bare reference in a spurious IntersectOp -- turning a
+  // formula real Excel accepts into #NAME?.
   auto is_ref_right_candidate = [](TokenKind k) noexcept {
     return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::LParen ||
-           k == TokenKind::RParen || k == TokenKind::RBracket || k == TokenKind::Number;
+           k == TokenKind::Number;
   };
   // A cell-shaped lexeme that is also an Excel function name. The two forms
   // overlap only where a function name matches the cell-reference pattern

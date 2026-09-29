@@ -185,13 +185,31 @@ AstNode* Parser::parse_string_atom() {
   return n;
 }
 
+TextRange Parser::consume_ref_error_glued_tail(TextRange base_range) {
+  if (peek_kind() != TokenKind::CellRef) {
+    return base_range;
+  }
+  const Token& first = advance();
+  TextRange range = SpanRange(base_range, first.range);
+  if (peek_kind() == TokenKind::Colon && peek_kind_at(1) == TokenKind::CellRef) {
+    advance();  // Colon
+    const Token& second = advance();
+    range = SpanRange(range, second.range);
+  }
+  return range;
+}
+
 AstNode* Parser::parse_error_literal_atom() {
   const Token& tok = advance();
+  TextRange range = tok.range;
+  if (tok.error_code == ErrorCode::Ref) {
+    range = consume_ref_error_glued_tail(range);
+  }
   AstNode* n = make_error_literal(arena_, tok.error_code);
   if (n == nullptr) {
     return nullptr;
   }
-  n->set_range(tok.range);
+  n->set_range(range);
   return n;
 }
 

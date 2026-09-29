@@ -87,6 +87,13 @@ TEST(ParserLet, BindingNameWithUnderscore) {
   EXPECT_EQ(ParseToSexpr("=LET(_foo, 3, _foo)"), "(let ((_foo (num 3))) (name _foo))");
 }
 
+TEST(ParserLet, BindingNameWithBackslashStart) {
+  // `\` is Excel's third legal name-manager start character, alongside a
+  // letter and `_`; `IsLetNameShape` mirrors the tokenizer's identifier
+  // rule so a LET binding admits it too.
+  EXPECT_EQ(ParseToSexpr("=LET(\\foo, 3, \\foo)"), "(let ((\\foo (num 3))) (name \\foo))");
+}
+
 TEST(ParserLet, BindingNameWithDigitsAndDot) {
   // Allowed shape: leading letter, subsequent letters/digits/underscore/
   // period. `a1_test.v2` has trailing non-digit characters so is NOT an

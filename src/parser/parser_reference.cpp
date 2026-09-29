@@ -24,7 +24,7 @@ using detail::SpanRange;
 
 namespace {
 
-// Returns true iff `name` starts with `[A-Za-z_]` or any non-ASCII (UTF-8
+// Returns true iff `name` starts with `[A-Za-z_\]` or any non-ASCII (UTF-8
 // continuation) byte, and continues with `[A-Za-z0-9_.?]` plus non-ASCII
 // bytes. Length must be non-zero and <= 255 bytes. This mirrors the
 // tokenizer's identifier rule (`Tokenizer::is_ident_start_byte` /
@@ -37,7 +37,7 @@ bool IsLetNameShape(std::string_view name) noexcept {
     return false;
   }
   const auto first = static_cast<unsigned char>(name[0]);
-  if (!IsAsciiLetter(static_cast<char>(first)) && first != '_' && first < 0x80) {
+  if (!IsAsciiLetter(static_cast<char>(first)) && first != '_' && first != '\\' && first < 0x80) {
     return false;
   }
   for (std::size_t i = 1; i < name.size(); ++i) {
@@ -752,12 +752,25 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
     return n;
   }
 
-  // Three possibilities:
+  // Four possibilities:
   //   1. CellRef: `Sheet1!A1`.
   //   2. Ident Colon Ident with matching column letters: `Sheet1!A:A`.
   //   3. Number Colon Number with matching row digits: `Sheet1!1:1`.
+  //   4. `#REF!`: Excel's spelling after the sheet itself is deleted
+  //      (`Sheet1!#REF!`). The whole reference has already collapsed to
+  //      one error, so the sheet qualifier carries no surviving meaning.
   // Anything else is an error.
   const TokenKind k = peek_kind();
+  if (k == TokenKind::ErrorLiteral && peek().error_code == ErrorCode::Ref) {
+    const Token& err_tok = advance();
+    const TextRange range = consume_ref_error_glued_tail(SpanRange(sheet_range, err_tok.range));
+    AstNode* n = make_error_literal(arena_, ErrorCode::Ref);
+    if (n == nullptr) {
+      return nullptr;
+    }
+    n->set_range(range);
+    return n;
+  }
   if (k == TokenKind::CellRef) {
     const Token& cell = advance();
     Reference r;

@@ -187,6 +187,26 @@ TEST(AstFormat, ThreeDRangeTailAbsolute) {
   ExpectRoundTripsToSame("=SUM(Sheet1:Sheet3!$A$1:$B$2)");
 }
 
+// A sheet renamed to TRUE/FALSE cannot be written as source text directly
+// (the unquoted spelling *is* the bug), so this builds the Reference node
+// the way a rename_sheet-driven re-serialise would and checks that
+// formatting it produces text that re-parses to the same reference.
+TEST(AstFormat, RefWithReservedWordSheetNameQuotesAndReparses) {
+  Arena a1;
+  Reference r;
+  r.sheet = "TRUE";
+  r.col = 0;
+  r.row = 0;
+  AstNode* root1 = make_ref(a1, r);
+  ASSERT_NE(root1, nullptr);
+  const std::string formatted = format_formula(*root1);
+  EXPECT_EQ(formatted, "'TRUE'!A1");
+
+  Arena a2;
+  const std::string sexpr2 = ParseDump(formatted, a2);
+  EXPECT_EQ(sexpr2, "(ref 'TRUE'!A1)");
+}
+
 TEST(AstFormat, NameRef) {
   ExpectRoundTripsToSame("=foo");
 }
@@ -368,6 +388,15 @@ TEST(AstFormat, IntersectOpWithUnionRhs) {
 TEST(AstFormat, IntersectOpWithUnionLhs) {
   ExpectRoundTripsToSame("=(A1,B1) C1:D1");
 }
+// An intersection/union can itself close a `:` range: the XLSB Ptg decoder
+// can already build this AST shape (PtgRange over a PtgIsect/PtgUnion
+// operand), so the text parser must accept it back on reparse too.
+TEST(AstFormat, RangeWithIntersectionLhs) {
+  ExpectRoundTripsToSame("=(A1 B1):C3");
+}
+TEST(AstFormat, RangeWithIntersectionOfRangesLhs) {
+  ExpectRoundTripsToSame("=(A1:B2 B1:C3):D4");
+}
 TEST(AstFormat, ImplicitIntersection) {
   ExpectRoundTripsToSame("=@A1");
 }
@@ -507,6 +536,51 @@ TEST(AstFormat, StorageFormAgreesWithCanonicalFormOnReferenceSpellings) {
     EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), format_formula(*root))
         << "storage form diverged for: " << src;
   }
+}
+
+// LET/LAMBDA parameter names resolve case-insensitively at eval time (Excel
+// folds ASCII case on name resolution), so the storage form must recognise a
+// differently-cased reference to a bound parameter as in-scope and give it
+// the `_xlpm.` placeholder prefix, the same as an exact-case reference.
+TEST(AstFormat, LetStorageFormMatchesParameterCaseInsensitively) {
+  Arena arena;
+  Parser parser("=LET(x,1,X+1)", arena);
+  AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(parser.errors().empty());
+  EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), "LET(_xlpm.x,1,_xlpm.X+1)");
+}
+
+TEST(AstFormat, LambdaStorageFormMatchesParameterCaseInsensitively) {
+  Arena arena;
+  Parser parser("=LAMBDA(x,X+1)", arena);
+  AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(parser.errors().empty());
+  EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), "LAMBDA(_xlpm.x,_xlpm.X+1)");
+}
+
+// Excel's on-disk spelling of the postfix `#` operator is a call to the
+// hidden `_xlfn.ANCHORARRAY` name, not the bare `<ref>#` the formula bar
+// shows. `format_formula` (the canonical/formula-bar form) must keep the
+// `#` spelling; only `format_formula_storage` uses the call shape.
+TEST(AstFormat, SpillRefStorageFormUsesAnchorarrayCall) {
+  Arena arena;
+  Parser parser("=SUM(A1#)", arena);
+  AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(parser.errors().empty());
+  EXPECT_EQ(format_formula(*root), "SUM(A1#)");
+  EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), "SUM(ANCHORARRAY(A1))");
+}
+
+TEST(AstFormat, SpillRefStorageFormWithComputedAnchor) {
+  Arena arena;
+  Parser parser("=SEQUENCE(3)#", arena);
+  AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(parser.errors().empty());
+  EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), "ANCHORARRAY(SEQUENCE(3))");
 }
 
 TEST(AstFormat, WholeAxisPairIsStoredAsTheCompactSpelling) {

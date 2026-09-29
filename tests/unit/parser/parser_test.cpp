@@ -48,6 +48,12 @@ TEST(ParserAtoms, DecimalLiteral) {
   EXPECT_EQ(ParseToSexpr("=3.14"), "(num 3.14)");
 }
 
+TEST(ParserAtoms, TrailingDotLiteral) {
+  // `1.` -- an empty fractional part -- is a valid Excel literal equal to 1.
+  EXPECT_EQ(ParseToSexpr("=1."), "(num 1)");
+  EXPECT_EQ(ParseToSexpr("=1.+2"), "(binary + (num 1) (num 2))");
+}
+
 TEST(ParserAtoms, BoolTrueUpperCase) {
   EXPECT_EQ(ParseToSexpr("=TRUE"), "(bool true)");
 }
@@ -70,6 +76,35 @@ TEST(ParserAtoms, ErrorLiteralName) {
 
 TEST(ParserAtoms, ErrorLiteralNA) {
   EXPECT_EQ(ParseToSexpr("=#N/A"), "(err-lit #N/A)");
+}
+
+// Excel rewrites a reference through a deleted row/column/sheet as `#REF!`
+// glued directly to whatever cell/range tail (`#REF!A1`, `#REF!A1:B2`) or
+// preceding sheet qualifier (`Sheet1!#REF!`) survived. The whole reference
+// has already collapsed to one error, so these fold into a single
+// `err-lit`, not `#NAME?` or a parse failure.
+TEST(ParserAtoms, ErrorLiteralRefWithGluedCellTail) {
+  EXPECT_EQ(ParseToSexpr("=#REF!A1"), "(err-lit #REF!)");
+}
+TEST(ParserAtoms, ErrorLiteralRefWithGluedRangeTail) {
+  EXPECT_EQ(ParseToSexpr("=SUM(#REF!A1:B2)"), "(call SUM (err-lit #REF!))");
+}
+TEST(ParserAtoms, ErrorLiteralRefAfterSheetQualifier) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1!#REF!"), "(err-lit #REF!)");
+}
+TEST(ParserAtoms, ErrorLiteralRefAfterSheetQualifierWithGluedCellTail) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1!#REF!A1"), "(err-lit #REF!)");
+}
+TEST(ParserAtoms, ErrorLiteralNADoesNotConsumeGluedCellTail) {
+  // The fold is specific to #REF! -- an unrelated error literal glued to a
+  // reference-shaped run is not this finding's shape and stays as-is
+  // (`#N/A` alone, with `A1` left for the parser to error on separately).
+  Arena a;
+  Parser p("=#N/AA1", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_EQ(root->kind(), NodeKind::ErrorLiteral);
+  EXPECT_EQ(root->as_error_literal(), ErrorCode::NA);
 }
 
 TEST(ParserAtoms, CellRefA1) {
@@ -206,6 +241,12 @@ TEST(ParserAtoms, NameRef) {
 
 TEST(ParserAtoms, NameRefMixedCase) {
   EXPECT_EQ(ParseToSexpr("=Foo_bar"), "(name Foo_bar)");
+}
+
+TEST(ParserAtoms, NameRefBackslashStart) {
+  // Excel's name-manager rule accepts a letter, underscore, or backslash as
+  // the first character of a defined name.
+  EXPECT_EQ(ParseToSexpr("=\\foo"), "(name \\foo)");
 }
 
 // ---------------------------------------------------------------------------
@@ -353,6 +394,20 @@ TEST(ParserRange, RangeInsideSum) {
   EXPECT_EQ(ParseToSexpr("=SUM(A1:A10)"), "(call SUM (range (ref A1) (ref A10)))");
 }
 
+// A parenthesised intersection/union is itself reference-shaped and can
+// close a `:` range -- the same shapes the space-intersection operand check
+// already admits on both sides. The XLSB Ptg decoder can already build a
+// PtgRange over a PtgIsect/PtgUnion operand with no equivalent restriction,
+// so the text parser rejecting this AST on reparse would break
+// format_formula's round-trip promise.
+TEST(ParserRange, IntersectionEndpointIsAcceptedRangeLhs) {
+  EXPECT_EQ(ParseToSexpr("=(A1 B1):C3"), "(range (intersect (ref A1) (ref B1)) (ref C3))");
+}
+TEST(ParserRange, IntersectionEndpointIsAcceptedRangeLhsOfIntersections) {
+  EXPECT_EQ(ParseToSexpr("=(A1:B2 B1:C3):D4"),
+            "(range (intersect (range (ref A1) (ref B2)) (range (ref B1) (ref C3))) (ref D4))");
+}
+
 // ---------------------------------------------------------------------------
 // Space-as-intersection operator
 // ---------------------------------------------------------------------------
@@ -420,6 +475,27 @@ TEST(ParserIntersect, LowercaseLog10BeforeSpacedParenStaysCall) {
 
 TEST(ParserIntersect, Log11BeforeSpacedParenIsIntersect) {
   EXPECT_EQ(ParseToSexpr("=LOG11 (B1:C5)"), "(intersect (ref LOG11) (range (ref B1) (ref C5)))");
+}
+
+// A trailing space before a closing paren/bracket can never start an
+// intersection RHS (there is no expression left to parse), so it must
+// degrade to plain layout on every path a reference can appear in: a bare
+// call argument, a range endpoint, a parenthesised group, and a structured
+// reference's table-name atom.
+TEST(ParserIntersect, SpaceBeforeClosingParenAfterCellRefDegradesToLayout) {
+  EXPECT_EQ(ParseToSexpr("=SUM(A1 )"), "(call SUM (ref A1))");
+}
+TEST(ParserIntersect, SpaceBeforeClosingParenAfterRangeDegradesToLayout) {
+  EXPECT_EQ(ParseToSexpr("=SUM(A1:A10 )"), "(call SUM (range (ref A1) (ref A10)))");
+}
+TEST(ParserIntersect, SpaceBeforeClosingParenAfterParenthesisedRefDegradesToLayout) {
+  EXPECT_EQ(ParseToSexpr("=(A1:B2 )"), "(range (ref A1) (ref B2))");
+}
+TEST(ParserIntersect, SpaceBeforeClosingParenAfterNestedCallDegradesToLayout) {
+  EXPECT_EQ(ParseToSexpr("=SUM(INDEX(A:A,1) )"), "(call SUM (call INDEX (ref A:A) (num 1)))");
+}
+TEST(ParserIntersect, SpaceBeforeClosingParenAfterNameRefDegradesToLayout) {
+  EXPECT_EQ(ParseToSexpr("=SUM(Name )"), "(call SUM (name Name))");
 }
 
 // ---------------------------------------------------------------------------

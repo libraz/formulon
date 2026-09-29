@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -198,7 +199,11 @@ bool Tokenizer::is_ident_start_byte(unsigned char c) noexcept {
   // U+0080..U+00BF are continuation bytes; treating them as start bytes
   // lets a stray continuation slip into the identifier slot and pulls
   // subsequent token boundaries off by one byte.
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c >= 0xC0;
+  // `\` is Excel's third legal name-manager start character (alongside a
+  // letter and `_`) for a defined name -- `scan_ident_or_cellref_or_bool`
+  // consumes it explicitly before the continuation loop, since it is not
+  // itself an `is_ident_cont_byte`.
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '\\' || c >= 0xC0;
 }
 
 bool Tokenizer::is_ident_cont_byte(unsigned char c) noexcept {
@@ -835,10 +840,10 @@ void Tokenizer::scan_number() {
 
   std::string_view lex(source_.data() + start, byte_pos_ - start);
 
-  // Reject degenerate runs: a bare '.' (no digits around it), or an empty
-  // fractional part like `1.`. We allow `.5` because the main loop only
-  // entered scan_number when `.` is followed by a digit. For `1.`, the
-  // fractional branch sets saw_dot but consumes no digit, which is invalid.
+  // Reject a bare '.' with no digit on either side. `.5` and `1.` both keep
+  // a digit (before or after the dot respectively) and are valid Excel
+  // literals -- `1.` parses to 1, matching Excel's own acceptance of a
+  // trailing decimal point with an empty fractional part.
   if (lex == ".") {
     emit(TokenKind::Invalid, start);
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
@@ -906,7 +911,7 @@ void Tokenizer::scan_number() {
   std::memcpy(buf, numeric_text.data(), n);
   buf[n] = '\0';
   char* end_ptr = nullptr;
-  const double value = std::strtod(buf, &end_ptr);
+  double value = std::strtod(buf, &end_ptr);
   if (end_ptr != buf + n) {
     emit(TokenKind::Invalid, start);
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
@@ -915,8 +920,7 @@ void Tokenizer::scan_number() {
   // A magnitude that overflows the double range (`1E309`) comes back from
   // strtod as ±infinity. Excel surfaces such a literal as `#NUM!` rather
   // than propagating a non-finite Number value, so emit the error literal
-  // directly. Underflow (`1E-400`) returns a finite 0 / subnormal and is
-  // accepted as-is, matching Excel's round-to-zero.
+  // directly.
   if (std::isinf(value)) {
     Token overflow;
     overflow.kind = TokenKind::ErrorLiteral;
@@ -925,6 +929,16 @@ void Tokenizer::scan_number() {
     overflow.error_code = ErrorCode::Num;
     tokens_.push_back(overflow);
     return;
+  }
+  // Excel flushes any subnormal magnitude to zero rather than keeping
+  // denormalized precision: measured directly against Excel 365 (Mac, via
+  // xlwings), `=2.5E-310`, `=1E-320`, `=1E-310`, `=4.9E-324`, `=1E-308` all
+  // evaluate to exactly 0, while `=2.3E-308` (above `DBL_MIN`) evaluates to
+  // 2.3e-308. `strtod` only floors to 0.0 below the smallest subnormal
+  // (~4.9E-324), so the whole subnormal range above that needs an explicit
+  // check.
+  if (value != 0.0 && std::fabs(value) < std::numeric_limits<double>::min()) {
+    value = std::copysign(0.0, value);
   }
 
   Token t;
@@ -998,6 +1012,14 @@ void Tokenizer::scan_error_literal() {
 void Tokenizer::scan_ident_or_cellref_or_bool() {
   const std::size_t start = byte_pos_;
   mark_start();
+
+  // Optional leading `\` (defined-name start character; see
+  // `is_ident_start_byte`). It is not an `is_ident_cont_byte`, so it has to
+  // be consumed here rather than falling into the loop below; a CellRef
+  // never carries one, so `looks_like_cellref` rejects the run unchanged.
+  if (byte_pos_ < source_.size() && source_[byte_pos_] == '\\') {
+    advance_one();
+  }
 
   // Optional leading `$` (only relevant if we end up being a CellRef).
   if (byte_pos_ < source_.size() && source_[byte_pos_] == '$') {

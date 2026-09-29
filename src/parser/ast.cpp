@@ -16,6 +16,7 @@
 #include "utils/a1_column.h"
 #include "utils/arena.h"
 #include "utils/expected.h"  // FM_CHECK
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -843,6 +844,12 @@ bool sheet_name_needs_quoting(std::string_view name) noexcept {
   // as a numeric literal and never reaches the `!`, so `3Q!A1` is not a
   // reference at all. Quoting is the only way to write such a name.
   if (name.front() >= '0' && name.front() <= '9') {
+    return true;
+  }
+  // A sheet named TRUE/FALSE (any ASCII case) tokenizes as a Bool literal
+  // before the `!` is ever consulted, so `TRUE!A1` re-parses as `(bool
+  // true)` followed by a dangling `!`. Quoting is the only unambiguous form.
+  if (strings::case_insensitive_eq(name, "TRUE") || strings::case_insensitive_eq(name, "FALSE")) {
     return true;
   }
 
