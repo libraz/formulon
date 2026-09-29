@@ -63,8 +63,56 @@ constexpr std::uint16_t kRowRelBit = 0x8000;
 constexpr std::uint8_t kPtgValueClass = 0x40;
 constexpr std::uint8_t kPtgTypeMask = 0x1FU;
 
+constexpr std::uint8_t kPtgReferenceClass = 0x20;
+constexpr std::uint8_t kPtgArrayClass = 0x60;
+
 constexpr std::uint8_t ValueClassPtg(std::uint8_t reference_class_ptg) {
   return static_cast<std::uint8_t>((reference_class_ptg & kPtgTypeMask) | kPtgValueClass);
+}
+
+/// `reference_class_ptg` carrying the class bits `cls` instead.
+constexpr std::uint8_t ClassedPtg(std::uint8_t reference_class_ptg, std::uint8_t cls) {
+  return static_cast<std::uint8_t>((reference_class_ptg & kPtgTypeMask) | cls);
+}
+
+/// Where a node sits in a formula: the parameter-class letter
+/// (`xlsb_parameter_class`) of the built-in argument it is, or is inside,
+/// 0 elsewhere; `operand` when it is an operator's operand there.
+struct Slot {
+  char letter = 0;
+  bool operand = false;
+};
+
+/// Class bits Excel gives a cell (`area == false`) or area reference at
+/// `slot` (measured per parameter; see `xlsb_parameter_class`). Outside
+/// every built-in an operand is value class and a direct argument keeps
+/// reference class.
+std::uint8_t SlotClass(Slot slot, bool area) {
+  if (slot.operand) {
+    switch (slot.letter) {
+      case 'S':
+      case 'I':
+      case 'Y':
+        return area ? kPtgArrayClass : kPtgValueClass;
+      case 'F':
+      case 'X':
+        return kPtgArrayClass;
+      default:
+        return kPtgValueClass;
+    }
+  }
+  switch (slot.letter) {
+    case 'V':
+      return kPtgValueClass;
+    case 'F':
+      return kPtgArrayClass;
+    case 'I':
+      return area ? kPtgArrayClass : kPtgValueClass;
+    case 'Y':
+      return area ? kPtgValueClass : kPtgReferenceClass;
+    default:
+      return kPtgReferenceClass;
+  }
 }
 
 void emit_u8(std::vector<std::uint8_t>& dst, std::uint8_t v) {
@@ -375,10 +423,15 @@ class Encoder {
     const bool root = std::exchange(is_root_, false);
     // Root promotion applies only to the single outermost node, and only when the caller wants it.
     const bool promote = root && promote_root_;
-    // In the same formulas an operator's operand is value class too (measured
-    // for a cell, an area and a name at the top level; inside a function
-    // Excel takes the class from the parameter, which is not modelled).
-    const bool value_operand = std::exchange(value_operand_, false) && promote_root_;
+    const Slot slot = std::exchange(next_slot_, Slot{});
+    // A reference's class follows its slot in the formulas a value root is
+    // measured for; a defined-name body keeps reference class (unmeasured).
+    auto cls = [&](bool area) -> std::uint8_t {
+      if (promote) {
+        return kPtgValueClass;
+      }
+      return promote_root_ ? SlotClass(slot, area) : kPtgReferenceClass;
+    };
     switch (node.kind()) {
       case parser::NodeKind::Literal:
         return emit_literal(node.as_literal());
@@ -387,16 +440,15 @@ class Encoder {
         emit_u8(out_, error_wire_code(node.as_error_literal()));
         return Expected<void, Error>::Ok();
       case parser::NodeKind::Ref:
-        return emit_ref(node.as_ref(),
-                        promote || (value_operand && !node.as_ref().is_full_col && !node.as_ref().is_full_row));
+        return emit_ref(node.as_ref(), cls(node.as_ref().is_full_col || node.as_ref().is_full_row));
       case parser::NodeKind::Ref3D:
         return emit_ref3d(node, promote);
       case parser::NodeKind::UnaryOp:
-        return emit_unary(node);
+        return emit_unary(node, slot);
       case parser::NodeKind::BinaryOp:
-        return emit_binary(node);
+        return emit_binary(node, slot);
       case parser::NodeKind::RangeOp:
-        return emit_range(node, promote, value_operand);
+        return emit_range(node, promote, cls(true));
       case parser::NodeKind::UnionOp:
       case parser::NodeKind::IntersectOp:
         return emit_reference_operation(node, root);
@@ -406,12 +458,12 @@ class Encoder {
         return emit_array(node);
       case parser::NodeKind::NameRef:
         if (!node.as_name_sheet().empty()) {
-          return emit_sheet_name_ref(node.as_name_sheet(), node.as_name(), promote || value_operand);
+          return emit_sheet_name_ref(node.as_name_sheet(), node.as_name(), cls(false));
         }
-        return emit_name_ref(node.as_name(), promote || value_operand);
+        return emit_name_ref(node.as_name(), cls(false));
       case parser::NodeKind::ExternalRef:
         if (parser::is_self_book_name_ref(node)) {
-          return emit_self_book_name_ref(node.as_external_ref_name(), promote || value_operand);
+          return emit_self_book_name_ref(node.as_external_ref_name(), cls(false));
         }
         return unsupported_node("ExternalRef");
       case parser::NodeKind::StructuredRef:
@@ -481,9 +533,9 @@ class Encoder {
                        [name](const auto& binding) { return strings::case_insensitive_eq(binding.first, name); });
   }
 
-  /// `value`: value-class `PtgName` (0x43), as Excel writes a name a cell
-  /// formula takes the value of; a LET / LAMBDA parameter stays 0x23.
-  Expected<void, Error> emit_name_ref(std::string_view name, bool value = false) {
+  /// `cls`: the class a defined name takes where it sits (see `SlotClass`);
+  /// a LET / LAMBDA parameter stays 0x23.
+  Expected<void, Error> emit_name_ref(std::string_view name, std::uint8_t cls = kPtgReferenceClass) {
     // Case-insensitive: LET/LAMBDA parameter names resolve case-insensitively
     // (Excel folds ASCII case on name resolution), so a NameRef spelled in a
     // different case than its binding is still that parameter.
@@ -499,7 +551,7 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
     }
-    emit_u8(out_, value ? ValueClassPtg(0x23) : 0x23);  // PtgName
+    emit_u8(out_, ClassedPtg(0x23, cls));  // PtgName
     emit_u32(out_, it->second);
     return Expected<void, Error>::Ok();
   }
@@ -510,7 +562,7 @@ class Encoder {
   /// record scoped to `sheet` that Excel 365 saves for it (never another
   /// sheet's definition). Excel writes a sheet-qualified name as `PtgNameX`
   /// through a book-scope `BrtExternSheet` entry rather than as `PtgName`.
-  Expected<void, Error> emit_sheet_name_ref(std::string_view sheet, std::string_view name, bool value) {
+  Expected<void, Error> emit_sheet_name_ref(std::string_view sheet, std::string_view name, std::uint8_t cls) {
     const int itab = resolve_ixti(sheet_names_, sheet);
     if (itab < 0) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet-qualified name names no sheet",
@@ -524,14 +576,14 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
     }
-    return emit_name_x(it->second, value);
+    return emit_name_x(it->second, cls);
   }
 
   /// Emits `PtgNameX` for the self-book `[0]!name`, naming the record it
   /// resolves to: the workbook-scoped one, else the lowest sheet's local
   /// one, as Excel 365 saves it. An undefined name falls back to its
   /// placeholder record.
-  Expected<void, Error> emit_self_book_name_ref(std::string_view name, bool value) {
+  Expected<void, Error> emit_self_book_name_ref(std::string_view name, std::uint8_t cls) {
     auto it = name_table_.find(sheet_scoped_name_key(-1, name));
     for (std::size_t itab = 0; it == name_table_.end() && itab < sheet_names_.size(); ++itab) {
       it = name_table_.find(sheet_scoped_name_key(static_cast<std::int32_t>(itab), name));
@@ -543,14 +595,14 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
     }
-    return emit_name_x(it->second, value);
+    return emit_name_x(it->second, cls);
   }
 
   /// Emits `PtgNameX` for record `ilbl` through the sheetless
   /// `BrtExternSheet` entry this workbook's own names resolve through.
-  Expected<void, Error> emit_name_x(std::uint32_t ilbl, bool value) {
+  Expected<void, Error> emit_name_x(std::uint32_t ilbl, std::uint8_t cls) {
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiNoSheet, kXtiNoSheet));
-    emit_u8(out_, value ? ValueClassPtg(0x39) : 0x39);  // PtgNameX
+    emit_u8(out_, ClassedPtg(0x39, cls));  // PtgNameX
     emit_u16(out_, ixti);
     emit_u32(out_, ilbl);
     return Expected<void, Error>::Ok();
@@ -669,10 +721,9 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
-  /// `promote`: measured against real Excel 365 -- a reference that is a
-  /// cell formula's entire body (nothing else consumes it) is value class;
-  /// a function argument or operator operand stays reference class.
-  Expected<void, Error> emit_ref(const parser::Reference& ref, bool promote) {
+  /// `cls`: the class bits the reference takes where it sits (see
+  /// `SlotClass`); a cell formula's entire body is value class.
+  Expected<void, Error> emit_ref(const parser::Reference& ref, std::uint8_t cls) {
     if (ref.is_full_col || ref.is_full_row) {
       // XLSB has no standalone whole-column / whole-row token. Encode the
       // logical extent as an Area using Excel's grid sentinels; this is
@@ -692,28 +743,28 @@ class Encoder {
         last.col = 16383U;
       }
       if (ref.sheet.empty()) {
-        emit_u8(out_, promote ? ValueClassPtg(0x25) : 0x25);  // PtgArea
+        emit_u8(out_, ClassedPtg(0x25, cls));  // PtgArea
         emit_area(out_, first, last);
         return Expected<void, Error>::Ok();
       }
       ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(ref.sheet));
-      emit_u8(out_, promote ? ValueClassPtg(0x3B) : 0x3B);  // PtgArea3d
+      emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
       emit_u16(out_, ixti);
       emit_area(out_, first, last);
       return Expected<void, Error>::Ok();
     }
     if (ref.sheet.empty() && base_ && IsRelative(ref)) {
-      emit_u8(out_, promote ? ValueClassPtg(0x2C) : 0x2C);  // PtgRefN
+      emit_u8(out_, ClassedPtg(0x2C, cls));  // PtgRefN
       emit_loc(out_, OffsetFrom(ref, *base_));
       return Expected<void, Error>::Ok();
     }
     if (ref.sheet.empty()) {
-      emit_u8(out_, promote ? ValueClassPtg(0x24) : 0x24);  // PtgRef
+      emit_u8(out_, ClassedPtg(0x24, cls));  // PtgRef
       emit_loc(out_, ref);
       return Expected<void, Error>::Ok();
     }
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(ref.sheet));
-    emit_u8(out_, promote ? ValueClassPtg(0x3A) : 0x3A);  // PtgRef3d
+    emit_u8(out_, ClassedPtg(0x3A, cls));  // PtgRef3d
     emit_u16(out_, ixti);
     emit_loc(out_, ref);
     return Expected<void, Error>::Ok();
@@ -786,14 +837,14 @@ class Encoder {
     return -1;
   }
 
-  /// Emits an operator's operand, which takes its value (see `emit_node`).
-  Expected<void, Error> emit_operand(const parser::AstNode& node) {
-    value_operand_ = true;
+  /// Emits an operator's operand; `slot` is where the operator sits.
+  Expected<void, Error> emit_operand(const parser::AstNode& node, Slot slot) {
+    next_slot_ = Slot{slot.letter, true};
     return emit(node);
   }
 
-  Expected<void, Error> emit_unary(const parser::AstNode& node) {
-    RETURN_IF_ERROR(emit_operand(node.as_unary_operand()));
+  Expected<void, Error> emit_unary(const parser::AstNode& node, Slot slot) {
+    RETURN_IF_ERROR(emit_operand(node.as_unary_operand(), slot));
     switch (node.as_unary_op()) {
       case parser::UnaryOp::Plus:
         emit_u8(out_, 0x12);  // PtgUplus
@@ -808,9 +859,9 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
-  Expected<void, Error> emit_binary(const parser::AstNode& node) {
-    RETURN_IF_ERROR(emit_operand(node.as_binary_lhs()));
-    RETURN_IF_ERROR(emit_operand(node.as_binary_rhs()));
+  Expected<void, Error> emit_binary(const parser::AstNode& node, Slot slot) {
+    RETURN_IF_ERROR(emit_operand(node.as_binary_lhs(), slot));
+    RETURN_IF_ERROR(emit_operand(node.as_binary_rhs(), slot));
     std::uint8_t byte = 0x03;
     switch (node.as_binary_op()) {
       case parser::BinOp::Add:
@@ -854,13 +905,11 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
-  /// `promote`: see `emit_ref`. The fast-path Area/Area3d collapse gets the
-  /// same promotion; the general form instead wraps `operand+operand+
-  /// PtgRange` in a value-class `PtgMemFunc` (both measured, real Excel 365).
-  /// `value_operand`: the range is an operator's operand, whose compact
-  /// `PtgArea` / `PtgAreaN` form is value class (measured) while the general
-  /// form keeps its reference-class tokens.
-  Expected<void, Error> emit_range(const parser::AstNode& node, bool promote, bool value_operand) {
+  /// `cls`: the class of the fast-path Area/Area3d collapse (see
+  /// `emit_ref`). A root the general form wraps, `operand+operand+PtgRange`,
+  /// in a value-class `PtgMemFunc` instead (`promote`; both measured, real
+  /// Excel 365).
+  Expected<void, Error> emit_range(const parser::AstNode& node, bool promote, std::uint8_t cls) {
     // Fast path: a range whose endpoints are both plain cell refs maps
     // to PtgArea / PtgArea3d (a single operand) rather than two refs +
     // the `:` operator. The decoder produces a RangeOp of two refs, so
@@ -871,21 +920,20 @@ class Encoder {
       const parser::Reference& a = lhs.as_ref();
       const parser::Reference& b = rhs.as_ref();
       if (!a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row && b.sheet.empty()) {
-        const bool value = promote || value_operand;
         if (a.sheet.empty() && base_ && (IsRelative(a) || IsRelative(b))) {
-          emit_u8(out_, value ? ValueClassPtg(0x2D) : 0x2D);  // PtgAreaN
+          emit_u8(out_, ClassedPtg(0x2D, cls));  // PtgAreaN
           emit_area(out_, OffsetFrom(a, *base_), OffsetFrom(b, *base_));
           return Expected<void, Error>::Ok();
         }
         if (a.sheet.empty()) {
-          emit_u8(out_, value ? ValueClassPtg(0x25) : 0x25);  // PtgArea
+          emit_u8(out_, ClassedPtg(0x25, cls));  // PtgArea
           emit_area(out_, a, b);
           return Expected<void, Error>::Ok();
         }
         const int itab = resolve_ixti(sheet_names_, a.sheet);
         const int ixti = itab >= 0 ? try_resolve_range_ixti(itab, itab) : -1;
         if (ixti >= 0) {
-          emit_u8(out_, promote ? ValueClassPtg(0x3B) : 0x3B);  // PtgArea3d
+          emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
           emit_u16(out_, static_cast<std::uint16_t>(ixti));
           emit_area(out_, a, b);
           return Expected<void, Error>::Ok();
@@ -1019,6 +1067,7 @@ class Encoder {
     }
     const std::uint32_t arity = node.as_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
+      next_slot_ = Slot{xlsb_parameter_class(name, i), false};
       RETURN_IF_ERROR(emit(node.as_call_arg(i)));
     }
     // Excel 365 stores a one-argument SUM as `PtgAttrSum` rather than a call.
@@ -1070,6 +1119,7 @@ class Encoder {
     emit_u32(out_, it->second);
     const std::uint32_t arity = node.as_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
+      next_slot_ = Slot{xlsb_parameter_class(name, i), false};
       RETURN_IF_ERROR(emit(node.as_call_arg(i)));
     }
     const std::uint32_t cparams = arity + 1;  // +1 for the name-ref operand
@@ -1152,8 +1202,8 @@ class Encoder {
   std::unordered_set<const parser::AstNode*> parens_;
   /// True while emitting the operation a memory token covers.
   bool in_memory_token_ = false;
-  /// Set by `emit_operand` for the next node `emit_node` starts.
-  bool value_operand_ = false;
+  /// Where the next node `emit_node` starts sits; set by its parent.
+  Slot next_slot_;
   /// Base cell of `PtgRefN` / `PtgAreaN` offsets, when the formula has one.
   const std::optional<PtgBaseCell> base_;
   /// See `emit()`'s `promote` local. Cleared on the first call.

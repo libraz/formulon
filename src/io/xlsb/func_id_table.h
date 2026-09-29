@@ -72,6 +72,19 @@ const XlsbFuncEntry* lookup_func_by_id(std::uint16_t id);
 /// one-to-one id <-> name relation in both directions.
 const XlsbFuncEntry* lookup_func_by_name(std::string_view name);
 
+/// Returns the class Excel gives a reference passed as argument `index`
+/// (0-based) of the built-in `name` (canonical spelling, any case), one of:
+///   * `V` value: a direct argument and an operator's operand are value class;
+///   * `R` reference: direct reference class, operands value class;
+///   * `S` like `R`, but an area operand is array class;
+///   * `F` forced array: direct and operands array class;
+///   * `X` direct reference class, operands array class;
+///   * `I` a direct or operand area is array class, a cell value class;
+///   * `Y` a direct area is value class, a direct cell reference class,
+///     operands as for `I`.
+/// Measured for every built-in the writer calls; `V` for a name with none.
+char xlsb_parameter_class(std::string_view name, std::uint32_t index);
+
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon

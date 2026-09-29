@@ -40,6 +40,16 @@ Usage::
     tools/oracle/.venv/bin/python tools/dev/xlsb_func_id_harvest.py emit \\
         tests/fixtures/excel/xlsb_func_ids.xlsb
 
+The parameter classes behind `xlsb_parameter_class` come from four class
+probes (one argument shape each) run in the Excel that is already open::
+
+    for slot in A1:A2 A1 A1:A2+0 A1+0; do
+      tools/oracle/.venv/bin/python tools/dev/xlsb_func_id_harvest.py classes-build \\
+          --slot "$slot" --out "/path/classes_$slot.xlsb"
+    done
+    tools/oracle/.venv/bin/python tools/dev/xlsb_func_id_harvest.py classes-emit \\
+        <A1:A2 probe> <A1 probe> <A1:A2+0 probe> <A1+0 probe>
+
 `emit` exits 1 when a decoded id would displace an existing table row. Such a
 row is withheld from the output and reported as a `// collision:` comment
 instead: `DBCS` is the standing case, because Excel encodes it with the id
@@ -481,7 +491,7 @@ def _ptg_token_length(buf: bytes, at: int, end: int) -> Optional[int]:
         if buf[at + 1] == _PTG_ATTR_CHOOSE:
             if at + 4 > end:
                 return None
-            return 4 + 4 * (_u16(buf, at + 2) + 1)
+            return 4 + 2 * (_u16(buf, at + 2) + 1)  # u16 jump offsets
         return 4
     if op < 0x20:
         return _PTG_FIXED_LEN.get(op)
@@ -739,6 +749,214 @@ def collisions(resolved: List[Dict[str, object]]) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
+# parameter classes
+# ---------------------------------------------------------------------------
+#
+# A reference argument is stored with the class the parameter it feeds asks
+# for: reference (`PtgArea` 0x25), value (0x45) or array (0x65). The class
+# probe calls every function with the area `A1:A2` (or, via `--slot`, any
+# text holding one cell or area token) in each argument slot and reads the
+# class of the n-th such token back as the n-th parameter's class.
+# With `--slot "A1:A2+0"` the same read gives the class Excel gives an
+# operator's operand inside that parameter, which differs from the direct
+# argument's class where the parameter does not force array evaluation.
+
+BRT_ARR_FMLA = 426
+CLASS_SLOTS_MAX = 8
+_CLASS_LETTER = {0x20: "R", 0x40: "V", 0x60: "A"}
+
+
+def table_rows() -> List[Tuple[str, int, int]]:
+    """`(name, arg_min, arg_max)` of every `func_id_table.cpp` row."""
+
+    path = os.path.join(REPO_ROOT, "src", "io", "xlsb", "func_id_table.cpp")
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    rows = re.findall(r'\{\d+,\s*"([A-Z0-9_.]+)",\s*(\d+),\s*(kVariadicMax|\d+),', text)
+    return [(n, int(lo), 255 if hi == "kVariadicMax" else int(hi)) for n, lo, hi in rows]
+
+
+def hidden_route_names() -> List[str]:
+    """Functions stored through the hidden-name route (`io/future_functions.cpp`)."""
+
+    path = os.path.join(REPO_ROOT, "src", "io", "future_functions.cpp")
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    names: List[str] = []
+    for blob in ("kXlfnFunctions", "kXlwsFunctions", "kXlsbHiddenNameFunctions"):
+        m = re.search(blob + r"\s*=\s*((?:\s*//[^\n]*\n|\s*\"[^\"]*\")+)\s*;", text)
+        if m:
+            joined = "".join(re.findall(r'"([^"]*)"', m.group(1)))
+            names.extend(n for n in joined.split("|") if n)
+    return names
+
+
+def class_probes() -> List[Tuple[str, int]]:
+    """`(name, slots)`: every function that takes arguments, at the arity probed.
+
+    A fixed arity is probed exactly; an open one up to three slots past its
+    minimum (so a repeating tail shows), capped at `CLASS_SLOTS_MAX`.
+    """
+
+    arity = registry_arity()
+    out: List[Tuple[str, int]] = []
+    seen = set()
+    rows = [(n, lo, hi) for n, lo, hi in table_rows()]
+    for name in hidden_route_names():
+        lo, hi = arity.get(name, (1, None))
+        rows.append((name, lo, 255 if hi is None else hi))
+    for name, lo, hi in rows:
+        if name in seen or name in ("LET", "LAMBDA") or hi == 0:
+            continue
+        seen.add(name)
+        out.append((name, min(hi, CLASS_SLOTS_MAX, max(lo, 1) + 3)))
+    return out
+
+
+def classes_build(out_path: str, slot: str) -> None:
+    """Types every class probe into a workbook in the running Excel and saves it as `.xlsb`.
+
+    Uses the Excel instance already running and leaves it running; other
+    sessions share it.
+    """
+
+    sys.path.insert(0, os.path.join(REPO_ROOT, "tools", "oracle"))
+    import xlwings as xw  # noqa: PLC0415
+    from drivers.macos_excel import _assign_formula  # noqa: PLC0415
+
+    out_path = os.path.abspath(out_path)
+    if os.path.exists(out_path):
+        os.remove(out_path)
+    app = xw.apps.active
+    book = app.books.add()
+    rejected: List[Tuple[str, str]] = []
+    try:
+        sheet = book.sheets[0]
+        sheet.range("A1").value = 1.0
+        sheet.range("A2").value = 2.0
+        for i, (name, slots) in enumerate(class_probes()):
+            row = PROBE_ROW_0 + i + 1
+            sheet.range((row, LABEL_COL + 1)).value = name
+            # An arity the engine does not declare is found by backing off
+            # until Excel accepts the call.
+            for n in range(slots, 0, -1):
+                formula = f"={name}(" + ",".join([slot] * n) + ")"
+                try:
+                    _assign_formula(sheet.range((row, FORMULA_COL + 1)), formula, context=f"{name} class probe")
+                    break
+                except Exception as exc:  # noqa: BLE001 - reported, not raised
+                    if n == 1:
+                        rejected.append((formula, f"{type(exc).__name__}: {exc}"[:120]))
+        book.api.save_workbook_as(filename=out_path, file_format=50)
+    finally:
+        # Save-as renames the book, so close it by its new name.
+        for open_book in list(app.books):
+            if open_book.name == os.path.basename(out_path):
+                open_book.close()
+    for formula, why in rejected:
+        print(f"rejected {formula}: {why}", file=sys.stderr)
+    print(f"wrote {out_path}")
+
+
+def _formula_streams(buf: bytes) -> Dict[Tuple[int, int], bytes]:
+    """Every formula cell's Ptg stream, resolving `PtgExp` to its array formula."""
+
+    cells: Dict[Tuple[int, int], bytes] = {}
+    arrays: Dict[Tuple[int, int], bytes] = {}
+    row = -1
+    for rec in iter_records(buf):
+        if rec.type == BRT_ROW_HDR:
+            row = _u32(buf, rec.offset)
+        elif rec.type in BRT_FMLA_TYPES:
+            span = _rgce_span(buf, rec)
+            if span is not None:
+                cells[(row, _u32(buf, rec.offset))] = buf[span[0] : span[0] + span[1]]
+        elif rec.type == BRT_ARR_FMLA:
+            p = rec.offset
+            first_row, first_col = _u32(buf, p), _u32(buf, p + 8)
+            cce = _u32(buf, p + 17)
+            arrays[(first_row, first_col)] = buf[p + 21 : p + 21 + cce]
+    return {key: arrays.get(key, rgce) if rgce[:1] == b"\x01" else rgce for key, rgce in cells.items()}
+
+
+def classes(xlsb_path: str) -> Tuple[Dict[str, str], List[str]]:
+    """Per-function parameter classes (`R`/`V`/`A` per slot), plus unresolved names."""
+
+    with zipfile.ZipFile(xlsb_path) as zf:
+        streams = _formula_streams(zf.read("xl/worksheets/sheet1.bin"))
+    out: Dict[str, str] = {}
+    unresolved: List[str] = []
+    for i, (name, slots) in enumerate(class_probes()):
+        rgce = streams.get((PROBE_ROW_0 + i, FORMULA_COL))
+        letters = ""
+        at = 0
+        while rgce is not None and at < len(rgce):
+            length = _ptg_token_length(rgce, at, len(rgce))
+            if length is None or length <= 0:
+                rgce = None
+                break
+            if rgce[at] >= 0x20 and _ptg_base_byte(rgce[at]) in (0x24, 0x25):
+                letters += _CLASS_LETTER[rgce[at] & 0x60]
+            at += length
+        if rgce is None or not letters or len(letters) > slots:
+            unresolved.append(name)
+            continue
+        out[name] = letters
+    return out, unresolved
+
+
+# One letter per parameter, from the classes Excel gave four probes of it:
+# a direct area, a direct cell, an area and a cell as an operator's operand
+# (`-` where Excel refused an operator there, i.e. a reference-only
+# parameter, read as its operand-free form).
+_SLOT_LETTER = {
+    "VVVV": "V",  # value
+    "RRVV": "R",  # reference, operands take values
+    "RRAV": "S",  # reference, an area operand stays an array
+    "AAAA": "F",  # forced array
+    "RRAA": "X",  # reference, operands forced to arrays
+    "AVAV": "I",  # array for an area, value for a cell
+    "VRAV": "Y",  # value for an area, reference for a cell
+    "RR--": "R",
+    "VV--": "V",
+}
+
+
+def classes_emit(area: str, cell: str, area_op: str, cell_op: str) -> List[str]:
+    """Formats the four class probes as `func_id_table.cpp`'s class blob.
+
+    Each entry is the shortest prefix of the per-slot letters that, repeating
+    its last letter (or last two, marked by a trailing `2`), regenerates what
+    was probed. Functions whose every slot is `V` are left out: that is the
+    lookup's default for a built-in.
+    """
+
+    probes = [classes(path)[0] for path in (area, cell, area_op, cell_op)]
+    lines: List[str] = []
+    for name in sorted(probes[0]):
+        width = len(probes[0][name])
+        letters = ""
+        for i in range(width):
+            key = "".join(p[name][i] if name in p and i < len(p[name]) else "-" for p in probes)
+            if key not in _SLOT_LETTER:
+                raise SystemExit(f"{name} slot {i}: unclassified probe classes {key}")
+            letters += _SLOT_LETTER[key]
+        best = letters
+        for period in (1, 2):
+            for k in range(period, len(letters) + 1):
+                gen = letters[:k]
+                while len(gen) < len(letters):
+                    gen += gen[-period:]
+                if gen == letters:
+                    cand = letters[:k] + ("2" if period == 2 else "")
+                    best = min(best, cand, key=len)
+                    break
+        if set(best.rstrip("2")) != {"V"}:
+            lines.append(f"{name}:{best}")
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -758,7 +976,38 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_emit = sub.add_parser("emit", help="print func_id_table.cpp rows for a probe .xlsb")
     p_emit.add_argument("xlsb")
 
+    p_cbuild = sub.add_parser("classes-build", help="save the parameter-class probe workbook as .xlsb")
+    p_cbuild.add_argument("--out", required=True)
+    p_cbuild.add_argument("--slot", default="A1:A2", help="text of every argument (one area token)")
+
+    p_classes = sub.add_parser("classes", help="print each function's parameter classes from a class probe .xlsb")
+    p_classes.add_argument("xlsb")
+
+    p_cemit = sub.add_parser("classes-emit", help="print the parameter-class blob from the four class probes")
+    p_cemit.add_argument("area", help='probe built with the default slot "A1:A2"')
+    p_cemit.add_argument("cell", help='probe built with --slot "A1"')
+    p_cemit.add_argument("area_op", help='probe built with --slot "A1:A2+0"')
+    p_cemit.add_argument("cell_op", help='probe built with --slot "A1+0"')
+
     args = parser.parse_args(argv)
+
+    if args.command == "classes-emit":
+        entries = classes_emit(args.area, args.cell, args.area_op, args.cell_op)
+        blob = "|" + "|".join(entries) + "|"
+        for at in range(0, len(blob), 100):
+            print(f'    "{blob[at : at + 100]}"')
+        return 0
+
+    if args.command == "classes-build":
+        classes_build(args.out, args.slot)
+        return 0
+    if args.command == "classes":
+        found, unresolved = classes(args.xlsb)
+        for name, letters in found.items():
+            print(f"{name} {letters}")
+        for name in unresolved:
+            print(f"UNRESOLVED {name}")
+        return 0
 
     if args.command == "build":
         build(args.out, visible=args.visible)

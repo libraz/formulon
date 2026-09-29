@@ -473,6 +473,47 @@ TEST(XlsbPtgCodec, VolatileFormulasOpenWithAttrSemi) {
             (std::vector<std::uint8_t>{0x19, 0x01, 0x00, 0x00}));
 }
 
+// A reference argument takes the class of the parameter it feeds, and an
+// operator's operand the class that parameter gives it; bytes as Excel 365
+// saved them (backup/oracle_probe/param_class). A reference-class operand
+// under IF made Excel compute =IF(A1>0,A2,A3) as #VALUE!, a value-class one
+// under SUMPRODUCT showed as =SUMPRODUCT(@A1:A2*2).
+TEST(XlsbPtgCodec, ArgumentClassesFollowTheParameter) {
+  struct Case {
+    const char* formula;
+    std::vector<std::uint8_t> rgce;
+  };
+  const Case cases[] = {
+      {"ISNUMBER(A1:A3)",
+       {0x45, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0xC0, 0x41, 0x80, 0x00}},
+      {"INDEX(A1:A3,2)", {0x25, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
+                          0xC0, 0x00, 0xC0, 0x1E, 0x02, 0x00, 0x42, 0x02, 0x1D, 0x00}},
+      {"ABS(A1)", {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x41, 0x18, 0x00}},
+      {"SUMPRODUCT(A1:A2*2)", {0x65, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xC0,
+                               0x00, 0xC0, 0x1E, 0x02, 0x00, 0x05, 0x42, 0x01, 0xE4, 0x00}},
+      {"VLOOKUP(2,A1:A3,1,0)", {0x1E, 0x02, 0x00, 0x25, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
+                                0xC0, 0x00, 0xC0, 0x1E, 0x01, 0x00, 0x1E, 0x00, 0x00, 0x42, 0x04, 0x66, 0x00}},
+      // Excel also writes PtgAttrIf / PtgAttrGoto around IF's branches, which
+      // this encoder leaves out (no observable difference).
+      {"IF(A1>0,A2,A3)", {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x1E, 0x00, 0x00, 0x0D, 0x24, 0x01, 0x00, 0x00,
+                          0x00, 0x00, 0xC0, 0x24, 0x02, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x42, 0x03, 0x01, 0x00}},
+  };
+  for (const Case& c : cases) {
+    EXPECT_EQ(EncodeOnSheet1(c.formula, PtgRootClass::kValue).rgce, c.rgce) << c.formula;
+  }
+}
+
+// The class list's tail repeats its last letter, or its last two when marked.
+TEST(XlsbPtgCodec, ParameterClassTailRepeats) {
+  EXPECT_EQ(xlsb_parameter_class("SUMPRODUCT", 7), 'F');
+  const char sumifs[] = "RRVRVRV";
+  for (std::uint32_t i = 0; i < 7U; ++i) {
+    EXPECT_EQ(xlsb_parameter_class("sumifs", i), sumifs[i]) << i;
+  }
+  EXPECT_EQ(xlsb_parameter_class("ABS", 0), 'V');
+  EXPECT_EQ(xlsb_parameter_class("NOT.A.FUNCTION", 3), 'V');
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }

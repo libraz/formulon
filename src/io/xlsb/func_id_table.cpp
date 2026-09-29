@@ -18,6 +18,8 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 namespace formulon {
 namespace io {
@@ -452,6 +454,46 @@ bool NameEqualsIgnoreCase(std::string_view a, std::string_view b) {
   return true;
 }
 
+/// Per-parameter reference class of every built-in with a parameter that is
+/// not plain value (`V`), as `|NAME:LETTERS|`. Harvested from Excel 365 by
+/// `tools/dev/xlsb_func_id_harvest.py classes-emit` (four probes calling each
+/// function with an area, a cell, and each as an operator's operand); the
+/// letters are documented at `xlsb_parameter_class`. A trailing `2` repeats
+/// the last two letters for the arguments past the list, otherwise the last
+/// one repeats.
+constexpr std::string_view kParameterClasses =
+    "|ACCRINT:R|ACCRINTM:R|AGGREGATE:VVXR|AMORDEGRC:R|AMORLINC:R|AND:S|AREAS:R|ARRAYTOTEXT:FV|AVEDEV:S|AV"
+    "ERAGE:S|AVERAGEA:S|AVERAGEIF:RVR|AVERAGEIFS:RRV2|BESSELI:R|BESSELJ:R|BESSELK:R|BESSELY:R|BIN2DEC:R|B"
+    "IN2HEX:R|BIN2OCT:R|BYCOL:XV|BYROW:XV|CELL:VR|CHISQ.TEST:F|CHITEST:F|CHOOSE:IS|CHOOSECOLS:XF|CHOOSERO"
+    "WS:XF|COLUMN:R|COLUMNS:X|COMPLEX:R|CONCAT:S|CONVERT:R|COPILOT:X|CORREL:F|COUNT:S|COUNTA:S|COUNTBLANK"
+    ":R|COUNTIF:RV|COUNTIFS:RV2|COUPDAYBS:R|COUPDAYS:R|COUPDAYSNC:R|COUPNCD:R|COUPNUM:R|COUPPCD:R|COVAR:F"
+    "|COVARIANCE.P:F|COVARIANCE.S:F|CUBEMEMBER:VSV|CUBESET:VSV|CUBEVALUE:VS|CUMIPMT:R|CUMPRINC:R|DAVERAGE"
+    ":R|DCOUNT:R|DCOUNTA:R|DEC2BIN:R|DEC2HEX:R|DEC2OCT:R|DELTA:R|DEVSQ:S|DGET:R|DISC:R|DMAX:R|DMIN:R|DOLL"
+    "ARDE:R|DOLLARFR:R|DPRODUCT:R|DROP:XV|DSTDEV:R|DSTDEVP:R|DSUM:R|DURATION:R|DVAR:R|DVARP:R|EDATE:R|EFF"
+    "ECT:R|ENCODEURL:X|EOMONTH:R|ERF:R|ERF.PRECISE:R|ERFC:R|ERFC.PRECISE:R|EXPAND:FVVF|F.TEST:F|FACTDOUBL"
+    "E:R|FILTER:XXF|FILTERXML:X|FORECAST:VF|FORECAST.ETS:VXXV|FORECAST.ETS.CONFINT:VXXV|FORECAST.ETS.SEAS"
+    "ONALITY:XXV|FORECAST.ETS.STAT:XXV|FORECAST.LINEAR:VF|FORMULATEXT:R|FREQUENCY:X|FTEST:F|FVSCHEDULE:RS"
+    "|GCD:S|GEOMEAN:S|GESTEP:R|GETPIVOTDATA:RRV|GROUPBY:XFFV|GROWTH:XXXR|HARMEAN:S|HEX2BIN:R|HEX2DEC:R|HE"
+    "X2OCT:R|HLOOKUP:VSSV|HSTACK:X|HYPERLINK:VI|IF:IS|IFERROR:IS|IFNA:IS|IFS:FX2|IMABS:R|IMAGINARY:R|IMAR"
+    "GUMENT:R|IMCONJUGATE:R|IMCOS:R|IMCOSH:R|IMCOT:R|IMCSC:R|IMCSCH:R|IMDIV:R|IMEXP:R|IMLN:R|IMLOG10:R|IM"
+    "LOG2:R|IMPOWER:R|IMPRODUCT:S|IMREAL:R|IMSEC:R|IMSECH:R|IMSIN:R|IMSINH:R|IMSQRT:R|IMSUB:R|IMSUM:S|IMT"
+    "AN:R|INDEX:XV|INTERCEPT:F|INTRATE:R|IRR:XV|ISEVEN:R|ISFORMULA:R|ISODD:R|ISOMITTED:S|ISREF:S|KURT:S|L"
+    "ARGE:SV|LCM:S|LINEST:XXR|LOGEST:XXR|LOOKUP:VX|MAKEARRAY:VVX|MAP:X|MATCH:VSR|MAX:S|MAXA:S|MAXIFS:RRV|"
+    "MDETERM:F|MDURATION:R|MEDIAN:S|MIN:S|MINA:S|MINIFS:RRV|MINVERSE:F|MIRR:XV|MMULT:F|MODE:F|MODE.MULT:F"
+    "|MODE.SNGL:F|MROUND:R|MULTINOMIAL:S|N:R|NETWORKDAYS:RRS|NETWORKDAYS.INTL:RRVS|NOMINAL:R|NPV:VS|OCT2B"
+    "IN:R|OCT2DEC:R|OCT2HEX:R|ODDFPRICE:R|ODDFYIELD:R|ODDLPRICE:R|ODDLYIELD:R|OFFSET:RV|OR:S|PEARSON:F|PE"
+    "RCENTILE:SV|PERCENTILE.EXC:SV|PERCENTILE.INC:SV|PERCENTOF:S|PERCENTRANK:SV|PERCENTRANK.EXC:SV|PERCEN"
+    "TRANK.INC:SV|PHONETIC:R|PIVOTBY:XXF|PRICE:R|PRICEDISC:R|PRICEMAT:R|PROB:FFV|PRODUCT:S|QUARTILE:SV|QU"
+    "ARTILE.EXC:SV|QUARTILE.INC:SV|QUOTIENT:R|RANDBETWEEN:R|RANK:VRV|RANK.AVG:VRV|RANK.EQ:VRV|RECEIVED:R|"
+    "REDUCE:XXV|ROW:R|ROWS:X|RSQ:F|SCAN:XXV|SERIESSUM:RRRS|SHEET:S|SHEETS:X|SINGLE:Y|SKEW:S|SKEW.P:S|SLOP"
+    "E:F|SMALL:SV|SORT:FFFV|SORTBY:FFV|SQRTPI:R|STDEV:S|STDEV.P:S|STDEV.S:S|STDEVA:S|STDEVP:S|STDEVPA:S|S"
+    "TEYX:F|SUBTOTAL:VR|SUM:S|SUMIF:RVR|SUMIFS:RRV2|SUMPRODUCT:F|SUMSQ:S|SUMX2MY2:F|SUMX2PY2:F|SUMXMY2:F|"
+    "SWITCH:FFX|T:R|T.TEST:FFV|TAKE:XV|TBILLEQ:R|TBILLPRICE:R|TBILLYIELD:R|TEXTAFTER:VIV|TEXTBEFORE:VIV|T"
+    "EXTJOIN:SVS|TEXTSPLIT:VFFV|TOCOL:XV|TOROW:XV|TRANSPOSE:F|TREND:XXXR|TRIMMEAN:SV|TRIMRANGE:XV|TTEST:F"
+    "FV|TYPE:I|UNIQUE:FV|VAR:S|VAR.P:S|VAR.S:S|VARA:S|VARP:S|VARPA:S|VLOOKUP:VSSV|VSTACK:X|WEBSERVICE:X|W"
+    "EEKNUM:R|WORKDAY:RRS|WORKDAY.INTL:RRVS|WRAPCOLS:FV|WRAPROWS:FV|XIRR:SSR|XLOOKUP:VXXS|XMATCH:VXV|XNPV"
+    ":RS|XOR:S|YEARFRAC:R|YIELD:R|YIELDDISC:R|YIELDMAT:R|Z.TEST:SV|ZTEST:SV|";
+
 }  // namespace
 
 const std::size_t kXlsbFuncEntryCount = kEntriesCount;
@@ -476,6 +518,30 @@ const XlsbFuncEntry* lookup_func_by_name(std::string_view name) {
     }
   }
   return nullptr;
+}
+
+char xlsb_parameter_class(std::string_view name, std::uint32_t index) {
+  std::string needle = "|";
+  for (char c : name) {
+    needle.push_back((c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c);
+  }
+  needle.push_back(':');
+  const std::size_t at = kParameterClasses.find(needle);
+  if (at == std::string_view::npos) {
+    return 'V';
+  }
+  const std::size_t begin = at + needle.size();
+  std::string_view letters = kParameterClasses.substr(begin, kParameterClasses.find('|', begin) - begin);
+  std::size_t period = 1;
+  if (letters.back() == '2') {
+    period = 2;
+    letters.remove_suffix(1);
+  }
+  if (index < letters.size()) {
+    return letters[index];
+  }
+  const std::size_t tail = letters.size() - period;
+  return letters[tail + (index - tail) % period];
 }
 
 }  // namespace xlsb
