@@ -30,29 +30,13 @@
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
-
-// ASCII-lowercase fold for the info_type key. Excel matches CELL's first
-// argument case-insensitively (`"ROW"` == `"row"` == `"Row"`); only ASCII
-// is in the supported keyset so a byte-level fold suffices.
-std::string ascii_tolower(std::string_view s) {
-  std::string out;
-  out.reserve(s.size());
-  for (char c : s) {
-    const auto u = static_cast<unsigned char>(c);
-    if (u >= 'A' && u <= 'Z') {
-      out.push_back(static_cast<char>(u + 32));
-    } else {
-      out.push_back(c);
-    }
-  }
-  return out;
-}
 
 // Copies `s` into `arena` and returns a Text Value pointing at the
 // arena-owned storage. Used for keys whose result is a constant string
@@ -517,7 +501,8 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (info_text.value().empty()) {
     return Value::error(ErrorCode::Value);
   }
-  const std::string key = ascii_tolower(info_text.value());
+  // Excel matches info_type case-insensitively; every key is ASCII.
+  const std::string key = strings::to_ascii_lower(info_text.value());
 
   // Reference-dependent protection query: reads the referenced cell's xf
   // `locked` flag. Resolves the top-left (or the formula cell for the

@@ -22,6 +22,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -290,23 +291,6 @@ Value ErrorType(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // type_text - including a numeric argument or a non-text coercion - surfaces
 // as `#VALUE!`.
 
-// ASCII-lowercase helper for the INFO type_text lookup. Non-ASCII bytes
-// pass through unchanged; the supported keys are all ASCII so that's
-// sufficient.
-std::string ascii_tolower(std::string_view s) {
-  std::string out;
-  out.reserve(s.size());
-  for (char c : s) {
-    const auto u = static_cast<unsigned char>(c);
-    if (u >= 'A' && u <= 'Z') {
-      out.push_back(static_cast<char>(u + 32));
-    } else {
-      out.push_back(c);
-    }
-  }
-  return out;
-}
-
 Value Info(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   // INFO only accepts Text (and Blank -> ""); numeric / bool arguments
   // surface as `#VALUE!` after the case-insensitive lookup fails. We
@@ -318,7 +302,7 @@ Value Info(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  const std::string key = ascii_tolower(text.value());
+  const std::string key = strings::to_ascii_lower(text.value());
   std::string_view result;
   if (key == "directory") {
     result = "/";
