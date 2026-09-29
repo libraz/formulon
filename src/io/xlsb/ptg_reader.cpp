@@ -431,6 +431,16 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     for (std::uint32_t i = 0; i < real_count; ++i) {
       args[i] = ops[1 + i];
     }
+    // Another sheet's local name keeps its qualifier: `Sheet2!Fn(3)` is a
+    // call through that sheet's scope, which only a `LambdaCall` can carry.
+    if (!ops[0]->as_name_sheet().empty()) {
+      parser::AstNode* n = parser::make_lambda_call(arena, const_cast<parser::AstNode*>(ops[0]), args, real_count);
+      if (n == nullptr) {
+        return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (qualified name call)",
+                          "context=xlsb_ptg_reader");
+      }
+      return n;
+    }
     parser::AstNode* n = parser::make_call(arena, arena.intern(callee), args, real_count);
     if (n == nullptr) {
       return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (future-function call)",

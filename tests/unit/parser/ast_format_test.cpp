@@ -216,6 +216,8 @@ TEST(AstFormat, SheetQualifiedNameRef) {
   ExpectRoundTripsToSame("='My Sheet'!Rate*2");
   ExpectRoundTripsToSame("='It''s'!Rate");
   ExpectRoundTripsToSame("=SUM(Sheet2!Rng,Rng)");
+  ExpectRoundTripsToSame("=Sheet2!Fn(3)");
+  ExpectRoundTripsToSame("='My Sheet'!Fn(1,A1)+1");
 }
 
 // A qualified name whose text reads as a column still needs the parens that

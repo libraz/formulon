@@ -75,6 +75,9 @@ const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_vie
   if (wb == nullptr || !current_sheet_index(ctx, &sheet_id)) {
     return nullptr;
   }
+  if (ctx.name_scope_sheet() >= 0) {
+    sheet_id = static_cast<std::uint16_t>(ctx.name_scope_sheet());
+  }
   return find_defined_name(*wb, sheet_id, name);
 }
 
@@ -115,7 +118,13 @@ Value evaluate_defined_name(const io::DefinedName* def, Arena& arena, const Func
   // lexical scope (a defined name never sees LET / LAMBDA bindings) and push
   // this definition onto the cycle chain.
   const DefinedNameFrame frame{def, ctx.defined_name_stack()};
-  const EvalContext def_ctx = ctx.with_name_env(nullptr).with_defined_name_frame(&frame);
+  EvalContext def_ctx = ctx.with_name_env(nullptr).with_defined_name_frame(&frame);
+  // A sheet-local name's body resolves its own unqualified names in the
+  // owning sheet's scope, whichever sheet uses it; a workbook name's body
+  // keeps the scope it is used from.
+  if (def->local_sheet_id >= 0 && static_cast<std::size_t>(def->local_sheet_id) < ctx.workbook()->sheet_count()) {
+    def_ctx = def_ctx.with_name_scope_sheet(def->local_sheet_id);
+  }
   // A range-shaped body (e.g. `Sheet1!$A$1:$A$5`) must surface as a
   // `Value::Array` so range-aware consumers (`SUM`, `COUNT`, `VLOOKUP`, ...)
   // and the spill committer pick up its full shape instead of collapsing it to

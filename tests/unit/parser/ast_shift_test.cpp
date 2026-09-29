@@ -260,9 +260,24 @@ TEST(ShiftRefsWithSheetRename, RenamesSheetQualifiedNames) {
   EXPECT_EQ(format_formula(*shifted), "'My Sheet'!Rate+Other!Rate+Rate");
 }
 
+TEST(ShiftRefsWithSheetRename, RenamesSheetQualifiedNameCalls) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=Sheet1!Fn(Sheet1!A1)+Fn(1)", arena);
+  ASSERT_NE(root, nullptr);
+  SheetRenameTransform transform("Sheet1", "My Sheet");
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "'My Sheet'!Fn('My Sheet'!A1)+Fn(1)");
+}
+
 TEST(ShiftRefsWithSheetRemoval, SheetQualifiedNameOnRemovedSheetBecomesRef) {
   EXPECT_EQ(ParseSheetRemovalFormula("=Sheet2!Rate+Sheet1!Rate+Rate", {"Sheet1", "Sheet2"}, 1U),
             "#REF!+Sheet1!Rate+Rate");
+}
+
+// The whole call collapses: `#REF!(3)` would not parse back.
+TEST(ShiftRefsWithSheetRemoval, SheetQualifiedNameCallOnRemovedSheetBecomesRef) {
+  EXPECT_EQ(ParseSheetRemovalFormula("=Sheet2!Fn(3)+Sheet1!Fn(A1)", {"Sheet1", "Sheet2"}, 1U), "#REF!+Sheet1!Fn(A1)");
 }
 
 TEST(ShiftRefsWithRowColShift, SheetQualifiedNameIsUntouched) {

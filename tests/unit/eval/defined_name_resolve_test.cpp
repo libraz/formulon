@@ -7,6 +7,7 @@
 
 #include "eval/defined_name_resolve.h"
 
+#include <cstddef>
 #include <string_view>
 #include <vector>
 
@@ -169,6 +170,123 @@ TEST(DefinedNameResolve, SheetQualifiedNameRecalcsRenamesAndRemoves) {
 
   ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1U)));
   EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->formula_text, "=#REF!*2");
+}
+
+// Values measured on Mac Excel 365 16.113.2 (ja-JP). Workbook names G = 5
+// and Inner = 1; Sheet2-local Inner = 100, Local = Sheet2!$A$1*10 with
+// Sheet2!A1 = 2, Outer = Inner+1 and Fn = LAMBDA(x,x*2). A local name's
+// body binds its unqualified names in the owning sheet's scope, so
+// `Sheet2!Outer` is 101 from either sheet.
+class MeasuredSheetScopedNames : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    wb_.add_sheet("Sheet1");
+    wb_.add_sheet("Sheet2");
+    wb_.sheet(1).set_cell_value(0U, 0U, Value::number(2.0));
+    wb_.set_defined_names({
+        io::DefinedName{"G", "5", -1, false, ""},
+        io::DefinedName{"Inner", "1", -1, false, ""},
+        io::DefinedName{"Inner", "100", 1, false, ""},
+        io::DefinedName{"Local", "Sheet2!$A$1*10", 1, false, ""},
+        io::DefinedName{"Outer", "Inner+1", 1, false, ""},
+        io::DefinedName{"Fn", "LAMBDA(x,x*2)", 1, false, ""},
+    });
+  }
+
+  Value Eval(std::size_t sheet, std::string_view src) {
+    EvalState state;
+    EvalContext ctx(wb_, wb_.sheet(sheet), state);
+    return EvalOrDie(src, arena_, ctx);
+  }
+
+  Workbook wb_ = Workbook::create_empty();
+  Arena arena_;
+};
+
+TEST_F(MeasuredSheetScopedNames, NumbersFromEitherSheet) {
+  struct Case {
+    std::size_t sheet;
+    const char* src;
+    double want;
+  };
+  for (const Case& c : {Case{0, "=Sheet2!Local", 20.0}, Case{0, "=Sheet2!Outer", 101.0}, Case{0, "=Sheet2!G", 5.0},
+                        Case{0, "=Sheet1!G", 5.0}, Case{0, "=Sheet1!Inner", 1.0}, Case{0, "=Sheet2!Fn(3)", 6.0},
+                        Case{0, "=Sheet2!Inner", 100.0}, Case{0, "=Inner", 1.0}, Case{1, "=Outer", 101.0},
+                        Case{1, "=Fn(3)", 6.0}, Case{1, "=Inner", 100.0}, Case{1, "=Sheet1!Inner", 1.0}}) {
+    const Value v = Eval(c.sheet, c.src);
+    ASSERT_TRUE(v.is_number()) << c.src << " -> " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.want) << c.src;
+  }
+}
+
+TEST_F(MeasuredSheetScopedNames, UnqualifiedLocalNamesAreInvisibleFromOtherSheet) {
+  for (const char* src : {"=Sheet2!Undefined", "=Outer", "=Local"}) {
+    const Value v = Eval(0, src);
+    ASSERT_TRUE(v.is_error()) << src << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Name) << src;
+  }
+}
+
+TEST_F(MeasuredSheetScopedNames, QualifiedFormulaNameIsNotAReference) {
+  const Value v = Eval(0, "=ISREF(Sheet2!Local)");
+  ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
+  EXPECT_FALSE(v.as_boolean());
+}
+
+// A LAMBDA built in a local name's body keeps that scope when it runs, and
+// a workbook name reached from it inherits the scope rather than the
+// calling sheet's.
+TEST(DefinedNameResolve, LocalNameBodyScopeReachesLambdaAndWorkbookNames) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  wb.set_defined_names({
+      io::DefinedName{"Inner", "1", -1, false, ""},
+      io::DefinedName{"Inner", "100", 1, false, ""},
+      io::DefinedName{"Scale", "LAMBDA(x,x*Inner)", 1, false, ""},
+      io::DefinedName{"Twice", "Inner*2", -1, false, ""},
+      io::DefinedName{"ViaBook", "Twice+0", 1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, wb.sheet(0), state);
+  struct Case {
+    const char* src;
+    double want;
+  };
+  for (const Case& c : {Case{"=Sheet2!Scale(2)", 200.0}, Case{"=Sheet2!ViaBook", 200.0}, Case{"=Twice", 2.0}}) {
+    Arena a;
+    const Value v = EvalOrDie(c.src, a, ctx);
+    ASSERT_TRUE(v.is_number()) << c.src << " -> " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.want) << c.src;
+  }
+}
+
+// The dependency graph follows the same scope evaluation reads: a cell
+// behind a name reached through another sheet's local body, and through a
+// qualified LAMBDA call, recalculates its dependents.
+TEST(DefinedNameResolve, LocalNameBodyScopeDrivesRecalc) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Cell", "Sheet2!$A$1", 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Via", "Cell*3", 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("AddCell", "LAMBDA(x,x+Cell)", 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Sheet2!Via")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=Sheet2!AddCell(10)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 6.0);
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(1U, 0U).as_number(), 12.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(5.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 15.0);
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(1U, 0U).as_number(), 15.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(1U, "Data 2")));
+  EXPECT_EQ(wb.sheet(0).cell_at(1U, 0U)->formula_text, "='Data 2'!AddCell(10)");
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1U)));
+  EXPECT_EQ(wb.sheet(0).cell_at(1U, 0U)->formula_text, "=#REF!");
 }
 
 // (c') The same sheet-scoped name resolves on its owning sheet.

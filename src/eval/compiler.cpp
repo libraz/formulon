@@ -574,6 +574,12 @@ Expected<void, Error> compile_lambda(BodyState& bs, const parser::AstNode& node)
 }
 
 Expected<void, Error> compile_lambda_call(BodyState& bs, const parser::AstNode& node) {
+  // `Sheet1!Fn(2)` resolves to an AST-backed lambda, which `CallLambda`
+  // cannot enter; like a 3-D reference it stays on the tree walker.
+  if (node.as_lambda_call_callee().kind() == parser::NodeKind::NameRef) {
+    return make_compile_error(FormulonErrorCode::kVmUnsupportedNode,
+                              "sheet-qualified name call not supported by the VM");
+  }
   // Compile the callee first (it ends up below the args on the stack), then
   // the args left-to-right, then `CallLambda arity`.
   RETURN_IF_ERROR(compile_node(bs, node.as_lambda_call_callee()));

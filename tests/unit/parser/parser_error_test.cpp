@@ -238,14 +238,6 @@ TEST(ParserErrors, PathSpelledExternalWorkbookReferenceIsUnsupported) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct));
 }
 
-TEST(ParserErrors, SheetQualifiedCallIsInvalidReference) {
-  // Only a name follows a sheet qualifier; `Sheet1!Fn(1)` is not a call.
-  Arena a;
-  Parser p("=Sheet1!Fn(1)", a);
-  (void)p.parse();
-  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::InvalidReference));
-}
-
 TEST(ParserErrors, IndexSpelledExternalWorkbookReferenceParses) {
   // The shape Excel actually stores. Both the sheet form and the
   // book-scope defined-name form parse cleanly into an `ExternalRef`.

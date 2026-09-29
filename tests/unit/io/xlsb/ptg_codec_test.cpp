@@ -149,6 +149,47 @@ TEST(XlsbPtgCodec, NameLocalToAnotherSheetDecodesSheetQualified) {
   }
 }
 
+// Excel 365 writes `Sheet2!Local` as `PtgNameX` through a sheetless
+// book-scope ExternSheet entry, and `Sheet2!Fn(3)` as that name-ref, the
+// argument and `PtgFuncVar(255)`; both read back with the qualifier.
+TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
+  const std::vector<std::string> sheets = {"Sheet1", "Sheet2"};
+  NameTable table;
+  table.emplace(sheet_scoped_name_key(1, "Local"), 1U);
+  table.emplace(sheet_scoped_name_key(1, "Fn"), 2U);
+  const std::vector<XlsbName> names = {XlsbName{1, "Local", false}, XlsbName{1, "Fn", false}};
+  struct Case {
+    const char* formula;
+    std::vector<std::uint8_t> want;
+  };
+  const Case cases[] = {
+      {"Sheet2!Local", {0x39, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}},
+      {"Sheet2!Fn(3)", {0x39, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x1E, 0x03, 0x00, 0x42, 0x02, 0xFF, 0x00}},
+  };
+  for (const Case& c : cases) {
+    Arena arena;
+    parser::Parser p(c.formula, arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << c.formula;
+    SheetRangeTable ranges;
+    std::unordered_set<std::uint64_t> seen;
+    collect_ptg_sheet_ranges(*root, sheets, ranges, seen);
+    ASSERT_EQ(ranges.size(), 1U) << c.formula;
+    EXPECT_EQ(ranges[0].first, -2);
+    EXPECT_EQ(ranges[0].second, -2);
+    auto encoded = encode_ptgs(*root, sheets, ranges, table);
+    ASSERT_TRUE(static_cast<bool>(encoded)) << c.formula << " | " << (encoded ? "" : encoded.error().message);
+    EXPECT_EQ(encoded.value().rgce, c.want) << c.formula;
+
+    const std::vector<XlsbSheetRange> decode_ranges = {XlsbSheetRange{-2, -2}};
+    Arena dec_arena;
+    auto decoded = decode_ptgs(ByteSpan{encoded.value().rgce.data(), encoded.value().rgce.size()}, {}, dec_arena,
+                               sheets, names, decode_ranges, {}, /*host_itab=*/0);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
+    EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
+  }
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }

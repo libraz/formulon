@@ -761,7 +761,8 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
   //      one error, so the sheet qualifier carries no surviving meaning.
   //   5. Any other Ident: a defined name looked up in that sheet's scope
   //      (`Sheet1!Rate`), the only spelling that reaches another sheet's
-  //      local name.
+  //      local name. A following `(` calls it (`Sheet1!Fn(2)`); the
+  //      postfix-call rule in the Pratt loop wraps it in a `LambdaCall`.
   // Anything else is an error.
   const TokenKind k = peek_kind();
   if (k == TokenKind::ErrorLiteral && peek().error_code == ErrorCode::Ref) {
@@ -913,7 +914,7 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
       }
     }
   }
-  if (k == TokenKind::Ident && peek_kind_at(1) != TokenKind::LParen) {
+  if (k == TokenKind::Ident) {
     const Token& name = advance();
     AstNode* n = make_sheet_name_ref(arena_, sheet, name.lexeme, quoted);
     if (n == nullptr) {

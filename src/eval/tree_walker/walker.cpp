@@ -859,6 +859,7 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       lv->param_count = n;
       lv->optional_count = node.as_lambda_optional_count();
       lv->body = &node.as_lambda_body();
+      lv->name_scope_sheet = ctx.name_scope_sheet();
       // Copy the caller's NameEnv into the arena: the live `NameEnv` value at
       // `ctx.name_env()` typically lives on a parent eval_node frame that
       // disappears once that frame returns, but every `Binding*` it points

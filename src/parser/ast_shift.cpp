@@ -431,6 +431,11 @@ const AstNode* TransformLambdaCall(const AstNode& node, Arena& arena, const RefT
   if (callee == nullptr) {
     return nullptr;
   }
+  // `Sheet2!Fn(3)` whose sheet is removed collapses whole to `#REF!`: an
+  // error literal is no callee `(` can follow.
+  if (callee->kind() == NodeKind::ErrorLiteral && node.as_lambda_call_callee().kind() == NodeKind::NameRef) {
+    return callee;
+  }
   const std::uint32_t n = node.as_lambda_call_arity();
   std::vector<const AstNode*> args;
   args.reserve(n);

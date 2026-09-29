@@ -148,7 +148,10 @@ Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, cons
   for (std::uint32_t i = arity; i < lv->param_count; ++i) {
     env = env.extend_omitted(lv->params[i], arena);
   }
-  const EvalContext body_ctx = ctx.with_name_env(&env);
+  EvalContext body_ctx = ctx.with_name_env(&env);
+  if (lv->name_scope_sheet >= 0) {
+    body_ctx = body_ctx.with_name_scope_sheet(lv->name_scope_sheet);
+  }
   return eval_node(*lv->body, arena, registry, body_ctx);
 }
 

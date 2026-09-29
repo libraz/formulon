@@ -809,6 +809,68 @@ TEST(XlsbWriteReadSymmetry, SheetQualifiedNameKeepsItsScope) {
   EXPECT_EQ(after.sheet(1).resolve_cell_value(0U, 1U).as_number(), 5.0);
 }
 
+// A local name whose body binds its unqualified names in the owning sheet
+// survives a save and reload with its qualifier and value. (A qualified
+// LAMBDA call is pinned at the codec level: the writer cannot lower a
+// LAMBDA-valued definition, so no workbook holding one saves as XLSB.)
+TEST(XlsbWriteReadSymmetry, SheetQualifiedLocalBodyScopeRoundTrips) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Inner", "1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Inner", "100", 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Outer", "Inner+1", 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Sheet2!Outer")));  // Sheet1!A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=Inner")));         // Sheet1!B1
+
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << "read_xlsb failed: " << reloaded.error().message;
+  EXPECT_EQ(reloaded.value().undecoded_formula_count, 0U);
+  Workbook after = std::move(reloaded.value().workbook);
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 0U)->formula_text, "=Sheet2!Outer");
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 1U)->formula_text, "=Inner");
+
+  auto recalc_or = after.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(recalc_or)) << recalc_or.error().message;
+  EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 0U).as_number(), 101.0);
+  EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 1U).as_number(), 1.0);
+}
+
+// Excel-saved workbook (Mac Excel 365 16.113.2): Sheet1!A1 = `=Sheet2!Local`
+// with the Sheet2-local name Local = Sheet2!$A$1*10 and Sheet2!A1 = 2.
+// Excel stores the reference as `PtgNameX` through a sheetless ExternSheet
+// entry, which the writer reproduces on save.
+TEST(XlsbWriteReadSymmetry, ExcelSheetQualifiedLocalNameFixture) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath("sheet_qualified_local_name.xlsb"));
+  ASSERT_FALSE(bytes.empty());
+  auto loaded = io::xlsb::read_xlsb(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << "read_xlsb failed: " << loaded.error().message;
+  EXPECT_EQ(loaded.value().undecoded_formula_count, 0U);
+  Workbook wb = std::move(loaded.value().workbook);
+  ASSERT_EQ(wb.sheet_count(), 2U);
+  EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->formula_text, "=Sheet2!Local");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 20.0);
+
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  std::string sheet1;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), "xl/worksheets/sheet1.bin", &sheet1));
+  // PtgNameX, ixti 1 (after Local's own Sheet2 entry), ilbl 1.
+  const std::string name_x("\x39\x01\x00\x01\x00\x00\x00", 7);
+  EXPECT_NE(sheet1.find(name_x), std::string::npos);
+
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << "read_xlsb failed: " << reloaded.error().message;
+  EXPECT_EQ(reloaded.value().undecoded_formula_count, 0U);
+  Workbook after = std::move(reloaded.value().workbook);
+  EXPECT_EQ(after.sheet(0).cell_at(0U, 0U)->formula_text, "=Sheet2!Local");
+  ASSERT_TRUE(static_cast<bool>(after.recalc(eval::default_registry())));
+  EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 0U).as_number(), 20.0);
+}
+
 // Reinterprets `v`'s object representation so two doubles can be
 // compared for bit equality rather than numeric equality.
 std::uint64_t BitsOf(double v) {

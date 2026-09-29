@@ -68,6 +68,10 @@ struct LambdaValue {
   /// outer `LET` was in scope. Lifetime is bounded by the evaluation arena
   /// of the enclosing call to `evaluate()`.
   const NameEnv* captured_env;
+  /// Sheet index whose scope the body's unqualified defined names resolve
+  /// in (see `EvalContext::name_scope_sheet`), captured where the lambda
+  /// was built; -1 keeps the caller's scope.
+  std::int32_t name_scope_sheet = -1;
 };
 
 // Trivially-copyable invariant: `Value` carries a `const LambdaValue*` and

@@ -447,6 +447,20 @@ class EvalContext {
     return copy;
   }
 
+  /// Returns the 0-based index of the sheet whose scope an unqualified
+  /// defined name resolves in, or -1 when that is the current sheet's.
+  std::int32_t name_scope_sheet() const noexcept { return name_scope_sheet_; }
+
+  /// Returns a copy of `*this` whose unqualified defined names resolve in
+  /// sheet `index`'s scope (-1: the current sheet's). A sheet-local name's
+  /// body binds its names where the name is defined, not where it is used;
+  /// unqualified cell references still read `current_sheet()`.
+  EvalContext with_name_scope_sheet(std::int32_t index) const noexcept {
+    EvalContext copy = *this;
+    copy.name_scope_sheet_ = index;
+    return copy;
+  }
+
   class Builder;
 
   /// Returns a fluent builder pre-bound to the workbook-aware,
@@ -579,6 +593,9 @@ class EvalContext {
   // links one frame on so circular definitions are detected instead of
   // recursing without bound.
   const DefinedNameFrame* defined_name_stack_ = nullptr;
+  // Sheet index unqualified defined names resolve in; -1 is the current
+  // sheet. Set while a sheet-local name's body evaluates.
+  std::int32_t name_scope_sheet_ = -1;
   ExcelProfile excel_profile_ = default_excel_profile();
   // 1904 date-system flag, sourced from `Workbook::date1904()`. Threaded
   // to date-aware evaluators so serial <-> calendar conversions pick the

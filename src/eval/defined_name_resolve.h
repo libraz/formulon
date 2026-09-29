@@ -65,9 +65,10 @@ const io::DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t
 
 /// Finds the defined name visible from an evaluator context. This is the
 /// single context-aware lookup used by both ordinary NameRef evaluation and
-/// named-LAMBDA call dispatch; it returns nullptr when the context is
-/// unbound, its current sheet is not owned by the workbook, or no definition
-/// is visible.
+/// named-LAMBDA call dispatch. The name is seen from
+/// `ctx.name_scope_sheet()` when set, else from the current sheet; it
+/// returns nullptr when the context is unbound, its current sheet is not
+/// owned by the workbook, or no definition is visible.
 const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept;
 
 /// Finds the defined name a sheet-qualified reference `sheet!name` denotes:
@@ -91,7 +92,9 @@ const io::DefinedName* find_sheet_defined_name(const Workbook& workbook, std::st
 /// `arena` backs the parsed body and any text payload in the result; it must
 /// outlive the returned `Value`. The definition is evaluated with the
 /// caller's lexical `name_env()` cleared (a defined name is a top-level
-/// formula and does not see the using formula's LET / LAMBDA bindings).
+/// formula and does not see the using formula's LET / LAMBDA bindings). A
+/// sheet-local definition's body resolves its unqualified names in its own
+/// sheet's scope; a workbook-scoped one inherits the caller's.
 Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx);
 

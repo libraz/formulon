@@ -700,16 +700,19 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     if (kind == TokenKind::LParen) {
       // Gate by LHS shape so we do not turn `=TRUE(1)` (Bool literal then
       // `(`) and similar non-callable forms into LambdaCall nodes the user
-      // did not write. Only `Lambda` (an immediate IIFE) and `LambdaCall`
-      // (chained curry) participate. Parenthesised lambda expressions like
-      // `(LAMBDA(x, x))(5)` still work because `parse_paren_atom` unwraps a
-      // single inner expression to its own kind; the outer Lambda kind is
-      // preserved across the paren wrapper. The normal `Ident(args)`
+      // did not write. Only `Lambda` (an immediate IIFE), `LambdaCall`
+      // (chained curry) and a sheet-qualified name (`Sheet1!Fn(2)`, whose
+      // unqualified spelling is an ordinary `Call`) participate.
+      // Parenthesised lambda expressions like `(LAMBDA(x, x))(5)` still
+      // work because `parse_paren_atom` unwraps a single inner expression
+      // to its own kind; the outer Lambda kind is preserved across the
+      // paren wrapper. The normal `Ident(args)`
       // function-call path is unaffected: `parse_ident_or_call_or_full_col`
       // consumes the Ident and the matching `(` together before this loop
       // ever sees them.
       const NodeKind lk = lhs->kind();
-      if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall) {
+      const bool sheet_name = lk == NodeKind::NameRef && !lhs->as_name_sheet().empty();
+      if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall && !sheet_name) {
         // Special-case: a *Bool* literal LHS followed by an empty `()` is
         // treated as a no-op so the surrounding Pratt loop can continue and
         // pick up trailing operators. The motivating case is `=TRUE()+0`: the

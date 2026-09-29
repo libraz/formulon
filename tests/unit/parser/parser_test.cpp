@@ -150,6 +150,16 @@ TEST(ParserAtoms, SheetQualifiedName) {
   EXPECT_EQ(ParseToSexpr("=SUM(Sheet1!Rng:B2)"), "(call SUM (range (name Sheet1!Rng) (ref B2)))");
 }
 
+// `Sheet1!Fn(args)` calls the name as seen from Sheet1's scope; the
+// unqualified `Fn(args)` stays an ordinary call.
+TEST(ParserAtoms, SheetQualifiedNameCall) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1!Fn(1,2)"), "(lambda-call (name Sheet1!Fn) (num 1) (num 2))");
+  EXPECT_EQ(ParseToSexpr("='My Sheet'!Fn()"), "(lambda-call (name 'My Sheet'!Fn))");
+  EXPECT_EQ(ParseToSexpr("=Sheet1!Fn(1)*2"), "(binary * (lambda-call (name Sheet1!Fn) (num 1)) (num 2))");
+  EXPECT_EQ(ParseToSexpr("=Sheet1!Curry(1)(2)"), "(lambda-call (lambda-call (name Sheet1!Curry) (num 1)) (num 2))");
+  EXPECT_EQ(ParseToSexpr("=Fn(1)"), "(call Fn (num 1))");
+}
+
 TEST(ParserAtoms, SheetQualifiedNameCarriesScope) {
   Arena a;
   Parser p("='My Sheet'!Rate", a);

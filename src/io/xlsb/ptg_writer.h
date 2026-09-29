@@ -101,9 +101,11 @@ void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::
 /// `(itabFirst, itabLast)` sheet-range pair a qualified reference will
 /// need an `ixti` for while encoding it: a single-sheet `Ref` whose
 /// `sheet` is non-empty contributes `(itab, itab)`; a `Ref3D` node
-/// contributes its full `(begin, end)` span. `sheet_names` resolves a
-/// sheet display name to its 0-based index; a name absent from
-/// `sheet_names` is skipped here (the encode fails later with a precise
+/// contributes its full `(begin, end)` span; a sheet-qualified defined
+/// name (`Sheet2!Rate`) contributes the sheetless `(-2, -2)` entry its
+/// `PtgNameX` resolves through. `sheet_names` resolves a sheet display
+/// name to its 0-based index; a name absent from `sheet_names` is
+/// skipped here (the encode fails later with a precise
 /// error instead of silently fabricating an entry). `seen` dedupes
 /// (both across one call and across callers pre-seeding it), and
 /// `ranges`' index order becomes the `ixti` assignment `encode_ptgs`

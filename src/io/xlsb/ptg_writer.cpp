@@ -182,6 +182,11 @@ void emit_area(std::vector<std::uint8_t>& dst, const parser::Reference& a, const
   emit_u16(dst, pack_area_col(b));
 }
 
+/// `itabFirst` / `itabLast` of the `BrtExternSheet` entry a `PtgNameX`
+/// naming one of this workbook's own defined names resolves through: the
+/// entry names no sheet, the record's own scope does.
+constexpr std::int32_t kXtiNoSheet = -2;
+
 Error unsupported_node(const char* kind) {
   return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                     std::string("xlsb encoder cannot lower AST node kind: ") + kind, "context=xlsb_ptg_writer");
@@ -245,8 +250,13 @@ class Encoder {
         return unsupported_node("Lambda");
       case parser::NodeKind::LetBinding:
         return emit_let(node);
-      case parser::NodeKind::LambdaCall:
+      case parser::NodeKind::LambdaCall: {
+        const parser::AstNode& callee = node.as_lambda_call_callee();
+        if (callee.kind() == parser::NodeKind::NameRef && !callee.as_name_sheet().empty()) {
+          return emit_sheet_name_call(node);
+        }
         return unsupported_node("LambdaCall");
+      }
       case parser::NodeKind::ErrorPlaceholder:
         return unsupported_node("ErrorPlaceholder");
     }
@@ -321,10 +331,12 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
-  /// Emits `PtgName` for `sheet!name`: the record local to `sheet` when one
-  /// exists, else the workbook-scoped one, which is what the reference
-  /// resolves to. A name defined in neither falls back to its placeholder
-  /// record, as an undefined unqualified name does.
+  /// Emits `PtgNameX` for `sheet!name`, naming the record local to `sheet`
+  /// when one exists, else the workbook-scoped one, which is what the
+  /// reference resolves to. A name defined in neither falls back to its
+  /// placeholder record, as an undefined unqualified name does. Excel 365
+  /// writes a sheet-qualified name as `PtgNameX` through a book-scope
+  /// `BrtExternSheet` entry rather than as `PtgName`.
   Expected<void, Error> emit_sheet_name_ref(std::string_view sheet, std::string_view name) {
     const int itab = resolve_ixti(sheet_names_, sheet);
     if (itab < 0) {
@@ -342,8 +354,30 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
     }
-    emit_u8(out_, 0x23);  // PtgName (reference-class base)
+    ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiNoSheet, kXtiNoSheet));
+    emit_u8(out_, 0x39);  // PtgNameX (reference-class base)
+    emit_u16(out_, ixti);
     emit_u32(out_, it->second);
+    return Expected<void, Error>::Ok();
+  }
+
+  /// Encodes `sheet!name(args)` the way a call to a named LAMBDA is stored:
+  /// the callee name-ref, then the arguments, then `PtgFuncVar` with the
+  /// `id == 255` sentinel and `cparams == arity + 1`.
+  Expected<void, Error> emit_sheet_name_call(const parser::AstNode& node) {
+    const parser::AstNode& callee = node.as_lambda_call_callee();
+    RETURN_IF_ERROR(emit_sheet_name_ref(callee.as_name_sheet(), callee.as_name()));
+    const std::uint32_t arity = node.as_lambda_call_arity();
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      RETURN_IF_ERROR(emit(node.as_lambda_call_arg(i)));
+    }
+    const std::uint32_t cparams = arity + 1;  // +1 for the name-ref operand
+    if (cparams > 0xFF) {
+      return unsupported_node("LambdaCall(arity>254)");
+    }
+    emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
+    emit_u8(out_, static_cast<std::uint8_t>(cparams));
+    emit_u16(out_, 255);
     return Expected<void, Error>::Ok();
   }
 
@@ -882,6 +916,15 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       }
       return;
     }
+    case parser::NodeKind::LambdaCall: {
+      // Only `Sheet1!Fn(args)` is lowered (see `Encoder::emit_sheet_name_call`).
+      CollectNamesScoped(node.as_lambda_call_callee(), names, seen, scope, skip_sheet_qualified);
+      const std::uint32_t arity = node.as_lambda_call_arity();
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        CollectNamesScoped(node.as_lambda_call_arg(i), names, seen, scope, skip_sheet_qualified);
+      }
+      return;
+    }
     case parser::NodeKind::LetBinding: {
       AddName("_xlfn.LET", names, seen);
       const std::uint32_t n = node.as_let_binding_count();
@@ -897,7 +940,7 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       scope.resize(scope_base);
       return;
     }
-    // Leaves, and forms the encoder does not lower (Lambda / LambdaCall /
+    // Leaves, and forms the encoder does not lower (Lambda /
     // StructuredRef): nothing to collect. A future writer bundle that
     // lowers these would extend this switch alongside the corresponding
     // `emit_*` case.
@@ -942,6 +985,20 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       const int itab_begin = resolve_ixti(sheet_names, node.as_ref3d_sheet_begin());
       const int itab_end = resolve_ixti(sheet_names, node.as_ref3d_sheet_end());
       AddSheetRange(itab_begin, itab_end, ranges, seen);
+      return;
+    }
+    case parser::NodeKind::NameRef:
+      // `Sheet1!Rate` encodes as `PtgNameX` through the book-scope entry.
+      if (!node.as_name_sheet().empty() && seen.insert(PackRangeKey(kXtiNoSheet, kXtiNoSheet)).second) {
+        ranges.emplace_back(kXtiNoSheet, kXtiNoSheet);
+      }
+      return;
+    case parser::NodeKind::LambdaCall: {
+      collect_ptg_sheet_ranges(node.as_lambda_call_callee(), sheet_names, ranges, seen);
+      const std::uint32_t arity = node.as_lambda_call_arity();
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        collect_ptg_sheet_ranges(node.as_lambda_call_arg(i), sheet_names, ranges, seen);
+      }
       return;
     }
     case parser::NodeKind::Call: {

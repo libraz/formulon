@@ -68,6 +68,9 @@ struct WalkState {
   ExtractedDeps* out;
   std::unordered_set<CellNodeId, CellNodeIdHash> seen;
   std::uint16_t current_sheet_id;
+  // Scope unqualified defined names resolve in: the formula's own sheet,
+  // or the owning sheet while a sheet-local name's body is expanded.
+  std::uint16_t name_scope_sheet_id;
   const Workbook* workbook;
   Arena* name_arena;
   std::vector<const io::DefinedName*> name_stack;
@@ -92,7 +95,7 @@ const io::DefinedName* find_name_ref_definition(const parser::AstNode& name_ref,
   if (!sheet.empty()) {
     return find_sheet_defined_name(*state.workbook, sheet, name_ref.as_name());
   }
-  return find_defined_name(*state.workbook, state.current_sheet_id, name_ref.as_name());
+  return find_defined_name(*state.workbook, state.name_scope_sheet_id, name_ref.as_name());
 }
 
 bool lambda_is_active(const parser::AstNode* lambda, const WalkState& state) noexcept {
@@ -275,9 +278,16 @@ void visit_defined_name_body(const io::DefinedName& def, WalkState& state, Visit
   // definition body.
   std::vector<WalkState::LexicalBinding> saved_lexical;
   saved_lexical.swap(state.lexical_stack);
+  // A sheet-local body binds its names in the owning sheet's scope, as
+  // `resolve_defined_name` evaluates it.
+  const std::uint16_t saved_scope = state.name_scope_sheet_id;
+  if (def.local_sheet_id >= 0 && static_cast<std::size_t>(def.local_sheet_id) < state.workbook->sheet_count()) {
+    state.name_scope_sheet_id = static_cast<std::uint16_t>(def.local_sheet_id);
+  }
   state.name_stack.push_back(&def);
   visit(*root);
   state.name_stack.pop_back();
+  state.name_scope_sheet_id = saved_scope;
   state.lexical_stack.swap(saved_lexical);
 }
 
@@ -440,7 +450,7 @@ std::optional<Footprint> pair_footprint(const parser::Reference& lhs, const pars
 std::optional<Footprint> call_footprint(const parser::AstNode& node, WalkState& state) {
   const std::string_view name = node.as_call_name();
   if (lookup_lexical(name, state) != nullptr ||
-      find_defined_name(*state.workbook, state.current_sheet_id, name) != nullptr ||
+      find_defined_name(*state.workbook, state.name_scope_sheet_id, name) != nullptr ||
       VolatileTracker::is_dynamic_reference_function(name) || !is_reference_call_name(name)) {
     return std::nullopt;
   }
@@ -779,7 +789,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
     case parser::NodeKind::Call: {
       const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_call_name(), state);
       const io::DefinedName* defined =
-          lexical == nullptr ? find_defined_name(*state.workbook, state.current_sheet_id, node.as_call_name())
+          lexical == nullptr ? find_defined_name(*state.workbook, state.name_scope_sheet_id, node.as_call_name())
                              : nullptr;
       const bool builtin = lexical == nullptr && defined == nullptr;
       const std::uint32_t arity = node.as_call_arity();
@@ -876,16 +886,21 @@ void walk(const parser::AstNode& node, WalkState& state) {
         // lambda *value*, the body IS evaluated here, so its cell refs and
         // volatile calls are genuine dependencies that must reach the graph.
         walk_invoked_lambda_body(callee, state);
+      } else if (callee.kind() == parser::NodeKind::NameRef) {
+        // `Sheet1!Fn(5)`: the sheet-qualified spelling of `Fn(5)`, which
+        // invokes the definition just as the `Call` case does.
+        if (const io::DefinedName* def = find_name_ref_definition(callee, state); def != nullptr) {
+          expand_defined_name(*def, state, /*invoked=*/true);
+        }
       } else {
-        // The only callee kind that reaches here is a nested `LambdaCall`
-        // (currying, e.g. `LAMBDA(x, LAMBDA(y, x+y))(3)(4)`): the parser
-        // gates this postfix `(` to a `Lambda` or `LambdaCall` LHS, so a
-        // named callee (`=MyLambda(5)`) always parses as a `Call` and is
-        // handled by the `Call` case above instead, including invocation
-        // of a workbook-scoped defined name that holds a lambda. Walking
-        // generically here recurses back into this same `case` (or into
-        // `Lambda`, at the base of the curry chain), which is what still
-        // surfaces the chain's embedded refs and volatile calls.
+        // The remaining callee kind is a nested `LambdaCall` (currying,
+        // e.g. `LAMBDA(x, LAMBDA(y, x+y))(3)(4)`): the parser gates this
+        // postfix `(` to a `Lambda`, a `LambdaCall` or a sheet-qualified
+        // name, and an unqualified named callee (`=MyLambda(5)`) parses as
+        // a `Call` handled above. Walking generically here recurses back
+        // into this same `case` (or into `Lambda`, at the base of the curry
+        // chain), which is what still surfaces the chain's embedded refs
+        // and volatile calls.
         walk(callee, state);
       }
       const std::uint32_t arity = node.as_lambda_call_arity();
@@ -905,7 +920,7 @@ ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sh
   // as long as this call so the parsed nodes never outlive the walk; the
   // caller-supplied `node` is unrelated and stays in its own arena.
   Arena name_arena;
-  WalkState state{&deps, {}, current_sheet_id, &workbook, &name_arena, {}, {}, {}};
+  WalkState state{&deps, {}, current_sheet_id, current_sheet_id, &workbook, &name_arena, {}, {}, {}};
   walk(node, state);
   return deps;
 }
