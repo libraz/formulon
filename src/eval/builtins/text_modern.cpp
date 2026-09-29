@@ -181,12 +181,10 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
   return opts;
 }
 
-}  // namespace
-
-namespace text_detail {
-
-// TEXTBEFORE(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])
-Value TextBefore_(const Value* args, std::uint32_t arity, Arena& arena) {
+// Shared frame of TEXTBEFORE / TEXTAFTER; `slice` picks the side of the
+// located match that the function returns.
+template <typename Slice>
+Value text_before_after(const Value* args, std::uint32_t arity, Arena& arena, Slice slice) {
   // Registered with propagate_errors=false so if_not_found (args[5]) can pass
   // through as an error fallback. Propagate errors manually for args 0-4.
   for (std::uint32_t i = 0; i < arity && i < 5; ++i) {
@@ -232,51 +230,26 @@ Value TextBefore_(const Value* args, std::uint32_t arity, Arena& arena) {
     }
     return Value::error(ErrorCode::NA);
   }
+  return Value::text(arena.intern(slice(std::string_view(text.value()), hit)));
+}
+
+}  // namespace
+
+namespace text_detail {
+
+// TEXTBEFORE(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])
+Value TextBefore_(const Value* args, std::uint32_t arity, Arena& arena) {
   // Everything before the match's starting byte.
-  return Value::text(arena.intern(text.value().substr(0, hit.match_start_byte)));
+  return text_before_after(args, arity, arena, [](std::string_view text, const TextMatchResult& hit) {
+    return text.substr(0, hit.match_start_byte);
+  });
 }
 
 // TEXTAFTER(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])
 Value TextAfter_(const Value* args, std::uint32_t arity, Arena& arena) {
-  // Registered with propagate_errors=false so if_not_found (args[5]) can pass
-  // through as an error fallback. Propagate errors manually for args 0-4.
-  for (std::uint32_t i = 0; i < arity && i < 5; ++i) {
-    if (args[i].is_error()) {
-      return args[i];
-    }
-  }
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
-  }
-  auto delimiter = coerce_to_text(args[1]);
-  if (!delimiter) {
-    return Value::error(delimiter.error());
-  }
-  auto opts = read_tba_opts(args, arity);
-  if (!opts) {
-    return Value::error(opts.error());
-  }
-  // Same domain guard as TEXTBEFORE, in the same units — delimiter longer
-  // than text is #VALUE! once any optional argument has been provided; the
-  // 2-arg form treats the same input as a regular not-found and returns
-  // #N/A.
-  if (arity >= 3 && utf16_units_in(delimiter.value()) > utf16_units_in(text.value())) {
-    return Value::error(ErrorCode::Value);
-  }
-  bool arg_err = false;
-  const TextMatchResult hit = find_text_instance(text.value(), delimiter.value(), opts.value().instance_num,
-                                                 opts.value().match_mode, opts.value().match_end, &arg_err);
-  if (arg_err) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (!hit.found) {
-    if (opts.value().has_if_not_found) {
-      return opts.value().if_not_found;
-    }
-    return Value::error(ErrorCode::NA);
-  }
-  return Value::text(arena.intern(text.value().substr(hit.match_end_byte)));
+  return text_before_after(args, arity, arena, [](std::string_view text, const TextMatchResult& hit) {
+    return text.substr(hit.match_end_byte);
+  });
 }
 
 }  // namespace text_detail

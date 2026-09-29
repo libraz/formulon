@@ -92,6 +92,33 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
   return true;
 }
 
+Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return text.error();
+  }
+  auto start = read_int_arg(args[1]);
+  if (!start) {
+    return start.error();
+  }
+  auto count = read_int_arg(args[2]);
+  if (!count) {
+    return count.error();
+  }
+  std::string new_text;
+  if (arity > 3) {
+    auto coerced = coerce_to_text(args[3]);
+    if (!coerced) {
+      return coerced.error();
+    }
+    new_text = std::move(coerced.value());
+  }
+  if (start.value() < 1 || count.value() < 0) {
+    return ErrorCode::Value;
+  }
+  return TextWindowArgs{std::move(text.value()), start.value(), count.value(), std::move(new_text)};
+}
+
 }  // namespace text_detail
 }  // namespace eval
 }  // namespace formulon

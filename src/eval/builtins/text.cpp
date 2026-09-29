@@ -36,6 +36,7 @@ namespace {
 
 using text_detail::read_int_arg;
 using text_detail::read_optional_int_arg;
+using text_detail::read_text_window_args;
 
 // Excel caps the result of REPT (and a handful of related text functions)
 // at 32,767 UTF-16 units. We reuse the same constant in REPT's overflow
@@ -167,32 +168,23 @@ Value Right(const Value* args, std::uint32_t arity, Arena& arena) {
 // MID(text, start_num, num_chars) - 1-based slice in UTF-16 units. Excel
 // returns `""` when `start_num` is past the end. `start_num<1` or
 // `num_chars<0` -> `#VALUE!`.
-Value Mid(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
+Value Mid(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto parsed = read_text_window_args(args, arity);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto start = read_int_arg(args[1]);
-  if (!start) {
-    return Value::error(start.error());
-  }
-  auto length = read_int_arg(args[2]);
-  if (!length) {
-    return Value::error(length.error());
-  }
-  if (start.value() < 1 || length.value() < 0) {
-    return Value::error(ErrorCode::Value);
-  }
-  const std::uint32_t total = utf16_units_in(text.value());
-  const auto start_unit = static_cast<std::uint32_t>(start.value() - 1);
+  const std::string& text = parsed.value().text;
+  const int start = parsed.value().start;
+  const int length = parsed.value().count;
+  const std::uint32_t total = utf16_units_in(text);
+  const auto start_unit = static_cast<std::uint32_t>(start - 1);
   if (start_unit >= total) {
     return Value::text({});
   }
-  if (length.value() == 0) {
+  if (length == 0) {
     return Value::text({});
   }
-  return Value::text(
-      arena.intern(utf16_substring(text.value(), start_unit, static_cast<std::uint32_t>(length.value()))));
+  return Value::text(arena.intern(utf16_substring(text, start_unit, static_cast<std::uint32_t>(length))));
 }
 
 // REPT(text, n) - repeat. n<0 -> `#VALUE!`. Excel caps the result length at
@@ -310,41 +302,29 @@ Value Substitute(const Value* args, std::uint32_t arity, Arena& arena) {
 // `start_num` with `new_text`. `start_num > total_units + 1` clamps to
 // append (the suffix is empty). `start_num < 1` or `num_chars < 0` surface
 // `#VALUE!`. The result is capped at Excel's 32,767-unit text limit.
-Value Replace_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto old_text = coerce_to_text(args[0]);
-  if (!old_text) {
-    return Value::error(old_text.error());
+Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto parsed = read_text_window_args(args, arity);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto start = read_int_arg(args[1]);
-  if (!start) {
-    return Value::error(start.error());
-  }
-  auto num_chars = read_int_arg(args[2]);
-  if (!num_chars) {
-    return Value::error(num_chars.error());
-  }
-  auto new_text = coerce_to_text(args[3]);
-  if (!new_text) {
-    return Value::error(new_text.error());
-  }
-  if (start.value() < 1 || num_chars.value() < 0) {
-    return Value::error(ErrorCode::Value);
-  }
-  const std::uint32_t total = utf16_units_in(old_text.value());
-  auto start_unit = static_cast<std::uint32_t>(start.value() - 1);
+  const std::string& old_text = parsed.value().text;
+  const int start = parsed.value().start;
+  const int num_chars = parsed.value().count;
+  const std::string& new_text = parsed.value().new_text;
+  const std::uint32_t total = utf16_units_in(old_text);
+  auto start_unit = static_cast<std::uint32_t>(start - 1);
   if (start_unit > total) {
     start_unit = total;
   }
   const std::uint32_t remaining = total - start_unit;
-  const auto delete_units = static_cast<std::uint32_t>(num_chars.value()) > remaining
-                                ? remaining
-                                : static_cast<std::uint32_t>(num_chars.value());
-  const std::string prefix = utf16_substring(old_text.value(), 0u, start_unit);
-  const std::string suffix = utf16_substring(old_text.value(), start_unit + delete_units, remaining - delete_units);
+  const auto delete_units =
+      static_cast<std::uint32_t>(num_chars) > remaining ? remaining : static_cast<std::uint32_t>(num_chars);
+  const std::string prefix = utf16_substring(old_text, 0u, start_unit);
+  const std::string suffix = utf16_substring(old_text, start_unit + delete_units, remaining - delete_units);
   std::string out;
-  out.reserve(prefix.size() + new_text.value().size() + suffix.size());
+  out.reserve(prefix.size() + new_text.size() + suffix.size());
   out.append(prefix);
-  out.append(new_text.value());
+  out.append(new_text);
   out.append(suffix);
   if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
     return Value::error(ErrorCode::Value);

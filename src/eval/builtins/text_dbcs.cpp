@@ -293,28 +293,19 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
 // return "". If `start_byte` lands inside a 2-byte character, emit a space
 // pad and consume 1 byte of budget; from there walk normally, padding on
 // the trailing edge with the same 1-byte-overflow rule as LEFTB.
-Value Midb(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
+Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto parsed = read_text_window_args(args, arity);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto start = read_int_arg(args[1]);
-  if (!start) {
-    return Value::error(start.error());
-  }
-  auto length = read_int_arg(args[2]);
-  if (!length) {
-    return Value::error(length.error());
-  }
-  if (start.value() < 1 || length.value() < 0) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (length.value() == 0) {
+  const std::string& src = parsed.value().text;
+  const int start = parsed.value().start;
+  const int length = parsed.value().count;
+  if (length == 0) {
     return Value::text({});
   }
-  const std::string& src = text.value();
-  const auto start_byte = static_cast<std::uint64_t>(start.value());  // 1-based
-  const auto budget = static_cast<std::uint64_t>(length.value());
+  const auto start_byte = static_cast<std::uint64_t>(start);  // 1-based
+  const auto budget = static_cast<std::uint64_t>(length);
 
   // Walk characters and track byte cursor.
   std::uint64_t cursor = 0;  // Bytes consumed so far (DBCS byte index).
@@ -411,35 +402,23 @@ std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src) {
 // character, the trailing byte of deletion is substituted with an ASCII
 // space before `new_text` is appended. `start_num < 1` or `num_bytes < 0`
 // -> `#VALUE!`. Result capped at Excel's 32,767-unit text limit.
-Value ReplaceB_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
   // Excel caps the result of REPT (and a handful of related text functions)
   // at 32,767 UTF-16 units. We reuse the same constant in REPT's overflow
   // guard.
   constexpr std::uint64_t kExcelTextCapUnits = 32767u;
 
-  auto old_text = coerce_to_text(args[0]);
-  if (!old_text) {
-    return Value::error(old_text.error());
+  auto parsed = read_text_window_args(args, arity);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto start = read_int_arg(args[1]);
-  if (!start) {
-    return Value::error(start.error());
-  }
-  auto num_bytes = read_int_arg(args[2]);
-  if (!num_bytes) {
-    return Value::error(num_bytes.error());
-  }
-  auto new_text = coerce_to_text(args[3]);
-  if (!new_text) {
-    return Value::error(new_text.error());
-  }
-  if (start.value() < 1 || num_bytes.value() < 0) {
-    return Value::error(ErrorCode::Value);
-  }
-  const std::string& src = old_text.value();
-  const auto start_byte = static_cast<std::uint64_t>(start.value());  // 1-based
-  const auto budget = static_cast<std::uint64_t>(num_bytes.value());  // bytes to remove
-  const std::uint64_t end_byte_inclusive = start_byte + budget - 1;   // final byte to delete
+  const std::string& src = parsed.value().text;
+  const int start = parsed.value().start;
+  const int num_bytes = parsed.value().count;
+  const std::string& new_text = parsed.value().new_text;
+  const auto start_byte = static_cast<std::uint64_t>(start);         // 1-based
+  const auto budget = static_cast<std::uint64_t>(num_bytes);         // bytes to remove
+  const std::uint64_t end_byte_inclusive = start_byte + budget - 1;  // final byte to delete
 
   std::string prefix;
   std::string suffix;
@@ -550,9 +529,9 @@ Value ReplaceB_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   (void)head_pad;
 
   std::string out;
-  out.reserve(prefix.size() + new_text.value().size() + (tail_pad ? 1u : 0u) + suffix.size());
+  out.reserve(prefix.size() + new_text.size() + (tail_pad ? 1u : 0u) + suffix.size());
   out.append(prefix);
-  out.append(new_text.value());
+  out.append(new_text);
   if (tail_pad) {
     out.push_back(' ');
   }

@@ -60,6 +60,19 @@ struct SearchArgs {
 // search; `false` when the caller must return `*out_result` verbatim.
 bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, SearchArgs* out, Value* out_result);
 
+// The `(text, start_num, num_chars[, new_text])` arguments of MID / MIDB /
+// REPLACE / REPLACEB. `new_text` stays empty for the three-argument forms.
+struct TextWindowArgs {
+  std::string text;
+  int start;
+  int count;
+  std::string new_text;
+};
+
+// Coerces the arguments left to right (`new_text` only when `arity > 3`),
+// then rejects `start < 1` or `count < 0` with `#VALUE!`.
+Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity);
+
 // Per-character record: UTF-8 byte offset, byte length, 1-based DBCS
 // position (byte position under the ja-JP DBCS rule), and DBCS cost.
 struct DbcsCharRec {
