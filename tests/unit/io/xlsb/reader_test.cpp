@@ -450,7 +450,7 @@ std::vector<std::uint8_t> SharedStringsBin(std::string_view item) {
 /// Builds `xl/sharedStrings.bin` with one BrtSSTItem entry whose
 /// phonetic tail (`kRichStrPhonetic` set, no rich-text runs) declares
 /// one run but supplies zero bytes for it -- `DecodePhoneticTail`
-/// (reader.cpp) bounds the run count against the remaining payload
+/// (sst_reader.cpp) bounds the run count against the remaining payload
 /// before reading, so this exercises the `kIoXlsbRecordTruncated` path
 /// rather than an out-of-bounds read.
 std::vector<std::uint8_t> TruncatedPhoneticSharedStringsBin() {

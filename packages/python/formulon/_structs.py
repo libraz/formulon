@@ -751,7 +751,7 @@ def write_str_field(
     needed for a field the C ABI itself distinguishes NULL from a
     zero-length string on, such as ``fm_phonetic_run_t.text``: a NULL run
     text is rejected (``kBindingNullPointer``), but Excel legitimately
-    produces empty-reading runs (see ``src/io/xlsb/reader.cpp``'s
+    produces empty-reading runs (see ``src/io/xlsb/sst_reader.cpp``'s
     out-of-range kana slices), so ``get_phonetic_runs()``'s own output
     could not always round-trip back through ``set_phonetic_runs()``.
     Every buffer allocated here is appended to ``owned`` so the caller can

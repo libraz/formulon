@@ -134,7 +134,7 @@ struct WorksheetProperties {
 /// Reads the sheet's retained `<sheetPr>` fragment back into the fields
 /// `BrtWsProp` can express. The fragment is the same string the OOXML
 /// writer emits and the XLSB reader synthesises, so this is the inverse of
-/// `reader.cpp`'s `DecodeWorksheetProperties` and the two containers agree
+/// `sheet_reader.cpp`'s `DecodeWorksheetProperties` and the two containers agree
 /// on a sheet's code name and tab colour whichever one it was loaded from.
 ///
 /// Members `<sheetPr>` can carry that `BrtWsProp` has no field for --

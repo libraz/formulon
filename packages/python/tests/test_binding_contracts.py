@@ -478,7 +478,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_phonetic_run_with_empty_text_round_trips(self) -> None:
         # Excel itself produces a run with `text == ""` for an out-of-range
-        # kana slice (see src/io/xlsb/reader.cpp); the C ABI rejects a NULL
+        # kana slice (see src/io/xlsb/sst_reader.cpp); the C ABI rejects a NULL
         # run text but accepts a zero-length one, so this must not raise.
         runs = [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "")]
         with Workbook.create_default() as wb:

@@ -177,7 +177,7 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     // ---- Operators (no class mark) -----------------------------------------
     // `Exp` (shared/array-formula shell): the reader does not decode this
     // token directly -- `decode_ptgs` has no `PtgKind::Exp` case. The
-    // token is handled a layer up instead: `reader.cpp` recognises a bare
+    // token is handled a layer up instead: `sheet_reader.cpp` recognises a bare
     // `PtgExp` stream as the placeholder it is and leaves the cell without
     // a formula, while `DecodeSheetBin`'s `BrtArrFmla` handling supplies
     // the array / dynamic-array formula's real tokens out-of-band and

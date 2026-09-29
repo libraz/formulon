@@ -372,7 +372,7 @@ def _rgce_span(buf: bytes, rec: Record) -> Optional[Tuple[int, int]]:
     Every `BrtFmla*` record is an 8-byte cell header, then the cached result
     (8 bytes for Num, an XLWideString for String, 1 byte for Bool / Error),
     then a `u16` flag word, then `CellParsedFormula` (`u32 cce` + `cce`
-    bytes). Mirrors the reader in `src/io/xlsb/reader.cpp`.
+    bytes). Mirrors the reader in `src/io/xlsb/sheet_reader.cpp`.
     """
 
     p = rec.offset + 8  # cell header: u32 col + u24 iStyleRef + u8 fPhShow

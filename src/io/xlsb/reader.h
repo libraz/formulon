@@ -18,7 +18,7 @@
 //
 // Formulas are decoded through a full `Ptg → AST → Excel-formula-text`
 // pipeline (`io/xlsb/ptg_reader.h`'s `decode_ptgs` plus
-// `parser::format_formula`; see `DecodeFormulaText` in reader.cpp).
+// `parser::format_formula`; see `DecodeFormulaText` in sheet_reader.cpp).
 // When a Ptg stream uses a token outside the supported set, the reader
 // logs a structured warning and leaves the cell's formula text empty so
 // the already-decoded cached value is preserved instead of a fabricated
