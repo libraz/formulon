@@ -79,6 +79,37 @@ bool match_cell_is(const CFRule& rule, const Value& cell_value) {
 }
 
 // ---------------------------------------------------------------------------
+// ContainsBlanks / NotContainsBlanks.
+// ---------------------------------------------------------------------------
+
+// Excel stores and evaluates a Blanks CF rule as `LEN(TRIM(A1))=0`, so a
+// formula-produced empty string or a whitespace-only cell counts as blank,
+// not only a truly empty cell. Mirrors TRIM's own trimmable-character set
+// (ASCII space and the ideographic space U+3000) — see text.cpp's `Trim`.
+bool is_cf_blank(const Value& cell_value) {
+  if (cell_value.is_blank()) {
+    return true;
+  }
+  if (!cell_value.is_text()) {
+    return false;
+  }
+  const std::string_view text = cell_value.as_text();
+  for (std::size_t i = 0; i < text.size();) {
+    if (text[i] == ' ') {
+      ++i;
+      continue;
+    }
+    if (i + 3 <= text.size() && static_cast<unsigned char>(text[i]) == 0xE3u &&
+        static_cast<unsigned char>(text[i + 1]) == 0x80u && static_cast<unsigned char>(text[i + 2]) == 0x80u) {
+      i += 3;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Text family — containsText / notContainsText / beginsWith / endsWith.
 // ---------------------------------------------------------------------------
 
@@ -382,9 +413,9 @@ bool match_top10(const CFRule& rule, const Value& cell_value, const CFEvalContex
 bool match_rule(const CFRule& rule, const Value& cell_value) {
   switch (rule.type) {
     case RuleType::ContainsBlanks:
-      return cell_value.is_blank();
+      return is_cf_blank(cell_value);
     case RuleType::NotContainsBlanks:
-      return !cell_value.is_blank();
+      return !is_cf_blank(cell_value);
     case RuleType::ContainsErrors:
       return cell_value.is_error();
     case RuleType::NotContainsErrors:

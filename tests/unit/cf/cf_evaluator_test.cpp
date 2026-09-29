@@ -48,13 +48,26 @@ TEST(CFEvaluator, ContainsBlanksMatchesBlank) {
   CFRule r = MakeRule(RuleType::ContainsBlanks);
   EXPECT_TRUE(match_rule(r, Value::blank()));
   EXPECT_FALSE(match_rule(r, Value::number(0.0)));
-  EXPECT_FALSE(match_rule(r, Value::text("")));
   EXPECT_FALSE(match_rule(r, Value::boolean(false)));
+}
+
+// Excel stores/evaluates the Blanks CF rule as LEN(TRIM(A1))=0, so a
+// formula-produced empty string or whitespace-only text counts as blank,
+// not only a true blank cell.
+TEST(CFEvaluator, ContainsBlanksMatchesEmptyAndWhitespaceOnlyText) {
+  CFRule r = MakeRule(RuleType::ContainsBlanks);
+  EXPECT_TRUE(match_rule(r, Value::text("")));
+  EXPECT_TRUE(match_rule(r, Value::text("   ")));
+  EXPECT_TRUE(match_rule(r, Value::text("\xE3\x80\x80")));  // U+3000 ideographic space
+  EXPECT_FALSE(match_rule(r, Value::text("x")));
+  EXPECT_FALSE(match_rule(r, Value::text(" x ")));
 }
 
 TEST(CFEvaluator, NotContainsBlanksIsComplementOfContainsBlanks) {
   CFRule r = MakeRule(RuleType::NotContainsBlanks);
   EXPECT_FALSE(match_rule(r, Value::blank()));
+  EXPECT_FALSE(match_rule(r, Value::text("")));
+  EXPECT_FALSE(match_rule(r, Value::text("   ")));
   EXPECT_TRUE(match_rule(r, Value::number(1.0)));
   EXPECT_TRUE(match_rule(r, Value::text("x")));
   EXPECT_TRUE(match_rule(r, Value::boolean(true)));
