@@ -219,34 +219,31 @@ bool is_range_producing_call(const parser::AstNode& call_node) {
          strings::case_insensitive_eq(name, "COLUMN");
 }
 
+// Shared body of ROWS / COLUMNS; `want_rows` picks the reported axis.
+Value eval_rows_or_columns(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, bool want_rows) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  Value err = Value::blank();
+  if (!resolve_shape(call.as_call_arg(0), arena, registry, ctx, &rows, &cols, &err)) {
+    return err;
+  }
+  return Value::number(static_cast<double>(want_rows ? rows : cols));
+}
+
 }  // namespace
 
 Value eval_rows_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
-  if (call.as_call_arity() != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  Value err = Value::blank();
-  if (!resolve_shape(call.as_call_arg(0), arena, registry, ctx, &rows, &cols, &err)) {
-    return err;
-  }
-  return Value::number(static_cast<double>(rows));
+  return eval_rows_or_columns(call, arena, registry, ctx, /*want_rows=*/true);
 }
 
 Value eval_columns_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  if (call.as_call_arity() != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  Value err = Value::blank();
-  if (!resolve_shape(call.as_call_arg(0), arena, registry, ctx, &rows, &cols, &err)) {
-    return err;
-  }
-  return Value::number(static_cast<double>(cols));
+  return eval_rows_or_columns(call, arena, registry, ctx, /*want_rows=*/false);
 }
 
 // Shared helper for ROW / COLUMN. Picks the row or column axis via
@@ -437,19 +434,9 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
     const parser::AstNode& arg_node = *effective;
     const parser::NodeKind k = arg_node.kind();
     ArgArray a{};
-    if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-      auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
-      if (!resolved) {
-        return Value::error(resolved.error());
-      }
-      auto& rr = resolved.value();
-      a.rows = rr.rows;
-      a.cols = rr.cols;
-      a.cells = std::move(rr.cells);
-    } else if (k == parser::NodeKind::Call) {
-      // OFFSET / CHOOSE / IF call after LET passthrough — route through
-      // `resolve_range_arg` so the rectangle (and its row/col shape) is
-      // expanded the same way as a literal `RangeOp` argument.
+    if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::Call) {
+      // A Call (OFFSET / CHOOSE / IF after LET passthrough) is expanded the
+      // same way as a literal `RangeOp` argument, keeping its row/col shape.
       auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
       if (!resolved) {
         return Value::error(resolved.error());

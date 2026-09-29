@@ -191,7 +191,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
             // to coerce a rectangle to one bool. The broadcast belongs to the
             // lazy `IF` seam and is shared rather than repeated here, so this
             // path and a bare `IF(cond, a, b)` cannot answer differently for
-            // one formula. `expand_if_call` routes to the same helper.
+            // one formula. `expand_if_call` resolves through this branch.
             const Value result = eval_if_array_cond_lazy(arg_node, cond, arena, registry, ctx);
             if (result.is_error()) {
               *out_err_code = result.as_error();

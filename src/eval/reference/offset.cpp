@@ -28,50 +28,93 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/reference/common.h"
-#include "eval/special_forms_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
 
-Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                       const EvalContext& ctx) {
+namespace {
+
+// The rectangle an OFFSET call names: the base's sheet plus the 0-based
+// top-left corner and the extent.
+struct OffsetRect {
   refs_internal::OffsetBase base{};
   std::uint32_t top_row = 0;
   std::uint32_t left_col = 0;
   std::uint32_t height = 0;
   std::uint32_t width = 0;
+};
+
+bool resolve_offset_rect(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, OffsetRect* out, ErrorCode* out_err) {
+  return refs_internal::compute_offset_rect(call, arena, registry, ctx, &out->base, &out->top_row, &out->left_col,
+                                            &out->height, &out->width, out_err);
+}
+
+// Reads every cell of `rect` through `EvalContext::expand_range`, which
+// already handles cross-sheet routing, cycle detection, and per-cell
+// recursion.
+Expected<std::vector<Value>, ErrorCode> expand_offset_rect(const OffsetRect& rect, Arena& arena,
+                                                           const FunctionRegistry& registry, const EvalContext& ctx) {
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  lhs.sheet = rect.base.sheet;
+  lhs.row = rect.top_row;
+  lhs.col = rect.left_col;
+  rhs.sheet = rect.base.sheet;
+  rhs.row = rect.top_row + rect.height - 1U;
+  rhs.col = rect.left_col + rect.width - 1U;
+  return ctx.expand_range(lhs, rhs, arena, registry);
+}
+
+// Resolves `node` through `resolve_range_arg` into the expander out-params.
+bool expand_resolved_range(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                           std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  auto resolved = resolve_range_arg(node, arena, registry, ctx);
+  if (!resolved) {
+    *out_err_code = resolved.error();
+    return false;
+  }
+  auto& rr = resolved.value();
+  if (out_rows != nullptr) {
+    *out_rows = rr.rows;
+  }
+  if (out_cols != nullptr) {
+    *out_cols = rr.cols;
+  }
+  *out_cells = std::move(rr.cells);
+  return true;
+}
+
+}  // namespace
+
+Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  OffsetRect rect{};
   ErrorCode err = ErrorCode::Value;
-  if (!refs_internal::compute_offset_rect(call, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
-                                          &err)) {
+  if (!resolve_offset_rect(call, arena, registry, ctx, &rect, &err)) {
     return Value::error(err);
   }
+  const std::uint32_t height = rect.height;
+  const std::uint32_t width = rect.width;
   if (height == 1U && width == 1U) {
     parser::Reference target{};
-    target.sheet = base.sheet;
-    target.row = top_row;
-    target.col = left_col;
+    target.sheet = rect.base.sheet;
+    target.row = rect.top_row;
+    target.col = rect.left_col;
     return ctx.resolve_ref(target, arena, registry);
   }
 
   // A direct multi-cell OFFSET is a dynamic array. Materialise the whole
   // rectangle so it can spill at the formula cell; range-aware consumers
   // use the matching `expand_offset_call` path below.
-  parser::Reference lhs{};
-  parser::Reference rhs{};
-  lhs.sheet = base.sheet;
-  lhs.row = top_row;
-  lhs.col = left_col;
-  rhs.sheet = base.sheet;
-  rhs.row = top_row + height - 1U;
-  rhs.col = left_col + width - 1U;
-  auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+  auto expanded = expand_offset_rect(rect, arena, registry, ctx);
   if (!expanded) {
     return Value::error(expanded.error());
   }
@@ -95,39 +138,23 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
 bool expand_offset_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                         std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  refs_internal::OffsetBase base{};
-  std::uint32_t top_row = 0;
-  std::uint32_t left_col = 0;
-  std::uint32_t height = 0;
-  std::uint32_t width = 0;
+  OffsetRect rect{};
   ErrorCode err = ErrorCode::Value;
-  if (!refs_internal::compute_offset_rect(call, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
-                                          &err)) {
+  if (!resolve_offset_rect(call, arena, registry, ctx, &rect, &err)) {
     *out_err_code = err;
     return false;
   }
-  // Build two synthetic endpoint references delimiting the rectangle and
-  // hand them off to `EvalContext::expand_range`, which already handles
-  // cross-sheet routing, cycle detection, and per-cell recursion.
-  parser::Reference lhs{};
-  parser::Reference rhs{};
-  lhs.sheet = base.sheet;
-  lhs.row = top_row;
-  lhs.col = left_col;
-  rhs.sheet = base.sheet;
-  rhs.row = top_row + height - 1U;
-  rhs.col = left_col + width - 1U;
-  auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+  auto expanded = expand_offset_rect(rect, arena, registry, ctx);
   if (!expanded) {
     *out_err_code = expanded.error();
     return false;
   }
   *out_cells = std::move(expanded.value());
   if (out_rows != nullptr) {
-    *out_rows = height;
+    *out_rows = rect.height;
   }
   if (out_cols != nullptr) {
-    *out_cols = width;
+    *out_cols = rect.width;
   }
   return true;
 }
@@ -184,125 +211,19 @@ bool expand_choose_call(const parser::AstNode& call, Arena& arena, const Functio
     return false;
   }
   const auto picked_slot = static_cast<std::uint32_t>(raw);
-  const parser::AstNode& chosen = call.as_call_arg(picked_slot);
-  // Recurse so nested OFFSET / CHOOSE chains also flatten cleanly. Any
-  // other shape (Ref, RangeOp, …) falls through to `resolve_range_arg`,
-  // which already knows how to handle them — including the
-  // "anything else -> #VALUE!" fallthrough for scalar children.
-  if (chosen.kind() == parser::NodeKind::Call) {
-    const std::string_view name = chosen.as_call_name();
-    if (strings::case_insensitive_eq(name, "OFFSET")) {
-      return expand_offset_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
-    }
-    if (strings::case_insensitive_eq(name, "CHOOSE")) {
-      return expand_choose_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
-    }
-  }
-  auto resolved = resolve_range_arg(chosen, arena, registry, ctx);
-  if (!resolved) {
-    *out_err_code = resolved.error();
-    return false;
-  }
-  auto& rr = resolved.value();
-  if (out_rows != nullptr) {
-    *out_rows = rr.rows;
-  }
-  if (out_cols != nullptr) {
-    *out_cols = rr.cols;
-  }
-  *out_cells = std::move(rr.cells);
-  return true;
+  // `resolve_range_arg` routes a nested OFFSET / CHOOSE / IF back through
+  // these expanders, so chains flatten cleanly.
+  return expand_resolved_range(call.as_call_arg(picked_slot), arena, registry, ctx, out_cells, out_err_code, out_rows,
+                               out_cols);
 }
 
 bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                     std::vector<Value>* out_cells, ErrorCode* out_err_code, std::uint32_t* out_rows,
                     std::uint32_t* out_cols) {
-  const std::uint32_t arity = call.as_call_arity();
-  // `IF(cond, then, [else])` — Mac Excel preserves reference-shape through
-  // the picked branch, so `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` should
-  // aggregate the 3-cell range rather than collapse to a scalar. Mirror
-  // `eval_if_lazy`'s short-circuit semantics: evaluate cond first (errors
-  // propagate left-to-right matching Excel), then recurse into the picked
-  // branch. The `IF(FALSE, then)` two-arity case returns boolean FALSE in
-  // Excel's scalar path — not a reference — so we surface `#VALUE!` and
-  // let the caller fall back to its scalar branch (see commit `e068a7f`'s
-  // `resolve_reference_call` IF block for the matching reasoning).
-  if (arity != 2U && arity != 3U) {
-    *out_err_code = ErrorCode::Value;
-    return false;
-  }
-  const Value cond = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (cond.is_error()) {
-    *out_err_code = cond.as_error();
-    return false;
-  }
-  if (cond.is_array()) {
-    // An array condition picks per cell rather than short-circuiting, which
-    // is what makes `SUM(IF(A1:A5<=3, A1:A5, 0))` aggregate the masked
-    // column instead of failing to coerce a rectangle to one bool. The
-    // broadcast belongs to the lazy `IF` seam; expanding it here would be a
-    // second copy of Excel's rule.
-    const Value result = eval_if_array_cond_lazy(call, cond, arena, registry, ctx);
-    if (result.is_error()) {
-      *out_err_code = result.as_error();
-      return false;
-    }
-    if (!result.is_array()) {
-      *out_err_code = ErrorCode::Value;
-      return false;
-    }
-    const ArrayValue* array = result.as_array();
-    const std::size_t count = static_cast<std::size_t>(array->rows) * array->cols;
-    out_cells->assign(array->cells, array->cells + count);
-    if (out_rows != nullptr) {
-      *out_rows = array->rows;
-    }
-    if (out_cols != nullptr) {
-      *out_cols = array->cols;
-    }
-    return true;
-  }
-  auto coerced = coerce_to_bool(cond);
-  if (!coerced) {
-    *out_err_code = coerced.error();
-    return false;
-  }
-  if (!coerced.value() && arity == 2U) {
-    *out_err_code = ErrorCode::Value;
-    return false;
-  }
-  const std::uint32_t pick = coerced.value() ? 1U : 2U;
-  const parser::AstNode& chosen = call.as_call_arg(pick);
-  // Recurse so nested OFFSET / CHOOSE / IF chains also flatten cleanly.
-  // Any other shape (Ref, RangeOp, …) falls through to `resolve_range_arg`,
-  // which already knows how to handle them — including the
-  // "anything else -> #VALUE!" fallthrough for scalar children.
-  if (chosen.kind() == parser::NodeKind::Call) {
-    const std::string_view name = chosen.as_call_name();
-    if (strings::case_insensitive_eq(name, "OFFSET")) {
-      return expand_offset_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
-    }
-    if (strings::case_insensitive_eq(name, "CHOOSE")) {
-      return expand_choose_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
-    }
-    if (strings::case_insensitive_eq(name, "IF")) {
-      return expand_if_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
-    }
-  }
-  auto resolved = resolve_range_arg(chosen, arena, registry, ctx);
-  if (!resolved) {
-    *out_err_code = resolved.error();
-    return false;
-  }
-  auto& rr = resolved.value();
-  if (out_rows != nullptr) {
-    *out_rows = rr.rows;
-  }
-  if (out_cols != nullptr) {
-    *out_cols = rr.cols;
-  }
-  *out_cells = std::move(rr.cells);
-  return true;
+  // `resolve_range_arg` owns the reference-shaped IF rule: it short-circuits
+  // the condition, broadcasts an array condition, and recurses into the
+  // picked branch.
+  return expand_resolved_range(call, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
 }
 
 namespace {

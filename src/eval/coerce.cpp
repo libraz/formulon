@@ -260,21 +260,26 @@ Expected<double, ErrorCode> matrix_strict_number_cell(const Value& v, std::uint3
 }
 
 Expected<std::vector<double>, ErrorCode> collect_numerics(const Value& v, NumericCollectPolicy policy) {
-  // Single-pass flatten: an Array iterates its row-major cells; any
-  // other kind is treated as a 1-element input. Blank is always
-  // dropped (counting blanks as zero is the "A"-family's job, handled
-  // by a separate helper). Ref / Lambda are always dropped — callers
-  // that care about them resolve refs before calling.
-  std::vector<double> out;
+  // An Array iterates its row-major cells; any other kind is treated as a
+  // 1-element input.
   std::uint32_t n = 1;
   const Value* cells = &v;
   if (v.kind() == ValueKind::Array) {
     n = v.as_array_rows() * v.as_array_cols();
     cells = v.as_array_cells();
   }
-  out.reserve(n);
-  for (std::uint32_t i = 0; i < n; ++i) {
-    const Value& cell = cells[i];
+  return collect_numerics(cells, n, policy);
+}
+
+Expected<std::vector<double>, ErrorCode> collect_numerics(const Value* args, std::uint32_t count,
+                                                          NumericCollectPolicy policy) {
+  // Errors short-circuit at the first offending cell (when
+  // `policy.error_on_error_cell` is set), matching the contract used by the
+  // AVERAGE / SMALL / LARGE / "A" families.
+  std::vector<double> out;
+  out.reserve(count);
+  for (std::uint32_t i = 0; i < count; ++i) {
+    const Value& cell = args[i];
     switch (cell.kind()) {
       case ValueKind::Number:
         out.push_back(cell.as_number());
@@ -320,60 +325,6 @@ Expected<std::vector<double>, ErrorCode> collect_numerics(const Value& v, Numeri
       case ValueKind::Lambda:
         // Always drop. Nested Array would only appear via lambda /
         // dynamic-array machinery that has its own flattening step.
-        break;
-    }
-  }
-  return out;
-}
-
-Expected<std::vector<double>, ErrorCode> collect_numerics(const Value* args, std::uint32_t count,
-                                                          NumericCollectPolicy policy) {
-  // Multi-Value flatten. The dispatcher has already expanded any range
-  // arguments into scalar cells, so walking the flat slice cell-by-cell
-  // and applying the same per-kind policy as the single-Value overload
-  // produces an identical result. Errors short-circuit at the first
-  // offending cell (when `policy.error_on_error_cell` is set), matching
-  // the contract used by the AVERAGE / SMALL / LARGE / "A" families.
-  std::vector<double> out;
-  out.reserve(count);
-  for (std::uint32_t i = 0; i < count; ++i) {
-    const Value& cell = args[i];
-    switch (cell.kind()) {
-      case ValueKind::Number:
-        out.push_back(cell.as_number());
-        break;
-      case ValueKind::Bool:
-        if (policy.include_bool) {
-          out.push_back(cell.as_boolean() ? 1.0 : 0.0);
-        }
-        break;
-      case ValueKind::Text:
-        if (policy.include_text_numeric_literal) {
-          auto coerced = coerce_to_number(cell);
-          if (!coerced) {
-            if (policy.error_on_text) {
-              return coerced.error();
-            }
-            break;
-          }
-          out.push_back(coerced.value());
-        }
-        break;
-      case ValueKind::Error:
-        if (policy.error_on_error_cell) {
-          return cell.as_error();
-        }
-        break;
-      case ValueKind::Blank:
-        if (policy.blank_as_zero) {
-          out.push_back(0.0);
-        }
-        break;
-      case ValueKind::Array:
-      case ValueKind::Ref:
-      case ValueKind::Lambda:
-        // Always drop. Range / Array arguments are expected to have been
-        // expanded by the dispatcher before reaching this helper.
         break;
     }
   }

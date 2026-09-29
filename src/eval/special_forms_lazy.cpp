@@ -195,6 +195,23 @@ Value eval_and_or_lazy(const parser::AstNode& call, Arena& arena, const Function
   return Value::boolean(result);
 }
 
+// Views every arm of an array-broadcast IFS / SWITCH and widens `*rows` x
+// `*cols` to cover them all. `slots` backs the views of the scalar arms, so
+// it is sized before any view is taken: a reallocation would leave those
+// views dangling.
+std::vector<ArrayView> view_arms(const std::vector<Value>& values, std::vector<Value>* slots, std::uint32_t* rows,
+                                 std::uint32_t* cols) {
+  slots->assign(values.size(), Value::blank());
+  std::vector<ArrayView> arms;
+  arms.reserve(values.size());
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    arms.push_back(as_array_view(values[i], &(*slots)[i]));
+    *rows = *rows > arms.back().rows ? *rows : arms.back().rows;
+    *cols = *cols > arms.back().cols ? *cols : arms.back().cols;
+  }
+  return arms;
+}
+
 }  // namespace
 
 Value eval_if_array_cond_lazy(const parser::AstNode& call, const Value& cond, Arena& arena,
@@ -415,28 +432,16 @@ Value eval_ifs_array_cond(const parser::AstNode& call, std::uint32_t first, cons
                           const FunctionRegistry& registry, const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
   const std::size_t arm_count = static_cast<std::size_t>(arity - first);
-  // `arm_slots` backs the views of the scalar arms, so it is sized before
-  // any view is taken: an `ArrayView` over a scalar points into its slot and
-  // a reallocation would leave those views dangling.
   std::vector<Value> arm_values;
   arm_values.reserve(arm_count);
   arm_values.push_back(first_cond);
   for (std::uint32_t i = first + 1U; i < arity; ++i) {
     arm_values.push_back(eval_node(call.as_call_arg(i), arena, registry, ctx));
   }
-  std::vector<Value> arm_slots(arm_count, Value::blank());
-  std::vector<ArrayView> arms;
-  arms.reserve(arm_count);
-  for (std::size_t i = 0; i < arm_count; ++i) {
-    arms.push_back(as_array_view(arm_values[i], &arm_slots[i]));
-  }
-
   std::uint32_t out_rows = 1U;
   std::uint32_t out_cols = 1U;
-  for (const ArrayView& arm : arms) {
-    out_rows = out_rows > arm.rows ? out_rows : arm.rows;
-    out_cols = out_cols > arm.cols ? out_cols : arm.cols;
-  }
+  std::vector<Value> arm_slots;
+  const std::vector<ArrayView> arms = view_arms(arm_values, &arm_slots, &out_rows, &out_cols);
 
   Value* buf = nullptr;
   ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
@@ -592,29 +597,17 @@ Value eval_switch_array_subject(const parser::AstNode& call, const Value& subjec
                                 const FunctionRegistry& registry, const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
   const std::size_t arm_count = static_cast<std::size_t>(arity) - 1U;
-  // `arm_slots` backs the views of the scalar arms, so both vectors are
-  // sized up front: an `ArrayView` of a scalar points into its slot, and a
-  // reallocation would leave those views dangling.
   std::vector<Value> arm_values;
   arm_values.reserve(arm_count);
   for (std::uint32_t i = 1; i < arity; ++i) {
     arm_values.push_back(eval_node(call.as_call_arg(i), arena, registry, ctx));
   }
-  std::vector<Value> arm_slots(arm_count, Value::blank());
-  std::vector<ArrayView> arms;
-  arms.reserve(arm_count);
-  for (std::size_t i = 0; i < arm_count; ++i) {
-    arms.push_back(as_array_view(arm_values[i], &arm_slots[i]));
-  }
-
   Value subject_slot = Value::blank();
   const ArrayView sv = as_array_view(subject, &subject_slot);
   std::uint32_t out_rows = sv.rows;
   std::uint32_t out_cols = sv.cols;
-  for (const ArrayView& arm : arms) {
-    out_rows = out_rows > arm.rows ? out_rows : arm.rows;
-    out_cols = out_cols > arm.cols ? out_cols : arm.cols;
-  }
+  std::vector<Value> arm_slots;
+  const std::vector<ArrayView> arms = view_arms(arm_values, &arm_slots, &out_rows, &out_cols);
 
   Value* buf = nullptr;
   ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
