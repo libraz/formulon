@@ -21,6 +21,7 @@
 #include <cstring>
 #include <deque>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -29,7 +30,9 @@
 
 #include "io/array_anchor_budget.h"
 #include "io/cell_parser.h"
+#include "io/formula_prefix.h"
 #include "io/sax_xml_reader.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
@@ -63,6 +66,44 @@ struct SharedFormulaMaster {
   std::uint32_t col = 0;
 };
 
+/// Predicts how many new `Cell` slots a write to `(row, col)` will cost
+/// `RowCells::ensure()`, without reaching into `RowCells` itself -- the
+/// reader only sees `(row, col)` pairs in XML document order, so this
+/// mirrors the run's contiguous-growth rule from the outside: a write to
+/// a new row costs 1 slot, a write outside the row's already-seen
+/// `[min_col, max_col]` span costs the gap it bridges (matching a styled
+/// far-apart pair of cells materialising every slot between them), and a
+/// write inside that span costs nothing (already materialised). Shared
+/// by both the DOM and SAX read paths so each charges the same sheet-load
+/// budget for the same input.
+class RowGrowthTracker {
+ public:
+  std::uint64_t charge_for(std::uint32_t row, std::uint32_t col) {
+    if (!row_.has_value() || *row_ != row) {
+      row_ = row;
+      min_col_ = col;
+      max_col_ = col;
+      return 1U;
+    }
+    if (col < min_col_) {
+      const std::uint64_t growth = static_cast<std::uint64_t>(min_col_) - col;
+      min_col_ = col;
+      return growth;
+    }
+    if (col > max_col_) {
+      const std::uint64_t growth = static_cast<std::uint64_t>(col) - max_col_;
+      max_col_ = col;
+      return growth;
+    }
+    return 0U;
+  }
+
+ private:
+  std::optional<std::uint32_t> row_;
+  std::uint32_t min_col_ = 0;
+  std::uint32_t max_col_ = 0;
+};
+
 /// Decodes a shared-formula `si` attribute under the shared XSD
 /// non-negative-integer lexer.
 ///
@@ -89,8 +130,17 @@ std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint3
     return master.text;
   }
 
+  // `master.text` is the raw `<f>` body, which may still carry Excel's
+  // `_xlfn.` / `_xlpm.` storage prefixes (the master cell's own text is
+  // canonicalised later, by `Workbook::set_cell_formula`). Strip them
+  // before parsing: the general Call-node path only recognises those
+  // prefixes for LET / LAMBDA specially, so an un-stripped future-function
+  // callee would shift and re-format with the prefix still glued to its
+  // name, and the prefix bytes also count against the tokenizer's
+  // formula-length cap even though Excel's own limit is measured on the
+  // canonical (formula-bar) text this produces.
   std::string source("=");
-  source.append(master.text);
+  source.append(strip_storage_prefixes(master.text));
   Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
   parser::Parser parser(source, arena);
   parser::AstNode* root = parser.parse();
@@ -136,66 +186,6 @@ void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_
   ctx.array_anchors.push_back(ArrayAnchor{anchor_row, anchor_col, last_row, last_col});
 }
 
-/// Registers each recorded dynamic-array anchor as a spill region so the
-/// cached spill targets (bare `<v>` cells Excel writes for F7 / F8 of a
-/// `=SEQUENCE(3)` in F6) do not read back as independent literals. Without
-/// this, the anchor's re-spill on recalc collides with those literals and
-/// surfaces `#SPILL!`. The phantom values are captured into the region and
-/// the underlying non-anchor cells are blanked so recalc can overwrite the
-/// footprint freely.
-Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) {
-  // Validate and charge every footprint before the first reserve or cell
-  // walk. This keeps a later malformed/over-budget anchor from arriving
-  // after an earlier one has already started an attacker-sized operation.
-  ResourceBudget budget(kMaxDynamicArrayCells, FormulonErrorCode::kIoSheetCorrupt);
-  for (const ArrayAnchor& a : anchors) {
-    auto cells_or = checked_array_anchor_cells(a.row, a.col, a.last_row, a.last_col, FormulonErrorCode::kIoSheetCorrupt,
-                                               "context=sheet_reader array_anchor");
-    if (!cells_or) {
-      return cells_or.error();
-    }
-    std::string context("context=sheet_reader format=ooxml anchor_row=");
-    context.append(std::to_string(a.row));
-    context.append(" anchor_col=");
-    context.append(std::to_string(a.col));
-    context.append(" last_row=");
-    context.append(std::to_string(a.last_row));
-    context.append(" last_col=");
-    context.append(std::to_string(a.last_col));
-    auto charged = consume_array_anchor_budget(budget, cells_or.value(), std::move(context));
-    if (!charged) {
-      return charged.error();
-    }
-  }
-
-  for (const ArrayAnchor& a : anchors) {
-    const std::uint32_t rows = a.last_row - a.row + 1U;
-    const std::uint32_t cols = a.last_col - a.col + 1U;
-    const std::uint64_t cell_count = static_cast<std::uint64_t>(rows) * cols;
-    std::vector<Value> values;
-    values.reserve(static_cast<std::size_t>(cell_count));
-    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
-      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
-        const Cell* cell = sheet.cell_at(r, c);
-        values.push_back(cell != nullptr ? cell->cached_value : Value::blank());
-      }
-    }
-    // Blank the non-anchor cells: their values now live in the region as
-    // phantoms, and blanking keeps them from blocking either this commit's
-    // collision scan or the anchor's re-spill on recalc.
-    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
-      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
-        if (r == a.row && c == a.col) {
-          continue;
-        }
-        sheet.set_cell_cached_value(r, c, Value::blank());
-      }
-    }
-    sheet.commit_spill(a.row, a.col, rows, cols, std::move(values));
-  }
-  return Expected<void, Error>::Ok();
-}
-
 /// Reads the `<f>` child of `c_node` and updates `formula_out`. Returns
 /// `false` and surfaces an error when a slave occurrence references an
 /// unknown `si`. `shared` is the per-sheet map of master formulas.
@@ -207,19 +197,37 @@ Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayA
 ///     `shared[N]`, sets `formula_out = BODY`.
 ///   * `<f t="shared" si="N"/>` (no body) -> looks up master, sets
 ///     `formula_out` to the master text (verbatim — see file-level note).
-///   * `<f t="array">BODY</f>` (CSE array) and `<f t="dataTable" ...>`
-///     are accepted but treated as plain formulas: we read the body as
-///     the formula text. CSE-array detail / data-table semantics will
-///     land in a later bundle.
+///   * `<f t="array">BODY</f>` (CSE array) is accepted but treated as a
+///     plain formula: we read the body as the formula text. CSE-array
+///     detail will land in a later bundle.
+///   * `<f t="dataTable" .../>` carries no body at all (its geometry
+///     lives in `r1`/`r2`/`dt2D`/`dtr` attributes, which are not read),
+///     so `formula_out` comes out empty and the cell falls back to its
+///     cached `<v>` like any formula-less cell. `diagnostics` (when
+///     non-null) counts the drop via `skipped_feature_count` so a
+///     What-If data table is never silently frozen into constants with
+///     no record of the loss.
 Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
                                      std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared, std::uint32_t row,
-                                     std::uint32_t col, std::string& formula_out) {
+                                     std::uint32_t col, std::string& formula_out, ReadDiagnostics* diagnostics) {
   pugi::xml_node f_node = c_node.child("f");
   if (!f_node) {
     formula_out.clear();
     return Expected<void, Error>::Ok();
   }
   const std::string_view ftype = f_node.attribute("t").value();
+  if (ftype == "dataTable") {
+    formula_out.clear();
+    StructuredLog("io.sheet.formula.data_table_skip")
+        .field("row", std::to_string(row))
+        .field("col", std::to_string(col))
+        .error_code(FormulonErrorCode::kIoSheetCorrupt)
+        .warn();
+    if (diagnostics != nullptr) {
+      ++diagnostics->skipped_feature_count;
+    }
+    return Expected<void, Error>::Ok();
+  }
   if (ftype != "shared") {
     // Plain formula (or an unhandled variant we treat as plain).
     formula_out = f_node.text().get();
@@ -333,8 +341,62 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
 
 }  // namespace
 
+Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) {
+  // Validate and charge every footprint before the first reserve or cell
+  // walk. This keeps a later malformed/over-budget anchor from arriving
+  // after an earlier one has already started an attacker-sized operation.
+  ResourceBudget budget(kMaxDynamicArrayCells, FormulonErrorCode::kIoSheetCorrupt);
+  for (const ArrayAnchor& a : anchors) {
+    auto cells_or = checked_array_anchor_cells(a.row, a.col, a.last_row, a.last_col, FormulonErrorCode::kIoSheetCorrupt,
+                                               "context=sheet_reader array_anchor");
+    if (!cells_or) {
+      return cells_or.error();
+    }
+    std::string context("context=sheet_reader format=ooxml anchor_row=");
+    context.append(std::to_string(a.row));
+    context.append(" anchor_col=");
+    context.append(std::to_string(a.col));
+    context.append(" last_row=");
+    context.append(std::to_string(a.last_row));
+    context.append(" last_col=");
+    context.append(std::to_string(a.last_col));
+    auto charged = consume_array_anchor_budget(budget, cells_or.value(), std::move(context));
+    if (!charged) {
+      return charged.error();
+    }
+  }
+
+  for (const ArrayAnchor& a : anchors) {
+    const std::uint32_t rows = a.last_row - a.row + 1U;
+    const std::uint32_t cols = a.last_col - a.col + 1U;
+    const std::uint64_t cell_count = static_cast<std::uint64_t>(rows) * cols;
+    std::vector<Value> values;
+    values.reserve(static_cast<std::size_t>(cell_count));
+    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
+      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
+        const Cell* cell = sheet.cell_at(r, c);
+        values.push_back(cell != nullptr ? cell->cached_value : Value::blank());
+      }
+    }
+    // Blank the non-anchor cells: their values now live in the region as
+    // phantoms, and blanking keeps them from blocking either this commit's
+    // collision scan or the anchor's re-spill on recalc.
+    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
+      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
+        if (r == a.row && c == a.col) {
+          continue;
+        }
+        sheet.set_cell_cached_value(r, c, Value::blank());
+      }
+    }
+    sheet.commit_spill(a.row, a.col, rows, cols, std::move(values));
+  }
+  return Expected<void, Error>::Ok();
+}
+
 Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::size_t sheet_index, Workbook& workbook,
-                                      SheetReadContext& ctx, std::deque<std::string>& text_storage) {
+                                      SheetReadContext& ctx, std::deque<std::string>& text_storage,
+                                      ReadDiagnostics* diagnostics, std::uint64_t max_cell_bytes) {
   if (sheet_index >= workbook.sheet_count()) {
     std::string ctxs("context=sheet_reader sheet_index=");
     ctxs.append(std::to_string(sheet_index));
@@ -356,6 +418,11 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
   }
 
   std::unordered_map<std::uint32_t, SharedFormulaMaster> shared_formulas;
+  // Charged before every cell materialises, so a row whose two styled
+  // cells sit far apart cannot force `RowCells::ensure()` to allocate
+  // every slot between them unbounded — see `RowGrowthTracker`.
+  ResourceBudget cell_budget(max_cell_bytes, FormulonErrorCode::kIoFileTooLarge);
+  RowGrowthTracker cell_growth;
 
   for (pugi::xml_node row = sheet_data.child("row"); row; row = row.next_sibling("row")) {
     for (pugi::xml_node c = row.child("c"); c; c = c.next_sibling("c")) {
@@ -373,9 +440,30 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       // Resolve formula text (handling shared-formula reuse).
       std::string formula_text;
       {
-        auto resolved = ResolveFormula(c, shared_formulas, parsed.row, parsed.col, formula_text);
+        auto resolved = ResolveFormula(c, shared_formulas, parsed.row, parsed.col, formula_text, diagnostics);
         if (!resolved) {
           return resolved.error();
+        }
+      }
+
+      // Charge before `ApplyParsedCell` materialises: a truly empty cell
+      // (matching its own no-op condition below) never calls
+      // `RowCells::ensure()`, so it must not advance `cell_growth` either
+      // -- otherwise a later real write in the same row would be charged
+      // as if the gap it bridges were smaller than it actually is.
+      const bool materializes =
+          !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index || parsed.xf_index != 0U;
+      if (materializes) {
+        const std::uint64_t growth = cell_growth.charge_for(parsed.row, parsed.col);
+        if (growth != 0U) {
+          std::string ctxs("context=sheet_reader row=");
+          ctxs.append(std::to_string(parsed.row));
+          ctxs.append(" col=");
+          ctxs.append(std::to_string(parsed.col));
+          auto charged = charge(cell_budget, growth * sizeof(Cell), std::move(ctxs));
+          if (!charged) {
+            return charged.error();
+          }
         }
       }
 
@@ -392,7 +480,10 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       }
     }
   }
-  return RegisterArraySpills(workbook.sheet(sheet_index), ctx.array_anchors);
+  // Spill registration is the caller's job (see `SheetReadContext::
+  // array_anchors`): it must run after `ctx.pending_sst_cells` has been
+  // resolved, which this function does not do.
+  return Expected<void, Error>::Ok();
 }
 
 // ---------------------------------------------------------------------------
@@ -707,14 +798,22 @@ struct SaxApplyState {
   // their own position. Mirrors the DOM path's per-sheet `shared_formulas`
   // map (see `ResolveFormula`).
   std::unordered_map<std::uint32_t, SharedFormulaMaster> shared_formulas;
+  ReadDiagnostics* diagnostics;
+  // Mirrors the DOM path's per-sheet cell-materialisation budget (see
+  // `read_sheet_data`), so the two loaders enforce the same ceiling.
+  ResourceBudget cell_budget;
+  RowGrowthTracker cell_growth;
 };
 
 /// Resolves a SAX `CellRecord`'s `<f>` into the effective formula text
 /// (leading `=` already stripped by the scanner), mirroring the DOM
 /// `ResolveFormula`. Plain formulas pass through; shared-formula masters
 /// register into `shared`; followers shift the registered master to their
-/// cell. Array / dataTable formulas are treated as plain (body used
-/// verbatim), matching the DOM path.
+/// cell. Array formulas are treated as plain (body used verbatim),
+/// matching the DOM path. `<f t="dataTable">` also comes back empty here
+/// (the scanner captures no body for it, same as the DOM path reading
+/// no text), so the diagnostics side-effect lives in `ApplyCellRecord`
+/// where `rec.f_t` is still available for the check.
 Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
                                                      std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared) {
   if (rec.f_t != "shared") {
@@ -751,11 +850,16 @@ Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
 ///
 /// Shared-formula groups (`<f t="shared" si=>`) are resolved through
 /// `shared` so followers recover the shifted master body — matching the
-/// DOM path. Array / dataTable formulas are read as plain (body
-/// verbatim).
+/// DOM path. Array formulas are read as plain (body verbatim).
+/// `<f t="dataTable">` also reads as an empty body (matching the DOM
+/// path's fallback to the cached `<v>`), but is additionally counted
+/// via `diagnostics->skipped_feature_count` so the drop is never silent
+/// -- see `ResolveFormula`.
 Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_index, Workbook& workbook,
                                       SheetReadContext& ctx, std::deque<std::string>& text_storage,
-                                      std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared) {
+                                      std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared,
+                                      ReadDiagnostics* diagnostics, ResourceBudget& cell_budget,
+                                      RowGrowthTracker& cell_growth) {
   const bool value_present = rec.is_inline_string || !rec.value.empty();
   auto payload_or = decode_cell_payload(rec.t, rec.value, value_present, rec.is_inline_string, text_storage);
   if (!payload_or) {
@@ -775,12 +879,40 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   if (!parse_xsd_nonneg_int(rec.s, &xf)) {
     xf = 0;
   }
+  if (rec.f_t == "dataTable") {
+    StructuredLog("io.sheet.formula.data_table_skip")
+        .field("row", std::to_string(rec.row))
+        .field("col", std::to_string(rec.col))
+        .error_code(FormulonErrorCode::kIoSheetCorrupt)
+        .warn();
+    if (diagnostics != nullptr) {
+      ++diagnostics->skipped_feature_count;
+    }
+  }
   // Resolve shared-formula groups (plain formulas pass straight through).
   auto formula_or = ResolveSharedFromRecord(rec, shared);
   if (!formula_or) {
     return formula_or.error();
   }
   const std::string& formula_text = formula_or.value();
+
+  // Charge before `ApplyParsedCell` materialises -- mirrors the DOM
+  // path's placement and no-op guard exactly (see `read_sheet_data`), so
+  // a truly empty record never advances `cell_growth`.
+  const bool materializes = !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index || xf != 0U;
+  if (materializes) {
+    const std::uint64_t growth = cell_growth.charge_for(rec.row, rec.col);
+    if (growth != 0U) {
+      std::string ctxs("context=sheet_reader_sax row=");
+      ctxs.append(std::to_string(rec.row));
+      ctxs.append(" col=");
+      ctxs.append(std::to_string(rec.col));
+      auto charged = charge(cell_budget, growth * sizeof(Cell), std::move(ctxs));
+      if (!charged) {
+        return charged.error();
+      }
+    }
+  }
   // Inline-string cells with <rPh> annotations carry their kana on the
   // SAX record. SST-referenced cells (rec.phonetic stays null by
   // construction) route their phonetic through the post-loop SST
@@ -799,7 +931,8 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
 
 Expected<void, Error> SaxOnCellTrampoline(void* user_data, const CellRecord& rec) {
   auto* st = static_cast<SaxApplyState*>(user_data);
-  return ApplyCellRecord(rec, st->sheet_index, *st->workbook, *st->ctx, *st->text_storage, st->shared_formulas);
+  return ApplyCellRecord(rec, st->sheet_index, *st->workbook, *st->ctx, *st->text_storage, st->shared_formulas,
+                         st->diagnostics, st->cell_budget, st->cell_growth);
 }
 
 // Captures per-row overrides on the SAX path, mirroring the DOM
@@ -844,7 +977,8 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
 }  // namespace
 
 Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_index, Workbook& workbook,
-                                          SheetReadContext& ctx, std::deque<std::string>& text_storage) {
+                                          SheetReadContext& ctx, std::deque<std::string>& text_storage,
+                                          ReadDiagnostics* diagnostics, std::uint64_t max_cell_bytes) {
   if (sheet_index >= workbook.sheet_count()) {
     std::string ctxs("context=sheet_reader_sax sheet_index=");
     ctxs.append(std::to_string(sheet_index));
@@ -853,7 +987,14 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
     return make_error(FormulonErrorCode::kInvalidArgument, "read_sheet_data_sax: sheet_index out of range",
                       std::move(ctxs));
   }
-  SaxApplyState state{sheet_index, &workbook, &ctx, &text_storage, {}};
+  SaxApplyState state{sheet_index,
+                      &workbook,
+                      &ctx,
+                      &text_storage,
+                      {},
+                      diagnostics,
+                      ResourceBudget(max_cell_bytes, FormulonErrorCode::kIoFileTooLarge),
+                      {}};
   SheetSaxCallbacks cb;
   cb.user_data = &state;
   cb.on_row_start = &SaxOnRowStartTrampoline;
@@ -862,7 +1003,10 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
   if (!scanned) {
     return scanned.error();
   }
-  return RegisterArraySpills(workbook.sheet(sheet_index), ctx.array_anchors);
+  // Spill registration is the caller's job (see `SheetReadContext::
+  // array_anchors`): it must run after `ctx.pending_sst_cells` has been
+  // resolved, which this function does not do.
+  return Expected<void, Error>::Ok();
 }
 
 #endif  // !FORMULON_WASM || FORMULON_WASM_ENABLE_SAX
@@ -1137,14 +1281,20 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     v.prompt_title.assign(attr_str(dv, "promptTitle"));
     v.prompt_message.assign(attr_str(dv, "prompt"));
 
+    // `AppendOoxmlTextUnescaped` decodes the OOXML `_xHHHH_` control-
+    // character escapes the writer emits for this slot (`AppendXmlEscaped`
+    // in ooxml/sheet_xml_builder.cpp), on top of `.text().get()`'s
+    // ordinary XML entity decoding.
     if (pugi::xml_node f1 = dv.child("formula1"); f1) {
-      v.formula1.assign(f1.text().get());
+      v.formula1.clear();
+      AppendOoxmlTextUnescaped(v.formula1, f1.text().get());
       if (!v.formula1.empty() && v.formula1.front() == '=') {
         v.formula1.erase(0, 1);
       }
     }
     if (pugi::xml_node f2 = dv.child("formula2"); f2) {
-      v.formula2.assign(f2.text().get());
+      v.formula2.clear();
+      AppendOoxmlTextUnescaped(v.formula2, f2.text().get());
       if (!v.formula2.empty() && v.formula2.front() == '=') {
         v.formula2.erase(0, 1);
       }

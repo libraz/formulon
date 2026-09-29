@@ -55,6 +55,7 @@
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_table.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -262,6 +263,61 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   return out;
 }
 
+/// Finds the 1-based `<cellMetadata>/<bk>` index a saved dynamic-array
+/// spill anchor's `<c cm="N">` must name to link it to a retained
+/// `xl/metadata.xml` passthrough part's XLDAPR entry.
+///
+/// Mirrors `xlsb::find_dynamic_array_cell_meta_index`'s binary scan, in
+/// XML form: locates the 1-based ordinal of `<metadataType
+/// name="XLDAPR">` within `<metadataTypes>`, then the first
+/// `<cellMetadata>/<bk>` whose `<rc t="...">` names that ordinal. Returns
+/// 0 (no `cm=` is emitted) when the part is absent, malformed, or carries
+/// no XLDAPR type at all -- an unresolved index must never let a spill
+/// anchor point at metadata Excel resolves to something unrelated (rich
+/// data, linked data types, ...).
+std::uint32_t FindDynamicArrayCellMetadataIndex(const std::vector<PassthroughPart>& passthrough_parts) {
+  const PassthroughPart* retained = nullptr;
+  for (const PassthroughPart& part : passthrough_parts) {
+    if (part.path == "xl/metadata.xml") {
+      retained = &part;
+      break;
+    }
+  }
+  if (retained == nullptr) {
+    return 0U;
+  }
+  pugi::xml_document doc;
+  if (!load_xml_buffer(doc, retained->bytes, "ooxml_writer", "xl/metadata.xml")) {
+    return 0U;
+  }
+  const pugi::xml_node root = doc.child("metadata");
+  if (!root) {
+    return 0U;
+  }
+  std::uint32_t xldapr_ordinal = 0U;
+  std::uint32_t type_ordinal = 0U;
+  for (pugi::xml_node type = root.child("metadataTypes").child("metadataType"); type;
+       type = type.next_sibling("metadataType")) {
+    ++type_ordinal;
+    if (xldapr_ordinal == 0U && std::string_view(type.attribute("name").value()) == "XLDAPR") {
+      xldapr_ordinal = type_ordinal;
+    }
+  }
+  if (xldapr_ordinal == 0U) {
+    return 0U;
+  }
+  std::uint32_t bk_index = 0U;
+  for (pugi::xml_node bk = root.child("cellMetadata").child("bk"); bk; bk = bk.next_sibling("bk")) {
+    ++bk_index;
+    for (pugi::xml_node rc = bk.child("rc"); rc; rc = rc.next_sibling("rc")) {
+      if (rc.attribute("t").as_uint(0U) == xldapr_ordinal) {
+        return bk_index;
+      }
+    }
+  }
+  return 0U;
+}
+
 }  // namespace
 
 Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
@@ -293,6 +349,10 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
 
   const SharedStrings shared_strings = BuildSharedStrings(wb);
   const EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty(), &diagnostics);
+  // 0 when no retained `xl/metadata.xml` passthrough part names an
+  // XLDAPR entry; every spill anchor's `<f t="array">` then omits `cm=`,
+  // exactly as before this existed.
+  const std::uint32_t dynamic_array_cm_index = FindDynamicArrayCellMetadataIndex(wb.passthrough_parts());
 
   ZipWriterGuard writer;
   if (!writer.init()) {
@@ -353,12 +413,12 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
-    auto wresult =
-        AddPart(writer.get(), part_path,
-                BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
-                                  rels_result.printer_settings_rid, rels_result.drawing_rid,
-                                  rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs.size()),
-                &written_paths);
+    auto wresult = AddPart(
+        writer.get(), part_path,
+        BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
+                          rels_result.printer_settings_rid, rels_result.drawing_rid, rels_result.legacy_drawing_rid,
+                          &shared_strings, wb.styles().dxfs.size(), dynamic_array_cm_index),
+        &written_paths);
     if (!wresult) {
       return wresult.error();
     }

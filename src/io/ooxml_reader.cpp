@@ -784,7 +784,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     if constexpr (kSaxEnabled) {
       if (sheet_bytes.size() >= sax_threshold) {
         ByteSpan sheet_span{sheet_bytes.data(), sheet_bytes.size()};
-        auto rs = read_sheet_data_sax(sheet_span, i, wb, sheet_contexts[i], result_text_storage);
+        auto rs = read_sheet_data_sax(sheet_span, i, wb, sheet_contexts[i], result_text_storage, &diagnostics);
         if (!rs) {
           return rs.error();
         }
@@ -814,7 +814,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, shell, "ooxml_reader", "sheet*.xml (metadata shell)"));
     } else {
       RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, sheet_bytes, "ooxml_reader", "sheet*.xml"));
-      auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage);
+      auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage, &diagnostics);
       if (!rs) {
         return rs.error();
       }
@@ -1009,6 +1009,19 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         }
       }
       ++pending_sst_count;
+    }
+  }
+
+  // 6b. Register each sheet's dynamic-array spill regions, now that every
+  // SST reference is resolved. This must run after step 6: a spill
+  // region's phantom cells capture their footprint's `cached_value` at
+  // registration time, so registering before SST resolution would freeze
+  // an SST-typed phantom's unresolved `Text("")` placeholder into the
+  // region rather than the string it actually holds (see
+  // `SheetReadContext::array_anchors`).
+  for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
+    if (auto r = RegisterArraySpills(wb.sheet(i), sheet_contexts[i].array_anchors); !r) {
+      return r.error();
     }
   }
 

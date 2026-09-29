@@ -12,6 +12,7 @@
 
 #include "io/defined_names_internal.h"
 #include "io/formula_prefix.h"
+#include "io/xml_escape.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -118,10 +119,15 @@ Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_doc
 
     // Element text payload — pugixml exposes child text nodes via
     // `.child_value()` for the first text child, which is what writers
-    // emit for `<definedName>...</definedName>`. Strip framing
-    // whitespace; interior whitespace stays put so round-tripping a
-    // formula that genuinely contains spaces is faithful.
-    entry.formula = dn.child_value();
+    // emit for `<definedName>...</definedName>`. `child_value()` has
+    // already undergone XML entity decoding; `AppendOoxmlTextUnescaped`
+    // additionally decodes the OOXML `_xHHHH_` control-character escapes
+    // the writer emits for this slot, matching every other element-text
+    // reader. Strip framing whitespace after that; interior whitespace
+    // stays put so round-tripping a formula that genuinely contains
+    // spaces is faithful.
+    entry.formula.clear();
+    AppendOoxmlTextUnescaped(entry.formula, dn.child_value());
     TrimAsciiWhitespace(entry.formula);
     // Canonicalise the storage prefixes Excel tags post-2007 / LET-LAMBDA
     // constructs with (`_xlfn.`, `_xlfn._xlws.`, `_xlws.`, `_xlpm.`) so a

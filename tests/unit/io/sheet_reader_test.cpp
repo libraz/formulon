@@ -119,6 +119,47 @@ TEST(SheetReader, FormulaCachedValueSurvivesLoadBeforeRecalc) {
   EXPECT_EQ(StoredValue(wb, 0U, 0U, 1U).as_text(), "Excel cache");
 }
 
+// A What-If data table's `<f t="dataTable" .../>` carries no body (its
+// geometry lives in attributes this reader does not decode), so the
+// cell falls back to its cached `<v>` like any formula-less cell -- but
+// the drop must be counted, not silent.
+TEST(SheetReader, DataTableFormulaFallsBackToCachedValueAndIsCounted) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(
+      "<worksheet><sheetData><row r=\"1\">"
+      "<c r=\"A1\"><f t=\"dataTable\" ref=\"A1:B2\" dt2D=\"1\" dtr=\"0\" r1=\"C1\" r2=\"C2\"/><v>42</v></c>"
+      "</row></sheetData></worksheet>"));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ReadDiagnostics diagnostics;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage, &diagnostics)));
+
+  EXPECT_EQ(StoredFormula(wb, 0U, 0U, 0U), "");
+  ASSERT_TRUE(StoredValue(wb, 0U, 0U, 0U).is_number());
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 0U).as_number(), 42.0);
+  EXPECT_EQ(diagnostics.skipped_feature_count, 1U);
+}
+
+// A null `diagnostics` (the default) must not crash -- callers that do
+// not track read diagnostics still get the fallback-to-cached-value
+// behaviour above.
+TEST(SheetReader, DataTableFormulaWithNullDiagnosticsDoesNotCrash) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(
+      doc.load_string("<worksheet><sheetData><row r=\"1\">"
+                      "<c r=\"A1\"><f t=\"dataTable\" ref=\"A1:B2\"/><v>7</v></c>"
+                      "</row></sheetData></worksheet>"));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+  ASSERT_TRUE(StoredValue(wb, 0U, 0U, 0U).is_number());
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 0U).as_number(), 7.0);
+}
+
 TEST(SheetReader, InlineStringCell) {
   const char* xml =
       "<worksheet><sheetData>"
@@ -224,6 +265,9 @@ TEST(SheetReader, RetainsSingleCellArrayFormulaAnchor) {
   SheetReadContext ctx;
   std::deque<std::string> text_storage;
   ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+  // Spill registration is the caller's job, run after SST resolution --
+  // see `SheetReadContext::array_anchors`.
+  ASSERT_TRUE(static_cast<bool>(RegisterArraySpills(wb.sheet(0), ctx.array_anchors)));
   const SpillRegion* region = wb.sheet(0).spill_region_at_anchor(0U, 0U);
   ASSERT_NE(region, nullptr);
   EXPECT_EQ(region->rows, 1U);
@@ -239,7 +283,10 @@ TEST(SheetReader, RejectsFullGridArrayAnchorBeforeSpillWalk) {
   SheetReadContext ctx;
   std::deque<std::string> text_storage;
 
-  auto result = read_sheet_data(doc, 0U, wb, ctx, text_storage);
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+  // The budget/validation check lives in `RegisterArraySpills`, which the
+  // caller now runs separately after SST resolution.
+  auto result = RegisterArraySpills(wb.sheet(0), ctx.array_anchors);
   ASSERT_FALSE(static_cast<bool>(result));
   EXPECT_EQ(result.error().code, FormulonErrorCode::kIoSheetCorrupt);
   EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
@@ -256,7 +303,8 @@ TEST(SheetReader, RejectsCumulativeArrayAnchorsOverSheetBudget) {
   SheetReadContext ctx;
   std::deque<std::string> text_storage;
 
-  auto result = read_sheet_data(doc, 0U, wb, ctx, text_storage);
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+  auto result = RegisterArraySpills(wb.sheet(0), ctx.array_anchors);
   ASSERT_FALSE(static_cast<bool>(result));
   EXPECT_EQ(result.error().code, FormulonErrorCode::kIoSheetCorrupt);
   EXPECT_NE(result.error().context.find("format=ooxml"), std::string::npos);
@@ -299,6 +347,42 @@ TEST(SheetReader, PendingSstCellsCollected) {
   Value a2 = StoredValue(wb, 0U, 1U, 0U);
   ASSERT_TRUE(a2.is_number());
   EXPECT_DOUBLE_EQ(a2.as_number(), 42.0);
+}
+
+// Mirrors the real read pipeline's order (ooxml_reader.cpp resolves
+// `ctx.pending_sst_cells` in its own step 6, then registers spills in
+// step 6b): an SST-typed phantom cell inside a spill footprint must
+// capture its fully-resolved text, not the unresolved `Text("")`
+// placeholder `read_sheet_data` writes while SST resolution is still
+// pending. Registering spills before resolving SST would freeze that
+// placeholder into the region permanently.
+TEST(SheetReader, SpillPhantomCapturesTheSstResolvedValueNotThePlaceholder) {
+  const char* xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\"><f t=\"array\" ref=\"A1:B1\">1</f><v>1</v></c>"
+      "<c r=\"B1\" t=\"s\"><v>0</v></c></row>"
+      "</sheetData></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+
+  ASSERT_EQ(ctx.pending_sst_cells.size(), 1U);
+  const std::vector<std::string_view> sst_entries = {"resolved"};
+  for (const auto& triple : ctx.pending_sst_cells) {
+    wb.sheet(0).set_cell_cached_value_borrowed(std::get<0>(triple), std::get<1>(triple),
+                                               Value::text(sst_entries.at(std::get<2>(triple))));
+  }
+  ASSERT_TRUE(static_cast<bool>(RegisterArraySpills(wb.sheet(0), ctx.array_anchors)));
+
+  const SpillRegion* region = wb.sheet(0).spill_region_at_anchor(0U, 0U);
+  ASSERT_NE(region, nullptr);
+  ASSERT_EQ(region->cells.size(), 2U);
+  ASSERT_TRUE(region->cells[1].is_text());
+  EXPECT_EQ(region->cells[1].as_text(), "resolved");
 }
 
 TEST(SheetReader, RejectsOutOfRangeSheetIndex) {
@@ -387,6 +471,48 @@ TEST(SheetReader, CellStyleIndexPastCellXfsFallsBackToDefault) {
   EXPECT_EQ(sheet.cell_at(0U, 0U)->xf_index, 1U);
   EXPECT_LT(sheet.cell_at(0U, 1U)->xf_index, wb.styles().cell_xfs.size());
   EXPECT_EQ(sheet.cell_at(0U, 1U)->xf_index, 0U);
+}
+
+// Two styled cells far apart force `RowCells::ensure()` to materialise
+// every slot between them (`sheet.h`'s documented worst case). A tiny
+// injected budget catches this without needing a real multi-hundred-MB
+// fixture -- mirrors the finding's own PoC shape (styled cells at the
+// row's two ends).
+TEST(SheetReader, WideSparseStyledRowRejectedOverCellBudget) {
+  const char* xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" s=\"1\"><v>1</v></c><c r=\"XFD1\" s=\"1\"><v>2</v></c></row>"
+      "</sheetData></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ReadDiagnostics diagnostics;
+  auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage, &diagnostics, /*max_cell_bytes=*/1000U);
+  ASSERT_FALSE(static_cast<bool>(rs));
+  EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoFileTooLarge);
+}
+
+// Bare `<c>` elements with no value, style, or formula never call
+// `RowCells::ensure()` (`ApplyParsedCell`'s own no-op path), so charging
+// for the gap between them would reject a load that costs the sheet
+// nothing at all.
+TEST(SheetReader, TrulyEmptySparseCellsDoNotConsumeTheCellBudget) {
+  const char* xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\"/><c r=\"XFD1\"/></row>"
+      "</sheetData></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage, /*diagnostics=*/nullptr, /*max_cell_bytes=*/1000U);
+  ASSERT_TRUE(static_cast<bool>(rs)) << rs.error().message;
+  EXPECT_EQ(wb.sheet(0).cell_count(), 0U);
 }
 
 }  // namespace

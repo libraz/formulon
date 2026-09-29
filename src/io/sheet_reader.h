@@ -23,6 +23,7 @@
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -55,12 +56,30 @@ struct SheetReadContext {
   /// `Text("")` cells with the resolved string from the SST.
   std::vector<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>> pending_sst_cells;
   /// Dynamic-array anchors (`<f t="array" ref=...>`) discovered while
-  /// scanning cells. After the scan the reader registers each as a spill
-  /// region so the cached spill targets do not read back as independent
-  /// literals that collide (`#SPILL!`) with the anchor's re-spill on recalc.
-  /// A one-cell region preserves dynamic-array metadata.
+  /// scanning cells. Neither `read_sheet_data` nor `read_sheet_data_sax`
+  /// registers these itself -- the caller must resolve `pending_sst_cells`
+  /// first and only then pass this list to `RegisterArraySpills`. A
+  /// phantom cell's cached value is captured into the spill region at
+  /// registration time, so registering before SST resolution would freeze
+  /// an SST-typed phantom's unresolved `Text("")` placeholder into the
+  /// region permanently.
   std::vector<ArrayAnchor> array_anchors;
 };
+
+/// Registers each of `anchors` as a spill region on `sheet`, so the cached
+/// spill targets Excel wrote as bare `<v>` cells (e.g. F7 / F8 of a
+/// `=SEQUENCE(3)` anchored at F6) do not read back as independent literals
+/// that collide (`#SPILL!`) with the anchor's re-spill on recalc. The
+/// phantom values are captured into the region and the underlying
+/// non-anchor cells are blanked so recalc can overwrite the footprint
+/// freely. A one-cell region preserves dynamic-array metadata with no
+/// phantom cells to capture.
+///
+/// Callers must resolve every SST-typed cell within `anchors`' footprints
+/// (see `SheetReadContext::array_anchors`) before calling this -- both
+/// `read_sheet_data` and `read_sheet_data_sax` leave that ordering to the
+/// caller rather than enforcing it internally.
+Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors);
 
 /// Reads `<sheetData>` from a parsed `sheet*.xml` document and writes every
 /// cell into `workbook.sheet(sheet_index)` via the public Workbook API
@@ -90,20 +109,33 @@ struct SheetReadContext {
 ///   * SST cells (`t="s"`): the placeholder `Text("")` is written, and
 ///     `(row, col, sst_index)` is queued in `ctx.pending_sst_cells` for
 ///     a later resolution pass.
+///   * `<f t="dataTable">` (What-If data table): the element carries no
+///     body, so the cell falls back to its cached `<v>` like any other
+///     formula-less cell; `diagnostics->skipped_feature_count` (when
+///     `diagnostics` is non-null) counts the drop so it is never silent,
+///     matching every other unmodelled-feature drop in this reader.
 ///
 /// `sheet_doc` is the parsed pugixml document for this sheet; `sheet_index`
 /// must be `< workbook.sheet_count()`. Returns `kIoSheetCorrupt` on any
 /// malformed cell or on bookkeeping inconsistencies (a slave shared
-/// formula that references an unknown `si` is a hard error).
+/// formula that references an unknown `si` is a hard error). Returns
+/// `kIoFileTooLarge` once the cumulative `Cell` storage the walk would
+/// materialise -- including the gap-filled slots a styled-but-sparse row
+/// forces between its written columns -- exceeds `max_cell_bytes`
+/// (default `kMaxSheetLoadCellBytes`; tests inject a smaller value, the
+/// same pattern `zip_reader.h`'s `open()` uses for its own budget).
 ///
 /// `text_storage` is the workbook-lifetime backing-store for
 /// inline-string `Value::text` payloads (a `std::deque<std::string>`
 /// for pointer stability across appends). The reader appends each
 /// decoded inline string here; cells store a `string_view` into the
 /// resulting deque entry, so the deque must outlive the workbook's use
-/// of the text values.
+/// of the text values. `diagnostics` may be null (tests, and callers
+/// that do not track read diagnostics).
 Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::size_t sheet_index, Workbook& workbook,
-                                      SheetReadContext& ctx, std::deque<std::string>& text_storage);
+                                      SheetReadContext& ctx, std::deque<std::string>& text_storage,
+                                      ReadDiagnostics* diagnostics = nullptr,
+                                      std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes);
 
 /// Sheet-XML byte size at which the OOXML reader switches from the
 /// pugixml DOM path to the streaming SAX scanner. Below this threshold
@@ -158,8 +190,16 @@ constexpr std::size_t kSaxThresholdBytes = 256U * 1024U;
 /// `kSaxThresholdBytes`. The DOM path remains the default below the
 /// threshold so the WASM build does not pay the SAX setup cost on
 /// every small sheet.
+///
+/// `diagnostics` and `max_cell_bytes` mirror `read_sheet_data`'s
+/// parameters of the same name, including the `<f t="dataTable">` skip
+/// count and the cell-materialisation budget -- required for the two
+/// paths' "identical" contract above to hold on diagnostics and on
+/// rejection, not just on the workbook mutations of a load that succeeds.
 Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_index, Workbook& workbook,
-                                          SheetReadContext& ctx, std::deque<std::string>& text_storage);
+                                          SheetReadContext& ctx, std::deque<std::string>& text_storage,
+                                          ReadDiagnostics* diagnostics = nullptr,
+                                          std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes);
 
 /// Reads non-cell worksheet metadata from the parsed `sheet*.xml`
 /// document and writes it onto `workbook.sheet(sheet_index)`. Currently

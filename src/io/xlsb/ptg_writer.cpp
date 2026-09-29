@@ -21,6 +21,7 @@
 #include "parser/reference.h"
 #include "sheet_name.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -234,7 +235,7 @@ class Encoder {
       case parser::NodeKind::StructuredRef:
         return unsupported_node("StructuredRef");
       case parser::NodeKind::SpillRef:
-        return unsupported_node("SpillRef");
+        return emit_spill_ref(node);
       case parser::NodeKind::ImplicitIntersection:
         return unsupported_node("ImplicitIntersection");
       case parser::NodeKind::Lambda:
@@ -297,8 +298,11 @@ class Encoder {
   /// (`write_xlsb`) builds it from `collect_ptg_names` before encoding
   /// any cell, so a live `NameRef` always resolves.
   Expected<void, Error> emit_name_ref(std::string_view name) {
+    // Case-insensitive: LET/LAMBDA parameter names resolve case-insensitively
+    // (Excel folds ASCII case on name resolution), so a NameRef spelled in a
+    // different case than its binding is still that parameter.
     for (auto it = let_scope_.rbegin(); it != let_scope_.rend(); ++it) {
-      if (it->first == name) {
+      if (strings::case_insensitive_eq(it->first, name)) {
         emit_u8(out_, 0x23);  // PtgName (reference-class base)
         emit_u32(out_, it->second);
         return Expected<void, Error>::Ok();
@@ -664,6 +668,33 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
+  /// Encodes the postfix `#` spill operator as a call to the hidden
+  /// `_xlfn.ANCHORARRAY` name -- Excel's own file-format spelling (see
+  /// `eval/dynamic_array/anchor.h` and the matching OOXML storage form in
+  /// `ast_format.cpp`'s `StorageEmitter`). Same shape as
+  /// `emit_future_function_call`, inlined because the anchor operand comes
+  /// from `as_spill_ref_anchor_expr`/`as_spill_ref`, not a `Call` node's
+  /// argument list.
+  Expected<void, Error> emit_spill_ref(const parser::AstNode& node) {
+    const auto it = name_table_.find(xlsb_hidden_function_name("ANCHORARRAY"));
+    if (it == name_table_.end()) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                        "xlsb encoder: hidden-name callee has no BrtName registered",
+                        "context=xlsb_ptg_writer fn=ANCHORARRAY");
+    }
+    emit_u8(out_, 0x23);  // PtgName (reference-class): the callee name-ref
+    emit_u32(out_, it->second);
+    if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+      RETURN_IF_ERROR(emit(*anchor));
+    } else {
+      RETURN_IF_ERROR(emit_ref(node.as_spill_ref()));
+    }
+    emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
+    emit_u8(out_, 2);                    // cparams: name-ref + one anchor operand
+    emit_u16(out_, 255);
+    return Expected<void, Error>::Ok();
+  }
+
   Expected<void, Error> emit_array(const parser::AstNode& node) {
     // The main token stream carries only a 15-byte placeholder (opcode
     // + 14 reserved bytes, contents unconstrained); the real dimensions
@@ -750,8 +781,9 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
   switch (node.kind()) {
     case parser::NodeKind::NameRef: {
       const std::string_view name = node.as_name();
+      // Case-insensitive: see `Encoder::emit_name_ref`.
       for (const std::string_view param : scope) {
-        if (param == name) {
+        if (strings::case_insensitive_eq(param, name)) {
           return;  // LET / LAMBDA parameter: encoded via its _xlpm. placeholder.
         }
       }
@@ -804,6 +836,16 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       }
       return;
     }
+    case parser::NodeKind::SpillRef: {
+      // Stored as a call to the hidden `_xlfn.ANCHORARRAY` name (see
+      // `Encoder::emit_spill_ref`), so it needs the same BrtName
+      // registration any other future-function callee gets.
+      AddName(xlsb_hidden_function_name("ANCHORARRAY"), names, seen);
+      if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        CollectNamesScoped(*anchor, names, seen, scope);
+      }
+      return;
+    }
     case parser::NodeKind::LetBinding: {
       AddName("_xlfn.LET", names, seen);
       const std::uint32_t n = node.as_let_binding_count();
@@ -820,9 +862,9 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       return;
     }
     // Leaves, and forms the encoder does not lower (Lambda / LambdaCall /
-    // StructuredRef / SpillRef): nothing to collect. A
-    // future writer bundle that lowers these would extend this switch
-    // alongside the corresponding `emit_*` case.
+    // StructuredRef): nothing to collect. A future writer bundle that
+    // lowers these would extend this switch alongside the corresponding
+    // `emit_*` case.
     default:
       return;
   }

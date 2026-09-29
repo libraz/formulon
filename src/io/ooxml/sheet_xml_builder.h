@@ -14,6 +14,7 @@
 #ifndef FORMULON_IO_OOXML_SHEET_XML_BUILDER_H_
 #define FORMULON_IO_OOXML_SHEET_XML_BUILDER_H_
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,12 +36,17 @@ class SharedStrings;
 /// printer-settings rel (empty when the sheet has no printer settings).
 /// `dxf_count` is the `<dxf>` record count of the package's styles part,
 /// which bounds the `dxfId` values the conditional-format block may name
-/// (see `write_conditional_formattings`).
+/// (see `write_conditional_formattings`). `dynamic_array_cm_index` is the
+/// 1-based `<cellMetadata>/<bk>` index a spill anchor's `<c cm="N">`
+/// names (0 when no retained `xl/metadata.xml` part carries an XLDAPR
+/// entry, in which case no anchor emits `cm=` at all); see
+/// `FindDynamicArrayCellMetadataIndex` in ooxml_writer.cpp.
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
-                              const SharedStrings* shared_strings, std::size_t dxf_count);
+                              const SharedStrings* shared_strings, std::size_t dxf_count,
+                              std::uint32_t dynamic_array_cm_index);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, comments / VML, and

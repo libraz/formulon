@@ -447,6 +447,27 @@ std::vector<std::uint8_t> SharedStringsBin(std::string_view item) {
   return body;
 }
 
+/// Builds `xl/sharedStrings.bin` with one BrtSSTItem entry whose
+/// phonetic tail (`kRichStrPhonetic` set, no rich-text runs) declares
+/// one run but supplies zero bytes for it -- `DecodePhoneticTail`
+/// (reader.cpp) bounds the run count against the remaining payload
+/// before reading, so this exercises the `kIoXlsbRecordTruncated` path
+/// rather than an out-of-bounds read.
+std::vector<std::uint8_t> TruncatedPhoneticSharedStringsBin() {
+  std::vector<std::uint8_t> body;
+  AppendRecord(body, 159, {});  // BrtBeginSst
+  {
+    std::vector<std::uint8_t> p;
+    AppendU8(p, 0x02);          // flags: fPhonetic set, fRichSt clear
+    AppendXLWideString(p, "");  // the string itself
+    AppendXLWideString(p, "");  // phonetic text
+    AppendU32(p, 1U);           // run count -- no run bytes follow
+    AppendRecord(body, 19, p);
+  }
+  AppendRecord(body, 160, {});  // BrtEndSst
+  return body;
+}
+
 // ---------------------------------------------------------------------------
 // ZIP packaging via miniz.
 // ---------------------------------------------------------------------------
@@ -832,6 +853,22 @@ TEST(XlsbReader, OutOfRangeRowHeaderIsRecordCorrupt) {
   auto result = read_xlsb(SpanOf(archive));
   ASSERT_FALSE(static_cast<bool>(result));
   EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
+TEST(XlsbReader, TruncatedPhoneticRunArrayIsRecordTruncated) {
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinIsst(0)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+  parts.push_back({"xl/sharedStrings.bin", TruncatedPhoneticSharedStringsBin()});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
 }
 
 TEST(XlsbReader, ReversedArrayFormulaRectIsRecordCorrupt) {

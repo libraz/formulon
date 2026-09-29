@@ -500,6 +500,65 @@ TEST(XlsbWriteReadSymmetry, CellStyleAndNumberFormatSurviveRoundTrip) {
   EXPECT_EQ(d3_after->xf_index, d3_before->xf_index);
 }
 
+// LET/LAMBDA parameter names resolve case-insensitively at eval time, so a
+// reference spelled in a different case than its binding (`X` referencing a
+// `LET(x, ...)` binding) must still be recognised as in-scope by the writer
+// and encoded via its `_xlpm.` placeholder -- not registered as a free
+// workbook-level defined name, which real Excel cannot resolve the same way.
+TEST(XlsbWriteReadSymmetry, LetParameterReferencedInDifferentCaseKeepsItsBinding) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=LET(x,10,X+1)")));  // A1
+  auto before_recalc = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(before_recalc)) << before_recalc.error().message;
+  const Value a1_before = wb.sheet(0).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(a1_before.is_number());
+  ASSERT_EQ(a1_before.as_number(), 11.0);
+
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << "read_xlsb failed: " << reloaded.error().message;
+  Workbook after = std::move(reloaded.value().workbook);
+
+  // No free defined name was invented for `X`: the parameter reference was
+  // recognised as in-scope, not treated as an unbound NameRef.
+  EXPECT_TRUE(after.defined_names().empty());
+
+  auto after_recalc = after.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(after_recalc)) << after_recalc.error().message;
+  const Value a1_after = after.sheet(0).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(a1_after.is_number());
+  EXPECT_EQ(a1_after.as_number(), 11.0);
+}
+
+// A formula referencing another cell's spill (`A1#`) must survive an XLSB
+// save: the writer previously aborted the whole save with "SpillRef" listed
+// as an unsupported AST node kind.
+TEST(XlsbWriteReadSymmetry, SpillRefSurvivesRoundTrip) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3)")));  // A1, spills to A1:A3
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A1#)")));     // B1
+  auto before_recalc = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(before_recalc)) << before_recalc.error().message;
+  const Value b1_before = wb.sheet(0).resolve_cell_value(0U, 1U);
+  ASSERT_TRUE(b1_before.is_number());
+  ASSERT_EQ(b1_before.as_number(), 6.0);
+
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << "read_xlsb failed: " << reloaded.error().message;
+  Workbook after = std::move(reloaded.value().workbook);
+
+  auto after_recalc = after.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(after_recalc)) << after_recalc.error().message;
+  const Value b1_after = after.sheet(0).resolve_cell_value(0U, 1U);
+  ASSERT_TRUE(b1_after.is_number());
+  EXPECT_EQ(b1_after.as_number(), 6.0);
+}
+
 // A workbook-scoped name and a sheet-local name may spell the same text
 // (`Workbook::set_defined_name_scoped` admits the pair), and each needs
 // its own `BrtName` record: the `ilbl` a cell's `PtgName` carries is a

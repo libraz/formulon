@@ -60,8 +60,11 @@ struct ReadDiagnostics {
   /// missing or unparseable. Counts one per dropped entry for merges,
   /// hyperlinks and data validations, and one per dropped
   /// `<conditionalFormatting>` block (a block carries several rules, so a
-  /// single increment can cost more than one rule).
-  /// Fed by: `io.sheet.overlay.skip`, `io.cf.skip`.
+  /// single increment can cost more than one rule). Also counts one per
+  /// `<f t="dataTable">` cell: the element carries no formula body, so
+  /// the cell keeps its cached value but the data-table formula itself
+  /// is not preserved for re-emission.
+  /// Fed by: `io.sheet.overlay.skip`, `io.cf.skip`, `io.sheet.formula.data_table_skip`.
   std::uint32_t skipped_feature_count = 0;
   /// Workbook parts whose declared content type was unrecognised, so the
   /// read fell back to `WorkbookKind::kXlsx`. At most 1 per read.

@@ -39,6 +39,7 @@
 
 #include "io/a1_ref.h"
 #include "io/phonetic_pr.h"
+#include "io/xml_escape.h"
 #include "io/xsd_int.h"
 #include "io/zip_reader.h"
 #include "phonetic.h"
@@ -894,12 +895,16 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
       std::string* dest = in_rph && !scratch->inline_string_phonetic.empty()
                               ? &scratch->inline_string_phonetic.back().text
                               : &scratch->inline_string;
+      // `_xHHHH_` is plain ASCII text, not an XML entity, so it survives
+      // `needs_processing == false` and must be decoded unconditionally --
+      // matching the DOM path's `AppendOoxmlTextUnescaped` on this same
+      // `<t>` slot (`io::append_rich_text`).
       if (needs_processing) {
         std::string tmp;
         DecodeTextRunInto(raw, kind, &tmp);
-        dest->append(tmp);
+        AppendOoxmlTextUnescaped(*dest, tmp);
       } else {
-        dest->append(raw.data(), raw.size());
+        AppendOoxmlTextUnescaped(*dest, raw);
       }
     }
     // Other open elements (e.g. <r>, <rPr>) are descended into by

@@ -14,6 +14,7 @@
 
 #include "cf/cf_types.h"
 #include "io/cell_parser.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -618,8 +619,13 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   for (pugi::xml_node child = rule.first_child(); child; child = child.next_sibling()) {
     const std::string_view name = child.name();
     if (name == "formula") {
-      const std::string_view raw = child.text().get();
-      std::string body(raw);
+      // `child.text().get()` has already undergone XML entity decoding;
+      // `AppendOoxmlTextUnescaped` additionally decodes the OOXML
+      // `_xHHHH_` control-character escapes the writer emits for this
+      // slot (`AppendXmlEscaped` in cf_writer.cpp), matching every other
+      // element-text reader.
+      std::string body;
+      AppendOoxmlTextUnescaped(body, child.text().get());
       if (!body.empty() && body[0] == '=') {
         body.erase(body.begin());
       }

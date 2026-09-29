@@ -103,6 +103,28 @@ TEST(CFReader, ExpressionRuleStripsLeadingEquals) {
   EXPECT_EQ(r.formula1.value(), "A1>100");
 }
 
+// `_x0001_` is the OOXML notation for a control character XML 1.0 cannot
+// carry literally (cf_writer.cpp's AppendXmlEscaped emits it for such a
+// byte inside formula text); the reader must decode it back, matching
+// every other element-text slot.
+TEST(CFReader, FormulaDecodesTheOoxmlControlCharacterEscape) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A1">
+        <cfRule type="expression" priority="1" dxfId="0">
+          <formula>=A1&amp;"x_x0001_y"</formula>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.formula1.has_value());
+  EXPECT_EQ(r.formula1.value(), std::string("A1&\"x\x01"
+                                            "y\"",
+                                            8));
+}
+
 TEST(CFReader, MultipleRangesInSqref) {
   pugi::xml_document doc = Load(R"(
     <worksheet>

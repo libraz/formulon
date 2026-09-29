@@ -109,6 +109,44 @@ TEST(OoxmlDimension, EmptySheetStillDeclaresA1) {
 }
 
 // ---------------------------------------------------------------------------
+// Dynamic-array spill anchors keep the `cm=` link to `xl/metadata.xml`'s
+// XLDAPR entry that Excel needs to reopen them as modern spills rather
+// than legacy CSE arrays.
+// ---------------------------------------------------------------------------
+
+TEST(OoxmlDynamicArrayMetadata, SpillAnchorsFromARealFixtureKeepCmOnResave) {
+  // formula_corpus.xlsx is Excel-authored and carries `cm="1"` on every
+  // one of its spill anchors, linking them to its single `xl/metadata.xml`
+  // XLDAPR entry. A load-then-resave with no edits must not drop that
+  // link, even though this writer regenerates <c> attributes from the
+  // model rather than passing worksheet XML through verbatim.
+  const std::vector<std::uint8_t> bytes =
+      test::read_file_bytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/formula_corpus.xlsx");
+  ASSERT_FALSE(bytes.empty());
+  auto loaded = io::read_ooxml(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+
+  const std::string saved_sheet = SavedPart(loaded.value().workbook, "xl/worksheets/sheet1.xml");
+  EXPECT_NE(saved_sheet.find("<c r=\"G1\" cm=\"1\""), std::string::npos) << saved_sheet;
+  EXPECT_NE(saved_sheet.find("<c r=\"H1\" cm=\"1\""), std::string::npos) << saved_sheet;
+  EXPECT_NE(saved_sheet.find("<c r=\"I1\" cm=\"1\""), std::string::npos) << saved_sheet;
+}
+
+TEST(OoxmlDynamicArrayMetadata, FreshSpillWithNoRetainedMetadataPartOmitsCm) {
+  // A workbook built from scratch (no passthrough xl/metadata.xml to
+  // resolve an XLDAPR index from) must not emit a `cm=` that names
+  // nothing in the saved package.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.sheet(0).set_cell_formula(0, 0, "=SEQUENCE(3)");
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
+  ASSERT_TRUE(wb.sheet(0).commit_spill(0, 0, 3U, 1U, std::move(cells)));
+
+  const std::string sheet_xml = SavedPart(wb, "xl/worksheets/sheet1.xml");
+  EXPECT_EQ(sheet_xml.find("cm="), std::string::npos) << sheet_xml;
+}
+
+// ---------------------------------------------------------------------------
 // <pageMargins> required attributes.
 // ---------------------------------------------------------------------------
 
@@ -596,6 +634,54 @@ TEST(WorksheetChildren, UnmodelledChildIsPreservedWithoutBeingNamedInAdvance) {
     EXPECT_GE(slot, previous) << name << " is out of schema order in " << saved_sheet;
     previous = slot;
   }
+}
+
+// ---------------------------------------------------------------------------
+// <definedName> shares the cell <f> writer's storage-prefix and escaping.
+// ---------------------------------------------------------------------------
+
+TEST(OoxmlDefinedNames, FormulaGainsTheFutureFunctionStoragePrefix) {
+  // `XLOOKUP` needs `_xlfn.` in the OOXML `<f>` storage spelling the same
+  // way a cell formula does (io/future_functions.h, and the `<f>`-prefixed
+  // control case in storage_prefix_container_test.cpp); a definedName body
+  // missing the prefix reads back into real Excel as #NAME?.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("MyLookup", "XLOOKUP(A1,B1:B10,C1:C10)")));
+
+  const std::string wb_xml = SavedPart(wb, "xl/workbook.xml");
+  EXPECT_NE(wb_xml.find("<definedName name=\"MyLookup\">_xlfn.XLOOKUP(A1,B1:B10,C1:C10)</definedName>"),
+            std::string::npos)
+      << wb_xml;
+
+  auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto loaded = io::read_ooxml(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ASSERT_EQ(loaded.value().workbook.defined_names().size(), 1U);
+  EXPECT_EQ(loaded.value().workbook.defined_names()[0].formula, "XLOOKUP(A1,B1:B10,C1:C10)");
+}
+
+TEST(OoxmlDefinedNames, FormulaControlCharacterSurvivesTheOoxmlEscape) {
+  // A string literal inside the formula can carry a raw C0 control byte
+  // (pasted text, for instance); XML 1.0 cannot carry it literally, so the
+  // writer must spell it `_xHHHH_` and the reader must decode it back,
+  // exactly as the cell <f> / <is><t> writer and reader already do.
+  const std::string formula = std::string("\"a\x01") + "b\"";
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Weird", formula)));
+
+  const std::string wb_xml = SavedPart(wb, "xl/workbook.xml");
+  EXPECT_NE(wb_xml.find("_x0001_"), std::string::npos) << wb_xml;
+  EXPECT_EQ(wb_xml.find('\x01'), std::string::npos) << "a raw control byte must not reach the XML part";
+
+  auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto loaded = io::read_ooxml(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ASSERT_EQ(loaded.value().workbook.defined_names().size(), 1U);
+  EXPECT_EQ(loaded.value().workbook.defined_names()[0].formula, formula);
 }
 
 }  // namespace

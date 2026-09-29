@@ -237,53 +237,6 @@ bool starts_with_ci(std::string_view s, std::string_view prefix) {
   return s.size() >= prefix.size() && strings::case_insensitive_eq(s.substr(0, prefix.size()), prefix);
 }
 
-/// Returns true when `sheet` must be single-quoted to round-trip as a
-/// qualified-reference prefix (`'sheet'!ref` rather than `sheet!ref`).
-///
-/// XLSB's `PtgRef3d` / `PtgArea3d` carry the sheet only as an `ixti` table
-/// index -- there is no "was this quoted in the formula bar" bit to
-/// preserve, so the decoder must re-derive Excel's own quoting rule from
-/// the sheet name text. Two cases require quoting:
-///
-///   * The name contains a character outside the bare-identifier set
-///     (matches the heuristic `parser::ast_format.cpp`'s
-///     `AppendSheetNameQuoted` already applies to genuine `Ref3D` nodes).
-///   * The name has the exact shape of an A1 cell reference
-///     (`[A-Za-z]{1,3}[1-9][0-9]*`, e.g. `S2`), which is otherwise
-///     indistinguishable from a cell reference when unquoted -- the
-///     tokenizer resolves `S2` to a `CellRef` token before a qualifying
-///     `!` can reclassify it. Verified against a real Excel-365-produced
-///     package: a sheet literally named `S2` serialises its cross-sheet
-///     formula as `'S2'!A1*2` in `xl/worksheets/sheet1.xml`, never the
-///     bare form.
-bool NeedsSheetQuote(std::string_view sheet) {
-  if (sheet.empty()) {
-    return true;
-  }
-  for (const char c : sheet) {
-    const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
-    if (!ok) {
-      return true;
-    }
-  }
-  std::size_t i = 0;
-  while (i < sheet.size() && ((sheet[i] >= 'A' && sheet[i] <= 'Z') || (sheet[i] >= 'a' && sheet[i] <= 'z'))) {
-    ++i;
-  }
-  const std::size_t letters = i;
-  if (letters == 0 || letters > 3 || i >= sheet.size()) {
-    return false;
-  }
-  if (sheet[i] < '1' || sheet[i] > '9') {
-    return false;
-  }
-  ++i;
-  while (i < sheet.size() && sheet[i] >= '0' && sheet[i] <= '9') {
-    ++i;
-  }
-  return i == sheet.size();
-}
-
 }  // namespace
 
 Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Arena& arena,
@@ -881,7 +834,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         parser::Reference ref = ref_or.value();
         ref.sheet = arena.intern(ref.sheet);
-        ref.sheet_quoted = NeedsSheetQuote(ref.sheet);
+        ref.sheet_quoted = parser::sheet_name_needs_quoting(ref.sheet);
         parser::AstNode* n = parser::make_ref(arena, ref);
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef3d)", "context=xlsb_ptg_reader");
@@ -955,7 +908,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         parser::Reference first = area_or.value().first;
         first.sheet = arena.intern(first.sheet);
-        first.sheet_quoted = NeedsSheetQuote(first.sheet);
+        first.sheet_quoted = parser::sheet_name_needs_quoting(first.sheet);
         parser::AstNode* lhs = parser::make_ref(arena, first);
         parser::AstNode* rhs = parser::make_ref(arena, area_or.value().second);
         if (lhs == nullptr || rhs == nullptr) {

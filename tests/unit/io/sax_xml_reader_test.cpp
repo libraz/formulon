@@ -224,6 +224,29 @@ TEST(SaxXmlReader, InlineStringWithoutRPhPhoneticEmpty) {
   EXPECT_TRUE(cap.cells[0].phonetic.empty());
 }
 
+// `_x0001_` is plain ASCII, not an XML entity, so it survives even the
+// cheap `needs_processing == false` path and must still be decoded --
+// matching the DOM path's `AppendOoxmlTextUnescaped` on this same slot
+// (`io::append_rich_text`), which already decodes both the surface `<t>`
+// and the `<rPh>` kana.
+TEST(SaxXmlReader, InlineStringDecodesTheOoxmlControlCharacterEscape) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\">"
+      "<is><t>a_x0001_b</t>"
+      "<rPh sb=\"0\" eb=\"1\"><t>c_x0002_d</t></rPh></is>"
+      "</c></row></sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].value, std::string("a\x01"
+                                            "b",
+                                            3));
+  EXPECT_EQ(cap.cells[0].phonetic, std::string("c\x02"
+                                               "d",
+                                               3));
+}
+
 TEST(SaxXmlReader, SingleCellBoolean) {
   const std::string xml =
       "<worksheet><sheetData>"

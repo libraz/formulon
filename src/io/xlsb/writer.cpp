@@ -23,6 +23,7 @@
 
 #include "cell.h"
 #include "cf/cf_types.h"
+#include "eval/iterative_solver.h"
 #include "io/default_content_type.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
@@ -159,13 +160,40 @@ bool IsRepresentableDefaultRowHeight(double value) {
   return std::isfinite(std::round(value * 20.0));
 }
 
+/// True when `workbook`'s passthrough set already carries at least one
+/// XLSB-native pivot part (`xl/pivotTables/*.bin` / `xl/pivotCache/*.bin`).
+///
+/// Unlike every other feature `ReportDeferredSheetFeatures` checks, a
+/// pivot table's *source* part can survive a save untouched: the XLSB
+/// pivot reader deliberately never marks a decoded-or-skipped pivot part
+/// as consumed (see `LoadPivotParts` in xlsb/reader.cpp), specifically so
+/// it keeps round-tripping through passthrough even though this writer
+/// has no pivot output of its own. `sheet.pivot_tables()` is non-empty
+/// whenever the source was `.xlsb` with intact pivots, which is exactly
+/// the case where nothing is actually lost -- so the deferred count below
+/// only fires when there is no such surviving part (the source was
+/// `.xlsx`, whose pivot parts are plain XML with no `.bin` counterpart
+/// for this passthrough set to carry).
+bool HasPivotPassthroughPart(const Workbook& workbook) {
+  for (const PassthroughPart& part : workbook.passthrough_parts()) {
+    if (part.path.rfind("xl/pivotTables/", 0) == 0 || part.path.rfind("xl/pivotCache/", 0) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   std::uint32_t count = 0U;
+  const bool pivots_survive_via_passthrough = HasPivotPassthroughPart(workbook);
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "conditional_formats", sheet.conditional_formats().size(), i);
     ReportDeferred(&count, "data_validations", sheet.validations().size(), i);
     ReportDeferred(&count, "auto_filter", sheet.auto_filter_xml().empty() ? 0U : 1U, i);
+    ReportDeferred(&count, "comments", sheet.comments().size(), i);
+    ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
+    ReportDeferred(&count, "sheet_protection", sheet.protection().enabled ? 1U : 0U, i);
     const SheetPrintSettings& print = sheet.print_settings();
     const bool has_print = !print.sheet_pr_xml.empty() || !print.page_margins_xml.empty() ||
                            !print.page_setup_xml.empty() || !print.print_options_xml.empty() ||
@@ -188,6 +216,11 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   if (!workbook.tables().empty()) {
     ReportDeferred(&count, "tables", workbook.tables().size(), 0U);
   }
+  // Workbook-level calc settings: this writer emits no calc-properties
+  // record at all, so a non-default mode or an enabled iterative solve
+  // silently reverts to automatic / non-iterative recalculation on open.
+  ReportDeferred(&count, "calc_mode", workbook.calc_mode() == Workbook::CalcMode::kAuto ? 0U : 1U, 0U);
+  ReportDeferred(&count, "iterative_calc", workbook.iterative_options().enabled ? 1U : 0U, 0U);
   return count;
 }
 

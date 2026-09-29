@@ -35,7 +35,13 @@ bool CellIsEmitted(const Cell& cell);
 /// Returns the <sheetData>...</sheetData> markup for a single sheet. The
 /// caller wraps it in <worksheet>. Pure function: no I/O, no allocation
 /// outside the returned string.
-std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings = nullptr);
+///
+/// `dynamic_array_cm_index` is the 1-based `<cellMetadata>/<bk>` index a
+/// spill anchor's `<c cm="N">` names; 0 (the default) omits `cm=`
+/// entirely, which is correct whenever the saved package carries no
+/// XLDAPR-typed `xl/metadata.xml` for it to reference.
+std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
+                              std::uint32_t dynamic_array_cm_index = 0U);
 
 /// Encodes a 0-based (row, col) into the Excel A1 address (1-based, e.g.
 /// "A1", "AA1", "XFD1048576"). Exposed for unit testing; not consumed

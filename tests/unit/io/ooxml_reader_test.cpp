@@ -284,11 +284,22 @@ TEST(OoxmlReader, ResolveRelativePathRefusesEscapingTarget) {
   EXPECT_NE(result.error().context.find("target=../../etc/passwd"), std::string::npos);
 }
 
-TEST(OoxmlReader, ResolveRelativePathRefusesPackageAbsoluteTarget) {
-  // A package-absolute Target ("/xl/...") bypasses base-dir-relative
-  // accounting entirely; we refuse it rather than silently treat it as
-  // root-relative.
-  auto result = internal::ResolveRelativePathForTesting("xl/_rels", "/etc/passwd");
+TEST(OoxmlReader, ResolveRelativePathAcceptsPackageAbsoluteTarget) {
+  // A package-absolute Target ("/xl/...") is OPC-legal (ECMA-376 Part 2)
+  // and resolves from the package root regardless of base_dir -- Excel's
+  // own root `_rels/.rels` already accepts this shape
+  // (`ReadUnknownPackageRels`), and openpyxl / pandas write it routinely
+  // for workbook and sheet rels.
+  auto result = internal::ResolveRelativePathForTesting("xl/_rels", "/xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(result)) << (result ? "" : result.error().message);
+  EXPECT_EQ(result.value(), "xl/worksheets/sheet1.xml");
+}
+
+TEST(OoxmlReader, ResolveRelativePathRefusesPackageAbsoluteTargetThatEscapes) {
+  // The leading '/' only resets the stack to the package root; a '..'
+  // that then climbs past it must still be refused, exactly as a
+  // base-dir-relative target already is.
+  auto result = internal::ResolveRelativePathForTesting("xl/_rels", "/../etc/passwd");
   ASSERT_FALSE(static_cast<bool>(result));
   EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipSlip);
 }

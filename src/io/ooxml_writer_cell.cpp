@@ -207,7 +207,7 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
 // <v>. Phantoms are suppressed by the caller via spill_region_covering;
 // this function trusts the caller and never re-checks.
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
-                   const SharedStrings* shared_strings) {
+                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index) {
   const bool has_formula = !cell.formula_text.empty();
   if (!CellIsEmitted(cell)) {
     return false;
@@ -241,6 +241,16 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     out.append("<c r=\"");
     out.append(addr);
     out.append("\"");
+    // `cm=` links a dynamic-array spill anchor to the `xl/metadata.xml`
+    // XLDAPR entry (see `FindDynamicArrayCellMetadataIndex` in
+    // ooxml_writer.cpp) that tells Excel this `t="array"` is a modern
+    // spill rather than a legacy CSE array on reopen. Emitted only when
+    // the saved package actually carries a resolved entry for it.
+    if (anchored != nullptr && dynamic_array_cm_index != 0U) {
+      out.append(" cm=\"");
+      out.append(std::to_string(dynamic_array_cm_index));
+      out.append("\"");
+    }
     AppendStyleAttr(out, cell.xf_index);
 
     // The `t=` attribute on the formula <c> must agree with the cached
@@ -422,7 +432,8 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
 // non-empty, an empty self-closing `<row r="N" .../>` is still emitted
 // so the override survives the round-trip.
 bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
-                  std::string_view override_attrs, const SharedStrings* shared_strings) {
+                  std::string_view override_attrs, const SharedStrings* shared_strings,
+                  std::uint32_t dynamic_array_cm_index) {
   // Buffer the row body separately so we can tell whether anything ended
   // up inside the <row> wrapper before we commit to writing it.
   std::string body;
@@ -435,7 +446,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
       // anchor on load.
       continue;
     }
-    (void)AppendCellXml(body, sheet, row, col, row_cells[i], shared_strings);
+    (void)AppendCellXml(body, sheet, row, col, row_cells[i], shared_strings, dynamic_array_cm_index);
   }
   if (body.empty() && override_attrs.empty()) {
     return false;
@@ -472,7 +483,8 @@ std::string EncodeA1(std::uint32_t row, std::uint32_t col) {
   return out;
 }
 
-std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings) {
+std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings,
+                              std::uint32_t dynamic_array_cm_index) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
@@ -516,7 +528,7 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
     }
     auto cells_it = rows_map.find(row);
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
-    AppendRowXml(body, sheet, row, row_cells, override_attrs, shared_strings);
+    AppendRowXml(body, sheet, row, row_cells, override_attrs, shared_strings, dynamic_array_cm_index);
   }
 
   if (body.empty()) {

@@ -68,6 +68,29 @@ TEST(DataValidationRoundTrip, BetweenWholeNumberOperator) {
   EXPECT_EQ(out.value()[0].formula2, "100");
 }
 
+// `_x0001_` is the OOXML notation for a control character XML 1.0 cannot
+// carry literally (ooxml/sheet_xml_builder.cpp's AppendXmlEscaped emits
+// it for such a byte inside formula1/formula2 text); the reader must
+// decode it back, matching every other element-text slot.
+TEST(DataValidationRoundTrip, FormulaDecodesTheOoxmlControlCharacterEscape) {
+  pugi::xml_document doc;
+  auto ws = ParseWorksheet(doc,
+                           "<dataValidations>"
+                           "<dataValidation type=\"list\" sqref=\"A1\">"
+                           "<formula1>\"a_x0001_b\"</formula1><formula2>c_x0002_d</formula2>"
+                           "</dataValidation>"
+                           "</dataValidations>");
+  auto out = read_data_validations(ws);
+  ASSERT_TRUE(static_cast<bool>(out));
+  ASSERT_EQ(out.value().size(), 1U);
+  EXPECT_EQ(out.value()[0].formula1, std::string("\"a\x01"
+                                                 "b\"",
+                                                 5));
+  EXPECT_EQ(out.value()[0].formula2, std::string("c\x02"
+                                                 "d",
+                                                 3));
+}
+
 TEST(DataValidationRoundTrip, MultipleRanges) {
   pugi::xml_document doc;
   auto ws = ParseWorksheet(doc,

@@ -20,6 +20,7 @@
 #include "eval/iterative_solver.h"
 #include "io/default_content_type.h"
 #include "io/defined_names.h"
+#include "io/future_functions.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
@@ -28,6 +29,10 @@
 #include "io/workbook_kind.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "parser/ast.h"
+#include "parser/ast_format.h"
+#include "parser/parser.h"
+#include "utils/arena.h"
 #include "utils/double_format.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
@@ -73,12 +78,6 @@ constexpr std::string_view kRelExtendedProperties =
 constexpr std::string_view kRelCustomProperties =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 
-/// Escapes `text` and appends it as the body of an XML element. Callers
-/// that need attribute escaping should use `AppendXmlAttrEscaped` directly.
-inline void AppendEscaped(std::string& out, std::string_view text) {
-  AppendXmlEscaped(out, text);
-}
-
 void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& names) {
   if (names.empty()) {
     return;
@@ -102,7 +101,32 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
       out.push_back('"');
     }
     out.push_back('>');
-    AppendEscaped(out, n.formula);
+    // Re-apply Excel's hidden storage prefixes (`_xlfn.` / `_xlfn._xlws.`
+    // on the enumerated future functions, `_xlpm.` on LET / LAMBDA
+    // parameters), mirroring the cell <f> writer: `n.formula` was
+    // normalised to the canonical formula-bar form on ingestion
+    // (io::strip_storage_prefixes in defined_names.cpp), and a real
+    // Excel reading this file needs the prefixed spelling back to resolve
+    // modern functions instead of showing #NAME?. On any parse failure,
+    // fall back to the canonical text unchanged.
+    Arena formula_arena;
+    parser::Parser formula_parser(n.formula, formula_arena);
+    parser::AstNode* formula_root = formula_parser.parse();
+    bool storage_emitted = false;
+    if (formula_root != nullptr && formula_parser.errors().empty()) {
+      const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name);
+      // Only re-serialise when a storage prefix was actually added; a
+      // classic formula's storage form equals its plain form, so the
+      // stored text is emitted verbatim below to preserve its exact
+      // spelling.
+      if (storage != parser::format_formula(*formula_root)) {
+        AppendXmlEscaped(out, storage);
+        storage_emitted = true;
+      }
+    }
+    if (!storage_emitted) {
+      AppendXmlEscaped(out, n.formula);
+    }
     out.append("</definedName>\n");
   }
   out.append("  </definedNames>\n");

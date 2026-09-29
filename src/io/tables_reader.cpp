@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -90,9 +91,12 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
       // Preserve <calculatedColumnFormula> verbatim. Children come
       // after attributes per the OOXML schema, so this lookup runs
       // last for the column. pugixml's `text().as_string()` already
-      // returns the unescaped PCDATA payload.
+      // decodes ordinary XML entities; `AppendOoxmlTextUnescaped`
+      // additionally decodes the OOXML `_xHHHH_` control-character
+      // escapes the writer emits for this slot (`AppendXmlEscaped` in
+      // ooxml_writer.cpp).
       if (pugi::xml_node fn_node = col.child("calculatedColumnFormula"); fn_node) {
-        entry.calculated_column_formula = fn_node.text().as_string();
+        AppendOoxmlTextUnescaped(entry.calculated_column_formula, fn_node.text().as_string());
       }
       table.columns.push_back(std::move(entry));
     }

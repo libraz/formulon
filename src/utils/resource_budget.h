@@ -144,6 +144,12 @@ inline constexpr std::size_t kMaxEvalArenaBytes = 1024U * 1024U * 1024U;  // 1 G
 /// crafted formula string cannot turn a load into an allocation loop.
 inline constexpr std::size_t kMaxLoadArenaBytes = 64U * 1024U * 1024U;  // 64 MiB
 
+/// Hard cap on cumulative `Cell` storage bytes one sheet load may
+/// materialise via `RowCells::ensure()`'s gap-filled slots (`sheet.h`'s
+/// documented worst case: `populated_rows * Sheet::kMaxCols * sizeof(Cell)`).
+/// Reuses `zip_reader.h`'s `kMaxTotalExtractedBytes` archive-layer cap.
+inline constexpr std::uint64_t kMaxSheetLoadCellBytes = 256ULL * 1024ULL * 1024ULL;  // 256 MiB
+
 /// Running work-unit counter checked against a fixed ceiling.
 ///
 /// Typical use:

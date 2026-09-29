@@ -288,6 +288,26 @@ TEST(BuildSheetDataXml, FormulaCellTextResultPreservesWhitespace) {
   EXPECT_NE(xml.find("<v xml:space=\"preserve\"> abc </v>"), std::string::npos) << xml;
 }
 
+TEST(BuildSheetDataXml, FormulaCellSpillRefStoresAsAnchorarrayCall) {
+  // Excel's file-format spelling of the postfix `#` spill operator is a
+  // call to the hidden `_xlfn.ANCHORARRAY` name, not the bare `A1#` the
+  // formula bar shows -- see eval/dynamic_array/anchor.h.
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=SUM(A1#)");
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("<f>SUM(_xlfn.ANCHORARRAY(A1))</f>"), std::string::npos) << xml;
+}
+
+TEST(BuildSheetDataXml, FormulaCellLetParameterPrefixedCaseInsensitively) {
+  // LET/LAMBDA parameters resolve case-insensitively at eval time, so a
+  // reference spelled in a different case than its binding must still get
+  // the `_xlpm.` storage prefix, not be written as a free name.
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=LET(x,1,X+1)");
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("<f>_xlfn.LET(_xlpm.x,1,_xlpm.X+1)</f>"), std::string::npos) << xml;
+}
+
 TEST(BuildSheetDataXml, FormulaXmlEscaped) {
   Sheet s("Sheet1");
   // Both '&' and '<' must be XML-escaped inside <f>.
@@ -316,6 +336,32 @@ TEST(BuildSheetDataXml, SpillAnchorHasArrayType) {
   // decoupled from prefix formatting.)
   EXPECT_NE(xml.find("<f t=\"array\" ref=\"A1:A3\">"), std::string::npos) << xml;
   EXPECT_NE(xml.find("SEQUENCE(3)</f>"), std::string::npos) << xml;
+}
+
+TEST(BuildSheetDataXml, SpillAnchorOmitsCmWithNoResolvedMetadataIndex) {
+  // The default (no XLDAPR entry resolved in the saved package) must not
+  // emit `cm=` at all: an unresolved index would either dangle or, worse,
+  // point at metadata the file doesn't carry.
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=SEQUENCE(3)");
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
+
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_EQ(xml.find("cm="), std::string::npos) << xml;
+}
+
+TEST(BuildSheetDataXml, SpillAnchorCarriesCmWhenAMetadataIndexIsResolved) {
+  // `cm=` links the spill anchor to the package's XLDAPR entry so Excel
+  // treats `t="array"` as a modern spill rather than a legacy CSE array
+  // on reopen. Phantom cells (which carry no formula) never get one.
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=SEQUENCE(3)");
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
+
+  const std::string xml = BuildSheetDataXml(s, /*shared_strings=*/nullptr, /*dynamic_array_cm_index=*/1U);
+  EXPECT_NE(xml.find("<c r=\"A1\" cm=\"1\""), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, SpillPhantomsSuppressed) {

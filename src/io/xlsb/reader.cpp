@@ -764,8 +764,11 @@ constexpr std::size_t kStrRunSize = 4U;
 ///
 /// The trailing `(u16 ifnt, u16 flags)` -- phonetic font, plus the
 /// annotation type and alignment `<phoneticPr>` carries in OOXML -- is
-/// read past but not modelled: `PhoneticRun` holds the reading, not how
-/// Excel renders it. The OOXML reader drops the same element.
+/// decoded into `out_props` via `DecodePhoneticProperties` below. The
+/// OOXML reader models the same element too, parsing `<phoneticPr>` in
+/// its DOM, SAX and SST paths (`cell_parser.cpp`, `sax_xml_reader.cpp`,
+/// `sst_reader.cpp`).
+
 /// Reads the phonetic tail's closing `(u16 ifnt, u16 flags)` pair.
 ///
 /// Leniently: a record that stops short of the pair keeps the defaults

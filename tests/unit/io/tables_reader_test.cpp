@@ -162,6 +162,31 @@ TEST(TablesReader, CalculatedColumnFormulaWithXmlEscapesPreserved) {
   EXPECT_EQ(table_or.value().columns[0].calculated_column_formula, "IF(A1<5,\"x\",\"y\")&\"!\"");
 }
 
+TEST(TablesReader, CalculatedColumnFormulaWithOoxmlControlCharacterEscapeDecoded) {
+  // `_x0001_` is the OOXML notation for a control character XML 1.0
+  // cannot carry literally (ooxml_writer.cpp's AppendXmlEscaped emits it
+  // for such a byte inside this same element); the reader must decode it
+  // back, matching every other element-text slot.
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"6\" name=\"EscTbl\" "
+      "displayName=\"EscTbl\" ref=\"A1:B2\">");
+  xml.append("  <tableColumns count=\"1\">");
+  xml.append(
+      "    <tableColumn id=\"1\" name=\"E\">"
+      "<calculatedColumnFormula>\"a_x0001_b\"</calculatedColumnFormula>"
+      "</tableColumn>");
+  xml.append("  </tableColumns>");
+  xml.append("</table>");
+
+  auto table_or = read_table(Bytes(xml), 0U);
+  ASSERT_TRUE(static_cast<bool>(table_or));
+  ASSERT_EQ(table_or.value().columns.size(), 1U);
+  EXPECT_EQ(table_or.value().columns[0].calculated_column_formula, std::string("\"a\x01"
+                                                                               "b\"",
+                                                                               5));
+}
+
 TEST(TablesReader, MissingCalculatedColumnFormulaIsEmptyString) {
   std::string xml(kXmlDecl);
   xml.append(

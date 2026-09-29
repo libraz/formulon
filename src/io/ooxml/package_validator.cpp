@@ -223,35 +223,32 @@ Expected<std::vector<DefaultContentType>, Error> list_default_content_types(cons
 }
 
 Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, std::string_view target) {
-  // Absolute-path targets are not permitted in well-formed OOXML rels
-  // files. A writer that emits `Target="/xl/..."` is either misbehaving
-  // or attempting path traversal; in either case the result is not safe
-  // to consume because the path no longer participates in `..`-segment
-  // accounting that defends the package root.
-  if (!target.empty() && target.front() == '/') {
-    std::string ctx("context=ooxml_reader base_dir=");
-    ctx.append(base_dir);
-    ctx.append(" target=");
-    ctx.append(target);
-    return make_error(FormulonErrorCode::kIoZipSlip, "rels target uses package-absolute path; refusing to resolve",
-                      std::move(ctx));
-  }
-
   std::vector<std::string> stack;
-  // Seed the stack from `base_dir`.
-  std::size_t start = 0;
-  for (std::size_t i = 0; i <= base_dir.size(); ++i) {
-    if (i == base_dir.size() || base_dir[i] == '/') {
-      if (i > start) {
-        stack.emplace_back(base_dir.substr(start, i - start));
+  // A leading '/' names a package-root-relative target, which OPC
+  // (ECMA-376 Part 2) permits: Excel's own root `_rels/.rels` already
+  // resolves one (`ReadUnknownPackageRels` in ooxml_reader.cpp), and
+  // openpyxl / pandas routinely write them for workbook and sheet rels.
+  // Root-relative resolution starts from an empty stack instead of
+  // seeding it from `base_dir`; the '..' accounting below still refuses
+  // a target that climbs past the package root either way.
+  if (!target.empty() && target.front() == '/') {
+    target.remove_prefix(1);
+  } else {
+    // Seed the stack from `base_dir`.
+    std::size_t start = 0;
+    for (std::size_t i = 0; i <= base_dir.size(); ++i) {
+      if (i == base_dir.size() || base_dir[i] == '/') {
+        if (i > start) {
+          stack.emplace_back(base_dir.substr(start, i - start));
+        }
+        start = i + 1;
       }
-      start = i + 1;
     }
   }
   // Append the target, applying `.` / `..` normalisation. Track whether
   // any `..` segment failed to find a directory to pop so we can refuse
   // a target that escapes the package root.
-  start = 0;
+  std::size_t start = 0;
   for (std::size_t i = 0; i <= target.size(); ++i) {
     if (i == target.size() || target[i] == '/') {
       if (i > start) {

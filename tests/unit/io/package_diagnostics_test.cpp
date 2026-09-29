@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/iterative_solver.h"
 #include "gtest/gtest.h"
 #include "io/cf_reader.h"
 #include "io/default_content_type.h"
@@ -30,6 +31,8 @@
 #include "io/unknown_relationship.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
 #include "pugixml.hpp"
 #include "support/ooxml_package_fixture.h"
 #include "workbook.h"
@@ -255,6 +258,87 @@ TEST(XlsbWriteDiagnostics, CleanWorkbookReportsNothingLost) {
   EXPECT_EQ(d.dropped_part_count, 0U);
   EXPECT_EQ(d.dropped_relationship_count, 0U);
   EXPECT_EQ(d.renumbered_part_count, 0U);
+}
+
+TEST(XlsbWriteDiagnostics, CommentsCountAsDeferred) {
+  // The XLSB writer has no comments output; a comment surviving into the
+  // model (necessarily from an .xlsx source, since the XLSB reader never
+  // decodes comments at all) is silently dropped on save.
+  Workbook wb = OneSheetWorkbook();
+  wb.sheet(0).mutable_comments().push_back(CellComment{0, 0, "Author", "Note"});
+
+  auto result = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+}
+
+TEST(XlsbWriteDiagnostics, EnabledSheetProtectionCountsAsDeferred) {
+  Workbook wb = OneSheetWorkbook();
+  wb.sheet(0).mutable_protection().enabled = true;
+
+  auto result = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+}
+
+TEST(XlsbWriteDiagnostics, NonAutoCalcModeCountsAsDeferred) {
+  Workbook wb = OneSheetWorkbook();
+  wb.set_calc_mode(Workbook::CalcMode::kManual);
+
+  auto result = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+}
+
+TEST(XlsbWriteDiagnostics, EnabledIterativeCalcCountsAsDeferred) {
+  Workbook wb = OneSheetWorkbook();
+  eval::IterativeOptions opts;
+  opts.enabled = true;
+  wb.set_iterative_options(opts);
+
+  auto result = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+}
+
+TEST(XlsbWriteDiagnostics, PivotTableWithNoSurvivingPassthroughPartCountsAsDeferred) {
+  // No `xl/pivotTables/*.bin` / `xl/pivotCache/*.bin` passthrough part
+  // exists (as when the source was `.xlsx`, whose pivot parts are plain
+  // XML): the pivot table has no representable counterpart in the saved
+  // package at all.
+  Workbook wb = OneSheetWorkbook();
+  auto cache = std::make_unique<pivot::PivotCache>();
+  cache->set_cache_id(0U);
+  wb.add_pivot_cache(std::move(cache));
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_pivot_cache_id(0U);
+  wb.sheet(0).add_pivot_table(std::move(table));
+
+  auto result = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+}
+
+TEST(XlsbWriteDiagnostics, PivotTableWithASurvivingPassthroughPartIsNotCountedAsDeferred) {
+  // A source `.xlsb`'s pivot `.bin` parts round-trip through passthrough
+  // untouched (this writer has no pivot output to invalidate them with),
+  // so the pivot table is not actually lost.
+  Workbook wb = OneSheetWorkbook();
+  auto cache = std::make_unique<pivot::PivotCache>();
+  cache->set_cache_id(0U);
+  wb.add_pivot_cache(std::move(cache));
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_pivot_cache_id(0U);
+  wb.sheet(0).add_pivot_table(std::move(table));
+  PassthroughPart pivot_bin;
+  pivot_bin.path = "xl/pivotTables/pivotTable1.bin";
+  pivot_bin.bytes = {0x00};
+  wb.set_default_content_types({DefaultContentType{"bin", "application/octet-stream"}});
+  wb.set_passthrough_parts({std::move(pivot_bin)});
+
+  auto result = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
 }
 
 TEST(XlsbWriteDiagnostics, PassthroughPartCollidingWithAGeneratedPathIsCounted) {
