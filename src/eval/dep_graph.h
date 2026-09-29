@@ -16,9 +16,9 @@
 //
 // The graph is intentionally minimal: nodes are just `CellNodeId`
 // (sheet+row+col triples) and edges are stored as a forward + reverse
-// adjacency list. Range / DefinedName / TableColumn nodes will be modeled
-// as separate node kinds in a follow-up bundle when the recalc engine
-// starts wiring those in; today every node is a cell.
+// adjacency list. A compact rectangle watched by one or more formulas is a
+// virtual range node (`range_node`) between its watchers and the formula
+// cells inside it, so N watchers over M formulas cost N + M edges.
 //
 // The implementation uses an iterative Tarjan to stay safe on the WASM
 // stack (Excel's 1,048,576-row maximum makes deep call chains plausible
@@ -51,6 +51,21 @@ struct CellNodeId {
   }
   friend bool operator!=(CellNodeId lhs, CellNodeId rhs) noexcept { return !(lhs == rhs); }
 };
+
+/// Sheet id reserved for virtual range nodes. `Workbook::kMaxSheets` is
+/// 0xFFFF, so real sheet indices stop at 0xFFFE and every evaluation loop's
+/// `sheet_id >= sheet_count` guard already skips these nodes.
+inline constexpr std::uint16_t kRangeNodeSheetId = 0xFFFFU;
+
+/// The graph node standing for the interned compact rectangle `range_id`.
+inline constexpr CellNodeId range_node(std::uint32_t range_id) noexcept {
+  return CellNodeId{kRangeNodeSheetId, range_id, 0U};
+}
+
+/// Whether `node` is a virtual range node rather than a cell.
+inline constexpr bool is_range_node(CellNodeId node) noexcept {
+  return node.sheet_id == kRangeNodeSheetId;
+}
 
 /// Orders cells by sheet, then row, then column — Excel's top-left-first
 /// calculation order, and the canonical order every pinned cell sequence
@@ -226,8 +241,9 @@ class DepGraph {
   /// directly.
   std::vector<CellNodeId> topological_order() const;
 
-  /// Number of cells with at least one outgoing or incoming edge.
-  /// O(1) — backed by a counter kept in sync by every mutator.
+  /// Number of cells with at least one outgoing or incoming edge; virtual
+  /// range nodes are not counted. O(1) — backed by a counter kept in sync
+  /// by every mutator.
   std::size_t node_count() const noexcept { return node_count_; }
 
   /// Whether the graph has no recorded edges.
@@ -289,6 +305,10 @@ class DepGraph {
 /// Returns whether an SCC is a real cycle: two or more nodes, or a
 /// singleton whose sole cell has a self-dependency.
 bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) noexcept;
+
+/// Returns the cell members of an SCC, dropping virtual range nodes, which
+/// have nothing to evaluate.
+std::vector<CellNodeId> cells_of_component(const std::vector<CellNodeId>& component);
 
 }  // namespace formulon::eval
 

@@ -1118,5 +1118,132 @@ TEST(DepExtractor, ThreeDWholeAxisSpansPreserveBothAxes) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// `:` over a reference-returning endpoint registers the box it can read
+// ---------------------------------------------------------------------------
+
+std::vector<CellNodeId> RectCells(std::uint16_t sheet, std::uint32_t r0, std::uint32_t r1, std::uint32_t c0,
+                                  std::uint32_t c1) {
+  std::vector<CellNodeId> out;
+  for (std::uint32_t r = r0; r <= r1; ++r) {
+    for (std::uint32_t c = c0; c <= c1; ++c) {
+      out.push_back(CellNodeId{sheet, r, c});
+    }
+  }
+  return out;
+}
+
+ExtractedDeps ExtractFrom(std::string_view source, const Workbook& wb) {
+  Arena arena;
+  const parser::AstNode* root = ParseFormula(source, arena);
+  EXPECT_NE(root, nullptr);
+  return root == nullptr ? ExtractedDeps{} : extract_deps(*root, 0U, wb);
+}
+
+bool HasRangeDep(const ExtractedDeps& deps, CellRangeDependency want) {
+  return std::any_of(deps.range_deps.begin(), deps.range_deps.end(), [&](const CellRangeDependency& d) {
+    return d.sheet_id == want.sheet_id && d.row_first == want.row_first && d.row_last == want.row_last &&
+           d.col_first == want.col_first && d.col_last == want.col_last;
+  });
+}
+
+TEST(DepExtractor, DynamicEndpointInsideSourceAddsNothing) {
+  const Workbook wb = Workbook::create();
+  const ExtractedDeps deps = ExtractFrom("SUM(A1:INDEX(A1:A10,3))", wb);
+  EXPECT_EQ(Sorted(deps.cell_deps), RectCells(0U, 0U, 9U, 0U, 0U));
+  EXPECT_TRUE(deps.range_deps.empty());
+}
+
+TEST(DepExtractor, DynamicEndpointRegistersBoundingBox) {
+  const Workbook wb = Workbook::create();
+  EXPECT_EQ(Sorted(ExtractFrom("SUM(A1:INDEX(C1:C10,3))", wb).cell_deps), RectCells(0U, 0U, 9U, 0U, 2U));
+  EXPECT_EQ(Sorted(ExtractFrom("SUM(INDEX(A1:A10,2):INDEX(C1:C10,3))", wb).cell_deps), RectCells(0U, 0U, 9U, 0U, 2U));
+  EXPECT_EQ(Sorted(ExtractFrom("SUM(A1:CHOOSE(2,B1,D5))", wb).cell_deps), RectCells(0U, 0U, 4U, 0U, 3U));
+}
+
+TEST(DepExtractor, ChainedRangeRegistersBoundingBox) {
+  const Workbook wb = Workbook::create();
+  EXPECT_EQ(Sorted(ExtractFrom("SUM(A1:B2:C3)", wb).cell_deps), RectCells(0U, 0U, 2U, 0U, 2U));
+}
+
+TEST(DepExtractor, DynamicEndpointOverWholeColumnStaysCompact) {
+  const Workbook wb = Workbook::create();
+  const ExtractedDeps deps = ExtractFrom("SUM(A1:INDEX(C:C,5))", wb);
+  EXPECT_TRUE(HasRangeDep(deps, CellRangeDependency{0U, 0U, Sheet::kMaxRows - 1U, 0U, 2U}));
+  EXPECT_LE(deps.cell_deps.size(), 1U);
+}
+
+TEST(DepExtractor, DynamicEndpointConditionStaysAPlainCell) {
+  const Workbook wb = Workbook::create();
+  std::vector<CellNodeId> expected = RectCells(0U, 0U, 4U, 0U, 3U);
+  expected.push_back(CellNodeId{0U, 0U, 25U});  // Z1
+  EXPECT_EQ(Sorted(ExtractFrom("SUM(A1:IF(Z1>0,B5,D5))", wb).cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, OffsetEndpointKeepsDynamicReference) {
+  const Workbook wb = Workbook::create();
+  const ExtractedDeps deps = ExtractFrom("SUM(A1:OFFSET(A1,2,2))", wb);
+  EXPECT_EQ(Sorted(deps.cell_deps), (std::vector<CellNodeId>{CellNodeId{0U, 0U, 0U}}));
+  EXPECT_TRUE(deps.range_deps.empty());
+  EXPECT_TRUE(deps.has_dynamic_reference);
+}
+
+TEST(DepExtractor, DynamicEndpointThroughLetBinding) {
+  const Workbook wb = Workbook::create();
+  EXPECT_EQ(Sorted(ExtractFrom("LET(r,C1:C10,SUM(A1:INDEX(r,3)))", wb).cell_deps), RectCells(0U, 0U, 9U, 0U, 2U));
+}
+
+TEST(DepExtractor, DynamicEndpointThroughDefinedName) {
+  Workbook wb = Workbook::create();
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"Rng", "=Sheet1!$C$1:$C$10", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+  EXPECT_EQ(Sorted(ExtractFrom("SUM(A1:INDEX(Rng,3))", wb).cell_deps), RectCells(0U, 0U, 9U, 0U, 2U));
+}
+
+TEST(DepExtractor, DynamicEndpointOnAnotherSheet) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  EXPECT_EQ(Sorted(ExtractFrom("SUM(Sheet2!A1:INDEX(Sheet2!C1:C3,2))", wb).cell_deps), RectCells(1U, 0U, 2U, 0U, 2U));
+}
+
+// ---------------------------------------------------------------------------
+// Reference-only arguments read no values
+// ---------------------------------------------------------------------------
+
+TEST(DepExtractor, ReferenceOnlyArgumentsRegisterNothing) {
+  const Workbook wb = Workbook::create();
+  for (const char* src :
+       {"ROWS(A:A)", "ROW(A1)", "COLUMNS(1:1)", "ROWS(A1:C3)", "ISREF(A1)", "COLUMN(A1:B2:C3)", "AREAS((A1,B2:C3))"}) {
+    const ExtractedDeps deps = ExtractFrom(src, wb);
+    EXPECT_TRUE(deps.cell_deps.empty()) << src;
+    EXPECT_TRUE(deps.range_deps.empty()) << src;
+  }
+}
+
+TEST(DepExtractor, ReferenceOnlyArgumentThroughDefinedName) {
+  Workbook wb = Workbook::create();
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"Rng", "=Sheet1!$C$1:$C$10", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+  const ExtractedDeps deps = ExtractFrom("ROWS(Rng)", wb);
+  EXPECT_TRUE(deps.cell_deps.empty());
+  EXPECT_TRUE(deps.range_deps.empty());
+}
+
+TEST(DepExtractor, ReferenceOnlyCallStillWalksComputedArguments) {
+  const Workbook wb = Workbook::create();
+  // A spill's extent is read from its anchor.
+  EXPECT_EQ(ExtractFrom("ROWS(A1#)", wb).cell_deps, (std::vector<CellNodeId>{CellNodeId{0U, 0U, 0U}}));
+  // INDEX reads B1 to pick the row.
+  const std::vector<CellNodeId> index_deps = ExtractFrom("ROW(INDEX(A1:A10,B1))", wb).cell_deps;
+  EXPECT_NE(std::find(index_deps.begin(), index_deps.end(), CellNodeId{0U, 0U, 1U}), index_deps.end());
+}
+
+TEST(DepExtractor, ShadowedReferenceOnlyNameKeepsItsArgument) {
+  const Workbook wb = Workbook::create();
+  EXPECT_EQ(Sorted(ExtractFrom("LET(rows,LAMBDA(x,x),rows(A1:A3))", wb).cell_deps), RectCells(0U, 0U, 2U, 0U, 0U));
+}
+
 }  // namespace
 }  // namespace formulon::eval

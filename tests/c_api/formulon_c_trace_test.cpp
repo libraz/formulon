@@ -105,6 +105,36 @@ TEST(FormulonCApiTrace, CompactRangeIsVisibleInBothDirections) {
   EXPECT_EQ(watcher.col, 1U);
 }
 
+TEST(FormulonCApiTrace, CompactRangeOverFormulaReportsOnlyCells) {
+  // A formula inside a compact rectangle is ordered through the rectangle's
+  // virtual graph node; trace reports the cells on either side of it.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 4999, 0, "=A1*2"), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=SUM(A1:A60000)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  CellNodesGuard precedents;
+  ASSERT_EQ(fm_workbook_precedents(wb.handle, 0, 0, 1, 2, &precedents.handle), 0);
+  ASSERT_EQ(fm_cell_nodes_count(precedents.handle), 2U);
+  for (std::size_t i = 0; i < 2U; ++i) {
+    fm_cell_node_t n{};
+    ASSERT_EQ(fm_cell_nodes_at(precedents.handle, i, &n), 0);
+    EXPECT_EQ(n.sheet, 0U);
+    EXPECT_EQ(n.col, 0U);
+  }
+
+  CellNodesGuard dependents;
+  ASSERT_EQ(fm_workbook_dependents(wb.handle, 0, 4999, 0, 2, &dependents.handle), 0);
+  ASSERT_EQ(fm_cell_nodes_count(dependents.handle), 1U);
+  fm_cell_node_t watcher{};
+  ASSERT_EQ(fm_cell_nodes_at(dependents.handle, 0, &watcher), 0);
+  EXPECT_EQ(watcher.sheet, 0U);
+  EXPECT_EQ(watcher.row, 0U);
+  EXPECT_EQ(watcher.col, 1U);
+}
+
 TEST(FormulonCApiTrace, DepthExpandsTransitively) {
   // A1=1, B1=A1, C1=B1 -> precedents(C1, depth=2) includes A1
   WorkbookGuard wb;

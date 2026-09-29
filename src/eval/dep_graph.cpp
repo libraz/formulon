@@ -60,10 +60,10 @@ void DepGraph::add_dependency_source(CellNodeId dependent, CellNodeId dependency
   }
   forward_[dependent].push_back(dependency);
   reverse_[dependency].push_back(dependent);
-  if (!dependent_was_known) {
+  if (!dependent_was_known && !is_range_node(dependent)) {
     ++node_count_;
   }
-  if (!dependency_was_known && dependent != dependency) {
+  if (!dependency_was_known && dependent != dependency && !is_range_node(dependency)) {
     ++node_count_;
   }
 }
@@ -105,10 +105,10 @@ bool DepGraph::remove_dependency_source(CellNodeId dependent, CellNodeId depende
 
   const bool dependent_is_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
   const bool dependency_is_known = forward_.count(dependency) != 0U || reverse_.count(dependency) != 0U;
-  if (dependent_was_known && !dependent_is_known) {
+  if (dependent_was_known && !dependent_is_known && !is_range_node(dependent)) {
     --node_count_;
   }
-  if (dependency != dependent && dependency_was_known && !dependency_is_known) {
+  if (dependency != dependent && dependency_was_known && !dependency_is_known && !is_range_node(dependency)) {
     --node_count_;
   }
   return true;
@@ -256,6 +256,17 @@ bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGrap
   const CellNodeId only = component.front();
   const std::vector<CellNodeId>& dependencies = graph.dependencies_of_ref(only);
   return std::find(dependencies.begin(), dependencies.end(), only) != dependencies.end();
+}
+
+std::vector<CellNodeId> cells_of_component(const std::vector<CellNodeId>& component) {
+  std::vector<CellNodeId> cells;
+  cells.reserve(component.size());
+  for (const CellNodeId node : component) {
+    if (!is_range_node(node)) {
+      cells.push_back(node);
+    }
+  }
+  return cells;
 }
 
 std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {

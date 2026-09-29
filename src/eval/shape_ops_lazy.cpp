@@ -322,9 +322,18 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     return index_array(rect.value().row_first, rect.value().col_first, rect.value().row_last, rect.value().col_last);
   }
   if (k == parser::NodeKind::RangeOp) {
-    // A `RangeOp` whose endpoints are not both bare references names no
-    // rectangle until it is evaluated, which this seam does not do.
-    return Value::error(ErrorCode::Value);
+    // A `RangeOp` over a reference-returning endpoint (`A1:INDEX(...)`)
+    // names its rectangle once the endpoint is resolved.
+    std::string_view sheet;
+    std::uint32_t top = 0;
+    std::uint32_t left = 0;
+    std::uint32_t bottom = 0;
+    std::uint32_t right = 0;
+    ErrorCode err = ErrorCode::Value;
+    if (!resolve_reference_rect(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
+      return Value::error(err);
+    }
+    return index_array(top, left, bottom, right);
   }
   if (k == parser::NodeKind::Call) {
     // Reference-returning builtins (INDIRECT, OFFSET) nested inside

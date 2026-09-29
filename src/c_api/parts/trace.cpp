@@ -6,6 +6,7 @@
 // can return data without re-walking the graph. Depth is capped at 32
 // to keep cyclic graphs from blowing up the queue.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -96,15 +97,18 @@ fm_status_t trace_impl(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32
   // A reference wide enough to be registered as a compact rectangle owns no
   // per-cell graph edge, so the raw adjacency lists alone would hide
   // `=SUM(A1:A5000)` from both trace directions. Fold the rectangle's
-  // content-clipped expansion into the neighbour set.
+  // content-clipped expansion into the neighbour set in place of the
+  // rectangle's virtual graph node, which is not a cell.
   auto neighbors = [&](formulon::eval::CellNodeId node) {
     if constexpr (kPrecedents) {
       auto nodes = graph.dependencies_of(node);
+      nodes.erase(std::remove_if(nodes.begin(), nodes.end(), formulon::eval::is_range_node), nodes.end());
       const auto compact = engine.compact_range_precedents_of(node, workbook);
       nodes.insert(nodes.end(), compact.begin(), compact.end());
       return nodes;
     } else {
       auto nodes = graph.dependents_of(node);
+      nodes.erase(std::remove_if(nodes.begin(), nodes.end(), formulon::eval::is_range_node), nodes.end());
       const auto compact = engine.compact_range_dependents_of(node);
       nodes.insert(nodes.end(), compact.begin(), compact.end());
       return nodes;

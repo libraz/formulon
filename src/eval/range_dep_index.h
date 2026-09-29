@@ -7,7 +7,8 @@
 //
 //   * "which formulas watch a rectangle covering this cell?"
 //     (`for_each_owner_covering`) — once per workbook cell write, so it must
-//     not scan every registered rectangle;
+//     not scan every registered rectangle — and "which rectangles cover this
+//     formula cell?" (`for_each_range_covering`) when a formula registers;
 //   * "which rectangles are watched, and by whom?"
 //     (`for_each_distinct_range`) — once per spill reconcile and once per
 //     partial-recalc closure expansion;
@@ -60,13 +61,21 @@ class RangeDepIndex {
   RangeDepIndex& operator=(RangeDepIndex&&) noexcept = default;
   ~RangeDepIndex() = default;
 
+  /// Result of `add`: the interned id of the rectangle, and whether this
+  /// call interned it (no owner watched it before).
+  struct AddResult {
+    std::uint32_t range_id = 0;
+    bool is_new = false;
+  };
+
   /// Records that `owner` watches `range`. Idempotent: repeating the same
   /// pair leaves the index unchanged.
-  void add(CellNodeId owner, const CellRangeDependency& range);
+  AddResult add(CellNodeId owner, const CellRangeDependency& range);
 
-  /// Drops every rectangle watched by `owner`. Rectangles left without an
-  /// owner are released. Safe on an owner that was never added.
-  void erase_owner(CellNodeId owner);
+  /// Drops every rectangle watched by `owner` and returns the ids of the
+  /// rectangles this left without an owner, which are released for reuse.
+  /// Safe on an owner that was never added.
+  std::vector<std::uint32_t> erase_owner(CellNodeId owner);
 
   /// Empties the index.
   void clear() noexcept;
@@ -94,6 +103,21 @@ class RangeDepIndex {
       }
       for (const CellNodeId owner : entry.owners) {
         fn(owner);
+      }
+    }
+  }
+
+  /// Invokes `fn(std::uint32_t range_id)` once per interned rectangle that
+  /// covers `cell`. `fn` must not mutate the index.
+  template <typename Fn>
+  void for_each_range_covering(CellNodeId cell, Fn&& fn) const {
+    const auto band = bands_.find(band_key(cell.sheet_id, cell.row));
+    if (band == bands_.end()) {
+      return;
+    }
+    for (const std::uint32_t range_id : band->second) {
+      if (ranges_[range_id].range.contains(cell)) {
+        fn(range_id);
       }
     }
   }

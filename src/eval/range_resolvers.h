@@ -44,6 +44,14 @@ class FunctionRegistry;
 /// "is this call a reference?" sees one list.
 bool is_reference_call_name(std::string_view name) noexcept;
 
+/// True when argument `arg_index` of a reference-returning call `call_name`
+/// with `arity` arguments can be the reference the call returns: INDEX's
+/// source, XLOOKUP's return_array / if_not_found, an IF branch, a CHOOSE
+/// value, an IFS value, or a SWITCH result / default. Always false for
+/// INDIRECT and OFFSET, whose result is built at evaluation time, and for a
+/// name `is_reference_call_name` rejects.
+bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_index, std::uint32_t arity) noexcept;
+
 /// Attempts to resolve `node` as a reference-returning call (see
 /// `is_reference_call_name`), producing a rectangular reference without
 /// dereferencing. A call whose arguments select a non-reference (e.g.
@@ -63,8 +71,9 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
                             bool* out_is_range, ErrorCode* out_err);
 
 /// Resolves a `:` operator endpoint into a rectangle. `node` may be a
-/// plain `Ref` (1x1 rectangle) or a reference-returning `Call`, in which
-/// case `resolve_reference_call` produces the rectangle.
+/// plain `Ref` (1x1 rectangle), a reference-returning `Call`, in which
+/// case `resolve_reference_call` produces the rectangle, or a LET-bound
+/// name standing for either.
 /// Returns `true` on success and writes the rectangle (0-based,
 /// inclusive) into the out parameters; the sheet qualifier (empty =
 /// bound sheet) is written to `*out_sheet`. On failure returns `false`

@@ -103,6 +103,10 @@ bool has_lazy_only_call(const parser::AstNode& node, const FunctionRegistry& reg
     case parser::NodeKind::BinaryOp:
       return has_lazy_only_call(node.as_binary_lhs(), registry) || has_lazy_only_call(node.as_binary_rhs(), registry);
     case parser::NodeKind::RangeOp:
+      // The IR cannot represent a `:` over a computed endpoint (`A1:INDEX(...)`).
+      if (node.as_range_lhs().kind() != parser::NodeKind::Ref || node.as_range_rhs().kind() != parser::NodeKind::Ref) {
+        return true;
+      }
       return has_lazy_only_call(node.as_range_lhs(), registry) || has_lazy_only_call(node.as_range_rhs(), registry);
     case parser::NodeKind::IntersectOp:
       return has_lazy_only_call(node.as_intersect_lhs(), registry) ||
@@ -423,6 +427,66 @@ Value eval_intersect_op(const parser::AstNode& node, Arena& arena, const Functio
   return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
 }
 
+// Resolves a LET initialiser that returns a reference (a reference-returning
+// call, or a `:` over one) to the static `Ref` / `RangeOp` it names, so the
+// binding carries that rectangle rather than the call. Returns nullptr for
+// any other shape or when the call picks a non-reference (`INDEX({1,2},1)`).
+const parser::AstNode* resolve_let_reference(const parser::AstNode& expr, Arena& arena,
+                                             const FunctionRegistry& registry, const EvalContext& ctx) {
+  if (expr.kind() == parser::NodeKind::Call) {
+    const NameEnv* env = ctx.name_env();
+    if (!is_reference_call_name(expr.as_call_name()) ||
+        (env != nullptr && env->lookup(expr.as_call_name()) != nullptr)) {
+      return nullptr;
+    }
+  } else if (expr.kind() == parser::NodeKind::RangeOp) {
+    parser::Reference lhs{};
+    parser::Reference rhs{};
+    if (declared_rect_endpoint_pair(expr, &lhs, &rhs)) {
+      return nullptr;
+    }
+  } else {
+    return nullptr;
+  }
+  std::string_view sheet;
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t bottom = 0;
+  std::uint32_t right = 0;
+  ErrorCode err = ErrorCode::Value;
+  if (!resolve_reference_rect(expr, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
+    return nullptr;
+  }
+  parser::Reference first{};
+  parser::Reference last{};
+  first.sheet = sheet;
+  last.sheet = sheet;
+  if (top == 0U && bottom == Sheet::kMaxRows - 1U) {
+    first.is_full_col = true;
+    last.is_full_col = true;
+    first.col = left;
+    last.col = right;
+  } else if (left == 0U && right == Sheet::kMaxCols - 1U) {
+    first.is_full_row = true;
+    last.is_full_row = true;
+    first.row = top;
+    last.row = bottom;
+  } else {
+    first.row = top;
+    first.col = left;
+    last.row = bottom;
+    last.col = right;
+  }
+  // Always a `RangeOp`, even for one cell (`D1:D1`): a bare `Ref` binding is
+  // the scalar-provenance shape, and a reference-returning call is not.
+  parser::AstNode* lhs = parser::make_ref(arena, first);
+  parser::AstNode* rhs = parser::make_ref(arena, last);
+  if (lhs == nullptr || rhs == nullptr) {
+    return nullptr;
+  }
+  return parser::make_range_op(arena, lhs, rhs);
+}
+
 }  // namespace
 
 // Public entry point declared in `eval/tree_walker.h`. Routes through
@@ -693,6 +757,15 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       for (std::uint32_t i = 0; i < count; ++i) {
         const parser::AstNode& expr_node = node.as_let_binding_expr(i);
         const EvalContext inner_ctx = ctx.with_name_env(&env);
+        // A reference-returning initialiser binds the rectangle it resolves
+        // to, resolved once, so every consumer of the name (ROW, CELL, a `:`
+        // endpoint, SUM) sees a plain reference rather than re-running the call.
+        const parser::AstNode* resolved_ref = resolve_let_reference(expr_node, arena, registry, inner_ctx);
+        if (resolved_ref != nullptr) {
+          const Value v = eval_node(*resolved_ref, arena, registry, inner_ctx);
+          env = env.extend(node.as_let_binding_name(i), v, resolved_ref, arena);
+          continue;
+        }
         const Value v = eval_node(expr_node, arena, registry, inner_ctx);
         // Record the AST source for reference-shaped bindings: a bare
         // `Ref` (`=LET(r, A5, ROW(r))`), a `RangeOp`, an `ArrayLiteral`,

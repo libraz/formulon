@@ -130,6 +130,18 @@ TEST(BuiltinsRowColumnArray, StandaloneColumnOverRangeSpills) {
   EXPECT_DOUBLE_EQ(v.as_array()->cells[4].as_number(), 5.0);
 }
 
+TEST(BuiltinsRowColumnArray, RowOverRangeWithComputedEndpoint) {
+  // `A1:INDEX(A1:A10,3)` is the reference A1:A3 once INDEX resolves.
+  Workbook wb = Workbook::create();
+  const Value v = EvalIn("=ROW(A1:INDEX(A1:A10,3))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[r].as_number(), static_cast<double>(r + 1U));
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

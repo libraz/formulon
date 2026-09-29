@@ -21,6 +21,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/styles_reader.h"
@@ -482,9 +483,11 @@ bool resolve_topleft_or_formula_cell(const parser::AstNode& call, Arena& arena, 
     *out_sheet = std::string_view{};
     return true;
   }
-  // Two-argument form: extract from the supplied reference AST.
+  // Two-argument form: extract from the supplied reference AST, looking
+  // through a LET binding to the reference it names.
   Value err = Value::blank();
-  if (!extract_topleft_ref(call.as_call_arg(1), arena, registry, ctx, out_row, out_col, out_sheet, &err)) {
+  if (!extract_topleft_ref(resolve_name_ast(call.as_call_arg(1), ctx.name_env()), arena, registry, ctx, out_row,
+                           out_col, out_sheet, &err)) {
     *out_result = err;
     return false;
   }

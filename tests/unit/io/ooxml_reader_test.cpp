@@ -137,8 +137,9 @@ TEST(OoxmlReader, MultiMillionCellRangeLoadsWithoutMaterialisingItsCells) {
   // so a load registers dependencies exactly like an interactive edit does.
   // A two-column, million-row reference is the shape whose per-cell graph
   // would be two million permanently resident nodes; registered as one
-  // compact rectangle it contributes none, which is what keeps the loaded
-  // workbook's retained heap independent of the referenced area.
+  // compact rectangle it contributes no cell node beyond the formula itself,
+  // which is what keeps the loaded workbook's retained heap independent of
+  // the referenced area.
   Workbook src = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0U, 0U, 3U, "=SUM(A1:B1000000)")));
   const std::vector<std::uint8_t> bytes = SaveOrDie(src);
@@ -149,7 +150,7 @@ TEST(OoxmlReader, MultiMillionCellRangeLoadsWithoutMaterialisingItsCells) {
   const Cell* d1 = wb.sheet(0).cell_at(0U, 3U);
   ASSERT_NE(d1, nullptr);
   EXPECT_EQ(d1->formula_text, "=SUM(A1:B1000000)");
-  EXPECT_EQ(wb.recalc_engine().dep_graph().node_count(), 0U);
+  EXPECT_EQ(wb.recalc_engine().dep_graph().node_count(), 1U);
 }
 
 TEST(OoxmlReader, JapaneseSheetNameSurvivesRoundTrip) {

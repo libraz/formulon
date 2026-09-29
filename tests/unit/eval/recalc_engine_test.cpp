@@ -32,6 +32,23 @@ Value CellValue(const Workbook& wb, std::size_t sheet_index, std::uint32_t row, 
   return Value::blank();
 }
 
+// Whether `owner` reads `target` directly or through the virtual node of a
+// compact rectangle it watches.
+bool ReadsThroughGraph(const DepGraph& graph, CellNodeId owner, CellNodeId target) {
+  for (const CellNodeId dependency : graph.dependencies_of(owner)) {
+    if (dependency == target) {
+      return true;
+    }
+    if (is_range_node(dependency)) {
+      const auto inner = graph.dependencies_of(dependency);
+      if (std::find(inner.begin(), inner.end(), target) != inner.end()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 TEST(RecalcEngine, SimpleLinearChainEvaluatesInOrder) {
   Workbook wb = Workbook::create();
   // A1 = 1, A2 = =A1+1. After recalc, A2 should hold 2.
@@ -121,8 +138,7 @@ void AssertWholeColumnOrdering(bool aggregate_first) {
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 11.0);
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 11.0);
 
-  const auto dependencies = wb.recalc_engine().dep_graph().dependencies_of(CellNodeId{0U, 0U, 1U});
-  EXPECT_NE(std::find(dependencies.begin(), dependencies.end(), CellNodeId{0U, 0U, 0U}), dependencies.end());
+  EXPECT_TRUE(ReadsThroughGraph(wb.recalc_engine().dep_graph(), CellNodeId{0U, 0U, 1U}, CellNodeId{0U, 0U, 0U}));
 
   // One pass must refresh A1 before B1 reads it; a missing ordering edge
   // leaves B1 on the previous value for a whole recalc.
@@ -192,8 +208,7 @@ void AssertLargeRangeOrdering(bool aggregate_first) {
 
   // The ordering edge exists in the graph even though the rectangle's cells
   // do not: Tarjan needs it to refresh A5001 before B1 in one pass.
-  const auto dependencies = wb.recalc_engine().dep_graph().dependencies_of(CellNodeId{0U, 0U, 1U});
-  EXPECT_NE(std::find(dependencies.begin(), dependencies.end(), CellNodeId{0U, 5000U, 0U}), dependencies.end());
+  EXPECT_TRUE(ReadsThroughGraph(wb.recalc_engine().dep_graph(), CellNodeId{0U, 0U, 1U}, CellNodeId{0U, 5000U, 0U}));
 
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(20.0))));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
@@ -248,13 +263,14 @@ TEST(RecalcEngine, LargeRangeGraphFootprintIsIndependentOfArea) {
   const std::size_t before = wb.recalc_engine().dep_graph().node_count();
 
   // 120,000 cells, none of which may become a graph node: registration cost
-  // is bounded by the formula text plus one rectangle.
+  // is bounded by the formula text plus one rectangle. Only the watcher
+  // itself is counted; the rectangle's virtual node is not a cell.
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=SUM(A1:B60000)")));  // D1
-  EXPECT_EQ(wb.recalc_engine().dep_graph().node_count(), before);
+  EXPECT_EQ(wb.recalc_engine().dep_graph().node_count(), before + 1U);
 
   ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 3.0);
-  EXPECT_EQ(wb.recalc_engine().dep_graph().node_count(), before);
+  EXPECT_EQ(wb.recalc_engine().dep_graph().node_count(), before + 1U);
 }
 
 void AssertPhantomOnlySpillSequence(Workbook& wb, bool producer_first) {
@@ -505,6 +521,110 @@ TEST(RecalcEngine, FormulaUpdateRewritesDependencies) {
     ASSERT_EQ(deps.size(), 1u);
     EXPECT_EQ(deps[0], (CellNodeId{0U, 0U, 1U}));  // B1 == col 1
   }
+}
+
+// `A1:INDEX(C1:C10,3)` reads the box A1:C3, so column B -- named nowhere in
+// the formula text -- must still reach D1.
+TEST(RecalcEngine, DynamicRangeEndpointTracksCellsInsideTheBox) {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    for (std::uint32_t c = 0; c < 3U; ++c) {
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, r, c, Value::number(1.0))));
+    }
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=SUM(A1:INDEX(C1:C10,3))")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 9.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(11.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 19.0);
+
+  // A formula inside the box is ordered before D1 within one pass.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=E1*2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 4U, Value::number(5.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 18.0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 4U, Value::number(50.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 1U).as_number(), 100.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 108.0);
+}
+
+// Measured on Excel 365 (Mac 16.113.2, ja-JP): none of these is circular.
+TEST(RecalcEngine, PositionOfOwnCellIsNotACycle) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=ROWS(A:A)")));      // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=ROWS(A:A)")));      // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 4U, 0U, "=ROWS($A$1:A5)")));  // A5
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=ROW(B1)")));        // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=COLUMN(C1)")));     // C1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 5U, "=ISREF(F1)")));      // F1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 6U, "=AREAS(G1:G5)")));   // G3
+  auto stats = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cycle_cells, 0U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 1048576.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 1048576.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 4U, 0U).as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 3.0);
+  const Value isref = CellValue(wb, 0U, 0U, 5U);
+  ASSERT_TRUE(isref.is_boolean());
+  EXPECT_TRUE(isref.as_boolean());
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 2U, 6U).as_number(), 1.0);
+}
+
+// A compact rectangle that covers its own watcher reads the watcher, exactly
+// as the flattened small-rectangle path does. Excel 365 (Mac 16.113.2,
+// ja-JP) flags E5 as the circular reference.
+TEST(RecalcEngine, CompactRangeCoveringItsOwnerIsACycle) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 4U, Value::number(1.0))));  // E1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 4U, 4U, "=SUM(E1:E2000)")));  // E5
+  auto stats = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cycle_cells, 1U);
+}
+
+// N watchers of one rectangle over M formulas inside it cost N + M edges
+// through the rectangle's shared node, not N x M.
+TEST(RecalcEngine, SharedCompactRangeKeepsEdgesLinear) {
+  constexpr std::uint32_t kRows = 50U;
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(1.0))));  // D1
+  for (std::uint32_t r = 0; r < kRows; ++r) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, r, 0U, "=$D$1")));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, r, 1U, "=COUNTIF(A:A,1)")));
+  }
+  const DepGraph& graph = wb.recalc_engine().dep_graph();
+  // Each A cell reads D1, each B cell reads the shared node, and the node
+  // reads each A cell.
+  EXPECT_EQ(graph.source_edge_count(DepGraph::DependencySource::kAuthored), 3U * kRows);
+  EXPECT_EQ(graph.node_count(), 2U * kRows + 1U);
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, kRows - 1U, 1U).as_number(), static_cast<double>(kRows));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, kRows - 1U, 1U).as_number(), 0.0);
+}
+
+TEST(RecalcEngine, LastWatcherReleasesTheRangeNode) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=1")));         // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A:A)")));  // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=SUM(A:A)")));  // B2
+  const DepGraph& graph = wb.recalc_engine().dep_graph();
+  ASSERT_EQ(graph.dependents_of(CellNodeId{0U, 0U, 0U}).size(), 1U);
+
+  // One watcher left keeps the node; the last one retires it.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(5.0))));
+  EXPECT_EQ(graph.dependents_of(CellNodeId{0U, 0U, 0U}).size(), 1U);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(6.0))));
+  EXPECT_TRUE(graph.dependents_of(CellNodeId{0U, 0U, 0U}).empty());
+  EXPECT_TRUE(graph.empty());
 }
 
 // ---------------------------------------------------------------------------

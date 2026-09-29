@@ -58,23 +58,26 @@ void RangeDepIndex::release_range(std::uint32_t range_id) {
   --live_range_count_;
 }
 
-void RangeDepIndex::add(CellNodeId owner, const CellRangeDependency& range) {
+RangeDepIndex::AddResult RangeDepIndex::add(CellNodeId owner, const CellRangeDependency& range) {
+  const bool is_new = range_ids_.count(range) == 0U;
   const std::uint32_t range_id = intern_range(range);
   std::vector<OwnedRange>& owned = ranges_by_owner_[owner];
   for (const OwnedRange& existing : owned) {
     if (existing.range_id == range_id) {
-      return;  // Already watching this rectangle.
+      return AddResult{range_id, is_new};  // Already watching this rectangle.
     }
   }
   std::vector<CellNodeId>& owners = ranges_[range_id].owners;
   owned.push_back(OwnedRange{range_id, static_cast<std::uint32_t>(owners.size())});
   owners.push_back(owner);
+  return AddResult{range_id, is_new};
 }
 
-void RangeDepIndex::erase_owner(CellNodeId owner) {
+std::vector<std::uint32_t> RangeDepIndex::erase_owner(CellNodeId owner) {
+  std::vector<std::uint32_t> released;
   const auto it = ranges_by_owner_.find(owner);
   if (it == ranges_by_owner_.end()) {
-    return;
+    return released;
   }
 
   for (const OwnedRange& owned : it->second) {
@@ -101,9 +104,11 @@ void RangeDepIndex::erase_owner(CellNodeId owner) {
     owners.pop_back();
     if (owners.empty()) {
       release_range(owned.range_id);
+      released.push_back(owned.range_id);
     }
   }
   ranges_by_owner_.erase(it);
+  return released;
 }
 
 void RangeDepIndex::clear() noexcept {

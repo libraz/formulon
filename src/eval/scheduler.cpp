@@ -251,15 +251,16 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       sheet.set_cell_cached_value(c.row, c.col, v);
     };
 
+    const std::vector<CellNodeId> cells = cells_of_component(component);
     const IterativeOutcome outcome =
-        run_iterative_solve(component, iter_opts, evaluate_one, commit, progress_cb, progress_user_data);
+        run_iterative_solve(cells, iter_opts, evaluate_one, commit, progress_cb, progress_user_data);
     if (arena.exhausted()) {
       out.arena_exhausted = true;
       return out;
     }
     if (outcome.converged) {
       ++out.cycle_recoveries;
-      out.cells_evaluated += component.size();
+      out.cells_evaluated += cells.size();
     }
     return out;
   }

@@ -155,9 +155,10 @@ struct ExtractedDeps {
 /// `range_deps` without enumerating its cells, so registration memory is
 /// bounded by the formula text rather than by the referenced area. The same
 /// ceiling applies to structured (table) references and to the per-sheet
-/// rectangle of a 3-D reference. Endpoints that are not plain `Ref` nodes
-/// (e.g. OFFSET / INDIRECT call results) are ignored; dynamic ranges are out
-/// of scope for static dependency analysis.
+/// rectangle of a 3-D reference. A `:` whose endpoint is a reference-returning
+/// call registers the bounding box of every reference that call could return
+/// (`A1:INDEX(C1:C10,n)` registers A1:C10); OFFSET / INDIRECT endpoints have
+/// no static footprint and are covered by `has_dynamic_reference` instead.
 ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sheet_id, const Workbook& workbook);
 
 }  // namespace eval

@@ -12,8 +12,10 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "test_eval_helpers.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -224,6 +226,106 @@ TEST(EvalLet, ForwardReferenceBeforeBindingIsNameError) {
   const Value v = EvalSource("=LET(x, y, y, 2, x)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+// ---------------------------------------------------------------------------
+// Reference-returning initialisers
+// ---------------------------------------------------------------------------
+
+// A1:A10 = 1..10, B1:B10 = 10..100, C1:C10 = 100..1000, D1 = "abc".
+Workbook ReferenceFixture() {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 10; ++r) {
+    const double n = static_cast<double>(r + 1U);
+    wb.sheet(0).set_cell_value(r, 0, Value::number(n));
+    wb.sheet(0).set_cell_value(r, 1, Value::number(n * 10.0));
+    wb.sheet(0).set_cell_value(r, 2, Value::number(n * 100.0));
+  }
+  wb.sheet(0).set_cell_value(0, 3, Value::text("abc"));
+  return wb;
+}
+
+Value EvalRef(std::string_view src) {
+  const Workbook wb = ReferenceFixture();
+  return formulon::test::EvalSourceAt(src, wb, wb.sheet(0), 19, 7);
+}
+
+void ExpectNumber(std::string_view src, double expected) {
+  const Value v = EvalRef(src);
+  ASSERT_TRUE(v.is_number()) << src;
+  EXPECT_EQ(v.as_number(), expected) << src;
+}
+
+TEST(EvalLetReference, RowOfIndexBinding) {
+  ExpectNumber("=LET(r,INDEX(A1:A10,3),ROW(r))", 3.0);
+}
+
+TEST(EvalLetReference, ColumnOfIndexColumnBinding) {
+  ExpectNumber("=LET(r,INDEX(A1:B10,0,2),COLUMN(r))", 2.0);
+}
+
+TEST(EvalLetReference, RowsAndColumnsOfIndexColumnBinding) {
+  ExpectNumber("=LET(r,INDEX(A1:B10,0,2),ROWS(r))", 10.0);
+  ExpectNumber("=LET(r,INDEX(A1:B10,0,2),COLUMNS(r))", 1.0);
+}
+
+TEST(EvalLetReference, IsrefAndAreasOfIndexBinding) {
+  const Value isref = EvalRef("=LET(r,INDEX(A1:A10,3),ISREF(r))");
+  ASSERT_TRUE(isref.is_boolean());
+  EXPECT_TRUE(isref.as_boolean());
+  ExpectNumber("=LET(r,INDEX(A1:A10,3),AREAS(r))", 1.0);
+}
+
+TEST(EvalLetReference, CellAddressOfXlookupBinding) {
+  const Value v = EvalRef("=LET(r,XLOOKUP(3,A1:A10,B1:B10),CELL(\"address\",r))");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "$B$3");
+}
+
+TEST(EvalLetReference, RangeEndpointFromIndexBinding) {
+  ExpectNumber("=LET(r,INDEX(A1:A10,3),SUM(A1:r))", 6.0);
+}
+
+TEST(EvalLetReference, IfsAndSwitchBindings) {
+  ExpectNumber("=LET(r,IFS(TRUE,B5),ROW(r))", 5.0);
+  ExpectNumber("=LET(r,SWITCH(1,1,C3),COLUMN(r))", 3.0);
+}
+
+TEST(EvalLetReference, ShadowedBindingResolvesAgainstOuterScope) {
+  ExpectNumber("=LET(x,A1:A10,LET(x,INDEX(x,3),ROW(x)))", 3.0);
+}
+
+TEST(EvalLetReference, IndexOverArrayLiteralIsNotReference) {
+  const Value v = EvalRef("=LET(r,INDEX({1,2,3},2),ISREF(r))");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(EvalLetReference, CellRowOfPlainRefBinding) {
+  ExpectNumber("=LET(r,A5,CELL(\"row\",r))", 5.0);
+}
+
+TEST(EvalLetReference, MultiCellReferenceCallBindingsAggregate) {
+  ExpectNumber("=LET(r,OFFSET(A1,0,0,3,1),SUM(r))", 6.0);
+  ExpectNumber("=LET(r,CHOOSE(2,A1:A2,A1:A3),SUM(r))", 6.0);
+  ExpectNumber("=LET(r,IF(TRUE,A1:A4,B1:B4),SUM(r))", 10.0);
+  ExpectNumber("=LET(r,INDIRECT(\"A1:A5\"),SUM(r))", 15.0);
+}
+
+TEST(EvalLetReference, SingleCellTextBindingAggregatesAsReference) {
+  // A one-cell reference returned by a call stays a reference, so SUM skips
+  // the text in it exactly as `SUM(OFFSET(D1,0,0))` does.
+  ExpectNumber("=SUM(OFFSET(D1,0,0))", 0.0);
+  ExpectNumber("=LET(r,OFFSET(D1,0,0),SUM(r))", 0.0);
+  ExpectNumber("=LET(r,CHOOSE(1,D1),SUM(r))", 0.0);
+  ExpectNumber("=LET(r,IF(TRUE,D1),SUM(r))", 0.0);
+  ExpectNumber("=LET(r,INDIRECT(\"D1\"),SUM(r))", 0.0);
+  ExpectNumber("=LET(r,INDEX(D1:D2,1),SUM(r))", 0.0);
+}
+
+TEST(EvalLetReference, SingleCellBindingValueIsScalar) {
+  ExpectNumber("=LET(r,INDEX(A1:A10,3),r+1)", 4.0);
+  ExpectNumber("=LET(r,OFFSET(A1,4,0),r*2)", 10.0);
 }
 
 }  // namespace

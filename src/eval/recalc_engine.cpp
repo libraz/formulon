@@ -58,6 +58,13 @@ void mark_spill_release_wave(const RecalcEngine::LockedMutator& mutator, const s
   }
 }
 
+// Drops the virtual node of every compact rectangle that lost its last watcher.
+void remove_range_nodes(DepGraph& graph, const std::vector<std::uint32_t>& released_range_ids) {
+  for (const std::uint32_t range_id : released_range_ids) {
+    graph.remove_node(range_node(range_id));
+  }
+}
+
 bool spill_intersects_range(const SpillFootprint& footprint, const CellRangeDependency& range) noexcept {
   // Both records use inclusive endpoints / positive dimensions. Convert to
   // half-open uint64 intervals before comparing so a max-grid coordinate or
@@ -257,7 +264,7 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   // Drop the cell's previous outgoing edges so re-registration is a clean
   // rewrite (the new dependency set may differ from the old one).
   graph_.clear_dependencies_of(cell);
-  range_dependencies_.erase_owner(cell);
+  remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
   three_d_span_dependencies_.erase(
       std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
                      [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
@@ -274,7 +281,14 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
     three_d_span_dependencies_.push_back(RegisteredThreeDSpan{cell, span});
   }
   for (const CellRangeDependency& range : deps.range_deps) {
-    range_dependencies_.add(cell, range);
+    // The watcher reads the rectangle's virtual node, which every watcher of
+    // the same rectangle shares.
+    const RangeDepIndex::AddResult added = range_dependencies_.add(cell, range);
+    const CellNodeId node = range_node(added.range_id);
+    graph_.add_dependency(cell, node);
+    if (!added.is_new) {
+      continue;
+    }
 
     // Preserve evaluation order for formulas already inside the range. The
     // compact range table handles literal writes (including cells created in
@@ -283,26 +297,21 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
     //
     // The sheet's formula-cell index answers that directly, so the cost is
     // the formula cells inside the rectangle — never its area, and never the
-    // literal content a whole-column reference spans.
+    // literal content a whole-column reference spans. A watcher inside its
+    // own rectangle reads itself, which is a cycle as in the flattened path.
     const Sheet& sheet = workbook.sheet(range.sheet_id);
     for (const CellAddress source :
          sheet.formula_cells_in(range.row_first, range.col_first, range.row_last, range.col_last)) {
-      const CellNodeId source_node{range.sheet_id, source.row, source.col};
-      if (source_node != cell) {
-        graph_.add_dependency(cell, source_node);
-      }
+      graph_.add_dependency(node, CellNodeId{range.sheet_id, source.row, source.col});
     }
   }
 
   // A formula added after an aggregate must also become an explicit graph
-  // dependency of every existing range watcher that contains it. Otherwise
-  // the watcher would be dirtied, but Tarjan would have no ordering edge to
+  // dependency of every existing rectangle that contains it. Otherwise the
+  // watcher would be dirtied, but Tarjan would have no ordering edge to
   // ensure the new formula's cached value is refreshed first.
-  range_dependencies_.for_each_owner_covering(cell, [this, cell](CellNodeId owner) {
-    if (owner != cell) {
-      graph_.add_dependency(owner, cell);
-    }
-  });
+  range_dependencies_.for_each_range_covering(
+      cell, [this, cell](std::uint32_t range_id) { graph_.add_dependency(range_node(range_id), cell); });
   if (deps.is_volatile) {
     volatiles_.register_cell(cell, deps.has_dynamic_reference ? VolatileKind::kDynamicReference : VolatileKind::kValue);
   }
@@ -324,7 +333,7 @@ void RecalcEngine::unregister_formula_locked(CellNodeId cell) {
   }
   mark_range_dependents_dirty_locked(cell);
   graph_.remove_node(cell);
-  range_dependencies_.erase_owner(cell);
+  remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
   three_d_span_dependencies_.erase(
       std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
                      [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
@@ -340,7 +349,7 @@ void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
 
 void RecalcEngine::clear_cell_dependencies_locked(CellNodeId cell) {
   graph_.clear_dependencies_of(cell);
-  range_dependencies_.erase_owner(cell);
+  remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
   three_d_span_dependencies_.erase(
       std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
                      [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
@@ -561,8 +570,9 @@ recalc_next_wave:
         sheet.set_cell_cached_value(c.row, c.col, v);
       };
 
+      const std::vector<CellNodeId> cells = cells_of_component(component);
       const IterativeOutcome outcome =
-          run_iterative_solve(component, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
+          run_iterative_solve(cells, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
       if (arena_->exhausted()) {
         return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during iterative recalc");
       }
@@ -570,11 +580,8 @@ recalc_next_wave:
         // Solver wrote the converged values into the cell store; count
         // each member as evaluated (singleton-style accounting) plus
         // tagged as iterative.
-        for (CellNodeId c : component) {
-          (void)c;
-          ++stats.cells_evaluated;
-          ++stats.iterative_cells;
-        }
+        stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
+        stats.iterative_cells += static_cast<std::uint32_t>(cells.size());
       } else {
         // Iteration-limit exhaustion or callback-driven abort leaves the
         // last-iteration values in place. The user-visible failure mode is
@@ -582,10 +589,7 @@ recalc_next_wave:
         // count the members in `cycle_cells` to mirror the
         // disabled-iterative-calc accounting.
         // A later pass can continue from the retained approximation.
-        for (CellNodeId c : component) {
-          (void)c;
-          ++stats.cycle_cells;
-        }
+        stats.cycle_cells += static_cast<std::uint32_t>(cells.size());
       }
       continue;
     }
@@ -1028,24 +1032,19 @@ partial_recalc_next_wave:
         sheet.set_cell_cached_value(c.row, c.col, v);
       };
 
+      const std::vector<CellNodeId> cells = cells_of_component(component);
       const IterativeOutcome outcome =
-          run_iterative_solve(component, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
+          run_iterative_solve(cells, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
       if (arena_->exhausted()) {
         return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
       }
       if (outcome.converged) {
-        for (CellNodeId c : component) {
-          (void)c;
-          ++stats.cells_evaluated;
-          ++stats.iterative_cells;
-        }
+        stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
+        stats.iterative_cells += static_cast<std::uint32_t>(cells.size());
       } else {
         // A finite iteration budget leaves the solver's final approximation
         // in place so a later viewport/full pass can resume from it.
-        for (CellNodeId c : component) {
-          (void)c;
-          ++stats.cycle_cells;
-        }
+        stats.cycle_cells += static_cast<std::uint32_t>(cells.size());
       }
       continue;
     }

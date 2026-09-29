@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/dep_graph.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
@@ -64,8 +65,10 @@ TEST(RecalcScaleSlow, LoadingWholeColumnWatchersStaysLinear) {
     for (std::uint32_t row = 0; row < kRows; ++row) {
       ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, row, 0U, Value::number(row + 1.0))));
     }
+    // `ROWS(A:A)` alone reads no values and registers nothing; the untaken
+    // IF branch keeps a genuine whole-column watch at O(1) evaluation cost.
     for (std::uint32_t row = 0; row < kRows; ++row) {
-      ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 1U, "=ROWS(A:A)")));
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 1U, "=IF(FALSE,A:A,ROWS(A:A))")));
     }
     auto written = io::write_ooxml(wb);
     ASSERT_TRUE(static_cast<bool>(written));
@@ -84,6 +87,61 @@ TEST(RecalcScaleSlow, LoadingWholeColumnWatchersStaysLinear) {
   ASSERT_NE(last, nullptr);
   ASSERT_TRUE(last->cached_value.is_number());
   EXPECT_DOUBLE_EQ(last->cached_value.as_number(), 1048576.0);
+}
+
+// Every formula in column A measures column A itself. The measurement reads
+// no values, so the column neither forms a cycle nor pays for N x N edges.
+TEST(RecalcScaleSlow, SelfWatchingWholeColumnStaysLinear) {
+  constexpr std::uint32_t kRows = 40000U;
+  std::vector<std::uint8_t> bytes;
+  {
+    Workbook wb = Workbook::create();
+    for (std::uint32_t row = 0; row < kRows; ++row) {
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 0U, "=ROWS(A:A)")));
+    }
+    auto written = io::write_ooxml(wb);
+    ASSERT_TRUE(static_cast<bool>(written));
+    bytes = std::move(written.value());
+  }
+
+  const auto started = std::chrono::steady_clock::now();
+  auto loaded = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(loaded));
+  Workbook& wb = loaded.value().workbook;
+  auto stats = wb.recalc(eval::default_registry());
+  const auto elapsed = std::chrono::steady_clock::now() - started;
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cycle_cells, 0U);
+  EXPECT_LT(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count(), 10);
+  const Cell* last = wb.sheet(0U).cell_at(kRows - 1U, 0U);
+  ASSERT_NE(last, nullptr);
+  ASSERT_TRUE(last->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(last->cached_value.as_number(), 1048576.0);
+}
+
+// Twenty thousand watchers of one whole column over twenty thousand formulas
+// inside it. Interleaving the two columns makes every new formula land under
+// every watcher registered so far; the shared range node keeps that at one
+// edge per formula instead of one per (watcher, formula) pair.
+TEST(RecalcScaleSlow, WatchersOverFormulaColumnStayLinear) {
+  constexpr std::uint32_t kRows = 20000U;
+  Workbook wb = Workbook::create();
+  const auto started = std::chrono::steady_clock::now();
+  for (std::uint32_t row = 0; row < kRows; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 0U, "=ROW()")));
+    // The untaken branch registers the column watch at O(1) evaluation cost.
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 1U, "=IF(FALSE,A:A,ROW())")));
+  }
+  auto stats = wb.recalc(eval::default_registry());
+  const auto elapsed = std::chrono::steady_clock::now() - started;
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cycle_cells, 0U);
+  EXPECT_EQ(wb.recalc_engine().dep_graph().source_edge_count(eval::DepGraph::DependencySource::kAuthored), 2U * kRows);
+  EXPECT_LT(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count(), 10);
+  const Cell* last = wb.sheet(0U).cell_at(kRows - 1U, 1U);
+  ASSERT_NE(last, nullptr);
+  ASSERT_TRUE(last->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(last->cached_value.as_number(), static_cast<double>(kRows));
 }
 
 }  // namespace

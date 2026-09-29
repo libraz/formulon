@@ -238,24 +238,55 @@ using ReferenceCallResolver = bool (*)(const parser::AstNode&, Arena&, const Fun
                                        std::string_view*, std::uint32_t*, std::uint32_t*, std::uint32_t*,
                                        std::uint32_t*, bool*, ErrorCode*);
 
+// Which argument slots can hand their reference through as the call's result.
+using ReferenceCarrier = bool (*)(std::uint32_t index, std::uint32_t arity);
+
 struct ReferenceCall {
   std::string_view name;
   ReferenceCallResolver resolve;
+  ReferenceCarrier carries;
 };
+
+// INDIRECT and OFFSET build their reference at evaluation time; no argument
+// is the reference they return.
+constexpr bool carries_none(std::uint32_t /*index*/, std::uint32_t /*arity*/) {
+  return false;
+}
+constexpr bool carries_first(std::uint32_t index, std::uint32_t /*arity*/) {
+  return index == 0U;
+}
+constexpr bool carries_if_branch(std::uint32_t index, std::uint32_t /*arity*/) {
+  return index == 1U || index == 2U;
+}
+constexpr bool carries_choose_value(std::uint32_t index, std::uint32_t /*arity*/) {
+  return index >= 1U;
+}
+constexpr bool carries_ifs_value(std::uint32_t index, std::uint32_t /*arity*/) {
+  return index % 2U == 1U;
+}
+// SWITCH(expr, value1, result1, ..., [default]): results sit at even indices
+// from 2, and an even arity leaves a trailing default.
+constexpr bool carries_switch_result(std::uint32_t index, std::uint32_t arity) {
+  return (index >= 2U && index % 2U == 0U) || (arity % 2U == 0U && index + 1U == arity);
+}
+// XLOOKUP returns a slice of return_array, or if_not_found when nothing matches.
+constexpr bool carries_xlookup_result(std::uint32_t index, std::uint32_t /*arity*/) {
+  return index == 2U || index == 3U;
+}
 
 // Every builtin whose result can be a reference. This table is the one list
 // the engine keeps: `is_reference_call_name` answers from it and
 // `resolve_reference_call` dispatches through it, so a name cannot be
 // reference-returning to one consumer and not to another.
 constexpr ReferenceCall kReferenceCalls[] = {
-    {"INDIRECT", &resolve_indirect_call},
-    {"OFFSET", &resolve_offset_call},
-    {"IF", &resolve_if_call},
-    {"CHOOSE", &resolve_choose_call},
-    {"IFS", &resolve_ifs_call},
-    {"SWITCH", &resolve_switch_call},
-    {"INDEX", &resolve_lookup_call<&resolve_index_reference>},
-    {"XLOOKUP", &resolve_lookup_call<&resolve_xlookup_reference>},
+    {"INDIRECT", &resolve_indirect_call, &carries_none},
+    {"OFFSET", &resolve_offset_call, &carries_none},
+    {"IF", &resolve_if_call, &carries_if_branch},
+    {"CHOOSE", &resolve_choose_call, &carries_choose_value},
+    {"IFS", &resolve_ifs_call, &carries_ifs_value},
+    {"SWITCH", &resolve_switch_call, &carries_switch_result},
+    {"INDEX", &resolve_lookup_call<&resolve_index_reference>, &carries_first},
+    {"XLOOKUP", &resolve_lookup_call<&resolve_xlookup_reference>, &carries_xlookup_result},
 };
 
 const ReferenceCall* find_reference_call(std::string_view name) noexcept {
@@ -272,6 +303,11 @@ const ReferenceCall* find_reference_call(std::string_view name) noexcept {
 
 bool is_reference_call_name(std::string_view name) noexcept {
   return find_reference_call(name) != nullptr;
+}
+
+bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_index, std::uint32_t arity) noexcept {
+  const ReferenceCall* entry = find_reference_call(call_name);
+  return entry != nullptr && arg_index < arity && entry->carries(arg_index, arity);
 }
 
 bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -307,10 +343,12 @@ bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const Func
 
 }  // namespace
 
-bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                             ErrorCode* out_err) {
+  // A LET-bound endpoint (`A1:r`) stands for the reference it was bound to.
+  const parser::AstNode& node = resolve_name_ast(endpoint, ctx.name_env());
   if (node.kind() == parser::NodeKind::Ref) {
     const parser::Reference& r = node.as_ref();
     // Whole-column / whole-row refs cannot anchor an endpoint composition

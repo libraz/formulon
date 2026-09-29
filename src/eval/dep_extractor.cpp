@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -15,7 +17,9 @@
 #include "eval/defined_name_resolve.h"
 #include "eval/dep_graph.h"
 #include "eval/formula_text_utils.h"
+#include "eval/range_resolvers.h"
 #include "eval/structured_ref.h"
+#include "eval/tree_walker/dispatch.h"
 #include "eval/volatile_tracker.h"
 #include "io/defined_names.h"
 #include "io/tables_reader.h"
@@ -35,6 +39,16 @@
 namespace formulon::eval {
 namespace {
 
+// The rectangle a reference-valued expression can name, before evaluation
+// picks which of its candidate references it returns. `sheet_explicit`
+// records whether a qualifier fixed the sheet, since a bare `:` endpoint
+// inherits the other endpoint's sheet.
+struct Footprint {
+  std::uint16_t sheet_id = 0;
+  bool sheet_explicit = false;
+  DeclaredRect rect;
+};
+
 // Walker state: collects results into `out` and tracks already-emitted cells
 // in `seen` so the dedup runs in one O(N) pass. `name_stack` holds the
 // definitions currently being expanded so a self-referential or mutually
@@ -46,6 +60,9 @@ struct WalkState {
   struct LexicalBinding {
     std::string name;
     const parser::AstNode* lambda = nullptr;
+    /// The reference a LET initialiser can name; empty for LAMBDA parameters
+    /// and for initialisers that are not references.
+    std::optional<Footprint> footprint;
   };
 
   ExtractedDeps* out;
@@ -139,6 +156,20 @@ void add_three_d_span_dep(WalkState& state, std::size_t sheet_first, std::size_t
   }
 }
 
+// Registers `rect` on `sheet_id`. Every rectangle leaves here as either at
+// most `kMaxMaterializedDependencyCells` per-cell edges or exactly one
+// compact rectangle; no shape registers nothing.
+void emit_rect(WalkState& state, std::uint16_t sheet_id, const DeclaredRect& rect) {
+  const std::uint64_t area = static_cast<std::uint64_t>(rect.rows()) * rect.cols();
+  if (rect.whole_axis || area > kMaxMaterializedDependencyCells) {
+    add_range_dep(state, CellRangeDependency{sheet_id, rect.row_first, rect.row_last, rect.col_first, rect.col_last});
+    return;
+  }
+  for (auto [r, c] : utils::RectRange(rect.row_first, rect.col_first, rect.row_last, rect.col_last)) {
+    add_cell_dep(state, CellNodeId{sheet_id, r, c});
+  }
+}
+
 // Flattens the rectangle [lhs, rhs] into per-cell dependencies. Both
 // endpoints must be plain `Ref` nodes; complex ranges (OFFSET-based,
 // INDIRECT, etc.) are silently ignored — dynamic shapes cannot be statically
@@ -175,25 +206,7 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
     // static extraction simply omits a shape it cannot model safely.
     return;
   }
-  const std::uint32_t r_min = normalized.value().row_first;
-  const std::uint32_t r_max = normalized.value().row_last;
-  const std::uint32_t c_min = normalized.value().col_first;
-  const std::uint32_t c_max = normalized.value().col_last;
-
-  // Every rectangle leaves here as either at most
-  // `kMaxMaterializedDependencyCells` per-cell edges or exactly one compact
-  // rectangle; no shape registers nothing.
-  const std::uint64_t area = static_cast<std::uint64_t>(r_max - r_min + 1U) * (c_max - c_min + 1U);
-  if (normalized.value().whole_axis || area > kMaxMaterializedDependencyCells) {
-    add_range_dep(state, CellRangeDependency{target_sheet_id, r_min, r_max, c_min, c_max});
-    return;
-  }
-
-  for (std::uint32_t r = r_min; r <= r_max; ++r) {
-    for (std::uint32_t c = c_min; c <= c_max; ++c) {
-      add_cell_dep(state, CellNodeId{target_sheet_id, r, c});
-    }
-  }
+  emit_rect(state, target_sheet_id, normalized.value());
 }
 
 // Forward decl for the recursive walker.
@@ -214,7 +227,7 @@ void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state) {
   state.lambda_stack.push_back(&lambda);
   const std::uint32_t param_count = lambda.as_lambda_param_count();
   for (std::uint32_t i = 0; i < param_count; ++i) {
-    state.lexical_stack.push_back({strings::to_ascii_lower(lambda.as_lambda_param(i)), nullptr});
+    state.lexical_stack.push_back({strings::to_ascii_lower(lambda.as_lambda_param(i)), nullptr, std::nullopt});
   }
   walk(lambda.as_lambda_body(), state);
   for (std::uint32_t i = 0; i < param_count; ++i) {
@@ -223,9 +236,8 @@ void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state) {
   state.lambda_stack.pop_back();
 }
 
-// Expands a defined-name reference: parses its formula text in the
-// extractor-local arena and recurses into the resulting AST through the
-// shared `walk()`. Cycles (`Loop = Loop + 1`, `A = B; B = A`) are detected
+// Parses a defined name's formula text in the extractor-local arena and
+// hands the resulting AST to `visit`. Cycles (`Loop = Loop + 1`, `A = B; B = A`) are detected
 // via `state.name_stack`: every definition currently being expanded is
 // pushed before recursion and popped after. A repeated entry
 // causes a silent skip — no volatility flag, no diagnostic — matching the
@@ -234,7 +246,8 @@ void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state) {
 // name's formula are also silently skipped: malformed defined-name
 // formulas exist in the wild and the dep extractor is not the right layer
 // to surface them.
-void expand_defined_name(const io::DefinedName& def, WalkState& state, bool invoked) {
+template <typename Visit>
+void visit_defined_name_body(const io::DefinedName& def, WalkState& state, Visit&& visit) {
   // Cycle detection by definition identity: a mixed-case re-entry
   // (`Foo` -> `=foo+1`) resolves to the same entry, while `Sheet1!X` naming
   // `Sheet2!X` reaches a different one.
@@ -263,29 +276,37 @@ void expand_defined_name(const io::DefinedName& def, WalkState& state, bool invo
   std::vector<WalkState::LexicalBinding> saved_lexical;
   saved_lexical.swap(state.lexical_stack);
   state.name_stack.push_back(&def);
-  if (invoked && root->kind() == parser::NodeKind::Lambda) {
-    // A direct defined-name LAMBDA body is evaluated by a call, so descend
-    // into it with parameter names shadowing workbook names. A bare NameRef
-    // to the same definition remains a lambda value and must not invent
-    // dependencies from its body.
-    walk_invoked_lambda_body(*root, state);
-  } else if (invoked && root->kind() == parser::NodeKind::NameRef) {
-    // Preserve the common alias shape (`Alias = NamedLambda`) without
-    // repeatedly walking the lambda body. Any non-defined alias is handled
-    // by the ordinary NameRef walker and contributes no static deps.
-    const io::DefinedName* aliased = find_name_ref_definition(*root, state);
-    if (aliased != nullptr) {
-      expand_defined_name(*aliased, state, /*invoked=*/true);
-    }
-  } else {
-    walk(*root, state);
-  }
+  visit(*root);
   state.name_stack.pop_back();
   state.lexical_stack.swap(saved_lexical);
 }
 
+// Expands a defined-name reference, recursing into its body through the
+// shared `walk()`.
+void expand_defined_name(const io::DefinedName& def, WalkState& state, bool invoked) {
+  visit_defined_name_body(def, state, [&](const parser::AstNode& root) {
+    if (invoked && root.kind() == parser::NodeKind::Lambda) {
+      // A direct defined-name LAMBDA body is evaluated by a call, so descend
+      // into it with parameter names shadowing workbook names. A bare NameRef
+      // to the same definition remains a lambda value and must not invent
+      // dependencies from its body.
+      walk_invoked_lambda_body(root, state);
+    } else if (invoked && root.kind() == parser::NodeKind::NameRef) {
+      // Preserve the common alias shape (`Alias = NamedLambda`) without
+      // repeatedly walking the lambda body. Any non-defined alias is handled
+      // by the ordinary NameRef walker and contributes no static deps.
+      const io::DefinedName* aliased = find_name_ref_definition(root, state);
+      if (aliased != nullptr) {
+        expand_defined_name(*aliased, state, /*invoked=*/true);
+      }
+    } else {
+      walk(root, state);
+    }
+  });
+}
+
 // Resolves a `StructuredRef` node into a static rectangle on the table's
-// owning sheet and emits one cell dep per cell in the rectangle.
+// owning sheet.
 //
 // Design (pin-the-rect, mirroring `walk_range_op`):
 //   * The bracket payload is captured verbatim by the parser into the
@@ -316,13 +337,14 @@ void expand_defined_name(const io::DefinedName& def, WalkState& state, bool invo
 // volatile. A calculated column's own formula may reference a volatile
 // function, but that volatility lives on the column's home cell and is
 // the dep extractor's concern when *that* cell is registered, not here.
-void walk_structured_ref(const parser::AstNode& node, WalkState& state) {
+bool structured_ref_rect(const parser::AstNode& node, const WalkState& state, std::uint16_t* out_sheet_id,
+                         DeclaredRect* out_rect) {
   const std::string_view table_name = node.as_structured_ref_table();
   const std::string_view payload = node.as_structured_ref_column();
 
   auto sel_or = parse_structured_ref_payload(payload);
   if (!sel_or) {
-    return;  // Malformed payload: silent skip.
+    return false;  // Malformed payload: silent skip.
   }
   StructuredRefSelector sel = std::move(sel_or).value();
   sel.table_name = table_name;
@@ -330,7 +352,7 @@ void walk_structured_ref(const parser::AstNode& node, WalkState& state) {
   // Implicit intersection: row context is the formula cell's row, which
   // is not known here. The evaluator owns this dep at eval time.
   if ((sel.specifiers & StructuredRefSpecifiers::kThisRow) != 0u) {
-    return;
+    return false;
   }
 
   // `resolve_structured_ref` only consults `current_sheet_index` for
@@ -341,7 +363,7 @@ void walk_structured_ref(const parser::AstNode& node, WalkState& state) {
   auto rect_or =
       resolve_structured_ref(sel, *state.workbook, /*current_sheet_index=*/state.current_sheet_id, /*current_row=*/0u);
   if (!rect_or) {
-    return;  // Unknown table / column / missing band: silent skip.
+    return false;  // Unknown table / column / missing band: silent skip.
   }
   const StructuredRefRange rect = std::move(rect_or).value();
 
@@ -350,28 +372,221 @@ void walk_structured_ref(const parser::AstNode& node, WalkState& state) {
   // the bound is re-checked rather than assumed: a rectangle that cannot be
   // addressed contributes no edges instead of aliasing another sheet.
   if (rect.sheet_index > 0xFFFFu) {
-    return;
+    return false;
   }
-  const std::uint16_t target_sheet_id = static_cast<std::uint16_t>(rect.sheet_index);
-
   if (rect.row_first >= Sheet::kMaxRows || rect.row_last >= Sheet::kMaxRows ||  //
       rect.col_first >= Sheet::kMaxCols || rect.col_last >= Sheet::kMaxCols) {
-    return;
+    return false;
   }
+  *out_sheet_id = static_cast<std::uint16_t>(rect.sheet_index);
+  *out_rect = DeclaredRect{rect.row_first, rect.row_last, rect.col_first, rect.col_last, /*whole_axis=*/false};
+  return true;
+}
 
-  // A table column is unbounded from the extractor's point of view — the
-  // table's own row count decides the area — so the rectangle passes the same
-  // graph-footprint ceiling every other range shape does.
-  const std::uint64_t area = (static_cast<std::uint64_t>(rect.row_last - rect.row_first) + 1U) *
-                             (static_cast<std::uint64_t>(rect.col_last - rect.col_first) + 1U);
-  if (area > kMaxMaterializedDependencyCells) {
-    add_range_dep(state,
-                  CellRangeDependency{target_sheet_id, rect.row_first, rect.row_last, rect.col_first, rect.col_last});
-    return;
+void walk_structured_ref(const parser::AstNode& node, WalkState& state) {
+  std::uint16_t sheet_id = 0;
+  DeclaredRect rect;
+  if (structured_ref_rect(node, state, &sheet_id, &rect)) {
+    // A table column is unbounded from the extractor's point of view — the
+    // table's own row count decides the area — so the rectangle passes the
+    // same graph-footprint ceiling every other range shape does.
+    emit_rect(state, sheet_id, rect);
   }
+}
 
-  for (auto [r, c] : utils::RectRange(rect.row_first, rect.col_first, rect.row_last, rect.col_last)) {
-    add_cell_dep(state, CellNodeId{target_sheet_id, r, c});
+// Unions two footprints the way `:` composes its endpoints: two qualified
+// sheets must agree, and a bare side takes the other side's sheet.
+std::optional<Footprint> union_footprints(const Footprint& a, const Footprint& b) {
+  if (a.sheet_explicit && b.sheet_explicit && a.sheet_id != b.sheet_id) {
+    return std::nullopt;
+  }
+  Footprint out;
+  out.sheet_explicit = a.sheet_explicit || b.sheet_explicit;
+  out.sheet_id = a.sheet_explicit ? a.sheet_id : b.sheet_id;
+  out.rect.row_first = std::min(a.rect.row_first, b.rect.row_first);
+  out.rect.row_last = std::max(a.rect.row_last, b.rect.row_last);
+  out.rect.col_first = std::min(a.rect.col_first, b.rect.col_first);
+  out.rect.col_last = std::max(a.rect.col_last, b.rect.col_last);
+  out.rect.whole_axis = a.rect.whole_axis || b.rect.whole_axis;
+  return out;
+}
+
+std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkState& state);
+
+// The footprint of a static endpoint pair, with `emit_range_cells`'s sheet rule.
+std::optional<Footprint> pair_footprint(const parser::Reference& lhs, const parser::Reference& rhs,
+                                        const WalkState& state) {
+  if (!lhs.sheet.empty() && !rhs.sheet.empty() && !sheet_names::equal(lhs.sheet, rhs.sheet)) {
+    return std::nullopt;
+  }
+  parser::Reference probe{};
+  probe.sheet = lhs.sheet.empty() ? rhs.sheet : lhs.sheet;
+  Footprint out;
+  if (!resolve_sheet_id(probe, state, &out.sheet_id)) {
+    return std::nullopt;
+  }
+  const auto rect = declared_rect(lhs, rhs);
+  if (!rect) {
+    return std::nullopt;
+  }
+  out.sheet_explicit = !probe.sheet.empty();
+  out.rect = rect.value();
+  return out;
+}
+
+// The footprint of a reference-returning call: the union over every argument
+// that can be the returned reference. Literal arguments name no reference
+// (the `:` fails if one is picked) and are skipped.
+std::optional<Footprint> call_footprint(const parser::AstNode& node, WalkState& state) {
+  const std::string_view name = node.as_call_name();
+  if (lookup_lexical(name, state) != nullptr ||
+      find_defined_name(*state.workbook, state.current_sheet_id, name) != nullptr ||
+      VolatileTracker::is_dynamic_reference_function(name) || !is_reference_call_name(name)) {
+    return std::nullopt;
+  }
+  const std::uint32_t arity = node.as_call_arity();
+  std::optional<Footprint> acc;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const parser::AstNode& arg = node.as_call_arg(i);
+    if (!is_reference_carrying_arg(name, i, arity) || arg.kind() == parser::NodeKind::Literal ||
+        arg.kind() == parser::NodeKind::ErrorLiteral) {
+      continue;
+    }
+    const std::optional<Footprint> part = reference_footprint(arg, state);
+    if (!part) {
+      return std::nullopt;
+    }
+    acc = acc ? union_footprints(*acc, *part) : part;
+    if (!acc) {
+      return std::nullopt;
+    }
+  }
+  return acc;
+}
+
+// The rectangle `node` can name when used as a reference, or nothing when
+// that is not statically knowable (OFFSET / INDIRECT, a LAMBDA parameter, a
+// non-reference expression).
+std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkState& state) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref:
+      return pair_footprint(node.as_ref(), node.as_ref(), state);
+
+    case parser::NodeKind::RangeOp: {
+      parser::Reference lhs{};
+      parser::Reference rhs{};
+      if (declared_rect_endpoint_pair(node, &lhs, &rhs)) {
+        return pair_footprint(lhs, rhs, state);
+      }
+      const std::optional<Footprint> a = reference_footprint(node.as_range_lhs(), state);
+      const std::optional<Footprint> b = a ? reference_footprint(node.as_range_rhs(), state) : std::nullopt;
+      return b ? union_footprints(*a, *b) : std::nullopt;
+    }
+
+    case parser::NodeKind::UnionOp: {
+      std::optional<Footprint> acc;
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        const std::optional<Footprint> part = reference_footprint(node.as_union_child(i), state);
+        if (!part) {
+          return std::nullopt;
+        }
+        acc = acc ? union_footprints(*acc, *part) : part;
+        if (!acc) {
+          return std::nullopt;
+        }
+      }
+      return acc;
+    }
+
+    case parser::NodeKind::StructuredRef: {
+      Footprint out;
+      if (!structured_ref_rect(node, state, &out.sheet_id, &out.rect)) {
+        return std::nullopt;
+      }
+      out.sheet_explicit = true;
+      return out;
+    }
+
+    case parser::NodeKind::NameRef: {
+      if (node.as_name_sheet().empty()) {
+        if (const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_name(), state); lexical != nullptr) {
+          return lexical->footprint;
+        }
+      }
+      const io::DefinedName* def = find_name_ref_definition(node, state);
+      if (def == nullptr) {
+        return std::nullopt;
+      }
+      std::optional<Footprint> out;
+      visit_defined_name_body(*def, state,
+                              [&](const parser::AstNode& root) { out = reference_footprint(root, state); });
+      return out;
+    }
+
+    case parser::NodeKind::Call:
+      return call_footprint(node, state);
+
+    default:
+      return std::nullopt;
+  }
+}
+
+// Builtins that read only the position or shape of a reference argument,
+// never its values: a static reference there is no dependency, so `=ROW(A1)`
+// in A1 is not circular. CELL / FORMULATEXT / ISFORMULA read the cell and
+// stay out.
+struct ReferenceOnlyArg {
+  std::string_view name;
+  std::uint32_t arg_index;
+};
+constexpr ReferenceOnlyArg kReferenceOnlyArgs[] = {
+    {"ROW", 0U}, {"COLUMN", 0U}, {"ROWS", 0U}, {"COLUMNS", 0U}, {"AREAS", 0U}, {"ISREF", 0U}, {"SHEET", 0U},
+};
+
+bool is_reference_only_arg(std::string_view call_name, std::uint32_t arg_index) {
+  const std::string_view bare = strip_future_prefix(call_name);
+  return std::any_of(std::begin(kReferenceOnlyArgs), std::end(kReferenceOnlyArgs), [&](const ReferenceOnlyArg& e) {
+    return e.arg_index == arg_index && strings::case_insensitive_eq(bare, e.name);
+  });
+}
+
+// True for a reference whose rectangle is fixed by the formula text: a `Ref`,
+// a static `:` chain, a 3-D or structured reference, a union of those, or a
+// defined name standing for one. A spill, a computed endpoint or a LET name
+// is not.
+bool is_static_reference(const parser::AstNode& node, WalkState& state) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::Ref3D:
+    case parser::NodeKind::StructuredRef:
+      return true;
+    case parser::NodeKind::RangeOp: {
+      parser::Reference lhs{};
+      parser::Reference rhs{};
+      return declared_rect_endpoint_pair(node, &lhs, &rhs);
+    }
+    case parser::NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        if (!is_static_reference(node.as_union_child(i), state)) {
+          return false;
+        }
+      }
+      return true;
+    case parser::NodeKind::NameRef: {
+      if (node.as_name_sheet().empty() && lookup_lexical(node.as_name(), state) != nullptr) {
+        return false;
+      }
+      const io::DefinedName* def = find_name_ref_definition(node, state);
+      if (def == nullptr) {
+        return false;
+      }
+      bool is_static = false;
+      visit_defined_name_body(*def, state,
+                              [&](const parser::AstNode& root) { is_static = is_static_reference(root, state); });
+      return is_static;
+    }
+    default:
+      return false;
   }
 }
 
@@ -381,20 +596,21 @@ void walk_range_op(const parser::AstNode& node, WalkState& state) {
   const parser::AstNode& lhs = node.as_range_lhs();
   const parser::AstNode& rhs = node.as_range_rhs();
 
-  // Static dep extraction only handles `Ref:Ref` rectangles. Anything more
-  // exotic (OFFSET-based, INDIRECT, named-range expansion) is dynamic and
-  // skipped silently here; the evaluator will resolve it lazily and the
-  // recalc engine will pick up dependencies when those refs surface as
-  // direct `Ref` nodes inside their argument trees.
   if (lhs.kind() == parser::NodeKind::Ref && rhs.kind() == parser::NodeKind::Ref) {
     emit_range_cells(state, lhs.as_ref(), rhs.as_ref());
     return;
   }
 
   // Otherwise descend into both sides so any nested `Ref` / `Call` is still
-  // visited.
+  // visited, then register the bounding box the `:` reads. An endpoint that
+  // is a reference-returning call contributes every reference it could
+  // return (`A1:INDEX(C1:C10,n)` reads within A1:C10); OFFSET / INDIRECT
+  // endpoints have no static footprint and rely on their volatility.
   walk(lhs, state);
   walk(rhs, state);
+  if (const std::optional<Footprint> footprint = reference_footprint(node, state)) {
+    emit_rect(state, footprint->sheet_id, footprint->rect);
+  }
 }
 
 void walk(const parser::AstNode& node, WalkState& state) {
@@ -561,19 +777,24 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
 
     case parser::NodeKind::Call: {
-      const std::uint32_t arity = node.as_call_arity();
-      for (std::uint32_t i = 0; i < arity; ++i) {
-        walk(node.as_call_arg(i), state);
-      }
-
       const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_call_name(), state);
       const io::DefinedName* defined =
           lexical == nullptr ? find_defined_name(*state.workbook, state.current_sheet_id, node.as_call_name())
                              : nullptr;
+      const bool builtin = lexical == nullptr && defined == nullptr;
+      const std::uint32_t arity = node.as_call_arity();
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        const parser::AstNode& arg = node.as_call_arg(i);
+        if (builtin && is_reference_only_arg(node.as_call_name(), i) && is_static_reference(arg, state)) {
+          continue;
+        }
+        walk(arg, state);
+      }
+
       // A lexical binding or a visible defined name shadows a built-in name;
       // in particular, a LET-bound `NOW` / `RAND` must not be marked
       // volatile merely because its spelling resembles a built-in.
-      if (lexical == nullptr && defined == nullptr && VolatileTracker::is_volatile_function(node.as_call_name())) {
+      if (builtin && VolatileTracker::is_volatile_function(node.as_call_name())) {
         state.out->is_volatile = true;
         if (VolatileTracker::is_dynamic_reference_function(node.as_call_name())) {
           state.out->has_dynamic_reference = true;
@@ -632,6 +853,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
       for (std::uint32_t i = 0; i < binding_count; ++i) {
         walk(node.as_let_binding_expr(i), state);
         const parser::AstNode& expr = node.as_let_binding_expr(i);
+        std::optional<Footprint> footprint = reference_footprint(expr, state);
         const parser::AstNode* lambda = nullptr;
         if (expr.kind() == parser::NodeKind::Lambda) {
           lambda = &expr;
@@ -640,7 +862,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
             lambda = prior->lambda;
           }
         }
-        state.lexical_stack.push_back({strings::to_ascii_lower(node.as_let_binding_name(i)), lambda});
+        state.lexical_stack.push_back({strings::to_ascii_lower(node.as_let_binding_name(i)), lambda, footprint});
       }
       walk(node.as_let_body(), state);
       state.lexical_stack.resize(saved_lexical_depth);
