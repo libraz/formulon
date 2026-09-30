@@ -4,55 +4,19 @@
 #include "eval/coerce.h"
 
 #include <cmath>
-#include <cstdlib>
-#include <cstring>
 #include <string>
 #include <string_view>
 
 #include "eval/date_text_parse.h"
 #include "eval/number_parse.h"
 #include "utils/double_format.h"
+#include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
-
-// Parses `s` as a full double using std::strtod. Returns true iff the entire
-// input (no leftover bytes) parsed cleanly; the numeric value is written
-// to `*out` even if it is NaN / Inf, leaving the finiteness check to the
-// caller. The stack buffer is sized for any IEEE-754 literal including
-// subnormals; longer inputs take the heap path.
-bool strtod_full(std::string_view s, double* out) noexcept {
-  if (s.empty()) {
-    return false;
-  }
-  char stack_buf[64];
-  char* heap_buf = nullptr;
-  const std::size_t n = s.size();
-  char* buf = stack_buf;
-  if (n + 1 > sizeof(stack_buf)) {
-    heap_buf = static_cast<char*>(std::malloc(n + 1));
-    if (heap_buf == nullptr) {
-      return false;
-    }
-    buf = heap_buf;
-  }
-  std::memcpy(buf, s.data(), n);
-  buf[n] = '\0';
-  char* end_ptr = nullptr;
-  const double parsed = parse_double_c_locale(buf, &end_ptr);
-  const bool ok = end_ptr == buf + n;
-  if (heap_buf != nullptr) {
-    std::free(heap_buf);
-  }
-  if (!ok) {
-    return false;
-  }
-  *out = parsed;
-  return true;
-}
 
 Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* from_date_text) {
   if (from_date_text != nullptr) {
@@ -73,8 +37,8 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
     return ErrorCode::Value;
   }
   // Layered numeric-coercion fallback, in order:
-  //   1. strtod(trimmed)                    - plain numeric fast path
-  //   2. trailing '%' stripped, strtod, /100 - percent literals
+  //   1. decimal parse(trimmed)             - plain numeric fast path
+  //   2. trailing '%' stripped, parse, /100 - percent literals
   //   3. VALUE()-style locale parse          - grouping, parens, full-width,
   //                                            currency ({$, ¥, ￥, €} on one
   //                                            side only), currency + percent
@@ -87,17 +51,17 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   // runs against the raw, untrimmed text so padded date strings stay #VALUE!
   // (see WhitespacePaddedDate rejection test).
   double parsed = 0.0;
-  if (strtod_full(trimmed, &parsed)) {
-    if (std::isnan(parsed) || std::isinf(parsed)) {
+  if (parse_double_exact(trimmed, &parsed)) {
+    if (std::isinf(parsed)) {
       return ErrorCode::Num;
     }
     return parsed;
   }
   if (trimmed.back() == '%') {
     const std::string_view body = trimmed.substr(0, trimmed.size() - 1);
-    if (strtod_full(body, &parsed)) {
+    if (parse_double_exact(body, &parsed)) {
       const double scaled = parsed / 100.0;
-      if (std::isnan(scaled) || std::isinf(scaled)) {
+      if (std::isinf(scaled)) {
         return ErrorCode::Num;
       }
       return scaled;
@@ -122,8 +86,8 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   // have rejected the input so plain numerics keep their fast path.
   // The raw, un-trimmed text is passed: implicit numeric coercion is
   // strict about whitespace around date strings (`=FLOOR(10,
-  // " 2024-01-10 ")` -> #VALUE!), even though `strtod` and DATEVALUE
-  // both tolerate it.
+  // " 2024-01-10 ")` -> #VALUE!), even though the decimal parser and
+  // DATEVALUE both tolerate it.
   double serial = 0.0;
   double frac = 0.0;
   bool has_date = false;

@@ -24,6 +24,7 @@
 #include "parser/parser.h"
 #include "sheet.h"
 #include "utils/date_time.h"
+#include "utils/double_parse.h"
 #include "utils/rect_iterator.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -91,10 +92,10 @@ std::optional<LiteralOperand> parse_literal(const std::string& source) {
   }
 
   // Numeric literal — consumed in full or rejected. Route through the
-  // evaluator's shared `strtod_full` scanner so the cellIs literal parser
+  // shared decimal parser (`utils/double_parse.h`) so the cellIs literal parser
   // and the engine's text-to-number coercion accept exactly the same syntax.
   double parsed = 0.0;
-  if (eval::strtod_full(source, &parsed)) {
+  if (parse_double_exact(source, &parsed)) {
     LiteralOperand operand;
     operand.kind = LiteralOperand::Kind::Number;
     operand.number_value = parsed;
@@ -434,10 +435,10 @@ std::optional<double> parse_double(std::string_view source) {
   if (source.empty()) {
     return std::nullopt;
   }
-  // Shared scanner with the engine's text-to-number coercion so CFVO
+  // Shared parser with the engine's text-to-number coercion so CFVO
   // thresholds parse identically to `=`/`<`/`>` numeric operands.
   double parsed = 0.0;
-  if (eval::strtod_full(source, &parsed)) {
+  if (parse_double_exact(source, &parsed)) {
     return parsed;
   }
   return std::nullopt;

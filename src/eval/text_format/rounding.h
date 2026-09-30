@@ -7,7 +7,9 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
-#include <cstdlib>
+#include <string_view>
+
+#include "utils/double_parse.h"
 
 namespace formulon {
 namespace text_format {
@@ -125,7 +127,8 @@ inline double round_display_decimal(double value, int decimals) noexcept {
   if (rebuilt_length <= 0 || static_cast<std::size_t>(rebuilt_length) >= sizeof(rebuilt)) {
     return value;
   }
-  return std::copysign(std::strtod(rebuilt, nullptr), value);
+  const std::string_view literal(rebuilt, static_cast<std::size_t>(rebuilt_length));
+  return std::copysign(parse_double_prefix(literal).value, value);
 }
 
 }  // namespace text_format

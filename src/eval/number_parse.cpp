@@ -6,33 +6,14 @@
 
 #include "eval/number_parse.h"
 
-#include <locale.h>  // newlocale / uselocale / freelocale (POSIX 2008)
-#if defined(__APPLE__) || defined(__FreeBSD__)
-// Older Apple/BSD SDKs (e.g. the macOS 14 SDK on GitHub's macos-14 CI
-// runner) declare the extended-locale API in xlocale.h rather than
-// pulling it in via locale.h; newer SDKs fold it in already, so this is
-// a no-op there. glibc has no xlocale.h at all (removed as a deprecated
-// shim), hence the platform guard.
-#include <xlocale.h>
-#endif
-
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
-#include <cstring>
+
+#include "utils/double_parse.h"
 
 namespace formulon {
 namespace eval {
 namespace {
-
-// Cached C locale used to make numeric parsing independent of the host
-// process's LC_NUMERIC. Created once; never freed (process-lifetime). A
-// `(locale_t)0` result (allocation failure) makes callers fall back to the
-// plain `std::strtod` path.
-locale_t c_numeric_locale() noexcept {
-  static const locale_t loc = newlocale(LC_NUMERIC_MASK, "C", static_cast<locale_t>(0));
-  return loc;
-}
 
 bool is_ascii_ws(unsigned char c) noexcept {
   return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
@@ -87,19 +68,6 @@ std::string_view strip_trailing_euro(std::string_view s) noexcept {
 }
 
 }  // namespace
-
-double parse_double_c_locale(const char* str, char** endptr) noexcept {
-  const locale_t loc = c_numeric_locale();
-  if (loc == static_cast<locale_t>(0)) {
-    return std::strtod(str, endptr);
-  }
-  // uselocale swaps only the calling thread's locale, so this is safe under
-  // the scheduler's worker threads and does not disturb other threads.
-  const locale_t previous = uselocale(loc);
-  const double value = std::strtod(str, endptr);
-  uselocale(previous);
-  return value;
-}
 
 bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double* out) noexcept {
   // Trim ASCII whitespace first.
@@ -237,30 +205,8 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
   if (seen_group_sep && !seen_point && !seen_exp && digits_in_current_group != 3) {
     return false;
   }
-  // Parse via std::strtod over a NUL-terminated buffer.
-  char stack_buf[64];
-  char* heap_buf = nullptr;
-  const std::size_t n = canonical.size();
-  char* buf = stack_buf;
-  if (n + 1 > sizeof(stack_buf)) {
-    heap_buf = static_cast<char*>(std::malloc(n + 1));
-    if (heap_buf == nullptr) {
-      return false;
-    }
-    buf = heap_buf;
-  }
-  std::memcpy(buf, canonical.data(), n);
-  buf[n] = '\0';
-  char* end_ptr = nullptr;
-  double parsed = parse_double_c_locale(buf, &end_ptr);
-  const bool ok = end_ptr == buf + n;
-  if (heap_buf != nullptr) {
-    std::free(heap_buf);
-  }
-  if (!ok) {
-    return false;
-  }
-  if (std::isnan(parsed) || std::isinf(parsed)) {
+  double parsed = 0.0;
+  if (!parse_double_exact(canonical, &parsed) || std::isinf(parsed)) {
     return false;
   }
   // Apply percent scaling with division (not multiplication by 0.01) so the

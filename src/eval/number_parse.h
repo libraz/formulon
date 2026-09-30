@@ -15,17 +15,6 @@
 namespace formulon {
 namespace eval {
 
-/// Locale-independent `std::strtod`. Excel's numeric grammar always uses `.`
-/// as the decimal separator, but `std::strtod` honours the host process's
-/// `LC_NUMERIC` category — so a native embedder that set (e.g.)
-/// `LC_NUMERIC=de_DE` would misparse `"1.5"`. This wrapper evaluates the
-/// conversion under a cached C locale on the calling thread (via
-/// `uselocale`, which is thread-local and therefore safe under the
-/// scheduler's worker threads), then restores the previous locale. The
-/// contract matches `std::strtod`: `*endptr` points past the consumed
-/// prefix. Every numeric parse in the evaluator routes through here.
-double parse_double_c_locale(const char* str, char** endptr) noexcept;
-
 /// Parses a numeric string using `decimal_sep` and `group_sep`. `group_sep`
 /// may appear only in the integer part and must form valid 3-digit groups
 /// (the first group being 1-3 digits); pass `'\0'` to disable grouping.

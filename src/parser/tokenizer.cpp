@@ -4,9 +4,9 @@
 //
 //   * UTF-8 decoding is hand-rolled (no `<codecvt>` / ICU): we only need
 //     byte-length and UTF-16 code-unit count per codepoint.
-//   * Numbers go through `std::strtod` in the C locale (IEEE 754
-//     round-to-nearest), which matches Excel across the oracle corpus with
-//     no observed divergence.
+//   * Numbers go through the shared decimal parser (`utils/double_parse.h`,
+//     IEEE 754 round-to-nearest), which matches Excel across the oracle
+//     corpus with no observed divergence.
 //   * String / quoted-sheet-name escapes expand into the tokenizer's arena
 //     so token views remain stable for the lifetime of the tokenizer.
 //   * The spilled-range `#` operator is disambiguated from `#error!` by
@@ -21,11 +21,12 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <string>
 #include <string_view>
+
+#include "utils/double_parse.h"
 
 namespace formulon {
 namespace parser {
@@ -908,37 +909,29 @@ void Tokenizer::scan_number() {
     return;
   }
 
-  // Parse via strtod over a NUL-terminated copy (strtod requires C-strings).
-  // Refuse to silently truncate over-long literals: feeding only the first
-  // 63 bytes to strtod when the lexeme is longer would let the token's
-  // semantic value diverge from its source spelling, which an attacker
-  // could exploit to smuggle different numbers past callers that compare
-  // lexeme bytes. Excel only cares about the IEEE-754 representation, so
-  // any literal that does not fit in the local buffer is reported as an
-  // invalid token rather than truncated.
-  char buf[64];
-  if (lex.size() >= sizeof(buf)) {
+  // Refuse over-long literals rather than parse a prefix of them: a token
+  // whose semantic value diverges from its source spelling would let an
+  // attacker smuggle different numbers past callers that compare lexeme
+  // bytes. Excel only cares about the IEEE-754 representation, so any
+  // literal of 64 bytes or more is reported as an invalid token.
+  constexpr std::size_t kMaxNumberLiteralBytes = 64;
+  if (lex.size() >= kMaxNumberLiteralBytes) {
     emit(TokenKind::Invalid, start);
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
     return;
   }
-  // Apply Excel's 15-significant-digit rule before strtod. The truncated
-  // string is never longer than the original lexeme, so buf is large enough.
-  // The original lexeme is still recorded on the token for diagnostics.
+  // Apply Excel's 15-significant-digit rule before parsing. The original
+  // lexeme is still recorded on the token for diagnostics.
   const std::string truncated = truncate_to_excel_precision(lex);
   const std::string_view numeric_text = truncated.empty() ? lex : std::string_view(truncated);
-  const std::size_t n = numeric_text.size();
-  std::memcpy(buf, numeric_text.data(), n);
-  buf[n] = '\0';
-  char* end_ptr = nullptr;
-  double value = std::strtod(buf, &end_ptr);
-  if (end_ptr != buf + n) {
+  double value = 0.0;
+  if (!parse_double_exact(numeric_text, &value)) {
     emit(TokenKind::Invalid, start);
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
     return;
   }
   // A magnitude that overflows the double range (`1E309`) comes back from
-  // strtod as ±infinity. Excel surfaces such a literal as `#NUM!` rather
+  // the parser as ±infinity. Excel surfaces such a literal as `#NUM!` rather
   // than propagating a non-finite Number value, so emit the error literal
   // directly.
   if (std::isinf(value)) {
@@ -954,7 +947,7 @@ void Tokenizer::scan_number() {
   // denormalized precision: measured directly against Excel 365 (Mac, via
   // xlwings), `=2.5E-310`, `=1E-320`, `=1E-310`, `=4.9E-324`, `=1E-308` all
   // evaluate to exactly 0, while `=2.3E-308` (above `DBL_MIN`) evaluates to
-  // 2.3e-308. `strtod` only floors to 0.0 below the smallest subnormal
+  // 2.3e-308. Parsing only floors to 0.0 below the smallest subnormal
   // (~4.9E-324), so the whole subnormal range above that needs an explicit
   // check.
   if (value != 0.0 && std::fabs(value) < std::numeric_limits<double>::min()) {

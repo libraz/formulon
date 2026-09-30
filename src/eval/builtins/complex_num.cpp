@@ -29,6 +29,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
+#include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "value.h"
 
@@ -56,10 +57,10 @@ struct Complex {
 // that the entire view be consumed (no trailing characters) and the
 // parsed value to be finite (NaN / Inf are rejected so the IM* impls
 // can treat success as "usable as a number"). Delegates the raw parse
-// to the shared `strtod_full` scanner in `eval/coerce.h`.
+// to the shared decimal parser in `utils/double_parse.h`.
 inline bool parse_double(std::string_view s, double* out) {
   double v = 0.0;
-  if (!strtod_full(s, &v)) {
+  if (!parse_double_exact(s, &v)) {
     return false;
   }
   if (std::isnan(v) || std::isinf(v)) {
@@ -82,7 +83,7 @@ std::optional<Complex> parse_complex_text(std::string_view src) {
     return std::nullopt;
   }
   // Reject any forbidden character up-front so we never fall into surprise
-  // parse behaviours (e.g. hex floats via strtod's `0x` prefix).
+  // parse behaviours (e.g. the leading whitespace the decimal parser skips).
   for (char c : src) {
     const bool ok =
         (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.' || c == 'e' || c == 'E' || c == 'i' || c == 'j';

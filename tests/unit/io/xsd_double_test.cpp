@@ -44,14 +44,13 @@ TEST(XsdDouble, RejectsEmptyAndTrailingGarbage) {
 }
 
 TEST(XsdDouble, RejectsHexLiterals) {
-  // `strtod` reads `0x10` as 16; xs:double has no hexadecimal form, so
-  // accepting it would silently load a different number than the file
-  // states.
+  // xs:double has no hexadecimal form; reading `0x10` as 16 would silently
+  // load a different number than the file states.
   double out = 0.0;
   EXPECT_FALSE(parse_xsd_double("0x10", &out));
   EXPECT_FALSE(parse_xsd_double("0X10", &out));
   EXPECT_FALSE(parse_xsd_double("-0x1p4", &out));
-  EXPECT_FALSE(parse_xsd_double(" 0x10", &out)) << "the gate must run after the whitespace strtod skips";
+  EXPECT_FALSE(parse_xsd_double(" 0x10", &out)) << "leading whitespace must not hide a hex literal";
   EXPECT_DOUBLE_EQ(out, 0.0);
 }
 

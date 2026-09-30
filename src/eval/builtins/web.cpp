@@ -19,10 +19,8 @@
 
 #include "eval/builtins/web.h"
 
-#include <cerrno>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <string>
 #include <string_view>
 
@@ -30,9 +28,9 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
-#include "eval/number_parse.h"
 #include "pugixml.hpp"
 #include "utils/arena.h"
+#include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "value.h"
 
@@ -166,14 +164,11 @@ bool parse_excel_readback_number(std::string_view s, double* out) noexcept {
   if (s.empty()) {
     return false;
   }
-  std::string tmp(s);
-  char* end = nullptr;
-  errno = 0;
-  const double parsed = parse_double_c_locale(tmp.c_str(), &end);
-  if (errno != 0 || end == tmp.c_str() || *end != '\0') {
+  const ParsedDouble parsed = parse_double_prefix(s);
+  if (parsed.out_of_range || parsed.consumed == 0 || parsed.consumed != s.size()) {
     return false;
   }
-  *out = parsed;
+  *out = parsed.value;
   return true;
 }
 

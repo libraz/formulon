@@ -16,7 +16,6 @@
 #include <initializer_list>
 #include <string>
 
-#include "eval/number_parse.h"
 #include "gtest/gtest.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -414,23 +413,22 @@ TEST(CoerceToNumberTextLocale, MalformedGroupingRejected) {
   EXPECT_EQ(r.error(), ErrorCode::Value);
 }
 
+TEST(CoerceToNumberText, HexAndInfNanSpellingsAreText) {
+  // Measured on Mac Excel 365: `="0x10"+1`, `="inf"+1`, `="nan"+1` and the
+  // rest all give #VALUE!; none of these spellings is a number to Excel.
+  for (const char* text : {"0x10", "0X1A", "0x1p3", "inf", "INF", "infinity", "-inf", "nan", "NaN"}) {
+    auto r = coerce_to_number(Value::text(text));
+    ASSERT_FALSE(r.has_value()) << text;
+    EXPECT_EQ(r.error(), ErrorCode::Value) << text;
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Locale-independent numeric parsing: the evaluator always uses '.' as the
+// Locale-independent numeric coercion: the evaluator always uses '.' as the
 // decimal separator regardless of the host process's LC_NUMERIC.
 // ---------------------------------------------------------------------------
 
-TEST(ParseDoubleCLocale, DecimalIsAlwaysDotUnderCLocale) {
-  // Under the C locale a comma never acts as a decimal separator: "1.5"
-  // parses fully, and "1,5" stops at the comma. This holds no matter what
-  // the host LC_NUMERIC is set to, because the parser swaps to a C locale.
-  char* end = nullptr;
-  EXPECT_DOUBLE_EQ(parse_double_c_locale("1.5", &end), 1.5);
-  EXPECT_EQ(*end, '\0');
-  EXPECT_DOUBLE_EQ(parse_double_c_locale("1,5", &end), 1.0);
-  EXPECT_EQ(*end, ',');
-}
-
-TEST(ParseDoubleCLocale, UnaffectedByCommaDecimalHostLocale) {
+TEST(CoerceToNumberHostLocale, UnaffectedByCommaDecimalHostLocale) {
   // Install a comma-decimal locale on THIS thread only (uselocale is
   // thread-local, so parallel ctest workers are unaffected). "1.5" must
   // still parse to 1.5 — proving numeric parsing ignores the host locale.

@@ -109,6 +109,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/a1_ref.cpp
   src/utils/date_time.cpp
   src/utils/double_format.cpp
+  src/utils/double_parse.cpp
   src/utils/index_sort.cpp
   src/utils/japanese_era.cpp
   src/utils/structured_log.cpp

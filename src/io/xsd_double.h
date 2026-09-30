@@ -23,12 +23,11 @@ namespace formulon::io {
 ///
 /// Returns false, leaving `*out` unchanged, on empty input, on input that
 /// does not start with a number, on trailing characters other than
-/// whitespace, and on the three forms `std::strtod` accepts outside that
-/// space:
+/// whitespace, and on:
 ///
-///   * a hexadecimal literal (`0x10` would otherwise read as 16);
-///   * an `inf` / `infinity` / `nan` spelling in any case, which the
-///     writer cannot express in a `<v>` body and turns back into `#NUM!`;
+///   * a hexadecimal literal or an `inf` / `infinity` / `nan` spelling,
+///     which lie outside the xs:double space this parser reads (the writer
+///     could not express a non-finite value in a `<v>` body anyway);
 ///   * an overflow to ±infinity or an underflow to exact zero.
 ///
 /// Callers treat a false return as `kIoSheetCorrupt` rather than

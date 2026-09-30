@@ -29,6 +29,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/utils/a1_column_test.cpp
   unit/utils/budget_charge_test.cpp
   unit/utils/double_format_test.cpp
+  unit/utils/double_parse_test.cpp
   unit/utils/index_sort_test.cpp
   unit/utils/rect_iterator_test.cpp
   unit/utils/resource_budget_test.cpp

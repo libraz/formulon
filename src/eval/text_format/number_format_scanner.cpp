@@ -13,8 +13,8 @@
 #include <string>
 #include <string_view>
 
-#include "eval/number_parse.h"
 #include "eval/text_format/number_format_types.h"
+#include "utils/double_parse.h"
 
 namespace formulon {
 namespace text_format {
@@ -568,23 +568,16 @@ int parse_cond_directive(std::string_view body, CondOp* out_op, double* out_valu
   } else {
     return 0;
   }
-  // Parse the remaining bytes as a finite double. We copy into a stack buffer
-  // so `std::strtod` sees a NUL terminator without depending on `body`'s
-  // backing being NUL-terminated.
+  // Parse the remaining bytes, minus trailing blanks, as one number.
   if (k >= body.size()) {
     return -1;
   }
-  std::string buf(body.substr(k));
-  // Trim trailing whitespace.
-  while (!buf.empty() && (buf.back() == ' ' || buf.back() == '\t')) {
-    buf.pop_back();
+  std::string_view number = body.substr(k);
+  while (!number.empty() && (number.back() == ' ' || number.back() == '\t')) {
+    number.remove_suffix(1);
   }
-  if (buf.empty()) {
-    return -1;
-  }
-  char* endp = nullptr;
-  const double v = eval::parse_double_c_locale(buf.c_str(), &endp);
-  if (endp == nullptr || endp == buf.c_str() || static_cast<std::size_t>(endp - buf.c_str()) != buf.size()) {
+  double v = 0.0;
+  if (!parse_double_exact(number, &v)) {
     return -1;
   }
   *out_op = op;

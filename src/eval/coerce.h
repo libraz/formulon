@@ -103,17 +103,6 @@ Expected<std::string, ErrorCode> coerce_to_text(const Value& v);
 /// * `Array`, `Ref`, and `Lambda` yield `#VALUE!`.
 Expected<bool, ErrorCode> coerce_to_bool(const Value& v);
 
-/// Parses `s` as a full double via `std::strtod`. Returns `true` iff the
-/// entire input was consumed (no trailing bytes). The numeric value is
-/// written to `*out` even if it is `NaN` / `Inf`; callers that require a
-/// finite result must run their own `std::isnan` / `std::isinf` guard.
-///
-/// This is the same scanner that `coerce_text_to_number` uses internally
-/// for the numeric-fast-path; it is exposed so the IM* / COMPLEX
-/// parsing helpers can avoid duplicating the stack-buffer + heap-fallback
-/// dance.
-bool strtod_full(std::string_view s, double* out) noexcept;
-
 /// Computes `base ^ exp` with Excel's edge-case handling: a NaN/Inf result
 /// is reported as `#NUM!`. This is shared between the `^` operator and the
 /// `POWER()` builtin so the two paths cannot diverge.
