@@ -1,0 +1,47 @@
+suite: usdollar
+description: >
+  USDOLLAR formats as US-dollar text whatever the locale: `$`, two default
+  decimals and parenthesised negatives, where ja-JP DOLLAR uses `¥`, zero
+  decimals and a leading minus. A value that display-rounds to zero keeps its
+  sign; one rounded left of the decimal point first does not.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: usdollar_two_decimals
+    formula: "=USDOLLAR(1234.5,2)"
+  - id: usdollar_default_decimals
+    formula: "=USDOLLAR(1234.5)"
+  - id: usdollar_negative_parenthesised
+    formula: "=USDOLLAR(-1234.5,2)"
+  - id: usdollar_negative_default_decimals
+    formula: "=USDOLLAR(-1234.5)"
+  - id: usdollar_negative_decimals
+    formula: "=USDOLLAR(1234.567,-2)"
+  - id: usdollar_negative_value_negative_decimals
+    formula: "=USDOLLAR(-1234.5,-1)"
+  - id: usdollar_half_rounds_up
+    formula: "=USDOLLAR(2.5,0)"
+  - id: usdollar_zero
+    formula: "=USDOLLAR(0)"
+  - id: usdollar_numeric_text
+    formula: "=USDOLLAR(\"12\",1)"
+  - id: usdollar_bool
+    formula: "=USDOLLAR(TRUE)"
+  - id: usdollar_truncated_decimals
+    formula: "=USDOLLAR(1234.5,2.9)"
+  - id: usdollar_large
+    formula: "=USDOLLAR(1E+15,2)"
+  - id: usdollar_rounds_to_negative_zero
+    formula: "=USDOLLAR(-0.001,2)"
+  - id: usdollar_rounds_to_negative_zero_units
+    formula: "=USDOLLAR(-0.4,0)"
+  - id: usdollar_rounded_left_of_point_to_zero
+    formula: "=USDOLLAR(-4,-1)"
+  - id: usdollar_decimals_over_cap
+    formula: "=USDOLLAR(1,128)"
+  - id: usdollar_non_numeric_text
+    formula: "=USDOLLAR(\"abc\")"
+  - id: usdollar_error_propagates
+    formula: "=USDOLLAR(1/0)"
+  - id: dollar_rounds_to_negative_zero
+    formula: "=DOLLAR(-0.001,2)"

@@ -3300,6 +3300,22 @@ groups:
         probe: '=DOLLAR(1234.5, 2)'
         expected: impl
 
+  - function: "USDOLLAR"
+    aspect: "US-dollar currency text regardless of locale"
+    behaviors:
+      - name: "default decimals is 2"
+        probe: '=USDOLLAR(1234.5)'
+        expected: impl
+      - name: "negative number renders in parentheses"
+        probe: '=USDOLLAR(-1234.5,2)'
+        expected: impl
+      - name: "negative decimals rounds left of the point"
+        probe: '=USDOLLAR(1234.567,-2)'
+        expected: impl
+      - name: "display rounding to zero keeps the sign"
+        probe: '=USDOLLAR(-0.001,2)'
+        expected: impl
+
   - function: "HYPERLINK"
     aspect: "link/friendly-name text rendering (formula returns display text)"
     behaviors:

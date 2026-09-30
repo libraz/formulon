@@ -18,8 +18,8 @@ namespace eval {
 
 class FunctionRegistry;
 
-/// Registers VALUETOTEXT, ARRAYTOTEXT, NUMBERVALUE, FIXED, DOLLAR, and the
-/// rest of the text-conversion family into `registry`. Intended to be
+/// Registers VALUETOTEXT, ARRAYTOTEXT, NUMBERVALUE, FIXED, DOLLAR, USDOLLAR,
+/// and the rest of the text-conversion family into `registry`. Intended to be
 /// invoked from `register_builtins`. TEXT and VALUE are NOT registered
 /// here -- see `text_builtin_impl` / `value_builtin_impl` below.
 void register_text_format_builtins(FunctionRegistry& registry);

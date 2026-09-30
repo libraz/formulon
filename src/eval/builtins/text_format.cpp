@@ -200,52 +200,70 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
 }
 
 // ---------------------------------------------------------------------------
-// DOLLAR(number, [decimals])
+// DOLLAR(number, [decimals]) / USDOLLAR(number, [decimals])
 // ---------------------------------------------------------------------------
 //
-// Mac Excel ja-JP formats with the yen sign `¥` (UTF-8 0xC2 0xA5) rather
-// than the dollar sign. The default `decimals` is locale-dependent: ja-JP
-// uses 0 (no fractional part) while en-US uses 2. The negative-number
-// section also diverges from en-US: ja-JP renders negatives as
-// `¥-1,235` (leading minus inside the prefix), not `($1,234.56)` parens.
-// Uses a two-section format `¥#,##0[.00];¥-#,##0[.00]`; the format
-// engine's section selector emits `std::fabs(value)` for section 1, so
-// the literal `-` in the negative section is what produces the sign.
-// Negative `decimals` rounds left of the decimal point (same rule as
-// FIXED); `|decimals| > 127` -> `#VALUE!`.
+// Both render `number` as currency text through one kernel; they differ in
+// the symbol, the default `decimals` and the negative section (measured on
+// Mac Excel 365 ja-JP):
+//   DOLLAR   `¥1,235`,   `¥-1,235`     (locale currency, default 0 decimals)
+//   USDOLLAR `$1,234.50`, `($1,234.50)` (always US dollars, default 2)
+// The chosen section formats the magnitude, so its literal `-` or
+// parentheses carry the sign. Negative `decimals` rounds left of the decimal
+// point (same rule as FIXED); `|decimals| > 127` -> `#VALUE!`.
 
-Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
+struct CurrencyStyle {
+  std::string_view symbol;
+  int default_decimals;
+  bool negative_in_parentheses;
+};
+
+Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, const CurrencyStyle& style) {
   auto num = read_finite_number_arg(args, 0);
   if (!num) {
     return Value::error(num.error());
   }
-  // ja-JP default is 0 decimals (en-US would default to 2).
-  auto decimals_e = read_optional_fixed_decimals(args, arity, 1, 0);
+  auto decimals_e = read_optional_fixed_decimals(args, arity, 1, style.default_decimals);
   if (!decimals_e) {
     return Value::error(decimals_e.error());
   }
   const int decimals = decimals_e.value();
   const double value = ::formulon::text_format::round_display_decimal(num.value(), decimals);
   const int effective_decimals = decimals < 0 ? 0 : decimals;
-  // Two-section ¥ format: positive uses `¥#,##0[.00]`, negative uses
-  // `¥-#,##0[.00]`. The format engine passes `std::fabs(value)` into
-  // section 1, so the literal `-` in the negative section emits the sign.
-  std::string fraction;
+  std::string body = "#,##0";
   if (effective_decimals > 0) {
-    fraction.reserve(1u + static_cast<std::size_t>(effective_decimals));
-    fraction.push_back('.');
-    fraction.append(static_cast<std::size_t>(effective_decimals), '0');
+    body.push_back('.');
+    body.append(static_cast<std::size_t>(effective_decimals), '0');
   }
+  // A number that display-rounds to zero keeps its sign, one rounded left of
+  // the decimal point first does not: USDOLLAR(-0.4,0) is `($0)` but
+  // USDOLLAR(-4,-1) is `$0`. So the section is picked here, and the chosen
+  // one formats the magnitude.
+  const bool negative = decimals < 0 ? value < 0.0 : num.value() < 0.0;
   std::string fmt;
-  fmt.reserve(32 + 2u * fraction.size());
-  // Positive section: "¥#,##0[.00]"
-  fmt.append("\xC2\xA5#,##0");
-  fmt.append(fraction);
-  fmt.push_back(';');
-  // Negative section: "¥-#,##0[.00]"
-  fmt.append("\xC2\xA5-#,##0");
-  fmt.append(fraction);
-  return apply_text_number_format(value, fmt, arena);
+  fmt.reserve(body.size() + style.symbol.size() + 3u);
+  if (!negative) {
+    fmt.append(style.symbol);
+    fmt.append(body);
+  } else if (style.negative_in_parentheses) {
+    fmt.push_back('(');
+    fmt.append(style.symbol);
+    fmt.append(body);
+    fmt.push_back(')');
+  } else {
+    fmt.append(style.symbol);
+    fmt.push_back('-');
+    fmt.append(body);
+  }
+  return apply_text_number_format(std::fabs(value), fmt, arena);
+}
+
+Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
+  return format_currency(args, arity, arena, CurrencyStyle{"\xC2\xA5", 0, false});
+}
+
+Value UsDollar_(const Value* args, std::uint32_t arity, Arena& arena) {
+  return format_currency(args, arity, arena, CurrencyStyle{"$", 2, true});
 }
 
 // ---------------------------------------------------------------------------
@@ -668,7 +686,7 @@ void register_text_format_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"VALUETOTEXT", 1u, 2u, &ValueToText_}, {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_},
       {"NUMBERVALUE", 1u, 3u, &NumberValue_}, {"FIXED", 1u, 3u, &Fixed_},
-      {"DOLLAR", 1u, 2u, &Dollar_},
+      {"DOLLAR", 1u, 2u, &Dollar_},           {"USDOLLAR", 1u, 2u, &UsDollar_},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

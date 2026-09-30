@@ -10,6 +10,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
@@ -45,8 +46,8 @@ Value EvalSource(std::string_view src) {
 
 TEST(BuiltinsText3Registry, AllNamesRegistered) {
   const FunctionRegistry& r = default_registry();
-  for (const char* name :
-       {"REPLACE", "REPLACEB", "FINDB", "SEARCHB", "TEXTBEFORE", "TEXTAFTER", "FIXED", "DOLLAR", "HYPERLINK"}) {
+  for (const char* name : {"REPLACE", "REPLACEB", "FINDB", "SEARCHB", "TEXTBEFORE", "TEXTAFTER", "FIXED", "DOLLAR",
+                           "USDOLLAR", "HYPERLINK"}) {
     EXPECT_NE(r.lookup(name), nullptr) << "missing registration: " << name;
   }
 }
@@ -512,6 +513,63 @@ TEST(BuiltinsText3Dollar, ErrorPropagates) {
   const Value v = EvalSource("=DOLLAR(#REF!)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+// A value that display-rounds to zero keeps its sign (Mac Excel 365).
+TEST(BuiltinsText3Dollar, RoundedToZeroKeepsTheSign) {
+  const Value v = EvalSource("=DOLLAR(-0.001, 2)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), std::string("\xC2\xA5"
+                                     "-0.00"));
+}
+
+// ---------------------------------------------------------------------------
+// USDOLLAR: DOLLAR's kernel with `$`, two default decimals and parenthesised
+// negatives, whatever the locale (measured on Mac Excel 365 ja-JP).
+// ---------------------------------------------------------------------------
+
+void ExpectUsDollar(const char* src, const char* want) {
+  const Value v = EvalSource(src);
+  ASSERT_TRUE(v.is_text()) << src;
+  EXPECT_EQ(v.as_text(), want) << src;
+}
+
+TEST(BuiltinsText3UsDollar, FormatsInUsDollars) {
+  ExpectUsDollar("=USDOLLAR(1234.5,2)", "$1,234.50");
+  ExpectUsDollar("=USDOLLAR(1234.5)", "$1,234.50");
+  ExpectUsDollar("=USDOLLAR(0)", "$0.00");
+  ExpectUsDollar("=USDOLLAR(1E+15,2)", "$1,000,000,000,000,000.00");
+  ExpectUsDollar("=USDOLLAR(\"12\",1)", "$12.0");
+  ExpectUsDollar("=USDOLLAR(TRUE)", "$1.00");
+  ExpectUsDollar("=USDOLLAR(1234.5,2.9)", "$1,234.50");
+}
+
+TEST(BuiltinsText3UsDollar, NegativesAreParenthesised) {
+  ExpectUsDollar("=USDOLLAR(-1234.5,2)", "($1,234.50)");
+  ExpectUsDollar("=USDOLLAR(-1234.5)", "($1,234.50)");
+  ExpectUsDollar("=USDOLLAR(-1234.5,-1)", "($1,230)");
+}
+
+TEST(BuiltinsText3UsDollar, Rounding) {
+  ExpectUsDollar("=USDOLLAR(1234.567,-2)", "$1,200");
+  ExpectUsDollar("=USDOLLAR(0.5,0)", "$1");
+  ExpectUsDollar("=USDOLLAR(2.5,0)", "$3");
+  // Display rounding to zero keeps the sign; rounding left of the point
+  // first does not.
+  ExpectUsDollar("=USDOLLAR(-0.001,2)", "($0.00)");
+  ExpectUsDollar("=USDOLLAR(-0.4,0)", "($0)");
+  ExpectUsDollar("=USDOLLAR(-4,-1)", "$0");
+  ExpectUsDollar("=USDOLLAR(0.001,2)", "$0.00");
+}
+
+TEST(BuiltinsText3UsDollar, Errors) {
+  for (const auto& [src, want] : {std::pair<const char*, ErrorCode>{"=USDOLLAR(1,128)", ErrorCode::Value},
+                                  {"=USDOLLAR(\"abc\")", ErrorCode::Value},
+                                  {"=USDOLLAR(1/0)", ErrorCode::Div0}}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), want) << src;
+  }
 }
 
 // ---------------------------------------------------------------------------
