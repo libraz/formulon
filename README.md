@@ -106,17 +106,17 @@ per-pass telemetry in the status line.
 
 ## Status
 
-**All 522 catalogued Excel functions are recognized**, but recognition is not the same as full Excel-compatible execution. The function catalog exposes availability explicitly; `make function-status` reports the current split.
+**All 523 catalogued Excel functions are recognized**, but recognition is not the same as full Excel-compatible execution. The function catalog exposes availability explicitly; `make function-status` reports the current split.
 
-The two top-level rows are exclusive and sum to the full 522; the
-environment-bound row is a **subset of the 507 real implementations**, called
+The two top-level rows are exclusive and sum to the full 523; the
+environment-bound row is a **subset of the 508 real implementations**, called
 out separately because a fixed golden cannot fully describe it — it is not an
-additional category (507 + 15 = 522, not 524).
+additional category (508 + 15 = 523, not 525).
 
 | Availability | Count | Meaning | Examples |
 |--------------|-------|---------|----------|
-| Real implementation | 507 | Evaluates inside the normal calculation engine and is covered by unit and/or oracle tests. | Math, statistics, lookup, text, dynamic arrays |
-| &nbsp;&nbsp;↳ of which environment-bound | 2 | A real implementation whose result depends on host or workbook state, so a fixed golden cannot fully describe it. Counted within the 507 above. | `INFO`, `CELL` |
+| Real implementation | 508 | Evaluates inside the normal calculation engine and is covered by unit and/or oracle tests. | Math, statistics, lookup, text, dynamic arrays |
+| &nbsp;&nbsp;↳ of which environment-bound | 2 | A real implementation whose result depends on host or workbook state, so a fixed golden cannot fully describe it. Counted within the 508 above. | `INFO`, `CELL` |
 | Unavailable stub | 15 | Requires external services, network I/O, COM providers, or OLAP connections that Formulon does not embed; returns a fixed error. | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
 **104 oracle categories** are defined. The formula and conditional-formatting tracks regenerate from Mac Excel 365 ja-JP; the workbook track regenerates from Windows Excel 365 ja-JP, and its goldens carry a capture identifier that pins every suite to a single verified Microsoft 365 session. Current local verification:
@@ -132,7 +132,7 @@ additional category (507 + 15 = 522, not 524).
 
 Three labels partition the CTest suite: `SLOW` (minutes-scale integration and concurrency cases), `TSAN` (thread-sanitizer runs), and `BENCH` (microbenchmark regression checks, whose threshold is tunable, so they run on demand). Everything else is the unlabeled fast tier that CI gates on; there is no separate load-test tier. The libFuzzer harnesses also carry the `SLOW` label, but they exist only in a build configured with `-DFM_BUILD_FUZZ=ON` (`make fuzz`), not in a default build or in CI. They need a Clang that ships the libFuzzer runtime, which the Apple toolchain does not, so macOS needs a separate LLVM. AddressSanitizer is off by default there as well — it deadlocks in its own shadow-memory setup against recent macOS dynamic linkers — so a macOS fuzz run detects crashes, timeouts and undefined behaviour but not heap corruption.
 
-Every skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 522 catalogued functions, `518` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); the remaining `4` (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) fail only `behaviors_declared` — their behavior taxonomy is under-specified. `JIS` closes as a declared alias of `DBCS`: Excel rewrites that ja-JP formula-bar spelling before it stores or evaluates a formula, so no oracle case can name it, and the closure harness resolves the alias to the function it defers to rather than taking the declaration on trust.
+Every skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 523 catalogued functions, `519` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); the remaining `4` (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) fail only `behaviors_declared` — their behavior taxonomy is under-specified. `JIS` closes as a declared alias of `DBCS`: Excel rewrites that ja-JP formula-bar spelling before it stores or evaluates a formula, so no oracle case can name it, and the closure harness resolves the alias to the function it defers to rather than taking the declaration on trust.
 
 Beyond formula results, **pivot tables and print areas / pagination** have a dedicated **workbook oracle track**, captured through a WSL2 → Windows COM bridge. Its nine remaining skips are all the same Excel quirk: at a print scale or zoom of 50% or less, Excel's page-break preview emits column auto-breaks that do not follow geometric pagination, so the observed break set stops shrinking with the scale and grows again at 25%. Each skipped case records the Microsoft 365 observation it was measured against.
 

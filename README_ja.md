@@ -84,14 +84,14 @@ formulon paginate output.xlsx --sheet 0
 
 ## ステータス
 
-カタログに登録した Excel 関数は **522 個すべてを認識**します。ただし、「関数名を知っている」ことと「Excel 互換の実装がある」ことは分けて扱います。現在の内訳は `make function-status` で確認できます。
+カタログに登録した Excel 関数は **523 個すべてを認識**します。ただし、「関数名を知っている」ことと「Excel 互換の実装がある」ことは分けて扱います。現在の内訳は `make function-status` で確認できます。
 
-上位 2 区分（実装済み・unavailable stub）は排他的で、合計は 522 に一致します。環境依存の行は**実装済み 507 件の内数**です。固定の golden では記述しきれないため別に示していますが、独立した区分ではありません（507 + 15 = 522 で、524 にはなりません）。
+上位 2 区分（実装済み・unavailable stub）は排他的で、合計は 523 に一致します。環境依存の行は**実装済み 508 件の内数**です。固定の golden では記述しきれないため別に示していますが、独立した区分ではありません（508 + 15 = 523 で、525 にはなりません）。
 
 | 区分 | 件数 | 意味 | 例 |
 |------|------|------|----|
-| 実装済み | 507 | 通常の計算エンジン内で評価できる関数。unit / oracle で検証しています。 | 数学、統計、検索、テキスト、動的配列など |
-| &nbsp;&nbsp;↳ うち環境依存 | 2 | 実装済みだが、ホスト環境やワークブック状態によって値が変わるため固定 golden だけでは完全に記述できない関数。上記 507 に含まれます。 | `INFO`, `CELL` |
+| 実装済み | 508 | 通常の計算エンジン内で評価できる関数。unit / oracle で検証しています。 | 数学、統計、検索、テキスト、動的配列など |
+| &nbsp;&nbsp;↳ うち環境依存 | 2 | 実装済みだが、ホスト環境やワークブック状態によって値が変わるため固定 golden だけでは完全に記述できない関数。上記 508 に含まれます。 | `INFO`, `CELL` |
 | unavailable stub | 15 | Formulon が内蔵しない外部サービス、ネットワーク、COM、OLAP 接続などが必要な関数。決まったエラーを返します。 | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
 oracle は **104 カテゴリ** あります。数式 track と条件付き書式 track は Mac Excel 365 ja-JP から、workbook track は Windows Excel 365 ja-JP から再生成します。workbook track の golden には採取 ID が付いていて、すべての suite が同じ検証済み Microsoft 365 セッションで採取されたことを確認できます。
@@ -109,7 +109,7 @@ oracle は **104 カテゴリ** あります。数式 track と条件付き書�
 
 CTest スイートを分けているラベルは 3 つです。`SLOW`（数分かかる結合・並行性テスト）、`TSAN`（ThreadSanitizer での実行）、`BENCH`（しきい値を調整できるマイクロベンチの回帰チェックで、必要なときだけ実行）です。ラベルのないテストはすべて高速層で、CI はこれを合否判定に使います。負荷試験専用の層はありません。libFuzzer ハーネスも `SLOW` ラベルを持ちますが、`-DFM_BUILD_FUZZ=ON` を指定したビルド (`make fuzz`) にしか存在せず、既定ビルドにも CI にも含まれません。libFuzzer ランタイムを同梱する Clang が必要で、Apple の toolchain はこれを持たないため、macOS では別途 LLVM が要ります。macOS では AddressSanitizer も既定で無効です。最近の macOS の動的リンカと組み合わせると、shadow memory の初期化中にデッドロックするためです。そのため macOS での fuzz 実行で検出できるのはクラッシュ・タイムアウト・未定義動作までで、ヒープ破壊は検出できません。
 
-残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `518` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る 4 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、挙動の分類がまだ書き切れていないためです。`JIS` は `DBCS` の別名として宣言し、closure を満たしています。Excel は ja-JP の数式バーで入力された `JIS` を保存・評価の前に `DBCS` へ書き換えるため、`JIS` を直接呼ぶ oracle case は作れません。closure harness は宣言をそのまま信用せず、別名の参照先の関数を実際に評価して判定します。
+残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。523 関数のうち `519` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る 4 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、挙動の分類がまだ書き切れていないためです。`JIS` は `DBCS` の別名として宣言し、closure を満たしています。Excel は ja-JP の数式バーで入力された `JIS` を保存・評価の前に `DBCS` へ書き換えるため、`JIS` を直接呼ぶ oracle case は作れません。closure harness は宣言をそのまま信用せず、別名の参照先の関数を実際に評価して判定します。
 
 数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があり、WSL2 から Windows COM へ渡すブリッジ経由で採取します。残る 9 件の skip はいずれも同じ Excel の癖です。印刷倍率またはズームが 50% 以下のとき、Excel の改ページプレビューは幾何的なページ分割に従わない列の自動改ページを出すため、観測される改ページ位置は倍率を下げても縮まらず、25% では逆に増えます。skip した各ケースには、照合した Microsoft 365 の観測値を記録しています。
 
