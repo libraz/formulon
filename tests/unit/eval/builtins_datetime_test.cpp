@@ -840,10 +840,24 @@ TEST(DateTimeWeeknum, Iso21_2023Jan1_RollsToPrevYear) {
   EXPECT_EQ(v.as_number(), 52.0);
 }
 
-TEST(DateTimeWeeknum, InvalidReturnTypeUsesDefault) {
-  const Value v = EvalSource("=WEEKNUM(DATE(2024,1,1),99)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 1.0);
+// Windows Excel 365 (the primary reference) rejects an unsupported
+// return_type with #NUM!; only 1, 2, 11..17 and 21 are accepted.
+TEST(DateTimeWeeknum, InvalidReturnTypeIsNum) {
+  for (const char* src :
+       {"=WEEKNUM(DATE(2024,1,1),99)", "=WEEKNUM(DATE(2024,1,1),0)", "=WEEKNUM(DATE(2024,1,1),3)",
+        "=WEEKNUM(DATE(2024,1,1),10)", "=WEEKNUM(DATE(2024,1,1),18)", "=WEEKNUM(DATE(2024,1,1),22)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
+  }
+}
+
+TEST(DateTimeWeeknum, EveryAcceptedReturnTypeComputes) {
+  for (const char* src :
+       {"=WEEKNUM(DATE(2024,1,1),1)", "=WEEKNUM(DATE(2024,1,1),2)", "=WEEKNUM(DATE(2024,1,1),11)",
+        "=WEEKNUM(DATE(2024,1,1),17)", "=WEEKNUM(DATE(2024,1,1),21)", "=WEEKNUM(DATE(2024,1,1),11.9)"}) {
+    EXPECT_TRUE(EvalSource(src).is_number()) << src;
+  }
 }
 
 TEST(DateTimeWeeknum, NegativeSerialIsNum) {

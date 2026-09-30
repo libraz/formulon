@@ -41,6 +41,9 @@ IRONCALC_DIVERGENCE = REPO_ROOT / "tests" / "ironcalc_divergence.yaml"
 GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden"
 IRONCALC_GOLDEN_DIR = GOLDEN_DIR / "ironcalc"
 VARIANTS_DIR = REPO_ROOT / "tests" / "oracle" / "variants"
+TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
+# The explicit every-target value of `applies_to`; `oracle_gen.py` reads it too.
+APPLIES_TO_ALL = "all"
 NON_ORACLE_SCOPES = {
     "api-contract",
     "environment",
@@ -187,6 +190,40 @@ def load_observations(golden_dirs: "list[Path] | None" = None) -> dict[str, str]
                 elif "observed_error" in case:
                     out[case["id"]] = f"{_display_path(path)} (probe failed: {case['observed_error']})"
     return out
+
+
+@functools.lru_cache(maxsize=1)
+def known_targets() -> frozenset[str]:
+    """Every oracle target named in tools/oracle/targets.yaml."""
+
+    doc = yaml.safe_load(TARGETS_FILE.read_text(encoding="utf-8")) or {}
+    return frozenset((doc.get("targets") or {}).keys())
+
+
+def applies_to_error(entry: dict, *, required: bool) -> "str | None":
+    """Why an entry's `applies_to` is unacceptable, or None.
+
+    A skip entry must state its scope -- `all`, or a list of known targets --
+    because an unscoped skip suppresses every target's capture, and one
+    observed on a single host would silently cost the others a measurement.
+    """
+
+    if "applies_to" not in entry or entry["applies_to"] is None:
+        if required:
+            return (
+                "skip-oracle needs an explicit `applies_to`: `all`, or the targets whose observation "
+                "the skip rests on (e.g. [mac-365-ja_JP])"
+            )
+        return None
+    applies = entry["applies_to"]
+    if applies == APPLIES_TO_ALL:
+        return None
+    if not isinstance(applies, list) or not applies or not all(isinstance(item, str) for item in applies):
+        return f"`applies_to` must be `{APPLIES_TO_ALL}` or a non-empty list of target names; got {applies!r}"
+    unknown = sorted(set(applies) - known_targets())
+    if unknown:
+        return f"`applies_to` names unknown target(s): {', '.join(unknown)}"
+    return None
 
 
 def divergence_files() -> list[Path]:
@@ -474,6 +511,10 @@ def validate(path: Path, *, strict: bool) -> int:
         stamp = entry.get("last_verified_excel_version")
         stamp_pending = is_pending_stamp(stamp)
         stamp_stale = is_stale_stamp(stamp)
+
+        scope_error = applies_to_error(entry, required=entry.get("mode") == "skip-oracle")
+        if scope_error is not None:
+            errors.append(f"{case_id}: {scope_error}")
 
         if entry.get("mode") == "skip-oracle":
             cause = entry.get("cause")

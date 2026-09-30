@@ -104,6 +104,7 @@ class StaleStampGateTest(unittest.TestCase):
         "  - id: volatile_now_clock\n"
         "    mode: skip-oracle\n"
         "    cause: excel-no-value\n"
+        "    applies_to: all\n"
         '    reason: "r"\n'
         "    prefer: formulon\n"
         '    last_verified_excel_version: "16.108.1"\n'
@@ -140,7 +141,7 @@ class SkipCauseTest(unittest.TestCase):
     the number has to be in cases rather than entries.
     """
 
-    COMMON = 'reason: "r"\n    prefer: formulon\n    last_verified_excel_version: "16.112"\n'
+    COMMON = 'reason: "r"\n    prefer: formulon\n    last_verified_excel_version: "16.112"\n    applies_to: all\n'
 
     def _run(self, body: str) -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:
@@ -227,6 +228,67 @@ class SkipCauseTest(unittest.TestCase):
         self.assertIn("skipped cases by cause: 0 total", output)
 
 
+class SkipScopeTest(unittest.TestCase):
+    """A skip entry must say which targets it suppresses.
+
+    An unscoped skip-oracle entry applies to every target, so a skip resting
+    on a Mac-only observation silently kept Windows from capturing 19 cases.
+    Requiring `applies_to` makes the scope a stated decision every time.
+    """
+
+    SKIP = (
+        "entries:\n  - id: volatile_now_clock\n    mode: skip-oracle\n    cause: excel-no-value\n"
+        '    reason: "r"\n    prefer: formulon\n    last_verified_excel_version: "16.112"\n'
+    )
+
+    def _run(self, body: str) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "divergence.yaml"
+            path.write_text(body, encoding="utf-8")
+            out = io.StringIO()
+            err = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                status = divergence_check.validate(path, strict=True)
+            return status, out.getvalue() + err.getvalue()
+
+    def test_skip_without_applies_to_fails(self) -> None:
+        status, output = self._run(self.SKIP)
+        self.assertEqual(status, 1)
+        self.assertIn("needs an explicit `applies_to`", output)
+
+    def test_all_and_known_target_lists_pass(self) -> None:
+        for scope in ("all", "[mac-365-ja_JP]", "[mac-365-ja_JP, win-365-ja_JP]"):
+            with self.subTest(scope=scope):
+                status, output = self._run(self.SKIP + f"    applies_to: {scope}\n")
+                self.assertEqual(status, 0, output)
+
+    def test_unknown_target_and_bad_shapes_fail(self) -> None:
+        for scope, message in (
+            ("[mac-365-ja-JP]", "unknown target"),
+            ("[]", "non-empty list"),
+            ("everywhere", "non-empty list"),
+        ):
+            with self.subTest(scope=scope):
+                status, output = self._run(self.SKIP + f"    applies_to: {scope}\n")
+                self.assertEqual(status, 1)
+                self.assertIn(message, output)
+
+    def test_tolerance_entry_may_leave_scope_implicit(self) -> None:
+        status, output = self._run(
+            "entries:\n  - id: volatile_now_clock\n    tolerance: { abs: 1.0, rel: 0 }\n"
+            '    reason: "r"\n    prefer: formulon\n    last_verified_excel_version: "16.112"\n'
+        )
+        self.assertEqual(status, 0, output)
+
+    def test_committed_registries_scope_every_skip(self) -> None:
+        for path in divergence_check.divergence_files():
+            doc = divergence_check.yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            for entry in doc.get("entries") or []:
+                if entry.get("mode") == "skip-oracle":
+                    with self.subTest(path=path.name, entry=entry.get("id") or entry.get("ids") or entry.get("suite")):
+                        self.assertIsNone(divergence_check.applies_to_error(entry, required=True))
+
+
 class AmbiguousCaseIdTest(unittest.TestCase):
     """A bare `id:`/`ids:` selector cannot disambiguate a shared case id.
 
@@ -235,7 +297,7 @@ class AmbiguousCaseIdTest(unittest.TestCase):
     would also skip/re-tolerance the other suite's case of the same id.
     """
 
-    COMMON = 'reason: "r"\n    prefer: formulon\n    last_verified_excel_version: "16.112"\n'
+    COMMON = 'reason: "r"\n    prefer: formulon\n    last_verified_excel_version: "16.112"\n    applies_to: all\n'
 
     def _run(self, body: str) -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:

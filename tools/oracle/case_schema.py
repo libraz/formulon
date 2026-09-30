@@ -34,7 +34,6 @@ COMPARE_MODES = {
     "exact",
     "complex_text",
     "datevalue_roundtrip_readback",
-    "empty_string_readback",
     "numeric_text",
 }
 

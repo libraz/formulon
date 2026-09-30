@@ -65,8 +65,7 @@
       "expect": {
         "kind": "text",
         "value": ""
-      },
-      "compare_mode": "empty_string_readback"
+      }
     },
     {
       "id": "encodeurl_percent_self_encodes",

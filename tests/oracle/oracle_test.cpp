@@ -395,9 +395,6 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
 std::string compare_json_scalar(const JsonValue& expect, const Value& actual, double tol_abs, double tol_rel,
                                 std::string_view compare_mode) {
   if (expect.is_null()) {
-    if (compare_mode == "empty_string_readback" && actual.is_text() && actual.as_text().empty()) {
-      return {};
-    }
     return actual.is_blank() ? std::string{} : "expected blank, got " + format_value(actual);
   }
   if (expect.is_number()) {
@@ -417,9 +414,6 @@ std::string compare_json_scalar(const JsonValue& expect, const Value& actual, do
                      (actual.as_boolean() ? "TRUE" : "FALSE");
   }
   if (expect.is_string()) {
-    if (compare_mode == "empty_string_readback" && expect.as_string().empty() && actual.is_blank()) {
-      return {};
-    }
     if (!actual.is_text())
       return "expected text, got " + format_value(actual);
     if (expect.as_string() == actual.as_text())
@@ -502,9 +496,6 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
   if (kind == "blank") {
     if (actual.is_blank())
       return {};
-    if (compare_mode == "empty_string_readback" && actual.is_text() && actual.as_text().empty()) {
-      return {};
-    }
     return "expected blank, got " + format_value(actual);
   }
   if (kind == "number") {
@@ -551,10 +542,6 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
         return {};
       }
       return "numeric text mismatch: expected \"" + want_text + "\", got " + std::to_string(got);
-    }
-
-    if (compare_mode == "empty_string_readback" && want_text.empty() && actual.is_blank()) {
-      return {};
     }
 
     if (!actual.is_text())

@@ -607,8 +607,7 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     // No filesystem path on the Workbook yet. Mac returns blank when the
     // workbook has never been saved; we surface empty text instead so
     // the top-level blank-as-zero rule (`evaluate()` in tree_walker)
-    // does not collapse the result to 0. Oracle verification accepts the
-    // xlwings "" read-back artifact via empty_string_readback.
+    // does not collapse the result to 0.
     return arena_text(arena, "");
   }
   if (key == "parentheses") {

@@ -14,7 +14,6 @@
 #include "eval/info_lazy.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -527,20 +526,11 @@ Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const Functio
     if (args[1].is_error()) {
       return args[1];
     }
-    auto rt = coerce_to_number(args[1]);
-    if (!rt) {
-      return Value::error(rt.error());
-    }
-    const int return_type = static_cast<int>(std::trunc(rt.value()));
-    const bool valid =
-        return_type == 1 || return_type == 2 || return_type == 21 || (return_type >= 11 && return_type <= 17);
-    if (!valid) {
-      args[1] = Value::number(1.0);
-    }
   }
   // WEEKNUM is date1904-sensitive and no longer in the eager registry; reach
   // its shared calendar impl through `find_date_entry` and thread the
-  // workbook epoch. Invalid return_type values use Excel's default type 1.
+  // workbook epoch. An unsupported return_type is #NUM! there, as Windows
+  // Excel 365 reports it (Mac Excel falls back to type 1).
   const DateEntry* entry = find_date_entry("WEEKNUM");
   if (entry == nullptr) {
     return Value::error(ErrorCode::Name);

@@ -86,17 +86,16 @@
 #       prefer: mac-excel-365 | win-excel-365 | formulon
 #       first_noted: YYYY-MM-DD
 #       last_verified_excel_version: "16.xx.x (Build ...)"
-#       applies_to: [mac-365-ja_JP, win-365-ja_JP]   # optional; list of
-#                                                     # oracle target names
-#                                                     # from tools/oracle/
-#                                                     # targets.yaml. Default
-#                                                     # (omitted / null) =
-#                                                     # applies to every
-#                                                     # target. Entries with
-#                                                     # an unrecognised type
-#                                                     # are rejected loudly
-#                                                     # so typos surface
-#                                                     # immediately.
+#       applies_to: all | [mac-365-ja_JP, win-365-ja_JP]
+#                                          # `all`, or target names from
+#                                          # tools/oracle/targets.yaml.
+#                                          # REQUIRED on skip-oracle entries:
+#                                          # a skip suppresses capture on the
+#                                          # targets it covers, so one resting
+#                                          # on a single host's observation
+#                                          # names that host. Optional on
+#                                          # tolerance / compare_mode entries,
+#                                          # where omitted means every target.
 
 entries:
   # Excel refuses these five spellings at entry, so no reading exists to
@@ -110,12 +109,24 @@ entries:
       - arraytotext_only_errors_default
       - arraytotext_arity_zero
       - arraytotext_arity_three
+    applies_to: all
     mode: skip-oracle
     cause: excel-no-value
-    reason: "Excel discards these formulas at entry rather than evaluating them: `NA()` inside an array constant is not accepted (an error literal such as `{1,#N/A,3}` is), and ARRAYTOTEXT takes one or two arguments. Observed by entering each and reading the formula back empty. The error contract they were written for is captured by arraytotext_error_literal_in_array_default / _strict, arraytotext_error_cells_default / _strict and arraytotext_only_error_cells_default, which Excel does accept."
+    reason: "Excel discards these formulas at entry rather than evaluating them: `NA()` inside an array constant is not accepted (an error literal such as `{1,#N/A,3}` is), and ARRAYTOTEXT takes one or two arguments. Observed by entering each and reading the formula back empty. The error contract they were written for is captured by arraytotext_error_literal_in_array_default / _strict, arraytotext_error_cells_default / _strict and arraytotext_only_error_cells_default, which Excel does accept. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-08-05
     last_verified_excel_version: "16.112.1"
+  # Windows Excel 365, the primary reference, rejects an unsupported
+  # WEEKNUM return_type with #NUM! (16.0.20228); Mac Excel 365 falls back to
+  # type 1 and returns the week number instead.
+  - id: weeknum_invalid_type_is_num
+    applies_to: [mac-365-ja_JP]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "WEEKNUM(DATE(2024,1,1),99): Mac Excel 365 ja-JP treats the unsupported return_type as the default type 1 and returns 1, where Windows Excel 365 ja-JP returns #NUM! (tests/oracle/variants/win-365-ja_JP/golden/datetime.golden.json). Formulon follows Windows, the primary 1-bit reference, and Microsoft's documented contract (only 1, 2, 11-17 and 21 are accepted)."
+    prefer: formulon
+    first_noted: 2026-09-30
+    last_verified_excel_version: "16.113.2"
   # -- ad-hoc evaluate-formula scalar reduction (intentional API shape) ----
   # `fm_workbook_evaluate_formula` (and the WASM / Node
   # `evaluateFormulaText`) return a single scalar. When the evaluated
@@ -128,6 +139,7 @@ entries:
   # generated for this behaviour; the entry documents the intent for
   # reviewers.
   - id: evaluate_formula_array_scalar_reduction
+    applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     scope: api-contract
@@ -152,9 +164,10 @@ entries:
   - ids:
       - isformula_of_literal_number_is_value
       - isformula_of_literal_text_is_value
+    applies_to: all
     mode: skip-oracle
     cause: excel-no-value
-    reason: "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against."
+    reason: "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-23
     last_verified_excel_version: "16.112.1"
@@ -218,25 +231,28 @@ entries:
   # dead bridge: in the same generator invocation, `erf_zero` and
   # `erf_one` set and captured normally (0.0 and 0.8427007929497149).
   - id: rows_of_mixed_row_array_literal
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel refuses =ROWS({1,2;3,4,5}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's parser surfaces #NAME? for the jagged array literal."
+    reason: "Mac Excel refuses =ROWS({1,2;3,4,5}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's parser surfaces #NAME? for the jagged array literal. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-26
     last_verified_excel_version: "16.112"
 
   - id: erf_precise_two_arg_rejected
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors."
+    reason: "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-26
     last_verified_excel_version: "16.112"
 
   - id: erfc_precise_two_arg_rejected
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected."
+    reason: "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112"
@@ -250,9 +266,10 @@ entries:
   - ids:
       - rows_of_two_endpoint_mixed_axis
       - columns_of_two_endpoint_mixed_axis
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel refuses the two-endpoint mixed-axis spelling (=ROWS(A:1), =COLUMNS(A:1)) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The three-endpoint spelling (=ROWS(1:3:E5) / =COLUMNS(1:3:E5), cases rows_of_whole_row_chained_with_cell / columns_of_whole_row_chained_with_cell) is accepted and has a real golden. Formulon's parser surfaces #NAME? for the rejected two-endpoint spelling."
+    reason: "Mac Excel refuses the two-endpoint mixed-axis spelling (=ROWS(A:1), =COLUMNS(A:1)) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The three-endpoint spelling (=ROWS(1:3:E5) / =COLUMNS(1:3:E5), cases rows_of_whole_row_chained_with_cell / columns_of_whole_row_chained_with_cell) is accepted and has a real golden. Formulon's parser surfaces #NAME? for the rejected two-endpoint spelling. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-08-21
     last_verified_excel_version: "16.112.1"
@@ -308,6 +325,7 @@ entries:
   # reports #VALUE! for all three, so the divergence is which surface a
   # bounded run reports, not whether the run terminates.
   - id: regex_match_limit_regextest
+    applies_to: [mac-365-ja_JP]
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
@@ -317,6 +335,7 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
   - id: regex_match_limit_regexextract
+    applies_to: [mac-365-ja_JP]
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
@@ -326,6 +345,7 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
   - id: regex_match_limit_regexreplace
+    applies_to: [mac-365-ja_JP]
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
@@ -369,6 +389,7 @@ entries:
   # alpha value becomes non-unique; Mac picks alpha ~0.751, Formulon
   # picks alpha ~0.09 on the same data with the same RMSE.
   - id: forecast_ets_stat_alpha
+    applies_to: all
     cause: non-identifiable
     reason: "On cyclic period-4 data where joint optimisation drives RMSE -> 0, the alpha value is non-unique: any (alpha, beta, gamma, initial-state) combination with the same forecast manifold yields the same SSE. Mac selects alpha ~0.751 via its bias / regularisation; Formulon's bounded Nelder-Mead reaches RMSE = 0 at alpha ~0.09. The fit quality (RMSE / MASE) matches Mac; the smoothing weight is a non-identifiable parameter on this fixture."
     prefer: mac-excel-365
@@ -387,6 +408,7 @@ entries:
   # now captured as full arrays by the spill-shape oracle probe. Mode 3
   # remains skipped until Mac Excel exposes return_mode=3.
   - id: regexextract_mode_3_all_capture_groups
+    applies_to: [mac-365-ja_JP]
     cause: accepted-divergence
     reason: "Mac Excel 365 16.109 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements per MS docs and validates via unit tests."
     prefer: formulon
@@ -421,6 +443,7 @@ entries:
   # entries remain for numerically unstable perfect-fit statistics and an
   # empty-array-literal read-back quirk.
   - id: linest_univariate_stats_true
+    applies_to: all
     cause: non-identifiable
     reason: "Perfect-fit LINEST stats=TRUE drives the residual sum to exactly 0, so the F statistic is infinite in the limit. Both engines report a huge finite F — Formulon by flooring the residual at the squared rounding error the data's scale can still resolve, Mac Excel 16.109 by whatever residual its own arithmetic happens to leave — and the two magnitudes differ by a numerically unstable factor. Same class as logest_univariate_stats_true. Other stats cells are covered by unit tests."
     prefer: mac-excel-365
@@ -428,6 +451,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: logest_univariate_stats_true
+    applies_to: all
     cause: non-identifiable
     reason: "Perfect-fit LOGEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 and Formulon both return huge finite F statistics but differ by a numerically unstable factor. Other stats cells are covered by unit tests."
     prefer: mac-excel-365
@@ -435,8 +459,9 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: frequency_empty_bins
+    applies_to: all
     cause: excel-no-value
-    reason: "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon treats the zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests."
+    reason: "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon treats the zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-05-15
     last_verified_excel_version: "16.112"
@@ -448,6 +473,7 @@ entries:
   # parity is not meaningful, so every case is `mode: skip-oracle`. Per-
   # function correctness is covered by unit tests (range / shape).
   - id: volatile_now_clock
+    applies_to: all
     cause: excel-no-value
     reason: "NOW() depends on wall-clock time; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
@@ -455,6 +481,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: volatile_today_clock
+    applies_to: all
     cause: excel-no-value
     reason: "TODAY() depends on wall-clock date; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
@@ -462,6 +489,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: volatile_rand_uniform
+    applies_to: all
     cause: excel-no-value
     reason: "RAND() draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
@@ -469,6 +497,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: volatile_randbetween_int
+    applies_to: all
     cause: excel-no-value
     reason: "RANDBETWEEN draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
@@ -476,6 +505,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: volatile_randarray_2x2
+    applies_to: all
     cause: excel-no-value
     reason: "RANDARRAY draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
     prefer: formulon
@@ -490,6 +520,7 @@ entries:
   # engine. Fixed return codes are covered by unit tests; these entries
   # exclude the representative probes from oracle-verify.
   - id: external_stub_image
+    applies_to: all
     cause: accepted-divergence
     reason: "IMAGE fetches a network image; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an embedded image client."
     prefer: formulon
@@ -497,6 +528,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_py
+    applies_to: all
     cause: accepted-divergence
     reason: "PY runs Python in the cloud; Formulon does not embed a Python runtime and stubs to #NAME!. Oracle parity requires the Microsoft 365 PY service."
     prefer: formulon
@@ -504,6 +536,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_rtd
+    applies_to: all
     cause: accepted-divergence
     reason: "RTD reads from a real-time data COM server; Formulon has no provider runtime and stubs to #N/A. Oracle parity requires a registered COM RTD server."
     prefer: formulon
@@ -511,6 +544,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_stockhistory
+    applies_to: all
     cause: accepted-divergence
     reason: "STOCKHISTORY pulls live market data; Formulon does no network I/O. Oracle parity requires Microsoft 365 stock data subscription."
     prefer: formulon
@@ -518,6 +552,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_webservice
+    applies_to: all
     cause: accepted-divergence
     reason: "WEBSERVICE makes an HTTP request; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an HTTP client."
     prefer: formulon
@@ -525,6 +560,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_copilot
+    applies_to: all
     cause: accepted-divergence
     reason: "COPILOT dispatches to an LLM backend; Formulon does not embed one and stubs to #NAME!. Oracle parity requires the Microsoft 365 Copilot service."
     prefer: formulon
@@ -532,6 +568,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_detectlanguage
+    applies_to: all
     cause: accepted-divergence
     reason: "DETECTLANGUAGE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
     prefer: formulon
@@ -539,6 +576,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_translate
+    applies_to: all
     cause: accepted-divergence
     reason: "TRANSLATE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
     prefer: formulon
@@ -574,6 +612,7 @@ entries:
   # its own environment-bound suite (`info_function.yaml`) because it is
   # host-state-dependent rather than an unavailable fixed-error stub.
   - id: external_stub_info
+    applies_to: all
     cause: excel-no-value
     case_alias: info_system
     reason: "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
@@ -582,6 +621,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubekpimember
+    applies_to: all
     cause: accepted-divergence
     reason: "CUBEKPIMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
@@ -589,6 +629,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubemember
+    applies_to: all
     cause: accepted-divergence
     reason: "CUBEMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
@@ -596,6 +637,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubememberproperty
+    applies_to: all
     cause: accepted-divergence
     reason: "CUBEMEMBERPROPERTY requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
@@ -603,6 +645,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cuberankedmember
+    applies_to: all
     cause: accepted-divergence
     reason: "CUBERANKEDMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
@@ -610,6 +653,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubeset
+    applies_to: all
     cause: accepted-divergence
     reason: "CUBESET requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
@@ -617,6 +661,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubesetcount
+    applies_to: all
     cause: accepted-divergence
     reason: "CUBESETCOUNT requires a live cube set; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
@@ -624,6 +669,7 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_cubevalue
+    applies_to: all
     cause: accepted-divergence
     reason: "CUBEVALUE requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
     prefer: formulon
@@ -640,16 +686,18 @@ entries:
   # entry survives because the case is a string literal, which Excel
   # refuses at entry.
   - id: external_stub_phonetic
+    applies_to: all
     cause: excel-no-value
     case_alias: lazy_phonetic_literal_text
-    reason: "As lazy_phonetic_literal_text: the case is `=PHONETIC(\"テスト\")` and Excel's PHONETIC takes a reference, so the literal is refused at entry and Excel stores no formula to evaluate. Annotated-cell behaviour agrees on both engines and is pinned by tests/integration/ooxml_phonetic_roundtrip_test.cpp."
+    reason: "As lazy_phonetic_literal_text: the case is `=PHONETIC(\"テスト\")` and Excel's PHONETIC takes a reference, so the literal is refused at entry and Excel stores no formula to evaluate. Annotated-cell behaviour agrees on both engines and is pinned by tests/integration/ooxml_phonetic_roundtrip_test.cpp. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: lazy_phonetic_literal_text
+    applies_to: all
     cause: excel-no-value
-    reason: "Excel's PHONETIC takes a reference, so a string literal is refused at entry and leaves no reading. `=PHONETIC(A1)` over an unannotated text cell returns the text on both engines and is captured as lazy_phonetic_unannotated_cell; the annotated and partially annotated cases are pinned against a hand-built rPh package Excel was asked to open."
+    reason: "Excel's PHONETIC takes a reference, so a string literal is refused at entry and leaves no reading. `=PHONETIC(A1)` over an unannotated text cell returns the text on both engines and is captured as lazy_phonetic_unannotated_cell; the annotated and partially annotated cases are pinned against a hand-built rPh package Excel was asked to open. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: mac-excel-365
     first_noted: 2026-05-15
     last_verified_excel_version: "16.112.1"
@@ -670,17 +718,19 @@ entries:
   # spelling a user types is retained and evaluated, so the semantics these
   # cases were written for are pinned by their `_hash_` siblings instead.
   - id: anchorarray_static_value_anchor
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Excel discards `=_xlfn.ANCHORARRAY(B1)` at entry, so there is no reading to compare. Entering `=B1#` on the same sheet returns #REF!, matching Formulon; that is captured as anchorarray_hash_static_value_anchor."
+    reason: "Excel discards `=_xlfn.ANCHORARRAY(B1)` at entry, so there is no reading to compare. Entering `=B1#` on the same sheet returns #REF!, matching Formulon; that is captured as anchorarray_hash_static_value_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: mac-excel-365
     first_noted: 2026-05-02
     last_verified_excel_version: "16.112.1"
 
   - id: anchorarray_blank_anchor
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Excel discards `=_xlfn.ANCHORARRAY(E1)` at entry. The `=E1#` spelling returns #REF! for a genuinely blank anchor, captured as anchorarray_hash_blank_anchor."
+    reason: "Excel discards `=_xlfn.ANCHORARRAY(E1)` at entry. The `=E1#` spelling returns #REF! for a genuinely blank anchor, captured as anchorarray_hash_blank_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: mac-excel-365
     first_noted: 2026-05-02
     last_verified_excel_version: "16.112.1"
@@ -689,9 +739,10 @@ entries:
       - anchorarray_resolves_sequence_sum
       - anchorarray_resolves_sequence_rows
       - anchorarray_offset_resolved_anchor
+    applies_to: all
     mode: skip-oracle
     cause: excel-no-value
-    reason: "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor."
+    reason: "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-08-05
     last_verified_excel_version: "16.112.1"
@@ -770,6 +821,7 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112"
   - id: info_release
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
     reason: "INFO(\"release\") returns the host application's version string; intrinsically environment-bound. Mac Excel 365 returns its build number, Formulon returns the engine version."
@@ -777,6 +829,7 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112.1"
   - id: info_osversion
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
     reason: "INFO(\"osversion\") returns the host OS version string; intrinsically environment-bound."
@@ -784,6 +837,7 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112.1"
   - id: info_system
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
     reason: "INFO(\"system\") returns the host OS family (\"mac\" / \"pcdos\" on Excel); intrinsically environment-bound."
@@ -791,6 +845,7 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112.1"
   - id: info_numfile
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
     reason: "INFO(\"numfile\") returns the count of currently open workbooks; varies with host state."
@@ -798,6 +853,7 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112.1"
   - id: info_recalc
+    applies_to: all
     cause: excel-no-value
     mode: skip-oracle
     reason: "INFO(\"recalc\") returns the host application's recalculation mode (\"Automatic\" / \"Manual\"); Formulon has no notion of recalc mode."
@@ -931,29 +987,38 @@ entries:
     prefer: formulon
     first_noted: 2026-08-16
     last_verified_excel_version: "16.0.20228"
-  # -- Column geometry is calibrated to one Normal font ---------------------
+  # -- Column print-layout width is inferred for every font but Calibri ----
   # Excel resolves a column's width in points from its stored character-unit
-  # width times the Normal font's maximum digit width, so the conversion is a
-  # property of that font. Pagination carries a single calibration for it.
-  # The scope was measured by opening workbooks that differ only in font 0
-  # and reading `Range.Width` back: at 11 pt the family does not move it at
-  # all, so a ja-JP workbook whose default font is a Japanese body face
-  # paginates identically. The point size does move it, and away from 11 pt
-  # the family starts to matter too. Recorded rather than fixed because the
-  # calibration this constant carries is the Windows one, and the sweep that
-  # would size it off the Normal font has only been run on Mac, whose column
-  # geometry is a different regime.
+  # width times the Normal font's maximum digit width (MDW), so the
+  # conversion is a property of that font -- but two DIFFERENT MDW figures
+  # are in play. The reported `Range.Width` ("display" width) is DPI-
+  # dependent: sweeping Calibri, ＭＳ Ｐゴシック, 游ゴシック and Meiryo UI
+  # at 8-18 pt gave different numbers at 100% scaling (96 DPI) than at 175%
+  # (168 DPI) for the identical fonts/sizes. The width print pagination
+  # actually breaks on is NOT this figure: the same print-track cases'
+  # page-break positions are identical across both DPI captures, which the
+  # 168-DPI Range.Width sweep approximates and the 96-DPI one does not.
+  # Only Calibri 11's print-layout width is therefore directly evidenced
+  # (from the print captures' own breaks, not a Range.Width sweep); every
+  # other font/size's print-layout width is inferred by scaling its
+  # (separately measured, DPI-dependent) 96-DPI display calibration by
+  # Calibri 11's print/display ratio -- an approximation, not a second
+  # sweep. The display calibration itself remains exact and continues to
+  # drive `applied_geometry.column_widths_pt` in the workbook oracle
+  # goldens (a diagnostic field no verifier compares today).
   - id: pagination_column_width_calibrated_to_one_normal_font
+    applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
     evidence: [src/print/pagination.cpp, tests/unit/print/pagination_test.cpp]
-    reason: "Column width in points is the stored character-unit width times the Normal font's max digit width. Mac Excel 365 16.112.1 resolves a 30-unit column to the same width under Calibri 11, 游ゴシック 11 and ＭＳ Ｐゴシック 11, so the font family is not observable at 11 pt; the point size is (Calibri 8/11/18 give 4/6/9 pt per stored unit) and the family becomes observable away from 11 pt (游ゴシック 14 gives 8 where Calibri 14 gives 7). Formulon paginates every workbook against the 11 pt calibration. Closing it needs the same sweep captured on the Windows primary oracle, whose column geometry is a different regime from the Mac numbers above."
-    prefer: mac-excel-365
+    reason: "Column width in points is the stored character-unit width times the Normal font's max digit width (MDW), which depends on that font's family and size -- but pagination's break math and the diagnostic `applied_geometry.column_widths_pt` field need different MDW figures. `Range.Width` (the display figure, swept over Calibri, ＭＳ Ｐゴシック, 游ゴシック and Meiryo UI at 8/9/10/11/12/14/16/18 pt: tests/fixtures/excel/win/column_width_dpi100/results.json at 100% scaling / 96 DPI, cross-checked against tests/fixtures/excel/win/column_width/results.json at 175% / 168 DPI) is DPI-dependent -- e.g. Calibri 11 resolves an 8.43-unit column to 48 pt at 100% and 51.43 pt at 175%. Print pagination cannot depend on the authoring screen's DPI, and indeed does not: the print-track captures' page-break positions for a 30-character Calibri-11 column are identical at both DPIs (171.0 pt worth of break, not either DPI's Range.Width figure of 161.25 pt / 171.0 pt happens to coincide for the 168-DPI capture only by chance). Formulon therefore uses two geometries (`ResolveColumnPrintGeometry` / `ResolveColumnDisplayGeometry`, src/print/pagination.cpp): Calibri 11's print-layout MDW/padding is the only one taken directly from a print capture; every other font/size's print-layout figure is inferred by scaling its measured 96-DPI display calibration by Calibri 11's print/display ratio, which is an approximation Excel's actual per-font print behavior has not been swept to confirm. The display calibration remains exact and still drives the diagnostic `applied_geometry` field. A Normal font or size outside the 4x8 sampled set falls back to the Calibri-11 figures in both geometries."
+    prefer: win-excel-365
     first_noted: 2026-08-22
-    last_verified_excel_version: "16.112.1"
+    last_verified_excel_version: "16.0.20326"
 
   - id: xlookup_binary_search_dirty_data
+    applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
@@ -1024,6 +1089,7 @@ entries:
   # than this entry describes and no case pins it; scoping it needs its own
   # probe of how far the abandonment reaches.
   - id: circular_reference_iterative_off_returns_ref
+    applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
@@ -1055,6 +1121,7 @@ entries:
   # available without a Windows host. What Mac genuinely cannot do is
   # *create* a pivot from the AppleScript bridge.
   - id: xlsb_pivot_unmeasured_cell_encodings
+    applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: fixture
@@ -1070,6 +1137,7 @@ entries:
   # the supporting workbook is closed. Only the XLSB *writer* cannot put one
   # back, so an xlsb save keeps the cached value and drops the formula.
   - id: xlsb_external_reference_not_encoded_on_save
+    applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
@@ -1097,6 +1165,7 @@ entries:
   # from the measured cost of this cap (see `cmake/FormulonWasm.cmake`), so
   # raising the cap means re-measuring and re-pinning that flag too.
   - id: left_associative_chain_default_depth_cap
+    applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
@@ -1153,6 +1222,7 @@ entries:
   # be re-serialised as `A:A:C:C` because the storage emitter did not
   # share the canonical emitter's whole-axis splice.
   - id: chained_range_operator_spelling_normalised_on_reserialise
+    applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     scope: deferred-feature
@@ -1162,31 +1232,32 @@ entries:
     first_noted: 2026-08-21
     last_verified_excel_version: "16.112.1"
 
-  # -- Structural edits do not reach verbatim-retained extensions ----------
-  # A row or column edit moves every structure the engine models. The
-  # worksheet content it keeps byte-verbatim precisely because it does not
-  # model it -- the worksheet `<extLst>` and unmodelled `<worksheet>`
-  # children -- stays where it was, so any rectangle or formula inside it
-  # is left addressing pre-edit cells.
-  #
-  # Recorded rather than fixed, and the reason is worth stating plainly:
-  # the obvious fix is wrong in a way that is worse than the gap. Deriving
-  # each `<xm:sqref>` from the model rule its `x14:id` links to would close
-  # only the entries that carry an id, and rests on Excel writing that
-  # `xm:sqref` equal to the legacy block's `sqref` rather than to a subset
-  # of it. No file in the corpus can settle that -- there is no workbook
-  # here, fixture or third-party, that carries a conditional format at all,
-  # and the CF I/O tests all feed hand-written XML. Guessing wrong turns a
-  # silent omission into a silent mis-range.
-  - id: structural_edit_does_not_remap_verbatim_worksheet_extensions
+  # -- Structural edits and verbatim-retained worksheet content ----------
+  # A row or column edit moves every structure the engine models, and the
+  # x14 ranges and formulas inside the retained worksheet `<extLst>` (and
+  # their .xlsb records) with them; Windows Excel's own edited saves are the
+  # fixture in tests/unit/io/x14_structural_edit_fixture_test.cpp. What
+  # remains is below.
+  - id: structural_edit_does_not_remap_unmodelled_worksheet_children
+    applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
     evidence: [src/sheet.h, tests/integration/structural_edit_matrix_test.cpp]
-    reason: "`insert_rows` / `delete_rows` / `insert_cols` / `delete_cols` remap every modelled structure but not the coordinates inside worksheet content retained byte-verbatim: the worksheet `<extLst>` (the `x14` conditional-formatting block behind DataBar negative-fill / axis / gradient settings, sparkline groups, slicer anchors) and unmodelled `<worksheet>` children. Excel moves all of them, so an edited workbook differs from what Excel would have produced. The visible outcome differs per extension: Excel drops an `x14` conditional-formatting entry whose range no longer matches the legacy rule it extends, reverting an extended DataBar to its legacy rendering, while a sparkline group keeps drawing and reads its `<xm:f>` source range from the wrong cells. Nothing reports it -- no status, no read diagnostic. Closing it needs an Excel-authored workbook whose legacy `<conditionalFormatting sqref>` is a union rather than a single rectangle, saved by Excel itself, to establish whether the `x14` entry mirrors that sqref or narrows it; a single rectangle looks mirrored either way and answers nothing. That capture cannot be taken on the Mac primary, which was measured rather than assumed: a hand-authored `<x14:conditionalFormattings>` block does not survive a Mac Excel save (tried with the namespaces declared inline and again on the worksheet root -- Excel rewrote the part, kept the legacy rules and their per-rule `<x14:id>` links, and emitted no worksheet-level `<extLst>` at all, leaving the links dangling), and the Mac automation surface exposes no `FormatConditions.AddDatabar` with which to ask Excel to author a genuine one. Both routes need Windows COM. Whether a well-formed block would have survived is exactly what an Excel-authored one would settle."
-    prefer: mac-excel-365
+    reason: "`insert_rows` / `delete_rows` / `insert_cols` / `delete_cols` do not remap coordinates inside an unmodelled `<worksheet>` child retained byte-verbatim so a save does not drop it -- a `<sortState ref>`, for one. It keeps its pre-edit rectangle and nothing reports it. The x14 ranges and formulas in the `<extLst>` and in the matching `.xlsb` records do move, as Excel moves them."
+    prefer: win-excel-365
     first_noted: 2026-08-21
-    last_verified_excel_version: "16.112.1"
+    last_verified_excel_version: "16.0.20228"
+  - id: structural_insert_does_not_inherit_adjacent_formatting
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    scope: deferred-feature
+    evidence: [tests/unit/io/x14_structural_edit_fixture_test.cpp]
+    reason: "Excel gives an inserted row the formatting of the row above it, and that includes a sparkline: with a sparkline at G1 over E1:E6, `Rows(2).Insert` extends it to E1:E7 and adds a second one at G2 over E2:E8 (Windows Excel 365, both formats). Formulon moves and extends the existing sparkline the same way but copies nothing onto the inserted row -- neither cell formats nor sparklines -- so the new row stays unformatted."
+    prefer: win-excel-365
+    first_noted: 2026-09-30
+    last_verified_excel_version: "16.0.20228"
 
   # -- Bare whole-axis reference: geometry cases are live --------------
   # The five geometry cases (a declared rectangle that no longer fits from
@@ -1208,6 +1279,7 @@ entries:
   # the rest from it, so a multi-member cycle has no uniform value and
   # cannot be recaused by pattern-matching this text.
   - id: whole_col_cycle_decided_before_blocking
+    applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     reason: "=A:A at A1 with A2/A3 occupied: circular and blocked at once, and Excel answers 0 -- it decides the cycle before the blocking check. A2 and A3 hold literal data, not formulas, so the formula cell is the only member of this cycle and its 0 is a single readable value rather than one term of a cascade. Formulon returns #REF! per its cycle policy. The control case with the formula cell outside the referenced column is a live golden and reports #SPILL!, so the pair pins the ordering rather than the blocking."
@@ -1215,6 +1287,7 @@ entries:
     first_noted: 2026-08-15
     last_verified_excel_version: "16.112"
   - id: whole_col_containing_its_own_formula_cell
+    applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     reason: "=A:A at A1 with column A otherwise empty: the rectangle fits and the runway is clear, so only the cycle stops the spill. Nothing else in column A holds a formula, so the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy."
@@ -1222,6 +1295,7 @@ entries:
     first_noted: 2026-08-15
     last_verified_excel_version: "16.112"
   - id: whole_row_containing_its_own_formula_cell
+    applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     reason: "=5:5 at A5 with row 5 otherwise empty: same isolation on the row axis. Nothing else in row 5 holds a formula, so the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy."

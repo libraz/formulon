@@ -1981,8 +1981,7 @@
       "expect": {
         "kind": "text",
         "value": ""
-      },
-      "compare_mode": "empty_string_readback"
+      }
     },
     {
       "id": "textafter_empty_delimiter_second_instance",
@@ -2000,8 +1999,7 @@
       "expect": {
         "kind": "text",
         "value": ""
-      },
-      "compare_mode": "empty_string_readback"
+      }
     },
     {
       "id": "textbefore_empty_delimiter_negative_instance",

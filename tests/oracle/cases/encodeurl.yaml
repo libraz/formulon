@@ -23,7 +23,6 @@ cases:
 
   - id: encodeurl_empty_string
     formula: "=ENCODEURL(\"\")"
-    compare_mode: empty_string_readback
 
   - id: encodeurl_percent_self_encodes
     description: "'%' is not unreserved and encodes to %25"

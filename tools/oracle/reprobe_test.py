@@ -56,6 +56,13 @@ _DIVERGENCE = """entries:
     reason: "other target"
     prefer: formulon
     last_verified_excel_version: "unverified (pending)"
+  - id: all_targets_case
+    cause: excel-no-value
+    mode: skip-oracle
+    applies_to: all
+    reason: "every target"
+    prefer: formulon
+    last_verified_excel_version: "16.112"
   - id: tolerance_case
     cause: accepted-divergence
     mode: tolerance
@@ -96,6 +103,11 @@ class ReprobeSelectionTests(unittest.TestCase):
     def test_applies_to_scoping_is_honoured(self) -> None:
         self.assertNotIn("scoped_out_case", self._reprobes("mac-365-ja_JP"))
         self.assertIn("scoped_out_case", self._reprobes("win-365-ja_JP"))
+
+    def test_explicit_all_skips_every_target(self) -> None:
+        for target in ("mac-365-ja_JP", "win-365-ja_JP"):
+            with self.subTest(target=target):
+                self.assertIn("all_targets_case", oracle_gen._load_divergence_skips(self.path, target))
 
     def test_reprobes_are_a_subset_of_skips(self) -> None:
         # The reprobe set only ever narrows the skip set -- a case that is

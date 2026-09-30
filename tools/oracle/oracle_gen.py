@@ -263,12 +263,22 @@ def _load_divergence_entries(path: Path) -> List[Dict[str, Any]]:
     return [entry for entry in entries if isinstance(entry, dict)]
 
 
+# The explicit every-target value of a divergence entry's `applies_to`.
+APPLIES_TO_ALL = "all"
+
+
 def _applies_to_target(entry: Dict[str, Any], path: Path, label: str, target_name: str) -> bool:
-    """Validate and evaluate an optional target selector on one entry."""
+    """Validate and evaluate an optional target selector on one entry.
+
+    ``applies_to: all`` names every target explicitly; an absent selector
+    means the same (divergence_check.py requires skip entries to spell it).
+    """
 
     if "applies_to" not in entry or entry["applies_to"] is None:
         return True
     applies = entry["applies_to"]
+    if applies == APPLIES_TO_ALL:
+        return True
     if not isinstance(applies, list) or not all(isinstance(item, str) for item in applies):
         raise RuntimeError(
             f"{path}: entry {label!r} has invalid `applies_to`: expected list of strings, got {applies!r}"

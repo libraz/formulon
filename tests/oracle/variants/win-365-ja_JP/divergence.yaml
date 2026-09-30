@@ -18,14 +18,14 @@ entries:
     reason: "Win Excel 365 reads these financial result cells back as locale-formatted numeric text; Formulon returns equivalent numeric values."
     prefer: formulon
     first_noted: 2026-05-08
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "16.0.20228"
   # Excel's complex-function text rounding differs by a final display digit.
   - suite: complex
     compare_mode: complex_text
     reason: "Win Excel 365 rounds complex-number text differently at the final display digit; compare parsed real and imaginary components instead."
     prefer: formulon
     first_noted: 2026-05-08
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "16.0.20228"
   # Trigonometric values near poles are sensitive to the platform libm.
   - ids:
       - tan_neg_three_pi_over_two
@@ -40,21 +40,22 @@ entries:
     reason: "Near-pole trigonometric probes vary at the platform-libm level between Win Excel and Formulon; 0.1% relative tolerance preserves the observable sign and magnitude contract."
     prefer: formulon
     first_noted: 2026-05-08
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "16.0.20228"
   # Windows Excel can read this pre-1900 DATEVALUE result back as zero.
   - id: datevalue_agrees_with_date
     compare_mode: datevalue_roundtrip_readback
     reason: "Win Excel 365's COM read-back turns the pre-1900 DATEVALUE serial -1 into 0; accept that bridge artifact while retaining normal date comparison."
     prefer: formulon
     first_noted: 2026-05-08
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "16.0.20228"
   - id: regexextract_mode_3_all_capture_groups
+    applies_to: [win-365-ja_JP]
     mode: skip-oracle
     cause: accepted-divergence
     reason: "Win Excel 365 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements the documented all-capture-groups spill mode and validates it via unit tests."
     prefer: formulon
     first_noted: 2026-05-15
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "16.0.20326"
   # The four aggregator cases carried `prefer: formulon` here and
   # `prefer: mac-excel-365` in tests/divergence.yaml -- the same
   # divergence recorded with opposite verdicts. Both files also blamed the
@@ -63,3 +64,18 @@ entries:
   # sort_order slot, outside Excel's signed-column-index domain. The cases
   # now pass an in-contract argument list, so nothing needs skipping on
   # that account; the rejection is pinned by its own live cases.
+  # Both Excels stop short of the fixed point 10 of `=Z1*0.9 + 1`, at
+  # different places, and the suite tolerance accepts either.
+  - id: iter_smoothing_fixed_point
+    tolerance: { abs: 0.001, rel: 0.001 }
+    reason: "Win Excel 365 stops iterating `=Z1*0.9 + 1` at 9.991405 where Mac Excel 365 stops at 9.999445 (tests/oracle/golden/iterative_calc.golden.json), a real difference in where the solver halts that the iterative suite's 1e-3 tolerance absorbs. Recorded so the tolerance is a stated policy for this target rather than an accident; the engine's own stopping point is checked against both."
+    prefer: formulon
+    first_noted: 2026-09-30
+    last_verified_excel_version: "16.0.20228"
+  # A bounded range spilling over its own formula cell reads differently per
+  # host, and the verifier's anchor projection accepts both readings.
+  - id: bounded_rectangle_containing_its_own_formula_cell
+    reason: "`=A1:C3` entered in B2 is circular. Win Excel 365 captures the whole 3x3 rectangle as zeros; Mac Excel 365 captures the scalar 0 (tests/oracle/golden/whole_axis_spill.golden.json). The verifier compares the anchor, so both goldens pass without asserting the shape; recorded so that projection is not mistaken for agreement on the spill shape."
+    prefer: formulon
+    first_noted: 2026-09-30
+    last_verified_excel_version: "16.0.20228"

@@ -844,14 +844,12 @@ cases:
 
   - id: textbefore_empty_delimiter
     formula: "=TEXTBEFORE(\"a-b-c\", \"\")"
-    compare_mode: empty_string_readback
 
   - id: textafter_empty_delimiter_second_instance
     formula: "=TEXTAFTER(\"a-b-c\", \"\", 2)"
 
   - id: textafter_empty_delimiter_negative_instance
     formula: "=TEXTAFTER(\"a-b-c\", \"\", -1)"
-    compare_mode: empty_string_readback
 
   - id: textbefore_empty_delimiter_negative_instance
     formula: "=TEXTBEFORE(\"a-b-c\", \"\", -1)"

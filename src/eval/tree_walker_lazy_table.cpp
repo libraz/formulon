@@ -116,8 +116,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"COVARIANCE.S", &eval_covariance_s_lazy, LazyResultShape::kReduce},
     // Calendar family: date1904-sensitive functions share one lazy impl
     // (`eval_datetime_lazy`) so the workbook epoch reaches the calendar math.
-    // WEEKNUM is served by `eval_weeknum_lazy` (it layers a Win365 quirk) and
-    // is registered separately below.
+    // WEEKNUM is served by `eval_weeknum_lazy` and is registered separately
+    // below.
     {"DATE", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"DATEDIF", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"DATEVALUE", &eval_datetime_lazy, LazyResultShape::kBroadcast},
