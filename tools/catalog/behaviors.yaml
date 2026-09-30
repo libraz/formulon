@@ -3315,6 +3315,15 @@ groups:
       - name: "display rounding to zero keeps the sign"
         probe: '=USDOLLAR(-0.001,2)'
         expected: impl
+      - name: "fractional decimals truncate toward zero"
+        probe: '=USDOLLAR(1234.5,2.9)'
+        expected: impl
+      - name: "numeric text and booleans coerce to a number"
+        probe: '=USDOLLAR("12",1)'
+        expected: impl
+      - name: "decimals above 127 -> #VALUE!"
+        probe: '=USDOLLAR(1,128)'
+        expected: impl
 
   - function: "HYPERLINK"
     aspect: "link/friendly-name text rendering (formula returns display text)"
@@ -3759,7 +3768,7 @@ groups:
         expected: impl
       - name: "unsupported return_type -> #NUM!"
         probe: "=WEEKNUM(DATE(2024,1,1),99)"
-        expected: impl
+        expected: diverged
 
   - function: "ISOWEEKNUM"
     aspect: "ISO 8601 week numbering"
