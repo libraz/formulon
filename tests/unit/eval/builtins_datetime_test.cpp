@@ -1826,13 +1826,13 @@ TEST(DateTime1904, NumericAndDatevalueMonthBoundsStayCanonical) {
 // ---------------------------------------------------------------------------
 
 // Excel 365 ja-JP readings for serials 0..8, around the ghost day 60, and
-// across 1900 for the week-number family. Error readings carry no kind.
+// across 1900 for the week-number family.
 TEST(DateTimeSerialWeekday, MatchesExcelGrid) {
   struct Case {
     const char* formula;
     double number;
     const char* text;
-    bool error;
+    bool num_error;
   };
   static constexpr Case kCases[] = {
       {"=WEEKDAY(0)", 7.0, nullptr, false},
@@ -2243,8 +2243,9 @@ TEST(DateTimeSerialWeekday, MatchesExcelGrid) {
   };
   for (const Case& c : kCases) {
     const Value v = EvalSource(c.formula);
-    if (c.error) {
-      EXPECT_TRUE(v.is_error()) << c.formula;
+    if (c.num_error) {
+      ASSERT_TRUE(v.is_error()) << c.formula;
+      EXPECT_EQ(v.as_error(), ErrorCode::Num) << c.formula;
     } else if (c.text != nullptr) {
       ASSERT_TRUE(v.is_text()) << c.formula;
       EXPECT_EQ(v.as_text(), c.text) << c.formula;
