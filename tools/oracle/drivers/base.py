@@ -144,6 +144,18 @@ def decode_spill_shape_probe(value: Any) -> tuple[int, int]:
     return rows, columns
 
 
+def is_empty_text_result(evaluate, cell) -> bool:
+    """Tells an empty-text result apart from a blank cell via ``TYPE()``.
+
+    Both platform bridges read ``""`` and a blank cell identically (Mac as
+    ``''``, Windows COM as ``None``), so only an in-Excel probe separates
+    them: ``TYPE`` is 2 for text and 1 for a blank. ``evaluate`` is the
+    platform's Application.Evaluate adapter. Verified on Mac Excel 16.113.2.
+    """
+
+    return evaluate(f"TYPE({cell.get_address(external=True)})") == 2
+
+
 def probe_spill_shape(evaluate, anchor, *, max_cells: Optional[int] = MAX_CAPTURE_CELLS) -> tuple[int, int]:
     """Evaluate the shared, non-invasive spill-shape expression once.
 

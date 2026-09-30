@@ -52,6 +52,7 @@ from .base import (
     _datetime_to_serial,
     case_formula_cell,
     case_shape_samples,
+    is_empty_text_result,
     probe_spill_shape,
 )
 
@@ -259,17 +260,6 @@ def _error_display_from_cell(cell) -> Optional[str]:
     return None
 
 
-def _is_empty_text_result(evaluate, cell) -> bool:
-    """Tells an empty-text result apart from a blank cell via ``TYPE()``.
-
-    The Mac bridge reads both as ``''`` from every property (value, value2,
-    string_value), so only an in-Excel probe separates them: ``TYPE`` is 2
-    for text and 1 for a blank. Verified on Excel 16.113.2.
-    """
-
-    return evaluate(f"TYPE({cell.get_address(external=True)})") == 2
-
-
 def _classify_value(cell, evaluate) -> CaseResult:
     """Converts an xlwings cell observation into a CaseResult.
 
@@ -313,7 +303,7 @@ def _classify_value(cell, evaluate) -> CaseResult:
             # blank here; the YAML case should be rewritten to force a
             # non-date display if a serial is needed.
             pass
-        if _is_empty_text_result(evaluate, cell):
+        if is_empty_text_result(evaluate, cell):
             return CaseResult(id="", kind="text", value="")
         return CaseResult(id="", kind="blank")
 

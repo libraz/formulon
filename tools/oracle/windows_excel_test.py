@@ -437,5 +437,83 @@ class WindowsPaginationSettleTest(unittest.TestCase):
         self.assertEqual(value, ([12, 39], [2, 7], 6))
 
 
+class _FakeResultCell:
+    """An xlwings-like result cell: a value read plus an external address."""
+
+    def __init__(self, value, address="'[Book1]Sheet1'!$A$1", offsets=None) -> None:
+        self.value = value
+        self.api = None
+        self._address = address
+        self._offsets = offsets or {}
+
+    def get_address(self, *, external=False):
+        if not external:
+            raise AssertionError("the oracle must request an external address")
+        return self._address
+
+    def offset(self, row, column):
+        return self._offsets[(row, column)]
+
+
+class _FakeEvaluateApi:
+    def __init__(self, answers) -> None:
+        self._answers = answers
+        self.calls = []
+
+    def Evaluate(self, expression):  # noqa: N802 - COM method name
+        self.calls.append(expression)
+        return self._answers(expression)
+
+
+class _FakeEvaluateApp:
+    def __init__(self, answers) -> None:
+        self.api = _FakeEvaluateApi(answers)
+
+
+class WindowsEmptyTextReadbackTest(unittest.TestCase):
+    """COM reads "" and a blank cell alike; TYPE() tells them apart, as on Mac."""
+
+    def test_empty_read_back_is_split_into_empty_text_and_blank_by_type(self) -> None:
+        for value in ("", None):
+            for type_code, expected in ((2.0, ("text", "")), (1.0, ("blank", None))):
+                with self.subTest(value=value, type_code=type_code):
+                    app = _FakeEvaluateApp(lambda _expression, code=type_code: code)
+                    evaluate = windows_excel._app_evaluate(app)
+                    result = windows_excel._classify_value(_FakeResultCell(value), evaluate)
+                    self.assertEqual((result.kind, result.value), expected)
+                    self.assertEqual(app.api.calls, ["TYPE('[Book1]Sheet1'!$A$1)"])
+
+    def test_non_empty_value_does_not_probe_type(self) -> None:
+        def evaluate(expression):
+            raise AssertionError(f"unexpected probe: {expression}")
+
+        for value, kind in ((0, "number"), ("x", "text"), (False, "bool")):
+            with self.subTest(value=value):
+                self.assertEqual(windows_excel._classify_value(_FakeResultCell(value), evaluate).kind, kind)
+
+    def test_without_an_evaluator_an_empty_read_back_stays_blank(self) -> None:
+        self.assertEqual(windows_excel._classify_value(_FakeResultCell(None)).kind, "blank")
+
+    def test_spilled_empty_text_cells_are_probed_per_cell(self) -> None:
+        blank = _FakeResultCell(None, address="'[Book1]Sheet1'!$A$2")
+        text = _FakeResultCell("", address="'[Book1]Sheet1'!$A$1")
+        anchor = _FakeResultCell("", offsets={(0, 0): text, (1, 0): blank})
+
+        def answers(expression):
+            if expression.startswith("TYPE("):
+                return 2.0 if "$A$1" in expression else 1.0
+            raise AssertionError(expression)
+
+        app = _FakeEvaluateApp(answers)
+
+        class _Sheet:
+            def range(self, _addr):
+                return anchor
+
+        with patch.object(windows_excel, "_evaluate_spill_shape", return_value=(2, 1)):
+            result = windows_excel._classify_result_cell(app, _Sheet(), "A1")
+        self.assertEqual((result.kind, result.value, result.array_shape), ("array", ["", None], [2, 1]))
+
+
 if __name__ == "__main__":
     unittest.main()
