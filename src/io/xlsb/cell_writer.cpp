@@ -63,7 +63,7 @@ std::uint8_t ErrorWireCode(ErrorCode e) {
 /// an array block's `BrtArrFmla`.
 Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::vector<std::string>& sheet_names,
                                                   const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                                  bool array_formula, const NameIsScalar& name_is_scalar) {
+                                                  bool array_formula, const NameShapes& name_shapes) {
   std::string_view body(cell.formula_text);
   if (!body.empty() && body.front() == '=') {
     body.remove_prefix(1);
@@ -80,7 +80,7 @@ Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::v
                      cell.dynamic_array ? PtgEvaluation::kDynamicArray
                      : array_formula    ? PtgEvaluation::kLegacyArray
                                         : PtgEvaluation::kLegacy,
-                     name_is_scalar);
+                     name_shapes);
 }
 
 /// Emits a `BrtFmla*` record matching `cached`'s kind, with the encoded
@@ -89,13 +89,13 @@ Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::v
 ///
 ///   cell-header (8 bytes)
 ///   value       (kind-specific)
-///   grbitFlags  (u16, written as zero)
+///   grbitFlags  (u16: fAlwaysCalc 0x0002, as Excel sets it where .xlsx has `ca="1"`)
 ///   cce         (u32 byte length of rgce)
 ///   rgce        (cce bytes)         — the Ptg stream
 ///   cb          (u32 byte length of rgcb)
 ///   rgcb        (cb bytes)          — array-constant extra data
 void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index,
-                           const Value& cached, const EncodedFormula& formula) {
+                           const Value& cached, const EncodedFormula& formula, bool always_calculates) {
   std::vector<std::uint8_t> p;
   EmitCellHeader(p, col, xf_index);
 
@@ -127,7 +127,7 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
       emit_double(p, 0.0);
       break;
   }
-  emit_u16(p, 0);  // grbitFlags
+  emit_u16(p, always_calculates ? 0x0002U : 0U);  // grbitFlags: fAlwaysCalc
 
   // CellParsedFormula: cce + rgce + cb + rgcb.
   emit_u32(p, static_cast<std::uint32_t>(formula.rgce.size()));
@@ -162,13 +162,14 @@ EncodedFormula MakePtgExpShell(std::uint32_t anchor_row, std::uint32_t anchor_co
 /// decode): RfX (rwFirst, rwLast, colFirst, colLast as u32) + 1 flag byte
 /// + `CellParsedFormula` (cce + rgce + cb + rgcb).
 void EmitArrayFormulaRecord(std::vector<std::uint8_t>& dst, std::uint32_t rw_first, std::uint32_t rw_last,
-                            std::uint32_t col_first, std::uint32_t col_last, const EncodedFormula& formula) {
+                            std::uint32_t col_first, std::uint32_t col_last, const EncodedFormula& formula,
+                            bool always_calculates) {
   std::vector<std::uint8_t> p;
   emit_u32(p, rw_first);
   emit_u32(p, rw_last);
   emit_u32(p, col_first);
   emit_u32(p, col_last);
-  emit_u8(p, 0);  // flags (fAlwaysCalc etc.); zero matches Excel's output here.
+  emit_u8(p, always_calculates ? 0x01U : 0U);  // flags: fAlwaysCalc, the `aca="1"` of .xlsx
   emit_u32(p, static_cast<std::uint32_t>(formula.rgce.size()));
   p.insert(p.end(), formula.rgce.begin(), formula.rgce.end());
   emit_u32(p, static_cast<std::uint32_t>(formula.rgcb.size()));
@@ -248,13 +249,13 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
 }  // namespace
 
 Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
-                                SstBuilder& sst, const std::vector<std::string>& sheet_names,
+                                bool always_calculates, SstBuilder& sst, const std::vector<std::string>& sheet_names,
                                 const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                std::uint32_t* downgraded_formula_count, const NameIsScalar& name_is_scalar) {
+                                std::uint32_t* downgraded_formula_count, const NameShapes& name_shapes) {
   // Formula cells take precedence: even if the cached_value is blank, we
   // still emit a BrtFmla* record so the formula round-trips.
   if (!cell.formula_text.empty()) {
-    auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, false, name_is_scalar);
+    auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, false, name_shapes);
     if (!formula_or) {
       StructuredLog("xlsb.writer.formula_downgraded")
           .field("row", static_cast<std::int64_t>(row))
@@ -267,7 +268,7 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell
       EmitLiteralCellRecord(dst, col, cell.xf_index, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, sst);
       return Expected<void, Error>::Ok();
     }
-    EmitFormulaCellRecord(dst, col, cell.xf_index, cell.cached_value, formula_or.value());
+    EmitFormulaCellRecord(dst, col, cell.xf_index, cell.cached_value, formula_or.value(), always_calculates);
     return Expected<void, Error>::Ok();
   }
 
@@ -276,12 +277,13 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell
 }
 
 Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, const Value& anchor_value,
-                                        std::uint32_t col, std::uint32_t anchor_row, std::uint32_t last_row,
-                                        std::uint32_t last_col, const std::vector<std::string>& sheet_names,
+                                        bool always_calculates, std::uint32_t col, std::uint32_t anchor_row,
+                                        std::uint32_t last_row, std::uint32_t last_col,
+                                        const std::vector<std::string>& sheet_names,
                                         const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count,
-                                        bool* downgraded_to_literal, const NameIsScalar& name_is_scalar) {
-  auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, true, name_is_scalar);
+                                        bool* downgraded_to_literal, const NameShapes& name_shapes) {
+  auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table, true, name_shapes);
   if (!formula_or) {
     StructuredLog("xlsb.writer.array_formula_downgraded")
         .field("row", static_cast<std::int64_t>(anchor_row))
@@ -300,15 +302,15 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Ce
   // The anchor's own cell record is a PtgExp shell typed by the spilled
   // value at the anchor; the real tokens go into the following BrtArrFmla.
   const EncodedFormula shell = MakePtgExpShell(anchor_row, col);
-  EmitFormulaCellRecord(dst, col, cell.xf_index, anchor_value, shell);
-  EmitArrayFormulaRecord(dst, anchor_row, last_row, col, last_col, formula_or.value());
+  EmitFormulaCellRecord(dst, col, cell.xf_index, anchor_value, shell, always_calculates);
+  EmitArrayFormulaRecord(dst, anchor_row, last_row, col, last_col, formula_or.value(), always_calculates);
   return Expected<void, Error>::Ok();
 }
 
 void emit_array_phantom(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index, const Value& cached,
-                        std::uint32_t anchor_row, std::uint32_t anchor_col) {
+                        std::uint32_t anchor_row, std::uint32_t anchor_col, bool always_calculates) {
   const EncodedFormula shell = MakePtgExpShell(anchor_row, anchor_col);
-  EmitFormulaCellRecord(dst, col, xf_index, cached, shell);
+  EmitFormulaCellRecord(dst, col, xf_index, cached, shell, always_calculates);
 }
 
 }  // namespace xlsb

@@ -88,18 +88,13 @@ TEST(XlsbPtg, ExternalWorkbookDefinedNamesAreReadOnly) {
   EXPECT_NE(p->status, PtgStatus::Unsupported);
 }
 
-TEST(XlsbPtg, ArrayConstantsAreClassifiedAsPartiallyCovered) {
-  // `PtgArray` round-trips numeric elements and refuses every other
-  // element tag, in both directions. Claiming `Full` would say that
-  // `={1,"a"}` survives a save, which it does not.
+TEST(XlsbPtg, ArrayConstantsAreFullyCovered) {
+  // Every element kind Excel stores round-trips (see
+  // `XlsbPtgCodec.PtgArrayElementsMatchExcelBytes`).
   const PtgInfo* p = lookup_ptg_from_wire(0x20);
   ASSERT_NE(p, nullptr);
   EXPECT_EQ(p->kind, PtgKind::Array);
-  EXPECT_EQ(p->status, PtgStatus::Partial);
-  // The distinction has to stay off the dispatch-time gate: whether the
-  // token is decodable depends on its payload, so rejecting it on sight
-  // would lose the numeric constants that do work.
-  EXPECT_NE(p->status, PtgStatus::Unsupported);
+  EXPECT_EQ(p->status, PtgStatus::Full);
 }
 
 TEST(XlsbPtg, LookupReturnsNullForUnknownByte) {

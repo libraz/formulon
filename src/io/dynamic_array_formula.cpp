@@ -1,5 +1,7 @@
 #include "io/dynamic_array_formula.h"
 
+#include <algorithm>
+#include <functional>
 #include <string_view>
 #include <utility>
 
@@ -13,30 +15,83 @@ namespace formulon {
 namespace io {
 namespace {
 
-// A defined name's formula standing for one value: a one-cell reference or a constant.
-bool NameFormulaIsScalar(std::string_view formula) {
+// What a defined name's formula shows of it without evaluation.
+xlsb::NameShape NameFormulaShape(std::string_view formula) {
   if (!formula.empty() && formula.front() == '=') {
     formula.remove_prefix(1);
   }
   Arena arena;
   const parser::AstNode* body = parser::parse_strict(formula, arena);
-  if (body != nullptr && body->kind() == parser::NodeKind::UnaryOp) {
+  xlsb::NameShape shape;
+  if (body == nullptr) {
+    return shape;
+  }
+  if (body->kind() == parser::NodeKind::Literal && body->as_literal().is_number()) {
+    const double d = body->as_literal().as_number();
+    if (d >= 1.0 && d <= 65535.0 && d == static_cast<double>(static_cast<std::uint32_t>(d))) {
+      shape.positive_int = static_cast<std::uint32_t>(d);
+    }
+  }
+  if (body->kind() == parser::NodeKind::UnaryOp) {
     body = &body->as_unary_operand();
   }
-  if (body == nullptr) {
-    return false;
-  }
+  auto extent = [&shape](const parser::Reference& a, const parser::Reference& b) {
+    shape.rows = a.is_full_col ? Sheet::kMaxRows : (a.row > b.row ? a.row - b.row : b.row - a.row) + 1U;
+    shape.cols = a.is_full_row ? Sheet::kMaxCols : (a.col > b.col ? a.col - b.col : b.col - a.col) + 1U;
+  };
   switch (body->kind()) {
     case parser::NodeKind::Literal:
     case parser::NodeKind::ErrorLiteral:
-      return true;
+      shape.scalar = true;
+      break;
     case parser::NodeKind::Ref:
-      return !body->as_ref().is_full_col && !body->as_ref().is_full_row;
+      extent(body->as_ref(), body->as_ref());
+      shape.scalar = shape.rows == 1U && shape.cols == 1U;
+      break;
     case parser::NodeKind::Ref3D:
-      return !body->as_ref3d_is_range() && body->as_ref3d_sheet_begin() == body->as_ref3d_sheet_end();
+      shape.scalar = !body->as_ref3d_is_range() && body->as_ref3d_sheet_begin() == body->as_ref3d_sheet_end();
+      break;
+    case parser::NodeKind::RangeOp:
+      if (body->as_range_lhs().kind() == parser::NodeKind::Ref &&
+          body->as_range_rhs().kind() == parser::NodeKind::Ref) {
+        extent(body->as_range_lhs().as_ref(), body->as_range_rhs().as_ref());
+      }
+      break;
     default:
-      return false;
+      break;
   }
+  return shape;
+}
+
+// The defined name a `NameRef`, `[0]!Name` or name-call node refers to.
+std::string_view NameOf(const parser::AstNode& node) {
+  switch (node.kind()) {
+    case parser::NodeKind::NameRef:
+      return node.as_name();
+    case parser::NodeKind::Call:
+      return node.as_call_name();
+    default:
+      return node.as_external_ref_name();
+  }
+}
+
+// Index in `names` of `name` as a formula in `scope` (a sheet index, or -1
+// for workbook scope) resolves it: sheet-local before workbook-wide;
+// `names.size()` when undefined.
+std::size_t FindDefinedName(const std::vector<DefinedName>& names, std::string_view name, std::int32_t scope) {
+  std::size_t found = names.size();
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    if (!strings::case_insensitive_eq(names[i].name, name)) {
+      continue;
+    }
+    if (names[i].local_sheet_id == scope) {
+      return i;
+    }
+    if (names[i].local_sheet_id < 0) {
+      found = i;
+    }
+  }
+  return found;
 }
 
 }  // namespace
@@ -96,33 +151,86 @@ void apply_loaded_dynamic_array_marks(Sheet& sheet, const std::unordered_set<std
   }
 }
 
-xlsb::NameIsScalar legacy_name_shapes(const Workbook& wb, std::size_t sheet_index) {
+std::vector<xlsb::NameShape> defined_name_shapes(const Workbook& wb) {
   const std::vector<DefinedName>& names = wb.defined_names();
-  std::vector<bool> scalar(names.size());
+  std::vector<xlsb::NameShape> shapes(names.size());
   for (std::size_t i = 0; i < names.size(); ++i) {
-    scalar[i] = NameFormulaIsScalar(names[i].formula);
+    shapes[i] = NameFormulaShape(names[i].formula);
+    shapes[i].defined = true;
   }
-  return [&wb, sheet_index, scalar = std::move(scalar)](const parser::AstNode& node) {
-    const std::vector<DefinedName>& defined = wb.defined_names();
-    const bool name_ref = node.kind() == parser::NodeKind::NameRef;
-    const std::string_view name = name_ref ? node.as_name() : node.as_external_ref_name();
-    const std::string_view qualifier = name_ref ? node.as_name_sheet() : std::string_view();
-    const auto scope = static_cast<std::int32_t>(qualifier.empty() ? sheet_index : wb.sheet_index_by_name(qualifier));
-    std::size_t found = defined.size();
-    for (std::size_t i = 0; i < defined.size() && i < scalar.size(); ++i) {
-      if (!strings::case_insensitive_eq(defined[i].name, name)) {
-        continue;
-      }
-      if (defined[i].local_sheet_id == scope) {
-        found = i;
-        break;
-      }
-      if (defined[i].local_sheet_id < 0) {
-        found = i;
-      }
+  // fCalcExp and constant recalculation follow the names a formula refers
+  // to, so they resolve in dependency order; a name reached again while it
+  // is being resolved counts as clear.
+  enum class State : std::uint8_t { kPending, kResolving, kDone };
+  std::vector<State> state(names.size(), State::kPending);
+  std::function<void(std::size_t)> resolve = [&](std::size_t i) {
+    if (state[i] != State::kPending) {
+      return;
     }
-    return found < scalar.size() && scalar[found];
+    state[i] = State::kResolving;
+    std::string_view formula = names[i].formula;
+    if (!formula.empty() && formula.front() == '=') {
+      formula.remove_prefix(1);
+    }
+    const xlsb::NameShapes referenced = [&](const parser::AstNode& node) {
+      const std::size_t found = FindDefinedName(names, NameOf(node), names[i].local_sheet_id);
+      if (found >= names.size()) {
+        return xlsb::NameShape{};
+      }
+      resolve(found);
+      xlsb::NameShape shape = shapes[found];
+      if (state[found] != State::kDone) {
+        shape.calc_exp = shape.always_calculates = false;
+      }
+      return shape;
+    };
+    Arena arena;
+    if (const parser::AstNode* body = parser::parse_strict(formula, arena); body != nullptr) {
+      shapes[i].calc_exp = xlsb::name_sets_calc_exp(*body, referenced);
+      shapes[i].always_calculates = xlsb::formula_always_calculates(*body, referenced);
+    }
+    state[i] = State::kDone;
   };
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    resolve(i);
+  }
+  return shapes;
+}
+
+xlsb::NameShapes name_shapes(const Workbook& wb, std::size_t sheet_index) {
+  return [&wb, sheet_index, shapes = defined_name_shapes(wb)](const parser::AstNode& node) {
+    const std::string_view qualifier =
+        node.kind() == parser::NodeKind::NameRef ? node.as_name_sheet() : std::string_view();
+    const auto scope = static_cast<std::int32_t>(qualifier.empty() ? sheet_index : wb.sheet_index_by_name(qualifier));
+    const std::size_t found = FindDefinedName(wb.defined_names(), NameOf(node), scope);
+    return found < shapes.size() ? shapes[found] : xlsb::NameShape{};
+  };
+}
+
+bool formula_cell_always_calculates(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
+                                    const xlsb::NameShapes& names) {
+  if (cell.formula_text.empty()) {
+    return false;
+  }
+  if (is_dynamic_array_formula(cell)) {
+    const std::vector<CellAddress> blocked = sheet.blocked_spill_anchors_intersecting(row, col, 1U, 1U);
+    if (std::any_of(blocked.begin(), blocked.end(),
+                    [&](const CellAddress& a) { return a.row == row && a.col == col; })) {
+      return true;
+    }
+  }
+  std::string_view formula = cell.formula_text;
+  if (formula.front() == '=') {
+    formula.remove_prefix(1);
+  }
+  Arena arena;
+  parser::Parser parser(formula, arena);
+  const parser::AstNode* root = parser.parse();
+  return root != nullptr && parser.errors().empty() && xlsb::formula_always_calculates(*root, names);
+}
+
+bool entered_as_dynamic_array(const Workbook& wb, std::size_t sheet_index, const parser::AstNode& root) {
+  return xlsb::formula_is_dynamic_array(root, name_shapes(wb, sheet_index));
 }
 
 }  // namespace io

@@ -235,14 +235,9 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::Num, 0x1F, "Num", PtgStatus::Full},
 
     // ---- Class-marked Ptgs (Reference-class base bytes 0x20..0x3D) --------
-    // `Array` (inline array constant): the element tag byte that precedes
-    // each value in the `RgbExtra` area has only been verified against
-    // real Excel output for `0x00` (number). `decode_ptgs` returns
-    // `kIoXlsbUnsupportedPtg` for any other tag rather than guessing at a
-    // layout, and `encode_ptgs` refuses a non-numeric element for the
-    // same reason, so `={1,"a"}` does not round-trip in either direction.
-    // Numeric constants such as `=SUM({1,2;3,4})` do.
-    {PtgKind::Array, 0x20, "Array", PtgStatus::Partial},
+    // `Array` (inline array constant): every element kind Excel stores,
+    // number, text, boolean and error, round-trips (measured tags 0, 1, 2, 4).
+    {PtgKind::Array, 0x20, "Array", PtgStatus::Full},
     {PtgKind::Func, 0x21, "Func", PtgStatus::Full},
     {PtgKind::FuncVar, 0x22, "FuncVar", PtgStatus::Full},
     {PtgKind::Name, 0x23, "Name", PtgStatus::Full},

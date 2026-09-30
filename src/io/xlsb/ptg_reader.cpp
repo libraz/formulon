@@ -196,6 +196,25 @@ Expected<std::pair<parser::Reference, parser::Reference>, Error> read_area(ByteS
   return std::make_pair(first, last);
 }
 
+// `first`:`last` as a formula spells it. Excel stores whole columns (`A:A`)
+// as an area over every row with the rows absolute, and whole rows alike.
+parser::AstNode* make_area(Arena& arena, parser::Reference first, parser::Reference last) {
+  const bool cols = first.row == 0U && last.row == Sheet::kMaxRows - 1U && first.row_abs && last.row_abs;
+  const bool rows = !cols && first.col == 0U && last.col == Sheet::kMaxCols - 1U && first.col_abs && last.col_abs;
+  if (cols || rows) {
+    first.is_full_col = last.is_full_col = cols;
+    first.is_full_row = last.is_full_row = rows;
+    const bool one = cols ? first.col == last.col && first.col_abs == last.col_abs
+                          : first.row == last.row && first.row_abs == last.row_abs;
+    if (one) {
+      return parser::make_ref(arena, first);
+    }
+  }
+  parser::AstNode* lhs = parser::make_ref(arena, first);
+  parser::AstNode* rhs = parser::make_ref(arena, last);
+  return lhs == nullptr || rhs == nullptr ? nullptr : parser::make_range_op(arena, lhs, rhs);
+}
+
 // Resolves a `PtgRefN` / `PtgAreaN` corner read by `read_loc` / `read_area`
 // against `base`: a relative axis holds an offset modulo the grid.
 void resolve_relative(parser::Reference& ref, PtgBaseCell base) {
@@ -607,7 +626,12 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         std::memcpy(&v, cursor.data, sizeof(v));
         cursor.data += 8;
         cursor.size -= 8;
-        parser::AstNode* n = parser::make_literal(arena, Value::number(v));
+        // Excel stores a typed `-1` as the negative number; read it back as
+        // the formula spells it, a minus over the number.
+        parser::AstNode* n = parser::make_literal(arena, Value::number(v < 0.0 ? -v : v));
+        if (n != nullptr && v < 0.0) {
+          n = parser::make_unary_op(arena, parser::UnaryOp::Minus, n);
+        }
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNum)", "context=xlsb_ptg_reader");
         }
@@ -669,15 +693,9 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // live in `extra` (the `CellParsedFormula`'s `rgcb`), consumed
         // here in encounter order.
         //
-        // Field order (first u32 = rows, second u32 = cols) and element
-        // consumption order (row-major: row 0 left-to-right, then row 1,
-        // ...) cannot be distinguished from the square 2x2 real-Excel
-        // fixture alone (`xlsb_fidelity_base.xlsb`'s `=SUM({1,2;3,4})`
-        // pins element *order* but not which dimension word is which for
-        // a square array). The layout below is what [MS-XLSB] 2.5.98.26
-        // specifies and what independent third-party decoders of the same
-        // record agree on; a non-square array constant produced by Excel
-        // would pin it directly, and the fixture corpus has none.
+        // The first u32 is the row count and the second the column count,
+        // elements row-major, each a tag byte and its payload (measured on
+        // non-square Excel constants, `xlsb_phantom_cells.xlsb`).
         if (cursor.size < 14) {
           return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgArray placeholder truncated",
                             "context=xlsb_ptg_reader");
@@ -726,14 +744,33 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
               elem = parser::make_literal(arena, Value::number(v));
               break;
             }
+            case 1: {  // string: u16 count + UTF-16LE, as PtgStr carries it
+              auto s_or = read_ptg_string(extra);
+              if (!s_or) {
+                return s_or.error();
+              }
+              elem = parser::make_literal(arena, Value::text(arena.intern(s_or.value())));
+              break;
+            }
+            case 2: {  // boolean: one byte
+              auto b_or = read_u8(extra);
+              if (!b_or) {
+                return b_or.error();
+              }
+              elem = parser::make_literal(arena, Value::boolean(b_or.value() != 0));
+              break;
+            }
+            case 4: {  // error: the code, then three unused bytes
+              auto e_or = read_u32(extra);
+              if (!e_or) {
+                return e_or.error();
+              }
+              elem =
+                  parser::make_error_literal(arena, error_from_wire(static_cast<std::uint8_t>(e_or.value() & 0xFFU)));
+              break;
+            }
             default:
-              // Only the numeric element tag has been verified against
-              // real Excel output; string / bool / error array-constant
-              // elements are not decoded speculatively. Surfacing as
-              // unsupported preserves the cell's cached value instead
-              // of risking a silently wrong array.
-              return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                                "PtgArray element tag not decoded (only numeric elements are verified)",
+              return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "PtgArray element tag not decoded",
                                 "context=xlsb_ptg_reader tag=" + std::to_string(tag_or.value()));
           }
           if (elem == nullptr) {
@@ -875,9 +912,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           if (!domain_or) {
             return domain_or.error();
           }
-          parser::AstNode* lhs = parser::make_ref(arena, area_or.value().first);
-          parser::AstNode* rhs = parser::make_ref(arena, area_or.value().second);
-          n = lhs == nullptr || rhs == nullptr ? nullptr : parser::make_range_op(arena, lhs, rhs);
+          n = make_area(arena, area_or.value().first, area_or.value().second);
         }
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRefN/PtgAreaN)",
@@ -895,12 +930,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (!domain_or) {
           return domain_or.error();
         }
-        parser::AstNode* lhs = parser::make_ref(arena, area_or.value().first);
-        parser::AstNode* rhs = parser::make_ref(arena, area_or.value().second);
-        if (lhs == nullptr || rhs == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea)", "context=xlsb_ptg_reader");
-        }
-        parser::AstNode* n = parser::make_range_op(arena, lhs, rhs);
+        parser::AstNode* n = make_area(arena, area_or.value().first, area_or.value().second);
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea range)",
                             "context=xlsb_ptg_reader");
@@ -1049,12 +1079,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         parser::Reference first = area_or.value().first;
         first.sheet = arena.intern(first.sheet);
         first.sheet_quoted = parser::sheet_name_needs_quoting(first.sheet);
-        parser::AstNode* lhs = parser::make_ref(arena, first);
-        parser::AstNode* rhs = parser::make_ref(arena, area_or.value().second);
-        if (lhs == nullptr || rhs == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea3d)", "context=xlsb_ptg_reader");
-        }
-        parser::AstNode* n = parser::make_range_op(arena, lhs, rhs);
+        parser::AstNode* n = make_area(arena, first, area_or.value().second);
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea3d range)",
                             "context=xlsb_ptg_reader");

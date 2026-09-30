@@ -22,7 +22,6 @@
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "eval/scheduler.h"
-#include "eval/spill_potential.h"
 #include "external_link.h"
 #include "io/dynamic_array_formula.h"
 #include "io/format_detect.h"
@@ -1093,7 +1092,7 @@ Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint
 void Workbook::apply_legacy_implicit_intersections() {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   for (std::size_t sheet_index = 0; sheet_index < sheets_.size(); ++sheet_index) {
-    const io::xlsb::NameIsScalar name_is_scalar = io::legacy_name_shapes(*this, sheet_index);
+    const io::xlsb::NameShapes name_shapes = io::name_shapes(*this, sheet_index);
     Sheet& sheet = sheets_[sheet_index];
     for (const CellAddress address : sheet.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U)) {
       const Cell* cell = sheet.cell_at(address.row, address.col);
@@ -1110,7 +1109,7 @@ void Workbook::apply_legacy_implicit_intersections() {
         continue;
       }
       std::vector<std::uint32_t> at;
-      for (const parser::AstNode* node : io::xlsb::legacy_intersections(*root, name_is_scalar)) {
+      for (const parser::AstNode* node : io::xlsb::legacy_intersections(*root, name_shapes)) {
         if (node->kind() != parser::NodeKind::ImplicitIntersection) {
           at.push_back(node->range().start);
         }
@@ -1190,12 +1189,10 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
     // reads what the user actually typed. This also resets `cached_value`
     // to blank.
     sheets_[sheet_index].set_cell_formula(row, col, std::move(formula));
-    // Entered as Excel 365 would: a formula that may evaluate to an array, or
-    // evaluates an area as one, is a dynamic-array formula (over-marking is
-    // harmless, measured). A reader replaces this with the file's own mark.
+    // Marked as Excel 365 marks a typed formula; a reader replaces this with
+    // the file's own mark.
     sheets_[sheet_index].set_cell_dynamic_array(
-        row, col,
-        root != nullptr && (eval::may_produce_spill(*root) || io::xlsb::formula_uses_array_evaluation(*root)));
+        row, col, root != nullptr && io::entered_as_dynamic_array(*this, sheet_index, *root));
 
     if (root != nullptr) {
       mutator.register_formula(node, *root, *this);

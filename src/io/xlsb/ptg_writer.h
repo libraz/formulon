@@ -157,25 +157,61 @@ void collect_sheet_qualified_names(const parser::AstNode& node,
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                               SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen);
 
-/// True when a cell formula `root` evaluates an area or a name as an array:
-/// one that sits, under the measured parameter classes, where it takes value
-/// or array class (`=A1:A2`, `=SUM(A1:A2*2)`, `=COUNTIF(A1:A2,A1:A2)`), or a
-/// root intersection. Excel stores such a formula as a dynamic array even
-/// when its result is one value, or reads it with implicit intersection.
-bool formula_uses_array_evaluation(const parser::AstNode& root);
+/// What a formula can know of a defined name from the name's own formula,
+/// without evaluating it.
+struct NameShape {
+  /// The name stands for one value: a one-cell reference or a constant.
+  bool scalar = false;
+  /// Rows and columns of the one plain rectangle it refers to; 0 otherwise.
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  /// The integer its formula is, when that is a literal Excel stores as
+  /// `PtgInt` (1..65535); 0 otherwise.
+  std::uint32_t positive_int = 0;
+  /// Excel stores the name with `fCalcExp` (`name_sets_calc_exp`).
+  bool calc_exp = false;
+  /// The name is defined.
+  bool defined = false;
+  /// Its formula is recalculated every time (`formula_always_calculates`).
+  bool always_calculates = false;
+};
 
-/// Whether a `NameRef` (or `[0]!Name`) node names a single value: a
-/// one-cell reference or a constant. An empty one takes every name as
-/// multi-cell.
-using NameIsScalar = std::function<bool(const parser::AstNode& name)>;
+/// The `NameShape` of the defined name a `NameRef`, `[0]!Name` or name-call
+/// node refers to. An empty one takes every name as an unknown, multi-cell
+/// reference.
+using NameShapes = std::function<NameShape(const parser::AstNode& name)>;
+
+/// True when Excel 365 enters the cell formula `root` as a dynamic-array
+/// formula (`cm` / `BrtCellMeta`): its result may be more than one value, or
+/// it evaluates a multi-valued operand where a formula without the mark
+/// would intersect it (`=SUM(A1:A2*2)`). Measured against Excel's own marks.
+bool formula_is_dynamic_array(const parser::AstNode& root, const NameShapes& names);
+
+/// True when Excel 365 sets `fCalcExp` on a defined name whose formula is
+/// `root` (measured name by name): its value is a call to a built-in
+/// `xlsb_sets_calc_exp` lists or through a name, a LET, a LAMBDA or a call
+/// to one, or a spill
+/// reference, reached from the root through operators but not parentheses;
+/// or it refers anywhere to a defined name `names` says carries it.
+bool name_sets_calc_exp(const parser::AstNode& root, const NameShapes& names);
+
+/// True when a formula calls one of Excel's volatile functions
+/// (`parser::is_volatile_function_name`); XLSB opens it with `PtgAttrSemi`.
+bool formula_calls_volatile(const parser::AstNode& root);
+
+/// True when Excel 365 recalculates the formula `root` every time, and so
+/// stores it with `ca="1"` in .xlsx (measured): it calls a volatile function,
+/// one that is neither built in nor defined, or a reference (`A1(1)`), or
+/// refers to a defined name whose formula `names` says is recalculated every
+/// time.
+bool formula_always_calculates(const parser::AstNode& root, const NameShapes& names);
 
 /// The nodes of `root`, a cell formula without the dynamic-array mark, that
 /// Excel 365 shows behind an implicit-intersection `@` (its formula2 text):
 /// an area, a multi-cell name or an array-returning call where an area would
 /// be value class. A written `@` node is listed itself when it stands where
 /// Excel's own would, so a legacy writer can drop it; in document order.
-std::vector<const parser::AstNode*> legacy_intersections(const parser::AstNode& root,
-                                                         const NameIsScalar& name_is_scalar);
+std::vector<const parser::AstNode*> legacy_intersections(const parser::AstNode& root, const NameShapes& names);
 
 /// Encodes the AST rooted at `node` into an `rgce` Ptg byte stream (plus
 /// its `rgcb` array-constant extra data, see `EncodedFormula`).
@@ -202,13 +238,13 @@ std::vector<const parser::AstNode*> legacy_intersections(const parser::AstNode& 
 ///
 /// Returns `kIoXlsbUnsupportedPtg` for any node kind outside the
 /// supported set (see header banner). The error context names the
-/// offending node kind. `name_is_scalar` feeds a legacy formula's
-/// `legacy_intersections`.
+/// offending node kind. `names` feeds the shapes that decide a call's class
+/// and a legacy formula's `legacy_intersections`.
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base = std::nullopt,
                                             PtgEvaluation evaluation = PtgEvaluation::kDynamicArray,
-                                            const NameIsScalar& name_is_scalar = NameIsScalar());
+                                            const NameShapes& names = NameShapes());
 
 }  // namespace xlsb
 }  // namespace io

@@ -405,7 +405,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
         writer.get(), part_path,
         BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
                           rels_result.printer_settings_rid, rels_result.drawing_rid, rels_result.legacy_drawing_rid,
-                          &shared_strings, wb.styles().dxfs.size(), dynamic_array_cm_index, legacy_name_shapes(wb, i)),
+                          &shared_strings, wb.styles().dxfs.size(), dynamic_array_cm_index, name_shapes(wb, i)),
         &written_paths);
     if (!wresult) {
       return wresult.error();

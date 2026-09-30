@@ -12,8 +12,9 @@
 //     region on open; a bare t="array" with no ref reads back as a
 //     legacy single-cell CSE array instead.
 //   * Phantom cell (covered by an anchor's region but not the anchor
-//     itself): suppress the <c> entirely. Excel reconstructs phantoms by
-//     re-spilling the anchor on load.
+//     itself): written from the spill table as Excel writes it, a cached
+//     value with no formula (`AppendPhantomCellXml`), so a reader that does
+//     not recalculate sees the spilled values.
 //
 // oracle-verify: r14:spill="1" not emitted; verify against Mac Excel
 // 16.108.1 if re-spill on load fails.
@@ -172,13 +173,84 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
 // cell was written, false when the cell was suppressed (blank literal,
 // phantom of a spill region).
 //
+// The `t=` a formula cell's cached value needs (none for a number); a
+// non-finite number is stored as the error `<v>` below writes for it.
+void AppendFormulaValueType(std::string& out, const Value& cached) {
+  if (cached.is_error() || (cached.is_number() && !std::isfinite(cached.as_number()))) {
+    out.append(" t=\"e\"");
+  } else if (cached.is_text()) {
+    out.append(" t=\"str\"");
+  } else if (cached.is_boolean()) {
+    out.append(" t=\"b\"");
+  }
+}
+
+// Appends a formula cell's cached value `<v>`.
+void AppendFormulaValue(std::string& out, const Value& cv) {
+  // <v>: omit when blank (Excel will recalculate on load); downgrade
+  // NaN/Inf number to #NUM! text inside <v>; otherwise emit normally.
+  if (cv.is_blank()) {
+    // No <v> at all.
+  } else if (cv.is_number()) {
+    const double v = cv.as_number();
+    if (std::isfinite(v)) {
+      out.append("<v>");
+      append_xml_number(out, v);
+      out.append("</v>");
+    } else {
+      out.append("<v>");
+      out.append(display_name(ErrorCode::Num));
+      out.append("</v>");
+    }
+  } else if (cv.is_boolean()) {
+    out.append("<v>");
+    out.push_back(cv.as_boolean() ? '1' : '0');
+    out.append("</v>");
+  } else if (cv.is_text()) {
+    // Formula cells with text results inline the string in <v> rather
+    // than the <is><t> form used by literal text cells. Excel accepts
+    // both shapes for formula results. `xml:space="preserve"` mirrors
+    // `AppendLiteralCellBody`'s `<is><t xml:space="preserve">`: Excel
+    // trims leading/trailing whitespace from a cached string value on
+    // reload unless this hint is present, and a cached formula result
+    // is just as much a displayed string as a literal one.
+    out.append("<v xml:space=\"preserve\">");
+    AppendXmlEscaped(out, cv.as_text());
+    out.append("</v>");
+  } else if (cv.is_error()) {
+    out.append("<v>");
+    out.append(display_name(stored_cell_error(cv.as_error())));
+    out.append("</v>");
+  }
+  // Array / Ref / Lambda cached values fall through with no <v>; the
+  // engine evaluates on load.
+}
+
+// A spilled (non-anchor) cell as Excel 365 stores it: its own style, the
+// value typed as a formula result's, and `<f ca="1"/>` when the anchor is
+// recalculated every time (measured).
+void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col, std::uint32_t xf_index,
+                          const Value& value, bool always_calculates) {
+  out.append("<c r=\"");
+  out.append(a1::encode_a1(row, col));
+  out.append("\"");
+  AppendStyleAttr(out, xf_index);
+  AppendFormulaValueType(out, value);
+  out.push_back('>');
+  if (always_calculates) {
+    out.append("<f ca=\"1\"/>");
+  }
+  AppendFormulaValue(out, value);
+  out.append("</c>");
+}
+
 // Spill anchor handling: if `(row, col)` is anchored, the formula is
 // emitted with t="array" and the cached value (cells[0]) becomes the
 // <v>. Phantoms are suppressed by the caller via spill_region_covering;
 // this function trusts the caller and never re-checks.
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
                    const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
-                   const xlsb::NameIsScalar& name_is_scalar) {
+                   const xlsb::NameShapes& name_shapes) {
   const bool has_formula = !cell.formula_text.empty();
   if (!CellIsEmitted(cell)) {
     return false;
@@ -227,36 +299,21 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     out.append("<c r=\"");
     out.append(addr);
     out.append("\"");
-    // `cm=` links a dynamic-array spill anchor to the `xl/metadata.xml`
-    // XLDAPR entry (see `FindDynamicArrayCellMetadataIndex` in
-    // ooxml_writer.cpp) that tells Excel this `t="array"` is a modern
-    // spill rather than a legacy CSE array on reopen. Emitted only when
-    // the saved package actually carries a resolved entry for it.
+    // Attributes in Excel's order: style, the value's type (which must agree
+    // with the cached <v> so a save/load round trip keeps it), then `cm=`.
+    // `cm=` links a dynamic-array formula to the `xl/metadata.xml` XLDAPR
+    // entry (see `FindDynamicArrayCellMetadataIndex` in ooxml_writer.cpp)
+    // that tells Excel this `t="array"` is a modern spill rather than a
+    // legacy CSE array on reopen; emitted only when the saved package
+    // carries a resolved entry for it.
+    AppendStyleAttr(out, cell.xf_index);
+    AppendFormulaValueType(out, cell.cached_value);
     if (dynamic) {
       out.append(" cm=\"");
       out.append(std::to_string(dynamic_array_cm_index));
       out.append("\"");
     }
-    AppendStyleAttr(out, cell.xf_index);
-
-    // The `t=` attribute on the formula <c> must agree with the cached
-    // <v> body so a save/load round-trip preserves the value's type.
-    // The default `n` (number) is omitted; everything else is named so
-    // cell_parser does not try to parse a non-numeric body as a double.
-    // Non-finite numbers are downgraded to t="e" because the <v> below
-    // emits #NUM! for that branch.
-    const Value& cached = cell.cached_value;
-    if (cached.is_error()) {
-      out.append(" t=\"e\">");
-    } else if (cached.is_text()) {
-      out.append(" t=\"str\">");
-    } else if (cached.is_boolean()) {
-      out.append(" t=\"b\">");
-    } else if (cached.is_number() && !std::isfinite(cached.as_number())) {
-      out.append(" t=\"e\">");
-    } else {
-      out.append(">");
-    }
+    out.push_back('>');
 
     // <f> with optional t="array" ref="..." for spill anchors. Modern
     // Excel marks a dynamic-array anchor with `t="array"` plus a `ref`
@@ -264,8 +321,12 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // the region on open (a bare `t="array"` reads back as a legacy
     // single-cell CSE array). The formula text always begins with '=';
     // strip it before serialisation.
+    // Excel stores `ca="1"` on a formula it recalculates every time, and on a
+    // dynamic-array formula whose spill is blocked; the array form adds
+    // `aca="1"` (measured).
+    const bool always_calculates = formula_cell_always_calculates(sheet, row, col, cell, name_shapes);
     if (anchored != nullptr || dynamic) {
-      out.append("<f t=\"array\" ref=\"");
+      out.append(always_calculates ? "<f t=\"array\" aca=\"1\" ref=\"" : "<f t=\"array\" ref=\"");
       out.append(a1::encode_a1(row, col));
       const std::uint32_t rows = anchored != nullptr ? anchored->rows : 1U;
       const std::uint32_t cols = anchored != nullptr ? anchored->cols : 1U;
@@ -275,9 +336,9 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
         out.push_back(':');
         out.append(a1::encode_a1(last_row, last_col));
       }
-      out.append("\">");
+      out.append(always_calculates ? "\" ca=\"1\">" : "\">");
     } else {
-      out.append("<f>");
+      out.append(always_calculates ? "<f ca=\"1\">" : "<f>");
     }
     // Re-apply Excel's hidden storage prefixes (`_xlfn.` / `_xlfn._xlws.`
     // on the enumerated future functions, `_xlpm.` on LET / LAMBDA
@@ -293,7 +354,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       // a CSE block intersects nothing.
       std::vector<const parser::AstNode*> implied_at;
       if (!cell.dynamic_array && anchored == nullptr) {
-        implied_at = xlsb::legacy_intersections(*formula_root, name_is_scalar);
+        implied_at = xlsb::legacy_intersections(*formula_root, name_shapes);
       }
       const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name, &implied_at);
       // Only re-serialise when a storage prefix was actually added (the
@@ -310,45 +371,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     }
     out.append("</f>");
 
-    // <v>: omit when blank (Excel will recalculate on load); downgrade
-    // NaN/Inf number to #NUM! text inside <v>; otherwise emit normally.
-    const Value& cv = cell.cached_value;
-    if (cv.is_blank()) {
-      // No <v> at all.
-    } else if (cv.is_number()) {
-      const double v = cv.as_number();
-      if (std::isfinite(v)) {
-        out.append("<v>");
-        append_xml_number(out, v);
-        out.append("</v>");
-      } else {
-        out.append("<v>");
-        out.append(display_name(ErrorCode::Num));
-        out.append("</v>");
-      }
-    } else if (cv.is_boolean()) {
-      out.append("<v>");
-      out.push_back(cv.as_boolean() ? '1' : '0');
-      out.append("</v>");
-    } else if (cv.is_text()) {
-      // Formula cells with text results inline the string in <v> rather
-      // than the <is><t> form used by literal text cells. Excel accepts
-      // both shapes for formula results. `xml:space="preserve"` mirrors
-      // `AppendLiteralCellBody`'s `<is><t xml:space="preserve">`: Excel
-      // trims leading/trailing whitespace from a cached string value on
-      // reload unless this hint is present, and a cached formula result
-      // is just as much a displayed string as a literal one.
-      out.append("<v xml:space=\"preserve\">");
-      AppendXmlEscaped(out, cv.as_text());
-      out.append("</v>");
-    } else if (cv.is_error()) {
-      out.append("<v>");
-      out.append(display_name(stored_cell_error(cv.as_error())));
-      out.append("</v>");
-    }
-    // Array / Ref / Lambda cached values fall through with no <v>; the
-    // engine evaluates on load.
-
+    AppendFormulaValue(out, cell.cached_value);
     out.append("</c>");
     return true;
   }
@@ -398,29 +421,51 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
 
 // Emits the <row> wrapper with all visible cells in the row. Returns true
 // when at least one <c> was emitted (i.e. the <row> was actually written),
-// false when the row collapsed to nothing (every cell was blank or a
-// phantom). When `override_attrs` is non-empty it is appended to the
+// false when the row collapsed to nothing (every cell was blank).
+// `phantom_cols` lists the row's spilled columns, ascending. When `override_attrs` is non-empty it is appended to the
 // `<row>` start-tag (between `r="N"` and the closing `>`), allowing the
 // caller to merge per-row layout overrides without reshaping the body.
 // When the row body collapses to nothing but `override_attrs` is
 // non-empty, an empty self-closing `<row r="N" .../>` is still emitted
 // so the override survives the round-trip.
 bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
-                  std::string_view override_attrs, const SharedStrings* shared_strings,
-                  std::uint32_t dynamic_array_cm_index, const xlsb::NameIsScalar& name_is_scalar) {
+                  const std::vector<std::uint32_t>& phantom_cols, std::string_view override_attrs,
+                  const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
+                  const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor) {
   // Buffer the row body separately so we can tell whether anything ended
   // up inside the <row> wrapper before we commit to writing it.
   std::string body;
   body.reserve(row_cells.size() * 24U);
-  const std::size_t col_count = row_cells.size();
-  for (std::size_t i = 0; i < col_count; ++i) {
-    const std::uint32_t col = static_cast<std::uint32_t>(i);
+  const std::uint32_t stored = static_cast<std::uint32_t>(row_cells.size());
+  auto emit_phantom = [&](std::uint32_t col) {
+    const SpillRegion* region = sheet.spill_region_covering(row, col);
+    if (region == nullptr) {
+      return;
+    }
+    const std::uint64_t key = (static_cast<std::uint64_t>(region->anchor_row) << 32) | region->anchor_col;
+    auto it = always_by_anchor.find(key);
+    if (it == always_by_anchor.end()) {
+      const Cell* anchor = sheet.cell_at(region->anchor_row, region->anchor_col);
+      const bool always = anchor != nullptr && formula_cell_always_calculates(sheet, region->anchor_row,
+                                                                              region->anchor_col, *anchor, name_shapes);
+      it = always_by_anchor.emplace(key, always).first;
+    }
+    const std::size_t idx =
+        static_cast<std::size_t>(row - region->anchor_row) * region->cols + (col - region->anchor_col);
+    const Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
+    AppendPhantomCellXml(body, row, col, col < stored ? row_cells[col].xf_index : 0U, value, it->second);
+  };
+  for (std::uint32_t col = 0; col < stored; ++col) {
     if (sheet.spill_region_covering(row, col) != nullptr) {
-      // Phantom cell: suppressed entirely; Excel re-spills from the
-      // anchor on load.
+      emit_phantom(col);
       continue;
     }
-    (void)AppendCellXml(body, sheet, row, col, row_cells[i], shared_strings, dynamic_array_cm_index, name_is_scalar);
+    (void)AppendCellXml(body, sheet, row, col, row_cells[col], shared_strings, dynamic_array_cm_index, name_shapes);
+  }
+  for (const std::uint32_t col : phantom_cols) {
+    if (col >= stored) {
+      emit_phantom(col);
+    }
   }
   if (body.empty() && override_attrs.empty()) {
     return false;
@@ -448,7 +493,7 @@ bool CellIsEmitted(const Cell& cell) {
 }
 
 std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings,
-                              std::uint32_t dynamic_array_cm_index, const xlsb::NameIsScalar& name_is_scalar) {
+                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
@@ -463,12 +508,26 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
     overrides_by_row.emplace(ro.row, &ro);
   }
 
-  // Union of populated rows and override rows. Rows that have only an
+  // Spilled cells live in the spill table, not in the rows; gather their
+  // columns per row so each is written where Excel writes it.
+  std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> phantom_cols;
+  for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {
+    phantom_cols[phantom.row].push_back(phantom.col);
+  }
+  for (auto& [row, cols] : phantom_cols) {
+    (void)row;
+    sort_ascending(cols);
+  }
+
+  // Union of populated, spilled and override rows. Rows that have only an
   // override (no cells) still need to surface so the override survives
   // a save/load round-trip.
   std::vector<std::uint32_t> row_indices;
-  row_indices.reserve(rows_map.size() + row_overrides.size());
+  row_indices.reserve(rows_map.size() + phantom_cols.size() + row_overrides.size());
   for (const auto& kv : rows_map) {
+    row_indices.push_back(kv.first);
+  }
+  for (const auto& kv : phantom_cols) {
     row_indices.push_back(kv.first);
   }
   for (const RowLayout& ro : row_overrides) {
@@ -484,6 +543,8 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
   // Sentinel empty span used when a row has no override; avoids a
   // per-row default-construction of std::string.
   static const RowCells kEmptyRow;
+  static const std::vector<std::uint32_t> kNoPhantoms;
+  std::unordered_map<std::uint64_t, bool> always_by_anchor;
   for (std::uint32_t row : row_indices) {
     std::string override_attrs;
     auto override_it = overrides_by_row.find(row);
@@ -492,7 +553,9 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
     }
     auto cells_it = rows_map.find(row);
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
-    AppendRowXml(body, sheet, row, row_cells, override_attrs, shared_strings, dynamic_array_cm_index, name_is_scalar);
+    const auto phantoms_it = phantom_cols.find(row);
+    AppendRowXml(body, sheet, row, row_cells, phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms,
+                 override_attrs, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor);
   }
 
   if (body.empty()) {

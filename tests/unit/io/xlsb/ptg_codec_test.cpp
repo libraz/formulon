@@ -251,7 +251,13 @@ EncodedFormula EncodeOnSheet1(std::string_view formula, PtgRootClass root_class)
   SheetRangeTable ranges;
   std::unordered_set<std::uint64_t> seen;
   collect_ptg_sheet_ranges(*root, sheets, ranges, seen);
-  auto encoded = encode_ptgs(*root, sheets, ranges, {}, root_class);
+  // A cell formula is encoded as typed into Excel 365: with the dynamic-array
+  // mark exactly where Excel gives it one.
+  const PtgEvaluation evaluation =
+      root_class == PtgRootClass::kReference || formula_is_dynamic_array(*root, NameShapes())
+          ? PtgEvaluation::kDynamicArray
+          : PtgEvaluation::kLegacy;
+  auto encoded = encode_ptgs(*root, sheets, ranges, {}, root_class, std::nullopt, evaluation);
   EXPECT_TRUE(static_cast<bool>(encoded)) << formula << " | " << (encoded ? "" : encoded.error().message);
   return encoded ? encoded.value() : EncodedFormula{};
 }
@@ -547,7 +553,7 @@ TEST(XlsbPtgCodec, ArrayEvaluationFollowsTheParameterClasses) {
     parser::Parser p(formula, arena);
     const parser::AstNode* root = p.parse();
     ASSERT_NE(root, nullptr) << formula;
-    EXPECT_TRUE(formula_uses_array_evaluation(*root)) << formula;
+    EXPECT_TRUE(formula_is_dynamic_array(*root, NameShapes())) << formula;
   }
   for (const char* formula : {"A1", "A1+1", "SUM(A1:A2)", "SUMPRODUCT(A1:A2)", "MATCH(1,A1:A2,0)",
                               "VLOOKUP(1,A1:B2,2,0)", "INDEX(A1:A2,1)", "(A1:A2,B1:B2)", "A1 B1", "ROWS(A1:A2)"}) {
@@ -555,7 +561,7 @@ TEST(XlsbPtgCodec, ArrayEvaluationFollowsTheParameterClasses) {
     parser::Parser p(formula, arena);
     const parser::AstNode* root = p.parse();
     ASSERT_NE(root, nullptr) << formula;
-    EXPECT_FALSE(formula_uses_array_evaluation(*root)) << formula;
+    EXPECT_FALSE(formula_is_dynamic_array(*root, NameShapes())) << formula;
   }
 }
 
@@ -752,8 +758,21 @@ TEST(XlsbPtgCodec, SumOverArea) {
 }
 
 TEST(XlsbPtgCodec, WholeColumnAndRowRefsEncodeAsSentinelAreas) {
-  EXPECT_EQ(RoundTrip("SUM(A:A)"), "SUM(A1:A1048576)");
-  EXPECT_EQ(RoundTrip("SUM(1:1)"), "SUM(A1:XFD1)");
+  EXPECT_EQ(RoundTrip("SUM(A:A)"), "SUM(A:A)");
+  EXPECT_EQ(RoundTrip("SUM(1:1)"), "SUM(1:1)");
+  EXPECT_EQ(RoundTrip("SUM($A:B)"), "SUM($A:B)");
+  EXPECT_EQ(RoundTrip("SUM(1:$2)"), "SUM(1:$2)");
+  // Bytes as Excel 365 saved them: the spanned axis is absolute, and a
+  // span of columns or rows is one area.
+  const std::vector<std::uint8_t> full_col_a = {0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x40, 0x00, 0x40};
+  std::vector<std::uint8_t> excel = {0x45};
+  excel.insert(excel.end(), full_col_a.begin(), full_col_a.end());
+  EXPECT_EQ(EncodeOnSheet1("A:A", PtgRootClass::kValue).rgce, excel);
+  EXPECT_EQ(EncodeOnSheet1("A:B", PtgRootClass::kValue).rgce,
+            (std::vector<std::uint8_t>{0x45, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x40, 0x01, 0x40}));
+  EXPECT_EQ(EncodeOnSheet1("SUM(1:2)", PtgRootClass::kValue).rgce,
+            (std::vector<std::uint8_t>{0x25, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x80, 0xFF, 0xBF,
+                                       0x19, 0x10, 0x00, 0x00}));
 }
 
 TEST(XlsbPtgCodec, IfWithStrings) {
@@ -966,43 +985,34 @@ TEST(XlsbPtgCodec, PtgArrayDecodesRowsBeforeColsFromRawWireBytes) {
   EXPECT_EQ(parser::format_formula(*decoded.value()), "{1,2,3}");
 }
 
-TEST(XlsbPtgCodec, PtgArrayCoversNumericElementsOnlyAndSaysSoBothWays) {
-  // The element tag preceding each `SerAr` value has only been verified
-  // for `0x00` (number). Guessing at the string / bool / error layouts
-  // would risk a silently wrong array constant, so both directions
-  // refuse them -- and refuse the same set, which is what makes the
-  // classification a `Partial` round-trip rather than a one-sided gap.
-  const std::vector<std::uint8_t> rgce = {
-      0x60,                                                  // PtgArray (array-class)
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 14-byte placeholder
-      0x00, 0x00, 0x00, 0x00, 0x00,
+// Array constants of text, booleans and errors, bytes as Excel 365 saved
+// them. The token's last four bytes are memory Excel leaves uninitialised.
+TEST(XlsbPtgCodec, PtgArrayElementsMatchExcelBytes) {
+  struct Case {
+    const char* formula;
+    std::vector<std::uint8_t> rgce_head;  // opcode + the 10 bytes Excel sets
+    std::vector<std::uint8_t> rgcb;
   };
-  std::vector<std::uint8_t> rgcb;
-  emit_u32(rgcb, 1U);    // DRw
-  emit_u32(rgcb, 1U);    // DCol
-  rgcb.push_back(0x01);  // SerAr string tag: not verified, not decoded
-  emit_u32(rgcb, 1U);
-  rgcb.push_back('a');
-  rgcb.push_back(0x00);
-
-  Arena arena;
-  auto decoded =
-      decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, {}, {}, {}, {});
-  ASSERT_FALSE(static_cast<bool>(decoded));
-  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
-
-  Arena enc_arena;
-  parser::Parser parser_with_text("{1,\"a\"}", enc_arena);
-  parser::AstNode* root = parser_with_text.parse();
-  ASSERT_NE(root, nullptr);
-  ASSERT_TRUE(parser_with_text.errors().empty());
-  auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue);
-  ASSERT_FALSE(static_cast<bool>(encoded));
-  EXPECT_EQ(encoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
-
-  // The covered half is genuinely covered: an all-numeric constant still
-  // round-trips, so the classification is partial and not unsupported.
-  EXPECT_EQ(RoundTrip("SUM({1,2;3,4})"), "SUM({1,2;3,4})");
+  const Case cases[] = {
+      {"{\"a\",\"b\";\"c\",\"d\"}",
+       {0x40, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+       {0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x61, 0x00, 0x01,
+        0x01, 0x00, 0x62, 0x00, 0x01, 0x01, 0x00, 0x63, 0x00, 0x01, 0x01, 0x00, 0x64, 0x00}},
+      {"{TRUE;FALSE}",
+       {0x40, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+       {0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x01, 0x02, 0x00}},
+      {"{1;#N/A;\"z\"}",
+       {0x40, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+       {0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0xF0, 0x3F, 0x04, 0x2A, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x7A, 0x00}},
+  };
+  for (const Case& c : cases) {
+    const EncodedFormula encoded = EncodeOnSheet1(c.formula, PtgRootClass::kValue);
+    ASSERT_EQ(encoded.rgce.size(), 15U) << c.formula;
+    EXPECT_EQ(std::vector<std::uint8_t>(encoded.rgce.begin(), encoded.rgce.begin() + 11), c.rgce_head) << c.formula;
+    EXPECT_EQ(encoded.rgcb, c.rgcb) << c.formula;
+    EXPECT_EQ(RoundTrip(c.formula), c.formula);
+  }
 }
 
 TEST(XlsbPtgCodec, PtgRefRowAtGridBoundIsRecordCorrupt) {

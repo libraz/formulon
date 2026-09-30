@@ -545,8 +545,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
                                                       const std::vector<std::string>& sheet_names,
                                                       const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                                       std::uint32_t* downgraded_formula_count,
-                                                      std::uint32_t dynamic_array_ifmd,
-                                                      const NameIsScalar& name_is_scalar) {
+                                                      std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -570,6 +569,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
     std::uint32_t anchor_row = 0;
     std::uint32_t anchor_col = 0;
     Value value = Value::blank();
+    bool always_calculates = false;
   };
   std::map<std::uint32_t, std::map<std::uint32_t, PhantomShell>> phantoms;
   for (const auto& [anchor_row, cells] : sheet.rows()) {
@@ -582,6 +582,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
       if (region == nullptr || static_cast<std::uint64_t>(region->rows) * region->cols <= 1U) {
         continue;
       }
+      const bool always = formula_cell_always_calculates(sheet, anchor_row, col, cell, name_shapes);
       for (std::uint32_t r = 0; r < region->rows; ++r) {
         for (std::uint32_t c = 0; c < region->cols; ++c) {
           if (r == 0 && c == 0) {
@@ -589,7 +590,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
           }
           const std::size_t idx = static_cast<std::size_t>(r) * region->cols + c;
           Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
-          phantoms[anchor_row + r][col + c] = PhantomShell{anchor_row, col, std::move(value)};
+          phantoms[anchor_row + r][col + c] = PhantomShell{anchor_row, col, std::move(value), always};
         }
       }
     }
@@ -684,7 +685,12 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
     EmitRowHeader(body, row, row_layout, spans);
     for (std::uint32_t col = 0; col <= max_col; ++col) {
       const Cell* cell = row_cells != nullptr && col < row_cells->size() ? &(*row_cells)[col] : nullptr;
-      if (cell != nullptr && !IsEmptySlot(*cell)) {
+      const auto ph =
+          row_phantoms != nullptr ? row_phantoms->find(col) : std::map<std::uint32_t, PhantomShell>::const_iterator();
+      const bool phantom = row_phantoms != nullptr && ph != row_phantoms->end();
+      // A spilled cell carrying only its own style is still the spill's.
+      if (cell != nullptr && !IsEmptySlot(*cell) && !(phantom && cell->formula_text.empty())) {
+        const bool always = formula_cell_always_calculates(sheet, row, col, *cell, name_shapes);
         const SpillRegion* region = cell->formula_text.empty() ? nullptr : sheet.spill_region_at_anchor(row, col);
         // A dynamic-array formula keeps that form (its `BrtCellMeta` naming
         // the XLDAPR entry) even when it does not spill; a spill anchor that
@@ -701,31 +707,29 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
             emit_u32(metadata_index, dynamic_array_ifmd);  // XLDAPR dynamic-array metadata entry
             emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), metadata_index);
           }
-          if (auto r =
-                  emit_array_anchor(body, *cell, anchor_value, col, row, last_row, last_col, sheet_names, sheet_ranges,
-                                    name_table, sst, downgraded_formula_count, &downgraded_to_literal, name_is_scalar);
+          if (auto r = emit_array_anchor(body, *cell, anchor_value, always, col, row, last_row, last_col, sheet_names,
+                                         sheet_ranges, name_table, sst, downgraded_formula_count,
+                                         &downgraded_to_literal, name_shapes);
               !r) {
             return r.error();
           }
           if (downgraded_to_literal) {
             downgraded_array_anchors.insert(anchor_key(row, col));
           }
-        } else if (auto r = emit_cell(body, *cell, row, col, sst, sheet_names, sheet_ranges, name_table,
-                                      downgraded_formula_count, name_is_scalar);
+        } else if (auto r = emit_cell(body, *cell, row, col, always, sst, sheet_names, sheet_ranges, name_table,
+                                      downgraded_formula_count, name_shapes);
                    !r) {
           return r.error();
         }
         continue;
       }
-      if (row_phantoms != nullptr) {
-        const auto ph = row_phantoms->find(col);
-        if (ph != row_phantoms->end()) {
-          if (downgraded_array_anchors.count(anchor_key(ph->second.anchor_row, ph->second.anchor_col)) != 0U) {
-            continue;
-          }
-          const std::uint32_t xf_index = cell != nullptr ? cell->xf_index : 0U;
-          emit_array_phantom(body, col, xf_index, ph->second.value, ph->second.anchor_row, ph->second.anchor_col);
+      if (phantom) {
+        if (downgraded_array_anchors.count(anchor_key(ph->second.anchor_row, ph->second.anchor_col)) != 0U) {
+          continue;
         }
+        const std::uint32_t xf_index = cell != nullptr ? cell->xf_index : 0U;
+        emit_array_phantom(body, col, xf_index, ph->second.value, ph->second.anchor_row, ph->second.anchor_col,
+                           ph->second.always_calculates);
       }
     }
   }

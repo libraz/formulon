@@ -85,6 +85,17 @@ const XlsbFuncEntry* lookup_func_by_name(std::string_view name);
 /// Measured for every built-in the writer calls; `V` for a name with none.
 char xlsb_parameter_class(std::string_view name, std::uint32_t index);
 
+/// True when Excel 365 takes the result of the built-in `name` as an array
+/// whatever its arguments: it marks a call with one-cell arguments as a
+/// dynamic-array formula. OFFSET, the other built-in so marked, depends on
+/// its size arguments instead and is not listed.
+bool xlsb_returns_array(std::string_view name);
+
+/// True when a defined name whose value is a call to the built-in `name`
+/// carries `fCalcExp` in Excel 365's `BrtName` (see
+/// `name_sets_calc_exp`), whatever the call's arguments.
+bool xlsb_sets_calc_exp(std::string_view name);
+
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon

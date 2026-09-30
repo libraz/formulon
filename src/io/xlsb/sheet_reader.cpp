@@ -1376,10 +1376,18 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       if (formula_text.empty()) {
         return RecordDisposition::kModelled;
       }
+      // The anchor's shell record, read before this one, carries its cached value.
+      const Cell* shell = wb.sheet(sheet_index).cell_at(rw_first_or.value(), col_first_or.value());
+      Value cached = shell != nullptr ? shell->cached_value : Value::blank();
+      const std::string cached_text = cached.is_text() ? std::string(cached.as_text()) : std::string();
       auto wf = wb.set_cell_formula(sheet_index, rw_first_or.value(), col_first_or.value(), formula_text);
       if (!wf) {
         return wf.error();
       }
+      if (cached.is_text()) {
+        cached = Value::text(cached_text);  // the cell's own copy went with the shell
+      }
+      wb.sheet(sheet_index).set_cell_cached_value(rw_first_or.value(), col_first_or.value(), cached);
       // Record the footprint for a second pass after the whole sheet
       // has been decoded (see `RegisterArraySpills`, called at the end
       // of this function). `BrtArrFmla` for the anchor `(rwFirst,

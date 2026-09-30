@@ -84,6 +84,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp
+  unit/io/xlsb/ptg_class_fixture_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
   unit/io/xlsb/reader_test.cpp
   unit/io/xlsb/record_test.cpp
@@ -98,6 +99,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb_retained_part_staleness_test.cpp
   unit/io/xlsb_reader_contract_test.cpp
   unit/io/ooxml_output_contract_test.cpp
+  unit/io/spill_phantom_fixture_test.cpp
   unit/parser/tokenizer_test.cpp
   unit/parser/ast_test.cpp
   unit/parser/ast_dump_test.cpp

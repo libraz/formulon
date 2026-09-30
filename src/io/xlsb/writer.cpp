@@ -1151,7 +1151,7 @@ void EmitExternSheet(std::vector<std::uint8_t>& body, const SheetRangeTable& ran
 /// Excel stores a `#NAME?` placeholder there, which is not required for
 /// this writer's own reader to round-trip the name table).
 Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::string& name, std::string_view formula,
-                               std::int32_t itab, bool hidden, std::string_view comment,
+                               std::int32_t itab, bool hidden, bool calc_exp, std::string_view comment,
                                const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
                                const NameTable& name_table) {
   // Names carrying Excel's hidden storage prefixes are not ordinary
@@ -1203,9 +1203,8 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
                         "xlsb writer: defined-name formula failed to parse for Ptg encoding",
                         std::string("context=xlsb_writer name=") + name);
     }
-    // fCalcExp (grbit bit 4): Excel 365 sets it on a name whose body is a LAMBDA.
-    if (root->kind() == parser::NodeKind::Lambda) {
-      p[0] |= 0x10U;
+    if (calc_exp) {
+      p[0] |= 0x10U;  // fCalcExp (grbit bit 4)
     }
     // Measured: a defined-name body's root reference stays reference class.
     auto encoded_or = encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kReference);
@@ -1360,11 +1359,12 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
     }
     return it->second;
   };
+  const std::vector<NameShape> shapes = defined_name_shapes(wb);
   for (std::size_t i = 0; i < ordered_names.size(); ++i) {
     if (i < defined_count) {
       const DefinedName& dn = wb.defined_names()[i];
-      if (auto r = EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, dn.comment, sheet_names,
-                            sheet_ranges, table_for_scope(dn.local_sheet_id));
+      if (auto r = EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, shapes[i].calc_exp, dn.comment,
+                            sheet_names, sheet_ranges, table_for_scope(dn.local_sheet_id));
           !r) {
         return r.error();
       }
@@ -1373,7 +1373,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
       // never consulted; the workbook-scope one keeps the call uniform. A
       // stub for an undefined name is not hidden, as Excel saves it.
       const OrderedName& slot = ordered_names[i];
-      if (auto r = EmitName(body, slot.name, /*formula=*/{}, slot.itab, /*hidden=*/false,
+      if (auto r = EmitName(body, slot.name, /*formula=*/{}, slot.itab, /*hidden=*/false, /*calc_exp=*/false,
                             /*comment=*/{}, sheet_names, sheet_ranges, table_for_scope(-1));
           !r) {
         return r.error();
@@ -1437,7 +1437,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
     auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table,
-                                    &downgraded_formula_count, dynamic_array.ifmd, legacy_name_shapes(workbook, i));
+                                    &downgraded_formula_count, dynamic_array.ifmd, name_shapes(workbook, i));
     if (!sheet_body_or) {
       return sheet_body_or.error();
     }

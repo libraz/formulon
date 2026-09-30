@@ -12,12 +12,13 @@
 //     disappear together with the part they point at.
 
 #include <cstdint>
-#include <set>
 #include <string>
 #include <vector>
 
 #include "c_api/formulon_c.h"
 #include "cell.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "external_link.h"
 #include "gtest/gtest.h"
 #include "io/dynamic_array_formula.h"
@@ -134,11 +135,9 @@ TEST(OoxmlDynamicArrayMetadata, SpillAnchorsFromARealFixtureKeepCmOnResave) {
   EXPECT_NE(saved_sheet.find("<c r=\"I1\" cm=\"1\""), std::string::npos) << saved_sheet;
 }
 
-// Every formula Excel 365 marked dynamic-array (`cm=`) when entered is
-// stored so; the ones it did not mark may be too (measured harmless), and
-// those are listed so the set cannot grow unnoticed. Entered through the
-// same path as any formula (Rng/Cel/Val/Fn being a range, cell, constant
-// and LAMBDA name in the measured workbook).
+// A formula is stored dynamic-array (`cm=`) exactly when Excel 365 marked it
+// on entry. Entered through the same path as any formula, with Rng/Cel/Val/Fn
+// the range, cell, constant and LAMBDA names of the measured workbook.
 TEST(OoxmlDynamicArrayMetadata, EnteredFormulasAreStoredDynamicWhereExcelDoes) {
   struct Case {
     const char* formula;
@@ -207,18 +206,72 @@ TEST(OoxmlDynamicArrayMetadata, EnteredFormulasAreStoredDynamicWhereExcelDoes) {
       {"=MAX(A1:A2)", false},
       {"=AND(A1:A2>0)", true},
   };
-  const std::set<std::string> harmless_extra = {
-      "=(A1:A2,B1:B2)", "=INDEX(A1:A2,1)",   "=OFFSET(A1,0,0)",        "=Cel", "=Val", "=VLOOKUP(1,A1:B2,2,0)",
-      "=LET(x,1,x)",    "=MATCH(1,A1:A2,0)", "=XLOOKUP(1,A1:A2,B1:B2)"};
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rng", "=Sheet1!$A$1:$A$2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Cel", "=Sheet1!$A$1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Val", "=5")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "=LAMBDA(x,x*2)")));
   std::uint32_t row = 0;
   for (const Case& c : cases) {
     ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row, 4U, c.formula)));
     const Sheet& sheet = wb.sheet(0);
     const bool stored_dynamic = io::is_dynamic_array_formula(*sheet.cell_at(row, 4U));
-    EXPECT_EQ(stored_dynamic, c.excel_cm || harmless_extra.count(c.formula) != 0U) << c.formula;
+    EXPECT_EQ(stored_dynamic, c.excel_cm) << c.formula;
     ++row;
+  }
+}
+
+// `ca="1"` (and `aca="1"` on the array form) exactly where Excel 365 stores
+// it: a volatile call anywhere, a call to a function that is neither built in
+// nor defined, a name whose formula is volatile, and a blocked spill.
+TEST(OoxmlDynamicArrayMetadata, AlwaysCalculatedFormulasCarryCaAsExcelDoes) {
+  struct Case {
+    const char* formula;
+    const char* f_open;  // `<f ...>` as Excel wrote it for the cell
+  };
+  const Case cases[] = {
+      {"=RAND()", "<f ca=\"1\">"},
+      {"=SUM(RAND())", "<f ca=\"1\">"},
+      {"=IF(TRUE,1,RAND())", "<f ca=\"1\">"},
+      {"=ABS(ABS(RAND()))", "<f ca=\"1\">"},
+      {"=OFFSET(A1,0,0)", "<f ca=\"1\">"},
+      {"=FORMULATEXT(A1)", "<f ca=\"1\">"},
+      {"=SHEETS()", "<f ca=\"1\">"},
+      {"=LET(x,RAND(),x)", "<f ca=\"1\">"},
+      {"=IFERROR(1/0,NOW())", "<f ca=\"1\">"},
+      {"=SUM(NOSUCH(1))", "<f ca=\"1\">"},
+      {"=VolNm+1", "<f t=\"array\" aca=\"1\" ref=\"E11\" ca=\"1\">"},
+      {"=INDIRECT(\"A1\")", "<f t=\"array\" aca=\"1\" ref=\"E12\" ca=\"1\">"},
+      {"=LAMBDA(x,x)(RAND())", "<f t=\"array\" aca=\"1\" ref=\"E13\" ca=\"1\">"},
+      {"=ISERROR(NOSUCH(1))", "<f t=\"array\" aca=\"1\" ref=\"E14\" ca=\"1\">"},
+      {"=A1:A2", "<f t=\"array\" aca=\"1\" ref=\"E15\" ca=\"1\">"},  // blocked by E16
+      {"=A1", "<f>"},
+      {"=ISFORMULA(A1)", "<f>"},
+      {"=NOSUCHREF", "<f t=\"array\" ref=\"E18\">"},
+      {"=Fn(1)", "<f t=\"array\" ref=\"E19\">"},
+      {"=LAMBDA(x,x)(1)", "<f t=\"array\" ref=\"E20\">"},
+  };
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("VolNm", "=RAND()")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "=LAMBDA(x,x*2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(2.0))));
+  std::uint32_t row = 0;
+  for (const Case& c : cases) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row++, 4U, c.formula))) << c.formula;
+  }
+  (void)wb.recalc(eval::default_registry());
+  const std::string sheet_xml = SavedPart(wb, "xl/worksheets/sheet1.xml");
+  row = 0;
+  for (const Case& c : cases) {
+    const std::string cell = "<c r=\"E" + std::to_string(++row) + "\"";
+    const std::size_t at = sheet_xml.find(cell);
+    ASSERT_NE(at, std::string::npos) << c.formula;
+    const std::size_t f = sheet_xml.find("<f", at);
+    EXPECT_EQ(sheet_xml.compare(f, std::string(c.f_open).size(), c.f_open), 0)
+        << c.formula << ": " << sheet_xml.substr(f, 60);
   }
 }
 

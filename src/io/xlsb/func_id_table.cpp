@@ -494,6 +494,33 @@ constexpr std::string_view kParameterClasses =
     "EEKNUM:R|WORKDAY:RRS|WORKDAY.INTL:RRVS|WRAPCOLS:FV|WRAPROWS:FV|XIRR:SSR|XLOOKUP:VXXS|XMATCH:VXV|XNPV"
     ":RS|XOR:S|YEARFRAC:R|YIELD:R|YIELDDISC:R|YIELDMAT:R|Z.TEST:SV|ZTEST:SV|";
 
+/// The built-ins `xlsb_returns_array` lists, as `|NAME|`: those Excel 365
+/// marks dynamic-array in the `classes-build --slot A1` probe of
+/// `tools/dev/xlsb_func_id_harvest.py` (every argument one cell), less OFFSET.
+constexpr std::string_view kArrayResults =
+    "|BYCOL|BYROW|CELL|CHOOSECOLS|CHOOSEROWS|COPILOT|DROP|ENCODEURL|EXPAND|FILTER|FILTERXML|FREQUENCY|GROUPBY|GROWT"
+    "H|HSTACK|IFS|LINEST|LOGEST|MAKEARRAY|MAP|MINVERSE|MMULT|MODE.MULT|MUNIT|PIVOTBY|RANDARRAY|REDUCE|REGEXEXTRACT|"
+    "SCAN|SEQUENCE|SORT|SORTBY|STOCKHISTORY|SWITCH|TAKE|TEXTSPLIT|TOCOL|TOROW|TRANSPOSE|TREND|TRIMRANGE|UNIQUE|VSTA"
+    "CK|WEBSERVICE|WRAPCOLS|WRAPROWS|";
+
+/// The built-ins `xlsb_sets_calc_exp` lists, as `|NAME|`: those whose call,
+/// as the whole body of a defined name, Excel 365 saves with `fCalcExp`,
+/// harvested one name per built-in (cell and area arguments alike).
+constexpr std::string_view kCalcExp =
+    "|BYCOL|BYROW|CELL|CHOOSE|CHOOSECOLS|CHOOSEROWS|COLUMN|COPILOT|DROP|ENCODEURL|EXPAND|FILTER|FILTERXML|FREQUENCY|G"
+    "ROUPBY|GROWTH|HLOOKUP|HSTACK|HYPERLINK|IF|IFERROR|IFNA|IFS|INDEX|LINEST|LOGEST|MAKEARRAY|MAP|MINVERSE|MMULT|MODE"
+    ".MULT|MUNIT|PIVOTBY|RANDARRAY|REDUCE|REGEXEXTRACT|ROW|SCAN|SEQUENCE|SORT|SORTBY|STOCKHISTORY|SWITCH|TAKE|TEXTSPL"
+    "IT|TOCOL|TOROW|TRANSPOSE|TREND|UNIQUE|VLOOKUP|VSTACK|WEBSERVICE|WRAPCOLS|WRAPROWS|XLOOKUP|";
+
+/// `|NAME` with `name` upper-cased: the start of its entry in the tables above.
+std::string EntryPrefix(std::string_view name) {
+  std::string key = "|";
+  for (char c : name) {
+    key.push_back((c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c);
+  }
+  return key;
+}
+
 }  // namespace
 
 const std::size_t kXlsbFuncEntryCount = kEntriesCount;
@@ -521,10 +548,7 @@ const XlsbFuncEntry* lookup_func_by_name(std::string_view name) {
 }
 
 char xlsb_parameter_class(std::string_view name, std::uint32_t index) {
-  std::string needle = "|";
-  for (char c : name) {
-    needle.push_back((c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c);
-  }
+  std::string needle = EntryPrefix(name);
   needle.push_back(':');
   const std::size_t at = kParameterClasses.find(needle);
   if (at == std::string_view::npos) {
@@ -542,6 +566,14 @@ char xlsb_parameter_class(std::string_view name, std::uint32_t index) {
   }
   const std::size_t tail = letters.size() - period;
   return letters[tail + (index - tail) % period];
+}
+
+bool xlsb_returns_array(std::string_view name) {
+  return kArrayResults.find(EntryPrefix(name) + "|") != std::string_view::npos;
+}
+
+bool xlsb_sets_calc_exp(std::string_view name) {
+  return kCalcExp.find(EntryPrefix(name) + "|") != std::string_view::npos;
 }
 
 }  // namespace xlsb

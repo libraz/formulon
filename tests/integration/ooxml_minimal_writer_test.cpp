@@ -275,7 +275,7 @@ TEST(SpillRoundTrip, AnchorHasArrayType) {
   ASSERT_NE(body.find("_xlfn.SEQUENCE(3)</f>"), std::string::npos) << body;
 }
 
-TEST(SpillRoundTrip, PhantomCellsAbsent) {
+TEST(SpillRoundTrip, PhantomCellsCarryTheirValues) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_formula(0U, 0U, "=SEQUENCE(2,2)");
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0)};
@@ -284,13 +284,12 @@ TEST(SpillRoundTrip, PhantomCellsAbsent) {
   auto result = wb.save();
   ASSERT_TRUE(static_cast<bool>(result));
 
+  // Spilled cells hold their cached value and no formula, as Excel writes them.
   const std::string body = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
-  // The anchor must be present.
   EXPECT_NE(body.find("r=\"A1\""), std::string::npos) << body;
-  // Phantoms must be absent from the worksheet XML.
-  EXPECT_EQ(body.find("r=\"B1\""), std::string::npos) << body;
-  EXPECT_EQ(body.find("r=\"A2\""), std::string::npos) << body;
-  EXPECT_EQ(body.find("r=\"B2\""), std::string::npos) << body;
+  EXPECT_NE(body.find("<c r=\"B1\"><v>2</v></c>"), std::string::npos) << body;
+  EXPECT_NE(body.find("<c r=\"A2\"><v>3</v></c>"), std::string::npos) << body;
+  EXPECT_NE(body.find("<c r=\"B2\"><v>4</v></c>"), std::string::npos) << body;
 }
 
 TEST(SpillRoundTrip, ScalarReplacementRemovesArrayMarkupAndUnmasksCells) {

@@ -2095,7 +2095,7 @@ TEST(XlsbWriter, WholeColumnFormulaSavesWithoutDowngrade) {
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
   const Cell* cell = read_or.value().workbook.sheet(0).cell_at(0U, 0U);
   ASSERT_NE(cell, nullptr);
-  EXPECT_EQ(cell->formula_text, "=SUM(A1:A1048576)");
+  EXPECT_EQ(cell->formula_text, "=SUM(A:A)");
 }
 
 }  // namespace

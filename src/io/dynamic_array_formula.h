@@ -43,10 +43,26 @@ inline std::uint64_t dynamic_array_cell_key(std::uint32_t row, std::uint32_t col
 /// formula entry inferred: a loaded formula keeps the meaning the file gives.
 void apply_loaded_dynamic_array_marks(Sheet& sheet, const std::unordered_set<std::uint64_t>& marked);
 
-/// Which names a formula on sheet `sheet_index` of `wb` reads as one value
-/// (`xlsb::legacy_intersections`): a defined name, sheet-local before
-/// workbook-wide, whose body is a one-cell reference or a constant.
-xlsb::NameIsScalar legacy_name_shapes(const Workbook& wb, std::size_t sheet_index);
+/// `xlsb::NameShape` of every defined name of `wb`, in `wb.defined_names()` order.
+std::vector<xlsb::NameShape> defined_name_shapes(const Workbook& wb);
+
+/// What a formula on sheet `sheet_index` of `wb` knows of each defined name
+/// it references (sheet-local before workbook-wide), from the name's own
+/// formula: whether it is one cell or a constant, the rectangle it covers,
+/// and the positive integer it is.
+xlsb::NameShapes name_shapes(const Workbook& wb, std::size_t sheet_index);
+
+/// True when the formula in `cell` at (`row`, `col`) of `sheet` is stored as
+/// recalculated every time (`.xlsx` `ca="1"`, `.xlsb` fAlwaysCalc), as Excel
+/// 365 stores it: `xlsb::formula_always_calculates` holds for it, or it is a
+/// dynamic-array formula whose spill is blocked. False for a non-formula cell.
+bool formula_cell_always_calculates(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
+                                    const xlsb::NameShapes& names);
+
+/// True when Excel 365 marks `root`, a formula typed into sheet
+/// `sheet_index` of `wb`, as a dynamic-array formula
+/// (`xlsb::formula_is_dynamic_array` over `wb`'s defined names).
+bool entered_as_dynamic_array(const Workbook& wb, std::size_t sheet_index, const parser::AstNode& root);
 
 }  // namespace io
 }  // namespace formulon

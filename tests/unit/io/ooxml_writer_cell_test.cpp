@@ -385,19 +385,21 @@ TEST(BuildSheetDataXml, SpillAnchorCarriesCmWhenAMetadataIndexIsResolved) {
   EXPECT_NE(xml.find("<c r=\"A1\" cm=\"1\""), std::string::npos) << xml;
 }
 
-TEST(BuildSheetDataXml, SpillPhantomsSuppressed) {
+// Spilled cells are written as Excel writes them: the cached value alone,
+// typed as a formula result's, with the cell's own style.
+TEST(BuildSheetDataXml, SpillPhantomsCarryTheirValues) {
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=SEQUENCE(2,2)");
-  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0)};
+  s.set_cell_value(1U, 1U, Value::blank());
+  s.set_cell_xf_index(1U, 1U, 3U);
+  std::vector<Value> cells = {Value::number(1.0), Value::text("x"), Value::boolean(true), Value::number(4.0)};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 2U, 2U, std::move(cells)));
 
   const std::string xml = BuildSheetDataXml(s);
-  // The anchor must be present.
-  EXPECT_NE(xml.find("r=\"A1\""), std::string::npos) << xml;
-  // Phantoms B1, A2, B2 must be entirely absent.
-  EXPECT_EQ(xml.find("r=\"B1\""), std::string::npos) << xml;
-  EXPECT_EQ(xml.find("r=\"A2\""), std::string::npos) << xml;
-  EXPECT_EQ(xml.find("r=\"B2\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"A1\"><f t=\"array\" ref=\"A1:B2\">"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"B1\" t=\"str\"><v xml:space=\"preserve\">x</v></c>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"A2\" t=\"b\"><v>1</v></c>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"B2\" s=\"3\"><v>4</v></c>"), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, SpillCollisionStoresTheLegacyFallback) {
@@ -453,7 +455,10 @@ TEST(BuildSheetDataXml, DynamicArrayFormulaKeepsItsFormWithoutSpilling) {
   const std::string xml = BuildSheetDataXml(s, nullptr, /*dynamic_array_cm_index=*/1U);
   EXPECT_NE(xml.find("<c r=\"A1\" cm=\"1\"><f t=\"array\" ref=\"A1\">SUM(A5:A6*2)</f>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<c r=\"A2\"><f>A5+1</f>"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<c r=\"A3\" cm=\"1\"><f t=\"array\" ref=\"A3\">MyFn(1)</f>"), std::string::npos) << xml;
+  // MyFn is neither built in nor defined here, so Excel recalculates it always.
+  EXPECT_NE(xml.find("<c r=\"A3\" cm=\"1\"><f t=\"array\" aca=\"1\" ref=\"A3\" ca=\"1\">MyFn(1)</f>"),
+            std::string::npos)
+      << xml;
   EXPECT_NE(xml.find("<c r=\"A4\"><f>SUM(A5:A6*2)</f>"), std::string::npos) << xml;
   // Without an XLDAPR entry to name, the plain form stays.
   EXPECT_NE(BuildSheetDataXml(s).find("<c r=\"A1\"><f>SUM(A5:A6*2)</f>"), std::string::npos);
