@@ -1358,15 +1358,16 @@ class Encoder {
     }
     const std::uint32_t arity = node.as_call_arity();
     std::vector<std::size_t> gotos;
-    // A two-argument IF keeps no jump attributes: Excel's form for it is unmeasured.
-    if (strings::case_insensitive_eq(name, "IF") && arity == 3U) {
+    if (strings::case_insensitive_eq(name, "IF") && (arity == 2U || arity == 3U)) {
       RETURN_IF_ERROR(emit_call_arg(node, name, 0U));
       const std::size_t attr_if = emit_attr(0x02);
       RETURN_IF_ERROR(emit_call_arg(node, name, 1U));
       gotos.push_back(emit_attr(0x08));
       patch_u16(attr_if + 2U, out_.size() - (attr_if + 4U));
-      RETURN_IF_ERROR(emit_call_arg(node, name, 2U));
-      gotos.push_back(emit_attr(0x08));
+      if (arity == 3U) {
+        RETURN_IF_ERROR(emit_call_arg(node, name, 2U));
+        gotos.push_back(emit_attr(0x08));
+      }
     } else if (strings::case_insensitive_eq(name, "CHOOSE") && arity >= 2U) {
       RETURN_IF_ERROR(emit_call_arg(node, name, 0U));
       // PtgAttrChoose: the choice count, then one offset per choice and one

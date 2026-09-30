@@ -658,8 +658,10 @@ TEST(XlsbPtgCodec, BranchingCallsCarryExcelsJumpAttributes) {
   EXPECT_EQ(EncodeOnSheet1("IFERROR(A1,A1)", PtgRootClass::kValue).rgce,
             join({a1, {0x19, 0x80, 0x07, 0x00}, ref_a1, {0x19, 0x08, 0x02, 0x00, 0x41, 0xE0, 0x01}}));
   EXPECT_EQ(RoundTrip("IF(A1>0,CHOOSE(2,A1,B1),IFERROR(1/0,2))"), "IF(A1>0,CHOOSE(2,A1,B1),IFERROR(1/0,2))");
-  // Two-argument IF: Excel's jump attributes for it are unmeasured, so none are written.
-  EXPECT_EQ(EncodeOnSheet1("IF(A1,A1)", PtgRootClass::kValue).rgce, join({a1, ref_a1, {0x42, 0x02, 0x01, 0x00}}));
+  EXPECT_EQ(EncodeOnSheet1("IF(A1>0,1)", PtgRootClass::kValue).rgce,
+            join({a1,
+                  {0x1E, 0x00, 0x00, 0x0D, 0x19, 0x02, 0x07, 0x00, 0x1E, 0x01, 0x00, 0x19, 0x08, 0x03, 0x00, 0x42, 0x02,
+                   0x01, 0x00}}));
 }
 
 TEST(XlsbPtgCodec, SumOverArea) {
