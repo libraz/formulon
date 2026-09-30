@@ -253,6 +253,7 @@ AstNode* Parser::parse_paren_atom() {
       return nullptr;
     }
     u->set_range(SpanRange(lparen.range, rparen.range));
+    u->add_paren();
     return u;
   }
   if (peek_kind() != TokenKind::RParen) {
@@ -263,6 +264,7 @@ AstNode* Parser::parse_paren_atom() {
   }
   const Token& rparen = advance();
   inner->set_range(SpanRange(lparen.range, rparen.range));
+  inner->add_paren();
   return inner;
 }
 

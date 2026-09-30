@@ -1239,12 +1239,12 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         break;
       }
       case PtgKind::Paren: {
-        // Parentheses are structurally transparent: the AST formatter
-        // re-inserts whatever parens precedence requires. Keep the
-        // operand as-is.
+        // Evaluation ignores parentheses; the operand records them so the
+        // formula text keeps the ones Excel shows.
         if (stack.empty()) {
           return corrupt_stack("paren");
         }
+        stack.back()->add_paren();
         break;
       }
 

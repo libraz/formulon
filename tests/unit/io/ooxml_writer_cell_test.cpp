@@ -307,6 +307,17 @@ TEST(BuildSheetDataXml, FormulaCellWrittenAtStoresAsSingleCall) {
   EXPECT_NE(xml.find("<f>_xlfn.SINGLE(A2)+1</f>"), std::string::npos) << xml;
 }
 
+TEST(BuildSheetDataXml, WrittenParenthesesAreStoredAsWritten) {
+  // A formula stored verbatim keeps its text; one re-serialised for a
+  // storage prefix keeps its written parentheses too.
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=(A2)+1");
+  s.set_cell_formula(1U, 0U, "=(SEQUENCE(2))+1");
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("<f>(A2)+1</f>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<f>(_xlfn.SEQUENCE(2))+1</f>"), std::string::npos) << xml;
+}
+
 TEST(BuildSheetDataXml, FormulaCellLetParameterPrefixedCaseInsensitively) {
   // LET/LAMBDA parameters resolve case-insensitively at eval time, so a
   // reference spelled in a different case than its binding must still get

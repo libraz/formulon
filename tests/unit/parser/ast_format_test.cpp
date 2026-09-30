@@ -360,7 +360,7 @@ TEST(AstFormat, RangeBetweenColumnShapedNames) {
   Parser p("=SUM((RO):(r))", a);
   AstNode* root = p.parse();
   ASSERT_NE(root, nullptr);
-  EXPECT_EQ(format_formula(*root), "SUM((RO):r)");
+  EXPECT_EQ(format_formula(*root), "SUM((RO):(r))");
 }
 TEST(AstFormat, RangeFromColumnShapedNameToCall) {
   ExpectRoundTripsToSame("=LE:(NA())");
@@ -368,7 +368,7 @@ TEST(AstFormat, RangeFromColumnShapedNameToCall) {
   Parser p("=LE:(NA())", a);
   AstNode* root = p.parse();
   ASSERT_NE(root, nullptr);
-  EXPECT_EQ(format_formula(*root), "(LE):NA()");
+  EXPECT_EQ(format_formula(*root), "(LE):(NA())");
 }
 // Ordinary ranges and a name that is too long to be a column keep the plain
 // join.
@@ -728,6 +728,18 @@ TEST(AstFormat, StorageOperatorRespellingLeavesEverythingElse) {
   EXPECT_EQ(spell_storage_operators("=SINGLE(A1,2)"), "=SINGLE(A1,2)");
   EXPECT_EQ(spell_storage_operators("=SUM(A1:A2)"), "=SUM(A1:A2)");
   EXPECT_EQ(spell_storage_operators("=SINGLE("), "=SINGLE(");
+}
+
+TEST(AstFormat, WrittenParenthesesAreKept) {
+  // Excel's formula2 shows the parentheses as written, redundant ones too.
+  for (const char* formula : {"(WEEKDAY(TODAY()))", "((1+2))*3", "-(A1)", "((A1,B1))", "AND(A1<(WEEKDAY(TODAY())))",
+                              "(A1:A2)(1)", "SUM((A1))"}) {
+    Arena a;
+    Parser p(formula, a);
+    AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << formula;
+    EXPECT_EQ(format_formula(*root), formula);
+  }
 }
 
 }  // namespace

@@ -2007,5 +2007,14 @@ TEST(WorkbookSheetOps, RemoveReindexesSurvivingScopedNameBeforeDependentRecalc) 
   EXPECT_DOUBLE_EQ(wb.sheet(1).cell_at(0, 0)->cached_value.as_number(), 7.0);
 }
 
+TEST(WorkbookSheetOps, RowInsertKeepsWrittenParentheses) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 4U, 1U, "=(A1)+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0U, 0U, 1U)));
+  const Cell* cell = wb.sheet(0).cell_at(5U, 1U);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_EQ(cell->formula_text, "=(A2)+1");
+}
+
 }  // namespace
 }  // namespace formulon

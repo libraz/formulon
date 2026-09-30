@@ -457,7 +457,7 @@ const AstNode* TransformLambdaCall(const AstNode& node, Arena& arena, const RefT
   return make_lambda_call(arena, const_cast<AstNode*>(callee), n == 0 ? nullptr : args.data(), n);
 }
 
-const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransform& transform) {
+const AstNode* TransformNodeBare(const AstNode& node, Arena& arena, const RefTransform& transform) {
   switch (node.kind()) {
     case NodeKind::Literal:
     case NodeKind::ErrorLiteral:
@@ -500,6 +500,16 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
       return TransformLambdaCall(node, arena, transform);
   }
   return &node;
+}
+
+// A rebuilt node keeps the parentheses written around the one it replaces.
+const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const AstNode* rebuilt = TransformNodeBare(node, arena, transform);
+  if (rebuilt != nullptr && rebuilt != &node && node.paren_depth() != 0U) {
+    // Every node other than `node` itself is fresh from this walk's arena.
+    const_cast<AstNode*>(rebuilt)->set_paren_depth(node.paren_depth());
+  }
+  return rebuilt;
 }
 
 // ---------------------------------------------------------------------------

@@ -658,8 +658,8 @@ class Encoder {
   /// shows `(1+2)*3` as `1+2*3`.
   Expected<void, Error> emit(const parser::AstNode& node) {
     RETURN_IF_ERROR(emit_node(node));
-    if (parens_.count(&node) != 0) {
-      emit_u8(out_, 0x15);  // PtgParen
+    if (const auto it = parens_.find(&node); it != parens_.end()) {
+      out_.insert(out_.end(), it->second, 0x15);  // PtgParen, one per pair
     }
     return Expected<void, Error>::Ok();
   }
@@ -1561,8 +1561,9 @@ class Encoder {
   const std::vector<std::string>& sheet_names_;
   const SheetRangeTable& sheet_ranges_;
   const NameTable& name_table_;
-  /// Nodes the formula text parenthesises (`parser::collect_parenthesized_nodes`).
-  std::unordered_set<const parser::AstNode*> parens_;
+  /// Parenthesis pairs per node, as the formula text prints them
+  /// (`parser::collect_parenthesized_nodes`).
+  std::unordered_map<const parser::AstNode*, std::uint8_t> parens_;
   /// True while emitting the operation a memory token covers.
   bool in_memory_token_ = false;
   /// Where the next node `emit_node` starts sits; set by its parent.

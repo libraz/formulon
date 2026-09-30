@@ -733,6 +733,20 @@ TEST(XlsbPtgCodec, ReferenceReturningCallsFollowTheirSlot) {
       "1d 01 19 02 0b 00 24 00 00 00 00 00 c0 19 08 0e 00 24 00 00 00 00 01 c0 19 08 03 00 22 03 01 00 41 4b 00 ");
 }
 
+// A written pair of parentheses is one PtgParen after its operand, redundant
+// or not; bytes as Excel 365 saved `=AND(A1<(WEEKDAY(TODAY())))`, which
+// decodes back to the same text.
+TEST(XlsbPtgCodec, WrittenParenthesesRoundTripAsPtgParen) {
+  const std::vector<std::uint8_t> excel = {0x19, 0x01, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x41,
+                                           0xDD, 0x00, 0x42, 0x01, 0x46, 0x00, 0x15, 0x09, 0x42, 0x01, 0x24, 0x00};
+  EXPECT_EQ(EncodeOnSheet1("AND(A1<(WEEKDAY(TODAY())))", PtgRootClass::kValue).rgce, excel);
+  Arena arena;
+  auto decoded = decode_ptgs(ByteSpan{excel.data(), excel.size()}, ByteSpan{}, arena, {"Sheet1"}, {}, {}, {});
+  ASSERT_TRUE(static_cast<bool>(decoded));
+  EXPECT_EQ(parser::format_formula(*decoded.value()), "AND(A1<(WEEKDAY(TODAY())))");
+  EXPECT_EQ(RoundTrip("((1+2))*3"), "((1+2))*3");
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }
@@ -1040,16 +1054,16 @@ TEST(XlsbPtgCodec, PtgRefErrWithSentinelCoordinatesStillDecodesAsRef) {
   EXPECT_EQ(parser::format_formula(*decoded.value()), "#REF!");
 }
 
-TEST(XlsbPtgCodec, DecoderAcceptsTransparentParenToken) {
-  // PtgInt(1), PtgInt(2), PtgAdd, PtgParen. Excel emits the trailing
-  // PtgParen for explicit grouping; its value stack is otherwise unchanged.
+TEST(XlsbPtgCodec, DecoderKeepsParenTokenInTheText) {
+  // PtgInt(1), PtgInt(2), PtgAdd, PtgParen: the written parentheses Excel
+  // shows, which leave the value stack unchanged.
   const std::vector<std::uint8_t> rgce = {0x1E, 0x01, 0x00, 0x1E, 0x02, 0x00, 0x03, 0x15};
   Arena arena;
   ByteSpan main{rgce.data(), rgce.size()};
   ByteSpan extra{nullptr, 0};
   auto decoded = decode_ptgs(main, extra, arena, {}, {}, {}, {});
   ASSERT_TRUE(static_cast<bool>(decoded));
-  EXPECT_EQ(parser::format_formula(*decoded.value()), "1+2");
+  EXPECT_EQ(parser::format_formula(*decoded.value()), "(1+2)");
 }
 
 TEST(XlsbPtgCodec, DecoderConsumesMemoryCachePtgsWithoutChangingExpression) {

@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 #include "parser/ast.h"
@@ -98,10 +98,18 @@ int BinOpBp(BinOp op) noexcept {
   return kBpComparison;
 }
 
-// Forward declaration: the full recursion target. `min_bp` is the minimum
-// binding power the parent requires; if `EffectiveBp(node) < min_bp` we wrap
-// the rendered text in `(...)`.
-void FormatNode(const AstNode& node, std::string& out, int min_bp);
+// Parenthesis pairs to print around each node, decided once by
+// `CollectParens` for the formatters and the XLSB encoder alike.
+using ParenCounts = std::unordered_map<const AstNode*, std::uint8_t>;
+
+std::uint8_t ParenCount(const ParenCounts& parens, const AstNode& node) {
+  const auto it = parens.find(&node);
+  return it == parens.end() ? 0U : it->second;
+}
+
+// Forward declaration: the full recursion target, which prints `node`
+// inside the parentheses `parens` gives it.
+void FormatNode(const AstNode& node, std::string& out, const ParenCounts& parens);
 
 // Renders a Number payload. Outside an array constant a negative value is
 // parenthesised so its leading `-` cannot glue onto an adjacent operator;
@@ -346,52 +354,21 @@ void FormatStructuredRef(const AstNode& node, std::string& out) {
   out.append("]]");
 }
 
-void FormatUnary(const AstNode& node, std::string& out, int min_bp) {
+void FormatUnary(const AstNode& node, std::string& out, const ParenCounts& parens) {
   const UnaryOp op = node.as_unary_op();
   if (op == UnaryOp::Percent) {
-    // Postfix: render operand at percent-level binding power then append `%`.
-    const bool wrap = kBpPostfixPercent < min_bp;
-    if (wrap) {
-      out.push_back('(');
-    }
-    FormatNode(node.as_unary_operand(), out, kBpPostfixPercent);
+    FormatNode(node.as_unary_operand(), out, parens);
     out.push_back('%');
-    if (wrap) {
-      out.push_back(')');
-    }
     return;
   }
-  // Prefix `+` / `-`.
-  const bool wrap = kBpUnaryPrefix < min_bp;
-  if (wrap) {
-    out.push_back('(');
-  }
   out.push_back(op == UnaryOp::Plus ? '+' : '-');
-  FormatNode(node.as_unary_operand(), out, kBpUnaryPrefix);
-  if (wrap) {
-    out.push_back(')');
-  }
+  FormatNode(node.as_unary_operand(), out, parens);
 }
 
-void FormatBinary(const AstNode& node, std::string& out, int min_bp) {
-  const BinOp op = node.as_binary_op();
-  const int bp = BinOpBp(op);
-  const bool wrap = bp < min_bp;
-  if (wrap) {
-    out.push_back('(');
-  }
-  // Left-associative: LHS demands `bp` (a same-precedence child on the left
-  // does not need wrapping), RHS demands `bp + 1` (a same-precedence child
-  // on the right must be wrapped so it does not silently re-associate on
-  // reparse). Uniform across every binary operator, including `^`.
-  const int lhs_min = bp;
-  const int rhs_min = bp + 1;
-  FormatNode(node.as_binary_lhs(), out, lhs_min);
-  out.append(BinOpToken(op));
-  FormatNode(node.as_binary_rhs(), out, rhs_min);
-  if (wrap) {
-    out.push_back(')');
-  }
+void FormatBinary(const AstNode& node, std::string& out, const ParenCounts& parens) {
+  FormatNode(node.as_binary_lhs(), out, parens);
+  out.append(BinOpToken(node.as_binary_op()));
+  FormatNode(node.as_binary_rhs(), out, parens);
 }
 
 // True when `name` on its own is a bare column token -- one to three ASCII
@@ -487,77 +464,34 @@ bool TrySpliceWholeAxisPair(const AstNode& lhs, const AstNode& rhs, std::string&
   return true;
 }
 
-void FormatRangeOp(const AstNode& node, std::string& out, int min_bp) {
-  const bool wrap = kBpRange < min_bp;
-  if (wrap) {
-    out.push_back('(');
-  }
+void FormatRangeOp(const AstNode& node, std::string& out, const ParenCounts& parens) {
   const AstNode& lhs = node.as_range_lhs();
   const AstNode& rhs = node.as_range_rhs();
   if (TrySpliceWholeAxisPair(lhs, rhs, out)) {
-    if (wrap) {
-      out.push_back(')');
-    }
     return;
   }
-  const bool split_endpoints = ColonEndpointsWouldFold(lhs, rhs);
-  if (split_endpoints) {
-    out.push_back('(');
-  }
-  FormatNode(lhs, out, kBpRange);
-  if (split_endpoints) {
-    out.push_back(')');
-  }
+  FormatNode(lhs, out, parens);
   out.push_back(':');
-  FormatNode(rhs, out, kBpRange + 1);
-  if (wrap) {
-    out.push_back(')');
-  }
+  FormatNode(rhs, out, parens);
 }
 
-void FormatIntersect(const AstNode& node, std::string& out, int min_bp) {
-  const bool wrap = kBpIntersect < min_bp;
-  if (wrap) {
-    out.push_back('(');
-  }
-  FormatNode(node.as_intersect_lhs(), out, kBpIntersect);
+void FormatIntersect(const AstNode& node, std::string& out, const ParenCounts& parens) {
+  FormatNode(node.as_intersect_lhs(), out, parens);
   out.push_back(' ');
-  FormatNode(node.as_intersect_rhs(), out, kBpIntersect + 1);
-  if (wrap) {
-    out.push_back(')');
-  }
+  FormatNode(node.as_intersect_rhs(), out, parens);
 }
 
-void FormatUnion(const AstNode& node, std::string& out) {
-  // Union is only well-formed inside a parenthesised expression. Always
-  // wrap so no caller can accidentally absorb the comma into a higher-
-  // precedence outer slot.
-  out.push_back('(');
+void FormatUnion(const AstNode& node, std::string& out, const ParenCounts& parens) {
   const std::uint32_t n = node.as_union_arity();
   for (std::uint32_t i = 0; i < n; ++i) {
     if (i > 0) {
       out.push_back(',');
     }
-    // Inside parens the slot is permissive; let the child decide whether
-    // it needs internal parens via its own min_bp.
-    FormatNode(node.as_union_child(i), out, 0);
-  }
-  out.push_back(')');
-}
-
-void FormatImplicitIntersection(const AstNode& node, std::string& out, int min_bp) {
-  const bool wrap = kBpAtPrefix < min_bp;
-  if (wrap) {
-    out.push_back('(');
-  }
-  out.push_back('@');
-  FormatNode(node.as_implicit_intersection_operand(), out, kBpAtPrefix);
-  if (wrap) {
-    out.push_back(')');
+    FormatNode(node.as_union_child(i), out, parens);
   }
 }
 
-void FormatCall(const AstNode& node, std::string& out) {
+void FormatCall(const AstNode& node, std::string& out, const ParenCounts& parens) {
   out.append(node.as_call_name());
   out.push_back('(');
   const std::uint32_t n = node.as_call_arity();
@@ -565,7 +499,7 @@ void FormatCall(const AstNode& node, std::string& out) {
     if (i > 0) {
       out.push_back(',');
     }
-    FormatNode(node.as_call_arg(i), out, 0);
+    FormatNode(node.as_call_arg(i), out, parens);
   }
   out.push_back(')');
 }
@@ -573,15 +507,15 @@ void FormatCall(const AstNode& node, std::string& out) {
 // An Excel array constant admits only literal constants: no parentheses and
 // no expressions. A negative element therefore has to be written with a bare
 // sign, or the emitted text is text Excel -- and this parser -- rejects.
-void FormatArrayElement(const AstNode& node, std::string& out) {
+void FormatArrayElement(const AstNode& node, std::string& out, const ParenCounts& parens) {
   if (node.kind() == NodeKind::Literal) {
     FormatLiteral(node.as_literal(), out, /*parenthesise_negative=*/false);
     return;
   }
-  FormatNode(node, out, 0);
+  FormatNode(node, out, parens);
 }
 
-void FormatArrayLiteral(const AstNode& node, std::string& out) {
+void FormatArrayLiteral(const AstNode& node, std::string& out, const ParenCounts& parens) {
   out.push_back('{');
   const std::uint32_t rows = node.as_array_rows();
   const std::uint32_t cols = node.as_array_cols();
@@ -593,13 +527,13 @@ void FormatArrayLiteral(const AstNode& node, std::string& out) {
       if (c > 0) {
         out.push_back(',');
       }
-      FormatArrayElement(node.as_array_element(r, c), out);
+      FormatArrayElement(node.as_array_element(r, c), out, parens);
     }
   }
   out.push_back('}');
 }
 
-void FormatLambda(const AstNode& node, std::string& out) {
+void FormatLambda(const AstNode& node, std::string& out, const ParenCounts& parens) {
   out.append("LAMBDA(");
   const std::uint32_t n = node.as_lambda_param_count();
   const std::uint32_t opt = node.as_lambda_optional_count();
@@ -619,20 +553,20 @@ void FormatLambda(const AstNode& node, std::string& out) {
   if (n > 0) {
     out.push_back(',');
   }
-  FormatNode(node.as_lambda_body(), out, 0);
+  FormatNode(node.as_lambda_body(), out, parens);
   out.push_back(')');
 }
 
-void FormatLet(const AstNode& node, std::string& out) {
+void FormatLet(const AstNode& node, std::string& out, const ParenCounts& parens) {
   out.append("LET(");
   const std::uint32_t n = node.as_let_binding_count();
   for (std::uint32_t i = 0; i < n; ++i) {
     out.append(node.as_let_binding_name(i));
     out.push_back(',');
-    FormatNode(node.as_let_binding_expr(i), out, 0);
+    FormatNode(node.as_let_binding_expr(i), out, parens);
     out.push_back(',');
   }
-  FormatNode(node.as_let_body(), out, 0);
+  FormatNode(node.as_let_body(), out, parens);
   out.push_back(')');
 }
 
@@ -653,60 +587,35 @@ bool CalleePrintsBare(const AstNode& callee) {
   }
 }
 
-void FormatLambdaCall(const AstNode& node, std::string& out) {
-  // Excel's immediately-invoked lambda renders as `<callee>(args...)`. The
-  // callee itself may need parens when it is not a bare ident / lambda.
-  const AstNode& callee = node.as_lambda_call_callee();
-  // A bare Lambda atom is parseable directly without parens; everything
-  // else (paren'd expression, prior LambdaCall, NameRef) is also fine
-  // because the parser treats the postfix `(` as a high-precedence
-  // operator. Still, wrap operator children defensively.
-  if (CalleePrintsBare(callee)) {
-    FormatNode(callee, out, 0);
-  } else {
-    out.push_back('(');
-    FormatNode(callee, out, 0);
-    out.push_back(')');
-  }
+void FormatLambdaCall(const AstNode& node, std::string& out, const ParenCounts& parens) {
+  FormatNode(node.as_lambda_call_callee(), out, parens);
   out.push_back('(');
   const std::uint32_t n = node.as_lambda_call_arity();
   for (std::uint32_t i = 0; i < n; ++i) {
     if (i > 0) {
       out.push_back(',');
     }
-    FormatNode(node.as_lambda_call_arg(i), out, 0);
+    FormatNode(node.as_lambda_call_arg(i), out, parens);
   }
   out.push_back(')');
 }
 
-void FormatNode(const AstNode& node, std::string& out, int min_bp) {
+void FormatBare(const AstNode& node, std::string& out, const ParenCounts& parens) {
   switch (node.kind()) {
     case NodeKind::Literal:
-      FormatLiteral(node.as_literal(), out);
+      FormatLiteral(node.as_literal(), out, /*parenthesise_negative=*/false);
       return;
     case NodeKind::Ref:
       FormatRef(node.as_ref(), out);
       return;
-    case NodeKind::SpillRef: {
-      // Postfix `#`. Wrap when the parent slot demands tighter binding than
-      // the postfix-hash level (very rare since `#` sits near the top).
-      const bool wrap = kBpPostfixHash < min_bp;
-      if (wrap) {
-        out.push_back('(');
-      }
+    case NodeKind::SpillRef:
       if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        // A computed anchor prints at the postfix level so a lower-binding
-        // sub-expression parenthesises itself back into place.
-        FormatNode(*anchor, out, kBpPostfixHash);
+        FormatNode(*anchor, out, parens);
       } else {
         FormatRef(node.as_spill_ref(), out);
       }
       out.push_back('#');
-      if (wrap) {
-        out.push_back(')');
-      }
       return;
-    }
     case NodeKind::Ref3D:
       FormatRef3D(node, out);
       return;
@@ -721,37 +630,38 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
       out.append(node.as_name());
       return;
     case NodeKind::UnaryOp:
-      FormatUnary(node, out, min_bp);
+      FormatUnary(node, out, parens);
       return;
     case NodeKind::BinaryOp:
-      FormatBinary(node, out, min_bp);
+      FormatBinary(node, out, parens);
       return;
     case NodeKind::RangeOp:
-      FormatRangeOp(node, out, min_bp);
+      FormatRangeOp(node, out, parens);
       return;
     case NodeKind::UnionOp:
-      FormatUnion(node, out);
+      FormatUnion(node, out, parens);
       return;
     case NodeKind::IntersectOp:
-      FormatIntersect(node, out, min_bp);
+      FormatIntersect(node, out, parens);
       return;
     case NodeKind::ImplicitIntersection:
-      FormatImplicitIntersection(node, out, min_bp);
+      out.push_back('@');
+      FormatNode(node.as_implicit_intersection_operand(), out, parens);
       return;
     case NodeKind::Call:
-      FormatCall(node, out);
+      FormatCall(node, out, parens);
       return;
     case NodeKind::ArrayLiteral:
-      FormatArrayLiteral(node, out);
+      FormatArrayLiteral(node, out, parens);
       return;
     case NodeKind::Lambda:
-      FormatLambda(node, out);
+      FormatLambda(node, out, parens);
       return;
     case NodeKind::LetBinding:
-      FormatLet(node, out);
+      FormatLet(node, out, parens);
       return;
     case NodeKind::LambdaCall:
-      FormatLambdaCall(node, out);
+      FormatLambdaCall(node, out, parens);
       return;
     case NodeKind::ErrorLiteral:
       out.append(display_name(node.as_error_literal()));
@@ -765,20 +675,29 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
   }
 }
 
-// Records every node `FormatNode` wraps in parentheses it adds, slot by slot
-// with the same binding-power demands, so a token encoder marks the same
-// spots.
-void CollectParens(const AstNode& node, int min_bp, std::unordered_set<const AstNode*>& out) {
-  auto wrap_if = [&](int bp) {
-    if (bp < min_bp) {
-      out.insert(&node);
-    }
-  };
+void FormatNode(const AstNode& node, std::string& out, const ParenCounts& parens) {
+  const std::uint8_t n = ParenCount(parens, node);
+  out.append(n, '(');
+  FormatBare(node, out, parens);
+  out.append(n, ')');
+}
+
+// The one place that decides how many parenthesis pairs each node prints
+// with: the pairs written around it, or one where its slot's binding power
+// demands it. The formatters and the XLSB `PtgParen`s both read the result.
+void Parenthesize(const AstNode& node, bool needed, ParenCounts& out) {
+  const std::uint8_t count = std::max<std::uint8_t>(node.paren_depth(), needed ? 1U : 0U);
+  if (count != 0U) {
+    std::uint8_t& slot = out[&node];
+    slot = std::max(slot, count);
+  }
+}
+
+void CollectParens(const AstNode& node, int min_bp, ParenCounts& out) {
+  auto wrap_if = [&](int bp) { Parenthesize(node, bp < min_bp, out); };
   switch (node.kind()) {
     case NodeKind::Literal:
-      if (node.as_literal().is_number() && node.as_literal().as_number() < 0.0) {
-        out.insert(&node);
-      }
+      Parenthesize(node, node.as_literal().is_number() && node.as_literal().as_number() < 0.0, out);
       return;
     case NodeKind::SpillRef:
       wrap_if(kBpPostfixHash);
@@ -807,15 +726,14 @@ void CollectParens(const AstNode& node, int min_bp, std::unordered_set<const Ast
       if (TrySpliceWholeAxisPair(lhs, rhs, scratch)) {
         return;
       }
-      if (ColonEndpointsWouldFold(lhs, rhs)) {
-        out.insert(&lhs);
-      }
+      Parenthesize(lhs, ColonEndpointsWouldFold(lhs, rhs), out);
       CollectParens(lhs, kBpRange, out);
       CollectParens(rhs, kBpRange + 1, out);
       return;
     }
     case NodeKind::UnionOp:
-      out.insert(&node);
+      // A union only parses inside parentheses.
+      Parenthesize(node, true, out);
       for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
         CollectParens(node.as_union_child(i), 0, out);
       }
@@ -830,24 +748,26 @@ void CollectParens(const AstNode& node, int min_bp, std::unordered_set<const Ast
       CollectParens(node.as_implicit_intersection_operand(), kBpAtPrefix, out);
       return;
     case NodeKind::Call:
+      Parenthesize(node, false, out);
       for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
         CollectParens(node.as_call_arg(i), 0, out);
       }
       return;
     case NodeKind::Lambda:
+      Parenthesize(node, false, out);
       CollectParens(node.as_lambda_body(), 0, out);
       return;
     case NodeKind::LetBinding:
+      Parenthesize(node, false, out);
       for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
         CollectParens(node.as_let_binding_expr(i), 0, out);
       }
       CollectParens(node.as_let_body(), 0, out);
       return;
     case NodeKind::LambdaCall: {
+      Parenthesize(node, false, out);
       const AstNode& callee = node.as_lambda_call_callee();
-      if (!CalleePrintsBare(callee)) {
-        out.insert(&callee);
-      }
+      Parenthesize(callee, !CalleePrintsBare(callee), out);
       CollectParens(callee, 0, out);
       for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
         CollectParens(node.as_lambda_call_arg(i), 0, out);
@@ -863,6 +783,7 @@ void CollectParens(const AstNode& node, int min_bp, std::unordered_set<const Ast
     case NodeKind::ArrayLiteral:
     case NodeKind::ErrorLiteral:
     case NodeKind::ErrorPlaceholder:
+      Parenthesize(node, false, out);
       return;
   }
 }
@@ -878,6 +799,7 @@ struct StorageEmitter {
   StorageFunctionNameSpeller spell;
   std::vector<std::string_view> scope;  // in-scope LET binding / LAMBDA param names
   const std::vector<const AstNode*>* omitted_at = nullptr;
+  ParenCounts parens;
 
   bool in_scope(std::string_view name) const {
     // Case-insensitive: LET/LAMBDA parameter names resolve case-insensitively
@@ -895,10 +817,17 @@ struct StorageEmitter {
 
   void append_function_name(std::string& out, std::string_view canonical) const { out.append(spell(canonical)); }
 
-  void emit(const AstNode& node, std::string& out, int min_bp) {
+  void emit(const AstNode& node, std::string& out) {
+    const std::uint8_t n = ParenCount(parens, node);
+    out.append(n, '(');
+    emit_bare(node, out);
+    out.append(n, ')');
+  }
+
+  void emit_bare(const AstNode& node, std::string& out) {
     switch (node.kind()) {
       case NodeKind::Literal:
-        FormatLiteral(node.as_literal(), out);
+        FormatLiteral(node.as_literal(), out, /*parenthesise_negative=*/false);
         return;
       case NodeKind::Ref:
         FormatRef(node.as_ref(), out);
@@ -912,7 +841,7 @@ struct StorageEmitter {
         append_function_name(out, "ANCHORARRAY");
         out.push_back('(');
         if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-          emit(*anchor, out, 0);
+          emit(*anchor, out);
         } else {
           FormatRef(node.as_spill_ref(), out);
         }
@@ -940,40 +869,52 @@ struct StorageEmitter {
         return;
       }
       case NodeKind::UnaryOp:
-        emit_unary(node, out, min_bp);
+        if (node.as_unary_op() == UnaryOp::Percent) {
+          emit(node.as_unary_operand(), out);
+          out.push_back('%');
+        } else {
+          out.push_back(node.as_unary_op() == UnaryOp::Plus ? '+' : '-');
+          emit(node.as_unary_operand(), out);
+        }
         return;
       case NodeKind::BinaryOp:
-        emit_binary(node, out, min_bp);
+        emit(node.as_binary_lhs(), out);
+        out.append(BinOpToken(node.as_binary_op()));
+        emit(node.as_binary_rhs(), out);
         return;
       case NodeKind::RangeOp:
-        emit_binary_ref(node, out, min_bp, kBpRange, ':');
+        // A whole-axis pair has no function name inside it, so the shared
+        // splice renders both forms.
+        if (!TrySpliceWholeAxisPair(node.as_range_lhs(), node.as_range_rhs(), out)) {
+          emit(node.as_range_lhs(), out);
+          out.push_back(':');
+          emit(node.as_range_rhs(), out);
+        }
         return;
       case NodeKind::UnionOp:
-        emit_union(node, out);
+        for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+          if (i > 0) {
+            out.push_back(',');
+          }
+          emit(node.as_union_child(i), out);
+        }
         return;
       case NodeKind::IntersectOp:
-        emit_binary_ref(node, out, min_bp, kBpIntersect, ' ');
+        emit(node.as_intersect_lhs(), out);
+        out.push_back(' ');
+        emit(node.as_intersect_rhs(), out);
         return;
-      case NodeKind::ImplicitIntersection: {
+      case NodeKind::ImplicitIntersection:
         if (omitted_at != nullptr && std::find(omitted_at->begin(), omitted_at->end(), &node) != omitted_at->end()) {
-          emit(node.as_implicit_intersection_operand(), out, min_bp);
+          emit(node.as_implicit_intersection_operand(), out);
           return;
         }
-        // Excel stores a written `@` as a call to `_xlfn.SINGLE`; the
-        // parentheses stay where the `@` form has them, as XLSB `PtgParen`s do.
-        const bool wrap = kBpAtPrefix < min_bp;
-        if (wrap) {
-          out.push_back('(');
-        }
+        // Excel stores a written `@` as a call to `_xlfn.SINGLE`.
         append_function_name(out, "SINGLE");
         out.push_back('(');
-        emit(node.as_implicit_intersection_operand(), out, kBpAtPrefix);
+        emit(node.as_implicit_intersection_operand(), out);
         out.push_back(')');
-        if (wrap) {
-          out.push_back(')');
-        }
         return;
-      }
       case NodeKind::Call:
         emit_call(node, out);
         return;
@@ -998,99 +939,6 @@ struct StorageEmitter {
     }
   }
 
-  void emit_unary(const AstNode& node, std::string& out, int min_bp) {
-    const UnaryOp op = node.as_unary_op();
-    if (op == UnaryOp::Percent) {
-      const bool wrap = kBpPostfixPercent < min_bp;
-      if (wrap) {
-        out.push_back('(');
-      }
-      emit(node.as_unary_operand(), out, kBpPostfixPercent);
-      out.push_back('%');
-      if (wrap) {
-        out.push_back(')');
-      }
-      return;
-    }
-    const bool wrap = kBpUnaryPrefix < min_bp;
-    if (wrap) {
-      out.push_back('(');
-    }
-    out.push_back(op == UnaryOp::Plus ? '+' : '-');
-    emit(node.as_unary_operand(), out, kBpUnaryPrefix);
-    if (wrap) {
-      out.push_back(')');
-    }
-  }
-
-  void emit_binary(const AstNode& node, std::string& out, int min_bp) {
-    const BinOp op = node.as_binary_op();
-    const int bp = BinOpBp(op);
-    const bool wrap = bp < min_bp;
-    if (wrap) {
-      out.push_back('(');
-    }
-    // Left-associative, uniformly across every binary operator including
-    // `^`; see `FormatBinary`'s comment for the rationale.
-    const int lhs_min = bp;
-    const int rhs_min = bp + 1;
-    emit(node.as_binary_lhs(), out, lhs_min);
-    out.append(BinOpToken(op));
-    emit(node.as_binary_rhs(), out, rhs_min);
-    if (wrap) {
-      out.push_back(')');
-    }
-  }
-
-  // Shared shape for the two reference binary operators (`:` range and the
-  // space intersect): wrap at `bp`, emit lhs at `bp`, rhs at `bp + 1`.
-  void emit_binary_ref(const AstNode& node, std::string& out, int min_bp, int bp, char sep) {
-    const bool wrap = bp < min_bp;
-    if (wrap) {
-      out.push_back('(');
-    }
-    if (node.kind() == NodeKind::RangeOp) {
-      // Same splice the canonical formatter applies. A whole-axis pair has
-      // no function name inside it, so there is nothing here for the
-      // storage speller to add and the shared helper renders both forms.
-      if (TrySpliceWholeAxisPair(node.as_range_lhs(), node.as_range_rhs(), out)) {
-        if (wrap) {
-          out.push_back(')');
-        }
-        return;
-      }
-      const bool split_endpoints = ColonEndpointsWouldFold(node.as_range_lhs(), node.as_range_rhs());
-      if (split_endpoints) {
-        out.push_back('(');
-      }
-      emit(node.as_range_lhs(), out, bp);
-      if (split_endpoints) {
-        out.push_back(')');
-      }
-      out.push_back(sep);
-      emit(node.as_range_rhs(), out, bp + 1);
-    } else {
-      emit(node.as_intersect_lhs(), out, bp);
-      out.push_back(sep);
-      emit(node.as_intersect_rhs(), out, bp + 1);
-    }
-    if (wrap) {
-      out.push_back(')');
-    }
-  }
-
-  void emit_union(const AstNode& node, std::string& out) {
-    out.push_back('(');
-    const std::uint32_t n = node.as_union_arity();
-    for (std::uint32_t i = 0; i < n; ++i) {
-      if (i > 0) {
-        out.push_back(',');
-      }
-      emit(node.as_union_child(i), out, 0);
-    }
-    out.push_back(')');
-  }
-
   void emit_call(const AstNode& node, std::string& out) {
     append_function_name(out, node.as_call_name());
     out.push_back('(');
@@ -1099,7 +947,7 @@ struct StorageEmitter {
       if (i > 0) {
         out.push_back(',');
       }
-      emit(node.as_call_arg(i), out, 0);
+      emit(node.as_call_arg(i), out);
     }
     out.push_back(')');
   }
@@ -1119,7 +967,7 @@ struct StorageEmitter {
         if (node.as_array_element(r, c).kind() == NodeKind::Literal) {
           FormatLiteral(node.as_array_element(r, c).as_literal(), out, /*parenthesise_negative=*/false);
         } else {
-          emit(node.as_array_element(r, c), out, 0);
+          emit(node.as_array_element(r, c), out);
         }
       }
     }
@@ -1152,7 +1000,7 @@ struct StorageEmitter {
     if (n > 0) {
       out.push_back(',');
     }
-    emit(node.as_lambda_body(), out, 0);
+    emit(node.as_lambda_body(), out);
     out.push_back(')');
     scope.resize(base);
   }
@@ -1169,31 +1017,24 @@ struct StorageEmitter {
       out.push_back(',');
       // A binding value may reference earlier bindings but not itself, so it
       // is emitted with the scope accumulated so far (before pushing `name`).
-      emit(node.as_let_binding_expr(i), out, 0);
+      emit(node.as_let_binding_expr(i), out);
       out.push_back(',');
       scope.push_back(name);
     }
-    emit(node.as_let_body(), out, 0);
+    emit(node.as_let_body(), out);
     out.push_back(')');
     scope.resize(base);
   }
 
   void emit_lambda_call(const AstNode& node, std::string& out) {
-    const AstNode& callee = node.as_lambda_call_callee();
-    if (CalleePrintsBare(callee)) {
-      emit(callee, out, 0);
-    } else {
-      out.push_back('(');
-      emit(callee, out, 0);
-      out.push_back(')');
-    }
+    emit(node.as_lambda_call_callee(), out);
     out.push_back('(');
     const std::uint32_t n = node.as_lambda_call_arity();
     for (std::uint32_t i = 0; i < n; ++i) {
       if (i > 0) {
         out.push_back(',');
       }
-      emit(node.as_lambda_call_arg(i), out, 0);
+      emit(node.as_lambda_call_arg(i), out);
     }
     out.push_back(')');
   }
@@ -1201,7 +1042,7 @@ struct StorageEmitter {
 
 }  // namespace
 
-void collect_parenthesized_nodes(const AstNode& root, std::unordered_set<const AstNode*>& out) {
+void collect_parenthesized_nodes(const AstNode& root, std::unordered_map<const AstNode*, std::uint8_t>& out) {
   if (ast_depth_within_limit(root, kMaxFormulaAstDepth)) {
     CollectParens(root, 0, out);
   }
@@ -1211,9 +1052,11 @@ std::string format_formula(const AstNode& node) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
     return "#REF!";
   }
+  ParenCounts parens;
+  CollectParens(node, 0, parens);
   std::string out;
   out.reserve(64);
-  FormatNode(node, out, 0);
+  FormatNode(node, out, parens);
   return out;
 }
 
@@ -1222,10 +1065,11 @@ std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpell
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
     return "#REF!";
   }
-  StorageEmitter emitter{spell, {}, omitted_at};
+  StorageEmitter emitter{spell, {}, omitted_at, {}};
+  CollectParens(node, 0, emitter.parens);
   std::string out;
   out.reserve(64);
-  emitter.emit(node, out, 0);
+  emitter.emit(node, out);
   return out;
 }
 

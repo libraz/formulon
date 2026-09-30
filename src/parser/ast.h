@@ -152,6 +152,16 @@ class AstNode final {
   /// immediately after a successful factory invocation.
   void set_range(TextRange r) noexcept { range_ = r; }
 
+  /// Parenthesis pairs written around this node (`((x))` is 2), kept so the
+  /// text and the XLSB `PtgParen`s round-trip; evaluation ignores them.
+  std::uint8_t paren_depth() const noexcept { return paren_depth_; }
+  void add_paren() noexcept {
+    if (paren_depth_ < 0xFF) {
+      ++paren_depth_;
+    }
+  }
+  void set_paren_depth(std::uint8_t depth) noexcept { paren_depth_ = depth; }
+
   // --- Literal -------------------------------------------------------------
   const Value& as_literal() const;
 
@@ -429,6 +439,7 @@ class AstNode final {
   };
 
   NodeKind kind_ = NodeKind::Literal;
+  std::uint8_t paren_depth_ = 0;
   TextRange range_{};
   Payload data_;
 };

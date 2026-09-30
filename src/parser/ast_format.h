@@ -27,7 +27,7 @@
 
 #include <string>
 #include <string_view>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 #include "parser/ast.h"
@@ -44,10 +44,11 @@ namespace parser {
 /// byte-exact stability.
 std::string format_formula(const AstNode& node);
 
-/// Adds to `out` every node `format_formula(root)` prints inside parentheses
-/// it supplies, so a token encoder can mark the same spots (XLSB
-/// `PtgParen`). A node printed as `((x))` appears once.
-void collect_parenthesized_nodes(const AstNode& root, std::unordered_set<const AstNode*>& out);
+/// Fills `out` with the parenthesis pairs each node of `root` prints with:
+/// the pairs written around it (`AstNode::paren_depth`), or one where its
+/// slot's precedence demands it. Both formatters print exactly these, and a
+/// token encoder emits the same count of XLSB `PtgParen`s after the node.
+void collect_parenthesized_nodes(const AstNode& root, std::unordered_map<const AstNode*, std::uint8_t>& out);
 
 /// Storage prefix a function name carries in the OOXML `<f>` element.
 enum class StoragePrefixKind {
