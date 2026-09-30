@@ -1,0 +1,821 @@
+{
+  "suite": "lambda_reference_params",
+  "description": "LAMBDA parameters and LET names bound to a reference stay references: ISREF, ROW / COLUMN, CELL and OFFSET inside the body see the argument's rectangle, not its value. Also pins what the helper callbacks (MAP / BYROW / BYCOL / REDUCE / SCAN / MAKEARRAY) receive for a range source.\n",
+  "environment": {
+    "excel_version": "16.0.20228",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-09-30T05:45:37Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "lambda_isref_single_cell",
+      "formula": "=LAMBDA(r, ISREF(r))(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "lambda_isref_scalar",
+      "formula": "=LAMBDA(r, ISREF(r))(1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "lambda_isref_range",
+      "formula": "=LAMBDA(r, ISREF(r))(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "lambda_isref_expression",
+      "formula": "=LAMBDA(r, ISREF(r))(A1+0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "lambda_isref_offset_argument",
+      "formula": "=LAMBDA(r, ISREF(r))(OFFSET(A1,1,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "lambda_row_single_cell",
+      "formula": "=LAMBDA(r, ROW(r))(B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "lambda_column_range",
+      "formula": "=LAMBDA(r, COLUMN(r))(C2:D3)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "lambda_rows_range",
+      "formula": "=LAMBDA(r, ROWS(r))(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "lambda_offset_single_cell",
+      "formula": "=LAMBDA(r, OFFSET(r,1,0))(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "lambda_sum_offset_resize",
+      "formula": "=LAMBDA(r, SUM(OFFSET(r,0,0,2,1)))(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "lambda_cell_address",
+      "formula": "=LAMBDA(r, CELL(\"address\", r))(B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$B$2"
+      }
+    },
+    {
+      "id": "lambda_index_range",
+      "formula": "=LAMBDA(r, INDEX(r,2))(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "lambda_isref_index_range",
+      "formula": "=LAMBDA(r, ISREF(INDEX(r,2)))(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "lambda_row_index_argument",
+      "formula": "=LAMBDA(r, ROW(r))(INDEX(A1:A3,2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "lambda_areas_range",
+      "formula": "=LAMBDA(r, AREAS(r))(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "lambda_range_endpoint",
+      "formula": "=LAMBDA(r, SUM(r:A3))(A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "lambda_nested_row",
+      "formula": "=LAMBDA(r, LAMBDA(s, ROW(s))(r))(B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "lambda_nested_isref",
+      "formula": "=LAMBDA(r, LAMBDA(s, ISREF(s))(r))(B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "lambda_let_bound_row",
+      "formula": "=LET(f, LAMBDA(r, ROW(r)), f(B5))",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "lambda_let_bound_offset",
+      "formula": "=LET(f, LAMBDA(r, OFFSET(r,2,0)), f(A1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "lambda_let_name_argument",
+      "formula": "=LET(x, B5, LAMBDA(r, ROW(r))(x))",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "lambda_value_arithmetic",
+      "formula": "=LAMBDA(r, r*2)(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "let_row_single_cell",
+      "formula": "=LET(x, B5, ROW(x))",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "let_isref_range",
+      "formula": "=LET(x, A1:A3, ISREF(x))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "let_isref_single_cell",
+      "formula": "=LET(x, A1, ISREF(x))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "let_isref_scalar",
+      "formula": "=LET(x, 1, ISREF(x))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "let_offset_single_cell",
+      "formula": "=LET(x, A1, OFFSET(x,1,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "let_cell_address",
+      "formula": "=LET(x, B2, CELL(\"address\", x))",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$B$2"
+      }
+    },
+    {
+      "id": "map_isref_range",
+      "formula": "=MAP(A1:A3, LAMBDA(x, ISREF(x)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          true,
+          true,
+          true
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "map_cell_address_range",
+      "formula": "=MAP(A1:A3, LAMBDA(x, CELL(\"address\", x)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "$A$1",
+          "$A$2",
+          "$A$3"
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "byrow_isref_range",
+      "formula": "=BYROW(A1:B2, LAMBDA(x, ISREF(x)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          true,
+          true
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "bycol_isref_range",
+      "formula": "=BYCOL(A1:B2, LAMBDA(x, ISREF(x)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          true,
+          true
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "reduce_isref_value_range",
+      "formula": "=REDUCE(\"\", A1:A3, LAMBDA(a, v, a&ISREF(v)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "TRUETRUETRUE"
+      }
+    },
+    {
+      "id": "reduce_isref_initial_reference",
+      "formula": "=REDUCE(A1, A2:A2, LAMBDA(a, v, ISREF(a)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "scan_isref_value_range",
+      "formula": "=SCAN(\"\", A1:A3, LAMBDA(a, v, ISREF(v)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          true,
+          true,
+          true
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "makearray_isref",
+      "formula": "=MAKEARRAY(1, 2, LAMBDA(r, c, ISREF(r)))",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          false,
+          false
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "call_cell_reference",
+      "formula": "=A1(1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "call_empty_cell_reference",
+      "formula": "=B1(1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "call_lambda_param_bound_to_cell",
+      "formula": "=LAMBDA(f, f(1))(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "call_lambda_param_bound_to_range",
+      "formula": "=LAMBDA(f, f(1))(A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "call_let_name_bound_to_cell",
+      "formula": "=LET(f, A1, f(1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "call_lambda_param_bound_to_value",
+      "formula": "=LAMBDA(f, f(1))(5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "call_let_name_bound_to_value",
+      "formula": "=LET(f, 5, f(1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

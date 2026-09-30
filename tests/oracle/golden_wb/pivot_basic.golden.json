@@ -2,12 +2,12 @@
   "suite": "pivot_basic",
   "kind": "workbook",
   "environment": {
-    "excel_version": "16.0.20228",
+    "excel_version": "16.0.20326",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-19T15:02:20Z",
-    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-08-19T15:02:20Z"
+    "generated_at": "2026-09-30T07:10:35Z",
+    "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
   },
   "cases": [
     {

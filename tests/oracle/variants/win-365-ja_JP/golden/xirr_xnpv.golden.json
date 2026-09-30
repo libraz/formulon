@@ -2,11 +2,11 @@
   "suite": "xirr_xnpv",
   "description": "XIRR / XNPV — irregular cash-flow NPV and IRR over date schedules",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T05:45:37Z"
   },
   "tolerance": {
     "abs": 1e-09,

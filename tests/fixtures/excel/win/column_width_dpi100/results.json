@@ -1,0 +1,1499 @@
+{
+  "env": {
+    "Version": "16.0",
+    "Build": 20228.0,
+    "OperatingSystem": "Windows (64-bit) NT 10.00",
+    "country": 81.0,
+    "ui_lang": 1041
+  },
+  "method": "One-off pywin32 COM script, Excel visible (needed for ActiveWindow). For each font x size: new workbook, wb.Styles('Normal').Font.Name/.Size set, then Columns B..E .ColumnWidth = 8.43/10/30/100. Recorded Columns(x).Width (points) and .ColumnWidth for A (default) and B..E, sheet StandardWidth, and ActiveWindow PointsToScreenPixelsX(0)/(72)/(720) with Zoom (pixels per 72pt ~ screen DPI). Saved .xlsx only.",
+  "dpi": {
+    "probe_process_not_dpi_aware": {
+      "GetDpiForSystem": 96,
+      "LOGPIXELSX": 96
+    },
+    "per_monitor_dpi_aware": {
+      "GetDpiForSystem": 96,
+      "LOGPIXELSX": 96,
+      "screen_px": [
+        3200,
+        2000
+      ]
+    },
+    "note": "The capture process (python.exe) was not DPI-aware, so its GetDpiForSystem/LOGPIXELSX and the PointsToScreenPixelsX readings may be DPI-virtualized; per_monitor_dpi_aware was queried afterwards from a separate process with SetProcessDpiAwareness(2)."
+  },
+  "cases": {
+    "calibri_8": {
+      "font": "Calibri",
+      "size": 8,
+      "normal_font_readback": {
+        "Name": "Calibri",
+        "Size": 8.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 48.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 138.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 453.75
+        }
+      },
+      "StandardWidth": 8.5,
+      "StandardHeight": 11.25,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 23,
+        "px72": 95,
+        "px720": 743
+      },
+      "file": [
+        "calibri_8.xlsx"
+      ]
+    },
+    "calibri_9": {
+      "font": "Calibri",
+      "size": 9,
+      "normal_font_readback": {
+        "Name": "Calibri",
+        "Size": 9.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 48.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 138.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 453.75
+        }
+      },
+      "StandardWidth": 8.5,
+      "StandardHeight": 12.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 23,
+        "px72": 95,
+        "px720": 743
+      },
+      "file": [
+        "calibri_9.xlsx"
+      ]
+    },
+    "calibri_10": {
+      "font": "Calibri",
+      "size": 10,
+      "normal_font_readback": {
+        "Name": "Calibri",
+        "Size": 10.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 56.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 161.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 528.75
+        }
+      },
+      "StandardWidth": 8.43,
+      "StandardHeight": 12.75,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 26,
+        "px72": 98,
+        "px720": 746
+      },
+      "file": [
+        "calibri_10.xlsx"
+      ]
+    },
+    "calibri_11": {
+      "font": "Calibri",
+      "size": 11,
+      "normal_font_readback": {
+        "Name": "Calibri",
+        "Size": 11.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 56.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 161.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 528.75
+        }
+      },
+      "StandardWidth": 8.43,
+      "StandardHeight": 15.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 26,
+        "px72": 98,
+        "px720": 746
+      },
+      "file": [
+        "calibri_11.xlsx"
+      ]
+    },
+    "calibri_12": {
+      "font": "Calibri",
+      "size": 12,
+      "normal_font_readback": {
+        "Name": "Calibri",
+        "Size": 12.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 63.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 183.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 603.75
+        }
+      },
+      "StandardWidth": 8.38,
+      "StandardHeight": 15.75,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 29,
+        "px72": 101,
+        "px720": 749
+      },
+      "file": [
+        "calibri_12.xlsx"
+      ]
+    },
+    "calibri_14": {
+      "font": "Calibri",
+      "size": 14,
+      "normal_font_readback": {
+        "Name": "Calibri",
+        "Size": 14.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.1,
+          "Width_pt": 66.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.4,
+          "Width_pt": 68.25
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 80.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 230.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 755.25
+        }
+      },
+      "StandardWidth": 8.1,
+      "StandardHeight": 18.75,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 37,
+        "px72": 109,
+        "px720": 757
+      },
+      "file": [
+        "calibri_14.xlsx"
+      ]
+    },
+    "calibri_16": {
+      "font": "Calibri",
+      "size": 16,
+      "normal_font_readback": {
+        "Name": "Calibri",
+        "Size": 16.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.09,
+          "Width_pt": 72.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.45,
+          "Width_pt": 75.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 87.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 252.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 830.25
+        }
+      },
+      "StandardWidth": 8.09,
+      "StandardHeight": 21.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 40,
+        "px72": 112,
+        "px720": 760
+      },
+      "file": [
+        "calibri_16.xlsx"
+      ]
+    },
+    "calibri_18": {
+      "font": "Calibri",
+      "size": 18,
+      "normal_font_readback": {
+        "Name": "Calibri",
+        "Size": 18.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.08,
+          "Width_pt": 78.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.42,
+          "Width_pt": 81.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 95.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 275.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 905.25
+        }
+      },
+      "StandardWidth": 8.08,
+      "StandardHeight": 23.25,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 43,
+        "px72": 115,
+        "px720": 763
+      },
+      "file": [
+        "calibri_18.xlsx"
+      ]
+    },
+    "yugothic_8": {
+      "font": "游ゴシック",
+      "size": 8,
+      "normal_font_readback": {
+        "Name": "游ゴシック",
+        "Size": 8.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 48.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 138.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 453.75
+        }
+      },
+      "StandardWidth": 8.5,
+      "StandardHeight": 12.75,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 23,
+        "px72": 95,
+        "px720": 743
+      },
+      "file": [
+        "yugothic_8.xlsx"
+      ]
+    },
+    "yugothic_9": {
+      "font": "游ゴシック",
+      "size": 9,
+      "normal_font_readback": {
+        "Name": "游ゴシック",
+        "Size": 9.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 56.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 161.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 528.75
+        }
+      },
+      "StandardWidth": 8.43,
+      "StandardHeight": 15.75,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 26,
+        "px72": 98,
+        "px720": 746
+      },
+      "file": [
+        "yugothic_9.xlsx"
+      ]
+    },
+    "yugothic_10": {
+      "font": "游ゴシック",
+      "size": 10,
+      "normal_font_readback": {
+        "Name": "游ゴシック",
+        "Size": 10.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 56.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 161.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 528.75
+        }
+      },
+      "StandardWidth": 8.43,
+      "StandardHeight": 16.5,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 26,
+        "px72": 98,
+        "px720": 746
+      },
+      "file": [
+        "yugothic_10.xlsx"
+      ]
+    },
+    "yugothic_11": {
+      "font": "游ゴシック",
+      "size": 11,
+      "normal_font_readback": {
+        "Name": "游ゴシック",
+        "Size": 11.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 63.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 183.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 603.75
+        }
+      },
+      "StandardWidth": 8.38,
+      "StandardHeight": 18.75,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 34,
+        "px72": 106,
+        "px720": 754
+      },
+      "file": [
+        "yugothic_11.xlsx"
+      ]
+    },
+    "yugothic_12": {
+      "font": "游ゴシック",
+      "size": 12,
+      "normal_font_readback": {
+        "Name": "游ゴシック",
+        "Size": 12.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.11,
+          "Width_pt": 60.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.44,
+          "Width_pt": 62.25
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 72.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 207.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 680.25
+        }
+      },
+      "StandardWidth": 8.11,
+      "StandardHeight": 19.5,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 34,
+        "px72": 106,
+        "px720": 754
+      },
+      "file": [
+        "yugothic_12.xlsx"
+      ]
+    },
+    "yugothic_14": {
+      "font": "游ゴシック",
+      "size": 14,
+      "normal_font_readback": {
+        "Name": "游ゴシック",
+        "Size": 14.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.09,
+          "Width_pt": 72.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.45,
+          "Width_pt": 75.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 87.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 252.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 830.25
+        }
+      },
+      "StandardWidth": 8.09,
+      "StandardHeight": 24.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 40,
+        "px72": 112,
+        "px720": 760
+      },
+      "file": [
+        "yugothic_14.xlsx"
+      ]
+    },
+    "yugothic_16": {
+      "font": "游ゴシック",
+      "size": 16,
+      "normal_font_readback": {
+        "Name": "游ゴシック",
+        "Size": 16.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.08,
+          "Width_pt": 78.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.42,
+          "Width_pt": 81.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 95.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 275.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 905.25
+        }
+      },
+      "StandardWidth": 8.08,
+      "StandardHeight": 25.5,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 43,
+        "px72": 115,
+        "px720": 763
+      },
+      "file": [
+        "yugothic_16.xlsx"
+      ]
+    },
+    "yugothic_18": {
+      "font": "游ゴシック",
+      "size": 18,
+      "normal_font_readback": {
+        "Name": "游ゴシック",
+        "Size": 18.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.54,
+          "Width_pt": 90.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.46,
+          "Width_pt": 89.25
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 104.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 299.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 981.75
+        }
+      },
+      "StandardWidth": 8.54,
+      "StandardHeight": 30.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 48,
+        "px72": 120,
+        "px720": 768
+      },
+      "file": [
+        "yugothic_18.xlsx"
+      ]
+    },
+    "mspgothic_8": {
+      "font": "ＭＳ Ｐゴシック",
+      "size": 8,
+      "normal_font_readback": {
+        "Name": "ＭＳ Ｐゴシック",
+        "Size": 8.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 48.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 138.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 453.75
+        }
+      },
+      "StandardWidth": 8.5,
+      "StandardHeight": 10.5,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 23,
+        "px72": 95,
+        "px720": 743
+      },
+      "file": [
+        "mspgothic_8.xlsx"
+      ]
+    },
+    "mspgothic_9": {
+      "font": "ＭＳ Ｐゴシック",
+      "size": 9,
+      "normal_font_readback": {
+        "Name": "ＭＳ Ｐゴシック",
+        "Size": 9.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.5,
+          "Width_pt": 42.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 48.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 138.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 453.75
+        }
+      },
+      "StandardWidth": 8.5,
+      "StandardHeight": 11.25,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 23,
+        "px72": 95,
+        "px720": 743
+      },
+      "file": [
+        "mspgothic_9.xlsx"
+      ]
+    },
+    "mspgothic_10": {
+      "font": "ＭＳ Ｐゴシック",
+      "size": 10,
+      "normal_font_readback": {
+        "Name": "ＭＳ Ｐゴシック",
+        "Size": 10.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 56.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 161.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 528.75
+        }
+      },
+      "StandardWidth": 8.43,
+      "StandardHeight": 12.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 26,
+        "px72": 98,
+        "px720": 746
+      },
+      "file": [
+        "mspgothic_10.xlsx"
+      ]
+    },
+    "mspgothic_11": {
+      "font": "ＭＳ Ｐゴシック",
+      "size": 11,
+      "normal_font_readback": {
+        "Name": "ＭＳ Ｐゴシック",
+        "Size": 11.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 63.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 183.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 603.75
+        }
+      },
+      "StandardWidth": 8.38,
+      "StandardHeight": 13.5,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 29,
+        "px72": 101,
+        "px720": 749
+      },
+      "file": [
+        "mspgothic_11.xlsx"
+      ]
+    },
+    "mspgothic_12": {
+      "font": "ＭＳ Ｐゴシック",
+      "size": 12,
+      "normal_font_readback": {
+        "Name": "ＭＳ Ｐゴシック",
+        "Size": 12.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 63.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 183.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 603.75
+        }
+      },
+      "StandardWidth": 8.38,
+      "StandardHeight": 14.25,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 29,
+        "px72": 101,
+        "px720": 749
+      },
+      "file": [
+        "mspgothic_12.xlsx"
+      ]
+    },
+    "mspgothic_14": {
+      "font": "ＭＳ Ｐゴシック",
+      "size": 14,
+      "normal_font_readback": {
+        "Name": "ＭＳ Ｐゴシック",
+        "Size": 14.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.1,
+          "Width_pt": 66.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.4,
+          "Width_pt": 68.25
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 80.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 230.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 755.25
+        }
+      },
+      "StandardWidth": 8.1,
+      "StandardHeight": 17.25,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 37,
+        "px72": 109,
+        "px720": 757
+      },
+      "file": [
+        "mspgothic_14.xlsx"
+      ]
+    },
+    "mspgothic_16": {
+      "font": "ＭＳ Ｐゴシック",
+      "size": 16,
+      "normal_font_readback": {
+        "Name": "ＭＳ Ｐゴシック",
+        "Size": 16.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.09,
+          "Width_pt": 72.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.45,
+          "Width_pt": 75.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 87.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 252.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 830.25
+        }
+      },
+      "StandardWidth": 8.09,
+      "StandardHeight": 18.75,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 40,
+        "px72": 112,
+        "px720": 760
+      },
+      "file": [
+        "mspgothic_16.xlsx"
+      ]
+    },
+    "mspgothic_18": {
+      "font": "ＭＳ Ｐゴシック",
+      "size": 18,
+      "normal_font_readback": {
+        "Name": "ＭＳ Ｐゴシック",
+        "Size": 18.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.08,
+          "Width_pt": 78.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.42,
+          "Width_pt": 81.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 95.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 275.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 905.25
+        }
+      },
+      "StandardWidth": 8.08,
+      "StandardHeight": 21.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 43,
+        "px72": 115,
+        "px720": 763
+      },
+      "file": [
+        "mspgothic_18.xlsx"
+      ]
+    },
+    "meiryoui_8": {
+      "font": "Meiryo UI",
+      "size": 8,
+      "normal_font_readback": {
+        "Name": "Meiryo UI",
+        "Size": 8.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 56.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 161.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 528.75
+        }
+      },
+      "StandardWidth": 8.43,
+      "StandardHeight": 12.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 26,
+        "px72": 98,
+        "px720": 746
+      },
+      "file": [
+        "meiryoui_8.xlsx"
+      ]
+    },
+    "meiryoui_9": {
+      "font": "Meiryo UI",
+      "size": 9,
+      "normal_font_readback": {
+        "Name": "Meiryo UI",
+        "Size": 9.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.43,
+          "Width_pt": 48.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 56.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 161.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 528.75
+        }
+      },
+      "StandardWidth": 8.43,
+      "StandardHeight": 12.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 26,
+        "px72": 98,
+        "px720": 746
+      },
+      "file": [
+        "meiryoui_9.xlsx"
+      ]
+    },
+    "meiryoui_10": {
+      "font": "Meiryo UI",
+      "size": 10,
+      "normal_font_readback": {
+        "Name": "Meiryo UI",
+        "Size": 10.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.38,
+          "Width_pt": 54.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 63.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 183.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 603.75
+        }
+      },
+      "StandardWidth": 8.38,
+      "StandardHeight": 14.25,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 29,
+        "px72": 101,
+        "px720": 749
+      },
+      "file": [
+        "meiryoui_10.xlsx"
+      ]
+    },
+    "meiryoui_11": {
+      "font": "Meiryo UI",
+      "size": 11,
+      "normal_font_readback": {
+        "Name": "Meiryo UI",
+        "Size": 11.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.11,
+          "Width_pt": 60.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.44,
+          "Width_pt": 62.25
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 72.75
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 207.75
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 680.25
+        }
+      },
+      "StandardWidth": 8.11,
+      "StandardHeight": 15.75,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 34,
+        "px72": 106,
+        "px720": 754
+      },
+      "file": [
+        "meiryoui_11.xlsx"
+      ]
+    },
+    "meiryoui_12": {
+      "font": "Meiryo UI",
+      "size": 12,
+      "normal_font_readback": {
+        "Name": "Meiryo UI",
+        "Size": 12.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.1,
+          "Width_pt": 66.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.4,
+          "Width_pt": 68.25
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 80.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 230.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 755.25
+        }
+      },
+      "StandardWidth": 8.1,
+      "StandardHeight": 16.5,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 37,
+        "px72": 109,
+        "px720": 757
+      },
+      "file": [
+        "meiryoui_12.xlsx"
+      ]
+    },
+    "meiryoui_14": {
+      "font": "Meiryo UI",
+      "size": 14,
+      "normal_font_readback": {
+        "Name": "Meiryo UI",
+        "Size": 14.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.08,
+          "Width_pt": 78.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.42,
+          "Width_pt": 81.0
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 95.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 275.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 905.25
+        }
+      },
+      "StandardWidth": 8.08,
+      "StandardHeight": 19.5,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 43,
+        "px72": 115,
+        "px720": 763
+      },
+      "file": [
+        "meiryoui_14.xlsx"
+      ]
+    },
+    "meiryoui_16": {
+      "font": "Meiryo UI",
+      "size": 16,
+      "normal_font_readback": {
+        "Name": "Meiryo UI",
+        "Size": 16.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.54,
+          "Width_pt": 90.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.46,
+          "Width_pt": 89.25
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 104.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 299.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 981.75
+        }
+      },
+      "StandardWidth": 8.54,
+      "StandardHeight": 21.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 48,
+        "px72": 120,
+        "px720": 768
+      },
+      "file": [
+        "meiryoui_16.xlsx"
+      ]
+    },
+    "meiryoui_18": {
+      "font": "Meiryo UI",
+      "size": 18,
+      "normal_font_readback": {
+        "Name": "Meiryo UI",
+        "Size": 18.0
+      },
+      "columns": {
+        "A": {
+          "set": null,
+          "ColumnWidth": 8.47,
+          "Width_pt": 102.0
+        },
+        "B": {
+          "set": 8.43,
+          "ColumnWidth": 8.4,
+          "Width_pt": 101.25
+        },
+        "C": {
+          "set": 10,
+          "ColumnWidth": 10.0,
+          "Width_pt": 119.25
+        },
+        "D": {
+          "set": 30,
+          "ColumnWidth": 30.0,
+          "Width_pt": 344.25
+        },
+        "E": {
+          "set": 100,
+          "ColumnWidth": 100.0,
+          "Width_pt": 1131.75
+        }
+      },
+      "StandardWidth": 8.47,
+      "StandardHeight": 24.0,
+      "window": {
+        "Zoom": 100.0,
+        "px0": 54,
+        "px72": 126,
+        "px720": 774
+      },
+      "file": [
+        "meiryoui_18.xlsx"
+      ]
+    }
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "env": {
+    "Version": "16.0",
+    "Build": 20228.0,
+    "OperatingSystem": "Windows (64-bit) NT 10.00",
+    "country": 81.0,
+    "ui_lang": 1041
+  },
+  "method": "One-off pywin32 COM script. (a) COM states: new workbook, wb.Protect(Password, Structure, Windows) for s1 Structure=True Windows=True no password, s2 same with password 'a', s3 Structure=False Windows=True; SaveAs .xlsx(51)/.xlsb(50). (b) Hand-authored: an empty workbook saved by this Excel as base, then python zipfile rewrote xl/workbook.xml inserting one <workbookProtection .../> element immediately before <bookViews> (where Excel itself writes it, after xr:revisionPtr; inserting right after <workbookPr/> made Workbooks.Open fail); kept as *.input.xlsx. Each input opened in Excel (Workbooks.Open) and SaveAs .xlsx/.xlsb. Survival: workbookProtection element parsed from the saved .xlsx workbook.xml, and ProtectStructure/ProtectWindows read via COM on the open input and on each saved file reopened.",
+  "cases": {
+    "com_s1_struct_win_nopw": {
+      "protect_args": {
+        "Structure": true,
+        "Windows": true
+      },
+      "protect_ok": true,
+      "after_protect": {
+        "ProtectStructure": true,
+        "ProtectWindows": false
+      },
+      "saved": {
+        "com_s1_struct_win_nopw.xlsx": {
+          "reopened": {
+            "ProtectStructure": true,
+            "ProtectWindows": false
+          },
+          "workbookProtection": "<workbookProtection lockStructure=\"1\"/>"
+        },
+        "com_s1_struct_win_nopw.xlsb": {
+          "reopened": {
+            "ProtectStructure": true,
+            "ProtectWindows": false
+          }
+        }
+      }
+    },
+    "com_s2_struct_win_pw_a": {
+      "protect_args": {
+        "Password": "a",
+        "Structure": true,
+        "Windows": true
+      },
+      "protect_ok": true,
+      "after_protect": {
+        "ProtectStructure": true,
+        "ProtectWindows": false
+      },
+      "saved": {
+        "com_s2_struct_win_pw_a.xlsx": {
+          "reopened": {
+            "ProtectStructure": true,
+            "ProtectWindows": false
+          },
+          "workbookProtection": "<workbookProtection workbookAlgorithmName=\"SHA-512\" workbookHashValue=\"eSrjT0lGcfQy4KkqtjmLgltbdoePx7iFwzEcNNA+wutfrd8PVbHXM0vlpJ/reg3h5BUXMBOdWoyVlqWfQlWpaA==\" workbookSaltValue=\"1NPzGtGrX1tFhIGKHLFNLA==\" workbookSpinCount=\"100000\" lockStructure=\"1\"/>"
+        },
+        "com_s2_struct_win_pw_a.xlsb": {
+          "reopened": {
+            "ProtectStructure": true,
+            "ProtectWindows": false
+          }
+        }
+      }
+    },
+    "com_s3_nostruct_win_nopw": {
+      "protect_args": {
+        "Structure": false,
+        "Windows": true
+      },
+      "protect_ok": true,
+      "after_protect": {
+        "ProtectStructure": false,
+        "ProtectWindows": false
+      },
+      "saved": {
+        "com_s3_nostruct_win_nopw.xlsx": {
+          "reopened": {
+            "ProtectStructure": false,
+            "ProtectWindows": false
+          },
+          "workbookProtection": null
+        },
+        "com_s3_nostruct_win_nopw.xlsb": {
+          "reopened": {
+            "ProtectStructure": false,
+            "ProtectWindows": false
+          }
+        }
+      }
+    },
+    "hand_lockWindows": {
+      "injected": "<workbookProtection lockWindows=\"1\"/>",
+      "input_workbookProtection": "<workbookProtection lockWindows=\"1\"/>",
+      "opened_input": {
+        "ProtectStructure": false,
+        "ProtectWindows": false
+      },
+      "saved": {
+        "hand_lockWindows.xlsx": {
+          "reopened": {
+            "ProtectStructure": false,
+            "ProtectWindows": false
+          },
+          "workbookProtection": null
+        },
+        "hand_lockWindows.xlsb": {
+          "reopened": {
+            "ProtectStructure": false,
+            "ProtectWindows": false
+          }
+        }
+      }
+    },
+    "hand_lockRevision": {
+      "injected": "<workbookProtection lockRevision=\"1\"/>",
+      "input_workbookProtection": "<workbookProtection lockRevision=\"1\"/>",
+      "opened_input": {
+        "ProtectStructure": false,
+        "ProtectWindows": false
+      },
+      "saved": {
+        "hand_lockRevision.xlsx": {
+          "reopened": {
+            "ProtectStructure": false,
+            "ProtectWindows": false
+          },
+          "workbookProtection": null
+        },
+        "hand_lockRevision.xlsb": {
+          "reopened": {
+            "ProtectStructure": false,
+            "ProtectWindows": false
+          }
+        }
+      }
+    },
+    "hand_lockAll": {
+      "injected": "<workbookProtection lockStructure=\"1\" lockWindows=\"1\" lockRevision=\"1\"/>",
+      "input_workbookProtection": "<workbookProtection lockStructure=\"1\" lockWindows=\"1\" lockRevision=\"1\"/>",
+      "opened_input": {
+        "ProtectStructure": true,
+        "ProtectWindows": false
+      },
+      "saved": {
+        "hand_lockAll.xlsx": {
+          "reopened": {
+            "ProtectStructure": true,
+            "ProtectWindows": false
+          },
+          "workbookProtection": "<workbookProtection lockStructure=\"1\"/>"
+        },
+        "hand_lockAll.xlsb": {
+          "reopened": {
+            "ProtectStructure": true,
+            "ProtectWindows": false
+          }
+        }
+      }
+    },
+    "hand_revisionsPassword": {
+      "injected": "<workbookProtection revisionsPassword=\"CC4B\"/>",
+      "input_workbookProtection": "<workbookProtection revisionsPassword=\"CC4B\"/>",
+      "opened_input": {
+        "ProtectStructure": false,
+        "ProtectWindows": false
+      },
+      "saved": {
+        "hand_revisionsPassword.xlsx": {
+          "reopened": {
+            "ProtectStructure": false,
+            "ProtectWindows": false
+          },
+          "workbookProtection": null
+        },
+        "hand_revisionsPassword.xlsb": {
+          "reopened": {
+            "ProtectStructure": false,
+            "ProtectWindows": false
+          }
+        }
+      }
+    }
+  },
+  "rejected_placement": {
+    "file": "hand_lockWindows_afterWorkbookPr.rejected.input.xlsx",
+    "note": "Same as hand_lockWindows.input.xlsx but the element sits right after <workbookPr/> (before mc:AlternateContent / xr:revisionPtr).",
+    "open_error": "com_error(-2147352567, '例外が発生しました。', (0, 'Microsoft Excel', 'Workbooks クラスの Open メソッドが失敗しました。', 'xlmain11.chm', 0, -2146827284), None)"
+  }
+}

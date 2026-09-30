@@ -2,11 +2,11 @@
   "suite": "datevalue_timevalue",
   "description": "DATEVALUE / TIMEVALUE text-to-serial parsing (ISO / slash / kanji forms, AM-PM, embedded date-time)",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T05:45:37Z"
   },
   "tolerance": {
     "abs": 1e-10,

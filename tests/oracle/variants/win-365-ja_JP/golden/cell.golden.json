@@ -2,11 +2,11 @@
   "suite": "cell",
   "description": "CELL(info_type, [reference]) — info_type dispatch covering address/col/row/contents/type and the metadata stubs (filename/format/color/parentheses/prefix/protect/width).",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T06:23:20Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -143,6 +143,29 @@
       },
       "expect": {
         "kind": "text",
+        "value": "l"
+      }
+    },
+    {
+      "id": "cell_type_formula_empty_string",
+      "formula": "=CELL(\"type\", A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "l"
+      }
+    },
+    {
+      "id": "cell_type_blank_is_b_not_empty_string",
+      "formula": "=CELL(\"type\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
         "value": "b"
       }
     },
@@ -178,9 +201,9 @@
       "formula": "=CELL(\"prefix\", A1)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "cell_protect_default",
@@ -196,9 +219,9 @@
       "formula": "=CELL(\"filename\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "cell_unknown_info_type",

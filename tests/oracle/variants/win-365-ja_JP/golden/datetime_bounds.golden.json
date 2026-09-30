@@ -2,11 +2,11 @@
   "suite": "datetime_bounds",
   "description": "DATE / EDATE / EOMONTH upper-bound and overflow probes in the 1900 date system",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T05:45:37Z"
   },
   "tolerance": {
     "abs": 1e-12,

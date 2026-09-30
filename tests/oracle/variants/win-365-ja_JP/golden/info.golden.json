@@ -2,11 +2,11 @@
   "suite": "info",
   "description": "IS* predicates, T, N type-introspection and coercion",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20326",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T07:12:27Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -45,7 +45,10 @@
           "value": ""
         }
       },
-      "skipped": "xlwings writes \"\" as a blank cell, so Excel reports ISBLANK=TRUE even though Formulon correctly says FALSE."
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
     },
     {
       "id": "isnumber_of_integer",
@@ -250,27 +253,27 @@
       "formula": "=T(42)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "t_of_bool",
       "formula": "=T(TRUE)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "t_of_blank_cell",
       "formula": "=T(A1)",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "n_of_number",
@@ -619,13 +622,13 @@
       "id": "isformula_of_literal_number_is_value",
       "formula": "=ISFORMULA(42)",
       "setup": {},
-      "skipped": "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
+      "skipped": "driver skip: COM -2147352567: 例外が発生しました。 -- scode=0x800A03EC"
     },
     {
       "id": "isformula_of_literal_text_is_value",
       "formula": "=ISFORMULA(\"A1\")",
       "setup": {},
-      "skipped": "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
+      "skipped": "driver skip: COM -2147352567: 例外が発生しました。 -- scode=0x800A03EC"
     },
     {
       "id": "isref_of_cell_ref",

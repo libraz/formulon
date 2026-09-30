@@ -2,11 +2,11 @@
   "suite": "datetime_1904_text",
   "description": "Mac Excel 16.112 ja-JP date1904 probes for date-text coercion across calendar extractors, day-count functions, serial zero, cell references, whitespace, time-only input, and pre-epoch strings.\n",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": true,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T05:45:37Z"
   },
   "tolerance": {
     "abs": 1e-12,

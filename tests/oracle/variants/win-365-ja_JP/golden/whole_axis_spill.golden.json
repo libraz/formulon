@@ -2,11 +2,11 @@
   "suite": "whole_axis_spill",
   "description": "Bare whole-axis references (`=A:A`, `=A:C`, `=1:2`) used as the whole formula, i.e. as a spilling expression rather than as a function argument. Every case declares its own `formula_cell`, because the observable result depends on where the formula sits.\nExcel 365 treats a bare whole-axis reference like any other bare range: the value is the array of the *declared* rectangle — rows 1..1048576 for a column span, columns A..XFD for a row span — and it spills from the formula cell. Nothing is trimmed to the populated extent, and cells with no content spill as 0. Three consequences are directly observable and are what this suite pins:\n\n  * the rectangle must fit inside the grid measured from the formula\n    cell, so a whole-column reference only spills from row 1 and a\n    whole-row reference only from column A; anywhere else is `#SPILL!`;\n  * any occupied cell anywhere in that rectangle blocks the spill, even\n    one far below or far to the right of the populated data, which is\n    what shows the footprint is the full declared rectangle;\n  * a formula that sits inside the axis it references is a circular\n    reference, so it never spills at all.\n\nThe four full-rectangle spills use `capture: shape`: their results are far larger than the cell-by-cell capture ceiling (the smallest is 16,384 cells against a 4,096 ceiling), so the golden records the dynamic-array shape plus the listed sample cells instead of every cell. Excel answers them normally; only the recording differs.\nThe remaining seven are recorded cell by cell and are currently registered in tests/divergence.yaml. Each `expect` block below is Excel's observed answer; deleting an entry and regenerating this suite turns the corresponding case back into a verified golden.\n",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T05:45:37Z"
   },
   "tolerance": {
     "abs": 0.0,

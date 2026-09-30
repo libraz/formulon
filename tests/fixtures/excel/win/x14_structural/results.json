@@ -1,0 +1,358 @@
+{
+  "env": {
+    "Version": "16.0",
+    "Build": 20228.0,
+    "OperatingSystem": "Windows (64-bit) NT 10.00",
+    "country": 81.0,
+    "ui_lang": 1041
+  },
+  "method": "One-off pywin32 COM script. Each state is built from scratch in a fresh workbook: A1:A6=-3,-1,0,2,4,6; C1:C6 same; E1:E6=1..6; Range(<target>).FormatConditions.AddDatabar() with target 'A1:A6,C1:C6' (union_databar) or 'A1:A6' (single_databar); then .AxisPosition=xlDataBarAxisMidpoint(1), .NegativeBarFormat.ColorType=xlDataBarColor(0), .BarFillType=xlDataBarFillGradient(1); Range('G1').SparklineGroups.Add(Type=xlSparkLine(1), SourceData='E1:E6'). Then the edit (none / Rows(2).Insert / Columns(2).Delete / Columns(1).Insert), then SaveAs .xlsx(51)/.xlsb(50). Recorded FormatConditions AppliesTo.Address and sparkline group Location/SourceData via Cells.SparklineGroups.",
+  "workbooks": {
+    "union_databar": {
+      "target": "A1:A6,C1:C6",
+      "states": {
+        "0_base": {
+          "before_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6,$C$1:$C$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "after_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6,$C$1:$C$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "files": [
+            "union_databar_0_base.xlsx",
+            "union_databar_0_base.xlsb"
+          ]
+        },
+        "1_insert_row2": {
+          "before_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6,$C$1:$C$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "after_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$7,$C$1:$C$7",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1,$G$2",
+                "SourceData": "E1:E7,E2:E8",
+                "Type": 1
+              }
+            ]
+          },
+          "files": [
+            "union_databar_1_insert_row2.xlsx",
+            "union_databar_1_insert_row2.xlsb"
+          ]
+        },
+        "2_delete_colB": {
+          "before_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6,$C$1:$C$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "after_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$B$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$F$1",
+                "SourceData": "D1:D6",
+                "Type": 1
+              }
+            ]
+          },
+          "files": [
+            "union_databar_2_delete_colB.xlsx",
+            "union_databar_2_delete_colB.xlsb"
+          ]
+        },
+        "3_insert_col1": {
+          "before_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6,$C$1:$C$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "after_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$B$1:$B$6,$D$1:$D$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$H$1",
+                "SourceData": "F1:F6",
+                "Type": 1
+              }
+            ]
+          },
+          "files": [
+            "union_databar_3_insert_col1.xlsx",
+            "union_databar_3_insert_col1.xlsb"
+          ]
+        }
+      }
+    },
+    "single_databar": {
+      "target": "A1:A6",
+      "states": {
+        "0_base": {
+          "before_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "after_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "files": [
+            "single_databar_0_base.xlsx",
+            "single_databar_0_base.xlsb"
+          ]
+        },
+        "1_insert_row2": {
+          "before_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "after_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$7",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1,$G$2",
+                "SourceData": "E1:E7,E2:E8",
+                "Type": 1
+              }
+            ]
+          },
+          "files": [
+            "single_databar_1_insert_row2.xlsx",
+            "single_databar_1_insert_row2.xlsb"
+          ]
+        },
+        "2_delete_colB": {
+          "before_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "after_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$F$1",
+                "SourceData": "D1:D6",
+                "Type": 1
+              }
+            ]
+          },
+          "files": [
+            "single_databar_2_delete_colB.xlsx",
+            "single_databar_2_delete_colB.xlsb"
+          ]
+        },
+        "3_insert_col1": {
+          "before_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$A$1:$A$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$G$1",
+                "SourceData": "E1:E6",
+                "Type": 1
+              }
+            ]
+          },
+          "after_edit": {
+            "format_conditions": [
+              {
+                "Type": 4,
+                "AppliesTo": "$B$1:$B$6",
+                "AxisPosition": 1,
+                "BarFillType": 1,
+                "NegColorType": 0
+              }
+            ],
+            "sparkline_groups": [
+              {
+                "Location": "$H$1",
+                "SourceData": "F1:F6",
+                "Type": 1
+              }
+            ]
+          },
+          "files": [
+            "single_databar_3_insert_col1.xlsx",
+            "single_databar_3_insert_col1.xlsb"
+          ]
+        }
+      }
+    }
+  }
+}

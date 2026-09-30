@@ -2,11 +2,11 @@
   "suite": "regression_advanced",
   "description": "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Array-aware oracle capture makes most spill outputs live; remaining skip-oracle entries are limited to numerically unstable perfect-fit F-statistic slots and an empty bins-array literal read-back quirk. Tolerance widened to 1e-10 for stats-block fit metrics.",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20326",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T07:12:27Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -408,7 +408,7 @@
       "id": "frequency_empty_bins",
       "formula": "=FREQUENCY({1;2;3}, {})",
       "setup": {},
-      "skipped": "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon treats the zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests."
+      "skipped": "driver skip: COM -2147352567: 例外が発生しました。 -- scode=0x800A03EC"
     },
     {
       "id": "frequency_text_in_data_skipped",

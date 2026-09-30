@@ -1,0 +1,1031 @@
+{
+  "suite": "print_basic",
+  "kind": "workbook",
+  "environment": {
+    "excel_version": "16.0.20228",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-09-30T06:28:18Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-09-30T06:28:18Z"
+  },
+  "cases": [
+    {
+      "id": "explicit_print_area_a4_portrait",
+      "spec": {
+        "id": "explicit_print_area_a4_portrait",
+        "description": "An explicit A1:D20 print area on A4 portrait at 100% scale.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D20": {
+              "kind": "text",
+              "value": "X"
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:D20",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:D20",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0,
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "absent_print_area_used_range_fallback",
+      "spec": {
+        "id": "absent_print_area_used_range_fallback",
+        "description": "No print area; the engine falls back to the used range.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "number",
+              "value": 1.0
+            },
+            "B2": {
+              "kind": "number",
+              "value": 2.0
+            },
+            "C3": {
+              "kind": "number",
+              "value": 3.0
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "letter_portrait",
+      "spec": {
+        "id": "letter_portrait",
+        "description": "A4-shaped grid on US Letter paper, portrait.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "F30": {
+              "kind": "text",
+              "value": "X"
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:F30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 1,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:F30",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 1,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "a4_landscape",
+      "spec": {
+        "id": "a4_landscape",
+        "description": "A4 landscape orientation swaps the body width and height.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "F30": {
+              "kind": "text",
+              "value": "X"
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:F30",
+          "page_setup": {
+            "orientation": "landscape",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:F30",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "landscape",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "print_titles_repeat_rows",
+      "spec": {
+        "id": "print_titles_repeat_rows",
+        "description": "A print area with a repeat-rows print title.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "Header"
+            },
+            "A40": {
+              "kind": "text",
+              "value": "X"
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:D40",
+          "print_titles": {
+            "rows": "1:1"
+          },
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:D40",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0,
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "print_titles_repeat_rows_and_cols",
+      "spec": {
+        "id": "print_titles_repeat_rows_and_cols",
+        "description": "A print area with both repeat-rows and repeat-columns titles.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "Corner"
+            },
+            "H40": {
+              "kind": "text",
+              "value": "X"
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H40",
+          "print_titles": {
+            "rows": "1:1",
+            "cols": "A:A"
+          },
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H40",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "multi_area_print_range",
+      "spec": {
+        "id": "multi_area_print_range",
+        "description": "A comma-separated multi-area print range.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "number",
+              "value": 1.0
+            },
+            "B2": {
+              "kind": "number",
+              "value": 2.0
+            },
+            "E1": {
+              "kind": "number",
+              "value": 3.0
+            },
+            "F5": {
+              "kind": "number",
+              "value": 4.0
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:B2,E1:F5",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:B2,E1:F5",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 2,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "single_cell_print_area",
+      "spec": {
+        "id": "single_cell_print_area",
+        "description": "A degenerate single-cell print area.",
+        "sheets": {
+          "Sheet1": {
+            "C3": {
+              "kind": "text",
+              "value": "only"
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "C3:C3",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "C3",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "hidden_columns_no_width",
+      "spec": {
+        "id": "hidden_columns_no_width",
+        "description": "Wide columns with three of them hidden and no width recorded for the hidden ones. Whether a hidden column still consumes page width decides the horizontal break count.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "A40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "B40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "C40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "D1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "D40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "E1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "E40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "F1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "F40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "G1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "G40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "H40": {
+              "kind": "text",
+              "value": "end"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 28
+        },
+        "hidden_columns": [
+          "C",
+          "D",
+          "E"
+        ],
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H40",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H40",
+          "h_breaks": [],
+          "v_breaks": [
+            6
+          ],
+          "pages": 2,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              150.75,
+              150.75,
+              0.0,
+              0.0,
+              0.0,
+              150.75,
+              150.75,
+              150.75
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "hidden_rows_no_height",
+      "spec": {
+        "id": "hidden_rows_no_height",
+        "description": "The row-axis counterpart: hidden rows carry no ht, so the vertical break count says whether they still occupy page height.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "A40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "B40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "C40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "D1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "D40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "E1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "E40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "F1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "F40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "G1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "G40": {
+              "kind": "text",
+              "value": "end"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "hdr"
+            },
+            "H40": {
+              "kind": "text",
+              "value": "end"
+            }
+          }
+        },
+        "row_heights": {
+          "1": 60,
+          "40": 60
+        },
+        "hidden_rows": [
+          "10",
+          "11",
+          "12",
+          "13",
+          "14"
+        ],
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H40",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H40",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              60.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              60.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    }
+  ]
+}

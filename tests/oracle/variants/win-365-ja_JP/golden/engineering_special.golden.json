@@ -2,11 +2,11 @@
   "suite": "engineering_special",
   "description": "Continuous-math engineering built-ins: error function family (ERF, ERF.PRECISE, ERFC, ERFC.PRECISE) and Bessel function family (BESSELJ, BESSELY, BESSELI, BESSELK). Cases cover canonical handbook values, oddness / integral form for ERF, order truncation for BESSEL*, and singularity / negative-domain rejection for the second-kind Bessel members. Tolerance is loose (1e-8) because BESSELK uses Abramowitz & Stegun 9.8.5-9.8.8 polynomial approximations whose rated accuracy is |epsilon| < 1.9e-7.\n",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20326",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T07:12:27Z"
   },
   "tolerance": {
     "abs": 1e-08,
@@ -264,7 +264,7 @@
       "id": "erf_precise_two_arg_rejected",
       "formula": "=ERF.PRECISE(1,2)",
       "setup": {},
-      "skipped": "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors."
+      "skipped": "driver skip: COM -2147352567: 例外が発生しました。 -- scode=0x800A03EC"
     },
     {
       "id": "erfc_large_positive_to_zero",
@@ -516,7 +516,7 @@
       "id": "erfc_precise_two_arg_rejected",
       "formula": "=ERFC.PRECISE(1,2)",
       "setup": {},
-      "skipped": "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected."
+      "skipped": "driver skip: COM -2147352567: 例外が発生しました。 -- scode=0x800A03EC"
     }
   ]
 }

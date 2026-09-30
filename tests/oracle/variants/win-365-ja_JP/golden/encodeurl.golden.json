@@ -2,11 +2,11 @@
   "suite": "encodeurl",
   "description": "ENCODEURL -- RFC 3986 percent-encoding with uppercase hex (Excel 365 Mac ja-JP)",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T06:23:20Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -63,7 +63,8 @@
       "formula": "=ENCODEURL(\"\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
+        "kind": "text",
+        "value": ""
       },
       "compare_mode": "empty_string_readback"
     },

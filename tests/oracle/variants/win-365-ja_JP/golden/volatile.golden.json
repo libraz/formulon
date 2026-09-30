@@ -2,11 +2,11 @@
   "suite": "volatile",
   "description": "Volatile / non-deterministic functions (NOW / TODAY / RAND / RANDBETWEEN / RANDARRAY). Each member draws from a wall-clock or PRNG source that is intrinsically non-reproducible, so every case is registered as skip-oracle in tests/divergence.yaml. The closure exists purely to declare the divergence cluster — there is no oracle comparison.",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T05:45:37Z"
   },
   "tolerance": {
     "abs": 1e-12,

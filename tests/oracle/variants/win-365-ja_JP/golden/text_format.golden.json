@@ -2,11 +2,11 @@
   "suite": "text_format",
   "description": "TEXT format-string engine (number + date/time formatting)",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T06:23:20Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -486,9 +486,9 @@
       "formula": "=TEXT(42, \"\")",
       "setup": {},
       "expect": {
-        "kind": "blank"
-      },
-      "compare_mode": "empty_string_readback"
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "text_bool_true_coerces",

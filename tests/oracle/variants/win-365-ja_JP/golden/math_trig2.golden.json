@@ -2,11 +2,11 @@
   "suite": "math_trig2",
   "description": "Hyperbolic, reciprocal-trig, and parity-rounding builtins (SINH, COSH, TANH, ASINH, ACOSH, ATANH, SEC, CSC, COT, ACOT, SECH, CSCH, COTH, ACOTH, EVEN, ODD, QUOTIENT). Kept in a separate suite from math_trig so the existing golden JSON stays bit-stable and only the new cases need to be populated by `make oracle-gen` on macOS.\n",
   "environment": {
-    "excel_version": "16.0",
+    "excel_version": "16.0.20228",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-15T18:52:11Z"
+    "generated_at": "2026-09-30T05:45:37Z"
   },
   "tolerance": {
     "abs": 1e-12,

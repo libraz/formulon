@@ -1,0 +1,1806 @@
+{
+  "suite": "print_matrix",
+  "kind": "workbook",
+  "environment": {
+    "excel_version": "16.0.20228",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-09-30T06:28:18Z",
+    "capture_id": "win-365-ja_JP:16.0.20228:ja-JP:2026-09-30T06:28:18Z"
+  },
+  "cases": [
+    {
+      "id": "zoom_100_dense_fit_off",
+      "spec": {
+        "id": "zoom_100_dense_fit_off",
+        "description": "Baseline zoom 100% on dense A1:H30 with FitToPages OFF.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "zoom_75_dense_fit_off",
+      "spec": {
+        "id": "zoom_75_dense_fit_off",
+        "description": "Zoom 75% on the same dense grid; expect fewer breaks than 100%.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 75
+          }
+        }
+      },
+      "skipped": "Excel's automatic column breaks do not respond to the print scale: Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at zoom 75, identical to zoom 100, with the column measured at the same 171.0 pt throughout. Formulon paginates the scaled geometry."
+    },
+    {
+      "id": "zoom_50_dense_fit_off",
+      "spec": {
+        "id": "zoom_50_dense_fit_off",
+        "description": "Zoom 50% on the same dense grid; expect noticeably fewer breaks.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 50
+          }
+        }
+      },
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[29] pages=8 at zoom 50, where zoom 100 gives h=[]; breaks do not shrink as the scale does, and at 25 they grow."
+    },
+    {
+      "id": "zoom_25_dense_fit_off",
+      "spec": {
+        "id": "zoom_25_dense_fit_off",
+        "description": "Zoom 25% on the same dense grid; expect a single page.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 25
+          }
+        }
+      },
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[1,2,3,4,5,6,7] h=[18] pages=16 at zoom 25; breaks do not shrink as the scale does, and at 25 they grow."
+    },
+    {
+      "id": "fit_off_zoom_100_dense",
+      "spec": {
+        "id": "fit_off_zoom_100_dense",
+        "description": "FitToPages OFF with Zoom 100; baseline against zoom_100_dense_fit_off.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100,
+            "fit_to_width": 0,
+            "fit_to_height": 0
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "fit_width_1_zoom_100_dense",
+      "spec": {
+        "id": "fit_width_1_zoom_100_dense",
+        "description": "FitToWidth=1 with Zoom 100; should collapse vertical breaks.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100,
+            "fit_to_width": 1,
+            "fit_to_height": 0
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": false,
+            "fit_to_width": 1,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "fit_height_1_zoom_100_dense",
+      "spec": {
+        "id": "fit_height_1_zoom_100_dense",
+        "description": "FitToHeight=1 with Zoom 100; should collapse horizontal breaks.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100,
+            "fit_to_width": 0,
+            "fit_to_height": 1
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": false,
+            "fit_to_width": false,
+            "fit_to_height": 1,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "fit_2x2_zoom_100_dense",
+      "spec": {
+        "id": "fit_2x2_zoom_100_dense",
+        "description": "FitToPages 2x2 with Zoom 100; expect at most 4 pages.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100,
+            "fit_to_width": 2,
+            "fit_to_height": 2
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            4
+          ],
+          "pages": 2,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": false,
+            "fit_to_width": 2,
+            "fit_to_height": 2,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "density_dense_baseline",
+      "spec": {
+        "id": "density_dense_baseline",
+        "description": "Every cell populated in A1:H30; same geometry as fit_off baseline.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A3": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A4": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A5": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A6": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A7": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A8": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A9": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A10": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A15": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A20": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A25": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H15": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "density_sparse_corners",
+      "spec": {
+        "id": "density_sparse_corners",
+        "description": "Only A1, D15, H30 populated; blank stretches between.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "density_col_sparse_only_a",
+      "spec": {
+        "id": "density_col_sparse_only_a",
+        "description": "Only column A is populated (rows 1..30); columns B..H blank.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A5": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A10": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A15": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A20": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A25": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "row_heights": {
+          "1": 80,
+          "30": 80
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            2,
+            4,
+            6
+          ],
+          "pages": 4,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "print_titles_repeat_1_row",
+      "spec": {
+        "id": "print_titles_repeat_1_row",
+        "description": "Print titles repeat row 1 only on a dense A1:D40 grid.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "A40": {
+              "kind": "text",
+              "value": "X"
+            },
+            "A20": {
+              "kind": "text",
+              "value": "X"
+            },
+            "D20": {
+              "kind": "text",
+              "value": "X"
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:D40",
+          "print_titles": {
+            "rows": "1:1"
+          },
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:D40",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0,
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "print_titles_repeat_3_rows",
+      "spec": {
+        "id": "print_titles_repeat_3_rows",
+        "description": "Print titles repeat rows 1..3 on the same dense A1:D40 grid.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "H"
+            },
+            "B2": {
+              "kind": "text",
+              "value": "H"
+            },
+            "C2": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D2": {
+              "kind": "text",
+              "value": "H"
+            },
+            "A3": {
+              "kind": "text",
+              "value": "H"
+            },
+            "B3": {
+              "kind": "text",
+              "value": "H"
+            },
+            "C3": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D3": {
+              "kind": "text",
+              "value": "H"
+            },
+            "A40": {
+              "kind": "text",
+              "value": "X"
+            },
+            "A20": {
+              "kind": "text",
+              "value": "X"
+            },
+            "D20": {
+              "kind": "text",
+              "value": "X"
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:D40",
+          "print_titles": {
+            "rows": "1:3"
+          },
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:D40",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0,
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "print_titles_repeat_5_rows",
+      "spec": {
+        "id": "print_titles_repeat_5_rows",
+        "description": "Print titles repeat rows 1..5 on the same dense A1:D40 grid.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D1": {
+              "kind": "text",
+              "value": "H"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "H"
+            },
+            "B2": {
+              "kind": "text",
+              "value": "H"
+            },
+            "C2": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D2": {
+              "kind": "text",
+              "value": "H"
+            },
+            "A3": {
+              "kind": "text",
+              "value": "H"
+            },
+            "B3": {
+              "kind": "text",
+              "value": "H"
+            },
+            "C3": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D3": {
+              "kind": "text",
+              "value": "H"
+            },
+            "A4": {
+              "kind": "text",
+              "value": "H"
+            },
+            "B4": {
+              "kind": "text",
+              "value": "H"
+            },
+            "C4": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D4": {
+              "kind": "text",
+              "value": "H"
+            },
+            "A5": {
+              "kind": "text",
+              "value": "H"
+            },
+            "B5": {
+              "kind": "text",
+              "value": "H"
+            },
+            "C5": {
+              "kind": "text",
+              "value": "H"
+            },
+            "D5": {
+              "kind": "text",
+              "value": "H"
+            },
+            "A40": {
+              "kind": "text",
+              "value": "X"
+            },
+            "A20": {
+              "kind": "text",
+              "value": "X"
+            },
+            "D20": {
+              "kind": "text",
+              "value": "X"
+            }
+          }
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:D40",
+          "print_titles": {
+            "rows": "1:5"
+          },
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 100
+          }
+        }
+      },
+      "expect": {
+        "print": {
+          "print_area": "A1:D40",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              48.0,
+              48.0,
+              48.0,
+              48.0
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
+    },
+    {
+      "id": "scale_50_short_row",
+      "spec": {
+        "id": "scale_50_short_row",
+        "description": "8 wide cols, 1 row, scale 50. Mirror of print_fit.scale_50_shrinks_breaks but inside print_matrix so applied_page_setup is captured.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H1",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 50
+          }
+        }
+      },
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
+    },
+    {
+      "id": "scale_50_flat_rows",
+      "spec": {
+        "id": "scale_50_flat_rows",
+        "description": "8 wide cols, 30 rows ALL default 15pt (no tall rows), scale 50. Distinguishes from zoom_50_dense_fit_off which has 80pt rows.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 50
+          }
+        }
+      },
+      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
+    },
+    {
+      "id": "scale_75_short_row",
+      "spec": {
+        "id": "scale_75_short_row",
+        "description": "8 wide cols, 1 row, scale 75. Same content as scale_50_short_row at a different scale; isolates the scale axis at row_count=1.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H1",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 75
+          }
+        }
+      },
+      "skipped": "Excel's automatic column breaks do not respond to the print scale: Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 75, identical to scale 100, with the column measured at the same 171.0 pt throughout. Formulon paginates the scaled geometry."
+    },
+    {
+      "id": "scale_75_flat_rows",
+      "spec": {
+        "id": "scale_75_flat_rows",
+        "description": "8 wide cols, 30 rows ALL default 15pt, scale 75. Distinguishes from zoom_75_dense_fit_off (which has 80pt rows); isolates the row-count axis at scale=75.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "A30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H1": {
+              "kind": "text",
+              "value": "x"
+            },
+            "H30": {
+              "kind": "text",
+              "value": "x"
+            },
+            "D15": {
+              "kind": "text",
+              "value": "x"
+            }
+          }
+        },
+        "column_widths": {
+          "A:H": 30
+        },
+        "print": {
+          "sheet": "Sheet1",
+          "print_area": "A1:H30",
+          "page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "scale": 75
+          }
+        }
+      },
+      "skipped": "Excel's automatic column breaks do not respond to the print scale: Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 75, identical to scale 100, with the column measured at the same 171.0 pt throughout. Formulon paginates the scaled geometry."
+    }
+  ]
+}
