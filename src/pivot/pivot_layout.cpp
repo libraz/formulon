@@ -289,13 +289,15 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   // non-empty `row_labels_label` as the locale opting in to this mode.
   const bool locale_opted_in = !options.row_labels_label.empty();
   // Tabular and Outline layouts are honoured only when the locale opts
-  // into Excel-style rendering AND the pivot has row fields with no
-  // column hierarchy. Pivots with column fields fall back to the
-  // compact (single row-label column) shape that the workbook oracle
-  // already verifies for the col-field cases; widening tabular/outline
-  // to col-field pivots is a separate scope.
-  const bool tabular = locale_opted_in && table.layout() == PivotLayout::Tabular && row_depth > 0 && col_depth == 0;
-  const bool outline = locale_opted_in && table.layout() == PivotLayout::Outline && row_depth > 0 && col_depth == 0;
+  // into Excel-style rendering and the pivot has row fields (there is
+  // no per-row-field column to give its own header without one). A
+  // column hierarchy is fully supported: the column labels render the
+  // same way Compact's col-field branch already does, and the extra
+  // header row above them carries the column fields' own display
+  // names (see the `multi_col_layout` header block below) instead of
+  // Compact's single "Column Labels" placeholder.
+  const bool tabular = locale_opted_in && table.layout() == PivotLayout::Tabular && row_depth > 0;
+  const bool outline = locale_opted_in && table.layout() == PivotLayout::Outline && row_depth > 0;
   const bool multi_col_layout = tabular || outline;
   const bool compact = locale_opted_in && !multi_col_layout;
   const std::string subtotal_suffix =
@@ -359,9 +361,9 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   // row-field display names + the data-field display name(s).
   // English mode preserves the legacy `col_header_rows +
   // data_field_header_rows + 1` shape.
-  const std::size_t header_rows =
-      compact ? (col_depth == 0 ? std::size_t{1} : col_header_rows + 1)
-              : (multi_col_layout ? std::size_t{1} : col_header_rows + data_field_header_rows + 1);
+  const std::size_t header_rows = (compact || multi_col_layout)
+                                      ? (col_depth == 0 ? std::size_t{1} : col_header_rows + 1)
+                                      : (col_header_rows + data_field_header_rows + 1);
   // Compact form folds the grand-totals strip in axes that have no
   // hierarchy of their own: a no-column-fields pivot's per-row total
   // already lives in the single data column, so the right-hand grand-
@@ -407,6 +409,13 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   const std::uint32_t data_top = top + static_cast<std::uint32_t>(header_rows);
   const std::uint32_t data_left = left + static_cast<std::uint32_t>(row_header_cols);
   const std::uint32_t row_header_row = top + static_cast<std::uint32_t>(header_rows - 1);
+  // Where the grand-totals-rows strip's own header sits: beside the
+  // outermost column field's hierarchy row (row `top + 1`, the same one
+  // "Q1 集計" / "Q2 集計" occupy) once a column hierarchy exists, else
+  // beside the row-field names -- the two coincide for a single-level
+  // column axis. Declared here so both the column-header rows below and
+  // the strip itself (further down) agree on it.
+  const std::uint32_t total_header_row = col_depth > 0 ? top + 1 : row_header_row;
 
   // The page block: field name, then the item it is showing. Both are
   // header furniture, so neither earns a `PivotCellKind` of its own — the
@@ -430,22 +439,125 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
     }
   }
 
-  if (multi_col_layout) {
-    // Tabular / Outline header: one row containing the per-row-field
-    // display names followed by the data-field display name(s). Only
-    // exercised for row-only pivots (col_depth == 0 enforced above).
-    for (std::size_t d = 0; d < row_depth; ++d) {
+  // Emits one column-hierarchy label row at `depth` (Q1/Q2/... under a
+  // single-level Quarter axis, Store/Web under a nested one, etc.),
+  // repeated across every data-field slot per leaf/subtotal column.
+  // Shared by Compact and Tabular/Outline, which lay out the row-header
+  // columns above it differently but agree on this part exactly.
+  auto emit_col_hierarchy_row = [&](std::uint32_t row, std::size_t depth) {
+    // A non-leaf depth (e.g. Quarter, one level above Channel) repeats its
+    // value across every child leaf/subtotal column; Excel shows it once
+    // per contiguous run and blanks the repeats, the same rule Tabular's
+    // row side already applies. The leaf-most depth always shows its own
+    // value -- that is the level distinct sibling columns differ on.
+    const bool leaf_depth = depth + 1 == col_header_rows;
+    std::string prev_label;
+    bool prev_filled = false;
+    for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
+      const ColEntry& entry = col_entries[c_entry];
+      const AxisLeaf& leaf = entry.leaf;
       std::string label;
-      if (table.row_field_order()[d] < table.fields().size()) {
-        label = pivot_field_display_name(table.fields()[table.row_field_order()[d]]);
+      if (depth < leaf.labels.size()) {
+        label = leaf.labels[depth];
       }
-      append_cell(cells, top, left + static_cast<std::uint32_t>(d), text_value(cells, std::move(label)),
-                  PivotCellKind::Header, static_cast<std::uint32_t>(d));
+      if (entry.subtotal && depth + 1 == leaf.labels.size()) {
+        label += subtotal_suffix;
+      }
+      bool emit_blank = false;
+      if (!leaf_depth && !label.empty()) {
+        if (prev_filled && prev_label == label) {
+          emit_blank = true;
+        }
+        prev_label = label;
+        prev_filled = true;
+      }
+      std::string field_name;
+      if (depth < col_depth && table.col_field_order()[depth] < table.fields().size()) {
+        field_name = pivot_field_display_name(table.fields()[table.col_field_order()[depth]]);
+      }
+      for (std::size_t df = 0; df < data_field_count; ++df) {
+        const std::uint32_t col = data_left + static_cast<std::uint32_t>(c_entry * data_field_count + df);
+        append_cell(cells, row, col, emit_blank ? Value::blank() : text_value(cells, label),
+                    entry.subtotal ? PivotCellKind::ColSubtotal : PivotCellKind::ColLabel,
+                    static_cast<std::uint32_t>(depth), field_name);
+      }
     }
-    for (std::size_t df = 0; df < data_field_count; ++df) {
-      const std::uint32_t col = data_left + static_cast<std::uint32_t>(df);
-      append_cell(cells, top, col, text_value(cells, data_field_name(table, df)), PivotCellKind::Header, 0,
-                  data_field_name(table, df), data_field_format(table, df));
+    // The grand-totals-rows strip sits past `col_entries`, in its own
+    // column(s) to the right; every column-header row except the one
+    // carrying the strip's own header (see `total_header_row` above)
+    // leaves it an explicit blank, same as the rest of that row.
+    if (emit_grand_totals_rows_strip && row != total_header_row) {
+      const std::uint32_t total_left = data_left + static_cast<std::uint32_t>(data_cols);
+      for (std::size_t df = 0; df < data_field_count; ++df) {
+        append_cell(cells, row, total_left + static_cast<std::uint32_t>(df), Value::blank(), PivotCellKind::Blank, 0);
+      }
+    }
+  };
+
+  if (multi_col_layout) {
+    if (col_depth == 0) {
+      // Row-only header: one row with the per-row-field display names
+      // followed by the data-field display name(s).
+      for (std::size_t d = 0; d < row_depth; ++d) {
+        std::string label;
+        if (table.row_field_order()[d] < table.fields().size()) {
+          label = pivot_field_display_name(table.fields()[table.row_field_order()[d]]);
+        }
+        append_cell(cells, top, left + static_cast<std::uint32_t>(d), text_value(cells, std::move(label)),
+                    PivotCellKind::Header, static_cast<std::uint32_t>(d));
+      }
+      for (std::size_t df = 0; df < data_field_count; ++df) {
+        const std::uint32_t col = data_left + static_cast<std::uint32_t>(df);
+        append_cell(cells, top, col, text_value(cells, data_field_name(table, df)), PivotCellKind::Header, 0,
+                    data_field_name(table, df), data_field_format(table, df));
+      }
+    } else {
+      // Corner: the data-field name, the same position Compact's
+      // corner occupies (multi_col_layout requires row_depth > 0, so
+      // there is always a row field to make room for it).
+      append_cell(cells, top, left, text_value(cells, data_field_name(table, 0)), PivotCellKind::Header, 0,
+                  data_field_name(table, 0), data_field_format(table, 0));
+      for (std::size_t d = 1; d < row_header_cols; ++d) {
+        append_cell(cells, top, left + static_cast<std::uint32_t>(d), Value::blank(), PivotCellKind::Blank, 0);
+      }
+      // One column per column-field depth carries that field's own
+      // display name -- Tabular/Outline name the column fields the
+      // same way they name the row fields, instead of Compact's single
+      // "Column Labels" placeholder.
+      for (std::size_t depth = 0; depth < col_depth; ++depth) {
+        std::string field_name;
+        if (table.col_field_order()[depth] < table.fields().size()) {
+          field_name = pivot_field_display_name(table.fields()[table.col_field_order()[depth]]);
+        }
+        append_cell(cells, top, data_left + static_cast<std::uint32_t>(depth), text_value(cells, std::move(field_name)),
+                    PivotCellKind::Header, 0);
+      }
+      const std::size_t corner_extent = data_cols + (emit_grand_totals_rows_strip ? data_field_count : 0);
+      for (std::size_t i = col_depth; i < corner_extent; ++i) {
+        append_cell(cells, top, data_left + static_cast<std::uint32_t>(i), Value::blank(), PivotCellKind::Blank, 0);
+      }
+      // Column hierarchy labels start one row below the corner. The
+      // last such row also carries the per-row-field display names
+      // (the position Compact's row-labels placeholder occupies);
+      // every other one leaves the row-header columns blank.
+      for (std::size_t depth = 0; depth < col_header_rows; ++depth) {
+        const std::uint32_t row = top + 1 + static_cast<std::uint32_t>(depth);
+        if (depth + 1 == col_header_rows) {
+          for (std::size_t d = 0; d < row_header_cols; ++d) {
+            std::string label;
+            if (d < row_depth && table.row_field_order()[d] < table.fields().size()) {
+              label = pivot_field_display_name(table.fields()[table.row_field_order()[d]]);
+            }
+            append_cell(cells, row, left + static_cast<std::uint32_t>(d), text_value(cells, std::move(label)),
+                        PivotCellKind::Header, static_cast<std::uint32_t>(d));
+          }
+        } else {
+          for (std::size_t d = 0; d < row_header_cols; ++d) {
+            append_cell(cells, row, left + static_cast<std::uint32_t>(d), Value::blank(), PivotCellKind::Blank, 0);
+          }
+        }
+        emit_col_hierarchy_row(row, depth);
+      }
     }
   } else if (compact) {
     // Compact form: a single "Row Labels" placeholder occupies the
@@ -498,27 +610,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           // explicit blank so the rendered extent matches Excel.
           append_cell(cells, row, left, Value::blank(), PivotCellKind::Blank, 0);
         }
-        for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
-          const ColEntry& entry = col_entries[c_entry];
-          const AxisLeaf& leaf = entry.leaf;
-          std::string label;
-          if (depth < leaf.labels.size()) {
-            label = leaf.labels[depth];
-          }
-          if (entry.subtotal && depth + 1 == leaf.labels.size()) {
-            label += subtotal_suffix;
-          }
-          std::string field_name;
-          if (depth < col_depth && table.col_field_order()[depth] < table.fields().size()) {
-            field_name = pivot_field_display_name(table.fields()[table.col_field_order()[depth]]);
-          }
-          for (std::size_t df = 0; df < data_field_count; ++df) {
-            const std::uint32_t col = data_left + static_cast<std::uint32_t>(c_entry * data_field_count + df);
-            append_cell(cells, row, col, text_value(cells, label),
-                        entry.subtotal ? PivotCellKind::ColSubtotal : PivotCellKind::ColLabel,
-                        static_cast<std::uint32_t>(depth), field_name);
-          }
-        }
+        emit_col_hierarchy_row(row, depth);
       }
       // Row labels placeholder lives on the last header row when there
       // are row fields. Without row fields the data-field name will go
@@ -816,7 +908,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       ++total_r_leaf;
     }
     for (std::size_t df = 0; df < data_field_count; ++df) {
-      append_cell(cells, row_header_row, total_left + static_cast<std::uint32_t>(df),
+      append_cell(cells, total_header_row, total_left + static_cast<std::uint32_t>(df),
                   text_value(cells, options.grand_total_label), PivotCellKind::Header, 0, data_field_name(table, df),
                   data_field_format(table, df));
     }

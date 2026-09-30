@@ -256,6 +256,265 @@ TEST(WorkbookBuilder, FormulaProbePinsPageAxisRefBranch) {
   EXPECT_EQ(results_or.value()[0].value.as_error(), ErrorCode::Ref);
 }
 
+TEST(WorkbookBuilder, CountAggregationCountsNonBlankRegardlessOfType) {
+  // Reproduces `count_with_text_in_value_column` from
+  // tests/oracle/golden_wb/pivot_cross_axis.golden.json (Windows Excel
+  // 365 ja-JP, build 16.0.20228): Excel's pivot "Count" (個数) mirrors
+  // COUNTA -- it counts every non-blank cell of any type, not just
+  // numbers. North's Amount column mixes two numbers with one text
+  // cell ("n/a"); the count must still be 3, not 1. Before the fix,
+  // `build_pivot_from_spec` built shared_items from the field's text
+  // values only (here just "n/a") without marking any cell as an
+  // index, so `cell_value()`'s have-no-flag fallback misread every
+  // *numeric* cell in the same field as an out-of-range shared-item
+  // index and collapsed it to Blank -- undercounting both regions.
+  JsonValue data_cells = jobj({
+      {"A1", text_cell("Region")},
+      {"B1", text_cell("Amount")},
+      {"A2", text_cell("North")},
+      {"B2", number_cell(100.0)},
+      {"A3", text_cell("North")},
+      {"B3", text_cell("n/a")},
+      {"A4", text_cell("North")},
+      {"B4", number_cell(50.0)},
+      {"A5", text_cell("South")},
+      {"B5", number_cell(200.0)},
+      {"A6", text_cell("South")},
+      {"B6", number_cell(300.0)},
+  });
+  JsonValue pivot = jobj({
+      {"source", jstr("Data!A1:B6")},
+      {"anchor", jstr("Report!A1")},
+      {"row_fields", jarr({jstr("Region")})},
+      {"data_fields", jarr({jobj({{"field", jstr("Amount")}, {"agg", jstr("Count")}})})},
+  });
+  const JsonValue spec = jobj({
+      {"sheets", jobj({{"Data", std::move(data_cells)}, {"Report", jobj({})}})},
+      {"pivot", std::move(pivot)},
+  });
+
+  auto built_or = build_pivot_from_spec(spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const BuiltPivot& built = built_or.value();
+
+  auto result_or = pivot::evaluate(built.table, built.cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const pivot::PivotResult& result = result_or.value();
+
+  ASSERT_EQ(result.rows.size(), 2U);
+  std::map<std::string, double> count_by_region;
+  for (std::size_t i = 0; i < result.rows.size(); ++i) {
+    count_by_region[result.rows[i].label] = result.values[i][0][0].as_number();
+  }
+  EXPECT_DOUBLE_EQ(count_by_region["North"], 3.0);
+  EXPECT_DOUBLE_EQ(count_by_region["South"], 2.0);
+  ASSERT_TRUE(result.grand_total.is_number());
+  EXPECT_DOUBLE_EQ(result.grand_total.as_number(), 5.0);
+}
+
+// A `{kind, formula}` cell record, as the workbook case schema emits for a
+// pivot-source cell whose value comes from evaluating a formula rather
+// than a literal.
+JsonValue formula_cell(std::string formula) {
+  return jobj({{"kind", jstr("formula")}, {"formula", jstr(std::move(formula))}});
+}
+
+// Builds the Region/Amount dataset the three `*_with_error_in_value_column`
+// golden cases share: North has a literal `=1/0` (#DIV/0!) among two
+// numbers, South is all-numeric. `agg` selects the data field's
+// aggregation.
+JsonValue build_error_in_value_column_spec(const std::string& agg) {
+  JsonValue data_cells = jobj({
+      {"A1", text_cell("Region")},
+      {"B1", text_cell("Amount")},
+      {"A2", text_cell("North")},
+      {"B2", number_cell(100.0)},
+      {"A3", text_cell("North")},
+      {"B3", formula_cell("=1/0")},
+      {"A4", text_cell("North")},
+      {"B4", number_cell(50.0)},
+      {"A5", text_cell("South")},
+      {"B5", number_cell(200.0)},
+      {"A6", text_cell("South")},
+      {"B6", number_cell(300.0)},
+  });
+  JsonValue pivot = jobj({
+      {"source", jstr("Data!A1:B6")},
+      {"anchor", jstr("Report!A1")},
+      {"row_fields", jarr({jstr("Region")})},
+      {"data_fields", jarr({jobj({{"field", jstr("Amount")}, {"agg", jstr(agg)}})})},
+  });
+  return jobj({
+      {"sheets", jobj({{"Data", std::move(data_cells)}, {"Report", jobj({})}})},
+      {"pivot", std::move(pivot)},
+  });
+}
+
+TEST(WorkbookBuilder, FormulaSourceCellCountsAsNonBlankLikeAnyError) {
+  // Reproduces `count_with_error_in_value_column`: the same COUNTA-like
+  // rule as the text case above, but the non-numeric cell is a genuine
+  // formula error (`=1/0`) rather than a literal string. This is the
+  // case that motivated supporting `{"kind":"formula"}` pivot-source
+  // cells at all -- North=3, South=2, total=5.
+  const JsonValue spec = build_error_in_value_column_spec("Count");
+  auto built_or = build_pivot_from_spec(spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const BuiltPivot& built = built_or.value();
+
+  auto result_or = pivot::evaluate(built.table, built.cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const pivot::PivotResult& result = result_or.value();
+
+  ASSERT_EQ(result.rows.size(), 2U);
+  std::map<std::string, double> count_by_region;
+  for (std::size_t i = 0; i < result.rows.size(); ++i) {
+    count_by_region[result.rows[i].label] = result.values[i][0][0].as_number();
+  }
+  EXPECT_DOUBLE_EQ(count_by_region["North"], 3.0);
+  EXPECT_DOUBLE_EQ(count_by_region["South"], 2.0);
+  ASSERT_TRUE(result.grand_total.is_number());
+  EXPECT_DOUBLE_EQ(result.grand_total.as_number(), 5.0);
+}
+
+TEST(WorkbookBuilder, SumAggregationPropagatesFormulaSourceError) {
+  // Reproduces `sum_with_error_in_value_column`: Sum(Amount) propagates
+  // the #DIV/0! the same way SUM(range-with-error) would -- North and
+  // the grand total both become the error; South, unaffected, sums
+  // normally.
+  const JsonValue spec = build_error_in_value_column_spec("Sum");
+  auto built_or = build_pivot_from_spec(spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const BuiltPivot& built = built_or.value();
+
+  auto result_or = pivot::evaluate(built.table, built.cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const pivot::PivotResult& result = result_or.value();
+
+  ASSERT_EQ(result.rows.size(), 2U);
+  auto sum_by_region = [&](const std::string& region) -> const Value& {
+    for (std::size_t i = 0; i < result.rows.size(); ++i) {
+      if (result.rows[i].label == region) {
+        return result.values[i][0][0];
+      }
+    }
+    ADD_FAILURE() << "no row leaf labelled '" << region << "'";
+    return result.values[0][0][0];
+  };
+  ASSERT_TRUE(sum_by_region("North").is_error());
+  EXPECT_EQ(sum_by_region("North").as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(sum_by_region("South").is_number());
+  EXPECT_DOUBLE_EQ(sum_by_region("South").as_number(), 500.0);
+  ASSERT_TRUE(result.grand_total.is_error());
+  EXPECT_EQ(result.grand_total.as_error(), ErrorCode::Div0);
+}
+
+TEST(WorkbookBuilder, CountNumbersAggregationExcludesFormulaSourceError) {
+  // Reproduces `count_numbers_with_error_in_value_column`: CountNumbers
+  // (the aggregation that names a type) only counts genuinely numeric
+  // cells, so the #DIV/0! cell drops out the same way a text cell
+  // would -- North=2, South=2, total=4.
+  const JsonValue spec = build_error_in_value_column_spec("CountNumbers");
+  auto built_or = build_pivot_from_spec(spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const BuiltPivot& built = built_or.value();
+
+  auto result_or = pivot::evaluate(built.table, built.cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const pivot::PivotResult& result = result_or.value();
+
+  ASSERT_EQ(result.rows.size(), 2U);
+  std::map<std::string, double> count_by_region;
+  for (std::size_t i = 0; i < result.rows.size(); ++i) {
+    count_by_region[result.rows[i].label] = result.values[i][0][0].as_number();
+  }
+  EXPECT_DOUBLE_EQ(count_by_region["North"], 2.0);
+  EXPECT_DOUBLE_EQ(count_by_region["South"], 2.0);
+  ASSERT_TRUE(result.grand_total.is_number());
+  EXPECT_DOUBLE_EQ(result.grand_total.as_number(), 4.0);
+}
+
+TEST(WorkbookBuilder, FormulaSourceErrorCrossedWithColumnFieldStaysInItsOwnCell) {
+  // Reproduces `error_in_value_column_crossed_with_column_field`: an
+  // error under a column split lands in its own cross-axis cell, that
+  // column's grand total, and that row's grand total -- but not in the
+  // unrelated column or row.
+  JsonValue data_cells = jobj({
+      {"A1", text_cell("Region")},
+      {"B1", text_cell("Quarter")},
+      {"C1", text_cell("Amount")},
+      {"A2", text_cell("North")},
+      {"B2", text_cell("Q1")},
+      {"C2", number_cell(100.0)},
+      {"A3", text_cell("North")},
+      {"B3", text_cell("Q2")},
+      {"C3", formula_cell("=1/0")},
+      {"A4", text_cell("South")},
+      {"B4", text_cell("Q1")},
+      {"C4", number_cell(200.0)},
+      {"A5", text_cell("South")},
+      {"B5", text_cell("Q2")},
+      {"C5", number_cell(300.0)},
+  });
+  JsonValue pivot = jobj({
+      {"source", jstr("Data!A1:C5")},
+      {"anchor", jstr("Report!A1")},
+      {"row_fields", jarr({jstr("Region")})},
+      {"col_fields", jarr({jstr("Quarter")})},
+      {"data_fields", jarr({jobj({{"field", jstr("Amount")}, {"agg", jstr("Sum")}})})},
+  });
+  const JsonValue spec = jobj({
+      {"sheets", jobj({{"Data", std::move(data_cells)}, {"Report", jobj({})}})},
+      {"pivot", std::move(pivot)},
+  });
+
+  auto built_or = build_pivot_from_spec(spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const BuiltPivot& built = built_or.value();
+
+  auto result_or = pivot::evaluate(built.table, built.cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const pivot::PivotResult& result = result_or.value();
+
+  ASSERT_EQ(result.rows.size(), 2U);
+  ASSERT_EQ(result.cols.size(), 2U);
+  std::map<std::string, std::size_t> row_index;
+  for (std::size_t i = 0; i < result.rows.size(); ++i) {
+    row_index[result.rows[i].label] = i;
+  }
+  std::map<std::string, std::size_t> col_index;
+  for (std::size_t i = 0; i < result.cols.size(); ++i) {
+    col_index[result.cols[i].label] = i;
+  }
+  const std::size_t north = row_index.at("North");
+  const std::size_t south = row_index.at("South");
+  const std::size_t q1 = col_index.at("Q1");
+  const std::size_t q2 = col_index.at("Q2");
+
+  ASSERT_TRUE(result.values[north][q1][0].is_number());
+  EXPECT_DOUBLE_EQ(result.values[north][q1][0].as_number(), 100.0);
+  ASSERT_TRUE(result.values[north][q2][0].is_error());
+  EXPECT_EQ(result.values[north][q2][0].as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(result.values[south][q1][0].is_number());
+  EXPECT_DOUBLE_EQ(result.values[south][q1][0].as_number(), 200.0);
+  ASSERT_TRUE(result.values[south][q2][0].is_number());
+  EXPECT_DOUBLE_EQ(result.values[south][q2][0].as_number(), 300.0);
+
+  // Row totals: North's is the error (Q1 + the erroring Q2); South's
+  // sums normally.
+  ASSERT_EQ(result.row_leaf_totals.size(), 2U);
+  ASSERT_TRUE(result.row_leaf_totals[north][0].is_error());
+  EXPECT_EQ(result.row_leaf_totals[north][0].as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(result.row_leaf_totals[south][0].is_number());
+  EXPECT_DOUBLE_EQ(result.row_leaf_totals[south][0].as_number(), 500.0);
+
+  // Column totals: Q1's is unaffected; Q2's is the error.
+  ASSERT_EQ(result.col_leaf_totals.size(), 2U);
+  ASSERT_TRUE(result.col_leaf_totals[q1][0].is_number());
+  EXPECT_DOUBLE_EQ(result.col_leaf_totals[q1][0].as_number(), 300.0);
+  ASSERT_TRUE(result.col_leaf_totals[q2][0].is_error());
+  EXPECT_EQ(result.col_leaf_totals[q2][0].as_error(), ErrorCode::Div0);
+}
+
 // --- Print pagination tests -------------------------------------------------
 //
 // Unlike the pivot path -- whose goldens need a Windows + Excel host --

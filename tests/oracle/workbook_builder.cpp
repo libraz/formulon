@@ -49,9 +49,10 @@ Error invalid(std::string message) {
 /// normalised `{kind, value}` shape the workbook case schema emits and the
 /// bare JSON shorthands (number / string / bool) for hand-written specs.
 /// `text` payloads are interned into the workbook so the returned `Value`
-/// holds a workbook-lifetime view. `formula` records are not evaluated:
-/// the pivot harness only consumes literal source data, so a formula cell
-/// is rejected rather than silently producing a blank.
+/// holds a workbook-lifetime view. `formula` records are handled by the
+/// caller (`build_workbook`), which writes and recalcs them instead of
+/// producing a literal `Value` here -- a formula's result depends on the
+/// rest of the workbook, not just its own record.
 Expected<Value, Error> value_from_record(const JsonValue& rec, Workbook* workbook, const std::string& where) {
   if (rec.is_number()) {
     return Value::number(rec.as_number());
@@ -112,9 +113,11 @@ Expected<std::unique_ptr<Workbook>, Error> build_workbook(const JsonValue& spec)
   if (sheets_v == nullptr || !sheets_v->is_object()) {
     return invalid("spec is missing a 'sheets' object");
   }
+  bool wrote_formula = false;
   for (const std::string& sheet_name : sheets_v->object_keys()) {
     const JsonValue* cells = sheets_v->find(sheet_name);
-    Sheet& sheet = workbook->sheet(workbook->add_sheet(sheet_name));
+    const std::size_t sheet_index = workbook->add_sheet(sheet_name);
+    Sheet& sheet = workbook->sheet(sheet_index);
     if (cells == nullptr || !cells->is_object()) {
       return invalid("sheets/" + sheet_name + ": expected an A1 -> value object");
     }
@@ -133,9 +136,29 @@ Expected<std::unique_ptr<Workbook>, Error> build_workbook(const JsonValue& spec)
       where += sheet_name;
       where += "/";
       where += addr;
+      // A formula cell is written and left for the recalc pass below,
+      // rather than resolved to a `Value` here: its result can depend on
+      // other cells (and, for a pivot source column, needs to carry
+      // through as an error/text/number the same way a real Excel-authored
+      // formula cell would when the pivot reads it back).
+      if (rec.is_object()) {
+        const JsonValue* kind_v = rec.find("kind");
+        if (kind_v != nullptr && kind_v->is_string() && kind_v->as_string() == "formula") {
+          const JsonValue* formula_v = rec.find("formula");
+          if (formula_v == nullptr || !formula_v->is_string()) {
+            return invalid(where + ": formula cell missing string 'formula'");
+          }
+          RETURN_IF_ERROR(workbook->set_cell_formula(sheet_index, row, col, formula_v->as_string()));
+          wrote_formula = true;
+          continue;
+        }
+      }
       ASSIGN_OR_RETURN(Value v, value_from_record(rec, workbook.get(), where));
       sheet.set_cell_value(row, col, v);
     }
+  }
+  if (wrote_formula) {
+    RETURN_IF_ERROR(workbook->recalc(eval::default_registry()));
   }
   return workbook;
 }
@@ -312,6 +335,17 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
   for (std::uint32_t r = src.r0 + 1; r <= src.r1; ++r) {
     PivotCacheRecord rec;
     rec.cells.reserve(headers.size());
+    // Every cell below is stored inline (verbatim), never as an index into
+    // `shared_items` -- explicit so `cell_value()` (record_access.h) does
+    // not fall back to inferring the encoding from `shared_items` being
+    // non-empty. That fallback assumes a field with shared items indexes
+    // *every* cell through them; this harness only populates shared_items
+    // from a field's text values (informational, for filter-item lookup),
+    // so a field mixing numbers and text -- e.g. Count(Amount) with one
+    // error/text cell among the numbers -- would otherwise have its
+    // numeric cells misread as out-of-range shared-item indices and
+    // collapse to Blank.
+    rec.cell_is_index.assign(headers.size(), false);
     for (std::uint32_t c = src.c0; c <= src.c1; ++c) {
       Value cell = src_sheet->resolve_cell_value(r, c);
       // The cache must outlive the workbook's text views once the
