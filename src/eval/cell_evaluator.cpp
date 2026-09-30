@@ -4,14 +4,18 @@
 
 #include "eval/cell_evaluator.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 #include "cell.h"
 #include "eval/builtin_names.h"
 #include "eval/eval_context.h"
+#include "eval/eval_state.h"
 #include "eval/formula_text_utils.h"
 #include "eval/function_registry.h"
+#include "eval/iterative_solver.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -80,6 +84,9 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   // pass; suppress the `evaluate()`-level fixed-point driver so the two
   // mechanisms do not double-iterate or fight over divergence accounting.
   ctx = ctx.with_iterative_driver_suppressed();
+  if (opts.read_observer != nullptr) {
+    ctx = ctx.with_state(*opts.read_observer);
+  }
 
   Value result = evaluate(*root, arena, registry, ctx);
   // If the top-level evaluator produced an Array (e.g. a SEQUENCE() at the
@@ -87,6 +94,27 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   // logic in `EvalContext::resolve_ref` for recursive Array results.
   result = ctx.dispatch_array_result(result);
   return result;
+}
+
+bool settle_component_by_reads(const Workbook& workbook, const std::vector<CellNodeId>& cells,
+                               const std::function<Value(CellNodeId, EvalState*)>& evaluate,
+                               const std::function<void(CellNodeId, Value)>& commit) {
+  EvalState observer;
+  for (std::size_t i = 0; i < cells.size(); ++i) {
+    const CellNodeId c = cells[i];
+    if (c.sheet_id < workbook.sheet_count()) {
+      observer.observe_reads_of(&workbook.sheet(c.sheet_id), c.row, c.col, i);
+    }
+  }
+  return settle_cycle_by_reads(
+      cells.size(),
+      [&](std::size_t i, std::vector<std::size_t>* reads) {
+        observer.clear_observed_reads();
+        const Value v = evaluate(cells[i], &observer);
+        *reads = observer.observed_reads();
+        return v;
+      },
+      [&](std::size_t i, Value v) { commit(cells[i], v); });
 }
 
 }  // namespace eval

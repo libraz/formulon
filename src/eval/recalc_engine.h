@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -487,6 +488,48 @@ class RecalcEngine {
   // `graph_`, this stores one interned rectangle per authored range rather
   // than one edge per cell.
   RangeDepIndex range_dependencies_;
+  /// The single cells formulas read, per sheet, each with the number of
+  /// formula edges naming it. Spill reconciliation looks up the ones inside
+  /// a committed spill to link each spilled cell to its anchor. Maintained
+  /// only where a formula's authored edges are added or dropped.
+  class ReferencedCellIndex {
+   public:
+    void add(CellNodeId cell);
+    void remove(CellNodeId cell);
+    void clear() noexcept { by_sheet_.clear(); }
+    bool empty() const noexcept;
+    bool references_sheet(std::uint16_t sheet_id) const noexcept {
+      return sheet_id < by_sheet_.size() && !by_sheet_[sheet_id].empty();
+    }
+    /// Invokes `visit(row, col)` for every referenced cell of `sheet_id`
+    /// inside the inclusive rectangle; cost follows the referenced cells in
+    /// its rows, not its area.
+    template <typename Visit>
+    void for_each_in(std::uint16_t sheet_id, std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                     std::uint32_t last_col, Visit&& visit) const {
+      if (sheet_id >= by_sheet_.size()) {
+        return;
+      }
+      const std::map<std::uint64_t, std::uint32_t>& cells = by_sheet_[sheet_id];
+      const auto end = cells.upper_bound(key(last_row, last_col));
+      for (auto it = cells.lower_bound(key(first_row, first_col)); it != end; ++it) {
+        const auto col = static_cast<std::uint32_t>(it->first & 0xFFFFFFFFULL);
+        if (col >= first_col && col <= last_col) {
+          visit(static_cast<std::uint32_t>(it->first >> 32U), col);
+        }
+      }
+    }
+
+   private:
+    static constexpr std::uint64_t key(std::uint32_t row, std::uint32_t col) noexcept {
+      return (static_cast<std::uint64_t>(row) << 32U) | col;
+    }
+    std::vector<std::map<std::uint64_t, std::uint32_t>> by_sheet_;
+  };
+  ReferencedCellIndex referenced_cells_;
+  /// Drops `cell`'s authored single-cell edges from `referenced_cells_`;
+  /// called before those edges are removed from the graph.
+  void forget_referenced_cells_locked(CellNodeId cell);
   struct RegisteredThreeDSpan {
     CellNodeId owner;
     ThreeDSheetSpanDependency span;

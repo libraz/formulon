@@ -34,6 +34,7 @@
 #ifndef FORMULON_EVAL_ITERATIVE_SOLVER_H_
 #define FORMULON_EVAL_ITERATIVE_SOLVER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <utility>
@@ -112,6 +113,20 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
                                           const std::function<Value(CellNodeId)>& evaluate_one,
                                           const std::function<void(CellNodeId, Value)>& commit,
                                           IterativeProgressCb progress, void* progress_user_data);
+
+/// Settles a statically cyclic component the way Excel judges circularity:
+/// by what its formulas read when evaluated, so a back edge in a branch that
+/// is never taken (`=IF(FALSE,A1,1)` in A1) is no cycle. Evaluates and commits
+/// members `0 .. count-1` in an order where each follows every member it
+/// read, re-ordering from the reads each pass observes until a pass reads no
+/// member ahead of itself. `evaluate_one(i, reads)` evaluates member `i`
+/// against the current cell store and lists the members it read in `reads`.
+/// Returns false when a member reads itself or the observed reads form a
+/// cycle -- the cycle is real -- leaving what it committed for the caller to
+/// replace.
+bool settle_cycle_by_reads(std::size_t count,
+                           const std::function<Value(std::size_t, std::vector<std::size_t>*)>& evaluate_one,
+                           const std::function<void(std::size_t, Value)>& commit);
 
 /// Runs the iterative solver on a single SCC. See
 /// `run_iterative_solve_impl` for the contract. The template wrapper

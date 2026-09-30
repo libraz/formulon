@@ -174,7 +174,30 @@ Value EvalContext::resolve_ref(const parser::Reference& ref) const {
   // and an anchor's `cached_value` tracks its region's first cell. Reading
   // through the sheet keeps the whole lookup inside one lock acquisition
   // and hands no `Cell*` back to this layer.
+  note_value_reads(*target, ref.row, ref.col, ref.row, ref.col);
   return target->resolve_cell_value(ref.row, ref.col);
+}
+
+void EvalContext::note_value_reads(const Sheet& sheet, std::uint32_t first_row, std::uint32_t first_col,
+                                   std::uint32_t last_row, std::uint32_t last_col) const {
+  if (state_ != nullptr && state_->observing_reads()) {
+    state_->note_reads(&sheet, first_row, first_col, last_row, last_col);
+  }
+}
+
+bool EvalContext::read_spill_region(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Arena& arena,
+                                    std::vector<Value>& out_cells, std::uint32_t* out_rows,
+                                    std::uint32_t* out_cols) const {
+  note_value_reads(sheet, row, col, row, col);
+  return sheet.read_spill_region_at_anchor(row, col, arena, out_cells, out_rows, out_cols);
+}
+
+EvalContext EvalContext::without_read_observer() const noexcept {
+  EvalContext copy = *this;
+  if (state_ != nullptr && state_->observing_reads()) {
+    copy.state_ = nullptr;
+  }
+  return copy;
 }
 
 Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const FunctionRegistry& registry) const {
@@ -183,6 +206,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   if (target == nullptr) {
     return short_circuit;
   }
+  note_value_reads(*target, ref.row, ref.col, ref.row, ref.col);
 
   // One lock acquisition covers "is this a formula cell" and both fields a
   // formula cell is read for. Holding a `Cell*` past the lock instead would
@@ -208,7 +232,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
 
   // Formula cell. If no recursive state is bound, fall back to the
   // non-recursive behaviour so the two overloads agree.
-  if (state_ == nullptr) {
+  if (state_ == nullptr || state_->observing_reads()) {
     const Value cached = adopt_into_arena(arena, read.value());
     return scalarize_result ? scalarize_formula_ref(cached) : cached;
   }
@@ -431,6 +455,7 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   // cached value and are re-resolved below. Text payloads land in `arena`,
   // the same lifetime the scalar path promises.
   std::vector<std::size_t> formula_indices;
+  note_value_reads(*target_sheet, r_min, c_min, r_max, c_max);
   target_sheet->read_range(r_min, r_max, c_min, c_max, arena, out, formula_indices);
   const std::uint32_t width = c_max - c_min + 1U;
   for (const std::size_t index : formula_indices) {

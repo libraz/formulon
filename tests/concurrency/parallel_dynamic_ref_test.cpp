@@ -214,5 +214,28 @@ TEST(ParallelDynamicRef, DynamicCyclesRestoreEveryMember) {
   }
 }
 
+// Readers of single spilled cells, spread across pooled layers, follow their
+// anchors: each reader is linked to the spill it reads, so workers never
+// evaluate one before its anchor has committed the spill.
+TEST(ParallelDynamicRef, SpilledCellReadersFollowTheirAnchors) {
+  Workbook wb = Workbook::create();
+  constexpr std::uint32_t kSpills = 32U;
+  for (std::uint32_t i = 0; i < kSpills; ++i) {
+    const std::string spilled_row = std::to_string(i * 3U + 2U);
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, i, 0U, "=C" + spilled_row + "*10")));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, i * 3U, 2U, "=SEQUENCE(2,1," + std::to_string(i) + ")")));
+  }
+  SchedulerConfig cfg;
+  cfg.num_threads = 4U;
+  for (int pass = 0; pass < 3; ++pass) {
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, nullptr)));
+    for (std::uint32_t i = 0; i < kSpills; ++i) {
+      const Value v = StoredValue(wb, i, 0U);
+      ASSERT_TRUE(v.is_number()) << i;
+      EXPECT_EQ(v.as_number(), static_cast<double>(i + 1U) * 10.0) << "A" << i + 1U << " pass " << pass;
+    }
+  }
+}
+
 }  // namespace
 }  // namespace formulon::eval

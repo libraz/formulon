@@ -25,6 +25,7 @@
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
 #include "eval/dynamic_read_log.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -222,11 +223,66 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
   const std::size_t sheet_count = wb.sheet_count();
 
   if (is_cyclic_component(component, graph)) {
+    // The read-ordered settle (iterative calc off) or the solver (on) drives
+    // the lambdas below. They capture by reference and run synchronously
+    // inside this worker; both are single-threaded and finish the component
+    // before returning. Concurrent SCC processors operate on disjoint
+    // cells (different SCCs by construction), so the cell-store mutex
+    // only ever contends inside `commit`.
+    // Hoisted out of `evaluate_one` so a staged formula's bytes stay live
+    // exactly as long as the arena contents of the same call: a string
+    // literal inside the formula surfaces in the returned Value as a view
+    // into this buffer, and the solver consumes each result before asking
+    // for the next one (which resets the arena).
+    Cell staged;
+    auto evaluate_with = [&](CellNodeId c, EvalState* observer) -> Value {
+      if (c.sheet_id >= sheet_count) {
+        return Value::error(ErrorCode::Ref);
+      }
+      Sheet& sheet = wb.sheet(c.sheet_id);
+      if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
+        return Value::blank();
+      }
+      arena.reset();
+      EvaluateCellOptions opts;
+      opts.spill_release_callback = release_callback;
+      opts.spill_release_user_data = release_user_data;
+      opts.read_observer = observer;
+      obs.observe(c, opts, nullptr);
+      if (obs.log != nullptr) {
+        obs.log->note_iterative_member(c, obs.ordinal);
+      }
+      Value result = evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
+      if (obs.log != nullptr) {
+        obs.log->end();
+      }
+      return result;
+    };
+    auto evaluate_one = [&](CellNodeId c) { return evaluate_with(c, nullptr); };
+    auto commit = [&](CellNodeId c, Value v) {
+      if (c.sheet_id >= sheet_count) {
+        return;
+      }
+      Sheet& sheet = wb.sheet(c.sheet_id);
+      std::lock_guard<std::mutex> guard(write_mutex);
+      sheet.set_cell_cached_value(c.row, c.col, v);
+      obs.note_commit(c);
+    };
+
+    const std::vector<CellNodeId> cells = cells_of_component(component);
     if (!iter_opts.enabled) {
-      // Cycle SCC, iterative calc disabled: every member surfaces #REF!,
-      // except that a cycle closing through an OFFSET / INDIRECT read keeps
-      // its members at their last value, as Excel does.
+      // Excel judges circularity by what evaluation reads, so only a cycle
+      // that reads back into itself is one; `settle_component_by_reads` is
+      // the rule the serial drivers apply too.
       const bool dynamic_cycle = obs.log != nullptr && closes_through_dynamic_edge(component, graph);
+      if (!dynamic_cycle && settle_component_by_reads(wb, cells, evaluate_with, commit)) {
+        out.cells_evaluated += cells.size();
+        out.arena_exhausted = arena.exhausted();
+        return out;
+      }
+      // Otherwise every member surfaces #REF!, except that a cycle closing
+      // through an OFFSET / INDIRECT read keeps its members at their last
+      // value, as Excel does.
       if (dynamic_cycle) {
         std::lock_guard<std::mutex> guard(write_mutex);
         obs.log->restore_prior_values(wb, component);
@@ -246,52 +302,6 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       }
       return out;
     }
-
-    // Iterative calc enabled: drive the solver. The lambdas below capture
-    // by reference and run synchronously inside this worker — the solver
-    // is single-threaded and performs the full SCC fixed-point search
-    // before returning. Concurrent SCC processors operate on disjoint
-    // cells (different SCCs by construction), so the cell-store mutex
-    // only ever contends inside `commit`.
-    // Hoisted out of `evaluate_one` so a staged formula's bytes stay live
-    // exactly as long as the arena contents of the same call: a string
-    // literal inside the formula surfaces in the returned Value as a view
-    // into this buffer, and the solver consumes each result before asking
-    // for the next one (which resets the arena).
-    Cell staged;
-    auto evaluate_one = [&](CellNodeId c) -> Value {
-      if (c.sheet_id >= sheet_count) {
-        return Value::error(ErrorCode::Ref);
-      }
-      Sheet& sheet = wb.sheet(c.sheet_id);
-      if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
-        return Value::blank();
-      }
-      arena.reset();
-      EvaluateCellOptions opts;
-      opts.spill_release_callback = release_callback;
-      opts.spill_release_user_data = release_user_data;
-      obs.observe(c, opts, nullptr);
-      if (obs.log != nullptr) {
-        obs.log->note_iterative_member(c, obs.ordinal);
-      }
-      Value result = evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
-      if (obs.log != nullptr) {
-        obs.log->end();
-      }
-      return result;
-    };
-    auto commit = [&](CellNodeId c, Value v) {
-      if (c.sheet_id >= sheet_count) {
-        return;
-      }
-      Sheet& sheet = wb.sheet(c.sheet_id);
-      std::lock_guard<std::mutex> guard(write_mutex);
-      sheet.set_cell_cached_value(c.row, c.col, v);
-      obs.note_commit(c);
-    };
-
-    const std::vector<CellNodeId> cells = cells_of_component(component);
     if (obs.log != nullptr) {
       // A reader already evaluated as a singleton in this recalc starts the
       // solve from the value it showed before.

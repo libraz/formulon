@@ -46,7 +46,7 @@ ArrayValue* project_spill_at_anchor(std::string_view sheet, std::uint32_t row, s
   std::vector<Value> cells;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
-  if (!target->read_spill_region_at_anchor(row, col, arena, cells, &rows, &cols)) {
+  if (!ctx.read_spill_region(*target, row, col, arena, cells, &rows, &cols)) {
     *out_err = ErrorCode::Ref;
     return nullptr;
   }

@@ -235,4 +235,71 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
   return out;
 }
 
+bool settle_cycle_by_reads(std::size_t count,
+                           const std::function<Value(std::size_t, std::vector<std::size_t>*)>& evaluate_one,
+                           const std::function<void(std::size_t, Value)>& commit) {
+  // A value-dependent branch can change what the next pass reads; a few
+  // re-orders settle any realistic component, and one that keeps moving is
+  // treated as the cycle it may well be.
+  constexpr int kMaxPasses = 4;
+  std::vector<std::size_t> order(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    order[i] = i;
+  }
+  std::vector<std::vector<std::size_t>> reads(count);
+  std::vector<std::size_t> position(count);
+  for (int pass = 0; pass < kMaxPasses; ++pass) {
+    for (std::size_t i = 0; i < count; ++i) {
+      position[order[i]] = i;
+    }
+    bool read_ahead = false;
+    for (std::size_t i = 0; i < count; ++i) {
+      const std::size_t member = order[i];
+      reads[member].clear();
+      commit(member, evaluate_one(member, &reads[member]));
+      for (const std::size_t read : reads[member]) {
+        if (read == member) {
+          return false;
+        }
+        read_ahead = read_ahead || position[read] > i;
+      }
+    }
+    if (!read_ahead) {
+      return true;
+    }
+    // Kahn over the observed reads, keeping the previous order among ties;
+    // a member left over sits on a cycle of reads.
+    std::vector<std::size_t> pending(count, 0U);
+    std::vector<std::vector<std::size_t>> readers(count);
+    for (std::size_t member = 0; member < count; ++member) {
+      for (const std::size_t read : reads[member]) {
+        ++pending[member];
+        readers[read].push_back(member);
+      }
+    }
+    std::vector<std::size_t> next;
+    next.reserve(count);
+    std::vector<bool> placed(count, false);
+    while (next.size() < count) {
+      bool progressed = false;
+      for (const std::size_t member : order) {
+        if (placed[member] || pending[member] != 0U) {
+          continue;
+        }
+        placed[member] = true;
+        next.push_back(member);
+        for (const std::size_t reader : readers[member]) {
+          --pending[reader];
+        }
+        progressed = true;
+      }
+      if (!progressed) {
+        return false;
+      }
+    }
+    order.swap(next);
+  }
+  return false;
+}
+
 }  // namespace formulon::eval

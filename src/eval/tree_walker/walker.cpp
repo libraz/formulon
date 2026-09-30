@@ -464,9 +464,11 @@ Value eval_binding_source(const parser::AstNode& expr, Arena& arena, const Funct
   } else if (expr.kind() == parser::NodeKind::NameRef && expr.as_name_sheet().empty() && ctx.name_env() != nullptr) {
     *out_ast = ctx.name_env()->lookup_ast(expr.as_name());
   }
-  // A call resolved to its rectangle is read through that rectangle, so it runs once.
-  const bool computed = ref != nullptr && ref != &expr && expr.kind() != parser::NodeKind::NameRef;
-  return eval_node(computed ? *ref : expr, arena, registry, ctx);
+  // A reference is read where the bound name is used, not here.
+  if (ref != nullptr) {
+    return Value::blank();
+  }
+  return eval_node(expr, arena, registry, ctx);
 }
 
 // Public entry point declared in `eval/tree_walker.h`. Routes through
@@ -706,7 +708,8 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       }
       const NameEnv* env = ctx.name_env();
       if (env != nullptr) {
-        if (const Value* bound = env->lookup(node.as_name()); bound != nullptr) {
+        const auto read = [&](const parser::AstNode& ref) { return eval_node(ref, arena, registry, ctx); };
+        if (const Value* bound = env->lookup_or_read(node.as_name(), read); bound != nullptr) {
           return *bound;
         }
       }

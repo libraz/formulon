@@ -135,13 +135,16 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
       // mapping as ISFORMULA / FORMULATEXT.
       return Value::error(ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref);
     }
+    // Excel does not count PHONETIC's read toward circularity:
+    // `=PHONETIC(A1)` in A1 is not circular (measured on Mac Excel 365).
+    const EvalContext text_ctx = ctx.without_read_observer();
     const Cell* cell = target->cell_at(r.row, r.col);
     if (cell != nullptr && !cell->phonetic_runs.empty()) {
       // Annotated cell: substitute the annotated spans and keep the rest
       // of the surface text. Intern into the eval arena so the returned
       // Value's lifetime matches every other Text emitted by the
       // evaluator.
-      const Value surface = ctx.resolve_ref(r);
+      const Value surface = text_ctx.resolve_ref(r);
       const std::string composed =
           compose_phonetic(surface.is_text() ? surface.as_text() : std::string_view{}, cell->phonetic_runs);
       return Value::text(arena.intern(composed));
@@ -150,7 +153,7 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
     // We don't recurse with a registry here because PHONETIC's argument
     // is required to be a literal Ref; the resolve does not need to
     // re-evaluate a formula cell, only to read its cached value.
-    Value resolved = ctx.resolve_ref(r);
+    Value resolved = text_ctx.resolve_ref(r);
     return apply_passthrough_surface(resolved, arena);
   }
 

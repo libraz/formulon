@@ -94,6 +94,21 @@ class EvalState {
   void mark_out_of_memory() noexcept { out_of_memory_ = true; }
   bool out_of_memory() const noexcept { return out_of_memory_; }
 
+  /// Switches this state to observing reads instead of recursing: every
+  /// formula cell resolves to its cached value, and a read of a cell added
+  /// here records `tag` in `observed_reads()`. Recalc uses it to judge a
+  /// statically cyclic component by what its formulas actually read.
+  void observe_reads_of(const Sheet* sheet, std::uint32_t row, std::uint32_t col, std::size_t tag);
+  bool observing_reads() const noexcept { return observing_reads_; }
+  /// Records a read of the rectangle `[first_row..last_row] x
+  /// [first_col..last_col]` of `sheet`: every observed cell inside it, and
+  /// every observed spill anchor whose committed region it overlaps (a
+  /// phantom cell's value is its anchor's).
+  void note_reads(const Sheet* sheet, std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                  std::uint32_t last_col);
+  const std::vector<std::size_t>& observed_reads() const noexcept { return observed_reads_; }
+  void clear_observed_reads() noexcept { observed_reads_.clear(); }
+
  private:
   // Composite key identifying a single cell across all sheets in the
   // current workbook. `sheet` is compared by pointer identity; the
@@ -128,6 +143,9 @@ class EvalState {
   // Memoised results, keyed by the composite address.
   std::unordered_map<CellKey, Value, CellKeyHash> memo_;
   bool out_of_memory_ = false;
+  bool observing_reads_ = false;
+  std::unordered_map<CellKey, std::size_t, CellKeyHash> observed_;
+  std::vector<std::size_t> observed_reads_;
 };
 
 }  // namespace eval

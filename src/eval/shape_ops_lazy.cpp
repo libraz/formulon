@@ -123,8 +123,12 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
     // propagate and non-reference calls degrade to 1x1.
   }
   // Scalar fallback. We still evaluate so an error argument propagates
-  // with the correct code instead of silently producing 1.
-  const Value v = eval_node(arg_node, arena, registry, ctx);
+  // with the correct code instead of silently producing 1. A spill
+  // reference is read for its extent alone, which Excel does not count
+  // toward circularity: `=ROWS(A1#)` in A1 is not circular (measured on Mac
+  // Excel 365).
+  const bool extent_only = k == parser::NodeKind::SpillRef;
+  const Value v = eval_node(arg_node, arena, registry, extent_only ? ctx.without_read_observer() : ctx);
   if (v.is_error()) {
     *out_err = v;
     return false;

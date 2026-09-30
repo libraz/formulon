@@ -20,6 +20,7 @@
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
 #include "eval/dynamic_read_log.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_reentry.h"
@@ -200,10 +201,41 @@ std::vector<CellNodeId> RecalcEngine::LockedMutator::three_d_span_owners_coverin
   return owners;
 }
 
+void RecalcEngine::ReferencedCellIndex::add(CellNodeId cell) {
+  if (cell.sheet_id >= by_sheet_.size()) {
+    by_sheet_.resize(static_cast<std::size_t>(cell.sheet_id) + 1U);
+  }
+  ++by_sheet_[cell.sheet_id][key(cell.row, cell.col)];
+}
+
+void RecalcEngine::ReferencedCellIndex::remove(CellNodeId cell) {
+  if (cell.sheet_id >= by_sheet_.size()) {
+    return;
+  }
+  std::map<std::uint64_t, std::uint32_t>& cells = by_sheet_[cell.sheet_id];
+  const auto found = cells.find(key(cell.row, cell.col));
+  if (found != cells.end() && --found->second == 0U) {
+    cells.erase(found);
+  }
+}
+
+bool RecalcEngine::ReferencedCellIndex::empty() const noexcept {
+  return std::all_of(by_sheet_.begin(), by_sheet_.end(), [](const auto& cells) { return cells.empty(); });
+}
+
+void RecalcEngine::forget_referenced_cells_locked(CellNodeId cell) {
+  for (const CellNodeId dep : graph_.dependencies_of_ref(cell)) {
+    if (!is_range_node(dep) && graph_.has_dependency_source(cell, dep, DepGraph::DependencySource::kAuthored)) {
+      referenced_cells_.remove(dep);
+    }
+  }
+}
+
 DepGraph::DependencyDelta RecalcEngine::reconcile_spill_dependencies_locked(const Workbook& workbook) {
   // With no compact watchers and no old derived ownership there is nothing
   // to snapshot or replace. This is the common scalar-only fast path.
-  if (range_dependencies_.empty() && !graph_.has_source_edges(DepGraph::DependencySource::kSpillFootprint)) {
+  if (range_dependencies_.empty() && referenced_cells_.empty() &&
+      !graph_.has_source_edges(DepGraph::DependencySource::kSpillFootprint)) {
     return {};
   }
 
@@ -219,8 +251,18 @@ DepGraph::DependencyDelta RecalcEngine::reconcile_spill_dependencies_locked(cons
           referenced_sheets.insert(range.sheet_id);
         }
       });
+  for (std::uint16_t sheet_id = 0; sheet_id < workbook.sheet_count(); ++sheet_id) {
+    if (referenced_cells_.references_sheet(sheet_id)) {
+      referenced_sheets.insert(sheet_id);
+    }
+  }
+  bool any_spill = false;
   for (std::uint16_t sheet_id : referenced_sheets) {
     committed[sheet_id] = workbook.sheet(sheet_id).committed_spill_footprints();
+    any_spill = any_spill || !committed[sheet_id].empty();
+  }
+  if (!any_spill && !graph_.has_source_edges(DepGraph::DependencySource::kSpillFootprint)) {
+    return {};
   }
 
   std::vector<DepGraph::Edge> desired;
@@ -243,6 +285,24 @@ DepGraph::DependencyDelta RecalcEngine::reconcile_spill_dependencies_locked(cons
           }
         }
       });
+  // A spilled cell a formula reads holds its anchor's value, so it depends
+  // on the anchor: its readers are ordered behind the anchor, dirtied with
+  // it, and a read back into the anchor's own inputs is a cycle.
+  for (std::uint16_t sheet_id = 0; sheet_id < committed.size(); ++sheet_id) {
+    for (const SpillFootprint& footprint : committed[sheet_id]) {
+      if (footprint.rows == 0U || footprint.cols == 0U) {
+        continue;
+      }
+      const CellNodeId anchor{sheet_id, footprint.anchor_row, footprint.anchor_col};
+      referenced_cells_.for_each_in(
+          sheet_id, footprint.anchor_row, footprint.anchor_col, footprint.anchor_row + footprint.rows - 1U,
+          footprint.anchor_col + footprint.cols - 1U, [&](std::uint32_t row, std::uint32_t col) {
+            if (row != anchor.row || col != anchor.col) {
+              desired.emplace_back(CellNodeId{sheet_id, row, col}, anchor);
+            }
+          });
+    }
+  }
   return graph_.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, desired);
 }
 
@@ -398,6 +458,7 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
 
   // Drop the cell's previous outgoing edges so re-registration is a clean
   // rewrite (the new dependency set may differ from the old one).
+  forget_referenced_cells_locked(cell);
   graph_.clear_dependencies_of(cell);
   remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
   three_d_span_dependencies_.erase(
@@ -411,6 +472,7 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   const ExtractedDeps deps = extract_deps(ast, cell.sheet_id, workbook);
   for (CellNodeId dep : deps.cell_deps) {
     graph_.add_dependency(cell, dep);
+    referenced_cells_.add(dep);
   }
   for (const ThreeDSheetSpanDependency span : deps.three_d_spans) {
     three_d_span_dependencies_.push_back(RegisteredThreeDSpan{cell, span});
@@ -467,6 +529,7 @@ void RecalcEngine::unregister_formula_locked(CellNodeId cell) {
     dirty_.mark(dependent);
   }
   mark_range_dependents_dirty_locked(cell);
+  forget_referenced_cells_locked(cell);
   graph_.remove_node(cell);
   remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
   three_d_span_dependencies_.erase(
@@ -483,6 +546,7 @@ void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
 }
 
 void RecalcEngine::clear_cell_dependencies_locked(CellNodeId cell) {
+  forget_referenced_cells_locked(cell);
   graph_.clear_dependencies_of(cell);
   remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
   three_d_span_dependencies_.erase(
@@ -509,6 +573,7 @@ void RecalcEngine::mark_range_dependents_dirty_locked(CellNodeId cell) {
 void RecalcEngine::reset_graph_locked() {
   graph_ = DepGraph{};
   range_dependencies_.clear();
+  referenced_cells_.clear();
   three_d_span_dependencies_.clear();
   potential_spill_producers_by_sheet_.clear();
   volatiles_.clear();
@@ -646,17 +711,12 @@ recalc_next_wave:
         visited_in_sccs.insert(c);
       }
 
-      if (!iterative_.enabled) {
-        commit_unresolved_cycle_locked(workbook, component, dynamic, release_callback, &release_queue, stats);
-        continue;
-      }
-
-      // Iterative calc enabled: hand the SCC to the solver. The
-      // `evaluate_one` lambda mirrors the singleton path's evaluator
-      // glue: parse on the fly, dispatch through `evaluate()`, fold
-      // dynamic-array spills back into a scalar anchor. The `commit`
+      // Evaluation glue for the read-ordered settle (iterative calc off)
+      // and the solver (on). `evaluate_with` mirrors the singleton path's
+      // evaluator glue: parse on the fly, dispatch through `evaluate()`,
+      // fold dynamic-array spills back into a scalar anchor. The `commit`
       // lambda writes the new value into the cell store so the next
-      // iteration's `evaluate_one` reads the freshest value back.
+      // evaluation reads the freshest value back.
       // Hoisted out of `evaluate_one` so a staged formula's bytes stay live
       // exactly as long as the arena contents of the same call: a string
       // literal inside the formula surfaces in the returned Value as a view
@@ -664,7 +724,7 @@ recalc_next_wave:
       // for the next one (which resets the arena).
       Cell staged;
       const std::uint64_t component_ordinal = dynamic.next_ordinal();
-      auto evaluate_one = [&](CellNodeId c) -> Value {
+      auto evaluate_with = [&](CellNodeId c, EvalState* observer) -> Value {
         if (c.sheet_id >= sheet_count) {
           return Value::error(ErrorCode::Ref);
         }
@@ -685,12 +745,14 @@ recalc_next_wave:
         EvaluateCellOptions opts;
         opts.spill_release_callback = release_callback;
         opts.spill_release_user_data = &release_queue;
+        opts.read_observer = observer;
         dynamic.log().observe(c, component_ordinal, opts, nullptr);
         dynamic.log().note_iterative_member(c, component_ordinal);
         Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
         dynamic.log().end();
         return result;
       };
+      auto evaluate_one = [&](CellNodeId c) { return evaluate_with(c, nullptr); };
       auto commit = [&](CellNodeId c, Value v) {
         if (c.sheet_id >= sheet_count) {
           return;
@@ -701,6 +763,22 @@ recalc_next_wave:
       };
 
       const std::vector<CellNodeId> cells = cells_of_component(component);
+      if (!iterative_.enabled) {
+        // Excel judges circularity by what evaluation reads, so only a cycle
+        // that reads back into itself is one. A cycle through an OFFSET /
+        // INDIRECT read keeps its own treatment.
+        const bool settled = !closes_through_dynamic_edge(component, graph_) &&
+                             settle_component_by_reads(workbook, cells, evaluate_with, commit);
+        if (arena_->exhausted()) {
+          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
+        }
+        if (settled) {
+          stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
+          continue;
+        }
+        commit_unresolved_cycle_locked(workbook, component, dynamic, release_callback, &release_queue, stats);
+        continue;
+      }
       // A reader first evaluated as a singleton in this recalc has already
       // stepped once; the solver starts from the value it showed before.
       dynamic.log().restore_prior_values(workbook, cells);
@@ -1139,18 +1217,13 @@ partial_recalc_next_wave:
         visited_in_sccs.insert(c);
       }
 
-      if (!iterative_.enabled) {
-        commit_unresolved_cycle_locked(workbook, component, dynamic, release_callback, &release_queue, stats);
-        continue;
-      }
-
       // Hoisted for the same reason as the full-recalc solver above: the
       // staged bytes have to outlive each `evaluate_one` call, because a
       // string literal in the formula surfaces in the result as a view
       // into them.
       Cell staged;
       const std::uint64_t component_ordinal = dynamic.next_ordinal();
-      auto evaluate_one = [&](CellNodeId c) -> Value {
+      auto evaluate_with = [&](CellNodeId c, EvalState* observer) -> Value {
         if (c.sheet_id >= sheet_count) {
           return Value::error(ErrorCode::Ref);
         }
@@ -1162,12 +1235,14 @@ partial_recalc_next_wave:
         EvaluateCellOptions opts;
         opts.spill_release_callback = release_callback;
         opts.spill_release_user_data = &release_queue;
+        opts.read_observer = observer;
         dynamic.log().observe(c, component_ordinal, opts, nullptr);
         dynamic.log().note_iterative_member(c, component_ordinal);
         Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
         dynamic.log().end();
         return result;
       };
+      auto evaluate_one = [&](CellNodeId c) { return evaluate_with(c, nullptr); };
       auto commit = [&](CellNodeId c, Value v) {
         if (c.sheet_id >= sheet_count) {
           return;
@@ -1178,6 +1253,22 @@ partial_recalc_next_wave:
       };
 
       const std::vector<CellNodeId> cells = cells_of_component(component);
+      if (!iterative_.enabled) {
+        // Excel judges circularity by what evaluation reads, so only a cycle
+        // that reads back into itself is one. A cycle through an OFFSET /
+        // INDIRECT read keeps its own treatment.
+        const bool settled = !closes_through_dynamic_edge(component, graph_) &&
+                             settle_component_by_reads(workbook, cells, evaluate_with, commit);
+        if (arena_->exhausted()) {
+          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
+        }
+        if (settled) {
+          stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
+          continue;
+        }
+        commit_unresolved_cycle_locked(workbook, component, dynamic, release_callback, &release_queue, stats);
+        continue;
+      }
       dynamic.log().restore_prior_values(workbook, cells);
       const IterativeOutcome outcome =
           run_iterative_solve(cells, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);

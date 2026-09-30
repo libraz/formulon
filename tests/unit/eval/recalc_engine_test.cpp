@@ -683,5 +683,103 @@ TEST(SchedulerContract, SccPhaseWalksOnlyTheDirtySubgraph) {
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 43.0);
 }
 
+// ---------------------------------------------------------------------------
+// A formula reading one spilled cell depends on the spill's anchor.
+// ---------------------------------------------------------------------------
+
+enum class SpillReadDriver { kSerial, kParallel };
+
+void RecalcSpillBook(Workbook& wb, SpillReadDriver driver) {
+  if (driver == SpillReadDriver::kSerial) {
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+    return;
+  }
+  SchedulerConfig cfg;
+  cfg.num_threads = 2U;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, nullptr)));
+}
+
+void SetFormula(Workbook& wb, std::uint32_t row, std::uint32_t col, const char* text) {
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, col, text))) << text;
+}
+
+double NumberAt(const Workbook& wb, std::uint32_t row, std::uint32_t col) {
+  const Value v = CellValue(wb, 0U, row, col);
+  EXPECT_TRUE(v.is_number()) << v.debug_to_string();
+  return v.is_number() ? v.as_number() : -1.0;
+}
+
+class SpilledCellRead : public ::testing::TestWithParam<SpillReadDriver> {};
+
+// A1 `=B2*10` reads the second cell of B1's spill, whichever was entered
+// first and however the rows are laid out.
+TEST_P(SpilledCellRead, ReaderOrdersBehindTheAnchor) {
+  for (const bool reader_first : {true, false}) {
+    Workbook wb = Workbook::create();
+    if (reader_first) {
+      SetFormula(wb, 0U, 0U, "=B2*10");
+      SetFormula(wb, 0U, 1U, "=SEQUENCE(2)");
+    } else {
+      SetFormula(wb, 0U, 1U, "=SEQUENCE(2)");
+      SetFormula(wb, 0U, 0U, "=B2*10");
+    }
+    RecalcSpillBook(wb, GetParam());
+    EXPECT_DOUBLE_EQ(NumberAt(wb, 0U, 0U), 20.0) << (reader_first ? "reader first" : "anchor first");
+  }
+}
+
+// The reader follows the spill as it changes, shrinks away from the cell,
+// grows back over it and disappears.
+TEST_P(SpilledCellRead, ReaderFollowsTheSpill) {
+  Workbook wb = Workbook::create();
+  SetFormula(wb, 0U, 0U, "=B2*10");
+  SetFormula(wb, 0U, 1U, "=SEQUENCE(2)");
+  RecalcSpillBook(wb, GetParam());
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 0U, 0U), 20.0);
+  SetFormula(wb, 0U, 1U, "=SEQUENCE(2,1,5)");
+  RecalcSpillBook(wb, GetParam());
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 0U, 0U), 60.0) << "changed";
+  SetFormula(wb, 0U, 1U, "=SEQUENCE(1)");
+  RecalcSpillBook(wb, GetParam());
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 0U, 0U), 0.0) << "shrunk off B2";
+  SetFormula(wb, 0U, 1U, "=SEQUENCE(3)");
+  RecalcSpillBook(wb, GetParam());
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 0U, 0U), 20.0) << "grown back";
+  SetFormula(wb, 0U, 1U, "=7");
+  RecalcSpillBook(wb, GetParam());
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 0U, 0U), 0.0) << "no spill";
+}
+
+// B1 `=SEQUENCE(2)+D1` with D1 `=B2+100`: D1 reads B1's own spill, which is
+// circular (measured on Mac Excel 365).
+TEST_P(SpilledCellRead, ReadingTheAnchorsOwnSpillIsCircular) {
+  Workbook wb = Workbook::create();
+  SetFormula(wb, 0U, 1U, "=SEQUENCE(2)+D1");
+  SetFormula(wb, 0U, 3U, "=B2+100");
+  RecalcSpillBook(wb, GetParam());
+  RecalcSpillBook(wb, GetParam());
+  const Value d1 = CellValue(wb, 0U, 0U, 3U);
+  ASSERT_TRUE(d1.is_error()) << d1.debug_to_string();
+  EXPECT_EQ(d1.as_error(), ErrorCode::Ref);
+}
+
+INSTANTIATE_TEST_SUITE_P(Drivers, SpilledCellRead,
+                         ::testing::Values(SpillReadDriver::kSerial, SpillReadDriver::kParallel));
+
+// Inserting a row above the spill re-registers the shifted formulas; the
+// index follows, so the moved reader still tracks the moved anchor.
+TEST(SpilledCellReadStructural, InsertRowAboveTheSpillKeepsTheLink) {
+  Workbook wb = Workbook::create();
+  SetFormula(wb, 0U, 0U, "=B2*10");
+  SetFormula(wb, 0U, 1U, "=SEQUENCE(2)");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0U, 0U, 1U)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 1U, 0U), 20.0);
+  SetFormula(wb, 1U, 1U, "=SEQUENCE(2,1,5)");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 1U, 0U), 60.0);
+}
+
 }  // namespace
 }  // namespace formulon::eval

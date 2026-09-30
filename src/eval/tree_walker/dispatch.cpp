@@ -266,7 +266,8 @@ const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t ca
     const std::string_view name = arg.as_name();
     const NameEnv* env = ctx.name_env();
     // A name bound in scope shadows any built-in of the same spelling.
-    if (const Value* bound = (env != nullptr) ? env->lookup(name) : nullptr; bound != nullptr) {
+    const auto read = [&](const parser::AstNode& ref) { return eval_node(ref, arena, registry, ctx); };
+    if (const Value* bound = (env != nullptr) ? env->lookup_or_read(name, read) : nullptr; bound != nullptr) {
       if (bound->is_error()) {
         *out_err = *bound;
         return nullptr;
@@ -677,7 +678,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       // `arena`: the flattened values feed the whole call and outlive the
       // region they came from.
       std::vector<Value> region_cells;
-      if (!target->read_spill_region_at_anchor(anchor_row, anchor_col, arena, region_cells, nullptr, nullptr)) {
+      if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, region_cells, nullptr, nullptr)) {
         const Value err = Value::error(ErrorCode::Ref);
         if (def->propagate_errors) {
           return err;

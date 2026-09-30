@@ -534,6 +534,23 @@ class EvalContext {
   /// only the shape or position of the resolved reference.
   EvalContext without_dynamic_read_callback() const noexcept { return with_dynamic_read_callback(nullptr, nullptr); }
 
+  /// Reports a read of the values in a rectangle of `sheet` to a state
+  /// observing reads (see `EvalState::observe_reads_of`); no-op otherwise.
+  /// Every read of a cell's value goes through here -- `resolve_ref`, range
+  /// expansion and `read_spill_region` call it -- so circularity is judged
+  /// on what evaluation reads.
+  void note_value_reads(const Sheet& sheet, std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                        std::uint32_t last_col) const;
+
+  /// `Sheet::read_spill_region_at_anchor`, reported as a read of the anchor's
+  /// value. The one way the evaluator reads a spill region's values.
+  bool read_spill_region(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Arena& arena,
+                         std::vector<Value>& out_cells, std::uint32_t* out_rows, std::uint32_t* out_cols) const;
+
+  /// A copy whose reads are not reported to a state observing reads, for a
+  /// read Excel does not count toward circularity (PHONETIC's text).
+  EvalContext without_read_observer() const noexcept;
+
   /// Reports a rectangle an OFFSET / INDIRECT resolved to; no-op without an
   /// observer.
   void note_dynamic_read(std::string_view sheet, const DeclaredRect& rect) const {

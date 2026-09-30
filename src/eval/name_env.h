@@ -29,14 +29,12 @@
 #include <cstddef>
 #include <string_view>
 
+#include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
-namespace parser {
-class AstNode;
-}  // namespace parser
 namespace eval {
 
 /// Immutable, arena-allocated linked-frame environment.
@@ -53,10 +51,30 @@ class NameEnv {
   /// Returns a pointer to the bound Value for `name`, or `nullptr` when the
   /// name is not in scope. Case-insensitive over ASCII letters; non-ASCII
   /// bytes compare verbatim. Walks frames from head to tail so a freshly
-  /// extended binding shadows earlier ones with the same name.
+  /// extended binding shadows earlier ones with the same name. A reference
+  /// binding not read yet holds a blank; value reads go through
+  /// `lookup_or_read`.
   const Value* lookup(std::string_view name) const noexcept {
     for (const Binding* b = head_; b != nullptr; b = b->prev) {
       if (strings::case_insensitive_eq(b->name, name)) {
+        return &b->value;
+      }
+    }
+    return nullptr;
+  }
+
+  /// Like `lookup`, but a name bound to a reference reads it on first use:
+  /// `read(ast)` evaluates the bound `Ref` / `RangeOp` and the result is kept
+  /// for later uses. Binding a reference reads nothing, as in Excel, where
+  /// `=LET(r,A1,5)` in A1 is not circular.
+  template <typename Read>
+  const Value* lookup_or_read(std::string_view name, Read&& read) const {
+    for (const Binding* b = head_; b != nullptr; b = b->prev) {
+      if (strings::case_insensitive_eq(b->name, name)) {
+        if (b->read_pending) {
+          b->value = read(*b->expr);
+          b->read_pending = false;
+        }
         return &b->value;
       }
     }
@@ -117,6 +135,8 @@ class NameEnv {
     frame->name = arena.intern(name);
     frame->value = value;
     frame->expr = expr;
+    frame->read_pending =
+        expr != nullptr && (expr->kind() == parser::NodeKind::Ref || expr->kind() == parser::NodeKind::RangeOp);
     frame->is_omitted = false;
     frame->prev = head_;
     NameEnv next;
@@ -160,7 +180,9 @@ class NameEnv {
     // `Arena::create<Binding>()`.
     Binding() noexcept : value(Value::blank()) {}
     std::string_view name;
-    Value value;
+    /// Mutable so a reference binding can keep the value its first read
+    /// produced; the frame is otherwise immutable once linked.
+    mutable Value value;
     /// Optional pointer to the AST node the name was bound to. Non-null only
     /// for range-shaped initialisers; consumers must keep the parsing arena
     /// alive for the duration of evaluation (the same invariant as for the
@@ -170,6 +192,9 @@ class NameEnv {
     /// LAMBDA parameter slot. ISOMITTED reports TRUE for these and FALSE
     /// for everything else (regular LET / LAMBDA bindings, unbound names).
     bool is_omitted = false;
+    /// Set for a `Ref` / `RangeOp` binding whose cells are not read yet;
+    /// `value` holds nothing until `lookup_or_read` reads them.
+    mutable bool read_pending = false;
     const Binding* prev = nullptr;
   };
 

@@ -464,7 +464,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     // The copied cells outlive the region, so the read re-homes any Text
     // payload into `arena` while the sheet lock is held.
     out_cells->clear();
-    if (!target->read_spill_region_at_anchor(anchor_row, anchor_col, arena, *out_cells, out_rows, out_cols)) {
+    if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, *out_cells, out_rows, out_cols)) {
       *out_err_code = ErrorCode::Ref;
       return false;
     }

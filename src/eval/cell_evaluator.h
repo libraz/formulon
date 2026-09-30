@@ -19,7 +19,10 @@
 #define FORMULON_EVAL_CELL_EVALUATOR_H_
 
 #include <cstdint>
+#include <functional>
+#include <vector>
 
+#include "eval/dep_graph.h"
 #include "eval/eval_context.h"
 #include "eval/spill_committer.h"
 #include "value.h"
@@ -43,6 +46,9 @@ struct EvaluateCellOptions {
   /// Observer of the rectangles OFFSET / INDIRECT resolve to.
   DynamicReadCallback dynamic_read_callback = nullptr;
   void* dynamic_read_user_data = nullptr;
+  /// When set, a state observing reads (`EvalState::observe_reads_of`)
+  /// records which of its cells the formula reads.
+  EvalState* read_observer = nullptr;
 };
 
 /// Copies the formula cell at `(row, col)` out of `sheet` into `staged`,
@@ -90,6 +96,15 @@ bool stage_formula_cell(const Sheet& sheet, std::uint32_t row, std::uint32_t col
 Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cell_data, std::uint32_t row,
                                std::uint32_t col, const FunctionRegistry& registry, Arena& arena,
                                const EvaluateCellOptions& opts = {});
+
+/// Settles the cells of a statically cyclic component by what they read (see
+/// `settle_cycle_by_reads`), the one rule every recalc driver applies with
+/// iterative calculation off. `evaluate(cell, observer)` evaluates `cell` as
+/// the driver does, passing `observer` as `EvaluateCellOptions::read_observer`;
+/// `commit` writes the result back. Returns false on a genuine cycle.
+bool settle_component_by_reads(const Workbook& workbook, const std::vector<CellNodeId>& cells,
+                               const std::function<Value(CellNodeId, EvalState*)>& evaluate,
+                               const std::function<void(CellNodeId, Value)>& commit);
 
 }  // namespace eval
 }  // namespace formulon

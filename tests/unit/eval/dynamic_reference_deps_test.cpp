@@ -513,5 +513,120 @@ TEST_P(DynamicCycleRecalc, MemberIsNotRecomputedWhenItsOtherInputChanges) {
 
 INSTANTIATE_TEST_SUITE_P(Drivers, DynamicCycleRecalc, ::testing::Values(CycleDriver::kSerial, CycleDriver::kParallel));
 
+// Excel judges circularity by what evaluation reads: a formula whose only
+// path back to its own cell sits in a branch never taken is not circular.
+// Measured on Mac Excel 365 with each formula in A1.
+TEST(ReadCircularity, BranchNotTakenIsNotCircular) {
+  struct Case {
+    const char* formula;
+    double want;
+  };
+  const Case cases[] = {
+      {"=LET(r,A1,IF(FALSE,r,ROW(r)))", 1.0},
+      {"=IF(FALSE,A1,5)", 5.0},
+      {"=IF(FALSE,A1+1,3)", 3.0},
+      {"=CHOOSE(2,A1,7)", 7.0},
+      {"=IFS(FALSE,A1,TRUE,8)", 8.0},
+      {"=SWITCH(2,1,A1,2,9)", 9.0},
+      {"=IFERROR(5,A1)", 5.0},
+      {"=IFNA(5,A1)", 5.0},
+      {"=IF(B1>0,A1,5)", 5.0},
+      {"=XLOOKUP(1,{1},{6},A1)", 6.0},
+      // Reads Excel does not count: formula text, formula-ness and
+      // phonetic text.
+      {"=LEN(FORMULATEXT(A1))", 21.0},
+      {"=IF(ISFORMULA(A1),7,8)", 7.0},
+      {"=LEN(PHONETIC(A1))+100", 100.0},
+  };
+  for (const Case& c : cases) {
+    Workbook wb = Workbook::create();
+    Formula(wb, {0U, kA}, c.formula);
+    EXPECT_EQ(Recalc(wb).cycle_cells, 0U) << c.formula;
+    ExpectNumberAt(wb, {0U, kA}, c.want, c.formula);
+  }
+}
+
+TEST(ReadCircularity, ReadingTheOwnCellStaysCircular) {
+  const char* formulas[] = {
+      "=A1+1",
+      "=IF(TRUE,A1,5)",
+      "=CHOOSE(1,A1,7)",
+      "=AND(FALSE,A1)",
+      "=OR(TRUE,A1)",
+      "=LET(x,A1+1,5)",
+      "=LAMBDA(x,5)(A1+1)",
+      "=SUM(A1:A3)",
+      "=COUNTIF(A1:A3,1)",
+      "=VLOOKUP(1,A1:B3,2,0)",
+      "=SUMPRODUCT(A1:A3)",
+      "=MATCH(1,A1:A3,0)",
+      "=AVERAGE(A1:A3)",
+      "=XLOOKUP(1,A1:A3,B1:B3)",
+      "=SUMIF(A1:A3,\">0\")",
+      "=MAX(A:A)",
+      "=IF(ISBLANK(A1),7,8)",
+      "=IF(ISNUMBER(A1),7,8)",
+      "=N(A1)+100",
+  };
+  for (const char* f : formulas) {
+    Workbook wb = Workbook::create();
+    Formula(wb, {0U, kA}, f);
+    EXPECT_GT(Recalc(wb).cycle_cells, 0U) << f;
+  }
+}
+
+// Reading a spill reads its anchor's value: B1 `=SEQUENCE(2)+D1` with D1
+// `=SUM(B1#)+100` is circular (measured on Mac Excel 365).
+TEST(ReadCircularity, ReadingASpillOfTheComponentIsCircular) {
+  Workbook wb = Workbook::create();
+  Formula(wb, {0U, kB}, "=SEQUENCE(2)+D1");
+  Formula(wb, {0U, kD}, "=SUM(B1#)+100");
+  EXPECT_GT(Recalc(wb).cycle_cells, 0U);
+}
+
+// A1 `=IF(FALSE,B1,1)`, B1 `=A1+1`: a static cycle whose reads run one way,
+// so both cells compute (Excel: 1 and 2), under either recalc driver and
+// whichever cell was entered last.
+TEST_P(DynamicCycleRecalc, StaticCycleWithOneWayReadsComputes) {
+  for (const bool a_first : {true, false}) {
+    Workbook wb = Workbook::create();
+    if (a_first) {
+      Formula(wb, {0U, kA}, "=IF(FALSE,B1,1)");
+      Formula(wb, {0U, kB}, "=A1+1");
+    } else {
+      Formula(wb, {0U, kB}, "=A1+1");
+      Formula(wb, {0U, kA}, "=IF(FALSE,B1,1)");
+    }
+    RecalcWith(wb, GetParam());
+    ExpectCycleValues(wb, 1.0, 2.0, a_first ? "A1 first" : "B1 first");
+  }
+}
+
+// The verdict follows the values: once the branch back to A1 is taken, the
+// cycle is real and reported as every static cycle is (#REF!, the accepted
+// divergence from Excel, which keeps the last value).
+TEST(ReadCircularity, VerdictFollowsTheBranchTaken) {
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kB}, 0.0);
+  Formula(wb, {0U, kA}, "=IF(B1>0,A1+1,5)");
+  EXPECT_EQ(Recalc(wb).cycle_cells, 0U);
+  ExpectNumberAt(wb, {0U, kA}, 5.0, "B1 = 0");
+  Number(wb, {0U, kB}, 1.0);
+  EXPECT_GT(Recalc(wb).cycle_cells, 0U);
+  Number(wb, {0U, kB}, 0.0);
+  EXPECT_EQ(Recalc(wb).cycle_cells, 0U);
+  ExpectNumberAt(wb, {0U, kA}, 5.0, "B1 back to 0");
+}
+
+TEST(ReadCircularity, IterativeCalcStillSolvesTheComponent) {
+  IterativeOptions opts;
+  opts.enabled = true;
+  Workbook wb = Workbook::create();
+  wb.set_iterative_options(opts);
+  Formula(wb, {0U, kA}, "=IF(FALSE,A1,5)");
+  Recalc(wb);
+  ExpectNumberAt(wb, {0U, kA}, 5.0, "IF(FALSE,A1,5)");
+}
+
 }  // namespace
 }  // namespace formulon
