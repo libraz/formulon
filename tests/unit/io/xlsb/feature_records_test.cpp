@@ -285,7 +285,9 @@ std::vector<std::string> FeatureRecords(const std::vector<std::uint8_t>& xlsb, c
 
 /// True when `a` and `b` differ at most in the formula size fields
 /// (BrtBeginCFRule bytes 30-41, BrtCFVO 20-23), which the writer fills with
-/// `cce` (see `EncodedFeatureFormula`) where Excel counts differently.
+/// `cce` (see `EncodedFeatureFormula`) where Excel counts differently, and in
+/// a PtgAttrSemi operand: MS-XLSB marks it ignored, Excel writes `00 00`,
+/// `fe ff` or `fc ff` there, and the writer `00 00`.
 bool SameUpToFormulaSize(const std::string& a, const std::string& b) {
   const std::size_t colon = a.find(':');
   if (a.size() != b.size() || colon == std::string::npos || a.compare(0, colon, b, 0, colon) != 0) {
@@ -294,9 +296,17 @@ bool SameUpToFormulaSize(const std::string& a, const std::string& b) {
   const std::string type = a.substr(0, colon);
   const std::size_t skip_from = type == "463" ? 30U : type == "471" ? 20U : 0U;
   const std::size_t skip_to = type == "463" ? 42U : type == "471" ? 24U : 0U;
+  auto semi_operand = [&](std::size_t i) {
+    for (const std::size_t back : {6U, 9U}) {
+      if (i >= colon + 2U + back && a.compare(i - back, 5, "19 01") == 0 && b.compare(i - back, 5, "19 01") == 0) {
+        return true;
+      }
+    }
+    return false;
+  };
   for (std::size_t i = colon + 2U; i + 1U < a.size(); i += 3U) {
     const std::size_t byte = (i - colon - 2U) / 3U;
-    if (a.compare(i, 2, b, i, 2) != 0 && (byte < skip_from || byte >= skip_to)) {
+    if (a.compare(i, 2, b, i, 2) != 0 && (byte < skip_from || byte >= skip_to) && !semi_operand(i)) {
       return false;
     }
   }
@@ -363,14 +373,9 @@ INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureFixture,
                          ::testing::Values("base", "cellis_ops", "text_rules", "flags", "cfvo", "iconbits", "rel",
                                            "dv_all", "prot", "prot2", "excelprot", "x14", "x14bars", "x14dir"));
 
-// Left out: `text_rules` and `flags`, whose timePeriod formulas Excel
-// generates itself and stores in a fixed form of its own, not the one it
-// gives the same formula typed: value-class tokens inside AND, a
-// reference-class WEEKDAY result, EDATE as `PtgFuncVar`, redundant
-// parentheses, and a PtgAttrSemi operand (`fe ff` / `fc ff`) Excel ignores.
 INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureWriterBytes,
-                         ::testing::Values("base", "cellis_ops", "cfvo", "iconbits", "rel", "dv_all", "prot", "prot2",
-                                           "excelprot", "x14", "x14bars", "x14dir"));
+                         ::testing::Values("base", "cellis_ops", "text_rules", "flags", "cfvo", "iconbits", "rel",
+                                           "dv_all", "prot", "prot2", "excelprot", "x14", "x14bars", "x14dir"));
 
 /// Payload of the first `type` record in `part`, hex-encoded.
 std::string RecordPayload(const std::vector<std::uint8_t>& xlsb, const std::string& part, std::uint16_t type) {
