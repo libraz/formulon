@@ -472,12 +472,9 @@ TEST(BuiltinsIndex, ZeroBothOn2DRangeSpillsWholeArray) {
   EXPECT_DOUBLE_EQ(cells[3].as_number(), 4.0);
 }
 
-TEST(BuiltinsIndex, ZeroRowOn2DRangeSpillsWholeArrayWithColumnOmitted) {
-  // The two-argument form reads its omitted column argument as zero, so a
-  // zero row selector spans both dimensions: `INDEX(src, 0)` and
-  // `INDEX(src, 0, 0)` produce the same rectangle. Anything narrower would
-  // make the same "0" mean different things depending only on whether the
-  // caller spelled the column argument out.
+TEST(BuiltinsIndex, ZeroRowWithColumnOmittedSpillsAnArrayButNotAReference) {
+  // Excel 365: `INDEX(Sheet2!A1:C2,0)` is #REF! like any row-only 2-D
+  // reference, while the array form spills the whole array.
   Workbook wb = Workbook::create();
   for (std::uint32_t r = 0; r < 2; ++r) {
     for (std::uint32_t c = 0; c < 2; ++c) {
@@ -485,13 +482,9 @@ TEST(BuiltinsIndex, ZeroRowOn2DRangeSpillsWholeArrayWithColumnOmitted) {
     }
   }
   const Value two_arg = EvalSourceIn("=INDEX(A1:B2, 0)", wb, wb.sheet(0));
-  ASSERT_TRUE(two_arg.is_array());
-  EXPECT_EQ(two_arg.as_array_rows(), 2U);
-  EXPECT_EQ(two_arg.as_array_cols(), 2U);
-  EXPECT_DOUBLE_EQ(two_arg.as_array_cells()[0].as_number(), 1.0);
-  EXPECT_DOUBLE_EQ(two_arg.as_array_cells()[3].as_number(), 4.0);
+  ASSERT_TRUE(two_arg.is_error());
+  EXPECT_EQ(two_arg.as_error(), ErrorCode::Ref);
 
-  // The array-selector path composes the same tile.
   const Value array_literal = EvalSource("=INDEX({1,2;3,4},0)");
   ASSERT_TRUE(array_literal.is_array());
   EXPECT_EQ(array_literal.as_array_rows(), 2U);

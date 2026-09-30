@@ -586,16 +586,18 @@ Expected<IndexPick, ErrorCode> index_pick(std::uint32_t rows, std::uint32_t cols
       }
       return IndexPick{IndexPickKind::kCell, row_idx - 1U, 0U};
     }
-    // 2-D array with only a row selector: the omitted column argument is
-    // read as zero, so the selected row spills whole. A zero row selector
-    // then spans both dimensions and spills the entire array, the same
-    // result the explicit `INDEX(array, 0, 0)` produces below.
+    // A 2-D reference with a row number alone, 0 included, is #REF!
+    // (measured on Excel 365).
+    if (reference) {
+      return ErrorCode::Ref;
+    }
+    // A 2-D array with only a row selector reads the omitted column as zero,
+    // so the selected row spills whole, and a zero row the whole array, as
+    // `INDEX(array, 0, 0)` does below.
     if (row_idx == 0U) {
       return IndexPick{IndexPickKind::kWhole, 0U, 0U};
     }
-    // A 2-D reference with a row number alone is #REF! (measured on Excel
-    // 365); an array spills the row.
-    if (row_idx > rows || reference) {
+    if (row_idx > rows) {
       return ErrorCode::Ref;
     }
     return IndexPick{IndexPickKind::kRow, row_idx - 1U, 0U};
