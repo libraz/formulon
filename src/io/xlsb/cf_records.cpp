@@ -1,3 +1,5 @@
+// @size-budget: 56 KB
+
 #include "io/xlsb/cf_records.h"
 
 #include <algorithm>

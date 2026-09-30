@@ -1,3 +1,5 @@
+// @size-budget: 56 KB
+
 #include "io/xlsb/protection_records.h"
 
 #include <array>

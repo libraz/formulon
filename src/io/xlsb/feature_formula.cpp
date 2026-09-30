@@ -1,3 +1,5 @@
+// @size-budget: 56 KB
+
 #include "io/xlsb/feature_formula.h"
 
 #include <string>

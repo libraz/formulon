@@ -1,3 +1,5 @@
+// @size-budget: 56 KB
+
 #include "io/xlsb/dv_records.h"
 
 #include <algorithm>
