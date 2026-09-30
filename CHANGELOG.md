@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `USDOLLAR`, which formats a number as dollar currency text with two
+  decimals by default and negatives in parentheses (`($1,234.50)`).
 - Conditional-format rules carry an icon set's floor (its first threshold,
   below which a cell gets no icon) and a data bar's direction. The C ABI
   appends `icon_set_floor_engaged`, `icon_set_floor` and
@@ -18,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `iconSet.floor`, `dataBar.direction` and `barDirection` in npm and
   native Node, and as `IconSet.floor`, `DataBar.direction` and
   `CfMatch.bar_direction` in Python.
+- The XLSB reader decodes conditional formatting (every rule type and
+  operator, RGB and icon-set colours, and data bars including their
+  `x14` extension) and data validations into the same model the OOXML
+  reader fills, and the writer emits them back, so a `.xlsb` workbook's
+  rules and validations survive a load, edit and save instead of being
+  dropped. Sheet and workbook protection round-trip the same way, and a
+  rule's differential format (dxf) is written into `.xlsb`'s native
+  `xl/styles.bin`. A retained pivot table, pivot cache, styles part or
+  `x14` block that a save would leave pointing at stale data is
+  fingerprinted at load and the save is refused instead of writing a
+  file with the edit silently missing.
 
 ### Changed
 
@@ -66,10 +79,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other non-empty string is rejected with `kInvalidArgument`. A pivot
   field's id now reaches the saved file as `<pivotField numFmtId>` and is
   read back from it; it was previously accepted and silently dropped.
-- The WASM size report's Brotli ceilings moved to 800 KiB soft and
-  832 KiB hard. Shipped feature code had filled the previous margin, so
-  the soft warning fired on every run; the uncompressed pair is unchanged
-  at 2.75 MiB and 3.00 MiB.
+- A pivot item added by cache index, which carries no name of its own,
+  derives its display label from the bound cache value at evaluation
+  time. Hiding such an item now hides the value it displays, a sole
+  visible page item is labelled by that value, and a show-as base item
+  is matched against it.
+- The WASM size report's ceilings moved to 3.00 MiB / 832 KiB Brotli soft
+  and 3.25 MiB / 864 KiB Brotli hard. Shipped feature code had filled the
+  previous margin, so the soft warning fired on every run; the gap between
+  each soft and hard ceiling stays 0.25 MiB and 32 KiB.
+- `FORMULATEXT`, `SHEET` and `SHEETS` are volatile, as in Excel: their
+  cells recalculate on every pass, `.xlsb` stores them with the volatile
+  marker, and `.xlsx` marks their cells `ca="1"`.
 
 ### Fixed
 
@@ -79,6 +100,282 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   started and `createFormulon()` never resolved, with no error. Workers now
   boot from the Emscripten module itself, and `"sideEffects"` names that
   module, whose top level starts the pthread runtime.
+- A conditional-format icon set now draws no icon for a value below its
+  floor threshold -- a number, formula or percent floor, and at the
+  floor value itself when `gte` is off -- instead of drawing the lowest
+  icon there.
+- A formula keeps the parenthesis pairs it was written with, in its
+  formula text and, for `.xlsb`, in the stored bytes, instead of losing
+  them on a round trip.
+- The parser accepts a cell reference, and a parenthesised union or
+  intersection, as the callee of a function call -- `=A1(1)`,
+  `=Sheet1!A1(1)`, `=(A1,B1)(1)`, `=(A1:B2 B1:B3)(1)` -- and evaluates
+  each to `#REF!` instead of failing to parse; `Sheet1!LOG10(100)` still
+  calls the built-in. The formula text, and for `.xlsb` the stored
+  bytes, round-trip each shape the way Excel 365 saves it.
+- Several formula-text edge cases now parse the way Excel does: a
+  parenthesised intersection or union is accepted as a range endpoint
+  (`(A1 B1):C3`), a trailing space before `)` or `]` is no longer
+  misread as an intersection operator, a sheet named `TRUE` or `FALSE`
+  is quoted so `Sheet!A1` does not tokenize as a boolean literal, a
+  leading backslash is accepted in a defined name, and `LET`/`LAMBDA`
+  parameter names are matched case-insensitively when writing storage
+  form. A subnormal numeric literal flushes to zero, `#REF!A1` and
+  `Sheet1!#REF!` parse as a bare `#REF!`, and the formula-length cap is
+  lowered to Excel's 8,192-character limit.
+- Conditional-format, data-validation and defined-name formula bodies
+  read from `.xlsx` and `.xlsb` now go through the same `_xlfn.` prefix
+  stripping cell formulas already used, so a stored `_xlfn.SINGLE(x)` /
+  `_xlfn.ANCHORARRAY(x)` reads back as `@x` / `x#` from either format
+  instead of only from `.xlsx`, and an `.xlsb` name body calling a
+  future function no longer keeps its `_xlfn.` prefix. A loaded formula
+  without the dynamic-array marker now shows `@` exactly where Excel's
+  formula bar shows it -- an area reference in a value-class slot, a
+  name whose body is an area, or a call that can return an array. A
+  typed `@` now encodes and saves in both formats instead of being
+  rejected, and `A1#` saved to `.xlsb` decodes correctly on load instead
+  of writing a parameter class that could not be read back.
+- OOXML `_xHHHH_` control-character escapes in defined names, inline
+  strings, phonetic runs, and conditional-format / data-validation /
+  table formulas decode symmetrically with how the writer encodes them,
+  and a defined name's stored function prefix is re-applied when its
+  formula is re-emitted. A package-absolute relationship target (a
+  leading `/`) now resolves from the package root instead of being
+  rejected, so files written by openpyxl or pandas load.
+- `Sheet!Name` resolves in that sheet's scope, sheet-local first then
+  workbook, reporting `#REF!` for an unknown sheet and `#NAME?` for an
+  undefined name; a sheet rename rewrites the qualifier and a sheet
+  removal collapses it to `#REF!`, and `.xlsb` round-trips it the same
+  way, including giving an unqualified name that only exists as another
+  sheet's local name its own workbook-scope record instead of borrowing
+  that sheet's. An unqualified name used inside a sheet-local name's own
+  body, including a `LAMBDA` defined there, resolves in the owning
+  sheet's scope rather than the caller's. `[0]!Name` resolves to the
+  workbook-scoped definition, falling back to the lowest-indexed sheet's
+  local one, and is now accepted as a range endpoint (`A1:[0]!Rng`) and
+  as an intersection operand next to another qualifier
+  (`[0]!Rng A1:A5`). Defining, renaming or removing a name now
+  re-indexes and recalculates formulas that call it as a function
+  (`=Fn(3)`), not only ones that reference it directly, and a
+  sheet-qualified call to a built-in (`Sheet1!SUM(1)`) is rejected as a
+  parse failure while a qualified defined name is still accepted.
+  Inside a structured-reference bracket, an apostrophe escapes the next
+  character, so `Table1['#Items]` and `Table1[Col'[x']]` tokenize at
+  the intended brackets.
+- A number of XLSB formula-encoding fixes: an operator's argument such
+  as in `=SUMPRODUCT(A1:A2*2)` or `=SUM(A1:A2*2)` no longer gains a
+  spurious implicit-intersection reading and changes value when Excel
+  reopens an engine-written file; `=(1+2)*3` keeps its parentheses; a
+  cell formula that is only a reference (`=A10:A11`) spills instead of
+  showing `#VALUE!`; the correct sheet tab is selected on reopen; `IF`,
+  `CHOOSE` and `IFERROR` carry the jump metadata Excel expects; a call
+  to `NOW`, `RAND`, `INDIRECT` and other volatile functions
+  recalculates on F9 instead of staying stale; `LAMBDA` definitions and
+  calls and an unrecognised `_xlfn.` name round-trip with their
+  original text and behavior; and an undefined `Sheet!Name` gets an
+  empty name record scoped to that sheet instead of a workbook-scope
+  placeholder, so a same-named workbook definition no longer leaks into
+  it.
+- An XLSB pivot cache field containing a record type the reader has not
+  decoded fails the load with a named error instead of being silently
+  skipped.
+- `INDEX` on a two-dimensional reference with only a row argument
+  (column omitted) now returns `#REF!` for every row number including
+  0; only an array constant still spills (a nonzero row spills that
+  row, row 0 the whole array). `OFFSET` treats an empty height/width
+  argument like an omitted one, keeping the base reference's size,
+  instead of reading it as zero. `INDEX` and `XLOOKUP` resolve to a
+  rectangle through the same reference resolver as
+  `INDIRECT`/`OFFSET`/`IF`/`CHOOSE`/`IFS`/`SWITCH`, so both now work as
+  range endpoints (`A1:INDEX(...)`, `XLOOKUP(...):B3`), and `INDEX`'s
+  area-number form selects from a parenthesised union in source order,
+  giving `#REF!` for an out-of-range area.
+- `@` and `SINGLE` over a reference project it onto the formula's cell
+  instead of taking its top-left value: over a spill reference (`@G1#`)
+  they project the anchor plus its spill region, and over a defined
+  name, intersection, `LAMBDA` call or reference-returning call
+  (`INDEX`, `OFFSET`, `CHOOSE`, `INDIRECT`, `IF`, `IFS`, `SWITCH`,
+  `XLOOKUP`) they resolve and project that reference, giving `#VALUE!`
+  outside it. A legacy `_xlfn.ANCHORARRAY(G1)` formula now loads and
+  round-trips as `@G1#`.
+- Calling any reference shape as a function -- a cell, range, union,
+  intersection or spill reference, including one held by a name or
+  `LET` binding (`=(A1:A2)(1)`, `=LET(f,(A1,B1),f(1))`) -- now gives
+  `#REF!`. `LET` names and `LAMBDA` parameters bind as references, not
+  values, whenever their source resolves to one, so `ISREF`, `ROW`,
+  `CELL`, `OFFSET` and `AREAS` see the reference; `MAP`, `BYROW`,
+  `BYCOL`, `REDUCE` and `SCAN` pass each element of a reference source
+  as a cell/row/column reference.
+- Reading a reference only for its position -- `CELL` under an info
+  type other than contents/type, a static argument to
+  `ROW`/`ROWS`/`COLUMNS`/`AREAS`/`ISREF`/`SHEET`, or an `OFFSET` base --
+  no longer registers a dependency edge, so `=ROW(A1)` in `A1` and
+  `=ROWS(A:A)` down column A are no longer circular. A range endpoint
+  resolved through a reference-returning call now registers only the
+  rectangle actually read (`A1:INDEX(C1:C10,3)` depends on column C's
+  read cells, not the whole column).
+- `OFFSET`/`INDIRECT` record the rectangles they resolve to as tracked
+  dynamic dependencies, so `OFFSET`'s base argument is no longer a
+  false self-cycle and a dependent cell is correctly invalidated when
+  the target moves; a cycle closing only through such an edge behaves
+  like Excel, cyclic while the target points at the cell and settled
+  once it moves. With iterative calculation off, a dynamic cycle now
+  restores every member to its pre-recalc value and reads an uncomputed
+  member as 0, so recalculation is idempotent rather than growing
+  values each pass. `CELL` reads its reference argument's value only
+  for info types contents/type, tracked as a run-time read. A
+  self-reference reached through ad-hoc single-formula evaluation
+  (`fm_workbook_evaluate_formula`) now reads the cell's cached value
+  instead of re-entering the iterative driver.
+- Whole-row/whole-column references used together in one call now
+  share a walked length and pad shorter ones with blanks, so uneven
+  whole columns agree on shape in `SUMIFS`/`COUNTIFS`,
+  `XLOOKUP`/`XMATCH`/`MATCH`/`LOOKUP` and `FILTER`; `VLOOKUP`/`HLOOKUP`/
+  `INDEX` read only needed cells, so a wide whole-column lookup no
+  longer hits `#CALC!`. The same rule now governs `WRAPCOLS`/`WRAPROWS`
+  and `GROUPBY`/`PIVOTBY`'s filter array.
+- `TEXTBEFORE`/`TEXTAFTER` accept an empty delimiter, matching at the
+  start of the text for a positive `instance_num` and at the end for a
+  negative one, regardless of `match_end`; `instance_num` 0 is still
+  `#VALUE!`.
+- `TEXTJOIN` moves to lazy dispatch so a range or array delimiter is no
+  longer expanded into the argument list before evaluation. `TEXT`,
+  `FIXED` and `DOLLAR` print an integer value beyond 15 significant
+  digits without trailing binary-representation noise, and the
+  localized ja-JP `General` number-format code (including its DBNum
+  variants) is recognised as `General` rather than falling through as a
+  custom format.
+- `REGEXEXTRACT`/`REGEXTEST`/`REGEXREPLACE` advance a find-all match by
+  UTF-8 code point instead of byte, and `REGEXREPLACE` accepts a
+  negative occurrence count counted from the end of the matches.
+  `DATEVALUE` and `VALUE` read a year-less date text against the
+  current year instead of a fixed year.
+- `YEARFRAC` basis 1 divides a multi-year span's day count by the
+  average length of every calendar year in the range instead of
+  counting a leap year only when its Feb 29 falls inside the span; the
+  same-year and within-one-year branches are unchanged, and the
+  financial functions share the same basis-1 helper.
+- The date1904-sensitive financial functions (`COUP*`, `ACCRINT*`,
+  `DISC`/`INTRATE`/`RECEIVED`/`TBILL*`, `PRICE*`/`YIELD*`,
+  `DURATION`/`MDURATION`, `ODDF*`/`ODDL*`, `AMOR*`) honor the
+  workbook's `date1904` system instead of always assuming the 1900
+  epoch. `YIELD` and `ODDFYIELD` return `#NUM!` instead of an
+  uncertified clamped result, and `AMORDEGRC`/`AMORLINC` cap their
+  period argument. `DAYS`/`DAYS360` reject an invalid date serial and
+  `DAYS360`'s US last-day-of-February rule matches the 30/360 year
+  fraction used elsewhere. `TIME` computes from total seconds before
+  the modulo instead of after, avoiding rounding noise.
+- `ROUNDUP`, `ROUNDDOWN` and `TRUNC` snap binary-representation noise
+  the same way `ROUND` already does, so a value that lands on
+  `28.999999999999996` after scaling rounds to 29 instead of 28.
+- `VAR`/`STDEV` family functions coerce a directly-passed boolean or
+  numeric-text argument per the documented rules. `COMBIN`, `COMBINA`
+  and `MULTINOMIAL` compute their multiplicative product exact within
+  2^53 instead of drifting on large inputs, and `T.DIST`/`T.INV` gain
+  an asymptotic path at very large degrees of freedom. `MAKEARRAY`
+  rejects a `rows` or `cols` argument below 1 as `#VALUE!`, and
+  `BYROW`/`BYCOL` accept a bare function name the same way
+  `GROUPBY`/`PIVOTBY` already do for their aggregator argument.
+- Conditional-format time-period rules (ThisWeek/LastWeek/NextWeek,
+  ThisMonth/LastMonth/NextMonth) decode a cell's and today's date serial
+  on the workbook's `date1904` epoch instead of always assuming 1900.
+  `ContainsBlanks`/`NotContainsBlanks` treat a formula-produced empty
+  string or a whitespace-only cell as blank, mirroring Excel's own
+  `LEN(TRIM(A1))=0` evaluation.
+- Printed page width no longer counts a hidden column when deciding how
+  many columns fit on a page, and print layout resolves the JIS B4 and
+  B5 paper sizes instead of falling back to A4.
+- A cached formula error that uses a newer error code is stored as the
+  legacy code Excel itself writes: `#SPILL!`/`#CALC!` and the other
+  newer errors as `#VALUE!`, and `#GETTING_DATA` as `#N/A`, in both
+  `.xlsx` and `.xlsb`. The XLSB writer previously wrote the newer code
+  directly, which is not a valid stored error and made Excel refuse
+  the whole file.
+- A Top-N/Bottom-N or percentage pivot value filter on an inner field
+  now ranks and keeps/drops whole groups within each parent group,
+  matching Excel, instead of ranking across the flattened axis;
+  Bottom-N filters are supported alongside Top-N. Pivot subtotals and
+  grand totals for AVERAGE/MIN/MAX/distinct-count style aggregations
+  are re-derived from the underlying leaf records, including after a
+  value filter or a Show Values As margin, instead of summed from
+  already-aggregated child values, which was only correct for SUM.
+  Date grouping now buckets against the workbook's 1904/1900 epoch
+  instead of always 1900; a table placing a date- or number-grouped
+  field on an axis is rejected instead of silently collapsing it to
+  one blank item; a non-finite aggregate result now evaluates to
+  `#NUM!` instead of propagating infinity or NaN; and a field's sort
+  order and the Values pseudo-field's position now round-trip through
+  save and load.
+- The WASM/Node binding no longer lets `delete()`/`dispose()` free a
+  workbook handle while that handle's own iterative-progress callback
+  is still running; both surfaces now throw instead. Spec objects are
+  validated field-by-field before their values are written into the C
+  struct rather than cast as given, so a missing required pivot/data-
+  field name now reaches the C ABI as NULL rather than the literal
+  string `"undefined"`, and an out-of-range `recalcParallel` thread
+  count or a non-number `setError` error code is rejected by the
+  binding itself before any C call.
+- The Python binding raises `FormulonError` for a WASM trap encountered
+  during a call, instead of letting a raw `wasmtime.Trap` escape, and
+  marks the shared module instance poisoned so every later call on any
+  `Workbook` fails the same way instead of touching state the trap may
+  have corrupted. The cell, defined-name, table and passthrough
+  iterators re-check that their handle is still live at each resume, so
+  calling `close()` between two `next()` calls raises `FormulonError`
+  instead of reading a freed handle, and `set_phonetic_runs` accepts an
+  empty run's text instead of rejecting it, matching Excel's own
+  out-of-range kana runs.
+- A model mutation the dependency graph cannot observe directly now
+  marks the right formulas dirty for the next recalc, where before the
+  cached value went stale: a phonetic-run, reading, or cell-property
+  write; a row's hidden flag actually changing (read by
+  `SUBTOTAL`/`AGGREGATE` outside any dependency edge); an Excel-profile
+  change; and a defined-name create/rename/remove (including a print
+  area or print titles) or a table change, which now reindexes only the
+  formulas that reference it. `fm_workbook_set_number` also rejects NaN
+  and Infinity outright instead of writing a value `ISNUMBER` disagrees
+  with until a later save downgrades it to `#NUM!`.
+- A static cycle is only reported when evaluation actually reads a cell
+  of the cycle back into itself, so a branch that is not taken no longer
+  makes a formula circular: `=LET(r,A1,IF(FALSE,r,ROW(r)))` or
+  `=IF(FALSE,A1,5)` in A1 evaluates, while `=IF(TRUE,A1,5)` stays
+  circular. A `LET` name or `LAMBDA` parameter bound to a reference now
+  reads its cells when first used as a value, so an unused binding of the
+  formula's own cell is not circular either.
+- A formula reading a single cell of another formula's spill now depends
+  on the spill's anchor. It previously had no link to the anchor, so it
+  could be calculated before the spill (`=B2*10` next to
+  `B1=SEQUENCE(2)` gave 0) and stayed stale when the spill changed.
+- `COUNTIF`, `SUMIF`, `AVERAGEIF`, `COUNTIFS`, `SUMIFS`, `AVERAGEIFS`,
+  `MAXIFS` and `MINIFS` lift a range or array criterion and return one
+  result per element, broadcast across several criteria the way
+  operators broadcast, instead of returning 0. A position a shorter
+  criterion array cannot supply uses `#N/A` as that criterion's value,
+  as Excel does.
+- `DOLLAR` keeps the minus sign of a negative value that rounds to zero
+  for display (`DOLLAR(-0.001,2)` is `¥-0.00`).
+- Saved files mark a formula as dynamic-array (the `cm` cell metadata,
+  and in `.xlsb` the anchor form) exactly where Excel does. The mark is
+  derived from the formula's static shape -- result shapes of `INDEX`,
+  `OFFSET`, `XLOOKUP` and the always-array functions, defined-name body
+  shapes, and element-wise parameters -- where it used to be set on
+  formulas Excel leaves unmarked, such as `INDEX(A1:A2,1)`, and missing
+  on `IFS`/`SWITCH`.
+- Spilled cells are saved with their values: `.xlsx` writes each as a
+  value-only cell, as Excel does, where they used to be omitted, so a
+  reader that does not recalculate saw blanks. Volatile and
+  always-calculated formulas carry `ca="1"` / `aca="1"` in `.xlsx` and
+  the matching always-calculate flags in `.xlsb`, and `.xlsb` sets a
+  defined name's calculated-expression flag the way Excel does.
+- `.xlsb` formulas encode the way Excel does: the call tokens of
+  reference-returning `IFS`, `SWITCH` and `XLOOKUP`, defined-name bodies
+  (encoded as array formulas), calls nested in array-class arguments,
+  `LET`/`LAMBDA` parameter references, whole-row and whole-column
+  references (`A:B` as one area, read back as `A:B`), negative number
+  literals, a typed `#REF!` and array constants now take Excel's token
+  types and classes. Array constants holding text, booleans or errors
+  load, and a spill anchor keeps its cached value on load, so a loaded
+  spill no longer turns into constants that block its own recalculation.
 
 ### Removed
 
