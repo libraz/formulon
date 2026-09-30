@@ -21,6 +21,7 @@
 #include "parser/reference.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
+#include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -1330,15 +1331,19 @@ class OperatorRespeller {
                         arg.kind() == NodeKind::ExternalRef;
       return parenthesised(arg, !bare) + "#";
     }
-    std::vector<const AstNode*> children = Children(node);
-    std::sort(children.begin(), children.end(),
-              [](const AstNode* a, const AstNode* b) { return a->range().start < b->range().start; });
+    const std::vector<const AstNode*> children = Children(node);
+    const auto by_start = [&](std::uint32_t lhs, std::uint32_t rhs) {
+      return children[lhs]->range().start < children[rhs]->range().start;
+    };
+    std::vector<std::uint32_t> order;
+    sorted_index_order(order, static_cast<std::uint32_t>(children.size()), make_index_less(by_start));
     const bool tight = node.kind() == NodeKind::RangeOp || node.kind() == NodeKind::IntersectOp ||
                        node.kind() == NodeKind::SpillRef ||
                        (node.kind() == NodeKind::UnaryOp && node.as_unary_op() == UnaryOp::Percent);
     std::string out;
     std::uint32_t at = r.start;
-    for (const AstNode* child : children) {
+    for (const std::uint32_t index : order) {
+      const AstNode* child = children[index];
       if (!HasStorageOperatorCall(*child)) {
         continue;
       }

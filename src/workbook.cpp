@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -49,6 +48,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
@@ -1118,9 +1118,10 @@ void Workbook::apply_legacy_implicit_intersections() {
       if (at.empty()) {
         continue;
       }
-      std::sort(at.begin(), at.end(), std::greater<>());
-      for (const std::uint32_t offset : at) {
-        text.insert(body_at + offset, 1U, '@');
+      // Right to left, so each insertion leaves the earlier offsets valid.
+      sort_ascending(at);
+      for (auto it = at.rbegin(); it != at.rend(); ++it) {
+        text.insert(body_at + *it, 1U, '@');
       }
       sheet.set_cell_formula_text(address.row, address.col, std::move(text));
     }
