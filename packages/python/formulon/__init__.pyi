@@ -249,7 +249,7 @@ class PivotDateGrouping(IntEnum):
     MONTH = 1
     QUARTER = 2
     YEAR = 3
-    WEEK = 4
+    DAYS = 4
     HOUR = 5
     MINUTE = 6
     SECOND = 7
@@ -1336,6 +1336,9 @@ class Workbook:
         calendar: Union[PivotCalendar, int],
         start_year: int = ...,
         end_year: int = ...,
+        interval_days: int = ...,
+        start_serial: float = ...,
+        end_serial: float = ...,
     ) -> None: ...
     def pivot_field_clear_date_group(self, sheet: int, pivot_index: int, field_idx: int) -> None: ...
     def pivot_field_set_number_format(self, sheet: int, pivot_index: int, field_idx: int, fmt: str) -> None: ...

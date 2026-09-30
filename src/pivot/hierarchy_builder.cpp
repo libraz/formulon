@@ -1,9 +1,11 @@
 
 #include "pivot/hierarchy_builder.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -72,9 +74,19 @@ void append_year(std::string& out, int y) {
   out.append(std::to_string(y));
 }
 
+// `yyyy/m/d`, unpadded month/day -- the literal format Excel's Days-interval
+// bucket labels use, independent of the field's own number format.
+void append_days_group_date(std::string& out, double serial, bool date1904) {
+  const formulon::date_time::YMD ymd = date1904 ? formulon::date_time::ymd_from_serial(serial, /*date1904=*/true)
+                                                : formulon::date_time::legacy_1900_ymd(serial);
+  append_year(out, ymd.y);
+  out.push_back('/');
+  out.append(std::to_string(ymd.m));
+  out.push_back('/');
+  out.append(std::to_string(ymd.d));
+}
+
 DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
-  using formulon::date_time::civil_from_days;
-  using formulon::date_time::days_from_civil;
   using formulon::date_time::HMS;
   using formulon::date_time::hms_from_fraction;
   using formulon::date_time::YMD;
@@ -149,25 +161,32 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
       append_pad2(label, ymd.d);
       return {Value::number(serial_floor), std::move(label)};
     }
-    case DateGrouping::Week: {
-      // Sunday-start week. 1970-01-01 was a Thursday, so with Sun=0..Sat=6
-      // the day-of-week is `((days % 7) + 7 + 4) % 7`. Subtract that to
-      // land on the week's Sunday. The civil-day count is monotone across
-      // calendar years, so it doubles as the chronological sort key.
-      // Excel ja-JP renders weekly buckets as Gregorian YYYY-MM-DD even
-      // when the field's date group nominally targets the Japanese
-      // calendar; mirror that by ignoring `dg.calendar` here.
-      const std::int64_t days = days_from_civil(ymd.y, ymd.m, ymd.d);
-      const std::int64_t dow = ((days % 7) + 7 + 4) % 7;
-      const std::int64_t week_start_days = days - dow;
-      const YMD ws = civil_from_days(week_start_days);
+    case DateGrouping::Days: {
+      // `value_or(serial_floor)` only guards a caller that skips
+      // `pivot_evaluator::evaluate`'s auto Start/End resolution.
+      const double interval = dg.interval_days > 0 ? static_cast<double>(dg.interval_days) : 1.0;
+      const double start = dg.start_serial.value_or(serial_floor);
+      const double end = dg.end_serial.value_or(serial_floor);
+      if (serial_floor < start) {
+        // Catch-all: everything below an explicit Start narrower than the data minimum, sorted first.
+        std::string label = "<";
+        append_days_group_date(label, start, date1904);
+        return {Value::number(-std::numeric_limits<double>::infinity()), std::move(label)};
+      }
+      if (serial_floor > end) {
+        // Mirror image: everything above an explicit End narrower than the data maximum, sorted last.
+        std::string label = ">";
+        append_days_group_date(label, end, date1904);
+        return {Value::number(std::numeric_limits<double>::infinity()), std::move(label)};
+      }
+      const double bucket_index = std::floor((serial_floor - start) / interval);
+      const double bucket_start = start + bucket_index * interval;
+      const double bucket_end = std::max(bucket_start, std::min(bucket_start + interval - 1.0, end));
       std::string label;
-      append_year(label, ws.y);
-      label.push_back('-');
-      append_pad2(label, ws.m);
-      label.push_back('-');
-      append_pad2(label, ws.d);
-      return {Value::number(static_cast<double>(week_start_days)), std::move(label)};
+      append_days_group_date(label, bucket_start, date1904);
+      label.append(" - ");
+      append_days_group_date(label, bucket_end, date1904);
+      return {Value::number(bucket_start), std::move(label)};
     }
     case DateGrouping::Hour: {
       const double hour_index = std::floor(serial * 24.0);

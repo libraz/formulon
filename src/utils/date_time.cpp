@@ -87,6 +87,13 @@ YMD ymd_from_serial(double serial_floor, bool date1904) noexcept {
   return civil_from_days(s - base);
 }
 
+YMD legacy_1900_ymd(double serial) noexcept {
+  if (std::floor(serial) == 0.0) {
+    return YMD{1900, 1u, 0u};
+  }
+  return ymd_from_serial(serial, /*date1904=*/false);
+}
+
 double serial_from_ymd(int y, unsigned m, unsigned d, bool date1904) noexcept {
   if (date1904) {
     // 1904 system: no ghost day; single linear base off 1904-01-01.

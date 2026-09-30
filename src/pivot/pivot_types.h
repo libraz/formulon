@@ -91,7 +91,10 @@ enum class DateGrouping : std::uint8_t {
   Month = 1,
   Quarter = 2,
   Year = 3,
-  Week = 4,
+  /// Excel's "By: Days" grouping: an explicit interval starting at the
+  /// data minimum or an explicit Start, with catch-all buckets below
+  /// Start / above End. A real Excel "week" is `interval_days == 7`.
+  Days = 4,
   Hour = 5,
   Minute = 6,
   Second = 7,
@@ -154,6 +157,22 @@ struct PivotDateGroup {
   CalendarSystem calendar = CalendarSystem::Gregorian;
   std::optional<int> start_year;
   std::optional<int> end_year;
+
+  /// `Days` granularity only: bucket width, Excel's "Number of days".
+  /// Unused otherwise.
+  std::uint32_t interval_days = 1;
+
+  /// `Days` granularity only: the bucket origin, as an Excel date
+  /// serial. Unset means Start=auto (the field's data minimum); an
+  /// explicit start past that minimum collapses everything below it
+  /// into one `"<" + start` catch-all bucket.
+  std::optional<double> start_serial;
+
+  /// `Days` granularity only: as an Excel date serial. Unset means
+  /// End=auto (the data maximum plus one day); an explicit end short
+  /// of the data maximum collapses everything above it into one
+  /// `">" + end` catch-all bucket.
+  std::optional<double> end_serial;
 };
 
 /// Single filter clause attached to a pivot field.

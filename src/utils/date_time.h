@@ -112,6 +112,11 @@ YMD civil_from_days(std::int64_t days) noexcept;
 /// and should be rejected at the builtin boundary.
 YMD ymd_from_serial(double serial_floor, bool date1904 = false) noexcept;
 
+/// `ymd_from_serial` under the 1900 system, but with Excel's literal
+/// "1900-01-00" spelling for serial 0 rather than the proleptic
+/// 1899-12-31 `ymd_from_serial` returns for it.
+YMD legacy_1900_ymd(double serial) noexcept;
+
 /// Inverse of `ymd_from_serial`. The input triple need not be a valid
 /// calendar date: out-of-range months/days are normalised first (via
 /// `days_from_civil`), so `serial_from_ymd(2026, 13, 1)` returns the serial

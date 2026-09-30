@@ -425,7 +425,8 @@ class JsWorkbook {
   JsStatus pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t agg);
   JsStatus pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx);
   JsStatus pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t granularity,
-                                  uint32_t calendar, int32_t startYear, int32_t endYear);
+                                  uint32_t calendar, int32_t startYear, int32_t endYear, uint32_t intervalDays,
+                                  double startSerial, double endSerial);
   JsStatus pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx);
   JsStatus pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& utf8);
 

@@ -417,10 +417,48 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     }
     return &manual_order_cache.emplace(fi, std::move(positions)).first->second;
   };
+  // A `Days` field's auto Start/End resolves once per field from the
+  // whole cache (matching Excel's Group dialog, unaffected by report
+  // filters); every hierarchy level for that field reuses the result.
+  std::unordered_map<std::uint32_t, PivotDateGroup> resolved_days_group_cache;
+  auto resolved_date_group = [&](std::uint32_t fi, const PivotDateGroup& dg) -> const PivotDateGroup* {
+    if (dg.granularity != DateGrouping::Days || (dg.start_serial.has_value() && dg.end_serial.has_value())) {
+      return &dg;
+    }
+    if (auto it = resolved_days_group_cache.find(fi); it != resolved_days_group_cache.end()) {
+      return &it->second;
+    }
+    PivotDateGroup resolved = dg;
+    bool have_bound = false;
+    double data_min = 0.0;
+    double data_max = 0.0;
+    for (const PivotCacheRecord& rec : cache.records()) {
+      const Value v = cell_value(cache, rec, fi);
+      if (!v.is_number() || !(v.as_number() >= 0.0)) {
+        continue;  // Mirrors bucket_date's own valid-serial domain.
+      }
+      const double n = v.as_number();
+      if (!have_bound) {
+        data_min = n;
+        data_max = n;
+        have_bound = true;
+      } else {
+        data_min = std::min(data_min, n);
+        data_max = std::max(data_max, n);
+      }
+    }
+    if (!resolved.start_serial.has_value()) {
+      resolved.start_serial = have_bound ? data_min : 0.0;
+    }
+    if (!resolved.end_serial.has_value()) {
+      resolved.end_serial = have_bound ? (data_max + 1.0) : *resolved.start_serial;
+    }
+    return &resolved_days_group_cache.emplace(fi, resolved).first->second;
+  };
   auto level_for = [&](std::uint32_t fi) -> HierLevel {
     const PivotDateGroup* dg = nullptr;
     if (fi < table.fields().size() && table.fields()[fi].date_group.has_value()) {
-      dg = &*table.fields()[fi].date_group;
+      dg = resolved_date_group(fi, *table.fields()[fi].date_group);
     }
     const bool manual = fi < table.fields().size() && table.fields()[fi].sort.manual;
     const bool ascending = fi >= table.fields().size() || table.fields()[fi].sort.ascending;

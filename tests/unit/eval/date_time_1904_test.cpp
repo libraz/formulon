@@ -66,6 +66,23 @@ TEST(DateTime1904, DefaultSystemUnaffected) {
   EXPECT_DOUBLE_EQ(serial_from_ymd(2020, 1, 1), 43831.0);
 }
 
+TEST(DateTime, Legacy1900YmdAliasesSerialZero) {
+  // `legacy_1900_ymd` is `ymd_from_serial`'s 1900-system path plus Excel's
+  // literal "1900-01-00" spelling for serial 0.
+  const YMD zero = legacy_1900_ymd(0.0);
+  EXPECT_EQ(zero.y, 1900);
+  EXPECT_EQ(zero.m, 1u);
+  EXPECT_EQ(zero.d, 0u);
+  const YMD ghost = legacy_1900_ymd(60.0);
+  EXPECT_EQ(ghost.y, 1900);
+  EXPECT_EQ(ghost.m, 2u);
+  EXPECT_EQ(ghost.d, 29u);
+  const YMD after_ghost = legacy_1900_ymd(61.0);
+  EXPECT_EQ(after_ghost.y, 1900);
+  EXPECT_EQ(after_ghost.m, 3u);
+  EXPECT_EQ(after_ghost.d, 1u);
+}
+
 }  // namespace
 }  // namespace date_time
 }  // namespace formulon

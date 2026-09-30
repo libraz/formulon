@@ -438,13 +438,18 @@ class PivotFilterValueKind(IntEnum):
 
 
 class PivotDateGrouping(IntEnum):
-    """Date-grouping granularity for a pivot field."""
+    """Date-grouping granularity for a pivot field.
+
+    ``DAYS`` is Excel's "By: Days" grouping (an explicit interval, e.g.
+    a real Excel "week" is ``DAYS`` with ``interval_days=7``); there is
+    no separate week granularity.
+    """
 
     DAY = 0
     MONTH = 1
     QUARTER = 2
     YEAR = 3
-    WEEK = 4
+    DAYS = 4
     HOUR = 5
     MINUTE = 6
     SECOND = 7
@@ -5606,8 +5611,22 @@ class Workbook:
         calendar: "PivotCalendar | int",
         start_year: int = -1,
         end_year: int = -1,
+        interval_days: int = 1,
+        start_serial: float = -1.0,
+        end_serial: float = -1.0,
     ) -> None:
-        """Configure date-grouping on pivot field ``field_idx``."""
+        """Configure date-grouping on pivot field ``field_idx``.
+
+        ``interval_days`` is the ``PivotDateGrouping.DAYS``-only bucket
+        width in whole days; leave it at ``1`` for every other
+        granularity. ``start_serial`` / ``end_serial`` are the
+        ``DAYS``-only Start/End window, as Excel date serials -- leave
+        either at ``-1`` to keep it auto (Start = the field's data
+        minimum, End = the data maximum plus one day); both are ignored
+        for every other granularity. With ``DAYS``, a zero
+        ``interval_days`` or a start after the end raises
+        ``FormulonError``.
+        """
         h = self._require()
         _check(
             LIB.fm_workbook_pivot_field_set_date_group(
@@ -5619,6 +5638,9 @@ class Workbook:
                 _sint(calendar, "calendar"),
                 _sint(start_year, "start_year_or_neg1"),
                 _sint(end_year, "end_year_or_neg1"),
+                _uint(interval_days, "interval_days"),
+                float(start_serial),
+                float(end_serial),
             ),
             "fm_workbook_pivot_field_set_date_group",
         )

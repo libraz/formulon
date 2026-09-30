@@ -1110,11 +1110,11 @@ TEST(PivotEvaluator, DateGroupingNonNumericPassesThrough) {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-day / week granularities (Week / Hour / Minute / Second).
+// Sub-day granularities (Hour / Minute / Second).
 // ---------------------------------------------------------------------------
 //
 // These build their own caches so the records can carry sub-day fractions
-// or weekday-precise dates that don't fit `build_date_cache()`'s shape.
+// that don't fit `build_date_cache()`'s shape.
 
 PivotCache build_two_field_cache() {
   PivotCache cache;
@@ -1129,44 +1129,6 @@ void push_record(PivotCache& cache, double serial, double amount) {
   rec.cells.push_back(Value::number(serial));
   rec.cells.push_back(Value::number(amount));
   cache.mutable_records().push_back(std::move(rec));
-}
-
-TEST(PivotEvaluator, DateGroupingByWeekGregorian) {
-  // Excel serials for ja-JP-friendly Gregorian dates in 2024:
-  //   2024-03-11 (Mon) = 45362, 2024-03-13 (Wed) = 45364,
-  //   2024-03-15 (Fri) = 45366  -> all in the week starting 2024-03-10 (Sun).
-  //   2024-03-18 (Mon) = 45369  -> in the next week, starting 2024-03-17 (Sun).
-  PivotCache cache = build_two_field_cache();
-  push_record(cache, 45362.0, 1.0);
-  push_record(cache, 45364.0, 2.0);
-  push_record(cache, 45366.0, 4.0);
-  push_record(cache, 45369.0, 8.0);
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Week, CalendarSystem::Gregorian);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 2U);
-  EXPECT_EQ(r.rows[0].label, "2024-03-10");
-  EXPECT_EQ(r.rows[1].label, "2024-03-17");
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0 + 2.0 + 4.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 8.0);
-}
-
-TEST(PivotEvaluator, DateGroupingByWeekJapaneseUsesGregorianLabel) {
-  // The Japanese-calendar selector is ignored for Week buckets; Mac Excel
-  // ja-JP renders weekly labels as Gregorian YYYY-MM-DD.
-  PivotCache cache = build_two_field_cache();
-  push_record(cache, 45362.0, 1.0);  // 2024-03-11 Mon
-  push_record(cache, 45369.0, 2.0);  // 2024-03-18 Mon
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Week, CalendarSystem::Japanese);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 2U);
-  EXPECT_EQ(r.rows[0].label, "2024-03-10");
-  EXPECT_EQ(r.rows[1].label, "2024-03-17");
 }
 
 TEST(PivotEvaluator, DateGroupingByHour) {
@@ -1248,6 +1210,180 @@ TEST(PivotEvaluator, DateGroupingByYearHonorsDate1904Epoch) {
   EXPECT_EQ(r.rows[1].label, "2024");
   EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 20.0);
   EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 10.0);
+}
+
+// ---------------------------------------------------------------------------
+// Days-interval grouping ("By: Days", `rangePr groupBy="days"`).
+//
+// Measured against Windows Excel 365 ja-JP build 16.0.20228
+// (tests/fixtures/excel/win/pivot_week_1900/results.json). Source data:
+// 71 records, one per Excel serial 0..70 under the 1900 epoch, amount 1
+// each (grand total 71). Every variant groups by 7 days with End left
+// auto; only Start varies.
+// ---------------------------------------------------------------------------
+
+PivotCache build_days_interval_cache() {
+  PivotCache cache = build_two_field_cache();
+  for (double serial = 0.0; serial <= 70.0; serial += 1.0) {
+    push_record(cache, serial, 1.0);
+  }
+  return cache;
+}
+
+PivotTable build_days_grouped_table(std::optional<double> start_serial, std::uint32_t interval_days = 7,
+                                    std::optional<double> end_serial = std::nullopt) {
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  PivotField date_f;
+  date_f.source_name = "Date";
+  date_f.axis = PivotAxis::Row;
+  PivotDateGroup dg;
+  dg.granularity = DateGrouping::Days;
+  dg.interval_days = interval_days;
+  dg.start_serial = start_serial;
+  dg.end_serial = end_serial;
+  date_f.date_group = dg;
+  PivotField amount_f;
+  amount_f.source_name = "Amount";
+  amount_f.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(date_f));
+  table.mutable_fields().push_back(std::move(amount_f));
+  table.mutable_row_field_order() = {0};
+  PivotDataField sum;
+  sum.name = "Sum of Amount";
+  sum.field_index = 1;
+  sum.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum));
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  return table;
+}
+
+TEST(PivotEvaluator, DateGroupingByDaysIntervalAutoStart) {
+  PivotCache cache = build_days_interval_cache();
+  PivotTable table = build_days_grouped_table(/*start_serial=*/std::nullopt);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Ten full 7-day buckets from the data minimum (serial 0) plus one
+  // trailing bucket clipped to the resolved auto End (data max + 1),
+  // which is one day past the last record (serial 70 = "1900/3/10").
+  ASSERT_EQ(r.rows.size(), 11U);
+  EXPECT_EQ(r.rows[0].label, "1900/1/0 - 1900/1/6");
+  EXPECT_EQ(r.rows[1].label, "1900/1/7 - 1900/1/13");
+  EXPECT_EQ(r.rows[2].label, "1900/1/14 - 1900/1/20");
+  EXPECT_EQ(r.rows[3].label, "1900/1/21 - 1900/1/27");
+  EXPECT_EQ(r.rows[4].label, "1900/1/28 - 1900/2/3");
+  EXPECT_EQ(r.rows[5].label, "1900/2/4 - 1900/2/10");
+  EXPECT_EQ(r.rows[6].label, "1900/2/11 - 1900/2/17");
+  EXPECT_EQ(r.rows[7].label, "1900/2/18 - 1900/2/24");
+  EXPECT_EQ(r.rows[8].label, "1900/2/25 - 1900/3/2");
+  EXPECT_EQ(r.rows[9].label, "1900/3/3 - 1900/3/9");
+  EXPECT_EQ(r.rows[10].label, "1900/3/10 - 1900/3/11");
+  for (std::size_t i = 0; i < 10; ++i) {
+    EXPECT_DOUBLE_EQ(r.values[i][0][0].as_number(), 7.0) << "bucket " << i;
+  }
+  EXPECT_DOUBLE_EQ(r.values[10][0][0].as_number(), 1.0);
+}
+
+TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitStartEqualsMinMatchesAuto) {
+  // Start=0 explicit coincides with the data minimum, so Excel renders the
+  // identical bucket set as the auto case above.
+  PivotCache cache = build_days_interval_cache();
+  PivotTable table = build_days_grouped_table(/*start_serial=*/0.0);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 11U);
+  EXPECT_EQ(r.rows[0].label, "1900/1/0 - 1900/1/6");
+  EXPECT_EQ(r.rows[10].label, "1900/3/10 - 1900/3/11");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 7.0);
+  EXPECT_DOUBLE_EQ(r.values[10][0][0].as_number(), 1.0);
+}
+
+TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitStartAboveMinAddsCatchAll) {
+  // Start=1 is one past the data minimum (serial 0): a catch-all bucket
+  // absorbs everything below it, and since (71-1) records divide evenly
+  // by 7 the trailing regular bucket is NOT clipped here, unlike the
+  // auto/Start=0 case above.
+  PivotCache cache = build_days_interval_cache();
+  PivotTable table = build_days_grouped_table(/*start_serial=*/1.0);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 11U);
+  EXPECT_EQ(r.rows[0].label, "<1900/1/1");
+  EXPECT_EQ(r.rows[1].label, "1900/1/1 - 1900/1/7");
+  EXPECT_EQ(r.rows[2].label, "1900/1/8 - 1900/1/14");
+  EXPECT_EQ(r.rows[3].label, "1900/1/15 - 1900/1/21");
+  EXPECT_EQ(r.rows[4].label, "1900/1/22 - 1900/1/28");
+  EXPECT_EQ(r.rows[5].label, "1900/1/29 - 1900/2/4");
+  EXPECT_EQ(r.rows[6].label, "1900/2/5 - 1900/2/11");
+  EXPECT_EQ(r.rows[7].label, "1900/2/12 - 1900/2/18");
+  EXPECT_EQ(r.rows[8].label, "1900/2/19 - 1900/2/25");
+  EXPECT_EQ(r.rows[9].label, "1900/2/26 - 1900/3/3");
+  EXPECT_EQ(r.rows[10].label, "1900/3/4 - 1900/3/10");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
+  for (std::size_t i = 1; i < 11; ++i) {
+    EXPECT_DOUBLE_EQ(r.values[i][0][0].as_number(), 7.0) << "bucket " << i;
+  }
+}
+
+TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitStartDeepInDataClipsLastBucket) {
+  // Start=61 puts 61 of the 71 records into the catch-all; the trailing
+  // regular bucket clips to the resolved auto End (data max + 1), not to
+  // the true data max, so its label spans one day past the last record.
+  PivotCache cache = build_days_interval_cache();
+  PivotTable table = build_days_grouped_table(/*start_serial=*/61.0);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 3U);
+  EXPECT_EQ(r.rows[0].label, "<1900/3/1");
+  EXPECT_EQ(r.rows[1].label, "1900/3/1 - 1900/3/7");
+  EXPECT_EQ(r.rows[2].label, "1900/3/8 - 1900/3/11");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 61.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 7.0);
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 3.0);
+}
+
+TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitEndAboveDataMaxAddsCatchAll) {
+  // Mirror image of ExplicitStartAboveMinAddsCatchAll: an explicit End
+  // (60) short of the data maximum (70) collapses everything above it
+  // into one ">1900/2/29" catch-all, and the last regular bucket clips
+  // to End the same way the auto-End case clips to the data maximum.
+  // Serial 60 is "1900/2/29" (Excel's 1900 system has a phantom leap
+  // day real Gregorian 1900 does not), not "1900/3/1" -- confirmed by
+  // pivot_week_1900's own auto-End bucket "1900/2/25 - 1900/3/2",
+  // which spans serials 56-62 including the ghost day. Not in the
+  // fixture itself (which only varies Start, never End); label shape
+  // mirrors the measured `<start` bucket, but `>end` itself is
+  // unmeasured.
+  PivotCache cache = build_days_interval_cache();
+  PivotTable table = build_days_grouped_table(/*start_serial=*/std::nullopt, /*interval_days=*/7,
+                                              /*end_serial=*/60.0);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 10U);
+  EXPECT_EQ(r.rows[0].label, "1900/1/0 - 1900/1/6");
+  EXPECT_EQ(r.rows[7].label, "1900/2/18 - 1900/2/24");
+  EXPECT_EQ(r.rows[8].label, "1900/2/25 - 1900/2/29");
+  EXPECT_EQ(r.rows[9].label, ">1900/2/29");
+  for (std::size_t i = 0; i < 8; ++i) {
+    EXPECT_DOUBLE_EQ(r.values[i][0][0].as_number(), 7.0) << "bucket " << i;
+  }
+  EXPECT_DOUBLE_EQ(r.values[8][0][0].as_number(), 5.0);   // 1900/2/25..1900/3/1: 5 records.
+  EXPECT_DOUBLE_EQ(r.values[9][0][0].as_number(), 10.0);  // 1900/3/2..1900/3/11: 10 records.
 }
 
 // ---------------------------------------------------------------------------

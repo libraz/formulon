@@ -3173,14 +3173,16 @@ typedef enum {
 
 /**
  * @brief Date-grouping granularity. Numbering mirrors
- *        `formulon::pivot::DateGrouping`.
+ *        `formulon::pivot::DateGrouping`. `FM_PIVOT_DATE_DAYS` is
+ *        Excel's "By: Days" grouping; a real Excel "week" is `DAYS`
+ *        with `interval_days == 7` (see `..._set_date_group`).
  */
 typedef enum {
   FM_PIVOT_DATE_DAY = 0,
   FM_PIVOT_DATE_MONTH = 1,
   FM_PIVOT_DATE_QUARTER = 2,
   FM_PIVOT_DATE_YEAR = 3,
-  FM_PIVOT_DATE_WEEK = 4,
+  FM_PIVOT_DATE_DAYS = 4,
   FM_PIVOT_DATE_HOUR = 5,
   FM_PIVOT_DATE_MINUTE = 6,
   FM_PIVOT_DATE_SECOND = 7
@@ -3610,12 +3612,22 @@ FM_API fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t* wb,
 /**
  * @brief Configures date-grouping on pivot field `field_idx`. Pass
  *        `start_year_or_neg1 == -1` (and likewise `end_year_or_neg1`)
- *        to leave the bound unset. `granularity` and `calendar` are raw
- *        signed 32-bit ordinals; unknown values return `kInvalidArgument`.
+ *        to leave the Year-truncation bound unset (`FM_PIVOT_DATE_YEAR`
+ *        only). `interval_days` / `start_serial_or_neg1` /
+ *        `end_serial_or_neg1` (Excel date serials, `-1.0` = auto) are
+ *        `FM_PIVOT_DATE_DAYS`-only and ignored otherwise. `granularity`
+ *        and `calendar` are raw signed 32-bit ordinals.
+ *
+ * @return `kInvalidArgument` for an unknown `granularity`/`calendar`,
+ *         or -- when `granularity` is `FM_PIVOT_DATE_DAYS` -- for
+ *         `interval_days == 0` or an explicit `start_serial_or_neg1` >
+ *         an explicit `end_serial_or_neg1`.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                           size_t field_idx, int32_t granularity, int32_t calendar,
-                                                          int32_t start_year_or_neg1, int32_t end_year_or_neg1);
+                                                          int32_t start_year_or_neg1, int32_t end_year_or_neg1,
+                                                          uint32_t interval_days, double start_serial_or_neg1,
+                                                          double end_serial_or_neg1);
 
 /** @brief Removes the date-grouping config from pivot field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_field_clear_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,

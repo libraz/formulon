@@ -318,8 +318,12 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   const std::int32_t calendar = info.Length() > 4 ? info[4].ToNumber().Int32Value() : 0;
   const int32_t start_year = info.Length() > 5 ? info[5].As<Napi::Number>().Int32Value() : -1;
   const int32_t end_year = info.Length() > 6 ? info[6].As<Napi::Number>().Int32Value() : -1;
+  const std::uint32_t interval_days = info.Length() > 7 ? info[7].As<Napi::Number>().Uint32Value() : 1;
+  const double start_serial = info.Length() > 8 ? info[8].As<Napi::Number>().DoubleValue() : -1.0;
+  const double end_serial = info.Length() > 9 ? info[9].As<Napi::Number>().DoubleValue() : -1.0;
   fm_status_t rc = fm_workbook_pivot_field_set_date_group(handle_, sheet, pivot_idx, field_idx, granularity, calendar,
-                                                          start_year, end_year);
+                                                          start_year, end_year, interval_days, start_serial,
+                                                          end_serial);
   return MakeStatus(env, rc);
 }
 

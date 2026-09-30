@@ -304,13 +304,16 @@ export const PivotFilterType: Readonly<{
   LabelDate: 5;
 }>;
 
-/** Date-grouping granularity. Mirrors `fm_pivot_date_grouping_t`. */
+/** Date-grouping granularity. Mirrors `fm_pivot_date_grouping_t`.
+ *  `Days` is Excel's "By: Days" grouping (an explicit interval, e.g. a
+ *  real Excel "week" is `Days` with `intervalDays: 7`); there is no
+ *  separate week granularity. */
 export const PivotDateGrouping: Readonly<{
   Day: 0;
   Month: 1;
   Quarter: 2;
   Year: 3;
-  Week: 4;
+  Days: 4;
   Hour: 5;
   Minute: 6;
   Second: 7;
@@ -1927,7 +1930,16 @@ export interface Workbook {
   /** Drops every subtotal-fn entry from pivot field `fieldIdx`. */
   pivotFieldClearSubtotalFns(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Configures date-grouping on pivot field `fieldIdx`. Pass `-1` for
-   *  `startYear` / `endYear` to leave the bound unset. */
+   *  `startYear` / `endYear` to leave the Year-truncation bound unset
+   *  (meaningful only for `PivotDateGrouping.Year`). `intervalDays` is
+   *  the `PivotDateGrouping.Days`-only bucket width in whole days;
+   *  defaults to `1`, which is also what every other granularity
+   *  should pass. `startSerial` / `endSerial` are the `Days`-only
+   *  Start/End window as Excel date serials; default `-1` leaves
+   *  either auto (Start = the field's data minimum, End = the data
+   *  maximum plus one day), and both are ignored for every other
+   *  granularity. With `Days`, a zero `intervalDays` or a start after
+   *  the end is rejected with `kInvalidArgument`. */
   pivotFieldSetDateGroup(
     sheet: number,
     pivotIdx: number,
@@ -1936,6 +1948,9 @@ export interface Workbook {
     calendar: number,
     startYear: number,
     endYear: number,
+    intervalDays?: number,
+    startSerial?: number,
+    endSerial?: number,
   ): Status;
   /** Removes the date-grouping config from pivot field `fieldIdx`. */
   pivotFieldClearDateGroup(sheet: number, pivotIdx: number, fieldIdx: number): Status;

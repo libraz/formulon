@@ -512,13 +512,14 @@ JsStatus JsWorkbook::pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotId
 }
 
 JsStatus JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t granularity,
-                                            uint32_t calendar, int32_t startYear, int32_t endYear) {
+                                            uint32_t calendar, int32_t startYear, int32_t endYear,
+                                            uint32_t intervalDays, double startSerial, double endSerial) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  fm_status_t rc =
-      fm_workbook_pivot_field_set_date_group(handle_, sheet, pivotIdx, fieldIdx, static_cast<std::int32_t>(granularity),
-                                             static_cast<std::int32_t>(calendar), startYear, endYear);
+  fm_status_t rc = fm_workbook_pivot_field_set_date_group(
+      handle_, sheet, pivotIdx, fieldIdx, static_cast<std::int32_t>(granularity), static_cast<std::int32_t>(calendar),
+      startYear, endYear, intervalDays, startSerial, endSerial);
   return status_from_rc(rc);
 }
 

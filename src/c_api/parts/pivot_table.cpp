@@ -514,11 +514,10 @@ extern "C" fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t*
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, std::size_t sheet_index,
-                                                              std::size_t pivot_index, std::size_t field_idx,
-                                                              std::int32_t granularity, std::int32_t calendar,
-                                                              std::int32_t start_year_or_neg1,
-                                                              std::int32_t end_year_or_neg1) {
+extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(
+    fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, std::size_t field_idx,
+    std::int32_t granularity, std::int32_t calendar, std::int32_t start_year_or_neg1, std::int32_t end_year_or_neg1,
+    std::uint32_t interval_days, double start_serial_or_neg1, double end_serial_or_neg1) {
   clear_last_error();
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
@@ -531,6 +530,20 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb,
   enum_status = check_enum_domain(calendar, 1, "fm_workbook_pivot_field_set_date_group", "calendar");
   if (enum_status != 0) {
     return enum_status;
+  }
+  const bool has_start = start_serial_or_neg1 != -1.0;
+  const bool has_end = end_serial_or_neg1 != -1.0;
+  if (granularity == FM_PIVOT_DATE_DAYS) {
+    if (interval_days == 0) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "interval_days must be non-zero",
+                               "fm_workbook_pivot_field_set_date_group: interval_days=0");
+    }
+    if (has_start && has_end && start_serial_or_neg1 > end_serial_or_neg1) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "start_serial_or_neg1 must not exceed end_serial_or_neg1",
+                               "fm_workbook_pivot_field_set_date_group: start=" + std::to_string(start_serial_or_neg1) +
+                                   " end=" + std::to_string(end_serial_or_neg1));
+    }
   }
   formulon::pivot::PivotTable* table = nullptr;
   auto* field =
@@ -546,6 +559,13 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb,
   }
   if (end_year_or_neg1 != -1) {
     grp.end_year = end_year_or_neg1;
+  }
+  grp.interval_days = interval_days;
+  if (has_start) {
+    grp.start_serial = start_serial_or_neg1;
+  }
+  if (has_end) {
+    grp.end_serial = end_serial_or_neg1;
   }
   field->date_group = std::move(grp);
   invalidate_pivot_result(*table);

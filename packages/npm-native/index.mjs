@@ -169,13 +169,17 @@ export const PivotFilterType = Object.freeze({
   LabelDate: 5,
 });
 
-/** `fm_pivot_date_grouping_t` ordinals. */
+/**
+ * `fm_pivot_date_grouping_t` ordinals. `Days` is Excel's "By: Days"
+ * grouping (an explicit interval, e.g. a real Excel "week" is `Days`
+ * with `intervalDays: 7`); there is no separate week grouping.
+ */
 export const PivotDateGrouping = Object.freeze({
   Day: 0,
   Month: 1,
   Quarter: 2,
   Year: 3,
-  Week: 4,
+  Days: 4,
   Hour: 5,
   Minute: 6,
   Second: 7,

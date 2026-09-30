@@ -430,18 +430,6 @@ MonthFields shift_month_fields(const date_time::YMD& base, long long months) noe
   return out;
 }
 
-// Excel's 1904 direct-Text month functions first map the Text date back to
-// the old 1900 coordinate. Serial zero in that coordinate has Excel's
-// special 1900-01-00 spelling, which `ymd_from_serial` intentionally does
-// not expose. Keeping it explicit also prevents passing day zero to the
-// unsigned civil-date conversion helpers.
-date_time::YMD legacy_1900_ymd(double serial) noexcept {
-  if (std::floor(serial) == 0.0) {
-    return date_time::YMD{1900, 1u, 0u};
-  }
-  return date_time::ymd_from_serial(serial, /*date1904=*/false);
-}
-
 struct ShiftedMonth {
   int y;
   unsigned m;
@@ -489,7 +477,7 @@ Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904)
 }
 
 double legacy_edate_result(const ShiftedMonth& shifted) noexcept {
-  const date_time::YMD legacy_base = legacy_1900_ymd(shifted.legacy_input_1900);
+  const date_time::YMD legacy_base = date_time::legacy_1900_ymd(shifted.legacy_input_1900);
   const MonthFields legacy_target = shift_month_fields(legacy_base, shifted.months);
   // The 1900-01-00 alias is one day before the first of its target month.
   const double serial_1900 = legacy_target.d == 0u
@@ -499,7 +487,7 @@ double legacy_edate_result(const ShiftedMonth& shifted) noexcept {
 }
 
 double legacy_eomonth_result(const ShiftedMonth& shifted) noexcept {
-  const date_time::YMD legacy_base = legacy_1900_ymd(shifted.legacy_input_1900);
+  const date_time::YMD legacy_base = date_time::legacy_1900_ymd(shifted.legacy_input_1900);
   const MonthFields legacy_target = shift_month_fields(legacy_base, shifted.months);
   return date_time::serial_from_ymd(legacy_target.y, legacy_target.m, legacy_target.eom_d, false) - kDate1904EpochGap;
 }
@@ -674,7 +662,7 @@ YearfracEndpoint make_yearfrac_endpoint(const CoercedDateArg& arg, bool date1904
     // difference, while its civil fields come from the once-rebased 1900
     // coordinate. This is deliberately distinct from DATEVALUE/DATE, which
     // are Numbers already expressed in the workbook coordinate.
-    return YearfracEndpoint{workbook_serial - kDate1904EpochGap, legacy_1900_ymd(workbook_serial)};
+    return YearfracEndpoint{workbook_serial - kDate1904EpochGap, date_time::legacy_1900_ymd(workbook_serial)};
   }
   return YearfracEndpoint{
       workbook_serial, date_time::ymd_from_serial(std::floor(normal_date_serial(arg, date1904)), /*date1904=*/false)};

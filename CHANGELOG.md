@@ -79,6 +79,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other non-empty string is rejected with `kInvalidArgument`. A pivot
   field's id now reaches the saved file as `<pivotField numFmtId>` and is
   read back from it; it was previously accepted and silently dropped.
+- **Breaking (C ABI and every binding):** the pivot date grouping
+  `FM_PIVOT_DATE_WEEK` / `PivotDateGrouping.Week` is replaced by
+  `FM_PIVOT_DATE_DAYS` / `PivotDateGrouping.Days` (same ordinal, 4), which
+  is Excel's "Days" grouping: a week is a 7-day interval.
+  `fm_workbook_pivot_field_set_date_group` (`pivotFieldSetDateGroup` /
+  `pivot_field_set_date_group`) gains the interval in days and an optional
+  Start and End date serial. Buckets start at the field's data minimum
+  unless Start is given, are labelled `yyyy/m/d - yyyy/m/d`, and records
+  below Start or above End collapse into `<start` / `>end` buckets. The
+  previous Sunday-aligned `YYYY-MM-DD` weeks matched no Excel grouping. A
+  zero interval, or a Start after End, is rejected with `kInvalidArgument`.
 - A pivot item added by cache index, which carries no name of its own,
   derives its display label from the bound cache value at evaluation
   time. Hiding such an item now hides the value it displays, a sole

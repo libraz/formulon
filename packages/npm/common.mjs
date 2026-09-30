@@ -65,7 +65,7 @@ export const PivotDateGrouping = Object.freeze({
   Month: 1,
   Quarter: 2,
   Year: 3,
-  Week: 4,
+  Days: 4,
   Hour: 5,
   Minute: 6,
   Second: 7,
