@@ -971,35 +971,6 @@ void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFo
 
 namespace {
 
-/// One framed record of a buffer, by offset.
-struct FramedRecord {
-  std::uint16_t type = 0;
-  ByteSpan payload{};
-  std::size_t begin = 0;
-  std::size_t end = 0;
-};
-
-/// Splits `buf` into framed records; empty when it does not parse whole.
-std::vector<FramedRecord> SplitRecords(const std::vector<std::uint8_t>& buf) {
-  std::vector<FramedRecord> out;
-  ByteSpan cursor{buf.data(), buf.size()};
-  while (cursor.size != 0U) {
-    const std::size_t begin = static_cast<std::size_t>(cursor.data - buf.data());
-    auto rec = read_record(cursor);
-    if (!rec) {
-      return {};
-    }
-    out.push_back(
-        FramedRecord{rec.value().type, rec.value().payload, begin, static_cast<std::size_t>(cursor.data - buf.data())});
-  }
-  return out;
-}
-
-void Append(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& src, const FramedRecord& rec) {
-  dst.insert(dst.end(), src.begin() + static_cast<std::ptrdiff_t>(rec.begin),
-             src.begin() + static_cast<std::ptrdiff_t>(rec.end));
-}
-
 bool IsMeasuredDataBarRule14(const FramedRecord& rec) {
   return rec.type == kBeginCfRule14 && rec.payload.size == kDataBarRule14Bytes && rec.payload.data[4] == 4U;
 }
@@ -1054,7 +1025,7 @@ std::vector<std::uint8_t> RewriteRule14(const std::vector<std::uint8_t>& buf, co
       if (rec.payload.size != kDataBar14Bytes) {
         std::vector<std::uint8_t> raw;
         for (std::size_t k = first; k <= last; ++k) {
-          Append(raw, buf, recs[k]);
+          append_record(raw, buf, recs[k]);
         }
         return raw;
       }
@@ -1067,7 +1038,7 @@ std::vector<std::uint8_t> RewriteRule14(const std::vector<std::uint8_t>& buf, co
         out.insert(out.end(), colors.begin(), colors.end());
         colors_pending = false;
       }
-      Append(out, buf, rec);
+      append_record(out, buf, rec);
     }
   }
   return out;
@@ -1086,7 +1057,7 @@ std::size_t FindType(const std::vector<FramedRecord>& recs, std::size_t from, st
 
 void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vector<cf::ConditionalFormat>& formats,
                              std::unordered_set<std::string>& linked) {
-  const std::vector<FramedRecord> recs = SplitRecords(records);
+  const std::vector<FramedRecord> recs = split_records(records);
   std::unordered_map<std::string, const cf::DataBarSpec*> model;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
@@ -1102,7 +1073,7 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
     const bool container = recs[i].type == kFrtBegin && i + 1U < n && recs[i + 1U].type == kBeginCfs14 &&
                            close + 1U < n && recs[close + 1U].type == kFrtEnd;
     if (!container) {
-      Append(out, records, recs[i]);
+      append_record(out, records, recs[i]);
       ++i;
       continue;
     }
@@ -1110,7 +1081,7 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
     for (std::size_t k = i + 2U; k < close;) {
       const std::size_t block_end = FindType(recs, k, close, kEndCondFmt14);
       if (recs[k].type != kBeginCondFmt14 || block_end == close) {
-        Append(inner, records, recs[k]);
+        append_record(inner, records, recs[k]);
         ++k;
         continue;
       }
@@ -1120,7 +1091,7 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
       for (std::size_t l = k + 1U; l < block_end;) {
         const std::size_t rule_end = FindType(recs, l, block_end, kEndCfRule14);
         if (recs[l].type != kBeginCfRule14 || rule_end == block_end) {
-          Append(block, records, recs[l]);
+          append_record(block, records, recs[l]);
           ++l;
           continue;
         }
@@ -1135,7 +1106,7 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
           }
         } else {
           for (std::size_t m = l; m <= rule_end; ++m) {
-            Append(rule, records, recs[m]);
+            append_record(rule, records, recs[m]);
           }
         }
         if (!rule.empty()) {
@@ -1145,18 +1116,18 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
         l = rule_end + 1U;
       }
       if (kept != 0U || rules == 0U) {
-        Append(inner, records, recs[k]);
+        append_record(inner, records, recs[k]);
         inner.insert(inner.end(), block.begin(), block.end());
-        Append(inner, records, recs[block_end]);
+        append_record(inner, records, recs[block_end]);
       }
       k = block_end + 1U;
     }
     if (!inner.empty()) {
-      Append(out, records, recs[i]);
-      Append(out, records, recs[i + 1U]);
+      append_record(out, records, recs[i]);
+      append_record(out, records, recs[i + 1U]);
       out.insert(out.end(), inner.begin(), inner.end());
-      Append(out, records, recs[close]);
-      Append(out, records, recs[close + 1U]);
+      append_record(out, records, recs[close]);
+      append_record(out, records, recs[close + 1U]);
     }
     i = close + 2U;
   }
@@ -1223,7 +1194,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
   if (groups.empty()) {
     return Expected<void, Error>::Ok();
   }
-  const std::vector<FramedRecord> recs = SplitRecords(records);
+  const std::vector<FramedRecord> recs = split_records(records);
   for (std::size_t i = 0; i + 1U < recs.size(); ++i) {
     if (recs[i].type == kFrtBegin && recs[i + 1U].type == kBeginCfs14) {
       const std::size_t close = FindType(recs, i, recs.size(), kEndCfs14);

@@ -334,11 +334,13 @@ Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const
     emit_xlnullablewidestring(iso, std::nullopt);
     emit_record(dst, kBrtBookProtectionIso, iso);
   }
-  std::vector<std::uint8_t> payload;
-  emit_u16(payload, pwd);
-  emit_u16(payload, 0U);
-  emit_u16(payload, flags);
-  emit_record(dst, kBrtBookProtection, payload);
+  if (pwd != 0U || flags != 0U || !algorithm.empty()) {
+    std::vector<std::uint8_t> payload;
+    emit_u16(payload, pwd);
+    emit_u16(payload, 0U);
+    emit_u16(payload, flags);
+    emit_record(dst, kBrtBookProtection, payload);
+  }
   return !(read_xsd_bool(node, "lockWindows", false) || read_xsd_bool(node, "lockRevision", false) ||
            node.attribute("revisionsPassword") || node.attribute("revisionsAlgorithmName"));
 }

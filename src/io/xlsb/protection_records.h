@@ -11,14 +11,16 @@
 //   * BrtSheetProtectionIso (678, precedes 535): spin count u32, the same
 //     16 booleans, hash and salt as u32-length byte blobs, then the
 //     algorithm name as an XLWideString.
-//   * BrtBookProtection (534): protpwd u16, a u16 Mac Excel always writes
+//   * BrtBookProtection (534): protpwd u16, a u16 Excel always writes
 //     as 0, and a u16 flag word whose bit 0 is lockStructure.
 //   * BrtBookProtectionIso (677, precedes 534): book and revision spin
 //     counts, the flag word, then the book's hash / salt / algorithm and
 //     the revision's hash / salt / nullable algorithm.
 //
-// Mac Excel drops lockWindows and lockRevision on save, so their bits
-// are unmeasured and a record setting them is refused.
+// Excel (macOS and Windows 16.0.20228) drops lockWindows, lockRevision and
+// the revisions password on save in both formats, even when set through the
+// object model, so no field for them exists and a record setting one is
+// refused.
 
 #ifndef FORMULON_IO_XLSB_PROTECTION_RECORDS_H_
 #define FORMULON_IO_XLSB_PROTECTION_RECORDS_H_
@@ -64,8 +66,8 @@ Expected<void, Error> emit_sheet_protection(std::vector<std::uint8_t>& dst, cons
 bool decode_book_protection(ByteSpan payload, ByteSpan iso, std::string& xml);
 
 /// Emits BrtBookProtectionIso (when a modern hash is set) and
-/// BrtBookProtection for a `<workbookProtection>` element; nothing for an
-/// empty one. Returns false when the element carries lockWindows,
+/// BrtBookProtection for a `<workbookProtection>` element; nothing when
+/// only dropped flags remain, as in Excel's own save. Returns false when the element carries lockWindows,
 /// lockRevision or a revisions password, which have no measured field and
 /// are left out. Fails on a hash, salt or password the records cannot carry.
 Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const std::string& xml);

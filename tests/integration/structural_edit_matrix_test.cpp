@@ -558,36 +558,26 @@ TEST(StructuralEditMatrix, EditsLeaveAnUnparsableAutoFilterRefAlone) {
   EXPECT_EQ(wb.sheet(0).auto_filter_xml(), original);
 }
 
-// The three structures `shift_sheet_metadata` deliberately omits. Excel
-// moves all of them, so these tests pin a divergence rather than a
-// correct behaviour: they exist so a future partial fix -- one that
-// derives an `<xm:sqref>` from the model rule its `x14:id` names, and
-// therefore reaches only the entries carrying an id -- shows up as a
-// changed expectation here instead of shipping as "extLst now follows
-// edits". The reason the whole of it is not fixed at once, and what it
-// would take, is `structural_edit_does_not_remap_verbatim_worksheet_
-// extensions` in tests/divergence.yaml.
+// The worksheet `<extLst>` is retained verbatim, but its x14 ranges and
+// formulas move with the edit, as Excel moves them: the x14 CF range stays
+// equal to the legacy sqref it extends, and a sparkline's location and
+// source move like ordinary references. Excel-saved counterparts are
+// compared in tests/unit/io/x14_structural_edit_fixture_test.cpp.
 
-TEST(StructuralEditMatrix, EditsLeaveExtLstCoordinatesAtTheirPreEditRectangle) {
-  Workbook wb = Workbook::create();
-  Sheet& sheet = wb.sheet(0);
+namespace {
 
-  // A DataBar extension linked to a legacy rule by GUID, plus a sparkline
-  // group. The sparkline is the one that keeps rendering afterwards: it
-  // carries its own source range in `<xm:f>` and no link to anything the
-  // model owns, so nothing beside it moved either.
-  const std::string ext_lst =
-      "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\">"
-      "<x14:conditionalFormattings><x14:conditionalFormatting>"
-      "<x14:cfRule type=\"dataBar\" id=\"{00000000-0000-0000-0000-000000000001}\"/>"
-      "<xm:sqref>A1:A10</xm:sqref>"
-      "</x14:conditionalFormatting></x14:conditionalFormattings></ext>"
-      "<ext uri=\"{05C60535-1F16-4fd2-B633-F4F36F0B64E0}\">"
-      "<x14:sparklineGroups><x14:sparklineGroup><x14:sparklines><x14:sparkline>"
-      "<xm:f>Sheet1!A1:A10</xm:f><xm:sqref>C1</xm:sqref>"
-      "</x14:sparkline></x14:sparklines></x14:sparklineGroup></x14:sparklineGroups></ext></extLst>";
-  sheet.set_ext_lst_xml(ext_lst);
+const char kExtLstDataBarAndSparkline[] =
+    "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\">"
+    "<x14:conditionalFormattings><x14:conditionalFormatting>"
+    "<x14:cfRule type=\"dataBar\" id=\"{00000000-0000-0000-0000-000000000001}\"/>"
+    "<xm:sqref>A1:A10</xm:sqref>"
+    "</x14:conditionalFormatting></x14:conditionalFormattings></ext>"
+    "<ext uri=\"{05C60535-1F16-4fd2-B633-F4F36F0B64E0}\">"
+    "<x14:sparklineGroups><x14:sparklineGroup><x14:colorSeries rgb=\"FF376092\"/><x14:sparklines>"
+    "<x14:sparkline><xm:f>Sheet1!A1:A10</xm:f><xm:sqref>C1</xm:sqref></x14:sparkline>"
+    "</x14:sparklines></x14:sparklineGroup></x14:sparklineGroups></ext></extLst>";
 
+void AddLinkedDataBar(Sheet& sheet) {
   cf::ConditionalFormat block;
   block.sqref.push_back({{0, 0}, {9, 0}});
   cf::CFRule rule;
@@ -595,17 +585,62 @@ TEST(StructuralEditMatrix, EditsLeaveExtLstCoordinatesAtTheirPreEditRectangle) {
   rule.id = "{00000000-0000-0000-0000-000000000001}";
   block.rules.push_back(rule);
   sheet.mutable_conditional_formats().push_back(block);
+}
+
+}  // namespace
+
+TEST(StructuralEditMatrix, EditsMoveExtLstRangesAndFormulas) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_ext_lst_xml(kExtLstDataBarAndSparkline);
+  AddLinkedDataBar(sheet);
 
   ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 0, 5)));
 
-  // The modelled sqref moved; the extension's copy of the same rectangle
-  // did not, and neither did the sparkline's source range.
   ASSERT_EQ(sheet.conditional_formats().size(), 1U);
   ASSERT_EQ(sheet.conditional_formats()[0].sqref.size(), 1U);
   EXPECT_EQ(sheet.conditional_formats()[0].sqref[0].first.row, 5U);
   EXPECT_EQ(sheet.conditional_formats()[0].sqref[0].last.row, 14U);
-  EXPECT_EQ(sheet.ext_lst_xml(), ext_lst);
+  std::string expected = kExtLstDataBarAndSparkline;
+  expected.replace(expected.find("A1:A10</xm:sqref>"), 6, "A6:A15");
+  expected.replace(expected.find("Sheet1!A1:A10"), 13, "Sheet1!A6:A15");
+  expected.replace(expected.find("C1</xm:sqref>"), 2, "C6");
+  EXPECT_EQ(sheet.ext_lst_xml(), expected);
 }
+
+TEST(StructuralEditMatrix, DeletingASparklineLocationRemovesItsGroup) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_ext_lst_xml(kExtLstDataBarAndSparkline);
+  AddLinkedDataBar(sheet);
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, 2, 1)));
+
+  EXPECT_EQ(sheet.ext_lst_xml(),
+            "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\">"
+            "<x14:conditionalFormattings><x14:conditionalFormatting>"
+            "<x14:cfRule type=\"dataBar\" id=\"{00000000-0000-0000-0000-000000000001}\"/>"
+            "<xm:sqref>A1:A10</xm:sqref>"
+            "</x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>");
+}
+
+TEST(StructuralEditMatrix, DeletingEveryExtLstRangeEmptiesIt) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_ext_lst_xml(kExtLstDataBarAndSparkline);
+  AddLinkedDataBar(sheet);
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, 0, 3)));
+
+  EXPECT_TRUE(sheet.conditional_formats().empty());
+  EXPECT_EQ(sheet.ext_lst_xml(), "");
+}
+
+// An unmodelled `<worksheet>` child is the structure a row/column edit does
+// not reach: it is retained verbatim, so a rectangle inside it keeps its
+// pre-edit coordinates. The reason is
+// `structural_edit_does_not_remap_unmodelled_worksheet_children` in
+// tests/divergence.yaml.
 
 TEST(StructuralEditMatrix, EditsLeaveRawWorksheetChildrenAtTheirPreEditRectangle) {
   Workbook wb = Workbook::create();

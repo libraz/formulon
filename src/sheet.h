@@ -60,6 +60,13 @@ struct MergeRange {
   std::uint32_t last_col = 0;
 };
 
+/// Moves the ranges of one sqref (a conditional format's, or a retained x14
+/// copy of one) for a row/column edit: `count` rows or columns inserted or
+/// deleted at 0-based `index`. Ranges the edit deletes are removed, and a
+/// delete joins the ranges it brings edge to edge.
+void shift_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
+                        bool row_axis);
+
 /// One `<hyperlink>` entry attached to a sheet. The numeric rectangle is the
 /// sole source of truth; the OOXML writer regenerates its `ref` attribute from
 /// these four 0-based inclusive endpoints. The OOXML wire form is
@@ -1318,28 +1325,10 @@ class Sheet {
   /// formatting survives a save cycle. Re-emitted at the worksheet tail
   /// (after `<tableParts>`) per ECMA-376 element order.
   ///
-  /// A row/column edit does not remap the coordinates inside it, so an
-  /// `<xm:sqref>` here keeps its pre-edit rectangle while the `cfRule` it
-  /// extends moves with `conditional_formats()`. Excel resolves the
-  /// mismatch by dropping the extension, which silently reverts an extended
-  /// DataBar to its legacy rendering.
-  ///
-  /// The extended DataBar is the cheapest case to describe, not the whole
-  /// of it, and reading it as the whole understates what a structural edit
-  /// leaves behind here. An `<x14:cfRule>` carrying no `id` has no link
-  /// back to a model rule at all, so nothing beside it moved either.
-  /// Sparklines are worse than a stale rectangle: each group carries both
-  /// an `<xm:sqref>` for the cells it draws in and an `<xm:f>` naming the
-  /// source range it draws from, and neither is modelled, so an edit
-  /// between the two leaves a chart reading a range that no longer holds
-  /// its data. Slicers name their cache and their anchored range the same
-  /// way. Deriving the right coordinates from the model — rather than
-  /// shifting the retained bytes — closes only the subset that carries an
-  /// `id`, and rests on Excel writing an `xm:sqref` equal to the legacy
-  /// block's `sqref` rather than a subset of it, which no file in the
-  /// corpus can confirm. That is why this is documented rather than
-  /// half-fixed: deriving a wrong rectangle would trade a silent omission
-  /// for a silent mis-range.
+  /// A workbook row/column edit moves every `<xm:sqref>` and `<xm:f>`
+  /// inside it (x14 CF ranges, sparkline locations and sources, x14
+  /// validations) by the rules the modelled structures follow, and removes
+  /// a sparkline or x14 block whose range it deletes.
   const std::string& ext_lst_xml() const noexcept { return ext_lst_xml_; }
 
   /// Sets the raw worksheet-level `<extLst>` element. Plain metadata.
@@ -1418,15 +1407,12 @@ class Sheet {
   /// themselves (which each public edit method moves first, since the cell
   /// storage differs per axis).
   ///
-  /// Three sheet-attached structures are deliberately absent from it, and
-  /// naming them here is the point: a reader checking the enumeration for
-  /// what moves would otherwise discharge that check against a list that
-  /// silently omits the fields most likely to hold stale coordinates.
-  /// `ext_lst_xml_`, `raw_extensions_` and `xlsb_tail_` are retained
-  /// byte-verbatim, so a `ref`, an `sqref` or a formula inside them keeps
-  /// its pre-edit rectangle. Each field's own declaration states what that
-  /// costs; `auto_filter_xml_` is the one raw field that *is* shifted, and
-  /// only its `ref` attribute is.
+  /// The retained `ext_lst_xml_`, `xlsb_tail_` and `raw_extensions_` are
+  /// deliberately absent: the sheet does not parse them. The workbook edit
+  /// moves the x14 ranges and formulas in the first two, since that needs
+  /// the file-format readers; `raw_extensions_` children keep their pre-edit
+  /// rectangles. `auto_filter_xml_` is the one raw field whose `ref`
+  /// attribute is shifted here.
   void shift_sheet_metadata(const StructuralEdit& edit);
 
   // ---------------------------------------------------------------------------

@@ -134,11 +134,12 @@ struct XlsbExternSheetEntry {
 /// keeping these slots preserves source order even when a source omits one of
 /// those blocks.
 ///
-/// Retention is byte-verbatim, with the same consequence the raw-XML
-/// retention already carries: a row/column edit does not remap coordinates
-/// inside these records. A retained formula blob's sheet-qualified
-/// references are `ixti` indices into the source `BrtExternSheet` table,
-/// which `extern_sheets` records so the writer can keep those indices.
+/// Retention is byte-verbatim. A workbook row/column edit remaps the x14 CF
+/// ranges and formulas and each sparkline's range and source; coordinates
+/// in any other retained record keep their pre-edit values. A retained formula
+/// blob's sheet-qualified references are `ixti` indices into the source
+/// `BrtExternSheet` table, which `extern_sheets` records so the writer can
+/// keep those indices.
 struct XlsbSheetTail {
   /// Records between the end of the cell table and the merged-cell block.
   std::vector<std::uint8_t> before_merges;

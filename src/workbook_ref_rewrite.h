@@ -81,6 +81,16 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
 /// name now resolves to a different range than the dep graph was built from.
 bool rewrite_defined_names(std::vector<DefinedName>& names, const parser::RefTransform& transform);
 
+// Moves the ranges inside `sheet`'s retained worksheet extensions -- the
+// raw `<extLst>` and the `.xlsb` tail records -- for a row/column edit, by
+// the rule `shift_sqref_ranges` applies to the modelled sqrefs. The sheet
+// cannot do this in its own move: finding those ranges takes the
+// file-format readers. Formulas in the same content move with
+// `rewrite_sheet_metadata_formulas` against pre-edit coordinates, so call
+// this after the sheet's own move.
+void shift_retained_extension_ranges(Sheet& sheet, std::uint32_t index, std::uint32_t count, bool is_delete,
+                                     bool row_axis);
+
 }  // namespace formulon
 
 #endif  // FORMULON_WORKBOOK_REF_REWRITE_H_

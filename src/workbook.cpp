@@ -1739,6 +1739,8 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
   } else {
     target.delete_cols(origin, count);
   }
+  shift_retained_extension_ranges(target, origin, count, edit == parser::RowColEdit::kDelete,
+                                  axis == parser::RowColAxis::kRow);
   // Re-index only after the physical move. Formula text is rewritten while
   // cells still occupy their pre-edit coordinates, so rebuilding the graph
   // before the move would register moved owners (including Ref3D owners) at

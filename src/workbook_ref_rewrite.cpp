@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -12,6 +13,8 @@
 #include "defined_name.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
+#include "io/ext_lst_refs.h"
+#include "io/xlsb/tail_refs.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
@@ -163,6 +166,21 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
       rewrite_field(validation.formula1, transform);
       rewrite_field(validation.formula2, transform);
     }
+
+    // Formulas inside retained extensions: sparkline sources, x14 rule and
+    // validation formulas.
+    std::string ext_lst = sheet.ext_lst_xml();
+    if (io::remap_ext_lst_formulas(ext_lst, [&transform](std::string_view text) -> std::optional<std::string> {
+          FormulaRewriteResult result = rewrite_formula(text, transform);
+          return result.changed ? std::optional<std::string>(std::move(result.text)) : std::nullopt;
+        })) {
+      sheet.set_ext_lst_xml(std::move(ext_lst));
+    }
+    if (!sheet.xlsb_tail().empty()) {
+      XlsbSheetTail tail = sheet.xlsb_tail();
+      io::xlsb::remap_tail_formulas(tail, transform);
+      sheet.set_xlsb_tail(std::move(tail));
+    }
   }
 
   for (TableMetadata& table : tables) {
@@ -267,6 +285,22 @@ bool rewrite_defined_names(std::vector<DefinedName>& names, const parser::RefTra
     }
   }
   return any_changed;
+}
+
+void shift_retained_extension_ranges(Sheet& sheet, std::uint32_t index, std::uint32_t count, bool is_delete,
+                                     bool row_axis) {
+  const io::SqrefRemap remap = [&](std::vector<MergeRange>& ranges) {
+    shift_sqref_ranges(ranges, index, count, is_delete, row_axis);
+  };
+  std::string ext_lst = sheet.ext_lst_xml();
+  if (io::remap_ext_lst_sqrefs(ext_lst, remap)) {
+    sheet.set_ext_lst_xml(std::move(ext_lst));
+  }
+  if (!sheet.xlsb_tail().empty()) {
+    XlsbSheetTail tail = sheet.xlsb_tail();
+    io::xlsb::remap_tail_sqrefs(tail, remap);
+    sheet.set_xlsb_tail(std::move(tail));
+  }
 }
 
 }  // namespace formulon

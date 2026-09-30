@@ -69,6 +69,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/styles_writer_test.cpp
   unit/io/tables_reader_test.cpp
   unit/io/workbook_kind_test.cpp
+  unit/io/x14_structural_edit_fixture_test.cpp
   unit/io/xml_escape_test.cpp
   unit/io/xml_utils_test.cpp
   unit/io/xsd_bool_test.cpp
@@ -80,6 +81,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_roundtrip_symmetry_test.cpp
   unit/io/sheet_roundtrip_symmetry_test.cpp
   unit/io/xlsb_roundtrip_symmetry_test.cpp
+  unit/io/xlsb/book_protection_fixture_test.cpp
   unit/io/xlsb/feature_records_test.cpp
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp

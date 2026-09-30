@@ -133,6 +133,7 @@ set(FORMULON_CORE_SOURCES
   src/io/comments_writer.cpp
   src/io/defined_names.cpp
   src/io/dynamic_array_formula.cpp
+  src/io/ext_lst_refs.cpp
   src/io/future_functions.cpp
   src/io/iso_date.cpp
   src/io/ooxml_reader.cpp
@@ -188,6 +189,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/sst_writer.cpp
   src/io/xlsb/styles_reader.cpp
   src/io/xlsb/styles_writer.cpp
+  src/io/xlsb/tail_refs.cpp
   src/io/xlsb/writer.cpp
   src/cf/cf_evaluator.cpp
   src/cf/cf_helpers.cpp

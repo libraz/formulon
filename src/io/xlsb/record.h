@@ -23,8 +23,10 @@
 #ifndef FORMULON_IO_XLSB_RECORD_H_
 #define FORMULON_IO_XLSB_RECORD_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "io/zip_reader.h"
 #include "utils/error.h"
@@ -218,6 +220,20 @@ Expected<std::string, Error> read_xlnullablewidestring(ByteSpan& cursor);
 /// The function does *not* advance any cursor — callers pass in the
 /// raw 32-bit RK value already extracted via `read_u32`.
 double decode_rk_number(std::uint32_t rk);
+
+/// One framed record of a buffer, by offset.
+struct FramedRecord {
+  std::uint16_t type = 0;
+  ByteSpan payload{};
+  std::size_t begin = 0;
+  std::size_t end = 0;
+};
+
+/// Splits `buf` into framed records; empty when it does not parse whole.
+std::vector<FramedRecord> split_records(const std::vector<std::uint8_t>& buf);
+
+/// Appends `rec`'s framed bytes from `src` to `dst`.
+void append_record(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& src, const FramedRecord& rec);
 
 }  // namespace xlsb
 }  // namespace io

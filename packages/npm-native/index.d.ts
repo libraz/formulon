@@ -1766,22 +1766,15 @@ export interface Workbook {
    * The four structural edits move every structure the engine models:
    * cells, formulas, merges, conditional-format ranges, validations,
    * hyperlinks, tables, print areas, manual breaks and the auto-filter
-   * range.
+   * range. The ranges and formulas inside the worksheet `<extLst>` (the
+   * `x14` conditional-formatting block, sparkline groups, `x14`
+   * validations) move with them, as Excel moves them.
    *
-   * They do not move coordinates held in worksheet content the engine
-   * keeps byte-verbatim because it does not model it — the worksheet
-   * `<extLst>` (the `x14` conditional-formatting block behind DataBar
-   * negative-fill / axis / gradient settings, sparkline groups, slicer
-   * anchors) and any unmodelled `<worksheet>` child kept so a save does
-   * not drop it. Those keep their pre-edit rectangles.
-   *
-   * What that looks like in Excel differs per extension: it drops an
-   * `x14` entry whose range no longer matches the legacy rule it extends,
-   * so an extended DataBar quietly reverts to its legacy rendering, while
-   * a sparkline group keeps drawing and reads its source range from the
-   * wrong cells. Neither raises a status or a diagnostic counter. Re-author
-   * those extensions after editing rows or columns on a sheet that carries
-   * them.
+   * They do not move an unmodelled `<worksheet>` child kept byte-verbatim
+   * so a save does not drop it (a `<sortState>`, for one): a `ref` inside
+   * it keeps its pre-edit rectangle, and nothing reports it. An insert also
+   * does not copy the formatting of the row or column before it onto the
+   * new one, which Excel does — a sparkline included.
    */
 
   /** Inserts `count` rows at `row` on `sheet` and rewrites cross-workbook

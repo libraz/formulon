@@ -187,23 +187,17 @@ void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, std::u
   std::vector<cf::ConditionalFormat> retained_formats;
   retained_formats.reserve(formats.size());
   for (cf::ConditionalFormat& format : formats) {
-    std::vector<cf::CFCellRange> retained;
-    retained.reserve(format.sqref.size());
-    for (cf::CFCellRange& range : format.sqref) {
-      MergeRange shifted{range.first.row, range.first.col, range.last.row, range.last.col};
-      bool drop = false;
-      if (row_axis) {
-        ShiftRowRange(shifted, index, count, is_delete, &drop);
-      } else {
-        ShiftColRange(shifted, index, count, is_delete, &drop);
-      }
-      if (!drop) {
-        range.first = CellAddress{shifted.first_row, shifted.first_col};
-        range.last = CellAddress{shifted.last_row, shifted.last_col};
-        retained.push_back(std::move(range));
-      }
+    std::vector<MergeRange> ranges;
+    ranges.reserve(format.sqref.size());
+    for (const cf::CFCellRange& range : format.sqref) {
+      ranges.push_back(MergeRange{range.first.row, range.first.col, range.last.row, range.last.col});
     }
-    format.sqref = std::move(retained);
+    shift_sqref_ranges(ranges, index, count, is_delete, row_axis);
+    format.sqref.clear();
+    for (const MergeRange& range : ranges) {
+      format.sqref.push_back(
+          cf::CFCellRange{CellAddress{range.first_row, range.first_col}, CellAddress{range.last_row, range.last_col}});
+    }
     // A conditionalFormatting element without an sqref applies nowhere and
     // is invalid OOXML. Drop it when a row/column deletion consumed every
     // one of its ranges.
@@ -365,6 +359,34 @@ void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, 
 }
 
 }  // namespace
+
+// Beyond the per-range rules, a delete joins the two ranges it brings edge to
+// edge across the removed band when they share the other axis's span, as
+// Excel does: deleting column B turns `A1:A6 C1:C6` into `A1:B6`.
+void shift_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
+                        bool row_axis) {
+  ShiftRangeList(ranges, index, count, is_delete, row_axis);
+  if (!is_delete || index == 0U) {
+    return;
+  }
+  const auto seam = [index, row_axis](const MergeRange& before, const MergeRange& after) {
+    return row_axis ? before.last_row + 1U == index && after.first_row == index &&
+                          before.first_col == after.first_col && before.last_col == after.last_col
+                    : before.last_col + 1U == index && after.first_col == index &&
+                          before.first_row == after.first_row && before.last_row == after.last_row;
+  };
+  for (std::size_t i = 0; i < ranges.size(); ++i) {
+    for (std::size_t j = 0; j < ranges.size(); ++j) {
+      if (i == j || !seam(ranges[i], ranges[j])) {
+        continue;
+      }
+      (row_axis ? ranges[i].last_row : ranges[i].last_col) = row_axis ? ranges[j].last_row : ranges[j].last_col;
+      ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(j));
+      i = static_cast<std::size_t>(-1);
+      break;
+    }
+  }
+}
 
 // Every sheet-attached structure derives its new coordinates from the one
 // `StructuralEdit` description. This list is the enumeration: a structure

@@ -4,9 +4,11 @@
 
 #include "io/xlsb/record.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -213,6 +215,26 @@ Expected<XlsbRecord, Error> read_record(ByteSpan& cursor) {
   cursor.data += payload_size;
   cursor.size -= payload_size;
   return rec;
+}
+
+std::vector<FramedRecord> split_records(const std::vector<std::uint8_t>& buf) {
+  std::vector<FramedRecord> out;
+  ByteSpan cursor{buf.data(), buf.size()};
+  while (cursor.size != 0U) {
+    const std::size_t begin = static_cast<std::size_t>(cursor.data - buf.data());
+    auto rec = read_record(cursor);
+    if (!rec) {
+      return {};
+    }
+    out.push_back(
+        FramedRecord{rec.value().type, rec.value().payload, begin, static_cast<std::size_t>(cursor.data - buf.data())});
+  }
+  return out;
+}
+
+void append_record(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& src, const FramedRecord& rec) {
+  dst.insert(dst.end(), src.begin() + static_cast<std::ptrdiff_t>(rec.begin),
+             src.begin() + static_cast<std::ptrdiff_t>(rec.end));
 }
 
 }  // namespace xlsb
