@@ -1851,7 +1851,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
 
     def test_save_and_read_diagnostics_report_every_counter(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_formula(0, 0, 0, "=@A1:A10")
+            wb.set_formula(0, 0, 0, "=SUM(T[C])")
             wb.add_validation(
                 0,
                 DataValidationInput(

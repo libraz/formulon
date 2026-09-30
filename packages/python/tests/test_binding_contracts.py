@@ -396,10 +396,10 @@ class StructuredLogTests(unittest.TestCase):
                 sys.stderr.flush()
                 os.dup2(sink.fileno(), 2)
                 with Workbook.create_default() as wb:
-                    # An implicit-intersection formula the XLSB encoder
+                    # A structured reference the XLSB encoder
                     # cannot lower, which makes the writer emit a per-cell
                     # warn record.
-                    wb.set_formula(0, 0, 0, "=@A1:A10")
+                    wb.set_formula(0, 0, 0, "=SUM(T[C])")
                     wb.recalc()
                     wb.save_as(formulon.WorkbookFormat.XLSB)
             finally:

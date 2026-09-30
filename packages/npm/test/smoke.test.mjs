@@ -84,12 +84,12 @@ function getModule() {
   return modulePromise;
 }
 
-// An implicit-intersection formula the XLSB encoder cannot lower, which
+// A structured reference the XLSB encoder cannot lower, which
 // makes the writer emit one per-cell warn record.
 function emitXlsbWarning(Module, xlsbFormat) {
   const wb = Module.Workbook.createDefault();
   try {
-    assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+    assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
     assert.ok(wb.recalc().ok);
     assert.ok(wb.saveAs(xlsbFormat).status.ok);
   } finally {

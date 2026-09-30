@@ -215,9 +215,9 @@ test('a registered sink receives the record as raw bytes', async () => {
   assert.ok(mod.setLogMinLevel(mod.LogLevel.Warn).ok);
   try {
     const wb = mod.Workbook.createDefault();
-    // An implicit-intersection formula the XLSB encoder cannot lower,
+    // A structured reference the XLSB encoder cannot lower,
     // which makes the writer emit a per-cell warn record.
-    assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+    assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
     assert.ok(wb.recalc().ok);
     assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).status.ok);
     wb.dispose();
@@ -241,7 +241,7 @@ test('the default threshold delivers nothing to a registered sink', async () => 
   assert.ok(mod.setLogSink((record) => records.push(record)).ok);
   try {
     const wb = mod.Workbook.createDefault();
-    assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+    assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
     assert.ok(wb.recalc().ok);
     assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).status.ok);
     wb.dispose();
@@ -266,7 +266,7 @@ test('a throwing log sink does not leave a pending exception at the ThreadSafeFu
   assert.ok(mod.setLogMinLevel(mod.LogLevel.Warn).ok);
   try {
     const wb = mod.Workbook.createDefault();
-    assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+    assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
     assert.ok(wb.recalc().ok);
     assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).status.ok);
     wb.dispose();
@@ -1851,7 +1851,7 @@ test('saveAs() writes xlsx and xlsb bytes; rejects a missing format argument', a
 test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable shape', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+  assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
   assert.ok(
     wb.addValidation(0, {
       ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
