@@ -11,6 +11,7 @@
 #include "print/page_setup.h"
 #include "print/print_area.h"
 #include "sheet.h"
+#include "styles.h"
 #include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "workbook.h"
@@ -25,50 +26,152 @@ namespace {
 // default font's maximum digit width (MDW). The character-to-pixel
 // conversion below is Excel's documented formula; the constants are
 // named so the arithmetic carries no bare literals.
+//
+// Two distinct quantities share this stored-width input and must not be
+// confused:
+//
+//   * Print-layout width, consumed only by `paginate()`'s own break math
+//     (h_breaks / v_breaks / page count). Comparing a Windows Excel 365
+//     ja-JP build 16.0.20228/16.0.20326 capture taken at 100% display
+//     scaling (96 DPI) against one of the *same build* taken at 175%
+//     (168 DPI) shows `Range.Width` itself is DPI-dependent (Calibri 11
+//     resolves a 30-character column to 161.25 pt at 96 DPI and 171.0 pt
+//     at 168 DPI) -- but the resulting page-break positions are
+//     identical across both captures. Print output cannot depend on the
+//     authoring screen's DPI, so the break math needs a DPI-stable
+//     figure, which the 168-DPI capture's `Range.Width` approximates
+//     and the 96-DPI one does not.
+//   * Display width, `applied_geometry.column_widths_pt` in the workbook
+//     oracle goldens: a diagnostic/reporting figure, not compared by any
+//     verifier today (`workbook_oracle_test.cpp` never reads it). This
+//     is the 96-DPI `Range.Width` figure, unadjusted.
+//
+// Only Calibri 11's print-layout width is directly measured (from the
+// print-track captures' own break positions, not a `Range.Width` sweep).
+// Other fonts/sizes' print-layout widths are unmeasured; they are
+// inferred by scaling that font's *display* calibration by the ratio
+// between Calibri 11's print and display figures, separately for the
+// per-character rate and the padding term (`kPrintMdwRatio` /
+// `kPrintPaddingRatio` below) -- an approximation, not a second sweep.
 
-/// Points per character unit and the per-column padding, as Excel 365
-/// resolves a character-unit column width under the Normal style pinned to
-/// Calibri 11 (`Range.Width`, captured in every workbook golden's
-/// `applied_geometry.column_widths_pt`).
-///
-/// These replace the textbook 96-DPI screen model (MDW 7px, so 5.25 pt per
-/// character). That model predicts 157.5 pt for a 30-character column;
-/// Excel resolves 171.0. Every measured size is an exact multiple of
-/// 1/7 pt, and the law is linear across the captured widths:
-///
-///     20 chars -> 115.2857 pt    28 -> 159.8571 pt    30 -> 171.0 pt
-///
-/// Pagination compares these against the printable body, so using the
-/// screen model made a wide print area fit roughly one column too many per
-/// page.
-///
-/// The calibration is to one Normal font, and MDW is a property of that
-/// font, so a workbook whose Normal style names a different one resolves a
-/// different number of points per character. The scope of that was measured
-/// by opening workbooks that differ only in font 0 and reading
-/// `Range.Width` back:
-///
-///   * At 11 pt the family does not move it. `Calibri`, `游ゴシック` and
-///     `ＭＳ Ｐゴシック` all resolve a 30-unit column to the same width, so
-///     a ja-JP host declaring a Japanese body font paginates identically.
-///   * The point size does move it, roughly in proportion, and the family
-///     starts to matter away from 11 pt: `Calibri 18` resolves half again
-///     as wide as `Calibri 11`, and `游ゴシック 14` a seventh wider than
-///     `Calibri 14`.
-///
-/// Those observations are Mac Excel's, whose column geometry is a different
-/// regime from the Windows primary oracle these constants come from, so
-/// they establish that the dependency exists without supplying the numbers
-/// to model it. Sizing the constants off the Normal font needs a Windows
-/// capture over the same sweep; until then a workbook whose Normal font is
-/// not 11 pt paginates against the 11 pt geometry.
-constexpr double kPointsPerColumnChar = 39.0 / 7.0;
-constexpr double kColumnPaddingPt = 27.0 / 7.0;
+/// Calibri 11's print-layout points-per-character-unit and per-column
+/// padding: the pre-existing figure that both DPI captures' page breaks
+/// agree with, matching the classic `39/7`, `27/7` sevenths that predate
+/// this file's DPI investigation. This is also the print-layout fallback
+/// for any (Normal font family, size) `kColumnWidthCalibrations` below
+/// does not cover.
+constexpr double kPrintPointsPerColumnCharCalibri11 = 39.0 / 7.0;
+constexpr double kPrintColumnPaddingPtCalibri11 = 27.0 / 7.0;
+
+/// Calibri 11's *display* points-per-character-unit and per-column
+/// padding (`Range.Width` at 96 DPI) -- the `kColumnWidthCalibrations`
+/// entry for `{"Calibri", 11}`, restated here so the print/display
+/// ratios below don't depend on table lookup order.
+constexpr double kDisplayPointsPerColumnCharCalibri11 = 5.25;
+constexpr double kDisplayColumnPaddingPtCalibri11 = 3.75;
+
+/// Print-layout-to-display ratios for the per-character rate and the
+/// padding term, derived from Calibri 11 (the only font with a directly
+/// measured print-layout figure) and applied to every other font's
+/// display calibration to approximate its print-layout one.
+constexpr double kPrintMdwRatio = kPrintPointsPerColumnCharCalibri11 / kDisplayPointsPerColumnCharCalibri11;
+constexpr double kPrintPaddingRatio = kPrintColumnPaddingPtCalibri11 / kDisplayColumnPaddingPtCalibri11;
 
 /// Excel's standard default column width, in character units. Used when
 /// neither a `<col>` override nor `<sheetFormatPr defaultColWidth>`
 /// applies.
 constexpr double kStandardColWidthChars = 8.43;
+
+/// One (Normal font family, size) -> (MDW, padding) *display* calibration
+/// point, measured on Windows Excel 365 ja-JP (build 16.0.20228, 100%
+/// display scaling / 96 DPI) via `Range.Width` at stored widths 30/100
+/// chars. `Calibri`/11 reproduces `kDisplayPointsPerColumnCharCalibri11` /
+/// `kDisplayColumnPaddingPtCalibri11` above exactly.
+struct ColumnWidthCalibration {
+  const char* family;
+  int size;
+  double mdw_pt;
+  double pad_pt;
+};
+
+constexpr ColumnWidthCalibration kColumnWidthCalibrations[] = {
+    {"Calibri", 8, 4.5, 3.75},          {"Calibri", 9, 4.5, 3.75},           {"Calibri", 10, 5.25, 3.75},
+    {"Calibri", 11, 5.25, 3.75},        {"Calibri", 12, 6.0, 3.75},          {"Calibri", 14, 7.5, 5.25},
+    {"Calibri", 16, 8.25, 5.25},        {"Calibri", 18, 9.0, 5.25},          {"ＭＳ Ｐゴシック", 8, 4.5, 3.75},
+    {"ＭＳ Ｐゴシック", 9, 4.5, 3.75},  {"ＭＳ Ｐゴシック", 10, 5.25, 3.75}, {"ＭＳ Ｐゴシック", 11, 6.0, 3.75},
+    {"ＭＳ Ｐゴシック", 12, 6.0, 3.75}, {"ＭＳ Ｐゴシック", 14, 7.5, 5.25},  {"ＭＳ Ｐゴシック", 16, 8.25, 5.25},
+    {"ＭＳ Ｐゴシック", 18, 9.0, 5.25}, {"游ゴシック", 8, 4.5, 3.75},        {"游ゴシック", 9, 5.25, 3.75},
+    {"游ゴシック", 10, 5.25, 3.75},     {"游ゴシック", 11, 6.0, 3.75},       {"游ゴシック", 12, 6.75, 5.25},
+    {"游ゴシック", 14, 8.25, 5.25},     {"游ゴシック", 16, 9.0, 5.25},       {"游ゴシック", 18, 9.75, 6.75},
+    {"Meiryo UI", 8, 5.25, 3.75},       {"Meiryo UI", 9, 5.25, 3.75},        {"Meiryo UI", 10, 6.0, 3.75},
+    {"Meiryo UI", 11, 6.75, 5.25},      {"Meiryo UI", 12, 7.5, 5.25},        {"Meiryo UI", 14, 9.0, 5.25},
+    {"Meiryo UI", 16, 9.75, 6.75},      {"Meiryo UI", 18, 11.25, 6.75},
+};
+
+/// The resolved points-per-character-unit and per-column padding used by
+/// `ColumnCharsToPoints`, for either quantity -- the caller picks which
+/// one via `ResolveColumnPrintGeometry` / `ResolveColumnDisplayGeometry`.
+struct ColumnWidthGeometry {
+  double points_per_char = kPrintPointsPerColumnCharCalibri11;
+  double padding_pt = kPrintColumnPaddingPtCalibri11;
+};
+
+/// Looks up the measured *display* calibration for `(family, size)` in
+/// `kColumnWidthCalibrations`. Falls back to the Calibri-11 display
+/// figure for any family or integer size the table does not cover, and
+/// for any non-integer size -- interpolating between the sampled sizes
+/// would be inventing data the capture does not support. Reported as
+/// `applied_geometry.column_widths_pt` in the workbook oracle goldens;
+/// no verifier compares it today, but pagination's own break math must
+/// not read it directly -- see `ResolveColumnPrintGeometry`.
+ColumnWidthGeometry ResolveColumnDisplayGeometry(const std::string& family, double size) {
+  const int size_int = static_cast<int>(size);
+  if (static_cast<double>(size_int) == size) {
+    for (const ColumnWidthCalibration& row : kColumnWidthCalibrations) {
+      if (row.size == size_int && family == row.family) {
+        return ColumnWidthGeometry{row.mdw_pt, row.pad_pt};
+      }
+    }
+  }
+  return ColumnWidthGeometry{kDisplayPointsPerColumnCharCalibri11, kDisplayColumnPaddingPtCalibri11};
+}
+
+/// The geometry `paginate()`'s break math (h_breaks / v_breaks / page
+/// count) must use: `(family, size)`'s display calibration scaled by
+/// Calibri 11's print/display ratios. Reduces to the measured
+/// `kPrintPointsPerColumnCharCalibri11` / `kPrintColumnPaddingPtCalibri11`
+/// exactly for `{"Calibri", 11}` and for any untabulated font/size (both
+/// fall back to the Calibri-11 display figure before scaling).
+ColumnWidthGeometry ResolveColumnPrintGeometry(const std::string& family, double size) {
+  const ColumnWidthGeometry display = ResolveColumnDisplayGeometry(family, size);
+  return ColumnWidthGeometry{display.points_per_char * kPrintMdwRatio, display.padding_pt * kPrintPaddingRatio};
+}
+
+/// Resolves the workbook's Normal-style font: `cell_styles["Normal"]` ->
+/// `xf_id` -> `cell_style_xfs[xf_id].font_index` -> `fonts[font_index]`.
+/// Falls back to `fonts[0]` (the workbook's default font slot) when no
+/// `"Normal"` cell style is declared, or when its `xf_id` / `font_index`
+/// does not resolve. Returns `nullptr` only if `fonts` itself is empty,
+/// which `StylesTable`'s own seeding invariant rules out for any table
+/// produced by this codebase.
+const FontRecord* ResolveNormalFont(const StylesTable& styles) {
+  if (styles.fonts.empty()) {
+    return nullptr;
+  }
+  for (const CellStyleRecord& cell_style : styles.cell_styles) {
+    if (cell_style.name != "Normal") {
+      continue;
+    }
+    if (cell_style.xf_id < styles.cell_style_xfs.size()) {
+      const std::uint32_t font_index = styles.cell_style_xfs[cell_style.xf_id].font_index;
+      if (font_index < styles.fonts.size()) {
+        return &styles.fonts[font_index];
+      }
+    }
+    break;
+  }
+  return &styles.fonts[0];
+}
 
 /// Excel's default row height, in points, measured the same way as the
 /// column constants above (`applied_geometry.row_heights_pt`). Used when
@@ -90,11 +193,11 @@ constexpr double kMinScaleFactor = 0.01;
 /// extent entirely -- see `ColumnWidthChars`). The flat padding term
 /// below models the cell-border/margin allowance every *visible* column
 /// carries and does not apply to a column with no printed width at all.
-double ColumnCharsToPoints(double chars) {
+double ColumnCharsToPoints(double chars, const ColumnWidthGeometry& geometry) {
   if (chars == 0.0) {
     return 0.0;
   }
-  return chars * kPointsPerColumnChar + kColumnPaddingPt;
+  return chars * geometry.points_per_char + geometry.padding_pt;
 }
 
 /// Returns the width, in character units, of column `col` on `sheet`.
@@ -292,6 +395,15 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   }
   const Sheet& sheet = wb.sheet(sheet_index);
 
+  // Column width geometry depends on the workbook's Normal-style font
+  // (MDW varies by family and size); resolve it once for every
+  // ColumnCharsToPoints call below. Break math needs the print-layout
+  // geometry, not the display one -- see the comment block above
+  // `ResolveColumnPrintGeometry`.
+  const FontRecord* normal_font = ResolveNormalFont(wb.styles());
+  const ColumnWidthGeometry column_geometry =
+      normal_font != nullptr ? ResolveColumnPrintGeometry(normal_font->name, normal_font->size) : ColumnWidthGeometry{};
+
   // 1. Resolve the print area. The reported `result.print_area` mirrors
   // Excel's `PageSetup.PrintArea` exactly: empty when the workbook
   // defines no print area, even if the sheet has populated cells. The
@@ -458,7 +570,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   if (titles.repeat_cols.has_value()) {
     const auto [first, last] = *titles.repeat_cols;
     for (std::uint32_t col = first; col <= last; ++col) {
-      title_width += ColumnCharsToPoints(col_width(col));
+      title_width += ColumnCharsToPoints(col_width(col), column_geometry);
     }
   }
 
@@ -469,7 +581,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // fit factor has to accommodate them alongside the data.
   double union_total_width = 0.0;
   for (double width : col_widths) {
-    union_total_width += ColumnCharsToPoints(width);
+    union_total_width += ColumnCharsToPoints(width, column_geometry);
   }
   double union_total_height = 0.0;
   for (double height : row_heights) {
@@ -525,7 +637,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     std::vector<double> col_points;
     col_points.reserve(rect.last_col - rect.first_col + 1);
     for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
-      col_points.push_back(ColumnCharsToPoints(col_width(col)) * scale);
+      col_points.push_back(ColumnCharsToPoints(col_width(col), column_geometry) * scale);
     }
     AxisInput col_axis;
     col_axis.first = rect.first_col;

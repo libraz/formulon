@@ -17,6 +17,7 @@
 #include "print/page_setup.h"
 #include "print/print_area.h"
 #include "sheet.h"
+#include "styles.h"
 #include "utils/a1_column.h"
 #include "value.h"
 #include "workbook.h"
@@ -49,6 +50,14 @@ void SetColumnWidth(Sheet* sheet, std::uint32_t first, std::uint32_t last, doubl
   span.last = last;
   span.width = width;
   sheet->mutable_layout().columns.push_back(span);
+}
+
+// Sets the workbook's Normal-style font (`fonts[0]`, the slot
+// `Workbook::create()`'s default "Normal" cell style resolves to).
+void SetNormalFont(Workbook* wb, std::string name, double size) {
+  FontRecord& font = wb->mutable_styles().fonts[0];
+  font.name = std::move(name);
+  font.size = size;
 }
 
 // Returns the furthest track index any break precedes, or 0 when there
@@ -112,6 +121,59 @@ TEST(PaginationTest, WideTableWrapsOntoFurtherPageColumns) {
   EXPECT_GT(breaks.front(), 0U);
   EXPECT_LE(breaks.back(), 19U);
   EXPECT_EQ(result.value().page_count, breaks.size() + 1U);
+}
+
+TEST(PaginationTest, CalibriNormalFontBaselineColumnGeometryUnchanged) {
+  Workbook wb = Workbook::create();  // Seeds Normal on Calibri 11, the calibrated baseline row.
+  Sheet& sheet = wb.sheet(0);
+  // Five 30-char-unit columns: Calibri 11's print-layout geometry (not
+  // its 96-DPI display geometry -- see `ResolveColumnPrintGeometry` in
+  // pagination.cpp) resolves 30 chars to exactly 171.0 pt, so a third
+  // column (342 + 171 = 513 pt) overflows the ~494.5 pt A4 body -- the
+  // second still fits at 342 pt.
+  SetColumnWidth(&sheet, 0, 4, 30.0);
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$E$1", 0)});
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_FALSE(result.value().v_breaks.empty());
+  EXPECT_EQ(result.value().v_breaks.front(), 2U);
+}
+
+TEST(PaginationTest, NonCalibriNormalFontUsesMeasuredColumnGeometry) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  // Meiryo UI 14's print-layout geometry (its 96-DPI display MDW/padding
+  // scaled by Calibri 11's print/display ratio -- unmeasured for any
+  // font but Calibri) resolves 30 chars to ~291.93 pt versus Calibri
+  // 11's 171 pt, so the second column (~583.86 pt) already overflows
+  // the ~494.5 pt A4 body -- one column earlier than the Calibri-11
+  // baseline above.
+  SetNormalFont(&wb, "Meiryo UI", 14.0);
+  SetColumnWidth(&sheet, 0, 4, 30.0);
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$E$1", 0)});
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_FALSE(result.value().v_breaks.empty());
+  EXPECT_EQ(result.value().v_breaks.front(), 1U);
+}
+
+TEST(PaginationTest, UntabulatedNormalFontSizeFallsBackToCalibriBaseline) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  // Meiryo UI at 20pt is outside the measured table (8-18pt only); the
+  // geometry must fall back to the Calibri-11 baseline rather than
+  // extrapolate Meiryo's growth trend, reproducing the exact break
+  // position of the Calibri-11 case above.
+  SetNormalFont(&wb, "Meiryo UI", 20.0);
+  SetColumnWidth(&sheet, 0, 4, 30.0);
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$E$1", 0)});
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_FALSE(result.value().v_breaks.empty());
+  EXPECT_EQ(result.value().v_breaks.front(), 2U);
 }
 
 TEST(PaginationTest, TallTableForcesHorizontalBreak) {
