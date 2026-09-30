@@ -91,6 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FORMULATEXT`, `SHEET` and `SHEETS` are volatile, as in Excel: their
   cells recalculate on every pass, `.xlsb` stores them with the volatile
   marker, and `.xlsx` marks their cells `ca="1"`.
+- Printed page breaks size columns from the workbook's Normal-style font
+  and size, using widths measured against Windows Excel for Calibri,
+  游ゴシック, ＭＳ Ｐゴシック and Meiryo UI at 8 to 18 pt, instead of
+  assuming Calibri 11 for every workbook.
 
 ### Fixed
 
@@ -376,6 +380,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   types and classes. Array constants holding text, booleans or errors
   load, and a spill anchor keeps its cached value on load, so a loaded
   spill no longer turns into constants that block its own recalculation.
+- `WEEKNUM` with an unsupported return type returns `#NUM!`, as Windows
+  Excel does, instead of treating it as type 1.
+- Inserting or deleting rows and columns moves the ranges and formulas of
+  `x14` conditional-format rules and sparkline groups kept from a loaded
+  `.xlsx` or `.xlsb`, as Excel does. They previously kept their old
+  coordinates, so an extended data bar reverted and a sparkline read the
+  wrong cells. Deleting a band that leaves two conditional-format ranges
+  edge to edge joins them into one, as Excel does.
+- `.xlsb` workbook protection that carries only `lockWindows`,
+  `lockRevision` or a revisions password is no longer written as an
+  empty protection record; Excel keeps none of these flags on save.
+- Tabular and outline pivot layouts render pivots that also have column
+  fields, with one header column per column field. The grand-total
+  header of a pivot with several column fields sits on the first
+  column-header row, and a repeated outer column item is shown once.
 
 ### Removed
 
