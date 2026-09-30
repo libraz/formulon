@@ -7,6 +7,7 @@
 // encode <-> decode pair as a single round-trip without needing a full
 // xlsb package.
 
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -705,6 +706,31 @@ TEST(XlsbPtgCodec, ConditionalFormatArrayOperandsCarryArrayClassInward) {
   EXPECT_EQ(
       encode("H6<WEEKDAY(TODAY())-1"),
       join({{0x19, 0x01, 0x4C}, ref_n, {0x41, 0xDD, 0x00, 0x42, 0x01, 0x46, 0x00, 0x1E, 0x01, 0x00, 0x04, 0x09}}));
+}
+
+// A call that can return a reference keeps reference class where its
+// parameter takes one (ROWS, AREAS, SUM, ISREF) and value class in a value
+// parameter or at the root. Bytes as Excel 365 saved them.
+TEST(XlsbPtgCodec, ReferenceReturningCallsFollowTheirSlot) {
+  auto hex = [](std::string_view formula) {
+    std::string out;
+    for (const std::uint8_t b : EncodeOnSheet1(formula, PtgRootClass::kValue).rgce) {
+      char buf[4];
+      std::snprintf(buf, sizeof(buf), "%02x ", b);
+      out += buf;
+    }
+    return out;
+  };
+  const std::string offset = "19 01 00 00 24 00 00 00 00 00 c0 1e 00 00 1e 00 00 ";
+  EXPECT_EQ(hex("ROWS(OFFSET(A1,0,0))"), offset + "22 03 4e 00 41 4c 00 ");
+  EXPECT_EQ(hex("ISREF(OFFSET(A1,0,0))"), offset + "22 03 4e 00 41 69 00 ");
+  EXPECT_EQ(hex("ABS(OFFSET(A1,0,0))"), offset + "42 03 4e 00 41 18 00 ");
+  EXPECT_EQ(hex("OFFSET(A1,0,0)"), offset + "42 03 4e 00 ");
+  EXPECT_EQ(hex("SUM(INDEX(A1:C3,1,1))"),
+            "25 00 00 00 00 02 00 00 00 00 c0 02 c0 1e 01 00 1e 01 00 22 03 1d 00 19 10 00 00 ");
+  EXPECT_EQ(
+      hex("AREAS(IF(TRUE,A1,B1))"),
+      "1d 01 19 02 0b 00 24 00 00 00 00 00 c0 19 08 0e 00 24 00 00 00 00 01 c0 19 08 03 00 22 03 01 00 41 4b 00 ");
 }
 
 TEST(XlsbPtgCodec, SumOverArea) {

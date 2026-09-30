@@ -51,6 +51,17 @@ bool UsesHiddenNameRoute(std::string_view name) {
   return IsFutureFunction(name) || xlsb_uses_hidden_name(name);
 }
 
+/// Built-ins whose result can be a reference, as measured for the class of
+/// their call token.
+bool ReturnsReference(std::string_view name) {
+  for (const std::string_view fn : {"INDEX", "INDIRECT", "CHOOSE", "IF", "OFFSET"}) {
+    if (strings::case_insensitive_eq(name, fn)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 constexpr std::uint16_t kColRelBit = 0x4000;
 constexpr std::uint16_t kRowRelBit = 0x8000;
 
@@ -756,6 +767,7 @@ class Encoder {
       case parser::NodeKind::IntersectOp:
         return emit_reference_operation(node, root);
       case parser::NodeKind::Call:
+        call_in_reference_slot_ = !promote && promote_root_ && SlotClass(slot, true, evaluation_) == kPtgReferenceClass;
         return emit_call(node);
       case parser::NodeKind::ArrayLiteral:
         return emit_array(node);
@@ -932,13 +944,13 @@ class Encoder {
   /// Encodes `Fn(args)` whose callee is a defined name or an in-scope LET /
   /// LAMBDA parameter: the callee `PtgName`, the arguments, then
   /// `PtgFuncVar(255)`, as Excel 365 saves a call to a named LAMBDA.
-  Expected<void, Error> emit_name_call(const parser::AstNode& node) {
+  Expected<void, Error> emit_name_call(const parser::AstNode& node, bool reference_slot) {
     RETURN_IF_ERROR(emit_name_ref(node.as_call_name()));
     const std::uint32_t arity = node.as_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
       RETURN_IF_ERROR(emit(node.as_call_arg(i)));
     }
-    return emit_hidden_call_tail(arity + 1, "Call(arity>254, named LAMBDA)");
+    return emit_hidden_call_tail(arity + 1, "Call(arity>254, named LAMBDA)", reference_slot);
   }
 
   /// Encodes a `Lambda` as Excel 365 saves one: `PtgName(_xlfn.LAMBDA)`, a
@@ -974,11 +986,12 @@ class Encoder {
 
   /// Emits the `PtgFuncVar(255)` that closes a hidden-name-route call whose
   /// `cparams` operands (callee name-ref included) are already on the stack.
-  Expected<void, Error> emit_hidden_call_tail(std::uint32_t cparams, const char* too_many) {
+  Expected<void, Error> emit_hidden_call_tail(std::uint32_t cparams, const char* too_many,
+                                              bool reference_result = false) {
     if (cparams > 0xFF) {
       return unsupported_node(too_many);
     }
-    emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
+    emit_u8(out_, reference_result ? std::uint8_t{0x22} : ValueClassPtg(0x22));  // PtgFuncVar result
     emit_u8(out_, static_cast<std::uint8_t>(cparams));
     emit_u16(out_, 255);
     return Expected<void, Error>::Ok();
@@ -1349,19 +1362,23 @@ class Encoder {
   }
 
   Expected<void, Error> emit_call(const parser::AstNode& node) {
+    // A call that can return a reference keeps reference class where its
+    // parameter takes one (`ROWS(OFFSET(A1,0,0))` -> 0x22), as measured.
+    const bool reference_slot = std::exchange(call_in_reference_slot_, false);
     // A localised formula-bar spelling resolves to the name Excel stores
     // before anything is looked up, so both containers agree on the
     // callee and `func_id_table` needs no alias of its own.
     const std::string_view name = canonical_function_name(node.as_call_name());
+    const bool reference_result = reference_slot && ReturnsReference(name);
     if (in_let_scope(node.as_call_name())) {
-      return emit_name_call(node);
+      return emit_name_call(node, reference_slot);
     }
     if (UsesHiddenNameRoute(name)) {
       return emit_future_function_call(node, name);
     }
     const XlsbFuncEntry* entry = lookup_func_by_name(name);
     if (entry == nullptr && name_table_.count(std::string(node.as_call_name())) != 0) {
-      return emit_name_call(node);
+      return emit_name_call(node, reference_slot);
     }
     if (entry == nullptr) {
       // A callee with no id whose name the caller's table lacks. Encoding it
@@ -1426,7 +1443,7 @@ class Encoder {
       if (arity > 0xFF) {
         return unsupported_node("Call(arity>255)");
       }
-      emit_u8(out_, ResultPtg(0x22));  // PtgFuncVar result
+      emit_u8(out_, reference_result ? std::uint8_t{0x22} : ResultPtg(0x22));  // PtgFuncVar result
       emit_u8(out_, static_cast<std::uint8_t>(arity));
       emit_u16(out_, entry->id);
     } else {
@@ -1434,7 +1451,7 @@ class Encoder {
         return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: fixed-arity function arity mismatch",
                           std::string("context=xlsb_ptg_writer fn=") + std::string(name));
       }
-      emit_u8(out_, ResultPtg(0x21));  // PtgFunc result
+      emit_u8(out_, reference_result ? std::uint8_t{0x21} : ResultPtg(0x21));  // PtgFunc result
       emit_u16(out_, entry->id);
     }
     patch_gotos();
@@ -1597,6 +1614,8 @@ class Encoder {
   const std::optional<PtgBaseCell> base_;
   /// See `PtgEvaluation`.
   const PtgEvaluation evaluation_;
+  /// The next `emit_call`'s slot takes a reference (see `emit_node`).
+  bool call_in_reference_slot_ = false;
   /// Inside a conditional format's array operand (see `emit_node`).
   bool in_array_operand_ = false;
   /// Written `@` nodes a legacy formula stores as nothing.
