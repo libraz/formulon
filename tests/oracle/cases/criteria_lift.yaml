@@ -1,0 +1,52 @@
+suite: criteria_lift
+description: >
+  An array criterion lifts the *IF / *IFS family: the call returns an array
+  shaped by its criteria under the operator broadcast rule, one result per
+  criterion element; a criterion that cannot supply a position takes #N/A
+  there, as the operator broadcast fills it.
+  A1:A3 = 1, 2, 2 and B1:B3 = 10, 20, 30 throughout.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  - id: countif_range_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=COUNTIF(A1:A3,A1:A2)"
+  - id: countif_array_literal_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=COUNTIF(A1:A3,{1,2})"
+  - id: countif_concatenated_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=COUNTIF(A1:A3,\">\"&A1:A2)"
+  - id: countif_error_element
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=COUNTIF(A1:A3,{1,#N/A})"
+  - id: sumif_range_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=SUMIF(A1:A3,A1:A2,B1:B3)"
+  - id: sumif_array_criteria_no_sum_range
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=SUMIF(A1:A3,{1,2})"
+  - id: countifs_range_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=COUNTIFS(A1:A3,A1:A3,B1:B3,\">15\")"
+  - id: countifs_crossed_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=COUNTIFS(A1:A3,{1;2},B1:B3,{\">5\",\">25\"})"
+  - id: countifs_mismatched_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=COUNTIFS(A1:A3,{1;2},B1:B3,{\">5\";\">25\";\">0\"})"
+  - id: sumifs_array_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=SUMIFS(B1:B3,A1:A3,{1;2})"
+  - id: averageifs_array_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=AVERAGEIFS(B1:B3,A1:A3,{1,2})"
+  - id: maxifs_array_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=MAXIFS(B1:B3,A1:A3,{1;2})"
+  - id: minifs_array_criteria
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=MINIFS(B1:B3,A1:A3,{1;2})"
+  - id: countifs_short_criterion_fills_na
+    setup: { C1: 1, C2: "=NA()" }
+    formula: "=COUNTIFS(C1:C2,{1;2},C1:C2,{\"<>x\";\"<>x\";\"<>x\"})"

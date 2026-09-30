@@ -1,0 +1,62 @@
+{
+  "suite": "criteria_lift_averageif",
+  "description": "AVERAGEIF with an array criterion whose last element matches nothing. Kept apart from criteria_lift so it runs alone in a fresh workbook.\n",
+  "environment": {
+    "excel_version": "16.113.2",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-09-30T04:43:46Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "averageif_array_criteria_no_match_element",
+      "formula": "=AVERAGEIF(A1:A3,{1;2;9},B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          25.0,
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    }
+  ]
+}

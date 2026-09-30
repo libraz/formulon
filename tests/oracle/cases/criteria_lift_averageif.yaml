@@ -1,0 +1,10 @@
+suite: criteria_lift_averageif
+description: >
+  AVERAGEIF with an array criterion whose last element matches nothing. Kept
+  apart from criteria_lift so it runs alone in a fresh workbook.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  - id: averageif_array_criteria_no_match_element
+    setup: { A1: 1, A2: 2, A3: 2, B1: 10, B2: 20, B3: 30 }
+    formula: "=AVERAGEIF(A1:A3,{1;2;9},B1:B3)"

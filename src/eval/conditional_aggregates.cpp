@@ -5,6 +5,7 @@
 
 #include "eval/conditional_aggregates.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/criteria.h"
 #include "eval/eval_context.h"
@@ -19,6 +21,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
+#include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -88,27 +91,23 @@ struct CriteriaShape {
 /// argument index `first_pair_index` in `call`. Each criteria range is
 /// resolved through `resolve_range_arg` and must agree with `expected`
 /// under `CriteriaShape::agrees_with`; otherwise the helper fails with
-/// `#VALUE!`. Each criterion sub-expression is evaluated once; an error
-/// Value propagates.
+/// `#VALUE!`. Each criterion sub-expression is evaluated once, and its value
+/// is parsed later by `lift_criteria`.
 ///
 /// On success, appends the resolved cell vectors (in pair order) to
-/// `*out_cell_arrays` and appends the parsed criteria to `*out_parsed`,
-/// then returns `true`.
+/// `*out_cell_arrays` and the criterion values to `*out_criteria`, then
+/// returns `true`.
 ///
 /// On failure, writes the error Value to propagate into `*out_err_value`
-/// and returns `false`. `*out_cell_arrays` / `*out_parsed` may have
+/// and returns `false`. `*out_cell_arrays` / `*out_criteria` may have
 /// partially-accumulated state on failure; callers must not read them in
 /// that case.
-///
-/// `*out_parsed` uses `unique_ptr` indirection so the heap-resident
-/// `ParsedCriterion::rhs_storage` string is never relocated after parse
-/// and its `rhs_text` `string_view` stays stable across vector growth.
 bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pair_index, std::uint32_t pair_count,
                             const CriteriaShape& expected, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::vector<std::vector<Value>>* out_cell_arrays,
-                            std::vector<std::unique_ptr<ParsedCriterion>>* out_parsed, Value* out_err_value) {
+                            std::vector<Value>* out_criteria, Value* out_err_value) {
   out_cell_arrays->reserve(out_cell_arrays->size() + pair_count);
-  out_parsed->reserve(out_parsed->size() + pair_count);
+  out_criteria->reserve(out_criteria->size() + pair_count);
   for (std::uint32_t k = 0; k < pair_count; ++k) {
     const std::uint32_t range_idx = first_pair_index + (k * 2);
     const std::uint32_t crit_idx = range_idx + 1;
@@ -125,19 +124,75 @@ bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pai
     // An error-valued criterion is NOT propagated: Excel's *IFS functions
     // accept an error criterion as a filter over error cells with the
     // matching code (see `parse_criterion` ValueKind::Error branch).
-    const Value crit_val = eval_node(call.as_call_arg(crit_idx), arena, registry, ctx);
-    auto parsed = std::make_unique<ParsedCriterion>(parse_criterion(crit_val));
     out_cell_arrays->push_back(std::move(cells));
-    out_parsed->push_back(std::move(parsed));
+    out_criteria->push_back(eval_node(call.as_call_arg(crit_idx), arena, registry, ctx));
   }
   return true;
 }
 
+/// Parsed scalar criteria, one per criteria argument. `unique_ptr` keeps each
+/// `ParsedCriterion::rhs_storage` string in place, so its `rhs_text` view
+/// survives vector growth.
+using ParsedCriteria = std::vector<std::unique_ptr<ParsedCriterion>>;
+
+/// The one place a criteria argument is parsed. Excel lifts an array
+/// criterion: the call then returns an array shaped by its criteria under
+/// the operator broadcast rule, element (r, c) computed with each
+/// criterion's broadcast element -- `COUNTIF(A1:A3,A1:A2)` is a 2x1 count.
+/// A position a criterion cannot supply takes `#N/A` as that criterion, as
+/// the operator broadcast fills it (Mac Excel 365 then counts `#N/A` cells
+/// there). `aggregate(parsed)`
+/// computes one result from scalar criteria; with no array criterion it is
+/// the call's result.
+template <typename Aggregate>
+Value lift_criteria(const std::vector<Value>& criteria, Arena& arena, Aggregate&& aggregate) {
+  std::uint32_t rows = 1U;
+  std::uint32_t cols = 1U;
+  bool lifted = false;
+  for (const Value& criterion : criteria) {
+    if (criterion.is_array()) {
+      lifted = true;
+      rows = std::max(rows, criterion.as_array_rows());
+      cols = std::max(cols, criterion.as_array_cols());
+    }
+  }
+  if (!lifted) {
+    ParsedCriteria parsed;
+    for (const Value& criterion : criteria) {
+      parsed.push_back(std::make_unique<ParsedCriterion>(parse_criterion(criterion)));
+    }
+    return aggregate(parsed);
+  }
+  std::vector<Value> scalar_slots(criteria.size(), Value::blank());
+  std::vector<ArrayView> views;
+  views.reserve(criteria.size());
+  for (std::size_t k = 0; k < criteria.size(); ++k) {
+    views.push_back(as_array_view(criteria[k], &scalar_slots[k]));
+  }
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c) {
+      Value& slot = cells[static_cast<std::size_t>(r) * cols + c];
+      ParsedCriteria parsed;
+      for (const ArrayView& view : views) {
+        const Value* element = broadcast_cell(view, r, c);
+        parsed.push_back(std::make_unique<ParsedCriterion>(
+            parse_criterion(element != nullptr ? *element : Value::error(ErrorCode::NA))));
+      }
+      slot = aggregate(parsed);
+    }
+  }
+  return Value::array(out);
+}
+
 /// Tests whether position `i` in the parallel criteria-range arrays
 /// satisfies every parsed criterion. Short-circuits on the first failure.
-bool all_criteria_match(const std::vector<std::vector<Value>>& criteria_cells,
-                        const std::vector<std::unique_ptr<ParsedCriterion>>& parsed, std::size_t i,
-                        ExcelProfile profile) {
+bool all_criteria_match(const std::vector<std::vector<Value>>& criteria_cells, const ParsedCriteria& parsed,
+                        std::size_t i, ExcelProfile profile) {
   const std::size_t n = parsed.size();
   for (std::size_t k = 0; k < n; ++k) {
     if (!matches_criterion(criteria_cells[k][i], *parsed[k], profile)) {
@@ -188,7 +243,7 @@ bool resolve_optional_value_range(const parser::AstNode& arg, std::uint32_t crit
 struct IfsInputs {
   std::vector<Value> value_cells;
   std::vector<std::vector<Value>> criteria_cells;
-  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
+  std::vector<Value> criteria;
   std::size_t expected_size = 0;
 };
 
@@ -205,18 +260,19 @@ bool resolve_ifs_inputs(const parser::AstNode& call, Arena& arena, const Functio
 
   const std::uint32_t pair_count = (call.as_call_arity() - 1U) / 2U;
   return resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected, arena, registry, ctx,
-                                &out->criteria_cells, &out->parsed, out_err_value);
+                                &out->criteria_cells, &out->criteria, out_err_value);
 }
 
 enum class IfsNumericAggregate { Sum, Average, Max, Min };
 
-Value aggregate_matching_numbers(const IfsInputs& inputs, ExcelProfile profile, IfsNumericAggregate aggregate) {
+Value aggregate_matching_numbers(const IfsInputs& inputs, const ParsedCriteria& parsed, ExcelProfile profile,
+                                 IfsNumericAggregate aggregate) {
   bool any = false;
   double sum = 0.0;
   double count = 0.0;
   double best = 0.0;
   for (std::size_t i = 0; i < inputs.expected_size; ++i) {
-    if (!all_criteria_match(inputs.criteria_cells, inputs.parsed, i, profile)) {
+    if (!all_criteria_match(inputs.criteria_cells, parsed, i, profile)) {
       continue;
     }
     const Value& value = inputs.value_cells[i];
@@ -279,48 +335,51 @@ Value eval_ifs_numeric_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
     return err;
   }
-  return aggregate_matching_numbers(inputs, ctx.excel_profile(), aggregate);
+  return lift_criteria(inputs.criteria, arena, [&](const ParsedCriteria& parsed) {
+    return aggregate_matching_numbers(inputs, parsed, ctx.excel_profile(), aggregate);
+  });
 }
 
-/// Shared body of SUMIF / AVERAGEIF: resolves the criteria range, the
-/// criterion and the optional value range (defaulting to the criteria
-/// range), then sums the matching numeric cells. Errors at matching
-/// positions propagate; a non-finite running sum is #NUM!.
-bool sum_matching_if(const parser::AstNode& call, std::uint32_t arity, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, double* out_sum, double* out_count, Value* out_err) {
+/// Resolved inputs of SUMIF / AVERAGEIF: the criteria range, the criterion
+/// value and the value range (the criteria range itself when omitted).
+struct IfInputs {
+  std::vector<Value> criteria_cells;
+  std::vector<Value> explicit_value_cells;
+  bool has_value_range = false;
+  Value criterion = Value::blank();
+
+  const std::vector<Value>& value_cells() const { return has_value_range ? explicit_value_cells : criteria_cells; }
+};
+
+bool resolve_if_inputs(const parser::AstNode& call, std::uint32_t arity, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx, IfInputs* out, Value* out_err) {
   auto crit_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
   if (!crit_resolved) {
     *out_err = Value::error(crit_resolved.error());
     return false;
   }
-  std::vector<Value> criteria_cells = std::move(crit_resolved.value().cells);
-  const std::uint32_t crit_rows = crit_resolved.value().rows;
-  const std::uint32_t crit_cols = crit_resolved.value().cols;
+  out->criteria_cells = std::move(crit_resolved.value().cells);
   // Error criterion is NOT propagated; `parse_criterion` converts it to a
   // filter over error cells with the same code.
-  const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  const ParsedCriterion parsed = parse_criterion(criterion_val);
+  out->criterion = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  out->has_value_range = arity == 3;
+  return !out->has_value_range ||
+         resolve_optional_value_range(call.as_call_arg(2), crit_resolved.value().rows, crit_resolved.value().cols,
+                                      arena, registry, ctx, &out->explicit_value_cells, out_err);
+}
 
-  // Choose the effective value range: either the explicit third arg, or
-  // the criteria range when it is omitted.
-  const std::vector<Value>* value_cells_ptr = nullptr;
-  std::vector<Value> explicit_value_cells;
-  if (arity == 3) {
-    if (!resolve_optional_value_range(call.as_call_arg(2), crit_rows, crit_cols, arena, registry, ctx,
-                                      &explicit_value_cells, out_err)) {
-      return false;
-    }
-    value_cells_ptr = &explicit_value_cells;
-  } else {
-    value_cells_ptr = &criteria_cells;
-  }
-  const std::vector<Value>& value_cells = *value_cells_ptr;
-
+/// Shared body of SUMIF / AVERAGEIF: sums the matching numeric cells of the
+/// value range. Errors at matching positions propagate; a non-finite running
+/// sum is #NUM!.
+bool sum_matching_if(const IfInputs& in, const ParsedCriterion& parsed, ExcelProfile profile, double* out_sum,
+                     double* out_count, Value* out_err) {
+  const std::vector<Value>& criteria_cells = in.criteria_cells;
+  const std::vector<Value>& value_cells = in.value_cells();
   const std::size_t n = criteria_cells.size() < value_cells.size() ? criteria_cells.size() : value_cells.size();
   double sum = 0.0;
   double count = 0.0;
   for (std::size_t i = 0; i < n; ++i) {
-    if (!matches_criterion(criteria_cells[i], parsed, ctx.excel_profile())) {
+    if (!matches_criterion(criteria_cells[i], parsed, profile)) {
       continue;
     }
     const Value& v = value_cells[i];
@@ -352,7 +411,7 @@ bool sum_matching_if(const parser::AstNode& call, std::uint32_t arity, Arena& ar
 // ---------------------------------------------------------------------------
 //
 // The three conditional aggregators share a lot of shape: arg 0 is a
-// criteria range, arg 1 is a scalar criterion, and `SUMIF` / `AVERAGEIF`
+// criteria range, arg 1 is the criterion, and `SUMIF` / `AVERAGEIF`
 // additionally take an optional parallel range. The helpers below split
 // that shape into reusable building blocks so the three impls themselves
 // read as straight-line code.
@@ -376,15 +435,16 @@ Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const std::vector<Value>& cells = resolved.value().cells;
   // An error-valued criterion (e.g. `COUNTIF(range, #N/A)`) is NOT
   // propagated: `parse_criterion` turns it into an error-match filter.
-  const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  const ParsedCriterion parsed = parse_criterion(criterion_val);
-  double count = 0.0;
-  for (const Value& cell : cells) {
-    if (matches_criterion(cell, parsed, ctx.excel_profile())) {
-      count += 1.0;
+  const Value criterion = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  return lift_criteria({criterion}, arena, [&](const ParsedCriteria& parsed) {
+    double count = 0.0;
+    for (const Value& cell : cells) {
+      if (matches_criterion(cell, *parsed[0], ctx.excel_profile())) {
+        count += 1.0;
+      }
     }
-  }
-  return Value::number(count);
+    return Value::number(count);
+  });
 }
 
 // SUMIF(range, criterion [, sum_range])
@@ -414,13 +474,20 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
-  double sum = 0.0;
-  double count = 0.0;
+  IfInputs inputs;
   Value err = Value::blank();
-  if (!sum_matching_if(call, arity, arena, registry, ctx, &sum, &count, &err)) {
+  if (!resolve_if_inputs(call, arity, arena, registry, ctx, &inputs, &err)) {
     return err;
   }
-  return Value::number(sum);
+  return lift_criteria({inputs.criterion}, arena, [&](const ParsedCriteria& parsed) {
+    double sum = 0.0;
+    double count = 0.0;
+    Value match_err = Value::blank();
+    if (!sum_matching_if(inputs, *parsed[0], ctx.excel_profile(), &sum, &count, &match_err)) {
+      return match_err;
+    }
+    return Value::number(sum);
+  });
 }
 
 // AVERAGEIF(range, criterion [, average_range])
@@ -440,17 +507,24 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
-  double sum = 0.0;
-  double count = 0.0;
+  IfInputs inputs;
   Value err = Value::blank();
-  if (!sum_matching_if(call, arity, arena, registry, ctx, &sum, &count, &err)) {
+  if (!resolve_if_inputs(call, arity, arena, registry, ctx, &inputs, &err)) {
     return err;
   }
-  if (count == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double average = sum / count;
-  return std::isfinite(average) ? Value::number(average) : Value::error(ErrorCode::Num);
+  return lift_criteria({inputs.criterion}, arena, [&](const ParsedCriteria& parsed) {
+    double sum = 0.0;
+    double count = 0.0;
+    Value match_err = Value::blank();
+    if (!sum_matching_if(inputs, *parsed[0], ctx.excel_profile(), &sum, &count, &match_err)) {
+      return match_err;
+    }
+    if (count == 0.0) {
+      return Value::error(ErrorCode::Div0);
+    }
+    const double average = sum / count;
+    return std::isfinite(average) ? Value::number(average) : Value::error(ErrorCode::Num);
+  });
 }
 
 // COUNTIFS(range1, crit1 [, range2, crit2, ...])
@@ -468,7 +542,7 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
   }
   // Resolve the first criteria range to fix the expected shape.
   std::vector<std::vector<Value>> criteria_cells;
-  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
+  std::vector<Value> criteria;
   auto first_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
   if (!first_resolved) {
     return Value::error(first_resolved.error());
@@ -478,26 +552,27 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
   const std::size_t expected_size = expected.size;
   // Error criterion is NOT propagated; it filters error cells (see
   // `parse_criterion` ValueKind::Error).
-  const Value first_crit = eval_node(call.as_call_arg(1), arena, registry, ctx);
   criteria_cells.push_back(std::move(first_cells));
-  parsed.push_back(std::make_unique<ParsedCriterion>(parse_criterion(first_crit)));
+  criteria.push_back(eval_node(call.as_call_arg(1), arena, registry, ctx));
 
   const std::uint32_t remaining_pairs = (arity - 2) / 2;
   if (remaining_pairs > 0) {
     Value err = Value::number(0.0);
     if (!resolve_criteria_pairs(call, /*first_pair_index=*/2, remaining_pairs, expected, arena, registry, ctx,
-                                &criteria_cells, &parsed, &err)) {
+                                &criteria_cells, &criteria, &err)) {
       return err;
     }
   }
 
-  double count = 0.0;
-  for (std::size_t i = 0; i < expected_size; ++i) {
-    if (all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
-      count += 1.0;
+  return lift_criteria(criteria, arena, [&](const ParsedCriteria& parsed) {
+    double count = 0.0;
+    for (std::size_t i = 0; i < expected_size; ++i) {
+      if (all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
+        count += 1.0;
+      }
     }
-  }
-  return Value::number(count);
+    return Value::number(count);
+  });
 }
 
 // SUMIFS(sum_range, range1, crit1 [, range2, crit2, ...])

@@ -7,6 +7,7 @@
 // `accepts_ranges` path does not provide.
 
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 
@@ -608,6 +609,59 @@ TEST(BuiltinsCountIf, ThousandsGroupedNumericCriterion) {
   const Value sum = EvalSourceIn("=SUMIF(A1:A2, \">1,000\")", wb, wb.sheet(0));
   ASSERT_TRUE(sum.is_number());
   EXPECT_DOUBLE_EQ(sum.as_number(), 1001.0);
+}
+
+// ---------------------------------------------------------------------------
+// Array criteria lift: the call returns an array shaped by its criteria,
+// one result per criterion element (measured on Mac Excel 365, with
+// A1:A3 = 1, 2, 2 and B1:B3 = 10, 20, 30).
+// ---------------------------------------------------------------------------
+
+Workbook LiftFixture() {
+  Workbook wb = Workbook::create();
+  const double a[] = {1.0, 2.0, 2.0};
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(a[r]));
+    wb.sheet(0).set_cell_value(r, 1, Value::number(10.0 * (r + 1U)));
+  }
+  return wb;
+}
+
+void ExpectLifted(std::string_view src, std::uint32_t rows, std::uint32_t cols, std::initializer_list<double> want) {
+  const Workbook wb = LiftFixture();
+  const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << src << " -> " << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), rows) << src;
+  ASSERT_EQ(v.as_array_cols(), cols) << src;
+  std::size_t i = 0;
+  for (const double w : want) {
+    const Value& cell = v.as_array()->cells[i++];
+    ASSERT_TRUE(cell.is_number()) << src << " [" << i - 1U << "] -> " << cell.debug_to_string();
+    EXPECT_DOUBLE_EQ(cell.as_number(), w) << src << " [" << i - 1U << "]";
+  }
+}
+
+TEST(BuiltinsCountIfLift, RangeAndArrayCriteriaLift) {
+  ExpectLifted("=COUNTIF(A1:A3,A1:A2)", 2U, 1U, {1.0, 2.0});
+  ExpectLifted("=COUNTIF(A1:A3,{1,2})", 1U, 2U, {1.0, 2.0});
+  ExpectLifted("=COUNTIF(A1:A3,\">\"&A1:A2)", 2U, 1U, {2.0, 0.0});
+  ExpectLifted("=SUMIF(A1:A3,A1:A2,B1:B3)", 2U, 1U, {10.0, 50.0});
+  ExpectLifted("=SUMIF(A1:A3,{1,2})", 1U, 2U, {1.0, 4.0});
+}
+
+TEST(BuiltinsCountIfLift, OneElementArrayCriterion) {
+  const Workbook wb = LiftFixture();
+  const Value v = EvalSourceIn("=COUNTIF(A1:A3,{2})", wb, wb.sheet(0));
+  const Value& cell = v.is_array() ? v.as_array()->cells[0] : v;
+  ASSERT_TRUE(cell.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(cell.as_number(), 2.0);
+}
+
+TEST(BuiltinsCountIfLift, ScalarCriterionStaysScalar) {
+  const Workbook wb = LiftFixture();
+  const Value v = EvalSourceIn("=COUNTIF(A1:A3,A2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
 }  // namespace
