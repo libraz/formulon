@@ -99,6 +99,14 @@ Value eval_binding_source(const parser::AstNode& expr, Arena& arena, const Funct
 Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
                     const FunctionRegistry& registry, const EvalContext& ctx);
 
+/// Resolves the reference a call of `lv` with `call_args` returns
+/// (`LAMBDA(x,x)(A1:A3)` names A1:A3), binding the parameters as a call does.
+/// False with `*out_err` when the body yields no reference.
+bool resolve_lambda_reference(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args,
+                              Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                              std::string_view* out_sheet, std::uint32_t* out_top_row, std::uint32_t* out_left_col,
+                              std::uint32_t* out_bottom_row, std::uint32_t* out_right_col, ErrorCode* out_err);
+
 /// Invokes an AST-backed runtime lambda with arguments that have already
 /// been evaluated. This is the bridge used by the lazy lambda
 /// helpers (`MAP` / `BYROW` / `BYCOL` / `REDUCE` / `SCAN` / `MAKEARRAY`),

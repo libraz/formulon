@@ -519,6 +519,33 @@ TEST(LegacyAt, LoadedLegacyIndexAndOffsetReadAsExcelShowsThem) {
   ExpectExcelsFormula2AndValues(kLegacyIndexOffset, true);
 }
 
+// '@' over a spill or over a LAMBDA returning a range intersects that range
+// with the formula cell, as over a static one (Excel 365: G1 = SEQUENCE(3),
+// Fn = LAMBDA(x,x); 2 on row 2, #VALUE! on row 5). A legacy cell holding a
+// spill reference reads with Excel's implied '@'.
+TEST(LegacyAt, SpillAndLambdaResultsProjectOntoTheFormulaCell) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    s.set_cell_value(r, 0U, Value::number(r + 1.0));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Fn", "LAMBDA(x,x)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 6U, "=SEQUENCE(3)")));
+  for (const std::uint32_t row : {1U, 4U}) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 7U, "=G1#")));
+    s.set_cell_dynamic_array(row, 7U, false);
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 8U, "=@Fn(A1:A3)")));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 9U, "=@LAMBDA(x,x)(A1:A3)")));
+  }
+  wb.apply_legacy_implicit_intersections();
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(s.cell_at(1U, 7U)->formula_text, "=@G1#");
+  for (const std::uint32_t col : {7U, 8U, 9U}) {
+    EXPECT_EQ(DisplayOf(s.cell_at(1U, col)->cached_value), "2") << col;
+    EXPECT_EQ(DisplayOf(s.cell_at(4U, col)->cached_value), "#VALUE!") << col;
+  }
+}
+
 TEST(LegacyAt, DynamicArrayAndCseFormulasKeepTheirText) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);

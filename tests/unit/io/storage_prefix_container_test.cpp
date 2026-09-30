@@ -244,10 +244,12 @@ TEST(StoragePrefixContainers, AtAndSpillOperatorsRoundTripInBothContainers) {
   // Stored as `_xlfn.SINGLE(...)` / `_xlfn.ANCHORARRAY(...)` calls, read back
   // as the operators the formula bar shows.
   const std::vector<std::string> formulas = {"=@A1", "=SUM(@A1:A2)", "=@A1:A2", "=@SUM(A1:A5)", "=SUM(A1#)", "=A1#+1"};
+  // Entered as a user would, so each cell carries the dynamic-array mark
+  // Excel gives it; a legacy `A1#+1` would read back as `@A1#+1`.
   Workbook wb = Workbook::create_empty();
-  Sheet& s = wb.sheet(wb.add_sheet("F"));
+  const std::size_t sheet = wb.add_sheet("F");
   for (std::uint32_t i = 0; i < formulas.size(); ++i) {
-    s.set_cell_formula(i, 1U, formulas[i]);
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(sheet, i, 1U, formulas[i])));
   }
 
   auto xlsx_or = wb.save();

@@ -583,6 +583,7 @@ class LegacyIntersections {
       case NodeKind::Call:
         return call_returns_array(node);
       case NodeKind::LambdaCall:
+      case NodeKind::SpillRef:
         return true;
       default:
         return false;

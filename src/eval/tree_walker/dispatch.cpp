@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -125,17 +126,19 @@ namespace {
 // only: telling a syntactically omitted slot (`f(1, , 3)`) from a supplied
 // one. It is deliberately separate from `ast_args`, the per-argument AST
 // `eval_binding_source` chose to record on the binding.
-Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, const Value* args,
-                                const parser::AstNode* const* ast_args, const parser::AstNode* const* syntax_args,
-                                Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+// Binds `lv`'s parameters for a call into `*env`; the error a call surfaces
+// instead when the arity does not fit or the lambda has no body.
+std::optional<ErrorCode> bind_lambda_params(const LambdaValue* lv, std::uint32_t arity, const Value* args,
+                                            const parser::AstNode* const* ast_args,
+                                            const parser::AstNode* const* syntax_args, Arena& arena, NameEnv* out) {
   const std::uint32_t required = lv->param_count - lv->optional_count;
   if (arity < required || arity > lv->param_count) {
-    return Value::error(ErrorCode::Value);
+    return ErrorCode::Value;
   }
   if (lv->body == nullptr) {
-    return Value::error(ErrorCode::Name);
+    return ErrorCode::Name;
   }
-  NameEnv env;
+  NameEnv& env = *out;
   if (lv->captured_env != nullptr) {
     env = *lv->captured_env;
   }
@@ -159,11 +162,25 @@ Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, cons
   for (std::uint32_t i = arity; i < lv->param_count; ++i) {
     env = env.extend_omitted(lv->params[i], arena);
   }
+  return std::nullopt;
+}
+
+EvalContext lambda_body_context(const LambdaValue* lv, const NameEnv& env, const EvalContext& ctx) {
   EvalContext body_ctx = ctx.with_name_env(&env);
   if (lv->name_scope_sheet >= 0) {
     body_ctx = body_ctx.with_name_scope_sheet(lv->name_scope_sheet);
   }
-  return eval_node(*lv->body, arena, registry, body_ctx);
+  return body_ctx;
+}
+
+Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, const Value* args,
+                                const parser::AstNode* const* ast_args, const parser::AstNode* const* syntax_args,
+                                Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  NameEnv env;
+  if (const std::optional<ErrorCode> err = bind_lambda_params(lv, arity, args, ast_args, syntax_args, arena, &env)) {
+    return Value::error(*err);
+  }
+  return eval_node(*lv->body, arena, registry, lambda_body_context(lv, env, ctx));
 }
 
 }  // namespace
@@ -309,6 +326,37 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   }
   return invoke_lambda_values_impl(lv, arity, args.empty() ? nullptr : args.data(),
                                    bound_asts.empty() ? nullptr : bound_asts.data(), call_args, arena, registry, ctx);
+}
+
+bool resolve_lambda_reference(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args,
+                              Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                              std::string_view* out_sheet, std::uint32_t* out_top_row, std::uint32_t* out_left_col,
+                              std::uint32_t* out_bottom_row, std::uint32_t* out_right_col, ErrorCode* out_err) {
+  if (lv == nullptr || (arity != 0U && call_args == nullptr)) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  EvalDepthGuard lambda_guard(ctx.lambda_depth_counter(), kMaxLambdaDepth);
+  if (lambda_guard.exceeded()) {
+    *out_err = ErrorCode::Calc;
+    return false;
+  }
+  std::vector<Value> args;
+  std::vector<const parser::AstNode*> bound_asts;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const parser::AstNode* bound = nullptr;
+    args.push_back(eval_binding_source(*call_args[i], arena, registry, ctx, &bound));
+    bound_asts.push_back(bound);
+  }
+  NameEnv env;
+  if (const std::optional<ErrorCode> err =
+          bind_lambda_params(lv, arity, args.empty() ? nullptr : args.data(),
+                             bound_asts.empty() ? nullptr : bound_asts.data(), call_args, arena, &env)) {
+    *out_err = *err;
+    return false;
+  }
+  return resolve_reference_rect(*lv->body, arena, registry, lambda_body_context(lv, env, ctx), out_sheet, out_top_row,
+                                out_left_col, out_bottom_row, out_right_col, out_err);
 }
 
 namespace {
