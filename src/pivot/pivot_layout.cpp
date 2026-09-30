@@ -124,10 +124,17 @@ std::vector<std::size_t> subtotal_counts_for_axis(const PivotTable& table,
   return counts;
 }
 
-template <typename Subtotal>
+/// The two fields of a `RowSubtotal` / `ColSubtotal` the projection reads,
+/// so one non-template body serves both axes.
+struct SubtotalView {
+  std::uint32_t depth = 0;
+  const std::vector<std::string>* labels = nullptr;
+};
+
 Expected<void, Error> collect_axis_entries_impl(const AxisHierarchyNode& node, std::vector<std::string>& path,
-                                                const std::vector<Subtotal>& subtotals, std::size_t& subtotal_cursor,
-                                                std::vector<AxisEntry>& entries, const std::string& axis,
+                                                const std::vector<SubtotalView>& subtotals,
+                                                std::size_t& subtotal_cursor, std::vector<AxisEntry>& entries,
+                                                const std::string& axis,
                                                 const std::vector<bool>& subtotal_first_by_depth,
                                                 const std::vector<std::size_t>& subtotal_counts) {
   path.push_back(node.label);
@@ -163,8 +170,8 @@ Expected<void, Error> collect_axis_entries_impl(const AxisHierarchyNode& node, s
                             std::to_string(expected_count) + " total=" + std::to_string(subtotals.size()));
     }
     for (std::size_t offset = 0; offset < expected_count; ++offset) {
-      const Subtotal& subtotal = subtotals[subtotal_cursor];
-      if (subtotal.depth != depth || !labels_equal(subtotal.labels, path)) {
+      const SubtotalView& subtotal = subtotals[subtotal_cursor];
+      if (subtotal.depth != depth || !labels_equal(*subtotal.labels, path)) {
         path.pop_back();
         return make_error(FormulonErrorCode::kEvalPivotInvalid,
                           "pivot layout: " + axis + " subtotal metadata does not match sorted hierarchy projection",
@@ -188,12 +195,12 @@ Expected<void, Error> collect_axis_entries_impl(const AxisHierarchyNode& node, s
 /// Projects one axis hierarchy into leaf and subtotal entries. `axis` names
 /// the axis in diagnostics; an empty `subtotal_first_by_depth` places every
 /// subtotal after its group.
-template <typename Subtotal>
-Expected<std::vector<AxisEntry>, Error> collect_axis_entries(const std::vector<AxisHierarchyNode>& roots,
-                                                             const std::vector<Subtotal>& subtotals, std::size_t depth,
-                                                             bool include_subtotals, const std::string& axis,
-                                                             const std::vector<bool>& subtotal_first_by_depth,
-                                                             const std::vector<std::size_t>& subtotal_counts) {
+Expected<std::vector<AxisEntry>, Error> collect_axis_entries_view(const std::vector<AxisHierarchyNode>& roots,
+                                                                  const std::vector<SubtotalView>& subtotals,
+                                                                  std::size_t depth, bool include_subtotals,
+                                                                  const std::string& axis,
+                                                                  const std::vector<bool>& subtotal_first_by_depth,
+                                                                  const std::vector<std::size_t>& subtotal_counts) {
   if (depth == 0) {
     if (include_subtotals) {
       return make_error(FormulonErrorCode::kEvalPivotInvalid,
@@ -226,6 +233,21 @@ Expected<std::vector<AxisEntry>, Error> collect_axis_entries(const std::vector<A
                       "consumed=" + std::to_string(subtotal_cursor) + " total=" + std::to_string(subtotals.size()));
   }
   return entries;
+}
+
+template <typename Subtotal>
+Expected<std::vector<AxisEntry>, Error> collect_axis_entries(const std::vector<AxisHierarchyNode>& roots,
+                                                             const std::vector<Subtotal>& subtotals, std::size_t depth,
+                                                             bool include_subtotals, const std::string& axis,
+                                                             const std::vector<bool>& subtotal_first_by_depth,
+                                                             const std::vector<std::size_t>& subtotal_counts) {
+  std::vector<SubtotalView> views;
+  views.reserve(subtotals.size());
+  for (const Subtotal& subtotal : subtotals) {
+    views.push_back(SubtotalView{subtotal.depth, &subtotal.labels});
+  }
+  return collect_axis_entries_view(roots, views, depth, include_subtotals, axis, subtotal_first_by_depth,
+                                   subtotal_counts);
 }
 
 Expected<void, Error> validate_result_shape(const PivotTable& table, const PivotResult& result,
