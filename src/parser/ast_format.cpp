@@ -1240,65 +1240,11 @@ bool IsStorageOperatorCall(const AstNode& node) {
   return IsOperatorCall(node, "SINGLE") || IsOperatorCall(node, "ANCHORARRAY");
 }
 
-std::vector<const AstNode*> Children(const AstNode& node) {
-  std::vector<const AstNode*> out;
-  switch (node.kind()) {
-    case NodeKind::UnaryOp:
-      out.push_back(&node.as_unary_operand());
-      break;
-    case NodeKind::BinaryOp:
-      out = {&node.as_binary_lhs(), &node.as_binary_rhs()};
-      break;
-    case NodeKind::RangeOp:
-      out = {&node.as_range_lhs(), &node.as_range_rhs()};
-      break;
-    case NodeKind::IntersectOp:
-      out = {&node.as_intersect_lhs(), &node.as_intersect_rhs()};
-      break;
-    case NodeKind::UnionOp:
-      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-        out.push_back(&node.as_union_child(i));
-      }
-      break;
-    case NodeKind::ImplicitIntersection:
-      out.push_back(&node.as_implicit_intersection_operand());
-      break;
-    case NodeKind::Call:
-      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-        out.push_back(&node.as_call_arg(i));
-      }
-      break;
-    case NodeKind::LambdaCall:
-      out.push_back(&node.as_lambda_call_callee());
-      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
-        out.push_back(&node.as_lambda_call_arg(i));
-      }
-      break;
-    case NodeKind::LetBinding:
-      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
-        out.push_back(&node.as_let_binding_expr(i));
-      }
-      out.push_back(&node.as_let_body());
-      break;
-    case NodeKind::Lambda:
-      out.push_back(&node.as_lambda_body());
-      break;
-    case NodeKind::SpillRef:
-      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        out.push_back(anchor);
-      }
-      break;
-    default:
-      break;
-  }
-  return out;
-}
-
 bool HasStorageOperatorCall(const AstNode& node) {
   if (IsStorageOperatorCall(node)) {
     return true;
   }
-  for (const AstNode* child : Children(node)) {
+  for (const AstNode* child : child_nodes(node)) {
     if (HasStorageOperatorCall(*child)) {
       return true;
     }
@@ -1331,7 +1277,7 @@ class OperatorRespeller {
                         arg.kind() == NodeKind::ExternalRef;
       return parenthesised(arg, !bare) + "#";
     }
-    const std::vector<const AstNode*> children = Children(node);
+    const std::vector<const AstNode*> children = child_nodes(node);
     const auto by_start = [&](std::uint32_t lhs, std::uint32_t rhs) {
       return children[lhs]->range().start < children[rhs]->range().start;
     };

@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 #include "parser/reference.h"
 #include "parser/token.h"
@@ -503,6 +504,12 @@ AstNode* make_external_name_ref(Arena& arena, std::uint32_t book, std::string_vi
 /// `eval::find_self_book_defined_name`). It is how Excel stores the
 /// `Book!Name` spelling.
 bool is_self_book_name_ref(const AstNode& node) noexcept;
+
+/// The expressions directly under `node`, in source order: operands,
+/// arguments, a lambda call's callee, LET binding values and body, a lambda
+/// body and a computed spill anchor. Array-constant elements, which are
+/// always literals, are not included.
+std::vector<const AstNode*> child_nodes(const AstNode& node);
 
 /// True for a cell-shaped lexeme that is also an Excel function name. The
 /// two overlap only where a name matches `[A-Za-z]{1,3}[0-9]{1,7}` inside

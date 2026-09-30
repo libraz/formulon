@@ -635,6 +635,60 @@ const Reference& AstNode::as_ref3d_cell_end() const {
   return data_.ref3d->cell_end;
 }
 
+std::vector<const AstNode*> child_nodes(const AstNode& node) {
+  std::vector<const AstNode*> out;
+  switch (node.kind()) {
+    case NodeKind::UnaryOp:
+      out.push_back(&node.as_unary_operand());
+      break;
+    case NodeKind::BinaryOp:
+      out = {&node.as_binary_lhs(), &node.as_binary_rhs()};
+      break;
+    case NodeKind::RangeOp:
+      out = {&node.as_range_lhs(), &node.as_range_rhs()};
+      break;
+    case NodeKind::IntersectOp:
+      out = {&node.as_intersect_lhs(), &node.as_intersect_rhs()};
+      break;
+    case NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        out.push_back(&node.as_union_child(i));
+      }
+      break;
+    case NodeKind::ImplicitIntersection:
+      out.push_back(&node.as_implicit_intersection_operand());
+      break;
+    case NodeKind::Call:
+      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+        out.push_back(&node.as_call_arg(i));
+      }
+      break;
+    case NodeKind::LambdaCall:
+      out.push_back(&node.as_lambda_call_callee());
+      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
+        out.push_back(&node.as_lambda_call_arg(i));
+      }
+      break;
+    case NodeKind::LetBinding:
+      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+        out.push_back(&node.as_let_binding_expr(i));
+      }
+      out.push_back(&node.as_let_body());
+      break;
+    case NodeKind::Lambda:
+      out.push_back(&node.as_lambda_body());
+      break;
+    case NodeKind::SpillRef:
+      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        out.push_back(anchor);
+      }
+      break;
+    default:
+      break;
+  }
+  return out;
+}
+
 bool is_self_book_name_ref(const AstNode& node) noexcept {
   return node.kind() == NodeKind::ExternalRef && node.as_external_ref_book() == 0U &&
          !node.as_external_ref_name().empty();

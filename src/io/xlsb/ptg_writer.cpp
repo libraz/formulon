@@ -351,56 +351,13 @@ bool StaticRects(const parser::AstNode& node, std::vector<Rect>& out) {
 
 /// True when `node` calls one of Excel's volatile functions anywhere.
 bool ContainsVolatileCall(const parser::AstNode& node) {
-  using parser::NodeKind;
-  auto any = [](std::uint32_t n, auto child) {
-    for (std::uint32_t i = 0; i < n; ++i) {
-      if (ContainsVolatileCall(child(i))) {
-        return true;
-      }
+  if (node.kind() == parser::NodeKind::Call && parser::is_volatile_function_name(node.as_call_name())) {
+    return true;
+  }
+  for (const parser::AstNode* child : parser::child_nodes(node)) {
+    if (ContainsVolatileCall(*child)) {
+      return true;
     }
-    return false;
-  };
-  switch (node.kind()) {
-    case NodeKind::Call:
-      return parser::is_volatile_function_name(node.as_call_name()) ||
-             any(node.as_call_arity(), [&](std::uint32_t i) -> const parser::AstNode& { return node.as_call_arg(i); });
-    case NodeKind::UnaryOp:
-      return ContainsVolatileCall(node.as_unary_operand());
-    case NodeKind::BinaryOp:
-      return ContainsVolatileCall(node.as_binary_lhs()) || ContainsVolatileCall(node.as_binary_rhs());
-    case NodeKind::RangeOp:
-      return ContainsVolatileCall(node.as_range_lhs()) || ContainsVolatileCall(node.as_range_rhs());
-    case NodeKind::IntersectOp:
-      return ContainsVolatileCall(node.as_intersect_lhs()) || ContainsVolatileCall(node.as_intersect_rhs());
-    case NodeKind::UnionOp:
-      return any(node.as_union_arity(),
-                 [&](std::uint32_t i) -> const parser::AstNode& { return node.as_union_child(i); });
-    case NodeKind::ImplicitIntersection:
-      return ContainsVolatileCall(node.as_implicit_intersection_operand());
-    case NodeKind::SpillRef: {
-      const parser::AstNode* anchor = node.as_spill_ref_anchor_expr();
-      return anchor != nullptr && ContainsVolatileCall(*anchor);
-    }
-    case NodeKind::Lambda:
-      return ContainsVolatileCall(node.as_lambda_body());
-    case NodeKind::LetBinding:
-      return ContainsVolatileCall(node.as_let_body()) ||
-             any(node.as_let_binding_count(),
-                 [&](std::uint32_t i) -> const parser::AstNode& { return node.as_let_binding_expr(i); });
-    case NodeKind::LambdaCall:
-      return ContainsVolatileCall(node.as_lambda_call_callee()) ||
-             any(node.as_lambda_call_arity(),
-                 [&](std::uint32_t i) -> const parser::AstNode& { return node.as_lambda_call_arg(i); });
-    case NodeKind::Literal:
-    case NodeKind::Ref:
-    case NodeKind::Ref3D:
-    case NodeKind::ExternalRef:
-    case NodeKind::StructuredRef:
-    case NodeKind::NameRef:
-    case NodeKind::ArrayLiteral:
-    case NodeKind::ErrorLiteral:
-    case NodeKind::ErrorPlaceholder:
-      return false;
   }
   return false;
 }
