@@ -380,14 +380,8 @@ Value Weekday_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     return Value::error(return_type_arg.error());
   }
   const int return_type = return_type_arg.value();
-  const date_time::YMD ymd =
-      date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
-  // `days_from_civil` at epoch 1970-01-01 (a Thursday). A Thursday has
-  // weekday index 4 in the Sunday=0..Saturday=6 convention, so
-  // `(days + 4) mod 7` recovers the 0..6 weekday where 0 = Sunday.
-  const std::int64_t days = date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
-  const int sun0 = static_cast<int>(((days + 4) % 7 + 7) % 7);  // 0..6, Sun=0
-  const int mon0 = (sun0 + 6) % 7;                              // 0..6, Mon=0
+  const int sun0 = date_time::weekday_sun0(normal_date_serial(serial.value(), date1904));  // 0..6, Sun=0
+  const int mon0 = (sun0 + 6) % 7;                                                         // 0..6, Mon=0
   // Excel types 11..17 start the week on Mon..Sun respectively and always
   // return 1..7.
   if (return_type >= 11 && return_type <= 17) {
@@ -555,33 +549,25 @@ Value Eomonth_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
 // YEARFRAC and DATEDIF.
 // ---------------------------------------------------------------------------
 
-// Returns the Sun=0..Sat=6 weekday index of the Gregorian date (y, m, d).
-// Uses the `(days_from_civil + 4) mod 7` trick anchored at the 1970-01-01
-// Thursday epoch; the `+ 7) % 7` guard protects against negative remainders
-// for pre-1970 proleptic dates (not exercised by Excel, but cheap insurance).
-int weekday_sun0(int y, unsigned m, unsigned d) noexcept {
-  const std::int64_t days = date_time::days_from_civil(y, m, d);
-  return static_cast<int>(((days % 7) + 4 + 7) % 7);
+// Year a normal-1900 serial belongs to. Serial 0 is Excel's 1900-01-00,
+// so it counts as day 0 of 1900 rather than as 1899-12-31.
+int serial_year(double serial_floor) noexcept {
+  return serial_floor == 0.0 ? 1900 : date_time::ymd_from_serial(serial_floor, /*date1904=*/false).y;
 }
 
-// Computes the ISO 8601 week number for an arbitrary Gregorian date.
-// Implements the standard "Thursday of the current week" algorithm:
-// shift to the Thursday (Mon=1..Sun=7 -> +3 / +2 / ... / -3), then the
-// ISO week number is `(day-of-year(Thursday) - 1) / 7 + 1`, and the ISO
-// year is that Thursday's calendar year.
-int iso_week_number(int y, unsigned m, unsigned d) noexcept {
-  const std::int64_t days = date_time::days_from_civil(y, m, d);
-  // ISO weekday: Mon=0..Sun=6. The 1970-01-01 epoch falls on a Thursday
-  // (days=0 -> Thursday -> mon0=3), so `(days + 3) mod 7` recovers the
-  // zero-based Monday-first index. The `+ 7) % 7` guard keeps the
-  // result non-negative for proleptic pre-1970 inputs.
-  const int mon0 = static_cast<int>(((days + 3) % 7 + 7) % 7);
-  // Thursday of this ISO week is `3 - mon0` days away (-3 .. +3).
-  const std::int64_t thu_days = days + (3 - mon0);
-  const date_time::YMD thu = date_time::civil_from_days(thu_days);
-  const std::int64_t jan1_days = date_time::days_from_civil(thu.y, 1, 1);
-  const int doy = static_cast<int>(thu_days - jan1_days) + 1;  // 1-based
-  return (doy - 1) / 7 + 1;
+// Floor division by 7; WEEKNUM's day-of-year offset is -1 for serial 0.
+int floor_div7(int n) noexcept {
+  return n >= 0 ? n / 7 : -((-n + 6) / 7);
+}
+
+// ISO 8601 week number of a normal-1900 serial: the week holding the
+// Thursday of the serial's Monday-start week, counted in that Thursday's
+// year. Worked in serial space so Excel's serial weekday governs.
+int iso_week_number(double serial_floor) noexcept {
+  const int mon0 = (date_time::weekday_sun0(serial_floor) + 6) % 7;
+  const double thursday = serial_floor + static_cast<double>(3 - mon0);
+  const double jan1 = date_time::serial_from_ymd(serial_year(thursday), 1, 1);
+  return static_cast<int>(thursday - jan1) / 7 + 1;
 }
 
 // Completed calendar months between the (y1,m1,d1) -> (y2,m2,d2) pair,
@@ -644,25 +630,20 @@ Value Weeknum_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     case 16:
       ws = 6;  // Sat
       break;
-    case 21: {
+    case 21:
       // ISO 8601.
-      const date_time::YMD ymd =
-          date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
-      return Value::number(static_cast<double>(iso_week_number(ymd.y, ymd.m, ymd.d)));
-    }
+      return Value::number(
+          static_cast<double>(iso_week_number(std::floor(normal_date_serial(serial.value(), date1904)))));
     default:
       return Value::error(ErrorCode::Num);
   }
-  const date_time::YMD ymd =
-      date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
-  const std::int64_t jan1_days = date_time::days_from_civil(ymd.y, 1, 1);
-  const std::int64_t d_days = date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
-  const int jan1_sun0 = weekday_sun0(ymd.y, 1, 1);
+  const double day_serial = std::floor(normal_date_serial(serial.value(), date1904));
+  const double jan1 = date_time::serial_from_ymd(serial_year(day_serial), 1, 1);
   // Offset of Jan 1 from its week start (0..6). Adding this to the zero-
   // based day-of-year normalises Jan 1 so the first day of week 1 is day 0.
-  const int jan1_offset = (jan1_sun0 - ws + 7) % 7;
-  const int doy0 = static_cast<int>(d_days - jan1_days);  // 0-based day-of-year
-  const int week = (doy0 + jan1_offset) / 7 + 1;
+  const int jan1_offset = (date_time::weekday_sun0(jan1) - ws + 7) % 7;
+  const int doy0 = static_cast<int>(day_serial - jan1);  // 0-based day-of-year
+  const int week = floor_div7(doy0 + jan1_offset) + 1;
   return Value::number(static_cast<double>(week));
 }
 
@@ -672,9 +653,7 @@ Value Isoweeknum_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, 
   if (!serial) {
     return Value::error(serial.error());
   }
-  const date_time::YMD ymd =
-      date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
-  return Value::number(static_cast<double>(iso_week_number(ymd.y, ymd.m, ymd.d)));
+  return Value::number(static_cast<double>(iso_week_number(std::floor(normal_date_serial(serial.value(), date1904)))));
 }
 
 // ---------------------------------------------------------------------------

@@ -149,6 +149,96 @@
       }
     },
     {
+      "id": "weekday_serial_0_is_saturday",
+      "formula": "=WEEKDAY(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "weekday_serial_1_mon1",
+      "formula": "=WEEKDAY(1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "weekday_serial_60_ghost_day",
+      "formula": "=WEEKDAY(60)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "networkdays_serial_1_2",
+      "formula": "=NETWORKDAYS(1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "networkdays_serial_0_8",
+      "formula": "=NETWORKDAYS(0,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "networkdays_intl_serial_0_7_sunday_only",
+      "formula": "=NETWORKDAYS.INTL(0,7,11)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "workday_serial_0_plus_1",
+      "formula": "=WORKDAY(0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "workday_serial_59_plus_1_ghost_day",
+      "formula": "=WORKDAY(59,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "weeknum_serial_366_mon_start",
+      "formula": "=WEEKNUM(366,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 54.0
+      }
+    },
+    {
+      "id": "isoweeknum_serial_1",
+      "formula": "=ISOWEEKNUM(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 52.0
+      }
+    },
+    {
       "id": "edate_plus_three_months",
       "formula": "=EDATE(DATE(2024,4,22),3)",
       "setup": {},

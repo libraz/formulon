@@ -118,9 +118,7 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
     return;
   }
   const ::formulon::date_time::YMD ymd = ::formulon::date_time::ymd_from_serial(serial, date1904);
-  // Weekday Sunday=0..Saturday=6 computed from the civil day count.
-  const std::int64_t days = ::formulon::date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
-  const int sun0 = static_cast<int>(((days + 4) % 7 + 7) % 7);
+  const int sun0 = ::formulon::date_time::weekday_sun0(serial, date1904);
 
   // Decompose the time portion with optional fractional seconds.
   const double frac_day = serial - std::floor(serial);

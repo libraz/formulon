@@ -112,6 +112,12 @@ double serial_from_ymd(int y, unsigned m, unsigned d, bool date1904) noexcept {
   return static_cast<double>(civil + base);
 }
 
+int weekday_sun0(double serial_floor, bool date1904) noexcept {
+  // 1900: serial 1 is a Sunday. 1904: serial 0 (1904-01-01) is a Friday.
+  const std::int64_t s = static_cast<std::int64_t>(std::floor(serial_floor)) + (date1904 ? 5 : 6);
+  return static_cast<int>((s % 7 + 7) % 7);
+}
+
 double yearfrac_us30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
   // NASD rule set (Excel's implementation):
   //   if d1 == 31                         -> d1 = 30

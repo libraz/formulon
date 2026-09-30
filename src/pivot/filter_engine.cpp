@@ -493,13 +493,8 @@ DateWindow resolve_relative_period(RelativePeriod period, const date_time::Civil
   // anchors these on the calendar week running Sunday through Saturday,
   // not on a rolling seven days, so `ThisWeek` read on a Friday still
   // starts the preceding Sunday and the three windows tile exactly.
-  //
-  // The weekday comes from the civil date rather than the serial so the
-  // 1900 leap-year bug cannot shift it: 1970-01-01 was a Thursday, which
-  // is index 4 when Sunday is 0.
   const auto week_span = [&](int weeks) {
-    const std::int64_t epoch_days = date_time::days_from_civil(year, month, now.date.d);
-    const std::int64_t weekday = ((epoch_days + 4) % 7 + 7) % 7;
+    const int weekday = date_time::weekday_sun0(today, date1904);
     const double start = today - static_cast<double>(weekday) + static_cast<double>(weeks) * 7.0;
     return DateWindow{start, start + 6.0};
   };

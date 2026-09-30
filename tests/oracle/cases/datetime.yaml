@@ -58,6 +58,49 @@ cases:
     description: "return_type=3 (Mon=0) of Monday = 0"
     formula: "=WEEKDAY(DATE(2024,4,22),3)"
 
+  # -- Weekdays of 1900 serials -------------------------------------------
+  # Excel derives the weekday from the serial, so serials 0..60 sit one day
+  # off the proleptic calendar.
+  - id: weekday_serial_0_is_saturday
+    description: "Serial 0 (1900-01-00) is a Saturday: Excel counts weekdays off the serial"
+    formula: "=WEEKDAY(0)"
+
+  - id: weekday_serial_1_mon1
+    description: "Serial 1 (1900-01-01) is a Sunday in Excel's serial weekday"
+    formula: "=WEEKDAY(1,2)"
+
+  - id: weekday_serial_60_ghost_day
+    description: "The fictitious 1900-02-29 is a Wednesday"
+    formula: "=WEEKDAY(60)"
+
+  - id: networkdays_serial_1_2
+    description: "Sunday 1900-01-01 is a weekend day, so only Monday counts"
+    formula: "=NETWORKDAYS(1,2)"
+
+  - id: networkdays_serial_0_8
+    description: "Serials 0..8 span Sat..Sun with five workdays"
+    formula: "=NETWORKDAYS(0,8)"
+
+  - id: networkdays_intl_serial_0_7_sunday_only
+    description: "Selector 11 (Sunday only) over serials 0..7"
+    formula: "=NETWORKDAYS.INTL(0,7,11)"
+
+  - id: workday_serial_0_plus_1
+    description: "Next workday after Saturday serial 0 is Monday serial 2"
+    formula: "=WORKDAY(0,1)"
+
+  - id: workday_serial_59_plus_1_ghost_day
+    description: "WORKDAY steps from Tuesday serial 59 onto the Wednesday ghost day"
+    formula: "=WORKDAY(59,1)"
+
+  - id: weeknum_serial_366_mon_start
+    description: "1900-12-31 is week 54 under the Monday start because the ghost day counts"
+    formula: "=WEEKNUM(366,2)"
+
+  - id: isoweeknum_serial_1
+    description: "Sunday 1900-01-01 belongs to ISO week 52 of 1899"
+    formula: "=ISOWEEKNUM(1)"
+
   # -- EDATE / EOMONTH / DAYS ---------------------------------------------
   - id: edate_plus_three_months
     formula: "=EDATE(DATE(2024,4,22),3)"

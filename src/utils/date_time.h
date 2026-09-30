@@ -127,6 +127,16 @@ YMD ymd_from_serial(double serial_floor, bool date1904 = false) noexcept;
 /// less than the 1900 serial for the same calendar day.
 double serial_from_ymd(int y, unsigned m, unsigned d, bool date1904 = false) noexcept;
 
+/// Excel's weekday for a serial, Sunday = 0 .. Saturday = 6.
+///
+/// Excel counts weekdays off the serial, not the calendar: in the 1900
+/// system serial 1 (1900-01-01) is a Sunday and the ghost serial 60 a
+/// Wednesday, so serials 0..60 sit one day off the proleptic calendar and
+/// agree with it from serial 61 on. The 1904 system has no ghost day and
+/// matches the calendar throughout. Every weekday-dependent builtin and
+/// format token reads the weekday through this one function.
+int weekday_sun0(double serial_floor, bool date1904 = false) noexcept;
+
 /// Extracts hour/minute/second from the fractional part of a serial. The
 /// total seconds in the day are rounded to the nearest integer; this
 /// matches observed Excel behaviour for common values like `TIME(0,0,1)`

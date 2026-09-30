@@ -450,17 +450,11 @@ std::optional<double> parse_double(std::string_view source) {
 namespace {
 
 constexpr int kMonthsPerYear = 12;
-constexpr int kDaysPerWeek = 7;
 
 }  // namespace
 
 int weekday_sunday_one(double serial_floor, bool date1904) {
-  const date_time::YMD ymd = date_time::ymd_from_serial(serial_floor, date1904);
-  const std::int64_t days = date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
-  // 1970-01-01 was a Thursday → Excel weekday 5. Adjust so days = 0
-  // maps to 5, then take mod 7 and shift to the 1..7 range.
-  const std::int64_t adjusted = ((days % kDaysPerWeek) + kDaysPerWeek + 4) % kDaysPerWeek;
-  return static_cast<int>(adjusted) + 1;
+  return date_time::weekday_sun0(serial_floor, date1904) + 1;
 }
 
 double sunday_of_week(double serial_floor, bool date1904) {

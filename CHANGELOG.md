@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Weekday functions and weekday format tokens follow Excel's serial
+  weekday for 1900-system serials 0 to 60, where serial 1 (1900-01-01) is a
+  Sunday, instead of the proleptic Gregorian calendar. `WEEKDAY`,
+  `NETWORKDAYS(.INTL)`, `WORKDAY(.INTL)`, `TEXT` `ddd`/`aaa` and
+  conditional-format weekday checks now match Excel there, `WEEKNUM` and
+  `ISOWEEKNUM` match across 1900, and `WEEKDAY` of a blank cell is 7.
+  Later serials and the 1904 date system are unchanged.
 - `@libraz/formulon` now resolves to a single-threaded build that loads
   without cross-origin isolation. The previous build allocated its memory
   as a `SharedArrayBuffer` and spawned eight pthread workers as soon as the

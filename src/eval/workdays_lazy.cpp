@@ -56,15 +56,8 @@ bool is_valid_workday_count(double value, bool date1904) noexcept {
 // The epoch matters: the 1900/1904 offset of 1462 days is not a multiple
 // of 7, so reading a 1904 serial as a 1900 one shifts the weekday by two
 // days and silently changes every weekend decision.
-//
-// The ISO Mon=0 weekday index is derived from the `(days + 4) mod 7`
-// Sun=0 form used by WEEKDAY: subtracting one and wrapping gives Mon=0,
-// i.e. `(days + 3) mod 7`. 2024-01-01 is a Monday, so `(days(2024,1,1) +
-// 3) % 7 == 0` is the canonical cross-check.
 bool is_weekend_masked(double serial_floor, std::uint8_t weekend_mask, bool date1904) noexcept {
-  const date_time::YMD ymd = date_time::ymd_from_serial(serial_floor, date1904);
-  const std::int64_t days = date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
-  const int mon0 = static_cast<int>(((days + 3) % 7 + 7) % 7);
+  const int mon0 = (date_time::weekday_sun0(serial_floor, date1904) + 6) % 7;
   return (weekend_mask & (1U << mon0)) != 0U;
 }
 
