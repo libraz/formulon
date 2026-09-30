@@ -364,10 +364,10 @@ INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureFixture,
                                            "dv_all", "prot", "prot2", "excelprot", "x14", "x14bars", "x14dir"));
 
 // Left out: `text_rules` and `flags`, whose timePeriod formulas Excel
-// generates itself and stores in a form the Ptg codec does not reproduce:
-// redundant parentheses the decoder does not keep, the PtgAttrSemi operand
-// (`00 00` where Excel writes `fe ff` or `fc ff`), a reference-class WEEKDAY
-// result, and EDATE as `PtgFuncVar`.
+// generates itself and stores in a fixed form of its own, not the one it
+// gives the same formula typed: value-class tokens inside AND, a
+// reference-class WEEKDAY result, EDATE as `PtgFuncVar`, redundant
+// parentheses, and a PtgAttrSemi operand (`fe ff` / `fc ff`) Excel ignores.
 INSTANTIATE_TEST_SUITE_P(Excel, XlsbFeatureWriterBytes,
                          ::testing::Values("base", "cellis_ops", "cfvo", "iconbits", "rel", "dv_all", "prot", "prot2",
                                            "excelprot", "x14", "x14bars", "x14dir"));

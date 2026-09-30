@@ -710,13 +710,30 @@ class Encoder {
     // Root promotion applies only to the single outermost node, and only when the caller wants it.
     const bool promote = root && promote_root_;
     const Slot slot = std::exchange(next_slot_, Slot{});
+    // A conditional-format operand under a parameter other than a value one
+    // is evaluated as an array, and so is everything inside it.
+    const bool enters_array = evaluation_ == PtgEvaluation::kConditionalFormat && slot.operand && slot.letter != 0 &&
+                              slot.letter != 'V' && !in_array_operand_;
+    if (enters_array) {
+      in_array_operand_ = true;
+    }
+    struct Restore {
+      bool& flag;
+      bool entered;
+      ~Restore() {
+        if (entered) {
+          flag = false;
+        }
+      }
+    } restore{in_array_operand_, enters_array};
     // A reference's class follows its slot in the formulas a value root is
     // measured for; a defined-name body keeps reference class (unmeasured).
     auto cls = [&](bool area) -> std::uint8_t {
       if (promote) {
         return kPtgValueClass;
       }
-      return promote_root_ ? SlotClass(slot, area, evaluation_) : kPtgReferenceClass;
+      const std::uint8_t c = promote_root_ ? SlotClass(slot, area, evaluation_) : kPtgReferenceClass;
+      return in_array_operand_ && c == kPtgValueClass ? kPtgArrayClass : c;
     };
     switch (node.kind()) {
       case parser::NodeKind::Literal:
@@ -1409,7 +1426,7 @@ class Encoder {
       if (arity > 0xFF) {
         return unsupported_node("Call(arity>255)");
       }
-      emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
+      emit_u8(out_, ResultPtg(0x22));  // PtgFuncVar result
       emit_u8(out_, static_cast<std::uint8_t>(arity));
       emit_u16(out_, entry->id);
     } else {
@@ -1417,11 +1434,17 @@ class Encoder {
         return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: fixed-arity function arity mismatch",
                           std::string("context=xlsb_ptg_writer fn=") + std::string(name));
       }
-      emit_u8(out_, ValueClassPtg(0x21));  // PtgFunc result
+      emit_u8(out_, ResultPtg(0x21));  // PtgFunc result
       emit_u16(out_, entry->id);
     }
     patch_gotos();
     return Expected<void, Error>::Ok();
+  }
+
+  /// A built-in's result token: value class, array class inside an array
+  /// operand of a conditional format (`AND(MONTH(H3)=1)` -> 0x61).
+  std::uint8_t ResultPtg(std::uint8_t reference_class_ptg) const {
+    return in_array_operand_ ? ClassedPtg(reference_class_ptg, kPtgArrayClass) : ValueClassPtg(reference_class_ptg);
   }
 
   Expected<void, Error> emit_call_arg(const parser::AstNode& node, std::string_view name, std::uint32_t i) {
@@ -1574,6 +1597,8 @@ class Encoder {
   const std::optional<PtgBaseCell> base_;
   /// See `PtgEvaluation`.
   const PtgEvaluation evaluation_;
+  /// Inside a conditional format's array operand (see `emit_node`).
+  bool in_array_operand_ = false;
   /// Written `@` nodes a legacy formula stores as nothing.
   std::vector<const parser::AstNode*> implied_at_;
   /// See `emit()`'s `promote` local. Cleared on the first call.

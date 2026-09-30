@@ -664,6 +664,49 @@ TEST(XlsbPtgCodec, BranchingCallsCarryExcelsJumpAttributes) {
                    0x01, 0x00}}));
 }
 
+// A conditional format evaluates an operand under a parameter other than a
+// value one as an array, and everything inside it: references, names and
+// function results take array class (`AND(MONTH(H3)=MONTH(TODAY()),...)` ->
+// 0x6C / 0x61), while the root and its direct operands keep value class.
+// Bytes as Excel 365 saved typed rules anchored at their own cell; the
+// PtgAttrSemi operand, which Excel ignores, is left out of the comparison.
+TEST(XlsbPtgCodec, ConditionalFormatArrayOperandsCarryArrayClassInward) {
+  auto encode = [](const char* formula) {
+    Arena arena;
+    parser::Parser p(formula, arena);
+    parser::AstNode* root = p.parse();
+    EXPECT_NE(root, nullptr) << formula;
+    auto encoded =
+        encode_ptgs(*root, {"S"}, {}, {}, PtgRootClass::kValue, PtgBaseCell{5U, 7U}, PtgEvaluation::kConditionalFormat);
+    EXPECT_TRUE(static_cast<bool>(encoded)) << formula;
+    std::vector<std::uint8_t> rgce = encoded ? encoded.value().rgce : std::vector<std::uint8_t>{};
+    if (rgce.size() >= 4U && rgce[0] == 0x19 && rgce[1] == 0x01) {
+      rgce.erase(rgce.begin() + 2, rgce.begin() + 4);
+    }
+    return rgce;
+  };
+  const std::vector<std::uint8_t> ref_n = {0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};
+  auto join = [](std::initializer_list<std::vector<std::uint8_t>> parts) {
+    std::vector<std::uint8_t> out;
+    for (const auto& part : parts) {
+      out.insert(out.end(), part.begin(), part.end());
+    }
+    return out;
+  };
+  EXPECT_EQ(
+      encode("AND(H6<WEEKDAY(TODAY()))"),
+      join({{0x19, 0x01, 0x6C}, ref_n, {0x61, 0xDD, 0x00, 0x62, 0x01, 0x46, 0x00, 0x09, 0x42, 0x01, 0x24, 0x00}}));
+  EXPECT_EQ(encode("AND(MONTH(H6)=MONTH(TODAY()),YEAR(H6)=YEAR(TODAY()))"),
+            join({{0x19, 0x01, 0x6C},
+                  ref_n,
+                  {0x61, 0x44, 0x00, 0x61, 0xDD, 0x00, 0x61, 0x44, 0x00, 0x0B, 0x6C},
+                  ref_n,
+                  {0x61, 0x45, 0x00, 0x61, 0xDD, 0x00, 0x61, 0x45, 0x00, 0x0B, 0x42, 0x02, 0x24, 0x00}}));
+  EXPECT_EQ(
+      encode("H6<WEEKDAY(TODAY())-1"),
+      join({{0x19, 0x01, 0x4C}, ref_n, {0x41, 0xDD, 0x00, 0x42, 0x01, 0x46, 0x00, 0x1E, 0x01, 0x00, 0x04, 0x09}}));
+}
+
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
 }
