@@ -927,7 +927,7 @@ async function run() {
   test('saveWithDiagnostics() and readDiagnostics() expose stable counters', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+      assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
       assert.ok(
         wb.addValidation(0, {
           ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
@@ -962,7 +962,7 @@ async function run() {
       const xlsb = wb.saveWithDiagnostics(2);
       assert.ok(xlsb.status.ok, `xlsb save failed: ${JSON.stringify(xlsb.status)}`);
       assert.equal(xlsb.downgradedFormulaCount, 1);
-      assert.ok(xlsb.deferredFeatureCount >= 2);
+      assert.equal(xlsb.deferredFeatureCount, 0);
       // The binary writer never reassigns a part id.
       assert.equal(xlsb.renumberedPartCount, 0);
 
