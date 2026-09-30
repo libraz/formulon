@@ -88,8 +88,8 @@ TEST(VolatileTracker, ForEachVisitsEveryRegisteredCell) {
   }
 }
 
-TEST(VolatileTracker, IsVolatileFunctionMatchesAllNine) {
-  // Excel's nine volatile functions.
+TEST(VolatileTracker, IsVolatileFunctionMatchesExcelsVolatileSet) {
+  // The functions Excel 365 marks volatile in its files (measured).
   EXPECT_TRUE(VolatileTracker::is_volatile_function("NOW"));
   EXPECT_TRUE(VolatileTracker::is_volatile_function("TODAY"));
   EXPECT_TRUE(VolatileTracker::is_volatile_function("RAND"));
@@ -99,6 +99,9 @@ TEST(VolatileTracker, IsVolatileFunctionMatchesAllNine) {
   EXPECT_TRUE(VolatileTracker::is_volatile_function("INDIRECT"));
   EXPECT_TRUE(VolatileTracker::is_volatile_function("INFO"));
   EXPECT_TRUE(VolatileTracker::is_volatile_function("CELL"));
+  EXPECT_TRUE(VolatileTracker::is_volatile_function("FORMULATEXT"));
+  EXPECT_TRUE(VolatileTracker::is_volatile_function("SHEET"));
+  EXPECT_TRUE(VolatileTracker::is_volatile_function("SHEETS"));
 }
 
 TEST(VolatileTracker, IsVolatileFunctionRejectsNonVolatiles) {

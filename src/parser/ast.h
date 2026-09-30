@@ -531,9 +531,9 @@ std::vector<const AstNode*> child_nodes(const AstNode& node);
 bool is_cellref_shaped_function_name(std::string_view lexeme) noexcept;
 
 /// True for one of Excel's volatile functions (NOW, TODAY, RAND,
-/// RANDBETWEEN, RANDARRAY, OFFSET, INDIRECT, INFO, CELL), ASCII
-/// case-insensitively: a formula calling one is recalculated on every pass,
-/// and a file marks it so (XLSB `PtgAttrSemi`).
+/// RANDBETWEEN, RANDARRAY, OFFSET, INDIRECT, INFO, CELL, FORMULATEXT, SHEET,
+/// SHEETS), ASCII case-insensitively: a formula calling one is recalculated
+/// on every pass, and a file marks it so (XLSB `PtgAttrSemi`).
 bool is_volatile_function_name(std::string_view name) noexcept;
 
 /// True for a volatile function that resolves the cells it reads at

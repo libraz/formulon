@@ -708,6 +708,8 @@ bool is_volatile_function_name(std::string_view name) noexcept {
   switch (ascii_to_upper(name.front())) {
     case 'C':
       return case_insensitive_eq(name, "CELL");
+    case 'F':
+      return case_insensitive_eq(name, "FORMULATEXT");
     case 'I':
       return case_insensitive_eq(name, "INDIRECT") || case_insensitive_eq(name, "INFO");
     case 'N':
@@ -717,6 +719,8 @@ bool is_volatile_function_name(std::string_view name) noexcept {
     case 'R':
       return case_insensitive_eq(name, "RAND") || case_insensitive_eq(name, "RANDBETWEEN") ||
              case_insensitive_eq(name, "RANDARRAY");
+    case 'S':
+      return case_insensitive_eq(name, "SHEET") || case_insensitive_eq(name, "SHEETS");
     case 'T':
       return case_insensitive_eq(name, "TODAY");
     default:
