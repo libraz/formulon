@@ -17,6 +17,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "io/color_spec_xml.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
@@ -45,42 +46,6 @@ std::uint32_t ParseColorArgb(const pugi::xml_node& color, std::uint32_t fallback
     return fallback;
   }
   return parse_rgb_hex(color.attribute("rgb").value(), fallback);
-}
-
-/// Parses the original specification of a `<color>` element (rgb / theme /
-/// indexed / auto). Returns `kNone` when the element is absent or carries
-/// none of the recognised attributes. The caller keeps the literal RGB or
-/// compatibility fallback separately via `ParseColorArgb`; no theme/palette
-/// rendering is performed.
-ColorSpec ParseColorSpec(const pugi::xml_node& color) {
-  ColorSpec spec;
-  if (!color) {
-    return spec;
-  }
-  if (pugi::xml_attribute rgb = color.attribute("rgb"); rgb) {
-    spec.kind = ColorSpec::Kind::kRgb;
-    spec.rgb = parse_rgb_hex(rgb.value(), 0xFF000000U);
-    return spec;
-  }
-  if (pugi::xml_attribute theme = color.attribute("theme"); theme) {
-    spec.kind = ColorSpec::Kind::kTheme;
-    spec.theme = theme.as_uint(0U);
-    // Signed by design (ECMA-376 bounds it to [-1.0, 1.0]), so this takes
-    // the plain double lexer rather than the non-negative one; what it
-    // must not admit is a NaN or an infinity, which would propagate into
-    // every channel of the resolved colour.
-    spec.tint = attr_f64(color, "tint", 0.0);
-    return spec;
-  }
-  if (pugi::xml_attribute indexed = color.attribute("indexed"); indexed) {
-    spec.kind = ColorSpec::Kind::kIndexed;
-    spec.indexed = indexed.as_uint(0U);
-    return spec;
-  }
-  if (color.attribute("auto")) {
-    spec.kind = ColorSpec::Kind::kAuto;
-  }
-  return spec;
 }
 
 /// Parses a `<vertAlign val="..."/>` run into the `FontRecord::vert_align`
@@ -283,7 +248,7 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
     rec.scheme = ParseFontScheme(scheme.attribute("val").value());
   }
   rec.color_argb = ParseColorArgb(f.child("color"), 0xFF000000U);
-  rec.color = ParseColorSpec(f.child("color"));
+  rec.color = read_color_spec(f.child("color"));
   return rec;
 }
 
@@ -308,8 +273,8 @@ FillRecord ParseFillNode(const pugi::xml_node& fill) {
     rec.pattern = ParseFillPattern(pattern.attribute("patternType").value());
     rec.fg_argb = ParseColorArgb(pattern.child("fgColor"), 0U);
     rec.bg_argb = ParseColorArgb(pattern.child("bgColor"), 0U);
-    rec.fg = ParseColorSpec(pattern.child("fgColor"));
-    rec.bg = ParseColorSpec(pattern.child("bgColor"));
+    rec.fg = read_color_spec(pattern.child("fgColor"));
+    rec.bg = read_color_spec(pattern.child("bgColor"));
   }
   return rec;
 }
@@ -334,7 +299,7 @@ void ReadBorderSide(const pugi::xml_node& side, BorderSide* out) {
   }
   out->style = ParseBorderStyle(side.attribute("style").value());
   out->color_argb = ParseColorArgb(side.child("color"), 0U);
-  out->color = ParseColorSpec(side.child("color"));
+  out->color = read_color_spec(side.child("color"));
 }
 
 void ReadBorders(const pugi::xml_node& root, StylesTable& table) {

@@ -14,6 +14,7 @@
 
 #include "cf/cf_types.h"
 #include "io/cell_parser.h"
+#include "io/color_spec_xml.h"
 #include "io/future_functions.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -327,23 +328,11 @@ cf::Color ParseRgbColor(std::string_view rgb) {
 /// Reads a CF `<color>`-like element. `theme` / `indexed` / `auto` are kept as
 /// a `ColorSpec` (resolved at evaluation time); `rgb` stays literal.
 cf::Color ReadColor(const pugi::xml_node& node) {
-  if (!node.attribute("rgb")) {
-    ColorSpec spec;
-    if (node.attribute("theme")) {
-      spec.kind = ColorSpec::Kind::kTheme;
-      spec.theme = attr_u32(node, "theme", 0U);
-      spec.tint = attr_f64(node, "tint", 0.0);
-    } else if (node.attribute("indexed")) {
-      spec.kind = ColorSpec::Kind::kIndexed;
-      spec.indexed = attr_u32(node, "indexed", 0U);
-    } else if (node.attribute("auto")) {
-      spec.kind = ColorSpec::Kind::kAuto;
-    }
-    if (spec.kind != ColorSpec::Kind::kNone) {
-      cf::Color out{};
-      out.spec = spec;
-      return out;
-    }
+  const ColorSpec spec = read_color_spec(node);
+  if (spec.kind != ColorSpec::Kind::kNone && spec.kind != ColorSpec::Kind::kRgb) {
+    cf::Color out{};
+    out.spec = spec;
+    return out;
   }
   return ParseRgbColor(attr_str(node, "rgb"));
 }

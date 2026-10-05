@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 
+#include "io/color_spec_xml.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "styles.h"
@@ -49,37 +50,7 @@ void AppendArgb(std::string& out, std::uint32_t argb) {
 void AppendColor(std::string& out, const char* tag, const ColorSpec& spec, std::uint32_t fallback_argb) {
   out.push_back('<');
   out.append(tag);
-  switch (spec.kind) {
-    case ColorSpec::Kind::kTheme:
-      out.append(" theme=\"");
-      AppendUint(out, spec.theme);
-      out.append("\"");
-      if (spec.tint != 0.0) {
-        out.append(" tint=\"");
-        append_xml_number(out, spec.tint);
-        out.append("\"");
-      }
-      break;
-    case ColorSpec::Kind::kIndexed:
-      out.append(" indexed=\"");
-      AppendUint(out, spec.indexed);
-      out.append("\"");
-      break;
-    case ColorSpec::Kind::kAuto:
-      out.append(" auto=\"1\"");
-      break;
-    case ColorSpec::Kind::kRgb:
-      out.append(" rgb=\"");
-      AppendArgb(out, spec.rgb);
-      out.append("\"");
-      break;
-    case ColorSpec::Kind::kNone:
-    default:
-      out.append(" rgb=\"");
-      AppendArgb(out, fallback_argb);
-      out.append("\"");
-      break;
-  }
+  append_color_spec_attrs(out, spec, fallback_argb);
   out.append("/>");
 }
 

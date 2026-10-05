@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/xlsb/brt_color.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/xf_flags.h"
@@ -74,42 +75,8 @@ std::uint16_t FontHeightTwips(double points) {
 }
 
 void EmitColor(std::vector<std::uint8_t>& payload, std::uint32_t argb, const ColorSpec& spec) {
-  // BrtColor is [flags/type, index, tint:i16, r, g, b, a]. Preserve a
-  // theme/indexed/auto selector when it exists. The sibling ARGB bytes are
-  // literal RGB for an RGB selector or a compatibility fallback; this writer
-  // does not resolve theme, indexed, or auto colours.
-  std::uint8_t kind = 0x02U;
-  std::uint8_t index = 0xFFU;  // what Excel writes beside an RGB colour
-  std::int16_t tint = 0;
-  switch (spec.kind) {
-    case ColorSpec::Kind::kTheme:
-      kind = 0x03U;
-      index = static_cast<std::uint8_t>(std::min<std::uint32_t>(spec.theme, 0xFFU));
-      tint = static_cast<std::int16_t>(std::clamp(std::round(spec.tint * 32767.0), -32767.0, 32767.0));
-      break;
-    case ColorSpec::Kind::kIndexed:
-      kind = 0x01U;
-      index = static_cast<std::uint8_t>(std::min<std::uint32_t>(spec.indexed, 0xFFU));
-      break;
-    case ColorSpec::Kind::kAuto:
-      kind = 0x00U;
-      index = 0x40U;  // the system colour Excel writes for `auto`
-      break;
-    case ColorSpec::Kind::kNone:
-    case ColorSpec::Kind::kRgb:
-      break;
-  }
-  // BrtColor stores fValidRGB in bit 0 and XColorType in bits 1..7.
-  // Setting bit 7 turns an RGB color into the reserved type 0x41, which
-  // makes Excel reject the entire styles part.
-  const std::uint32_t color_flags = (static_cast<std::uint32_t>(kind) << 1U) | 0x01U;
-  emit_u8(payload, static_cast<std::uint8_t>(color_flags));
-  emit_u8(payload, index);
-  emit_u16(payload, static_cast<std::uint16_t>(tint));
-  emit_u8(payload, static_cast<std::uint8_t>((argb >> 16U) & 0xFFU));
-  emit_u8(payload, static_cast<std::uint8_t>((argb >> 8U) & 0xFFU));
-  emit_u8(payload, static_cast<std::uint8_t>(argb & 0xFFU));
-  emit_u8(payload, static_cast<std::uint8_t>((argb >> 24U) & 0xFFU));
+  const auto bytes = encode_brt_color(argb, spec);
+  payload.insert(payload.end(), bytes.begin(), bytes.end());
 }
 
 void EmitFont(std::vector<std::uint8_t>& out, const FontRecord& font) {

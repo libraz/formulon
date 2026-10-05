@@ -4,6 +4,7 @@
 #include <tuple>
 #include <utility>
 
+#include "color_resolve.h"
 #include "formulon_c_cf_test_helpers.h"
 
 TEST(FormulonCApiCf, EvaluateRangeOnEmptyCfWorkbookReturnsZero) {
@@ -302,4 +303,155 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   EXPECT_EQ(match.kind, FM_CF_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(match.dxf_id_engaged, 1);
   EXPECT_EQ(match.dxf_id, 4U);
+}
+
+namespace {
+
+formulon::cf::Color ThemeColor(std::uint32_t theme, double tint) {
+  formulon::cf::Color c{};
+  c.spec.kind = formulon::ColorSpec::Kind::kTheme;
+  c.spec.theme = theme;
+  c.spec.tint = tint;
+  return c;
+}
+
+std::uint32_t ResolvedArgb(const formulon::Workbook& wb, const formulon::cf::Color& c, formulon::ColorContext context) {
+  return formulon::resolve_color(wb, c.spec, context).argb;
+}
+
+std::uint32_t PackArgb(const fm_cf_color_t& c) {
+  return (static_cast<std::uint32_t>(c.a) << 24U) | (static_cast<std::uint32_t>(c.r) << 16U) |
+         (static_cast<std::uint32_t>(c.g) << 8U) | static_cast<std::uint32_t>(c.b);
+}
+
+WorkbookGuard ThemeColorWorkbook() {
+  return WorkbookFromMutator([](formulon::Workbook& w) {
+    auto& sheet = w.sheet(0);
+    for (std::uint32_t r = 0; r < 3; ++r) {
+      sheet.set_cell_value(r, 0, formulon::Value::number(r * 50.0));
+      sheet.set_cell_value(r, 1, formulon::Value::number(r * 50.0));
+    }
+    formulon::cf::ConditionalFormat scale_block{};
+    scale_block.sqref.push_back(MakeRange(0, 0, 2, 0));
+    formulon::cf::CFRule scale;
+    scale.type = formulon::cf::RuleType::ColorScale;
+    scale.priority = 1;
+    formulon::cf::ColorScaleSpec spec;
+    spec.thresholds.push_back({formulon::cf::CfvoType::Min, "", true});
+    spec.thresholds.push_back({formulon::cf::CfvoType::Max, "", true});
+    spec.colors.push_back(ThemeColor(4, 0.39997558519241921));
+    spec.colors.push_back(ThemeColor(5, -0.249977111117893));
+    scale.color_scale = std::move(spec);
+    scale_block.rules.push_back(std::move(scale));
+    sheet.mutable_conditional_formats().push_back(std::move(scale_block));
+
+    formulon::cf::ConditionalFormat bar_block{};
+    bar_block.sqref.push_back(MakeRange(0, 1, 2, 1));
+    formulon::cf::CFRule bar;
+    bar.type = formulon::cf::RuleType::DataBar;
+    bar.priority = 2;
+    formulon::cf::DataBarSpec bar_spec;
+    bar_spec.min = {formulon::cf::CfvoType::Min, "", true};
+    bar_spec.max = {formulon::cf::CfvoType::Max, "", true};
+    bar_spec.fill = ThemeColor(8, 0.59999389629810485);
+    bar_spec.negative_fill = bar_spec.fill;
+    bar.data_bar = std::move(bar_spec);
+    bar_block.rules.push_back(std::move(bar));
+    sheet.mutable_conditional_formats().push_back(std::move(bar_block));
+  });
+}
+
+}  // namespace
+
+TEST(FormulonCApiCf, ThemeColorScalePayloadIsResolvedNotBlack) {
+  WorkbookGuard wb = ThemeColorWorkbook();
+  ASSERT_NE(wb.handle, nullptr);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  CfResultsGuard results;
+  ASSERT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 0, 0, 2, 0, std::nan(""), &results.handle), 0);
+  ASSERT_EQ(fm_cf_results_cell_count(results.handle), 3U);
+  const auto& block = wb.handle->workbook().sheet(0).conditional_formats()[0];
+  const std::uint32_t low = ResolvedArgb(wb.handle->workbook(), block.rules[0].color_scale->colors[0],
+                                         formulon::ColorContext::kFillForeground);
+  const std::uint32_t high = ResolvedArgb(wb.handle->workbook(), block.rules[0].color_scale->colors[1],
+                                          formulon::ColorContext::kFillForeground);
+  ASSERT_NE(low & 0xFFFFFFU, 0U);
+
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::size_t match_count = 0;
+  fm_cf_match_t m{};
+  ASSERT_EQ(fm_cf_results_cell_at(results.handle, 0, &row, &col, &match_count), 0);
+  ASSERT_EQ(fm_cf_results_match_at(results.handle, 0, 0, &m), 0);
+  EXPECT_EQ(PackArgb(m.color), low);
+  ASSERT_EQ(fm_cf_results_cell_at(results.handle, 2, &row, &col, &match_count), 0);
+  ASSERT_EQ(fm_cf_results_match_at(results.handle, 2, 0, &m), 0);
+  EXPECT_EQ(PackArgb(m.color), high);
+  EXPECT_NE(PackArgb(m.color) & 0xFFFFFFU, 0U);
+}
+
+TEST(FormulonCApiCf, ThemeColorDataBarEvaluatedPayloadIsResolvedNotBlack) {
+  WorkbookGuard wb = ThemeColorWorkbook();
+  ASSERT_NE(wb.handle, nullptr);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  CfResultsGuard results;
+  ASSERT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 0, 1, 2, 1, std::nan(""), &results.handle), 0);
+  ASSERT_GT(fm_cf_results_cell_count(results.handle), 0U);
+  const auto& bar = *wb.handle->workbook().sheet(0).conditional_formats()[1].rules[0].data_bar;
+  const std::uint32_t expected = ResolvedArgb(wb.handle->workbook(), bar.fill, formulon::ColorContext::kFillForeground);
+  ASSERT_NE(expected & 0xFFFFFFU, 0U);
+
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::size_t match_count = 0;
+  fm_cf_match_t m{};
+  ASSERT_EQ(fm_cf_results_cell_at(results.handle, 0, &row, &col, &match_count), 0);
+  ASSERT_EQ(fm_cf_results_match_at(results.handle, 0, 0, &m), 0);
+  EXPECT_EQ(m.kind, FM_CF_DATA_BAR);
+  EXPECT_EQ(PackArgb(m.bar_fill), expected);
+}
+
+TEST(FormulonCApiCf, ThemeColorRuleReadbackReportsResolvedChannels) {
+  WorkbookGuard wb = ThemeColorWorkbook();
+  ASSERT_NE(wb.handle, nullptr);
+  const auto& blocks = wb.handle->workbook().sheet(0).conditional_formats();
+  const std::uint32_t scale_low = ResolvedArgb(wb.handle->workbook(), blocks[0].rules[0].color_scale->colors[0],
+                                               formulon::ColorContext::kFillForeground);
+  const std::uint32_t bar_fill =
+      ResolvedArgb(wb.handle->workbook(), blocks[1].rules[0].data_bar->fill, formulon::ColorContext::kFillForeground);
+
+  fm_cf_rule_t rule{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &rule), 0) << fm_last_error_message();
+  ASSERT_GE(rule.color_scale_count, 2U);
+  EXPECT_EQ(PackArgb(rule.color_scale_colors[0]), scale_low);
+  EXPECT_NE(PackArgb(rule.color_scale_colors[0]) & 0xFFFFFFU, 0U);
+
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 1, &rule), 0) << fm_last_error_message();
+  EXPECT_EQ(PackArgb(rule.data_bar_fill), bar_fill);
+  EXPECT_NE(PackArgb(rule.data_bar_fill) & 0xFFFFFFU, 0U);
+}
+
+TEST(FormulonCApiCf, ThemeColorSurvivesXlsbSaveAndLoad) {
+  WorkbookGuard wb = ThemeColorWorkbook();
+  ASSERT_NE(wb.handle, nullptr);
+  BufferGuard xlsb;
+  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb.data, &xlsb.len), 0)
+      << fm_last_error_message();
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(xlsb.data, xlsb.len, &loaded.handle), 0) << fm_last_error_message();
+
+  const auto& blocks = loaded.handle->workbook().sheet(0).conditional_formats();
+  ASSERT_EQ(blocks.size(), 2U);
+  const auto& colors = blocks[0].rules[0].color_scale->colors;
+  ASSERT_EQ(colors.size(), 2U);
+  EXPECT_EQ(colors[0].spec.kind, formulon::ColorSpec::Kind::kTheme);
+  EXPECT_EQ(colors[0].spec.theme, 4U);
+  EXPECT_NEAR(colors[0].spec.tint, 0.39997558519241921, 1e-4);
+  EXPECT_EQ(colors[1].spec.theme, 5U);
+  EXPECT_NEAR(colors[1].spec.tint, -0.249977111117893, 1e-4);
+  const auto& fill = blocks[1].rules[0].data_bar->fill;
+  EXPECT_EQ(fill.spec.kind, formulon::ColorSpec::Kind::kTheme);
+  EXPECT_EQ(fill.spec.theme, 8U);
 }

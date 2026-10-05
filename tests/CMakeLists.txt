@@ -70,6 +70,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_table_reader_filters_test.cpp
   unit/io/pivot_table_reader_attributes_test.cpp
   unit/io/pivot_table_writer_test.cpp
+  unit/io/color_spec_xml_test.cpp
   unit/io/row_custom_height_test.cpp
   unit/io/sax_shared_formula_test.cpp
   unit/io/sax_xml_reader_test.cpp

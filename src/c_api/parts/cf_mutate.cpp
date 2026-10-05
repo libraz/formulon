@@ -27,6 +27,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "cf/cf_types.h"
+#include "color_resolve.h"
 #include "io/cf_overlay.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -83,7 +84,15 @@ bool resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat>& bloc
 // does not move as later payloads are adopted, so a rule engaging more
 // than one visual payload cannot invalidate a pointer already written
 // into `*out`.
-fm_cf_color_t from_cf_color(formulon::cf::Color color) {
+// The C payload carries literal channels only, so a theme / indexed / auto
+// colour is reported as its effective value in `wb`.
+fm_cf_color_t from_cf_color(const formulon::Workbook& wb, formulon::cf::Color color, formulon::ColorContext context) {
+  if (color.is_symbolic()) {
+    const std::uint32_t argb = formulon::resolve_color(wb, color.spec, context).argb;
+    return fm_cf_color_t{static_cast<std::uint8_t>((argb >> 16U) & 0xFFU),
+                         static_cast<std::uint8_t>((argb >> 8U) & 0xFFU), static_cast<std::uint8_t>(argb & 0xFFU),
+                         static_cast<std::uint8_t>((argb >> 24U) & 0xFFU)};
+  }
   return fm_cf_color_t{color.r, color.g, color.b, color.a};
 }
 
@@ -97,10 +106,10 @@ fm_cfvo_t from_cfvo(const formulon::cf::CfValueObject& src, BorrowedStringArena&
   return out;
 }
 
-void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf::CFRule& rule, std::size_t dxf_count,
-               BorrowedStringArena& text_arena, BorrowedArrayArena<fm_cf_cell_range_t>& range_arena,
-               BorrowedArrayArena<fm_cfvo_t>& cfvo_arena, BorrowedArrayArena<fm_cf_color_t>& color_arena,
-               fm_cf_rule_t* out) {
+void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalFormat& block,
+               const formulon::cf::CFRule& rule, std::size_t dxf_count, BorrowedStringArena& text_arena,
+               BorrowedArrayArena<fm_cf_cell_range_t>& range_arena, BorrowedArrayArena<fm_cfvo_t>& cfvo_arena,
+               BorrowedArrayArena<fm_cf_color_t>& color_arena, fm_cf_rule_t* out) {
   *out = fm_cf_rule_t{};
   out->id = text_arena.emplace(rule.id);
   out->type = static_cast<std::uint8_t>(rule.type);
@@ -155,7 +164,7 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
     colors.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {
       thresholds.push_back(from_cfvo(spec.thresholds[i], text_arena));
-      colors.push_back(from_cf_color(spec.colors[i]));
+      colors.push_back(from_cf_color(wb, spec.colors[i], formulon::ColorContext::kFillForeground));
     }
     out->color_scale_thresholds = cfvo_arena.adopt(std::move(thresholds));
     out->color_scale_colors = color_arena.adopt(std::move(colors));
@@ -166,7 +175,7 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
     out->data_bar_engaged = 1;
     out->data_bar_min = from_cfvo(spec.min, text_arena);
     out->data_bar_max = from_cfvo(spec.max, text_arena);
-    out->data_bar_fill = from_cf_color(spec.fill);
+    out->data_bar_fill = from_cf_color(wb, spec.fill, formulon::ColorContext::kFillForeground);
     out->data_bar_show_value = spec.show_value ? 1 : 0;
     out->data_bar_min_length_pct = spec.min_length_pct;
     out->data_bar_max_length_pct = spec.max_length_pct;
@@ -179,17 +188,17 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
     out->data_bar_axis_position_engaged = 1;
     out->data_bar_axis_position = static_cast<std::uint8_t>(spec.axis_position);
     out->data_bar_negative_fill_engaged = 1;
-    out->data_bar_negative_fill = from_cf_color(spec.negative_fill);
+    out->data_bar_negative_fill = from_cf_color(wb, spec.negative_fill, formulon::ColorContext::kFillForeground);
     out->data_bar_border_engaged = spec.border.has_value() ? 1 : 0;
     if (spec.border.has_value()) {
-      out->data_bar_border = from_cf_color(*spec.border);
+      out->data_bar_border = from_cf_color(wb, *spec.border, formulon::ColorContext::kBorder);
     }
     out->data_bar_negative_border_engaged = spec.negative_border.has_value() ? 1 : 0;
     if (spec.negative_border.has_value()) {
-      out->data_bar_negative_border = from_cf_color(*spec.negative_border);
+      out->data_bar_negative_border = from_cf_color(wb, *spec.negative_border, formulon::ColorContext::kBorder);
     }
     out->data_bar_axis_color_engaged = 1;
-    out->data_bar_axis_color = from_cf_color(spec.axis_color);
+    out->data_bar_axis_color = from_cf_color(wb, spec.axis_color, formulon::ColorContext::kBorder);
     out->data_bar_direction = static_cast<std::uint8_t>(spec.direction);
   }
   if (rule.icon_set.has_value()) {
@@ -344,8 +353,9 @@ extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t s
   mutable_wb->cf_range_scratch.clear();
   mutable_wb->cfvo_scratch.clear();
   mutable_wb->cf_color_scratch.clear();
-  fill_rule(blocks[b], blocks[b].rules[r], wb->workbook().styles().dxfs.size(), mutable_wb->cf_text_scratch,
-            mutable_wb->cf_range_scratch, mutable_wb->cfvo_scratch, mutable_wb->cf_color_scratch, out);
+  fill_rule(wb->workbook(), blocks[b], blocks[b].rules[r], wb->workbook().styles().dxfs.size(),
+            mutable_wb->cf_text_scratch, mutable_wb->cf_range_scratch, mutable_wb->cfvo_scratch,
+            mutable_wb->cf_color_scratch, out);
   return 0;
 }
 

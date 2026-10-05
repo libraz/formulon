@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "io/cf_writer.h"
+#include "io/xlsb/brt_color.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -264,11 +265,48 @@ class BlockCursor {
   ByteSpan cursor_;
 };
 
+// BrtColor: [flags (fValidRGB bit 0, XColorType bits 1..7), index, tint:i16,
+// r, g, b, a]. XColorType 0 is automatic, 1 a palette index, 2 literal RGB,
+// 3 a theme index with tint (tint / 32767). Theme, palette and automatic
+// colours keep their selector in `Color::spec`; the channels stay the
+// placeholder the OOXML reader leaves.
+
 std::optional<cf::Color> DecodeColor(ByteSpan p) {
-  if (p.size != 8U || p.data[0] != 0x05U || p.data[1] != 0xFFU || p.data[2] != 0U || p.data[3] != 0U) {
+  if (p.size != 8U) {
     return std::nullopt;
   }
-  return cf::Color{p.data[4], p.data[5], p.data[6], p.data[7]};
+  const std::uint8_t type = static_cast<std::uint8_t>(p.data[0] >> 1U);
+  const std::uint8_t index = p.data[1];
+  cf::Color out{};
+  switch (type) {
+    case kBrtColorTypeRgb:
+      if (p.data[0] != 0x05U || index != 0xFFU || p.data[2] != 0U || p.data[3] != 0U) {
+        return std::nullopt;
+      }
+      return cf::Color{p.data[4], p.data[5], p.data[6], p.data[7]};
+    case kBrtColorTypeTheme: {
+      out.spec.kind = ColorSpec::Kind::kTheme;
+      out.spec.theme = index;
+      const auto raw = static_cast<std::int16_t>(static_cast<std::uint16_t>(p.data[2] | (p.data[3] << 8U)));
+      out.spec.tint = static_cast<double>(raw) / kBrtColorTintScale;
+      return out;
+    }
+    case kBrtColorTypeIndexed:
+      out.spec.kind = ColorSpec::Kind::kIndexed;
+      out.spec.indexed = index;
+      return out;
+    case kBrtColorTypeAuto:
+      out.spec.kind = ColorSpec::Kind::kAuto;
+      return out;
+    default:
+      return std::nullopt;
+  }
+}
+
+std::array<std::uint8_t, 8> EncodeColor(const cf::Color& c) {
+  const std::uint32_t argb = (static_cast<std::uint32_t>(c.a) << 24U) | (static_cast<std::uint32_t>(c.r) << 16U) |
+                             (static_cast<std::uint32_t>(c.g) << 8U) | static_cast<std::uint32_t>(c.b);
+  return encode_brt_color(argb, c.spec);
 }
 
 std::optional<cf::CfValueObject> DecodeCfvo(ByteSpan p, bool in_icon_set, const MergeRange& base,
@@ -631,8 +669,8 @@ bool ParseGuid(const std::string& id, std::array<std::uint8_t, kGuidBytes>& out)
 }
 
 void EmitColor(std::vector<std::uint8_t>& dst, cf::Color c) {
-  const std::vector<std::uint8_t> payload = {0x05, 0xFF, 0x00, 0x00, c.r, c.g, c.b, c.a};
-  emit_record(dst, kColor, payload);
+  const auto bytes = EncodeColor(c);
+  emit_record(dst, kColor, std::vector<std::uint8_t>(bytes.begin(), bytes.end()));
 }
 
 Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValueObject& v, bool in_icon_set,
@@ -994,7 +1032,9 @@ void EmitDataBar14(std::vector<std::uint8_t>& head, std::vector<std::uint8_t>& c
   emit_u16(p, flags);
   emit_record(head, kBeginDataBar14, p);
   const auto color = [&colors](cf::Color c) {
-    const std::vector<std::uint8_t> payload = {0x00, 0x00, 0x00, 0x00, 0x05, 0xFF, 0x00, 0x00, c.r, c.g, c.b, c.a};
+    std::vector<std::uint8_t> payload(4U, 0U);
+    const auto bytes = EncodeColor(c);
+    payload.insert(payload.end(), bytes.begin(), bytes.end());
     emit_record(colors, kColor14, payload);
   };
   if (border) {

@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "cf/cf_types.h"
+#include "io/color_spec_xml.h"
 #include "io/future_functions.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -205,34 +206,13 @@ std::string EncodeSqref(const std::vector<cf::CFCellRange>& ranges) {
 /// Emits the colour attributes: `theme` / `indexed` / `auto` as written, else
 /// the literal `rgb`.
 void AppendColorAttrs(std::string& out, const cf::Color& c) {
-  switch (c.spec.kind) {
-    case ColorSpec::Kind::kTheme:
-      out.append(" theme=\"");
-      out.append(std::to_string(c.spec.theme));
-      out.push_back('"');
-      if (c.spec.tint != 0.0) {
-        out.append(" tint=\"");
-        append_xml_number(out, c.spec.tint);
-        out.push_back('"');
-      }
-      return;
-    case ColorSpec::Kind::kIndexed:
-      out.append(" indexed=\"");
-      out.append(std::to_string(c.spec.indexed));
-      out.push_back('"');
-      return;
-    case ColorSpec::Kind::kAuto:
-      out.append(" auto=\"1\"");
-      return;
-    case ColorSpec::Kind::kNone:
-    case ColorSpec::Kind::kRgb:
-      break;
+  const std::uint32_t argb = (static_cast<std::uint32_t>(c.a) << 24U) | (static_cast<std::uint32_t>(c.r) << 16U) |
+                             (static_cast<std::uint32_t>(c.g) << 8U) | static_cast<std::uint32_t>(c.b);
+  ColorSpec spec = c.spec;
+  if (spec.kind == ColorSpec::Kind::kRgb) {
+    spec.kind = ColorSpec::Kind::kNone;  // The literal channels are authoritative for rgb.
   }
-  char buf[16];
-  std::snprintf(buf, sizeof(buf), "%02X%02X%02X%02X", c.a, c.r, c.g, c.b);
-  out.append(" rgb=\"");
-  out.append(buf);
-  out.push_back('"');
+  io::append_color_spec_attrs(out, spec, argb);
 }
 
 void AppendColor(std::string& out, const cf::Color& c) {
