@@ -24,6 +24,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
+#include "eval/text_format/display_text.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -312,13 +313,7 @@ std::string_view number_format_for_xf(const CellXf* xf, const EvalContext& ctx) 
   if (xf == nullptr || ctx.workbook() == nullptr) {
     return {};
   }
-  const StylesTable& styles = ctx.workbook()->styles();
-  for (const NumFmtRecord& custom : styles.num_fmts) {
-    if (custom.id == xf->num_fmt_id && custom.format_string_index < styles.num_fmt_strings.size()) {
-      return styles.num_fmt_strings[custom.format_string_index];
-    }
-  }
-  return builtin_num_fmt(xf->num_fmt_id);
+  return text_format::number_format_code_for_xf(ctx.workbook()->styles(), xf);
 }
 
 std::string_view cell_format_code(const CellXf* xf) {

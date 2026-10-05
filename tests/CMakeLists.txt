@@ -152,6 +152,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/partial_recalc_test.cpp
   unit/eval/recalc_engine_test.cpp
   unit/eval/cell_evaluator_test.cpp
+  unit/eval/display_text_test.cpp
   unit/eval/volatile_tracker_test.cpp
   unit/eval/cross_sheet_test.cpp
   unit/eval/utf8_length_test.cpp

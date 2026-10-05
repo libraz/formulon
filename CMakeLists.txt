@@ -294,6 +294,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/text_format.cpp
   src/eval/builtins/text_width.cpp
   src/eval/builtins/web.cpp
+  src/eval/text_format/display_text.cpp
   src/eval/text_format/number_format.cpp
   src/eval/text_format/number_format_scanner.cpp
   src/eval/text_format/number_format_section.cpp
