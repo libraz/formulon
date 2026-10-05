@@ -24,6 +24,7 @@
 #include "utils/checked_index.h"
 #include "utils/date_time.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -164,32 +165,12 @@ int CaseInsensitiveCompare(std::string_view lhs, std::string_view rhs) {
   return lhs.size() < rhs.size() ? -1 : 1;
 }
 
-bool CaseInsensitiveEquals(std::string_view lhs, std::string_view rhs) {
-  return lhs.size() == rhs.size() && CaseInsensitiveCompare(lhs, rhs) == 0;
-}
-
-bool CaseInsensitiveContains(std::string_view haystack, std::string_view needle) {
-  if (needle.empty()) {
-    return true;
-  }
-  if (needle.size() > haystack.size()) {
-    return false;
-  }
-  const std::size_t last = haystack.size() - needle.size();
-  for (std::size_t i = 0; i <= last; ++i) {
-    if (CaseInsensitiveEquals(haystack.substr(i, needle.size()), needle)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool CaseInsensitiveBeginsWith(std::string_view label, std::string_view value) {
-  return label.size() >= value.size() && CaseInsensitiveEquals(label.substr(0, value.size()), value);
+  return label.size() >= value.size() && strings::case_insensitive_eq(label.substr(0, value.size()), value);
 }
 
 bool CaseInsensitiveEndsWith(std::string_view label, std::string_view value) {
-  return label.size() >= value.size() && CaseInsensitiveEquals(label.substr(label.size() - value.size()), value);
+  return label.size() >= value.size() && strings::case_insensitive_eq(label.substr(label.size() - value.size()), value);
 }
 
 // Evaluates one decoded `<filters>` caption entry against `label`.
@@ -204,9 +185,9 @@ bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view labe
   };
   switch (f.predicate) {
     case CaptionPredicate::Equal:
-      return CaseInsensitiveEquals(label, value);
+      return strings::case_insensitive_eq(label, value);
     case CaptionPredicate::NotEqual:
-      return !CaseInsensitiveEquals(label, value);
+      return !strings::case_insensitive_eq(label, value);
     case CaptionPredicate::BeginsWith:
       return CaseInsensitiveBeginsWith(label, value);
     case CaptionPredicate::NotBeginsWith:
@@ -216,9 +197,9 @@ bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view labe
     case CaptionPredicate::NotEndsWith:
       return !CaseInsensitiveEndsWith(label, value);
     case CaptionPredicate::Contains:
-      return CaseInsensitiveContains(label, value);
+      return strings::case_insensitive_contains(label, value);
     case CaptionPredicate::NotContains:
-      return !CaseInsensitiveContains(label, value);
+      return !strings::case_insensitive_contains(label, value);
     case CaptionPredicate::GreaterThan:
       return CaseInsensitiveCompare(label, value) > 0;
     case CaptionPredicate::GreaterThanOrEqual:

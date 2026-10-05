@@ -196,8 +196,8 @@ Value AggregateVarP(const std::vector<Value>& values) {
   return variance_helper(values, /*population=*/true);
 }
 
-Value AggregateStdDev(const std::vector<Value>& values) {
-  Value v = variance_helper(values, /*population=*/false);
+Value stddev_helper(const std::vector<Value>& values, bool population) {
+  Value v = variance_helper(values, population);
   if (!v.is_number()) {
     return v;
   }
@@ -208,16 +208,12 @@ Value AggregateStdDev(const std::vector<Value>& values) {
   return Value::number(r);
 }
 
+Value AggregateStdDev(const std::vector<Value>& values) {
+  return stddev_helper(values, /*population=*/false);
+}
+
 Value AggregateStdDevP(const std::vector<Value>& values) {
-  Value v = variance_helper(values, /*population=*/true);
-  if (!v.is_number()) {
-    return v;
-  }
-  const double r = std::sqrt(v.as_number());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return stddev_helper(values, /*population=*/true);
 }
 
 Value AggregateProduct(const std::vector<Value>& values) {
