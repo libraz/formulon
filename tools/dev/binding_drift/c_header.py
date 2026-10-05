@@ -37,6 +37,8 @@ _WASM32_SCALARS = {
     "uint16_t": (2, 2),
     "uint32_t": (4, 4),
     "int32_t": (4, 4),
+    "uint64_t": (8, 8),
+    "int64_t": (8, 8),
     "double": (8, 8),
     "size_t": (4, 4),
 }

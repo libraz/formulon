@@ -272,6 +272,9 @@ def _scratch_slot_widths(
         # `x = _alloc_out_ptr()` -- the package's 4-byte out-i32 / out-ptr slot.
         if isinstance(callee, ast.Name) and callee.id == "_alloc_out_ptr":
             record(target.id, 4)
+        # `x = _alloc_out_u64()` -- the 8-byte out-uint64 slot.
+        elif isinstance(callee, ast.Name) and callee.id == "_alloc_out_u64":
+            record(target.id, 8)
         # `x = S.alloc_struct(LIB, S.LAYOUT)` -- sized from the layout table
         # `python-struct-layouts` already pins against the header.
         elif (isinstance(callee, ast.Attribute) and callee.attr == "alloc_struct") or (
