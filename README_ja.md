@@ -102,20 +102,20 @@ oracle は **104 カテゴリ** あります。数式 track と条件付き書�
 |------|------|
 | `ctest -LE "SLOW\|BENCH\|TSAN"` — `make test`、PR ゲート | すべて passed |
 | `ctest -LE "BENCH\|TSAN"` — `make test-slow`、`SLOW` 層を追加 | すべて passed |
-| primary formula oracle | `4546/4546` passed / `125` documented skips |
+| primary formula oracle | `4768/4768` passed / `133` documented skips |
 | 条件付き書式 oracle | `23/23` |
-| workbook oracle (pivot + print) | `73/73` passed / `9` documented skips |
+| workbook oracle (pivot + print) | `83/83` passed / `10` documented skips |
 | 取り込み済み外部エンジンコーパス (クロスチェック) | `12510/12510` passed / `168` documented divergences |
 
 CTest スイートを分けているラベルは 3 つです。`SLOW`（数分かかる結合・並行性テスト）、`TSAN`（ThreadSanitizer での実行）、`BENCH`（しきい値を調整できるマイクロベンチの回帰チェックで、必要なときだけ実行）です。ラベルのないテストはすべて高速層で、CI はこれを合否判定に使います。負荷試験専用の層はありません。libFuzzer ハーネスも `SLOW` ラベルを持ちますが、`-DFM_BUILD_FUZZ=ON` を指定したビルド (`make fuzz`) にしか存在せず、既定ビルドにも CI にも含まれません。libFuzzer ランタイムを同梱する Clang が必要で、Apple の toolchain はこれを持たないため、macOS では別途 LLVM が要ります。macOS では AddressSanitizer も既定で無効です。最近の macOS の動的リンカと組み合わせると、shadow memory の初期化中にデッドロックするためです。そのため macOS での fuzz 実行で検出できるのはクラッシュ・タイムアウト・未定義動作までで、ヒープ破壊は検出できません。
 
 残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。523 関数のうち `519` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る 4 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、挙動の分類がまだ書き切れていないためです。`JIS` は `DBCS` の別名として宣言し、closure を満たしています。Excel は ja-JP の数式バーで入力された `JIS` を保存・評価の前に `DBCS` へ書き換えるため、`JIS` を直接呼ぶ oracle case は作れません。closure harness は宣言をそのまま信用せず、別名の参照先の関数を実際に評価して判定します。
 
-数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があり、WSL2 から Windows COM へ渡すブリッジ経由で採取します。残る 9 件の skip はいずれも同じ Excel の癖です。印刷倍率またはズームが 50% 以下のとき、Excel の改ページプレビューは幾何的なページ分割に従わない列の自動改ページを出すため、観測される改ページ位置は倍率を下げても縮まらず、25% では逆に増えます。skip した各ケースには、照合した Microsoft 365 の観測値を記録しています。
+数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があり、WSL2 から Windows COM へ渡すブリッジ経由で採取します。skip は 10 件あり、そのうち 9 件は同じ Excel の癖によるものです。印刷倍率またはズームが 50% 以下のとき、Excel の改ページプレビューは幾何的なページ分割に従わない列の自動改ページを出すため、観測される改ページ位置は倍率を下げても縮まらず、25% では逆に増えます。この 9 件には、照合した Microsoft 365 の観測値を記録しています。残る 1 件はケースファイルの形だけを確かめるスモーク用のケースで、照合する値を持ちません。
 
 新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
 
-OOXML reader / writer はシート、スタイル、条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブルを round-trip します。MS-XLSB reader / writer はセル値、スタイル、シート間 3-D 参照、および一般的なトークン化数式をカバーします。配列定数リテラルと 2007 年以降の future function ID は、OOXML 経路に比べてまだ限定的です。ワークブック操作は C ABI と各言語バインディングから利用できます。CLI は意図的に `eval` / `recalc` / `dump` / `paginate` のみを公開します。
+OOXML reader / writer はシート、スタイル、条件付き書式、コメント (スレッド形式を含む)、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブル、画像と図形、テーマを round-trip します。MS-XLSB reader / writer はセル値、スタイル、シート間 3-D 参照、および一般的なトークン化数式をカバーします。配列定数リテラルと 2007 年以降の future function ID は、OOXML 経路に比べてまだ限定的です。スレッド形式のコメント、挿入した画像、型付き AutoFilter の編集は XLSB へ書き出しません。ワークブック操作は C ABI と各言語バインディングから利用できます。CLI は意図的に `eval` / `recalc` / `dump` / `paginate` のみを公開します。
 
 不具合報告・oracle 差分レポート・ご意見はいつでも歓迎しています。
 

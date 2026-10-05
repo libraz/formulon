@@ -7,11 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- C ABI: `fm_cell_xf` grows from 88 to 128 bytes (apply flags, `quotePrefix`
+  and protection) and `fm_row_layout_t` from 32 to 40 bytes (`has_height`,
+  `custom_height`). Callers built against the old layouts must rebuild.
+- C ABI: `fm_styles_set_cell_style` takes one `fm_cell_style_record_t` (name,
+  `xf_id`, `builtin_id`, `i_level`, `hidden`, `custom_builtin`). The JS
+  `setCellStyle` and Python `set_cell_style` take the matching record.
+
+### Added
+
+Everything below is available through the C ABI, WASM, native Node and Python.
+
+- Sheet geometry: default column width and row height can be read and set,
+  and a row height cleared back to auto. Cell rectangles, column widths and
+  row heights are reported in points in display or print mode, with the
+  width model and chars/points conversion.
+- Pagination results carry paper, margins, printable area, scale, page order,
+  print titles, per-page layout and manual-break flags.
+- Cells and formulas in a range are enumerated through a handle with a
+  resumable cursor, and merges in a range are listed.
+- A cell's formula in A1 and R1C1 notation, and its display text (or any
+  value under a format code) with an `ok` / overflow / invalid status.
+- The workbook theme: the 12 colours and the major and minor fonts can be
+  read and set, including on a workbook with no theme part. Any colour spec
+  (theme and tint, indexed, auto, RGB) resolves to ARGB for a font, fill or
+  border context, and a cell's effective style reports its resolved fonts,
+  fills and borders.
+- Named cell styles can be removed, and built-in style ids 48..53 are
+  accepted. `setCellStyle` is now available on the native Node addon.
+- Typed AutoFilters for sheets and tables: filter columns (values, date
+  groups, custom, top 10, dynamic, colour, icon) and sort state can be read,
+  set, removed, cleared, evaluated to visible rows and applied. Applying a
+  filter hides and unhides rows and recalculates `SUBTOTAL` and `AGGREGATE`.
+  A typed set keeps `xr:uid`, `calendarType`, `extLst` and unknown
+  attributes.
+- Data-validation evaluation: whether a proposed value satisfies the rule
+  that applies to a cell, which rule applied and its error style, plus a
+  resumable listing of invalid cells.
+- Threaded comments with replies, mentions, resolved state and the
+  workbook's person list can be read, added, edited and removed. Each thread
+  keeps Excel's legacy note stub in sync, and row and column edits move or
+  remove threads with their anchors.
+- Images: PNG, JPEG, GIF and BMP bytes are probed for format and pixel size,
+  a sheet's drawing objects (pictures, charts, shapes, groups) are listed
+  with anchors, and pictures can be read, inserted with a one-cell, two-cell
+  or absolute anchor, and removed. Row and column edits move anchors the way
+  Excel does.
+- Enum constants mirroring the C enums on every surface: `GeometryMode`,
+  `DisplayStatus`, `ColorContext`, `ColorResolution`, `ThemeSource`,
+  `EffectiveStyleSource`, `FilterKind`, `FilterOperator`,
+  `DynamicFilterType`, `SortBy`, `SortMethod`, `DateTimeGrouping`,
+  `ValidationErrorStyle`, `ImageFormat`, `DrawingObjectKind`, `AnchorKind`
+  and `AnchorEditAs`.
+
 ### Changed
 
+- `SUBTOTAL` and `AGGREGATE` (options 0..3 and the array form 14..19) skip a
+  referenced cell whose own formula calls `SUBTOTAL` or `AGGREGATE`,
+  including inside `LET` / `LAMBDA` bodies and unevaluated `IF` branches,
+  and every cell of a spilled or CSE array whose anchor qualifies. A name,
+  `INDIRECT` or a plain reference to such a cell does not count. A
+  `SUBTOTAL` whose cells are all excluded returns its empty-set value
+  instead of `#VALUE!`.
+- `SUBTOTAL` 1..11 treat hidden rows as filtered only when a sheet or table
+  AutoFilter on that sheet has a criterion, and then skip every hidden row
+  on the sheet. 101..111 keep skipping every hidden row.
+- Rows with an auto height are no longer written with `customHeight`; only
+  explicit heights are.
+- `TEXT` renderings match Excel for fraction padding on whole numbers,
+  `[DBNum1]` with General, serial 0 as 1900/1/0, negative 1904-system dates
+  and times, and the 1904 upper serial bound.
 - The WASM size report's ceilings moved to 3.50 MiB / 896 KiB Brotli soft
   and 3.75 MiB / 928 KiB Brotli hard, keeping the 0.25 MiB and 32 KiB gap
   between each soft and hard ceiling.
+
+### Fixed
+
+- Stored number formats with English colour names (`[Red]`, `[ColorN]`) no
+  longer render as `########` in display text and `CELL`.
+- Conditional-format theme, indexed and auto colours no longer render black:
+  they resolve against the workbook theme and palette in the engine and in
+  the C API payloads, and survive an XLSB save and load.
+- Table AutoFilters follow row and column inserts and deletes, and
+  AutoFilter `colId`s shift when columns are inserted or deleted inside the
+  filter.
+
+### Known limitations
+
+- Saving as XLSB does not write threaded comments, inserted images or typed
+  AutoFilter edits; each is reported as a diagnostic. AutoFilters loaded
+  from XLSB are not visible to the typed API.
+- Custom data-validation formulas and rule bounds evaluate against the
+  stored workbook, not the proposed value.
+- AutoFilter evaluation approximates Excel's text ordering for custom `<`
+  and `>` text comparisons, and computes top N and average filters over all
+  body rows.
+- Display text does not depend on column width: narrow columns never show
+  `####` and repeat fills contribute nothing.
+- The legacy note text of a threaded comment and the regenerated comment VML
+  geometry approximate Excel's.
 
 ## [0.12.0] - 2026-09-30
 
