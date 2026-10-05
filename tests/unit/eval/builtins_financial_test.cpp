@@ -1,14 +1,4 @@
-//
-// End-to-end tests for the financial built-ins: PV, FV, PMT, NPER, NPV,
-// IRR, RATE, IPMT, PPMT, CUMIPMT, and CUMPRINC. All but IRR run through
-// the eager registry dispatcher; IRR rides the lazy dispatch table
-// because its first argument must reach the impl as un-flattened AST so
-// range / Ref / ArrayLiteral shapes can all be walked cell-by-cell for
-// Newton-Raphson.
-//
-// Each test parses a formula source, evaluates the AST through the
-// default registry, and asserts the resulting Value. Tests that need a
-// bound workbook populate the current sheet and use `EvalSourceIn`.
+// Financial builtin tests grouped by schedule family.
 
 #include <cmath>
 #include <string>
@@ -31,13 +21,8 @@
 namespace formulon {
 namespace eval {
 namespace {
-
 using formulon::test::EvalSource;
 using formulon::test::EvalSourceIn;
-
-// ---------------------------------------------------------------------------
-// PV
-// ---------------------------------------------------------------------------
 
 TEST(FinancialPV, BasicEndOfPeriod) {
   // =PV(0.05/12, 60, -500) - 5-year car loan at 5% APR; negative pmt
@@ -78,10 +63,6 @@ TEST(FinancialPV, NonNumericArgIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-// ---------------------------------------------------------------------------
-// FV
-// ---------------------------------------------------------------------------
-
 TEST(FinancialFV, BasicMonthlySavings) {
   // =FV(0.08/12, 120, -200) - 10-year deposit at 8% APR, $200/mo cash
   // out, zero PV. Should be ~36589.21 positive (cash back to investor).
@@ -106,10 +87,6 @@ TEST(FinancialFV, WithPvAndType) {
   ASSERT_TRUE(begin.is_number());
   EXPECT_GT(begin.as_number(), end.as_number());
 }
-
-// ---------------------------------------------------------------------------
-// PMT
-// ---------------------------------------------------------------------------
 
 TEST(FinancialPMT, CarLoanPayment) {
   // =PMT(0.05/12, 60, 25000) - pv positive (borrow), pmt negative (pay).
@@ -194,10 +171,6 @@ TEST(FinancialFv, RateBelowMinusOneIntegerNperIsFinite) {
   EXPECT_DOUBLE_EQ(v.as_number(), -1100.0);
 }
 
-// ---------------------------------------------------------------------------
-// NPER
-// ---------------------------------------------------------------------------
-
 TEST(FinancialNPER, BasicLoan) {
   // =NPER(0.05/12, -500, 25000) -> ~56.18 periods.
   const Value v = EvalSource("=NPER(0.05/12, -500, 25000)");
@@ -231,10 +204,6 @@ TEST(FinancialNPER, RateBelowMinusOneIsNum) {
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
-
-// ---------------------------------------------------------------------------
-// NPV
-// ---------------------------------------------------------------------------
 
 TEST(FinancialNPV, BasicScalars) {
   // 100/1.1 + 200/1.1^2 + 300/1.1^3 ~= 481.59.
@@ -297,16 +266,12 @@ TEST(FinancialNPV, ErrorInScalarPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-// A direct logical argument contributes at its period: TRUE coerces to 1.0
-// discounted by (1+rate)^1. Previously the value was silently dropped.
 TEST(FinancialNPV, DirectBoolContributesAtPeriod) {
   const Value v = EvalSource("=NPV(0.1, TRUE)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 1.0 / 1.1, 1e-12);
 }
 
-// A direct logical between two numbers advances the period counter so the
-// following number lands one period later.
 TEST(FinancialNPV, DirectBoolAdvancesSubsequentPeriods) {
   const Value v = EvalSource("=NPV(0.1, 100, TRUE, 300)");
   const double expected = 100.0 / 1.1 + 1.0 / std::pow(1.1, 2) + 300.0 / std::pow(1.1, 3);
@@ -314,24 +279,18 @@ TEST(FinancialNPV, DirectBoolAdvancesSubsequentPeriods) {
   EXPECT_NEAR(v.as_number(), expected, 1e-10);
 }
 
-// A direct numeric-text argument is coerced and counted, matching Excel's
-// treatment of directly-passed text numbers.
 TEST(FinancialNPV, DirectNumericTextContributes) {
   const Value v = EvalSource("=NPV(0.1, \"5\")");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 5.0 / 1.1, 1e-12);
 }
 
-// A direct non-numeric text argument is ignored and does not advance the
-// period, so a following number stays at its original period.
 TEST(FinancialNPV, DirectNonNumericTextIsIgnored) {
   const Value v = EvalSource("=NPV(0.1, \"x\", 100)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 100.0 / 1.1, 1e-12);
 }
 
-// A range-sourced bool/text cell is still dropped (range filtering rules
-// are preserved): only the numeric cell participates.
 TEST(FinancialNPV, RangeBoolStillDropped) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
@@ -341,10 +300,6 @@ TEST(FinancialNPV, RangeBoolStillDropped) {
   // The TRUE cell is filtered out; only 100 remains at period 1.
   EXPECT_NEAR(v.as_number(), 100.0 / 1.1, 1e-12);
 }
-
-// ---------------------------------------------------------------------------
-// IRR
-// ---------------------------------------------------------------------------
 
 TEST(FinancialIRR, BasicRangeInvestment) {
   // Classic textbook IRR: -1000 followed by +300, +400, +500 over three
@@ -446,10 +401,6 @@ TEST(FinancialIRR, RangeSkipsNonNumeric) {
   EXPECT_NEAR(v.as_number(), 0.0889633947, 1e-8);
 }
 
-// ---------------------------------------------------------------------------
-// RATE
-// ---------------------------------------------------------------------------
-
 TEST(FinancialRATE, CarLoanConverges) {
   // =RATE(60, -500, 25000): 60 monthly payments of $500 amortise a
   // $25,000 principal. Total outflow 30000 implies 5000 interest over
@@ -506,583 +457,6 @@ TEST(FinancialRATE, ArityOver) {
   const Value v = EvalSource("=RATE(60, -500, 25000, 0, 0, 0.1, 0.2)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-// ---------------------------------------------------------------------------
-// IPMT
-// ---------------------------------------------------------------------------
-
-TEST(FinancialIPMT, FirstPeriodInterestDominates) {
-  // =IPMT(0.05/12, 1, 60, 25000): balance at start of period 1 is the
-  // full pv (25000), so interest = -25000 * (0.05/12) ~= -104.1667.
-  const Value v = EvalSource("=IPMT(0.05/12, 1, 60, 25000)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), -25000.0 * (0.05 / 12.0), 1e-8);
-}
-
-TEST(FinancialIPMT, LastPeriodInterestNearZero) {
-  // Interest in the final period is small in magnitude (most of the
-  // final payment is principal).
-  const Value v = EvalSource("=IPMT(0.05/12, 60, 60, 25000)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_LT(std::fabs(v.as_number()), 5.0);
-  EXPECT_LT(v.as_number(), 0.0);  // still negative (interest payment)
-}
-
-TEST(FinancialIPMT, IntegerPerBeyondNperIsNum) {
-  // Integer per > nper is an out-of-schedule period: Mac Excel 365 (and
-  // the IronCalc oracle) return #NUM! in this case.
-  const Value v = EvalSource("=IPMT(0.05/12, 61, 60, 25000)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialIPMT, FractionalPerBeyondNperMatchesOracle) {
-  // IronCalc / Mac Excel 365 oracle value for a fractional per > nper case
-  // at type == 0.
-  const Value v = EvalSource("=IPMT(0.1, 3.9, 3, 8000)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), -30.51485756246893, 1e-9);
-}
-
-TEST(FinancialIPMT, FractionalPerBeyondNperType1) {
-  // Same fractional per > nper case with fv=10 and annuity-due (type=1).
-  const Value v = EvalSource("=IPMT(0.1, 3.9, 3, 8000, 10, 1)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), -26.866364667656, 1e-9);
-}
-
-TEST(FinancialIPMT, PerZeroIsNum) {
-  const Value v = EvalSource("=IPMT(0.05/12, 0, 60, 25000)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialIPMT, TypeOneFirstPeriodIsZero) {
-  // Annuity-due, first period: payment is at start so no interest has
-  // accrued. IPMT must be exactly 0.
-  const Value v = EvalSource("=IPMT(0.05/12, 1, 60, 25000, 0, 1)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
-}
-
-TEST(FinancialIPMT, ZeroRateIsZero) {
-  // No interest ever accrues at rate=0.
-  const Value v = EvalSource("=IPMT(0, 5, 60, 25000)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
-}
-
-TEST(FinancialIPMT, ArityUnder) {
-  const Value v = EvalSource("=IPMT(0.05/12, 1, 60)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-// ---------------------------------------------------------------------------
-// PPMT
-// ---------------------------------------------------------------------------
-
-TEST(FinancialPPMT, FirstPeriodPrincipal) {
-  // PPMT = PMT - IPMT for the same period.
-  const Value pmt = EvalSource("=PMT(0.05/12, 60, 25000)");
-  const Value ipmt = EvalSource("=IPMT(0.05/12, 1, 60, 25000)");
-  const Value ppmt = EvalSource("=PPMT(0.05/12, 1, 60, 25000)");
-  ASSERT_TRUE(pmt.is_number());
-  ASSERT_TRUE(ipmt.is_number());
-  ASSERT_TRUE(ppmt.is_number());
-  EXPECT_NEAR(ppmt.as_number(), pmt.as_number() - ipmt.as_number(), 1e-9);
-}
-
-TEST(FinancialPPMT, IdentityAcrossAllPeriods) {
-  // For every period i in [1, nper], IPMT(i) + PPMT(i) == PMT.
-  const Value pmt = EvalSource("=PMT(0.05/12, 60, 25000)");
-  ASSERT_TRUE(pmt.is_number());
-  // Probe a handful of representative periods (full sweep is expensive
-  // via EvalSource and adds no signal over ~5 strategic probes).
-  for (int per : {1, 2, 15, 30, 59, 60}) {
-    const std::string formula = "=IPMT(0.05/12, " + std::to_string(per) + ", 60, 25000) + PPMT(0.05/12, " +
-                                std::to_string(per) + ", 60, 25000)";
-    const Value sum = EvalSource(formula);
-    ASSERT_TRUE(sum.is_number()) << "per=" << per;
-    EXPECT_NEAR(sum.as_number(), pmt.as_number(), 1e-8) << "per=" << per;
-  }
-}
-
-TEST(FinancialPPMT, IntegerPerBeyondNperIsNum) {
-  // Mirrors FinancialIPMT.IntegerPerBeyondNperIsNum — integer per > nper
-  // is still rejected as #NUM! to match the Mac Excel 365 oracle.
-  const Value v = EvalSource("=PPMT(0.05/12, 61, 60, 25000)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialPPMT, FractionalPerBeyondNperMatchesOracle) {
-  // IronCalc / Mac Excel 365 oracle value for a fractional per > nper case.
-  const Value v = EvalSource("=PPMT(0.1, 3.9, 3, 8000)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), -3186.4035714405495, 1e-9);
-}
-
-TEST(FinancialPPMT, ZeroRatePrincipalEqualsPmt) {
-  // rate=0 -> IPMT=0, so PPMT == PMT for every period.
-  const Value pmt = EvalSource("=PMT(0, 60, 25000)");
-  const Value ppmt = EvalSource("=PPMT(0, 5, 60, 25000)");
-  ASSERT_TRUE(pmt.is_number());
-  ASSERT_TRUE(ppmt.is_number());
-  EXPECT_DOUBLE_EQ(ppmt.as_number(), pmt.as_number());
-}
-
-// ---------------------------------------------------------------------------
-// CUMIPMT
-// ---------------------------------------------------------------------------
-
-TEST(FinancialCUMIPMT, FullRangeMatchesSumOfIPMT) {
-  // Sum of IPMT over [1, nper] must equal CUMIPMT over the same range.
-  const Value cum = EvalSource("=CUMIPMT(0.05/12, 60, 25000, 1, 60, 0)");
-  ASSERT_TRUE(cum.is_number());
-  double expected_sum = 0.0;
-  for (int per = 1; per <= 60; ++per) {
-    const std::string f = "=IPMT(0.05/12, " + std::to_string(per) + ", 60, 25000)";
-    const Value v = EvalSource(f);
-    ASSERT_TRUE(v.is_number());
-    expected_sum += v.as_number();
-  }
-  EXPECT_NEAR(cum.as_number(), expected_sum, 1e-6);
-}
-
-TEST(FinancialCUMIPMT, FirstYearSubset) {
-  // Sum of IPMT over periods 1..12 equals CUMIPMT for the first year.
-  const Value cum = EvalSource("=CUMIPMT(0.05/12, 60, 25000, 1, 12, 0)");
-  ASSERT_TRUE(cum.is_number());
-  double expected_sum = 0.0;
-  for (int per = 1; per <= 12; ++per) {
-    const std::string f = "=IPMT(0.05/12, " + std::to_string(per) + ", 60, 25000)";
-    const Value v = EvalSource(f);
-    ASSERT_TRUE(v.is_number());
-    expected_sum += v.as_number();
-  }
-  EXPECT_NEAR(cum.as_number(), expected_sum, 1e-6);
-}
-
-TEST(FinancialCUMIPMT, StartZeroIsNum) {
-  const Value v = EvalSource("=CUMIPMT(0.05/12, 60, 25000, 0, 12, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialCUMIPMT, ReversedRangeIsNum) {
-  // start > end is rejected.
-  const Value v = EvalSource("=CUMIPMT(0.05/12, 60, 25000, 24, 12, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialCUMIPMT, ZeroRateIsNum) {
-  // Excel's documented rule: rate must be strictly positive.
-  const Value v = EvalSource("=CUMIPMT(0, 60, 25000, 1, 12, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialCUMIPMT, NegativePvIsNum) {
-  const Value v = EvalSource("=CUMIPMT(0.05/12, 60, -25000, 1, 12, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialCUMIPMT, ArityTooFew) {
-  // `type` is required; CUMIPMT without the 6th arg is an arity error.
-  const Value v = EvalSource("=CUMIPMT(0.05/12, 60, 25000, 1, 12)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-// ---------------------------------------------------------------------------
-// CUMPRINC
-// ---------------------------------------------------------------------------
-
-TEST(FinancialCUMPRINC, FullRangeEqualsNegativePv) {
-  // Sum of all principal payments on a standard loan should equal -pv
-  // (the loan gets fully paid off). Small tolerance for compounding
-  // round-off over 60 periods.
-  const Value v = EvalSource("=CUMPRINC(0.05/12, 60, 25000, 1, 60, 0)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), -25000.0, 1e-6);
-}
-
-TEST(FinancialCUMPRINC, CumPrincPlusCumIpmtEqualsTotalPayments) {
-  // CUMPRINC + CUMIPMT over [1, nper] = PMT * nper (sum of payments).
-  const Value cp = EvalSource("=CUMPRINC(0.05/12, 60, 25000, 1, 60, 0)");
-  const Value ci = EvalSource("=CUMIPMT(0.05/12, 60, 25000, 1, 60, 0)");
-  const Value pmt = EvalSource("=PMT(0.05/12, 60, 25000)");
-  ASSERT_TRUE(cp.is_number());
-  ASSERT_TRUE(ci.is_number());
-  ASSERT_TRUE(pmt.is_number());
-  EXPECT_NEAR(cp.as_number() + ci.as_number(), pmt.as_number() * 60.0, 1e-6);
-}
-
-TEST(FinancialCUMPRINC, StartOutOfRangeIsNum) {
-  const Value v = EvalSource("=CUMPRINC(0.05/12, 60, 25000, 0, 12, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialCUMPRINC, EndBeyondNperIsNum) {
-  const Value v = EvalSource("=CUMPRINC(0.05/12, 60, 25000, 1, 61, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialCUMPRINC, ArityTooFew) {
-  // `type` is required.
-  const Value v = EvalSource("=CUMPRINC(0.05/12, 60, 25000, 1, 12)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-TEST(FinancialCUMPRINC, FractionalStartRoundsUp) {
-  // Mac Excel 365 ceils `start_period` and floors `end_period` before
-  // iterating; start=1.2 therefore skips period 1 and begins at period 2.
-  const Value ref = EvalSource("=CUMPRINC(0.01, 36, 8000, 2, 8, 1)");
-  const Value frac = EvalSource("=CUMPRINC(0.01, 36, 8000, 1.2, 8.53, 1)");
-  ASSERT_TRUE(ref.is_number());
-  ASSERT_TRUE(frac.is_number());
-  EXPECT_DOUBLE_EQ(frac.as_number(), ref.as_number());
-}
-
-TEST(FinancialCUMPRINC, FractionalTypeIsNum) {
-  // `type` must be strictly 0 or 1; fractional values yield #NUM!.
-  const Value v = EvalSource("=CUMPRINC(0.01, 36, 8000, 1, 10, 0.7)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialCUMIPMT, FractionalStartRoundsUp) {
-  const Value ref = EvalSource("=CUMIPMT(0.01, 36, 8000, 2, 8, 1)");
-  const Value frac = EvalSource("=CUMIPMT(0.01, 36, 8000, 1.2, 8.53, 1)");
-  ASSERT_TRUE(ref.is_number());
-  ASSERT_TRUE(frac.is_number());
-  EXPECT_DOUBLE_EQ(frac.as_number(), ref.as_number());
-}
-
-TEST(FinancialCUMIPMT, FractionalTypeIsNum) {
-  const Value v = EvalSource("=CUMIPMT(0.01, 36, 8000, 1, 10, 1.2)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialCumipmt, RejectsBoolStart) {
-  // Excel 365 rejects Bool in any position with #VALUE! (no silent
-  // coercion to 1.0). Mirrors the oracle's CUMPRINC_CUMIPMT G27/H27.
-  const Value v = EvalSource("=CUMIPMT(0.05, 10, 8000, TRUE, 10, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-TEST(FinancialCumprinc, RejectsBoolType) {
-  // Oracle CUMPRINC_CUMIPMT G28/H28: Bool in the `type` position is
-  // rejected with #VALUE! rather than being folded to 1.
-  const Value v = EvalSource("=CUMPRINC(0.05, 10, 8000, 3, 10, TRUE)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-// ---------------------------------------------------------------------------
-// SLN — straight-line depreciation
-// ---------------------------------------------------------------------------
-
-TEST(FinancialSLN, Basic) {
-  const Value v = EvalSource("=SLN(10000, 1000, 5)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1800.0);
-}
-
-TEST(FinancialSLN, ZeroSalvage) {
-  const Value v = EvalSource("=SLN(10000, 0, 10)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1000.0);
-}
-
-TEST(FinancialSLN, IdentitySlnTimesLifeEqualsDepreciableBase) {
-  // SLN * life == cost - salvage for any legal inputs.
-  const Value v = EvalSource("=SLN(10000, 1000, 5)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number() * 5.0, 10000.0 - 1000.0);
-}
-
-TEST(FinancialSLN, LifeZeroIsDiv0) {
-  const Value v = EvalSource("=SLN(10000, 1000, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
-}
-
-TEST(FinancialSLN, NegativeLifeProducesNegativeDepreciation) {
-  // Oracle-verified: Excel 365 Mac returns the raw algebraic answer
-  // (-1800 for these inputs) rather than #NUM!.
-  const Value v = EvalSource("=SLN(10000, 1000, -5)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), -1800.0);
-}
-
-TEST(FinancialSLN, ArityMismatchIsValue) {
-  const Value v = EvalSource("=SLN(10000, 1000)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-// ---------------------------------------------------------------------------
-// SYD — sum-of-years'-digits depreciation
-// ---------------------------------------------------------------------------
-
-TEST(FinancialSYD, FirstPeriod) {
-  // (10000-1000)*5*2/(5*6) = 3000
-  const Value v = EvalSource("=SYD(10000, 1000, 5, 1)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 3000.0);
-}
-
-TEST(FinancialSYD, LastPeriod) {
-  // (10000-1000)*1*2/(5*6) = 600
-  const Value v = EvalSource("=SYD(10000, 1000, 5, 5)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 600.0);
-}
-
-TEST(FinancialSYD, SumAcrossAllPeriodsEqualsDepreciableBase) {
-  // sum_{p=1..life} SYD(cost, salvage, life, p) == cost - salvage.
-  double total = 0.0;
-  for (int p = 1; p <= 5; ++p) {
-    const std::string src = "=SYD(10000, 1000, 5, " + std::to_string(p) + ")";
-    const Value v = EvalSource(src);
-    ASSERT_TRUE(v.is_number()) << "p=" << p;
-    total += v.as_number();
-  }
-  EXPECT_NEAR(total, 9000.0, 1e-9);
-}
-
-TEST(FinancialSYD, PeriodOutOfRangeIsNum) {
-  const Value v = EvalSource("=SYD(10000, 1000, 5, 6)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialSYD, PeriodZeroIsNum) {
-  const Value v = EvalSource("=SYD(10000, 1000, 5, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialSYD, FractionalPeriodAccepted) {
-  // Excel 365 accepts fractional periods: the SYD formula is a linear
-  // schedule so period=0.1 evaluates naturally. Regression guard for the
-  // relaxation of the `period < 1` rejection.
-  //   (290-2)*(5-0.1+1)*2 / (5*6) = 288 * 5.9 * 2 / 30 = 113.28
-  const Value v = EvalSource("=SYD(290, 2, 5, 0.1)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 113.28);
-}
-
-TEST(FinancialSYD, LifeZeroIsNum) {
-  const Value v = EvalSource("=SYD(10000, 1000, 0, 1)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-// ---------------------------------------------------------------------------
-// DDB — double-declining-balance depreciation
-// ---------------------------------------------------------------------------
-
-TEST(FinancialDDB, FirstPeriod) {
-  // rate = 2/5 = 0.4; dep_1 = 10000 * 0.4 = 4000
-  const Value v = EvalSource("=DDB(10000, 1000, 5, 1)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 4000.0);
-}
-
-TEST(FinancialDDB, SecondPeriod) {
-  // book = 6000 after period 1; dep_2 = 6000 * 0.4 = 2400
-  const Value v = EvalSource("=DDB(10000, 1000, 5, 2)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 2400.0);
-}
-
-TEST(FinancialDDB, CustomFactorTriples) {
-  // factor=3 -> rate = 3/5 = 0.6; dep_1 = 10000 * 0.6 = 6000
-  const Value v = EvalSource("=DDB(10000, 1000, 5, 1, 3)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 6000.0);
-}
-
-TEST(FinancialDDB, SalvageFloorCaps) {
-  // Running the full schedule: dep must never take book value below
-  // salvage. Verify total == cost - salvage (9000) exactly — DDB
-  // depreciates the full base over the asset's life, with the salvage
-  // floor absorbing whatever remains in the last period. For this
-  // schedule the final period is the capped one: 1296 * 0.4 = 518.4
-  // would overshoot, so dep_5 = book - salvage = 296.
-  double total = 0.0;
-  for (int p = 1; p <= 5; ++p) {
-    const std::string src = "=DDB(10000, 1000, 5, " + std::to_string(p) + ")";
-    const Value v = EvalSource(src);
-    ASSERT_TRUE(v.is_number()) << "p=" << p;
-    total += v.as_number();
-  }
-  EXPECT_NEAR(total, 9000.0, 1e-9);
-  const Value last = EvalSource("=DDB(10000, 1000, 5, 5)");
-  ASSERT_TRUE(last.is_number());
-  EXPECT_NEAR(last.as_number(), 296.0, 1e-9);
-}
-
-TEST(FinancialDDB, PeriodOutOfRangeIsNum) {
-  const Value v = EvalSource("=DDB(10000, 1000, 5, 6)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialDDB, NegativeCostIsNum) {
-  const Value v = EvalSource("=DDB(-100, 0, 5, 1)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialDDB, FactorZeroIsNum) {
-  const Value v = EvalSource("=DDB(10000, 1000, 5, 1, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-// ---------------------------------------------------------------------------
-// DB — fixed-rate declining-balance depreciation
-// ---------------------------------------------------------------------------
-
-TEST(FinancialDB, FullYearFirstPeriod) {
-  // rate = round(1 - (0.1)^0.2, 3) = 0.369; dep_1 = 10000 * 0.369 = 3690.
-  const Value v = EvalSource("=DB(10000, 1000, 5, 1)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 3690.0, 1e-6);
-}
-
-TEST(FinancialDB, PartialFirstYearProrated) {
-  // month=6: dep_1 = 10000 * 0.369 * 6/12 = 1845.
-  const Value v = EvalSource("=DB(10000, 1000, 5, 1, 6)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 1845.0, 1e-6);
-}
-
-TEST(FinancialDB, PartialYearSumApproxEqualsDepreciableBase) {
-  // With month=6 the depreciation runs life+1 = 6 periods; the sum
-  // should approximately equal cost - salvage within the 3-decimal
-  // rate-rounding error.
-  double total = 0.0;
-  for (int p = 1; p <= 6; ++p) {
-    const std::string src = "=DB(10000, 1000, 5, " + std::to_string(p) + ", 6)";
-    const Value v = EvalSource(src);
-    ASSERT_TRUE(v.is_number()) << "p=" << p;
-    total += v.as_number();
-  }
-  // Excel's 3-decimal rate rounding produces a small residual between
-  // the sum of depreciations and the true depreciable base. Observed
-  // residual for this fixture (cost=10000, salvage=1000, life=5,
-  // month=6) is ~54 — tolerance of 100 leaves margin for rounding
-  // accumulation without masking a real regression.
-  EXPECT_NEAR(total, 9000.0, 100.0);
-}
-
-TEST(FinancialDB, PeriodLifePlusOneNeedsPartialFirstYear) {
-  // month=12 (full year) with period == life+1 is invalid.
-  const Value v = EvalSource("=DB(10000, 1000, 5, 6)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialDB, PeriodLifePlusOneWithPartialYearIsValid) {
-  // month=6, period=6 is the partial last year; must produce a
-  // positive, finite charge.
-  const Value v = EvalSource("=DB(10000, 1000, 5, 6, 6)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_GT(v.as_number(), 0.0);
-}
-
-TEST(FinancialDB, InvalidMonthIsNum) {
-  const Value v = EvalSource("=DB(10000, 1000, 5, 1, 13)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialDB, ZeroMonthIsNum) {
-  const Value v = EvalSource("=DB(10000, 1000, 5, 1, 0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialDb, MonthIsFlooredToInteger) {
-  // Mac Excel 365 evaluates DB using INT(month), not the raw fractional
-  // month argument. With month=9.2222 the formula reduces to rate=0.438,
-  // dep_1=32.85, dep_2=29.4117, dep_3=(100-32.85-29.4117)*0.438 =
-  // 16.5293754 — the same value Mac Excel and the IronCalc G10 oracle
-  // produce. Prior to the INT(month) fix this evaluated to ~16.329735
-  // because the fractional month fed directly into the rate-prorated
-  // first period.
-  const Value v = EvalSource("=DB(100, 10, 4, 3, 9.2222)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 16.5293754, 1e-6);
-}
-
-TEST(FinancialDb, ZeroCostReturnsZero) {
-  // Excel short-circuits zero-cost assets to zero depreciation to avoid
-  // the `(salvage/0)^(1/life)` blow-up. Verified against IronCalc G30.
-  const Value v = EvalSource("=DB(0, 10, 4, 1, 2)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 0.0);
-}
-
-// ---------------------------------------------------------------------------
-// Depreciation schedule length
-// ---------------------------------------------------------------------------
-//
-// DDB and DB both step one iteration per integer period, and `period` is
-// bounded only by `life`, which is an ordinary user-supplied double. A
-// schedule longer than the Excel grid's row count cannot describe a real
-// asset, so each function stops before the loop becomes unbounded — DDB by
-// falling back to the closed form it already uses for fractional periods,
-// DB by refusing the request.
-
-TEST(FinancialDDB, HugeScheduleFallsBackToClosedForm) {
-  // Without the cap this would step 1e18 iterations. The closed form
-  // `cost * ((1-rate)^(p-1) - (1-rate)^p)` is exact for integer periods,
-  // so the answer is still well-defined.
-  const Value v = EvalSource("=DDB(1, 0, 2000000, 2000000)");
-  ASSERT_TRUE(v.is_number());
-  const double rate = 2.0 / 2000000.0;
-  const double expected = std::pow(1.0 - rate, 1999999.0) - std::pow(1.0 - rate, 2000000.0);
-  EXPECT_NEAR(v.as_number(), expected, expected * 1e-9);
-}
-
-TEST(FinancialDDB, ClosedFormAgreesWithTheIterativeSchedule) {
-  // The fallback is only sound because both branches compute the same
-  // number. Pin that at the largest period the iterative branch still
-  // takes, so a change to either branch is caught here.
-  const Value v = EvalSource("=DDB(1, 0, 2000000, 1048576)");
-  ASSERT_TRUE(v.is_number());
-  const double rate = 2.0 / 2000000.0;
-  const double expected = std::pow(1.0 - rate, 1048575.0) - std::pow(1.0 - rate, 1048576.0);
-  EXPECT_NEAR(v.as_number(), expected, expected * 1e-8);
-}
-
-TEST(FinancialDb, HugeScheduleIsNum) {
-  // DB's schedule carries a rounded rate and a partial-first-year term
-  // with no closed form to fall back on, so an over-long schedule is
-  // refused rather than approximated.
-  const Value v = EvalSource("=DB(10000, 1000, 1E18, 1E18, 6)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialDb, ScheduleWithinTheCapStillComputes) {
-  const Value v = EvalSource("=DB(10000, 1000, 5, 1, 6)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 1845.0, 1e-9);
 }
 
 }  // namespace

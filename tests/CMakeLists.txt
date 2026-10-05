@@ -140,6 +140,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_math_test.cpp
   unit/eval/builtins_math2_test.cpp
   unit/eval/builtins_math3_test.cpp
+  unit/eval/dep_extractor_names_test.cpp
+  unit/eval/dep_extractor_structured_refs_test.cpp
+  unit/eval/dep_extractor_3d_dynamic_test.cpp
   unit/eval/builtins_math4_test.cpp
   unit/eval/builtins_text_test.cpp
   unit/eval/builtins_text2_test.cpp
@@ -192,6 +195,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_lookup_test.cpp
   unit/eval/builtins_implicit_intersection_test.cpp
   unit/eval/builtins_references_test.cpp
+  unit/eval/builtins_distributions_beta_gamma_test.cpp
+  unit/eval/builtins_distributions_tail_test.cpp
   unit/eval/reference_lazy_test.cpp
   unit/eval/builtins_vlookup_test.cpp
   unit/eval/builtins_xlookup_test.cpp
@@ -206,17 +211,31 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_financial_bond_simple_test.cpp
   unit/eval/builtins_financial_duration_test.cpp
   unit/eval/builtins_financial_oddf_test.cpp
+  unit/eval/builtins_pivotby_multicol_test.cpp
+  unit/eval/builtins_pivotby_aggregators_test.cpp
+  unit/eval/builtins_pivotby_nested_totals_test.cpp
   unit/eval/builtins_financial_oddl_test.cpp
   unit/eval/builtins_financial_price_test.cpp
+  unit/eval/builtins_lookup_index_test.cpp
+  unit/eval/builtins_lookup_choose_test.cpp
   unit/eval/builtins_financial_yield_test.cpp
   unit/eval/builtins_forecast_ets_test.cpp
+  unit/eval/builtins_references_indirect_test.cpp
+  unit/eval/builtins_references_offset_test.cpp
+  unit/eval/builtins_references_endpoints_test.cpp
   unit/eval/builtins_regression_test.cpp
   unit/eval/builtins_hypothesis_test.cpp
   unit/eval/builtins_sumsq_test.cpp
   unit/eval/builtins_percentof_test.cpp
+  unit/eval/builtins_datetime_1904_test.cpp
+  unit/eval/builtins_datetime_calendar_test.cpp
+  unit/eval/builtins_datetime_clock_test.cpp
+  unit/eval/builtins_datetime_months_test.cpp
   unit/eval/builtins_sumx_test.cpp
   unit/eval/builtins_series_sum_test.cpp
   unit/eval/builtins_rank_test.cpp
+  unit/eval/builtins_financial_payments_test.cpp
+  unit/eval/builtins_financial_depreciation_test.cpp
   unit/eval/lazy_range_arg_shapes_test.cpp
   unit/eval/builtins_regex_test.cpp
   unit/eval/builtins_distributions_ext2_test.cpp
