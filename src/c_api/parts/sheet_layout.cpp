@@ -33,6 +33,7 @@ using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::FragmentValidation;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::validate_single_element_fragment;
 
 namespace {
@@ -488,7 +489,11 @@ extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sh
                                "fm_sheet_set_auto_filter_xml: invalid autoFilter XML fragment", validation.context);
     }
   }
-  wb->workbook().sheet(sheet_index).set_auto_filter_xml(fragment);
+  // Routed through the workbook so `_FilterDatabase` and SUBTOTAL/AGGREGATE
+  // dirty state follow the change.
+  if (auto result = wb->workbook().set_sheet_auto_filter_xml(sheet_index, fragment); !result) {
+    return set_last_error(result.error());
+  }
   return 0;
 }
 

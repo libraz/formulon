@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
 #include "defined_name.h"
 #include "eval/builtin_names.h"
 #include "eval/dep_graph.h"
@@ -36,6 +37,7 @@
 #include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "parser/ref_transforms.h"
+#include "parser/reference.h"
 #include "passthrough_part.h"
 #include "phonetic.h"
 #include "pivot/pivot_cache.h"
@@ -44,6 +46,7 @@
 #include "sheet_name.h"
 #include "styles.h"
 #include "table.h"
+#include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -473,6 +476,69 @@ void reindex_formulas_referencing_name(std::vector<Sheet>& sheets, const eval::R
                       [&](const parser::AstNode& root) { return references_any_name(root, affected); });
 }
 
+// Hidden sheet-scoped name Excel keeps over a sheet AutoFilter's range.
+constexpr std::string_view kFilterDatabaseName = "_xlnm._FilterDatabase";
+
+/// `Sheet1!$B$2:$F$12`, quoting the sheet name where Excel would.
+std::string filter_database_formula(std::string_view sheet_name, const MergeRange& range) {
+  std::string out;
+  parser::append_sheet_name(sheet_name, false, out);
+  out.push_back('!');
+  const auto append_cell = [&out](std::uint32_t row, std::uint32_t col) {
+    const std::string a1 = a1::encode_a1(row, col);
+    const std::size_t digits = a1.find_first_of("0123456789");
+    out.push_back('$');
+    out.append(a1, 0, digits);
+    out.push_back('$');
+    out.append(a1, digits, std::string::npos);
+  };
+  append_cell(range.first_row, range.first_col);
+  out.push_back(':');
+  append_cell(range.last_row, range.last_col);
+  return out;
+}
+
+/// Removes the `_FilterDatabase` name scoped to `sheet_index`. Returns true
+/// when one existed.
+bool erase_filter_database_name(std::vector<DefinedName>& names, std::size_t sheet_index) {
+  const auto it = std::find_if(names.begin(), names.end(), [sheet_index](const DefinedName& entry) {
+    return entry.local_sheet_id == static_cast<std::int32_t>(sheet_index) &&
+           strings::case_insensitive_eq(entry.name, kFilterDatabaseName);
+  });
+  if (it == names.end()) {
+    return false;
+  }
+  names.erase(it);
+  return true;
+}
+
+/// Body of `Workbook::mark_row_visibility_dependents_dirty`; the caller
+/// holds the engine mutex.
+void mark_row_visibility_dependents_dirty_locked(const std::vector<Sheet>& sheets,
+                                                 const eval::RecalcEngine::LockedMutator& mutator) {
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    const Sheet& sheet = sheets[sheet_idx];
+    for (const auto& [row, cells] : sheet.rows()) {
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        const Cell& cell = cells[col];
+        if (cell.formula_text.empty()) {
+          continue;
+        }
+        // SUBTOTAL/AGGREGATE can only be called by literally spelling one
+        // of these names, so this text scan has no false negatives; a
+        // string literal that happens to contain one costs a harmless
+        // extra dirty mark rather than reparsing every formula in the
+        // workbook to test more precisely.
+        if (strings::case_insensitive_contains(cell.formula_text, "SUBTOTAL") ||
+            strings::case_insensitive_contains(cell.formula_text, "AGGREGATE")) {
+          mutator.mark_dirty(
+              eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
+        }
+      }
+    }
+  }
+}
+
 // Re-registers and dirties only the formula cells whose structured
 // reference resolves through `dep_extractor` into a static rectangle
 // derived from a table's current `ref`/columns (see
@@ -834,6 +900,104 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   // re-register/dirty pass to that subset rather than every formula.
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   reindex_formulas_referencing_name(sheets_, mutator, *this, defined_names_.back().name);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::set_defined_name_hidden(std::string_view name, std::int32_t local_sheet_id,
+                                                        bool hidden) {
+  for (DefinedName& entry : defined_names_) {
+    if (entry.local_sheet_id == local_sheet_id && strings::case_insensitive_eq(entry.name, name)) {
+      entry.hidden = hidden;
+      return Expected<void, Error>::Ok();
+    }
+  }
+  return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_hidden: no such defined name",
+                    "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
+}
+
+Expected<void, Error> Workbook::set_sheet_auto_filter(std::size_t sheet_index, AutoFilter filter) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_sheet_auto_filter: sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index));
+  }
+  RETURN_IF_ERROR(validate_auto_filter(filter));
+  std::string formula = filter_database_formula(sheets_[sheet_index].name(), filter.range);
+  sheets_[sheet_index].set_auto_filter(std::move(filter));
+  const auto scope = static_cast<std::int32_t>(sheet_index);
+  const auto it = std::find_if(defined_names_.begin(), defined_names_.end(), [scope](const DefinedName& entry) {
+    return entry.local_sheet_id == scope && strings::case_insensitive_eq(entry.name, kFilterDatabaseName);
+  });
+  if (it != defined_names_.end()) {
+    it->formula = std::move(formula);
+    it->hidden = true;
+  } else {
+    DefinedName entry;
+    entry.name = std::string(kFilterDatabaseName);
+    entry.formula = std::move(formula);
+    entry.local_sheet_id = scope;
+    entry.hidden = true;
+    defined_names_.push_back(std::move(entry));
+  }
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  reindex_formulas_referencing_name(sheets_, mutator, *this, kFilterDatabaseName);
+  mark_row_visibility_dependents_dirty_locked(sheets_, mutator);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::remove_sheet_auto_filter(std::size_t sheet_index) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "remove_sheet_auto_filter: sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index));
+  }
+  sheets_[sheet_index].clear_auto_filter_model();
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  if (erase_filter_database_name(defined_names_, sheet_index)) {
+    reindex_formulas_referencing_name(sheets_, mutator, *this, kFilterDatabaseName);
+  }
+  mark_row_visibility_dependents_dirty_locked(sheets_, mutator);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::set_sheet_auto_filter_xml(std::size_t sheet_index, std::string_view xml) {
+  if (xml.empty()) {
+    return remove_sheet_auto_filter(sheet_index);
+  }
+  Expected<AutoFilter, Error> parsed = parse_auto_filter_xml(xml);
+  if (parsed && validate_auto_filter(parsed.value())) {
+    return set_sheet_auto_filter(sheet_index, std::move(parsed.value()));
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_sheet_auto_filter_xml: sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index));
+  }
+  sheets_[sheet_index].set_auto_filter_xml(std::string(xml));
+  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::set_table_auto_filter(std::size_t table_index, AutoFilter filter) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (table_index >= tables_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_table_auto_filter: table_index out of range",
+                      "table_index=" + std::to_string(table_index));
+  }
+  RETURN_IF_ERROR(validate_auto_filter(filter));
+  tables_[table_index].auto_filter_xml.set(std::move(filter));
+  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::remove_table_auto_filter(std::size_t table_index) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (table_index >= tables_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "remove_table_auto_filter: table_index out of range",
+                      "table_index=" + std::to_string(table_index));
+  }
+  tables_[table_index].auto_filter_xml.reset();
+  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
   return Expected<void, Error>::Ok();
 }
 
@@ -1356,28 +1520,7 @@ void Workbook::set_iterative_progress(eval::IterativeProgressCb cb, void* user_d
 
 void Workbook::mark_row_visibility_dependents_dirty() {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  for (std::size_t sheet_idx = 0; sheet_idx < sheets_.size(); ++sheet_idx) {
-    const Sheet& sheet = sheets_[sheet_idx];
-    for (const auto& [row, cells] : sheet.rows()) {
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        const Cell& cell = cells[col];
-        if (cell.formula_text.empty()) {
-          continue;
-        }
-        // SUBTOTAL/AGGREGATE can only be called by literally spelling one
-        // of these names, so this text scan has no false negatives; a
-        // string literal that happens to contain one costs a harmless
-        // extra dirty mark rather than reparsing every formula in the
-        // workbook to test more precisely.
-        if (strings::case_insensitive_contains(cell.formula_text, "SUBTOTAL") ||
-            strings::case_insensitive_contains(cell.formula_text, "AGGREGATE")) {
-          mutator.mark_dirty(
-              eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
-        }
-      }
-    }
-  }
+  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
 }
 
 void Workbook::mark_all_formulas_dirty() {
@@ -1737,7 +1880,7 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
   // the range `MyRef` used to cover. `set_defined_name_scoped` and
   // `remove_sheet` already take this fallback for the same reason.
   const parser::RowColShiftTransform name_transform(target_sheet_name, axis, edit, origin, count);
-  const bool names_changed = rewrite_defined_names(defined_names, name_transform);
+  bool names_changed = rewrite_defined_names(defined_names, name_transform);
   // Snapshot the pending-footprint records before formula text rewrites.
   // `Sheet::set_cell_formula` quite correctly clears a user-overwritten
   // blocked anchor; a structural rewrite of that same formula is not a user
@@ -1752,6 +1895,16 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
   }
   Sheet& target = sheets[sheet_index];
   const std::vector<BlockedSpillFootprint> blocked_before = blocked_before_all[sheet_index];
+  // AutoFilters on the edited sheet, serialized before the move, to detect a
+  // change that alters which hidden rows count as filtered.
+  const bool had_sheet_filter = target.has_auto_filter();
+  std::vector<std::string> filters_before;
+  filters_before.push_back(target.auto_filter_xml());
+  for (const TableMetadata& table : wb.tables()) {
+    if (table.sheet_index == sheet_index) {
+      filters_before.push_back(table.auto_filter_xml.xml());
+    }
+  }
   rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
   // Metadata formulas follow the same per-sheet policy as cell formulas: a
   // qualified reference to the edited sheet shifts no matter which sheet owns
@@ -1779,6 +1932,27 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
   }
   shift_retained_extension_ranges(target, origin, count, edit == parser::RowColEdit::kDelete,
                                   axis == parser::RowColAxis::kRow);
+  std::vector<std::string> filters_after;
+  filters_after.push_back(target.auto_filter_xml());
+  for (TableMetadata& table : wb.mutable_tables()) {
+    if (table.sheet_index != sheet_index) {
+      continue;
+    }
+    if (AutoFilter* filter = table.auto_filter_xml.get();
+        filter != nullptr && !shift_auto_filter(*filter, origin, count, edit == parser::RowColEdit::kDelete,
+                                                axis == parser::RowColAxis::kRow, /*header_delete_removes=*/false)) {
+      table.auto_filter_xml.reset();
+    }
+    filters_after.push_back(table.auto_filter_xml.xml());
+  }
+  // A sheet AutoFilter the edit removed takes its `_FilterDatabase` name
+  // with it; the full re-index below covers formulas naming it.
+  if (had_sheet_filter && !target.has_auto_filter() && erase_filter_database_name(defined_names, sheet_index)) {
+    names_changed = true;
+  }
+  if (filters_after != filters_before) {
+    mark_row_visibility_dependents_dirty_locked(sheets, mutator);
+  }
   // Re-index only after the physical move. Formula text is rewritten while
   // cells still occupy their pre-edit coordinates, so rebuilding the graph
   // before the move would register moved owners (including Ref3D owners) at

@@ -9,9 +9,11 @@
 #ifndef FORMULON_CF_CF_TYPES_H_
 #define FORMULON_CF_CF_TYPES_H_
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "cell.h"
@@ -101,6 +103,12 @@ enum class IconSetName : std::uint8_t {
   Five_Rating = 15,
   Five_Quarters = 16,
 };
+
+/// OOXML `ST_IconSetType` spellings, indexed by `IconSetName`.
+inline constexpr std::array<std::string_view, 17> kIconSetNames = {
+    "3Arrows",        "3ArrowsGray", "3Flags",      "3TrafficLights1", "3TrafficLights2", "3Signs",
+    "3Symbols",       "3Symbols2",   "4Arrows",     "4ArrowsGray",     "4RedToBlack",     "4Rating",
+    "4TrafficLights", "5Arrows",     "5ArrowsGray", "5Rating",         "5Quarters"};
 
 /// `<cfRule type="timePeriod">` value bucket.
 enum class TimePeriod : std::uint8_t {

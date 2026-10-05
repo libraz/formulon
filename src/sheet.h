@@ -30,7 +30,9 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
 #include "cell.h"
+#include "merge_range.h"
 #include "sheet_layout.h"
 #include "sheet_passthrough.h"
 #include "unknown_relationship.h"
@@ -49,24 +51,23 @@ namespace pivot {
 class PivotTable;
 }  // namespace pivot
 
-/// One `<mergeCell ref="A1:B2"/>` block: a rectangular merged range
-/// stored as 0-based, inclusive `(row, col)` corners. The two corners
-/// are normalised so that `first_row <= last_row` and
-/// `first_col <= last_col`; degenerate `first == last` rectangles are
-/// permitted (single-cell merges, which Excel emits).
-struct MergeRange {
-  std::uint32_t first_row = 0;
-  std::uint32_t first_col = 0;
-  std::uint32_t last_row = 0;
-  std::uint32_t last_col = 0;
-};
-
 /// Moves the ranges of one sqref (a conditional format's, or a retained x14
 /// copy of one) for a row/column edit: `count` rows or columns inserted or
 /// deleted at 0-based `index`. Ranges the edit deletes are removed, and a
 /// delete joins the ranges it brings edge to edge.
 void shift_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
                         bool row_axis);
+
+/// Moves an AutoFilter for a row/column edit (same arguments as
+/// `shift_sqref_ranges`): its range and sort ranges follow the span rules,
+/// a column delete removes the deleted columns' criteria and renumbers the
+/// later `colId`s down, and an insert strictly inside the range renumbers the
+/// `colId`s at or after it up. Returns false when the filter must be removed:
+/// its range was consumed, or `header_delete_removes` is set and the header
+/// row was deleted (a sheet AutoFilter; Excel cannot delete a table's).
+/// An opaque filter is left untouched.
+bool shift_auto_filter(AutoFilter& filter, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis,
+                       bool header_delete_removes);
 
 /// One `<hyperlink>` entry attached to a sheet. The numeric rectangle is the
 /// sole source of truth; the OOXML writer regenerates its `ref` attribute from
@@ -1328,22 +1329,21 @@ class Sheet {
     unknown_relationships_ = std::move(relationships);
   }
 
-  /// Raw `<autoFilter>` element captured from the worksheet, or empty when
-  /// the sheet has no auto-filter. The engine does not model filter
-  /// criteria yet; the element round-trips verbatim so the filter range
-  /// and any column criteria survive a save cycle. The writer re-emits it
-  /// in ECMA-376 order (after `<sheetProtection>`, before `<mergeCells>`).
-  ///
-  /// A row/column edit rewrites the `ref` rectangle, because a stale `ref`
-  /// leaves the filter attached to the wrong cells. Nothing else inside the
-  /// element moves: a `<filterColumn colId="N">` is an offset from `ref`'s
-  /// first column, so an insert or delete *inside* the filtered span leaves
-  /// its criteria one column off. Excel remaps those offsets; modelling the
-  /// criteria is what it would take to match.
-  const std::string& auto_filter_xml() const noexcept { return auto_filter_xml_; }
+  /// The worksheet `<autoFilter>` element serialized from the model, or empty
+  /// when the sheet has no AutoFilter. The writer emits it in ECMA-376 order
+  /// (after `<sheetProtection>`, before `<mergeCells>`).
+  std::string auto_filter_xml() const { return auto_filter_.xml(); }
 
-  /// Sets the raw `<autoFilter>` element. Plain metadata.
-  void set_auto_filter_xml(std::string xml) { auto_filter_xml_ = std::move(xml); }
+  /// Replaces the AutoFilter from its element; empty removes it, and a
+  /// fragment the model cannot represent is kept opaque. Plain metadata: the
+  /// `Workbook` setters also maintain `_FilterDatabase` and dirty state.
+  void set_auto_filter_xml(std::string xml) { auto_filter_.set_xml(xml); }
+
+  /// The sheet AutoFilter, or nullptr. May be opaque (`is_opaque()`).
+  const AutoFilter* auto_filter() const noexcept { return auto_filter_.get(); }
+  bool has_auto_filter() const noexcept { return !auto_filter_.empty(); }
+  void set_auto_filter(AutoFilter filter) { auto_filter_.set(std::move(filter)); }
+  void clear_auto_filter_model() noexcept { auto_filter_.reset(); }
 
   /// Raw worksheet-level `<extLst>` element captured from the worksheet,
   /// or empty. Excel stores the *data* for several 2010+ extensions here —
@@ -1440,8 +1440,7 @@ class Sheet {
   /// deliberately absent: the sheet does not parse them. The workbook edit
   /// moves the x14 ranges and formulas in the first two, since that needs
   /// the file-format readers; `raw_extensions_` children keep their pre-edit
-  /// rectangles. `auto_filter_xml_` is the one raw field whose `ref`
-  /// attribute is shifted here.
+  /// rectangles. The AutoFilter moves through `shift_auto_filter`.
   void shift_sheet_metadata(const StructuralEdit& edit);
 
   // ---------------------------------------------------------------------------
@@ -1587,9 +1586,8 @@ class Sheet {
   std::string comment_vml_path_;
   // Unmodelled entries from `xl/worksheets/_rels/sheetN.xml.rels`.
   std::vector<UnknownRelationship> unknown_relationships_;
-  // Raw `<autoFilter>` element, or empty. Round-trips verbatim; filter
-  // criteria are not modelled.
-  std::string auto_filter_xml_;
+  // Sheet AutoFilter, or empty.
+  AutoFilterSlot auto_filter_;
   // Raw worksheet-level `<extLst>` element (x14 conditional-formatting
   // data etc.), or empty. Round-trips verbatim.
   std::string ext_lst_xml_;

@@ -199,12 +199,11 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   }
   out.append(">\n");
   // CT_Table orders the optional filter/sort payload before the required
-  // tableColumns collection. Keep these fragments opaque: they may carry
-  // filter criteria, extension attributes, or other fields the table model
-  // does not interpret.
+  // tableColumns collection. The AutoFilter is serialized from its model;
+  // the sort and extension fragments are retained verbatim.
   if (!t.auto_filter_xml.empty()) {
     out.append("  ");
-    out.append(t.auto_filter_xml);
+    out.append(t.auto_filter_xml.xml());
     out.push_back('\n');
   }
   if (!t.sort_state_xml.empty()) {

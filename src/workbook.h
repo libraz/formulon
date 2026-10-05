@@ -491,6 +491,37 @@ class Workbook {
   /// `local_sheet_id` names a sheet outside the workbook.
   Expected<void, Error> set_defined_name_scoped(std::string name, std::string formula, std::int32_t local_sheet_id);
 
+  /// Sets the hidden flag of the defined name `name` in `local_sheet_id`
+  /// scope (`-1` for workbook scope). Returns `kInvalidArgument` when no
+  /// such name exists.
+  Expected<void, Error> set_defined_name_hidden(std::string_view name, std::int32_t local_sheet_id, bool hidden);
+
+  // --- AutoFilter ---
+  // Every change below dirties row-visibility dependents, since whether a
+  // sheet carries filter criteria decides which hidden rows are filtered.
+
+  /// Replaces the sheet AutoFilter with `filter` and creates or updates the
+  /// sheet's hidden `_xlnm._FilterDatabase` name over its range. Returns
+  /// `kAutoFilterInvalid` when `validate_auto_filter` rejects the model and
+  /// `kInvalidArgument` for a bad sheet index.
+  Expected<void, Error> set_sheet_auto_filter(std::size_t sheet_index, AutoFilter filter);
+
+  /// Removes the sheet AutoFilter and its `_xlnm._FilterDatabase` name.
+  Expected<void, Error> remove_sheet_auto_filter(std::size_t sheet_index);
+
+  /// XML view of `set_sheet_auto_filter`: empty removes the AutoFilter, and
+  /// an element the model cannot represent is stored opaque without touching
+  /// `_FilterDatabase`.
+  Expected<void, Error> set_sheet_auto_filter_xml(std::size_t sheet_index, std::string_view xml);
+
+  /// Replaces the AutoFilter of table `table_index`. Tables carry no
+  /// `_FilterDatabase` name. Returns `kAutoFilterInvalid` or
+  /// `kInvalidArgument` as `set_sheet_auto_filter` does.
+  Expected<void, Error> set_table_auto_filter(std::size_t table_index, AutoFilter filter);
+
+  /// Removes the AutoFilter of table `table_index`.
+  Expected<void, Error> remove_table_auto_filter(std::size_t table_index);
+
   /// Read-only access to the workbook's table-metadata list (in
   /// archive-discovery order, which matches the per-sheet rels walk).
   const std::vector<TableMetadata>& tables() const noexcept { return tables_; }

@@ -202,7 +202,7 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   const bool pivots_survive_via_passthrough = HasPivotPassthroughPart(workbook);
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
-    ReportDeferred(&count, "auto_filter", sheet.auto_filter_xml().empty() ? 0U : 1U, i);
+    ReportDeferred(&count, "auto_filter", sheet.has_auto_filter() ? 1U : 0U, i);
     ReportDeferred(&count, "comments", sheet.comments().size(), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
     const SheetPrintSettings& print = sheet.print_settings();

@@ -110,43 +110,7 @@ std::string_view CfvoTypeToString(cf::CfvoType t) {
 }
 
 std::string_view IconSetNameToString(cf::IconSetName n) {
-  switch (n) {
-    case cf::IconSetName::Three_Arrows:
-      return "3Arrows";
-    case cf::IconSetName::Three_ArrowsGray:
-      return "3ArrowsGray";
-    case cf::IconSetName::Three_Flags:
-      return "3Flags";
-    case cf::IconSetName::Three_TrafficLights1:
-      return "3TrafficLights1";
-    case cf::IconSetName::Three_TrafficLights2:
-      return "3TrafficLights2";
-    case cf::IconSetName::Three_Signs:
-      return "3Signs";
-    case cf::IconSetName::Three_Symbols:
-      return "3Symbols";
-    case cf::IconSetName::Three_Symbols2:
-      return "3Symbols2";
-    case cf::IconSetName::Four_Arrows:
-      return "4Arrows";
-    case cf::IconSetName::Four_ArrowsGray:
-      return "4ArrowsGray";
-    case cf::IconSetName::Four_RedToBlack:
-      return "4RedToBlack";
-    case cf::IconSetName::Four_Rating:
-      return "4Rating";
-    case cf::IconSetName::Four_TrafficLights:
-      return "4TrafficLights";
-    case cf::IconSetName::Five_Arrows:
-      return "5Arrows";
-    case cf::IconSetName::Five_ArrowsGray:
-      return "5ArrowsGray";
-    case cf::IconSetName::Five_Rating:
-      return "5Rating";
-    case cf::IconSetName::Five_Quarters:
-      return "5Quarters";
-  }
-  return "3Arrows";
+  return cf::kIconSetNames[static_cast<std::size_t>(n)];
 }
 
 std::string_view TimePeriodToString(cf::TimePeriod p) {

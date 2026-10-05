@@ -831,9 +831,9 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
     }
   }
   // <autoFilter> sits between <sheetProtection>/<scenarios> and
-  // <mergeCells> in ECMA-376 document order. Round-tripped verbatim.
+  // <mergeCells> in ECMA-376 document order, serialized from the model.
   flush_raw_before("autoFilter");
-  if (!sheet.auto_filter_xml().empty()) {
+  if (sheet.has_auto_filter()) {
     out.append("  ");
     out.append(sheet.auto_filter_xml());
     out.push_back('\n');

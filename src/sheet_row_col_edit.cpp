@@ -8,15 +8,12 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "cf/cf_types.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
-#include "utils/a1_column.h"
-#include "utils/a1_ref.h"
 #include "utils/index_sort.h"
 
 namespace formulon {
@@ -212,89 +209,6 @@ void ShiftRowLayouts(std::vector<RowLayout>& rows, std::uint32_t index, std::uin
   ShiftRowAnchored(rows, index, count, is_delete);
 }
 
-/// Renders `[first_row..last_row] x [first_col..last_col]` as an OOXML
-/// `ref` rectangle, collapsing a single-cell rectangle to one address the
-/// way Excel writes it. Returns false when a coordinate is outside the grid.
-bool AppendRefRectangle(std::string& out, const MergeRange& rect) {
-  const auto append_cell = [&out](std::uint32_t row, std::uint32_t col) {
-    if (!a1::append_column_letters(out, col)) {
-      return false;
-    }
-    out += std::to_string(static_cast<std::uint64_t>(row) + 1U);
-    return true;
-  };
-  if (!append_cell(rect.first_row, rect.first_col)) {
-    return false;
-  }
-  if (rect.first_row == rect.last_row && rect.first_col == rect.last_col) {
-    return true;
-  }
-  out += ':';
-  return append_cell(rect.last_row, rect.last_col);
-}
-
-/// Rewrites the `ref` rectangle of a raw `<autoFilter>` element through the
-/// same span rules the modelled rectangles follow, and clears the element
-/// when the edit consumed its whole rectangle.
-///
-/// The element is retained verbatim, so this is the one coordinate inside it
-/// that moves. It is also the one that decides which cells the filter is
-/// attached to: leaving it behind points the filter at whatever occupies the
-/// old rectangle after the edit. The `colId` offsets on any `<filterColumn>`
-/// children are relative to this rectangle's first column and are not
-/// remapped — see the field's declaration for what that costs.
-void ShiftAutoFilterRef(std::string& xml, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis) {
-  if (xml.empty()) {
-    return;
-  }
-  // Confine the search to the start tag: only the `<autoFilter>` element
-  // itself carries the rectangle.
-  const std::size_t tag_end = xml.find('>');
-  const std::size_t attr = xml.find("ref=\"");
-  if (tag_end == std::string::npos || attr == std::string::npos || attr > tag_end) {
-    return;
-  }
-  const std::size_t value_begin = attr + 5U;
-  const std::size_t value_end = xml.find('"', value_begin);
-  if (value_end == std::string::npos || value_end > tag_end) {
-    return;
-  }
-
-  const std::string_view value(xml.data() + value_begin, value_end - value_begin);
-  const std::size_t colon = value.find(':');
-  MergeRange rect;
-  if (!a1::parse_a1_ref(value.substr(0, colon), &rect.first_row, &rect.first_col)) {
-    return;  // Not a plain A1 rectangle; leave the element untouched.
-  }
-  if (colon == std::string_view::npos) {
-    rect.last_row = rect.first_row;
-    rect.last_col = rect.first_col;
-  } else if (!a1::parse_a1_ref(value.substr(colon + 1U), &rect.last_row, &rect.last_col)) {
-    return;
-  }
-  if (rect.first_row > rect.last_row || rect.first_col > rect.last_col) {
-    return;
-  }
-
-  bool drop = false;
-  if (row_axis) {
-    ShiftRowRange(rect, index, count, is_delete, &drop);
-  } else {
-    ShiftColRange(rect, index, count, is_delete, &drop);
-  }
-  if (drop) {
-    // Every filtered cell was deleted, which is what Excel resolves by
-    // removing the filter rather than by keeping an empty one.
-    xml.clear();
-    return;
-  }
-  std::string replacement;
-  if (!AppendRefRectangle(replacement, rect)) {
-    return;
-  }
-  xml.replace(value_begin, value_end - value_begin, replacement);
-}
-
 void ShiftColumnLayouts(std::vector<ColumnLayout>& columns, std::uint32_t index, std::uint32_t count, bool is_delete) {
   std::vector<ColumnLayout> retained;
   retained.reserve(columns.size());
@@ -388,6 +302,80 @@ void shift_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, st
   }
 }
 
+bool shift_auto_filter(AutoFilter& filter, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis,
+                       bool header_delete_removes) {
+  if (filter.is_opaque()) {
+    return true;
+  }
+  const MergeRange before = filter.range;
+  if (row_axis && is_delete && header_delete_removes && before.first_row >= index && before.first_row - index < count) {
+    return false;
+  }
+  bool drop = false;
+  if (row_axis) {
+    ShiftRowRange(filter.range, index, count, is_delete, &drop);
+  } else {
+    ShiftColRange(filter.range, index, count, is_delete, &drop);
+  }
+  if (drop) {
+    return false;
+  }
+  if (filter.sort) {
+    bool sort_drop = false;
+    if (row_axis) {
+      ShiftRowRange(filter.sort->ref, index, count, is_delete, &sort_drop);
+    } else {
+      ShiftColRange(filter.sort->ref, index, count, is_delete, &sort_drop);
+    }
+    if (sort_drop) {
+      filter.sort.reset();
+    } else {
+      std::vector<SortCondition> kept;
+      for (SortCondition& cond : filter.sort->conditions) {
+        bool cond_drop = false;
+        if (row_axis) {
+          ShiftRowRange(cond.ref, index, count, is_delete, &cond_drop);
+        } else {
+          ShiftColRange(cond.ref, index, count, is_delete, &cond_drop);
+        }
+        if (!cond_drop) {
+          kept.push_back(std::move(cond));
+        }
+      }
+      filter.sort->conditions = std::move(kept);
+    }
+  }
+  if (row_axis) {
+    return true;
+  }
+  // `colId` is an offset from the range's first column. A column delete
+  // drops the criteria of deleted columns and pulls later ones back by the
+  // deleted columns before them; an insert inside the range (not at its left
+  // edge, which moves the whole range) pushes the columns at or after it.
+  std::vector<FilterColumn> kept;
+  kept.reserve(filter.columns.size());
+  for (FilterColumn& col : filter.columns) {
+    const std::uint64_t absolute = static_cast<std::uint64_t>(before.first_col) + col.col_id;
+    if (is_delete) {
+      const std::uint64_t del_end = static_cast<std::uint64_t>(index) + count;
+      if (absolute >= index && absolute < del_end) {
+        continue;
+      }
+      const std::uint64_t lo = std::max<std::uint64_t>(index, before.first_col);
+      const std::uint64_t hi = std::min<std::uint64_t>(del_end, absolute);
+      col.col_id -= static_cast<std::uint32_t>(hi > lo ? hi - lo : 0U);
+    } else if (index > before.first_col && absolute >= index) {
+      col.col_id += count;
+    }
+    if (col.col_id > filter.range.last_col - filter.range.first_col) {
+      continue;  // Pushed past the sheet edge with the clamped range.
+    }
+    kept.push_back(std::move(col));
+  }
+  filter.columns = std::move(kept);
+  return true;
+}
+
 // Every sheet-attached structure derives its new coordinates from the one
 // `StructuralEdit` description. This list is the enumeration: a structure
 // added to `Sheet` and not added here does not follow a row/column edit.
@@ -416,7 +404,11 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
     ShiftBreaks(print_settings_.manual_col_breaks, index, count, is_delete, Sheet::kMaxCols);
   }
   ShiftPivotAnchors(pivot_tables_, index, count, is_delete, row_axis);
-  ShiftAutoFilterRef(auto_filter_xml_, index, count, is_delete, row_axis);
+  if (AutoFilter* filter = auto_filter_.get();
+      filter != nullptr && !shift_auto_filter(*filter, index, count, is_delete, row_axis,
+                                              /*header_delete_removes=*/true)) {
+    auto_filter_.reset();
+  }
 }
 
 void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {

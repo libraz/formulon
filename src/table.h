@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
+
 namespace formulon {
 
 /// Per-column metadata for a table.
@@ -74,9 +76,13 @@ struct TableMetadata {
   /// visual style survives a save cycle; the engine does not model table
   /// styles.
   std::string table_style_info_xml;
-  /// Unmodelled table-level filter, sort, and extension payloads retained
-  /// verbatim in their schema positions on write.
-  std::string auto_filter_xml;
+  /// Table AutoFilter. Keeps the name of the raw element it replaced and
+  /// reads/writes as that element (`AutoFilterSlot`); the typed model is the
+  /// source of truth. `Workbook::set_table_auto_filter` also dirties
+  /// row-visibility dependents.
+  AutoFilterSlot auto_filter_xml;
+  /// Unmodelled table-level sort and extension payloads retained verbatim in
+  /// their schema positions on write.
   std::string sort_state_xml;
   std::string ext_lst_xml;
   /// Table-root attributes not represented by the model, including extra

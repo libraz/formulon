@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -66,10 +67,8 @@ std::string table_style_xml(std::string_view style_name) {
          "\" showFirstColumn=\"0\" showLastColumn=\"0\" showRowStripes=\"1\" showColumnStripes=\"0\"/>";
 }
 
-// Keep the raw table-level autoFilter payload, changing only its opening
-// element's ref attribute. The reader stores this fragment verbatim because
-// filterColumn criteria and extension payloads are not modelled by the
-// evaluator.
+// Changes only the opening element's ref attribute of an AutoFilter the
+// model could not parse, which is retained verbatim.
 std::string table_auto_filter_xml(std::string_view raw_xml, std::string_view ref) {
   const std::string escaped_ref = xml_attr_escape(ref);
   if (raw_xml.empty()) {
@@ -292,7 +291,14 @@ extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index,
   // particular, a raw style payload survives a NULL style_name, while an
   // empty string explicitly removes it.
   const std::string next_ref = ref;
-  const std::string next_auto_filter_xml = table_auto_filter_xml(table.auto_filter_xml, next_ref);
+  formulon::AutoFilterSlot next_auto_filter = table.auto_filter_xml;
+  const std::optional<formulon::MergeRange> next_range = formulon::parse_a1_rectangle(next_ref);
+  if (formulon::AutoFilter* filter = next_auto_filter.get();
+      filter != nullptr && !filter->is_opaque() && next_range.has_value()) {
+    filter->range = *next_range;
+  } else {
+    next_auto_filter = table_auto_filter_xml(next_auto_filter.xml(), next_ref);
+  }
   const std::string next_style_xml = style_name == nullptr ? table.table_style_info_xml : table_style_xml(style_name);
   const bool next_header_row = header_row < 0 ? table.header_row : header_row > 0;
   const bool next_totals_row = totals_row < 0 ? table.totals_row : totals_row > 0;
@@ -300,13 +306,14 @@ extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index,
   table.ref = next_ref;
   table.header_row = next_header_row;
   table.totals_row = next_totals_row;
-  table.auto_filter_xml = next_auto_filter_xml;
+  table.auto_filter_xml = std::move(next_auto_filter);
   table.table_style_info_xml = next_style_xml;
   // The `ref` just changed, so every structured reference into this table
   // resolves to a different rectangle (`eval/dep_extractor.cpp`); reindex
   // the formulas that name it rather than leave their dep-graph edges and
   // cached values pointing at the pre-edit extent.
   wb->workbook().reindex_formulas_for_table_change({table.name, table.display_name});
+  wb->workbook().mark_row_visibility_dependents_dirty();
   return 0;
 }
 
@@ -328,5 +335,8 @@ extern "C" fm_status_t fm_workbook_table_remove(fm_workbook_t* wb, size_t index)
   const std::string removed_display_name = tables[index].display_name;
   tables.erase(tables.begin() + static_cast<std::ptrdiff_t>(index));
   wb->workbook().reindex_formulas_for_table_change({removed_name, removed_display_name});
+  // The removed table's AutoFilter may have been the sheet's only one with
+  // criteria.
+  wb->workbook().mark_row_visibility_dependents_dirty();
   return 0;
 }

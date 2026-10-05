@@ -111,40 +111,11 @@ cf::CfvoType ParseCfvoType(std::string_view text) {
 }
 
 cf::IconSetName ParseIconSetName(std::string_view text) {
-  if (text == "3Arrows")
-    return cf::IconSetName::Three_Arrows;
-  if (text == "3ArrowsGray")
-    return cf::IconSetName::Three_ArrowsGray;
-  if (text == "3Flags")
-    return cf::IconSetName::Three_Flags;
-  if (text == "3TrafficLights1")
-    return cf::IconSetName::Three_TrafficLights1;
-  if (text == "3TrafficLights2")
-    return cf::IconSetName::Three_TrafficLights2;
-  if (text == "3Signs")
-    return cf::IconSetName::Three_Signs;
-  if (text == "3Symbols")
-    return cf::IconSetName::Three_Symbols;
-  if (text == "3Symbols2")
-    return cf::IconSetName::Three_Symbols2;
-  if (text == "4Arrows")
-    return cf::IconSetName::Four_Arrows;
-  if (text == "4ArrowsGray")
-    return cf::IconSetName::Four_ArrowsGray;
-  if (text == "4RedToBlack")
-    return cf::IconSetName::Four_RedToBlack;
-  if (text == "4Rating")
-    return cf::IconSetName::Four_Rating;
-  if (text == "4TrafficLights")
-    return cf::IconSetName::Four_TrafficLights;
-  if (text == "5Arrows")
-    return cf::IconSetName::Five_Arrows;
-  if (text == "5ArrowsGray")
-    return cf::IconSetName::Five_ArrowsGray;
-  if (text == "5Rating")
-    return cf::IconSetName::Five_Rating;
-  if (text == "5Quarters")
-    return cf::IconSetName::Five_Quarters;
+  for (std::size_t i = 0; i < cf::kIconSetNames.size(); ++i) {
+    if (cf::kIconSetNames[i] == text) {
+      return static_cast<cf::IconSetName>(i);
+    }
+  }
   // The schema default, which Excel omits the attribute for.
   return cf::IconSetName::Three_TrafficLights1;
 }
