@@ -12,7 +12,7 @@
 
 #include "eval/builtins/text_detail.h"
 #include "eval/coerce.h"
-#include "eval/criteria.h"
+#include "eval/wildcard.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/text_ops.h"

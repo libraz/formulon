@@ -39,6 +39,7 @@
 #                           --include-path=<glob> flag for mull.
 #                           Default: src/eval/coerce.cpp,
 #                                    src/eval/criteria.cpp,
+#                                    src/eval/wildcard.cpp,
 #                                    src/eval/text_ops.cpp
 #   MULL_RUNNER             Mull runner binary (default: mull-runner-cxx)
 #   CMAKE                   cmake binary (default: cmake)
@@ -59,7 +60,7 @@ BUILD_DIR="${FORMULON_MUT_BUILD_DIR:-build-mutation}"
 TIMEOUT_SEC="${FORMULON_MUT_TIMEOUT:-120}"
 STRICT_FLAG="${FORMULON_MUT_STRICT:-}"
 TARGET_BIN="${FORMULON_MUT_TARGET:-formulon_unit_tests}"
-FILTER_RAW="${FORMULON_MUT_FILTER:-src/eval/coerce.cpp,src/eval/criteria.cpp,src/eval/text_ops.cpp}"
+FILTER_RAW="${FORMULON_MUT_FILTER:-src/eval/coerce.cpp,src/eval/criteria.cpp,src/eval/wildcard.cpp,src/eval/text_ops.cpp}"
 MULL_RUNNER="${MULL_RUNNER:-mull-runner-cxx}"
 CMAKE="${CMAKE:-cmake}"
 CTEST="${CTEST:-ctest}"

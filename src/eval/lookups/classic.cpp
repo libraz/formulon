@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "eval/coerce.h"
-#include "eval/criteria.h"
 #include "eval/declared_rect.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
@@ -25,6 +24,7 @@
 #include "eval/lookups/common.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
+#include "eval/wildcard.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"

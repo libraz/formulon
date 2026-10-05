@@ -15,7 +15,6 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
-#include "eval/criteria.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
@@ -23,6 +22,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/wildcard.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
