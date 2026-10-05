@@ -50,7 +50,8 @@ std::string TargetRelativeToWorksheet(std::string_view package_path);
 void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path = false);
 
 /// Appends a single `<Relationship Id="<id>" Type="<type>"
-/// Target="<target>"/>` entry plus its trailing newline.
+/// Target="<target>"/>` entry plus its trailing newline. `id` and `type` are
+/// always attribute-escaped; `target` only with `escape_target`.
 void AppendRelationship(std::string& out, std::string_view id, std::string_view type, std::string_view target,
                         bool target_external = false, bool escape_target = false);
 

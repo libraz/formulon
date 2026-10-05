@@ -50,7 +50,7 @@ void AppendRelationship(std::string& out, std::string_view id, std::string_view 
   out.append("  <Relationship Id=\"");
   AppendXmlAttrEscaped(out, id);
   out.append("\" Type=\"");
-  out.append(type);
+  AppendXmlAttrEscaped(out, type);
   out.append("\" Target=\"");
   if (escape_target) {
     // `Target` is an `xsd:anyURI` the rels reader takes verbatim from the
