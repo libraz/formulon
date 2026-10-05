@@ -29,6 +29,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_spill_scale_test.cpp
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
+  unit/validation_eval_test.cpp
   unit/theme_test.cpp
   unit/color_resolve_test.cpp
   unit/style_resolve_test.cpp

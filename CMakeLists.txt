@@ -128,6 +128,7 @@ set(FORMULON_CORE_SOURCES
   src/sheet_name_casefold_data.cpp
   src/workbook.cpp
   src/workbook_ref_rewrite.cpp
+  src/validation_eval.cpp
   src/io/cell_parser.cpp
   src/io/cf_overlay.cpp
   src/io/cf_reader.cpp
