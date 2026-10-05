@@ -19,7 +19,11 @@
 
 # ---- Fast scheduler topology tests ---------------------------------------
 
-add_executable(formulon_concurrency_tests scheduler_test.cpp)
+add_executable(formulon_concurrency_tests
+  scheduler_test.cpp
+  scheduler_layers_test.cpp
+  scheduler_reliability_test.cpp
+)
 
 target_link_libraries(formulon_concurrency_tests
   PRIVATE
@@ -44,7 +48,9 @@ gtest_discover_tests(formulon_concurrency_tests
 
 # ---- SLOW-labelled stress test -------------------------------------------
 
-add_executable(formulon_concurrency_stress_tests scheduler_test.cpp)
+add_executable(formulon_concurrency_stress_tests
+  scheduler_stress_test.cpp
+)
 
 target_link_libraries(formulon_concurrency_stress_tests
   PRIVATE
