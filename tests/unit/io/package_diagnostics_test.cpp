@@ -25,7 +25,7 @@
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
-#include "io/sheet_reader.h"
+#include "io/sheet_overlay_reader.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/retained_part_fingerprint.h"
 #include "io/xlsb/writer.h"

@@ -49,6 +49,7 @@
 #include "io/ooxml_defs.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
+#include "io/sheet_overlay_reader.h"
 #include "io/sheet_reader.h"
 #include "io/sst_reader.h"
 #include "io/styles_reader.h"

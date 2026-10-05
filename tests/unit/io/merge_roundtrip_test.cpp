@@ -1,7 +1,7 @@
 //
 // Round-trip tests for the `<mergeCells>` reader. The matching writer
 // path lives in `ooxml_writer.cpp::BuildMergeCellsBlock`; the reader's
-// public entry is `read_merges` in `sheet_reader.h`. Each test builds a
+// public entry is `read_merges` in `sheet_overlay_reader.h`. Each test builds a
 // minimal `<worksheet>` DOM in memory, runs `read_merges`, and checks
 // the output against the expected `MergeRange` list.
 
@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "io/sheet_reader.h"
+#include "io/sheet_overlay_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 

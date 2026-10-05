@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "io/sheet_reader.h"
+#include "io/sheet_overlay_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 

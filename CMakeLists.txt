@@ -158,6 +158,7 @@ set(FORMULON_CORE_SOURCES
   src/io/pivot_table_writer.cpp
   src/io/format_detect.cpp
   src/io/sax_xml_reader.cpp
+  src/io/sheet_overlay_reader.cpp
   src/io/sheet_reader.cpp
   src/io/sst_reader.cpp
   src/io/styles_reader.cpp

@@ -98,7 +98,7 @@ std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t de
 /// "true", false for everything else (including a missing attribute).
 /// Matches the lexicon Excel emits for the majority of `xs:boolean`
 /// attributes. For the case-insensitive variant Excel uses on a small
-/// subset of sheet flags, see `sheet_reader.cpp`'s local helper.
+/// subset of sheet flags, see `read_xsd_bool` in `io/xsd_bool.h`.
 bool parse_xml_bool_attr(const pugi::xml_attribute& attr);
 
 /// String-view variant of `parse_xml_bool_attr`. Returns true for
