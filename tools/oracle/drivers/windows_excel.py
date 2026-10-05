@@ -58,7 +58,6 @@ and amortising it once over the whole run cuts wall-clock by ~10x.
 from __future__ import annotations
 
 import base64
-import datetime as _dt
 import os
 import platform
 import shutil
@@ -68,18 +67,15 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ._locale import detect_locale_from_app, normalise_error_token
+from . import case_sheet, cell_result, windows_com, windows_page_setup, windows_pivot
+from ._locale import detect_locale_from_app
 from .base import (
-    _ERR_DISPLAY_NAMES,
     DEFAULT_FORMULA_CELL,
     MAX_CAPTURE_CELLS,
     CaseResult,
     EnvironmentInfo,
     OracleDriver,
-    _datetime_to_serial,
     case_formula_cell,
-    case_shape_samples,
-    is_empty_text_result,
     probe_spill_shape,
 )
 
@@ -107,182 +103,45 @@ def _ensure_windows() -> None:
         )
 
 
-def _cell_displayed_text(cell) -> Optional[str]:
-    """Returns the rendered string of a cell via the COM bridge.
-
-    On Windows, ``cell.api.Text`` is the canonical property that yields
-    the displayed string (including ``'#DIV/0!'`` for errors whose
-    Python-side ``.value`` has been coerced to ``None``).
-
-    Why we don't try fallback property names here:
-      Excel's IDispatch is case-insensitive, so ``text`` resolves to the
-      same DISPID as ``Text`` and adds no coverage; ``DisplayValue`` is
-      a Chart.Axis property and is not present on Range; ``string_value``
-      is an xlwings *high-level* Range attribute, not a COM property.
-      Worse, an earlier defensive version of this function iterated over
-      a list that included the lowercase ``text``, and on Excel 16.0 /
-      M365 a getattr for the lowercase form triggered an apparent
-      infinite retry inside ``win32com``'s ``COMRetryObjectWrapper`` --
-      cells whose ``Text`` legitimately resolved to ``""`` (e.g. the
-      result of ``=ARRAYTOTEXT("")``) made the loop fall through to the
-      lowercase try, which never returned and burned Excel CPU at ~60%
-      indefinitely. We saw the run hang for 30+ minutes before
-      diagnosis. Sticking to the canonical ``Text`` property avoids the
-      whole pitfall.
-    """
-
-    try:
-        api = cell.api
-    except Exception:
-        return None
-    try:
-        val = api.Text
-    except Exception:
-        return None
-    if isinstance(val, str):
-        return val or None
-    return None
+# Shared helpers re-exported under the names this driver has always carried.
+_cell_displayed_text = windows_com.cell_displayed_text
+_CellAdapter = windows_com.CellAdapter
+_format_com_error = windows_com.format_com_error
+_com_scalar = windows_com.com_scalar
+_com_bool = windows_com.com_bool
+_com_int = windows_com.com_int
+_com_text = windows_com.com_text
+_split_sheet_qualified_addr = case_sheet.split_sheet_qualified_addr
+_get_or_add_sheet = case_sheet.get_or_add_sheet
+_apply_merges = case_sheet.apply_merges
+_sanitize_sheet_name = case_sheet.sanitize_sheet_name
+_error_trigger = case_sheet.error_trigger
+_resolve_print_sheet = case_sheet.resolve_print_sheet
+_normalise_print_area = case_sheet.normalise_print_area
+_PRINT_ORIENTATIONS = case_sheet.PRINT_ORIENTATIONS
+_classify_python_scalar = cell_result.classify_python_scalar
+_array_cell_from_scalar = cell_result.array_cell_from_scalar
+_build_pivot_table = windows_pivot.build_pivot_table
+_run_formula_probes = windows_pivot.run_formula_probes
+_read_pivot_grid = windows_pivot.read_pivot_grid
+_split_a1 = windows_page_setup.split_a1
+_GEOMETRY_TRACK_CAP = windows_page_setup.GEOMETRY_TRACK_CAP
+_read_orientation_value = windows_page_setup.read_orientation_value
+_read_paper_value = windows_page_setup.read_paper_value
+_read_zoom_value = windows_page_setup.read_zoom_value
+_read_fit_value = windows_page_setup.read_fit_value
+_read_margins = windows_page_setup.read_margins
+_read_roundtrip = windows_page_setup.read_roundtrip
 
 
 def _error_display_from_cell(cell) -> Optional[str]:
-    """Returns the tokenised Excel error name for `cell`, or None.
-
-    Walks four progressively weaker signals:
-      1. ``xlwings.utils.CVErr`` -- ideal, but only surfaces on some
-         Excel / xlwings build pairs.
-      2. ``cell.value`` already a ``'#DIV/0!'``-style string.
-      3. The displayed text (COM ``.Text``) matches a known error.
-      4. ``cell.value`` is ``None`` AND the displayed text nonetheless
-         starts with ``#``. This is the fallback path where the Python
-         layer has coerced the error into ``None``.
-    """
-
-    raw = cell.value
-    try:
-        from xlwings.utils import CVErr  # type: ignore
-
-        if isinstance(raw, CVErr):
-            s = str(raw)
-            if s in _ERR_DISPLAY_NAMES:
-                return s
-    except Exception:  # pragma: no cover - older xlwings without CVErr
-        pass
-
-    if isinstance(raw, str):
-        if raw in _ERR_DISPLAY_NAMES:
-            return raw
-        # ja-JP / de-DE / fr-FR builds occasionally surface the localized
-        # token directly through cell.value (when the bridge has already
-        # decoded the CVErr to a string). Normalise here so the golden
-        # JSON always carries the canonical English form.
-        canon = normalise_error_token(raw)
-        if canon is not None:
-            return canon
-
-    text = _cell_displayed_text(cell)
-    if text in _ERR_DISPLAY_NAMES:
-        return text
-    # Range.Text is locale-bound: de-DE returns "#WERT!" for #VALUE!,
-    # fr-FR returns "#VALEUR!", and so on. Normalise through the shared
-    # localisation map before falling back to the prefix heuristic.
-    if text:
-        canon = normalise_error_token(text)
-        if canon is not None:
-            return canon
-    if text and text.startswith("#") and (text.endswith("!") or text.endswith("?") or text == "#N/A"):
-        for name in _ERR_DISPLAY_NAMES:
-            if text == name:
-                return name
-    return None
+    return cell_result.error_display_from_cell(cell, _cell_displayed_text)
 
 
 def _classify_value(cell, evaluate=None) -> CaseResult:
-    """Converts an xlwings cell observation into a CaseResult.
+    """Classifies one cell; without ``evaluate`` an empty read-back stays blank."""
 
-    The ``cell.value`` read happens once up front; subsequent checks may
-    consult the COM ``.Text`` fallback for edge cases (error cells,
-    pre-1900 serials) where the Python-side value is lossy. ``evaluate`` is
-    the Application.Evaluate adapter that resolves an empty read-back into
-    ``""`` or blank; without it (raw COM cells in the workbook track) an
-    empty read-back stays blank.
-    """
-
-    err = _error_display_from_cell(cell)
-    if err is not None:
-        return CaseResult(id="", kind="error", error_code=err)
-
-    v = cell.value
-    if isinstance(v, _dt.datetime):
-        return CaseResult(id="", kind="number", value=_datetime_to_serial(v))
-    if isinstance(v, _dt.date):  # pragma: no cover - xlwings mostly returns datetime
-        combined = _dt.datetime(v.year, v.month, v.day)
-        return CaseResult(id="", kind="number", value=_datetime_to_serial(combined))
-
-    if isinstance(v, bool):
-        return CaseResult(id="", kind="bool", value=bool(v))
-    if isinstance(v, (int, float)):
-        return CaseResult(id="", kind="number", value=float(v))
-
-    if v is None or v == "":
-        text = _cell_displayed_text(cell)
-        if text and text.strip():
-            pass
-        if evaluate is not None and is_empty_text_result(evaluate, cell):
-            return CaseResult(id="", kind="text", value="")
-        return CaseResult(id="", kind="blank")
-
-    if isinstance(v, str):
-        return CaseResult(id="", kind="text", value=v)
-
-    if isinstance(v, list):
-        rows = len(v)
-        cols = 0
-        if rows > 0 and isinstance(v[0], list):
-            cols = len(v[0])
-            flat = [_array_cell_from_scalar(_classify_python_scalar(item)) for row in v for item in row]
-        else:
-            cols = rows
-            rows = 1
-            flat = [_array_cell_from_scalar(_classify_python_scalar(item)) for item in v]
-        return CaseResult(
-            id="",
-            kind="array",
-            value=flat,
-            array_shape=[rows, cols],
-        )
-    return CaseResult(id="", kind="text", value=str(v))
-
-
-def _classify_python_scalar(v: Any) -> CaseResult:
-    """Classifies a scalar value already extracted from an xlwings array."""
-
-    if isinstance(v, _dt.datetime):
-        return CaseResult(id="", kind="number", value=_datetime_to_serial(v))
-    if isinstance(v, _dt.date):  # pragma: no cover - xlwings mostly returns datetime
-        combined = _dt.datetime(v.year, v.month, v.day)
-        return CaseResult(id="", kind="number", value=_datetime_to_serial(combined))
-    if isinstance(v, bool):
-        return CaseResult(id="", kind="bool", value=bool(v))
-    if isinstance(v, (int, float)):
-        return CaseResult(id="", kind="number", value=float(v))
-    if v is None or v == "":
-        return CaseResult(id="", kind="blank")
-    if isinstance(v, str):
-        canon = normalise_error_token(v)
-        if canon is not None:
-            return CaseResult(id="", kind="error", error_code=canon)
-        return CaseResult(id="", kind="text", value=v)
-    return CaseResult(id="", kind="text", value=str(v))
-
-
-def _array_cell_from_scalar(result: CaseResult) -> Any:
-    if result.kind == "blank":
-        return None
-    if result.kind in {"number", "bool", "text"}:
-        return result.value
-    if result.kind == "error":
-        return {"kind": "error", "code": result.error_code or "#UNKNOWN!"}
-    return {"kind": result.kind, "value": result.value}
+    return cell_result.classify_value(cell, evaluate, _cell_displayed_text)
 
 
 def _app_evaluate(app):
@@ -298,41 +157,38 @@ def _evaluate_spill_shape(app, anchor, *, max_cells: Optional[int] = MAX_CAPTURE
 
 
 def _classify_shape_result(app, sht, anchor_addr: str, samples: List[str]) -> CaseResult:
-    """Records a spill as its shape plus the case's declared sample cells.
+    """Records a spill as its shape plus the case's declared sample cells."""
 
-    Mirrors :func:`tools.oracle.drivers.macos_excel._classify_shape_result`.
-    """
-
-    rows, cols = _evaluate_spill_shape(app, sht.range(anchor_addr), max_cells=None)
-    evaluate = _app_evaluate(app)
-    values = {addr: _array_cell_from_scalar(_classify_value(sht.range(addr), evaluate)) for addr in samples}
-    return CaseResult(id="", kind="array_shape", value=values, array_shape=[rows, cols])
+    return cell_result.classify_shape_result(
+        app,
+        sht,
+        anchor_addr,
+        samples,
+        displayed_text=_cell_displayed_text,
+        app_evaluate=_app_evaluate,
+        spill_shape=_evaluate_spill_shape,
+    )
 
 
 def _classify_case_result(app, sht, case: Dict[str, Any]) -> CaseResult:
     """Reads one case's result in whichever capture mode it declares."""
 
-    anchor_addr = case_formula_cell(case)
-    samples = case_shape_samples(case)
-    if samples is not None:
-        return _classify_shape_result(app, sht, anchor_addr, samples)
-    return _classify_result_cell(app, sht, anchor_addr)
+    return cell_result.classify_case_result(
+        app, sht, case, shape_result=_classify_shape_result, result_cell=_classify_result_cell
+    )
 
 
 def _classify_result_cell(app, sht, anchor_addr: str = DEFAULT_FORMULA_CELL) -> CaseResult:
     """Classifies the anchor scalar or the full dynamic spill if present."""
 
-    shape = _evaluate_spill_shape(app, sht.range(anchor_addr))
-    rows, cols = shape
-    evaluate = _app_evaluate(app)
-    if rows == 1 and cols == 1:
-        return _classify_value(sht.range(anchor_addr), evaluate)
-    anchor = sht.range(anchor_addr)
-    flat: List[Any] = []
-    for r in range(rows):
-        for c in range(cols):
-            flat.append(_array_cell_from_scalar(_classify_value(anchor.offset(r, c), evaluate)))
-    return CaseResult(id="", kind="array", value=flat, array_shape=[rows, cols])
+    return cell_result.classify_result_cell(
+        app,
+        sht,
+        anchor_addr,
+        displayed_text=_cell_displayed_text,
+        app_evaluate=_app_evaluate,
+        spill_shape=_evaluate_spill_shape,
+    )
 
 
 # Names the printer whose driver metrics Excel paginates against; see
@@ -992,41 +848,6 @@ def _apply_axis_size(sheet, axis: str, key: str, size: float) -> None:
         )
 
 
-def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":
-    """Splits a setup-key like ``"Sheet2!A1"`` into ``(sheet, a1)``.
-
-    Returns ``(None, key)`` when the key is a bare A1 address (no ``!``).
-    Single-quoted sheet names are unquoted: ``"'Sheet One'!A1"`` ->
-    ``("Sheet One", "A1")``. Escaped quotes (``''`` inside a quoted
-    name) collapse to a single quote per Excel's convention. The split
-    is on the LAST ``!`` so a future stray ``!`` inside a quoted sheet
-    name does not confuse it.
-    """
-
-    if "!" not in key:
-        return None, key
-    bang = key.rfind("!")
-    sheet_part = key[:bang]
-    addr_part = key[bang + 1 :]
-    if sheet_part.startswith("'") and sheet_part.endswith("'") and len(sheet_part) >= 2:
-        sheet_part = sheet_part[1:-1].replace("''", "'")
-    return sheet_part, addr_part
-
-
-def _get_or_add_sheet(wb, name: str):
-    """Returns the sheet whose display name matches ``name`` (case-insensitive),
-    adding it at the end if absent. The xlwings ``books.Sheets`` collection
-    is itself case-insensitive on lookup, but we surface that behavior
-    explicitly here for clarity.
-    """
-
-    target = name.casefold()
-    for sht in wb.sheets:
-        if sht.name.casefold() == target:
-            return sht
-    return wb.sheets.add(name=name, after=wb.sheets[len(wb.sheets) - 1])
-
-
 def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
     """Writes one normalised {kind, value} record to ``sht!addr``."""
 
@@ -1070,219 +891,6 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
     raise ValueError(f"unknown cell kind: {kind}")
 
 
-def _apply_merges(sht, merges: List[str]) -> None:
-    """Apply case-declared inclusive A1 merge ranges on ``sht``."""
-
-    for ref in merges:
-        sht.range(ref).merge()
-
-
-# Excel `XlConsolidationFunction` constants, keyed by the declarative
-# `agg` name. Mirrors the `Aggregation` enum the C++ builder accepts.
-# Numeric values are the documented Office automation constants so the
-# driver does not depend on the `win32com` constant cache being warm.
-_XL_CONSOLIDATION = {
-    "Sum": -4157,
-    "Count": -4112,
-    "Average": -4106,
-    "Max": -4136,
-    "Min": -4139,
-    "Product": -4149,
-    "CountNumbers": -4113,
-    "StdDev": -4155,
-    "StdDevP": -4156,
-    "Var": -4164,
-    "VarP": -4165,
-}
-
-# Excel `XlPivotFieldOrientation` constants.
-_XL_ORIENT_ROW = 1
-_XL_ORIENT_COLUMN = 2
-_XL_ORIENT_PAGE = 3
-_XL_ORIENT_DATA = 4
-
-# Excel `XlPivotTableSourceType.xlDatabase`.
-_XL_DATABASE = 1
-
-# Excel `XlLayoutRowType` values for `RowAxisLayout`.
-_XL_COMPACT_ROW = 0
-_XL_TABULAR_ROW = 1
-_XL_OUTLINE_ROW = 2
-
-_PIVOT_LAYOUT_MODES = {
-    "Compact": _XL_COMPACT_ROW,
-    "Tabular": _XL_TABULAR_ROW,
-    "Outline": _XL_OUTLINE_ROW,
-}
-
-
-def _build_pivot_table(wb, pivot_spec: Dict[str, Any]):
-    """Creates a PivotTable in ``wb`` from a declarative ``pivot`` block.
-
-    Returns the materialised ``PivotTable`` COM object. The caller reads
-    ``TableRange2`` for the rendered grid and may then run post-build
-    formula probes. The ``pivot`` block shape is documented on
-    ``tests/oracle/workbook_builder.h``.
-    """
-
-    source = pivot_spec.get("source")
-    anchor = pivot_spec.get("anchor")
-    if not isinstance(source, str) or not source:
-        raise RuntimeError("pivot block missing string 'source'")
-    if not isinstance(anchor, str) or not anchor:
-        raise RuntimeError("pivot block missing string 'anchor'")
-
-    # Resolve the declarative anchor "Report!A1" to the destination
-    # cell's COM Range, since CreatePivotTable accepts a Range here and
-    # the string form has the same fully-qualified requirement as
-    # SourceData. We also drive the source resolution through a Range
-    # object so PivotCaches.Create does not have to parse the address
-    # itself.
-    src_sheet_name, src_addr = _split_sheet_qualified_addr(source)
-    anchor_sheet_name, anchor_addr = _split_sheet_qualified_addr(anchor)
-    if src_sheet_name is None:
-        raise RuntimeError(f"pivot source must be sheet-qualified (e.g. 'Data!A1:C13'); got {source!r}")
-    if anchor_sheet_name is None:
-        raise RuntimeError(f"pivot anchor must be sheet-qualified (e.g. 'Report!A1'); got {anchor!r}")
-
-    def _find_sheet(name: str):
-        for sht in wb.sheets:
-            if sht.name.casefold() == name.casefold():
-                return sht
-        return None
-
-    src_sheet = _find_sheet(src_sheet_name)
-    anchor_sheet = _find_sheet(anchor_sheet_name)
-    if src_sheet is None:
-        raise RuntimeError(f"pivot source references unknown sheet {src_sheet_name!r}")
-    if anchor_sheet is None:
-        raise RuntimeError(f"pivot anchor references unknown sheet {anchor_sheet_name!r}")
-
-    source_range_api = src_sheet.range(src_addr).api
-    anchor_range_api = anchor_sheet.range(anchor_addr).api
-
-    # Activate the anchor sheet so CreatePivotTable's destination is on
-    # the active sheet -- some Excel builds reject creating a pivot
-    # whose destination is on an inactive sheet with E_INVALIDARG.
-    try:
-        anchor_sheet.activate()
-    except Exception:
-        pass
-
-    api = wb.api
-    cache = api.PivotCaches().Create(_XL_DATABASE, source_range_api)
-    pivot = cache.CreatePivotTable(anchor_range_api, "FormulonPivot")
-
-    for field_name in pivot_spec.get("row_fields") or []:
-        pivot.PivotFields(field_name).Orientation = _XL_ORIENT_ROW
-    for field_name in pivot_spec.get("col_fields") or []:
-        pivot.PivotFields(field_name).Orientation = _XL_ORIENT_COLUMN
-    for field_name in pivot_spec.get("page_fields") or []:
-        pivot.PivotFields(field_name).Orientation = _XL_ORIENT_PAGE
-
-    for data_field in pivot_spec.get("data_fields") or []:
-        field_name = data_field.get("field")
-        agg = data_field.get("agg", "Sum")
-        consolidation = _XL_CONSOLIDATION.get(agg)
-        if consolidation is None:
-            raise RuntimeError(f"unknown aggregation {agg!r}")
-        field = pivot.PivotFields(field_name)
-        field.Orientation = _XL_ORIENT_DATA
-        field.Function = consolidation
-
-    # Manual item filters: hide the named items on their field.
-    for filter_spec in pivot_spec.get("filters") or []:
-        field_name = filter_spec.get("field")
-        for item_name in filter_spec.get("hide") or []:
-            try:
-                pivot.PivotFields(field_name).PivotItems(item_name).Visible = False
-            except Exception:
-                pass
-
-    layout = pivot_spec.get("layout")
-    if isinstance(layout, str) and layout in _PIVOT_LAYOUT_MODES:
-        try:
-            pivot.RowAxisLayout(_PIVOT_LAYOUT_MODES[layout])
-        except Exception:
-            pass
-
-    grand = pivot_spec.get("grand_totals") or {}
-    if isinstance(grand, dict):
-        if "rows" in grand:
-            pivot.RowGrand = bool(grand["rows"])
-        if "cols" in grand:
-            pivot.ColumnGrand = bool(grand["cols"])
-
-    pivot.RefreshTable()
-    return pivot
-
-
-def _run_formula_probes(wb, probes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Write and read post-build formulas against a materialised PivotTable.
-
-    Formula probes are intentionally evaluated only after ``RefreshTable``.
-    A rendered PivotTable grid cannot exercise GETPIVOTDATA's page/data-axis
-    routing, whereas a formula cell can.  The result shape matches the
-    scalar grid records: ``{"kind": ..., "value": ...}`` or
-    ``{"kind": "error", "code": "#REF!"}``.
-    """
-
-    if not isinstance(probes, list) or not probes:
-        return []
-    out: List[Dict[str, Any]] = []
-    for probe in probes:
-        if not isinstance(probe, dict):
-            raise RuntimeError("pivot formula_probes entries must be objects")
-        probe_id = probe.get("id")
-        cell_ref = probe.get("cell")
-        formula = probe.get("formula")
-        if not isinstance(probe_id, str) or not probe_id:
-            raise RuntimeError("pivot formula probe missing string 'id'")
-        if not isinstance(cell_ref, str) or "!" not in cell_ref:
-            raise RuntimeError(f"formula probe {probe_id!r} needs sheet-qualified cell")
-        if not isinstance(formula, str) or not formula:
-            raise RuntimeError(f"formula probe {probe_id!r} missing string 'formula'")
-        sheet_name, bare_addr = _split_sheet_qualified_addr(cell_ref)
-        target = None
-        for sht in wb.sheets:
-            if sht.name.casefold() == sheet_name.casefold():
-                target = sht
-                break
-        if target is None:
-            raise RuntimeError(f"formula probe {probe_id!r} references unknown sheet {sheet_name!r}")
-        result_cell = target.range(bare_addr)
-        try:
-            result_cell.formula2 = formula
-        except Exception:
-            result_cell.formula = formula
-
-    try:
-        wb.app.calculate()
-    except Exception as exc:
-        # Do not silently emit stale values from a prior probe. A formula
-        # result such as #REF! is a normal cell value and does not raise here;
-        # a COM calculation failure is a driver failure and must be visible.
-        raise RuntimeError(f"Excel failed to calculate formula probes: {_format_com_error(exc)}") from exc
-
-    for probe in probes:
-        sheet_name, bare_addr = _split_sheet_qualified_addr(probe["cell"])
-        target = next(sht for sht in wb.sheets if sht.name.casefold() == sheet_name.casefold())
-        result = _classify_value(_CellAdapter(target.range(bare_addr).api))
-        out.append({"id": probe["id"], "cell": probe["cell"], "result": _grid_value_record(result)})
-    return out
-
-
-# Excel `XlPageOrientation` constants.
-_XL_PORTRAIT = 1
-_XL_LANDSCAPE = 2
-
-_PRINT_ORIENTATIONS = {
-    "portrait": _XL_PORTRAIT,
-    "landscape": _XL_LANDSCAPE,
-}
-
-_PRINT_ORIENTATION_NAMES = {value: name for name, value in _PRINT_ORIENTATIONS.items()}
-
 # `GET.DOCUMENT(50)` is the Excel-4 macro that returns the page count;
 # used as a fallback when `PageSetup.Pages.Count` is unavailable.
 _GET_DOCUMENT_PAGE_COUNT = 50
@@ -1297,11 +905,6 @@ _XL_PAGE_BREAK_PREVIEW = 2
 # remembers the last PBP zoom across workbooks; pinning to 60 makes
 # the break read independent of which case came before.
 _XL_PAGE_BREAK_PREVIEW_ZOOM = 60
-
-# Excel COM reports `PageSetup.LeftMargin` etc. in points (72 pt = 1
-# inch). The Formulon `PageMargins` struct works in inches, so we
-# divide on read.
-_POINTS_PER_INCH = 72.0
 
 
 # How many times a case's pagination is read before the capture gives up
@@ -1404,19 +1007,6 @@ def _read_pagination_settled(ws, page_setup, wb) -> Tuple[List[int], List[int], 
         f"page breaks did not settle after {_BREAK_READ_ATTEMPTS} reads (last: {reading}); "
         "refusing to capture a golden that does not reproduce"
     )
-
-
-def _resolve_print_sheet(wb, print_spec: Dict[str, Any]):
-    """Returns the worksheet the `print` block names, or raises."""
-
-    sheet_name = print_spec.get("sheet")
-    if not isinstance(sheet_name, str) or not sheet_name:
-        raise RuntimeError("print block missing string 'sheet'")
-    target = sheet_name.casefold()
-    for sht in wb.sheets:
-        if sht.name.casefold() == target:
-            return sht
-    raise RuntimeError(f"print 'sheet' names an unknown sheet {sheet_name!r}")
 
 
 def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
@@ -1678,416 +1268,6 @@ def _read_applied_geometry(sht, resolved_area: str) -> Dict[str, Any]:
     except Exception:
         pass
     return out
-
-
-# A whole-column print area would otherwise issue 16,384 COM round trips
-# for a diagnostic nobody asserts.
-_GEOMETRY_TRACK_CAP = 64
-
-
-def _split_a1(addr: str) -> Tuple[int, int]:
-    """Splits a bare A1 address into 1-based (row, column) COM indices."""
-
-    addr = addr.replace("$", "")
-    i = 0
-    while i < len(addr) and addr[i].isalpha():
-        i += 1
-    col = 0
-    for ch in addr[:i]:
-        col = col * 26 + (ord(ch.upper()) - ord("A") + 1)
-    return int(addr[i:]), col
-
-
-def _read_orientation_value(page_setup) -> Any:
-    """Returns the post-apply Orientation as `"portrait"` / `"landscape"`.
-
-    Load-bearing rather than cosmetic: the pagination read can answer from
-    a page geometry the case never asked for (a portrait case coming back
-    with the preceding landscape case's breaks), and without the applied
-    orientation beside the breaks that is indistinguishable from Excel
-    genuinely disagreeing with the C++ paginator. An unreadable or
-    unrecognised value is reported as-is rather than guessed at.
-    """
-
-    try:
-        value = int(page_setup.Orientation)
-    except Exception:
-        return None
-    return _PRINT_ORIENTATION_NAMES.get(value, value)
-
-
-def _read_paper_value(page_setup) -> Any:
-    """Returns the post-apply `PaperSize` as the `XlPaperSize` int.
-
-    The companion to the orientation read: paper and orientation together
-    are what fix the page the breaks were measured on.
-    """
-
-    try:
-        return int(page_setup.PaperSize)
-    except Exception:
-        return None
-
-
-def _read_zoom_value(page_setup) -> Any:
-    """Returns the post-apply Zoom: int percent, or `False` when Fit-active.
-
-    Excel's COM ``PageSetup.Zoom`` is ``False`` when "Fit to" pagination
-    is engaged, else an integer percent (10..400). Boolean is checked
-    before numeric because Python's ``isinstance(False, int)`` is True.
-    """
-
-    try:
-        val = page_setup.Zoom
-    except Exception:
-        return None
-    if isinstance(val, bool):
-        return False if val is False else True
-    if isinstance(val, (int, float)):
-        return int(val)
-    return None
-
-
-def _read_fit_value(page_setup, name: str) -> Any:
-    """Returns the post-apply ``FitToPagesWide/Tall``: int or False (auto).
-
-    Excel returns ``False`` for the "auto" / unset axis and an integer
-    (1..32767) when constrained. Same bool-before-int ordering applies
-    as for Zoom.
-    """
-
-    try:
-        val = getattr(page_setup, name)
-    except Exception:
-        return None
-    if isinstance(val, bool):
-        return False
-    if isinstance(val, (int, float)):
-        return int(val)
-    return None
-
-
-_MARGIN_ATTRS = (
-    ("left", "LeftMargin"),
-    ("right", "RightMargin"),
-    ("top", "TopMargin"),
-    ("bottom", "BottomMargin"),
-    ("header", "HeaderMargin"),
-    ("footer", "FooterMargin"),
-)
-
-
-def _read_margins(page_setup) -> Dict[str, Any]:
-    """Returns the post-apply page margins in inches.
-
-    Excel's COM `PageSetup.{Left,Right,Top,Bottom,Header,Footer}Margin`
-    are points; we divide by 72 so the golden surfaces inches (matching
-    Formulon's `PageMargins` struct and OOXML's <pageMargins> tag, which
-    are both inch-denominated). The body-height calibration hunt in the
-    print_matrix follow-up needs these values to distinguish "Excel
-    applied the OOXML defaults" from "Excel applied a workbook-template
-    preset that we never asked for".
-    """
-
-    out: Dict[str, Any] = {}
-    for key, attr in _MARGIN_ATTRS:
-        try:
-            val = getattr(page_setup, attr)
-        except Exception:
-            out[key] = None
-            continue
-        if isinstance(val, (int, float)) and not isinstance(val, bool):
-            out[key] = round(float(val) / _POINTS_PER_INCH, 6)
-        else:
-            out[key] = None
-    return out
-
-
-# `XlPageBreak`. A manual break authored into the file must read back as
-# manual; one that degraded to automatic means Excel discarded the
-# `<rowBreaks man="1">` we wrote and re-derived the break itself.
-_XL_PAGE_BREAK_MANUAL = -4135
-
-# The header/footer sections Excel exposes per page class, in the order
-# OOXML concatenates them into one string (`&L...&C...&R...`).
-_HEADER_FOOTER_POSITIONS = ("Left", "Center", "Right")
-
-# `PageSetup.<name>` for the odd/primary pages, and the `Page` object
-# carrying the same three positions for the even and first-page classes.
-_HEADER_FOOTER_CLASSES = (
-    ("odd", None),
-    ("even", "EvenPage"),
-    ("first", "FirstPage"),
-)
-
-
-def _com_scalar(owner, attr: str) -> Any:
-    """Reads one COM property, mapping an unavailable one to ``None``.
-
-    A property Excel does not expose on this host must not abort the
-    capture: the golden records `null` and the comparison skips that
-    field, which is honest about what was observed.
-    """
-
-    try:
-        return getattr(owner, attr)
-    except Exception:
-        return None
-
-
-def _com_bool(owner, attr: str) -> Optional[bool]:
-    value = _com_scalar(owner, attr)
-    return bool(value) if isinstance(value, bool) else None
-
-
-def _com_int(owner, attr: str) -> Optional[int]:
-    value = _com_scalar(owner, attr)
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return int(value)
-
-
-def _com_text(owner, attr: str) -> Optional[str]:
-    value = _com_scalar(owner, attr)
-    return value if isinstance(value, str) else None
-
-
-def _read_header_footer(page_setup) -> Dict[str, Any]:
-    """Reads the six header/footer sections as Excel reports them.
-
-    OOXML stores one string per section with `&L` / `&C` / `&R` markers
-    inside it; COM splits the same content across three properties. The
-    golden records the split form, because that is what Excel actually
-    parsed the string into -- collapsing it back would hide a case where
-    Excel put our text in the wrong third.
-    """
-
-    out: Dict[str, Any] = {
-        "different_odd_even": _com_bool(page_setup, "OddAndEvenPagesHeaderFooter"),
-        "different_first": _com_bool(page_setup, "DifferentFirstPageHeaderFooter"),
-        "scale_with_doc": _com_bool(page_setup, "ScaleWithDocHeaderFooter"),
-        "align_with_margins": _com_bool(page_setup, "AlignMarginsHeaderFooter"),
-    }
-    for class_name, page_attr in _HEADER_FOOTER_CLASSES:
-        owner = page_setup if page_attr is None else _com_scalar(page_setup, page_attr)
-        for band in ("Header", "Footer"):
-            for position in _HEADER_FOOTER_POSITIONS:
-                key = f"{class_name}_{band.lower()}_{position.lower()}"
-                if owner is None:
-                    out[key] = None
-                    continue
-                if page_attr is None:
-                    # The odd/primary sections are plain strings on
-                    # `PageSetup` itself.
-                    out[key] = _com_text(owner, f"{position}{band}")
-                    continue
-                section = _com_scalar(owner, f"{position}{band}")
-                out[key] = None if section is None else _com_text(section, "Text")
-    return out
-
-
-def _read_manual_breaks(ws) -> Dict[str, List[int]]:
-    """Returns the manual row / column breaks as zero-based indices.
-
-    Automatic breaks are filtered out: an authored break that Excel
-    re-derived rather than honoured is the failure this case exists to
-    catch, and keeping both kinds in one list would let a coincidental
-    automatic break at the same position mask it.
-    """
-
-    rows: List[int] = []
-    try:
-        for i in range(1, int(ws.api.HPageBreaks.Count) + 1):
-            brk = ws.api.HPageBreaks(i)
-            if _com_int(brk, "Type") == _XL_PAGE_BREAK_MANUAL:
-                rows.append(int(brk.Location.Row) - 1)
-    except Exception:
-        pass
-    cols: List[int] = []
-    try:
-        for i in range(1, int(ws.api.VPageBreaks.Count) + 1):
-            brk = ws.api.VPageBreaks(i)
-            if _com_int(brk, "Type") == _XL_PAGE_BREAK_MANUAL:
-                cols.append(int(brk.Location.Column) - 1)
-    except Exception:
-        pass
-    rows.sort()
-    cols.sort()
-    return {"manual_row_breaks": rows, "manual_col_breaks": cols}
-
-
-def _read_roundtrip(sht) -> Dict[str, Any]:
-    """Reads every print setting Excel resolved from an opened workbook."""
-
-    page_setup = sht.api.PageSetup
-    print_area = _com_text(page_setup, "PrintArea") or ""
-    title_rows = _com_text(page_setup, "PrintTitleRows") or ""
-    title_cols = _com_text(page_setup, "PrintTitleColumns") or ""
-
-    observed: Dict[str, Any] = {
-        "page_setup": {
-            "paper_size": _com_int(page_setup, "PaperSize"),
-            "orientation": _com_int(page_setup, "Orientation"),
-            "zoom": _read_zoom_value(page_setup),
-            "fit_to_pages_wide": _read_fit_value(page_setup, "FitToPagesWide"),
-            "fit_to_pages_tall": _read_fit_value(page_setup, "FitToPagesTall"),
-        },
-        "page_margins": _read_margins(page_setup),
-        "print_options": {
-            "grid_lines": _com_bool(page_setup, "PrintGridlines"),
-            "headings": _com_bool(page_setup, "PrintHeadings"),
-            "horizontal_centered": _com_bool(page_setup, "CenterHorizontally"),
-            "vertical_centered": _com_bool(page_setup, "CenterVertically"),
-        },
-        "header_footer": _read_header_footer(page_setup),
-        "print_area": _normalise_print_area(print_area),
-        "print_title_rows": _normalise_print_area(title_rows),
-        "print_title_cols": _normalise_print_area(title_cols),
-    }
-    observed.update(_read_manual_breaks(sht))
-    return observed
-
-
-def _normalise_print_area(area: str) -> str:
-    """Strips ``$`` anchors and ``Sheet!`` qualifiers from a print area.
-
-    Excel reports ``PrintArea`` fully qualified and anchored
-    (``Sheet1!$A$1:$H$80``); the C++ engine compares against a bare
-    ``A1:H80`` form, so both sides normalise the same way.
-    """
-
-    out_parts: List[str] = []
-    for part in area.split(","):
-        token = part.strip()
-        if not token:
-            continue
-        bang = token.rfind("!")
-        if bang != -1:
-            token = token[bang + 1 :]
-        token = token.replace("$", "")
-        out_parts.append(token)
-    return ",".join(out_parts)
-
-
-def _read_pivot_grid(wb, table_range) -> "tuple[List[Dict[str, Any]], int, int]":
-    """Reads every cell of ``table_range`` into an anchor-relative grid.
-
-    Returns ``(grid, rows, cols)`` where ``grid`` is a list of
-    ``{"r", "c", "value"}`` records (``r`` / ``c`` are 0-based offsets
-    from the pivot anchor) and ``value`` is the normalised ``{kind,
-    value}`` record produced by ``_classify_value``.
-    """
-
-    rows = int(table_range.Rows.Count)
-    cols = int(table_range.Columns.Count)
-    top = int(table_range.Row)
-    left = int(table_range.Column)
-    sht = table_range.Worksheet
-
-    grid: List[Dict[str, Any]] = []
-    for r in range(rows):
-        for c in range(cols):
-            com_cell = sht.Cells(top + r, left + c)
-            result = _classify_value(_CellAdapter(com_cell))
-            grid.append(
-                {
-                    "r": r,
-                    "c": c,
-                    "value": _grid_value_record(result),
-                }
-            )
-    return grid, rows, cols
-
-
-def _grid_value_record(result: CaseResult) -> Dict[str, Any]:
-    """Shapes a ``CaseResult`` into the golden grid's ``{kind, value}``."""
-
-    if result.kind == "blank":
-        return {"kind": "blank"}
-    if result.kind == "error":
-        return {"kind": "error", "code": result.error_code or "#UNKNOWN!"}
-    return {"kind": result.kind, "value": result.value}
-
-
-class _CellAdapter:
-    """Adapts a raw COM ``Range`` to the small surface ``_classify_value``
-    expects (a ``.value`` attribute plus the COM passthrough used by the
-    error / displayed-text fallbacks).
-    """
-
-    def __init__(self, com_cell) -> None:
-        self.api = com_cell
-
-    @property
-    def value(self) -> Any:
-        return self.api.Value
-
-
-def _format_com_error(exc: BaseException) -> str:
-    """Returns a one-line summary of a pywin32 / xlwings exception.
-
-    Includes the COM HRESULT and Excel's localised description when
-    present, so per-target divergence triage can match on the actual
-    failure (e.g. ``COM -2147352567: 例外が発生しました。``) rather
-    than a generic Python traceback. Falls back to ``repr(exc)`` for
-    non-COM exceptions.
-    """
-
-    try:
-        args = getattr(exc, "args", ()) or ()
-        if args and isinstance(args[0], int):
-            hresult = args[0]
-            descr = ""
-            if len(args) >= 2 and isinstance(args[1], str):
-                descr = args[1]
-            # pywin32 com_error.args = (hresult, source, excepinfo, argerr)
-            # excepinfo = (wcode, source, description, helpfile, helpcontext, scode)
-            # When the HRESULT is the generic DISP_E_EXCEPTION the real
-            # Excel error message lives in excepinfo[2], so pull it out.
-            extras: List[str] = []
-            if len(args) >= 3 and args[2] is not None:
-                info = args[2]
-                if isinstance(info, tuple) and len(info) >= 3:
-                    src = info[1] if isinstance(info[1], str) else ""
-                    info_descr = info[2] if isinstance(info[2], str) else ""
-                    scode = info[5] if len(info) >= 6 else None
-                    if info_descr.strip():
-                        extras.append(info_descr.strip())
-                    if src.strip():
-                        extras.append(f"source={src.strip()}")
-                    if isinstance(scode, int):
-                        extras.append(f"scode=0x{scode & 0xFFFFFFFF:08X}")
-            if extras:
-                descr = (descr + " -- " if descr else "") + "; ".join(extras)
-            return f"COM {hresult}: {descr}".strip().rstrip(":")
-    except Exception:
-        pass
-    return f"{type(exc).__name__}: {exc}"[:200]
-
-
-_SHEET_FORBIDDEN = set("\\/?*[]:")
-
-
-def _sanitize_sheet_name(name: str) -> str:
-    """Strips characters Excel disallows in sheet names and trims length."""
-
-    cleaned = "".join("_" if c in _SHEET_FORBIDDEN else c for c in name)
-    return cleaned[:24] or "case"
-
-
-_ERROR_TRIGGERS = {
-    "#DIV/0!": "=1/0",
-    "#NAME?": "=NONEXISTENT_FUNC()",
-    "#VALUE!": '=VALUE("x")',
-    "#NUM!": "=SQRT(-1)",
-    "#N/A": "=NA()",
-    "#REF!": "=OFFSET(A1,-1,-1)",
-    "#NULL!": "=A1 B1",
-}
-
-
-def _error_trigger(code: str) -> str:
-    return _ERROR_TRIGGERS.get(code, '=VALUE("x")')
 
 
 def _env_to_json(env: EnvironmentInfo) -> Dict[str, Any]:

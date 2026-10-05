@@ -37,22 +37,18 @@ are then read in a second pass and packaged into `CaseResult` records.
 
 from __future__ import annotations
 
-import datetime as _dt
 import platform
 from typing import Any, Dict, List, Optional
 
-from ._locale import detect_locale_from_app, normalise_error_token
+from . import case_sheet, cell_result
+from ._locale import detect_locale_from_app
 from .base import (
-    _ERR_DISPLAY_NAMES,
     DEFAULT_FORMULA_CELL,
     MAX_CAPTURE_CELLS,
     CaseResult,
     EnvironmentInfo,
     OracleDriver,
-    _datetime_to_serial,
     case_formula_cell,
-    case_shape_samples,
-    is_empty_text_result,
     probe_spill_shape,
 )
 
@@ -208,157 +204,27 @@ def _cell_displayed_text(cell) -> Optional[str]:
     return None
 
 
+# Shared helpers re-exported under the names this driver has always carried.
+_split_sheet_qualified_addr = case_sheet.split_sheet_qualified_addr
+_get_or_add_sheet = case_sheet.get_or_add_sheet
+_apply_merges = case_sheet.apply_merges
+_sanitize_sheet_name = case_sheet.sanitize_sheet_name
+_error_trigger = case_sheet.error_trigger
+_resolve_print_sheet = case_sheet.resolve_print_sheet
+_normalise_print_area = case_sheet.normalise_print_area
+_PRINT_ORIENTATIONS = case_sheet.PRINT_ORIENTATIONS
+_classify_python_scalar = cell_result.classify_python_scalar
+_array_cell_from_scalar = cell_result.array_cell_from_scalar
+
+
 def _error_display_from_cell(cell) -> Optional[str]:
-    """Returns the tokenised Excel error name for `cell`, or None.
-
-    Walks four progressively weaker signals:
-      1. `xlwings.utils.CVErr` — ideal, but only surfaces on some Excel /
-         xlwings build pairs.
-      2. `cell.value` already a '#DIV/0!'-style string.
-      3. The displayed text (AppleScript `.text`) matches a known error.
-      4. `cell.value` is `None` AND the displayed text nonetheless starts
-         with `#`. This is the fallback Mac path where the Python layer
-         has coerced the error into `None`.
-    """
-
-    raw = cell.value
-    try:
-        from xlwings.utils import CVErr  # type: ignore
-
-        if isinstance(raw, CVErr):
-            s = str(raw)
-            if s in _ERR_DISPLAY_NAMES:
-                return s
-    except Exception:  # pragma: no cover - older xlwings without CVErr
-        pass
-
-    if isinstance(raw, str):
-        if raw in _ERR_DISPLAY_NAMES:
-            return raw
-        canon = normalise_error_token(raw)
-        if canon is not None:
-            return canon
-
-    text = _cell_displayed_text(cell)
-    if text in _ERR_DISPLAY_NAMES:
-        return text
-    # AppleScript `string_value` is locale-bound: de-DE returns "#WERT!",
-    # fr-FR "#VALEUR!", and so on. Normalise through the shared
-    # localisation map before falling back to the prefix heuristic.
-    if text:
-        canon = normalise_error_token(text)
-        if canon is not None:
-            return canon
-    # Last-ditch: match by prefix (`#DIV/0!...` in an ex-format-localised
-    # build, for example). All Excel errors start with `#` and end with
-    # `!` or `?`; we don't want to catch text that happens to start with
-    # '#'.
-    if text and text.startswith("#") and (text.endswith("!") or text.endswith("?") or text == "#N/A"):
-        for name in _ERR_DISPLAY_NAMES:
-            if text == name:
-                return name
-    return None
+    return cell_result.error_display_from_cell(cell, _cell_displayed_text)
 
 
 def _classify_value(cell, evaluate) -> CaseResult:
-    """Converts an xlwings cell observation into a CaseResult.
+    """Classifies one cell; ``evaluate`` resolves an empty read-back to ``""`` or blank."""
 
-    The `cell.value` read happens once up front; subsequent checks may
-    consult the AppleScript `.text` fallback for Mac edge cases (error
-    cells, pre-1900 serials) where the Python-side value is lossy.
-    ``evaluate`` is the Application.Evaluate adapter used to resolve an
-    empty read-back into ``""`` or blank.
-    """
-
-    err = _error_display_from_cell(cell)
-    if err is not None:
-        return CaseResult(id="", kind="error", error_code=err)
-
-    v = cell.value
-    # Datetime must come before bool/int because `datetime` is distinct
-    # from `int` in Python, but xlwings may return a `date` (no time) for
-    # pure DATE() results. Both use the shared 1900-system conversion so the
-    # golden carries a number kind (matching Formulon's Value::Number). The
-    # classifier has no workbook epoch metadata; 1904 cases should therefore
-    # expose date values through a numeric/boolean formula such as N(DATE()).
-    if isinstance(v, _dt.datetime):
-        return CaseResult(id="", kind="number", value=_datetime_to_serial(v))
-    if isinstance(v, _dt.date):  # pragma: no cover - xlwings mostly returns datetime
-        combined = _dt.datetime(v.year, v.month, v.day)
-        return CaseResult(id="", kind="number", value=_datetime_to_serial(combined))
-
-    if isinstance(v, bool):
-        return CaseResult(id="", kind="bool", value=bool(v))
-    if isinstance(v, (int, float)):
-        return CaseResult(id="", kind="number", value=float(v))
-
-    if v is None or v == "":
-        # Mac Excel can return None for pre-1900 serials (Python can't
-        # represent them as datetime). Inspect the displayed text and try
-        # to parse it as an integer serial before falling back to blank.
-        text = _cell_displayed_text(cell)
-        if text and text.strip():
-            # Trivial numeric fallback: some ja-JP date formats render
-            # as "1900/2/29" even though cell.value is None. Bail to
-            # blank here; the YAML case should be rewritten to force a
-            # non-date display if a serial is needed.
-            pass
-        if is_empty_text_result(evaluate, cell):
-            return CaseResult(id="", kind="text", value="")
-        return CaseResult(id="", kind="blank")
-
-    if isinstance(v, str):
-        return CaseResult(id="", kind="text", value=v)
-
-    if isinstance(v, list):
-        rows = len(v)
-        cols = 0
-        if rows > 0 and isinstance(v[0], list):
-            cols = len(v[0])
-            flat = [_array_cell_from_scalar(_classify_python_scalar(item)) for row in v for item in row]
-        else:
-            cols = rows
-            rows = 1
-            flat = [_array_cell_from_scalar(_classify_python_scalar(item)) for item in v]
-        return CaseResult(
-            id="",
-            kind="array",
-            value=flat,
-            array_shape=[rows, cols],
-        )
-    return CaseResult(id="", kind="text", value=str(v))
-
-
-def _classify_python_scalar(v: Any) -> CaseResult:
-    """Classifies a scalar value already extracted from an xlwings array."""
-
-    if isinstance(v, _dt.datetime):
-        return CaseResult(id="", kind="number", value=_datetime_to_serial(v))
-    if isinstance(v, _dt.date):  # pragma: no cover - xlwings mostly returns datetime
-        combined = _dt.datetime(v.year, v.month, v.day)
-        return CaseResult(id="", kind="number", value=_datetime_to_serial(combined))
-    if isinstance(v, bool):
-        return CaseResult(id="", kind="bool", value=bool(v))
-    if isinstance(v, (int, float)):
-        return CaseResult(id="", kind="number", value=float(v))
-    if v is None or v == "":
-        return CaseResult(id="", kind="blank")
-    if isinstance(v, str):
-        canon = normalise_error_token(v)
-        if canon is not None:
-            return CaseResult(id="", kind="error", error_code=canon)
-        return CaseResult(id="", kind="text", value=v)
-    return CaseResult(id="", kind="text", value=str(v))
-
-
-def _array_cell_from_scalar(result: CaseResult) -> Any:
-    if result.kind == "blank":
-        return None
-    if result.kind in {"number", "bool", "text"}:
-        return result.value
-    if result.kind == "error":
-        return {"kind": "error", "code": result.error_code or "#UNKNOWN!"}
-    return {"kind": result.kind, "value": result.value}
+    return cell_result.classify_value(cell, evaluate, _cell_displayed_text)
 
 
 def _app_evaluate(app):
@@ -374,43 +240,38 @@ def _evaluate_spill_shape(app, anchor, *, max_cells: Optional[int] = MAX_CAPTURE
 
 
 def _classify_shape_result(app, sht, anchor_addr: str, samples: List[str]) -> CaseResult:
-    """Records a spill as its shape plus the case's declared sample cells.
+    """Records a spill as its shape plus the case's declared sample cells."""
 
-    For results too large to materialise cell by cell. The shape comes from
-    the same non-invasive probe the cell walk uses; only the listed cells
-    are read.
-    """
-
-    rows, cols = _evaluate_spill_shape(app, sht.range(anchor_addr), max_cells=None)
-    evaluate = _app_evaluate(app)
-    values = {addr: _array_cell_from_scalar(_classify_value(sht.range(addr), evaluate)) for addr in samples}
-    return CaseResult(id="", kind="array_shape", value=values, array_shape=[rows, cols])
+    return cell_result.classify_shape_result(
+        app,
+        sht,
+        anchor_addr,
+        samples,
+        displayed_text=_cell_displayed_text,
+        app_evaluate=_app_evaluate,
+        spill_shape=_evaluate_spill_shape,
+    )
 
 
 def _classify_case_result(app, sht, case: Dict[str, Any]) -> CaseResult:
     """Reads one case's result in whichever capture mode it declares."""
 
-    anchor_addr = case_formula_cell(case)
-    samples = case_shape_samples(case)
-    if samples is not None:
-        return _classify_shape_result(app, sht, anchor_addr, samples)
-    return _classify_result_cell(app, sht, anchor_addr)
+    return cell_result.classify_case_result(
+        app, sht, case, shape_result=_classify_shape_result, result_cell=_classify_result_cell
+    )
 
 
 def _classify_result_cell(app, sht, anchor_addr: str = DEFAULT_FORMULA_CELL) -> CaseResult:
     """Classifies the anchor scalar or the full dynamic spill if present."""
 
-    shape = _evaluate_spill_shape(app, sht.range(anchor_addr))
-    rows, cols = shape
-    evaluate = _app_evaluate(app)
-    if rows == 1 and cols == 1:
-        return _classify_value(sht.range(anchor_addr), evaluate)
-    anchor = sht.range(anchor_addr)
-    flat: List[Any] = []
-    for r in range(rows):
-        for c in range(cols):
-            flat.append(_array_cell_from_scalar(_classify_value(anchor.offset(r, c), evaluate)))
-    return CaseResult(id="", kind="array", value=flat, array_shape=[rows, cols])
+    return cell_result.classify_result_cell(
+        app,
+        sht,
+        anchor_addr,
+        displayed_text=_cell_displayed_text,
+        app_evaluate=_app_evaluate,
+        spill_shape=_evaluate_spill_shape,
+    )
 
 
 class ExcelOracle(OracleDriver):
@@ -777,77 +638,6 @@ class ExcelOracle(OracleDriver):
                 pass
 
 
-def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":
-    """Splits ``"Sheet2!A1"`` into ``("Sheet2", "A1")``; returns ``(None, key)``
-    for bare A1 keys. Mirrors the Windows driver helper -- see
-    ``windows_excel._split_sheet_qualified_addr`` for the quoting rules.
-    """
-
-    if "!" not in key:
-        return None, key
-    bang = key.rfind("!")
-    sheet_part = key[:bang]
-    addr_part = key[bang + 1 :]
-    if sheet_part.startswith("'") and sheet_part.endswith("'") and len(sheet_part) >= 2:
-        sheet_part = sheet_part[1:-1].replace("''", "'")
-    return sheet_part, addr_part
-
-
-def _get_or_add_sheet(wb, name: str):
-    """Returns the sheet whose display name matches ``name`` (case-insensitive),
-    adding it at the end if absent.
-    """
-
-    target = name.casefold()
-    for sht in wb.sheets:
-        if sht.name.casefold() == target:
-            return sht
-    return wb.sheets.add(name=name, after=wb.sheets[len(wb.sheets) - 1])
-
-
-# Excel `XlPageOrientation` constants.
-_XL_PORTRAIT = 1
-_XL_LANDSCAPE = 2
-
-_PRINT_ORIENTATIONS = {
-    "portrait": _XL_PORTRAIT,
-    "landscape": _XL_LANDSCAPE,
-}
-
-
-def _resolve_print_sheet(wb, print_spec: Dict[str, Any]):
-    """Returns the worksheet the `print` block names, or raises."""
-
-    sheet_name = print_spec.get("sheet")
-    if not isinstance(sheet_name, str) or not sheet_name:
-        raise RuntimeError("print block missing string 'sheet'")
-    target = sheet_name.casefold()
-    for sht in wb.sheets:
-        if sht.name.casefold() == target:
-            return sht
-    raise RuntimeError(f"print 'sheet' names an unknown sheet {sheet_name!r}")
-
-
-def _normalise_print_area(area: str) -> str:
-    """Strips ``$`` anchors and ``Sheet!`` qualifiers from a print area.
-
-    Mirrors the Windows driver helper -- the C++ engine compares against
-    a bare ``A1:H80`` form, so both drivers normalise identically.
-    """
-
-    out_parts: List[str] = []
-    for part in area.split(","):
-        token = part.strip()
-        if not token:
-            continue
-        bang = token.rfind("!")
-        if bang != -1:
-            token = token[bang + 1 :]
-        token = token.replace("$", "")
-        out_parts.append(token)
-    return ",".join(out_parts)
-
-
 def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
     """Applies the declarative `print` block to ``wb`` and reads it back.
 
@@ -985,37 +775,5 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any], *, context: str = "setup ce
     raise ValueError(f"unknown cell kind: {kind}")
 
 
-def _apply_merges(sht, merges: List[str]) -> None:
-    """Apply case-declared inclusive A1 merge ranges on ``sht``."""
-
-    for ref in merges:
-        sht.range(ref).merge()
-
-
 def _format_mac_error(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"[:200]
-
-
-_SHEET_FORBIDDEN = set("\\/?*[]:")
-
-
-def _sanitize_sheet_name(name: str) -> str:
-    """Strips characters Excel disallows in sheet names and trims length."""
-
-    cleaned = "".join("_" if c in _SHEET_FORBIDDEN else c for c in name)
-    return cleaned[:24] or "case"
-
-
-_ERROR_TRIGGERS = {
-    "#DIV/0!": "=1/0",
-    "#NAME?": "=NONEXISTENT_FUNC()",
-    "#VALUE!": '=VALUE("x")',
-    "#NUM!": "=SQRT(-1)",
-    "#N/A": "=NA()",
-    "#REF!": "=OFFSET(A1,-1,-1)",  # relative moves out of range
-    "#NULL!": "=A1 B1",  # intersection with no overlap
-}
-
-
-def _error_trigger(code: str) -> str:
-    return _ERROR_TRIGGERS.get(code, '=VALUE("x")')

@@ -433,6 +433,11 @@ tools/oracle/
     ├── base.py                  OracleDriver ABC + CaseResult / EnvironmentInfo
     ├── macos_excel.py           Mac driver (xlwings via AppleEvents)
     ├── windows_excel.py         Windows driver (xlwings via COM) + wire entrypoint
+    ├── cell_result.py           xlwings cell / spill observation -> CaseResult (both drivers)
+    ├── case_sheet.py            sheet naming, merges, error triggers, print-block helpers (both drivers)
+    ├── windows_com.py           COM primitives: displayed text, raw-cell adapter, error text
+    ├── windows_pivot.py         PivotTable build, grid readout, formula probes
+    ├── windows_page_setup.py    PageSetup readers and the print round-trip read
     ├── wsl_bridge.py            WSL2 wrapper that subprocess-invokes windows_excel
     └── __init__.py              select_driver(target) factory
 ```
