@@ -17,6 +17,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -483,6 +484,147 @@ TEST(BuiltinsSubtotal, MissingRangeRejected) {
   // Single-arg form is rejected by min_arity = 2 (no implicit empty data).
   const Value v = EvalSource("=SUBTOTAL(9)");
   ASSERT_TRUE(v.is_error());
+}
+
+// ---------------------------------------------------------------------------
+// Nested SUBTOTAL / AGGREGATE exclusion
+// ---------------------------------------------------------------------------
+
+namespace {
+
+void SetFormula(Workbook& wb, std::uint32_t row, std::uint32_t col, const char* text) {
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, col, text))) << text;
+}
+
+void Recalc(Workbook& wb) {
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+}
+
+double NumberAt(const Workbook& wb, std::uint32_t row, std::uint32_t col) {
+  const Cell* cell = wb.sheet(0).cell_at(row, col);
+  EXPECT_TRUE(cell != nullptr);
+  if (cell == nullptr || !cell->cached_value.is_number()) {
+    ADD_FAILURE() << "row " << row << " col " << col << " "
+                  << (cell != nullptr ? cell->cached_value.debug_to_string() : "");
+    return -1.0;
+  }
+  return cell->cached_value.as_number();
+}
+
+// Report block in A1:A7: 100, 200, 300, subtotal of the first three, 400, 500,
+// subtotal of the last two.
+void FillReportBlock(Workbook& wb) {
+  wb.sheet(0).set_cell_value(0, 0, Value::number(100.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(200.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(300.0));
+  SetFormula(wb, 3U, 0U, "=SUBTOTAL(9,A1:A3)");
+  wb.sheet(0).set_cell_value(4, 0, Value::number(400.0));
+  wb.sheet(0).set_cell_value(5, 0, Value::number(500.0));
+  SetFormula(wb, 6U, 0U, "=SUBTOTAL(9,A5:A6)");
+}
+
+}  // namespace
+
+TEST(SubtotalNested, FeedbackWorkbookAverage) {
+  Workbook wb = Workbook::create();
+  FillReportBlock(wb);
+  SetFormula(wb, 0U, 2U, "=SUBTOTAL(9,A1:A7)");
+  SetFormula(wb, 1U, 2U, "=SUBTOTAL(1,A1:A7)");
+  SetFormula(wb, 2U, 2U, "=SUBTOTAL(2,A1:A7)");
+  SetFormula(wb, 3U, 2U, "=SUBTOTAL(3,A1:A7)");
+  SetFormula(wb, 4U, 2U, "=SUBTOTAL(109,A1:A7)");
+  SetFormula(wb, 5U, 2U, "=SUBTOTAL(101,A1:A7)");
+  SetFormula(wb, 6U, 2U, "=SUBTOTAL(1,A:A)");
+  Recalc(wb);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 0U, 2U), 1500.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 1U, 2U), 300.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 2U, 2U), 5.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 3U, 2U), 5.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 4U, 2U), 1500.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 5U, 2U), 300.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 6U, 2U), 300.0);
+}
+
+TEST(SubtotalNested, SurvivesRowInsertDelete) {
+  Workbook wb = Workbook::create();
+  FillReportBlock(wb);
+  SetFormula(wb, 20U, 2U, "=SUBTOTAL(9,A1:A7)");
+  SetFormula(wb, 21U, 2U, "=SUBTOTAL(1,A1:A7)");
+  SetFormula(wb, 22U, 2U, "=SUBTOTAL(2,A1:A7)");
+  Recalc(wb);
+  ASSERT_DOUBLE_EQ(NumberAt(wb, 20U, 2U), 1500.0);
+
+  // A blank row inside the range shifts the outer formulas down one row and
+  // widens their ranges; the results do not change.
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0U, 2U, 1U)));
+  Recalc(wb);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 21U, 2U), 1500.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 22U, 2U), 300.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 23U, 2U), 5.0);
+
+  // Deleting the same row restores the original layout and results.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0U, 2U, 1U)));
+  Recalc(wb);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 20U, 2U), 1500.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 21U, 2U), 300.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 22U, 2U), 5.0);
+}
+
+TEST(SubtotalNested, CandidateCellShapes) {
+  // One candidate cell per outer call; 0 means the cell is excluded. A defined
+  // name, a pointer cell and INDIRECT are not subtotal calls and stay in.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("NmSub", "SUBTOTAL(9,$Z$3)")));
+  wb.sheet(0).set_cell_value(0, 25, Value::number(1.0));  // Z1
+  wb.sheet(0).set_cell_value(2, 25, Value::number(8.0));  // Z3
+  struct Candidate {
+    const char* formula;
+    double expected;
+  };
+  static constexpr Candidate kCandidates[] = {
+      {"=SUBTOTAL(9,Z1)", 0.0},
+      {"=LET(x,SUBTOTAL(9,Z1),x)", 0.0},
+      {"=LET(x,NmSub,x)+0", 8.0},
+      {"=NmSub*2", 16.0},
+      {"=LAMBDA(r,SUBTOTAL(9,r))(Z1)", 0.0},
+      {"=subtotal(9,Z1)", 0.0},
+      {"=SUBTOTAL(109,Z1)", 0.0},
+      {"=SUMPRODUCT(SUBTOTAL(9,OFFSET(Z1,0,0,1,1)))", 0.0},
+      {"=AGGREGATE(9,0,Z1)", 0.0},
+      {"=AGGREGATE(9,4,Z1)", 0.0},
+      {"=IF(TRUE,64,\"SUBTOTAL(9)\")", 64.0},
+      {"=IF(1,256,AGGREGATE(9,0,Z1))", 0.0},
+      {"=A1*1024", 1024.0},  // only points at the SUBTOTAL(9,Z1) cell in A1
+      {"=INDIRECT(\"A1\")*1024", 1024.0},
+  };
+  SetFormula(wb, 0U, 0U, "=SUBTOTAL(9,Z1)");
+  std::uint32_t row = 1;
+  for (const Candidate& c : kCandidates) {
+    SetFormula(wb, row, 0U, c.formula);
+    SetFormula(wb, row, 2U, (std::string("=SUBTOTAL(9,A") + std::to_string(row + 1U) + ")").c_str());
+    ++row;
+  }
+  Recalc(wb);
+  row = 1;
+  for (const Candidate& c : kCandidates) {
+    EXPECT_DOUBLE_EQ(NumberAt(wb, row, 2U), c.expected) << c.formula;
+    ++row;
+  }
+}
+
+TEST(SubtotalNested, SpillCellsFollowTheAnchorFormula) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 25, Value::number(512.0));  // Z1
+  SetFormula(wb, 0U, 2U, "=SUBTOTAL(9,Z1)+SEQUENCE(3)*0");
+  SetFormula(wb, 0U, 4U, "=SUBTOTAL(9,C1:C3)");
+  SetFormula(wb, 1U, 4U, "=SUBTOTAL(109,C1:C3)");
+  SetFormula(wb, 2U, 4U, "=AGGREGATE(9,0,C1:C3)");
+  SetFormula(wb, 3U, 4U, "=AGGREGATE(9,4,C1:C3)");
+  Recalc(wb);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 0U, 4U), 0.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 1U, 4U), 0.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 2U, 4U), 0.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 3U, 4U), 1536.0);
 }
 
 }  // namespace

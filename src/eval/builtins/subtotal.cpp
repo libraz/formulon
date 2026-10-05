@@ -36,12 +36,9 @@
 // aggregator before we can decide whether to count it (COUNTA does count
 // errors; the numeric branches do not).
 //
-// One intentional simplification relative to Mac Excel 365:
-//   * Nested-SUBTOTAL filtering: Excel ignores cells whose source formula is
-//     itself a SUBTOTAL call so a column of subtotals can be summed without
-//     double-counting. We do not yet have access to per-cell formula text
-//     from inside a builtin, so the filter is omitted. None of the IronCalc
-//     fixtures exercise it.
+// Nested-SUBTOTAL filtering (a cell whose own formula calls SUBTOTAL or
+// AGGREGATE is skipped) happens in the lazy front-end, `eval_subtotal_lazy`,
+// which still has the argument's cell provenance; this file only sees values.
 
 #include "eval/builtins/subtotal.h"
 
@@ -222,12 +219,13 @@ Value run_stdev(const Value* args, std::uint32_t arity, bool population) {
 }  // namespace
 
 Value subtotal_apply(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  if (arity < 2u) {
-    // arity == 0 cannot happen (registry enforces min_arity = 2), but the
-    // bound is also enforced here so a future caller cannot violate the
-    // contract by accident.
+  if (arity < 1u) {
     return Value::error(ErrorCode::Value);
   }
+  // `arity == 1` is the function code alone: the lazy front-end filtered every
+  // data cell out (all nested subtotals or hidden), which aggregates over an
+  // empty set. The eager registration's min_arity = 2 still rejects a bare
+  // `SUBTOTAL(9)`.
   // First arg = function code. Errors propagate; non-coercible text yields
   // #VALUE!. Bool TRUE coerces to 1 (= AVERAGE), matching Excel.
   auto code = coerce_to_number(args[0]);

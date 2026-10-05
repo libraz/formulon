@@ -26,17 +26,9 @@
 //                   filter. Codes 0..3 *also* skip nested SUBTOTAL/AGGREGATE
 //                   results inside the range; codes 4..7 do not.
 //
-// One intentional simplification relative to Mac Excel 365 (the same
-// shortfall SUBTOTAL has documented in `eval/builtins/subtotal.cpp`):
-//
-//   * Nested-SUBTOTAL/AGGREGATE filtering: Excel ignores cells whose source
-//     formula is itself a SUBTOTAL or AGGREGATE call so a column of
-//     subtotals can be aggregated without double-counting. Formulon does
-//     not yet expose per-cell formula text from inside a builtin, so this
-//     filter is omitted. The nested-call bit is therefore unobservable and
-//     options codes 0/4, 1/5, 2/6, 3/7 each collapse to one pair of
-//     behaviors.
-//
+// Options 0..3 also skip cells whose own formula calls SUBTOTAL or AGGREGATE
+// anywhere in its AST (see aggregate_lazy.cpp); options 4..7 keep them.
+
 // What we honor today is the hidden-row bit (mask 1) and the error-ignore
 // bit (mask 2):
 //

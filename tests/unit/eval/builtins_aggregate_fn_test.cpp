@@ -27,6 +27,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -601,6 +602,82 @@ TEST(BuiltinsAggregateFn, MissingDataRangeRejected) {
   Workbook wb = MakeOneToFive();
   const Value v = EvalSourceIn("=AGGREGATE(9,0)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
+}
+
+// ---------------------------------------------------------------------------
+// Nested SUBTOTAL / AGGREGATE bit (options 0..3 exclude, 4..7 keep)
+// ---------------------------------------------------------------------------
+
+TEST(AggregateNested, Options4To7KeepNested) {
+  // A1 = 1000 and A2 = 2000 are plain; A3:A11 hold 1, 2, 4, ..., 256. A3, A4,
+  // A6, A7, A10 and A11 contain a SUBTOTAL / AGGREGATE call; A5 goes through
+  // a defined name, A8 only points at a subtotal cell and A9 has the text in
+  // a string literal, so those three stay in even for options 0..3.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  const auto set_formula = [&wb](std::uint32_t row, std::uint32_t col, const char* text) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, col, text))) << text;
+  };
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("NmSub", "SUBTOTAL(9,$Z$3)")));
+  sheet.set_cell_value(0, 0, Value::number(1000.0));
+  sheet.set_cell_value(1, 0, Value::number(2000.0));
+  sheet.set_cell_value(0, 25, Value::number(1.0));    // Z1
+  sheet.set_cell_value(1, 25, Value::number(2.0));    // Z2
+  sheet.set_cell_value(2, 25, Value::number(4.0));    // Z3
+  sheet.set_cell_value(3, 25, Value::number(8.0));    // Z4
+  sheet.set_cell_value(4, 25, Value::number(16.0));   // Z5
+  sheet.set_cell_value(7, 25, Value::number(128.0));  // Z8
+  sheet.set_cell_value(8, 25, Value::number(256.0));  // Z9
+  set_formula(2U, 0U, "=SUBTOTAL(9,Z1)");
+  set_formula(3U, 0U, "=0+SUBTOTAL(9,Z2)");
+  set_formula(4U, 0U, "=NmSub");
+  set_formula(5U, 0U, "=LET(x,SUBTOTAL(9,Z4),x)");
+  set_formula(6U, 0U, "=AGGREGATE(9,0,Z5)");
+  set_formula(7U, 0U, "=A3*32");
+  set_formula(8U, 0U, "=IF(1,64,\"SUBTOTAL(9)\")");
+  set_formula(9U, 0U, "=IF(TRUE,SUBTOTAL(9,Z8),0)");
+  set_formula(10U, 0U, "=IF(1,256,AGGREGATE(9,0,Z9))");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+
+  struct Case {
+    const char* source;
+    double expected;
+  };
+  static constexpr Case kCases[] = {
+      {"=SUBTOTAL(9,A1:A11)", 3100.0},    {"=SUBTOTAL(109,A1:A11)", 3100.0},   {"=SUBTOTAL(1,A1:A11)", 620.0},
+      {"=SUBTOTAL(101,A1:A11)", 620.0},   {"=SUBTOTAL(2,A1:A11)", 5.0},        {"=SUBTOTAL(3,A1:A11)", 5.0},
+      {"=AGGREGATE(9,0,A1:A11)", 3100.0}, {"=AGGREGATE(9,1,A1:A11)", 3100.0},  {"=AGGREGATE(9,2,A1:A11)", 3100.0},
+      {"=AGGREGATE(9,3,A1:A11)", 3100.0}, {"=AGGREGATE(9,4,A1:A11)", 3511.0},  {"=AGGREGATE(9,5,A1:A11)", 3511.0},
+      {"=AGGREGATE(9,6,A1:A11)", 3511.0}, {"=AGGREGATE(9,7,A1:A11)", 3511.0},  {"=AGGREGATE(1,0,A1:A11)", 620.0},
+      {"=AGGREGATE(1,3,A1:A11)", 620.0},  {"=AGGREGATE(4,0,A1:A11)", 2000.0},  {"=AGGREGATE(4,7,A1:A11)", 2000.0},
+      {"=AGGREGATE(15,0,A1:A11,1)", 4.0}, {"=AGGREGATE(15,3,A1:A11,2)", 32.0}, {"=AGGREGATE(15,4,A1:A11,1)", 1.0},
+      {"=AGGREGATE(15,7,A1:A11,2)", 2.0},
+  };
+  for (const Case& c : kCases) {
+    const Value v = EvalSourceIn(c.source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << c.source;
+    EXPECT_DOUBLE_EQ(v.as_number(), c.expected) << c.source;
+  }
+  for (const char* source :
+       {"=AGGREGATE(1,4,A1:A11)", "=AGGREGATE(1,5,A1:A11)", "=AGGREGATE(1,6,A1:A11)", "=AGGREGATE(1,7,A1:A11)"}) {
+    const Value v = EvalSourceIn(source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << source;
+    EXPECT_NEAR(v.as_number(), 319.181818, 1e-6) << source;
+  }
+}
+
+TEST(AggregateNested, SubtotalCellsExcludedFromAggregateAndBack) {
+  // A subtotal row inside an AGGREGATE range, and an AGGREGATE row inside a
+  // SUBTOTAL range, are both excluded; the "ignore none" options keep them.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(100.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(200.0));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=SUBTOTAL(9,A1:A2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 3U, 0U, "=AGGREGATE(9,0,A1:A2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=AGGREGATE(9,0,A1:A4)", wb, wb.sheet(0)).as_number(), 300.0);
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=AGGREGATE(9,4,A1:A4)", wb, wb.sheet(0)).as_number(), 900.0);
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=SUBTOTAL(9,A1:A4)", wb, wb.sheet(0)).as_number(), 300.0);
 }
 
 }  // namespace

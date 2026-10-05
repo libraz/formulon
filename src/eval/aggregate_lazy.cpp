@@ -13,15 +13,18 @@
 #include "eval/builtins/subtotal.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
+#include "eval/formula_text_utils.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
+#include "parser/parser.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -181,6 +184,179 @@ void append_visibility(const parser::AstNode& node, const EvalContext& ctx, std:
   }
 }
 
+// --- Nested SUBTOTAL / AGGREGATE exclusion --------------------------------
+//
+// SUBTOTAL (every function number) and AGGREGATE options 0..3 skip a cell
+// whose own formula contains a SUBTOTAL or AGGREGATE call anywhere in its
+// AST: inside LET / LAMBDA bodies, in an unevaluated IF branch, in any case.
+// A defined name, a string literal, INDIRECT or a cell that merely references
+// a subtotal cell does not count. Every cell of a spill whose anchor
+// qualifies is skipped too.
+//
+// The check is two-staged. Formula text is a cheap case-insensitive substring
+// candidate test; only candidates are parsed and walked. It runs once per
+// formula cell inside a reference argument, so a range without subtotal text
+// costs one substring scan per formula cell and no parsing.
+
+bool is_nested_call_name(std::string_view name) noexcept {
+  return strings::case_insensitive_eq(name, "SUBTOTAL") || strings::case_insensitive_eq(name, "AGGREGATE");
+}
+
+bool ast_has_nested_call(const parser::AstNode& node) {
+  using parser::NodeKind;
+  switch (node.kind()) {
+    case NodeKind::SpillRef: {
+      const parser::AstNode* anchor = node.as_spill_ref_anchor_expr();
+      return anchor != nullptr && ast_has_nested_call(*anchor);
+    }
+    case NodeKind::UnaryOp:
+      return ast_has_nested_call(node.as_unary_operand());
+    case NodeKind::ImplicitIntersection:
+      return ast_has_nested_call(node.as_implicit_intersection_operand());
+    case NodeKind::BinaryOp:
+      return ast_has_nested_call(node.as_binary_lhs()) || ast_has_nested_call(node.as_binary_rhs());
+    case NodeKind::RangeOp:
+      return ast_has_nested_call(node.as_range_lhs()) || ast_has_nested_call(node.as_range_rhs());
+    case NodeKind::IntersectOp:
+      return ast_has_nested_call(node.as_intersect_lhs()) || ast_has_nested_call(node.as_intersect_rhs());
+    case NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        if (ast_has_nested_call(node.as_union_child(i))) {
+          return true;
+        }
+      }
+      return false;
+    case NodeKind::Call:
+      if (is_nested_call_name(node.as_call_name())) {
+        return true;
+      }
+      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+        if (ast_has_nested_call(node.as_call_arg(i))) {
+          return true;
+        }
+      }
+      return false;
+    case NodeKind::ArrayLiteral:
+      for (std::uint32_t r = 0; r < node.as_array_rows(); ++r) {
+        for (std::uint32_t c = 0; c < node.as_array_cols(); ++c) {
+          if (ast_has_nested_call(node.as_array_element(r, c))) {
+            return true;
+          }
+        }
+      }
+      return false;
+    case NodeKind::Lambda:
+      return ast_has_nested_call(node.as_lambda_body());
+    case NodeKind::LetBinding:
+      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+        if (ast_has_nested_call(node.as_let_binding_expr(i))) {
+          return true;
+        }
+      }
+      return ast_has_nested_call(node.as_let_body());
+    case NodeKind::LambdaCall:
+      if (ast_has_nested_call(node.as_lambda_call_callee())) {
+        return true;
+      }
+      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
+        if (ast_has_nested_call(node.as_lambda_call_arg(i))) {
+          return true;
+        }
+      }
+      return false;
+    default:
+      return false;  // Leaves: literals, references, names, errors.
+  }
+}
+
+bool text_may_hold_nested_call(std::string_view text) noexcept {
+  static constexpr std::string_view kNeedles[] = {"SUBTOTAL", "AGGREGATE"};
+  for (const std::string_view needle : kNeedles) {
+    for (std::size_t i = 0; i + needle.size() <= text.size(); ++i) {
+      if (strings::case_insensitive_eq(text.substr(i, needle.size()), needle)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// True when the formula cell at (row, col) of `sheet` calls SUBTOTAL or
+// AGGREGATE anywhere in its AST.
+bool cell_formula_has_nested_call(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
+  Sheet::CellRead read;
+  sheet.read_formula_cell(row, col, read);
+  if (!read.exists() || !read.is_formula() || !text_may_hold_nested_call(read.formula_text())) {
+    return false;
+  }
+  Arena arena;
+  const parser::AstNode* root = parser::parse_strict(strip_formula_prefix(read.formula_text()), arena);
+  return root != nullptr && ast_has_nested_call(*root);
+}
+
+// Appends one flag per cell of the reference-shaped argument `node`, true for
+// cells that must be excluded as nested subtotals. Arguments without sheet
+// provenance (literals, computed arrays, `A1#`) are never flagged.
+void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t rows, std::uint32_t cols,
+                         std::vector<bool>* out_nested) {
+  const std::size_t count = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  const std::size_t base = out_nested->size();
+  out_nested->resize(base + count, false);
+
+  const parser::Reference* first = nullptr;
+  const parser::Reference* second = nullptr;
+  if (node.kind() == parser::NodeKind::Ref) {
+    first = &node.as_ref();
+    second = first;
+  } else if (node.kind() == parser::NodeKind::RangeOp && node.as_range_lhs().kind() == parser::NodeKind::Ref &&
+             node.as_range_rhs().kind() == parser::NodeKind::Ref) {
+    first = &node.as_range_lhs().as_ref();
+    second = &node.as_range_rhs().as_ref();
+  }
+  if (first == nullptr || count == 0U) {
+    return;
+  }
+  const Sheet* sheet = nullptr;
+  const auto rect_or = ctx.walked_range_rect(*first, *second, &sheet);
+  if (!rect_or || !rect_or.value().has_value() || sheet == nullptr) {
+    return;
+  }
+  const DeclaredRect& rect = *rect_or.value();
+  if (rect.rows() != rows || rect.cols() != cols) {
+    return;  // Shape disagrees with the resolver: flag nothing.
+  }
+  const auto mark = [&](std::uint32_t row, std::uint32_t col) {
+    (*out_nested)[base + static_cast<std::size_t>(row - rect.row_first) * cols + (col - rect.col_first)] = true;
+  };
+
+  for (const CellAddress addr : sheet->formula_cells_in(rect.row_first, rect.col_first, rect.row_last, rect.col_last)) {
+    if (cell_formula_has_nested_call(*sheet, addr.row, addr.col)) {
+      mark(addr.row, addr.col);
+    }
+  }
+  // A spill's phantom cells carry no formula of their own; the anchor's
+  // formula decides for the whole footprint, even when the anchor lies
+  // outside the rectangle.
+  for (const SpillFootprint& fp : sheet->committed_spill_footprints()) {
+    if (fp.rows == 0U || fp.cols == 0U || fp.anchor_row > rect.row_last || fp.anchor_col > rect.col_last ||
+        fp.anchor_row + fp.rows - 1U < rect.row_first || fp.anchor_col + fp.cols - 1U < rect.col_first) {
+      continue;
+    }
+    if (!cell_formula_has_nested_call(*sheet, fp.anchor_row, fp.anchor_col)) {
+      continue;
+    }
+    const std::uint32_t r0 = std::max(fp.anchor_row, rect.row_first);
+    const std::uint32_t r1 = std::min(fp.anchor_row + fp.rows - 1U, rect.row_last);
+    const std::uint32_t c0 = std::max(fp.anchor_col, rect.col_first);
+    const std::uint32_t c1 = std::min(fp.anchor_col + fp.cols - 1U, rect.col_last);
+    for (std::uint32_t r = r0; r <= r1; ++r) {
+      for (std::uint32_t c = c0; c <= c1; ++c) {
+        mark(r, c);
+      }
+    }
+  }
+}
+
 // Appends every scalar Value produced by `arg_node` to `out_cells`, mirroring
 // PERCENTOF's `sum_arg_for_percentof` provenance walk. LET-bound NameRefs
 // resolve to their bound AST when range-shaped. On any expansion failure
@@ -189,14 +365,16 @@ void append_visibility(const parser::AstNode& node, const EvalContext& ctx, std:
 //
 // `out_hidden` grows in lockstep with `out_cells`, one flag per appended
 // cell, so a later filter can drop the cells that sit on hidden rows without
-// re-deriving where each one came from.
+// re-deriving where each one came from. `out_nested` (nullable) grows the same
+// way with the nested SUBTOTAL / AGGREGATE flags; null skips the detection.
 //
 // Unlike PERCENTOF this helper does NOT filter by Value kind: AGGREGATE's
 // per-mode rules (numeric branches drop non-numerics; COUNTA counts them;
 // the error-ignore bit decides whether errors short-circuit) are applied
 // later by `apply_filters`.
 bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
-                 const EvalContext& ctx, std::vector<Value>* out_cells, std::vector<bool>* out_hidden, Value* out_err) {
+                 const EvalContext& ctx, std::vector<Value>* out_cells, std::vector<bool>* out_hidden,
+                 std::vector<bool>* out_nested, Value* out_err) {
   const parser::AstNode* effective = &arg_node;
   if (arg_node.kind() == parser::NodeKind::NameRef) {
     const parser::AstNode& resolved = resolve_name_ast(arg_node, ctx.name_env());
@@ -221,8 +399,14 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
     const std::size_t n = rr.cells.size();
     if (static_cast<std::size_t>(rr.rows) * static_cast<std::size_t>(rr.cols) == n) {
       append_visibility(node, ctx, rr.rows, rr.cols, out_hidden);
+      if (out_nested != nullptr) {
+        append_nested_flags(node, ctx, rr.rows, rr.cols, out_nested);
+      }
     } else {
       out_hidden->resize(out_hidden->size() + n, false);
+      if (out_nested != nullptr) {
+        out_nested->resize(out_nested->size() + n, false);
+      }
     }
     out_cells->insert(out_cells->end(), std::make_move_iterator(rr.cells.begin()),
                       std::make_move_iterator(rr.cells.end()));
@@ -238,6 +422,9 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
         const Value v = eval_node(node.as_array_element(r, c), arena, registry, ctx);
         out_cells->push_back(v);
         out_hidden->push_back(false);
+        if (out_nested != nullptr) {
+          out_nested->push_back(false);
+        }
       }
     }
     return true;
@@ -253,10 +440,16 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
     const std::size_t n = static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols);
     out_cells->insert(out_cells->end(), array->cells, array->cells + n);
     out_hidden->resize(out_hidden->size() + n, false);
+    if (out_nested != nullptr) {
+      out_nested->resize(out_nested->size() + n, false);
+    }
     return true;
   }
   out_cells->push_back(v);
   out_hidden->push_back(false);
+  if (out_nested != nullptr) {
+    out_nested->push_back(false);
+  }
   return true;
 }
 
@@ -274,6 +467,18 @@ void drop_hidden_cells(std::vector<Value>* cells, const std::vector<bool>& hidde
     }
   }
   *cells = std::move(kept);
+}
+
+// Builds the drop mask for one call: the hidden flags when `use_hidden`, OR
+// the nested flags when `use_nested`. Both inputs grew in lockstep with the
+// cells, so the mask drops them in a single pass and no vector goes stale.
+std::vector<bool> make_drop_mask(std::size_t n, bool use_hidden, const std::vector<bool>& hidden, bool use_nested,
+                                 const std::vector<bool>& nested) {
+  std::vector<bool> mask(n, false);
+  for (std::size_t i = 0; i < n; ++i) {
+    mask[i] = (use_hidden && i < hidden.size() && hidden[i]) || (use_nested && i < nested.size() && nested[i]);
+  }
+  return mask;
 }
 
 // Filters `cells` in place according to the options bit and the function
@@ -454,15 +659,14 @@ Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const Functi
 
   std::vector<Value> cells;
   std::vector<bool> hidden;
+  std::vector<bool> nested;
   Value err = Value::blank();
   for (std::uint32_t i = 1; i < arity; ++i) {
-    if (!collect_arg(call.as_call_arg(i), arena, registry, ctx, &cells, &hidden, &err)) {
+    if (!collect_arg(call.as_call_arg(i), arena, registry, ctx, &cells, &hidden, &nested, &err)) {
       return err;
     }
   }
-  if (skip_hidden) {
-    drop_hidden_cells(&cells, hidden);
-  }
+  drop_hidden_cells(&cells, make_drop_mask(cells.size(), skip_hidden, hidden, /*use_nested=*/true, nested));
 
   // Hand the mode dispatch the same shape the eager dispatcher would have
   // built: the function code followed by the flattened data cells.
@@ -500,13 +704,15 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return Value::error(ErrorCode::Value);
   }
   // Bit 0 (mask 1) is the hidden-row bit and bit 1 (mask 2) the error-ignore
-  // bit. Bit 2 selects whether nested SUBTOTAL / AGGREGATE results are also
-  // skipped, which is not yet observable; see the file header.
+  // bit. Bit 2 set (options 4..7) keeps nested SUBTOTAL / AGGREGATE cells.
   const bool ignore_hidden = (options & 1) != 0;
   const bool ignore_errors = (options & 2) != 0;
+  const bool ignore_nested = options < 4;
 
   std::vector<Value> cells;
   std::vector<bool> hidden;
+  std::vector<bool> nested;
+  std::vector<bool>* nested_out = ignore_nested ? &nested : nullptr;
 
   if (code >= kFnKArgFirst) {
     // 14..19 — Excel requires exactly one data range plus a trailing k.
@@ -514,12 +720,10 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     if (arity != 4U) {
       return Value::error(ErrorCode::Value);
     }
-    if (!collect_arg(call.as_call_arg(2), arena, registry, ctx, &cells, &hidden, &err)) {
+    if (!collect_arg(call.as_call_arg(2), arena, registry, ctx, &cells, &hidden, nested_out, &err)) {
       return err;
     }
-    if (ignore_hidden) {
-      drop_hidden_cells(&cells, hidden);
-    }
+    drop_hidden_cells(&cells, make_drop_mask(cells.size(), ignore_hidden, hidden, ignore_nested, nested));
     if (!apply_filters(&cells, code, ignore_errors, &err)) {
       return err;
     }
@@ -552,13 +756,11 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
 
   // Codes 1..13 — every remaining positional arg is data.
   for (std::uint32_t i = 2; i < arity; ++i) {
-    if (!collect_arg(call.as_call_arg(i), arena, registry, ctx, &cells, &hidden, &err)) {
+    if (!collect_arg(call.as_call_arg(i), arena, registry, ctx, &cells, &hidden, nested_out, &err)) {
       return err;
     }
   }
-  if (ignore_hidden) {
-    drop_hidden_cells(&cells, hidden);
-  }
+  drop_hidden_cells(&cells, make_drop_mask(cells.size(), ignore_hidden, hidden, ignore_nested, nested));
   if (!apply_filters(&cells, code, ignore_errors, &err)) {
     return err;
   }

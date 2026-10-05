@@ -165,3 +165,244 @@ cases:
     description: "options=8 — outside [0,7] -> #VALUE!"
     setup: { A1: 10, A2: 20, A3: 30 }
     formula: "=AGGREGATE(9, 8, A1:A3)"
+
+  # -- Nested SUBTOTAL / AGGREGATE bit (options 0..3 exclude, 4..7 keep) --------
+  - id: aggregate_nested_fn9_opt0
+    description: "AGGREGATE(9,0) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(9,0,A1:A11)"
+
+  - id: aggregate_nested_fn9_opt1
+    description: "AGGREGATE(9,1) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(9,1,A1:A11)"
+
+  - id: aggregate_nested_fn9_opt2
+    description: "AGGREGATE(9,2) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(9,2,A1:A11)"
+
+  - id: aggregate_nested_fn9_opt3
+    description: "AGGREGATE(9,3) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(9,3,A1:A11)"
+
+  - id: aggregate_nested_fn9_opt4
+    description: "AGGREGATE(9,4) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(9,4,A1:A11)"
+
+  - id: aggregate_nested_fn9_opt5
+    description: "AGGREGATE(9,5) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(9,5,A1:A11)"
+
+  - id: aggregate_nested_fn9_opt6
+    description: "AGGREGATE(9,6) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(9,6,A1:A11)"
+
+  - id: aggregate_nested_fn9_opt7
+    description: "AGGREGATE(9,7) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(9,7,A1:A11)"
+
+  - id: aggregate_nested_fn1_opt0
+    description: "AGGREGATE(1,0) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(1,0,A1:A11)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_fn1_opt1
+    description: "AGGREGATE(1,1) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(1,1,A1:A11)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_fn1_opt2
+    description: "AGGREGATE(1,2) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(1,2,A1:A11)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_fn1_opt3
+    description: "AGGREGATE(1,3) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(1,3,A1:A11)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_fn1_opt4
+    description: "AGGREGATE(1,4) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(1,4,A1:A11)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_fn1_opt5
+    description: "AGGREGATE(1,5) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(1,5,A1:A11)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_fn1_opt6
+    description: "AGGREGATE(1,6) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(1,6,A1:A11)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_fn1_opt7
+    description: "AGGREGATE(1,7) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(1,7,A1:A11)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_fn4_opt0
+    description: "AGGREGATE(4,0) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(4,0,A1:A11)"
+
+  - id: aggregate_nested_fn4_opt1
+    description: "AGGREGATE(4,1) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(4,1,A1:A11)"
+
+  - id: aggregate_nested_fn4_opt2
+    description: "AGGREGATE(4,2) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(4,2,A1:A11)"
+
+  - id: aggregate_nested_fn4_opt3
+    description: "AGGREGATE(4,3) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(4,3,A1:A11)"
+
+  - id: aggregate_nested_fn4_opt4
+    description: "AGGREGATE(4,4) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(4,4,A1:A11)"
+
+  - id: aggregate_nested_fn4_opt5
+    description: "AGGREGATE(4,5) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(4,5,A1:A11)"
+
+  - id: aggregate_nested_fn4_opt6
+    description: "AGGREGATE(4,6) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(4,6,A1:A11)"
+
+  - id: aggregate_nested_fn4_opt7
+    description: "AGGREGATE(4,7) over the nested marker mask"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(4,7,A1:A11)"
+
+  - id: aggregate_nested_small_opt0_k1
+    description: "array form SMALL (15), options 0, k=1"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,0,A1:A11,1)"
+
+  - id: aggregate_nested_small_opt0_k2
+    description: "array form SMALL (15), options 0, k=2"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,0,A1:A11,2)"
+
+  - id: aggregate_nested_small_opt1_k1
+    description: "array form SMALL (15), options 1, k=1"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,1,A1:A11,1)"
+
+  - id: aggregate_nested_small_opt1_k2
+    description: "array form SMALL (15), options 1, k=2"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,1,A1:A11,2)"
+
+  - id: aggregate_nested_small_opt2_k1
+    description: "array form SMALL (15), options 2, k=1"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,2,A1:A11,1)"
+
+  - id: aggregate_nested_small_opt2_k2
+    description: "array form SMALL (15), options 2, k=2"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,2,A1:A11,2)"
+
+  - id: aggregate_nested_small_opt3_k1
+    description: "array form SMALL (15), options 3, k=1"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,3,A1:A11,1)"
+
+  - id: aggregate_nested_small_opt3_k2
+    description: "array form SMALL (15), options 3, k=2"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,3,A1:A11,2)"
+
+  - id: aggregate_nested_small_opt4_k1
+    description: "array form SMALL (15), options 4, k=1"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,4,A1:A11,1)"
+
+  - id: aggregate_nested_small_opt4_k2
+    description: "array form SMALL (15), options 4, k=2"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,4,A1:A11,2)"
+
+  - id: aggregate_nested_small_opt5_k1
+    description: "array form SMALL (15), options 5, k=1"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,5,A1:A11,1)"
+
+  - id: aggregate_nested_small_opt5_k2
+    description: "array form SMALL (15), options 5, k=2"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,5,A1:A11,2)"
+
+  - id: aggregate_nested_small_opt6_k1
+    description: "array form SMALL (15), options 6, k=1"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,6,A1:A11,1)"
+
+  - id: aggregate_nested_small_opt6_k2
+    description: "array form SMALL (15), options 6, k=2"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,6,A1:A11,2)"
+
+  - id: aggregate_nested_small_opt7_k1
+    description: "array form SMALL (15), options 7, k=1"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,7,A1:A11,1)"
+
+  - id: aggregate_nested_small_opt7_k2
+    description: "array form SMALL (15), options 7, k=2"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=AGGREGATE(15,7,A1:A11,2)"
+
+  - id: aggregate_nested_report_block_fn1_opt0
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=AGGREGATE(1,0,A20:A26)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_report_block_fn9_opt0
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=AGGREGATE(9,0,A20:A26)"
+
+  - id: aggregate_nested_report_block_fn1_opt4
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=AGGREGATE(1,4,A20:A26)"
+    tolerance: { abs: 1.0e-4, rel: 1.0e-6 }
+
+  - id: aggregate_nested_report_block_fn9_opt4
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=AGGREGATE(9,4,A20:A26)"
+
+  - id: aggregate_nested_spill_anchor_opt0
+    description: "spill whose anchor holds SUBTOTAL"
+    setup: { X10: 512, C1: "=SUBTOTAL(9,X10)+SEQUENCE(3)*0" }
+    formula: "=AGGREGATE(9,0,C1:C3)"
+
+  - id: aggregate_nested_spill_anchor_opt4
+    description: "spill whose anchor holds SUBTOTAL"
+    setup: { X10: 512, C1: "=SUBTOTAL(9,X10)+SEQUENCE(3)*0" }
+    formula: "=AGGREGATE(9,4,C1:C3)"

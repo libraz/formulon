@@ -32,3 +32,139 @@ cases:
     description: "code outside 1..11 / 101..111 -> #VALUE!"
     setup: { A1: 10, A2: 20, A3: 30 }
     formula: "=SUBTOTAL(99,A1:A3)"
+
+  # -- Nested SUBTOTAL / AGGREGATE exclusion --------------------------------
+  - id: subtotal_nested_candidate_plain_subtotal
+    description: "outer SUBTOTAL(9) over one cell that is itself SUBTOTAL(9,..): excluded"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)" }
+    formula: "=SUBTOTAL(9,A1)"
+
+  - id: subtotal_nested_candidate_let_wrapped
+    description: "candidate cell =LET(x,SUBTOTAL(9,X1),x) as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=LET(x,SUBTOTAL(9,X1),x)" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_lambda_call
+    description: "candidate cell =LAMBDA(r,SUBTOTAL(9,r))(X1) as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=LAMBDA(r,SUBTOTAL(9,r))(X1)" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_lowercase
+    description: "candidate cell =subtotal(9,X1) as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=subtotal(9,X1)" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_code_109
+    description: "candidate cell =SUBTOTAL(109,X1) as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=SUBTOTAL(109,X1)" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_sumproduct_offset
+    description: "candidate cell =SUMPRODUCT(SUBTOTAL(9,OFFSET(X1,0,0,1,1))) as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=SUMPRODUCT(SUBTOTAL(9,OFFSET(X1,0,0,1,1)))" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_aggregate_0
+    description: "candidate cell =AGGREGATE(9,0,X1) as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=AGGREGATE(9,0,X1)" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_aggregate_4
+    description: "candidate cell =AGGREGATE(9,4,X1) as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=AGGREGATE(9,4,X1)" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_dead_if_branch
+    description: "candidate cell =IF(1,256,AGGREGATE(9,0,X1)) as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=IF(1,256,AGGREGATE(9,0,X1))" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_string_literal_only
+    description: "candidate cell =IF(1,64,SUBTOTAL(9)) as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=IF(1,64,\"SUBTOTAL(9)\")" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_pointer_cell
+    description: "candidate cell =A1*32 as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=A1*32" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_candidate_indirect_pointer
+    description: "candidate cell =INDIRECT(A1)*1024 as the only cell of SUBTOTAL(9,A2)"
+    setup: { X1: 1, A1: "=SUBTOTAL(9,X1)", A2: "=INDIRECT(\"A1\")*1024" }
+    formula: "=SUBTOTAL(9,A2)"
+
+  - id: subtotal_nested_marker_mask_1
+    description: "nine nested-shaped cells among two plain ones; SUBTOTAL(1) over A1:A11"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=SUBTOTAL(1,A1:A11)"
+
+  - id: subtotal_nested_marker_mask_9
+    description: "nine nested-shaped cells among two plain ones; SUBTOTAL(9) over A1:A11"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=SUBTOTAL(9,A1:A11)"
+
+  - id: subtotal_nested_marker_mask_101
+    description: "nine nested-shaped cells among two plain ones; SUBTOTAL(101) over A1:A11"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=SUBTOTAL(101,A1:A11)"
+
+  - id: subtotal_nested_marker_mask_109
+    description: "nine nested-shaped cells among two plain ones; SUBTOTAL(109) over A1:A11"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=SUBTOTAL(109,A1:A11)"
+
+  - id: subtotal_nested_marker_mask_2
+    description: "nine nested-shaped cells among two plain ones; SUBTOTAL(2) over A1:A11"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=SUBTOTAL(2,A1:A11)"
+
+  - id: subtotal_nested_marker_mask_3
+    description: "nine nested-shaped cells among two plain ones; SUBTOTAL(3) over A1:A11"
+    setup: { A1: 1000, A2: 2000, X1: 1, X2: 2, X3: 4, X4: 8, X5: 16, X8: 128, X9: 256, A3: "=SUBTOTAL(9,X1)", A4: "=0+SUBTOTAL(9,X2)", A5: "=X3", A6: "=LET(x,SUBTOTAL(9,X4),x)", A7: "=AGGREGATE(9,0,X5)", A8: "=A3*32", A9: "=IF(1,64,\"SUBTOTAL(9)\")", A10: "=IF(TRUE,SUBTOTAL(9,X8),0)", A11: "=IF(1,256,AGGREGATE(9,0,X9))" }
+    formula: "=SUBTOTAL(3,A1:A11)"
+
+  - id: subtotal_nested_report_block_9
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=SUBTOTAL(9,A20:A26)"
+
+  - id: subtotal_nested_report_block_1
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=SUBTOTAL(1,A20:A26)"
+
+  - id: subtotal_nested_report_block_2
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=SUBTOTAL(2,A20:A26)"
+
+  - id: subtotal_nested_report_block_3
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=SUBTOTAL(3,A20:A26)"
+
+  - id: subtotal_nested_report_block_109
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=SUBTOTAL(109,A20:A26)"
+
+  - id: subtotal_nested_report_block_101
+    description: "report block with two subtotal rows"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=SUBTOTAL(101,A20:A26)"
+
+  - id: subtotal_nested_spill_anchor_9
+    description: "every cell of a spill whose anchor holds SUBTOTAL is excluded"
+    setup: { X10: 512, C1: "=SUBTOTAL(9,X10)+SEQUENCE(3)*0" }
+    formula: "=SUBTOTAL(9,C1:C3)"
+
+  - id: subtotal_nested_spill_anchor_109
+    description: "every cell of a spill whose anchor holds SUBTOTAL is excluded"
+    setup: { X10: 512, C1: "=SUBTOTAL(9,X10)+SEQUENCE(3)*0" }
+    formula: "=SUBTOTAL(109,C1:C3)"
+
+  - id: subtotal_nested_whole_column
+    description: "whole-column reference over the report block"
+    setup: { A20: 100, A21: 200, A22: 300, A23: "=SUBTOTAL(9,A20:A22)", A24: 400, A25: 500, A26: "=SUBTOTAL(9,A24:A25)" }
+    formula: "=SUBTOTAL(9,A:A)"
