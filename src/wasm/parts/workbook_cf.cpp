@@ -36,8 +36,8 @@ fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* 
   fm_cfvo_t out{};
   out.type = js_pull_u8(v, "type", 0U);
   out.gte = js_pull_bool(v, "gte", true) ? 1 : 0;
-  if (!v["value"].isUndefined() && !v["value"].isNull()) {
-    out.value = strings->emplace(v["value"].as<std::string>());
+  if (js_has(v, "value")) {
+    out.value = strings->emplace(js_pull_string(v, "value"));
   }
   return out;
 }
@@ -134,7 +134,7 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
       return arr;
     }
     emscripten::val item = emscripten::val::object();
-    item.set("id", rule.id != nullptr ? std::string(rule.id) : std::string());
+    js_set_cstr(item, "id", rule.id);
     item.set("type", static_cast<uint32_t>(rule.type));
     item.set("priority", rule.priority);
     item.set("stopIfTrue", rule.stop_if_true != 0);
@@ -262,26 +262,15 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   // rather than a vector: the colorScale, dataBar and iconSet branches
   // below all feed the same store, and a vector would relocate the
   // earlier strings as the later branches add theirs.
-  std::vector<fm_cf_cell_range_t> ranges_buf;
   std::vector<fm_cfvo_t> color_scale_thresholds;
   std::vector<fm_cf_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
   formulon::c_api::BorrowedStringArena cfvo_strings;
-  if (v.hasOwnProperty("sqref")) {
-    emscripten::val sqref_js = v["sqref"];
-    if (sqref_js.isArray()) {
-      const uint32_t n = sqref_js["length"].as<uint32_t>();
-      ranges_buf.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        emscripten::val rng = sqref_js[i];
-        fm_cf_cell_range_t r{};
-        r.first_row = rng["firstRow"].as<uint32_t>();
-        r.first_col = rng["firstCol"].as<uint32_t>();
-        r.last_row = rng["lastRow"].as<uint32_t>();
-        r.last_col = rng["lastCol"].as<uint32_t>();
-        ranges_buf.push_back(r);
-      }
-    }
+  const std::vector<fm_merge_range> merge_ranges = js_pull_ranges(v, "sqref");
+  std::vector<fm_cf_cell_range_t> ranges_buf;
+  ranges_buf.reserve(merge_ranges.size());
+  for (const fm_merge_range& m : merge_ranges) {
+    ranges_buf.push_back(fm_cf_cell_range_t{m.first_row, m.first_col, m.last_row, m.last_col});
   }
   const std::string id = js_pull_string(v, "id");
   const std::string formula1 = js_pull_string(v, "formula1");
@@ -291,48 +280,48 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   fm_cf_rule_t rule{};
   rule.id = id.empty() ? nullptr : id.c_str();
   rule.type = js_pull_u8(v, "type", 0U);
-  rule.priority = js_pull_u32(v, "priority", 0U) != 0 ? static_cast<int32_t>(js_pull_u32(v, "priority", 0U)) : 0;
+  rule.priority = static_cast<int32_t>(js_pull_u32(v, "priority", 0U));
   rule.stop_if_true = js_pull_bool(v, "stopIfTrue", false) ? 1 : 0;
-  if (!v["dxfId"].isUndefined() && !v["dxfId"].isNull()) {
+  if (js_has(v, "dxfId")) {
     rule.dxf_id_engaged = 1;
-    rule.dxf_id = v["dxfId"].as<uint32_t>();
+    rule.dxf_id = js_pull_u32(v, "dxfId", 0U);
   }
   rule.sqref = ranges_buf.empty() ? nullptr : ranges_buf.data();
   rule.sqref_count = static_cast<uint32_t>(ranges_buf.size());
   rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
-  if (!v["op"].isUndefined() && !v["op"].isNull()) {
+  if (js_has(v, "op")) {
     rule.op_engaged = 1;
     rule.op = js_pull_u8(v, "op", 0U);
   }
-  if (!v["rank"].isUndefined() && !v["rank"].isNull()) {
+  if (js_has(v, "rank")) {
     rule.rank_engaged = 1;
-    rule.rank = static_cast<int32_t>(v["rank"].as<int32_t>());
+    rule.rank = js_pull_i32(v, "rank", 0);
   }
   rule.percent = js_pull_bool(v, "percent", false) ? 1 : 0;
   rule.bottom = js_pull_bool(v, "bottom", false) ? 1 : 0;
   rule.above_average = js_pull_bool(v, "aboveAverage", true) ? 1 : 0;
   rule.equal_average = js_pull_bool(v, "equalAverage", false) ? 1 : 0;
-  if (!v["stdDev"].isUndefined() && !v["stdDev"].isNull()) {
+  if (js_has(v, "stdDev")) {
     rule.std_dev_engaged = 1;
-    rule.std_dev = v["stdDev"].as<double>();
+    rule.std_dev = js_pull_double(v, "stdDev", 0.0);
   }
   rule.text = text.empty() ? nullptr : text.c_str();
-  if (!v["timePeriod"].isUndefined() && !v["timePeriod"].isNull()) {
+  if (js_has(v, "timePeriod")) {
     rule.time_period_engaged = 1;
     rule.time_period = js_pull_u8(v, "timePeriod", 0U);
   }
-  if (!v["colorScale"].isUndefined() && !v["colorScale"].isNull()) {
+  if (js_has(v, "colorScale")) {
     emscripten::val cs = v["colorScale"];
     if (cs.hasOwnProperty("thresholds") && cs["thresholds"].isArray()) {
-      const uint32_t n = cs["thresholds"]["length"].as<uint32_t>();
+      const uint32_t n = js_length(cs["thresholds"]);
       color_scale_thresholds.reserve(n);
       for (uint32_t i = 0; i < n; ++i) {
         color_scale_thresholds.push_back(js_pull_cfvo(cs["thresholds"][i], &cfvo_strings));
       }
     }
     if (cs.hasOwnProperty("colors") && cs["colors"].isArray()) {
-      const uint32_t n = cs["colors"]["length"].as<uint32_t>();
+      const uint32_t n = js_length(cs["colors"]);
       color_scale_colors.reserve(n);
       for (uint32_t i = 0; i < n; ++i) {
         color_scale_colors.push_back(js_pull_cf_color(cs["colors"][i]));
@@ -342,7 +331,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     rule.color_scale_colors = color_scale_colors.empty() ? nullptr : color_scale_colors.data();
     rule.color_scale_count = static_cast<uint32_t>(color_scale_thresholds.size());
   }
-  if (!v["dataBar"].isUndefined() && !v["dataBar"].isNull()) {
+  if (js_has(v, "dataBar")) {
     emscripten::val db = v["dataBar"];
     rule.data_bar_engaged = 1;
     rule.data_bar_min = js_pull_cfvo(db["min"], &cfvo_strings);
@@ -355,38 +344,38 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     // `*_engaged` flag clear, which the C ABI reads as "keep the model
     // default" (gradient on, automatic axis, negative fill equal to the
     // positive fill, no border, black axis).
-    if (!db["gradient"].isUndefined() && !db["gradient"].isNull()) {
+    if (js_has(db, "gradient")) {
       rule.data_bar_gradient_engaged = 1;
       rule.data_bar_gradient = js_pull_bool(db, "gradient", true) ? 1 : 0;
     }
-    if (!db["axisPosition"].isUndefined() && !db["axisPosition"].isNull()) {
+    if (js_has(db, "axisPosition")) {
       rule.data_bar_axis_position_engaged = 1;
       rule.data_bar_axis_position = js_pull_u8(db, "axisPosition", 0U);
     }
-    if (!db["negativeFill"].isUndefined() && !db["negativeFill"].isNull()) {
+    if (js_has(db, "negativeFill")) {
       rule.data_bar_negative_fill_engaged = 1;
       rule.data_bar_negative_fill = js_pull_cf_color(db["negativeFill"]);
     }
-    if (!db["border"].isUndefined() && !db["border"].isNull()) {
+    if (js_has(db, "border")) {
       rule.data_bar_border_engaged = 1;
       rule.data_bar_border = js_pull_cf_color(db["border"]);
     }
-    if (!db["negativeBorder"].isUndefined() && !db["negativeBorder"].isNull()) {
+    if (js_has(db, "negativeBorder")) {
       rule.data_bar_negative_border_engaged = 1;
       rule.data_bar_negative_border = js_pull_cf_color(db["negativeBorder"]);
     }
-    if (!db["axisColor"].isUndefined() && !db["axisColor"].isNull()) {
+    if (js_has(db, "axisColor")) {
       rule.data_bar_axis_color_engaged = 1;
       rule.data_bar_axis_color = js_pull_cf_color(db["axisColor"]);
     }
     rule.data_bar_direction = js_pull_u8(db, "direction", 0U);
   }
-  if (!v["iconSet"].isUndefined() && !v["iconSet"].isNull()) {
+  if (js_has(v, "iconSet")) {
     emscripten::val is = v["iconSet"];
     rule.icon_set_engaged = 1;
     rule.icon_set_name = js_pull_u8(is, "name", 0U);
     if (is.hasOwnProperty("thresholds") && is["thresholds"].isArray()) {
-      const uint32_t n = is["thresholds"]["length"].as<uint32_t>();
+      const uint32_t n = js_length(is["thresholds"]);
       icon_set_thresholds.reserve(n);
       for (uint32_t i = 0; i < n; ++i) {
         icon_set_thresholds.push_back(js_pull_cfvo(is["thresholds"][i], &cfvo_strings));
@@ -398,7 +387,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     rule.icon_set_show_value = js_pull_bool(is, "showValue", true) ? 1 : 0;
     rule.icon_set_percent = js_pull_bool(is, "percent", true) ? 1 : 0;
     // An omitted floor keeps Excel's default, `percent 0`.
-    if (!is["floor"].isUndefined() && !is["floor"].isNull()) {
+    if (js_has(is, "floor")) {
       rule.icon_set_floor_engaged = 1;
       rule.icon_set_floor = js_pull_cfvo(is["floor"], &cfvo_strings);
     }

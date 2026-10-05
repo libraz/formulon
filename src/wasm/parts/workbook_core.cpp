@@ -532,12 +532,9 @@ emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
     o.set("recomputed", static_cast<uint32_t>(0));
     return o;
   }
-  fm_viewport vp{};
-  vp.sheet = viewport["sheet"].as<uint32_t>();
-  vp.first_row = viewport["firstRow"].as<uint32_t>();
-  vp.last_row = viewport["lastRow"].as<uint32_t>();
-  vp.first_col = viewport["firstCol"].as<uint32_t>();
-  vp.last_col = viewport["lastCol"].as<uint32_t>();
+  const uint32_t vp_sheet = viewport["sheet"].as<uint32_t>();
+  const fm_merge_range bounds = js_pull_range(viewport);
+  fm_viewport vp{vp_sheet, bounds.first_row, bounds.last_row, bounds.first_col, bounds.last_col};
   uint32_t recomputed = 0;
   progress_callback_threw_ = false;
   fm_status_t rc = fm_workbook_partial_recalc(handle_, &vp, &recomputed);

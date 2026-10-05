@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/ooxml/part_dom.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
@@ -140,15 +141,6 @@ std::string theme_part_path(const Workbook& wb) {
   return kDefaultThemePath;
 }
 
-const PassthroughPart* find_part(const Workbook& wb, const std::string& path) {
-  for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.path == path) {
-      return &part;
-    }
-  }
-  return nullptr;
-}
-
 /// A minimal valid theme (colour scheme, font scheme, format scheme with three
 /// entries per list) carrying the default colours and fonts.
 std::string build_default_theme_xml() {
@@ -186,24 +178,17 @@ std::string build_default_theme_xml() {
 /// default one when absent. Yields the part path and the parsed document.
 Expected<std::string, Error> open_theme_for_edit(Workbook& wb, pugi::xml_document& doc) {
   std::string path = theme_part_path(wb);
-  if (find_part(wb, path) == nullptr) {
+  if (io::ooxml::find_passthrough_part(wb, path) == nullptr) {
     const std::string xml = build_default_theme_xml();
     PassthroughPart part(path, kThemeContentType, std::vector<std::uint8_t>(xml.begin(), xml.end()));
     RETURN_IF_ERROR(wb.add_passthrough_part(std::move(part)));
     wb.add_workbook_relationship(kThemeRelType, path);
   }
-  const PassthroughPart* part = find_part(wb, path);
-  RETURN_IF_ERROR(io::load_xml_buffer(doc, part->bytes, "theme", path));
+  RETURN_IF_ERROR(io::ooxml::load_part_dom(wb, path, "theme", doc));
   if (!parse_theme(doc)) {
     return make_error(FormulonErrorCode::kIoXmlParse, "theme: part is not a parseable theme", "part=" + path);
   }
   return path;
-}
-
-Expected<void, Error> store_theme(Workbook& wb, const std::string& path, const pugi::xml_document& doc) {
-  const std::string xml =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" + io::raw_xml(doc.document_element());
-  return wb.replace_passthrough_part(path, std::vector<std::uint8_t>(xml.begin(), xml.end()));
 }
 
 void set_attr(pugi::xml_node node, const char* name, const std::string& value) {
@@ -252,7 +237,7 @@ const Theme& default_theme() {
 LoadedTheme load_theme(const Workbook& wb) {
   LoadedTheme out;
   out.theme = default_theme();
-  const PassthroughPart* part = find_part(wb, theme_part_path(wb));
+  const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, theme_part_path(wb));
   if (part == nullptr) {
     return out;
   }
@@ -283,7 +268,7 @@ Expected<void, Error> set_theme_colors(Workbook& wb, const ThemeColors& colors) 
     }
     set_attr(slot.append_child((prefix + "srgbClr").c_str()), "val", hex6(colors[i]));
   }
-  return store_theme(wb, path_or.value(), doc);
+  return io::ooxml::store_part_dom(wb, path_or.value(), doc);
 }
 
 Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
@@ -301,7 +286,7 @@ Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
   }
   patch_font(major, fonts.major_latin, fonts.major_ea);
   patch_font(minor, fonts.minor_latin, fonts.minor_ea);
-  return store_theme(wb, path_or.value(), doc);
+  return io::ooxml::store_part_dom(wb, path_or.value(), doc);
 }
 
 }  // namespace formulon

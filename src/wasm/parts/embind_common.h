@@ -12,16 +12,11 @@
 //   * Translation helpers (`translate_value`, `translate_cf_*`,
 //     `merge_range_to_val`, `bytes_to_val`, `val_to_bytes`).
 //   * Status builders (`ok_status`, `error_status`, `status_from_rc`).
-//   * Small `js_pull_*` field-extractor helpers used by the value-object
-//     adders.
+//   * `js_pull_*` / `js_set_*` field readers and record builders.
 //
-// The translation helpers are deliberately not inline: they sit on the
-// cold side of the binding surface (one call per failure / read), and
-// keeping a single emission of them in `embind_common.cpp` lets the
-// linker dedupe across the ~9 part TUs. The `js_pull_*` helpers are
-// inline because they fold into the call sites that pull
-// `emscripten::val` fields apart, and inlining yields a measurably
-// smaller `.wasm.br` under `-O3 + wasm-opt -Oz`.
+// The helpers are deliberately out of line: they sit on the cold side of
+// the binding surface, and a single emission in `embind_common.cpp` lets
+// the ~9 part TUs share one copy of each embind bridge sequence.
 
 #ifndef FORMULON_WASM_PARTS_EMBIND_COMMON_H_
 #define FORMULON_WASM_PARTS_EMBIND_COMMON_H_
@@ -362,32 +357,25 @@ std::vector<uint8_t> val_to_bytes(const emscripten::val& v);
 /// Element-by-element copy via `set(i, val)` for layout independence.
 emscripten::val bytes_to_val(const uint8_t* data, std::size_t len);
 
-// ---- JS field-extraction helpers ---------------------------------------
+// ---- JS field readers and record builders -----------------------------
 //
-// These replace the repetitive
-// `record["x"].isUndefined() ? dflt : record["x"].as<T>()` pattern that
-// previously appeared inside `addFont` / `addFill` / `addBorder` /
-// `addXf` / `addValidation`. Centralising them lets the compiler emit
-// one copy of the embind glue (`val::operator[]`, `val::isUndefined`,
-// `val::as<T>`) per field type instead of per call site, which is a
-// measurable WASM size win because every embind operation pulls in
-// non-trivial JS-bridge stubs.
+// Every read of a caller-supplied `emscripten::val` record goes through
+// these helpers rather than an inline `v[key].isUndefined() ? ... :
+// v[key].as<T>()` chain. Each embind operation expands to a JS-bridge
+// stub, so one out-of-line copy per field type is markedly smaller than
+// the same glue repeated at every call site.
 //
-// They are deliberately `inline`: empirically `-Oz` keeps the inlined
-// forms smaller after `wasm-opt --converge` than the call-shaped forms.
+// "Missing" means `undefined` or `null` throughout. Required fields keep
+// reading through `val::as<T>` directly so a missing one converts exactly
+// as before.
 
-/// Returns the `uint32_t` value of `v[key]`, or `dflt` when the field
-/// is missing / undefined / null.
-inline uint32_t js_pull_u32(const emscripten::val& v, const char* key, uint32_t dflt) {
-  emscripten::val f = v[key];
-  if (f.isUndefined() || f.isNull()) {
-    return dflt;
-  }
-  return f.as<uint32_t>();
-}
+/// True when `v[key]` is present (neither `undefined` nor `null`).
+bool js_has(const emscripten::val& v, const char* key);
 
-/// Returns the low-byte `uint8_t` value of `v[key]`, or `dflt` when
-/// missing.
+/// Returns the `uint32_t` value of `v[key]`, or `dflt` when missing.
+uint32_t js_pull_u32(const emscripten::val& v, const char* key, uint32_t dflt);
+
+/// Returns the low-byte `uint8_t` value of `v[key]`, or `dflt` when missing.
 inline uint8_t js_pull_u8(const emscripten::val& v, const char* key, uint8_t dflt) {
   return static_cast<uint8_t>(js_pull_u32(v, key, dflt) & 0xFFU);
 }
@@ -397,87 +385,76 @@ inline uint16_t js_pull_u16(const emscripten::val& v, const char* key, uint16_t 
   return static_cast<uint16_t>(js_pull_u32(v, key, dflt) & 0xFFFFU);
 }
 
+/// Returns the `int32_t` value of `v[key]`, or `dflt` when missing.
+int32_t js_pull_i32(const emscripten::val& v, const char* key, int32_t dflt);
+
 /// Returns the `double` value of `v[key]`, or `dflt` when missing.
-inline double js_pull_double(const emscripten::val& v, const char* key, double dflt) {
-  emscripten::val f = v[key];
-  if (f.isUndefined() || f.isNull()) {
-    return dflt;
-  }
-  return f.as<double>();
-}
+double js_pull_double(const emscripten::val& v, const char* key, double dflt);
 
 /// Returns the `bool` value of `v[key]`, or `dflt` when missing.
-inline bool js_pull_bool(const emscripten::val& v, const char* key, bool dflt) {
-  emscripten::val f = v[key];
-  if (f.isUndefined() || f.isNull()) {
-    return dflt;
-  }
-  return f.as<bool>();
-}
+bool js_pull_bool(const emscripten::val& v, const char* key, bool dflt);
 
-/// Returns the string value of `v[key]`, or an empty string when
-/// missing.
-inline std::string js_pull_string(const emscripten::val& v, const char* key) {
-  emscripten::val f = v[key];
-  if (f.isUndefined() || f.isNull()) {
-    return std::string();
-  }
-  return f.as<std::string>();
-}
+/// Returns the string value of `v[key]`, or an empty string when missing.
+std::string js_pull_string(const emscripten::val& v, const char* key);
+
+/// Reads an optional string field as the C tri-state: `nullptr` when
+/// missing, otherwise `storage.c_str()` holding the copied value.
+const char* js_pull_optional_string(const emscripten::val& v, const char* key, std::string& storage);
+
+/// Returns `arr.length` as `uint32_t`.
+uint32_t js_length(const emscripten::val& arr);
+
+/// Reads the required `{firstRow, lastRow, firstCol, lastCol}` fields of
+/// a range record.
+fm_merge_range js_pull_range(const emscripten::val& v);
+
+/// Reads `v[key]` as an array of range records. An own property that is
+/// not an array, or no own property at all, reads as empty.
+std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char* key);
+
+/// Reads a JS number array as `uint32_t`; `undefined` / `null` read as
+/// empty.
+std::vector<uint32_t> js_pull_u32_list(const emscripten::val& arr);
+
+/// Reads exactly `n` numbers from `arr` into `out`. Returns false, leaving
+/// `out` untouched, unless `arr` is an array of length `n`.
+bool js_pull_u32_array(const emscripten::val& arr, uint32_t* out, uint32_t n);
 
 /// Pulls the `{kind, rgb, theme, tint, indexed}` colour specification out
 /// of `v[key]`. An absent object leaves `kind` at `kFmColorNone`, which
 /// makes the writer emit the sibling `*Argb` as literal `rgb`. A supplied
 /// selector is authoritative; the binding does not resolve theme/indexed /
 /// auto colours.
-inline fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key) {
-  fm_color_spec spec{};
-  emscripten::val f = v[key];
-  if (f.isUndefined() || f.isNull()) {
-    return spec;
-  }
-  spec.kind = js_pull_u8(f, "kind", 0);
-  spec.rgb = js_pull_u32(f, "rgb", 0U);
-  spec.theme = js_pull_u32(f, "theme", 0U);
-  spec.tint = js_pull_double(f, "tint", 0.0);
-  spec.indexed = js_pull_u32(f, "indexed", 0U);
-  return spec;
+fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key);
+
+/// Pulls a `{style, colorArgb, color}` border-side record out of `v`,
+/// defaulting every absent field to zero.
+fm_border_side js_pull_border_side(const emscripten::val& v);
+
+/// One string field of a record built by `js_set_cstr_fields`.
+struct JsStrField {
+  const char* key;
+  const char* value;  ///< NULL is emitted as the empty string.
+};
+
+/// Sets `o[key]` to `s`, or to the empty string when `s` is NULL.
+void js_set_cstr(emscripten::val& o, const char* key, const char* s);
+
+/// Sets every field of `fields` on `o` as `js_set_cstr` would.
+void js_set_cstr_fields(emscripten::val& o, const JsStrField* fields, std::size_t n);
+
+template <std::size_t N>
+inline void js_set_cstr_fields(emscripten::val& o, const JsStrField (&fields)[N]) {
+  js_set_cstr_fields(o, fields, N);
 }
 
 /// Builds the JS mirror of a colour specification. Reads emit it
 /// unconditionally so a get / edit / add cycle passes the theme or
 /// indexed colour straight back and keeps hitting style-table dedup.
-inline emscripten::val js_color_spec(const fm_color_spec& spec) {
-  emscripten::val o = emscripten::val::object();
-  o.set("kind", static_cast<uint32_t>(spec.kind));
-  o.set("rgb", spec.rgb);
-  o.set("theme", spec.theme);
-  o.set("tint", spec.tint);
-  o.set("indexed", spec.indexed);
-  return o;
-}
-
-/// Pulls a `{style, colorArgb, color}` border-side record out of `v`,
-/// defaulting every absent field to zero.
-inline fm_border_side js_pull_border_side(const emscripten::val& v) {
-  fm_border_side s{};
-  if (v.isUndefined() || v.isNull()) {
-    return s;
-  }
-  s.style = js_pull_u8(v, "style", 0);
-  s.color_argb = js_pull_u32(v, "colorArgb", 0U);
-  s.color = js_pull_color_spec(v, "color");
-  return s;
-}
+emscripten::val js_color_spec(const fm_color_spec& spec);
 
 /// Builds the JS mirror of a border side.
-inline emscripten::val js_border_side(const fm_border_side& s) {
-  emscripten::val o = emscripten::val::object();
-  o.set("style", static_cast<uint32_t>(s.style));
-  o.set("colorArgb", s.color_argb);
-  o.set("color", js_color_spec(s.color));
-  return o;
-}
+emscripten::val js_border_side(const fm_border_side& s);
 
 }  // namespace parts
 }  // namespace wasm

@@ -35,7 +35,7 @@ emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
     return out;
   }
   out.set("status", ok_status());
-  out.set("xml", xml != nullptr ? std::string(xml) : std::string());
+  js_set_cstr(out, "xml", xml);
   return out;
 }
 
@@ -52,11 +52,7 @@ JsStatus JsWorkbook::addMerge(uint32_t sheet, emscripten::val range) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  fm_merge_range m;
-  m.first_row = range["firstRow"].as<uint32_t>();
-  m.last_row = range["lastRow"].as<uint32_t>();
-  m.first_col = range["firstCol"].as<uint32_t>();
-  m.last_col = range["lastCol"].as<uint32_t>();
+  const fm_merge_range m = js_pull_range(range);
   fm_status_t rc = fm_sheet_add_merge(handle_, sheet, m);
   return status_from_rc(rc);
 }
@@ -65,11 +61,7 @@ JsStatus JsWorkbook::removeMerge(uint32_t sheet, emscripten::val range) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  fm_merge_range m;
-  m.first_row = range["firstRow"].as<uint32_t>();
-  m.last_row = range["lastRow"].as<uint32_t>();
-  m.first_col = range["firstCol"].as<uint32_t>();
-  m.last_col = range["lastCol"].as<uint32_t>();
+  const fm_merge_range m = js_pull_range(range);
   fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, m);
   return status_from_rc(rc);
 }
@@ -123,11 +115,7 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
     arr.set("status", error_status(7000));
     return arr;
   }
-  fm_merge_range query;
-  query.first_row = range["firstRow"].as<uint32_t>();
-  query.last_row = range["lastRow"].as<uint32_t>();
-  query.first_col = range["firstCol"].as<uint32_t>();
-  query.last_col = range["lastCol"].as<uint32_t>();
+  const fm_merge_range query = js_pull_range(range);
   uint32_t total = 0;
   fm_status_t rc = fm_sheet_merges_in_range(handle_, sheet, query, nullptr, 0, &total);
   std::vector<fm_merge_range> found(rc == 0 ? total : 0);
@@ -158,8 +146,7 @@ emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t co
     return emscripten::val::null();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("author", c.author != nullptr ? std::string(c.author) : std::string());
-  o.set("text", c.text != nullptr ? std::string(c.text) : std::string());
+  js_set_cstr_fields(o, {{"author", c.author}, {"text", c.text}});
   return o;
 }
 
@@ -178,8 +165,7 @@ emscripten::val JsWorkbook::getCommentResult(uint32_t sheet, uint32_t row, uint3
     return out;
   }
   emscripten::val comment = emscripten::val::object();
-  comment.set("author", c.author != nullptr ? std::string(c.author) : std::string());
-  comment.set("text", c.text != nullptr ? std::string(c.text) : std::string());
+  js_set_cstr_fields(comment, {{"author", c.author}, {"text", c.text}});
   out.set("status", ok_status());
   out.set("comment", comment);
   return out;
@@ -208,8 +194,7 @@ emscripten::val JsWorkbook::getComments(uint32_t sheet) const {
     emscripten::val o = emscripten::val::object();
     o.set("row", c.row);
     o.set("col", c.col);
-    o.set("author", c.author != nullptr ? std::string(c.author) : std::string());
-    o.set("text", c.text != nullptr ? std::string(c.text) : std::string());
+    js_set_cstr_fields(o, {{"author", c.author}, {"text", c.text}});
     arr.set(emitted, o);
     ++emitted;
   }
@@ -303,10 +288,8 @@ emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
     item.set("col", h.col);
     item.set("lastRow", h.last_row);
     item.set("lastCol", h.last_col);
-    item.set("target", h.target != nullptr ? std::string(h.target) : std::string());
-    item.set("location", h.location != nullptr ? std::string(h.location) : std::string());
-    item.set("display", h.display != nullptr ? std::string(h.display) : std::string());
-    item.set("tooltip", h.tooltip != nullptr ? std::string(h.tooltip) : std::string());
+    js_set_cstr_fields(
+        item, {{"target", h.target}, {"location", h.location}, {"display", h.display}, {"tooltip", h.tooltip}});
     arr.set(emitted, item);
     ++emitted;
   }
@@ -349,12 +332,12 @@ emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
     item.set("showInputMessage", v.show_input_message != 0);
     item.set("showErrorMessage", v.show_error_message != 0);
     item.set("showDropDown", v.show_dropdown != 0);
-    item.set("formula1", v.formula1 != nullptr ? std::string(v.formula1) : std::string());
-    item.set("formula2", v.formula2 != nullptr ? std::string(v.formula2) : std::string());
-    item.set("errorTitle", v.error_title != nullptr ? std::string(v.error_title) : std::string());
-    item.set("errorMessage", v.error_message != nullptr ? std::string(v.error_message) : std::string());
-    item.set("promptTitle", v.prompt_title != nullptr ? std::string(v.prompt_title) : std::string());
-    item.set("promptMessage", v.prompt_message != nullptr ? std::string(v.prompt_message) : std::string());
+    js_set_cstr_fields(item, {{"formula1", v.formula1},
+                              {"formula2", v.formula2},
+                              {"errorTitle", v.error_title},
+                              {"errorMessage", v.error_message},
+                              {"promptTitle", v.prompt_title},
+                              {"promptMessage", v.prompt_message}});
     arr.set(emitted, item);
     ++emitted;
   }
@@ -369,23 +352,7 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until
   // `fm_sheet_add_validation` returns.
-  std::vector<fm_merge_range> ranges_buf;
-  if (v.hasOwnProperty("ranges")) {
-    emscripten::val ranges_js = v["ranges"];
-    if (ranges_js.isArray()) {
-      const uint32_t n = ranges_js["length"].as<uint32_t>();
-      ranges_buf.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        emscripten::val rng = ranges_js[i];
-        fm_merge_range m{};
-        m.first_row = rng["firstRow"].as<uint32_t>();
-        m.last_row = rng["lastRow"].as<uint32_t>();
-        m.first_col = rng["firstCol"].as<uint32_t>();
-        m.last_col = rng["lastCol"].as<uint32_t>();
-        ranges_buf.push_back(m);
-      }
-    }
-  }
+  const std::vector<fm_merge_range> ranges_buf = js_pull_ranges(v, "ranges");
   const std::string formula1 = js_pull_string(v, "formula1");
   const std::string formula2 = js_pull_string(v, "formula2");
   const std::string error_title = js_pull_string(v, "errorTitle");

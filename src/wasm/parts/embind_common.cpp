@@ -1,8 +1,9 @@
 //
 // Out-of-line implementation of the shared embind helpers declared in
 // `parts/embind_common.h`. The status builders capture the thread-local
-// diagnostic surface that follows every C-ABI call, and the translation
-// helpers project a `fm_*` POD into an embind-friendly mirror.
+// diagnostic surface that follows every C-ABI call, the translation
+// helpers project a `fm_*` POD into an embind-friendly mirror, and the
+// field readers pull caller-supplied JS records apart.
 
 #include "wasm/parts/embind_common.h"
 
@@ -153,8 +154,8 @@ emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell) {
   item.set("value", translate_value(cell.value));
   item.set("kind", static_cast<int32_t>(cell.kind));
   item.set("depth", cell.depth);
-  item.set("fieldName", cell.field_name != nullptr ? std::string(cell.field_name) : std::string());
-  item.set("numberFormat", cell.number_format != nullptr ? std::string(cell.number_format) : std::string());
+  js_set_cstr(item, "fieldName", cell.field_name);
+  js_set_cstr(item, "numberFormat", cell.number_format);
   return item;
 }
 
@@ -183,6 +184,166 @@ emscripten::val bytes_to_val(const uint8_t* data, std::size_t len) {
     u8.call<void>("set", emscripten::val(emscripten::typed_memory_view(len, data)));
   }
   return u8;
+}
+
+bool js_has(const emscripten::val& v, const char* key) {
+  const emscripten::val f = v[key];
+  return !f.isUndefined() && !f.isNull();
+}
+
+uint32_t js_pull_u32(const emscripten::val& v, const char* key, uint32_t dflt) {
+  const emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return dflt;
+  }
+  return f.as<uint32_t>();
+}
+
+int32_t js_pull_i32(const emscripten::val& v, const char* key, int32_t dflt) {
+  const emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return dflt;
+  }
+  return f.as<int32_t>();
+}
+
+double js_pull_double(const emscripten::val& v, const char* key, double dflt) {
+  const emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return dflt;
+  }
+  return f.as<double>();
+}
+
+bool js_pull_bool(const emscripten::val& v, const char* key, bool dflt) {
+  const emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return dflt;
+  }
+  return f.as<bool>();
+}
+
+std::string js_pull_string(const emscripten::val& v, const char* key) {
+  const emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return std::string();
+  }
+  return f.as<std::string>();
+}
+
+const char* js_pull_optional_string(const emscripten::val& v, const char* key, std::string& storage) {
+  const emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return nullptr;
+  }
+  storage = f.as<std::string>();
+  return storage.c_str();
+}
+
+uint32_t js_length(const emscripten::val& arr) {
+  return arr["length"].as<uint32_t>();
+}
+
+fm_merge_range js_pull_range(const emscripten::val& v) {
+  fm_merge_range m{};
+  m.first_row = v["firstRow"].as<uint32_t>();
+  m.last_row = v["lastRow"].as<uint32_t>();
+  m.first_col = v["firstCol"].as<uint32_t>();
+  m.last_col = v["lastCol"].as<uint32_t>();
+  return m;
+}
+
+std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char* key) {
+  std::vector<fm_merge_range> out;
+  if (!v.hasOwnProperty(key)) {
+    return out;
+  }
+  const emscripten::val arr = v[key];
+  if (!arr.isArray()) {
+    return out;
+  }
+  const uint32_t n = js_length(arr);
+  out.reserve(n);
+  for (uint32_t i = 0; i < n; ++i) {
+    out.push_back(js_pull_range(arr[i]));
+  }
+  return out;
+}
+
+std::vector<uint32_t> js_pull_u32_list(const emscripten::val& arr) {
+  std::vector<uint32_t> out;
+  if (arr.isUndefined() || arr.isNull()) {
+    return out;
+  }
+  const uint32_t n = js_length(arr);
+  out.reserve(n);
+  for (uint32_t i = 0; i < n; ++i) {
+    out.push_back(arr[i].as<uint32_t>());
+  }
+  return out;
+}
+
+bool js_pull_u32_array(const emscripten::val& arr, uint32_t* out, uint32_t n) {
+  if (!arr.isArray() || js_length(arr) != n) {
+    return false;
+  }
+  for (uint32_t i = 0; i < n; ++i) {
+    out[i] = arr[i].as<uint32_t>();
+  }
+  return true;
+}
+
+fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key) {
+  fm_color_spec spec{};
+  const emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return spec;
+  }
+  spec.kind = js_pull_u8(f, "kind", 0);
+  spec.rgb = js_pull_u32(f, "rgb", 0U);
+  spec.theme = js_pull_u32(f, "theme", 0U);
+  spec.tint = js_pull_double(f, "tint", 0.0);
+  spec.indexed = js_pull_u32(f, "indexed", 0U);
+  return spec;
+}
+
+fm_border_side js_pull_border_side(const emscripten::val& v) {
+  fm_border_side s{};
+  if (v.isUndefined() || v.isNull()) {
+    return s;
+  }
+  s.style = js_pull_u8(v, "style", 0);
+  s.color_argb = js_pull_u32(v, "colorArgb", 0U);
+  s.color = js_pull_color_spec(v, "color");
+  return s;
+}
+
+void js_set_cstr(emscripten::val& o, const char* key, const char* s) {
+  o.set(key, s != nullptr ? std::string(s) : std::string());
+}
+
+void js_set_cstr_fields(emscripten::val& o, const JsStrField* fields, std::size_t n) {
+  for (std::size_t i = 0; i < n; ++i) {
+    js_set_cstr(o, fields[i].key, fields[i].value);
+  }
+}
+
+emscripten::val js_color_spec(const fm_color_spec& spec) {
+  emscripten::val o = emscripten::val::object();
+  o.set("kind", static_cast<uint32_t>(spec.kind));
+  o.set("rgb", spec.rgb);
+  o.set("theme", spec.theme);
+  o.set("tint", spec.tint);
+  o.set("indexed", spec.indexed);
+  return o;
+}
+
+emscripten::val js_border_side(const fm_border_side& s) {
+  emscripten::val o = emscripten::val::object();
+  o.set("style", static_cast<uint32_t>(s.style));
+  o.set("colorArgb", s.color_argb);
+  o.set("color", js_color_spec(s.color));
+  return o;
 }
 
 }  // namespace parts

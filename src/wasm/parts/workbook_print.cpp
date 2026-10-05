@@ -50,7 +50,7 @@ emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGette
     return out;
   }
   out.set("status", ok_status());
-  out.set("xml", xml != nullptr ? std::string(xml) : std::string());
+  js_set_cstr(out, "xml", xml);
   return out;
 }
 
@@ -89,23 +89,6 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
   out.set("status", ok_status());
   out.set("breaks", items);
   return out;
-}
-
-/// Reads an optional string field as the C tri-state: a missing key stays
-/// `nullptr` (leave the section alone), a present one owns its bytes in
-/// `storage` so the pointer outlives this call.
-const char* pull_optional_string(const emscripten::val& object, const char* key, std::string& storage) {
-  const emscripten::val field = object[key];
-  if (field.isUndefined() || field.isNull()) {
-    return nullptr;
-  }
-  storage = field.as<std::string>();
-  return storage.c_str();
-}
-
-bool has_field(const emscripten::val& object, const char* key) {
-  const emscripten::val field = object[key];
-  return !field.isUndefined() && !field.isNull();
 }
 
 }  // namespace
@@ -176,7 +159,7 @@ emscripten::val JsWorkbook::getSheetPrintArea(uint32_t sheet) const {
     return out;
   }
   out.set("status", ok_status());
-  out.set("ranges", ranges != nullptr ? std::string(ranges) : std::string());
+  js_set_cstr(out, "ranges", ranges);
   return out;
 }
 
@@ -205,8 +188,8 @@ emscripten::val JsWorkbook::getSheetPrintTitles(uint32_t sheet) const {
     return out;
   }
   out.set("status", ok_status());
-  out.set("repeatRows", rows != nullptr ? std::string(rows) : std::string());
-  out.set("repeatCols", cols != nullptr ? std::string(cols) : std::string());
+  js_set_cstr(out, "repeatRows", rows);
+  js_set_cstr(out, "repeatCols", cols);
   return out;
 }
 
@@ -269,17 +252,17 @@ JsStatus JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
     return error_status(7000);
   }
   fm_page_setup_t out{};
-  out.orientation_engaged = has_field(setup, "orientation") ? 1 : 0;
+  out.orientation_engaged = js_has(setup, "orientation") ? 1 : 0;
   out.orientation = js_pull_u32(setup, "orientation", 0U);
-  out.paper_size_engaged = has_field(setup, "paperSize") ? 1 : 0;
+  out.paper_size_engaged = js_has(setup, "paperSize") ? 1 : 0;
   out.paper_size = js_pull_u32(setup, "paperSize", 0U);
-  out.scale_engaged = has_field(setup, "scale") ? 1 : 0;
+  out.scale_engaged = js_has(setup, "scale") ? 1 : 0;
   out.scale = js_pull_u32(setup, "scale", 0U);
-  out.fit_to_width_engaged = has_field(setup, "fitToWidth") ? 1 : 0;
+  out.fit_to_width_engaged = js_has(setup, "fitToWidth") ? 1 : 0;
   out.fit_to_width = js_pull_u32(setup, "fitToWidth", 0U);
-  out.fit_to_height_engaged = has_field(setup, "fitToHeight") ? 1 : 0;
+  out.fit_to_height_engaged = js_has(setup, "fitToHeight") ? 1 : 0;
   out.fit_to_height = js_pull_u32(setup, "fitToHeight", 0U);
-  out.fit_to_page_engaged = has_field(setup, "fitToPage") ? 1 : 0;
+  out.fit_to_page_engaged = js_has(setup, "fitToPage") ? 1 : 0;
   out.fit_to_page = js_pull_bool(setup, "fitToPage", false) ? 1 : 0;
   return status_from_rc(fm_sheet_set_page_setup(handle_, sheet, &out));
 }
@@ -289,17 +272,17 @@ JsStatus JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins
     return error_status(7000);
   }
   fm_page_margins_t out{};
-  out.left_engaged = has_field(margins, "left") ? 1 : 0;
+  out.left_engaged = js_has(margins, "left") ? 1 : 0;
   out.left = js_pull_double(margins, "left", 0.0);
-  out.right_engaged = has_field(margins, "right") ? 1 : 0;
+  out.right_engaged = js_has(margins, "right") ? 1 : 0;
   out.right = js_pull_double(margins, "right", 0.0);
-  out.top_engaged = has_field(margins, "top") ? 1 : 0;
+  out.top_engaged = js_has(margins, "top") ? 1 : 0;
   out.top = js_pull_double(margins, "top", 0.0);
-  out.bottom_engaged = has_field(margins, "bottom") ? 1 : 0;
+  out.bottom_engaged = js_has(margins, "bottom") ? 1 : 0;
   out.bottom = js_pull_double(margins, "bottom", 0.0);
-  out.header_engaged = has_field(margins, "header") ? 1 : 0;
+  out.header_engaged = js_has(margins, "header") ? 1 : 0;
   out.header = js_pull_double(margins, "header", 0.0);
-  out.footer_engaged = has_field(margins, "footer") ? 1 : 0;
+  out.footer_engaged = js_has(margins, "footer") ? 1 : 0;
   out.footer = js_pull_double(margins, "footer", 0.0);
   return status_from_rc(fm_sheet_set_page_margins(handle_, sheet, &out));
 }
@@ -309,13 +292,13 @@ JsStatus JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val option
     return error_status(7000);
   }
   fm_print_options_t out{};
-  out.grid_lines_engaged = has_field(options, "gridLines") ? 1 : 0;
+  out.grid_lines_engaged = js_has(options, "gridLines") ? 1 : 0;
   out.grid_lines = js_pull_bool(options, "gridLines", false) ? 1 : 0;
-  out.headings_engaged = has_field(options, "headings") ? 1 : 0;
+  out.headings_engaged = js_has(options, "headings") ? 1 : 0;
   out.headings = js_pull_bool(options, "headings", false) ? 1 : 0;
-  out.horizontal_centered_engaged = has_field(options, "horizontalCentered") ? 1 : 0;
+  out.horizontal_centered_engaged = js_has(options, "horizontalCentered") ? 1 : 0;
   out.horizontal_centered = js_pull_bool(options, "horizontalCentered", false) ? 1 : 0;
-  out.vertical_centered_engaged = has_field(options, "verticalCentered") ? 1 : 0;
+  out.vertical_centered_engaged = js_has(options, "verticalCentered") ? 1 : 0;
   out.vertical_centered = js_pull_bool(options, "verticalCentered", false) ? 1 : 0;
   return status_from_rc(fm_sheet_set_print_options(handle_, sheet, &out));
 }
@@ -333,19 +316,19 @@ JsStatus JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val header
   std::string first_header;
   std::string first_footer;
   fm_header_footer_t out{};
-  out.odd_header = pull_optional_string(headerFooter, "oddHeader", odd_header);
-  out.odd_footer = pull_optional_string(headerFooter, "oddFooter", odd_footer);
-  out.even_header = pull_optional_string(headerFooter, "evenHeader", even_header);
-  out.even_footer = pull_optional_string(headerFooter, "evenFooter", even_footer);
-  out.first_header = pull_optional_string(headerFooter, "firstHeader", first_header);
-  out.first_footer = pull_optional_string(headerFooter, "firstFooter", first_footer);
-  out.different_odd_even_engaged = has_field(headerFooter, "differentOddEven") ? 1 : 0;
+  out.odd_header = js_pull_optional_string(headerFooter, "oddHeader", odd_header);
+  out.odd_footer = js_pull_optional_string(headerFooter, "oddFooter", odd_footer);
+  out.even_header = js_pull_optional_string(headerFooter, "evenHeader", even_header);
+  out.even_footer = js_pull_optional_string(headerFooter, "evenFooter", even_footer);
+  out.first_header = js_pull_optional_string(headerFooter, "firstHeader", first_header);
+  out.first_footer = js_pull_optional_string(headerFooter, "firstFooter", first_footer);
+  out.different_odd_even_engaged = js_has(headerFooter, "differentOddEven") ? 1 : 0;
   out.different_odd_even = js_pull_bool(headerFooter, "differentOddEven", false) ? 1 : 0;
-  out.different_first_engaged = has_field(headerFooter, "differentFirst") ? 1 : 0;
+  out.different_first_engaged = js_has(headerFooter, "differentFirst") ? 1 : 0;
   out.different_first = js_pull_bool(headerFooter, "differentFirst", false) ? 1 : 0;
-  out.scale_with_doc_engaged = has_field(headerFooter, "scaleWithDoc") ? 1 : 0;
+  out.scale_with_doc_engaged = js_has(headerFooter, "scaleWithDoc") ? 1 : 0;
   out.scale_with_doc = js_pull_bool(headerFooter, "scaleWithDoc", false) ? 1 : 0;
-  out.align_with_margins_engaged = has_field(headerFooter, "alignWithMargins") ? 1 : 0;
+  out.align_with_margins_engaged = js_has(headerFooter, "alignWithMargins") ? 1 : 0;
   out.align_with_margins = js_pull_bool(headerFooter, "alignWithMargins", false) ? 1 : 0;
   return status_from_rc(fm_sheet_set_header_footer(handle_, sheet, &out));
 }

@@ -3,7 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -35,9 +34,8 @@ constexpr std::array<std::string_view, 35> kDynamicNames = {
 constexpr std::array<std::string_view, 4> kSortByNames = {"value", "cellColor", "fontColor", "icon"};
 constexpr std::array<std::string_view, 3> kSortMethodNames = {"none", "pinYin", "stroke"};
 
-template <std::size_t N>
-std::optional<std::size_t> lookup(const std::array<std::string_view, N>& names, std::string_view text) {
-  for (std::size_t i = 0; i < N; ++i) {
+std::optional<std::size_t> lookup(const std::string_view* names, std::size_t count, std::string_view text) {
+  for (std::size_t i = 0; i < count; ++i) {
     if (names[i] == text) {
       return i;
     }
@@ -45,39 +43,96 @@ std::optional<std::size_t> lookup(const std::array<std::string_view, N>& names, 
   return std::nullopt;
 }
 
+/// How one attribute is parsed and serialized. The target a table entry binds
+/// to has the type named in each comment.
+enum class AttrKind : std::uint8_t {
+  kBool,            ///< `bool`; written when it differs from `bool_default`.
+  kU32,             ///< `std::optional<std::uint32_t>`; written when engaged.
+  kU32Required,     ///< `std::uint32_t`; absence fails, always written.
+  kNumber,          ///< `std::optional<double>`; written when engaged.
+  kNumberRequired,  ///< `double`; absence fails, always written.
+  kText,            ///< `std::string`; written when non-empty.
+  kTextAlways,      ///< `std::string`; always written.
+  kChoice,          ///< One-byte enum indexing `choices`; written unless 0.
+  kChoiceRequired,  ///< One-byte enum indexing `choices`; absence fails, always written.
+  kRect,            ///< `MergeRange` as an A1 `ref`; always written.
+  kExtras,          ///< `RawAttributes`: every attribute the table does not name.
+};
+
+/// One attribute of an element. A table lists them in serialization order; an
+/// element whose table has no `kExtras` entry rejects unlisted attributes.
+struct AttrSpec {
+  const char* name;
+  AttrKind kind;
+  bool bool_default = false;
+  const std::string_view* choices = nullptr;
+  std::size_t choice_count = 0;
+};
+
+constexpr AttrSpec choice_attr(const char* name, AttrKind kind, const std::string_view* names, std::size_t count) {
+  return AttrSpec{name, kind, false, names, count};
+}
+
+constexpr AttrSpec kRootAttrs[] = {{"ref", AttrKind::kRect}, {nullptr, AttrKind::kExtras}};
+constexpr AttrSpec kColumnAttrs[] = {{"colId", AttrKind::kU32Required},
+                                     {"hiddenButton", AttrKind::kBool, false},
+                                     {"showButton", AttrKind::kBool, true},
+                                     {nullptr, AttrKind::kExtras}};
+constexpr AttrSpec kFiltersAttrs[] = {{"blank", AttrKind::kBool, false}, {"calendarType", AttrKind::kText}};
+constexpr AttrSpec kFilterAttrs[] = {{"val", AttrKind::kTextAlways}};
+constexpr AttrSpec kDateGroupAttrs[] = {
+    {"year", AttrKind::kU32},
+    {"month", AttrKind::kU32},
+    {"day", AttrKind::kU32},
+    {"hour", AttrKind::kU32},
+    {"minute", AttrKind::kU32},
+    {"second", AttrKind::kU32},
+    choice_attr("dateTimeGrouping", AttrKind::kChoiceRequired, kGroupingNames.data(), kGroupingNames.size())};
+constexpr AttrSpec kCustomFiltersAttrs[] = {{"and", AttrKind::kBool, false}};
+constexpr AttrSpec kCustomFilterAttrs[] = {
+    choice_attr("operator", AttrKind::kChoice, kOperatorNames.data(), kOperatorNames.size()),
+    {"val", AttrKind::kTextAlways}};
+constexpr AttrSpec kTop10Attrs[] = {{"top", AttrKind::kBool, true},
+                                    {"percent", AttrKind::kBool, false},
+                                    {"val", AttrKind::kNumberRequired},
+                                    {"filterVal", AttrKind::kNumber}};
+constexpr AttrSpec kDynamicAttrs[] = {
+    choice_attr("type", AttrKind::kChoiceRequired, kDynamicNames.data(), kDynamicNames.size()),
+    {"val", AttrKind::kNumber},
+    {"valIso", AttrKind::kText},
+    {"maxVal", AttrKind::kNumber},
+    {"maxValIso", AttrKind::kText}};
+constexpr AttrSpec kColorAttrs[] = {{"dxfId", AttrKind::kU32}, {"cellColor", AttrKind::kBool, true}};
+constexpr AttrSpec kIconAttrs[] = {
+    choice_attr("iconSet", AttrKind::kChoiceRequired, cf::kIconSetNames.data(), cf::kIconSetNames.size()),
+    {"iconId", AttrKind::kU32}};
+constexpr AttrSpec kSortStateAttrs[] = {
+    {"columnSort", AttrKind::kBool, false},
+    {"caseSensitive", AttrKind::kBool, false},
+    choice_attr("sortMethod", AttrKind::kChoice, kSortMethodNames.data(), kSortMethodNames.size()),
+    {nullptr, AttrKind::kExtras},
+    {"ref", AttrKind::kRect}};
+/// `iconSet` (index `kSortConditionIconSet`) is written by hand: an icon sort
+/// names its set even when it is the default one.
+constexpr AttrSpec kSortConditionAttrs[] = {
+    {"descending", AttrKind::kBool, false},
+    choice_attr("sortBy", AttrKind::kChoice, kSortByNames.data(), kSortByNames.size()),
+    {"ref", AttrKind::kRect},
+    {"customList", AttrKind::kText},
+    {"dxfId", AttrKind::kU32},
+    choice_attr("iconSet", AttrKind::kChoice, cf::kIconSetNames.data(), cf::kIconSetNames.size()),
+    {"iconId", AttrKind::kU32}};
+constexpr std::size_t kSortConditionIconSet = 5U;
+
+static_assert(sizeof(FilterOperator) == 1U && sizeof(DynamicFilterType) == 1U && sizeof(cf::IconSetName) == 1U &&
+                  sizeof(SortBy) == 1U && sizeof(SortMethod) == 1U && sizeof(DateTimeGrouping) == 1U,
+              "kChoice targets are stored through one byte");
+
 /// Parse state: `ok` turns false on the first construct the model cannot carry.
 struct Reader {
   bool ok = true;
 
   void fail() { ok = false; }
-
-  /// Rejects any attribute not in `known`.
-  void only(const pugi::xml_node& node, std::initializer_list<std::string_view> known) {
-    for (const pugi::xml_attribute& attr : node.attributes()) {
-      bool listed = false;
-      for (const std::string_view name : known) {
-        listed = listed || name == attr.name();
-      }
-      if (!listed) {
-        fail();
-      }
-    }
-  }
-
-  /// Retains every attribute not in `known`, verbatim and in order.
-  static RawAttributes extras(const pugi::xml_node& node, std::initializer_list<std::string_view> known) {
-    RawAttributes out;
-    for (const pugi::xml_attribute& attr : node.attributes()) {
-      bool listed = false;
-      for (const std::string_view name : known) {
-        listed = listed || name == attr.name();
-      }
-      if (!listed) {
-        out.emplace_back(attr.name(), attr.value());
-      }
-    }
-    return out;
-  }
 
   bool boolean(const pugi::xml_node& node, const char* name, bool def) {
     const pugi::xml_attribute attr = node.attribute(name);
@@ -120,21 +175,6 @@ struct Reader {
     return v;
   }
 
-  template <std::size_t N>
-  std::size_t choice(const pugi::xml_node& node, const char* name, const std::array<std::string_view, N>& names,
-                     std::size_t def) {
-    const pugi::xml_attribute attr = node.attribute(name);
-    if (!attr) {
-      return def;
-    }
-    const std::optional<std::size_t> v = lookup(names, attr.value());
-    if (!v) {
-      fail();
-      return def;
-    }
-    return *v;
-  }
-
   MergeRange rect(const pugi::xml_node& node) {
     const std::optional<MergeRange> r = parse_a1_rectangle(node.attribute("ref").value());
     if (!r) {
@@ -142,6 +182,93 @@ struct Reader {
       return {};
     }
     return *r;
+  }
+
+  /// Reads every attribute `specs` names into the matching `targets` entry.
+  void attrs(const pugi::xml_node& node, const AttrSpec* specs, std::size_t n, void* const* targets) {
+    RawAttributes* extras = nullptr;
+    for (std::size_t i = 0; i < n; ++i) {
+      if (specs[i].kind == AttrKind::kExtras) {
+        extras = static_cast<RawAttributes*>(targets[i]);
+        extras->clear();
+      }
+    }
+    for (const pugi::xml_attribute& attr : node.attributes()) {
+      bool listed = false;
+      for (std::size_t i = 0; i < n; ++i) {
+        listed = listed || (specs[i].name != nullptr && std::string_view(specs[i].name) == attr.name());
+      }
+      if (listed) {
+        continue;
+      }
+      if (extras != nullptr) {
+        extras->emplace_back(attr.name(), attr.value());
+      } else {
+        fail();
+      }
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+      const AttrSpec& spec = specs[i];
+      void* target = targets[i];
+      switch (spec.kind) {
+        case AttrKind::kBool:
+          *static_cast<bool*>(target) = boolean(node, spec.name, spec.bool_default);
+          break;
+        case AttrKind::kU32:
+          *static_cast<std::optional<std::uint32_t>*>(target) = u32(node, spec.name);
+          break;
+        case AttrKind::kU32Required: {
+          const std::optional<std::uint32_t> v = u32(node, spec.name);
+          if (!v) {
+            fail();
+          }
+          *static_cast<std::uint32_t*>(target) = v.value_or(0U);
+          break;
+        }
+        case AttrKind::kNumber:
+          *static_cast<std::optional<double>*>(target) = number(node, spec.name);
+          break;
+        case AttrKind::kNumberRequired: {
+          const std::optional<double> v = number(node, spec.name);
+          if (!v) {
+            fail();
+          }
+          *static_cast<double*>(target) = v.value_or(0.0);
+          break;
+        }
+        case AttrKind::kText:
+        case AttrKind::kTextAlways:
+          *static_cast<std::string*>(target) = node.attribute(spec.name).value();
+          break;
+        case AttrKind::kChoice:
+        case AttrKind::kChoiceRequired: {
+          const pugi::xml_attribute attr = node.attribute(spec.name);
+          std::size_t index = 0;
+          if (attr) {
+            const std::optional<std::size_t> v = lookup(spec.choices, spec.choice_count, attr.value());
+            if (v) {
+              index = *v;
+            } else {
+              fail();
+            }
+          } else if (spec.kind == AttrKind::kChoiceRequired) {
+            fail();
+          }
+          *static_cast<std::uint8_t*>(target) = static_cast<std::uint8_t>(index);
+          break;
+        }
+        case AttrKind::kRect:
+          *static_cast<MergeRange*>(target) = rect(node);
+          break;
+        case AttrKind::kExtras:
+          break;
+      }
+    }
+  }
+
+  template <std::size_t N>
+  void attrs(const pugi::xml_node& node, const AttrSpec (&specs)[N], void* const (&targets)[N]) {
+    attrs(node, specs, N, targets);
   }
 };
 
@@ -152,39 +279,33 @@ bool is_element(const pugi::xml_node& node) {
 /// Parses one `<dateGroupItem>` (any prefix); fields present must be exactly
 /// those its grouping uses.
 std::optional<DateGroupItem> read_date_group(Reader& r, const pugi::xml_node& node) {
-  r.only(node, {"year", "month", "day", "hour", "minute", "second", "dateTimeGrouping"});
-  const std::optional<std::size_t> grouping = lookup(kGroupingNames, node.attribute("dateTimeGrouping").value());
-  if (!grouping) {
-    r.fail();
+  std::array<std::optional<std::uint32_t>, 6> fields;
+  DateGroupItem item;
+  r.attrs(node, kDateGroupAttrs,
+          {&fields[0], &fields[1], &fields[2], &fields[3], &fields[4], &fields[5], &item.grouping});
+  if (!r.ok) {
     return std::nullopt;
   }
-  constexpr std::array<const char*, 6> kFields = {"year", "month", "day", "hour", "minute", "second"};
   constexpr std::array<std::uint32_t, 6> kMax = {9999U, 12U, 31U, 23U, 59U, 59U};
-  std::array<std::uint32_t, 6> fields{};
-  for (std::size_t i = 0; i < kFields.size(); ++i) {
-    const std::optional<std::uint32_t> v = r.u32(node, kFields[i]);
-    if (v.has_value() != (i <= *grouping) || (v && *v > kMax[i])) {
+  for (std::size_t i = 0; i < fields.size(); ++i) {
+    if (fields[i].has_value() != (i <= static_cast<std::size_t>(item.grouping)) ||
+        (fields[i] && *fields[i] > kMax[i])) {
       r.fail();
       return std::nullopt;
     }
-    fields[i] = v.value_or(0U);
   }
-  DateGroupItem item;
-  item.year = static_cast<std::uint16_t>(fields[0]);
-  item.month = static_cast<std::uint8_t>(fields[1]);
-  item.day = static_cast<std::uint8_t>(fields[2]);
-  item.hour = static_cast<std::uint8_t>(fields[3]);
-  item.minute = static_cast<std::uint8_t>(fields[4]);
-  item.second = static_cast<std::uint8_t>(fields[5]);
-  item.grouping = static_cast<DateTimeGrouping>(*grouping);
+  item.year = static_cast<std::uint16_t>(fields[0].value_or(0U));
+  item.month = static_cast<std::uint8_t>(fields[1].value_or(0U));
+  item.day = static_cast<std::uint8_t>(fields[2].value_or(0U));
+  item.hour = static_cast<std::uint8_t>(fields[3].value_or(0U));
+  item.minute = static_cast<std::uint8_t>(fields[4].value_or(0U));
+  item.second = static_cast<std::uint8_t>(fields[5].value_or(0U));
   return item;
 }
 
 /// Parses `<filters>` children named `<prefix>filter` / `<prefix>dateGroupItem`.
 void read_value_filters(Reader& r, const pugi::xml_node& node, std::string_view prefix, ValueFilters& out) {
-  r.only(node, {"blank", "calendarType"});
-  out.blank = r.boolean(node, "blank", false);
-  out.calendar_type = node.attribute("calendarType").value();
+  r.attrs(node, kFiltersAttrs, {&out.blank, &out.calendar_type});
   if (out.calendar_type == "none") {
     out.calendar_type.clear();
   }
@@ -199,8 +320,8 @@ void read_value_filters(Reader& r, const pugi::xml_node& node, std::string_view 
     }
     const std::string_view local = name.substr(prefix.size());
     if (local == "filter") {
-      r.only(child, {"val"});
-      out.values.emplace_back(child.attribute("val").value());
+      std::string& value = out.values.emplace_back();
+      r.attrs(child, kFilterAttrs, {&value});
     } else if (local == "dateGroupItem") {
       if (std::optional<DateGroupItem> item = read_date_group(r, child)) {
         out.date_groups.push_back(*item);
@@ -253,15 +374,10 @@ bool lift_rich_filter_ext(const pugi::xml_node& ext, ValueFilters& out) {
 }
 
 void read_filter_column(Reader& r, const pugi::xml_node& node, FilterColumn& col) {
-  const std::optional<std::uint32_t> col_id = r.u32(node, "colId");
-  if (!col_id) {
-    r.fail();
+  r.attrs(node, kColumnAttrs, {&col.col_id, &col.hidden_button, &col.show_button, &col.extra_attrs});
+  if (!r.ok) {
     return;
   }
-  col.col_id = *col_id;
-  col.hidden_button = r.boolean(node, "hiddenButton", false);
-  col.show_button = r.boolean(node, "showButton", true);
-  col.extra_attrs = Reader::extras(node, {"colId", "hiddenButton", "showButton"});
   for (const pugi::xml_node& child : node.children()) {
     if (!is_element(child)) {
       continue;
@@ -278,8 +394,7 @@ void read_filter_column(Reader& r, const pugi::xml_node& node, FilterColumn& col
       read_value_filters(r, child, "", col.values);
     } else if (name == "customFilters") {
       col.kind = FilterKind::kCustom;
-      r.only(child, {"and"});
-      col.custom.and_join = r.boolean(child, "and", false);
+      r.attrs(child, kCustomFiltersAttrs, {&col.custom.and_join});
       for (const pugi::xml_node& item : child.children()) {
         if (!is_element(item)) {
           continue;
@@ -288,50 +403,26 @@ void read_filter_column(Reader& r, const pugi::xml_node& node, FilterColumn& col
           r.fail();
           return;
         }
-        r.only(item, {"operator", "val"});
-        CustomFilter filter;
-        filter.op = static_cast<FilterOperator>(r.choice(item, "operator", kOperatorNames, 0U));
-        filter.val = item.attribute("val").value();
-        col.custom.filters.push_back(std::move(filter));
+        CustomFilter& filter = col.custom.filters.emplace_back();
+        r.attrs(item, kCustomFilterAttrs, {&filter.op, &filter.val});
       }
       if (col.custom.filters.empty() || col.custom.filters.size() > 2U) {
         r.fail();
       }
     } else if (name == "top10") {
       col.kind = FilterKind::kTop10;
-      r.only(child, {"top", "percent", "val", "filterVal"});
-      col.top10.top = r.boolean(child, "top", true);
-      col.top10.percent = r.boolean(child, "percent", false);
-      const std::optional<double> val = r.number(child, "val");
-      if (!val) {
-        r.fail();
-      }
-      col.top10.val = val.value_or(0.0);
-      col.top10.filter_val = r.number(child, "filterVal");
+      r.attrs(child, kTop10Attrs, {&col.top10.top, &col.top10.percent, &col.top10.val, &col.top10.filter_val});
     } else if (name == "dynamicFilter") {
       col.kind = FilterKind::kDynamic;
-      r.only(child, {"type", "val", "valIso", "maxVal", "maxValIso"});
-      if (!child.attribute("type")) {
-        r.fail();
-      }
-      col.dynamic.type = static_cast<DynamicFilterType>(r.choice(child, "type", kDynamicNames, 0U));
-      col.dynamic.val = r.number(child, "val");
-      col.dynamic.val_iso = child.attribute("valIso").value();
-      col.dynamic.max_val = r.number(child, "maxVal");
-      col.dynamic.max_val_iso = child.attribute("maxValIso").value();
+      r.attrs(
+          child, kDynamicAttrs,
+          {&col.dynamic.type, &col.dynamic.val, &col.dynamic.val_iso, &col.dynamic.max_val, &col.dynamic.max_val_iso});
     } else if (name == "colorFilter") {
       col.kind = FilterKind::kColor;
-      r.only(child, {"dxfId", "cellColor"});
-      col.color.dxf_id = r.u32(child, "dxfId");
-      col.color.cell_color = r.boolean(child, "cellColor", true);
+      r.attrs(child, kColorAttrs, {&col.color.dxf_id, &col.color.cell_color});
     } else if (name == "iconFilter") {
       col.kind = FilterKind::kIcon;
-      r.only(child, {"iconSet", "iconId"});
-      if (!child.attribute("iconSet")) {
-        r.fail();
-      }
-      col.icon.icon_set = static_cast<cf::IconSetName>(r.choice(child, "iconSet", cf::kIconSetNames, 0U));
-      col.icon.icon_id = r.u32(child, "iconId");
+      r.attrs(child, kIconAttrs, {&col.icon.icon_set, &col.icon.icon_id});
     } else if (name == "extLst") {
       for (const pugi::xml_node& ext : child.children()) {
         if (!is_element(ext)) {
@@ -355,38 +446,23 @@ void read_filter_column(Reader& r, const pugi::xml_node& node, FilterColumn& col
 }
 
 void read_sort_state(Reader& r, const pugi::xml_node& node, SortState& sort) {
-  sort.ref = r.rect(node);
-  sort.column_sort = r.boolean(node, "columnSort", false);
-  sort.case_sensitive = r.boolean(node, "caseSensitive", false);
-  sort.sort_method = static_cast<SortMethod>(r.choice(node, "sortMethod", kSortMethodNames, 0U));
-  sort.extra_attrs = Reader::extras(node, {"ref", "columnSort", "caseSensitive", "sortMethod"});
+  r.attrs(node, kSortStateAttrs,
+          {&sort.column_sort, &sort.case_sensitive, &sort.sort_method, &sort.extra_attrs, &sort.ref});
   for (const pugi::xml_node& child : node.children()) {
     if (!is_element(child)) {
       continue;
     }
     const std::string_view name = child.name();
     if (name == "sortCondition") {
-      r.only(child, {"descending", "sortBy", "ref", "customList", "dxfId", "iconSet", "iconId"});
-      SortCondition cond;
-      cond.ref = r.rect(child);
-      cond.descending = r.boolean(child, "descending", false);
-      cond.sort_by = static_cast<SortBy>(r.choice(child, "sortBy", kSortByNames, 0U));
-      cond.custom_list = child.attribute("customList").value();
-      cond.dxf_id = r.u32(child, "dxfId");
-      cond.icon_set = static_cast<cf::IconSetName>(r.choice(child, "iconSet", cf::kIconSetNames, 0U));
-      cond.icon_id = r.u32(child, "iconId");
-      sort.conditions.push_back(std::move(cond));
+      SortCondition& cond = sort.conditions.emplace_back();
+      r.attrs(
+          child, kSortConditionAttrs,
+          {&cond.descending, &cond.sort_by, &cond.ref, &cond.custom_list, &cond.dxf_id, &cond.icon_set, &cond.icon_id});
     } else if (name == "extLst" && sort.ext_lst_xml.empty()) {
       sort.ext_lst_xml = io::raw_xml(child);
     } else {
       r.fail();
     }
-  }
-}
-
-void append_bool(std::string& out, const char* name, bool value, bool def) {
-  if (value != def) {
-    io::append_xml_attr(out, name, value ? "1" : "0");
   }
 }
 
@@ -404,14 +480,71 @@ void append_ref(std::string& out, const MergeRange& rect) {
   io::append_xml_attr(out, "ref", ref);
 }
 
+/// Writes the attributes `specs` describes, in table order, from `targets`.
+void write_attrs(std::string& out, const AttrSpec* specs, std::size_t n, const void* const* targets) {
+  for (std::size_t i = 0; i < n; ++i) {
+    const AttrSpec& spec = specs[i];
+    const void* target = targets[i];
+    switch (spec.kind) {
+      case AttrKind::kBool: {
+        const bool value = *static_cast<const bool*>(target);
+        if (value != spec.bool_default) {
+          io::append_xml_attr(out, spec.name, value ? "1" : "0");
+        }
+        break;
+      }
+      case AttrKind::kU32:
+        if (const auto& value = *static_cast<const std::optional<std::uint32_t>*>(target)) {
+          io::append_xml_attr_uint(out, spec.name, *value);
+        }
+        break;
+      case AttrKind::kU32Required:
+        io::append_xml_attr_uint(out, spec.name, *static_cast<const std::uint32_t*>(target));
+        break;
+      case AttrKind::kNumber:
+        if (const auto& value = *static_cast<const std::optional<double>*>(target)) {
+          append_number(out, spec.name, *value);
+        }
+        break;
+      case AttrKind::kNumberRequired:
+        append_number(out, spec.name, *static_cast<const double*>(target));
+        break;
+      case AttrKind::kText:
+      case AttrKind::kTextAlways: {
+        const std::string& value = *static_cast<const std::string*>(target);
+        if (spec.kind == AttrKind::kTextAlways || !value.empty()) {
+          io::append_xml_attr(out, spec.name, value);
+        }
+        break;
+      }
+      case AttrKind::kChoice:
+      case AttrKind::kChoiceRequired: {
+        const std::uint8_t index = *static_cast<const std::uint8_t*>(target);
+        if (spec.kind == AttrKind::kChoiceRequired || index != 0U) {
+          io::append_xml_attr(out, spec.name, spec.choices[index]);
+        }
+        break;
+      }
+      case AttrKind::kRect:
+        append_ref(out, *static_cast<const MergeRange*>(target));
+        break;
+      case AttrKind::kExtras:
+        io::append_raw_attrs(out, *static_cast<const RawAttributes*>(target));
+        break;
+    }
+  }
+}
+
+template <std::size_t N>
+void write_attrs(std::string& out, const AttrSpec (&specs)[N], const void* const (&targets)[N]) {
+  write_attrs(out, specs, N, targets);
+}
+
 void append_value_filters(std::string& out, const ValueFilters& values, std::string_view prefix) {
   out.push_back('<');
   out.append(prefix);
   out.append("filters");
-  append_bool(out, "blank", values.blank, false);
-  if (!values.calendar_type.empty()) {
-    io::append_xml_attr(out, "calendarType", values.calendar_type);
-  }
+  write_attrs(out, kFiltersAttrs, {&values.blank, &values.calendar_type});
   if (values.values.empty() && values.date_groups.empty()) {
     out.append("/>");
     return;
@@ -421,7 +554,7 @@ void append_value_filters(std::string& out, const ValueFilters& values, std::str
     out.push_back('<');
     out.append(prefix);
     out.append("filter");
-    io::append_xml_attr(out, "val", value);
+    write_attrs(out, kFilterAttrs, {&value});
     out.append("/>");
   }
   for (const DateGroupItem& item : values.date_groups) {
@@ -429,9 +562,8 @@ void append_value_filters(std::string& out, const ValueFilters& values, std::str
     out.append(prefix);
     out.append("dateGroupItem");
     const std::array<std::uint32_t, 6> fields = {item.year, item.month, item.day, item.hour, item.minute, item.second};
-    constexpr std::array<const char*, 6> kFields = {"year", "month", "day", "hour", "minute", "second"};
     for (std::size_t i = 0; i <= static_cast<std::size_t>(item.grouping); ++i) {
-      io::append_xml_attr_uint(out, kFields[i], fields[i]);
+      io::append_xml_attr_uint(out, kDateGroupAttrs[i].name, fields[i]);
     }
     io::append_xml_attr(out, "dateTimeGrouping", kGroupingNames[static_cast<std::size_t>(item.grouping)]);
     out.append("/>");
@@ -443,10 +575,7 @@ void append_value_filters(std::string& out, const ValueFilters& values, std::str
 
 void append_filter_column(std::string& out, const FilterColumn& col) {
   out.append("<filterColumn");
-  io::append_xml_attr_uint(out, "colId", col.col_id);
-  append_bool(out, "hiddenButton", col.hidden_button, false);
-  append_bool(out, "showButton", col.show_button, true);
-  io::append_raw_attrs(out, col.extra_attrs);
+  write_attrs(out, kColumnAttrs, {&col.col_id, &col.hidden_button, &col.show_button, &col.extra_attrs});
   const bool rich_dates = col.kind == FilterKind::kValues && !col.values.date_groups.empty();
   std::string body;
   switch (col.kind) {
@@ -459,59 +588,35 @@ void append_filter_column(std::string& out, const FilterColumn& col) {
       break;
     case FilterKind::kCustom:
       body.append("<customFilters");
-      append_bool(body, "and", col.custom.and_join, false);
+      write_attrs(body, kCustomFiltersAttrs, {&col.custom.and_join});
       body.push_back('>');
       for (const CustomFilter& filter : col.custom.filters) {
         body.append("<customFilter");
-        if (filter.op != FilterOperator::kEqual) {
-          io::append_xml_attr(body, "operator", kOperatorNames[static_cast<std::size_t>(filter.op)]);
-        }
-        io::append_xml_attr(body, "val", filter.val);
+        write_attrs(body, kCustomFilterAttrs, {&filter.op, &filter.val});
         body.append("/>");
       }
       body.append("</customFilters>");
       break;
     case FilterKind::kTop10:
       body.append("<top10");
-      append_bool(body, "top", col.top10.top, true);
-      append_bool(body, "percent", col.top10.percent, false);
-      append_number(body, "val", col.top10.val);
-      if (col.top10.filter_val) {
-        append_number(body, "filterVal", *col.top10.filter_val);
-      }
+      write_attrs(body, kTop10Attrs, {&col.top10.top, &col.top10.percent, &col.top10.val, &col.top10.filter_val});
       body.append("/>");
       break;
     case FilterKind::kDynamic:
       body.append("<dynamicFilter");
-      io::append_xml_attr(body, "type", kDynamicNames[static_cast<std::size_t>(col.dynamic.type)]);
-      if (col.dynamic.val) {
-        append_number(body, "val", *col.dynamic.val);
-      }
-      if (!col.dynamic.val_iso.empty()) {
-        io::append_xml_attr(body, "valIso", col.dynamic.val_iso);
-      }
-      if (col.dynamic.max_val) {
-        append_number(body, "maxVal", *col.dynamic.max_val);
-      }
-      if (!col.dynamic.max_val_iso.empty()) {
-        io::append_xml_attr(body, "maxValIso", col.dynamic.max_val_iso);
-      }
+      write_attrs(
+          body, kDynamicAttrs,
+          {&col.dynamic.type, &col.dynamic.val, &col.dynamic.val_iso, &col.dynamic.max_val, &col.dynamic.max_val_iso});
       body.append("/>");
       break;
     case FilterKind::kColor:
       body.append("<colorFilter");
-      if (col.color.dxf_id) {
-        io::append_xml_attr_uint(body, "dxfId", *col.color.dxf_id);
-      }
-      append_bool(body, "cellColor", col.color.cell_color, true);
+      write_attrs(body, kColorAttrs, {&col.color.dxf_id, &col.color.cell_color});
       body.append("/>");
       break;
     case FilterKind::kIcon:
       body.append("<iconFilter");
-      io::append_xml_attr(body, "iconSet", cf::kIconSetNames[static_cast<std::size_t>(col.icon.icon_set)]);
-      if (col.icon.icon_id) {
-        io::append_xml_attr_uint(body, "iconId", *col.icon.icon_id);
-      }
+      write_attrs(body, kIconAttrs, {&col.icon.icon_set, &col.icon.icon_id});
       body.append("/>");
       break;
   }
@@ -540,13 +645,8 @@ void append_filter_column(std::string& out, const FilterColumn& col) {
 
 void append_sort_state(std::string& out, const SortState& sort) {
   out.append("<sortState");
-  append_bool(out, "columnSort", sort.column_sort, false);
-  append_bool(out, "caseSensitive", sort.case_sensitive, false);
-  if (sort.sort_method != SortMethod::kNone) {
-    io::append_xml_attr(out, "sortMethod", kSortMethodNames[static_cast<std::size_t>(sort.sort_method)]);
-  }
-  io::append_raw_attrs(out, sort.extra_attrs);
-  append_ref(out, sort.ref);
+  write_attrs(out, kSortStateAttrs,
+              {&sort.column_sort, &sort.case_sensitive, &sort.sort_method, &sort.extra_attrs, &sort.ref});
   if (sort.conditions.empty() && sort.ext_lst_xml.empty()) {
     out.append("/>");
     return;
@@ -554,23 +654,13 @@ void append_sort_state(std::string& out, const SortState& sort) {
   out.push_back('>');
   for (const SortCondition& cond : sort.conditions) {
     out.append("<sortCondition");
-    append_bool(out, "descending", cond.descending, false);
-    if (cond.sort_by != SortBy::kValue) {
-      io::append_xml_attr(out, "sortBy", kSortByNames[static_cast<std::size_t>(cond.sort_by)]);
-    }
-    append_ref(out, cond.ref);
-    if (!cond.custom_list.empty()) {
-      io::append_xml_attr(out, "customList", cond.custom_list);
-    }
-    if (cond.dxf_id) {
-      io::append_xml_attr_uint(out, "dxfId", *cond.dxf_id);
-    }
+    const void* const targets[] = {&cond.descending, &cond.sort_by,  &cond.ref,    &cond.custom_list,
+                                   &cond.dxf_id,     &cond.icon_set, &cond.icon_id};
+    write_attrs(out, kSortConditionAttrs, kSortConditionIconSet, targets);
     if (cond.sort_by == SortBy::kIcon || cond.icon_set != cf::IconSetName::Three_Arrows) {
       io::append_xml_attr(out, "iconSet", cf::kIconSetNames[static_cast<std::size_t>(cond.icon_set)]);
     }
-    if (cond.icon_id) {
-      io::append_xml_attr_uint(out, "iconId", *cond.icon_id);
-    }
+    write_attrs(out, kSortConditionAttrs + kSortConditionIconSet + 1U, 1U, targets + kSortConditionIconSet + 1U);
     out.append("/>");
   }
   out.append(sort.ext_lst_xml);
@@ -641,8 +731,7 @@ Expected<AutoFilter, Error> parse_auto_filter_xml(std::string_view xml) {
   }
   Reader r;
   AutoFilter filter;
-  filter.range = r.rect(root);
-  filter.extra_attrs = Reader::extras(root, {"ref"});
+  r.attrs(root, kRootAttrs, {&filter.range, &filter.extra_attrs});
   for (const pugi::xml_node& child : root.children()) {
     if (!is_element(child) || !r.ok) {
       continue;
@@ -671,8 +760,7 @@ std::string serialize_auto_filter(const AutoFilter& filter) {
     return filter.opaque_xml;
   }
   std::string out = "<autoFilter";
-  append_ref(out, filter.range);
-  io::append_raw_attrs(out, filter.extra_attrs);
+  write_attrs(out, kRootAttrs, {&filter.range, &filter.extra_attrs});
   if (filter.columns.empty() && !filter.sort && filter.ext_lst_xml.empty()) {
     out.append("/>");
     return out;

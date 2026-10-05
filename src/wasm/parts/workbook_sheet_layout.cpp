@@ -514,26 +514,23 @@ JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defa
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  const auto supplied = [&defaults](const char* key) {
-    const emscripten::val f = defaults[key];
-    return !f.isUndefined() && !f.isNull();
-  };
   fm_sheet_format_defaults d{};
   d.default_col_width = js_pull_double(defaults, "defaultColWidth", 0.0);
   d.default_row_height = js_pull_double(defaults, "defaultRowHeight", 0.0);
   d.base_col_width = js_pull_double(defaults, "baseColWidth", 8.0);
-  d.has_default_col_width = js_pull_bool(defaults, "hasDefaultColWidth", supplied("defaultColWidth")) ? 1 : 0;
-  d.has_default_row_height = js_pull_bool(defaults, "hasDefaultRowHeight", supplied("defaultRowHeight")) ? 1 : 0;
+  d.has_default_col_width = js_pull_bool(defaults, "hasDefaultColWidth", js_has(defaults, "defaultColWidth")) ? 1 : 0;
+  d.has_default_row_height =
+      js_pull_bool(defaults, "hasDefaultRowHeight", js_has(defaults, "defaultRowHeight")) ? 1 : 0;
   return status_from_rc(fm_sheet_set_format_defaults(handle_, sheet, &d));
 }
 
 emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range, int32_t mode) const {
   fm_rect_pt r{};
-  const fm_status_t rc =
-      handle_ != nullptr
-          ? fm_sheet_cell_rect_pt(handle_, sheet, range["firstRow"].as<uint32_t>(), range["firstCol"].as<uint32_t>(),
-                                  range["lastRow"].as<uint32_t>(), range["lastCol"].as<uint32_t>(), mode, &r)
-          : 7000;
+  fm_status_t rc = 7000;
+  if (handle_ != nullptr) {
+    const fm_merge_range b = js_pull_range(range);
+    rc = fm_sheet_cell_rect_pt(handle_, sheet, b.first_row, b.first_col, b.last_row, b.last_col, mode, &r);
+  }
   if (rc != 0) {
     r = fm_rect_pt{};
   }
@@ -566,8 +563,8 @@ emscripten::val JsWorkbook::getWidthModel(uint32_t sheet, int32_t mode) const {
   o.set("paddingPt", m.padding_pt);
   o.set("normalFontSize", m.normal_font_size);
   o.set("calibrated", m.calibrated != 0);
-  o.set("normalFontName", std::string(m.normal_font_name != nullptr ? m.normal_font_name : ""));
-  o.set("platform", std::string(m.platform != nullptr ? m.platform : ""));
+  js_set_cstr(o, "normalFontName", m.normal_font_name);
+  js_set_cstr(o, "platform", m.platform);
   return o;
 }
 

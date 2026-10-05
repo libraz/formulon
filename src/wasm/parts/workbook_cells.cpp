@@ -81,7 +81,7 @@ JsStatus JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t 
     return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
                                 "setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
   }
-  const uint32_t count = runs["length"].as<uint32_t>();
+  const uint32_t count = js_length(runs);
   // Two passes for the same reason `createTable` needs them: no `c_str()`
   // may be taken before `texts` has finished growing.
   std::vector<std::string> texts;
@@ -158,7 +158,7 @@ emscripten::val JsWorkbook::getCellPhonetic(uint32_t sheet, uint32_t row, uint32
     return o;
   }
   o.set("status", ok_status());
-  o.set("value", std::string(text != nullptr ? text : ""));
+  js_set_cstr(o, "value", text);
   return o;
 }
 
@@ -183,7 +183,7 @@ emscripten::val JsWorkbook::getCellPhoneticRuns(uint32_t sheet, uint32_t row, ui
     entry.set("eb", run.eb);
     // Copied immediately: each read refreshes the handle's scratch, so the
     // previous run's pointer is dead by the time the next one lands.
-    entry.set("text", std::string(run.text != nullptr ? run.text : ""));
+    js_set_cstr(entry, "text", run.text);
     out.call<void>("push", entry);
   }
   if (rc != 0) {
@@ -310,7 +310,7 @@ emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t
     return o;
   }
   o.set("status", ok_status());
-  o.set("text", std::string(text != nullptr ? text : ""));
+  js_set_cstr(o, "text", text);
   return o;
 }
 
@@ -359,8 +359,8 @@ emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
     return o;
   }
   o.set("status", ok_status());
-  o.set("name", name != nullptr ? std::string(name) : std::string());
-  o.set("formula", formula != nullptr ? std::string(formula) : std::string());
+  js_set_cstr(o, "name", name);
+  js_set_cstr(o, "formula", formula);
   o.set("localSheetId", local_sheet_id);
   return o;
 }
@@ -381,9 +381,9 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
     return o;
   }
   o.set("status", ok_status());
-  o.set("name", name != nullptr ? std::string(name) : std::string());
-  o.set("displayName", display != nullptr ? std::string(display) : std::string());
-  o.set("ref", ref != nullptr ? std::string(ref) : std::string());
+  js_set_cstr(o, "name", name);
+  js_set_cstr(o, "displayName", display);
+  js_set_cstr(o, "ref", ref);
   o.set("sheetIndex", static_cast<uint32_t>(sheet_index));
   return o;
 }
@@ -410,7 +410,7 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
                                       "createTable: `columns` must be an array of column names");
     return out;
   }
-  const uint32_t count = columns["length"].as<uint32_t>();
+  const uint32_t count = js_length(columns);
   // The pointer vector is filled in a second pass so that no `c_str()` is
   // taken before `names` has finished growing.
   std::vector<std::string> names;
@@ -444,9 +444,8 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
   // The C ABI keeps `ref` non-null, so an omitted ref is resolved to the
   // current value before forwarding the partial update. Other omitted fields
   // use the C ABI's preservation sentinels directly.
-  emscripten::val ref_value = spec["ref"];
   std::string ref;
-  if (ref_value.isUndefined() || ref_value.isNull()) {
+  if (js_pull_optional_string(spec, "ref", ref) == nullptr) {
     const char* current_ref = nullptr;
     const char* ignored_name = nullptr;
     const char* ignored_display_name = nullptr;
@@ -457,24 +456,16 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
       return status_from_rc(lookup_rc);
     }
     ref = current_ref != nullptr ? current_ref : std::string();
-  } else {
-    ref = ref_value.as<std::string>();
   }
 
-  emscripten::val style_value = spec["styleName"];
   std::string style_name;
-  const char* style_name_ptr = nullptr;
-  if (!style_value.isUndefined() && !style_value.isNull()) {
-    style_name = style_value.as<std::string>();
-    style_name_ptr = style_name.c_str();
-  }
+  const char* style_name_ptr = js_pull_optional_string(spec, "styleName", style_name);
 
   const auto optional_bool = [&spec](const char* key) {
-    const emscripten::val value = spec[key];
-    if (value.isUndefined() || value.isNull()) {
+    if (!js_has(spec, key)) {
       return int32_t{-1};
     }
-    return value.as<bool>() ? int32_t{1} : int32_t{0};
+    return js_pull_bool(spec, key, false) ? int32_t{1} : int32_t{0};
   };
   return status_from_rc(fm_workbook_table_update(handle_, idx, ref.c_str(), style_name_ptr, optional_bool("headerRow"),
                                                  optional_bool("totalsRow")));
@@ -500,7 +491,7 @@ emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {
     return o;
   }
   o.set("status", ok_status());
-  o.set("path", path != nullptr ? std::string(path) : std::string());
+  js_set_cstr(o, "path", path);
   return o;
 }
 
@@ -570,9 +561,9 @@ emscripten::val JsWorkbook::getExternalLinks() const {
     }
     emscripten::val item = emscripten::val::object();
     item.set("index", rec.index);
-    item.set("relId", std::string(rec.rel_id != nullptr ? rec.rel_id : ""));
-    item.set("partPath", std::string(rec.part_path != nullptr ? rec.part_path : ""));
-    item.set("target", std::string(rec.target != nullptr ? rec.target : ""));
+    js_set_cstr(item, "relId", rec.rel_id);
+    js_set_cstr(item, "partPath", rec.part_path);
+    js_set_cstr(item, "target", rec.target);
     item.set("targetExternal", rec.target_external != 0);
     item.set("kind", rec.kind);
     arr.set(emitted, item);
@@ -597,7 +588,7 @@ emscripten::val formula_envelope(fm_status_t rc, const char* formula) {
 emscripten::val display_envelope(fm_status_t rc, const char* text, int32_t display_status) {
   emscripten::val o = emscripten::val::object();
   o.set("status", status_from_rc(rc));
-  o.set("text", rc == 0 && text != nullptr ? std::string(text) : std::string());
+  js_set_cstr(o, "text", rc == 0 ? text : nullptr);
   o.set("displayStatus", rc == 0 ? display_status : 0);
   return o;
 }
@@ -649,10 +640,10 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
                                          "getCellsInRange: `cursor` and `limit` must be non-negative integers"));
     return o;
   }
+  const fm_merge_range bounds = js_pull_range(range);
   fm_cell_range_t* page = nullptr;
   const fm_status_t rc =
-      fm_sheet_cells_in_range(handle_, sheet, range["firstRow"].as<uint32_t>(), range["firstCol"].as<uint32_t>(),
-                              range["lastRow"].as<uint32_t>(), range["lastCol"].as<uint32_t>(),
+      fm_sheet_cells_in_range(handle_, sheet, bounds.first_row, bounds.first_col, bounds.last_row, bounds.last_col,
                               static_cast<uint64_t>(cursor_value), static_cast<uint32_t>(limit_value), &page);
   if (rc != 0) {
     o.set("status", error_status(rc));

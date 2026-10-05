@@ -22,19 +22,6 @@ namespace parts {
 
 namespace {
 
-bool js_has_field(const emscripten::val& object, const char* key) {
-  const emscripten::val field = object[key];
-  return !field.isUndefined() && !field.isNull();
-}
-
-std::int32_t js_pull_i32(const emscripten::val& object, const char* key, std::int32_t dflt) {
-  const emscripten::val field = object[key];
-  if (field.isUndefined() || field.isNull()) {
-    return dflt;
-  }
-  return field.as<std::int32_t>();
-}
-
 void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf) {
   xf->font_index = js_pull_u32(record, "fontIndex", 0U);
   xf->fill_index = js_pull_u32(record, "fillIndex", 0U);
@@ -52,53 +39,51 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf) {
   xf->apply_alignment = js_pull_bool(record, "applyAlignment", false) ? 1 : 0;
   xf->apply_protection = js_pull_bool(record, "applyProtection", false) ? 1 : 0;
   xf->quote_prefix = js_pull_bool(record, "quotePrefix", false) ? 1 : 0;
-  const bool has_supplied_protection = js_has_field(record, "locked") || js_has_field(record, "hidden");
+  const bool has_supplied_protection = js_has(record, "locked") || js_has(record, "hidden");
   xf->has_protection = js_pull_bool(record, "hasProtection", has_supplied_protection) ? 1 : 0;
   xf->locked = js_pull_bool(record, "locked", true) ? 1 : 0;
   xf->hidden = js_pull_bool(record, "hidden", false) ? 1 : 0;
 
-  const bool has_explicit_horizontal_align = js_has_field(record, "hasHorizontalAlign");
-  const bool has_explicit_vertical_align = js_has_field(record, "hasVerticalAlign");
-  const bool has_explicit_wrap_text = js_has_field(record, "hasWrapText");
-  const bool has_explicit_justify_last_line = js_has_field(record, "hasJustifyLastLine");
+  const bool has_explicit_horizontal_align = js_has(record, "hasHorizontalAlign");
+  const bool has_explicit_vertical_align = js_has(record, "hasVerticalAlign");
+  const bool has_explicit_wrap_text = js_has(record, "hasWrapText");
+  const bool has_explicit_justify_last_line = js_has(record, "hasJustifyLastLine");
   xf->has_horizontal_align = has_explicit_horizontal_align ? (js_pull_bool(record, "hasHorizontalAlign", false) ? 1 : 0)
-                                                           : (js_has_field(record, "horizontalAlign") ? 1 : 0);
+                                                           : (js_has(record, "horizontalAlign") ? 1 : 0);
   xf->has_vertical_align = has_explicit_vertical_align ? (js_pull_bool(record, "hasVerticalAlign", false) ? 1 : 0)
-                                                       : (js_has_field(record, "verticalAlign") ? 1 : 0);
+                                                       : (js_has(record, "verticalAlign") ? 1 : 0);
   xf->has_wrap_text = has_explicit_wrap_text ? (js_pull_bool(record, "hasWrapText", false) ? 1 : 0)
-                                             : (js_has_field(record, "wrapText") ? 1 : 0);
+                                             : (js_has(record, "wrapText") ? 1 : 0);
   xf->has_justify_last_line = has_explicit_justify_last_line
                                   ? (js_pull_bool(record, "hasJustifyLastLine", false) ? 1 : 0)
-                                  : (js_has_field(record, "justifyLastLine") ? 1 : 0);
-  const bool has_explicit_alignment = js_has_field(record, "hasAlignment");
-  const bool has_supplied_alignment = js_has_field(record, "horizontalAlign") ||
-                                      js_has_field(record, "verticalAlign") || js_has_field(record, "wrapText") ||
-                                      js_has_field(record, "justifyLastLine") || js_has_field(record, "textRotation") ||
-                                      js_has_field(record, "indent") || js_has_field(record, "relativeIndent") ||
-                                      js_has_field(record, "shrinkToFit") || js_has_field(record, "readingOrder") ||
-                                      js_has_field(record, "hasHorizontalAlign") ||
-                                      js_has_field(record, "hasVerticalAlign") || js_has_field(record, "hasWrapText") ||
-                                      js_has_field(record, "hasJustifyLastLine");
+                                  : (js_has(record, "justifyLastLine") ? 1 : 0);
+  const bool has_explicit_alignment = js_has(record, "hasAlignment");
+  const bool has_supplied_alignment =
+      js_has(record, "horizontalAlign") || js_has(record, "verticalAlign") || js_has(record, "wrapText") ||
+      js_has(record, "justifyLastLine") || js_has(record, "textRotation") || js_has(record, "indent") ||
+      js_has(record, "relativeIndent") || js_has(record, "shrinkToFit") || js_has(record, "readingOrder") ||
+      js_has(record, "hasHorizontalAlign") || js_has(record, "hasVerticalAlign") || js_has(record, "hasWrapText") ||
+      js_has(record, "hasJustifyLastLine");
   xf->has_alignment =
       has_explicit_alignment ? (js_pull_bool(record, "hasAlignment", false) ? 1 : 0) : (has_supplied_alignment ? 1 : 0);
 
-  if (js_has_field(record, "textRotation")) {
+  if (js_has(record, "textRotation")) {
     xf->has_text_rotation = 1;
     xf->text_rotation = js_pull_u32(record, "textRotation", 0U);
   }
-  if (js_has_field(record, "indent")) {
+  if (js_has(record, "indent")) {
     xf->has_indent = 1;
     xf->indent = js_pull_u32(record, "indent", 0U);
   }
-  if (js_has_field(record, "relativeIndent")) {
+  if (js_has(record, "relativeIndent")) {
     xf->has_relative_indent = 1;
     xf->relative_indent = js_pull_i32(record, "relativeIndent", 0);
   }
-  if (js_has_field(record, "shrinkToFit")) {
+  if (js_has(record, "shrinkToFit")) {
     xf->has_shrink_to_fit = 1;
     xf->shrink_to_fit = js_pull_bool(record, "shrinkToFit", false) ? 1 : 0;
   }
-  if (js_has_field(record, "readingOrder")) {
+  if (js_has(record, "readingOrder")) {
     xf->has_reading_order = 1;
     xf->reading_order = js_pull_u32(record, "readingOrder", 0U);
   }
@@ -108,7 +93,7 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf) {
 /// `<dxf>` font projection so both surface the same field set.
 emscripten::val js_font_record(const fm_font_record& f) {
   emscripten::val o = emscripten::val::object();
-  o.set("name", std::string(f.name != nullptr ? f.name : ""));
+  js_set_cstr(o, "name", f.name);
   o.set("size", f.size);
   o.set("colorArgb", f.color_argb);
   o.set("bold", f.bold != 0);
@@ -330,7 +315,7 @@ emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
       handle_ != nullptr ? fm_styles_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s) : 7000;
   o.set("status", status_from_rc(rc));
   o.set("numFmtId", rc == 0 ? num_fmt_id : 0U);
-  o.set("formatCode", std::string(rc == 0 && s != nullptr ? s : ""));
+  js_set_cstr(o, "formatCode", rc == 0 ? s : nullptr);
   return o;
 }
 
@@ -359,7 +344,7 @@ emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
   if (d.num_fmt_engaged != 0) {
     emscripten::val num_fmt = emscripten::val::object();
     num_fmt.set("numFmtId", static_cast<uint32_t>(d.num_fmt_id));
-    num_fmt.set("formatCode", std::string(d.num_fmt_code != nullptr ? d.num_fmt_code : ""));
+    js_set_cstr(num_fmt, "formatCode", d.num_fmt_code);
     o.set("numFmt", num_fmt);
   }
   if (d.alignment_xml != nullptr && d.alignment_xml[0] != '\0') {
@@ -596,7 +581,7 @@ emscripten::val JsWorkbook::getCellStyle(uint32_t index) const {
     cs = fm_cell_style_record_t{};
   }
   o.set("status", status_from_rc(rc));
-  o.set("name", std::string(cs.name != nullptr ? cs.name : ""));
+  js_set_cstr(o, "name", cs.name);
   o.set("xfId", cs.xf_id);
   o.set("builtinId", cs.builtin_id);
   o.set("iLevel", cs.i_level);
@@ -679,16 +664,15 @@ emscripten::val JsWorkbook::getTheme() const {
     fonts = fm_theme_fonts{};
     source = 0;
   }
-  const auto face = [](const char* s) { return std::string(s != nullptr ? s : ""); };
   emscripten::val list = emscripten::val::array();
   for (uint32_t i = 0; i < 12U; ++i) {
     list.set(i, colors.argb[i]);
   }
   emscripten::val f = emscripten::val::object();
-  f.set("majorLatin", face(fonts.major_latin));
-  f.set("majorEastAsian", face(fonts.major_east_asian));
-  f.set("minorLatin", face(fonts.minor_latin));
-  f.set("minorEastAsian", face(fonts.minor_east_asian));
+  js_set_cstr_fields(f, {{"majorLatin", fonts.major_latin},
+                         {"majorEastAsian", fonts.major_east_asian},
+                         {"minorLatin", fonts.minor_latin},
+                         {"minorEastAsian", fonts.minor_east_asian}});
   emscripten::val o = emscripten::val::object();
   o.set("status", status_from_rc(rc));
   o.set("source", source);
@@ -701,13 +685,10 @@ JsStatus JsWorkbook::setThemeColors(emscripten::val colors) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  if (!colors.isArray() || colors["length"].as<uint32_t>() != 12U) {
+  fm_theme_colors tc{};
+  if (!js_pull_u32_array(colors, tc.argb, 12U)) {
     return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
                                 "setThemeColors: `colors` must be an array of 12 ARGB numbers");
-  }
-  fm_theme_colors tc{};
-  for (uint32_t i = 0; i < 12U; ++i) {
-    tc.argb[i] = colors[i].as<uint32_t>();
   }
   return status_from_rc(fm_workbook_set_theme_colors(handle_, &tc));
 }
@@ -767,7 +748,7 @@ emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint
   o.set("borders", borders);
   o.set("locked", e.locked != 0);
   o.set("hidden", e.hidden != 0);
-  o.set("numFmtCode", std::string(e.num_fmt_code != nullptr ? e.num_fmt_code : ""));
+  js_set_cstr(o, "numFmtCode", e.num_fmt_code);
   return o;
 }
 
