@@ -18,6 +18,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/xml_fragment.h"
+#include "io/auto_filter_xml.h"
 #include "print/sheet_geometry.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -467,7 +468,7 @@ extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, siz
   }
   fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
   mutable_wb->read_scratch.clear();
-  mutable_wb->read_scratch.emplace_back(wb->workbook().sheet(sheet_index).auto_filter_xml());
+  mutable_wb->read_scratch.emplace_back(formulon::io::auto_filter_xml(wb->workbook().sheet(sheet_index).auto_filter()));
   *out_xml = mutable_wb->read_scratch.back().c_str();
   return 0;
 }

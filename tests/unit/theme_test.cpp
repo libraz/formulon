@@ -62,7 +62,7 @@ constexpr const char* kCustomTheme =
 
 TEST(Theme, ReportsDefaultThemeWhenPartAbsent) {
   const Workbook wb = Workbook::create();
-  const LoadedTheme loaded = load_theme(wb);
+  const LoadedTheme loaded = wb.load_theme();
   EXPECT_EQ(loaded.source, ThemeSource::kDefault);
   EXPECT_EQ(loaded.theme.colors[4], 0xFF4472C4U);  // accent1 of the Office 2013-2022 theme
   EXPECT_EQ(loaded.theme.fonts.minor_latin, "Calibri");
@@ -77,9 +77,9 @@ TEST(Theme, GeneratesPartWhenAbsent) {
   colors[0] = 0xFF111111U;
   colors[5] = 0xFF123456U;
   colors[11] = 0xFFABCDEFU;
-  ASSERT_TRUE(static_cast<bool>(set_theme_colors(wb, colors)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_theme_colors(colors)));
   const ThemeFonts fonts = {"Arial", "Meiryo", "Verdana", "MS Gothic"};
-  ASSERT_TRUE(static_cast<bool>(set_theme_fonts(wb, fonts)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_theme_fonts(fonts)));
 
   const PassthroughPart* part = FindPart(wb, "xl/theme/theme1.xml");
   ASSERT_NE(part, nullptr);
@@ -95,7 +95,7 @@ TEST(Theme, GeneratesPartWhenAbsent) {
   }
   EXPECT_TRUE(has_rel);
 
-  const LoadedTheme loaded = load_theme(reloaded);
+  const LoadedTheme loaded = reloaded.load_theme();
   EXPECT_EQ(loaded.source, ThemeSource::kPart);
   EXPECT_EQ(loaded.theme.colors, colors);
   EXPECT_EQ(loaded.theme.fonts.major_latin, "Arial");
@@ -106,7 +106,7 @@ TEST(Theme, GeneratesPartWhenAbsent) {
 
 TEST(Theme, ParsesSchemeAndFontsOfExistingPart) {
   const Workbook wb = WorkbookWithTheme(kCustomTheme);
-  const LoadedTheme loaded = load_theme(wb);
+  const LoadedTheme loaded = wb.load_theme();
   ASSERT_EQ(loaded.source, ThemeSource::kPart);
   EXPECT_EQ(loaded.theme.colors[0], 0xFF010203U);  // sysClr lastClr
   EXPECT_EQ(loaded.theme.colors[1], 0xFFFEFDFCU);
@@ -119,10 +119,10 @@ TEST(Theme, ParsesSchemeAndFontsOfExistingPart) {
 
 TEST(Theme, EditPatchesOnlySchemeAndFontElements) {
   Workbook wb = WorkbookWithTheme(kCustomTheme);
-  ThemeColors colors = load_theme(wb).theme.colors;
+  ThemeColors colors = wb.load_theme().theme.colors;
   colors[3] = 0xFF778899U;
-  ASSERT_TRUE(static_cast<bool>(set_theme_colors(wb, colors)));
-  ASSERT_TRUE(static_cast<bool>(set_theme_fonts(wb, {"A", "B", "C", "D"})));
+  ASSERT_TRUE(static_cast<bool>(wb.set_theme_colors(colors)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_theme_fonts({"A", "B", "C", "D"})));
 
   const PassthroughPart* part = FindPart(wb, "xl/theme/theme1.xml");
   ASSERT_NE(part, nullptr);
@@ -130,7 +130,7 @@ TEST(Theme, EditPatchesOnlySchemeAndFontElements) {
   EXPECT_NE(xml.find("<a:marker id=\"keep-me\"/>"), std::string::npos);
   EXPECT_NE(xml.find("name=\"Custom\""), std::string::npos);
 
-  const LoadedTheme loaded = load_theme(wb);
+  const LoadedTheme loaded = wb.load_theme();
   ASSERT_EQ(loaded.source, ThemeSource::kPart);
   EXPECT_EQ(loaded.theme.colors, colors);
   EXPECT_EQ(loaded.theme.fonts.major_ea, "B");
@@ -140,11 +140,11 @@ TEST(Theme, EditPatchesOnlySchemeAndFontElements) {
 TEST(Theme, UnparseablePartReportsSourceAndRefusesEdit) {
   const std::string junk = "<a:theme>not a colour scheme</a:theme>";
   Workbook wb = WorkbookWithTheme(junk);
-  const LoadedTheme loaded = load_theme(wb);
+  const LoadedTheme loaded = wb.load_theme();
   EXPECT_EQ(loaded.source, ThemeSource::kUnparseable);
   EXPECT_EQ(loaded.theme.colors, default_theme().colors);
 
-  EXPECT_FALSE(static_cast<bool>(set_theme_colors(wb, default_theme().colors)));
+  EXPECT_FALSE(static_cast<bool>(wb.set_theme_colors(default_theme().colors)));
   const PassthroughPart* part = FindPart(wb, "xl/theme/theme1.xml");
   ASSERT_NE(part, nullptr);
   EXPECT_EQ(std::string(part->bytes.begin(), part->bytes.end()), junk);

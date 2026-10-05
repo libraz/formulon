@@ -12,8 +12,8 @@
 // effective fill or font colour, with matching conditional formats applied,
 // against the filter's dxf; icon filters compare the conditional-format icon.
 
-#ifndef FORMULON_AUTO_FILTER_EVAL_H_
-#define FORMULON_AUTO_FILTER_EVAL_H_
+#ifndef FORMULON_CF_AUTO_FILTER_EVAL_H_
+#define FORMULON_CF_AUTO_FILTER_EVAL_H_
 
 #include <cstddef>
 #include <vector>
@@ -60,11 +60,6 @@ Expected<std::vector<bool>, Error> evaluate_auto_filter(const Workbook& wb, cons
 Expected<void, Error> apply_auto_filter(Workbook& wb, std::size_t sheet_index, const AutoFilter& filter,
                                         const AutoFilterEvalDeps& deps = {});
 
-/// True when the sheet AutoFilter, or the AutoFilter of a table on the
-/// sheet, carries at least one criterion. Excel then treats every hidden row
-/// of the sheet as filtered, inside the filter range or not.
-bool sheet_has_filter_criteria(const Workbook* wb, const Sheet& sheet) noexcept;
-
 }  // namespace formulon
 
-#endif  // FORMULON_AUTO_FILTER_EVAL_H_
+#endif  // FORMULON_CF_AUTO_FILTER_EVAL_H_

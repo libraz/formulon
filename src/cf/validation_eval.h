@@ -1,8 +1,8 @@
 //
 // Data-validation evaluation: whether a cell value satisfies the rule that applies to it.
 
-#ifndef FORMULON_VALIDATION_EVAL_H_
-#define FORMULON_VALIDATION_EVAL_H_
+#ifndef FORMULON_CF_VALIDATION_EVAL_H_
+#define FORMULON_CF_VALIDATION_EVAL_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -55,4 +55,4 @@ Expected<ValidationOutcome, Error> validate_value(const Workbook& wb, const Shee
 
 }  // namespace formulon
 
-#endif  // FORMULON_VALIDATION_EVAL_H_
+#endif  // FORMULON_CF_VALIDATION_EVAL_H_

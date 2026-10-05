@@ -82,6 +82,18 @@ Expected<std::uint32_t, Error> read_u32(ByteSpan& cursor) {
   return v;
 }
 
+Expected<double, Error> read_double(ByteSpan& cursor) {
+  if (cursor.size < sizeof(double)) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb double read out of range",
+                      "context=xlsb.record");
+  }
+  double value = 0.0;
+  std::memcpy(&value, cursor.data, sizeof(value));
+  cursor.data += sizeof(double);
+  cursor.size -= sizeof(double);
+  return value;
+}
+
 Expected<std::string, Error> read_xlwidestring(ByteSpan& cursor) {
   auto len_or = read_u32(cursor);
   if (!len_or) {

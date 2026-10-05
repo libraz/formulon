@@ -1,4 +1,4 @@
-#include "auto_filter_eval.h"
+#include "cf/auto_filter_eval.h"
 
 #include <algorithm>
 #include <cmath>
@@ -21,7 +21,6 @@
 #include "sheet.h"
 #include "style_resolve.h"
 #include "styles.h"
-#include "table.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/resource_budget.h"
@@ -591,25 +590,6 @@ Expected<void, Error> apply_auto_filter(Workbook& wb, std::size_t sheet_index, c
     wb.mark_row_visibility_dependents_dirty();
   }
   return Expected<void, Error>::Ok();
-}
-
-bool sheet_has_filter_criteria(const Workbook* wb, const Sheet& sheet) noexcept {
-  if (const AutoFilter* own = sheet.auto_filter(); own != nullptr && own->has_criteria()) {
-    return true;
-  }
-  if (wb == nullptr) {
-    return false;
-  }
-  for (const TableMetadata& table : wb->tables()) {
-    const AutoFilter* f = table.auto_filter_xml.get();
-    if (f == nullptr || !f->has_criteria() || table.sheet_index >= wb->sheet_count()) {
-      continue;
-    }
-    if (&wb->sheet(table.sheet_index) == &sheet) {
-      return true;
-    }
-  }
-  return false;
 }
 
 }  // namespace formulon

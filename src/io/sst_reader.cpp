@@ -20,8 +20,6 @@
 #include <string_view>
 #include <vector>
 
-#include "io/phonetic_pr.h"
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "phonetic.h"
 #include "pugixml.hpp"
@@ -31,41 +29,6 @@
 
 namespace formulon {
 namespace io {
-namespace {
-
-/// Collects every `<rPh>` direct child of `si_node` into `out`, one run
-/// per block, in document order. Each block looks like
-/// `<rPh sb="0" eb="2"><t>トウキョウ</t></rPh>`: `sb`/`eb` delimit the
-/// surface-text span the kana covers, in UTF-16 code units, and the
-/// block's `<t>` descendants concatenate into that run's kana. The spans
-/// are kept because PHONETIC leaves the unannotated remainder of the
-/// string in place, so collapsing multi-block annotations into one kana
-/// string would lose observable content.
-void CollectPhoneticRuns(const pugi::xml_node& si_node, std::vector<PhoneticRun>& out) {
-  for (pugi::xml_node rph = si_node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
-    PhoneticRun run;
-    run.sb = static_cast<std::uint32_t>(rph.attribute("sb").as_uint(0U));
-    run.eb = static_cast<std::uint32_t>(rph.attribute("eb").as_uint(0U));
-    for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
-      AppendOoxmlTextUnescaped(run.text, t.text().get());
-    }
-    out.push_back(std::move(run));
-  }
-}
-
-/// Reads the `<phoneticPr>` sibling of those runs. An absent element
-/// leaves the defaults, which is the state Excel would have inferred.
-PhoneticProperties ReadPhoneticProperties(const pugi::xml_node& si_node) {
-  PhoneticProperties props;
-  if (pugi::xml_node node = si_node.child("phoneticPr")) {
-    props.font_id = static_cast<std::uint16_t>(node.attribute("fontId").as_uint(0U));
-    props.type = parse_phonetic_type(node.attribute("type").value());
-    props.alignment = parse_phonetic_alignment(node.attribute("alignment").value());
-  }
-  return props;
-}
-
-}  // namespace
 
 Expected<SharedStringTable, Error> read_shared_strings(std::vector<std::uint8_t> sst_bytes,
                                                        std::deque<std::string>& text_storage) {
@@ -107,8 +70,8 @@ Expected<SharedStringTable, Error> read_shared_strings(std::vector<std::uint8_t>
     // unconditionally to keep the index alignment invariant
     // `phonetic_for_entries.size() == entries.size()`.
     table.phonetic_for_entries.emplace_back();
-    CollectPhoneticRuns(si, table.phonetic_for_entries.back());
-    table.phonetic_props_for_entries.push_back(ReadPhoneticProperties(si));
+    append_phonetic_runs(si, table.phonetic_for_entries.back());
+    table.phonetic_props_for_entries.push_back(read_phonetic_properties(si));
   }
 
   return table;

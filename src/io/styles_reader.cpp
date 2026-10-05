@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "io/color_spec_xml.h"
+#include "io/styles_vocab.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
@@ -48,16 +49,24 @@ std::uint32_t ParseColorArgb(const pugi::xml_node& color, std::uint32_t fallback
   return parse_rgb_hex(color.attribute("rgb").value(), fallback);
 }
 
+/// `FindStyleToken` fallback for strict callers; no table has this many entries.
+constexpr std::uint8_t kNoStyleToken = 0xFF;
+
+/// Returns the ordinal of `s` in a `styles_vocab.h` table, or `fallback`
+/// when the token is absent from it.
+std::uint8_t FindStyleToken(const char* const* names, std::size_t count, std::string_view s, std::uint8_t fallback) {
+  for (std::size_t i = 0; i < count; ++i) {
+    if (s == names[i]) {
+      return static_cast<std::uint8_t>(i);
+    }
+  }
+  return fallback;
+}
+
 /// Parses a `<vertAlign val="..."/>` run into the `FontRecord::vert_align`
 /// ordinal. Missing / baseline / unknown collapse to 0 (baseline).
 std::uint8_t ParseVertAlign(std::string_view s) {
-  if (s == "superscript") {
-    return 1;
-  }
-  if (s == "subscript") {
-    return 2;
-  }
-  return 0;
+  return FindStyleToken(kVertAlignNames, kVertAlignCount, s, 0);
 }
 
 /// Parses a `<scheme val="..."/>` link into the `FontRecord::scheme`
@@ -65,138 +74,21 @@ std::uint8_t ParseVertAlign(std::string_view s) {
 /// preserving an uninterpretable link would let the writer emit a theme
 /// reference Excel cannot resolve.
 std::uint8_t ParseFontScheme(std::string_view s) {
-  if (s == "major") {
-    return 1;
-  }
-  if (s == "minor") {
-    return 2;
-  }
-  return 0;
+  return FindStyleToken(kFontSchemeNames, kFontSchemeCount, s, 0);
 }
 
 /// Maps OOXML border-style strings to the integer ordinal stored in
 /// `BorderSide::style`. Unknown strings collapse to `0` (none).
 std::uint8_t ParseBorderStyle(std::string_view s) {
-  if (s == "none" || s.empty()) {
-    return 0;
-  }
-  if (s == "thin") {
-    return 1;
-  }
-  if (s == "medium") {
-    return 2;
-  }
-  if (s == "dashed") {
-    return 3;
-  }
-  if (s == "dotted") {
-    return 4;
-  }
-  if (s == "thick") {
-    return 5;
-  }
-  if (s == "double") {
-    return 6;
-  }
-  if (s == "hair") {
-    return 7;
-  }
-  if (s == "mediumDashed") {
-    return 8;
-  }
-  if (s == "dashDot") {
-    return 9;
-  }
-  if (s == "mediumDashDot") {
-    return 10;
-  }
-  if (s == "dashDotDot") {
-    return 11;
-  }
-  if (s == "mediumDashDotDot") {
-    return 12;
-  }
-  if (s == "slantDashDot") {
-    return 13;
-  }
-  return 0;
+  return FindStyleToken(kBorderStyleNames, kBorderStyleCount, s, 0);
 }
 
 std::uint8_t ParseUnderline(std::string_view s) {
-  if (s == "single" || s.empty()) {
-    return s.empty() ? 0 : 1;
-  }
-  if (s == "double") {
-    return 2;
-  }
-  if (s == "singleAccounting") {
-    return 3;
-  }
-  if (s == "doubleAccounting") {
-    return 4;
-  }
-  return 0;
+  return FindStyleToken(kUnderlineNames, kUnderlineCount, s, 0);
 }
 
 std::uint8_t ParseFillPattern(std::string_view s) {
-  if (s == "none" || s.empty()) {
-    return 0;
-  }
-  if (s == "solid") {
-    return 1;
-  }
-  if (s == "mediumGray") {
-    return 2;
-  }
-  if (s == "darkGray") {
-    return 3;
-  }
-  if (s == "lightGray") {
-    return 4;
-  }
-  if (s == "darkHorizontal") {
-    return 5;
-  }
-  if (s == "darkVertical") {
-    return 6;
-  }
-  if (s == "darkDown") {
-    return 7;
-  }
-  if (s == "darkUp") {
-    return 8;
-  }
-  if (s == "darkGrid") {
-    return 9;
-  }
-  if (s == "darkTrellis") {
-    return 10;
-  }
-  if (s == "lightHorizontal") {
-    return 11;
-  }
-  if (s == "lightVertical") {
-    return 12;
-  }
-  if (s == "lightDown") {
-    return 13;
-  }
-  if (s == "lightUp") {
-    return 14;
-  }
-  if (s == "lightGrid") {
-    return 15;
-  }
-  if (s == "lightTrellis") {
-    return 16;
-  }
-  if (s == "gray125") {
-    return 17;
-  }
-  if (s == "gray0625") {
-    return 18;
-  }
-  return 0;
+  return FindStyleToken(kFillPatternNames, kFillPatternCount, s, 0);
 }
 
 FontRecord ParseFontNode(const pugi::xml_node& f) {
@@ -469,29 +361,9 @@ Expected<std::uint8_t, Error> ParseHorizontalAlignStrict(const pugi::xml_attribu
   // numeric and boolean attributes, its whitespace is significant: XML
   // values such as ` center ` are not the `center` token.
   const std::string_view value(attr.value());
-  if (value == "general") {
-    return static_cast<std::uint8_t>(0);
-  }
-  if (value == "left") {
-    return static_cast<std::uint8_t>(1);
-  }
-  if (value == "center") {
-    return static_cast<std::uint8_t>(2);
-  }
-  if (value == "right") {
-    return static_cast<std::uint8_t>(3);
-  }
-  if (value == "fill") {
-    return static_cast<std::uint8_t>(4);
-  }
-  if (value == "justify") {
-    return static_cast<std::uint8_t>(5);
-  }
-  if (value == "centerContinuous") {
-    return static_cast<std::uint8_t>(6);
-  }
-  if (value == "distributed") {
-    return static_cast<std::uint8_t>(7);
+  const std::uint8_t ordinal = FindStyleToken(kHorizontalAlignNames, kHorizontalAlignCount, value, kNoStyleToken);
+  if (ordinal != kNoStyleToken) {
+    return ordinal;
   }
   return InvalidXfAttribute(section, index, attr.name(), value);
 }
@@ -504,20 +376,9 @@ Expected<std::uint8_t, Error> ParseVerticalAlignStrict(const pugi::xml_attribute
   // ST_VerticalAlignment is also xsd:string-derived; preserve its lexical
   // whitespace and reject padded tokens.
   const std::string_view value(attr.value());
-  if (value == "bottom") {
-    return static_cast<std::uint8_t>(2);
-  }
-  if (value == "top") {
-    return static_cast<std::uint8_t>(0);
-  }
-  if (value == "center") {
-    return static_cast<std::uint8_t>(1);
-  }
-  if (value == "justify") {
-    return static_cast<std::uint8_t>(3);
-  }
-  if (value == "distributed") {
-    return static_cast<std::uint8_t>(4);
+  const std::uint8_t ordinal = FindStyleToken(kVerticalAlignNames, kVerticalAlignCount, value, kNoStyleToken);
+  if (ordinal != kNoStyleToken) {
+    return ordinal;
   }
   return InvalidXfAttribute(section, index, attr.name(), value);
 }

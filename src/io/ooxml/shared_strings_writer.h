@@ -37,19 +37,19 @@ class SharedStrings {
   const std::vector<SharedStringEntry>& entries() const noexcept { return entries_; }
 
  private:
-  /// Interning key. Two cells share an `<si>` only when both their
-  /// surface text and their full run list agree, so the spans are part
-  /// of the key: `東京都` annotated over `[0,2)` and the same text
-  /// annotated over `[0,3)` are different string items. The
-  /// `<phoneticPr>` block joins the key for the same reason: one reading
-  /// rendered as hiragana and the other as katakana are two items.
-  static std::string key_for(std::string_view text, const std::vector<PhoneticRun>& phonetic,
-                             PhoneticProperties phonetic_props);
-
   std::uint32_t total_count_ = 0;
   std::vector<SharedStringEntry> entries_;
   std::unordered_map<std::string, std::uint32_t> index_;
 };
+
+/// Interning key shared by the OOXML and XLSB string tables. Two cells
+/// share an entry only when both their surface text and their full run
+/// list agree, so the spans are part of the key: `東京都` annotated over
+/// `[0,2)` and the same text annotated over `[0,3)` are different string
+/// items. The `<phoneticPr>` block joins the key for the same reason: one
+/// reading rendered as hiragana and the other as katakana are two items.
+std::string SharedStringKey(std::string_view text, const std::vector<PhoneticRun>& phonetic,
+                            PhoneticProperties phonetic_props);
 
 SharedStrings BuildSharedStrings(const Workbook& workbook);
 std::string WriteSharedStrings(const SharedStrings& strings);

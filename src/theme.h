@@ -1,9 +1,8 @@
 //
 // Workbook theme model: colour scheme and major/minor fonts of the theme part.
 //
-// The theme lives in the workbook's passthrough parts and is parsed on every
-// call, never cached. Edits patch only the `a:clrScheme` / `a:fontScheme`
-// elements of the existing part, so the unmodelled remainder survives.
+// `Workbook::load_theme` and the theme setters read and patch the part
+// through `io/theme_part.h`.
 
 #ifndef FORMULON_THEME_H_
 #define FORMULON_THEME_H_
@@ -13,12 +12,7 @@
 #include <cstdint>
 #include <string>
 
-#include "utils/error.h"
-#include "utils/expected.h"
-
 namespace formulon {
-
-class Workbook;
 
 /// Number of colours in a theme colour scheme.
 constexpr std::size_t kThemeColorCount = 12;
@@ -56,20 +50,6 @@ struct LoadedTheme {
 
 /// The Office 2013-2022 theme (Calibri / Calibri Light, Yu Gothic for East Asian).
 const Theme& default_theme();
-
-/// Parses the workbook's theme part. Never fails: an absent or unparseable
-/// part yields `default_theme()` with the matching `ThemeSource`.
-LoadedTheme load_theme(const Workbook& wb);
-
-/// Sets the 12 scheme colours. When the workbook has no theme part, a minimal
-/// valid one is generated first, registered with its content type and the
-/// workbook relationship. Returns the parse error when an existing part is
-/// not a parseable theme (the part is then left untouched).
-Expected<void, Error> set_theme_colors(Workbook& wb, const ThemeColors& colors);
-
-/// Sets the four theme fonts; same generation and failure rules as
-/// `set_theme_colors`.
-Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts);
 
 }  // namespace formulon
 

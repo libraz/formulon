@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "double-conversion/double-conversion.h"
+#include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -419,6 +420,28 @@ std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {
   // would silently leak kana into plain comment / SST output.
 
   return count;
+}
+
+void append_phonetic_runs(const pugi::xml_node& node, std::vector<PhoneticRun>& out) {
+  for (pugi::xml_node rph = node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
+    PhoneticRun run;
+    run.sb = static_cast<std::uint32_t>(rph.attribute("sb").as_uint(0U));
+    run.eb = static_cast<std::uint32_t>(rph.attribute("eb").as_uint(0U));
+    for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
+      AppendOoxmlTextUnescaped(run.text, t.text().get());
+    }
+    out.push_back(std::move(run));
+  }
+}
+
+PhoneticProperties read_phonetic_properties(const pugi::xml_node& node) {
+  PhoneticProperties props;
+  if (pugi::xml_node pr = node.child("phoneticPr")) {
+    props.font_id = static_cast<std::uint16_t>(pr.attribute("fontId").as_uint(0U));
+    props.type = parse_phonetic_type(pr.attribute("type").value());
+    props.alignment = parse_phonetic_alignment(pr.attribute("alignment").value());
+  }
+  return props;
 }
 
 std::string capture_root_extra_ns_attrs(const pugi::xml_node& root) {

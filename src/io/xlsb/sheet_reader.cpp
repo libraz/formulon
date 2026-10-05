@@ -643,63 +643,15 @@ Expected<void, Error> ApplyXfIndex(Workbook& wb, std::size_t sheet_index, std::u
 /// plain `BrtCellRk` / `BrtCellReal` / ... for the cached spill targets
 /// of e.g. `=SEQUENCE(3)` in F6, spilling into F7:F8) does not read back
 /// as independent literals that block the anchor's own re-spill on
-/// recalc. Mirrors the OOXML reader's `RegisterArraySpills`
-/// (`io/sheet_reader.cpp`) byte-for-byte in intent: capture the
-/// footprint's current cached values, blank the non-anchor cells, then
-/// commit the spill region. Must run only after the entire sheet has
+/// recalc. Shares `register_array_spills` with the OOXML reader. Must
+/// run only after the entire sheet has
 /// been decoded -- see the `BrtArrFmla` case's comment in
 /// `DecodeSheetBin` for why registering inline (while later rows in the
 /// footprint have not been decoded yet) does not work.
 Expected<void, Error> RegisterArraySpills(Workbook& wb, std::size_t sheet_index,
                                           const std::vector<ArrayAnchor>& anchors) {
-  // Validate and charge every footprint before the first reserve or cell
-  // walk. Keep the budget local to this decoded sheet so independent sheets
-  // cannot consume one another's dynamic-array allowance.
-  ResourceBudget budget(kMaxDynamicArrayCells, FormulonErrorCode::kIoXlsbRecordCorrupt);
-  for (const ArrayAnchor& a : anchors) {
-    auto cells_or =
-        checked_array_anchor_cells(a.row, a.col, a.last_row, a.last_col, FormulonErrorCode::kIoXlsbRecordCorrupt,
-                                   "context=xlsb_reader array_anchor");
-    if (!cells_or) {
-      return cells_or.error();
-    }
-    std::string context("context=xlsb_reader format=xlsb anchor_row=");
-    context.append(std::to_string(a.row));
-    context.append(" anchor_col=");
-    context.append(std::to_string(a.col));
-    context.append(" last_row=");
-    context.append(std::to_string(a.last_row));
-    context.append(" last_col=");
-    context.append(std::to_string(a.last_col));
-    auto charged = consume_array_anchor_budget(budget, cells_or.value(), std::move(context));
-    if (!charged) {
-      return charged.error();
-    }
-  }
-
-  for (const ArrayAnchor& a : anchors) {
-    const std::uint32_t rows = a.last_row - a.row + 1U;
-    const std::uint32_t cols = a.last_col - a.col + 1U;
-    const std::uint64_t cell_count = static_cast<std::uint64_t>(rows) * cols;
-    std::vector<Value> values;
-    values.reserve(static_cast<std::size_t>(cell_count));
-    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
-      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
-        const Cell* cell = wb.sheet(sheet_index).cell_at(r, c);
-        values.push_back(cell != nullptr ? cell->cached_value : Value::blank());
-      }
-    }
-    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
-      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
-        if (r == a.row && c == a.col) {
-          continue;
-        }
-        wb.sheet(sheet_index).set_cell_cached_value_borrowed(r, c, Value::blank());
-      }
-    }
-    wb.sheet(sheet_index).commit_spill(a.row, a.col, rows, cols, std::move(values));
-  }
-  return Expected<void, Error>::Ok();
+  return register_array_spills(wb.sheet(sheet_index), anchors, FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb_reader",
+                               "xlsb");
 }
 
 /// Classifies and decodes one worksheet record.

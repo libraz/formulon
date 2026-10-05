@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "io/xsd_double.h"
+#include "phonetic.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -324,6 +325,16 @@ std::uint32_t parse_rgb_hex(std::string_view hex, std::uint32_t fallback) noexce
 /// this count rather than `out.empty()`, since a `<t></t>` legitimately
 /// contributes zero bytes but is still a valid payload.
 std::size_t append_rich_text(const pugi::xml_node& node, std::string& out);
+
+/// Appends one run per `<rPh>` direct child of `node` (an `<si>` or `<is>`
+/// string item), in document order. `sb`/`eb` delimit the surface-text span
+/// each block's kana covers, in UTF-16 code units, and are kept: PHONETIC
+/// replaces only the annotated spans, so the boundaries are observable.
+void append_phonetic_runs(const pugi::xml_node& node, std::vector<PhoneticRun>& out);
+
+/// Reads the `<phoneticPr>` child of a string item. An absent element
+/// leaves the defaults, which is the state Excel would have inferred.
+PhoneticProperties read_phonetic_properties(const pugi::xml_node& node);
 
 }  // namespace io
 }  // namespace formulon

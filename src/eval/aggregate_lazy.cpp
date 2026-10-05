@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "auto_filter_eval.h"
+#include "auto_filter.h"
 #include "eval/aggregate_kernels.h"
 #include "eval/builtins/subtotal.h"
 #include "eval/coerce.h"
@@ -148,12 +148,7 @@ const Sheet* reference_arg_origin(const parser::AstNode& node, const EvalContext
   if (sheet_name.empty() && second != nullptr) {
     sheet_name = second->sheet;
   }
-  const Sheet* sheet = nullptr;
-  if (sheet_name.empty()) {
-    sheet = ctx.current_sheet();
-  } else if (ctx.workbook() != nullptr) {
-    sheet = ctx.workbook()->sheet_by_name(sheet_name);
-  }
+  const Sheet* sheet = ctx.sheet_for_qualifier(sheet_name);
   if (sheet == nullptr) {
     return nullptr;
   }
@@ -384,14 +379,7 @@ void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, st
 bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                  const EvalContext& ctx, HiddenScope scope, std::vector<Value>* out_cells,
                  std::vector<bool>* out_hidden, std::vector<bool>* out_nested, Value* out_err) {
-  const parser::AstNode* effective = &arg_node;
-  if (arg_node.kind() == parser::NodeKind::NameRef) {
-    const parser::AstNode& resolved = resolve_name_ast(arg_node, ctx.name_env());
-    if (&resolved != &arg_node && is_range_shaped_ast(resolved)) {
-      effective = &resolved;
-    }
-  }
-  const parser::AstNode& node = *effective;
+  const parser::AstNode& node = resolve_range_binding(arg_node, ctx.name_env(), /*accept_ref=*/false);
   const parser::NodeKind k = node.kind();
 
   // Range / Ref / SpillRef / RangeOp -> use the canonical resolver.

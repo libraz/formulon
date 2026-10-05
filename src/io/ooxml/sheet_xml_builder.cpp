@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/auto_filter_xml.h"
 #include "io/cf_overlay.h"
 #include "io/cf_writer.h"
 #include "io/ooxml/cell_ref_writer.h"
@@ -835,7 +836,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   flush_raw_before("autoFilter");
   if (sheet.has_auto_filter()) {
     out.append("  ");
-    out.append(sheet.auto_filter_xml());
+    out.append(serialize_auto_filter(*sheet.auto_filter()));
     out.push_back('\n');
   }
   // Merge cells precede CF in ECMA-376 document order.

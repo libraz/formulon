@@ -10,6 +10,8 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "io/ooxml/emission_plan.h"
 
@@ -32,6 +34,14 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan);
 /// package is omitted and bumps `diagnostics->dropped_relationship_count`.
 /// `diagnostics` may be NULL, which discards the count.
 std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics);
+
+/// Format-neutral form of the above, shared with the XLSB writer:
+/// `workbook_target` is the workbook part path, `passthrough_kept` the
+/// parts that will be emitted, and `skipped_event` the log event for a
+/// dropped relationship.
+std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_target,
+                             const std::vector<const PassthroughPart*>& passthrough_kept,
+                             std::string_view skipped_event, WriteDiagnostics* diagnostics);
 
 /// Builds the `xl/workbook.xml` part: `<sheets>`, optional
 /// `<externalReferences>`, `<definedNames>`, `<calcPr>`, and

@@ -29,6 +29,7 @@
 #include "sheet.h"
 #include "styles.h"
 #include "table.h"
+#include "theme.h"
 #include "unknown_relationship.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
@@ -572,6 +573,22 @@ class Workbook {
   /// with the same type and target is not added twice. The writer mints the
   /// rId, and omits the relationship if `target` is not an emitted part.
   void add_workbook_relationship(std::string type, std::string target);
+
+  /// Parses the theme part (a passthrough part) on every call, never cached.
+  /// Never fails: an absent or unparseable part yields `default_theme()` with
+  /// the matching `ThemeSource`.
+  LoadedTheme load_theme() const;
+
+  /// Sets the 12 scheme colours, patching only `a:clrScheme`. When the
+  /// workbook has no theme part, a minimal valid one is generated first,
+  /// registered with its content type and the workbook relationship. Returns
+  /// the parse error when an existing part is not a parseable theme (the part
+  /// is then left untouched).
+  Expected<void, Error> set_theme_colors(const ThemeColors& colors);
+
+  /// Sets the four theme fonts, patching only `a:fontScheme`; same generation
+  /// and failure rules as `set_theme_colors`.
+  Expected<void, Error> set_theme_fonts(const ThemeFonts& fonts);
 
   // ---------------------------------------------------------------------------
   // Threaded comments and persons

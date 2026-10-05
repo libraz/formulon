@@ -193,7 +193,7 @@ TEST(StylesBuiltinIds, ExcelSavedRangeZeroTo53LoadsAndRoundTrips) {
 
 TEST(StylesBuiltinIds, ExcelSavedThemeIsParsed) {
   const Workbook wb = LoadFixture("builtin_cell_styles.xlsx");
-  const LoadedTheme loaded = load_theme(wb);
+  const LoadedTheme loaded = wb.load_theme();
   EXPECT_EQ(loaded.source, ThemeSource::kPart);
   EXPECT_EQ(loaded.theme.colors[4], 0xFF4F81BDU);  // accent1 of the fixture's own theme part
 }

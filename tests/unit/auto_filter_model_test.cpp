@@ -12,6 +12,7 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/xlsb/writer.h"
@@ -101,7 +102,7 @@ std::vector<std::string> ModelAutoFilters(const Workbook& wb) {
   std::vector<std::string> out;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     if (wb.sheet(i).has_auto_filter()) {
-      out.push_back(wb.sheet(i).auto_filter_xml());
+      out.push_back(io::auto_filter_xml(wb.sheet(i).auto_filter()));
     }
   }
   std::sort(out.begin(), out.end());
@@ -143,7 +144,7 @@ Workbook NewWorkbook() {
 
 Workbook ProbeWorkbook() {
   Workbook wb = NewWorkbook();
-  wb.sheet(0).set_auto_filter_xml(kProbeFilter);
+  wb.sheet(0).set_auto_filter(io::auto_filter_from_xml(kProbeFilter));
   return wb;
 }
 
@@ -158,7 +159,7 @@ Workbook ProbeTableWorkbook() {
   for (std::uint32_t i = 1; i <= 5; ++i) {
     table.columns.emplace_back(i, "c" + std::to_string(i), "", "", "");
   }
-  table.auto_filter_xml = kProbeFilter;
+  table.auto_filter_xml.set(io::auto_filter_from_xml(kProbeFilter));
   wb.mutable_tables().push_back(std::move(table));
   return wb;
 }
@@ -345,17 +346,17 @@ TEST(AutoFilterModel, OpaqueFragmentSurvives) {
       "</autoFilter>";
   const std::string qualified_ref = "<autoFilter ref=\"Sheet1!D6:E7\"/>";
   for (const std::string& xml : {unknown_type, qualified_ref}) {
-    EXPECT_EQ(parse_auto_filter_xml(xml).error().code, FormulonErrorCode::kAutoFilterInvalid) << xml;
+    EXPECT_EQ(io::parse_auto_filter_xml(xml).error().code, FormulonErrorCode::kAutoFilterInvalid) << xml;
     Workbook wb = NewWorkbook();
     ASSERT_TRUE(static_cast<bool>(wb.set_sheet_auto_filter_xml(0, xml)));
     ASSERT_NE(wb.sheet(0).auto_filter(), nullptr);
     EXPECT_TRUE(wb.sheet(0).auto_filter()->is_opaque());
-    EXPECT_EQ(wb.sheet(0).auto_filter_xml(), xml);
+    EXPECT_EQ(io::auto_filter_xml(wb.sheet(0).auto_filter()), xml);
     EXPECT_EQ(FilterDatabaseName(wb, 0), nullptr);
 
     ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, 0U, 1U)));
-    EXPECT_EQ(wb.sheet(0).auto_filter_xml(), xml);
-    EXPECT_EQ(Load(Save(wb)).sheet(0).auto_filter_xml(), xml);
+    EXPECT_EQ(io::auto_filter_xml(wb.sheet(0).auto_filter()), xml);
+    EXPECT_EQ(io::auto_filter_xml(Load(Save(wb)).sheet(0).auto_filter()), xml);
 
     const auto typed = wb.set_sheet_auto_filter(0, *wb.sheet(0).auto_filter());
     ASSERT_FALSE(static_cast<bool>(typed));
@@ -368,14 +369,14 @@ TEST(AutoFilterModel, UnknownColumnContentIsRetainedTyped) {
       "<autoFilter ref=\"A1:C9\" xr:uid=\"{00000000-0000-0000-0000-000000000001}\">"
       "<filterColumn colId=\"2\" hiddenButton=\"1\" x:future=\"7\"><filters><filter val=\"x\"/></filters>"
       "<futureChild a=\"1\"/></filterColumn></autoFilter>";
-  auto parsed = parse_auto_filter_xml(xml);
+  auto parsed = io::parse_auto_filter_xml(xml);
   ASSERT_TRUE(static_cast<bool>(parsed)) << parsed.error().message;
   const FilterColumn& col = parsed.value().columns.at(0);
   EXPECT_TRUE(col.hidden_button);
   ASSERT_EQ(col.extra_attrs.size(), 1U);
   EXPECT_EQ(col.extra_attrs[0].first, "x:future");
   EXPECT_EQ(col.extra_xml, "<futureChild a=\"1\"/>");
-  EXPECT_EQ(serialize_auto_filter(parsed.value()), xml);
+  EXPECT_EQ(io::serialize_auto_filter(parsed.value()), xml);
 }
 
 TEST(AutoFilterModel, ExtLstRoundTrips) {
@@ -388,7 +389,7 @@ TEST(AutoFilterModel, ExtLstRoundTrips) {
       "<xlrd2:filters><xlrd2:dateGroupItem year=\"2025\" month=\"3\" dateTimeGrouping=\"month\"/></xlrd2:filters>"
       "</xlrd2:filterColumn></ext><ext uri=\"{00000000-0000-0000-0000-00000000FFFF}\"><y:other/></ext></extLst>"
       "</filterColumn><extLst><ext uri=\"{00000000-0000-0000-0000-00000000EEEE}\"/></extLst></autoFilter>";
-  auto parsed = parse_auto_filter_xml(xml);
+  auto parsed = io::parse_auto_filter_xml(xml);
   ASSERT_TRUE(static_cast<bool>(parsed)) << parsed.error().message;
   const FilterColumn& col = parsed.value().columns.at(0);
   ASSERT_EQ(col.kind, FilterKind::kValues);
@@ -398,15 +399,15 @@ TEST(AutoFilterModel, ExtLstRoundTrips) {
   EXPECT_EQ(col.values.date_groups[0].grouping, DateTimeGrouping::kMonth);
   EXPECT_EQ(col.ext_xml, "<ext uri=\"{00000000-0000-0000-0000-00000000FFFF}\"><y:other/></ext>");
   EXPECT_EQ(parsed.value().ext_lst_xml, "<extLst><ext uri=\"{00000000-0000-0000-0000-00000000EEEE}\"/></extLst>");
-  EXPECT_EQ(serialize_auto_filter(parsed.value()), xml);
+  EXPECT_EQ(io::serialize_auto_filter(parsed.value()), xml);
 
   // A legacy `<filters><dateGroupItem>` is written in the extension form
   // Excel uses (O5b dgi_year_2024).
-  auto legacy = parse_auto_filter_xml(
+  auto legacy = io::parse_auto_filter_xml(
       "<autoFilter ref=\"A1:A10\"><filterColumn colId=\"0\"><filters>"
       "<dateGroupItem year=\"2024\" dateTimeGrouping=\"year\"/></filters></filterColumn></autoFilter>");
   ASSERT_TRUE(static_cast<bool>(legacy));
-  EXPECT_EQ(serialize_auto_filter(legacy.value()),
+  EXPECT_EQ(io::serialize_auto_filter(legacy.value()),
             "<autoFilter ref=\"A1:A10\"><filterColumn colId=\"0\"><extLst>"
             "<ext uri=\"{1AD28BCE-077C-4C59-8B6E-1921CE8616D4}\" "
             "xmlns:xlrd2=\"http://schemas.microsoft.com/office/spreadsheetml/2017/richdata2\"><xlrd2:filterColumn>"
@@ -419,16 +420,16 @@ TEST(AutoFilterModel, SortStateRoundTripsAndMoves) {
       "<autoFilter ref=\"A1:C9\"><sortState caseSensitive=\"1\" ref=\"A2:C9\">"
       "<sortCondition descending=\"1\" ref=\"B2:B9\"/><sortCondition sortBy=\"icon\" ref=\"C2:C9\" "
       "iconSet=\"3Flags\" iconId=\"2\"/></sortState></autoFilter>";
-  auto parsed = parse_auto_filter_xml(xml);
+  auto parsed = io::parse_auto_filter_xml(xml);
   ASSERT_TRUE(static_cast<bool>(parsed)) << parsed.error().message;
   ASSERT_TRUE(parsed.value().sort.has_value());
   EXPECT_EQ(parsed.value().sort->conditions.at(1).icon_set, cf::IconSetName::Three_Flags);
-  EXPECT_EQ(serialize_auto_filter(parsed.value()), xml);
+  EXPECT_EQ(io::serialize_auto_filter(parsed.value()), xml);
 
   AutoFilter shifted = parsed.value();
   ASSERT_TRUE(shift_auto_filter(shifted, 1U, 1U, /*is_delete=*/true, /*row_axis=*/false,
                                 /*header_delete_removes=*/true));
-  EXPECT_EQ(serialize_auto_filter(shifted),
+  EXPECT_EQ(io::serialize_auto_filter(shifted),
             "<autoFilter ref=\"A1:B9\"><sortState caseSensitive=\"1\" ref=\"A2:B9\">"
             "<sortCondition sortBy=\"icon\" ref=\"B2:B9\" iconSet=\"3Flags\" iconId=\"2\"/></sortState></autoFilter>");
 }
@@ -442,7 +443,7 @@ TEST(AutoFilterModel, FilterDatabaseNameCreatedAndRemoved) {
   EXPECT_TRUE(name->hidden);
   EXPECT_EQ(name->formula, "Sheet1!$B$2:$F$12");
 
-  auto narrowed = parse_auto_filter_xml("<autoFilter ref=\"A1:A16\"/>");
+  auto narrowed = io::parse_auto_filter_xml("<autoFilter ref=\"A1:A16\"/>");
   ASSERT_TRUE(static_cast<bool>(narrowed));
   ASSERT_TRUE(static_cast<bool>(wb.set_sheet_auto_filter(quoted, narrowed.value())));
   ASSERT_NE(FilterDatabaseName(wb, static_cast<std::int32_t>(quoted)), nullptr);
@@ -459,7 +460,7 @@ TEST(AutoFilterModel, FilterDatabaseNameCreatedAndRemoved) {
 
   // Tables carry no `_FilterDatabase` name.
   Workbook tables = ProbeTableWorkbook();
-  auto probe = parse_auto_filter_xml(kProbeFilter);
+  auto probe = io::parse_auto_filter_xml(kProbeFilter);
   ASSERT_TRUE(static_cast<bool>(tables.set_table_auto_filter(0, probe.value())));
   EXPECT_TRUE(tables.defined_names().empty());
 }
@@ -475,7 +476,7 @@ TEST(AutoFilterModel, SetDefinedNameHiddenTogglesTheFlag) {
 }
 
 TEST(AutoFilterModel, ValidationRejectsMalformedModels) {
-  auto base = parse_auto_filter_xml(kProbeFilter);
+  auto base = io::parse_auto_filter_xml(kProbeFilter);
   ASSERT_TRUE(static_cast<bool>(base));
   EXPECT_TRUE(static_cast<bool>(validate_auto_filter(base.value())));
 
@@ -506,7 +507,7 @@ TEST(AutoFilterModel, ChangesDirtySubtotalDependents) {
   evaluated();
   ASSERT_EQ(evaluated(), 0U);
 
-  auto probe = parse_auto_filter_xml(kProbeFilter);
+  auto probe = io::parse_auto_filter_xml(kProbeFilter);
   ASSERT_TRUE(static_cast<bool>(wb.set_sheet_auto_filter(0, probe.value())));
   EXPECT_EQ(evaluated(), 1U) << "set";
   ASSERT_TRUE(static_cast<bool>(wb.set_sheet_auto_filter_xml(0, kProbeFilter)));
@@ -529,7 +530,7 @@ TEST(AutoFilterModel, ChangesDirtySubtotalDependents) {
 
 TEST(AutoFilterModel, XlsbSaveReportsTheDeferredFilter) {
   Workbook wb = NewWorkbook();
-  auto probe = parse_auto_filter_xml(kProbeFilter);
+  auto probe = io::parse_auto_filter_xml(kProbeFilter);
   ASSERT_TRUE(static_cast<bool>(wb.set_sheet_auto_filter(0, probe.value())));
   auto written = io::xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;

@@ -2,23 +2,14 @@
 // AutoFilter model: the typed filter columns and criteria of a sheet or table
 // AutoFilter (ECMA-376 §18.3.2, `CT_AutoFilter`).
 //
-// The typed model is the source of truth; the `<autoFilter>` element is a
-// parse/serialize view of it. Attributes the model does not name on
-// `autoFilter`, `filterColumn` and `sortState` (Excel's `xr:uid`, namespace
-// declarations) and unknown `filterColumn` children are retained as raw XML.
-// A fragment that does not parse into the model at all — malformed XML, a ref
-// that is not a plain A1 rectangle, an unknown enumeration value — is kept
-// verbatim as `opaque_xml` and round-trips unchanged.
-//
-// Excel writes date-group criteria only inside a `filterColumn` extension
-// (`xlrd2:filterColumn`, uri {1AD28BCE-077C-4C59-8B6E-1921CE8616D4}); the
-// model lifts them into `ValueFilters::date_groups` and the serializer
-// writes them back in that form, whichever form the source used.
+// The typed model is the source of truth; `io/auto_filter_xml.h` reads and
+// writes the `<autoFilter>` element. Content the model does not name is kept
+// as raw XML on the owning record, and a fragment that does not parse into
+// the model at all is kept verbatim as `opaque_xml`.
 
 #ifndef FORMULON_AUTO_FILTER_H_
 #define FORMULON_AUTO_FILTER_H_
 
-#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -32,6 +23,9 @@
 #include "utils/expected.h"
 
 namespace formulon {
+
+class Sheet;
+class Workbook;
 
 /// Attributes retained verbatim as `(name, value)` pairs, in document order.
 using RawAttributes = std::vector<std::pair<std::string, std::string>>;
@@ -236,22 +230,17 @@ std::optional<MergeRange> parse_a1_rectangle(std::string_view text) noexcept;
 /// Returns false when a coordinate is outside the grid.
 bool append_a1_rectangle(std::string& out, const MergeRange& rect);
 
-/// Parses one `<autoFilter>` element. Returns `kAutoFilterInvalid` when the
-/// fragment is not a single well-formed `autoFilter` element the model can
-/// represent.
-Expected<AutoFilter, Error> parse_auto_filter_xml(std::string_view xml);
-
-/// Serializes `filter` as an `<autoFilter>` element. An opaque filter
-/// returns its retained bytes.
-std::string serialize_auto_filter(const AutoFilter& filter);
-
 /// Checks a caller-built model: a typed, in-grid range, column ids inside
 /// the range and strictly ascending, one or two custom conditions, and date
 /// groups whose fields fit their grouping. Returns `kAutoFilterInvalid`.
 Expected<void, Error> validate_auto_filter(const AutoFilter& filter);
 
-/// An optional AutoFilter that also reads and writes as its `<autoFilter>`
-/// element, so holders that used to store the raw element keep that view.
+/// True when the sheet AutoFilter, or the AutoFilter of a table on the
+/// sheet, carries at least one criterion. Excel then treats every hidden row
+/// of the sheet as filtered, inside the filter range or not.
+bool sheet_has_filter_criteria(const Workbook* wb, const Sheet& sheet) noexcept;
+
+/// An optional AutoFilter held by a sheet or table.
 class AutoFilterSlot {
  public:
   bool empty() const noexcept { return !value_.has_value(); }
@@ -259,21 +248,6 @@ class AutoFilterSlot {
   AutoFilter* get() noexcept { return value_ ? &*value_ : nullptr; }
   void set(AutoFilter filter) { value_ = std::move(filter); }
   void reset() noexcept { value_.reset(); }
-
-  /// The serialized element, or empty when there is no AutoFilter.
-  std::string xml() const { return value_ ? serialize_auto_filter(*value_) : std::string(); }
-
-  /// Replaces the AutoFilter from its element; empty removes it, and a
-  /// fragment the model cannot represent is kept opaque.
-  void set_xml(std::string_view xml);
-
-  AutoFilterSlot& operator=(std::string_view xml) {
-    set_xml(xml);
-    return *this;
-  }
-  std::size_t find(std::string_view needle, std::size_t pos = 0) const { return xml().find(needle, pos); }
-  friend bool operator==(const AutoFilterSlot& slot, std::string_view xml) { return slot.xml() == xml; }
-  friend bool operator!=(const AutoFilterSlot& slot, std::string_view xml) { return !(slot == xml); }
 
  private:
   std::optional<AutoFilter> value_;

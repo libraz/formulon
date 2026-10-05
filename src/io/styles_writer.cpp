@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include "io/color_spec_xml.h"
+#include "io/styles_vocab.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "styles.h"
@@ -63,67 +64,20 @@ bool HasColor(const ColorSpec& spec, std::uint32_t argb) {
 }
 
 const char* HorizontalAlignName(std::uint8_t v) {
-  switch (v) {
-    case 1:
-      return "left";
-    case 2:
-      return "center";
-    case 3:
-      return "right";
-    case 4:
-      return "fill";
-    case 5:
-      return "justify";
-    case 6:
-      return "centerContinuous";
-    case 7:
-      return "distributed";
-    case 0:
-    default:
-      return "general";
-  }
+  return kHorizontalAlignNames[v < kHorizontalAlignCount ? v : 0];
 }
 
 const char* VerticalAlignName(std::uint8_t v) {
-  switch (v) {
-    case 0:
-      return "top";
-    case 1:
-      return "center";
-    case 3:
-      return "justify";
-    case 4:
-      return "distributed";
-    case 2:
-    default:
-      return "bottom";
-  }
+  return kVerticalAlignNames[v < kVerticalAlignCount ? v : 2];
 }
 
 const char* UnderlineName(std::uint8_t v) {
-  switch (v) {
-    case 1:
-      return "single";
-    case 2:
-      return "double";
-    case 3:
-      return "singleAccounting";
-    case 4:
-      return "doubleAccounting";
-    default:
-      return nullptr;
-  }
+  return v != 0 && v < kUnderlineCount ? kUnderlineNames[v] : nullptr;
 }
 
 const char* VertAlignName(std::uint8_t v) {
-  switch (v) {
-    case 1:
-      return "superscript";
-    case 2:
-      return "subscript";
-    default:
-      return nullptr;  // 0 = baseline (default); emit no element.
-  }
+  // 0 = baseline (default); emit no element.
+  return v != 0 && v < kVertAlignCount ? kVertAlignNames[v] : nullptr;
 }
 
 void AppendVertAlign(std::string& out, std::uint8_t v) {
@@ -135,14 +89,8 @@ void AppendVertAlign(std::string& out, std::uint8_t v) {
 }
 
 const char* FontSchemeName(std::uint8_t v) {
-  switch (v) {
-    case 1:
-      return "major";
-    case 2:
-      return "minor";
-    default:
-      return nullptr;  // 0 = no theme link; emit no element.
-  }
+  // 0 = no theme link; emit no element.
+  return v != 0 && v < kFontSchemeCount ? kFontSchemeNames[v] : nullptr;
 }
 
 /// Emits the trailing `<family>` / `<charset>` / `<scheme>` children in the
@@ -167,81 +115,12 @@ void AppendFontFamilyCharsetScheme(std::string& out, const FontRecord& f) {
 }
 
 const char* FillPatternName(std::uint8_t v) {
-  switch (v) {
-    case 0:
-      return "none";
-    case 1:
-      return "solid";
-    case 2:
-      return "mediumGray";
-    case 3:
-      return "darkGray";
-    case 4:
-      return "lightGray";
-    case 5:
-      return "darkHorizontal";
-    case 6:
-      return "darkVertical";
-    case 7:
-      return "darkDown";
-    case 8:
-      return "darkUp";
-    case 9:
-      return "darkGrid";
-    case 10:
-      return "darkTrellis";
-    case 11:
-      return "lightHorizontal";
-    case 12:
-      return "lightVertical";
-    case 13:
-      return "lightDown";
-    case 14:
-      return "lightUp";
-    case 15:
-      return "lightGrid";
-    case 16:
-      return "lightTrellis";
-    case 17:
-      return "gray125";
-    case 18:
-      return "gray0625";
-    default:
-      return "none";
-  }
+  return kFillPatternNames[v < kFillPatternCount ? v : 0];
 }
 
 const char* BorderStyleName(std::uint8_t v) {
-  switch (v) {
-    case 1:
-      return "thin";
-    case 2:
-      return "medium";
-    case 3:
-      return "dashed";
-    case 4:
-      return "dotted";
-    case 5:
-      return "thick";
-    case 6:
-      return "double";
-    case 7:
-      return "hair";
-    case 8:
-      return "mediumDashed";
-    case 9:
-      return "dashDot";
-    case 10:
-      return "mediumDashDot";
-    case 11:
-      return "dashDotDot";
-    case 12:
-      return "mediumDashDotDot";
-    case 13:
-      return "slantDashDot";
-    default:
-      return nullptr;  // 0 = none; emit no style attribute.
-  }
+  // 0 = none; emit no style attribute.
+  return v != 0 && v < kBorderStyleCount ? kBorderStyleNames[v] : nullptr;
 }
 
 void AppendBorderSide(std::string& out, const char* tag, const BorderSide& side) {

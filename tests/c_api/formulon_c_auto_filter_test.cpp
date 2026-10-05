@@ -15,6 +15,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "utils/error.h"
 
 namespace {
@@ -556,13 +557,13 @@ TEST(FormulonCApiAutoFilter, GetThenSetKeepsUnmodelledContent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, kUnmodelledXml), 0) << fm_last_error_message();
-  const std::string before = wb.handle->workbook().sheet(0).auto_filter_xml();
+  const std::string before = formulon::io::auto_filter_xml(wb.handle->workbook().sheet(0).auto_filter());
   ASSERT_NE(before.find("calendarType"), std::string::npos);
   ASSERT_NE(before.find("x:future"), std::string::npos);
   const FilterCopy copy = GetSheetFilter(wb.handle);
   const OwnedRecord record(copy);
   ASSERT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, record.get()), 0) << fm_last_error_message();
-  EXPECT_EQ(wb.handle->workbook().sheet(0).auto_filter_xml(), before);
+  EXPECT_EQ(formulon::io::auto_filter_xml(wb.handle->workbook().sheet(0).auto_filter()), before);
 
   const char* names[] = {"A", "B", "C"};
   std::size_t table = 0;
@@ -571,8 +572,9 @@ TEST(FormulonCApiAutoFilter, GetThenSetKeepsUnmodelledContent) {
   table_xml.replace(table_xml.find("A1:C9"), 5, "E1:G9");
   table_xml.replace(table_xml.find("A2:C9"), 5, "E2:G9");
   table_xml.replace(table_xml.find("A2:A9"), 5, "E2:E9");
-  wb.handle->workbook().mutable_tables()[table].auto_filter_xml = table_xml;
-  const std::string table_before = wb.handle->workbook().tables()[table].auto_filter_xml.xml();
+  wb.handle->workbook().mutable_tables()[table].auto_filter_xml.set(formulon::io::auto_filter_from_xml(table_xml));
+  const std::string table_before =
+      formulon::io::auto_filter_xml(wb.handle->workbook().tables()[table].auto_filter_xml.get());
   fm_auto_filter out{};
   int32_t present = 0;
   ASSERT_EQ(fm_table_get_auto_filter(wb.handle, table, &out, &present), 0) << fm_last_error_message();
@@ -580,7 +582,7 @@ TEST(FormulonCApiAutoFilter, GetThenSetKeepsUnmodelledContent) {
   const FilterCopy table_copy = Copy(out);
   const OwnedRecord table_record(table_copy);
   ASSERT_EQ(fm_table_set_auto_filter(wb.handle, table, table_record.get()), 0) << fm_last_error_message();
-  EXPECT_EQ(wb.handle->workbook().tables()[table].auto_filter_xml.xml(), table_before);
+  EXPECT_EQ(formulon::io::auto_filter_xml(wb.handle->workbook().tables()[table].auto_filter_xml.get()), table_before);
 }
 
 }  // namespace

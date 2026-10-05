@@ -18,6 +18,7 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "io/ooxml_reader.h"
 #include "io/sheet_reader.h"  // kSaxThresholdBytes
 #include "miniz.h"
@@ -183,7 +184,7 @@ TEST(OoxmlSaxMetadata, LargeSheetRecoversMetadataAndSharedFormulas) {
   EXPECT_TRUE(sheet.protection().sort) << "omitted lock-by-default flag reads as locked";
 
   // autoFilter + print settings recovered.
-  EXPECT_FALSE(sheet.auto_filter_xml().empty());
+  EXPECT_FALSE(io::auto_filter_xml(sheet.auto_filter()).empty());
   EXPECT_FALSE(sheet.print_settings().print_options_xml.empty());
   EXPECT_FALSE(sheet.print_settings().page_setup_xml.empty());
 
@@ -294,7 +295,7 @@ void ExpectSheetsEquivalent(const Sheet& dom, const Sheet& sax) {
   EXPECT_EQ(dom.print_settings().header_footer_xml, sax.print_settings().header_footer_xml);
   EXPECT_EQ(dom.print_settings().print_options_xml, sax.print_settings().print_options_xml);
   EXPECT_EQ(dom.print_settings().page_setup_xml, sax.print_settings().page_setup_xml);
-  EXPECT_EQ(dom.auto_filter_xml(), sax.auto_filter_xml());
+  EXPECT_EQ(io::auto_filter_xml(dom.auto_filter()), io::auto_filter_xml(sax.auto_filter()));
   ASSERT_EQ(dom.print_settings().manual_row_breaks.size(), sax.print_settings().manual_row_breaks.size());
   for (std::size_t i = 0; i < dom.print_settings().manual_row_breaks.size(); ++i) {
     EXPECT_EQ(dom.print_settings().manual_row_breaks[i].id, sax.print_settings().manual_row_breaks[i].id);

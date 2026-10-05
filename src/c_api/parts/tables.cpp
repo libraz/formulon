@@ -12,6 +12,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "io/auto_filter_xml.h"
 #include "io/xml_escape.h"
 #include "utils/a1_ref.h"
 #include "utils/error.h"
@@ -253,7 +254,8 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
     column.name = column_names[i];
     table.columns.push_back(std::move(column));
   }
-  table.auto_filter_xml = "<autoFilter ref=\"" + xml_attr_escape(table.ref) + "\"/>";
+  table.auto_filter_xml.set(
+      formulon::io::auto_filter_from_xml("<autoFilter ref=\"" + xml_attr_escape(table.ref) + "\"/>"));
   table.table_style_info_xml = table_style_xml(style_name != nullptr ? style_name : "");
   auto& tables = book.mutable_tables();
   tables.push_back(std::move(table));
@@ -297,7 +299,8 @@ extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index,
       filter != nullptr && !filter->is_opaque() && next_range.has_value()) {
     filter->range = *next_range;
   } else {
-    next_auto_filter = table_auto_filter_xml(next_auto_filter.xml(), next_ref);
+    next_auto_filter.set(formulon::io::auto_filter_from_xml(
+        table_auto_filter_xml(formulon::io::auto_filter_xml(next_auto_filter.get()), next_ref)));
   }
   const std::string next_style_xml = style_name == nullptr ? table.table_style_info_xml : table_style_xml(style_name);
   const bool next_header_row = header_row < 0 ? table.header_row : header_row > 0;

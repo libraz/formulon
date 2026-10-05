@@ -71,28 +71,6 @@ namespace {
 // content types target binary parts (`*.bin`) instead of XML.
 // ---------------------------------------------------------------------------
 
-constexpr std::string_view kRelOfficeDocument =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
-constexpr std::string_view kRelCoreProperties =
-    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
-constexpr std::string_view kRelExtendedProperties =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
-constexpr std::string_view kRelCustomProperties =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
-constexpr std::string_view kRelWorksheet =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
-constexpr std::string_view kRelSharedStrings =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
-constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
-constexpr std::string_view kRelHyperlink =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
-constexpr std::string_view kRelPivotTable =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
-constexpr std::string_view kRelPivotCacheDefinition =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
-constexpr std::string_view kRelPivotCacheRecords =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
-
 // `[Content_Types].xml` registers the workbook part under the binary
 // content type for `.xlsb`. The reader gates on this content type to
 // avoid acting on a `.xlsx` archive that happened to be passed in.
@@ -388,22 +366,20 @@ Expected<std::vector<UnknownRelationship>, Error> LoadSheetRelationships(const Z
 }
 
 /// Returns the package-relative target of the first internal relationship
-/// of `type` declared by `part_path`, or an empty string when the part has
-/// no rels file or no such relationship.
-Expected<std::string, Error> FindRelationshipTarget(const ZipReader& zip, std::string_view part_path,
-                                                    std::string_view type) {
+/// declared by `part_path` whose `attr` attribute equals `value`, or an
+/// empty string when the part has no rels file or no such relationship.
+/// `label` names the rels file in error messages.
+Expected<std::string, Error> FindRelationship(const ZipReader& zip, std::string_view part_path, const char* attr,
+                                              std::string_view value, std::string_view label) {
   const std::string rels_path = ooxml::rels_path_for_part(part_path);
-  if (!zip.has_entry(rels_path)) {
+  if (value.empty() || !zip.has_entry(rels_path)) {
     return std::string();
   }
   const std::string dir = ooxml::dir_of(part_path);
   std::string found;
   auto status = ooxml::visit_relationship_nodes(
-      zip, rels_path, "pivot rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-        if (!found.empty()) {
-          return Expected<void, Error>::Ok();
-        }
-        if (std::string_view(rel.attribute("Type").value()) != type) {
+      zip, rels_path, label, "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+        if (!found.empty() || std::string_view(rel.attribute(attr).value()) != value) {
           return Expected<void, Error>::Ok();
         }
         if (std::string_view(rel.attribute("TargetMode").value()) == "External") {
@@ -467,7 +443,7 @@ struct RetainedPartOrigins {
 std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& wb, std::string_view pivot_table_path,
                                                std::unordered_map<std::string, std::uint32_t>& loaded,
                                                RetainedPartOrigins& origins) {
-  auto def_path_or = FindRelationshipTarget(zip, pivot_table_path, kRelPivotCacheDefinition);
+  auto def_path_or = FindRelationship(zip, pivot_table_path, "Type", kRelPivotCacheDefinition, "pivot rels");
   if (!def_path_or || def_path_or.value().empty()) {
     return std::nullopt;
   }
@@ -476,7 +452,7 @@ std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& w
   if (seen != loaded.end()) {
     return seen->second;
   }
-  auto rec_path_or = FindRelationshipTarget(zip, def_path, kRelPivotCacheRecords);
+  auto rec_path_or = FindRelationship(zip, def_path, "Type", kRelPivotCacheRecords, "pivot rels");
   if (!rec_path_or || rec_path_or.value().empty()) {
     return std::nullopt;
   }
@@ -507,47 +483,6 @@ std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& w
   wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
   loaded.emplace(def_path, cache_id);
   return cache_id;
-}
-
-/// Decodes every pivot table reachable from a sheet's relationships.
-///
-/// A pivot this reader cannot account for is skipped, not failed. Before
-/// this existed no XLSB pivot was decoded at all, so refusing one leaves
-/// that workbook loading exactly as it used to, whereas propagating the
-/// error would turn a working open into a failure. Skipping is also why
-/// the parts are left out of `consumed_parts`: the XLSB writer has no
-/// pivot output, so a decoded-but-not-consumed part still round-trips
-/// verbatim, and a skipped one is indistinguishable from before.
-/// Returns the package-relative target of the relationship `rel_id`
-/// declared by `part_path`, or an empty string when it is absent or
-/// points outside the package.
-Expected<std::string, Error> FindRelationshipById(const ZipReader& zip, std::string_view part_path,
-                                                  std::string_view rel_id) {
-  const std::string rels_path = ooxml::rels_path_for_part(part_path);
-  if (rel_id.empty() || !zip.has_entry(rels_path)) {
-    return std::string();
-  }
-  const std::string dir = ooxml::dir_of(part_path);
-  std::string found;
-  auto status = ooxml::visit_relationship_nodes(
-      zip, rels_path, "external link rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-        if (!found.empty() || std::string_view(rel.attribute("Id").value()) != rel_id) {
-          return Expected<void, Error>::Ok();
-        }
-        if (std::string_view(rel.attribute("TargetMode").value()) == "External") {
-          return Expected<void, Error>::Ok();
-        }
-        auto resolved = ResolveRelativePath(dir, rel.attribute("Target").value());
-        if (!resolved) {
-          return Expected<void, Error>(resolved.error());
-        }
-        found = std::move(resolved).value();
-        return Expected<void, Error>::Ok();
-      });
-  if (!status) {
-    return status.error();
-  }
-  return found;
 }
 
 /// Reads the remote workbook URL recorded in an external link part's own
@@ -592,7 +527,7 @@ void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector
     ExternalLinkRecord record;
     record.index = sup.external_book;
     record.rel_id = sup.rel_id;
-    auto path_or = FindRelationshipById(zip, "xl/workbook.bin", sup.rel_id);
+    auto path_or = FindRelationship(zip, "xl/workbook.bin", "Id", sup.rel_id, "external link rels");
     if (path_or && !path_or.value().empty() && zip.has_entry(path_or.value())) {
       record.part_path = path_or.value();
       record.target = ReadExternalLinkTarget(zip, record.part_path);
@@ -631,6 +566,15 @@ XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
   return books;
 }
 
+/// Decodes every pivot table reachable from a sheet's relationships.
+///
+/// A pivot this reader cannot account for is skipped, not failed. Before
+/// this existed no XLSB pivot was decoded at all, so refusing one leaves
+/// that workbook loading exactly as it used to, whereas propagating the
+/// error would turn a working open into a failure. Skipping is also why
+/// the parts are left out of `consumed_parts`: the XLSB writer has no
+/// pivot output, so a decoded-but-not-consumed part still round-trips
+/// verbatim, and a skipped one is indistinguishable from before.
 void LoadPivotParts(const ZipReader& zip, Workbook& wb, RetainedPartOrigins& origins) {
   std::unordered_map<std::string, std::uint32_t> loaded_caches;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {

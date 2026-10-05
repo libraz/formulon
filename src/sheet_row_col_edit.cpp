@@ -225,32 +225,6 @@ void ShiftColumnLayouts(std::vector<ColumnLayout>& columns, std::uint32_t index,
   columns = std::move(retained);
 }
 
-void ShiftBreaks(std::vector<ManualBreak>& breaks, std::uint32_t index, std::uint32_t count, bool is_delete,
-                 std::uint32_t bound) {
-  std::vector<ManualBreak> retained;
-  retained.reserve(breaks.size());
-  for (ManualBreak& page_break : breaks) {
-    if (page_break.id < index) {
-      retained.push_back(std::move(page_break));
-      continue;
-    }
-    if (is_delete) {
-      if (page_break.id < index + count) {
-        continue;
-      }
-      page_break.id -= count;
-    } else {
-      const std::uint64_t shifted = static_cast<std::uint64_t>(page_break.id) + count;
-      if (shifted >= bound) {
-        continue;
-      }
-      page_break.id = static_cast<std::uint32_t>(shifted);
-    }
-    retained.push_back(std::move(page_break));
-  }
-  breaks = std::move(retained);
-}
-
 void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, std::uint32_t index,
                        std::uint32_t count, bool is_delete, bool row_axis) {
   for (std::unique_ptr<pivot::PivotTable>& pivot : pivots) {
@@ -400,10 +374,10 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   ShiftConditionalFormats(conditional_formats_, index, count, is_delete, row_axis);
   if (row_axis) {
     ShiftRowLayouts(layout_.row_overrides, index, count, is_delete);
-    ShiftBreaks(print_settings_.manual_row_breaks, index, count, is_delete, Sheet::kMaxRows);
+    ShiftAnchored(print_settings_.manual_row_breaks, &ManualBreak::id, index, count, is_delete, Sheet::kMaxRows);
   } else {
     ShiftColumnLayouts(layout_.columns, index, count, is_delete);
-    ShiftBreaks(print_settings_.manual_col_breaks, index, count, is_delete, Sheet::kMaxCols);
+    ShiftAnchored(print_settings_.manual_col_breaks, &ManualBreak::id, index, count, is_delete, Sheet::kMaxCols);
   }
   ShiftPivotAnchors(pivot_tables_, index, count, is_delete, row_axis);
   if (AutoFilter* filter = auto_filter_.get();

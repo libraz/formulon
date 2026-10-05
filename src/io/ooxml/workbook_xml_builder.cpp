@@ -47,10 +47,8 @@ namespace {
 // `kXmlDecl` lives in `io/xml_utils.h` and is shared with comments / cf
 // writers (single source of truth for the XML 1.0 prologue).
 //
-// Relationship type URIs (the `kRel*` family that is also consumed by
-// the reader) live in `io/ooxml_defs.h`; the writer-only relationship
-// URIs (`kRelCalcChain`, `kRelTheme`, `kRelCoreProperties`,
-// `kRelExtendedProperties`) stay below.
+// Relationship type URIs shared with other readers / writers live in
+// `io/ooxml_defs.h`; only `kRelCalcChain` stays below.
 
 constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
 constexpr std::string_view kCtXml = "application/xml";
@@ -60,8 +58,6 @@ constexpr std::string_view kCtSharedStrings =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
 constexpr std::string_view kCtSheetMetadata =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml";
-constexpr std::string_view kRelSheetMetadata =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
 constexpr std::string_view kCtTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
 constexpr std::string_view kCtPivotCacheDefinition =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
@@ -73,16 +69,9 @@ constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-offic
 constexpr std::string_view kCtThreadedComments = "application/vnd.ms-excel.threadedcomments+xml";
 constexpr std::string_view kCtPerson = "application/vnd.ms-excel.person+xml";
 
-// Writer-only relationship URIs (no reader consumer).
+// Relationship URI only this writer emits.
 constexpr std::string_view kRelCalcChain =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
-constexpr std::string_view kRelTheme = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
-constexpr std::string_view kRelCoreProperties =
-    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
-constexpr std::string_view kRelExtendedProperties =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
-constexpr std::string_view kRelCustomProperties =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 
 void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& names) {
   if (names.empty()) {
@@ -279,24 +268,33 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
 }
 
 std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics) {
+  return BuildPackageRels(wb, "xl/workbook.xml", plan.passthrough_kept, "ooxml_writer.package_rel_skipped",
+                          diagnostics);
+}
+
+std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_target,
+                             const std::vector<const PassthroughPart*>& passthrough_kept,
+                             std::string_view skipped_event, WriteDiagnostics* diagnostics) {
   std::string out;
-  out.reserve(256);
+  out.reserve(384);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  AppendRelationship(out, 1, kRelOfficeDocument, "xl/workbook.xml");
+  AppendRelationship(out, 1, kRelOfficeDocument, workbook_target);
   std::uint32_t next_rid = 2;
-  if (HasPassthroughPart(plan, "docProps/core.xml")) {
+  // docProps parts ride the passthrough path but need package-level rels or
+  // Excel treats them as orphaned (and drops the document properties).
+  if (HasPassthroughPart(passthrough_kept, "docProps/core.xml")) {
     AppendRelationship(out, next_rid++, kRelCoreProperties, "docProps/core.xml");
   }
-  if (HasPassthroughPart(plan, "docProps/app.xml")) {
+  if (HasPassthroughPart(passthrough_kept, "docProps/app.xml")) {
     AppendRelationship(out, next_rid++, kRelExtendedProperties, "docProps/app.xml");
   }
-  if (HasPassthroughPart(plan, "docProps/custom.xml")) {
+  if (HasPassthroughPart(passthrough_kept, "docProps/custom.xml")) {
     AppendRelationship(out, next_rid++, kRelCustomProperties, "docProps/custom.xml");
   }
   for (const UnknownRelationship& r : wb.unknown_package_rels()) {
-    if (!r.target_external && !HasPassthroughPart(plan, r.target)) {
-      StructuredLog("ooxml_writer.package_rel_skipped")
+    if (!r.target_external && !HasPassthroughPart(passthrough_kept, r.target)) {
+      StructuredLog(skipped_event)
           .field("reason", std::string_view("target_part_absent"))
           .field("type", r.type)
           .field("target", r.target)

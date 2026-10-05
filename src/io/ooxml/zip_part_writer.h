@@ -77,6 +77,10 @@ Expected<void, Error> AddPartBytes(mz_zip_archive* archive, std::string_view pat
                                    const std::vector<std::uint8_t>& body,
                                    std::unordered_set<std::string>* seen_paths = nullptr);
 
+/// Finalises `writer`'s heap archive and returns its bytes, ending the
+/// writer either way. `context` tags any miniz failure.
+Expected<std::vector<std::uint8_t>, Error> FinalizeArchive(ZipWriterGuard& writer, const char* context);
+
 }  // namespace io
 }  // namespace formulon
 

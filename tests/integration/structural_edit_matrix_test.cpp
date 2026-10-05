@@ -36,6 +36,7 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
@@ -151,7 +152,7 @@ Workbook MakeWorkbook() {
   // The auto-filter element is retained as raw XML, but its `ref` rectangle
   // decides which cells the filter is attached to and so has to move with
   // them. Same rectangle as the merge above.
-  sheet.set_auto_filter_xml("<autoFilter ref=\"D6:E7\"><filterColumn colId=\"0\"/></autoFilter>");
+  sheet.set_auto_filter(io::auto_filter_from_xml("<autoFilter ref=\"D6:E7\"><filterColumn colId=\"0\"/></autoFilter>"));
 
   auto pivot = std::make_unique<pivot::PivotTable>();
   pivot->set_anchor(kAnchorRow, kAnchorCol, /*rows=*/2, /*cols=*/2);
@@ -176,7 +177,7 @@ const cf::CFCellRange& OnlyCfRange(const Workbook& wb) {
 /// The auto-filter element, with its `ref` rectangle rewritten to
 /// `expected_ref` and everything else left verbatim.
 void ExpectAutoFilterRef(const Sheet& sheet, const std::string& expected_ref) {
-  EXPECT_EQ(sheet.auto_filter_xml(),
+  EXPECT_EQ(io::auto_filter_xml(sheet.auto_filter()),
             "<autoFilter ref=\"" + expected_ref + "\"><filterColumn colId=\"0\"/></autoFilter>");
 }
 
@@ -521,30 +522,31 @@ TEST(StructuralEditMatrix, DeleteColsMovesEveryColumnAnchoredStructure) {
 
 TEST(StructuralEditMatrix, DeleteRowsShrinksTheAutoFilterRef) {
   Workbook wb = Workbook::create();
-  wb.sheet(0).set_auto_filter_xml("<autoFilter ref=\"D6:E8\"/>");
+  wb.sheet(0).set_auto_filter(io::auto_filter_from_xml("<autoFilter ref=\"D6:E8\"/>"));
 
   ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 7, 1)));
-  EXPECT_EQ(wb.sheet(0).auto_filter_xml(), "<autoFilter ref=\"D6:E7\"/>");
+  EXPECT_EQ(io::auto_filter_xml(wb.sheet(0).auto_filter()), "<autoFilter ref=\"D6:E7\"/>");
 }
 
 TEST(StructuralEditMatrix, DeleteRowsDropsAnAutoFilterWhoseRangeIsFullyConsumed) {
   Workbook wb = Workbook::create();
-  wb.sheet(0).set_auto_filter_xml("<autoFilter ref=\"D6:E7\"><filterColumn colId=\"0\"/></autoFilter>");
+  wb.sheet(0).set_auto_filter(
+      io::auto_filter_from_xml("<autoFilter ref=\"D6:E7\"><filterColumn colId=\"0\"/></autoFilter>"));
 
   // Deleting every filtered row leaves no rectangle to attach the filter to,
   // which Excel resolves by dropping the element rather than keeping an
   // empty one.
   ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 5, 2)));
-  EXPECT_TRUE(wb.sheet(0).auto_filter_xml().empty());
+  EXPECT_TRUE(io::auto_filter_xml(wb.sheet(0).auto_filter()).empty());
 }
 
 TEST(StructuralEditMatrix, InsertColsKeepsASingleCellAutoFilterRefSingleCell) {
   Workbook wb = Workbook::create();
-  wb.sheet(0).set_auto_filter_xml("<autoFilter ref=\"D6\"/>");
+  wb.sheet(0).set_auto_filter(io::auto_filter_from_xml("<autoFilter ref=\"D6\"/>"));
 
   // A one-cell `ref` is written without the `:` form, and stays that way.
   ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, 1, 2)));
-  EXPECT_EQ(wb.sheet(0).auto_filter_xml(), "<autoFilter ref=\"F6\"/>");
+  EXPECT_EQ(io::auto_filter_xml(wb.sheet(0).auto_filter()), "<autoFilter ref=\"F6\"/>");
 }
 
 TEST(StructuralEditMatrix, EditsLeaveAnUnparsableAutoFilterRefAlone) {
@@ -552,10 +554,10 @@ TEST(StructuralEditMatrix, EditsLeaveAnUnparsableAutoFilterRefAlone) {
   // A `ref` this layer cannot decode is retained verbatim rather than
   // rewritten from a guess.
   const std::string original = "<autoFilter ref=\"Sheet1!D6:E7\"/>";
-  wb.sheet(0).set_auto_filter_xml(original);
+  wb.sheet(0).set_auto_filter(io::auto_filter_from_xml(original));
 
   ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 1, 1)));
-  EXPECT_EQ(wb.sheet(0).auto_filter_xml(), original);
+  EXPECT_EQ(io::auto_filter_xml(wb.sheet(0).auto_filter()), original);
 }
 
 // The worksheet `<extLst>` is retained verbatim, but its x14 ranges and

@@ -14,6 +14,7 @@
 
 #include "defined_name.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "io/ooxml_reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
@@ -352,9 +353,9 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
   table.columns.push_back(TableColumn{1, "Region", "Total", "", ""});
   table.columns.push_back(TableColumn{2, "Q1", "", "sum", ""});
   table.columns.push_back(TableColumn{3, "Q2", "", "sum", ""});
-  table.auto_filter_xml =
+  table.auto_filter_xml.set(io::auto_filter_from_xml(
       "<autoFilter ref=\"A1:C5\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
-      "</autoFilter>";
+      "</autoFilter>"));
   table.sort_state_xml = "<sortState ref=\"A1:C5\"><sortCondition ref=\"C2:C5\" descending=\"1\"/></sortState>";
   table.table_style_info_xml =
       "<tableStyleInfo name=\"TableStyleMedium2\" showFirstColumn=\"0\" showLastColumn=\"1\" "
@@ -385,7 +386,7 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
   EXPECT_EQ(got.columns[1].totals_function, "sum");
   EXPECT_EQ(got.columns[2].totals_function, "sum");
   EXPECT_EQ(
-      got.auto_filter_xml,
+      io::auto_filter_xml(got.auto_filter_xml.get()),
       "<autoFilter ref=\"A1:C5\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
       "</autoFilter>");
   EXPECT_EQ(got.sort_state_xml, "<sortState ref=\"A1:C5\"><sortCondition ref=\"C2:C5\" descending=\"1\"/></sortState>");

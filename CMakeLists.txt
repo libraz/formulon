@@ -118,7 +118,6 @@ set(FORMULON_CORE_SOURCES
   src/utils/utf8_length.cpp
   src/external_book.cpp
   src/auto_filter.cpp
-  src/auto_filter_eval.cpp
   src/styles.cpp
   src/threaded_comment.cpp
   src/style_resolve.cpp
@@ -131,7 +130,7 @@ set(FORMULON_CORE_SOURCES
   src/sheet_name_casefold_data.cpp
   src/workbook.cpp
   src/workbook_ref_rewrite.cpp
-  src/validation_eval.cpp
+  src/io/auto_filter_xml.cpp
   src/io/cell_parser.cpp
   src/io/cf_overlay.cpp
   src/io/cf_reader.cpp
@@ -174,6 +173,7 @@ set(FORMULON_CORE_SOURCES
   src/io/styles_reader.cpp
   src/io/styles_writer.cpp
   src/io/tables_reader.cpp
+  src/io/theme_part.cpp
   src/io/xml_escape.cpp
   src/io/xml_utils.cpp
   src/io/xsd_double.cpp
@@ -205,10 +205,12 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/workbook_bin_reader.cpp
   src/io/xlsb/workbook_bin_writer.cpp
   src/io/xlsb/writer.cpp
+  src/cf/auto_filter_eval.cpp
   src/cf/cf_evaluator.cpp
   src/cf/cf_helpers.cpp
   src/cf/rule_match.cpp
   src/cf/scale_evaluator.cpp
+  src/cf/validation_eval.cpp
   src/parser/tokenizer.cpp
   src/parser/ast.cpp
   src/parser/reference.cpp

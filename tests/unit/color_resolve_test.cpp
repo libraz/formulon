@@ -172,7 +172,7 @@ TEST(ColorResolve, WorkbookOverloadUsesWorkbookTheme) {
   EXPECT_EQ(resolve_color(wb, ThemeSpec(4, 0.0), ColorContext::kFont).resolution, ColorResolution::kDefaultTheme);
   ThemeColors colors = default_theme().colors;
   colors[4] = 0xFF010203U;
-  ASSERT_TRUE(static_cast<bool>(set_theme_colors(wb, colors)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_theme_colors(colors)));
   const ResolvedColor got = resolve_color(wb, ThemeSpec(4, 0.0), ColorContext::kFont);
   EXPECT_EQ(got.argb, 0xFF010203U);
   EXPECT_EQ(got.resolution, ColorResolution::kExact);

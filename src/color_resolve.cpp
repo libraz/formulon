@@ -163,7 +163,7 @@ ResolvedColor resolve_color(const Workbook& wb, const ColorSpec& spec, ColorCont
   if (spec.kind != ColorSpec::Kind::kTheme) {
     return resolve_color(spec, default_theme(), ThemeSource::kDefault, wb.styles().indexed_colors, context);
   }
-  const LoadedTheme loaded = load_theme(wb);
+  const LoadedTheme loaded = wb.load_theme();
   return resolve_color(spec, loaded.theme, loaded.source, wb.styles().indexed_colors, context);
 }
 

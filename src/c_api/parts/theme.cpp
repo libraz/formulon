@@ -55,7 +55,7 @@ extern "C" fm_status_t fm_workbook_get_theme_colors(const fm_workbook_t* wb, fm_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_get_theme_colors: NULL argument");
   }
-  const formulon::LoadedTheme loaded = formulon::load_theme(wb->workbook());
+  const formulon::LoadedTheme loaded = wb->workbook().load_theme();
   for (std::size_t i = 0; i < formulon::kThemeColorCount; ++i) {
     out->argb[i] = loaded.theme.colors[i];
   }
@@ -73,7 +73,7 @@ extern "C" fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_
   for (std::size_t i = 0; i < formulon::kThemeColorCount; ++i) {
     model[i] = colors->argb[i];
   }
-  auto r = formulon::set_theme_colors(wb->workbook(), model);
+  auto r = wb->workbook().set_theme_colors(model);
   if (!r) {
     return set_last_error(r.error());
   }
@@ -86,7 +86,7 @@ extern "C" fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_t
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_get_theme_fonts: NULL argument");
   }
-  formulon::ThemeFonts fonts = formulon::load_theme(wb->workbook()).theme.fonts;
+  formulon::ThemeFonts fonts = wb->workbook().load_theme().theme.fonts;
   TextStore& store = const_cast<TextStore&>(wb->read_scratch);
   store.clear();
   store.emplace_back(std::move(fonts.major_latin));
@@ -112,7 +112,7 @@ extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_t
   model.major_ea = fonts->major_east_asian;
   model.minor_latin = fonts->minor_latin;
   model.minor_ea = fonts->minor_east_asian;
-  auto r = formulon::set_theme_fonts(wb->workbook(), model);
+  auto r = wb->workbook().set_theme_fonts(model);
   if (!r) {
     return set_last_error(r.error());
   }

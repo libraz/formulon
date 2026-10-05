@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -21,6 +20,7 @@
 #include "io/xlsb/func_id_table.h"
 #include "io/xlsb/ptg.h"
 #include "io/xlsb/ptg_targets.h"
+#include "io/xlsb/record_writer.h"
 #include "parser/ast_format.h"
 #include "parser/reference.h"
 #include "sheet_name.h"
@@ -113,29 +113,6 @@ std::uint8_t SlotClass(Slot slot, bool area, PtgEvaluation evaluation = PtgEvalu
     default:
       return kPtgReferenceClass;
   }
-}
-
-void emit_u8(std::vector<std::uint8_t>& dst, std::uint8_t v) {
-  dst.push_back(v);
-}
-
-void emit_u16(std::vector<std::uint8_t>& dst, std::uint16_t v) {
-  dst.push_back(static_cast<std::uint8_t>(v & 0xFF));
-  dst.push_back(static_cast<std::uint8_t>((v >> 8) & 0xFF));
-}
-
-void emit_u32(std::vector<std::uint8_t>& dst, std::uint32_t v) {
-  dst.push_back(static_cast<std::uint8_t>(v & 0xFF));
-  dst.push_back(static_cast<std::uint8_t>((v >> 8) & 0xFF));
-  dst.push_back(static_cast<std::uint8_t>((v >> 16) & 0xFF));
-  dst.push_back(static_cast<std::uint8_t>((v >> 24) & 0xFF));
-}
-
-void emit_double(std::vector<std::uint8_t>& dst, double v) {
-  std::uint64_t bits = 0;
-  std::memcpy(&bits, &v, sizeof(v));
-  emit_u32(dst, static_cast<std::uint32_t>(bits & 0xFFFFFFFFU));
-  emit_u32(dst, static_cast<std::uint32_t>((bits >> 32) & 0xFFFFFFFFU));
 }
 
 /// Emits a u16 code-unit count + UTF-16LE units for `text` (UTF-8 in).

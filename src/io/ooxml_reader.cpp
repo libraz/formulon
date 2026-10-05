@@ -36,6 +36,7 @@
 #include "calc_settings.h"
 #include "default_content_type.h"
 #include "defined_name.h"
+#include "io/auto_filter_xml.h"
 #include "io/cf_reader.h"
 #include "io/comments_reader.h"
 #include "io/defined_names_internal.h"
@@ -76,15 +77,6 @@
 namespace formulon {
 namespace io {
 namespace {
-
-constexpr std::string_view kRelOfficeDocument =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
-constexpr std::string_view kRelCoreProperties =
-    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
-constexpr std::string_view kRelExtendedProperties =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
-constexpr std::string_view kRelCustomProperties =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 
 Expected<std::vector<UnknownRelationship>, Error> ReadUnknownPackageRels(const std::vector<std::uint8_t>& bytes) {
   pugi::xml_document doc;
@@ -311,7 +303,7 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
     print.header_footer_xml = raw_xml(header_footer);
   }
   if (pugi::xml_node auto_filter = worksheet.child("autoFilter")) {
-    wb.sheet(i).set_auto_filter_xml(raw_xml(auto_filter));
+    wb.sheet(i).set_auto_filter(auto_filter_from_xml(raw_xml(auto_filter)));
   }
   // Worksheet-level `<extLst>` holds the *data* for 2010+ extensions —
   // notably `x14:conditionalFormattings` (DataBar negative-fill / axis /

@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "sheet.h"
 #include "support/roundtrip_symmetry.h"
 #include "workbook.h"
@@ -48,7 +49,7 @@ std::vector<std::uint8_t> BuildRichSheetXlsx() {
   ps.print_options_xml = "<printOptions horizontalCentered=\"1\" gridLines=\"1\" headings=\"1\"/>";
   ps.header_footer_xml = "<headerFooter><oddHeader>Report</oddHeader><oddFooter>Foot</oddFooter></headerFooter>";
   ps.manual_row_breaks.push_back(ManualBreak{4, 0, 9, true});
-  s.set_auto_filter_xml("<autoFilter ref=\"A1:J8\"/>");
+  s.set_auto_filter(io::auto_filter_from_xml("<autoFilter ref=\"A1:J8\"/>"));
 
   auto saved = wb.save();
   EXPECT_TRUE(static_cast<bool>(saved)) << "save failed: " << (saved ? "" : saved.error().message);

@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <string>
 #include <utility>
@@ -90,18 +89,6 @@ constexpr std::uint8_t kPivotFieldItemKindData = 0;
 
 Error CorruptError(const char* message) {
   return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, message, "context=xlsb_pivot_reader");
-}
-
-Expected<double, Error> ReadDouble(ByteSpan& cursor) {
-  if (cursor.size < sizeof(double)) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb pivot record double truncated",
-                      "context=xlsb_pivot_reader");
-  }
-  double value = 0.0;
-  std::memcpy(&value, cursor.data, sizeof(value));
-  cursor.data += sizeof(double);
-  cursor.size -= sizeof(double);
-  return value;
 }
 
 /// How a record cell encodes the value for one cache field.
@@ -316,7 +303,7 @@ Expected<void, Error> DecodeCacheRecords(ByteSpan cursor, const std::vector<Cell
         record.cells.push_back(Value::number(static_cast<double>(index_or.value())));
         record.cell_is_index.push_back(true);
       } else {
-        auto value_or = ReadDouble(payload);
+        auto value_or = read_double(payload);
         if (!value_or) {
           return value_or.error();
         }

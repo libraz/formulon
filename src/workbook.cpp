@@ -25,10 +25,12 @@
 #include "eval/recalc_engine.h"
 #include "eval/scheduler.h"
 #include "external_link.h"
+#include "io/auto_filter_xml.h"
 #include "io/dynamic_array_formula.h"
 #include "io/format_detect.h"
 #include "io/future_functions.h"
 #include "io/ooxml_writer.h"
+#include "io/theme_part.h"
 #include "io/workbook_kind_ooxml.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/writer.h"
@@ -107,6 +109,18 @@ void Workbook::add_workbook_relationship(std::string type, std::string target) {
   rel.type = std::move(type);
   rel.target = std::move(target);
   unknown_workbook_rels_.push_back(std::move(rel));
+}
+
+LoadedTheme Workbook::load_theme() const {
+  return io::load_theme(*this);
+}
+
+Expected<void, Error> Workbook::set_theme_colors(const ThemeColors& colors) {
+  return io::set_theme_colors(*this, colors);
+}
+
+Expected<void, Error> Workbook::set_theme_fonts(const ThemeFonts& fonts) {
+  return io::set_theme_fonts(*this, fonts);
 }
 
 namespace {
@@ -965,7 +979,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter_xml(std::size_t sheet_inde
   if (xml.empty()) {
     return remove_sheet_auto_filter(sheet_index);
   }
-  Expected<AutoFilter, Error> parsed = parse_auto_filter_xml(xml);
+  Expected<AutoFilter, Error> parsed = io::parse_auto_filter_xml(xml);
   if (parsed && validate_auto_filter(parsed.value())) {
     return set_sheet_auto_filter(sheet_index, std::move(parsed.value()));
   }
@@ -974,7 +988,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter_xml(std::size_t sheet_inde
     return make_error(FormulonErrorCode::kInvalidArgument, "set_sheet_auto_filter_xml: sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index));
   }
-  sheets_[sheet_index].set_auto_filter_xml(std::string(xml));
+  sheets_[sheet_index].set_auto_filter(io::auto_filter_from_xml(xml));
   mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
   return Expected<void, Error>::Ok();
 }
@@ -1191,25 +1205,14 @@ void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::Locke
   mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, row, col);
 }
 
-void mark_blocked_spill_anchors_intersecting_merge(const eval::RecalcEngine::LockedMutator& mutator,
-                                                   std::size_t sheet_index, const std::vector<Sheet>& sheets,
-                                                   const MergeRange& merge) {
-  if (merge.first_row > merge.last_row || merge.first_col > merge.last_col ||
-      !Sheet::coord_in_grid(merge.first_row, merge.first_col) ||
-      !Sheet::coord_in_grid(merge.last_row, merge.last_col)) {
-    return;
-  }
-  const std::uint32_t rows = merge.last_row - merge.first_row + 1U;
-  const std::uint32_t cols = merge.last_col - merge.first_col + 1U;
-  for (const CellAddress anchor :
-       sheets[sheet_index].blocked_spill_anchors_intersecting(merge.first_row, merge.first_col, rows, cols)) {
-    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
-  }
-}
+/// `Sheet::blocked_spill_anchors_intersecting` or
+/// `Sheet::committed_spill_anchors_intersecting`.
+using SpillAnchorQuery = std::vector<CellAddress> (Sheet::*)(std::uint32_t, std::uint32_t, std::uint32_t,
+                                                             std::uint32_t) const;
 
-void mark_committed_spill_anchors_intersecting_merge(const eval::RecalcEngine::LockedMutator& mutator,
-                                                     std::size_t sheet_index, const std::vector<Sheet>& sheets,
-                                                     const MergeRange& merge) {
+void mark_spill_anchors_intersecting_merge(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
+                                           const std::vector<Sheet>& sheets, const MergeRange& merge,
+                                           SpillAnchorQuery query) {
   if (merge.first_row > merge.last_row || merge.first_col > merge.last_col ||
       !Sheet::coord_in_grid(merge.first_row, merge.first_col) ||
       !Sheet::coord_in_grid(merge.last_row, merge.last_col)) {
@@ -1217,8 +1220,7 @@ void mark_committed_spill_anchors_intersecting_merge(const eval::RecalcEngine::L
   }
   const std::uint32_t rows = merge.last_row - merge.first_row + 1U;
   const std::uint32_t cols = merge.last_col - merge.first_col + 1U;
-  for (const CellAddress anchor :
-       sheets[sheet_index].committed_spill_anchors_intersecting(merge.first_row, merge.first_col, rows, cols)) {
+  for (const CellAddress anchor : (sheets[sheet_index].*query)(merge.first_row, merge.first_col, rows, cols)) {
     mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
   }
 }
@@ -1435,7 +1437,8 @@ Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange me
   // A merge added over a committed spill becomes a blocker for the next
   // evaluation. Keep the anchor dirty so recalc clears the old rectangle and
   // records the resulting #SPILL! state under the normal commit contract.
-  mark_committed_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, merge);
+  mark_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, merge,
+                                        &Sheet::committed_spill_anchors_intersecting);
   return Expected<void, Error>::Ok();
 }
 
@@ -1448,7 +1451,8 @@ Expected<void, Error> Workbook::remove_merges_intersecting(std::size_t sheet_ind
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   const std::vector<MergeRange> removed = sheets_[sheet_index].remove_merges_intersecting(merge);
   for (const MergeRange& erased : removed) {
-    mark_blocked_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, erased);
+    mark_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, erased,
+                                          &Sheet::blocked_spill_anchors_intersecting);
   }
   return Expected<void, Error>::Ok();
 }
@@ -1465,7 +1469,8 @@ Expected<void, Error> Workbook::remove_merge_at(std::size_t sheet_index, std::si
     return make_error(FormulonErrorCode::kInvalidArgument, "remove_merge_at: index out of range",
                       "index=" + std::to_string(index));
   }
-  mark_blocked_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, removed);
+  mark_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, removed,
+                                        &Sheet::blocked_spill_anchors_intersecting);
   return Expected<void, Error>::Ok();
 }
 
@@ -1901,10 +1906,10 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   // change that alters which hidden rows count as filtered.
   const bool had_sheet_filter = target.has_auto_filter();
   std::vector<std::string> filters_before;
-  filters_before.push_back(target.auto_filter_xml());
+  filters_before.push_back(io::auto_filter_xml(target.auto_filter()));
   for (const TableMetadata& table : wb.tables()) {
     if (table.sheet_index == sheet_index) {
-      filters_before.push_back(table.auto_filter_xml.xml());
+      filters_before.push_back(io::auto_filter_xml(table.auto_filter_xml.get()));
     }
   }
   rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
@@ -1937,7 +1942,7 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   shift_drawing_anchors(wb, sheet_index, origin, count, edit == parser::RowColEdit::kDelete,
                         axis == parser::RowColAxis::kRow);
   std::vector<std::string> filters_after;
-  filters_after.push_back(target.auto_filter_xml());
+  filters_after.push_back(io::auto_filter_xml(target.auto_filter()));
   for (TableMetadata& table : wb.mutable_tables()) {
     if (table.sheet_index != sheet_index) {
       continue;
@@ -1947,7 +1952,7 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
                                                 axis == parser::RowColAxis::kRow, /*header_delete_removes=*/false)) {
       table.auto_filter_xml.reset();
     }
-    filters_after.push_back(table.auto_filter_xml.xml());
+    filters_after.push_back(io::auto_filter_xml(table.auto_filter_xml.get()));
   }
   // A sheet AutoFilter the edit removed takes its `_FilterDatabase` name
   // with it; the full re-index below covers formulas naming it.

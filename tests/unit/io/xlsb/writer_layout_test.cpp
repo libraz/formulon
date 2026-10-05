@@ -9,6 +9,7 @@
 
 #include "cell.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -247,7 +248,7 @@ TEST(XlsbWriter, ReportsDeferredSheetFeatures) {
   hyperlink.target = "https://example.com";
   sheet.mutable_hyperlinks().push_back(std::move(hyperlink));
   sheet.mutable_validations().push_back(DataValidation{});
-  sheet.set_auto_filter_xml("<autoFilter ref=\"A1:B2\"/>");
+  sheet.set_auto_filter(io::auto_filter_from_xml("<autoFilter ref=\"A1:B2\"/>"));
   sheet.mutable_view().freeze_rows = 1U;
 
   auto write_or = write_xlsb_with_result(wb);

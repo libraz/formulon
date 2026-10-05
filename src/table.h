@@ -76,10 +76,9 @@ struct TableMetadata {
   /// visual style survives a save cycle; the engine does not model table
   /// styles.
   std::string table_style_info_xml;
-  /// Table AutoFilter. Keeps the name of the raw element it replaced and
-  /// reads/writes as that element (`AutoFilterSlot`); the typed model is the
-  /// source of truth. `Workbook::set_table_auto_filter` also dirties
-  /// row-visibility dependents.
+  /// Table AutoFilter. Keeps the name of the raw element it replaced;
+  /// `io/auto_filter_xml.h` reads and writes the element.
+  /// `Workbook::set_table_auto_filter` also dirties row-visibility dependents.
   AutoFilterSlot auto_filter_xml;
   /// Unmodelled table-level sort and extension payloads retained verbatim in
   /// their schema positions on write.

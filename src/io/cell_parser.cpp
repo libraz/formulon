@@ -31,8 +31,6 @@
 #include <vector>
 
 #include "io/iso_date.h"
-#include "io/phonetic_pr.h"
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "io/xsd_int.h"
@@ -145,28 +143,10 @@ std::uint32_t ParseColumnLetters(std::string_view text, std::size_t* i) {
 /// Walks `is_node`'s descendants and concatenates every `<t>` text node
 /// payload into `out`, in document order. Thin wrapper over the shared
 /// `append_rich_text` helper (which skips `<rPh>` so phonetic guides do
-/// not leak into the surface string; `CollectInlinePhoneticRuns` walks
+/// not leak into the surface string; `append_phonetic_runs` walks
 /// them separately).
 void ConcatInlineStringText(const pugi::xml_node& is_node, std::string& out) {
   (void)append_rich_text(is_node, out);
-}
-
-/// Collects every `<rPh>` direct child of `is_node` into `out`, one run
-/// per block, in document order. The `sb`/`eb` attributes delimit the
-/// surface-text span each block's kana covers, in UTF-16 code units, and
-/// are preserved: PHONETIC replaces only the annotated spans and passes
-/// the rest of the string through, so the boundaries are observable.
-/// Mirrors `CollectPhoneticRuns` on the shared-strings side.
-void CollectInlinePhoneticRuns(const pugi::xml_node& is_node, std::vector<PhoneticRun>& out) {
-  for (pugi::xml_node rph = is_node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
-    PhoneticRun run;
-    run.sb = static_cast<std::uint32_t>(rph.attribute("sb").as_uint(0U));
-    run.eb = static_cast<std::uint32_t>(rph.attribute("eb").as_uint(0U));
-    for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
-      AppendOoxmlTextUnescaped(run.text, t.text().get());
-    }
-    out.push_back(std::move(run));
-  }
 }
 
 }  // namespace
@@ -416,12 +396,8 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   // their kana, so unlike the cell's surface text they do not borrow
   // from `text_storage`.
   if (is_node) {
-    CollectInlinePhoneticRuns(is_node, out.phonetic_runs);
-    if (pugi::xml_node pr = is_node.child("phoneticPr")) {
-      out.phonetic_props.font_id = static_cast<std::uint16_t>(pr.attribute("fontId").as_uint(0U));
-      out.phonetic_props.type = parse_phonetic_type(pr.attribute("type").value());
-      out.phonetic_props.alignment = parse_phonetic_alignment(pr.attribute("alignment").value());
-    }
+    append_phonetic_runs(is_node, out.phonetic_runs);
+    out.phonetic_props = read_phonetic_properties(is_node);
   }
   return out;
 }

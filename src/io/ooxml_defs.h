@@ -1,7 +1,7 @@
 //
 // Shared OOXML schema constants used by the reader and writer.
-// Only the relationship type URIs that BOTH sides need are hoisted
-// here; content-type strings that are needed by exactly one side
+// Only the relationship type URIs that more than one reader / writer
+// (OOXML or XLSB) needs are hoisted here; content-type strings that are needed by exactly one side
 // (e.g. the `kCtWorkbook*` family the reader uses for kind detection,
 // or the writer-only `kCtPackageRels` / `kCtComments`) stay in the
 // consuming `.cpp` so this header tracks the minimum shared surface
@@ -66,6 +66,16 @@ inline constexpr std::string_view kRelDdeLink =
 inline constexpr std::string_view kRelThreadedComment =
     "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment";
 inline constexpr std::string_view kRelPerson = "http://schemas.microsoft.com/office/2017/10/relationships/person";
+inline constexpr std::string_view kRelTheme =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+inline constexpr std::string_view kRelSheetMetadata =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
+inline constexpr std::string_view kRelCoreProperties =
+    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+inline constexpr std::string_view kRelExtendedProperties =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+inline constexpr std::string_view kRelCustomProperties =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 
 }  // namespace io
 }  // namespace formulon

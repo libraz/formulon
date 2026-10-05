@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/ooxml/shared_strings_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "phonetic.h"
@@ -37,40 +38,6 @@ constexpr std::uint16_t kPhoneticFlagsBase = 0x0030U;
 std::uint16_t pack_phonetic_flags(PhoneticProperties props) {
   return static_cast<std::uint16_t>(kPhoneticFlagsBase | (props.type & 0x03U) |
                                     static_cast<std::uint16_t>((props.alignment & 0x03U) << 2U));
-}
-
-/// Builds the interner key for one payload.
-///
-/// Length-prefixes every field for the same reason the OOXML shared
-/// strings writer does: without it, adjacent fields could be re-cut into
-/// the same byte sequence and collide two distinct annotations onto one
-/// entry.
-std::string key_for(std::string_view text, const std::vector<PhoneticRun>& phonetic,
-                    PhoneticProperties phonetic_props) {
-  std::string key;
-  key.reserve(text.size() + 32U + phonetic.size() * 16U);
-  key.append(std::to_string(text.size()));
-  key.push_back(':');
-  key.append(text);
-  for (const PhoneticRun& run : phonetic) {
-    key.push_back(';');
-    key.append(std::to_string(run.sb));
-    key.push_back(',');
-    key.append(std::to_string(run.eb));
-    key.push_back(',');
-    key.append(std::to_string(run.text.size()));
-    key.push_back(':');
-    key.append(run.text);
-  }
-  if (!phonetic.empty()) {
-    key.push_back('|');
-    key.append(std::to_string(phonetic_props.font_id));
-    key.push_back(',');
-    key.append(std::to_string(phonetic_props.type));
-    key.push_back(',');
-    key.append(std::to_string(phonetic_props.alignment));
-  }
-  return key;
 }
 
 /// Narrows a UTF-16 offset to the `u16` the record format stores.
@@ -110,7 +77,7 @@ void emit_phonetic_tail(std::vector<std::uint8_t>& payload, const std::vector<Ph
 
 std::uint32_t SstBuilder::intern(std::string_view text, const std::vector<PhoneticRun>& phonetic,
                                  PhoneticProperties phonetic_props) {
-  std::string key = key_for(text, phonetic, phonetic_props);
+  std::string key = SharedStringKey(text, phonetic, phonetic_props);
   if (auto it = index_.find(key); it != index_.end()) {
     return it->second;
   }

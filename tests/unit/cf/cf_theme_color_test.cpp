@@ -144,9 +144,9 @@ TEST(CfThemeColor, LiteralRgbIsUntouched) {
 
 TEST(CfThemeColor, ThemeEditIsReflected) {
   Fixture f(kColorScaleXml);
-  ThemeColors colors = load_theme(f.wb).theme.colors;
+  ThemeColors colors = f.wb.load_theme().theme.colors;
   colors[4] = 0xFF204060U;  // accent1 (clrScheme order)
-  ASSERT_TRUE(static_cast<bool>(set_theme_colors(f.wb, colors)));
+  ASSERT_TRUE(static_cast<bool>(f.wb.set_theme_colors(colors)));
   const auto results = f.Evaluate();
   const Color got = *MatchAt(results, 0, 0)->resolved_fill_color;
   EXPECT_NE(got, Rgb(0x8E, 0xA9, 0xDB));

@@ -10,6 +10,7 @@
 #include "c_api/parts/common.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
 #include "workbook.h"
@@ -171,9 +172,9 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   // Seed payload that the C ABI deliberately does not model. The update must
   // rewrite only the opening autoFilter ref and retain every raw payload.
   auto& table = wb.handle->wb->mutable_tables()[index];
-  table.auto_filter_xml =
+  table.auto_filter_xml.set(formulon::io::auto_filter_from_xml(
       "<autoFilter ref=\"A1:B3\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
-      "</autoFilter>";
+      "</autoFilter>"));
   table.sort_state_xml = "<sortState ref=\"A1:B3\"><sortCondition ref=\"B2:B3\" descending=\"1\"/></sortState>";
   table.table_style_info_xml = "<tableStyleInfo name=\"CustomStyle\" showRowStripes=\"0\"/>";
   table.ext_lst_xml = "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>";
@@ -182,8 +183,8 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   EXPECT_EQ(table.ref, "A1:B4");
   EXPECT_TRUE(table.header_row);
   EXPECT_TRUE(table.totals_row);
-  EXPECT_NE(table.auto_filter_xml.find("ref=\"A1:B4\""), std::string::npos);
-  EXPECT_NE(table.auto_filter_xml.find("filterColumn"), std::string::npos);
+  EXPECT_NE(formulon::io::auto_filter_xml(table.auto_filter_xml.get()).find("ref=\"A1:B4\""), std::string::npos);
+  EXPECT_NE(formulon::io::auto_filter_xml(table.auto_filter_xml.get()).find("filterColumn"), std::string::npos);
   EXPECT_NE(table.sort_state_xml.find("ref=\"A1:B3\""), std::string::npos);
   EXPECT_NE(table.sort_state_xml.find("sortCondition"), std::string::npos);
   EXPECT_EQ(table.table_style_info_xml, "<tableStyleInfo name=\"CustomStyle\" showRowStripes=\"0\"/>");
@@ -198,9 +199,9 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   EXPECT_EQ(reloaded.ref, "A1:B4");
   EXPECT_TRUE(reloaded.header_row);
   EXPECT_TRUE(reloaded.totals_row);
-  EXPECT_NE(reloaded.auto_filter_xml.find("ref=\"A1:B4\""), std::string::npos);
-  EXPECT_NE(reloaded.auto_filter_xml.find("filterColumn"), std::string::npos);
-  EXPECT_NE(reloaded.auto_filter_xml.find("West"), std::string::npos);
+  EXPECT_NE(formulon::io::auto_filter_xml(reloaded.auto_filter_xml.get()).find("ref=\"A1:B4\""), std::string::npos);
+  EXPECT_NE(formulon::io::auto_filter_xml(reloaded.auto_filter_xml.get()).find("filterColumn"), std::string::npos);
+  EXPECT_NE(formulon::io::auto_filter_xml(reloaded.auto_filter_xml.get()).find("West"), std::string::npos);
   EXPECT_EQ(reloaded.sort_state_xml,
             "<sortState ref=\"A1:B3\"><sortCondition ref=\"B2:B3\" descending=\"1\"/></sortState>");
   EXPECT_EQ(reloaded.table_style_info_xml, "<tableStyleInfo name=\"CustomStyle\" showRowStripes=\"0\"/>");

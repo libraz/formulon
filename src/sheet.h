@@ -1357,17 +1357,9 @@ class Sheet {
     unknown_relationships_ = std::move(relationships);
   }
 
-  /// The worksheet `<autoFilter>` element serialized from the model, or empty
-  /// when the sheet has no AutoFilter. The writer emits it in ECMA-376 order
-  /// (after `<sheetProtection>`, before `<mergeCells>`).
-  std::string auto_filter_xml() const { return auto_filter_.xml(); }
-
-  /// Replaces the AutoFilter from its element; empty removes it, and a
-  /// fragment the model cannot represent is kept opaque. Plain metadata: the
-  /// `Workbook` setters also maintain `_FilterDatabase` and dirty state.
-  void set_auto_filter_xml(std::string xml) { auto_filter_.set_xml(xml); }
-
-  /// The sheet AutoFilter, or nullptr. May be opaque (`is_opaque()`).
+  /// The sheet AutoFilter, or nullptr. May be opaque (`is_opaque()`). The
+  /// setters are plain metadata: the `Workbook` setters also maintain
+  /// `_FilterDatabase` and dirty state.
   const AutoFilter* auto_filter() const noexcept { return auto_filter_.get(); }
   bool has_auto_filter() const noexcept { return !auto_filter_.empty(); }
   void set_auto_filter(AutoFilter filter) { auto_filter_.set(std::move(filter)); }

@@ -15,7 +15,7 @@
 // validations, hyperlinks, sheet protection, page breaks, sheet rels)
 // live in `src/io/ooxml/sheet_xml_builder.{h,cpp}`. The pipeline-only
 // pieces — `BuildTableXml`, `BuildExternalLinkRels`,
-// `BuildPivotCacheDefinitionRels`, and `write_ooxml()` itself — stay
+// `BuildSingleRelationshipRels`, and `write_ooxml()` itself — stay
 // here because each is consumed only by `write_ooxml()`.
 
 #include "io/ooxml_writer.h"
@@ -23,7 +23,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
@@ -33,6 +32,7 @@
 #include <vector>
 
 #include "external_link.h"
+#include "io/auto_filter_xml.h"
 #include "io/comments_writer.h"
 #include "io/dynamic_array_formula.h"
 #include "io/ooxml/emission_plan.h"
@@ -67,17 +67,17 @@ namespace formulon {
 namespace io {
 namespace {
 
-/// Builds the `_rels` document for a pivotCacheDefinition part: a single
-/// relationship of type `pivotCacheRecords` pointing at the matching
-/// records part. The records target lives in the same directory as the
-/// definition, so the `Target` is just the basename (e.g.
-/// `"pivotCacheRecords1.xml"`).
-std::string BuildPivotCacheDefinitionRels(std::string_view records_filename) {
+/// Builds a `_rels` document holding the single relationship `rId1` of
+/// `type` to `target`. A pivotCacheDefinition part relates to its records
+/// part (a basename in the same directory); a pivotTable part relates to
+/// its cache definition, which ECMA-376 §12.3.19 requires even though the
+/// table also names the cache by `cacheId`.
+std::string BuildSingleRelationshipRels(std::string_view type, std::string_view target) {
   std::string out;
-  out.reserve(256 + records_filename.size());
+  out.reserve(256 + target.size());
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  AppendRelationship(out, 1, kRelPivotCacheRecords, records_filename);
+  AppendRelationship(out, 1, type, target);
   out.append("</Relationships>\n");
   return out;
 }
@@ -127,22 +127,6 @@ std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivo
     return std::nullopt;
   }
   return PivotRenderedSpan{layout_or.value().rows, layout_or.value().cols};
-}
-
-/// Builds the `_rels` document for a pivotTable part: a single
-/// relationship of type `pivotCacheDefinition` pointing at the cache the
-/// table draws from. ECMA-376 §12.3.19 requires this relationship even
-/// though the table also names the cache by `cacheId`, so consumers that
-/// navigate the package by relationship alone can still find it. The
-/// target steps out of `xl/pivotTables/` into `xl/pivotCache/`.
-std::string BuildPivotTableRels(std::string_view cache_definition_target) {
-  std::string out;
-  out.reserve(256 + cache_definition_target.size());
-  out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  AppendRelationship(out, 1, kRelPivotCacheDefinition, cache_definition_target);
-  out.append("</Relationships>\n");
-  return out;
 }
 
 /// Builds the per-link rels file content for one external link.
@@ -204,7 +188,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   // the sort and extension fragments are retained verbatim.
   if (!t.auto_filter_xml.empty()) {
     out.append("  ");
-    out.append(t.auto_filter_xml.xml());
+    out.append(serialize_auto_filter(*t.auto_filter_xml.get()));
     out.push_back('\n');
   }
   if (!t.sort_state_xml.empty()) {
@@ -505,8 +489,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       const std::string_view records_filename = slash == std::string::npos
                                                     ? std::string_view(c.records_path)
                                                     : std::string_view(c.records_path).substr(slash + 1);
-      auto result = AddPart(writer.get(), c.definition_rels_path, BuildPivotCacheDefinitionRels(records_filename),
-                            &written_paths);
+      auto result = AddPart(writer.get(), c.definition_rels_path,
+                            BuildSingleRelationshipRels(kRelPivotCacheRecords, records_filename), &written_paths);
       if (!result) {
         return result.error();
       }
@@ -527,7 +511,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       // no rels part, so the package never carries a dangling target.
       if (!t.cache_definition_target.empty()) {
         auto rels_result =
-            AddPart(writer.get(), t.rels_path, BuildPivotTableRels(t.cache_definition_target), &written_paths);
+            AddPart(writer.get(), t.rels_path,
+                    BuildSingleRelationshipRels(kRelPivotCacheDefinition, t.cache_definition_target), &written_paths);
         if (!rels_result) {
           return rels_result.error();
         }
@@ -635,34 +620,11 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
   }
 
-  // Finalise into a heap buffer, then copy into a std::vector so the caller
-  // owns the bytes through normal RAII.
-  void* archive_ptr = nullptr;
-  std::size_t archive_size = 0;
-  if (mz_zip_writer_finalize_heap_archive(writer.get(), &archive_ptr, &archive_size) == MZ_FALSE) {
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_finalize_heap_archive failed",
-                      "context=write_ooxml");
+  auto bytes_or = FinalizeArchive(writer, "context=write_ooxml");
+  if (!bytes_or) {
+    return bytes_or.error();
   }
-  if (mz_zip_writer_end(writer.get()) == MZ_FALSE) {
-    // finalize succeeded but end failed — still free the buffer miniz handed
-    // us before surfacing the error.
-    if (archive_ptr != nullptr) {
-      mz_free(archive_ptr);
-    }
-    writer.release();
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_end failed", "context=write_ooxml");
-  }
-  writer.release();
-
-  std::vector<std::uint8_t> bytes;
-  bytes.resize(archive_size);
-  if (archive_size > 0 && archive_ptr != nullptr) {
-    std::memcpy(bytes.data(), archive_ptr, archive_size);
-  }
-  if (archive_ptr != nullptr) {
-    mz_free(archive_ptr);
-  }
-  return OoxmlWriteResult{std::move(bytes), diagnostics};
+  return OoxmlWriteResult{std::move(bytes_or.value()), diagnostics};
 }
 
 Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {

@@ -186,6 +186,10 @@ std::string NumberedPartPath(std::string_view prefix, std::uint32_t id, std::str
 /// calcChain, sharedStrings, ...).
 bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path);
 
+/// Same as above over a bare kept-part list; shared with the XLSB writer,
+/// whose emission plan carries the same list.
+bool HasPassthroughPart(const std::vector<const PassthroughPart*>& passthrough_kept, std::string_view path);
+
 /// True when `content_type` names a part whose body is a stream of
 /// MS-XLSB binary records rather than XML.
 ///

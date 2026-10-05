@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "io/ooxml_reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
@@ -391,7 +392,8 @@ TEST(OoxmlSheetFeaturesBatch, TableStyleInfoRoundTrips) {
   ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
   ASSERT_EQ(load_or.value().workbook.tables().size(), 1U);
   EXPECT_NE(load_or.value().workbook.tables()[0].table_style_info_xml.find("TableStyleMedium2"), std::string::npos);
-  EXPECT_NE(load_or.value().workbook.tables()[0].auto_filter_xml.find("north"), std::string::npos);
+  EXPECT_NE(io::auto_filter_xml(load_or.value().workbook.tables()[0].auto_filter_xml.get()).find("north"),
+            std::string::npos);
   EXPECT_NE(load_or.value().workbook.tables()[0].sort_state_xml.find("descending=\"1\""), std::string::npos);
   EXPECT_NE(load_or.value().workbook.tables()[0].ext_lst_xml.find("urn:test:table-extension"), std::string::npos);
   EXPECT_NE(load_or.value().workbook.tables()[0].columns[0].extra_attrs.find("dataDxfId=\"4\""), std::string::npos);

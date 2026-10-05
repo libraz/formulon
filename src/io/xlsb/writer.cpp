@@ -11,7 +11,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <limits>
 #include <optional>
 #include <string>
@@ -29,7 +28,9 @@
 #include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
+#include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml/zip_part_writer.h"
+#include "io/ooxml_defs.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
@@ -83,25 +84,6 @@ constexpr std::string_view kCtWorksheetXlsb = "application/vnd.ms-excel.workshee
 constexpr std::string_view kCtSharedStringsXlsb = "application/vnd.ms-excel.sharedStrings";
 constexpr std::string_view kCtStylesXlsb = "application/vnd.ms-excel.styles";
 constexpr std::string_view kCtSheetMetadataXlsb = "application/vnd.ms-excel.sheetMetadata";
-
-constexpr std::string_view kRelOfficeDocument =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
-constexpr std::string_view kRelWorksheet =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
-constexpr std::string_view kRelSharedStrings =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
-constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
-constexpr std::string_view kRelTheme = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
-constexpr std::string_view kRelHyperlink =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
-constexpr std::string_view kRelSheetMetadata =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
-constexpr std::string_view kRelCoreProps =
-    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
-constexpr std::string_view kRelExtendedProps =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
-constexpr std::string_view kRelCustomProps =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 
 // ---------------------------------------------------------------------------
 // Emission plan: where do passthrough parts land, do any collide?
@@ -568,70 +550,6 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   return out;
 }
 
-// Appends one `<Relationship>` with a fresh rId drawn from `*next_rid`.
-void AppendRelationship(std::string& out, std::size_t* next_rid, std::string_view type, std::string_view target,
-                        bool target_external = false) {
-  out.append("  <Relationship Id=\"rId");
-  out.append(std::to_string((*next_rid)++));
-  out.append("\" Type=\"");
-  AppendXmlAttrEscaped(out, type);
-  out.append("\" Target=\"");
-  // `Target` is an `xsd:anyURI` the rels reader takes verbatim from the
-  // parser, so it gets the attribute rule and no OOXML escaping.
-  AppendXmlAttrEscaped(out, target);
-  if (target_external) {
-    out.append("\" TargetMode=\"External\"/>\n");
-  } else {
-    out.append("\"/>\n");
-  }
-}
-
-// Returns true when a passthrough part with `path` will be emitted.
-bool HasPassthrough(const EmissionPlan& plan, std::string_view path) {
-  for (const PassthroughPart* part : plan.passthrough_kept) {
-    if (part->path == path) {
-      return true;
-    }
-  }
-  return false;
-}
-
-std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics) {
-  std::string out;
-  out.reserve(384);
-  out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  std::size_t next_rid = 1;
-  AppendRelationship(out, &next_rid, kRelOfficeDocument, "xl/workbook.bin");
-  // docProps parts ride the passthrough path but need package-level rels or
-  // Excel treats them as orphaned (and drops the document properties).
-  if (HasPassthrough(plan, "docProps/core.xml")) {
-    AppendRelationship(out, &next_rid, kRelCoreProps, "docProps/core.xml");
-  }
-  if (HasPassthrough(plan, "docProps/app.xml")) {
-    AppendRelationship(out, &next_rid, kRelExtendedProps, "docProps/app.xml");
-  }
-  if (HasPassthrough(plan, "docProps/custom.xml")) {
-    AppendRelationship(out, &next_rid, kRelCustomProps, "docProps/custom.xml");
-  }
-  for (const UnknownRelationship& r : wb.unknown_package_rels()) {
-    if (!r.target_external && !HasPassthrough(plan, r.target)) {
-      StructuredLog("xlsb.writer.package_rel_skipped")
-          .field("reason", std::string_view("target_part_absent"))
-          .field("type", r.type)
-          .field("target", r.target)
-          .warn();
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_relationship_count;
-      }
-      continue;
-    }
-    AppendRelationship(out, &next_rid, r.type, r.target, r.target_external);
-  }
-  out.append("</Relationships>\n");
-  return out;
-}
-
 // Builds `xl/worksheets/_rels/sheet<N>.bin.rels`, or an empty string when the
 // sheet has nothing to relate to.
 //
@@ -643,7 +561,7 @@ std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan, Write
 std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, WriteDiagnostics* diagnostics) {
   std::string entries;
   for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
-    if (!rel.target_external && !HasPassthrough(plan, rel.target)) {
+    if (!rel.target_external && !HasPassthroughPart(plan.passthrough_kept, rel.target)) {
       StructuredLog("xlsb.writer.sheet_rel_skipped")
           .field("reason", std::string_view("target_part_absent"))
           .field("type", rel.type)
@@ -707,7 +625,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   out.reserve(256 + sheet_count * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  std::size_t next_rid = 1;
+  std::uint32_t next_rid = 1;
   for (std::size_t i = 0; i < sheet_count; ++i) {
     out.append("  <Relationship Id=\"rId");
     out.append(std::to_string(next_rid++));
@@ -718,21 +636,24 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
     out.append(".bin\"/>\n");
   }
   if (emit_sst) {
-    AppendRelationship(out, &next_rid, kRelSharedStrings, "sharedStrings.bin");
+    AppendRelationship(out, next_rid++, kRelSharedStrings, "sharedStrings.bin", /*target_external=*/false,
+                       /*escape_target=*/true);
   }
   // The styles / theme / metadata parts ride the passthrough path, but the
   // reader (and Excel) locate them only through these workbook relationships.
   // Without them a styled cell's iStyleRef dangles against an empty style
   // table, and the theme / metadata parts are treated as orphans. Emit a rel
   // for each part that is actually present in the package.
-  if (plan.has_generated_styles || HasPassthrough(plan, "xl/styles.bin")) {
-    AppendRelationship(out, &next_rid, kRelStyles, "styles.bin");
+  if (plan.has_generated_styles || HasPassthroughPart(plan.passthrough_kept, "xl/styles.bin")) {
+    AppendRelationship(out, next_rid++, kRelStyles, "styles.bin", /*target_external=*/false, /*escape_target=*/true);
   }
-  if (HasPassthrough(plan, "xl/theme/theme1.xml")) {
-    AppendRelationship(out, &next_rid, kRelTheme, "theme/theme1.xml");
+  if (HasPassthroughPart(plan.passthrough_kept, "xl/theme/theme1.xml")) {
+    AppendRelationship(out, next_rid++, kRelTheme, "theme/theme1.xml", /*target_external=*/false,
+                       /*escape_target=*/true);
   }
-  if (plan.has_generated_dynamic_metadata || HasPassthrough(plan, "xl/metadata.bin")) {
-    AppendRelationship(out, &next_rid, kRelSheetMetadata, "metadata.bin");
+  if (plan.has_generated_dynamic_metadata || HasPassthroughPart(plan.passthrough_kept, "xl/metadata.bin")) {
+    AppendRelationship(out, next_rid++, kRelSheetMetadata, "metadata.bin", /*target_external=*/false,
+                       /*escape_target=*/true);
   }
   // Preserve relationships to raw XLSB parts that the reader does not model
   // (drawings, VBA, custom XML, etc.).  Internal targets are stored as
@@ -740,7 +661,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   // `xl/`.  Do not duplicate relationships which the generated package
   // already owns above.
   for (const UnknownRelationship& rel : wb.unknown_workbook_rels()) {
-    if (!rel.target_external && !HasPassthrough(plan, rel.target)) {
+    if (!rel.target_external && !HasPassthroughPart(plan.passthrough_kept, rel.target)) {
       StructuredLog("xlsb.writer.workbook_rel_skipped")
           .field("reason", std::string_view("target_part_absent"))
           .field("type", rel.type)
@@ -756,7 +677,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
       continue;
     }
     const std::string target = rel.target_external ? rel.target : std::string(WithoutXlPrefix(rel.target));
-    AppendRelationship(out, &next_rid, rel.type, target, rel.target_external);
+    AppendRelationship(out, next_rid++, rel.type, target, rel.target_external, /*escape_target=*/true);
   }
   out.append("</Relationships>\n");
   return out;
@@ -838,7 +759,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     return r.error();
   }
   // 2. _rels/.rels
-  if (auto r = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(workbook, plan, &diagnostics)); !r) {
+  if (auto r = AddPart(writer.get(), "_rels/.rels",
+                       BuildPackageRels(workbook, "xl/workbook.bin", plan.passthrough_kept,
+                                        "xlsb.writer.package_rel_skipped", &diagnostics));
+      !r) {
     return r.error();
   }
   // 3. xl/_rels/workbook.bin.rels
@@ -923,32 +847,12 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     }
   }
 
-  // Finalise into a heap buffer, then copy into a std::vector.
-  void* archive_ptr = nullptr;
-  std::size_t archive_size = 0;
-  if (mz_zip_writer_finalize_heap_archive(writer.get(), &archive_ptr, &archive_size) == MZ_FALSE) {
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_finalize_heap_archive failed",
-                      "context=write_xlsb");
-  }
-  if (mz_zip_writer_end(writer.get()) == MZ_FALSE) {
-    if (archive_ptr != nullptr) {
-      mz_free(archive_ptr);
-    }
-    writer.release();
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_end failed", "context=write_xlsb");
-  }
-  writer.release();
-
-  std::vector<std::uint8_t> bytes;
-  bytes.resize(archive_size);
-  if (archive_size > 0 && archive_ptr != nullptr) {
-    std::memcpy(bytes.data(), archive_ptr, archive_size);
-  }
-  if (archive_ptr != nullptr) {
-    mz_free(archive_ptr);
+  auto bytes_or = FinalizeArchive(writer, "context=write_xlsb");
+  if (!bytes_or) {
+    return bytes_or.error();
   }
   diagnostics.downgraded_formula_count = downgraded_formula_count;
-  return XlsbWriteResult{std::move(bytes), diagnostics};
+  return XlsbWriteResult{std::move(bytes_or.value()), diagnostics};
 }
 
 Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) {

@@ -14,6 +14,7 @@
 #include <tuple>
 #include <vector>
 
+#include "io/array_anchor_budget.h"
 #include "io/xlsb/ptg_reader.h"
 #include "phonetic.h"
 #include "sheet.h"
@@ -26,18 +27,6 @@ class Workbook;
 
 namespace io {
 namespace xlsb {
-
-/// A dynamic-array formula's anchor cell plus its footprint, decoded
-/// from a `BrtArrFmla` record's `RfX`. `row` / `col` is the anchor
-/// (`rwFirst`, `colFirst`); `last_row` / `last_col` is the footprint's
-/// bottom-right corner (`rwLast`, `colLast`). One-cell array anchors are
-/// retained as well so dynamic-array metadata survives an XLSB rewrite.
-struct ArrayAnchor {
-  std::uint32_t row = 0;
-  std::uint32_t col = 0;
-  std::uint32_t last_row = 0;
-  std::uint32_t last_col = 0;
-};
 
 /// Per-sheet decode state. The reader walks records in order and
 /// updates `current_row` whenever it sees a `BrtRowHdr`. Cell records

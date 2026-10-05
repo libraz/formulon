@@ -355,56 +355,7 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
 }  // namespace
 
 Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) {
-  // Validate and charge every footprint before the first reserve or cell
-  // walk. This keeps a later malformed/over-budget anchor from arriving
-  // after an earlier one has already started an attacker-sized operation.
-  ResourceBudget budget(kMaxDynamicArrayCells, FormulonErrorCode::kIoSheetCorrupt);
-  for (const ArrayAnchor& a : anchors) {
-    auto cells_or = checked_array_anchor_cells(a.row, a.col, a.last_row, a.last_col, FormulonErrorCode::kIoSheetCorrupt,
-                                               "context=sheet_reader array_anchor");
-    if (!cells_or) {
-      return cells_or.error();
-    }
-    std::string context("context=sheet_reader format=ooxml anchor_row=");
-    context.append(std::to_string(a.row));
-    context.append(" anchor_col=");
-    context.append(std::to_string(a.col));
-    context.append(" last_row=");
-    context.append(std::to_string(a.last_row));
-    context.append(" last_col=");
-    context.append(std::to_string(a.last_col));
-    auto charged = consume_array_anchor_budget(budget, cells_or.value(), std::move(context));
-    if (!charged) {
-      return charged.error();
-    }
-  }
-
-  for (const ArrayAnchor& a : anchors) {
-    const std::uint32_t rows = a.last_row - a.row + 1U;
-    const std::uint32_t cols = a.last_col - a.col + 1U;
-    const std::uint64_t cell_count = static_cast<std::uint64_t>(rows) * cols;
-    std::vector<Value> values;
-    values.reserve(static_cast<std::size_t>(cell_count));
-    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
-      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
-        const Cell* cell = sheet.cell_at(r, c);
-        values.push_back(cell != nullptr ? cell->cached_value : Value::blank());
-      }
-    }
-    // Blank the non-anchor cells: their values now live in the region as
-    // phantoms, and blanking keeps them from blocking either this commit's
-    // collision scan or the anchor's re-spill on recalc.
-    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
-      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
-        if (r == a.row && c == a.col) {
-          continue;
-        }
-        sheet.set_cell_cached_value(r, c, Value::blank());
-      }
-    }
-    sheet.commit_spill(a.row, a.col, rows, cols, std::move(values));
-  }
-  return Expected<void, Error>::Ok();
+  return register_array_spills(sheet, anchors, FormulonErrorCode::kIoSheetCorrupt, "sheet_reader", "ooxml");
 }
 
 Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::size_t sheet_index, Workbook& workbook,

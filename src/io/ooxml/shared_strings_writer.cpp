@@ -21,8 +21,8 @@
 namespace formulon {
 namespace io {
 
-std::string SharedStrings::key_for(std::string_view text, const std::vector<PhoneticRun>& phonetic,
-                                   PhoneticProperties phonetic_props) {
+std::string SharedStringKey(std::string_view text, const std::vector<PhoneticRun>& phonetic,
+                            PhoneticProperties phonetic_props) {
   std::string key;
   key.reserve(text.size() + 32U + phonetic.size() * 16U);
   key.append(std::to_string(text.size()));
@@ -55,7 +55,7 @@ std::string SharedStrings::key_for(std::string_view text, const std::vector<Phon
 std::uint32_t SharedStrings::intern(std::string_view text, const std::vector<PhoneticRun>& phonetic,
                                     PhoneticProperties phonetic_props) {
   ++total_count_;
-  const std::string key = key_for(text, phonetic, phonetic_props);
+  const std::string key = SharedStringKey(text, phonetic, phonetic_props);
   const auto found = index_.find(key);
   if (found != index_.end()) {
     return found->second;
@@ -68,7 +68,7 @@ std::uint32_t SharedStrings::intern(std::string_view text, const std::vector<Pho
 
 std::uint32_t SharedStrings::index_of(std::string_view text, const std::vector<PhoneticRun>& phonetic,
                                       PhoneticProperties phonetic_props) const {
-  const auto found = index_.find(key_for(text, phonetic, phonetic_props));
+  const auto found = index_.find(SharedStringKey(text, phonetic, phonetic_props));
   // `BuildSharedStrings` visits the same literal-cell set before any
   // worksheet is written, so this fallback is unreachable in normal use.
   // Keep the writer exception-free even if a future caller violates that

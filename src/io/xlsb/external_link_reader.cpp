@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <utility>
 
@@ -32,18 +31,6 @@ constexpr std::size_t kExternArea3dBytes = 13U;
 
 Error CorruptError(const char* message) {
   return make_error(FormulonErrorCode::kIoXlsbCorrupt, message, "context=xlsb_external_link_reader");
-}
-
-Expected<double, Error> ReadDouble(ByteSpan& cursor) {
-  if (cursor.size < sizeof(double)) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb extern cell double truncated",
-                      "context=xlsb_external_link_reader");
-  }
-  double value = 0.0;
-  std::memcpy(&value, cursor.data, sizeof(value));
-  cursor.data += sizeof(double);
-  cursor.size -= sizeof(double);
-  return value;
 }
 
 /// Decodes a defined name's stored formula into the rectangle it names.
@@ -185,7 +172,7 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor) {
         if (!col_or) {
           return col_or.error();
         }
-        auto value_or = ReadDouble(payload);
+        auto value_or = read_double(payload);
         if (!value_or) {
           return value_or.error();
         }

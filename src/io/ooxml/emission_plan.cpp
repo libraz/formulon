@@ -42,7 +42,11 @@ std::string NumberedPartPath(std::string_view prefix, std::uint32_t id, std::str
 }
 
 bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path) {
-  for (const PassthroughPart* part : plan.passthrough_kept) {
+  return HasPassthroughPart(plan.passthrough_kept, path);
+}
+
+bool HasPassthroughPart(const std::vector<const PassthroughPart*>& passthrough_kept, std::string_view path) {
+  for (const PassthroughPart* part : passthrough_kept) {
     if (part != nullptr && part->path == path) {
       return true;
     }

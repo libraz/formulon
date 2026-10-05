@@ -19,6 +19,7 @@
 #include "c_api/parts/common.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "io/format_detect.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
@@ -226,7 +227,7 @@ TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnes
   hyperlink.target = "https://example.com";
   sheet.mutable_hyperlinks().push_back(std::move(hyperlink));
   sheet.mutable_validations().push_back(formulon::DataValidation{});
-  sheet.set_auto_filter_xml("<autoFilter ref=\"A1:B2\"/>");
+  sheet.set_auto_filter(formulon::io::auto_filter_from_xml("<autoFilter ref=\"A1:B2\"/>"));
 
   // The OOXML writer represents all of the above, so a clean XLSX save
   // reports nothing lost -- including on the two fields both writers own.
