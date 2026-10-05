@@ -394,6 +394,14 @@ fm_sheet_get_page_setup
 fm_sheet_get_page_margins
 fm_sheet_set_range_xf_index
 
+# -- Drawing images --------------------------------------------------------------
+fm_workbook_probe_image
+fm_sheet_drawing_object_count
+fm_sheet_drawing_object_at
+fm_sheet_get_image
+fm_sheet_insert_image
+fm_sheet_remove_image
+
 # -- Version ---------------------------------------------------------------------
 fm_version_string
 

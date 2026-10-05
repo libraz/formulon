@@ -314,6 +314,32 @@ class ColorContext(IntEnum):
     FILL_BACKGROUND = 2
     BORDER = 3
 
+class ImageFormat(IntEnum):
+    UNKNOWN = 0
+    PNG = 1
+    JPEG = 2
+    GIF = 3
+    BMP = 4
+
+class DrawingObjectKind(IntEnum):
+    PICTURE = 0
+    SHAPE = 1
+    CHART = 2
+    GROUP = 3
+    CONNECTOR = 4
+    GRAPHIC_FRAME = 5
+    OTHER = 6
+
+class AnchorKind(IntEnum):
+    ONE_CELL = 0
+    TWO_CELL = 1
+    ABSOLUTE = 2
+
+class AnchorEditAs(IntEnum):
+    TWO_CELL = 0
+    ONE_CELL = 1
+    ABSOLUTE = 2
+
 class ColorResolution(IntEnum):
     EXACT = 0
     DEFAULT_THEME = 1
@@ -671,6 +697,53 @@ class ThreadedComment:
         parent_id: str = ...,
         done: bool = ...,
         mentions: List[Mention] = ...,
+    ) -> None: ...
+
+class ImageInfo:
+    format: Union[ImageFormat, int]
+    px_width: int
+    px_height: int
+    def __init__(self, format: Union[ImageFormat, int], px_width: int, px_height: int) -> None: ...
+
+class DrawingObject:
+    object_id: int
+    kind: Union[DrawingObjectKind, int]
+    anchor_kind: Union[AnchorKind, int]
+    edit_as: Union[AnchorEditAs, int]
+    from_row: int
+    from_col: int
+    from_row_off: int
+    from_col_off: int
+    to_row: int
+    to_col: int
+    to_row_off: int
+    to_col_off: int
+    cx: int
+    cy: int
+    image_format: Union[ImageFormat, int]
+    name: str
+    descr: str
+    media_path: str
+    def __init__(
+        self,
+        object_id: int,
+        kind: Union[DrawingObjectKind, int],
+        anchor_kind: Union[AnchorKind, int],
+        edit_as: Union[AnchorEditAs, int],
+        from_row: int,
+        from_col: int,
+        from_row_off: int,
+        from_col_off: int,
+        to_row: int,
+        to_col: int,
+        to_row_off: int,
+        to_col_off: int,
+        cx: int,
+        cy: int,
+        image_format: Union[ImageFormat, int],
+        name: str,
+        descr: str,
+        media_path: str,
     ) -> None: ...
 
 class Person:
@@ -1680,6 +1753,26 @@ class Workbook:
     ) -> None: ...
     def set_thread_resolved(self, sheet: int, thread_id: str, done: bool) -> None: ...
     def remove_threaded_comment(self, sheet: int, comment_id: str) -> None: ...
+    def probe_image(self, data: Union[bytes, bytearray, memoryview]) -> ImageInfo: ...
+    def list_drawing_objects(self, sheet: int) -> List[DrawingObject]: ...
+    def get_image(self, sheet: int, object_id: int) -> bytes: ...
+    def insert_image(
+        self,
+        sheet: int,
+        data: Union[bytes, bytearray, memoryview],
+        *,
+        name: str = ...,
+        descr: str = ...,
+        anchor_kind: Union[AnchorKind, int] = ...,
+        edit_as: Union[AnchorEditAs, int] = ...,
+        row: int = ...,
+        col: int = ...,
+        row_off_emu: int = ...,
+        col_off_emu: int = ...,
+        width_emu: int = ...,
+        height_emu: int = ...,
+    ) -> int: ...
+    def remove_image(self, sheet: int, object_id: int) -> None: ...
     def get_persons(self) -> List[Person]: ...
     def add_person(self, person: Person) -> None: ...
     def remove_person(self, person_id: str) -> None: ...

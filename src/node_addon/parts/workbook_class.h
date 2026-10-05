@@ -377,6 +377,13 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddPerson(const Napi::CallbackInfo& info);
   Napi::Value RemovePerson(const Napi::CallbackInfo& info);
 
+  // Drawing images.
+  Napi::Value ProbeImage(const Napi::CallbackInfo& info);
+  Napi::Value ListDrawingObjects(const Napi::CallbackInfo& info);
+  Napi::Value GetImage(const Napi::CallbackInfo& info);
+  Napi::Value InsertImage(const Napi::CallbackInfo& info);
+  Napi::Value RemoveImage(const Napi::CallbackInfo& info);
+
   // ---- Argument helpers (visible to all part TUs) -------------------
   //
   // Made public-static so per-area TUs can reach them without a friend

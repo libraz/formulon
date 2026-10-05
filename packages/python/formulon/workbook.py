@@ -42,6 +42,12 @@ __all__ = [
     "CfMatch",
     "CfValueObject",
     "ColorContext",
+    "ImageFormat",
+    "DrawingObjectKind",
+    "AnchorKind",
+    "AnchorEditAs",
+    "ImageInfo",
+    "DrawingObject",
     "FilterKind",
     "FilterOperator",
     "DynamicFilterType",
@@ -446,6 +452,44 @@ class ColorContext(IntEnum):
     FILL_FOREGROUND = 1
     FILL_BACKGROUND = 2
     BORDER = 3
+
+
+class ImageFormat(IntEnum):
+    """Raster format of an image (``fm_image_format_t``)."""
+
+    UNKNOWN = 0
+    PNG = 1
+    JPEG = 2
+    GIF = 3
+    BMP = 4
+
+
+class DrawingObjectKind(IntEnum):
+    """What a drawing anchor holds (``fm_drawing_object_kind_t``)."""
+
+    PICTURE = 0
+    SHAPE = 1
+    CHART = 2
+    GROUP = 3
+    CONNECTOR = 4
+    GRAPHIC_FRAME = 5
+    OTHER = 6
+
+
+class AnchorKind(IntEnum):
+    """Anchor element type of a drawing object (``fm_anchor_kind_t``)."""
+
+    ONE_CELL = 0
+    TWO_CELL = 1
+    ABSOLUTE = 2
+
+
+class AnchorEditAs(IntEnum):
+    """How a drawing object follows row and column edits (``fm_anchor_edit_as_t``)."""
+
+    TWO_CELL = 0
+    ONE_CELL = 1
+    ABSOLUTE = 2
 
 
 class ColorResolution(IntEnum):
@@ -906,6 +950,39 @@ class Person:
     display_name: str
     user_id: str = ""
     provider_id: str = ""
+
+
+@dataclass
+class ImageInfo:
+    """Format and pixel size of an image."""
+
+    format: Union[ImageFormat, int]
+    px_width: int
+    px_height: int
+
+
+@dataclass
+class DrawingObject:
+    """One anchored object of a sheet's drawing; sizes and offsets are in EMU."""
+
+    object_id: int
+    kind: Union[DrawingObjectKind, int]
+    anchor_kind: Union[AnchorKind, int]
+    edit_as: Union[AnchorEditAs, int]
+    from_row: int
+    from_col: int
+    from_row_off: int
+    from_col_off: int
+    to_row: int
+    to_col: int
+    to_row_off: int
+    to_col_off: int
+    cx: int
+    cy: int
+    image_format: Union[ImageFormat, int]
+    name: str
+    descr: str
+    media_path: str
 
 
 @dataclass
@@ -1954,6 +2031,12 @@ def _alloc_out_u64() -> int:
     ptr = LIB.alloc(8)
     LIB.write_bytes(ptr, b"\x00" * 8)
     return ptr
+
+
+def _read_image_info(ptr: int) -> ImageInfo:
+    """Decode an ``fm_image_info`` block."""
+    d = S.IMAGE_INFO.unpack(LIB, ptr)
+    return ImageInfo(format=d["format"], px_width=d["px_width"], px_height=d["px_height"])
 
 
 def _alloc_struct_array(layout: S.Struct, count: int, owned: List[int]) -> int:
@@ -4444,6 +4527,142 @@ class Workbook:
             )
         finally:
             LIB.free(id_ptr)
+
+    # -- Drawing images ------------------------------------------------------
+    def probe_image(self, data: Union[bytes, bytearray, memoryview]) -> ImageInfo:
+        """Sniff the format and pixel size of PNG, JPEG, GIF or BMP bytes without touching the workbook."""
+        h = self._require()
+        raw = bytes(data)
+        buf = LIB.alloc_bytes(raw)
+        info = S.alloc_struct(LIB, S.IMAGE_INFO)
+        try:
+            _check(LIB.fm_workbook_probe_image(h, buf, _uint(len(raw), "len"), info), "fm_workbook_probe_image")
+            return _read_image_info(info)
+        finally:
+            LIB.free(info)
+            LIB.free(buf)
+
+    def list_drawing_objects(self, sheet: int) -> List[DrawingObject]:
+        """Return the anchored objects of the sheet's drawing in document order."""
+        h = self._require()
+        n = _read_count(LIB.fm_sheet_drawing_object_count, h, _uint(sheet, "sheet_index"))
+        ptr = S.alloc_struct(LIB, S.DRAWING_OBJECT)
+        out: List[DrawingObject] = []
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.DRAWING_OBJECT, ptr)
+                _check(
+                    LIB.fm_sheet_drawing_object_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
+                    "fm_sheet_drawing_object_at",
+                )
+                d = S.DRAWING_OBJECT.unpack(LIB, ptr)
+                out.append(
+                    DrawingObject(
+                        object_id=d["object_id"],
+                        kind=d["kind"],
+                        anchor_kind=d["anchor_kind"],
+                        edit_as=d["edit_as"],
+                        from_row=d["from_row"],
+                        from_col=d["from_col"],
+                        from_row_off=d["from_row_off"],
+                        from_col_off=d["from_col_off"],
+                        to_row=d["to_row"],
+                        to_col=d["to_col"],
+                        to_row_off=d["to_row_off"],
+                        to_col_off=d["to_col_off"],
+                        cx=d["cx"],
+                        cy=d["cy"],
+                        image_format=d["image_format"],
+                        name=LIB.read_cstr(d["name"]),
+                        descr=LIB.read_cstr(d["descr"]),
+                        media_path=LIB.read_cstr(d["media_path"]),
+                    )
+                )
+        finally:
+            LIB.free(ptr)
+        return out
+
+    def get_image(self, sheet: int, object_id: int) -> bytes:
+        """Return the bytes of the picture ``object_id`` (copied out of WASM memory)."""
+        h = self._require()
+        bytes_ptr = _alloc_out_ptr()
+        len_ptr = _alloc_out_ptr()
+        info = S.alloc_struct(LIB, S.IMAGE_INFO)
+        try:
+            _check(
+                LIB.fm_sheet_get_image(
+                    h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), bytes_ptr, len_ptr, info
+                ),
+                "fm_sheet_get_image",
+            )
+            return LIB.read_bytes(LIB.read_u32(bytes_ptr), LIB.read_u32(len_ptr))
+        finally:
+            LIB.free(info)
+            LIB.free(len_ptr)
+            LIB.free(bytes_ptr)
+
+    def insert_image(
+        self,
+        sheet: int,
+        data: Union[bytes, bytearray, memoryview],
+        *,
+        name: str = "",
+        descr: str = "",
+        anchor_kind: Union[AnchorKind, int] = AnchorKind.ONE_CELL,
+        edit_as: Union[AnchorEditAs, int] = AnchorEditAs.TWO_CELL,
+        row: int = 0,
+        col: int = 0,
+        row_off_emu: int = 0,
+        col_off_emu: int = 0,
+        width_emu: int = 0,
+        height_emu: int = 0,
+    ) -> int:
+        """Insert an image anchored at ``(row, col)`` and return its object id.
+
+        A ``width_emu`` or ``height_emu`` of ``0`` means the image's pixel size
+        times 9525. ``edit_as`` is honoured for a two-cell anchor only.
+        """
+        h = self._require()
+        raw = bytes(data)
+        owned: List[int] = []
+        out = _alloc_out_ptr()
+        try:
+            owned.append(out)
+            buf = LIB.alloc_bytes(raw)
+            owned.append(buf)
+            ptr = _alloc_struct_array(S.IMAGE_INSERT, 1, owned)
+            S.IMAGE_INSERT.pack(
+                LIB,
+                ptr,
+                {
+                    "anchor_kind": _sint(anchor_kind, "anchor_kind"),
+                    "edit_as": _sint(edit_as, "edit_as"),
+                    "row": _uint(row, "row"),
+                    "col": _uint(col, "col"),
+                    "row_off_emu": int(row_off_emu),
+                    "col_off_emu": int(col_off_emu),
+                    "width_emu": int(width_emu),
+                    "height_emu": int(height_emu),
+                },
+            )
+            S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "name", name, owned)
+            S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "descr", descr, owned)
+            _check(
+                LIB.fm_sheet_insert_image(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), ptr, out),
+                "fm_sheet_insert_image",
+            )
+            return LIB.read_u32(out)
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def remove_image(self, sheet: int, object_id: int) -> None:
+        """Remove the picture ``object_id``; other drawing content is kept."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_remove_image(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id")),
+            "fm_sheet_remove_image",
+        )
 
     def get_persons(self) -> List[Person]:
         """Return the workbook's person list in file order."""

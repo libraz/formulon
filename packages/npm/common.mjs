@@ -154,6 +154,18 @@ export const ColorResolution = Object.freeze({
   ThemeUnparseable: 3,
   AutoContext: 4,
 });
+export const ImageFormat = Object.freeze({ Unknown: 0, Png: 1, Jpeg: 2, Gif: 3, Bmp: 4 });
+export const DrawingObjectKind = Object.freeze({
+  Picture: 0,
+  Shape: 1,
+  Chart: 2,
+  Group: 3,
+  Connector: 4,
+  GraphicFrame: 5,
+  Other: 6,
+});
+export const AnchorKind = Object.freeze({ OneCell: 0, TwoCell: 1, Absolute: 2 });
+export const AnchorEditAs = Object.freeze({ TwoCell: 0, OneCell: 1, Absolute: 2 });
 export const ThemeSource = Object.freeze({ Part: 0, Default: 1, Unparseable: 2 });
 export const EffectiveStyleSource = Object.freeze({ Cell: 0, Row: 1, Column: 2, Default: 3 });
 export const DisplayStatus = Object.freeze({ Ok: 0, Overflow: 1, InvalidFormat: 2 });

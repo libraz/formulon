@@ -11,6 +11,7 @@ Layout rules (wasm32 / ILP32):
   * ``int32`` / ``uint32`` are 4 bytes, 4-aligned;
   * ``uint16`` is 2 bytes, 2-aligned;
   * ``uint8`` is 1 byte, 1-aligned;
+  * ``int64`` is 8 bytes, 8-aligned;
   * ``double`` is 8 bytes, 8-aligned;
   * a struct's size is rounded up to its largest member alignment.
 
@@ -29,6 +30,7 @@ from typing import Dict, List, Optional, Tuple
 PTR = ("ptr", 4, 4)
 U32 = ("u32", 4, 4)
 I32 = ("i32", 4, 4)
+I64 = ("i64", 8, 8)
 U16 = ("u16", 2, 2)
 U8 = ("u8", 1, 1)
 F64 = ("f64", 8, 8)
@@ -52,6 +54,7 @@ _FMT = {
     "ptr": "<I",
     "u32": "<I",
     "i32": "<i",
+    "i64": "<q",
     "u16": "<H",
     "u8": "<B",
     "f64": "<d",
@@ -1012,4 +1015,54 @@ THREADED_COMMENT = Struct(
 PERSON = Struct(
     "fm_person",
     [("id", PTR), ("display_name", PTR), ("user_id", PTR), ("provider_id", PTR)],
+)
+
+
+# ---------------------------------------------------------------------------
+# Drawing images
+# ---------------------------------------------------------------------------
+
+IMAGE_INFO = Struct(
+    "fm_image_info",
+    [("format", I32), ("px_width", U32), ("px_height", U32)],
+)
+
+DRAWING_OBJECT = Struct(
+    "fm_drawing_object",
+    [
+        ("object_id", U32),
+        ("kind", I32),
+        ("anchor_kind", I32),
+        ("edit_as", I32),
+        ("from_row", U32),
+        ("from_col", U32),
+        ("from_row_off", I64),
+        ("from_col_off", I64),
+        ("to_row", U32),
+        ("to_col", U32),
+        ("to_row_off", I64),
+        ("to_col_off", I64),
+        ("cx", I64),
+        ("cy", I64),
+        ("image_format", I32),
+        ("name", PTR),
+        ("descr", PTR),
+        ("media_path", PTR),
+    ],
+)
+
+IMAGE_INSERT = Struct(
+    "fm_image_insert",
+    [
+        ("name", PTR),
+        ("descr", PTR),
+        ("anchor_kind", I32),
+        ("edit_as", I32),
+        ("row", U32),
+        ("col", U32),
+        ("row_off_emu", I64),
+        ("col_off_emu", I64),
+        ("width_emu", I64),
+        ("height_emu", I64),
+    ],
 )

@@ -758,6 +758,7 @@ test('list getters carry a status and stop at the first element failure', async 
       ['getValidations', () => wb.getValidations(0)],
       ['getConditionalFormats', () => wb.getConditionalFormats(0)],
       ['getExternalLinks', () => wb.getExternalLinks()],
+      ['listDrawingObjects', () => wb.listDrawingObjects(0)],
     ]) {
       const list = call();
       assert.ok(Array.isArray(list), `${name} must stay an array`);
@@ -772,6 +773,7 @@ test('list getters carry a status and stop at the first element failure', async 
       ['getHyperlinks', () => wb.getHyperlinks(99)],
       ['getValidations', () => wb.getValidations(99)],
       ['getConditionalFormats', () => wb.getConditionalFormats(99)],
+      ['listDrawingObjects', () => wb.listDrawingObjects(99)],
     ]) {
       const list = call();
       assert.ok(Array.isArray(list), `${name} must stay an array`);

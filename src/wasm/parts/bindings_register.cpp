@@ -257,6 +257,15 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getPersons", &JsWorkbook::getPersons)
       .function("addPerson", &JsWorkbook::addPerson)
       .function("removePerson", &JsWorkbook::removePerson)
+      .function("probeImage", &JsWorkbook::probeImage)
+      .function("listDrawingObjects", &JsWorkbook::listDrawingObjects)
+      .function("getImage", &JsWorkbook::getImage)
+      .function("insertImage", &JsWorkbook::insertImage)
+      .function("insertImage",
+                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, emscripten::val bytes) {
+                  return self.insertImage(sheet, bytes, emscripten::val::object());
+                }))
+      .function("removeImage", &JsWorkbook::removeImage)
       .function("getCellRectPt", &JsWorkbook::getCellRectPt)
       .function("getColumnWidthPt", &JsWorkbook::getColumnWidthPt)
       .function("getDisplayText", &JsWorkbook::getDisplayText)

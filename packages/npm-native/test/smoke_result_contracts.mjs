@@ -131,6 +131,9 @@ function envelopeProbes(wb) {
     ['AutoFilterEvalResult', true, () => wb.evaluateAutoFilter(99)],
     ['ThreadedCommentsResult', true, () => wb.getThreadedComments(99)],
     ['PersonsResult', false, () => wb.getPersons()],
+    ['ImageInfoResult', true, () => wb.probeImage(new Uint8Array(0))],
+    ['ImageResult', true, () => wb.getImage(99, 1)],
+    ['InsertImageResult', true, () => wb.insertImage(99, new Uint8Array(0), {})],
     ['ValidationOutcomeResult', true, () => wb.validateValue(99, 0, 0, { kind: 1, number: 1 })],
   ];
 }

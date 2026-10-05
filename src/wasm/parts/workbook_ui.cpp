@@ -916,6 +916,123 @@ JsStatus JsWorkbook::removePerson(const std::string& id) {
   return status_from_rc(fm_workbook_remove_person(handle_, id.c_str()));
 }
 
+// ---- Drawing images ----------------------------------------------------
+
+namespace {
+
+/// Envelope for the image calls: `status` plus the header info, zeroed on failure.
+emscripten::val image_info_to_val(fm_status_t rc, const fm_image_info& info) {
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  o.set("format", rc == 0 ? info.format : 0);
+  o.set("pxWidth", rc == 0 ? info.px_width : 0U);
+  o.set("pxHeight", rc == 0 ? info.px_height : 0U);
+  return o;
+}
+
+emscripten::val drawing_object_to_val(const fm_drawing_object& d) {
+  emscripten::val o = emscripten::val::object();
+  o.set("objectId", d.object_id);
+  o.set("kind", d.kind);
+  o.set("anchorKind", d.anchor_kind);
+  o.set("editAs", d.edit_as);
+  o.set("fromRow", d.from_row);
+  o.set("fromCol", d.from_col);
+  o.set("fromRowOff", static_cast<double>(d.from_row_off));
+  o.set("fromColOff", static_cast<double>(d.from_col_off));
+  o.set("toRow", d.to_row);
+  o.set("toCol", d.to_col);
+  o.set("toRowOff", static_cast<double>(d.to_row_off));
+  o.set("toColOff", static_cast<double>(d.to_col_off));
+  o.set("cx", static_cast<double>(d.cx));
+  o.set("cy", static_cast<double>(d.cy));
+  o.set("imageFormat", d.image_format);
+  js_set_cstr_fields(o, {{"name", d.name}, {"descr", d.descr}, {"mediaPath", d.media_path}});
+  return o;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::probeImage(emscripten::val bytes) const {
+  if (handle_ == nullptr) {
+    return image_info_to_val(kBindingInvalidHandle, fm_image_info{});
+  }
+  const std::vector<uint8_t> data = val_to_bytes(bytes);
+  fm_image_info info{};
+  const fm_status_t rc = fm_workbook_probe_image(handle_, data.data(), data.size(), &info);
+  return image_info_to_val(rc, info);
+}
+
+emscripten::val JsWorkbook::listDrawingObjects(uint32_t sheet) const {
+  emscripten::val arr = emscripten::val::array();
+  if (handle_ == nullptr) {
+    arr.set("status", error_status(kBindingInvalidHandle));
+    return arr;
+  }
+  size_t count = 0;
+  fm_status_t rc = fm_sheet_drawing_object_count(handle_, sheet, &count);
+  for (size_t i = 0; rc == 0 && i < count; ++i) {
+    fm_drawing_object d{};
+    rc = fm_sheet_drawing_object_at(handle_, sheet, i, &d);
+    if (rc == 0) {
+      arr.call<void>("push", drawing_object_to_val(d));
+    }
+  }
+  arr.set("status", status_from_rc(rc));
+  return arr;
+}
+
+emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
+  emscripten::val o;
+  if (handle_ == nullptr) {
+    o = image_info_to_val(kBindingInvalidHandle, fm_image_info{});
+    o.set("bytes", bytes_to_val(nullptr, 0));
+    return o;
+  }
+  const uint8_t* data = nullptr;
+  size_t len = 0;
+  fm_image_info info{};
+  const fm_status_t rc = fm_sheet_get_image(handle_, sheet, objectId, &data, &len, &info);
+  o = image_info_to_val(rc, info);
+  o.set("bytes", bytes_to_val(rc == 0 ? data : nullptr, rc == 0 ? len : 0));
+  return o;
+}
+
+emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
+  emscripten::val o = emscripten::val::object();
+  o.set("objectId", 0U);
+  if (handle_ == nullptr) {
+    o.set("status", error_status(kBindingInvalidHandle));
+    return o;
+  }
+  const std::vector<uint8_t> data = val_to_bytes(bytes);
+  std::string name_store;
+  std::string descr_store;
+  fm_image_insert ins{};
+  ins.name = js_pull_optional_string(opts, "name", name_store);
+  ins.descr = js_pull_optional_string(opts, "descr", descr_store);
+  ins.anchor_kind = js_pull_i32(opts, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
+  ins.edit_as = js_pull_i32(opts, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
+  ins.row = js_pull_u32(opts, "row", 0U);
+  ins.col = js_pull_u32(opts, "col", 0U);
+  ins.row_off_emu = static_cast<int64_t>(js_pull_double(opts, "rowOffEmu", 0.0));
+  ins.col_off_emu = static_cast<int64_t>(js_pull_double(opts, "colOffEmu", 0.0));
+  ins.width_emu = static_cast<int64_t>(js_pull_double(opts, "widthEmu", 0.0));
+  ins.height_emu = static_cast<int64_t>(js_pull_double(opts, "heightEmu", 0.0));
+  uint32_t id = 0;
+  const fm_status_t rc = fm_sheet_insert_image(handle_, sheet, data.data(), data.size(), &ins, &id);
+  o.set("status", status_from_rc(rc));
+  o.set("objectId", rc == 0 ? id : 0U);
+  return o;
+}
+
+JsStatus JsWorkbook::removeImage(uint32_t sheet, uint32_t objectId) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  return status_from_rc(fm_sheet_remove_image(handle_, sheet, objectId));
+}
+
 }  // namespace parts
 }  // namespace wasm
 }  // namespace formulon

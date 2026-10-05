@@ -6401,6 +6401,201 @@ FM_API fm_status_t fm_workbook_external_link_count(fm_workbook_t* wb, uint32_t* 
 FM_API fm_status_t fm_workbook_external_link_at(fm_workbook_t* wb, uint32_t index, fm_external_link_record_t* out);
 
 /* -------------------------------------------------------------------------- */
+/* Drawing images                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** @brief Raster format of an image; `UNKNOWN` marks "no image bytes found". */
+typedef enum {
+  FM_IMAGE_FORMAT_UNKNOWN = 0,
+  FM_IMAGE_FORMAT_PNG = 1,
+  FM_IMAGE_FORMAT_JPEG = 2,
+  FM_IMAGE_FORMAT_GIF = 3,
+  FM_IMAGE_FORMAT_BMP = 4,
+} fm_image_format_t;
+
+/** @brief What a drawing anchor holds. */
+typedef enum {
+  FM_DRAWING_OBJECT_PICTURE = 0,
+  FM_DRAWING_OBJECT_SHAPE = 1,
+  FM_DRAWING_OBJECT_CHART = 2,
+  FM_DRAWING_OBJECT_GROUP = 3,
+  FM_DRAWING_OBJECT_CONNECTOR = 4,
+  FM_DRAWING_OBJECT_GRAPHIC_FRAME = 5,
+  FM_DRAWING_OBJECT_OTHER = 6,
+} fm_drawing_object_kind_t;
+
+/** @brief The anchor element type of a drawing object. */
+typedef enum {
+  FM_ANCHOR_KIND_ONE_CELL = 0,
+  FM_ANCHOR_KIND_TWO_CELL = 1,
+  FM_ANCHOR_KIND_ABSOLUTE = 2,
+} fm_anchor_kind_t;
+
+/** @brief How a drawing object follows row and column edits. */
+typedef enum {
+  FM_ANCHOR_EDIT_AS_TWO_CELL = 0,
+  FM_ANCHOR_EDIT_AS_ONE_CELL = 1,
+  FM_ANCHOR_EDIT_AS_ABSOLUTE = 2,
+} fm_anchor_edit_as_t;
+
+/**
+ * @brief Format and pixel size of an image. `format` is an
+ *        `fm_image_format_t`.
+ */
+typedef struct {
+  int32_t format;
+  uint32_t px_width;
+  uint32_t px_height;
+} fm_image_info;
+
+/**
+ * @brief One anchored object of a sheet's drawing.
+ *
+ * `kind` is an `fm_drawing_object_kind_t`, `anchor_kind` an
+ * `fm_anchor_kind_t` and `edit_as` an `fm_anchor_edit_as_t`. `from_*` is the
+ * top-left marker (an absolute anchor reports its position from A1 as
+ * `from_col_off` = x and `from_row_off` = y); `to_*` is the bottom-right
+ * marker of a two-cell anchor and zero otherwise. `cx` and `cy` are the size
+ * in EMU. `image_format` is an `fm_image_format_t`, non-zero for a picture
+ * whose media part is present. `name`, `descr` and `media_path` are
+ * read-scratch-backed views (the lifetime `fm_sheet_get_auto_filter`
+ * describes); `media_path` is empty for a non-picture.
+ */
+typedef struct {
+  uint32_t object_id;
+  int32_t kind;
+  int32_t anchor_kind;
+  int32_t edit_as;
+  uint32_t from_row;
+  uint32_t from_col;
+  int64_t from_row_off;
+  int64_t from_col_off;
+  uint32_t to_row;
+  uint32_t to_col;
+  int64_t to_row_off;
+  int64_t to_col_off;
+  int64_t cx;
+  int64_t cy;
+  int32_t image_format;
+  const char* name;
+  const char* descr;
+  const char* media_path;
+} fm_drawing_object;
+
+/**
+ * @brief Placement of an inserted image.
+ *
+ * `anchor_kind` is `FM_ANCHOR_KIND_ONE_CELL` or `FM_ANCHOR_KIND_TWO_CELL`;
+ * `edit_as` (an `fm_anchor_edit_as_t`) is honoured for a two-cell anchor
+ * only. `row`/`col` is the 0-based top-left cell and `*_off_emu` the offset
+ * inside it. A `width_emu` or `height_emu` of `0` means the image's pixel
+ * size times 9525. `name` and `descr` may be `NULL`, meaning empty; an empty
+ * name becomes `Picture <id>`.
+ */
+typedef struct {
+  const char* name;
+  const char* descr;
+  int32_t anchor_kind;
+  int32_t edit_as;
+  uint32_t row;
+  uint32_t col;
+  int64_t row_off_emu;
+  int64_t col_off_emu;
+  int64_t width_emu;
+  int64_t height_emu;
+} fm_image_insert;
+
+/**
+ * @brief Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes
+ *        from the header alone, without touching the workbook.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kIoImageUnsupported` (5023) when the bytes are not a recognised
+ *         image, the header is truncated, or a dimension is zero.
+ */
+FM_API fm_status_t fm_workbook_probe_image(const fm_workbook_t* wb, const uint8_t* bytes, size_t len,
+                                           fm_image_info* out);
+
+/**
+ * @brief Number of anchored objects in the sheet's drawing; `0` for a sheet
+ *        without a drawing.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out_count == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ */
+FM_API fm_status_t fm_sheet_drawing_object_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Reads object `idx` of the sheet's drawing, in document order.
+ *
+ * The three strings are read-scratch-backed views.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out == NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ */
+FM_API fm_status_t fm_sheet_drawing_object_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                              fm_drawing_object* out);
+
+/**
+ * @brief Returns the media bytes and header info of the picture `object_id`.
+ *
+ * `*out_bytes` points into the workbook's own storage and is not
+ * NUL-terminated: it stays valid until the next call that mutates the
+ * workbook (insert, remove, any edit) or the handle is destroyed; unrelated
+ * reads do not invalidate it. Copy it to keep it longer.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ *         has no picture `object_id` with a present media part;
+ *         `kIoImageUnsupported` (5023) when the media bytes are not a
+ *         recognised image;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ */
+FM_API fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                      const uint8_t** out_bytes, size_t* out_len, fm_image_info* out_info);
+
+/**
+ * @brief Inserts `bytes` as a picture and returns its object id, unique
+ *        within the sheet's drawing.
+ *
+ * Existing charts, shapes and every other drawing content are kept. A sheet
+ * without a drawing gets a new one.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, an enum
+ *         field is outside its domain, the anchor kind is absolute, an
+ *         offset or size is negative or 2^31 EMU or more, the anchor lies
+ *         outside the sheet, the image exceeds 32 MiB, or the package would
+ *         exceed the reader's limits;
+ *         `kIoImageUnsupported` (5023) when `bytes` is not a recognised image;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or was retained from an `.xlsb` package. The workbook is then
+ *         unchanged.
+ */
+FM_API fm_status_t fm_sheet_insert_image(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
+                                         const fm_image_insert* opts, uint32_t* out_object_id);
+
+/**
+ * @brief Removes the picture `object_id`, and its media part and
+ *        relationship once nothing else references them.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ *         has no picture with that id;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or was retained from an `.xlsb` package.
+ */
+FM_API fm_status_t fm_sheet_remove_image(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
+
+/* -------------------------------------------------------------------------- */
 /* Version                                                                    */
 /* -------------------------------------------------------------------------- */
 

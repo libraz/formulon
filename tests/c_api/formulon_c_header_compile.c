@@ -87,6 +87,9 @@ int main(void) {
   _Static_assert(sizeof(fm_threaded_comment) == (sizeof(void*) == 4 ? 40 : 72),
                  "fm_threaded_comment ABI layout changed");
   _Static_assert(sizeof(fm_person) == 4 * sizeof(void*), "fm_person ABI layout changed");
+  _Static_assert(sizeof(fm_image_info) == 12, "fm_image_info ABI layout changed");
+  _Static_assert(sizeof(fm_drawing_object) == (sizeof(void*) == 4 ? 96 : 112), "fm_drawing_object ABI layout changed");
+  _Static_assert(sizeof(fm_image_insert) == (sizeof(void*) == 4 ? 56 : 64), "fm_image_insert ABI layout changed");
   fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter*, int32_t*) = fm_sheet_get_auto_filter;
   fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter*) = fm_table_set_auto_filter;
   fm_status_t (*evaluate_auto_filter)(const fm_workbook_t*, size_t, uint8_t*, size_t, size_t*, uint32_t*) =
@@ -100,6 +103,10 @@ int main(void) {
   fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const char*, const fm_mention*, uint32_t) =
       fm_sheet_edit_threaded_comment;
   fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person*) = fm_workbook_person_at;
+  fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_image_insert*, uint32_t*) =
+      fm_sheet_insert_image;
+  fm_status_t (*get_image)(const fm_workbook_t*, size_t, uint32_t, const uint8_t**, size_t*, fm_image_info*) =
+      fm_sheet_get_image;
   (void)cells_in_range;
   (void)format_value;
   (void)get_auto_filter;
@@ -110,6 +117,8 @@ int main(void) {
   (void)add_threaded_comment;
   (void)edit_threaded_comment;
   (void)person_at;
+  (void)insert_image;
+  (void)get_image;
   (void)save_diagnostics;
   (void)read_diagnostics;
   (void)save_as;

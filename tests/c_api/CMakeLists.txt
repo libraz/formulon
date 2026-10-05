@@ -15,6 +15,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_cf_visual_payload_test.cpp
   formulon_c_clock_test.cpp
   formulon_c_display_text_test.cpp
+  formulon_c_drawing_test.cpp
   formulon_c_evaluate_formula_test.cpp
   formulon_c_external_links_test.cpp
   formulon_c_function_metadata_test.cpp

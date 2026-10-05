@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <string>
 #include <vector>
@@ -1112,6 +1113,165 @@ Napi::Value Workbook::RemovePerson(const Napi::CallbackInfo& info) {
   }
   const std::string id = ArgString(info, 0);
   return MakeStatus(env, fm_workbook_remove_person(handle_, id.c_str()));
+}
+
+// ---- Drawing images -------------------------------------------------
+
+namespace {
+
+// Returns the bytes of the Uint8Array at `info[idx]`; false when it is not one.
+bool ReadImageBytes(const Napi::CallbackInfo& info, size_t idx, const uint8_t*& data, size_t& len) {
+  if (info.Length() <= idx || !info[idx].IsTypedArray() ||
+      info[idx].As<Napi::TypedArray>().TypedArrayType() != napi_uint8_array) {
+    return false;
+  }
+  const Napi::Uint8Array u8 = info[idx].As<Napi::Uint8Array>();
+  data = u8.Data();
+  len = u8.ElementLength();
+  return true;
+}
+
+}  // namespace
+
+Napi::Value Workbook::ProbeImage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("format", Num(env, 0));
+  out.Set("pxWidth", Num(env, 0));
+  out.Set("pxHeight", Num(env, 0));
+  const uint8_t* data = nullptr;
+  size_t len = 0;
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  if (!ReadImageBytes(info, 0, data, len)) {
+    out.Set("status", MakeBindingArgumentError(env, "probeImage expects (bytes:Uint8Array)"));
+    return out;
+  }
+  fm_image_info img{};
+  const fm_status_t rc = fm_workbook_probe_image(handle_, data, len, &img);
+  if (rc == 0) {
+    out.Set("format", Num(env, img.format));
+    out.Set("pxWidth", Num(env, img.px_width));
+    out.Set("pxHeight", Num(env, img.px_height));
+  }
+  out.Set("status", MakeStatus(env, rc));
+  return out;
+}
+
+Napi::Value Workbook::ListDrawingObjects(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Array arr = Napi::Array::New(env);
+  if (handle_ == nullptr) {
+    return FinishListResult(env, arr, kBindingInvalidHandle);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  size_t count = 0;
+  fm_status_t rc = fm_sheet_drawing_object_count(handle_, sheet, &count);
+  for (size_t i = 0; rc == 0 && i < count; ++i) {
+    fm_drawing_object o{};
+    rc = fm_sheet_drawing_object_at(handle_, sheet, i, &o);
+    if (rc != 0) {
+      break;
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("objectId", Num(env, o.object_id));
+    item.Set("kind", Num(env, o.kind));
+    item.Set("anchorKind", Num(env, o.anchor_kind));
+    item.Set("editAs", Num(env, o.edit_as));
+    item.Set("fromRow", Num(env, o.from_row));
+    item.Set("fromCol", Num(env, o.from_col));
+    item.Set("fromRowOff", Num(env, static_cast<double>(o.from_row_off)));
+    item.Set("fromColOff", Num(env, static_cast<double>(o.from_col_off)));
+    item.Set("toRow", Num(env, o.to_row));
+    item.Set("toCol", Num(env, o.to_col));
+    item.Set("toRowOff", Num(env, static_cast<double>(o.to_row_off)));
+    item.Set("toColOff", Num(env, static_cast<double>(o.to_col_off)));
+    item.Set("cx", Num(env, static_cast<double>(o.cx)));
+    item.Set("cy", Num(env, static_cast<double>(o.cy)));
+    item.Set("imageFormat", Num(env, o.image_format));
+    item.Set("name", CStr(env, o.name));
+    item.Set("descr", CStr(env, o.descr));
+    item.Set("mediaPath", CStr(env, o.media_path));
+    arr.Set(static_cast<uint32_t>(i), item);
+  }
+  return FinishListResult(env, arr, rc);
+}
+
+Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("format", Num(env, 0));
+  out.Set("bytes", Napi::Uint8Array::New(env, 0));
+  out.Set("pxWidth", Num(env, 0));
+  out.Set("pxHeight", Num(env, 0));
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint8_t* bytes = nullptr;
+  size_t len = 0;
+  fm_image_info img{};
+  const fm_status_t rc = fm_sheet_get_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &bytes, &len, &img);
+  if (rc == 0) {
+    // The C pointer dies on the next mutation, so the bytes are copied out.
+    Napi::Uint8Array copy = Napi::Uint8Array::New(env, len);
+    if (len != 0) {
+      std::memcpy(copy.Data(), bytes, len);
+    }
+    out.Set("format", Num(env, img.format));
+    out.Set("bytes", copy);
+    out.Set("pxWidth", Num(env, img.px_width));
+    out.Set("pxHeight", Num(env, img.px_height));
+  }
+  out.Set("status", MakeStatus(env, rc));
+  return out;
+}
+
+Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("objectId", Num(env, 0));
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint8_t* data = nullptr;
+  size_t len = 0;
+  const bool has_opts = info.Length() > 2 && info[2].IsObject();
+  if (!ReadImageBytes(info, 1, data, len) || (info.Length() > 2 && !info[2].IsUndefined() && !has_opts)) {
+    out.Set("status",
+            MakeBindingArgumentError(env, "insertImage expects (sheet:number, bytes:Uint8Array, opts?:object)"));
+    return out;
+  }
+  const Napi::Object spec = has_opts ? info[2].As<Napi::Object>() : Napi::Object::New(env);
+  const std::string name = PullString(spec, "name");
+  const std::string descr = PullString(spec, "descr");
+  fm_image_insert opts{};
+  opts.name = name.c_str();
+  opts.descr = descr.c_str();
+  opts.anchor_kind = SpecPullInt32(spec, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
+  opts.edit_as = SpecPullInt32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
+  opts.row = SpecPullU32(spec, "row", 0U);
+  opts.col = SpecPullU32(spec, "col", 0U);
+  opts.row_off_emu = static_cast<int64_t>(SpecPullDouble(spec, "rowOffEmu", 0.0));
+  opts.col_off_emu = static_cast<int64_t>(SpecPullDouble(spec, "colOffEmu", 0.0));
+  opts.width_emu = static_cast<int64_t>(SpecPullDouble(spec, "widthEmu", 0.0));
+  opts.height_emu = static_cast<int64_t>(SpecPullDouble(spec, "heightEmu", 0.0));
+  uint32_t object_id = 0;
+  const fm_status_t rc = fm_sheet_insert_image(handle_, ArgU32(info, 0), data, len, &opts, &object_id);
+  out.Set("objectId", Num(env, rc == 0 ? object_id : 0));
+  out.Set("status", MakeStatus(env, rc));
+  return out;
+}
+
+Napi::Value Workbook::RemoveImage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  return MakeStatus(env, fm_sheet_remove_image(handle_, ArgU32(info, 0), ArgU32(info, 1)));
 }
 
 }  // namespace formulon_node

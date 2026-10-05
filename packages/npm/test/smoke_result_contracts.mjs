@@ -132,6 +132,9 @@ function envelopeProbes(wb) {
     ['ThreadedCommentsResult', true, () => wb.getThreadedComments(99)],
     // A released handle is the only failure path, which is not usable here.
     ['PersonsResult', false, () => wb.getPersons()],
+    ['ImageInfoResult', true, () => wb.probeImage(new Uint8Array(4))],
+    ['ImageResult', true, () => wb.getImage(99, 1)],
+    ['InsertImageResult', true, () => wb.insertImage(99, new Uint8Array(4))],
     ['DisplayTextResult', true, () => wb.getDisplayText(99, 0, 0)],
     // A released handle is the only failure path, which is not usable here.
     ['ThemeResult', false, () => wb.getTheme()],

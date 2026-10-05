@@ -417,6 +417,12 @@ class JsWorkbook {
   JsStatus addPerson(emscripten::val person);
   JsStatus removePerson(const std::string& id);
 
+  emscripten::val probeImage(emscripten::val bytes) const;
+  emscripten::val listDrawingObjects(uint32_t sheet) const;
+  emscripten::val getImage(uint32_t sheet, uint32_t objectId) const;
+  emscripten::val insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
+  JsStatus removeImage(uint32_t sheet, uint32_t objectId);
+
   emscripten::val getValidations(uint32_t sheet) const;
   JsStatus addValidation(uint32_t sheet, emscripten::val v);
   JsStatus removeValidationAt(uint32_t sheet, uint32_t index);

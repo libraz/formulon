@@ -277,6 +277,26 @@ export const DateTimeGrouping = Object.freeze({ Year: 0, Month: 1, Day: 2, Hour:
 /** `fm_validation_error_style_t` ordinals: data-validation error style. */
 export const ValidationErrorStyle = Object.freeze({ Stop: 0, Warning: 1, Information: 2 });
 
+/** `fm_image_format_t` ordinals: raster format of an image; `Unknown` marks "no image bytes found". */
+export const ImageFormat = Object.freeze({ Unknown: 0, Png: 1, Jpeg: 2, Gif: 3, Bmp: 4 });
+
+/** `fm_drawing_object_kind_t` ordinals: what a drawing anchor holds. */
+export const DrawingObjectKind = Object.freeze({
+  Picture: 0,
+  Shape: 1,
+  Chart: 2,
+  Group: 3,
+  Connector: 4,
+  GraphicFrame: 5,
+  Other: 6,
+});
+
+/** `fm_anchor_kind_t` ordinals: the anchor element type of a drawing object. */
+export const AnchorKind = Object.freeze({ OneCell: 0, TwoCell: 1, Absolute: 2 });
+
+/** `fm_anchor_edit_as_t` ordinals: how a drawing object follows row and column edits. */
+export const AnchorEditAs = Object.freeze({ TwoCell: 0, OneCell: 1, Absolute: 2 });
+
 /** `fm_color_context_t` ordinals: where a colour is used. */
 export const ColorContext = Object.freeze({ Font: 0, FillForeground: 1, FillBackground: 2, Border: 3 });
 
@@ -353,6 +373,10 @@ export default {
   GeometryMode,
   DisplayStatus,
   ColorContext,
+  ImageFormat,
+  DrawingObjectKind,
+  AnchorKind,
+  AnchorEditAs,
   FilterKind,
   FilterOperator,
   DynamicFilterType,

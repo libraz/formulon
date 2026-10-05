@@ -973,6 +973,44 @@ export const ValidationErrorStyle: Readonly<{
 }>;
 export type ValidationErrorStyle = 0 | 1 | 2;
 
+/** Raster format of an image. Mirrors `fm_image_format_t`; `Unknown` marks "no image bytes found". */
+export const ImageFormat: Readonly<{
+  Unknown: 0;
+  Png: 1;
+  Jpeg: 2;
+  Gif: 3;
+  Bmp: 4;
+}>;
+export type ImageFormat = 0 | 1 | 2 | 3 | 4;
+
+/** What a drawing anchor holds. Mirrors `fm_drawing_object_kind_t`. */
+export const DrawingObjectKind: Readonly<{
+  Picture: 0;
+  Shape: 1;
+  Chart: 2;
+  Group: 3;
+  Connector: 4;
+  GraphicFrame: 5;
+  Other: 6;
+}>;
+export type DrawingObjectKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** The anchor element type of a drawing object. Mirrors `fm_anchor_kind_t`. */
+export const AnchorKind: Readonly<{
+  OneCell: 0;
+  TwoCell: 1;
+  Absolute: 2;
+}>;
+export type AnchorKind = 0 | 1 | 2;
+
+/** How a drawing object follows row and column edits. Mirrors `fm_anchor_edit_as_t`. */
+export const AnchorEditAs: Readonly<{
+  TwoCell: 0;
+  OneCell: 1;
+  Absolute: 2;
+}>;
+export type AnchorEditAs = 0 | 1 | 2;
+
 /** Where a colour is used; decides what an automatic colour means. Mirrors
  *  `fm_color_context_t`. */
 export const ColorContext: Readonly<{
@@ -1338,6 +1376,68 @@ export interface ThreadedCommentsResult {
 export interface PersonsResult {
   status: Status;
   persons: Person[];
+}
+
+/** Format and pixel size of an image; zeroed when `status` is not ok. */
+export interface ImageInfoResult {
+  status: Status;
+  format: ImageFormat;
+  pxWidth: number;
+  pxHeight: number;
+}
+
+/** Result of `Workbook.getImage`. `bytes` is a copy, empty on failure. */
+export interface ImageResult extends ImageInfoResult {
+  bytes: Uint8Array;
+}
+
+/** Result of `Workbook.insertImage`; `objectId` is zero on failure. */
+export interface InsertImageResult {
+  status: Status;
+  objectId: number;
+}
+
+/** One anchored object of a sheet's drawing. An absolute anchor reports its position from A1 as
+ *  `fromColOff` (x) and `fromRowOff` (y); `toRow`/`toCol` and the `to*Off` fields are zero unless the anchor is
+ *  two-cell. Offsets and `cx`/`cy` are in EMU. `imageFormat` is non-zero for a picture whose media part is present;
+ *  `mediaPath` is empty for a non-picture. */
+export interface DrawingObject {
+  objectId: number;
+  kind: DrawingObjectKind;
+  anchorKind: AnchorKind;
+  editAs: AnchorEditAs;
+  fromRow: number;
+  fromCol: number;
+  fromRowOff: number;
+  fromColOff: number;
+  toRow: number;
+  toCol: number;
+  toRowOff: number;
+  toColOff: number;
+  cx: number;
+  cy: number;
+  imageFormat: ImageFormat;
+  name: string;
+  descr: string;
+  mediaPath: string;
+}
+
+/** Placement of an inserted image. `anchorKind` is `OneCell` (default) or
+ *  `TwoCell`; `editAs` applies to a two-cell anchor only. `row` / `col` is
+ *  the 0-based top-left cell and `rowOffEmu` / `colOffEmu` the offset inside
+ *  it. A zero `widthEmu` / `heightEmu` means the pixel size times 9525. An
+ *  empty `name` becomes `Picture <id>`. */
+export interface ImageInsertOptions {
+  name?: string;
+  descr?: string;
+  anchorKind?: AnchorKind;
+  editAs?: AnchorEditAs;
+  row?: number;
+  col?: number;
+  rowOffEmu?: number;
+  colOffEmu?: number;
+  widthEmu?: number;
+  heightEmu?: number;
 }
 
 /** One populated cell in `getCellsInRange`. `formula` is the stored A1
@@ -2970,6 +3070,17 @@ export interface Workbook {
   /** Removes the person with `id`; rejected while a comment or mention still names them. */
   removePerson(id: string): Status;
 
+  /** Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes from the header alone. */
+  probeImage(bytes: Uint8Array): ImageInfoResult;
+  /** Lists the anchored objects of the sheet's drawing in document order. */
+  listDrawingObjects(sheet: number): ListResult<DrawingObject>;
+  /** Returns a copy of the media bytes of the picture `objectId`. */
+  getImage(sheet: number, objectId: number): ImageResult;
+  /** Inserts an image as a new anchored picture and returns its object id. */
+  insertImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertOptions): InsertImageResult;
+  /** Removes the picture `objectId`; other drawing content is kept. */
+  removeImage(sheet: number, objectId: number): Status;
+
   // Conditional formatting (read / mutate).
   /** Returns every CF rule on `sheet` in flattened priority order. The
    *  returned entries borrow rule ids from the engine's storage; treat
@@ -3148,6 +3259,10 @@ declare const _default: {
   GeometryMode: typeof GeometryMode;
   DisplayStatus: typeof DisplayStatus;
   ColorContext: typeof ColorContext;
+  ImageFormat: typeof ImageFormat;
+  DrawingObjectKind: typeof DrawingObjectKind;
+  AnchorKind: typeof AnchorKind;
+  AnchorEditAs: typeof AnchorEditAs;
   FilterKind: typeof FilterKind;
   FilterOperator: typeof FilterOperator;
   DynamicFilterType: typeof DynamicFilterType;
