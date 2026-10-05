@@ -144,11 +144,16 @@ std::vector<CFMatch> evaluate_cf_at_impl(const Sheet& sheet, CellAddress target,
       candidates.push_back({block_idx, rule_idx, blocks[block_idx].rules[rule_idx].priority});
     }
   }
-  std::stable_sort(candidates.begin(), candidates.end(),
-                   [](const Candidate& lhs, const Candidate& rhs) { return lhs.priority < rhs.priority; });
+  std::vector<std::uint32_t> ranked;
+  sorted_index_order(ranked, static_cast<std::uint32_t>(candidates.size()),
+                     IndexLess{&candidates, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
+                                 const auto& items = *static_cast<const std::vector<Candidate>*>(context);
+                                 return items[lhs].priority < items[rhs].priority;
+                               }});
 
   const Value cell_value = sheet.resolve_cell_value(target.row, target.col);
-  for (const Candidate& candidate : candidates) {
+  for (const std::uint32_t rank : ranked) {
+    const Candidate& candidate = candidates[rank];
     const ConditionalFormat& block = blocks[candidate.block_index];
     const CFRule& rule = block.rules[candidate.rule_index];
 

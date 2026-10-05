@@ -23,6 +23,7 @@
 #include "phonetic.h"
 #include "pivot/pivot_table.h"
 #include "utils/arena.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -129,12 +130,19 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> Sheet::comment_anchor_set()
   for (const ThreadedComment& c : threaded_comments_) {
     keys.push_back((static_cast<std::uint64_t>(c.row) << 32U) | c.col);
   }
-  std::sort(keys.begin(), keys.end());
-  keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+  std::vector<std::uint32_t> order;
+  sorted_index_order(order, static_cast<std::uint32_t>(keys.size()),
+                     IndexLess{&keys, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
+                                 const auto& packed = *static_cast<const std::vector<std::uint64_t>*>(context);
+                                 return packed[lhs] < packed[rhs];
+                               }});
   std::vector<std::pair<std::uint32_t, std::uint32_t>> anchors;
-  anchors.reserve(keys.size());
-  for (const std::uint64_t k : keys) {
-    anchors.emplace_back(static_cast<std::uint32_t>(k >> 32U), static_cast<std::uint32_t>(k));
+  anchors.reserve(order.size());
+  for (std::size_t i = 0; i < order.size(); ++i) {
+    const std::uint64_t k = keys[order[i]];
+    if (i == 0 || k != keys[order[i - 1U]]) {
+      anchors.emplace_back(static_cast<std::uint32_t>(k >> 32U), static_cast<std::uint32_t>(k));
+    }
   }
   return anchors;
 }
@@ -734,7 +742,7 @@ std::uint64_t Sheet::cells_in_range(std::uint32_t first_row, std::uint32_t first
         stored_rows.push_back(entry.first);
       }
     }
-    std::sort(stored_rows.begin(), stored_rows.end());
+    sort_ascending(stored_rows);
   }
 
   std::uint32_t emitted = 0;
@@ -768,7 +776,7 @@ std::uint64_t Sheet::cells_in_range(std::uint32_t first_row, std::uint32_t first
       }
     }
     if (phantom_cols) {
-      std::sort(cols.begin(), cols.end());
+      sort_ascending(cols);
       cols.erase(std::unique(cols.begin(), cols.end()), cols.end());
     }
     for (const std::uint32_t col : cols) {

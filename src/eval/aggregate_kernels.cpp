@@ -9,10 +9,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <utility>
 #include <vector>
 
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon {
@@ -214,27 +214,23 @@ Expected<double, ErrorCode> run_median(std::vector<double> xs) {
 }
 
 std::vector<ValueRun> group_equal_values(const std::vector<double>& xs) {
-  // Sort a copy by value while carrying source positions. This groups equal
-  // values in O(n log n), then the smallest source position implements
-  // Excel's first-occurrence tie rule without a quadratic frequency table.
-  std::vector<std::pair<double, std::size_t>> ranked;
-  ranked.reserve(xs.size());
-  for (std::size_t i = 0; i < xs.size(); ++i) {
-    ranked.emplace_back(xs[i], i);
-  }
-  std::sort(ranked.begin(), ranked.end(),
-            [](const std::pair<double, std::size_t>& lhs, const std::pair<double, std::size_t>& rhs) {
-              return lhs.first < rhs.first;
-            });
+  // Sort positions by value: equal values group in O(n log n), and the index
+  // sort's position tie-break starts each run at its first occurrence, which
+  // is Excel's tie rule.
+  std::vector<std::uint32_t> ranked;
+  sorted_index_order(ranked, static_cast<std::uint32_t>(xs.size()),
+                     IndexLess{&xs, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
+                                 const auto& values = *static_cast<const std::vector<double>*>(context);
+                                 return values[lhs] < values[rhs];
+                               }});
   std::vector<ValueRun> runs;
   for (std::size_t begin = 0; begin < ranked.size();) {
     std::size_t end = begin + 1U;
-    std::size_t first = ranked[begin].second;
-    while (end < ranked.size() && ranked[end].first == ranked[begin].first) {
-      first = std::min(first, ranked[end].second);
+    const double value = xs[ranked[begin]];
+    while (end < ranked.size() && xs[ranked[end]] == value) {
       ++end;
     }
-    runs.push_back(ValueRun{ranked[begin].first, first, end - begin});
+    runs.push_back(ValueRun{value, ranked[begin], end - begin});
     begin = end;
   }
   return runs;
