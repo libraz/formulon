@@ -251,6 +251,19 @@ void SetCellXfAlignment(Napi::Env env, const fm_cell_xf& xf, Napi::Object* out) 
   }
 }
 
+/// Builds the `getCellXf` / `getCellStyleXf` result from the C call's
+/// status and record; a failed read reports the all-default record.
+Napi::Object CellXfResultToJs(Napi::Env env, fm_status_t rc, fm_cell_xf xf) {
+  if (rc != 0) {
+    xf = fm_cell_xf{};
+  }
+  Napi::Object out = CellXfToJs(env, xf);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("xfId", Napi::Number::New(env, xf.xf_id));
+  SetCellXfAlignment(env, xf, &out);
+  return out;
+}
+
 }  // namespace
 
 // ---- Cell-XF index --------------------------------------------------
@@ -306,14 +319,7 @@ Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
   const uint32_t xf_index = ArgU32(info, 0);
   fm_cell_xf xf{};
   const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_xf(handle_, xf_index, &xf) : kBindingInvalidHandle;
-  if (rc != 0) {
-    xf = fm_cell_xf{};
-  }
-  Napi::Object out = CellXfToJs(env, xf);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("xfId", Napi::Number::New(env, xf.xf_id));
-  SetCellXfAlignment(env, xf, &out);
-  return out;
+  return CellXfResultToJs(env, rc, xf);
 }
 
 Napi::Value Workbook::GetFont(const Napi::CallbackInfo& info) {
@@ -788,14 +794,7 @@ Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
   const uint32_t index = ArgU32(info, 0);
   fm_cell_xf xf{};
   const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style_xf(handle_, index, &xf) : kBindingInvalidHandle;
-  if (rc != 0) {
-    xf = fm_cell_xf{};
-  }
-  Napi::Object out = CellXfToJs(env, xf);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("xfId", Napi::Number::New(env, xf.xf_id));
-  SetCellXfAlignment(env, xf, &out);
-  return out;
+  return CellXfResultToJs(env, rc, xf);
 }
 
 Napi::Value Workbook::SetCellStyle(const Napi::CallbackInfo& info) {

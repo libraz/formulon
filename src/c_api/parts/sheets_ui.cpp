@@ -31,6 +31,17 @@ fm_status_t check_sheet_coord(std::uint32_t row, std::uint32_t col, const char* 
                            "row=" + std::to_string(row) + " col=" + std::to_string(col));
 }
 
+// Orders the corners so first <= last componentwise; mirrors the reader's
+// behaviour and keeps downstream consumers simple.
+formulon::MergeRange normalized_merge(const fm_merge_range& r) {
+  formulon::MergeRange m;
+  m.first_row = (r.first_row < r.last_row) ? r.first_row : r.last_row;
+  m.first_col = (r.first_col < r.last_col) ? r.first_col : r.last_col;
+  m.last_row = (r.first_row < r.last_row) ? r.last_row : r.first_row;
+  m.last_col = (r.first_col < r.last_col) ? r.last_col : r.first_col;
+  return m;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -146,13 +157,7 @@ extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::uint32_t sheet
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_add_merge"); rc != 0) {
     return rc;
   }
-  // Normalise corners so first <= last componentwise; mirrors the
-  // reader's behaviour and keeps downstream consumers simple.
-  formulon::MergeRange m;
-  m.first_row = (merge.first_row < merge.last_row) ? merge.first_row : merge.last_row;
-  m.first_col = (merge.first_col < merge.last_col) ? merge.first_col : merge.last_col;
-  m.last_row = (merge.first_row < merge.last_row) ? merge.last_row : merge.first_row;
-  m.last_col = (merge.first_col < merge.last_col) ? merge.last_col : merge.first_col;
+  const formulon::MergeRange m = normalized_merge(merge);
   if (auto rc = check_sheet_rect(m.first_row, m.first_col, m.last_row, m.last_col, "fm_sheet_add_merge"); rc != 0) {
     return rc;
   }
@@ -168,12 +173,7 @@ extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::uint32_t sh
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_remove_merge"); rc != 0) {
     return rc;
   }
-  // Normalise corners so first <= last componentwise; mirrors fm_sheet_add_merge.
-  formulon::MergeRange q;
-  q.first_row = (range.first_row < range.last_row) ? range.first_row : range.last_row;
-  q.first_col = (range.first_col < range.last_col) ? range.first_col : range.last_col;
-  q.last_row = (range.first_row < range.last_row) ? range.last_row : range.first_row;
-  q.last_col = (range.first_col < range.last_col) ? range.last_col : range.first_col;
+  const formulon::MergeRange q = normalized_merge(range);
   const auto result = wb->workbook().remove_merges_intersecting(sheet, q);
   if (!result) {
     return formulon::c_api::parts::set_last_error(result.error());

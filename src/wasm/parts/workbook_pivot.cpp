@@ -536,24 +536,28 @@ JsStatus JsWorkbook::pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIdx
   return status_from_rc(rc);
 }
 
-JsStatus JsWorkbook::pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices) {
-  if (handle_ == nullptr) {
+namespace {
+
+// Shared body of `pivotSetRowFieldOrder` / `pivotSetColFieldOrder`.
+using PivotFieldOrderFn = fm_status_t (*)(fm_workbook_t*, size_t, size_t, const uint32_t*, size_t);
+
+JsStatus set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivotIdx, const emscripten::val& indices,
+                               PivotFieldOrderFn fn) {
+  if (wb == nullptr) {
     return error_status(7000);
   }
   const std::vector<uint32_t> v = js_pull_u32_list(indices);
-  fm_status_t rc =
-      fm_workbook_pivot_set_row_field_order(handle_, sheet, pivotIdx, v.empty() ? nullptr : v.data(), v.size());
-  return status_from_rc(rc);
+  return status_from_rc(fn(wb, sheet, pivotIdx, v.empty() ? nullptr : v.data(), v.size()));
+}
+
+}  // namespace
+
+JsStatus JsWorkbook::pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices) {
+  return set_pivot_field_order(handle_, sheet, pivotIdx, indices, &fm_workbook_pivot_set_row_field_order);
 }
 
 JsStatus JsWorkbook::pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices) {
-  if (handle_ == nullptr) {
-    return error_status(7000);
-  }
-  const std::vector<uint32_t> v = js_pull_u32_list(indices);
-  fm_status_t rc =
-      fm_workbook_pivot_set_col_field_order(handle_, sheet, pivotIdx, v.empty() ? nullptr : v.data(), v.size());
-  return status_from_rc(rc);
+  return set_pivot_field_order(handle_, sheet, pivotIdx, indices, &fm_workbook_pivot_set_col_field_order);
 }
 
 JsNumberResult JsWorkbook::pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx) const {

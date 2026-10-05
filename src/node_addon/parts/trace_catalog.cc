@@ -19,8 +19,12 @@ namespace {
 // objects, and frees the C-owned handle.
 using TraceFn = fm_status_t (*)(const fm_workbook_t*, uint32_t, uint32_t, uint32_t, uint32_t, fm_cell_nodes_t**);
 
-Napi::Array TraceToArray(Napi::Env env, const fm_workbook_t* handle, TraceFn fn, uint32_t sheet, uint32_t row,
-                         uint32_t col, uint32_t depth) {
+Napi::Array TraceToArray(const Napi::CallbackInfo& info, const fm_workbook_t* handle, TraceFn fn) {
+  Napi::Env env = info.Env();
+  const uint32_t sheet = Workbook::ArgU32(info, 0);
+  const uint32_t row = Workbook::ArgU32(info, 1);
+  const uint32_t col = Workbook::ArgU32(info, 2);
+  const uint32_t depth = Workbook::ArgU32(info, 3);
   Napi::Array arr = Napi::Array::New(env);
   if (handle == nullptr) {
     return FinishListResult(env, arr, kBindingInvalidHandle);
@@ -49,26 +53,27 @@ Napi::Array TraceToArray(Napi::Env env, const fm_workbook_t* handle, TraceFn fn,
   return FinishListResult(env, arr, rc);
 }
 
+// Shared bridge for `localizeFunctionName` / `canonicalizeFunctionName`.
+using FunctionNameMapFn = fm_status_t (*)(const char*, int32_t, const char**);
+
+Napi::Value MapFunctionName(const Napi::CallbackInfo& info, FunctionNameMapFn fn) {
+  const std::string name = Workbook::ArgString(info, 0);
+  const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
+  const char* out = nullptr;
+  const fm_status_t rc = fn(name.c_str(), locale, &out);
+  return MakeStringResult(info.Env(), rc, out);
+}
+
 }  // namespace
 
 // ---- Trace precedents / dependents ----------------------------------
 
 Napi::Value Workbook::Precedents(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  const uint32_t depth = ArgU32(info, 3);
-  return TraceToArray(env, handle_, fm_workbook_precedents, sheet, row, col, depth);
+  return TraceToArray(info, handle_, fm_workbook_precedents);
 }
 
 Napi::Value Workbook::Dependents(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  const uint32_t depth = ArgU32(info, 3);
-  return TraceToArray(env, handle_, fm_workbook_dependents, sheet, row, col, depth);
+  return TraceToArray(info, handle_, fm_workbook_dependents);
 }
 
 // ---- Dynamic-array spill info ---------------------------------------
@@ -185,21 +190,11 @@ Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::LocalizeFunctionName(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  const std::string canonical = ArgString(info, 0);
-  const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
-  const char* out = nullptr;
-  const fm_status_t rc = fm_function_localize(canonical.c_str(), locale, &out);
-  return MakeStringResult(env, rc, out);
+  return MapFunctionName(info, &fm_function_localize);
 }
 
 Napi::Value Workbook::CanonicalizeFunctionName(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  const std::string localized = ArgString(info, 0);
-  const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
-  const char* out = nullptr;
-  const fm_status_t rc = fm_function_canonicalize(localized.c_str(), locale, &out);
-  return MakeStringResult(env, rc, out);
+  return MapFunctionName(info, &fm_function_canonicalize);
 }
 
 }  // namespace formulon_node

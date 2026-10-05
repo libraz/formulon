@@ -82,31 +82,54 @@ JsStatus JsWorkbook::clearMerges(uint32_t sheet) {
   return status_from_rc(rc);
 }
 
-emscripten::val JsWorkbook::getMerges(uint32_t sheet) const {
+namespace {
+
+// Reads list element `index` of `sheet` into `*out`; the per-kind half of
+// `sheet_list`.
+using SheetListItemFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, emscripten::val*);
+
+// Enumerates a per-sheet list through its count / at-index pair into a
+// `ListResult` array, stopping at the first failed element read.
+emscripten::val sheet_list(fm_workbook_t* wb, uint32_t sheet,
+                           fm_status_t (*count_fn)(fm_workbook_t*, uint32_t, uint32_t*), SheetListItemFn item_fn) {
   emscripten::val arr = emscripten::val::array();
-  if (handle_ == nullptr) {
+  if (wb == nullptr) {
     arr.set("status", error_status(7000));
     return arr;
   }
   uint32_t count = 0;
-  fm_status_t rc = fm_sheet_get_merge_count(handle_, sheet, &count);
+  fm_status_t rc = count_fn(wb, sheet, &count);
   if (rc != 0) {
     arr.set("status", status_from_rc(rc));
     return arr;
   }
-  uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
-    fm_merge_range m{};
-    rc = fm_sheet_get_merge_at(handle_, sheet, i, &m);
+    emscripten::val item = emscripten::val::undefined();
+    rc = item_fn(wb, sheet, i, &item);
     if (rc != 0) {
       arr.set("status", status_from_rc(rc));
       return arr;
     }
-    arr.set(emitted, merge_range_to_val(m));
-    ++emitted;
+    arr.set(i, item);
   }
   arr.set("status", ok_status());
   return arr;
+}
+
+fm_status_t merge_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+  fm_merge_range m{};
+  const fm_status_t rc = fm_sheet_get_merge_at(wb, sheet, index, &m);
+  if (rc != 0) {
+    return rc;
+  }
+  *out = merge_range_to_val(m);
+  return 0;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::getMerges(uint32_t sheet) const {
+  return sheet_list(handle_, sheet, &fm_sheet_get_merge_count, &merge_item);
 }
 
 emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val range) const {
@@ -171,35 +194,26 @@ emscripten::val JsWorkbook::getCommentResult(uint32_t sheet, uint32_t row, uint3
   return out;
 }
 
-emscripten::val JsWorkbook::getComments(uint32_t sheet) const {
-  emscripten::val arr = emscripten::val::array();
-  if (handle_ == nullptr) {
-    arr.set("status", error_status(7000));
-    return arr;
-  }
-  uint32_t count = 0;
-  fm_status_t rc = fm_sheet_get_comment_count(handle_, sheet, &count);
+namespace {
+
+fm_status_t comment_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+  fm_comment c{};
+  const fm_status_t rc = fm_sheet_get_comment_at_index(wb, sheet, index, &c);
   if (rc != 0) {
-    arr.set("status", status_from_rc(rc));
-    return arr;
+    return rc;
   }
-  uint32_t emitted = 0;
-  for (uint32_t i = 0; i < count; ++i) {
-    fm_comment c{};
-    rc = fm_sheet_get_comment_at_index(handle_, sheet, i, &c);
-    if (rc != 0) {
-      arr.set("status", status_from_rc(rc));
-      return arr;
-    }
-    emscripten::val o = emscripten::val::object();
-    o.set("row", c.row);
-    o.set("col", c.col);
-    js_set_cstr_fields(o, {{"author", c.author}, {"text", c.text}});
-    arr.set(emitted, o);
-    ++emitted;
-  }
-  arr.set("status", ok_status());
-  return arr;
+  emscripten::val o = emscripten::val::object();
+  o.set("row", c.row);
+  o.set("col", c.col);
+  js_set_cstr_fields(o, {{"author", c.author}, {"text", c.text}});
+  *out = o;
+  return 0;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::getComments(uint32_t sheet) const {
+  return sheet_list(handle_, sheet, &fm_sheet_get_comment_count, &comment_item);
 }
 
 JsStatus JsWorkbook::setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author,
@@ -263,86 +277,68 @@ JsStatus JsWorkbook::clearHyperlinks(uint32_t sheet) {
   return status_from_rc(rc);
 }
 
-emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
-  emscripten::val arr = emscripten::val::array();
-  if (handle_ == nullptr) {
-    arr.set("status", error_status(7000));
-    return arr;
-  }
-  uint32_t count = 0;
-  fm_status_t rc = fm_sheet_get_hyperlink_count(handle_, sheet, &count);
+namespace {
+
+fm_status_t hyperlink_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+  fm_hyperlink h{};
+  const fm_status_t rc = fm_sheet_get_hyperlink_at(wb, sheet, index, &h);
   if (rc != 0) {
-    arr.set("status", status_from_rc(rc));
-    return arr;
+    return rc;
   }
-  uint32_t emitted = 0;
-  for (uint32_t i = 0; i < count; ++i) {
-    fm_hyperlink h{};
-    rc = fm_sheet_get_hyperlink_at(handle_, sheet, i, &h);
-    if (rc != 0) {
-      arr.set("status", status_from_rc(rc));
-      return arr;
-    }
-    emscripten::val item = emscripten::val::object();
-    item.set("row", h.row);
-    item.set("col", h.col);
-    item.set("lastRow", h.last_row);
-    item.set("lastCol", h.last_col);
-    js_set_cstr_fields(
-        item, {{"target", h.target}, {"location", h.location}, {"display", h.display}, {"tooltip", h.tooltip}});
-    arr.set(emitted, item);
-    ++emitted;
-  }
-  arr.set("status", ok_status());
-  return arr;
+  emscripten::val item = emscripten::val::object();
+  item.set("row", h.row);
+  item.set("col", h.col);
+  item.set("lastRow", h.last_row);
+  item.set("lastCol", h.last_col);
+  js_set_cstr_fields(item,
+                     {{"target", h.target}, {"location", h.location}, {"display", h.display}, {"tooltip", h.tooltip}});
+  *out = item;
+  return 0;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
+  return sheet_list(handle_, sheet, &fm_sheet_get_hyperlink_count, &hyperlink_item);
 }
 
 // ---- Data validations --------------------------------------------------
 
-emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
-  emscripten::val arr = emscripten::val::array();
-  if (handle_ == nullptr) {
-    arr.set("status", error_status(7000));
-    return arr;
-  }
-  uint32_t count = 0;
-  fm_status_t rc = fm_sheet_get_validation_count(handle_, sheet, &count);
+namespace {
+
+fm_status_t validation_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+  fm_data_validation v{};
+  const fm_status_t rc = fm_sheet_get_validation_at(wb, sheet, index, &v);
   if (rc != 0) {
-    arr.set("status", status_from_rc(rc));
-    return arr;
+    return rc;
   }
-  uint32_t emitted = 0;
-  for (uint32_t i = 0; i < count; ++i) {
-    fm_data_validation v{};
-    rc = fm_sheet_get_validation_at(handle_, sheet, i, &v);
-    if (rc != 0) {
-      arr.set("status", status_from_rc(rc));
-      return arr;
-    }
-    emscripten::val item = emscripten::val::object();
-    emscripten::val ranges = emscripten::val::array();
-    for (uint32_t r = 0; r < v.range_count; ++r) {
-      ranges.set(r, merge_range_to_val(v.ranges[r]));
-    }
-    item.set("ranges", ranges);
-    item.set("type", v.type);
-    item.set("op", v.op);
-    item.set("errorStyle", v.error_style);
-    item.set("allowBlank", v.allow_blank != 0);
-    item.set("showInputMessage", v.show_input_message != 0);
-    item.set("showErrorMessage", v.show_error_message != 0);
-    item.set("showDropDown", v.show_dropdown != 0);
-    js_set_cstr_fields(item, {{"formula1", v.formula1},
-                              {"formula2", v.formula2},
-                              {"errorTitle", v.error_title},
-                              {"errorMessage", v.error_message},
-                              {"promptTitle", v.prompt_title},
-                              {"promptMessage", v.prompt_message}});
-    arr.set(emitted, item);
-    ++emitted;
+  emscripten::val item = emscripten::val::object();
+  emscripten::val ranges = emscripten::val::array();
+  for (uint32_t r = 0; r < v.range_count; ++r) {
+    ranges.set(r, merge_range_to_val(v.ranges[r]));
   }
-  arr.set("status", ok_status());
-  return arr;
+  item.set("ranges", ranges);
+  item.set("type", v.type);
+  item.set("op", v.op);
+  item.set("errorStyle", v.error_style);
+  item.set("allowBlank", v.allow_blank != 0);
+  item.set("showInputMessage", v.show_input_message != 0);
+  item.set("showErrorMessage", v.show_error_message != 0);
+  item.set("showDropDown", v.show_dropdown != 0);
+  js_set_cstr_fields(item, {{"formula1", v.formula1},
+                            {"formula2", v.formula2},
+                            {"errorTitle", v.error_title},
+                            {"errorMessage", v.error_message},
+                            {"promptTitle", v.prompt_title},
+                            {"promptMessage", v.prompt_message}});
+  *out = item;
+  return 0;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
+  return sheet_list(handle_, sheet, &fm_sheet_get_validation_count, &validation_item);
 }
 
 JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {

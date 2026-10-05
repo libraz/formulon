@@ -31,6 +31,35 @@ fm_merge_range MergeRangeArg(const Napi::CallbackInfo& info, size_t idx) {
   return info.Length() > idx && info[idx].IsObject() ? ReadMergeRange(info[idx].As<Napi::Object>()) : fm_merge_range{};
 }
 
+// Enumerates a per-sheet list through its count / at-index pair into a
+// `ListResult` array, stopping at the first failed element read.
+template <typename T>
+Napi::Value SheetListResult(const Napi::CallbackInfo& info, fm_workbook_t* handle,
+                            fm_status_t (*count_fn)(fm_workbook_t*, uint32_t, uint32_t*),
+                            fm_status_t (*at_fn)(fm_workbook_t*, uint32_t, uint32_t, T*),
+                            Napi::Object (*to_js)(Napi::Env, const T&)) {
+  Napi::Env env = info.Env();
+  Napi::Array arr = Napi::Array::New(env);
+  if (handle == nullptr) {
+    return FinishListResult(env, arr, kBindingInvalidHandle);
+  }
+  const uint32_t sheet = Workbook::ArgU32(info, 0);
+  uint32_t count = 0;
+  fm_status_t rc = count_fn(handle, sheet, &count);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
+  }
+  for (uint32_t i = 0; i < count; ++i) {
+    T entry{};
+    rc = at_fn(handle, sheet, i, &entry);
+    if (rc != 0) {
+      return FinishListResult(env, arr, rc);
+    }
+    arr.Set(i, to_js(env, entry));
+  }
+  return FinishListResult(env, arr, 0);
+}
+
 }  // namespace
 
 Napi::Value Workbook::AddMerge(const Napi::CallbackInfo& info) {
@@ -74,34 +103,21 @@ Napi::Value Workbook::ClearMerges(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+namespace {
+
+Napi::Object MergeToJs(Napi::Env env, const fm_merge_range& m) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("firstRow", Napi::Number::New(env, m.first_row));
+  item.Set("lastRow", Napi::Number::New(env, m.last_row));
+  item.Set("firstCol", Napi::Number::New(env, m.first_col));
+  item.Set("lastCol", Napi::Number::New(env, m.last_col));
+  return item;
+}
+
+}  // namespace
+
 Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
-  if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  uint32_t count = 0;
-  fm_status_t rc = fm_sheet_get_merge_count(handle_, sheet, &count);
-  if (rc != 0) {
-    return FinishListResult(env, arr, rc);
-  }
-  std::size_t emitted = 0;
-  for (uint32_t i = 0; i < count; ++i) {
-    fm_merge_range m{};
-    rc = fm_sheet_get_merge_at(handle_, sheet, i, &m);
-    if (rc != 0) {
-      return FinishListResult(env, arr, rc);
-    }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("firstRow", Napi::Number::New(env, m.first_row));
-    item.Set("lastRow", Napi::Number::New(env, m.last_row));
-    item.Set("firstCol", Napi::Number::New(env, m.first_col));
-    item.Set("lastCol", Napi::Number::New(env, m.last_col));
-    arr.Set(static_cast<uint32_t>(emitted), item);
-    ++emitted;
-  }
-  return FinishListResult(env, arr, 0);
+  return SheetListResult(info, handle_, &fm_sheet_get_merge_count, &fm_sheet_get_merge_at, &MergeToJs);
 }
 
 Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
@@ -180,34 +196,21 @@ Napi::Value Workbook::GetCommentResult(const Napi::CallbackInfo& info) {
   return out;
 }
 
+namespace {
+
+Napi::Object CommentToJs(Napi::Env env, const fm_comment& c) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("row", Napi::Number::New(env, c.row));
+  item.Set("col", Napi::Number::New(env, c.col));
+  item.Set("author", Napi::String::New(env, c.author != nullptr ? c.author : ""));
+  item.Set("text", Napi::String::New(env, c.text != nullptr ? c.text : ""));
+  return item;
+}
+
+}  // namespace
+
 Napi::Value Workbook::GetComments(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
-  if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  uint32_t count = 0;
-  fm_status_t rc = fm_sheet_get_comment_count(handle_, sheet, &count);
-  if (rc != 0) {
-    return FinishListResult(env, arr, rc);
-  }
-  std::size_t emitted = 0;
-  for (uint32_t i = 0; i < count; ++i) {
-    fm_comment c{};
-    rc = fm_sheet_get_comment_at_index(handle_, sheet, i, &c);
-    if (rc != 0) {
-      return FinishListResult(env, arr, rc);
-    }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("row", Napi::Number::New(env, c.row));
-    item.Set("col", Napi::Number::New(env, c.col));
-    item.Set("author", Napi::String::New(env, c.author != nullptr ? c.author : ""));
-    item.Set("text", Napi::String::New(env, c.text != nullptr ? c.text : ""));
-    arr.Set(static_cast<uint32_t>(emitted), item);
-    ++emitted;
-  }
-  return FinishListResult(env, arr, 0);
+  return SheetListResult(info, handle_, &fm_sheet_get_comment_count, &fm_sheet_get_comment_at_index, &CommentToJs);
 }
 
 Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
@@ -295,38 +298,25 @@ Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
   return MakeStatus(env, AddHyperlinkFromArgs(handle_, info, /*ranged=*/true));
 }
 
+namespace {
+
+Napi::Object HyperlinkToJs(Napi::Env env, const fm_hyperlink& h) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("row", Napi::Number::New(env, h.row));
+  item.Set("col", Napi::Number::New(env, h.col));
+  item.Set("lastRow", Napi::Number::New(env, h.last_row));
+  item.Set("lastCol", Napi::Number::New(env, h.last_col));
+  item.Set("target", Napi::String::New(env, h.target != nullptr ? h.target : ""));
+  item.Set("location", Napi::String::New(env, h.location != nullptr ? h.location : ""));
+  item.Set("display", Napi::String::New(env, h.display != nullptr ? h.display : ""));
+  item.Set("tooltip", Napi::String::New(env, h.tooltip != nullptr ? h.tooltip : ""));
+  return item;
+}
+
+}  // namespace
+
 Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
-  if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  uint32_t count = 0;
-  fm_status_t rc = fm_sheet_get_hyperlink_count(handle_, sheet, &count);
-  if (rc != 0) {
-    return FinishListResult(env, arr, rc);
-  }
-  std::size_t emitted = 0;
-  for (uint32_t i = 0; i < count; ++i) {
-    fm_hyperlink h{};
-    rc = fm_sheet_get_hyperlink_at(handle_, sheet, i, &h);
-    if (rc != 0) {
-      return FinishListResult(env, arr, rc);
-    }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("row", Napi::Number::New(env, h.row));
-    item.Set("col", Napi::Number::New(env, h.col));
-    item.Set("lastRow", Napi::Number::New(env, h.last_row));
-    item.Set("lastCol", Napi::Number::New(env, h.last_col));
-    item.Set("target", Napi::String::New(env, h.target != nullptr ? h.target : ""));
-    item.Set("location", Napi::String::New(env, h.location != nullptr ? h.location : ""));
-    item.Set("display", Napi::String::New(env, h.display != nullptr ? h.display : ""));
-    item.Set("tooltip", Napi::String::New(env, h.tooltip != nullptr ? h.tooltip : ""));
-    arr.Set(static_cast<uint32_t>(emitted), item);
-    ++emitted;
-  }
-  return FinishListResult(env, arr, 0);
+  return SheetListResult(info, handle_, &fm_sheet_get_hyperlink_count, &fm_sheet_get_hyperlink_at, &HyperlinkToJs);
 }
 
 Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
@@ -364,53 +354,40 @@ Napi::Value Workbook::ClearHyperlinks(const Napi::CallbackInfo& info) {
 
 // ---- Validations ----------------------------------------------------
 
+namespace {
+
+Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation& v) {
+  Napi::Object item = Napi::Object::New(env);
+  Napi::Array ranges = Napi::Array::New(env);
+  for (uint32_t r = 0; r < v.range_count; ++r) {
+    Napi::Object rng = Napi::Object::New(env);
+    rng.Set("firstRow", Napi::Number::New(env, v.ranges[r].first_row));
+    rng.Set("lastRow", Napi::Number::New(env, v.ranges[r].last_row));
+    rng.Set("firstCol", Napi::Number::New(env, v.ranges[r].first_col));
+    rng.Set("lastCol", Napi::Number::New(env, v.ranges[r].last_col));
+    ranges.Set(r, rng);
+  }
+  item.Set("ranges", ranges);
+  item.Set("type", Napi::Number::New(env, v.type));
+  item.Set("op", Napi::Number::New(env, v.op));
+  item.Set("errorStyle", Napi::Number::New(env, v.error_style));
+  item.Set("allowBlank", Napi::Boolean::New(env, v.allow_blank != 0));
+  item.Set("showInputMessage", Napi::Boolean::New(env, v.show_input_message != 0));
+  item.Set("showErrorMessage", Napi::Boolean::New(env, v.show_error_message != 0));
+  item.Set("showDropDown", Napi::Boolean::New(env, v.show_dropdown != 0));
+  item.Set("formula1", Napi::String::New(env, v.formula1 != nullptr ? v.formula1 : ""));
+  item.Set("formula2", Napi::String::New(env, v.formula2 != nullptr ? v.formula2 : ""));
+  item.Set("errorTitle", Napi::String::New(env, v.error_title != nullptr ? v.error_title : ""));
+  item.Set("errorMessage", Napi::String::New(env, v.error_message != nullptr ? v.error_message : ""));
+  item.Set("promptTitle", Napi::String::New(env, v.prompt_title != nullptr ? v.prompt_title : ""));
+  item.Set("promptMessage", Napi::String::New(env, v.prompt_message != nullptr ? v.prompt_message : ""));
+  return item;
+}
+
+}  // namespace
+
 Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
-  if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  uint32_t count = 0;
-  fm_status_t rc = fm_sheet_get_validation_count(handle_, sheet, &count);
-  if (rc != 0) {
-    return FinishListResult(env, arr, rc);
-  }
-  std::size_t emitted = 0;
-  for (uint32_t i = 0; i < count; ++i) {
-    fm_data_validation v{};
-    rc = fm_sheet_get_validation_at(handle_, sheet, i, &v);
-    if (rc != 0) {
-      return FinishListResult(env, arr, rc);
-    }
-    Napi::Object item = Napi::Object::New(env);
-    Napi::Array ranges = Napi::Array::New(env);
-    for (uint32_t r = 0; r < v.range_count; ++r) {
-      Napi::Object rng = Napi::Object::New(env);
-      rng.Set("firstRow", Napi::Number::New(env, v.ranges[r].first_row));
-      rng.Set("lastRow", Napi::Number::New(env, v.ranges[r].last_row));
-      rng.Set("firstCol", Napi::Number::New(env, v.ranges[r].first_col));
-      rng.Set("lastCol", Napi::Number::New(env, v.ranges[r].last_col));
-      ranges.Set(r, rng);
-    }
-    item.Set("ranges", ranges);
-    item.Set("type", Napi::Number::New(env, v.type));
-    item.Set("op", Napi::Number::New(env, v.op));
-    item.Set("errorStyle", Napi::Number::New(env, v.error_style));
-    item.Set("allowBlank", Napi::Boolean::New(env, v.allow_blank != 0));
-    item.Set("showInputMessage", Napi::Boolean::New(env, v.show_input_message != 0));
-    item.Set("showErrorMessage", Napi::Boolean::New(env, v.show_error_message != 0));
-    item.Set("showDropDown", Napi::Boolean::New(env, v.show_dropdown != 0));
-    item.Set("formula1", Napi::String::New(env, v.formula1 != nullptr ? v.formula1 : ""));
-    item.Set("formula2", Napi::String::New(env, v.formula2 != nullptr ? v.formula2 : ""));
-    item.Set("errorTitle", Napi::String::New(env, v.error_title != nullptr ? v.error_title : ""));
-    item.Set("errorMessage", Napi::String::New(env, v.error_message != nullptr ? v.error_message : ""));
-    item.Set("promptTitle", Napi::String::New(env, v.prompt_title != nullptr ? v.prompt_title : ""));
-    item.Set("promptMessage", Napi::String::New(env, v.prompt_message != nullptr ? v.prompt_message : ""));
-    arr.Set(static_cast<uint32_t>(emitted), item);
-    ++emitted;
-  }
-  return FinishListResult(env, arr, 0);
+  return SheetListResult(info, handle_, &fm_sheet_get_validation_count, &fm_sheet_get_validation_at, &ValidationToJs);
 }
 
 Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {

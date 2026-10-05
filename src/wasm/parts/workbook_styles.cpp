@@ -220,6 +220,19 @@ void js_set_cell_xf_alignment(const fm_cell_xf& xf, emscripten::val* object) {
   }
 }
 
+// Builds the `getCellXf` / `getCellStyleXf` result from the C call's status
+// and record; a failed read reports the all-default record.
+emscripten::val js_cell_xf_result(fm_status_t rc, fm_cell_xf xf) {
+  if (rc != 0) {
+    xf = fm_cell_xf{};
+  }
+  emscripten::val o = js_cell_xf_record(xf);
+  o.set("status", status_from_rc(rc));
+  o.set("xfId", xf.xf_id);
+  js_set_cell_xf_alignment(xf, &o);
+  return o;
+}
+
 }  // namespace
 
 // ---- Per-cell xf index get/set -----------------------------------------
@@ -265,14 +278,7 @@ JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t
 emscripten::val JsWorkbook::getCellXf(uint32_t xf_index) const {
   fm_cell_xf xf{};
   const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_xf(handle_, xf_index, &xf) : 7000;
-  if (rc != 0) {
-    xf = fm_cell_xf{};
-  }
-  emscripten::val o = js_cell_xf_record(xf);
-  o.set("status", status_from_rc(rc));
-  o.set("xfId", xf.xf_id);
-  js_set_cell_xf_alignment(xf, &o);
-  return o;
+  return js_cell_xf_result(rc, xf);
 }
 
 emscripten::val JsWorkbook::getFont(uint32_t font_index) const {
@@ -593,14 +599,7 @@ emscripten::val JsWorkbook::getCellStyle(uint32_t index) const {
 emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {
   fm_cell_xf xf{};
   const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style_xf(handle_, index, &xf) : 7000;
-  if (rc != 0) {
-    xf = fm_cell_xf{};
-  }
-  emscripten::val o = js_cell_xf_record(xf);
-  o.set("status", status_from_rc(rc));
-  o.set("xfId", xf.xf_id);
-  js_set_cell_xf_alignment(xf, &o);
-  return o;
+  return js_cell_xf_result(rc, xf);
 }
 
 JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {

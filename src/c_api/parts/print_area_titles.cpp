@@ -141,39 +141,26 @@ std::string format_range(const formulon::print::CellRange& range) {
   return out;
 }
 
-/// True when `token` is a whole-row span (`1:2`), writing the 1-based
-/// endpoints back out.
-bool parse_row_span(std::string_view token, std::uint32_t* first, std::uint32_t* last) {
-  const std::size_t colon = token.find(':');
-  if (colon == std::string_view::npos) {
-    return false;
-  }
-  const auto to_row = [](std::string_view part, std::uint32_t* out) {
-    std::size_t pos = 0;
-    if (!part.empty() && part.front() == '$') {
-      part.remove_prefix(1);
-    }
-    return formulon::a1::parse_uint(part, &pos, out) && pos == part.size() && *out >= 1U && *out <= Sheet::kMaxRows;
-  };
-  return to_row(token.substr(0, colon), first) && to_row(token.substr(colon + 1), last);
-}
+/// A span endpoint reader: `formulon::a1::parse_uint` or `parse_column_letters`.
+using SpanEndParser = bool (*)(std::string_view, std::size_t*, std::uint32_t*);
 
-/// True when `token` is a whole-column span (`A:A`), writing the 1-based
+/// True when `token` is a whole-row (`1:2`) or whole-column (`A:A`) span
+/// whose endpoints `parse_end` reads within `1..max`, writing the 1-based
 /// endpoints back out.
-bool parse_col_span(std::string_view token, std::uint32_t* first, std::uint32_t* last) {
+bool parse_span(std::string_view token, SpanEndParser parse_end, std::uint32_t max, std::uint32_t* first,
+                std::uint32_t* last) {
   const std::size_t colon = token.find(':');
   if (colon == std::string_view::npos) {
     return false;
   }
-  const auto to_col = [](std::string_view part, std::uint32_t* out) {
+  const auto to_end = [&](std::string_view part, std::uint32_t* out) {
     std::size_t pos = 0;
     if (!part.empty() && part.front() == '$') {
       part.remove_prefix(1);
     }
-    return formulon::a1::parse_column_letters(part, &pos, out) && pos == part.size() && *out >= 1U &&
-           *out <= Sheet::kMaxCols;
+    return parse_end(part, &pos, out) && pos == part.size() && *out >= 1U && *out <= max;
   };
-  return to_col(token.substr(0, colon), first) && to_col(token.substr(colon + 1), last);
+  return to_end(token.substr(0, colon), first) && to_end(token.substr(colon + 1), last);
 }
 
 }  // namespace
@@ -267,7 +254,7 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
     if (!rows.empty()) {
       std::uint32_t first = 0;
       std::uint32_t last = 0;
-      if (!parse_row_span(rows, &first, &last)) {
+      if (!parse_span(rows, &formulon::a1::parse_uint, Sheet::kMaxRows, &first, &last)) {
         return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, kFn,
                                  "repeat_rows=" + std::string(rows));
       }
@@ -277,7 +264,7 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
     if (!cols.empty()) {
       std::uint32_t first = 0;
       std::uint32_t last = 0;
-      if (!parse_col_span(cols, &first, &last)) {
+      if (!parse_span(cols, &formulon::a1::parse_column_letters, Sheet::kMaxCols, &first, &last)) {
         return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, kFn,
                                  "repeat_cols=" + std::string(cols));
       }

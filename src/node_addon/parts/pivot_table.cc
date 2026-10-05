@@ -352,7 +352,7 @@ Napi::Value Workbook::PivotFieldSetNumberFormat(const Napi::CallbackInfo& info) 
   return MakeStatus(env, rc);
 }
 
-Napi::Value Workbook::PivotSetRowFieldOrder(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::InvokePivotFieldOrder(const Napi::CallbackInfo& info, PivotFieldOrderFn fn) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return NullHandleError(env);
@@ -360,22 +360,16 @@ Napi::Value Workbook::PivotSetRowFieldOrder(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::vector<uint32_t> indices = ReadU32Array(info, 2);
-  fm_status_t rc = fm_workbook_pivot_set_row_field_order(handle_, sheet, pivot_idx,
-                                                         indices.empty() ? nullptr : indices.data(), indices.size());
+  fm_status_t rc = fn(handle_, sheet, pivot_idx, indices.empty() ? nullptr : indices.data(), indices.size());
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::PivotSetRowFieldOrder(const Napi::CallbackInfo& info) {
+  return InvokePivotFieldOrder(info, &fm_workbook_pivot_set_row_field_order);
+}
+
 Napi::Value Workbook::PivotSetColFieldOrder(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::vector<uint32_t> indices = ReadU32Array(info, 2);
-  fm_status_t rc = fm_workbook_pivot_set_col_field_order(handle_, sheet, pivot_idx,
-                                                         indices.empty() ? nullptr : indices.data(), indices.size());
-  return MakeStatus(env, rc);
+  return InvokePivotFieldOrder(info, &fm_workbook_pivot_set_col_field_order);
 }
 
 Napi::Value Workbook::PivotDataFieldCount(const Napi::CallbackInfo& info) {

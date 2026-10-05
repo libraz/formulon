@@ -71,23 +71,32 @@ extern "C" fm_status_t fm_pagination_print_area_at(const fm_pagination_t* pagina
   return 0;
 }
 
+namespace {
+
+fm_status_t break_at(const fm_pagination_t* pagination, size_t index, uint32_t* out, bool horizontal,
+                     const char* null_message, const char* range_message) {
+  clear_last_error();
+  if (pagination == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, null_message);
+  }
+  const std::vector<std::uint32_t>& breaks = horizontal ? pagination->result.h_breaks : pagination->result.v_breaks;
+  if (index >= breaks.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, range_message);
+  }
+  *out = breaks[index];
+  return 0;
+}
+
+}  // namespace
+
 extern "C" size_t fm_pagination_horizontal_break_count(const fm_pagination_t* pagination) {
   return pagination == nullptr ? 0U : pagination->result.h_breaks.size();
 }
 
 extern "C" fm_status_t fm_pagination_horizontal_break_at(const fm_pagination_t* pagination, size_t index,
                                                          uint32_t* out_row) {
-  clear_last_error();
-  if (pagination == nullptr || out_row == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_pagination_horizontal_break_at: NULL argument");
-  }
-  if (index >= pagination->result.h_breaks.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_pagination_horizontal_break_at: index out of range");
-  }
-  *out_row = pagination->result.h_breaks[index];
-  return 0;
+  return break_at(pagination, index, out_row, /*horizontal=*/true, "fm_pagination_horizontal_break_at: NULL argument",
+                  "fm_pagination_horizontal_break_at: index out of range");
 }
 
 extern "C" size_t fm_pagination_vertical_break_count(const fm_pagination_t* pagination) {
@@ -96,17 +105,8 @@ extern "C" size_t fm_pagination_vertical_break_count(const fm_pagination_t* pagi
 
 extern "C" fm_status_t fm_pagination_vertical_break_at(const fm_pagination_t* pagination, size_t index,
                                                        uint32_t* out_col) {
-  clear_last_error();
-  if (pagination == nullptr || out_col == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_pagination_vertical_break_at: NULL argument");
-  }
-  if (index >= pagination->result.v_breaks.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_pagination_vertical_break_at: index out of range");
-  }
-  *out_col = pagination->result.v_breaks[index];
-  return 0;
+  return break_at(pagination, index, out_col, /*horizontal=*/false, "fm_pagination_vertical_break_at: NULL argument",
+                  "fm_pagination_vertical_break_at: index out of range");
 }
 
 extern "C" fm_status_t fm_pagination_paper(const fm_pagination_t* pagination, fm_paper_info* out) {

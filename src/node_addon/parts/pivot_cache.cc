@@ -15,6 +15,24 @@
 
 namespace formulon_node {
 
+namespace {
+
+// Shared body of the per-cache count getters (fields, records).
+using CacheCountFn = fm_status_t (*)(const fm_workbook_t*, uint32_t, size_t*);
+
+Napi::Value CacheCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, CacheCountFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  const uint32_t cache_id = Workbook::ArgU32(info, 0);
+  std::size_t count = 0;
+  const fm_status_t rc = fn(handle, cache_id, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
+}
+
+}  // namespace
+
 Napi::Value Workbook::PivotCacheCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -111,14 +129,7 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
 }
 
 Napi::Value Workbook::PivotCacheFieldCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }
-  const uint32_t cache_id = ArgU32(info, 0);
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_pivot_cache_field_count(handle_, cache_id, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return CacheCountResult(info, handle_, &fm_workbook_pivot_cache_field_count);
 }
 
 Napi::Value Workbook::PivotCacheFieldName(const Napi::CallbackInfo& info) {
@@ -251,14 +262,7 @@ Napi::Value Workbook::PivotCacheFieldClearSharedItems(const Napi::CallbackInfo& 
 }
 
 Napi::Value Workbook::PivotCacheRecordCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }
-  const uint32_t cache_id = ArgU32(info, 0);
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_pivot_cache_record_count(handle_, cache_id, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return CacheCountResult(info, handle_, &fm_workbook_pivot_cache_record_count);
 }
 
 Napi::Value Workbook::PivotCacheRecordAdd(const Napi::CallbackInfo& info) {

@@ -110,6 +110,18 @@ fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t for
   return 0;
 }
 
+/// Shared body of `fm_workbook_create` / `fm_workbook_create_empty`.
+fm_status_t create_handle(fm_workbook_t** out, formulon::Workbook (*factory)(), const char* null_out_message) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, null_out_message);
+  }
+  auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
+  handle->wb.emplace(factory());
+  *out = handle.release();
+  return 0;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -117,25 +129,11 @@ fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t for
 // ---------------------------------------------------------------------------
 
 extern "C" fm_status_t fm_workbook_create(fm_workbook_t** out) {
-  clear_last_error();
-  if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_create: out is NULL");
-  }
-  auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
-  handle->wb.emplace(formulon::Workbook::create());
-  *out = handle.release();
-  return 0;
+  return create_handle(out, &formulon::Workbook::create, "fm_workbook_create: out is NULL");
 }
 
 extern "C" fm_status_t fm_workbook_create_empty(fm_workbook_t** out) {
-  clear_last_error();
-  if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_create_empty: out is NULL");
-  }
-  auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
-  handle->wb.emplace(formulon::Workbook::create_empty());
-  *out = handle.release();
-  return 0;
+  return create_handle(out, &formulon::Workbook::create_empty, "fm_workbook_create_empty: out is NULL");
 }
 
 extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_workbook_t** out) {
@@ -288,9 +286,7 @@ extern "C" fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_i
   }
   // The enumeration cache is keyed by sheet index. Moving sheets can put a
   // different Sheet at a cached index with the same cell revision.
-  wb->cell_enumeration_cache.addresses.clear();
-  wb->cell_enumeration_cache.sheet_index = std::numeric_limits<std::size_t>::max();
-  wb->cell_enumeration_cache.revision = std::numeric_limits<std::uint64_t>::max();
+  wb->cell_enumeration_cache = {};
   return 0;
 }
 
@@ -306,9 +302,7 @@ extern "C" fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t inde
   // Removing a sheet shifts later sheet indices, so invalidate the
   // index-keyed coordinate cache even though the remaining Sheet objects
   // themselves were not mutated.
-  wb->cell_enumeration_cache.addresses.clear();
-  wb->cell_enumeration_cache.sheet_index = std::numeric_limits<std::size_t>::max();
-  wb->cell_enumeration_cache.revision = std::numeric_limits<std::uint64_t>::max();
+  wb->cell_enumeration_cache = {};
   return 0;
 }
 

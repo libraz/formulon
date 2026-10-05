@@ -396,14 +396,16 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   using RowColEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, uint32_t);
   Napi::Value InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn);
 
-  // Shared bodies for the five raw print-settings fragment pairs and the
-  // two break enumerators. Ten near-identical entry points would otherwise
-  // each carry the same handle check, status envelope and empty-result
-  // shape.
-  using XmlFragmentGetFn = fm_status_t (*)(const fm_workbook_t*, size_t, const char**);
-  using XmlFragmentSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const char*);
-  Napi::Value XmlFragmentGetter(const Napi::CallbackInfo& info, XmlFragmentGetFn getter);
-  Napi::Value XmlFragmentSetter(const Napi::CallbackInfo& info, XmlFragmentSetFn setter);
+  using PivotFieldOrderFn = fm_status_t (*)(fm_workbook_t*, size_t, size_t, const uint32_t*, size_t);
+  Napi::Value InvokePivotFieldOrder(const Napi::CallbackInfo& info, PivotFieldOrderFn fn);
+
+  // Shared bodies for the per-sheet string accessors (the five raw
+  // print-settings fragment pairs and the print area) and the two break
+  // enumerators. The getter returns `{status, <field>: string}`.
+  using SheetStringGetFn = fm_status_t (*)(const fm_workbook_t*, size_t, const char**);
+  using SheetStringSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const char*);
+  Napi::Value SheetStringGetter(const Napi::CallbackInfo& info, SheetStringGetFn getter, const char* field);
+  Napi::Value SheetStringSetter(const Napi::CallbackInfo& info, SheetStringSetFn setter);
   Napi::Value BreaksArray(const Napi::CallbackInfo& info, bool rows);
 
   /// Builds an error-Status envelope when the wrapper has been
@@ -411,6 +413,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Object NullHandleError(Napi::Env env) const { return MakeErrorStatus(env, kBindingInvalidHandle); }
 
  private:
+  using CreateFn = fm_status_t (*)(fm_workbook_t**);
+  /// Shared body of the `createDefault` / `createEmpty` factories.
+  static Napi::Value CreateWith(const Napi::CallbackInfo& info, CreateFn create);
+
   /// Matches `fm_iterative_progress_cb`: the header-wide wide-POD boolean
   /// convention (`int32_t`, `0` = abort), not a C `bool`.
   static int32_t IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,

@@ -29,66 +29,66 @@ const char* PullOptionalString(const Napi::Object& spec, const char* key, std::s
 
 }  // namespace
 
-Napi::Value Workbook::XmlFragmentGetter(const Napi::CallbackInfo& info, XmlFragmentGetFn getter) {
+Napi::Value Workbook::SheetStringGetter(const Napi::CallbackInfo& info, SheetStringGetFn getter, const char* field) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeStringFieldResult(env, NullHandleError(env), "xml", nullptr);
+    return MakeStringFieldResult(env, NullHandleError(env), field, nullptr);
   }
-  const char* xml = nullptr;
-  const fm_status_t rc = getter(handle_, ArgU32(info, 0), &xml);
+  const char* text = nullptr;
+  const fm_status_t rc = getter(handle_, ArgU32(info, 0), &text);
   if (rc != 0) {
-    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), "xml", nullptr);
+    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), field, nullptr);
   }
-  return MakeStringFieldResult(env, MakeOkStatus(env), "xml", xml);
+  return MakeStringFieldResult(env, MakeOkStatus(env), field, text);
 }
 
-Napi::Value Workbook::XmlFragmentSetter(const Napi::CallbackInfo& info, XmlFragmentSetFn setter) {
+Napi::Value Workbook::SheetStringSetter(const Napi::CallbackInfo& info, SheetStringSetFn setter) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const std::string xml = ArgString(info, 1);
-  return MakeStatus(env, setter(handle_, ArgU32(info, 0), xml.c_str()));
+  const std::string text = ArgString(info, 1);
+  return MakeStatus(env, setter(handle_, ArgU32(info, 0), text.c_str()));
 }
 
 Napi::Value Workbook::GetSheetPageSetupXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentGetter(info, &fm_sheet_get_page_setup_xml);
+  return SheetStringGetter(info, &fm_sheet_get_page_setup_xml, "xml");
 }
 
 Napi::Value Workbook::SetSheetPageSetupXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentSetter(info, &fm_sheet_set_page_setup_xml);
+  return SheetStringSetter(info, &fm_sheet_set_page_setup_xml);
 }
 
 Napi::Value Workbook::GetSheetPageMarginsXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentGetter(info, &fm_sheet_get_page_margins_xml);
+  return SheetStringGetter(info, &fm_sheet_get_page_margins_xml, "xml");
 }
 
 Napi::Value Workbook::SetSheetPageMarginsXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentSetter(info, &fm_sheet_set_page_margins_xml);
+  return SheetStringSetter(info, &fm_sheet_set_page_margins_xml);
 }
 
 Napi::Value Workbook::GetSheetPrintOptionsXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentGetter(info, &fm_sheet_get_print_options_xml);
+  return SheetStringGetter(info, &fm_sheet_get_print_options_xml, "xml");
 }
 
 Napi::Value Workbook::SetSheetPrintOptionsXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentSetter(info, &fm_sheet_set_print_options_xml);
+  return SheetStringSetter(info, &fm_sheet_set_print_options_xml);
 }
 
 Napi::Value Workbook::GetSheetHeaderFooterXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentGetter(info, &fm_sheet_get_header_footer_xml);
+  return SheetStringGetter(info, &fm_sheet_get_header_footer_xml, "xml");
 }
 
 Napi::Value Workbook::SetSheetHeaderFooterXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentSetter(info, &fm_sheet_set_header_footer_xml);
+  return SheetStringSetter(info, &fm_sheet_set_header_footer_xml);
 }
 
 Napi::Value Workbook::GetSheetSheetPrXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentGetter(info, &fm_sheet_get_sheet_pr_xml);
+  return SheetStringGetter(info, &fm_sheet_get_sheet_pr_xml, "xml");
 }
 
 Napi::Value Workbook::SetSheetSheetPrXml(const Napi::CallbackInfo& info) {
-  return XmlFragmentSetter(info, &fm_sheet_set_sheet_pr_xml);
+  return SheetStringSetter(info, &fm_sheet_set_sheet_pr_xml);
 }
 
 Napi::Value Workbook::SetSheetFitToPage(const Napi::CallbackInfo& info) {
@@ -100,25 +100,11 @@ Napi::Value Workbook::SetSheetFitToPage(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetPrintArea(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeStringFieldResult(env, NullHandleError(env), "ranges", nullptr);
-  }
-  const char* ranges = nullptr;
-  const fm_status_t rc = fm_sheet_get_print_area(handle_, ArgU32(info, 0), &ranges);
-  if (rc != 0) {
-    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), "ranges", nullptr);
-  }
-  return MakeStringFieldResult(env, MakeOkStatus(env), "ranges", ranges);
+  return SheetStringGetter(info, &fm_sheet_get_print_area, "ranges");
 }
 
 Napi::Value Workbook::SetSheetPrintArea(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::string ranges = ArgString(info, 1);
-  return MakeStatus(env, fm_sheet_set_print_area(handle_, ArgU32(info, 0), ranges.c_str()));
+  return SheetStringSetter(info, &fm_sheet_set_print_area);
 }
 
 Napi::Value Workbook::GetSheetPrintTitles(const Napi::CallbackInfo& info) {

@@ -100,12 +100,12 @@ Napi::Value Workbook::InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEdi
 
 // ---- Static factories -----------------------------------------------
 
-Napi::Value Workbook::CreateDefault(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::CreateWith(const Napi::CallbackInfo& info, CreateFn create) {
   Napi::Env env = info.Env();
   Napi::Function ctor = GetClass(env);
   Napi::Object jsobj = ctor.New({});
   Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
-  fm_status_t rc = fm_workbook_create(&wb->handle_);
+  fm_status_t rc = create(&wb->handle_);
   if (rc != 0) {
     // Even on failure return the wrapper; the caller can inspect
     // `lastErrorMessage()` and the next operation will fail with
@@ -116,17 +116,12 @@ Napi::Value Workbook::CreateDefault(const Napi::CallbackInfo& info) {
   return jsobj;
 }
 
+Napi::Value Workbook::CreateDefault(const Napi::CallbackInfo& info) {
+  return CreateWith(info, &fm_workbook_create);
+}
+
 Napi::Value Workbook::CreateEmpty(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Function ctor = GetClass(env);
-  Napi::Object jsobj = ctor.New({});
-  Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
-  fm_status_t rc = fm_workbook_create_empty(&wb->handle_);
-  if (rc != 0) {
-    wb->handle_ = nullptr;
-  }
-  wb->SyncExternalMemory(env);
-  return jsobj;
+  return CreateWith(info, &fm_workbook_create_empty);
 }
 
 Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
