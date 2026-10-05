@@ -290,9 +290,18 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/spill_ref_test.cpp
   unit/parser/structured_ref_test.cpp
   unit/eval/structured_ref_eval_test.cpp
-  unit/pivot/pivot_evaluator_test.cpp
-  unit/pivot/pivot_filter_test.cpp
-  unit/pivot/pivot_layout_test.cpp
+  unit/pivot/pivot_evaluator_aggregation_test.cpp
+  unit/pivot/pivot_evaluator_filter_test.cpp
+  unit/pivot/pivot_evaluator_grouping_test.cpp
+  unit/pivot/pivot_evaluator_ordering_test.cpp
+  unit/pivot/pivot_evaluator_totals_test.cpp
+  unit/pivot/pivot_filter_date_test.cpp
+  unit/pivot/pivot_filter_label_test.cpp
+  unit/pivot/pivot_filter_page_test.cpp
+  unit/pivot/pivot_filter_value_test.cpp
+  unit/pivot/pivot_layout_axes_test.cpp
+  unit/pivot/pivot_layout_page_test.cpp
+  unit/pivot/pivot_layout_subtotals_test.cpp
   unit/pivot/pivot_show_values_as_test.cpp
   unit/pivot/pivot_types_test.cpp
   unit/cf/cf_evaluator_test.cpp
