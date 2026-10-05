@@ -75,4 +75,20 @@ std::vector<CellNodeId> canonical_release_targets(const std::vector<CellNodeId>&
   return sorted;
 }
 
+void SpillWaveBudget::observe_release(const Workbook& workbook, const std::vector<CellNodeId>& released) {
+  if (released.empty()) {
+    return;
+  }
+  const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(workbook);
+  const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
+  if (have_previous_ && release_state == previous_state_ && release_targets == previous_targets_) {
+    ++no_progress_waves_;
+  } else {
+    no_progress_waves_ = 0U;
+  }
+  previous_state_ = release_state;
+  previous_targets_ = release_targets;
+  have_previous_ = true;
+}
+
 }  // namespace formulon::eval::detail

@@ -65,13 +65,9 @@ using detail::RecalcReentryGuard;
 
 // The spill-release queue, the progress snapshot and the wave ceilings are
 // shared with the serial `RecalcEngine::recalc`; see `spill_release.h`.
-using detail::BlockedSpillState;
-using detail::canonical_release_targets;
-using detail::kMaxNoProgressSpillWaves;
-using detail::kMaxSpillReleaseWaves;
 using detail::queue_spill_release;
-using detail::snapshot_blocked_spills;
 using detail::SpillReleaseQueue;
+using detail::SpillWaveBudget;
 
 // Maps each cell in the dirty SCC list to its 0-based super-node id. SCC
 // indices are assigned in iteration order of `sccs_dirty`.
@@ -617,12 +613,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   std::uint64_t parallel_steps = 0;
   std::uint64_t serial_fallback_steps = 0;
   std::uint64_t cycle_recoveries = 0;
-  std::size_t release_waves = 0U;
-  std::size_t dependency_waves = 0U;
-  std::size_t no_progress_waves = 0U;
-  std::vector<BlockedSpillState> previous_release_state;
-  std::vector<CellNodeId> previous_release_targets;
-  bool have_previous_release_state = false;
+  SpillWaveBudget wave_budget;
   const std::uint32_t configured_worker_count = resolve_thread_count(cfg.num_threads);
   // Keep one pool for the complete pass. A spill/dependency retry is another
   // wave of the same recalc, not a new recalc invocation; workers therefore
@@ -901,7 +892,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     const bool dynamic_retry = !dynamic.end_wave(nullptr).empty();
     const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
     if (dependency_retry) {
-      ++dependency_waves;
+      wave_budget.count_dependency_wave();
       for (const DepGraph::Edge& edge : dependency_delta.added) {
         engine.dirty_.mark(edge.first);
       }
@@ -909,22 +900,9 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
 
     const std::vector<CellNodeId> released = release_queue.take();
     if (!released.empty() || dependency_retry) {
-      ++release_waves;
-      if (!released.empty()) {
-        const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(wb);
-        const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
-        if (have_previous_release_state && release_state == previous_release_state &&
-            release_targets == previous_release_targets) {
-          ++no_progress_waves;
-        } else {
-          no_progress_waves = 0U;
-        }
-        previous_release_state = release_state;
-        previous_release_targets = release_targets;
-        have_previous_release_state = true;
-      }
-      if (release_waves > kMaxSpillReleaseWaves || dependency_waves > kMaxSpillReleaseWaves ||
-          (!released.empty() && no_progress_waves >= kMaxNoProgressSpillWaves)) {
+      wave_budget.count_release_wave();
+      wave_budget.observe_release(wb, released);
+      if (wave_budget.exceeded(!released.empty())) {
         // Keep the current dirty set, including unrelated work, while
         // retaining the release targets for a caller retry after an
         // external mutation.

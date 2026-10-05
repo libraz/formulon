@@ -34,6 +34,7 @@
 #include "utils/expected.h"
 #include "utils/rect_iterator.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -42,13 +43,9 @@ namespace {
 
 // The spill-release queue, the progress snapshot and the wave ceilings are
 // shared with the parallel scheduler; see `spill_release.h`.
-using detail::BlockedSpillState;
-using detail::canonical_release_targets;
-using detail::kMaxNoProgressSpillWaves;
-using detail::kMaxSpillReleaseWaves;
 using detail::queue_spill_release;
-using detail::snapshot_blocked_spills;
 using detail::SpillReleaseQueue;
+using detail::SpillWaveBudget;
 
 void mark_spill_release_wave(const RecalcEngine::LockedMutator& mutator, const std::vector<CellNodeId>& anchors,
                              const DepGraph& graph) {
@@ -397,29 +394,166 @@ void RecalcEngine::DynamicReadPass::mark_stale_dirty() {
   }
 }
 
-void RecalcEngine::commit_unresolved_cycle_locked(Workbook& workbook, const std::vector<CellNodeId>& component,
-                                                  DynamicReadPass& dynamic, SpillReleaseCallback release_callback,
-                                                  void* release_user_data, RecalcStats& stats) {
+void RecalcEngine::commit_unresolved_cycle_locked(const SerialEvalPass& pass,
+                                                  const std::vector<CellNodeId>& component) {
   // Excel shows a warning and leaves the cells as they were; with no UI to
   // host that banner Formulon surfaces #REF!, keeping Excel's last value
   // only for a cycle through an OFFSET / INDIRECT read.
   const bool dynamic_cycle = closes_through_dynamic_edge(component, graph_);
-  const std::uint64_t ordinal = dynamic.next_ordinal();
+  const std::uint64_t ordinal = pass.dynamic.next_ordinal();
   if (dynamic_cycle) {
-    dynamic.log().restore_prior_values(workbook, component);
+    pass.dynamic.log().restore_prior_values(pass.workbook, component);
   }
   for (const CellNodeId c : component) {
-    if (c.sheet_id >= workbook.sheet_count()) {
+    if (c.sheet_id >= pass.workbook.sheet_count()) {
       continue;  // A virtual range node.
     }
     if (!dynamic_cycle) {
-      Sheet& sheet = workbook.sheet(c.sheet_id);
-      SpillCommitter committer(&sheet, c.row, c.col, release_callback, release_user_data);
+      Sheet& sheet = pass.workbook.sheet(c.sheet_id);
+      SpillCommitter committer(&sheet, c.row, c.col, pass.release_callback, pass.release_user_data);
       sheet.set_cell_cached_value(c.row, c.col, committer.commit(Value::error(ErrorCode::Ref)));
     }
-    dynamic.log().note_commit(c, ordinal);
-    ++stats.cycle_cells;
+    pass.dynamic.log().note_commit(c, ordinal);
+    ++pass.stats.cycle_cells;
   }
+}
+
+Expected<void, Error> RecalcEngine::evaluate_formula_cell_locked(const SerialEvalPass& pass, CellNodeId cell) {
+  if (cell.sheet_id >= pass.workbook.sheet_count()) {
+    return Expected<void, Error>::Ok();
+  }
+  Sheet& sheet = pass.workbook.sheet(cell.sheet_id);
+  Cell staged;
+  if (!stage_formula_cell(sheet, cell.row, cell.col, staged)) {
+    // The dep graph may carry pure-input cells (read-only literals that
+    // someone reads via `add_dependency`). They have nothing to evaluate.
+    return Expected<void, Error>::Ok();
+  }
+  // Reset the per-pass arena before each evaluate so the bump allocator
+  // does not grow without bound across cells. Both result shapes
+  // already survive this reset:
+  //   * Array results are deep-copied into sheet-owned storage by
+  //     `Sheet::commit_spill` (driven by
+  //     `EvalContext::dispatch_array_result`), keeping the spill table
+  //     independent of the arena.
+  //   * Scalar Text results are deep-copied into the destination cell's
+  //     `Cell::cached_text_owned` by `Sheet::set_cell_cached_value` on
+  //     the write below, so the cached `string_view` does not dangle
+  //     when the next cell's evaluation resets the arena.
+  arena_->reset();
+  EvaluateCellOptions opts;
+  opts.spill_release_callback = pass.release_callback;
+  opts.spill_release_user_data = pass.release_user_data;
+  const std::uint64_t ordinal = pass.dynamic.next_ordinal();
+  pass.dynamic.log().observe(cell, ordinal, opts, &sheet);
+  Value result =
+      evaluate_cell_for_recalc(pass.workbook, sheet, staged, cell.row, cell.col, pass.registry, *arena_, opts);
+  pass.dynamic.log().end();
+  if (arena_->exhausted()) {
+    return make_error(FormulonErrorCode::kOutOfMemory, pass.oom_message);
+  }
+  sheet.set_cell_cached_value(cell.row, cell.col, result);
+  pass.dynamic.log().note_commit(cell, ordinal);
+  ++pass.stats.cells_evaluated;
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> RecalcEngine::evaluate_cyclic_component_locked(const SerialEvalPass& pass,
+                                                                     const std::vector<CellNodeId>& component,
+                                                                     const char* iterative_oom_message) {
+  const std::size_t sheet_count = pass.workbook.sheet_count();
+  // Evaluation glue for the read-ordered settle (iterative calc off)
+  // and the solver (on). `evaluate_with` mirrors the singleton path's
+  // evaluator glue: parse on the fly, dispatch through `evaluate()`,
+  // fold dynamic-array spills back into a scalar anchor. The `commit`
+  // lambda writes the new value into the cell store so the next
+  // evaluation reads the freshest value back.
+  // Hoisted out of `evaluate_one` so a staged formula's bytes stay live
+  // exactly as long as the arena contents of the same call: a string
+  // literal inside the formula surfaces in the returned Value as a view
+  // into this buffer, and the solver consumes each result before asking
+  // for the next one (which resets the arena).
+  Cell staged;
+  const std::uint64_t component_ordinal = pass.dynamic.next_ordinal();
+  auto evaluate_with = [&](CellNodeId c, EvalState* observer) -> Value {
+    if (c.sheet_id >= sheet_count) {
+      return Value::error(ErrorCode::Ref);
+    }
+    Sheet& sheet = pass.workbook.sheet(c.sheet_id);
+    if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
+      // No formula text: nothing to evaluate. Treat as Blank so the
+      // solver still has a value to compare against — this happens
+      // only on logic bugs but we degrade gracefully.
+      return Value::blank();
+    }
+    // Reset the bump arena per-evaluation. The previous iteration's
+    // committed Text scalars survive this reset because
+    // `Sheet::set_cell_cached_value` deep-copies Text payloads into
+    // each cell's own `cached_text_owned` storage; Array results are
+    // similarly deep-copied into `SpillRegion::owned_strings` by
+    // `Sheet::commit_spill`.
+    arena_->reset();
+    EvaluateCellOptions opts;
+    opts.spill_release_callback = pass.release_callback;
+    opts.spill_release_user_data = pass.release_user_data;
+    opts.read_observer = observer;
+    pass.dynamic.log().observe(c, component_ordinal, opts, nullptr);
+    pass.dynamic.log().note_iterative_member(c, component_ordinal);
+    Value result = evaluate_cell_for_recalc(pass.workbook, sheet, staged, c.row, c.col, pass.registry, *arena_, opts);
+    pass.dynamic.log().end();
+    return result;
+  };
+  auto evaluate_one = [&](CellNodeId c) { return evaluate_with(c, nullptr); };
+  auto commit = [&](CellNodeId c, Value v) {
+    if (c.sheet_id >= sheet_count) {
+      return;
+    }
+    Sheet& sheet = pass.workbook.sheet(c.sheet_id);
+    sheet.set_cell_cached_value(c.row, c.col, v);
+    pass.dynamic.log().note_commit(c, component_ordinal);
+  };
+
+  const std::vector<CellNodeId> cells = cells_of_component(component);
+  if (!iterative_.enabled) {
+    // Excel judges circularity by what evaluation reads, so only a cycle
+    // that reads back into itself is one. A cycle through an OFFSET /
+    // INDIRECT read keeps its own treatment.
+    const bool settled = !closes_through_dynamic_edge(component, graph_) &&
+                         settle_component_by_reads(pass.workbook, cells, evaluate_with, commit);
+    if (arena_->exhausted()) {
+      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
+    }
+    if (settled) {
+      pass.stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
+      return Expected<void, Error>::Ok();
+    }
+    commit_unresolved_cycle_locked(pass, component);
+    return Expected<void, Error>::Ok();
+  }
+  // A reader first evaluated as a singleton in this recalc has already
+  // stepped once; the solver starts from the value it showed before.
+  pass.dynamic.log().restore_prior_values(pass.workbook, cells);
+  const IterativeOutcome outcome =
+      run_iterative_solve(cells, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
+  if (arena_->exhausted()) {
+    return make_error(FormulonErrorCode::kOutOfMemory, iterative_oom_message);
+  }
+  if (outcome.converged) {
+    // Solver wrote the converged values into the cell store; count
+    // each member as evaluated (singleton-style accounting) plus
+    // tagged as iterative.
+    pass.stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
+    pass.stats.iterative_cells += static_cast<std::uint32_t>(cells.size());
+  } else {
+    // Iteration-limit exhaustion or callback-driven abort leaves the
+    // last-iteration values in place. The user-visible failure mode is
+    // still "the cycle did not resolve", so we
+    // count the members in `cycle_cells` to mirror the
+    // disabled-iterative-calc accounting.
+    // A later pass can continue from the retained approximation.
+    pass.stats.cycle_cells += static_cast<std::uint32_t>(cells.size());
+  }
+  return Expected<void, Error>::Ok();
 }
 
 bool RecalcEngine::drop_dynamic_only_cycles_locked(const std::vector<std::vector<CellNodeId>>& sccs) {
@@ -615,13 +749,10 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
   RecalcStats stats;
   SpillReleaseQueue release_queue{&workbook};
   const SpillReleaseCallback release_callback = &queue_spill_release;
-  std::size_t release_waves = 0U;
-  std::size_t dependency_waves = 0U;
-  std::size_t no_progress_waves = 0U;
-  std::vector<BlockedSpillState> previous_release_state;
-  std::vector<CellNodeId> previous_release_targets;
-  bool have_previous_release_state = false;
+  SpillWaveBudget wave_budget;
   DynamicReadPass dynamic(*this, workbook);
+  const SerialEvalPass pass{
+      workbook, registry, dynamic, release_callback, &release_queue, stats, "evaluation arena exhausted during recalc"};
 
   // Per-wave locals begin after this label and are destroyed on the backward
   // jump, while the counters, queue, and accumulated stats above persist.
@@ -677,11 +808,6 @@ recalc_next_wave:
   std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_nodes);
   dynamic.settle_sccs(sccs, dirty_nodes);
 
-  // Index sheet pointers once so we can resolve `CellNodeId::sheet_id` to
-  // a `Sheet*` without a per-cell lookup. Workbook sheet count is small
-  // (typically <= a few dozen).
-  const std::size_t sheet_count = workbook.sheet_count();
-
   // ---- Phase 4: evaluate every dirty SCC. ----
   // Also track which dirty cells have been visited via the SCC walk, so a
   // final sweep can pick up dirty cells with no graph edges (e.g. a
@@ -711,138 +837,15 @@ recalc_next_wave:
         visited_in_sccs.insert(c);
       }
 
-      // Evaluation glue for the read-ordered settle (iterative calc off)
-      // and the solver (on). `evaluate_with` mirrors the singleton path's
-      // evaluator glue: parse on the fly, dispatch through `evaluate()`,
-      // fold dynamic-array spills back into a scalar anchor. The `commit`
-      // lambda writes the new value into the cell store so the next
-      // evaluation reads the freshest value back.
-      // Hoisted out of `evaluate_one` so a staged formula's bytes stay live
-      // exactly as long as the arena contents of the same call: a string
-      // literal inside the formula surfaces in the returned Value as a view
-      // into this buffer, and the solver consumes each result before asking
-      // for the next one (which resets the arena).
-      Cell staged;
-      const std::uint64_t component_ordinal = dynamic.next_ordinal();
-      auto evaluate_with = [&](CellNodeId c, EvalState* observer) -> Value {
-        if (c.sheet_id >= sheet_count) {
-          return Value::error(ErrorCode::Ref);
-        }
-        Sheet& sheet = workbook.sheet(c.sheet_id);
-        if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
-          // No formula text: nothing to evaluate. Treat as Blank so the
-          // solver still has a value to compare against — this happens
-          // only on logic bugs but we degrade gracefully.
-          return Value::blank();
-        }
-        // Reset the bump arena per-evaluation. The previous iteration's
-        // committed Text scalars survive this reset because
-        // `Sheet::set_cell_cached_value` deep-copies Text payloads into
-        // each cell's own `cached_text_owned` storage; Array results are
-        // similarly deep-copied into `SpillRegion::owned_strings` by
-        // `Sheet::commit_spill`.
-        arena_->reset();
-        EvaluateCellOptions opts;
-        opts.spill_release_callback = release_callback;
-        opts.spill_release_user_data = &release_queue;
-        opts.read_observer = observer;
-        dynamic.log().observe(c, component_ordinal, opts, nullptr);
-        dynamic.log().note_iterative_member(c, component_ordinal);
-        Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
-        dynamic.log().end();
-        return result;
-      };
-      auto evaluate_one = [&](CellNodeId c) { return evaluate_with(c, nullptr); };
-      auto commit = [&](CellNodeId c, Value v) {
-        if (c.sheet_id >= sheet_count) {
-          return;
-        }
-        Sheet& sheet = workbook.sheet(c.sheet_id);
-        sheet.set_cell_cached_value(c.row, c.col, v);
-        dynamic.log().note_commit(c, component_ordinal);
-      };
-
-      const std::vector<CellNodeId> cells = cells_of_component(component);
-      if (!iterative_.enabled) {
-        // Excel judges circularity by what evaluation reads, so only a cycle
-        // that reads back into itself is one. A cycle through an OFFSET /
-        // INDIRECT read keeps its own treatment.
-        const bool settled = !closes_through_dynamic_edge(component, graph_) &&
-                             settle_component_by_reads(workbook, cells, evaluate_with, commit);
-        if (arena_->exhausted()) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
-        }
-        if (settled) {
-          stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
-          continue;
-        }
-        commit_unresolved_cycle_locked(workbook, component, dynamic, release_callback, &release_queue, stats);
-        continue;
-      }
-      // A reader first evaluated as a singleton in this recalc has already
-      // stepped once; the solver starts from the value it showed before.
-      dynamic.log().restore_prior_values(workbook, cells);
-      const IterativeOutcome outcome =
-          run_iterative_solve(cells, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
-      if (arena_->exhausted()) {
-        return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during iterative recalc");
-      }
-      if (outcome.converged) {
-        // Solver wrote the converged values into the cell store; count
-        // each member as evaluated (singleton-style accounting) plus
-        // tagged as iterative.
-        stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
-        stats.iterative_cells += static_cast<std::uint32_t>(cells.size());
-      } else {
-        // Iteration-limit exhaustion or callback-driven abort leaves the
-        // last-iteration values in place. The user-visible failure mode is
-        // still "the cycle did not resolve", so we
-        // count the members in `cycle_cells` to mirror the
-        // disabled-iterative-calc accounting.
-        // A later pass can continue from the retained approximation.
-        stats.cycle_cells += static_cast<std::uint32_t>(cells.size());
-      }
+      RETURN_IF_ERROR(
+          evaluate_cyclic_component_locked(pass, component, "evaluation arena exhausted during iterative recalc"));
       continue;
     }
 
     // Plain singleton: evaluate the cell.
     const CellNodeId only = component.front();
     visited_in_sccs.insert(only);
-    if (only.sheet_id >= sheet_count) {
-      continue;
-    }
-    Sheet& sheet = workbook.sheet(only.sheet_id);
-    Cell staged;
-    if (!stage_formula_cell(sheet, only.row, only.col, staged)) {
-      // The dep graph may carry pure-input cells (read-only literals that
-      // someone reads via `add_dependency`). They have nothing to evaluate.
-      continue;
-    }
-    // Reset the per-pass arena before each evaluate so the bump allocator
-    // does not grow without bound across cells. Both result shapes
-    // already survive this reset:
-    //   * Array results are deep-copied into sheet-owned storage by
-    //     `Sheet::commit_spill` (driven by
-    //     `EvalContext::dispatch_array_result`), keeping the spill table
-    //     independent of the arena.
-    //   * Scalar Text results are deep-copied into the destination cell's
-    //     `Cell::cached_text_owned` by `Sheet::set_cell_cached_value` on
-    //     the write below, so the cached `string_view` does not dangle
-    //     when the next cell's evaluation resets the arena.
-    arena_->reset();
-    EvaluateCellOptions opts;
-    opts.spill_release_callback = release_callback;
-    opts.spill_release_user_data = &release_queue;
-    const std::uint64_t ordinal = dynamic.next_ordinal();
-    dynamic.log().observe(only, ordinal, opts, &sheet);
-    Value result = evaluate_cell_for_recalc(workbook, sheet, staged, only.row, only.col, registry, *arena_, opts);
-    dynamic.log().end();
-    if (arena_->exhausted()) {
-      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
-    }
-    sheet.set_cell_cached_value(only.row, only.col, result);
-    dynamic.log().note_commit(only, ordinal);
-    ++stats.cells_evaluated;
+    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, only));
   }
 
   // ---- Phase 4b: defensive pickup for dirty cells not visited by Tarjan. ----
@@ -855,28 +858,7 @@ recalc_next_wave:
     }
   });
   for (CellNodeId c : standalone_dirty) {
-    if (c.sheet_id >= sheet_count) {
-      continue;
-    }
-    Sheet& sheet = workbook.sheet(c.sheet_id);
-    Cell staged;
-    if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
-      continue;
-    }
-    arena_->reset();
-    EvaluateCellOptions opts;
-    opts.spill_release_callback = release_callback;
-    opts.spill_release_user_data = &release_queue;
-    const std::uint64_t ordinal = dynamic.next_ordinal();
-    dynamic.log().observe(c, ordinal, opts, &sheet);
-    Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
-    dynamic.log().end();
-    if (arena_->exhausted()) {
-      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
-    }
-    sheet.set_cell_cached_value(c.row, c.col, result);
-    dynamic.log().note_commit(c, ordinal);
-    ++stats.cells_evaluated;
+    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, c));
   }
 
   // Reconcile compact-range -> spill-producer edges only after every cell in
@@ -890,7 +872,7 @@ recalc_next_wave:
   const bool dynamic_retry = !dynamic.end_wave(nullptr).empty();
   const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
   if (dependency_retry) {
-    ++dependency_waves;
+    wave_budget.count_dependency_wave();
     for (const DepGraph::Edge& edge : dependency_delta.added) {
       dirty_.mark(edge.first);
     }
@@ -901,22 +883,9 @@ recalc_next_wave:
   // of losing them when this pass clears its dirty set.
   const std::vector<CellNodeId> released = release_queue.take();
   if (!released.empty() || dependency_retry) {
-    ++release_waves;
-    if (!released.empty()) {
-      const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(workbook);
-      const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
-      if (have_previous_release_state && release_state == previous_release_state &&
-          release_targets == previous_release_targets) {
-        ++no_progress_waves;
-      } else {
-        no_progress_waves = 0U;
-      }
-      previous_release_state = release_state;
-      previous_release_targets = release_targets;
-      have_previous_release_state = true;
-    }
-    if (release_waves > kMaxSpillReleaseWaves || dependency_waves > kMaxSpillReleaseWaves ||
-        (!released.empty() && no_progress_waves >= kMaxNoProgressSpillWaves)) {
+    wave_budget.count_release_wave();
+    wave_budget.observe_release(workbook, released);
+    if (wave_budget.exceeded(!released.empty())) {
       // Do not recurse through an unbounded chain of release waves. Preserve
       // the existing dirty set (including unrelated work) and keep the
       // release targets dirty for a caller retry after an external mutation.
@@ -959,13 +928,15 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   RecalcStats stats;
   SpillReleaseQueue release_queue{&workbook};
   const SpillReleaseCallback release_callback = &queue_spill_release;
-  std::size_t release_waves = 0U;
-  std::size_t dependency_waves = 0U;
-  std::size_t no_progress_waves = 0U;
-  std::vector<BlockedSpillState> previous_release_state;
-  std::vector<CellNodeId> previous_release_targets;
-  bool have_previous_release_state = false;
+  SpillWaveBudget wave_budget;
   DynamicReadPass dynamic(*this, workbook);
+  const SerialEvalPass pass{workbook,
+                            registry,
+                            dynamic,
+                            release_callback,
+                            &release_queue,
+                            stats,
+                            "evaluation arena exhausted during partial recalc"};
 
   // ---- Phase 0: validate the viewport. ----
   // Empty viewport — collapsed row / column range, or unknown sheet —
@@ -1217,72 +1188,8 @@ partial_recalc_next_wave:
         visited_in_sccs.insert(c);
       }
 
-      // Hoisted for the same reason as the full-recalc solver above: the
-      // staged bytes have to outlive each `evaluate_one` call, because a
-      // string literal in the formula surfaces in the result as a view
-      // into them.
-      Cell staged;
-      const std::uint64_t component_ordinal = dynamic.next_ordinal();
-      auto evaluate_with = [&](CellNodeId c, EvalState* observer) -> Value {
-        if (c.sheet_id >= sheet_count) {
-          return Value::error(ErrorCode::Ref);
-        }
-        Sheet& sheet = workbook.sheet(c.sheet_id);
-        if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
-          return Value::blank();
-        }
-        arena_->reset();
-        EvaluateCellOptions opts;
-        opts.spill_release_callback = release_callback;
-        opts.spill_release_user_data = &release_queue;
-        opts.read_observer = observer;
-        dynamic.log().observe(c, component_ordinal, opts, nullptr);
-        dynamic.log().note_iterative_member(c, component_ordinal);
-        Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
-        dynamic.log().end();
-        return result;
-      };
-      auto evaluate_one = [&](CellNodeId c) { return evaluate_with(c, nullptr); };
-      auto commit = [&](CellNodeId c, Value v) {
-        if (c.sheet_id >= sheet_count) {
-          return;
-        }
-        Sheet& sheet = workbook.sheet(c.sheet_id);
-        sheet.set_cell_cached_value(c.row, c.col, v);
-        dynamic.log().note_commit(c, component_ordinal);
-      };
-
-      const std::vector<CellNodeId> cells = cells_of_component(component);
-      if (!iterative_.enabled) {
-        // Excel judges circularity by what evaluation reads, so only a cycle
-        // that reads back into itself is one. A cycle through an OFFSET /
-        // INDIRECT read keeps its own treatment.
-        const bool settled = !closes_through_dynamic_edge(component, graph_) &&
-                             settle_component_by_reads(workbook, cells, evaluate_with, commit);
-        if (arena_->exhausted()) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
-        }
-        if (settled) {
-          stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
-          continue;
-        }
-        commit_unresolved_cycle_locked(workbook, component, dynamic, release_callback, &release_queue, stats);
-        continue;
-      }
-      dynamic.log().restore_prior_values(workbook, cells);
-      const IterativeOutcome outcome =
-          run_iterative_solve(cells, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
-      if (arena_->exhausted()) {
-        return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
-      }
-      if (outcome.converged) {
-        stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
-        stats.iterative_cells += static_cast<std::uint32_t>(cells.size());
-      } else {
-        // A finite iteration budget leaves the solver's final approximation
-        // in place so a later viewport/full pass can resume from it.
-        stats.cycle_cells += static_cast<std::uint32_t>(cells.size());
-      }
+      RETURN_IF_ERROR(
+          evaluate_cyclic_component_locked(pass, component, "evaluation arena exhausted during partial recalc"));
       continue;
     }
 
@@ -1293,28 +1200,7 @@ partial_recalc_next_wave:
       continue;
     }
     visited_in_sccs.insert(only);
-    if (only.sheet_id >= sheet_count) {
-      continue;
-    }
-    Sheet& sheet = workbook.sheet(only.sheet_id);
-    Cell staged;
-    if (!stage_formula_cell(sheet, only.row, only.col, staged)) {
-      continue;
-    }
-    arena_->reset();
-    EvaluateCellOptions opts;
-    opts.spill_release_callback = release_callback;
-    opts.spill_release_user_data = &release_queue;
-    const std::uint64_t ordinal = dynamic.next_ordinal();
-    dynamic.log().observe(only, ordinal, opts, &sheet);
-    Value result = evaluate_cell_for_recalc(workbook, sheet, staged, only.row, only.col, registry, *arena_, opts);
-    dynamic.log().end();
-    if (arena_->exhausted()) {
-      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
-    }
-    sheet.set_cell_cached_value(only.row, only.col, result);
-    dynamic.log().note_commit(only, ordinal);
-    ++stats.cells_evaluated;
+    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, only));
   }
 
   // ---- Phase 4b: standalone dirty cells inside the closure. ----
@@ -1328,28 +1214,7 @@ partial_recalc_next_wave:
     }
   });
   for (CellNodeId c : standalone_dirty) {
-    if (c.sheet_id >= sheet_count) {
-      continue;
-    }
-    Sheet& sheet = workbook.sheet(c.sheet_id);
-    Cell staged;
-    if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
-      continue;
-    }
-    arena_->reset();
-    EvaluateCellOptions opts;
-    opts.spill_release_callback = release_callback;
-    opts.spill_release_user_data = &release_queue;
-    const std::uint64_t ordinal = dynamic.next_ordinal();
-    dynamic.log().observe(c, ordinal, opts, &sheet);
-    Value result = evaluate_cell_for_recalc(workbook, sheet, staged, c.row, c.col, registry, *arena_, opts);
-    dynamic.log().end();
-    if (arena_->exhausted()) {
-      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
-    }
-    sheet.set_cell_cached_value(c.row, c.col, result);
-    dynamic.log().note_commit(c, ordinal);
-    ++stats.cells_evaluated;
+    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, c));
   }
 
   // Reconcile globally after this partial wave. A newly discovered
@@ -1412,24 +1277,13 @@ partial_recalc_next_wave:
     }
     if (release_in_closure || dependency_retry_in_closure) {
       if (!released.empty()) {
-        ++release_waves;
-        const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(workbook);
-        const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
-        if (have_previous_release_state && release_state == previous_release_state &&
-            release_targets == previous_release_targets) {
-          ++no_progress_waves;
-        } else {
-          no_progress_waves = 0U;
-        }
-        previous_release_state = release_state;
-        previous_release_targets = release_targets;
-        have_previous_release_state = true;
+        wave_budget.count_release_wave();
+        wave_budget.observe_release(workbook, released);
       }
       if (dependency_retry_in_closure) {
-        ++dependency_waves;
+        wave_budget.count_dependency_wave();
       }
-      if (release_waves > kMaxSpillReleaseWaves || dependency_waves > kMaxSpillReleaseWaves ||
-          (!released.empty() && no_progress_waves >= kMaxNoProgressSpillWaves)) {
+      if (wave_budget.exceeded(!released.empty())) {
         return make_error(FormulonErrorCode::kGraphScheduleFailed, "recalc waves made no progress",
                           "partial spill recovery or dynamic-reference retries exceeded the bounded wave budget");
       }

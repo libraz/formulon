@@ -9,9 +9,8 @@
 //   * a `DirtySet` accumulating cells that need to be re-evaluated on the
 //     next pass.
 //
-// The engine itself is single-threaded; the multi-threaded scheduler that
-// will eventually parallelise SCC evaluation lives in a later phase. For
-// now the contract is intentionally narrow:
+// The engine evaluates on the calling thread; the parallel scheduler in
+// `scheduler.cpp` drives the same state through friend access. The contract:
 //
 //   * `register_formula(cell, ast, workbook)` analyses `ast` (via
 //     `extract_deps`) and updates the dep graph + volatile tracker for
@@ -25,12 +24,13 @@
 //     formula text changes.
 //   * `recalc(workbook, registry)` performs an end-to-end incremental
 //     recalc: it seeds the dirty set with volatile cells, BFS-propagates
-//     dirtiness through reverse edges, runs Tarjan SCC over the *full*
-//     graph (so the reverse-topological order is preserved), and evaluates
-//     every dirty SCC in order. Singleton SCCs without a self-loop are
-//     evaluated via the tree walker; SCCs with cycles surface `#REF!` on
-//     every member (until the iterative solver lands in a follow-up
-//     bundle). The dirty set is cleared at the end of the pass.
+//     dirtiness through reverse edges, runs Tarjan SCC over the dirty
+//     induced subgraph (`tarjan_scc_subset`), and evaluates every dirty SCC
+//     in reverse-topological order. Singleton SCCs without a self-loop are
+//     evaluated via the tree walker; a cyclic SCC is settled by what its
+//     members read, or by the iterative solver when iterative calc is
+//     enabled, and otherwise surfaces `#REF!`. The dirty set is cleared at
+//     the end of the pass.
 
 #ifndef FORMULON_EVAL_RECALC_ENGINE_H_
 #define FORMULON_EVAL_RECALC_ENGINE_H_
@@ -241,13 +241,14 @@ class RecalcEngine {
   ///      regardless of upstream changes.
   ///   2. BFS-propagate dirtiness via `DepGraph::dependents_of` until no new
   ///      cells are added.
-  ///   3. Compute Tarjan SCCs of the entire graph. Tarjan emits leaves
+  ///   3. Compute Tarjan SCCs of the dirty subgraph. Tarjan emits leaves
   ///      first, which is exactly the order the evaluator wants (a cell's
   ///      dependencies are evaluated before the cell itself).
   ///   4. Walk the SCC list and evaluate every component whose intersection
   ///      with the dirty set is non-empty. Singleton SCCs without a
-  ///      self-loop run through the tree walker; cyclic SCCs receive
-  ///      `#REF!` on every member.
+  ///      self-loop run through the tree walker; a cyclic SCC is settled by
+  ///      what its members read, or by the iterative solver when iterative
+  ///      calc is enabled, and otherwise surfaces `#REF!`.
   ///   5. Clear the dirty set.
   ///
   /// Returns `RecalcStats` describing the pass. The engine never propagates
@@ -468,14 +469,35 @@ class RecalcEngine {
     bool first_wave_ = true;
   };
 
+  /// What every evaluation site of one serial recalc call shares.
+  /// `oom_message` is that driver's arena-exhaustion error text.
+  struct SerialEvalPass {
+    Workbook& workbook;
+    const FunctionRegistry& registry;
+    DynamicReadPass& dynamic;
+    SpillReleaseCallback release_callback;
+    void* release_user_data;
+    RecalcStats& stats;
+    const char* oom_message;
+  };
+
+  /// Evaluates the formula at `cell` outside any cycle and commits its
+  /// result; a cell with no formula is left alone.
+  Expected<void, Error> evaluate_formula_cell_locked(const SerialEvalPass& pass, CellNodeId cell);
+
+  /// Settles a cyclic component by its reads (iterative calc off) or runs
+  /// the iterative solver (on). A solve that exhausts the arena fails with
+  /// `iterative_oom_message`.
+  Expected<void, Error> evaluate_cyclic_component_locked(const SerialEvalPass& pass,
+                                                         const std::vector<CellNodeId>& component,
+                                                         const char* iterative_oom_message);
+
   /// Commits a cyclic component iterative calc does not resolve: `#REF!` on
   /// every member, except that a cycle closing through an OFFSET / INDIRECT
   /// read restores each member's value from before this recalc, as Excel
   /// leaves a circular cell at its last value. Counts the members in
-  /// `stats.cycle_cells`.
-  void commit_unresolved_cycle_locked(Workbook& workbook, const std::vector<CellNodeId>& component,
-                                      DynamicReadPass& dynamic, SpillReleaseCallback release_callback,
-                                      void* release_user_data, RecalcStats& stats);
+  /// `pass.stats.cycle_cells`.
+  void commit_unresolved_cycle_locked(const SerialEvalPass& pass, const std::vector<CellNodeId>& component);
 
   // Serialises every mutating access to `graph_`, `volatiles_`, `dirty_`,
   // and `arena_`. Held for the full duration of each public entry; the

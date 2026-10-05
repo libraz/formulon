@@ -89,6 +89,34 @@ std::vector<CellNodeId> canonical_release_targets(const std::vector<CellNodeId>&
 constexpr std::size_t kMaxSpillReleaseWaves = 4096U;
 constexpr std::size_t kMaxNoProgressSpillWaves = 8U;
 
+/// Wave counters and the no-progress snapshot of one recalc call's release
+/// loop. Each driver decides which waves it counts; the ceilings are shared.
+class SpillWaveBudget {
+ public:
+  void count_release_wave() noexcept { ++release_waves_; }
+  void count_dependency_wave() noexcept { ++dependency_waves_; }
+
+  /// Counts a no-progress wave when the blocked geometry and the woken
+  /// targets both match the previous release, and resets the count
+  /// otherwise. No-op when `released` is empty.
+  void observe_release(const Workbook& workbook, const std::vector<CellNodeId>& released);
+
+  /// Whether a ceiling is exceeded. The no-progress ceiling applies only to
+  /// a wave that released anchors.
+  bool exceeded(bool released_any) const noexcept {
+    return release_waves_ > kMaxSpillReleaseWaves || dependency_waves_ > kMaxSpillReleaseWaves ||
+           (released_any && no_progress_waves_ >= kMaxNoProgressSpillWaves);
+  }
+
+ private:
+  std::size_t release_waves_ = 0U;
+  std::size_t dependency_waves_ = 0U;
+  std::size_t no_progress_waves_ = 0U;
+  std::vector<BlockedSpillState> previous_state_;
+  std::vector<CellNodeId> previous_targets_;
+  bool have_previous_ = false;
+};
+
 }  // namespace formulon::eval::detail
 
 #endif  // FORMULON_EVAL_SPILL_RELEASE_H_
