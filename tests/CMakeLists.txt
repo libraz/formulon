@@ -309,6 +309,9 @@ target_compile_definitions(formulon_unit_tests
 # `ZipReader.ReadEntryRejectsHighRatioEntry`) out of the fast loop we
 # rely on the `-j N` parallelism added to `make test`; they run
 # alongside the rest in <2 s wall-clock on a modern workstation.
+  unit/cf/cf_evaluator_context_test.cpp
+  unit/cf/cf_evaluator_population_test.cpp
+  unit/cf/cf_evaluator_range_test.cpp
 # Separating them into a dedicated SLOW binary would force the gtest
 # fixture to be duplicated, which is a worse trade.
 gtest_discover_tests(formulon_unit_tests)
