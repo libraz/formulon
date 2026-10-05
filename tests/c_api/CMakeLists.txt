@@ -6,7 +6,11 @@
 set(FORMULON_C_API_TEST_SOURCES
   formulon_c_adhoc_arena_cap_test.cpp
   formulon_c_calc_mode_test.cpp
-  formulon_c_cf_test.cpp
+  formulon_c_cf_authoring_test.cpp
+  formulon_c_cf_evaluation_test.cpp
+  formulon_c_cf_overlay_test.cpp
+  formulon_c_cf_validation_test.cpp
+  formulon_c_cf_visual_payload_test.cpp
   formulon_c_clock_test.cpp
   formulon_c_evaluate_formula_test.cpp
   formulon_c_external_links_test.cpp
@@ -14,15 +18,28 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_lambda_text_test.cpp
   formulon_c_logging_test.cpp
   formulon_c_named_styles_test.cpp
-  formulon_c_pivot_test.cpp
+  formulon_c_pivot_authoring_test.cpp
+  formulon_c_pivot_filters_test.cpp
+  formulon_c_pivot_grouping_test.cpp
+  formulon_c_pivot_lifecycle_test.cpp
+  formulon_c_pivot_read_test.cpp
   formulon_c_print_settings_test.cpp
   formulon_c_protection_test.cpp
   formulon_c_read_scratch_test.cpp
   formulon_c_sheet_features_test.cpp
   formulon_c_sheet_layout_test.cpp
   formulon_c_spill_test.cpp
-  formulon_c_styles_test.cpp
+  formulon_c_styles_alignment_test.cpp
+  formulon_c_styles_cell_xf_test.cpp
+  formulon_c_styles_dxf_test.cpp
+  formulon_c_styles_fills_borders_test.cpp
+  formulon_c_styles_fonts_test.cpp
+  formulon_c_styles_lifetime_test.cpp
+  formulon_c_styles_mutation_test.cpp
+  formulon_c_styles_num_formats_test.cpp
   formulon_c_test.cpp
+  formulon_c_values_test.cpp
+  formulon_c_save_test.cpp
   formulon_c_trace_test.cpp
   formulon_c_zip_budget_test.cpp
   partial_recalc_test.cpp
