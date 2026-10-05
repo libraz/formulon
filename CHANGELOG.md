@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The WASM size report's ceilings moved to 3.25 MiB / 864 KiB Brotli soft
-  and 3.50 MiB / 896 KiB Brotli hard, keeping the 0.25 MiB and 32 KiB gap
+- The WASM size report's ceilings moved to 3.50 MiB / 896 KiB Brotli soft
+  and 3.75 MiB / 928 KiB Brotli hard, keeping the 0.25 MiB and 32 KiB gap
   between each soft and hard ceiling.
 
 ## [0.12.0] - 2026-09-30
