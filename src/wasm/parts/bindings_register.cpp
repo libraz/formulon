@@ -219,6 +219,28 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getCellStyle", &JsWorkbook::getCellStyle)
       .function("getCellStyleXf", &JsWorkbook::getCellStyleXf)
       .function("getCellXf", &JsWorkbook::getCellXf)
+      .function("getCellsInRange", &JsWorkbook::getCellsInRange)
+      .function("getCellsInRange", emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet,
+                                                                    emscripten::val range, emscripten::val cursor) {
+                  return self.getCellsInRange(sheet, range, cursor, emscripten::val::undefined());
+                }))
+      .function("getCellsInRange",
+                emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, emscripten::val range) {
+                  return self.getCellsInRange(sheet, range, emscripten::val::undefined(), emscripten::val::undefined());
+                }))
+      .function("getCellRectPt", &JsWorkbook::getCellRectPt)
+      .function("getColumnWidthPt", &JsWorkbook::getColumnWidthPt)
+      .function("getDisplayText", &JsWorkbook::getDisplayText)
+      .function("getFormula", &JsWorkbook::getFormula)
+      .function("getFormulaR1C1", &JsWorkbook::getFormulaR1C1)
+      .function("getRowHeightPt", &JsWorkbook::getRowHeightPt)
+      .function("getSheetFormatDefaults", &JsWorkbook::getSheetFormatDefaults)
+      .function("getWidthModel", &JsWorkbook::getWidthModel)
+      .function("formatValue", &JsWorkbook::formatValue)
+      .function("clearRowHeight", &JsWorkbook::clearRowHeight)
+      .function("setSheetFormatDefaults", &JsWorkbook::setSheetFormatDefaults)
+      .function("columnCharsToPt", &JsWorkbook::columnCharsToPt)
+      .function("columnPtToChars", &JsWorkbook::columnPtToChars)
       .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
       .function("getCellPhonetic", &JsWorkbook::getCellPhonetic)
       .function("getCellPhoneticRuns", &JsWorkbook::getCellPhoneticRuns)
@@ -235,6 +257,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getIterative", &JsWorkbook::getIterative)
       .function("getLambdaText", &JsWorkbook::getLambdaText)
       .function("getMerges", &JsWorkbook::getMerges)
+      .function("getMergesInRange", &JsWorkbook::getMergesInRange)
       .function("getNumFmt", &JsWorkbook::getNumFmt)
       .function("getSheetColumns", &JsWorkbook::getSheetColumns)
       .function("getSheetAutoFilterXml", &JsWorkbook::getSheetAutoFilterXml)

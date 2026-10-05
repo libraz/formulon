@@ -379,4 +379,159 @@ Napi::Value Workbook::GetLambdaText(const Napi::CallbackInfo& info) {
   return MakeStringFieldResult(env, MakeOkStatus(env), "text", text);
 }
 
+// ---- Formula text, range enumeration, display text ------------------
+
+namespace {
+
+// Builds `{ status, <field>: string | null }`; an empty C string is "no formula".
+Napi::Object MakeFormulaResult(Napi::Env env, fm_status_t code, const char* formula) {
+  const bool present = code == 0 && formula != nullptr && formula[0] != '\0';
+  return MakeFieldResult(env, MakeStatus(env, code), "formula",
+                         present ? static_cast<Napi::Value>(Napi::String::New(env, formula)) : env.Null());
+}
+
+// Builds `{ status, text, displayStatus }`; `text` is "" and the display
+// status OK when the call failed.
+Napi::Object MakeDisplayResult(Napi::Env env, fm_status_t code, const char* text, int32_t display_status) {
+  const bool ok = code == 0;
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, code));
+  out.Set("text", Napi::String::New(env, ok && text != nullptr ? text : ""));
+  out.Set("displayStatus", Napi::Number::New(env, ok ? display_status : 0));
+  return out;
+}
+
+}  // namespace
+
+Napi::Value Workbook::GetFormula(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeFormulaResult(env, kBindingInvalidHandle, nullptr);
+  }
+  const char* formula = nullptr;
+  const fm_status_t rc = fm_workbook_get_formula(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &formula);
+  return MakeFormulaResult(env, rc, formula);
+}
+
+Napi::Value Workbook::GetFormulaR1C1(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeFormulaResult(env, kBindingInvalidHandle, nullptr);
+  }
+  const char* formula = nullptr;
+  const fm_status_t rc =
+      fm_workbook_get_formula_r1c1(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &formula);
+  return MakeFormulaResult(env, rc, formula);
+}
+
+Napi::Value Workbook::GetCellsInRange(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  Napi::Array cells = Napi::Array::New(env);
+  out.Set("cells", cells);
+  out.Set("nextCursor", env.Null());
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  if (info.Length() < 2 || !info[1].IsObject()) {
+    out.Set("status",
+            MakeBindingArgumentError(env, "getCellsInRange expects (sheet:number, range:object, cursor?, limit?)"));
+    return out;
+  }
+  const Napi::Object range = info[1].As<Napi::Object>();
+  const bool has_cursor = info.Length() > 2 && info[2].IsNumber();
+  const uint64_t cursor = has_cursor ? static_cast<uint64_t>(info[2].As<Napi::Number>().DoubleValue()) : 0U;
+  const uint32_t limit = info.Length() > 3 && info[3].IsNumber() ? ArgU32(info, 3) : 0U;
+  fm_cell_range_t* page = nullptr;
+  fm_status_t rc = fm_sheet_cells_in_range(handle_, ArgU32(info, 0), SpecPullU32(range, "firstRow", 0U),
+                                           SpecPullU32(range, "firstCol", 0U), SpecPullU32(range, "lastRow", 0U),
+                                           SpecPullU32(range, "lastCol", 0U), cursor, limit, &page);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  size_t count = 0;
+  rc = fm_cell_range_count(page, &count);
+  for (size_t i = 0; rc == 0 && i < count; ++i) {
+    uint32_t row = 0;
+    uint32_t col = 0;
+    const char* formula = nullptr;
+    fm_value_t value{};
+    rc = fm_cell_range_at(page, i, &row, &col, &formula, &value);
+    if (rc != 0) {
+      break;
+    }
+    Napi::Object cell = Napi::Object::New(env);
+    cell.Set("row", Napi::Number::New(env, row));
+    cell.Set("col", Napi::Number::New(env, col));
+    cell.Set("formula", formula != nullptr ? static_cast<Napi::Value>(Napi::String::New(env, formula)) : env.Null());
+    cell.Set("value", TranslateValue(env, value));
+    cells.Set(static_cast<uint32_t>(i), cell);
+  }
+  uint64_t next = UINT64_MAX;
+  if (rc == 0) {
+    rc = fm_cell_range_next_cursor(page, &next);
+  }
+  fm_cell_range_destroy(page);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  if (next != UINT64_MAX) {
+    out.Set("nextCursor", Napi::Number::New(env, static_cast<double>(next)));
+  }
+  return out;
+}
+
+Napi::Value Workbook::GetDisplayText(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeDisplayResult(env, kBindingInvalidHandle, nullptr, 0);
+  }
+  const char* text = nullptr;
+  int32_t display_status = 0;
+  const fm_status_t rc =
+      fm_workbook_get_display_text(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &text, &display_status);
+  return MakeDisplayResult(env, rc, text, display_status);
+}
+
+Napi::Value Workbook::FormatValue(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeDisplayResult(env, kBindingInvalidHandle, nullptr, 0);
+  }
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    Napi::Object out = MakeDisplayResult(env, kBindingNullPointer, nullptr, 0);
+    out.Set("status", MakeBindingArgumentError(env, "formatValue expects (value:Value, formatCode:string)"));
+    return out;
+  }
+  const Napi::Object spec = info[0].As<Napi::Object>();
+  const std::string text = spec.Has("text") ? spec.Get("text").ToString().Utf8Value() : std::string();
+  const std::string format_code = ArgString(info, 1);
+  fm_value_t value{};
+  value.kind = static_cast<fm_value_kind_t>(SpecPullInt32(spec, "kind", FM_VAL_BLANK));
+  switch (value.kind) {
+    case FM_VAL_NUMBER:
+      value.u.number = SpecPullDouble(spec, "number", 0.0);
+      break;
+    case FM_VAL_BOOL:
+      value.u.boolean = SpecPullInt32(spec, "boolean", 0) != 0 ? 1 : 0;
+      break;
+    case FM_VAL_TEXT:
+      value.u.text = text.c_str();
+      break;
+    case FM_VAL_ERROR:
+      value.u.error_code = SpecPullInt32(spec, "errorCode", 0);
+      break;
+    default:
+      break;
+  }
+  const char* out_text = nullptr;
+  int32_t display_status = 0;
+  const fm_status_t rc = fm_workbook_format_value(handle_, &value, format_code.c_str(), &out_text, &display_status);
+  return MakeDisplayResult(env, rc, out_text, display_status);
+}
+
 }  // namespace formulon_node

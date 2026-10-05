@@ -121,6 +121,12 @@ function envelopeProbes(wb) {
     // A released handle is the only failure path, which is not usable here.
     ['PinnedNowResult', false, () => wb.pinnedNow()],
     ['SpillInfo', true, () => wb.spillInfo(99, 0, 0)],
+    ['SheetFormatDefaultsResult', true, () => wb.getSheetFormatDefaults(99)],
+    ['CellRectResult', true, () => wb.getCellRectPt(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0)],
+    ['WidthModelResult', true, () => wb.getWidthModel(99, 0)],
+    ['FormulaResult', true, () => wb.getFormula(99, 0, 0)],
+    ['CellsInRangeResult', true, () => wb.getCellsInRange(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
+    ['DisplayTextResult', true, () => wb.getDisplayText(99, 0, 0)],
   ];
 }
 

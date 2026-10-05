@@ -582,6 +582,148 @@ emscripten::val JsWorkbook::getExternalLinks() const {
   return arr;
 }
 
+// ---- Formula text / range enumeration / display text -------------------
+
+namespace {
+
+emscripten::val formula_envelope(fm_status_t rc, const char* formula) {
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  const bool present = rc == 0 && formula != nullptr && formula[0] != '\0';
+  o.set("formula", present ? emscripten::val(std::string(formula)) : emscripten::val::null());
+  return o;
+}
+
+emscripten::val display_envelope(fm_status_t rc, const char* text, int32_t display_status) {
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  o.set("text", rc == 0 && text != nullptr ? std::string(text) : std::string());
+  o.set("displayStatus", rc == 0 ? display_status : 0);
+  return o;
+}
+
+/// Reads an optional non-negative integer argument (`undefined` / `null`
+/// keep `dflt`). Returns false for anything else that is not a safe integer.
+bool js_optional_index(const emscripten::val& v, double dflt, double max, double* out) {
+  if (v.isUndefined() || v.isNull()) {
+    *out = dflt;
+    return true;
+  }
+  const emscripten::val number = emscripten::val::global("Number");
+  if (!number.call<bool>("isInteger", v)) {
+    return false;
+  }
+  const double d = v.as<double>();
+  *out = d;
+  return d >= 0.0 && d <= max;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::getFormula(uint32_t sheet, uint32_t row, uint32_t col) const {
+  const char* formula = nullptr;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_formula(handle_, sheet, row, col, &formula) : 7000;
+  return formula_envelope(rc, formula);
+}
+
+emscripten::val JsWorkbook::getFormulaR1C1(uint32_t sheet, uint32_t row, uint32_t col) const {
+  const char* formula = nullptr;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_formula_r1c1(handle_, sheet, row, col, &formula) : 7000;
+  return formula_envelope(rc, formula);
+}
+
+emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val range, emscripten::val cursor,
+                                            emscripten::val limit) const {
+  emscripten::val o = emscripten::val::object();
+  o.set("cells", emscripten::val::array());
+  o.set("nextCursor", emscripten::val::null());
+  if (handle_ == nullptr) {
+    o.set("status", error_status(7000));
+    return o;
+  }
+  double cursor_value = 0.0;
+  double limit_value = 0.0;
+  if (!js_optional_index(cursor, 0.0, 9007199254740991.0, &cursor_value) ||
+      !js_optional_index(limit, 0.0, 4294967295.0, &limit_value)) {
+    o.set("status", binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
+                                         "getCellsInRange: `cursor` and `limit` must be non-negative integers"));
+    return o;
+  }
+  fm_cell_range_t* page = nullptr;
+  const fm_status_t rc =
+      fm_sheet_cells_in_range(handle_, sheet, range["firstRow"].as<uint32_t>(), range["firstCol"].as<uint32_t>(),
+                              range["lastRow"].as<uint32_t>(), range["lastCol"].as<uint32_t>(),
+                              static_cast<uint64_t>(cursor_value), static_cast<uint32_t>(limit_value), &page);
+  if (rc != 0) {
+    o.set("status", error_status(rc));
+    return o;
+  }
+  std::size_t count = 0;
+  uint64_t next = 0;
+  fm_cell_range_count(page, &count);
+  fm_cell_range_next_cursor(page, &next);
+  emscripten::val cells = emscripten::val::array();
+  for (std::size_t i = 0; i < count; ++i) {
+    uint32_t row = 0;
+    uint32_t col = 0;
+    const char* formula = nullptr;
+    fm_value_t v{};
+    if (fm_cell_range_at(page, i, &row, &col, &formula, &v) != 0) {
+      continue;
+    }
+    emscripten::val cell = emscripten::val::object();
+    cell.set("row", row);
+    cell.set("col", col);
+    cell.set("formula", formula != nullptr ? emscripten::val(std::string(formula)) : emscripten::val::null());
+    cell.set("value", translate_value(v));
+    cells.call<void>("push", cell);
+  }
+  fm_cell_range_destroy(page);
+  o.set("status", ok_status());
+  o.set("cells", cells);
+  if (next != UINT64_MAX) {
+    o.set("nextCursor", static_cast<double>(next));
+  }
+  return o;
+}
+
+emscripten::val JsWorkbook::getDisplayText(uint32_t sheet, uint32_t row, uint32_t col) const {
+  const char* text = nullptr;
+  int32_t display_status = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_display_text(handle_, sheet, row, col, &text, &display_status) : 7000;
+  return display_envelope(rc, text, display_status);
+}
+
+emscripten::val JsWorkbook::formatValue(emscripten::val value, const std::string& formatCode) const {
+  if (handle_ == nullptr) {
+    return display_envelope(7000, nullptr, 0);
+  }
+  fm_value_t v{};
+  v.kind = static_cast<fm_value_kind_t>(js_pull_u32(value, "kind", 0U));
+  std::string text = js_pull_string(value, "text");
+  switch (v.kind) {
+    case FM_VAL_NUMBER:
+      v.u.number = js_pull_double(value, "number", 0.0);
+      break;
+    case FM_VAL_BOOL:
+      v.u.boolean = js_pull_bool(value, "boolean", false) ? 1 : 0;
+      break;
+    case FM_VAL_TEXT:
+      v.u.text = text.c_str();
+      break;
+    case FM_VAL_ERROR:
+      v.u.error_code = static_cast<int32_t>(js_pull_u32(value, "errorCode", 0U));
+      break;
+    default:
+      break;
+  }
+  const char* out = nullptr;
+  int32_t display_status = 0;
+  const fm_status_t rc = fm_workbook_format_value(handle_, &v, formatCode.c_str(), &out, &display_status);
+  return display_envelope(rc, out, display_status);
+}
+
 }  // namespace parts
 }  // namespace wasm
 }  // namespace formulon

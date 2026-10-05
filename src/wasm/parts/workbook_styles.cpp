@@ -44,6 +44,17 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf) {
   xf->wrap_text = js_pull_bool(record, "wrapText", false) ? 1 : 0;
   xf->justify_last_line = js_pull_bool(record, "justifyLastLine", false) ? 1 : 0;
   xf->xf_id = js_pull_u32(record, "xfId", 0U);
+  xf->apply_number_format = js_pull_bool(record, "applyNumberFormat", false) ? 1 : 0;
+  xf->apply_font = js_pull_bool(record, "applyFont", false) ? 1 : 0;
+  xf->apply_fill = js_pull_bool(record, "applyFill", false) ? 1 : 0;
+  xf->apply_border = js_pull_bool(record, "applyBorder", false) ? 1 : 0;
+  xf->apply_alignment = js_pull_bool(record, "applyAlignment", false) ? 1 : 0;
+  xf->apply_protection = js_pull_bool(record, "applyProtection", false) ? 1 : 0;
+  xf->quote_prefix = js_pull_bool(record, "quotePrefix", false) ? 1 : 0;
+  const bool has_supplied_protection = js_has_field(record, "locked") || js_has_field(record, "hidden");
+  xf->has_protection = js_pull_bool(record, "hasProtection", has_supplied_protection) ? 1 : 0;
+  xf->locked = js_pull_bool(record, "locked", true) ? 1 : 0;
+  xf->hidden = js_pull_bool(record, "hidden", false) ? 1 : 0;
 
   const bool has_explicit_horizontal_align = js_has_field(record, "hasHorizontalAlign");
   const bool has_explicit_vertical_align = js_has_field(record, "hasVerticalAlign");
@@ -192,6 +203,16 @@ emscripten::val js_cell_xf_record(const fm_cell_xf& xf) {
   o.set("hasVerticalAlign", xf.has_vertical_align != 0);
   o.set("hasWrapText", xf.has_wrap_text != 0);
   o.set("hasJustifyLastLine", xf.has_justify_last_line != 0);
+  o.set("applyNumberFormat", xf.apply_number_format != 0);
+  o.set("applyFont", xf.apply_font != 0);
+  o.set("applyFill", xf.apply_fill != 0);
+  o.set("applyBorder", xf.apply_border != 0);
+  o.set("applyAlignment", xf.apply_alignment != 0);
+  o.set("applyProtection", xf.apply_protection != 0);
+  o.set("quotePrefix", xf.quote_prefix != 0);
+  o.set("hasProtection", xf.has_protection != 0);
+  o.set("locked", xf.locked != 0);
+  o.set("hidden", xf.hidden != 0);
   return o;
 }
 

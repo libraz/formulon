@@ -13,6 +13,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerCellGeometryDisplay } from './run_cell_geometry_display.mjs';
 import { registerCellsIo } from './run_cells_io.mjs';
 import { registerMetadataLayout } from './run_metadata_layout.mjs';
 import { registerPivotRegressions } from './run_pivot_regressions.mjs';
@@ -52,6 +53,7 @@ async function run() {
   registerStyles(Module, test);
   registerMetadataLayout(Module, test);
   registerPivotRegressions(Module, test);
+  registerCellGeometryDisplay(Module, test);
 
   // ---- Run --------------------------------------------------------------
   for (const c of cases) {

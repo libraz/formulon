@@ -255,6 +255,19 @@ formulon::CellXf cell_xf_from_c(const fm_cell_xf& record, std::uint32_t xf_id) {
   candidate.has_reading_order = record.has_reading_order != 0;
   candidate.reading_order = record.reading_order;
 
+  candidate.apply_number_format = record.apply_number_format != 0;
+  candidate.apply_font = record.apply_font != 0;
+  candidate.apply_fill = record.apply_fill != 0;
+  candidate.apply_border = record.apply_border != 0;
+  candidate.apply_alignment = record.apply_alignment != 0;
+  candidate.apply_protection = record.apply_protection != 0;
+  candidate.quote_prefix = record.quote_prefix != 0;
+  // An omitted `<protection>` child canonicalizes to the schema defaults so
+  // ignored values cannot split otherwise identical records.
+  candidate.has_protection = record.has_protection != 0;
+  candidate.locked = !candidate.has_protection || record.locked != 0;
+  candidate.hidden = candidate.has_protection && record.hidden != 0;
+
   candidate.has_alignment = formulon::HasAlignment(candidate);
   return candidate;
 }

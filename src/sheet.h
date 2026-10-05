@@ -19,6 +19,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -758,6 +759,34 @@ class Sheet {
   /// sheet's literal content. Takes `spill_mutex_` for the whole read.
   std::vector<CellAddress> formula_cells_in(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
                                             std::uint32_t last_col) const;
+
+  /// One populated coordinate handed to a `cells_in_range` visitor.
+  struct RangeCell {
+    std::uint32_t row = 0;
+    std::uint32_t col = 0;
+    /// Stored formula text verbatim (leading `=` kept); empty for a literal
+    /// or a spill phantom.
+    std::string_view formula_text;
+    /// The effective value; a Text payload aliases sheet storage.
+    Value value = Value::blank();
+  };
+
+  /// `cells_in_range` result once the rectangle holds no further cell.
+  static constexpr std::uint64_t kCellCursorEnd = std::numeric_limits<std::uint64_t>::max();
+
+  /// Visits, in row-major order, at most `limit` populated coordinates of
+  /// `[first_row..last_row] x [first_col..last_col]` starting at `cursor`
+  /// (`row * kMaxCols + col`), and returns the cursor of the next populated
+  /// coordinate, or `kCellCursorEnd`.
+  ///
+  /// Populated means a stored cell with formula text or a non-blank value,
+  /// or a committed spill phantom. Cost is proportional to the rectangle's
+  /// rows from the cursor on plus the cells visited, never to its area.
+  /// `limit` must be positive. `visit` runs under the sheet lock, so it must
+  /// copy what it keeps and must not call back into this sheet.
+  std::uint64_t cells_in_range(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                               std::uint32_t last_col, std::uint64_t cursor, std::uint32_t limit,
+                               void (*visit)(const RangeCell& cell, void* ctx), void* ctx) const;
 
   /// Monotonically changes whenever the flat stored-cell / spill-phantom
   /// address set changes. C-ABI iteration uses it to invalidate its

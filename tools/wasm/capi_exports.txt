@@ -59,6 +59,10 @@ fm_workbook_get_cell_phonetic_run_count
 fm_workbook_get_cell_phonetic_run
 fm_workbook_get_cell_phonetic_properties
 fm_workbook_lambda_text_at
+fm_workbook_get_formula
+fm_workbook_get_formula_r1c1
+fm_workbook_get_display_text
+fm_workbook_format_value
 
 # -- Ad-hoc array evaluation (two-step: evaluate + per-cell readback) -------------
 fm_workbook_evaluate_cf_formula
@@ -68,6 +72,11 @@ fm_workbook_evaluate_formula_array_cell
 # -- Iteration / dump ------------------------------------------------------------
 fm_workbook_cell_count
 fm_workbook_cell_at
+fm_sheet_cells_in_range
+fm_cell_range_count
+fm_cell_range_at
+fm_cell_range_next_cursor
+fm_cell_range_destroy
 fm_workbook_defined_name_count
 fm_workbook_defined_name_at
 fm_workbook_table_count
@@ -100,6 +109,7 @@ fm_sheet_remove_merge_at
 fm_sheet_clear_merges
 fm_sheet_get_merge_at
 fm_sheet_get_merge_count
+fm_sheet_merges_in_range
 fm_sheet_add_hyperlink
 fm_sheet_remove_hyperlink
 fm_sheet_remove_hyperlink_at
@@ -146,6 +156,15 @@ fm_sheet_get_row_override
 fm_sheet_set_row_height
 fm_sheet_set_row_hidden
 fm_sheet_set_row_outline
+fm_sheet_clear_row_height
+fm_sheet_get_format_defaults
+fm_sheet_set_format_defaults
+fm_sheet_cell_rect_pt
+fm_sheet_column_width_pt
+fm_sheet_row_height_pt
+fm_sheet_width_model
+fm_sheet_column_chars_to_pt
+fm_sheet_column_pt_to_chars
 
 # -- Conditional formatting ------------------------------------------------------
 fm_workbook_cf_evaluate_range
@@ -301,6 +320,15 @@ fm_pagination_horizontal_break_count
 fm_pagination_horizontal_break_at
 fm_pagination_vertical_break_count
 fm_pagination_vertical_break_at
+fm_pagination_paper
+fm_pagination_margins
+fm_pagination_printable
+fm_pagination_scale
+fm_pagination_page_order
+fm_pagination_print_titles
+fm_pagination_page_at
+fm_pagination_horizontal_break_is_manual
+fm_pagination_vertical_break_is_manual
 fm_sheet_get_page_setup_xml
 fm_sheet_set_page_setup_xml
 fm_sheet_get_page_margins_xml

@@ -6,12 +6,14 @@
 set(FORMULON_C_API_TEST_SOURCES
   formulon_c_adhoc_arena_cap_test.cpp
   formulon_c_calc_mode_test.cpp
+  formulon_c_cell_geometry_test.cpp
   formulon_c_cf_authoring_test.cpp
   formulon_c_cf_evaluation_test.cpp
   formulon_c_cf_overlay_test.cpp
   formulon_c_cf_validation_test.cpp
   formulon_c_cf_visual_payload_test.cpp
   formulon_c_clock_test.cpp
+  formulon_c_display_text_test.cpp
   formulon_c_evaluate_formula_test.cpp
   formulon_c_external_links_test.cpp
   formulon_c_function_metadata_test.cpp

@@ -288,3 +288,102 @@ TEST(FormulonCApiStyles, AddNullArgumentRejected) {
   EXPECT_NE(fm_styles_add_dxf(nullptr, fm_dxf_record{}, &idx), 0);
   EXPECT_NE(fm_styles_add_dxf(wb.handle, fm_dxf_record{}, nullptr), 0);
 }
+
+namespace {
+
+// A record that sets every apply flag, quotePrefix and an explicit
+// `<protection>` child whose values differ from the schema defaults.
+fm_cell_xf MakeFlaggedXf() {
+  fm_cell_xf xf{};
+  xf.apply_number_format = 1;
+  xf.apply_font = 1;
+  xf.apply_fill = 1;
+  xf.apply_border = 1;
+  xf.apply_alignment = 1;
+  xf.apply_protection = 1;
+  xf.quote_prefix = 1;
+  xf.has_protection = 1;
+  xf.locked = 0;
+  xf.hidden = 1;
+  return xf;
+}
+
+void ExpectFlagged(const fm_cell_xf& xf) {
+  EXPECT_EQ(xf.apply_number_format, 1);
+  EXPECT_EQ(xf.apply_font, 1);
+  EXPECT_EQ(xf.apply_fill, 1);
+  EXPECT_EQ(xf.apply_border, 1);
+  EXPECT_EQ(xf.apply_alignment, 1);
+  EXPECT_EQ(xf.apply_protection, 1);
+  EXPECT_EQ(xf.quote_prefix, 1);
+  EXPECT_EQ(xf.has_protection, 1);
+  EXPECT_EQ(xf.locked, 0);
+  EXPECT_EQ(xf.hidden, 1);
+}
+
+}  // namespace
+
+TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t xf_index = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, MakeFlaggedXf(), &xf_index), 0);
+  ASSERT_NE(xf_index, 0U);
+  uint32_t style_xf_id = 0;
+  ASSERT_EQ(fm_styles_add_cell_style_xf(wb.handle, MakeFlaggedXf(), &style_xf_id), 0);
+
+  fm_cell_xf got{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, xf_index, &got), 0);
+  ExpectFlagged(got);
+
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  const std::string styles_xml = ExtractStylesXml(saved);
+  EXPECT_NE(styles_xml.find("applyNumberFormat=\"1\" applyFont=\"1\" applyFill=\"1\" applyBorder=\"1\" "
+                            "applyAlignment=\"1\" applyProtection=\"1\" quotePrefix=\"1\""),
+            std::string::npos)
+      << styles_xml;
+  EXPECT_NE(styles_xml.find("<protection locked=\"0\" hidden=\"1\"/>"), std::string::npos) << styles_xml;
+
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  uint32_t reloaded_index = 0;
+  ASSERT_EQ(fm_cell_get_xf_index(reloaded.handle, 0, 0, 0, &reloaded_index), 0);
+  fm_cell_xf after{};
+  ASSERT_EQ(fm_styles_get_cell_xf(reloaded.handle, reloaded_index, &after), 0);
+  ExpectFlagged(after);
+  fm_cell_xf style_after{};
+  ASSERT_EQ(fm_styles_get_cell_style_xf(reloaded.handle, style_xf_id, &style_after), 0);
+  ExpectFlagged(style_after);
+}
+
+TEST(FormulonCApiStyles, XfProtectionDistinguishesDedup) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cell_xf locked{};
+  locked.has_protection = 1;
+  locked.locked = 1;
+  fm_cell_xf unlocked = locked;
+  unlocked.locked = 0;
+  uint32_t a = 0;
+  uint32_t b = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, locked, &a), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, unlocked, &b), 0);
+  EXPECT_NE(a, b);
+
+  // Without the child, `locked` / `hidden` are ignored: the record
+  // deduplicates with the default XF and reads back the schema defaults.
+  fm_cell_xf absent{};
+  absent.locked = 0;
+  absent.hidden = 1;
+  uint32_t c = 99;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, absent, &c), 0);
+  EXPECT_EQ(c, 0U);
+  fm_cell_xf got{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, c, &got), 0);
+  EXPECT_EQ(got.has_protection, 0);
+  EXPECT_EQ(got.locked, 1);
+  EXPECT_EQ(got.hidden, 0);
+}

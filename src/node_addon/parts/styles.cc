@@ -219,6 +219,17 @@ Napi::Object CellXfToJs(Napi::Env env, const fm_cell_xf& xf) {
   out.Set("hasVerticalAlign", Napi::Boolean::New(env, xf.has_vertical_align != 0));
   out.Set("hasWrapText", Napi::Boolean::New(env, xf.has_wrap_text != 0));
   out.Set("hasJustifyLastLine", Napi::Boolean::New(env, xf.has_justify_last_line != 0));
+  out.Set("applyNumberFormat", Napi::Boolean::New(env, xf.apply_number_format != 0));
+  out.Set("applyFont", Napi::Boolean::New(env, xf.apply_font != 0));
+  out.Set("applyFill", Napi::Boolean::New(env, xf.apply_fill != 0));
+  out.Set("applyBorder", Napi::Boolean::New(env, xf.apply_border != 0));
+  out.Set("applyAlignment", Napi::Boolean::New(env, xf.apply_alignment != 0));
+  out.Set("applyProtection", Napi::Boolean::New(env, xf.apply_protection != 0));
+  out.Set("quotePrefix", Napi::Boolean::New(env, xf.quote_prefix != 0));
+  out.Set("hasProtection", Napi::Boolean::New(env, xf.has_protection != 0));
+  // Without a `<protection>` child the model default applies: locked, not hidden.
+  out.Set("locked", Napi::Boolean::New(env, xf.has_protection == 0 || xf.locked != 0));
+  out.Set("hidden", Napi::Boolean::New(env, xf.has_protection != 0 && xf.hidden != 0));
   return out;
 }
 
@@ -567,6 +578,18 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
     xf.has_reading_order = 1;
     xf.reading_order = SpecPullU32(record, "readingOrder", 0U);
   }
+  xf.apply_number_format = SpecPullBool(record, "applyNumberFormat", false) ? 1 : 0;
+  xf.apply_font = SpecPullBool(record, "applyFont", false) ? 1 : 0;
+  xf.apply_fill = SpecPullBool(record, "applyFill", false) ? 1 : 0;
+  xf.apply_border = SpecPullBool(record, "applyBorder", false) ? 1 : 0;
+  xf.apply_alignment = SpecPullBool(record, "applyAlignment", false) ? 1 : 0;
+  xf.apply_protection = SpecPullBool(record, "applyProtection", false) ? 1 : 0;
+  xf.quote_prefix = SpecPullBool(record, "quotePrefix", false) ? 1 : 0;
+  xf.has_protection = SpecHas(record, "hasProtection")
+                          ? (SpecPullBool(record, "hasProtection", false) ? 1 : 0)
+                          : ((SpecHas(record, "locked") || SpecHas(record, "hidden")) ? 1 : 0);
+  xf.locked = SpecPullBool(record, "locked", true) ? 1 : 0;
+  xf.hidden = SpecPullBool(record, "hidden", false) ? 1 : 0;
   if (env.IsExceptionPending()) {
     // See the matching guard in AddFont. The return value is discarded
     // in favor of the pending exception either way.

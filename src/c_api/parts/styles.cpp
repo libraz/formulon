@@ -130,6 +130,17 @@ void cell_xf_to_c(const formulon::CellXf& xf, fm_cell_xf* out) {
   out->has_vertical_align = xf.has_vertical_align ? 1 : 0;
   out->has_wrap_text = xf.has_wrap_text ? 1 : 0;
   out->has_justify_last_line = xf.has_justify_last_line ? 1 : 0;
+  out->apply_number_format = xf.apply_number_format ? 1 : 0;
+  out->apply_font = xf.apply_font ? 1 : 0;
+  out->apply_fill = xf.apply_fill ? 1 : 0;
+  out->apply_border = xf.apply_border ? 1 : 0;
+  out->apply_alignment = xf.apply_alignment ? 1 : 0;
+  out->apply_protection = xf.apply_protection ? 1 : 0;
+  out->quote_prefix = xf.quote_prefix ? 1 : 0;
+  out->has_protection = xf.has_protection ? 1 : 0;
+  // Without a `<protection>` child the schema defaults are in effect.
+  out->locked = (!xf.has_protection || xf.locked) ? 1 : 0;
+  out->hidden = (xf.has_protection && xf.hidden) ? 1 : 0;
 }
 
 }  // namespace

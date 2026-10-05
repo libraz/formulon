@@ -97,6 +97,22 @@ class JsWorkbook {
   JsStatus setBlank(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula);
 
+  /// `{ status, formula }`: the stored A1 formula, or `null` for a cell that
+  /// holds none.
+  emscripten::val getFormula(uint32_t sheet, uint32_t row, uint32_t col) const;
+  /// R1C1 counterpart of `getFormula`, relative to the cell, without `=`.
+  emscripten::val getFormulaR1C1(uint32_t sheet, uint32_t row, uint32_t col) const;
+  /// One page of the populated cells inside `range`:
+  /// `{ status, cells: [{ row, col, formula, value }], nextCursor }`.
+  /// `cursor` / `limit` may be omitted or `null`; `nextCursor` is `null`
+  /// once the range is exhausted.
+  emscripten::val getCellsInRange(uint32_t sheet, emscripten::val range, emscripten::val cursor,
+                                  emscripten::val limit) const;
+  /// `{ status, text, displayStatus }`: the text Excel displays for a cell.
+  emscripten::val getDisplayText(uint32_t sheet, uint32_t row, uint32_t col) const;
+  /// Renders a `Value` under a stored-form number format code.
+  emscripten::val formatValue(emscripten::val value, const std::string& formatCode) const;
+
   JsCellResult getValue(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const;
   /// Reads a cell's furigana as `{ status, runs: [{ sb, eb, text }] }`,
@@ -270,6 +286,23 @@ class JsWorkbook {
   JsStatus setRowHeight(uint32_t sheet, uint32_t row, double height);
   JsStatus setRowHidden(uint32_t sheet, uint32_t row, bool hidden);
   JsStatus setRowOutline(uint32_t sheet, uint32_t row, uint32_t level);
+  /// Drops the height override at `row`, returning it to the sheet default.
+  JsStatus clearRowHeight(uint32_t sheet, uint32_t row);
+
+  /// Sheet default column / row metrics (`<sheetFormatPr>`).
+  emscripten::val getSheetFormatDefaults(uint32_t sheet) const;
+  JsStatus setSheetFormatDefaults(uint32_t sheet, emscripten::val defaults);
+
+  // ---- Point geometry (`mode`: 0 = display, 1 = print) --------------------
+
+  /// `{ status, x, y, width, height }` of an inclusive cell range, in points
+  /// from the top-left of A1.
+  emscripten::val getCellRectPt(uint32_t sheet, emscripten::val range, int32_t mode) const;
+  JsNumberResult getColumnWidthPt(uint32_t sheet, uint32_t col, int32_t mode) const;
+  JsNumberResult getRowHeightPt(uint32_t sheet, uint32_t row) const;
+  emscripten::val getWidthModel(uint32_t sheet, int32_t mode) const;
+  JsNumberResult columnCharsToPt(uint32_t sheet, int32_t mode, double chars) const;
+  JsNumberResult columnPtToChars(uint32_t sheet, int32_t mode, double pt) const;
 
   /** Complete worksheet-level `<autoFilter>` fragment. The empty string
    * means no filter; the status form distinguishes that from a bad sheet. */
@@ -340,6 +373,8 @@ class JsWorkbook {
   JsStatus clearHyperlinks(uint32_t sheet);
   emscripten::val getHyperlinks(uint32_t sheet) const;
   emscripten::val getMerges(uint32_t sheet) const;
+  /// The merges intersecting `range`, in storage order.
+  emscripten::val getMergesInRange(uint32_t sheet, emscripten::val range) const;
 
   emscripten::val getValidations(uint32_t sheet) const;
   JsStatus addValidation(uint32_t sheet, emscripten::val v);

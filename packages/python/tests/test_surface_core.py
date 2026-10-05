@@ -52,8 +52,8 @@ class StructLayoutTests(unittest.TestCase):
         "CIVIL_TIME": 24,
         "SHEET_VIEW": 44,
         "COLUMN_LAYOUT": 40,
-        "ROW_LAYOUT": 32,
-        "CELL_XF": 88,
+        "ROW_LAYOUT": 40,
+        "CELL_XF": 128,
         "COLOR_SPEC": 24,
         "FONT_RECORD": 88,
         "FILL_RECORD": 64,
@@ -72,6 +72,14 @@ class StructLayoutTests(unittest.TestCase):
         "PAGE_MARGINS": 96,
         "PRINT_OPTIONS": 32,
         "HEADER_FOOTER": 56,
+        "SHEET_FORMAT_DEFAULTS": 32,
+        "RECT_PT": 32,
+        "WIDTH_MODEL": 40,
+        "PAPER_INFO": 24,
+        "MARGINS_PT": 48,
+        "PRINT_TITLES": 24,
+        # Five `uint32`s, then four tail-aligned `double`s.
+        "PAGE_LAYOUT": 56,
     }
 
     def test_struct_sizes(self) -> None:

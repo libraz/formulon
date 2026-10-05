@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -13,10 +14,14 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "cell.h"
+#include "eval/formula_text_utils.h"
 #include "eval/lambda_format.h"
 #include "eval/lambda_value.h"
+#include "parser/ast_format_r1c1.h"
+#include "parser/parser.h"
 #include "phonetic.h"
 #include "sheet.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/index_sort.h"
 #include "value.h"
@@ -24,6 +29,7 @@
 
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
@@ -535,4 +541,185 @@ extern "C" fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, std::uint
   out->cols = region->cols;
   out->engaged = 1;
   return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Formula text and range enumeration
+// ---------------------------------------------------------------------------
+
+namespace {
+
+fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col, const char* api) {
+  if (formulon::Sheet::coord_in_grid(row, col)) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell coordinate out of range",
+                           std::string(api) + ": row=" + std::to_string(row) + " col=" + std::to_string(col));
+}
+
+// Shared front half of the two formula getters: validates, then copies the
+// stored formula text (empty for a non-formula) out under the sheet lock.
+fm_status_t read_stored_formula(const fm_workbook_t* wb, size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                const char** out_formula, const char* api, std::string* out_text) {
+  if (out_formula == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(api) + ": NULL argument").c_str());
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, api); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col, api); rc != 0) {
+    return rc;
+  }
+  formulon::Sheet::CellRead read;
+  wb->workbook().sheet(sheet_index).read_formula_cell(row, col, read);
+  out_text->assign(read.formula_text());
+  return 0;
+}
+
+const char* publish_scratch(const fm_workbook_t* wb, std::string text) {
+  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
+  store.clear();
+  store.emplace_back(std::move(text));
+  return store.back().c_str();
+}
+
+// Page size cap for `fm_sheet_cells_in_range`, and the size a zero limit asks for.
+constexpr std::uint32_t kMaxCellRangeLimit = 65536U;
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                               const char** out_formula) {
+  clear_last_error();
+  std::string text;
+  if (auto rc = read_stored_formula(wb, sheet_index, row, col, out_formula, "fm_workbook_get_formula", &text);
+      rc != 0) {
+    return rc;
+  }
+  *out_formula = publish_scratch(wb, std::move(text));
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_formula_r1c1(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                    uint32_t col, const char** out_formula) {
+  clear_last_error();
+  std::string text;
+  if (auto rc = read_stored_formula(wb, sheet_index, row, col, out_formula, "fm_workbook_get_formula_r1c1", &text);
+      rc != 0) {
+    return rc;
+  }
+  if (text.empty()) {
+    *out_formula = publish_scratch(wb, std::string());
+    return 0;
+  }
+  formulon::Arena arena;
+  const formulon::parser::AstNode* root =
+      formulon::parser::parse_strict(formulon::eval::strip_formula_prefix(text), arena);
+  if (root == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
+                             "fm_workbook_get_formula_r1c1: stored formula does not parse",
+                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  *out_formula = publish_scratch(wb, formulon::parser::format_formula_r1c1(*root, row, col));
+  return 0;
+}
+
+struct fm_cell_range {
+  struct Entry {
+    std::uint32_t row = 0;
+    std::uint32_t col = 0;
+    const char* formula = nullptr;
+    fm_value_t value{};
+  };
+  std::vector<Entry> entries;
+  // Owns every formula string and Text payload `entries` points at.
+  TextStore text;
+  std::uint64_t next_cursor = formulon::Sheet::kCellCursorEnd;
+};
+
+extern "C" fm_status_t fm_sheet_cells_in_range(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                               uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                               uint64_t cursor, uint32_t limit, fm_cell_range_t** out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cells_in_range: NULL out");
+  }
+  *out = nullptr;
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cells_in_range"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_rect(first_row, first_col, last_row, last_col, "fm_sheet_cells_in_range"); rc != 0) {
+    return rc;
+  }
+  constexpr std::uint64_t kCursorEnd =
+      static_cast<std::uint64_t>(formulon::Sheet::kMaxRows) * formulon::Sheet::kMaxCols;
+  if (cursor >= kCursorEnd) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cells_in_range: cursor out of range", "cursor=" + std::to_string(cursor));
+  }
+  const std::uint32_t page = (limit == 0U || limit > kMaxCellRangeLimit) ? kMaxCellRangeLimit : limit;
+  auto handle = std::unique_ptr<fm_cell_range_t>(new fm_cell_range_t{});
+  handle->next_cursor = wb->workbook()
+                            .sheet(sheet_index)
+                            .cells_in_range(
+                                first_row, first_col, last_row, last_col, cursor, page,
+                                [](const formulon::Sheet::RangeCell& cell, void* ctx) {
+                                  auto* range = static_cast<fm_cell_range_t*>(ctx);
+                                  fm_cell_range_t::Entry entry;
+                                  entry.row = cell.row;
+                                  entry.col = cell.col;
+                                  if (!cell.formula_text.empty()) {
+                                    range->text.emplace_back(cell.formula_text);
+                                    entry.formula = range->text.back().c_str();
+                                  }
+                                  value_to_fm(cell.value, range->text, &entry.value);
+                                  range->entries.push_back(entry);
+                                },
+                                handle.get());
+  *out = handle.release();
+  return 0;
+}
+
+extern "C" fm_status_t fm_cell_range_count(const fm_cell_range_t* range, size_t* out_count) {
+  clear_last_error();
+  if (range == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_range_count: NULL argument");
+  }
+  *out_count = range->entries.size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_cell_range_at(const fm_cell_range_t* range, size_t idx, uint32_t* out_row, uint32_t* out_col,
+                                        const char** out_formula, fm_value_t* out_value) {
+  clear_last_error();
+  if (range == nullptr || out_row == nullptr || out_col == nullptr || out_value == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_range_at: NULL argument");
+  }
+  if (idx >= range->entries.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_cell_range_at: idx out of range",
+                             "idx=" + std::to_string(idx) + " count=" + std::to_string(range->entries.size()));
+  }
+  const fm_cell_range_t::Entry& entry = range->entries[idx];
+  *out_row = entry.row;
+  *out_col = entry.col;
+  if (out_formula != nullptr) {
+    *out_formula = entry.formula;
+  }
+  *out_value = entry.value;
+  return 0;
+}
+
+extern "C" fm_status_t fm_cell_range_next_cursor(const fm_cell_range_t* range, uint64_t* out_cursor) {
+  clear_last_error();
+  if (range == nullptr || out_cursor == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_cell_range_next_cursor: NULL argument");
+  }
+  *out_cursor = range->next_cursor;
+  return 0;
+}
+
+extern "C" void fm_cell_range_destroy(fm_cell_range_t* range) {
+  delete range;
 }

@@ -22,7 +22,7 @@ namespace {
 // against a different definition reads its arguments from the wrong registers
 // and stack slots with no diagnosable failure. Pin the layout here so a change
 // has to break the build and be acknowledged.
-static_assert(sizeof(fm_cell_xf) == 88U, "fm_cell_xf ABI layout changed");
+static_assert(sizeof(fm_cell_xf) == 128U, "fm_cell_xf ABI layout changed");
 static_assert(offsetof(fm_cell_xf, font_index) == 0U, "fm_cell_xf.font_index offset changed");
 static_assert(offsetof(fm_cell_xf, fill_index) == 4U, "fm_cell_xf.fill_index offset changed");
 static_assert(offsetof(fm_cell_xf, border_index) == 8U, "fm_cell_xf.border_index offset changed");
@@ -39,6 +39,10 @@ static_assert(offsetof(fm_cell_xf, has_horizontal_align) == 72U, "fm_cell_xf.has
 static_assert(offsetof(fm_cell_xf, has_vertical_align) == 76U, "fm_cell_xf.has_vertical_align offset changed");
 static_assert(offsetof(fm_cell_xf, has_wrap_text) == 80U, "fm_cell_xf.has_wrap_text offset changed");
 static_assert(offsetof(fm_cell_xf, has_justify_last_line) == 84U, "fm_cell_xf.has_justify_last_line offset changed");
+static_assert(offsetof(fm_cell_xf, apply_number_format) == 88U, "fm_cell_xf.apply_number_format offset changed");
+static_assert(offsetof(fm_cell_xf, quote_prefix) == 112U, "fm_cell_xf.quote_prefix offset changed");
+static_assert(offsetof(fm_cell_xf, has_protection) == 116U, "fm_cell_xf.has_protection offset changed");
+static_assert(offsetof(fm_cell_xf, hidden) == 124U, "fm_cell_xf.hidden offset changed");
 static_assert(sizeof(fm_dxf_record) == (sizeof(void*) == 4U ? 368U : 376U), "fm_dxf_record ABI layout changed");
 static_assert(offsetof(fm_dxf_record, num_fmt_code) == 352U, "fm_dxf_record.num_fmt_code offset changed");
 static_assert(offsetof(fm_dxf_record, alignment_xml) == (sizeof(void*) == 4U ? 356U : 360U),

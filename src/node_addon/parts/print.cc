@@ -412,6 +412,98 @@ Napi::Value Workbook::GetSheetPageMargins(const Napi::CallbackInfo& info) {
   return result;
 }
 
+namespace {
+
+Napi::Object RectToJs(Napi::Env env, const fm_rect_pt& r) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("x", Napi::Number::New(env, r.x));
+  out.Set("y", Napi::Number::New(env, r.y));
+  out.Set("width", Napi::Number::New(env, r.width));
+  out.Set("height", Napi::Number::New(env, r.height));
+  return out;
+}
+
+// Sets the pagination detail keys on `result`. A null `pagination` yields the
+// all-zero record every failure path reports, so the keys exist on every exit.
+void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination_t* pagination) {
+  fm_paper_info paper{};
+  fm_margins_pt margins{};
+  fm_rect_pt printable{};
+  double scale = 0.0;
+  int32_t page_order = 0;
+  fm_print_titles titles{};
+  Napi::Array pages = Napi::Array::New(env);
+  Napi::Array horizontal_manual = Napi::Array::New(env);
+  Napi::Array vertical_manual = Napi::Array::New(env);
+  if (pagination != nullptr) {
+    (void)fm_pagination_paper(pagination, &paper);
+    (void)fm_pagination_margins(pagination, &margins);
+    (void)fm_pagination_printable(pagination, &printable);
+    (void)fm_pagination_scale(pagination, &scale);
+    (void)fm_pagination_page_order(pagination, &page_order);
+    (void)fm_pagination_print_titles(pagination, &titles);
+    for (std::size_t i = 0; i < fm_pagination_page_count(pagination); ++i) {
+      fm_page_layout page{};
+      if (fm_pagination_page_at(pagination, i, &page) != 0) {
+        continue;
+      }
+      Napi::Object item = Napi::Object::New(env);
+      item.Set("areaIndex", Napi::Number::New(env, page.area_index));
+      item.Set("firstRow", Napi::Number::New(env, page.first_row));
+      item.Set("lastRow", Napi::Number::New(env, page.last_row));
+      item.Set("firstCol", Napi::Number::New(env, page.first_col));
+      item.Set("lastCol", Napi::Number::New(env, page.last_col));
+      item.Set("originXPt", Napi::Number::New(env, page.origin_x_pt));
+      item.Set("originYPt", Napi::Number::New(env, page.origin_y_pt));
+      item.Set("widthPt", Napi::Number::New(env, page.width_pt));
+      item.Set("heightPt", Napi::Number::New(env, page.height_pt));
+      pages.Set(i, item);
+    }
+    for (std::size_t i = 0; i < fm_pagination_horizontal_break_count(pagination); ++i) {
+      int32_t manual = 0;
+      if (fm_pagination_horizontal_break_is_manual(pagination, i, &manual) == 0) {
+        horizontal_manual.Set(i, Napi::Boolean::New(env, manual != 0));
+      }
+    }
+    for (std::size_t i = 0; i < fm_pagination_vertical_break_count(pagination); ++i) {
+      int32_t manual = 0;
+      if (fm_pagination_vertical_break_is_manual(pagination, i, &manual) == 0) {
+        vertical_manual.Set(i, Napi::Boolean::New(env, manual != 0));
+      }
+    }
+  }
+  Napi::Object paper_js = Napi::Object::New(env);
+  paper_js.Set("widthPt", Napi::Number::New(env, paper.width_pt));
+  paper_js.Set("heightPt", Napi::Number::New(env, paper.height_pt));
+  paper_js.Set("landscape", Napi::Boolean::New(env, paper.landscape != 0));
+  paper_js.Set("known", Napi::Boolean::New(env, paper.known != 0));
+  Napi::Object margins_js = Napi::Object::New(env);
+  margins_js.Set("left", Napi::Number::New(env, margins.left));
+  margins_js.Set("right", Napi::Number::New(env, margins.right));
+  margins_js.Set("top", Napi::Number::New(env, margins.top));
+  margins_js.Set("bottom", Napi::Number::New(env, margins.bottom));
+  margins_js.Set("header", Napi::Number::New(env, margins.header));
+  margins_js.Set("footer", Napi::Number::New(env, margins.footer));
+  Napi::Object titles_js = Napi::Object::New(env);
+  titles_js.Set("hasRows", Napi::Boolean::New(env, titles.has_rows != 0));
+  titles_js.Set("firstRow", Napi::Number::New(env, titles.first_row));
+  titles_js.Set("lastRow", Napi::Number::New(env, titles.last_row));
+  titles_js.Set("hasCols", Napi::Boolean::New(env, titles.has_cols != 0));
+  titles_js.Set("firstCol", Napi::Number::New(env, titles.first_col));
+  titles_js.Set("lastCol", Napi::Number::New(env, titles.last_col));
+  result.Set("paper", paper_js);
+  result.Set("margins", margins_js);
+  result.Set("printable", RectToJs(env, printable));
+  result.Set("scale", Napi::Number::New(env, scale));
+  result.Set("pageOrder", Napi::Number::New(env, page_order));
+  result.Set("printTitles", titles_js);
+  result.Set("pages", pages);
+  result.Set("horizontalBreakManual", horizontal_manual);
+  result.Set("verticalBreakManual", vertical_manual);
+}
+
+}  // namespace
+
 Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object result = Napi::Object::New(env);
@@ -424,6 +516,7 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     result.Set("horizontalBreaks", horizontal_breaks);
     result.Set("verticalBreaks", vertical_breaks);
     result.Set("pageCount", Napi::Number::New(env, 0));
+    SetPaginationDetail(env, result, nullptr);
     return result;
   }
   if (info.Length() < 1 || !info[0].IsNumber()) {
@@ -438,6 +531,7 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     result.Set("horizontalBreaks", horizontal_breaks);
     result.Set("verticalBreaks", vertical_breaks);
     result.Set("pageCount", Napi::Number::New(env, 0));
+    SetPaginationDetail(env, result, nullptr);
     return result;
   }
   for (std::size_t i = 0; i < fm_pagination_print_area_count(pagination); ++i) {
@@ -469,6 +563,7 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
   result.Set("horizontalBreaks", horizontal_breaks);
   result.Set("verticalBreaks", vertical_breaks);
   result.Set("pageCount", Napi::Number::New(env, fm_pagination_page_count(pagination)));
+  SetPaginationDetail(env, result, pagination);
   fm_pagination_destroy(pagination);
   return result;
 }

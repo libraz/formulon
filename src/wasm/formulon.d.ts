@@ -610,6 +610,161 @@ export interface PaginationResult {
   horizontalBreaks: number[];
   verticalBreaks: number[];
   pageCount: number;
+  /** Paper the layout ran on, after the orientation swap. `known` is false
+   *  when the stored `paperSize` was unrecognised and A4 was substituted. */
+  paper: PaginationPaper;
+  margins: PaginationMargins;
+  /** Cell-body rectangle before print-title reservation, from the page's top-left corner. */
+  printable: RectPt;
+  /** Effective scale as a factor (1 is 100%). */
+  scale: number;
+  /** 0 = down then over, 1 = over then down. */
+  pageOrder: number;
+  /** Repeat rows / columns in effect (0-based, inclusive); a span is meaningful only when its flag is set. */
+  printTitles: PaginationPrintTitles;
+  /** Physical pages in print order. */
+  pages: PaginationPage[];
+  /** Parallel to `horizontalBreaks`: true for a manual break. */
+  horizontalBreakManual: boolean[];
+  /** Parallel to `verticalBreaks`: true for a manual break. */
+  verticalBreakManual: boolean[];
+}
+
+/** `PaginationResult.paper`. `known` is false when the stored `paperSize` was
+ *  unrecognised and A4 was substituted. */
+export interface PaginationPaper {
+  widthPt: number;
+  heightPt: number;
+  landscape: boolean;
+  known: boolean;
+}
+
+/** `PaginationResult.margins`, in points; `header` / `footer` are measured
+ *  from the page edge to the header / footer band. */
+export interface PaginationMargins {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  header: number;
+  footer: number;
+}
+
+/** `PaginationResult.printTitles`: repeat rows / columns (0-based,
+ *  inclusive). A span is meaningful only when its `has*` flag is true. */
+export interface PaginationPrintTitles {
+  hasRows: boolean;
+  firstRow: number;
+  lastRow: number;
+  hasCols: boolean;
+  firstCol: number;
+  lastCol: number;
+}
+
+/** A rectangle in points. */
+export interface RectPt {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** One physical page of a `PaginationResult`. `widthPt` / `heightPt` are the
+ *  scaled extent of the page's own cell block (repeated titles excluded) and
+ *  `originXPt` / `originYPt` is that block's top-left corner on the paper. */
+export interface PaginationPage {
+  /** Index into `PaginationResult.printArea` (0 for the used-range fallback). */
+  areaIndex: number;
+  firstRow: number;
+  lastRow: number;
+  firstCol: number;
+  lastCol: number;
+  originXPt: number;
+  originYPt: number;
+  widthPt: number;
+  heightPt: number;
+}
+
+/** Which Windows column-width figure a geometry call uses. Mirrors `fm_geometry_mode_t`.
+ *  `Display` is the screen figure (`Range.Width` at 96 DPI); `Print` is the
+ *  DPI-stable figure pagination breaks on. Row heights are identical in both. */
+export enum GeometryMode {
+  Display = 0,
+  Print = 1,
+}
+
+/** Return type of `Workbook.getCellRectPt(...)`. */
+export interface CellRectResult extends RectPt {
+  status: Status;
+}
+
+/** Return type of `Workbook.getWidthModel(...)`. */
+export interface WidthModelResult {
+  status: Status;
+  pointsPerChar: number;
+  paddingPt: number;
+  normalFontSize: number;
+  /** False when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated. */
+  calibrated: boolean;
+  normalFontName: string;
+  platform: string;
+}
+
+/** Sheet default column / row metrics (`<sheetFormatPr>`). A width / height is
+ *  meaningful only when its `has*` flag is set. */
+export interface SheetFormatDefaults {
+  /** Character units. */
+  defaultColWidth: number;
+  /** Points. */
+  defaultRowHeight: number;
+  /** Character units; OOXML default 8. */
+  baseColWidth: number;
+  hasDefaultColWidth: boolean;
+  hasDefaultRowHeight: boolean;
+}
+
+/** Return type of `Workbook.getSheetFormatDefaults(sheet)`. */
+export interface SheetFormatDefaultsResult extends SheetFormatDefaults {
+  status: Status;
+}
+
+/** Return type of `Workbook.getFormula` / `getFormulaR1C1`. `formula` is `null` when the cell holds no formula. */
+export interface FormulaResult {
+  status: Status;
+  formula: string | null;
+}
+
+/** One populated cell of `Workbook.getCellsInRange`. */
+export interface RangeCell {
+  row: number;
+  col: number;
+  formula: string | null;
+  value: Value;
+}
+
+/** Return type of `Workbook.getCellsInRange(...)`. */
+export interface CellsInRangeResult {
+  status: Status;
+  cells: RangeCell[];
+  /** Resume position for the next page, or `null` when the range is exhausted. */
+  nextCursor: number | null;
+}
+
+/** Outcome of a display-text rendering. Mirrors `fm_display_status_t`.
+ *  `Overflow`: the value cannot be shown in the format and the text is
+ *  `########`. `InvalidFormat`: the code is malformed and the text is the
+ *  General rendering. */
+export enum DisplayStatus {
+  Ok = 0,
+  Overflow = 1,
+  InvalidFormat = 2,
+}
+
+/** Return type of `Workbook.getDisplayText` / `formatValue`. */
+export interface DisplayTextResult {
+  status: Status;
+  text: string;
+  displayStatus: DisplayStatus;
 }
 
 /** Sheet tab visibility, mirroring OOXML `<sheet state>`.
@@ -735,6 +890,10 @@ export interface RowLayout {
   /** Whether OOXML customFormat=1 makes the row style effective. */
   hasStyle: number;
   styleXf: number;
+  /** Boolean stored as 0/1: whether a height is stored; `height` is meaningful only then. */
+  hasHeight: number;
+  /** Boolean stored as 0/1: an explicit override (`customHeight="1"`) rather than an auto height Excel recomputes. */
+  customHeight: number;
 }
 
 /** Return type of `Workbook.getSheetRowOverrides(sheet)`. */
@@ -1145,6 +1304,21 @@ export interface CellXfResult {
   hasWrapText: boolean;
   /** Whether `justifyLastLine="..."` was explicitly present. */
   hasJustifyLastLine: boolean;
+  /** OOXML `applyNumberFormat` / `applyFont` / `applyFill` / `applyBorder` /
+   *  `applyAlignment` / `applyProtection`: whether this record's value for
+   *  the group overrides its parent named style. */
+  applyNumberFormat: boolean;
+  applyFont: boolean;
+  applyFill: boolean;
+  applyBorder: boolean;
+  applyAlignment: boolean;
+  applyProtection: boolean;
+  /** OOXML `quotePrefix`. */
+  quotePrefix: boolean;
+  /** Whether the record carries a `<protection>` child. When false, `locked` / `hidden` are the model defaults (true / false). */
+  hasProtection: boolean;
+  locked: boolean;
+  hidden: boolean;
   /** OOXML `textRotation`; present only when the source attribute existed. */
   textRotation?: number;
   /** OOXML `indent`; present only when the source attribute existed. */
@@ -1278,6 +1452,21 @@ export interface CellXf {
   hasWrapText?: boolean;
   /** Whether `justifyLastLine` was explicitly supplied; defaults to inference. */
   hasJustifyLastLine?: boolean;
+  /** OOXML `apply*` flags; each defaults to false. */
+  applyNumberFormat?: boolean;
+  applyFont?: boolean;
+  applyFill?: boolean;
+  applyBorder?: boolean;
+  applyAlignment?: boolean;
+  applyProtection?: boolean;
+  /** OOXML `quotePrefix`; defaults to false. */
+  quotePrefix?: boolean;
+  /** Whether to write a `<protection>` child. Omit to infer from `locked` / `hidden`. */
+  hasProtection?: boolean;
+  /** Defaults to true; ignored unless the record carries a `<protection>` child. */
+  locked?: boolean;
+  /** Defaults to false; ignored unless the record carries a `<protection>` child. */
+  hidden?: boolean;
   /** OOXML `textRotation` (0..180 or 255). Omitted when absent. */
   textRotation?: number;
   /** OOXML `indent` (0..255). Omitted when absent. */
@@ -1704,6 +1893,19 @@ export interface Workbook {
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
   getValue(sheet: number, row: number, col: number): CellResult;
+
+  /** The stored A1 formula (leading `=` included), or `formula: null` for a cell that holds none. */
+  getFormula(sheet: number, row: number, col: number): FormulaResult;
+  /** The formula in R1C1 notation relative to the cell, without a leading `=`; `formula: null` when the cell holds none. */
+  getFormulaR1C1(sheet: number, row: number, col: number): FormulaResult;
+  /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside
+   *  `range`, row-major. `cursor` is the `nextCursor` of the previous page (omit for the first);
+   *  `limit` caps the page (omit or 0 for the maximum, 65536). */
+  getCellsInRange(sheet: number, range: MergeRange, cursor?: number | null, limit?: number | null): CellsInRangeResult;
+  /** The text Excel displays for the cell, from its value and number format under the workbook's date system. */
+  getDisplayText(sheet: number, row: number, col: number): DisplayTextResult;
+  /** Renders `value` (blank, number, boolean, text or error) under the stored-form number format `formatCode`; empty means General. */
+  formatValue(value: Value, formatCode: string): DisplayTextResult;
 
   /** Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
    *  single scalar result, without mutating the workbook. Local and
@@ -2226,6 +2428,27 @@ export interface Workbook {
   setRowHidden(sheet: number, row: number, hidden: boolean): Status;
   /** Sets / replaces the row outline level at `row` (clamped to 0..255). */
   setRowOutline(sheet: number, row: number, level: number): Status;
+  /** Removes the height override at `row`, returning it to the sheet default. */
+  clearRowHeight(sheet: number, row: number): Status;
+
+  /** Reads the sheet's default column / row metrics. */
+  getSheetFormatDefaults(sheet: number): SheetFormatDefaultsResult;
+  /** Replaces the sheet's default column / row metrics. A `has*` flag left out defaults to whether its value was supplied. */
+  setSheetFormatDefaults(sheet: number, defaults: Partial<SheetFormatDefaults>): Status;
+
+  /** Rectangle covering the inclusive cell range, in points from the top-left of A1.
+   *  Hidden rows and columns contribute zero extent. */
+  getCellRectPt(sheet: number, range: MergeRange, mode: GeometryMode): CellRectResult;
+  /** Effective column width in points; zero when hidden. */
+  getColumnWidthPt(sheet: number, col: number, mode: GeometryMode): NumberResult;
+  /** Effective row height in points; zero when hidden. */
+  getRowHeightPt(sheet: number, row: number): NumberResult;
+  /** The character-unit to point conversion model for the workbook's Normal font. */
+  getWidthModel(sheet: number, mode: GeometryMode): WidthModelResult;
+  /** Converts a column width in characters to points. */
+  columnCharsToPt(sheet: number, mode: GeometryMode, chars: number): NumberResult;
+  /** Inverse of `columnCharsToPt`; a width at or below the padding maps to zero characters. */
+  columnPtToChars(sheet: number, mode: GeometryMode, pt: number): NumberResult;
 
   /** Returns `{ status, xfIndex }` for the cell at `(sheet, row, col)`. */
   getCellXfIndex(sheet: number, row: number, col: number): CellXfIndexResult;
@@ -2337,6 +2560,8 @@ export interface Workbook {
   clearMerges(sheet: number): Status;
   /** Returns every merge range on `sheet` as a JS array. */
   getMerges(sheet: number): ListResult<MergeRange>;
+  /** Returns the merge ranges on `sheet` that intersect `range`, in storage order. */
+  getMergesInRange(sheet: number, range: MergeRange): ListResult<MergeRange>;
 
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
   getComment(sheet: number, row: number, col: number): CommentEntry | null;

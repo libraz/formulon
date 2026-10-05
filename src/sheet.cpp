@@ -669,6 +669,129 @@ std::vector<CellAddress> Sheet::formula_cells_in(std::uint32_t first_row, std::u
   return out;
 }
 
+std::uint64_t Sheet::cells_in_range(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                                    std::uint32_t last_col, std::uint64_t cursor, std::uint32_t limit,
+                                    void (*visit)(const RangeCell& cell, void* ctx), void* ctx) const {
+  constexpr std::uint64_t kStride = kMaxCols;
+  if (!rect_in_grid(first_row, first_col, last_row, last_col) || cursor >= kStride * kMaxRows) {
+    return kCellCursorEnd;
+  }
+  auto start_row = static_cast<std::uint32_t>(cursor / kStride);
+  auto start_col = static_cast<std::uint32_t>(cursor % kStride);
+  if (start_row < first_row) {
+    start_row = first_row;
+    start_col = first_col;
+  }
+  start_col = std::max(start_col, first_col);
+  if (start_col > last_col) {
+    ++start_row;
+    start_col = first_col;
+  }
+  if (start_row > last_row) {
+    return kCellCursorEnd;
+  }
+
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  std::vector<const SpillRegion*> regions;
+  if (spill_table_ != nullptr) {
+    for (const auto& [unused, region] : spill_table_->by_anchor) {
+      (void)unused;
+      if (RectIntersectsSpan(region, start_row, static_cast<std::uint64_t>(last_row) + 1U, first_col,
+                             static_cast<std::uint64_t>(last_col) + 1U)) {
+        regions.push_back(&region);
+      }
+    }
+  }
+
+  // Phantom-free rectangles taller than the stored row count walk the sorted
+  // stored rows instead of probing every row, as `populated_extent` does.
+  std::vector<std::uint32_t> stored_rows;
+  const bool walk_stored =
+      regions.empty() && static_cast<std::uint64_t>(rows_.size()) <= static_cast<std::uint64_t>(last_row - start_row);
+  if (walk_stored) {
+    for (const auto& entry : rows_) {
+      if (entry.first >= start_row && entry.first <= last_row) {
+        stored_rows.push_back(entry.first);
+      }
+    }
+    std::sort(stored_rows.begin(), stored_rows.end());
+  }
+
+  std::uint32_t emitted = 0;
+  std::vector<std::uint32_t> cols;
+  const auto scan_row = [&](std::uint32_t row) -> std::uint64_t {
+    const std::uint32_t col_begin = row == start_row ? start_col : first_col;
+    cols.clear();
+    const auto row_it = rows_.find(row);
+    const RowCells* cells = row_it == rows_.end() ? nullptr : &row_it->second;
+    if (cells != nullptr && !cells->empty()) {
+      const std::size_t end = std::min<std::size_t>(static_cast<std::size_t>(last_col) + 1U, cells->size());
+      for (std::size_t col = std::max<std::size_t>(col_begin, cells->first_col()); col < end; ++col) {
+        const Cell& cell = (*cells)[col];
+        if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
+          cols.push_back(static_cast<std::uint32_t>(col));
+        }
+      }
+    }
+    bool phantom_cols = false;
+    for (const SpillRegion* region : regions) {
+      if (row < region->anchor_row || row - region->anchor_row >= region->rows) {
+        continue;
+      }
+      const std::uint32_t span_first = std::max(col_begin, region->anchor_col);
+      const std::uint32_t span_last = std::min(last_col, region->anchor_col + region->cols - 1U);
+      for (std::uint32_t col = span_first; col <= span_last; ++col) {
+        if (row != region->anchor_row || col != region->anchor_col) {
+          cols.push_back(col);
+          phantom_cols = true;
+        }
+      }
+    }
+    if (phantom_cols) {
+      std::sort(cols.begin(), cols.end());
+      cols.erase(std::unique(cols.begin(), cols.end()), cols.end());
+    }
+    for (const std::uint32_t col : cols) {
+      if (emitted == limit) {
+        return static_cast<std::uint64_t>(row) * kStride + col;
+      }
+      RangeCell out;
+      out.row = row;
+      out.col = col;
+      // Same precedence as `read_formula_cell`: formula cell, then phantom,
+      // then the stored literal.
+      const Cell* cell = cells == nullptr ? nullptr : cells->find(col);
+      if (cell != nullptr && !cell->formula_text.empty()) {
+        out.formula_text = cell->formula_text;
+        out.value = cell->cached_value;
+      } else if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
+        out.value = covering->cells[static_cast<std::size_t>(row - covering->anchor_row) * covering->cols +
+                                    (col - covering->anchor_col)];
+      } else if (cell != nullptr) {
+        out.value = cell->cached_value;
+      }
+      visit(out, ctx);
+      ++emitted;
+    }
+    return kCellCursorEnd;
+  };
+
+  if (walk_stored) {
+    for (const std::uint32_t row : stored_rows) {
+      if (const std::uint64_t next = scan_row(row); next != kCellCursorEnd) {
+        return next;
+      }
+    }
+  } else {
+    for (std::uint32_t row = start_row; row <= last_row; ++row) {
+      if (const std::uint64_t next = scan_row(row); next != kCellCursorEnd) {
+        return next;
+      }
+    }
+  }
+  return kCellCursorEnd;
+}
+
 void Sheet::index_formula_cell_locked(std::uint32_t row, std::uint32_t col, bool has_formula) {
   if (has_formula) {
     formula_cells_.insert(formula_cell_key(row, col));

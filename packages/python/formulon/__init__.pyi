@@ -70,6 +70,77 @@ class PaginationResult:
     print_area: List[tuple[int, int, int, int]]
     horizontal_breaks: List[int]
     vertical_breaks: List[int]
+    paper: PaperInfo
+    margins: MarginsPt
+    printable: RectPt
+    scale: float
+    page_order: int
+    print_titles: PrintTitles
+    pages: List[PageLayout]
+    horizontal_break_manual: List[bool]
+    vertical_break_manual: List[bool]
+
+class RectPt:
+    x: float
+    y: float
+    width: float
+    height: float
+
+class PaperInfo:
+    width_pt: float
+    height_pt: float
+    landscape: bool
+    known: bool
+
+class MarginsPt:
+    left: float
+    right: float
+    top: float
+    bottom: float
+    header: float
+    footer: float
+
+class PrintTitles:
+    has_rows: bool
+    first_row: int
+    last_row: int
+    has_cols: bool
+    first_col: int
+    last_col: int
+
+class PageLayout:
+    area_index: int
+    first_row: int
+    last_row: int
+    first_col: int
+    last_col: int
+    origin_x_pt: float
+    origin_y_pt: float
+    width_pt: float
+    height_pt: float
+
+class SheetFormatDefaults:
+    default_col_width: float
+    default_row_height: float
+    base_col_width: float
+    has_default_col_width: bool
+    has_default_row_height: bool
+    def __init__(
+        self,
+        default_col_width: float = ...,
+        default_row_height: float = ...,
+        base_col_width: float = ...,
+        has_default_col_width: bool = ...,
+        has_default_row_height: bool = ...,
+    ) -> None: ...
+
+class WidthModel:
+    points_per_char: float
+    padding_pt: float
+    normal_font_size: float
+    calibrated: bool
+    normal_font_name: str
+    platform: str
 
 class PageBreak:
     id: int
@@ -149,6 +220,15 @@ class ReadDiagnostics:
 # ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
+
+class GeometryMode(IntEnum):
+    DISPLAY = 0
+    PRINT = 1
+
+class DisplayStatus(IntEnum):
+    OK = 0
+    OVERFLOW = 1
+    INVALID_FORMAT = 2
 
 class CalcMode(IntEnum):
     AUTO = 0
@@ -430,6 +510,8 @@ class RowLayout:
     outline_level: int
     has_style: bool
     style_xf: int
+    has_height: bool
+    custom_height: bool
 
 class CfMatch:
     kind: int
@@ -673,6 +755,16 @@ class CellXf:
     has_vertical_align: Optional[bool]
     has_wrap_text: Optional[bool]
     has_justify_last_line: Optional[bool]
+    apply_number_format: bool
+    apply_font: bool
+    apply_fill: bool
+    apply_border: bool
+    apply_alignment: bool
+    apply_protection: bool
+    quote_prefix: bool
+    has_protection: bool
+    locked: bool
+    hidden: bool
     def __init__(
         self,
         font_index: int,
@@ -694,6 +786,16 @@ class CellXf:
         has_vertical_align: Optional[bool] = ...,
         has_wrap_text: Optional[bool] = ...,
         has_justify_last_line: Optional[bool] = ...,
+        apply_number_format: bool = ...,
+        apply_font: bool = ...,
+        apply_fill: bool = ...,
+        apply_border: bool = ...,
+        apply_alignment: bool = ...,
+        apply_protection: bool = ...,
+        quote_prefix: bool = ...,
+        has_protection: bool = ...,
+        locked: bool = ...,
+        hidden: bool = ...,
     ) -> None: ...
 
 class ColorSpec:
@@ -1175,6 +1277,27 @@ class Workbook:
     def set_column_outline(self, sheet: int, first: int, last: int, level: int) -> None: ...
     def get_sheet_row_overrides(self, sheet: int) -> List[RowLayout]: ...
     def set_row_height(self, sheet: int, row: int, height: float) -> None: ...
+    def clear_row_height(self, sheet: int, row: int) -> None: ...
+    def get_sheet_format_defaults(self, sheet: int) -> SheetFormatDefaults: ...
+    def set_sheet_format_defaults(self, sheet: int, defaults: SheetFormatDefaults) -> None: ...
+    def get_cell_rect_pt(self, sheet: int, cell_range: MergeRange, mode: Union[GeometryMode, int] = ...) -> RectPt: ...
+    def get_column_width_pt(self, sheet: int, col: int, mode: Union[GeometryMode, int] = ...) -> float: ...
+    def get_row_height_pt(self, sheet: int, row: int) -> float: ...
+    def get_width_model(self, sheet: int, mode: Union[GeometryMode, int] = ...) -> WidthModel: ...
+    def column_chars_to_pt(self, sheet: int, chars: float, mode: Union[GeometryMode, int] = ...) -> float: ...
+    def column_pt_to_chars(self, sheet: int, pt: float, mode: Union[GeometryMode, int] = ...) -> float: ...
+    def get_formula(self, sheet: int, row: int, col: int) -> Optional[str]: ...
+    def get_formula_r1c1(self, sheet: int, row: int, col: int) -> Optional[str]: ...
+    def get_cells_in_range(
+        self,
+        sheet: int,
+        cell_range: MergeRange,
+        cursor: Optional[int] = ...,
+        limit: Optional[int] = ...,
+    ) -> Tuple[List[Cell], Optional[int]]: ...
+    def get_merges_in_range(self, sheet: int, cell_range: MergeRange) -> List[MergeRange]: ...
+    def get_display_text(self, sheet: int, row: int, col: int) -> Tuple[str, DisplayStatus]: ...
+    def format_value(self, value: Value, format_code: str = ...) -> Tuple[str, DisplayStatus]: ...
     def set_row_hidden(self, sheet: int, row: int, hidden: bool) -> None: ...
     def set_row_outline(self, sheet: int, row: int, level: int) -> None: ...
 

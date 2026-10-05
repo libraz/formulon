@@ -52,6 +52,7 @@ __all__ = [
     "DataValidationInput",
     "DefinedName",
     "DifferentialFormat",
+    "DisplayStatus",
     "ErrorCode",
     "ExternalLink",
     "ExternalLinkKind",
@@ -59,11 +60,15 @@ __all__ = [
     "FontRecord",
     "FormulonError",
     "FunctionMetadata",
+    "GeometryMode",
     "Hyperlink",
     "IterativeSettings",
     "LogLevel",
     "IconSet",
+    "MarginsPt",
     "MergeRange",
+    "PageLayout",
+    "PaperInfo",
     "PassthroughPart",
     "PivotAggregation",
     "PivotAxis",
@@ -80,9 +85,12 @@ __all__ = [
     "PivotReportLayout",
     "PivotShowValuesAs",
     "PivotWorksheetSource",
+    "PrintTitles",
     "ReadDiagnostics",
+    "RectPt",
     "RowLayout",
     "SaveDiagnostics",
+    "SheetFormatDefaults",
     "SheetProtection",
     "SheetView",
     "SheetVisibility",
@@ -90,6 +98,7 @@ __all__ = [
     "Table",
     "Value",
     "ValueKind",
+    "WidthModel",
     "Workbook",
 ]
 
@@ -105,6 +114,9 @@ _STATUS_NOT_FOUND = 6
 # 7000-band: bindings / C API (src/utils/error.h).
 _STATUS_BINDING_INVALID_HANDLE = 7000
 _STATUS_BINDING_NULL_POINTER = 7001
+
+# `fm_cell_range_next_cursor` reports UINT64_MAX when no further cell exists.
+_CELL_RANGE_NO_CURSOR = (1 << 64) - 1
 
 # Inclusive bounds of `fm_locale_t` (0 = en-US, 1 = ja-JP).
 _LOCALE_MIN = 0
@@ -287,6 +299,21 @@ class PassthroughPart(NamedTuple):
 # ---------------------------------------------------------------------------
 # Enumerations (mirror the C ABI ordinals)
 # ---------------------------------------------------------------------------
+
+
+class GeometryMode(IntEnum):
+    """Which Windows column-width figure a geometry call uses."""
+
+    DISPLAY = 0
+    PRINT = 1
+
+
+class DisplayStatus(IntEnum):
+    """Outcome of a display-text rendering (``fm_display_status_t``)."""
+
+    OK = 0
+    OVERFLOW = 1
+    INVALID_FORMAT = 2
 
 
 class CalcMode(IntEnum):
@@ -681,6 +708,10 @@ class RowLayout:
     outline_level: int
     has_style: bool = False
     style_xf: int = 0
+    #: A stored height is present; ``height`` is meaningful only then.
+    has_height: bool = False
+    #: ``customHeight="1"``: an explicit override rather than a cached auto height.
+    custom_height: bool = False
 
 
 class IterativeSettings(NamedTuple):
@@ -708,6 +739,107 @@ class PaginationResult:
     print_area: List[tuple[int, int, int, int]]
     horizontal_breaks: List[int]
     vertical_breaks: List[int]
+    paper: "PaperInfo"
+    margins: "MarginsPt"
+    printable: "RectPt"
+    #: Effective scale as a factor (1.0 is 100%).
+    scale: float
+    #: 0 down-then-over, 1 over-then-down.
+    page_order: int
+    print_titles: "PrintTitles"
+    pages: List["PageLayout"]
+    #: Per-break manual flags, parallel to ``horizontal_breaks``.
+    horizontal_break_manual: List[bool]
+    #: Per-break manual flags, parallel to ``vertical_breaks``.
+    vertical_break_manual: List[bool]
+
+
+@dataclass(frozen=True)
+class RectPt:
+    """A rectangle in points."""
+
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+@dataclass(frozen=True)
+class PaperInfo:
+    """The paper a sheet prints on, after the orientation swap."""
+
+    width_pt: float
+    height_pt: float
+    landscape: bool
+    #: False when ``paperSize`` was unrecognised and A4 substituted.
+    known: bool
+
+
+@dataclass(frozen=True)
+class MarginsPt:
+    """Page margins in points."""
+
+    left: float
+    right: float
+    top: float
+    bottom: float
+    header: float
+    footer: float
+
+
+@dataclass(frozen=True)
+class PrintTitles:
+    """Repeat rows / columns (0-based, inclusive); a span is valid only with its flag."""
+
+    has_rows: bool
+    first_row: int
+    last_row: int
+    has_cols: bool
+    first_col: int
+    last_col: int
+
+
+@dataclass(frozen=True)
+class PageLayout:
+    """One physical page: the cell block it carries and where it sits."""
+
+    area_index: int
+    first_row: int
+    last_row: int
+    first_col: int
+    last_col: int
+    origin_x_pt: float
+    origin_y_pt: float
+    width_pt: float
+    height_pt: float
+
+
+@dataclass(frozen=True)
+class SheetFormatDefaults:
+    """Sheet default column / row metrics (``<sheetFormatPr>``).
+
+    ``default_col_width`` is in characters and ``default_row_height`` in
+    points; each is meaningful only when its ``has_*`` flag is set.
+    """
+
+    default_col_width: float = 0.0
+    default_row_height: float = 0.0
+    base_col_width: float = 8.0
+    has_default_col_width: bool = False
+    has_default_row_height: bool = False
+
+
+@dataclass(frozen=True)
+class WidthModel:
+    """Column-width conversion model for the workbook's Normal font."""
+
+    points_per_char: float
+    padding_pt: float
+    normal_font_size: float
+    #: False when the Normal font is not a measured calibration point.
+    calibrated: bool
+    normal_font_name: str
+    platform: str
 
 
 @dataclass(frozen=True)
@@ -1014,6 +1146,18 @@ class CellXf:
     has_vertical_align: Optional[bool] = None
     has_wrap_text: Optional[bool] = None
     has_justify_last_line: Optional[bool] = None
+    apply_number_format: bool = False
+    apply_font: bool = False
+    apply_fill: bool = False
+    apply_border: bool = False
+    apply_alignment: bool = False
+    apply_protection: bool = False
+    quote_prefix: bool = False
+    #: Presence of the ``<protection>`` child; ``locked`` / ``hidden`` are
+    #: ignored on insertion without it.
+    has_protection: bool = False
+    locked: bool = True
+    hidden: bool = False
 
 
 @dataclass
@@ -1424,6 +1568,16 @@ def _cell_xf_fields(record: CellXf) -> Dict[str, object]:
         "has_justify_last_line": 1
         if (record.has_justify_last_line if record.has_justify_last_line is not None else record.justify_last_line)
         else 0,
+        "apply_number_format": 1 if record.apply_number_format else 0,
+        "apply_font": 1 if record.apply_font else 0,
+        "apply_fill": 1 if record.apply_fill else 0,
+        "apply_border": 1 if record.apply_border else 0,
+        "apply_alignment": 1 if record.apply_alignment else 0,
+        "apply_protection": 1 if record.apply_protection else 0,
+        "quote_prefix": 1 if record.quote_prefix else 0,
+        "has_protection": 1 if record.has_protection else 0,
+        "locked": 1 if record.locked else 0,
+        "hidden": 1 if record.hidden else 0,
     }
 
 
@@ -1447,6 +1601,24 @@ def _alloc_out_ptr() -> int:
     """Allocate a 4-byte WASM scratch slot for an out-i32 / out-ptr."""
     ptr = LIB.alloc(4)
     LIB.write_bytes(ptr, b"\x00\x00\x00\x00")
+    return ptr
+
+
+def _alloc_out_u64() -> int:
+    """Allocate an 8-byte WASM scratch slot for an out-uint64."""
+    ptr = LIB.alloc(8)
+    LIB.write_bytes(ptr, b"\x00" * 8)
+    return ptr
+
+
+def _alloc_struct_array(layout: S.Struct, count: int, owned: List[int]) -> int:
+    """Allocate a zeroed contiguous array of ``count`` ``layout`` structs.
+
+    The pointer is appended to ``owned`` for later release.
+    """
+    ptr = LIB.alloc(layout.size * count)
+    owned.append(ptr)
+    LIB.write_bytes(ptr, b"\x00" * (layout.size * count))
     return ptr
 
 
@@ -3196,6 +3368,318 @@ class Workbook:
             for p in owned:
                 LIB.free(p)
 
+    # -- Geometry / display ------------------------------------------------
+    def clear_row_height(self, sheet: int, row: int) -> None:
+        """Remove the height override at ``row`` (back to the sheet default)."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_clear_row_height(h, _uint(sheet, "sheet_index"), _uint(row, "row")),
+            "fm_sheet_clear_row_height",
+        )
+
+    def get_sheet_format_defaults(self, sheet: int) -> SheetFormatDefaults:
+        """Read the sheet's default column / row metrics (``<sheetFormatPr>``)."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.SHEET_FORMAT_DEFAULTS)
+        try:
+            _check(
+                LIB.fm_sheet_get_format_defaults(h, _uint(sheet, "sheet_index"), ptr),
+                "fm_sheet_get_format_defaults",
+            )
+            d = S.SHEET_FORMAT_DEFAULTS.unpack(LIB, ptr)
+            return SheetFormatDefaults(
+                default_col_width=d["default_col_width"],
+                default_row_height=d["default_row_height"],
+                base_col_width=d["base_col_width"],
+                has_default_col_width=bool(d["has_default_col_width"]),
+                has_default_row_height=bool(d["has_default_row_height"]),
+            )
+        finally:
+            LIB.free(ptr)
+
+    def set_sheet_format_defaults(self, sheet: int, defaults: SheetFormatDefaults) -> None:
+        """Replace the sheet's default column / row metrics."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.SHEET_FORMAT_DEFAULTS)
+        try:
+            S.SHEET_FORMAT_DEFAULTS.pack(
+                LIB,
+                ptr,
+                {
+                    "default_col_width": float(defaults.default_col_width),
+                    "default_row_height": float(defaults.default_row_height),
+                    "base_col_width": float(defaults.base_col_width),
+                    "has_default_col_width": 1 if defaults.has_default_col_width else 0,
+                    "has_default_row_height": 1 if defaults.has_default_row_height else 0,
+                },
+            )
+            _check(
+                LIB.fm_sheet_set_format_defaults(h, _uint(sheet, "sheet_index"), ptr),
+                "fm_sheet_set_format_defaults",
+            )
+        finally:
+            LIB.free(ptr)
+
+    def _read_f64_out(self, fn, *args) -> float:
+        """Call a ``(..., double* out)`` ABI function and return the double."""
+        out = LIB.alloc(8)
+        try:
+            _check(fn(*args, out), getattr(fn, "__name__", "geometry"))
+            return LIB.read_f64(out)
+        finally:
+            LIB.free(out)
+
+    def get_cell_rect_pt(
+        self, sheet: int, cell_range: MergeRange, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY
+    ) -> RectPt:
+        """Return the rectangle covering ``cell_range`` in points from the top-left of A1."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.RECT_PT)
+        try:
+            _check(
+                LIB.fm_sheet_cell_rect_pt(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(cell_range.first_row, "first_row"),
+                    _uint(cell_range.first_col, "first_col"),
+                    _uint(cell_range.last_row, "last_row"),
+                    _uint(cell_range.last_col, "last_col"),
+                    _sint(int(mode), "mode"),
+                    ptr,
+                ),
+                "fm_sheet_cell_rect_pt",
+            )
+            return RectPt(**S.RECT_PT.unpack(LIB, ptr))
+        finally:
+            LIB.free(ptr)
+
+    def get_column_width_pt(self, sheet: int, col: int, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY) -> float:
+        """Return the effective width of ``col`` in points (0 when hidden)."""
+        h = self._require()
+        return self._read_f64_out(
+            LIB.fm_sheet_column_width_pt, h, _uint(sheet, "sheet_index"), _uint(col, "col"), _sint(int(mode), "mode")
+        )
+
+    def get_row_height_pt(self, sheet: int, row: int) -> float:
+        """Return the effective height of ``row`` in points (0 when hidden)."""
+        h = self._require()
+        return self._read_f64_out(LIB.fm_sheet_row_height_pt, h, _uint(sheet, "sheet_index"), _uint(row, "row"))
+
+    def get_width_model(self, sheet: int, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY) -> WidthModel:
+        """Return the character-unit to point conversion model in ``mode``."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.WIDTH_MODEL)
+        try:
+            _check(
+                LIB.fm_sheet_width_model(h, _uint(sheet, "sheet_index"), _sint(int(mode), "mode"), ptr),
+                "fm_sheet_width_model",
+            )
+            d = S.WIDTH_MODEL.unpack(LIB, ptr)
+            return WidthModel(
+                points_per_char=d["points_per_char"],
+                padding_pt=d["padding_pt"],
+                normal_font_size=d["normal_font_size"],
+                calibrated=bool(d["calibrated"]),
+                normal_font_name=LIB.read_cstr(d["normal_font_name"]),
+                platform=LIB.read_cstr(d["platform"]),
+            )
+        finally:
+            LIB.free(ptr)
+
+    def column_chars_to_pt(
+        self, sheet: int, chars: float, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY
+    ) -> float:
+        """Convert a column width in character units to points."""
+        h = self._require()
+        return self._read_f64_out(
+            LIB.fm_sheet_column_chars_to_pt, h, _uint(sheet, "sheet_index"), _sint(int(mode), "mode"), float(chars)
+        )
+
+    def column_pt_to_chars(self, sheet: int, pt: float, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY) -> float:
+        """Convert a column width in points to character units."""
+        h = self._require()
+        return self._read_f64_out(
+            LIB.fm_sheet_column_pt_to_chars, h, _uint(sheet, "sheet_index"), _sint(int(mode), "mode"), float(pt)
+        )
+
+    def _read_formula_text(self, fn, op: str, sheet: int, row: int, col: int) -> Optional[str]:
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(fn(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), out), op)
+            text = LIB.read_cstr(LIB.read_u32(out))
+        finally:
+            LIB.free(out)
+        return text or None
+
+    def get_formula(self, sheet: int, row: int, col: int) -> Optional[str]:
+        """Return the stored A1 formula (leading ``=`` included), or ``None`` for a non-formula cell."""
+        return self._read_formula_text(LIB.fm_workbook_get_formula, "fm_workbook_get_formula", sheet, row, col)
+
+    def get_formula_r1c1(self, sheet: int, row: int, col: int) -> Optional[str]:
+        """Return the formula in R1C1 notation relative to the cell, or ``None`` for a non-formula cell."""
+        return self._read_formula_text(
+            LIB.fm_workbook_get_formula_r1c1, "fm_workbook_get_formula_r1c1", sheet, row, col
+        )
+
+    def get_cells_in_range(
+        self,
+        sheet: int,
+        cell_range: MergeRange,
+        cursor: Optional[int] = None,
+        limit: Optional[int] = None,
+    ) -> "tuple[List[Cell], Optional[int]]":
+        """Return one page of the populated cells in ``cell_range`` (row-major).
+
+        Pass the returned cursor back to fetch the next page; it is ``None``
+        when the rectangle holds no further populated cell. ``limit`` of
+        ``None`` or ``0`` means the engine maximum.
+        """
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_sheet_cells_in_range(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(cell_range.first_row, "first_row"),
+                    _uint(cell_range.first_col, "first_col"),
+                    _uint(cell_range.last_row, "last_row"),
+                    _uint(cell_range.last_col, "last_col"),
+                    _uint(cursor or 0, "cursor", 64),
+                    _uint(limit or 0, "limit"),
+                    out,
+                ),
+                "fm_sheet_cells_in_range",
+            )
+            handle = LIB.read_u32(out)
+        finally:
+            LIB.free(out)
+        if handle == 0:
+            raise FormulonError(
+                _STATUS_BINDING_NULL_POINTER,
+                op="fm_sheet_cells_in_range",
+                _diagnostic_override=("returned kOk with a null cell-range handle", ""),
+            )
+        try:
+            count = _read_count(LIB.fm_cell_range_count, handle)
+            row_ptr = _alloc_out_ptr()
+            col_ptr = _alloc_out_ptr()
+            formula_ptr = _alloc_out_ptr()
+            cursor_ptr = _alloc_out_u64()
+            value_ptr = LIB.alloc(fm_value_t_size)
+            try:
+                cells: List[Cell] = []
+                for i in range(count):
+                    LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
+                    _check(
+                        LIB.fm_cell_range_at(handle, _uint(i, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr),
+                        "fm_cell_range_at",
+                    )
+                    formula_addr = LIB.read_u32(formula_ptr)
+                    cells.append(
+                        Cell(
+                            row=LIB.read_u32(row_ptr),
+                            col=LIB.read_u32(col_ptr),
+                            formula=LIB.read_cstr(formula_addr) if formula_addr else None,
+                            value=Value._from_wasm(value_ptr),
+                        )
+                    )
+                _check(LIB.fm_cell_range_next_cursor(handle, cursor_ptr), "fm_cell_range_next_cursor")
+                next_cursor = struct.unpack("<Q", LIB.read_bytes(cursor_ptr, 8))[0]
+            finally:
+                LIB.free(row_ptr)
+                LIB.free(col_ptr)
+                LIB.free(formula_ptr)
+                LIB.free(cursor_ptr)
+                LIB.free(value_ptr)
+        finally:
+            LIB.fm_cell_range_destroy(handle)
+        return cells, (None if next_cursor == _CELL_RANGE_NO_CURSOR else next_cursor)
+
+    def get_merges_in_range(self, sheet: int, cell_range: MergeRange) -> List[MergeRange]:
+        """Return every merge range on ``sheet`` that intersects ``cell_range``."""
+        h = self._require()
+        owned: List[int] = []
+        range_ptr = _pack_merge_array([cell_range], owned)
+        count_ptr = _alloc_out_ptr()
+        try:
+            # Size the buffer first, then fetch.
+            _check(
+                LIB.fm_sheet_merges_in_range(h, _uint(sheet, "sheet_index"), range_ptr, 0, 0, count_ptr),
+                "fm_sheet_merges_in_range",
+            )
+            total = LIB.read_u32(count_ptr)
+            if total == 0:
+                return []
+            size = S.MERGE_RANGE.size
+            buf = _alloc_struct_array(S.MERGE_RANGE, total, owned)
+            _check(
+                LIB.fm_sheet_merges_in_range(
+                    h, _uint(sheet, "sheet_index"), range_ptr, buf, _uint(total, "capacity"), count_ptr
+                ),
+                "fm_sheet_merges_in_range",
+            )
+            out: List[MergeRange] = []
+            for i in range(min(total, LIB.read_u32(count_ptr))):
+                d = S.MERGE_RANGE.unpack(LIB, buf + i * size)
+                out.append(MergeRange(d["first_row"], d["first_col"], d["last_row"], d["last_col"]))
+            return out
+        finally:
+            LIB.free(count_ptr)
+            for p in owned:
+                LIB.free(p)
+
+    def get_display_text(self, sheet: int, row: int, col: int) -> "tuple[str, DisplayStatus]":
+        """Return the text Excel displays for the cell and the rendering outcome."""
+        h = self._require()
+        text_ptr = _alloc_out_ptr()
+        status_ptr = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_workbook_get_display_text(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), text_ptr, status_ptr
+                ),
+                "fm_workbook_get_display_text",
+            )
+            return LIB.read_cstr(LIB.read_u32(text_ptr)), DisplayStatus(LIB.read_i32(status_ptr))
+        finally:
+            LIB.free(text_ptr)
+            LIB.free(status_ptr)
+
+    def format_value(self, value: Value, format_code: str = "") -> "tuple[str, DisplayStatus]":
+        """Render ``value`` under the number format ``format_code`` (empty means General)."""
+        h = self._require()
+        owned: List[int] = []
+        value_ptr = LIB.alloc(fm_value_t_size)
+        owned.append(value_ptr)
+        text_ptr = _alloc_out_ptr()
+        status_ptr = _alloc_out_ptr()
+        owned.extend((text_ptr, status_ptr))
+        try:
+            payload = b"\x00" * 8
+            if value.kind is ValueKind.NUMBER:
+                payload = struct.pack("<d", float(value.number or 0.0))
+            elif value.kind is ValueKind.BOOL:
+                payload = struct.pack("<i", 1 if value.boolean else 0) + b"\x00" * 4
+            elif value.kind is ValueKind.ERROR:
+                payload = struct.pack("<i", int(value.error_code or 0)) + b"\x00" * 4
+            elif value.kind is ValueKind.TEXT:
+                text_buf, _ = LIB.alloc_utf8(value.text or "")
+                owned.append(text_buf)
+                payload = struct.pack("<I", text_buf) + b"\x00" * 4
+            LIB.write_bytes(value_ptr, struct.pack("<i", int(value.kind)) + b"\x00" * 4 + payload)
+            fmt_ptr, _ = LIB.alloc_utf8(format_code)
+            owned.append(fmt_ptr)
+            _check(
+                LIB.fm_workbook_format_value(h, value_ptr, fmt_ptr, text_ptr, status_ptr),
+                "fm_workbook_format_value",
+            )
+            return LIB.read_cstr(LIB.read_u32(text_ptr)), DisplayStatus(LIB.read_i32(status_ptr))
+        finally:
+            for p in owned:
+                LIB.free(p)
+
     # -- Sheet view / layout -----------------------------------------------
     def paginate(self, sheet: int) -> PaginationResult:
         """Resolve the worksheet's print area, page breaks, and page count.
@@ -3221,6 +3705,9 @@ class Workbook:
                 vertical_break_count = int(LIB.fm_pagination_vertical_break_count(pagination))
                 range_ptr = LIB.alloc(16)
                 value_ptr = _alloc_out_ptr()
+                scale_ptr = LIB.alloc(8)
+                # Sized for the largest pagination detail struct (fm_page_layout).
+                struct_ptr = S.alloc_struct(LIB, S.PAGE_LAYOUT)
                 try:
                     print_area = []
                     for i in range(range_count):
@@ -3243,10 +3730,71 @@ class Workbook:
                             "fm_pagination_vertical_break_at",
                         )
                         vertical_breaks.append(LIB.read_u32(value_ptr))
+                    horizontal_break_manual = []
+                    for i in range(break_count):
+                        _check(
+                            LIB.fm_pagination_horizontal_break_is_manual(pagination, _uint(i, "index"), value_ptr),
+                            "fm_pagination_horizontal_break_is_manual",
+                        )
+                        horizontal_break_manual.append(bool(LIB.read_i32(value_ptr)))
+                    vertical_break_manual = []
+                    for i in range(vertical_break_count):
+                        _check(
+                            LIB.fm_pagination_vertical_break_is_manual(pagination, _uint(i, "index"), value_ptr),
+                            "fm_pagination_vertical_break_is_manual",
+                        )
+                        vertical_break_manual.append(bool(LIB.read_i32(value_ptr)))
+                    _check(LIB.fm_pagination_scale(pagination, scale_ptr), "fm_pagination_scale")
+                    scale = LIB.read_f64(scale_ptr)
+                    _check(LIB.fm_pagination_page_order(pagination, value_ptr), "fm_pagination_page_order")
+                    page_order = LIB.read_i32(value_ptr)
+
+                    def read_struct(layout: S.Struct, fn, op: str) -> Dict[str, int]:
+                        S.zero_struct(LIB, layout, struct_ptr)
+                        _check(fn(pagination, struct_ptr), op)
+                        return layout.unpack(LIB, struct_ptr)
+
+                    d = read_struct(S.PAPER_INFO, LIB.fm_pagination_paper, "fm_pagination_paper")
+                    paper = PaperInfo(d["width_pt"], d["height_pt"], bool(d["landscape"]), bool(d["known"]))
+                    margins = MarginsPt(**read_struct(S.MARGINS_PT, LIB.fm_pagination_margins, "fm_pagination_margins"))
+                    printable = RectPt(**read_struct(S.RECT_PT, LIB.fm_pagination_printable, "fm_pagination_printable"))
+                    d = read_struct(S.PRINT_TITLES, LIB.fm_pagination_print_titles, "fm_pagination_print_titles")
+                    print_titles = PrintTitles(
+                        has_rows=bool(d["has_rows"]),
+                        first_row=d["first_row"],
+                        last_row=d["last_row"],
+                        has_cols=bool(d["has_cols"]),
+                        first_col=d["first_col"],
+                        last_col=d["last_col"],
+                    )
+                    pages = []
+                    for i in range(page_count):
+                        S.zero_struct(LIB, S.PAGE_LAYOUT, struct_ptr)
+                        _check(
+                            LIB.fm_pagination_page_at(pagination, _uint(i, "index"), struct_ptr),
+                            "fm_pagination_page_at",
+                        )
+                        pages.append(PageLayout(**S.PAGE_LAYOUT.unpack(LIB, struct_ptr)))
                 finally:
                     LIB.free(range_ptr)
                     LIB.free(value_ptr)
-                return PaginationResult(page_count, print_area, horizontal_breaks, vertical_breaks)
+                    LIB.free(scale_ptr)
+                    LIB.free(struct_ptr)
+                return PaginationResult(
+                    page_count,
+                    print_area,
+                    horizontal_breaks,
+                    vertical_breaks,
+                    paper,
+                    margins,
+                    printable,
+                    scale,
+                    page_order,
+                    print_titles,
+                    pages,
+                    horizontal_break_manual,
+                    vertical_break_manual,
+                )
             finally:
                 LIB.fm_pagination_destroy(pagination)
         finally:
@@ -3949,6 +4497,8 @@ class Workbook:
                         outline_level=d["outline_level"],
                         has_style=bool(d["has_style"]),
                         style_xf=d["style_xf"],
+                        has_height=bool(d["has_height"]),
+                        custom_height=bool(d["custom_height"]),
                     )
                 )
         finally:
@@ -4442,6 +4992,16 @@ class Workbook:
             has_vertical_align=bool(d["has_vertical_align"]),
             has_wrap_text=bool(d["has_wrap_text"]),
             has_justify_last_line=bool(d["has_justify_last_line"]),
+            apply_number_format=bool(d["apply_number_format"]),
+            apply_font=bool(d["apply_font"]),
+            apply_fill=bool(d["apply_fill"]),
+            apply_border=bool(d["apply_border"]),
+            apply_alignment=bool(d["apply_alignment"]),
+            apply_protection=bool(d["apply_protection"]),
+            quote_prefix=bool(d["quote_prefix"]),
+            has_protection=bool(d["has_protection"]),
+            locked=bool(d["locked"]),
+            hidden=bool(d["hidden"]),
         )
 
     def get_cell_xf(self, xf_index: int) -> CellXf:

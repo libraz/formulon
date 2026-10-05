@@ -156,6 +156,11 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Iteration / metadata.
   Napi::Value CellCount(const Napi::CallbackInfo& info);
   Napi::Value CellAt(const Napi::CallbackInfo& info);
+  Napi::Value GetFormula(const Napi::CallbackInfo& info);
+  Napi::Value GetFormulaR1C1(const Napi::CallbackInfo& info);
+  Napi::Value GetCellsInRange(const Napi::CallbackInfo& info);
+  Napi::Value GetDisplayText(const Napi::CallbackInfo& info);
+  Napi::Value FormatValue(const Napi::CallbackInfo& info);
   Napi::Value DefinedNameCount(const Napi::CallbackInfo& info);
   Napi::Value DefinedNameAt(const Napi::CallbackInfo& info);
   Napi::Value TableCount(const Napi::CallbackInfo& info);
@@ -271,6 +276,15 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetColumnOutline(const Napi::CallbackInfo& info);
   Napi::Value GetSheetRowOverrides(const Napi::CallbackInfo& info);
   Napi::Value SetRowHeight(const Napi::CallbackInfo& info);
+  Napi::Value ClearRowHeight(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetFormatDefaults(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetFormatDefaults(const Napi::CallbackInfo& info);
+  Napi::Value GetCellRectPt(const Napi::CallbackInfo& info);
+  Napi::Value GetColumnWidthPt(const Napi::CallbackInfo& info);
+  Napi::Value GetRowHeightPt(const Napi::CallbackInfo& info);
+  Napi::Value GetWidthModel(const Napi::CallbackInfo& info);
+  Napi::Value ColumnCharsToPt(const Napi::CallbackInfo& info);
+  Napi::Value ColumnPtToChars(const Napi::CallbackInfo& info);
   Napi::Value SetRowHidden(const Napi::CallbackInfo& info);
   Napi::Value SetRowOutline(const Napi::CallbackInfo& info);
 
@@ -310,6 +324,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RemoveMergeAt(const Napi::CallbackInfo& info);
   Napi::Value ClearMerges(const Napi::CallbackInfo& info);
   Napi::Value GetMerges(const Napi::CallbackInfo& info);
+  Napi::Value GetMergesInRange(const Napi::CallbackInfo& info);
   Napi::Value GetComment(const Napi::CallbackInfo& info);
   Napi::Value GetCommentResult(const Napi::CallbackInfo& info);
   Napi::Value GetComments(const Napi::CallbackInfo& info);

@@ -26,7 +26,9 @@ static_assert(offsetof(fm_column_layout_t, style_xf) == 32U);
 static_assert(sizeof(fm_column_layout_t) == 40U);
 static_assert(offsetof(fm_row_layout_t, has_style) == 24U);
 static_assert(offsetof(fm_row_layout_t, style_xf) == 28U);
-static_assert(sizeof(fm_row_layout_t) == 32U);
+static_assert(offsetof(fm_row_layout_t, has_height) == 32U);
+static_assert(offsetof(fm_row_layout_t, custom_height) == 36U);
+static_assert(sizeof(fm_row_layout_t) == 40U);
 // `fm_sheet_get_view` writes through a caller-supplied pointer, so a caller
 // compiled against a narrower definition of this struct is overwritten past
 // the end of its own storage rather than getting a diagnosable error. Pin the
@@ -710,4 +712,110 @@ TEST(FormulonCApiSheetLayout, LastGridCoordinateIsStillAccepted) {
   EXPECT_DOUBLE_EQ(row.height, 33.0);
   EXPECT_EQ(row.hidden, 1);
   EXPECT_EQ(row.outline_level, 2U);
+}
+
+TEST(FormulonCApiSheetLayout, RowOverrideReportsHeightPresenceAndCustomFlag) {
+  // An auto height that only caches `ht` arrives through the reader; the
+  // setter produces an explicit override.
+  formulon::Workbook source = formulon::Workbook::create();
+  formulon::RowLayout auto_row;
+  auto_row.row = 2U;
+  auto_row.height = 18.0;
+  auto_row.has_height = true;
+  source.sheet(0).mutable_layout().row_overrides = {auto_row};
+  auto source_bytes = source.save();
+  ASSERT_TRUE(static_cast<bool>(source_bytes)) << source_bytes.error().message;
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 5U, 30.0), 0);
+
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 2U);
+  for (size_t i = 0; i < count; ++i) {
+    fm_row_layout_t r{};
+    ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, i, &r), 0);
+    EXPECT_EQ(r.has_height, 1);
+    EXPECT_EQ(r.custom_height, r.row == 5U ? 1 : 0) << "row " << r.row;
+  }
+}
+
+TEST(FormulonCApiSheetLayout, ClearRowHeightDropsBareOverride) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 25.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 25.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 4U, 1), 0);
+
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 3U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 4U), 0);
+  // A row without an override is a no-op.
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 9U), 0);
+
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 1U);
+  fm_row_layout_t r{};
+  ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, 0, &r), 0);
+  EXPECT_EQ(r.row, 4U);
+  EXPECT_EQ(r.hidden, 1);
+  EXPECT_EQ(r.has_height, 0);
+  EXPECT_EQ(r.custom_height, 0);
+
+  EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 0, kLastRow + 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 7, 0U), kInvalidArgument);
+}
+
+TEST(FormulonCApiSheetLayout, FormatDefaultsRoundTripThroughSave) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_sheet_format_defaults d{};
+  ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
+  EXPECT_EQ(d.base_col_width, 8.0);
+
+  fm_sheet_format_defaults next{};
+  next.default_col_width = 12.5;
+  next.default_row_height = 20.25;
+  next.base_col_width = 10.0;
+  next.has_default_col_width = 1;
+  next.has_default_row_height = 1;
+  ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &next), 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  fm_sheet_format_defaults got{};
+  ASSERT_EQ(fm_sheet_get_format_defaults(reloaded.handle, 0, &got), 0);
+  EXPECT_EQ(got.default_col_width, 12.5);
+  EXPECT_EQ(got.default_row_height, 20.25);
+  EXPECT_EQ(got.base_col_width, 10.0);
+  EXPECT_EQ(got.has_default_col_width, 1);
+  EXPECT_EQ(got.has_default_row_height, 1);
+}
+
+TEST(FormulonCApiSheetLayout, FormatDefaultsIgnoreUnstatedValuesAndRejectBadNumbers) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_sheet_format_defaults unstated{};
+  unstated.default_col_width = kNaN;  // ignored: has flag is zero
+  unstated.base_col_width = 8.0;
+  ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &unstated), 0);
+  fm_sheet_format_defaults got{};
+  ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &got), 0);
+  EXPECT_EQ(got.has_default_col_width, 0);
+  EXPECT_EQ(got.default_col_width, 0.0);
+
+  fm_sheet_format_defaults bad{};
+  bad.has_default_row_height = 1;
+  bad.default_row_height = -1.0;
+  bad.base_col_width = 8.0;
+  EXPECT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &bad), kInvalidArgument);
+  bad.default_row_height = 15.0;
+  bad.base_col_width = kInfinity;
+  EXPECT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &bad), kInvalidArgument);
+  ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &got), 0);
+  EXPECT_EQ(got.has_default_row_height, 0);
+  EXPECT_NE(fm_sheet_set_format_defaults(wb.handle, 0, nullptr), 0);
+  EXPECT_NE(fm_sheet_get_format_defaults(wb.handle, 0, nullptr), 0);
 }

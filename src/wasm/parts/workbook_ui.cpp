@@ -117,6 +117,36 @@ emscripten::val JsWorkbook::getMerges(uint32_t sheet) const {
   return arr;
 }
 
+emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val range) const {
+  emscripten::val arr = emscripten::val::array();
+  if (handle_ == nullptr) {
+    arr.set("status", error_status(7000));
+    return arr;
+  }
+  fm_merge_range query;
+  query.first_row = range["firstRow"].as<uint32_t>();
+  query.last_row = range["lastRow"].as<uint32_t>();
+  query.first_col = range["firstCol"].as<uint32_t>();
+  query.last_col = range["lastCol"].as<uint32_t>();
+  uint32_t total = 0;
+  fm_status_t rc = fm_sheet_merges_in_range(handle_, sheet, query, nullptr, 0, &total);
+  std::vector<fm_merge_range> found(rc == 0 ? total : 0);
+  if (rc == 0 && total > 0) {
+    uint32_t written = 0;
+    rc = fm_sheet_merges_in_range(handle_, sheet, query, found.data(), total, &written);
+    found.resize(rc == 0 ? written : 0);
+  }
+  if (rc != 0) {
+    arr.set("status", error_status(rc));
+    return arr;
+  }
+  for (uint32_t i = 0; i < found.size(); ++i) {
+    arr.set(i, merge_range_to_val(found[i]));
+  }
+  arr.set("status", ok_status());
+  return arr;
+}
+
 // ---- Comments ----------------------------------------------------------
 
 emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t col) const {

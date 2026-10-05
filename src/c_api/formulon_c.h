@@ -1215,6 +1215,156 @@ FM_API fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_ind
                                        uint32_t* out_col, const char** out_formula, fm_value_t* out_value);
 
 /**
+ * @brief Reads the formula of the cell at `(row, col)` in A1 notation.
+ *
+ * The text is the stored formula verbatim, leading `=` included, as
+ * `fm_workbook_cell_at` reports it. A cell that holds no formula (a literal,
+ * a spill phantom, or no cell at all) yields `""`.
+ *
+ * `*out_formula` is a read-scratch-backed view: valid until the next
+ * successful scratch-backed read, any mutation, or handle destruction.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or the
+ *         coordinate is outside the grid.
+ */
+FM_API fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                           const char** out_formula);
+
+/**
+ * @brief Reads the formula of the cell at `(row, col)` in R1C1 notation,
+ *        relative to that cell.
+ *
+ * The text carries no leading `=`, and follows the A1 formatter's spacing
+ * and case rules. A cell that holds no formula yields `""`. Lifetime as
+ * `fm_workbook_get_formula`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or the
+ *         coordinate is outside the grid;
+ *         `kParserUnexpectedToken` (1000) when the stored formula does not
+ *         parse.
+ */
+FM_API fm_status_t fm_workbook_get_formula_r1c1(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                const char** out_formula);
+
+/** @brief Opaque owned snapshot of one page of cells inside a rectangle. */
+typedef struct fm_cell_range fm_cell_range_t;
+
+/**
+ * @brief Enumerates the populated cells of an inclusive rectangle, one page
+ *        at a time.
+ *
+ * A cell is populated when it holds a formula or a non-blank value; spill
+ * phantoms are included with their spilled value. Cells come in row-major
+ * order. `cursor` is the position to resume from, encoded as
+ * `row * 16384 + col`: pass `0` for the first page and the value
+ * `fm_cell_range_next_cursor` reported for each following one. A page holds
+ * at most `limit` cells; `0` means the maximum, 65,536, and larger values
+ * are capped to it.
+ *
+ * On success `*out` is an owned handle the caller releases with
+ * `fm_cell_range_destroy`; it is a snapshot, so later mutations do not
+ * change it.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, the
+ *         rectangle is inverted or outside the grid, or `cursor` is past
+ *         the last cell of the grid.
+ */
+FM_API fm_status_t fm_sheet_cells_in_range(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                           uint32_t first_col, uint32_t last_row, uint32_t last_col, uint64_t cursor,
+                                           uint32_t limit, fm_cell_range_t** out);
+
+/**
+ * @brief Number of cells in the page.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_cell_range_count(const fm_cell_range_t* range, size_t* out_count);
+
+/**
+ * @brief Reads cell `idx` of the page.
+ *
+ * `*out_formula` is the stored A1 formula (as `fm_workbook_get_formula`
+ * reports it), or `NULL` when the cell holds no formula; `out_formula` may
+ * be `NULL` to skip it. Both the formula and a `FM_VAL_TEXT` payload are
+ * owned by the handle and stay valid until `fm_cell_range_destroy`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `range`, `out_row`, `out_col`, or
+ *         `out_value` is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_cell_range_at(const fm_cell_range_t* range, size_t idx, uint32_t* out_row, uint32_t* out_col,
+                                    const char** out_formula, fm_value_t* out_value);
+
+/**
+ * @brief Reads the cursor that resumes after this page, or `UINT64_MAX` when
+ *        the rectangle holds no further populated cell.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_cell_range_next_cursor(const fm_cell_range_t* range, uint64_t* out_cursor);
+
+/** @brief Releases a page handle. `range == NULL` is a no-op. */
+FM_API void fm_cell_range_destroy(fm_cell_range_t* range);
+
+/* -------------------------------------------------------------------------- */
+/* Display text                                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Outcome of a display-text rendering.
+ *
+ * `FM_DISPLAY_OVERFLOW`: the value cannot be shown in the format (a date
+ * serial outside the calendar, for one) and the text is `"########"`.
+ * `FM_DISPLAY_INVALID_FORMAT`: the format code is malformed and the text is
+ * the General rendering.
+ */
+typedef enum {
+  FM_DISPLAY_OK = 0,
+  FM_DISPLAY_OVERFLOW = 1,
+  FM_DISPLAY_INVALID_FORMAT = 2,
+} fm_display_status_t;
+
+/**
+ * @brief Reads the text Excel displays for the cell at `(row, col)`.
+ *
+ * Rendered from the cell's value and its XF number format under the
+ * workbook's date system, independent of column width: a `*x` repeat fill
+ * contributes no characters and an overflow is reported through
+ * `*out_status` rather than as a width-dependent `#` run. An absent cell is
+ * `""`. `*out_text` is a read-scratch-backed view.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or the
+ *         coordinate is outside the grid.
+ */
+FM_API fm_status_t fm_workbook_get_display_text(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                const char** out_text, int32_t* out_status);
+
+/**
+ * @brief Renders `value` under the stored-form number format `format_code`
+ *        (`General`, `[Red]`, ...), using the workbook's date system.
+ *
+ * An empty `format_code` means General. `value` must be blank, a number,
+ * a boolean, text, or an error. `*out_text` is a read-scratch-backed view.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`, or a
+ *         `FM_VAL_TEXT` value carries a `NULL` text;
+ *         `kInvalidArgument` when the value kind is not one of the above,
+ *         a number is NaN or infinite, or an error code is out of range.
+ */
+FM_API fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const fm_value_t* value, const char* format_code,
+                                            const char** out_text, int32_t* out_status);
+
+/**
  * @brief Returns the number of defined names attached to the workbook.
  *
  * Defined names round-trip through OOXML even when not yet evaluated.
@@ -1514,6 +1664,23 @@ FM_API fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, uint32_t sheet, uint
  * @brief Returns the number of merge ranges attached to `sheet`.
  */
 FM_API fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+
+/**
+ * @brief Copies every merge range on `sheet` that intersects `range` into
+ *        the caller's buffer, in storage order.
+ *
+ * `*out_count` always receives the total number of intersecting merges; at
+ * most `capacity` of them are written to `out`. Call with `capacity == 0`
+ * (and `out` may then be `NULL`) to size the buffer first. `range` corners
+ * are normalised, mirroring `fm_sheet_remove_merge`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_count` is `NULL`, or `out`
+ *         is `NULL` while `capacity > 0`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, uint32_t sheet, fm_merge_range range,
+                                            fm_merge_range* out, uint32_t capacity, uint32_t* out_count);
 
 /**
  * @brief Inserts or replaces the comment at `(row, col)` on `sheet`.
@@ -2169,6 +2336,143 @@ FM_API size_t fm_pagination_vertical_break_count(const fm_pagination_t* paginati
 
 /** @brief Reads a 0-based column index that a vertical break precedes. */
 FM_API fm_status_t fm_pagination_vertical_break_at(const fm_pagination_t* pagination, size_t index, uint32_t* out_col);
+
+/** @brief A rectangle in points. Sheet geometry measures from the top-left
+ *         of cell A1; pagination measures from the page's top-left corner. */
+typedef struct {
+  double x;
+  double y;
+  double width;
+  double height;
+} fm_rect_pt;
+
+/** @brief The paper a sheet prints on, after the orientation swap. */
+typedef struct {
+  double width_pt;
+  double height_pt;
+  int32_t landscape; /* 0/1 */
+  int32_t known;     /* 0 when `paperSize` was unrecognised and A4 substituted */
+} fm_paper_info;
+
+/** @brief Page margins in points; `header` / `footer` are measured from the
+ *         page edge to the header / footer band. */
+typedef struct {
+  double left;
+  double right;
+  double top;
+  double bottom;
+  double header;
+  double footer;
+} fm_margins_pt;
+
+/** @brief The repeat-rows / repeat-columns in effect (0-based, inclusive).
+ *         A span is meaningful only when its `has_*` flag is non-zero. */
+typedef struct {
+  int32_t has_rows; /* 0/1 */
+  uint32_t first_row;
+  uint32_t last_row;
+  int32_t has_cols; /* 0/1 */
+  uint32_t first_col;
+  uint32_t last_col;
+} fm_print_titles;
+
+/**
+ * @brief One physical page: the cell block it carries and where it sits.
+ *
+ * `area_index` indexes `fm_pagination_print_area_at` (0 for the used-range
+ * fallback). `width_pt` / `height_pt` are the scaled extent of the page's
+ * own cell block, repeated titles excluded; `origin_*_pt` is that block's
+ * top-left corner on the paper.
+ */
+typedef struct {
+  uint32_t area_index;
+  uint32_t first_row;
+  uint32_t last_row;
+  uint32_t first_col;
+  uint32_t last_col;
+  double origin_x_pt;
+  double origin_y_pt;
+  double width_pt;
+  double height_pt;
+} fm_page_layout;
+
+/**
+ * @brief Reads the paper size and orientation pagination laid out on.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_pagination_paper(const fm_pagination_t* pagination, fm_paper_info* out);
+
+/**
+ * @brief Reads the page margins in points.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_pagination_margins(const fm_pagination_t* pagination, fm_margins_pt* out);
+
+/**
+ * @brief Reads the cell-body rectangle before print-title reservation, in
+ *        points from the page's top-left corner.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_pagination_printable(const fm_pagination_t* pagination, fm_rect_pt* out);
+
+/**
+ * @brief Reads the effective scale as a factor (1.0 is 100%): the `scale`
+ *        percentage, or the fit-to-page factor.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_pagination_scale(const fm_pagination_t* pagination, double* out_scale);
+
+/**
+ * @brief Reads the page order: `0` down-then-over (the OOXML default), `1`
+ *        over-then-down.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_pagination_page_order(const fm_pagination_t* pagination, int32_t* out_order);
+
+/**
+ * @brief Reads the print-title rows / columns repeated on every page.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_pagination_print_titles(const fm_pagination_t* pagination, fm_print_titles* out);
+
+/**
+ * @brief Reads physical page `index`, in print order.
+ *
+ * The index domain is `[0, fm_pagination_page_count)`: one entry per
+ * physical page, ordered by the page order and, across several print
+ * areas, by declaration order.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`;
+ *         `kInvalidArgument` when `index` is out of range.
+ */
+FM_API fm_status_t fm_pagination_page_at(const fm_pagination_t* pagination, size_t index, fm_page_layout* out);
+
+/**
+ * @brief Reports whether horizontal break `index` (the domain of
+ *        `fm_pagination_horizontal_break_at`) is a manual break (`1`) rather
+ *        than one the page walk computed (`0`).
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`;
+ *         `kInvalidArgument` when `index` is out of range.
+ */
+FM_API fm_status_t fm_pagination_horizontal_break_is_manual(const fm_pagination_t* pagination, size_t index,
+                                                            int32_t* out_manual);
+
+/**
+ * @brief Vertical-break counterpart of
+ *        `fm_pagination_horizontal_break_is_manual`.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`;
+ *         `kInvalidArgument` when `index` is out of range.
+ */
+FM_API fm_status_t fm_pagination_vertical_break_is_manual(const fm_pagination_t* pagination, size_t index,
+                                                          int32_t* out_manual);
 
 /* -------------------------------------------------------------------------- */
 /* Print settings - raw XML                                                   */
@@ -4042,6 +4346,11 @@ typedef struct {
  * Mirrors `formulon::RowLayout`. The row index is 0-based; height is
  * in points (matches OOXML `<row ht=...>`). `has_style` is set only when
  * OOXML `customFormat="1"` makes the row `s` attribute effective.
+ *
+ * `has_height` is the presence of a stored height; `height` is meaningful
+ * only when it is set. `custom_height` separates an explicit override
+ * (`customHeight="1"`, the state `fm_sheet_set_row_height` produces) from an
+ * auto height that merely caches `ht`, which Excel recomputes on its own.
  */
 typedef struct {
   uint32_t row;
@@ -4052,6 +4361,8 @@ typedef struct {
   /* Row s= is effective only when customFormat=1 in OOXML. */
   int32_t has_style; /* 0/1 */
   uint32_t style_xf;
+  int32_t has_height;    /* 0/1 */
+  int32_t custom_height; /* 0/1 */
 } fm_row_layout_t;
 
 /**
@@ -4210,6 +4521,163 @@ FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index
  *         is past the last row (1048575).
  */
 FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level);
+
+/**
+ * @brief Removes the height override of `row`, returning it to the sheet
+ *        default height.
+ *
+ * Clears the stored height and its custom flag. A row override left with
+ * no other state (visible, outline level 0, no row style) is dropped. A
+ * row with no height override is a no-op.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or `row`
+ *         is past the last row (1048575).
+ */
+FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row);
+
+/**
+ * @brief Sheet default column / row metrics (`<sheetFormatPr>`).
+ *
+ * `default_col_width` is in character units and `default_row_height` in
+ * points; each is meaningful only when its `has_*` flag is non-zero, since
+ * an absent attribute and an explicit `0` are different states.
+ * `base_col_width` is in characters and always present (OOXML default 8).
+ */
+typedef struct {
+  double default_col_width;
+  double default_row_height;
+  double base_col_width;
+  int32_t has_default_col_width;  /* 0/1 */
+  int32_t has_default_row_height; /* 0/1 */
+} fm_sheet_format_defaults;
+
+/**
+ * @brief Reads the sheet's default column / row metrics.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, size_t sheet_index,
+                                                fm_sheet_format_defaults* out);
+
+/**
+ * @brief Replaces the sheet's default column / row metrics.
+ *
+ * A value whose `has_*` flag is zero is ignored and stored as `0`. A
+ * rejected call leaves the sheet unchanged.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or a
+ *         stated value is negative, NaN, or infinite.
+ */
+FM_API fm_status_t fm_sheet_set_format_defaults(fm_workbook_t* wb, size_t sheet_index,
+                                                const fm_sheet_format_defaults* defaults);
+
+/**
+ * @brief Which Windows column-width figure a geometry call uses.
+ *
+ * `FM_GEOMETRY_DISPLAY` is the screen figure (`Range.Width` at 96 DPI);
+ * `FM_GEOMETRY_PRINT` is the DPI-stable figure pagination breaks on. Row
+ * heights are the same in both modes. Only Windows is calibrated.
+ */
+typedef enum {
+  FM_GEOMETRY_DISPLAY = 0,
+  FM_GEOMETRY_PRINT = 1,
+} fm_geometry_mode_t;
+
+/**
+ * @brief The character-unit to point conversion for the workbook's Normal
+ *        font in one mode.
+ *
+ * `calibrated` is `0` when the Normal font is not a measured calibration
+ * point and the Calibri 11 figure was extrapolated. `normal_font_name` is a
+ * read-scratch-backed view; `platform` is a static view (`"win"`).
+ */
+typedef struct {
+  double points_per_char;
+  double padding_pt;
+  double normal_font_size;
+  int32_t calibrated; /* 0/1 */
+  int32_t _pad;
+  const char* normal_font_name;
+  const char* platform;
+} fm_width_model;
+
+/**
+ * @brief Reads the rectangle covering the inclusive cell range, in points
+ *        from the top-left of cell A1.
+ *
+ * Hidden rows and columns contribute zero extent. `mode` is an
+ * `fm_geometry_mode_t` ordinal.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, the range
+ *         is inverted or outside the grid, or `mode` is unknown.
+ */
+FM_API fm_status_t fm_sheet_cell_rect_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                         uint32_t first_col, uint32_t last_row, uint32_t last_col, int32_t mode,
+                                         fm_rect_pt* out);
+
+/**
+ * @brief Reads the effective width of column `col` in points; zero when the
+ *        column is hidden.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `col` is out of range or
+ *         `mode` is unknown.
+ */
+FM_API fm_status_t fm_sheet_column_width_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t mode,
+                                            double* out_pt);
+
+/**
+ * @brief Reads the effective height of row `row` in points; zero when the
+ *        row is hidden.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `row` is out of range.
+ */
+FM_API fm_status_t fm_sheet_row_height_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, double* out_pt);
+
+/**
+ * @brief Reads the column-width conversion model in `mode`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or `mode`
+ *         is unknown.
+ */
+FM_API fm_status_t fm_sheet_width_model(const fm_workbook_t* wb, size_t sheet_index, int32_t mode, fm_width_model* out);
+
+/**
+ * @brief Converts a column width in character units to points. Zero
+ *        characters is exactly zero points.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, `mode` is
+ *         unknown, or `chars` is negative, NaN, or infinite.
+ */
+FM_API fm_status_t fm_sheet_column_chars_to_pt(const fm_workbook_t* wb, size_t sheet_index, int32_t mode, double chars,
+                                               double* out_pt);
+
+/**
+ * @brief Inverse of `fm_sheet_column_chars_to_pt`; a width at or below the
+ *        padding maps to zero characters.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, `mode` is
+ *         unknown, or `pt` is negative, NaN, or infinite.
+ */
+FM_API fm_status_t fm_sheet_column_pt_to_chars(const fm_workbook_t* wb, size_t sheet_index, int32_t mode, double pt,
+                                               double* out_chars);
 
 /**
  * @brief Sets the sheet's zoom percentage. Values outside `[10, 400]`
@@ -4442,8 +4910,9 @@ FM_API fm_status_t fm_set_log_sink(fm_log_sink_cb sink, void* user_data);
 /**
  * @brief Plain-data projection of a `formulon::io::CellXf` record.
  *
- * This record is a fixed 88-byte C ABI layout carrying every optional
- * alignment attribute represented by Formulon's style model.
+ * This record is a fixed 128-byte C ABI layout carrying every optional
+ * alignment attribute represented by Formulon's style model, the six
+ * `apply*` flags, `quotePrefix`, and the `<protection>` child.
  * `has_alignment` is the presence of the `<alignment>` child itself, so an
  * explicit empty child is distinct from an omitted child.
  * Each `has_*` flag below distinguishes an omitted OOXML attribute from an
@@ -4455,6 +4924,13 @@ FM_API fm_status_t fm_set_log_sink(fm_log_sink_cb sink, void* user_data);
  * alignment child and is deduplicated with the default XF; getters return
  * those canonical defaults. `relative_indent` is signed, matching the
  * OOXML `relativeIndent` attribute.
+ *
+ * `apply_*` mirror the `<xf apply*>` attributes, which say whether the
+ * record's own value for that group overrides its parent named style.
+ * `has_protection` is the presence of the `<protection>` child; when it is
+ * zero `locked` / `hidden` are ignored on insertion and getters report the
+ * model defaults (`locked=1`, `hidden=0`). All of these take part in XF
+ * deduplication, so two records differing only in protection stay distinct.
  *
  * Bindings copy the struct out of the workbook's styles table; subsequent
  * mutations to the workbook do not invalidate the copy.
@@ -4484,6 +4960,16 @@ typedef struct {
   int32_t has_vertical_align;    /* 0=omitted, 1=explicit `vertical` */
   int32_t has_wrap_text;         /* 0=omitted, 1=explicit `wrapText` */
   int32_t has_justify_last_line; /* 0=omitted, 1=explicit `justifyLastLine` */
+  int32_t apply_number_format;   /* 0/1 */
+  int32_t apply_font;            /* 0/1 */
+  int32_t apply_fill;            /* 0/1 */
+  int32_t apply_border;          /* 0/1 */
+  int32_t apply_alignment;       /* 0/1 */
+  int32_t apply_protection;      /* 0/1 */
+  int32_t quote_prefix;          /* 0/1 */
+  int32_t has_protection;        /* 0= no `<protection>` child, 1= child present */
+  int32_t locked;                /* 0/1; ignored unless has_protection */
+  int32_t hidden;                /* 0/1; ignored unless has_protection */
 } fm_cell_xf;
 
 /** Discriminator for `fm_color_spec::kind`, mirroring

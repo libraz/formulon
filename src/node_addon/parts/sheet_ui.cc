@@ -102,6 +102,36 @@ Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
   return FinishListResult(env, arr, 0);
 }
 
+Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Array arr = Napi::Array::New(env);
+  if (handle_ == nullptr) {
+    return FinishListResult(env, arr, kBindingInvalidHandle);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const fm_merge_range range = MergeRangeArg(info, 1);
+  uint32_t total = 0;
+  fm_status_t rc = fm_sheet_merges_in_range(handle_, sheet, range, nullptr, 0, &total);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
+  }
+  std::vector<fm_merge_range> merges(total);
+  uint32_t again = 0;
+  rc = fm_sheet_merges_in_range(handle_, sheet, range, merges.data(), total, &again);
+  if (rc != 0) {
+    return FinishListResult(env, arr, rc);
+  }
+  for (uint32_t i = 0; i < total; ++i) {
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("firstRow", Napi::Number::New(env, merges[i].first_row));
+    item.Set("lastRow", Napi::Number::New(env, merges[i].last_row));
+    item.Set("firstCol", Napi::Number::New(env, merges[i].first_col));
+    item.Set("lastCol", Napi::Number::New(env, merges[i].last_col));
+    arr.Set(i, item);
+  }
+  return FinishListResult(env, arr, 0);
+}
+
 // ---- Comments -------------------------------------------------------
 
 Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {

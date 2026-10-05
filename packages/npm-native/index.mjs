@@ -207,6 +207,12 @@ export const CalcMode = Object.freeze({ Auto: 0, Manual: 1, AutoNoTable: 2 });
 /** `fm_sheet_visibility_t` ordinals (mirror of OOXML `<sheet state>`). */
 export const SheetVisibility = Object.freeze({ Visible: 0, Hidden: 1, VeryHidden: 2 });
 
+/** `fm_geometry_mode_t` ordinals: which column-width figure a geometry call uses. */
+export const GeometryMode = Object.freeze({ Display: 0, Print: 1 });
+
+/** `fm_display_status_t` ordinals for `getDisplayText` / `formatValue`. */
+export const DisplayStatus = Object.freeze({ Ok: 0, Overflow: 1, InvalidFormat: 2 });
+
 /** External-link kinds (mirror of `formulon::io::ExternalLinkRecord::Kind`). */
 export const ExternalLinkKind = Object.freeze({ Unknown: 0, ExternalBook: 1, Ole: 2, Dde: 3 });
 
@@ -262,6 +268,8 @@ export default {
   LogLevel,
   CalcMode,
   SheetVisibility,
+  GeometryMode,
+  DisplayStatus,
   ExternalLinkKind,
   ErrorCode,
   WorkbookFormat,

@@ -13,6 +13,11 @@ namespace formulon_node {
 
 namespace {
 
+// Reads a geometry mode ordinal; an absent argument is the display mode.
+int32_t ArgMode(const Napi::CallbackInfo& info, size_t idx) {
+  return idx < info.Length() ? info[idx].ToNumber().Int32Value() : static_cast<int32_t>(FM_GEOMETRY_DISPLAY);
+}
+
 Napi::Object DefaultSheetView(Napi::Env env) {
   Napi::Object view = Napi::Object::New(env);
   view.Set("zoomScale", Napi::Number::New(env, 100));
@@ -388,6 +393,8 @@ Napi::Value Workbook::GetSheetRowOverrides(const Napi::CallbackInfo& info) {
     Napi::Object row = Napi::Object::New(env);
     row.Set("row", Napi::Number::New(env, entry.row));
     row.Set("height", Napi::Number::New(env, entry.height));
+    row.Set("hasHeight", Napi::Number::New(env, entry.has_height));
+    row.Set("customHeight", Napi::Number::New(env, entry.custom_height));
     row.Set("hidden", Napi::Number::New(env, entry.hidden));
     row.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
     row.Set("hasStyle", Napi::Number::New(env, entry.has_style));
@@ -410,6 +417,140 @@ Napi::Value Workbook::SetRowHeight(const Napi::CallbackInfo& info) {
   const double height = ArgDouble(info, 2);
   fm_status_t rc = fm_sheet_set_row_height(handle_, sheet, row, height);
   return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::ClearRowHeight(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  return MakeStatus(env, fm_sheet_clear_row_height(handle_, sheet, ArgU32(info, 1)));
+}
+
+Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  fm_sheet_format_defaults d{};
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d)
+                                            : kBindingInvalidHandle;
+  if (rc != 0) {
+    d = fm_sheet_format_defaults{};
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("defaultColWidth", Napi::Number::New(env, d.default_col_width));
+  out.Set("defaultRowHeight", Napi::Number::New(env, d.default_row_height));
+  out.Set("baseColWidth", Napi::Number::New(env, d.base_col_width));
+  out.Set("hasDefaultColWidth", Napi::Boolean::New(env, d.has_default_col_width != 0));
+  out.Set("hasDefaultRowHeight", Napi::Boolean::New(env, d.has_default_row_height != 0));
+  return out;
+}
+
+Napi::Value Workbook::SetSheetFormatDefaults(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  if (info.Length() < 2 || !info[1].IsObject()) {
+    return MakeBindingArgumentError(env, "setSheetFormatDefaults expects (sheet:number, defaults:object)");
+  }
+  const Napi::Object spec = info[1].As<Napi::Object>();
+  fm_sheet_format_defaults d{};
+  d.default_col_width = SpecPullDouble(spec, "defaultColWidth", 0.0);
+  d.default_row_height = SpecPullDouble(spec, "defaultRowHeight", 0.0);
+  d.base_col_width = SpecPullDouble(spec, "baseColWidth", 8.0);
+  d.has_default_col_width = SpecPullBool(spec, "hasDefaultColWidth", SpecHas(spec, "defaultColWidth")) ? 1 : 0;
+  d.has_default_row_height = SpecPullBool(spec, "hasDefaultRowHeight", SpecHas(spec, "defaultRowHeight")) ? 1 : 0;
+  return MakeStatus(env, fm_sheet_set_format_defaults(handle_, ArgU32(info, 0), &d));
+}
+
+// ---- Geometry -------------------------------------------------------
+
+Napi::Value Workbook::GetCellRectPt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  fm_rect_pt rect{};
+  Napi::Object status = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    status = NullHandleError(env);
+  } else if (info.Length() < 2 || !info[1].IsObject()) {
+    status = MakeBindingArgumentError(env, "getCellRectPt expects (sheet:number, range:object, mode:number)");
+  } else {
+    const Napi::Object range = info[1].As<Napi::Object>();
+    const fm_status_t rc = fm_sheet_cell_rect_pt(
+        handle_, ArgU32(info, 0), SpecPullU32(range, "firstRow", 0U), SpecPullU32(range, "firstCol", 0U),
+        SpecPullU32(range, "lastRow", 0U), SpecPullU32(range, "lastCol", 0U), ArgMode(info, 2), &rect);
+    if (rc != 0) {
+      rect = fm_rect_pt{};
+    }
+    status = MakeStatus(env, rc);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", status);
+  out.Set("x", Napi::Number::New(env, rect.x));
+  out.Set("y", Napi::Number::New(env, rect.y));
+  out.Set("width", Napi::Number::New(env, rect.width));
+  out.Set("height", Napi::Number::New(env, rect.height));
+  return out;
+}
+
+Napi::Value Workbook::GetColumnWidthPt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  double pt = 0.0;
+  const fm_status_t rc = fm_sheet_column_width_pt(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgMode(info, 2), &pt);
+  return MakeNumberResult(env, rc, pt);
+}
+
+Napi::Value Workbook::GetRowHeightPt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  double pt = 0.0;
+  const fm_status_t rc = fm_sheet_row_height_pt(handle_, ArgU32(info, 0), ArgU32(info, 1), &pt);
+  return MakeNumberResult(env, rc, pt);
+}
+
+Napi::Value Workbook::GetWidthModel(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  fm_width_model model{};
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_width_model(handle_, ArgU32(info, 0), ArgMode(info, 1), &model)
+                                            : kBindingInvalidHandle;
+  if (rc != 0) {
+    model = fm_width_model{};
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("pointsPerChar", Napi::Number::New(env, model.points_per_char));
+  out.Set("paddingPt", Napi::Number::New(env, model.padding_pt));
+  out.Set("normalFontSize", Napi::Number::New(env, model.normal_font_size));
+  out.Set("calibrated", Napi::Boolean::New(env, model.calibrated != 0));
+  out.Set("normalFontName", Napi::String::New(env, model.normal_font_name != nullptr ? model.normal_font_name : ""));
+  out.Set("platform", Napi::String::New(env, model.platform != nullptr ? model.platform : ""));
+  return out;
+}
+
+Napi::Value Workbook::ColumnCharsToPt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  double pt = 0.0;
+  const fm_status_t rc = fm_sheet_column_chars_to_pt(handle_, ArgU32(info, 0), ArgMode(info, 1), ArgDouble(info, 2), &pt);
+  return MakeNumberResult(env, rc, pt);
+}
+
+Napi::Value Workbook::ColumnPtToChars(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  double chars = 0.0;
+  const fm_status_t rc =
+      fm_sheet_column_pt_to_chars(handle_, ArgU32(info, 0), ArgMode(info, 1), ArgDouble(info, 2), &chars);
+  return MakeNumberResult(env, rc, chars);
 }
 
 Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {

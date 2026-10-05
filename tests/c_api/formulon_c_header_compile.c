@@ -48,7 +48,8 @@ int main(void) {
   _Static_assert(sizeof(fm_save_diagnostics_t) == 5 * sizeof(uint32_t), "fm_save_diagnostics_t must be packed");
   // Pinned from C as well as C++: a C consumer built against a narrower
   // definition of either record is miscompiled rather than diagnosed.
-  _Static_assert(sizeof(fm_cell_xf) == 88, "fm_cell_xf ABI layout changed");
+  _Static_assert(sizeof(fm_cell_xf) == 128, "fm_cell_xf ABI layout changed");
+  _Static_assert(sizeof(fm_row_layout_t) == 40, "fm_row_layout_t ABI layout changed");
   _Static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4 ? 40 : 48), "fm_sheet_view_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_print_range_t` from
@@ -62,6 +63,21 @@ int main(void) {
   _Static_assert(sizeof(fm_styles_batch) == 15 * sizeof(void*), "fm_styles_batch ABI layout changed");
   _Static_assert(offsetof(fm_styles_batch, num_fmt_ids) == 14 * sizeof(void*),
                  "fm_styles_batch.num_fmt_ids offset changed");
+  // Records the geometry, display and pagination-detail entry points write
+  // through caller pointers. All but the width model are target-independent.
+  _Static_assert(sizeof(fm_sheet_format_defaults) == 32, "fm_sheet_format_defaults ABI layout changed");
+  _Static_assert(sizeof(fm_rect_pt) == 32, "fm_rect_pt ABI layout changed");
+  _Static_assert(sizeof(fm_width_model) == (sizeof(void*) == 4 ? 40 : 48), "fm_width_model ABI layout changed");
+  _Static_assert(sizeof(fm_paper_info) == 24, "fm_paper_info ABI layout changed");
+  _Static_assert(sizeof(fm_margins_pt) == 48, "fm_margins_pt ABI layout changed");
+  _Static_assert(sizeof(fm_print_titles) == 24, "fm_print_titles ABI layout changed");
+  _Static_assert(sizeof(fm_page_layout) == 56, "fm_page_layout ABI layout changed");
+  fm_status_t (*cells_in_range)(const fm_workbook_t*, size_t, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t,
+                                uint32_t, fm_cell_range_t**) = fm_sheet_cells_in_range;
+  fm_status_t (*format_value)(const fm_workbook_t*, const fm_value_t*, const char*, const char**, int32_t*) =
+      fm_workbook_format_value;
+  (void)cells_in_range;
+  (void)format_value;
   (void)save_diagnostics;
   (void)read_diagnostics;
   (void)save_as;

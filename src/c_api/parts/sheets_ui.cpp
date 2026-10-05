@@ -239,6 +239,34 @@ extern "C" fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, std::uint32_t
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, std::uint32_t sheet, fm_merge_range range,
+                                                fm_merge_range* out, std::uint32_t capacity, std::uint32_t* out_count) {
+  clear_last_error();
+  if (out_count == nullptr || (out == nullptr && capacity > 0U)) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_merges_in_range: NULL argument");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_merges_in_range"); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t first_row = std::min(range.first_row, range.last_row);
+  const std::uint32_t last_row = std::max(range.first_row, range.last_row);
+  const std::uint32_t first_col = std::min(range.first_col, range.last_col);
+  const std::uint32_t last_col = std::max(range.first_col, range.last_col);
+  std::uint32_t count = 0;
+  for (const formulon::MergeRange& m : wb->workbook().sheet(sheet).merges()) {
+    if (m.last_row < first_row || m.first_row > last_row || m.last_col < first_col || m.first_col > last_col) {
+      continue;
+    }
+    if (count < capacity) {
+      out[count] = fm_merge_range{m.first_row, m.first_col, m.last_row, m.last_col};
+    }
+    ++count;
+  }
+  *out_count = count;
+  return 0;
+}
+
 // ---------------------------------------------------------------------------
 // Comments
 // ---------------------------------------------------------------------------

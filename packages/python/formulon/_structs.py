@@ -480,6 +480,81 @@ ROW_LAYOUT = Struct(
         ("outline_level", U8),
         ("has_style", I32),
         ("style_xf", U32),
+        ("has_height", I32),
+        ("custom_height", I32),
+    ],
+)
+
+SHEET_FORMAT_DEFAULTS = Struct(
+    "fm_sheet_format_defaults",
+    [
+        ("default_col_width", F64),
+        ("default_row_height", F64),
+        ("base_col_width", F64),
+        ("has_default_col_width", I32),
+        ("has_default_row_height", I32),
+    ],
+)
+
+RECT_PT = Struct(
+    "fm_rect_pt",
+    [("x", F64), ("y", F64), ("width", F64), ("height", F64)],
+)
+
+WIDTH_MODEL = Struct(
+    "fm_width_model",
+    [
+        ("points_per_char", F64),
+        ("padding_pt", F64),
+        ("normal_font_size", F64),
+        ("calibrated", I32),
+        ("_pad", I32),
+        ("normal_font_name", PTR),
+        ("platform", PTR),
+    ],
+)
+
+PAPER_INFO = Struct(
+    "fm_paper_info",
+    [("width_pt", F64), ("height_pt", F64), ("landscape", I32), ("known", I32)],
+)
+
+MARGINS_PT = Struct(
+    "fm_margins_pt",
+    [
+        ("left", F64),
+        ("right", F64),
+        ("top", F64),
+        ("bottom", F64),
+        ("header", F64),
+        ("footer", F64),
+    ],
+)
+
+PRINT_TITLES = Struct(
+    "fm_print_titles",
+    [
+        ("has_rows", I32),
+        ("first_row", U32),
+        ("last_row", U32),
+        ("has_cols", I32),
+        ("first_col", U32),
+        ("last_col", U32),
+    ],
+)
+
+PAGE_LAYOUT = Struct(
+    "fm_page_layout",
+    [
+        ("area_index", U32),
+        ("first_row", U32),
+        ("last_row", U32),
+        ("first_col", U32),
+        ("last_col", U32),
+        ("origin_x_pt", F64),
+        ("origin_y_pt", F64),
+        ("width_pt", F64),
+        ("height_pt", F64),
     ],
 )
 
@@ -512,6 +587,16 @@ CELL_XF = Struct(
         ("has_vertical_align", I32),
         ("has_wrap_text", I32),
         ("has_justify_last_line", I32),
+        ("apply_number_format", I32),
+        ("apply_font", I32),
+        ("apply_fill", I32),
+        ("apply_border", I32),
+        ("apply_alignment", I32),
+        ("apply_protection", I32),
+        ("quote_prefix", I32),
+        ("has_protection", I32),
+        ("locked", I32),
+        ("hidden", I32),
     ],
 )
 
