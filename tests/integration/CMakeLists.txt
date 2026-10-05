@@ -11,6 +11,8 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   legacy_at_test.cpp
   ooxml_cf_test.cpp
   ooxml_corpus_test.cpp
+  ooxml_corpus_cases.cpp
+  ooxml_corpus_package_support.cpp
   ooxml_default_passthrough_test.cpp
   ooxml_metadata_test.cpp
   ooxml_minimal_writer_test.cpp
@@ -34,7 +36,10 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   sheet_features_roundtrip_test.cpp
   sheet_layout_roundtrip_test.cpp
   sheet_print_geometry_roundtrip_test.cpp
-  sheet_ops_test.cpp
+  sheet_ops_name_rename_test.cpp
+  sheet_ops_remove_move_defined_names_test.cpp
+  sheet_ops_row_col_edits_test.cpp
+  sheet_ops_3d_structural_recalc_test.cpp
   structural_edit_matrix_test.cpp
   spill_collision_test.cpp
   styles_roundtrip_test.cpp
