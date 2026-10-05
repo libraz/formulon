@@ -380,6 +380,7 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/pivot_layout.cpp
   src/c_api/parts/pivot_table.cpp
   src/c_api/parts/pagination.cpp
+  src/c_api/parts/print_area_titles.cpp
   src/c_api/parts/print_settings.cpp
   src/c_api/parts/xml_fragment.cpp
   src/c_api/parts/sheet_layout.cpp
