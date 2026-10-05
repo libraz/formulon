@@ -15,6 +15,9 @@
 #include "cf/cf_helpers.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
+#include "color_resolve.h"
+#include "eval/eval_context.h"
+#include "theme.h"
 #include "value.h"
 
 namespace formulon::cf::scales {
@@ -93,6 +96,25 @@ std::optional<std::vector<double>> resolve_cfvo_list(const std::vector<CfValueOb
   return resolved;
 }
 
+/// Resolves a theme / indexed / auto colour to literal channels. Uses the
+/// workbook behind `ctx.eval_ctx` (theme part and `<indexedColors>`); without
+/// one, the default theme and built-in palette.
+Color effective_color(const Color& color, const CFEvalContext& ctx, ColorContext usage) {
+  if (!color.is_symbolic()) {
+    return color;
+  }
+  const Workbook* wb = ctx.eval_ctx != nullptr ? ctx.eval_ctx->workbook() : nullptr;
+  const ResolvedColor resolved =
+      wb != nullptr ? resolve_color(*wb, color.spec, usage)
+                    : resolve_color(color.spec, default_theme(), ThemeSource::kDefault, IndexedPalette{}, usage);
+  Color out;
+  out.a = static_cast<std::uint8_t>((resolved.argb >> 24U) & 0xFFU);
+  out.r = static_cast<std::uint8_t>((resolved.argb >> 16U) & 0xFFU);
+  out.g = static_cast<std::uint8_t>((resolved.argb >> 8U) & 0xFFU);
+  out.b = static_cast<std::uint8_t>(resolved.argb & 0xFFU);
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // ColorScale — resolve `<cfvo>` thresholds against the sqref population
 // and linearly interpolate the bounding stop colours in RGB space.
@@ -151,12 +173,16 @@ double automatic_axis_position(double threshold_min, double threshold_max) {
 }
 
 DataBarRender make_data_bar_render(const DataBarSpec& spec, double length_pct, double cell, double threshold_min,
-                                   double threshold_max) {
+                                   double threshold_max, const CFEvalContext& ctx) {
   DataBarRender render;
   render.length_pct = length_pct;
   render.is_negative = cell < 0.0;
-  render.fill = render.is_negative ? spec.negative_fill : spec.fill;
-  render.border = render.is_negative ? spec.negative_border : spec.border;
+  render.fill =
+      effective_color(render.is_negative ? spec.negative_fill : spec.fill, ctx, ColorContext::kFillForeground);
+  const std::optional<Color>& border = render.is_negative ? spec.negative_border : spec.border;
+  if (border.has_value()) {
+    render.border = effective_color(*border, ctx, ColorContext::kBorder);
+  }
   render.gradient = spec.gradient;
   render.direction = spec.direction;
   switch (spec.axis_position) {
@@ -203,10 +229,10 @@ std::optional<Color> resolve_color_scale(const CFRule& rule, const Value& cell_v
   // Locate the segment that contains the cell value. Cells outside the
   // outermost stops clamp to the boundary colour.
   if (cell <= resolved_thresholds->front()) {
-    return spec.colors.front();
+    return effective_color(spec.colors.front(), ctx, ColorContext::kFillForeground);
   }
   if (cell >= resolved_thresholds->back()) {
-    return spec.colors.back();
+    return effective_color(spec.colors.back(), ctx, ColorContext::kFillForeground);
   }
   for (std::size_t i = 0; i + 1 < resolved_thresholds->size(); ++i) {
     const double lower_bound = (*resolved_thresholds)[i];
@@ -216,10 +242,11 @@ std::optional<Color> resolve_color_scale(const CFRule& rule, const Value& cell_v
       // colour; the cell is exactly at a stop so either end is correct.
       const double span = upper_bound - lower_bound;
       const double fraction = span == 0.0 ? 1.0 : (cell - lower_bound) / span;
-      return interpolate_color(spec.colors[i], spec.colors[i + 1], fraction);
+      return interpolate_color(effective_color(spec.colors[i], ctx, ColorContext::kFillForeground),
+                               effective_color(spec.colors[i + 1], ctx, ColorContext::kFillForeground), fraction);
     }
   }
-  return spec.colors.back();
+  return effective_color(spec.colors.back(), ctx, ColorContext::kFillForeground);
 }
 
 bool match_color_scale(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
@@ -250,7 +277,7 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
   // here makes every data bar disappear for a range such as [42, 42, 42].
   if (*threshold_min == *threshold_max) {
     return make_data_bar_render(spec, static_cast<double>(spec.max_length_pct), cell_value.as_number(), *threshold_min,
-                                *threshold_max);
+                                *threshold_max, ctx);
   }
 
   const double cell = cell_value.as_number();
@@ -284,7 +311,7 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
   }
 
   return make_data_bar_render(spec, min_len + clamped_fraction * (max_len - min_len), cell, *threshold_min,
-                              *threshold_max);
+                              *threshold_max, ctx);
 }
 
 bool match_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {

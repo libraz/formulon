@@ -324,6 +324,30 @@ cf::Color ParseRgbColor(std::string_view rgb) {
   return out;
 }
 
+/// Reads a CF `<color>`-like element. `theme` / `indexed` / `auto` are kept as
+/// a `ColorSpec` (resolved at evaluation time); `rgb` stays literal.
+cf::Color ReadColor(const pugi::xml_node& node) {
+  if (!node.attribute("rgb")) {
+    ColorSpec spec;
+    if (node.attribute("theme")) {
+      spec.kind = ColorSpec::Kind::kTheme;
+      spec.theme = attr_u32(node, "theme", 0U);
+      spec.tint = attr_f64(node, "tint", 0.0);
+    } else if (node.attribute("indexed")) {
+      spec.kind = ColorSpec::Kind::kIndexed;
+      spec.indexed = attr_u32(node, "indexed", 0U);
+    } else if (node.attribute("auto")) {
+      spec.kind = ColorSpec::Kind::kAuto;
+    }
+    if (spec.kind != ColorSpec::Kind::kNone) {
+      cf::Color out{};
+      out.spec = spec;
+      return out;
+    }
+  }
+  return ParseRgbColor(attr_str(node, "rgb"));
+}
+
 cf::CfValueObject ReadCfvo(const pugi::xml_node& cfvo) {
   cf::CfValueObject out{};
   out.type = ParseCfvoType(attr_str(cfvo, "type"));
@@ -351,7 +375,7 @@ void ReadColorScale(const pugi::xml_node& scale, cf::ColorScaleSpec* out) {
     if (name == "cfvo") {
       out->thresholds.push_back(ReadCfvo(child));
     } else if (name == "color") {
-      out->colors.push_back(ParseRgbColor(attr_str(child, "rgb")));
+      out->colors.push_back(ReadColor(child));
     }
   }
 }
@@ -374,7 +398,7 @@ void ReadDataBar(const pugi::xml_node& bar, cf::DataBarSpec* out) {
       // gradient live only in the 2010+ `<x14:dataBar>` extension, which
       // `ApplyX14DataBarOverlay` folds on top of this.
       if (color_idx == 0) {
-        out->fill = ParseRgbColor(attr_str(child, "rgb"));
+        out->fill = ReadColor(child);
         out->negative_fill = out->fill;
       }
       ++color_idx;
@@ -428,13 +452,13 @@ void ApplyX14DataBarOverlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out)
   for (pugi::xml_node child = x14_bar.first_child(); child; child = child.next_sibling()) {
     const std::string_view name = child.name();
     if (name == "x14:negativeFillColor") {
-      out->negative_fill = ParseRgbColor(attr_str(child, "rgb"));
+      out->negative_fill = ReadColor(child);
     } else if (name == "x14:negativeBorderColor") {
-      out->negative_border = ParseRgbColor(attr_str(child, "rgb"));
+      out->negative_border = ReadColor(child);
     } else if (name == "x14:axisColor") {
-      out->axis_color = ParseRgbColor(attr_str(child, "rgb"));
+      out->axis_color = ReadColor(child);
     } else if (name == "x14:borderColor") {
-      out->border = ParseRgbColor(attr_str(child, "rgb"));
+      out->border = ReadColor(child);
     }
   }
   // `negativeBarColorSameAsPositive="1"` overrides any explicit

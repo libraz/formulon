@@ -13,6 +13,7 @@
 #include "cf/cf_types.h"
 #include "io/future_functions.h"
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
@@ -201,12 +202,43 @@ std::string EncodeSqref(const std::vector<cf::CFCellRange>& ranges) {
   return out;
 }
 
-void AppendColor(std::string& out, cf::Color c) {
+/// Emits the colour attributes: `theme` / `indexed` / `auto` as written, else
+/// the literal `rgb`.
+void AppendColorAttrs(std::string& out, const cf::Color& c) {
+  switch (c.spec.kind) {
+    case ColorSpec::Kind::kTheme:
+      out.append(" theme=\"");
+      out.append(std::to_string(c.spec.theme));
+      out.push_back('"');
+      if (c.spec.tint != 0.0) {
+        out.append(" tint=\"");
+        append_xml_number(out, c.spec.tint);
+        out.push_back('"');
+      }
+      return;
+    case ColorSpec::Kind::kIndexed:
+      out.append(" indexed=\"");
+      out.append(std::to_string(c.spec.indexed));
+      out.push_back('"');
+      return;
+    case ColorSpec::Kind::kAuto:
+      out.append(" auto=\"1\"");
+      return;
+    case ColorSpec::Kind::kNone:
+    case ColorSpec::Kind::kRgb:
+      break;
+  }
   char buf[16];
   std::snprintf(buf, sizeof(buf), "%02X%02X%02X%02X", c.a, c.r, c.g, c.b);
-  out.append("<color rgb=\"");
+  out.append(" rgb=\"");
   out.append(buf);
-  out.append("\"/>");
+  out.push_back('"');
+}
+
+void AppendColor(std::string& out, const cf::Color& c) {
+  out.append("<color");
+  AppendColorAttrs(out, c);
+  out.append("/>");
 }
 
 void AppendCfvo(std::string& out, const cf::CfValueObject& v) {
@@ -362,14 +394,11 @@ void AppendRuleExtLst(std::string& out, const cf::CFRule& r) {
 /// Emits one x14 colour element. The x14 schema names each colour slot
 /// with its own element rather than reusing `<color>`, so the element
 /// name is a parameter here where `AppendColor` can hard-code it.
-void AppendX14Color(std::string& out, std::string_view element, cf::Color c) {
-  char buf[16];
-  std::snprintf(buf, sizeof(buf), "%02X%02X%02X%02X", c.a, c.r, c.g, c.b);
+void AppendX14Color(std::string& out, std::string_view element, const cf::Color& c) {
   out.push_back('<');
   out.append(element);
-  out.append(" rgb=\"");
-  out.append(buf);
-  out.append("\"/>");
+  AppendColorAttrs(out, c);
+  out.append("/>");
 }
 
 /// Emits one `<x14:cfvo>`, mirroring the legacy `<cfvo>` it accompanies.

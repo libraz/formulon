@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "styles.h"
 
 namespace formulon::cf {
 
@@ -124,17 +125,30 @@ enum class TimePeriod : std::uint8_t {
   NextMonth = 9,
 };
 
-/// Plain RGBA colour. Channels are 0-255 (sRGB). Alpha is opaque (255)
-/// unless explicitly set; OOXML `tint` adjustments are resolved by the
-/// reader before this struct is populated.
+/// RGBA colour of a CF element. Channels are 0-255 (sRGB), alpha opaque (255)
+/// unless explicitly set. `spec` keeps a theme / indexed / auto colour as
+/// written (`kNone` and `kRgb` mean the channels are the literal colour); for
+/// those kinds the channels are only a black placeholder and the effective
+/// colour is resolved at evaluation time against the workbook's theme and
+/// palette, so theme edits are reflected.
 struct Color {
   std::uint8_t r = 0;
   std::uint8_t g = 0;
   std::uint8_t b = 0;
   std::uint8_t a = 255;
+  ColorSpec spec{};
 
-  friend bool operator==(Color x, Color y) noexcept { return x.r == y.r && x.g == y.g && x.b == y.b && x.a == y.a; }
-  friend bool operator!=(Color x, Color y) noexcept { return !(x == y); }
+  /// True when the colour must be resolved through `resolve_color`.
+  bool is_symbolic() const noexcept {
+    return spec.kind == ColorSpec::Kind::kTheme || spec.kind == ColorSpec::Kind::kIndexed ||
+           spec.kind == ColorSpec::Kind::kAuto;
+  }
+
+  friend bool operator==(const Color& x, const Color& y) noexcept {
+    return x.r == y.r && x.g == y.g && x.b == y.b && x.a == y.a && x.spec.kind == y.spec.kind &&
+           x.spec.theme == y.spec.theme && x.spec.tint == y.spec.tint && x.spec.indexed == y.spec.indexed;
+  }
+  friend bool operator!=(const Color& x, const Color& y) noexcept { return !(x == y); }
 };
 
 /// Excel grid extent, mirrored from `Sheet::kMaxRows` / `Sheet::kMaxCols`

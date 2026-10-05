@@ -317,6 +317,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/pivot_show_values_as_test.cpp
   unit/pivot/pivot_types_test.cpp
   unit/cf/cf_evaluator_test.cpp
+  unit/cf/cf_theme_color_test.cpp
   unit/cf/cf_evaluator_context_test.cpp
   unit/cf/cf_evaluator_population_test.cpp
   unit/cf/cf_evaluator_range_test.cpp
