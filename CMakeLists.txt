@@ -197,6 +197,7 @@ set(FORMULON_CORE_SOURCES
   src/cf/scale_evaluator.cpp
   src/parser/tokenizer.cpp
   src/parser/ast.cpp
+  src/parser/reference.cpp
   src/parser/ast_dump.cpp
   src/parser/ast_format.cpp
   src/parser/ast_shift.cpp
