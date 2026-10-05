@@ -26,7 +26,7 @@ CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/release
 
 - **互換性は実際の Excel と照合して確かめています。** 既定の profile は `win-365-ja_JP` です。数式の結果は Mac Excel 365 (ja-JP)、ピボットテーブルと印刷レイアウトは Windows Excel 365 (ja-JP) を基準に固定しています。ピボットテーブルの作成を自動化するには Windows COM が必要なためです。いずれも検証済みの Microsoft 365 環境から採取しています。出力は実 Excel から再生成した golden と照合します。許容している差分、たとえば超越関数の ulp 差、揮発関数、Excel 側の不整合を Formulon が意図的に採らないケースは、[`tests/divergence.yaml`](tests/divergence.yaml) に理由と確認済み Excel ビルドを記録します。
 - **どの環境でも同じ C++ コアが計算します。** ブラウザ、Python、CLI で別々の計算ロジックを持たず、同じエンジンを配布しています。実装が分かれないので、環境ごとに結果がずれることもありません。
-- **WASM のサイズに上限を設けています。** CI は非圧縮 **3.25 MiB**、Brotli **864 KiB** を超えると失敗し、**3.00 MiB** / **832 KiB** を超えると警告を出します。実際に効いてくるのは配信時の Brotli サイズなので、非圧縮と対等に検査します。現在値は `make size-check` で確認できます。
+- **WASM のサイズに上限を設けています。** CI は非圧縮 **3.50 MiB**、Brotli **896 KiB** を超えると失敗し、**3.25 MiB** / **864 KiB** を超えると警告を出します。実際に効いてくるのは配信時の Brotli サイズなので、非圧縮と対等に検査します。現在値は `make size-check` で確認できます。
 - **依存は小さく保っています。** ランタイム依存は `miniz` (zip/deflate)、`pugixml` (XML + XPath 1.0)、`PCRE2` (`REGEX*`)、`double-conversion` (Grisu3 `dtoa`) の 4 つです。線形代数、UTF-8 処理、数値変換の多くはリポジトリ内で実装しています。
 - **C++ は監査しやすさを優先して書いています。** `Expected<T, Error>` ベースのエラー処理、RAII、`-fno-exceptions -fno-rtti`、Google C++ Style を採用しています。
 

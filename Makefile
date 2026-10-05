@@ -46,6 +46,10 @@ BIOME_PATHS := packages/npm packages/npm-native tests/wasm src/wasm
 # walk through the ~10k oracle parametric tests.
 CTEST_JOBS ?= 0
 
+# Build parallelism for every `cmake --build` recipe. Empty lets the
+# generator pick; `make wasm JOBS=2` caps a build on a shared host.
+JOBS ?=
+
 SRC_DIRS := src tests
 CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 2>/dev/null)
 
@@ -66,11 +70,11 @@ all: build
 
 build:
 	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug
-	$(CMAKE) --build $(BUILD_DIR) --parallel
+	$(CMAKE) --build $(BUILD_DIR) --parallel $(JOBS)
 
 release:
 	$(CMAKE) -B build-release -DCMAKE_BUILD_TYPE=Release
-	$(CMAKE) --build build-release --parallel
+	$(CMAKE) --build build-release --parallel $(JOBS)
 
 # A gate result is only a claim about the tree it ran in, and that tree's
 # configuration can change without this file being touched: any
@@ -271,7 +275,7 @@ wasm:
 	fi
 	$(EM_CMAKE) -B $(WASM_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release \
 	  -DFM_BUILD_WASM=ON -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
-	$(CMAKE) --build $(WASM_BUILD_DIR) --parallel \
+	$(CMAKE) --build $(WASM_BUILD_DIR) --parallel $(JOBS) \
 	  --target formulon_wasm formulon_wasm_stack_probe
 	@echo ""
 	@echo "wasm artifacts:"
@@ -286,7 +290,7 @@ wasm-threads:
 	$(EM_CMAKE) -B $(WASM_THREADS_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release \
 	  -DFM_BUILD_WASM=ON -DFM_WASM_THREADS=ON \
 	  -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
-	$(CMAKE) --build $(WASM_THREADS_BUILD_DIR) --parallel \
+	$(CMAKE) --build $(WASM_THREADS_BUILD_DIR) --parallel $(JOBS) \
 	  --target formulon_wasm formulon_wasm_stack_probe
 	@echo ""
 	@echo "wasm-threads artifacts:"
@@ -300,7 +304,7 @@ wasm-debug:
 	fi
 	$(EM_CMAKE) -B $(WASM_DEBUG_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug \
 	  -DFM_BUILD_WASM=ON -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
-	$(CMAKE) --build $(WASM_DEBUG_BUILD_DIR) --parallel --target formulon_wasm
+	$(CMAKE) --build $(WASM_DEBUG_BUILD_DIR) --parallel $(JOBS) --target formulon_wasm
 
 # capi WASM: standalone reactor build consumed by wasmtime-py. No JS
 # glue, no pthread, exports the curated fm_* list from
@@ -313,7 +317,7 @@ wasm-capi:
 	$(EM_CMAKE) -B $(WASM_CAPI_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release \
 	  -DFM_BUILD_WASM=ON -DFM_WASM_VARIANT=capi \
 	  -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
-	$(CMAKE) --build $(WASM_CAPI_BUILD_DIR) --parallel --target formulon_wasm
+	$(CMAKE) --build $(WASM_CAPI_BUILD_DIR) --parallel $(JOBS) --target formulon_wasm
 	@echo ""
 	@echo "wasm-capi artifact:"
 	@ls -la $(WASM_CAPI_BUILD_DIR)/formulon_capi.wasm 2>/dev/null || \
@@ -455,7 +459,7 @@ NODE_NATIVE_BUILD_DIR ?= build
 
 node-native:
 	$(CMAKE) -B $(NODE_NATIVE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DFM_BUILD_NODE_ADDON=ON
-	$(CMAKE) --build $(NODE_NATIVE_BUILD_DIR) --target formulon_node --parallel
+	$(CMAKE) --build $(NODE_NATIVE_BUILD_DIR) --target formulon_node --parallel $(JOBS)
 
 node-package: node-native
 	@if ! command -v $(NODE) >/dev/null 2>&1; then \
@@ -618,8 +622,8 @@ oracle-verify:
 	@if [ ! -f $(BUILD_DIR)/CMakeCache.txt ]; then \
 	  echo "oracle-verify: run 'make build' first"; exit 1; \
 	fi
-	@$(CMAKE) --build $(BUILD_DIR) --target formulon_oracle_tests --parallel
-	@$(CMAKE) --build $(BUILD_DIR) --target formulon_workbook_oracle_tests --parallel
+	@$(CMAKE) --build $(BUILD_DIR) --target formulon_oracle_tests --parallel $(JOBS)
+	@$(CMAKE) --build $(BUILD_DIR) --target formulon_workbook_oracle_tests --parallel $(JOBS)
 	@# gtest_discover_tests caches the parameter list keyed by binary
 	@# timestamp, but our goldens aren't a build input. Force
 	@# rediscovery so newly regenerated golden*/*.golden.json files land
@@ -667,7 +671,7 @@ ironcalc-verify:
 	@if [ ! -f $(BUILD_DIR)/CMakeCache.txt ]; then \
 	  echo "ironcalc-verify: run 'make build' first"; exit 1; \
 	fi
-	@$(CMAKE) --build $(BUILD_DIR) --target formulon_ironcalc_oracle_tests --parallel
+	@$(CMAKE) --build $(BUILD_DIR) --target formulon_ironcalc_oracle_tests --parallel $(JOBS)
 	@# Force ctest to rediscover parameter list; the goldens aren't a
 	@# build input so the cache would otherwise stick.
 	@rm -f $(BUILD_DIR)/tests/oracle/formulon_ironcalc_oracle_tests*_tests.cmake
@@ -699,7 +703,7 @@ fuzz:
 	$(CMAKE) -B $(FUZZ_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DFM_BUILD_FUZZ=ON \
 	  -DFM_FUZZ_SANITIZERS="$(FUZZ_SANITIZERS)" \
 	  -DCMAKE_C_COMPILER="$(FUZZ_CC)" -DCMAKE_CXX_COMPILER="$(FUZZ_CXX)"
-	$(CMAKE) --build $(FUZZ_BUILD_DIR) --parallel
+	$(CMAKE) --build $(FUZZ_BUILD_DIR) --parallel $(JOBS)
 	@(cd $(FUZZ_BUILD_DIR) && $(CTEST) -R Fuzz --output-on-failure --timeout 300)
 
 # The same harnesses under a wall-clock budget instead of an iteration cap.
@@ -724,7 +728,7 @@ fuzz-long: fuzz
 # threshold is tunable, so it is run on demand rather than gated.
 bench:
 	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
-	$(CMAKE) --build $(BUILD_DIR) --parallel
+	$(CMAKE) --build $(BUILD_DIR) --parallel $(JOBS)
 	@(cd $(BUILD_DIR) && $(CTEST) -L BENCH --output-on-failure --timeout 600)
 
 # Local coverage diagnostic. Builds with the gcov-instrumented preset,
