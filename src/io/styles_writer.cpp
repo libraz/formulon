@@ -631,6 +631,30 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
   out.append("  </cellStyles>\n");
 }
 
+/// Emits `<colors>`: the `<indexedColors>` palette followed by the other
+/// retained children (`colors_xml` is a `<colors>` element holding them).
+void AppendColors(std::string& out, const StylesTable& table) {
+  constexpr std::string_view kOpen = "<colors>";
+  constexpr std::string_view kClose = "</colors>";
+  if (table.indexed_colors.empty() && table.colors_xml.empty()) {
+    return;
+  }
+  out.append("  <colors>");
+  if (!table.indexed_colors.empty()) {
+    out.append("<indexedColors>");
+    for (const std::uint32_t argb : table.indexed_colors) {
+      out.append("<rgbColor rgb=\"");
+      AppendArgb(out, argb);
+      out.append("\"/>");
+    }
+    out.append("</indexedColors>");
+  }
+  if (table.colors_xml.size() > kOpen.size() + kClose.size()) {
+    out.append(table.colors_xml, kOpen.size(), table.colors_xml.size() - kOpen.size() - kClose.size());
+  }
+  out.append("</colors>\n");
+}
+
 void AppendFontFragment(std::string& out, const FontRecord& f) {
   out.append("<font>");
   AppendFontToggle(out, "b", f.has_bold, f.bold);
@@ -776,11 +800,7 @@ std::string write_styles(const StylesTable& table) {
     out.append(table.table_styles_xml);
     out.push_back('\n');
   }
-  if (!table.colors_xml.empty()) {
-    out.append("  ");
-    out.append(table.colors_xml);
-    out.push_back('\n');
-  }
+  AppendColors(out, table);
   for (const std::string& raw : table.unknown_top_level_xml) {
     out.append("  ");
     out.append(raw);

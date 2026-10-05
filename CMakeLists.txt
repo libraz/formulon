@@ -118,6 +118,9 @@ set(FORMULON_CORE_SOURCES
   src/utils/utf8_length.cpp
   src/external_book.cpp
   src/styles.cpp
+  src/style_resolve.cpp
+  src/theme.cpp
+  src/color_resolve.cpp
   src/value.cpp
   src/sheet.cpp
   src/sheet_name.cpp

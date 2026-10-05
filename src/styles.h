@@ -18,6 +18,9 @@
 #include <string_view>
 #include <vector>
 
+#include "utils/error.h"
+#include "utils/expected.h"
+
 namespace formulon {
 
 /// Original specification of an OOXML `<color>` element, preserved so a
@@ -257,14 +260,17 @@ struct DifferentialFormat {
 /// style ("Normal", "Heading 1", custom user names, etc.) that points
 /// at a record in the parallel `<cellStyleXfs>` table via `xf_id`.
 ///
-/// `builtin_id` is the OOXML built-in style ordinal (`0..47`); the
+/// `builtin_id` is the OOXML built-in style ordinal (`0..kBuiltinIdMax`); the
 /// sentinel `kBuiltinIdNone` indicates the style is custom and the
 /// attribute should be omitted on write. `i_level` is the outline level
 /// for built-in heading styles (0 for everything else).
 struct CellStyleRecord {
   /// Sentinel for "no `builtinId` attribute" — picked above the OOXML
-  /// 0..47 built-in range so it cannot collide with a real id.
+  /// built-in range so it cannot collide with a real id.
   static constexpr std::uint32_t kBuiltinIdNone = 0xFFFFFFFFU;
+  /// Highest built-in style ordinal (53 = Explanatory Text); Excel loads
+  /// and writes the whole 0..53 range.
+  static constexpr std::uint32_t kBuiltinIdMax = 53U;
 
   std::string name;
   std::uint32_t xf_id = 0;
@@ -303,12 +309,19 @@ struct StylesTable {
   std::vector<CellStyleRecord> cell_styles;
   /// `<dxfs>` records referenced by conditional-format `dxfId`.
   std::vector<DifferentialFormat> dxfs;
+  /// `<indexedColors>` palette as AARRGGBB, in palette order. Empty selects
+  /// the built-in palette; a non-empty list overrides entry `i` for
+  /// `i < indexed_colors.size()`.
+  std::vector<std::uint32_t> indexed_colors;
   /// Namespace declarations and compatibility attributes from the
   /// `<styleSheet>` root that raw extension fragments depend on.
   std::string root_extra_attrs;
   /// Unmodelled top-level style sections retained verbatim. Their schema
   /// positions are fixed by `write_styles`, so a style-table edit does not
   /// discard custom palettes, table/pivot style defaults, or extensions.
+  ///
+  /// `colors_xml` holds the `<colors>` element minus its `<indexedColors>`
+  /// child (for example `<mruColors>`); empty when nothing else is present.
   std::string colors_xml;
   std::string table_styles_xml;
   std::string ext_lst_xml;
@@ -317,6 +330,19 @@ struct StylesTable {
   /// extension data during a read-modify-write cycle.
   std::vector<std::string> unknown_top_level_xml;
 };
+
+/// Removes the named `<cellStyle>` and detaches the cell xfs that used it.
+///
+/// Every `cell_xfs` entry whose `xf_id` is the removed style's is repointed to
+/// `0`, unless another named style still references that `cell_style_xfs`
+/// record. A group whose `apply_*` flag is false takes the value of
+/// `cell_style_xfs[0]` (Normal); a group whose flag is true keeps its own
+/// value, and the flags themselves are left as they are. `cell_xfs` and
+/// `cell_style_xfs` are never compacted, so every xf index stays valid.
+///
+/// Returns `kInvalidArgument` when no style has that name or when it is the
+/// Normal style (`builtin_id == 0`).
+Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name);
 
 /// Returns the format string for a built-in Excel number-format id
 /// (0..163). For ids outside the documented range returns an empty

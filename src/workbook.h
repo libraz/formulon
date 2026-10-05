@@ -526,6 +526,22 @@ class Workbook {
   /// preserved parts.
   void set_passthrough_parts(std::vector<PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
 
+  /// Adds one passthrough part, keeping the list ordered by path. Returns
+  /// `kInvalidArgument` when a part with the same path is already present or
+  /// the path is empty.
+  Expected<void, Error> add_passthrough_part(PassthroughPart part);
+
+  /// Replaces the bytes of the passthrough part at `path`, leaving its
+  /// content type untouched. Returns `kInvalidArgument` when no such part
+  /// exists.
+  Expected<void, Error> replace_passthrough_part(std::string_view path, std::vector<std::uint8_t> bytes);
+
+  /// Registers a workbook-level relationship of `type` to the package part
+  /// `target` (full package path, e.g. `xl/theme/theme1.xml`). A relationship
+  /// with the same type and target is not added twice. The writer mints the
+  /// rId, and omits the relationship if `target` is not an emitted part.
+  void add_workbook_relationship(std::string type, std::string target);
+
   /// Read-only access to the verbatim workbook-level `<Relationship>`
   /// entries (from `xl/_rels/workbook.xml.rels`) whose Type URI the
   /// reader did not recognise. Captured so the writer can re-emit

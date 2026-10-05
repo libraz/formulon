@@ -688,6 +688,27 @@ void ReadCellStyles(const pugi::xml_node& root, StylesTable& table) {
   }
 }
 
+/// Reads `<colors>`: the `<indexedColors>` palette becomes `indexed_colors`
+/// and every other child is retained verbatim in `colors_xml`.
+void ReadColors(const pugi::xml_node& colors, StylesTable& table) {
+  std::string others;
+  for (pugi::xml_node child : colors.children()) {
+    if (child.type() != pugi::node_element) {
+      continue;
+    }
+    if (std::string_view(child.name()) != "indexedColors") {
+      append_raw_xml(others, child);
+      continue;
+    }
+    for (pugi::xml_node rgb = child.child("rgbColor"); rgb; rgb = rgb.next_sibling("rgbColor")) {
+      table.indexed_colors.push_back(parse_rgb_hex(rgb.attribute("rgb").value(), 0xFF000000U));
+    }
+  }
+  if (!others.empty()) {
+    table.colors_xml = "<colors>" + others + "</colors>";
+  }
+}
+
 std::string CaptureRootExtraAttrs(const pugi::xml_node& root) {
   std::string out;
   for (pugi::xml_attribute attr : root.attributes()) {
@@ -798,7 +819,7 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
   NormalizeStyleIndices(table);
   table.root_extra_attrs = CaptureRootExtraAttrs(root);
   if (pugi::xml_node colors = root.child("colors")) {
-    table.colors_xml = raw_xml(colors);
+    ReadColors(colors, table);
   }
   if (pugi::xml_node table_styles = root.child("tableStyles")) {
     table.table_styles_xml = raw_xml(table_styles);

@@ -67,6 +67,44 @@ Workbook::Workbook(Workbook&&) noexcept = default;
 Workbook& Workbook::operator=(Workbook&&) noexcept = default;
 Workbook::~Workbook() = default;
 
+Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
+  if (part.path.empty()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "add_passthrough_part: empty part path");
+  }
+  for (const PassthroughPart& existing : passthrough_parts_) {
+    if (existing.path == part.path) {
+      return make_error(FormulonErrorCode::kInvalidArgument, "add_passthrough_part: part already present",
+                        "path=" + part.path);
+    }
+  }
+  passthrough_parts_.push_back(std::move(part));
+  sort_passthrough_parts(passthrough_parts_);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::replace_passthrough_part(std::string_view path, std::vector<std::uint8_t> bytes) {
+  for (PassthroughPart& existing : passthrough_parts_) {
+    if (existing.path == path) {
+      existing.bytes = std::move(bytes);
+      return Expected<void, Error>::Ok();
+    }
+  }
+  return make_error(FormulonErrorCode::kInvalidArgument, "replace_passthrough_part: no such part",
+                    "path=" + std::string(path));
+}
+
+void Workbook::add_workbook_relationship(std::string type, std::string target) {
+  for (const UnknownRelationship& rel : unknown_workbook_rels_) {
+    if (!rel.target_external && rel.type == type && rel.target == target) {
+      return;
+    }
+  }
+  UnknownRelationship rel;
+  rel.type = std::move(type);
+  rel.target = std::move(target);
+  unknown_workbook_rels_.push_back(std::move(rel));
+}
+
 namespace {
 
 /// OOXML pattern ordinal for `gray125`.
