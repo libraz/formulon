@@ -426,6 +426,9 @@ spill and are capped at `case_schema.MAX_SHAPE_SAMPLES`.
 tools/oracle/
 ├── targets.yaml                 declarative target manifest
 ├── cli.py                       cross-platform dispatcher (list / setup / gen)
+├── targets_manifest.py          targets.yaml loader + host label (used by cli.py)
+├── preflight.py                 per-target host checks behind `cli.py setup`
+├── contribute.py                contributor flow behind `cli.py contribute`
 ├── oracle_gen.py                core generator (loads cases, calls driver, writes JSON)
 ├── case_schema.py               YAML loader + validator
 ├── driver.py                    backward-compat re-export shim

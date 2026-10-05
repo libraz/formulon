@@ -11,7 +11,7 @@ This module centralises:
 
   - :data:`COUNTRY_CODE_TO_BCP47` — the int-keyed map from
     ``xlCountryCode`` to BCP-47 locale strings. Used both by the driver
-    (for environment probes) and by ``cli.py`` (for the contributor probe
+    (for environment probes) and by ``contribute.py`` (for the contributor probe
     that derives a target name).
   - :data:`LOCALIZED_ERROR_TO_CANONICAL` — the localized form of every
     Excel error token mapped back to its canonical English form. The

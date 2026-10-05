@@ -495,9 +495,9 @@ def _apply_divergence_metadata(
 def _version_tuple(s: str) -> Tuple[int, ...]:
     """Returns a comparable integer tuple from an Excel version string.
 
-    Mirrors ``cli.py``'s ``_version_tuple`` (duplicated rather than
-    imported: ``cli.py`` imports this module, so the reverse import
-    would be circular). Returns ``(0,)`` for strings with no leading
+    Mirrors ``contribute.py``'s ``_version_tuple`` (duplicated rather
+    than imported: the contributor flow sits above this module, so the
+    reverse import would be circular). Returns ``(0,)`` for strings with no leading
     digit run, e.g. a hand-seeded placeholder version.
     """
 
