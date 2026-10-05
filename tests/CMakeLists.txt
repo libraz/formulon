@@ -74,6 +74,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/part_dom_test.cpp
   unit/io/color_spec_xml_test.cpp
   unit/io/row_custom_height_test.cpp
+  unit/io/threaded_comments_test.cpp
   unit/io/sax_shared_formula_test.cpp
   unit/io/sax_xml_reader_test.cpp
   unit/io/sheet_name_validation_test.cpp

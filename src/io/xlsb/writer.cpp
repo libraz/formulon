@@ -204,6 +204,7 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "auto_filter", sheet.has_auto_filter() ? 1U : 0U, i);
     ReportDeferred(&count, "comments", sheet.comments().size(), i);
+    ReportDeferred(&count, "threaded_comments", sheet.threaded_comments().size(), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
     const SheetPrintSettings& print = sheet.print_settings();
     const bool has_print = !print.sheet_pr_xml.empty() || !print.page_margins_xml.empty() ||

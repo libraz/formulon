@@ -70,6 +70,8 @@ constexpr std::string_view kCtPivotCacheRecords =
 constexpr std::string_view kCtPivotTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
 constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
 constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
+constexpr std::string_view kCtThreadedComments = "application/vnd.ms-excel.threadedcomments+xml";
+constexpr std::string_view kCtPerson = "application/vnd.ms-excel.person+xml";
 
 // Writer-only relationship URIs (no reader consumer).
 constexpr std::string_view kRelCalcChain =
@@ -249,6 +251,12 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
       continue;
     }
     AppendOverride(out, cplan.comments_path, kCtComments);
+    if (!cplan.threaded_path.empty()) {
+      AppendOverride(out, cplan.threaded_path, kCtThreadedComments);
+    }
+  }
+  if (plan.generated_persons) {
+    AppendOverride(out, kPersonsPartPath, kCtPerson);
   }
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
@@ -535,6 +543,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   }
   if (plan.generated_dynamic_metadata) {
     AppendRelationship(out, next_rid++, kRelSheetMetadata, "metadata.xml");
+  }
+  if (plan.generated_persons) {
+    AppendRelationship(out, next_rid++, kRelPerson, WithoutXlPrefix(kPersonsPartPath));
   }
   for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
     // Only emit a relationship whose target actually exists in the

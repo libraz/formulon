@@ -35,6 +35,7 @@
 #include "merge_range.h"
 #include "sheet_layout.h"
 #include "sheet_passthrough.h"
+#include "threaded_comment.h"
 #include "unknown_relationship.h"
 #include "utils/a1_ref.h"
 #include "value.h"
@@ -104,11 +105,18 @@ struct Hyperlink {
 /// rich-text runs. Reads of multi-run rich text concatenate the runs
 /// into `text`; writes always emit the plain form. Authors are
 /// preserved verbatim so the workbook-wide author list round-trips.
+/// `uid` is the comment's `xr:uid` revision id, empty when absent.
 struct CellComment {
+  CellComment() = default;
+  CellComment(std::uint32_t row_in, std::uint32_t col_in, std::string author_in, std::string text_in,
+              std::string uid_in = {})
+      : row(row_in), col(col_in), author(std::move(author_in)), text(std::move(text_in)), uid(std::move(uid_in)) {}
+
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   std::string author;
   std::string text;
+  std::string uid;
 };
 
 /// One `<dataValidation>` block: a list of cell ranges that share a
@@ -1219,6 +1227,16 @@ class Sheet {
   /// without an extra accessor pair per field.
   std::vector<CellComment>& mutable_comments() noexcept { return comments_; }
 
+  /// Threaded comments in file order, each thread followed by its replies.
+  /// A thread's legacy stub note is not in `comments()`. Edits go through
+  /// the validating `Workbook` methods; the mutable accessor serves the reader.
+  const std::vector<ThreadedComment>& threaded_comments() const noexcept { return threaded_comments_; }
+  std::vector<ThreadedComment>& mutable_threaded_comments() noexcept { return threaded_comments_; }
+
+  /// Sorted, de-duplicated `(row, col)` anchors of every note and thread.
+  /// These are the cells the comment VML drawing carries a shape for.
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> comment_anchor_set() const;
+
   // ---------------------------------------------------------------------------
   // Data validations
   // ---------------------------------------------------------------------------
@@ -1318,6 +1336,16 @@ class Sheet {
   /// DrawingML target above and lets comment shapes survive sheet reordering.
   const std::string& comment_vml_path() const noexcept { return comment_vml_path_; }
   void set_comment_vml_path(std::string path) { comment_vml_path_ = std::move(path); }
+
+  /// `comment_anchor_set()` as it stood when the VML at `comment_vml_path()`
+  /// was read. The writer re-emits that VML verbatim only while the anchors
+  /// still match, and regenerates it from the model otherwise.
+  const std::vector<std::pair<std::uint32_t, std::uint32_t>>& comment_vml_anchors() const noexcept {
+    return comment_vml_anchors_;
+  }
+  void set_comment_vml_anchors(std::vector<std::pair<std::uint32_t, std::uint32_t>> anchors) {
+    comment_vml_anchors_ = std::move(anchors);
+  }
 
   /// Relationships from this worksheet's `.rels` part that Formulon does
   /// not otherwise model (OLE objects, controls, slicers, and so on).
@@ -1557,6 +1585,8 @@ class Sheet {
   std::vector<Hyperlink> hyperlinks_;
   // Per-cell text comments aggregated from `xl/comments<N>.xml`. Empty by default.
   std::vector<CellComment> comments_;
+  // Threaded comments from `xl/threadedComments/threadedComment<N>.xml`.
+  std::vector<ThreadedComment> threaded_comments_;
   // `<dataValidations>` blocks. Empty by default.
   std::vector<DataValidation> validations_;
   // `<sheetProtection>` flags. `protection_.enabled = false` by
@@ -1584,6 +1614,8 @@ class Sheet {
   // writer may assign a new output filename, but uses this path to find the
   // original bytes in passthrough storage.
   std::string comment_vml_path_;
+  // Comment anchors the source VML at `comment_vml_path_` was read with.
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> comment_vml_anchors_;
   // Unmodelled entries from `xl/worksheets/_rels/sheetN.xml.rels`.
   std::vector<UnknownRelationship> unknown_relationships_;
   // Sheet AutoFilter, or empty.

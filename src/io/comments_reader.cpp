@@ -64,6 +64,7 @@ Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::u
     if (author_id >= 0 && static_cast<std::size_t>(author_id) < authors.size()) {
       cc.author = authors[static_cast<std::size_t>(author_id)];
     }
+    cc.uid = c.attribute("xr:uid").value();
     if (pugi::xml_node text = c.child("text"); text) {
       // Comment XML never carries `<rPh>` in practice (kana phonetic
       // guides only attach to shared-string entries), so the unified

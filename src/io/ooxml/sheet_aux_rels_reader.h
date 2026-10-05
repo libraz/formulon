@@ -56,6 +56,8 @@ namespace ooxml {
 ///     through `unknown_rels` so its id and target round-trip.
 ///   * `printer_settings_path` — resolved path of the binary printer
 ///     settings part referenced by `<pageSetup r:id="...">`, or empty.
+///   * `threaded_comments_path` — resolved path of the
+///     `kRelThreadedComment` target, or empty when the sheet has none.
 ///   * `drawing_path` — resolved path of the DrawingML part referenced
 ///     by the worksheet's `<drawing r:id="...">` element (charts,
 ///     images, shapes), or empty. The drawing part, its own rels, and
@@ -65,6 +67,7 @@ namespace ooxml {
 struct SheetAuxRels {
   std::unordered_map<std::string, std::string> hyperlink_rid_to_target;
   std::string comments_path;
+  std::string threaded_comments_path;
   std::string vml_path;
   std::string printer_settings_rid;
   std::string printer_settings_path;
@@ -88,10 +91,10 @@ Expected<std::vector<std::string>, Error> load_sheet_pivot_table_targets(const Z
                                                                          std::string_view sheet_rels_path,
                                                                          std::string_view sheet_dir);
 
-/// Walks `sheet_rels_path` once for hyperlink, comments, VML and
-/// printer-settings entries; returns the aggregated lookup. The walker
-/// silently ignores unrelated relationship types so each consumer site
-/// reads only the slice it cares about.
+/// Walks `sheet_rels_path` once for hyperlink, comments, threaded
+/// comments, VML and printer-settings entries; returns the aggregated
+/// lookup. The walker silently ignores unrelated relationship types so
+/// each consumer site reads only the slice it cares about.
 ///
 /// `legacy_drawing_body_rid` is the `r:id` value of the worksheet body's
 /// `<legacyDrawing>` element (empty when the sheet has none). A sheet

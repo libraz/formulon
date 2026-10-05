@@ -11,6 +11,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "sheet.h"
+#include "threaded_comment.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -356,12 +357,21 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::uint32_t she
     }
     return 0;
   }
+  // A cell holds a note or a threaded comment, never both.
+  for (const formulon::ThreadedComment& thread : wb->workbook().sheet(sheet).threaded_comments()) {
+    if (thread.parent_id.empty() && thread.row == row && thread.col == col) {
+      return formulon::c_api::parts::set_last_error(
+          formulon::make_error(formulon::FormulonErrorCode::kThreadedCommentInvalid,
+                               "fm_sheet_set_comment: cell already has a threaded comment", thread.id));
+    }
+  }
   formulon::CellComment c;
   c.row = row;
   c.col = col;
   c.author = (author != nullptr) ? std::string(author) : std::string();
   c.text = std::string(text);
   if (found < list.size()) {
+    c.uid = std::move(list[found].uid);
     list[found] = std::move(c);
   } else {
     list.push_back(std::move(c));

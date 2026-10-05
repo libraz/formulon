@@ -211,6 +211,9 @@ enum class FormulonErrorCode : int32_t {
   /// count no 32-bit total can hold; pagination reports this instead of
   /// returning a truncated count.
   kPrintPageCountOverflow = 9005,
+  /// A threaded-comment operation named an unknown thread, person or reply,
+  /// or supplied an id or timestamp that is not well formed.
+  kThreadedCommentInvalid = 9006,
 
   // ----- Workbook structural mutation (5050-5069) -----
   // Reuse the I/O band: sheet name validation, sheet rearrangement, and
@@ -497,6 +500,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kPrintInvalidArea";
     case FormulonErrorCode::kPrintPageCountOverflow:
       return "kPrintPageCountOverflow";
+    case FormulonErrorCode::kThreadedCommentInvalid:
+      return "kThreadedCommentInvalid";
     case FormulonErrorCode::kUiViewStateInvalid:
       return "kUiViewStateInvalid";
     case FormulonErrorCode::kUiSnapshotFailed:

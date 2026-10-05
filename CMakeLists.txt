@@ -120,6 +120,7 @@ set(FORMULON_CORE_SOURCES
   src/auto_filter.cpp
   src/auto_filter_eval.cpp
   src/styles.cpp
+  src/threaded_comment.cpp
   src/style_resolve.cpp
   src/theme.cpp
   src/color_resolve.cpp
@@ -135,6 +136,7 @@ set(FORMULON_CORE_SOURCES
   src/io/cf_overlay.cpp
   src/io/cf_reader.cpp
   src/io/color_spec_xml.cpp
+  src/io/threaded_comments_io.cpp
   src/io/cf_writer.cpp
   src/io/comments_reader.cpp
   src/io/comments_writer.cpp

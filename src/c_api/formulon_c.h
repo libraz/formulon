@@ -1691,7 +1691,10 @@ FM_API fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, uint32_t sheet, f
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet` is out of range or the coordinate
- *         is outside the Excel grid.
+ *         is outside the Excel grid;
+ *         `kThreadedCommentInvalid` when the cell already holds a threaded
+ *         comment (a cell carries a note or a thread, never both).
+ *         Replacing a note keeps its `xr:uid`.
  */
 FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                         const char* author, const char* text);

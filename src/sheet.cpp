@@ -119,6 +119,20 @@ void Sheet::add_pivot_table(std::unique_ptr<pivot::PivotTable> table) {
   pivot_tables_.push_back(std::move(table));
 }
 
+std::vector<std::pair<std::uint32_t, std::uint32_t>> Sheet::comment_anchor_set() const {
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> anchors;
+  anchors.reserve(comments_.size() + threaded_comments_.size());
+  for (const CellComment& c : comments_) {
+    anchors.emplace_back(c.row, c.col);
+  }
+  for (const ThreadedComment& c : threaded_comments_) {
+    anchors.emplace_back(c.row, c.col);
+  }
+  std::sort(anchors.begin(), anchors.end());
+  anchors.erase(std::unique(anchors.begin(), anchors.end()), anchors.end());
+  return anchors;
+}
+
 const Cell& RowCells::blank() noexcept {
   // Shared read-only stand-in for a column the row never materialised.
   // `operator[]` hands it out for the leading gap, so index-based scans see a

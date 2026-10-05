@@ -90,6 +90,12 @@ Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::str
             return resolved.error();
           }
           out.comments_path = std::move(resolved).value();
+        } else if (type == kRelThreadedComment) {
+          auto resolved = resolve_relative_path(sheet_dir, target);
+          if (!resolved) {
+            return resolved.error();
+          }
+          out.threaded_comments_path = std::move(resolved).value();
         } else if (type == kRelVmlDrawing) {
           auto resolved = resolve_relative_path(sheet_dir, target);
           if (!resolved) {

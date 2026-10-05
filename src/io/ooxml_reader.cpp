@@ -54,6 +54,7 @@
 #include "io/sst_reader.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
+#include "io/threaded_comments_io.h"
 #include "io/workbook_kind_ooxml.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
@@ -693,6 +694,26 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     consumed_parts.insert("xl/calcChain.xml");
   }
 
+  // Persons: the person list the sheets' threaded comments name. The part
+  // is model-owned, so its relationship leaves the unknown list with it.
+  for (auto it = wb_rels.unknown_rels.begin(); it != wb_rels.unknown_rels.end(); ++it) {
+    if (it->type != kRelPerson || it->target_external || !zip.has_entry(it->target)) {
+      continue;
+    }
+    auto pb_or = zip.read_entry(it->target);
+    if (!pb_or) {
+      return pb_or.error();
+    }
+    auto persons_or = read_persons(pb_or.value());
+    if (!persons_or) {
+      return persons_or.error();
+    }
+    wb.mutable_persons() = std::move(persons_or.value());
+    consumed_parts.insert(it->target);
+    wb_rels.unknown_rels.erase(it);
+    break;
+  }
+
   // 4b. Styles — read for validation only at this slice. The full
   // numFmt/font/fill runtime model lands later when the formatter
   // pipeline begins consuming it. Mark consumed regardless of whether
@@ -929,9 +950,25 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         }
       }
 
+      // Threaded comments load before the legacy comments part so the
+      // thread stubs in it can be told apart from notes.
+      if (!aux.threaded_comments_path.empty() && zip.has_entry(aux.threaded_comments_path)) {
+        auto tb_or = zip.read_entry(aux.threaded_comments_path);
+        if (!tb_or) {
+          return tb_or.error();
+        }
+        auto threads_or = read_threaded_comments(tb_or.value());
+        if (!threads_or) {
+          return threads_or.error();
+        }
+        wb.sheet(i).mutable_threaded_comments() = std::move(threads_or.value());
+        consumed_parts.insert(aux.threaded_comments_path);
+      }
+
       // Comments part: load + attach. The VML drawing companion is
       // intentionally NOT consumed here so the bytes flow through the
-      // unknown-parts passthrough mechanism unchanged.
+      // unknown-parts passthrough mechanism unchanged; the anchors it was
+      // read with let the writer tell whether those bytes are still current.
       if (!aux.comments_path.empty() && zip.has_entry(aux.comments_path)) {
         auto cb_or = zip.read_entry(aux.comments_path);
         if (!cb_or) {
@@ -941,8 +978,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         if (!comments_or) {
           return comments_or.error();
         }
+        drop_thread_stubs(comments_or.value(), wb.sheet(i).threaded_comments());
         wb.sheet(i).mutable_comments() = std::move(comments_or.value());
         wb.sheet(i).set_comment_vml_path(aux.vml_path);
+        wb.sheet(i).set_comment_vml_anchors(wb.sheet(i).comment_anchor_set());
         consumed_parts.insert(aux.comments_path);
       }
 

@@ -387,9 +387,11 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   if (row_axis) {
     ShiftHyperlinkList(hyperlinks_, index, count, is_delete, /*row_axis=*/true);
     ShiftRowAnchored(comments_, index, count, is_delete);
+    ShiftRowAnchored(threaded_comments_, index, count, is_delete);
   } else {
     ShiftHyperlinkList(hyperlinks_, index, count, is_delete, /*row_axis=*/false);
     ShiftColAnchored(comments_, index, count, is_delete);
+    ShiftColAnchored(threaded_comments_, index, count, is_delete);
   }
   ShiftRangeList(merges_, index, count, is_delete, row_axis);
   for (DataValidation& dv : validations_) {

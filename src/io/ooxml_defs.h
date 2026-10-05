@@ -63,6 +63,9 @@ inline constexpr std::string_view kRelOleLink =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleLink";
 inline constexpr std::string_view kRelDdeLink =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ddeLink";
+inline constexpr std::string_view kRelThreadedComment =
+    "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment";
+inline constexpr std::string_view kRelPerson = "http://schemas.microsoft.com/office/2017/10/relationships/person";
 
 }  // namespace io
 }  // namespace formulon

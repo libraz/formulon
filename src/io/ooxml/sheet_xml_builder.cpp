@@ -1101,6 +1101,9 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     add_rel(next_unique_rid(), kRelComments, comments_target);
     res.legacy_drawing_rid = next_unique_rid();
     add_rel(res.legacy_drawing_rid, kRelVmlDrawing, vml_target);
+    if (!comments_plan.threaded_path.empty()) {
+      add_rel(next_unique_rid(), kRelThreadedComment, TargetRelativeToWorksheet(comments_plan.threaded_path));
+    }
   }
   for (const UnknownRelationship& relationship : sheet.unknown_relationships()) {
     // Internal unknown relationships are meaningful only when the

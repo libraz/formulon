@@ -46,6 +46,7 @@
 #include "io/pivot_cache_writer.h"
 #include "io/pivot_table_writer.h"
 #include "io/styles_writer.h"
+#include "io/threaded_comments_io.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "miniz.h"
@@ -575,15 +576,19 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
 
   // 9.5. Comments + VML drawings — one pair per sheet that has at
-  // least one comment. The VML companion uses the passthrough bytes
-  // when available so unchanged round-trips stay byte-identical;
-  // otherwise the writer's stub keeps Excel happy on a fresh comment.
+  // least one note or thread, plus the sheet's threaded comments. The
+  // comments part carries the notes and one legacy stub per thread. The
+  // VML companion re-emits the source bytes while the plan found them
+  // current, and is regenerated with one shape per commented cell
+  // otherwise.
   for (std::size_t i = 0; i < plan.comments_by_sheet.size(); ++i) {
     const EmissionPlan::CommentsPlan& cplan = plan.comments_by_sheet[i];
     if (cplan.numeric_id == 0) {
       continue;
     }
-    auto cresult = AddPart(writer.get(), cplan.comments_path, write_comments(wb.sheet(i).comments()), &written_paths);
+    const Sheet& sheet = wb.sheet(i);
+    auto cresult =
+        AddPart(writer.get(), cplan.comments_path, write_comments(legacy_comments_with_stubs(sheet)), &written_paths);
     if (!cresult) {
       return cresult.error();
     }
@@ -593,10 +598,24 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
         return vresult.error();
       }
     } else {
-      auto vresult = AddPart(writer.get(), cplan.vml_path, write_vml_drawing_stub(), &written_paths);
+      auto vresult = AddPart(writer.get(), cplan.vml_path,
+                             write_vml_drawing(sheet.comment_anchor_set(), cplan.numeric_id), &written_paths);
       if (!vresult) {
         return vresult.error();
       }
+    }
+    if (!cplan.threaded_path.empty()) {
+      auto tresult = AddPart(writer.get(), cplan.threaded_path, write_threaded_comments(sheet.threaded_comments()),
+                             &written_paths);
+      if (!tresult) {
+        return tresult.error();
+      }
+    }
+  }
+  if (plan.generated_persons) {
+    auto presult = AddPart(writer.get(), kPersonsPartPath, write_persons(wb.persons()), &written_paths);
+    if (!presult) {
+      return presult.error();
     }
   }
 

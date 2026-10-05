@@ -78,6 +78,8 @@ struct EmissionPlan {
   // True when the writer generates xl/metadata.xml (the XLDAPR entry a
   // dynamic-array formula's `cm=` names) because no retained part carries it.
   bool generated_dynamic_metadata = false;
+  // True when the writer generates `kPersonsPartPath` from `Workbook::persons()`.
+  bool generated_persons = false;
   // For each sheet (by 0-based index), the in-source TableMetadata
   // entries that target it, paired with the package-relative path the
   // writer assigned (`xl/tables/tableN.xml`). `(table_ref, path)` is
@@ -124,16 +126,18 @@ struct EmissionPlan {
   std::vector<std::vector<PivotTablePlan>> pivot_tables_by_sheet;
   // Per-sheet comments / VML payload. `numeric_id` matches the
   // `comments<N>.xml` filename (1-based, package-wide). `vml_path` is
-  // the per-sheet VML drawing path, emitted as a stub when the source
-  // had none and as passthrough bytes otherwise.
+  // the per-sheet VML drawing path: the source bytes are re-emitted
+  // verbatim while the sheet's comment anchors match the ones they were
+  // read with, and the drawing is regenerated from the model otherwise.
   struct CommentsPlan {
     std::uint32_t numeric_id = 0;
     std::string comments_path;                    // "xl/comments<N>.xml"
     std::string vml_path;                         // "xl/drawings/vmlDrawing<N>.vml"
+    std::string threaded_path;                    // "xl/threadedComments/threadedComment<N>.xml", or empty
     const PassthroughPart* vml_source = nullptr;  // non-null => use bytes verbatim
   };
   // One entry per sheet; engaged only for sheets with at least one
-  // comment. Disengaged entries have `numeric_id == 0`.
+  // note or thread. Disengaged entries have `numeric_id == 0`.
   std::vector<CommentsPlan> comments_by_sheet;
   // External link relationships. One entry per `wb.external_links()` in
   // document order. `workbook_rid` is the writer-assigned rId integer
@@ -157,6 +161,9 @@ struct EmissionPlan {
   // their payload remains available in `passthrough_kept`.
   std::vector<SheetRelsResult> sheet_rels;
 };
+
+/// Package path of the generated person list.
+inline constexpr std::string_view kPersonsPartPath = "xl/persons/person.xml";
 
 /// Builds the emission plan. Performs collision detection between
 /// generated and passthrough paths; collisions are logged via

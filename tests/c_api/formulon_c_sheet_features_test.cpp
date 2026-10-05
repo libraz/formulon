@@ -6,10 +6,13 @@
 
 #include <cstdint>
 #include <cstring>
+#include <string>
 
 #include "c_api/formulon_c.h"
+#include "c_api/parts/common.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
+#include "threaded_comment.h"
 #include "utils/error.h"
 
 namespace {
@@ -129,6 +132,34 @@ TEST_F(FormulonCApiSheetFeatures, CommentSetGetAndRemove) {
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", ""), 0);
   EXPECT_EQ(fm_sheet_get_comment_at(wb_, 0, 1, 1, &got),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+}
+
+TEST_F(FormulonCApiSheetFeatures, CommentRejectedOnThreadedCell) {
+  formulon::Workbook& wb = wb_->workbook();
+  const std::string person = "{11111111-AAAA-4BBB-8CCC-DDDDDDDDDDDD}";
+  ASSERT_TRUE(static_cast<bool>(wb.add_person(formulon::Person{person, "Alice", "alice@example.com", "AD"})));
+  formulon::ThreadedComment thread;
+  thread.id = "{22222222-1111-4222-8333-444444444444}";
+  thread.row = 2;
+  thread.col = 3;
+  thread.person_id = person;
+  thread.created = "2026-10-05T10:00:00.00";
+  thread.text = "Thread";
+  ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, thread)));
+  EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 2, 3, "Bob", "Note"),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kThreadedCommentInvalid));
+  fm_comment got{};
+  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 0, 2, 3, &got),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  // A neighbouring cell still takes a note.
+  EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 2, 4, "Bob", "Note"), 0);
+}
+
+TEST_F(FormulonCApiSheetFeatures, CommentReplaceKeepsRevisionUid) {
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
+  wb_->workbook().sheet(0).mutable_comments()[0].uid = "{AAAAAAAA-0000-4000-8000-000000000001}";
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", "World"), 0);
+  EXPECT_EQ(wb_->workbook().sheet(0).comments()[0].uid, "{AAAAAAAA-0000-4000-8000-000000000001}");
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentLookupDistinguishesAbsenceFromInvalidSheet) {

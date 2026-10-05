@@ -573,6 +573,46 @@ class Workbook {
   /// rId, and omits the relationship if `target` is not an emitted part.
   void add_workbook_relationship(std::string type, std::string target);
 
+  // ---------------------------------------------------------------------------
+  // Threaded comments and persons
+  // ---------------------------------------------------------------------------
+
+  /// The workbook's person list (`xl/persons/person.xml`) in file order.
+  const std::vector<Person>& persons() const noexcept { return persons_; }
+
+  /// Mutable person list for the reader; edits go through `add_person` /
+  /// `remove_person`.
+  std::vector<Person>& mutable_persons() noexcept { return persons_; }
+
+  /// Appends `person`. Fails with `kThreadedCommentInvalid` when the id is
+  /// not a brace-wrapped uppercase GUID, is already listed, or the display
+  /// name is empty.
+  Expected<void, Error> add_person(Person person);
+
+  /// Removes the person with `id`. Fails with `kThreadedCommentInvalid` when
+  /// no such person exists or a threaded comment or mention still names them.
+  Expected<void, Error> remove_person(std::string_view id);
+
+  /// Adds `comment` to sheet `sheet`. An empty `parent_id` opens a new thread
+  /// at `row`/`col`, which must hold neither a note nor a thread; a non-empty
+  /// one appends a reply to that thread, taking its anchor and ignoring
+  /// `row`/`col` and `done`. Ids, timestamps, persons and mention ranges are
+  /// validated; any violation fails with `kThreadedCommentInvalid` and leaves
+  /// the sheet unchanged.
+  Expected<void, Error> add_threaded_comment(std::size_t sheet, ThreadedComment comment);
+
+  /// Replaces the text and mentions of the comment with `id`.
+  Expected<void, Error> edit_threaded_comment(std::size_t sheet, std::string_view id, std::string text,
+                                              std::vector<Mention> mentions);
+
+  /// Sets the resolved state of the thread opened by `thread_id`, which must
+  /// name an opening comment, not a reply.
+  Expected<void, Error> set_thread_resolved(std::size_t sheet, std::string_view thread_id, bool done);
+
+  /// Removes the comment with `id`. Removing an opening comment removes its
+  /// whole thread; removing a reply removes that reply only.
+  Expected<void, Error> remove_threaded_comment(std::size_t sheet, std::string_view id);
+
   /// Read-only access to the verbatim workbook-level `<Relationship>`
   /// entries (from `xl/_rels/workbook.xml.rels`) whose Type URI the
   /// reader did not recognise. Captured so the writer can re-emit
@@ -946,6 +986,8 @@ class Workbook {
   // vbaProject, customXml, ...). Round-trip metadata only; the parts
   // themselves live in `passthrough_parts_`.
   std::vector<UnknownRelationship> unknown_workbook_rels_;
+  // Person list referenced by the sheets' threaded comments.
+  std::vector<Person> persons_;
   // Package-root relationships with unrecognised Type URIs (thumbnail,
   // digital-signature origin, and vendor extensions). Their target parts
   // remain in `passthrough_parts_`.
