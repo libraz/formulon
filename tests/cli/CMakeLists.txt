@@ -6,7 +6,11 @@
 # `FORMULON_CLI_PATH` so the tests do not depend on `$PATH`.
 
 set(FORMULON_CLI_TEST_SOURCES
-  cli_test.cpp
+  cli_commands_version_eval_test.cpp
+  cli_recalc_semantics_test.cpp
+  cli_atomic_paths_test.cpp
+  cli_dump_paginate_test.cpp
+  cli_test_support.cpp
   # `cli/file_io.cpp`: the atomic-write helper ships only in the CLI
   # binary, and a leaked descriptor cannot be observed from outside a
   # one-shot process, so it is compiled in and called directly.
