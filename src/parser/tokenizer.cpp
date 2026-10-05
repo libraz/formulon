@@ -398,7 +398,7 @@ const std::vector<Token>& Tokenizer::tokens() {
     // Dispatch on the leading byte.
     switch (c) {
       case '"':
-        scan_string();
+        scan_quoted('"', TokenKind::String, LexerErrorCode::UnterminatedString);
         continue;
       case '\'':
         // Inside a bracket an apostrophe is the ECMA-376 18.5.1.10
@@ -406,7 +406,7 @@ const std::vector<Token>& Tokenizer::tokens() {
         if (bracket_depth_ > 0) {
           scan_structured_ref_escape();
         } else {
-          scan_quoted_sheet_name();
+          scan_quoted('\'', TokenKind::SheetName, LexerErrorCode::UnterminatedSheetQuote);
         }
         continue;
       case '#':
@@ -717,19 +717,19 @@ void Tokenizer::scan_whitespace() {
   emit(TokenKind::Whitespace, start);
 }
 
-void Tokenizer::scan_string() {
+void Tokenizer::scan_quoted(char quote, TokenKind kind, LexerErrorCode unterminated) {
   const std::size_t start = byte_pos_;
   mark_start();
-  advance_one();  // consume leading '"'.
+  advance_one();  // consume the opening quote.
 
   std::string buf;
   bool terminated = false;
   while (byte_pos_ < source_.size()) {
     const char ch = source_[byte_pos_];
-    if (ch == '"') {
+    if (ch == quote) {
       // Doubled quote escape.
-      if (byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == '"') {
-        buf.push_back('"');
+      if (byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == quote) {
+        buf.push_back(quote);
         advance_one();
         advance_one();
         continue;
@@ -741,7 +741,7 @@ void Tokenizer::scan_string() {
     }
     const CodepointInfo info = peek_codepoint(byte_pos_);
     if (!info.valid) {
-      // Invalid UTF-8 inside a string: append the raw byte and advance.
+      // Invalid UTF-8 inside the quotes: append the raw byte and advance.
       buf.push_back(ch);
       advance_one();
       continue;
@@ -751,7 +751,7 @@ void Tokenizer::scan_string() {
   }
 
   Token t;
-  t.kind = TokenKind::String;
+  t.kind = kind;
   t.range = make_range();
   t.lexeme = std::string_view(source_.data() + start, byte_pos_ - start);
   // Intern the resolved payload into the arena so the view outlives `buf`.
@@ -759,49 +759,7 @@ void Tokenizer::scan_string() {
   tokens_.push_back(t);
 
   if (!terminated) {
-    record_error(LexerErrorCode::UnterminatedString, start);
-  }
-}
-
-void Tokenizer::scan_quoted_sheet_name() {
-  const std::size_t start = byte_pos_;
-  mark_start();
-  advance_one();  // consume leading '.
-
-  std::string buf;
-  bool terminated = false;
-  while (byte_pos_ < source_.size()) {
-    const char ch = source_[byte_pos_];
-    if (ch == '\'') {
-      if (byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == '\'') {
-        buf.push_back('\'');
-        advance_one();
-        advance_one();
-        continue;
-      }
-      advance_one();
-      terminated = true;
-      break;
-    }
-    const CodepointInfo info = peek_codepoint(byte_pos_);
-    if (!info.valid) {
-      buf.push_back(ch);
-      advance_one();
-      continue;
-    }
-    buf.append(source_.data() + byte_pos_, info.byte_len);
-    advance_one();
-  }
-
-  Token t;
-  t.kind = TokenKind::SheetName;
-  t.range = make_range();
-  t.lexeme = std::string_view(source_.data() + start, byte_pos_ - start);
-  t.text = arena_.intern(std::string_view(buf.data(), buf.size()));
-  tokens_.push_back(t);
-
-  if (!terminated) {
-    record_error(LexerErrorCode::UnterminatedSheetQuote, start);
+    record_error(unterminated, start);
   }
 }
 

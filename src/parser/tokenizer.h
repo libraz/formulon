@@ -128,8 +128,9 @@ class Tokenizer {
   // Per-kind scanners. Each assumes `byte_pos_` points at the first byte of
   // a token matching its expected prefix.
   void scan_whitespace();
-  void scan_string();
-  void scan_quoted_sheet_name();
+  // Scans a `quote`-delimited run with doubled-quote escapes: a string
+  // literal for `"`, a quoted sheet name for `'`.
+  void scan_quoted(char quote, TokenKind kind, LexerErrorCode unterminated);
   // Consumes an apostrophe inside `[...]` together with the codepoint it
   // escapes (`'#`, `''`, `'[`, `']`) as one `Ident` token, so an escaped
   // bracket never reaches the parser as bracket punctuation.

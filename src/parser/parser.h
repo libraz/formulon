@@ -198,6 +198,11 @@ class Parser {
   // reference. Returns a `Ref3D` node, or `nullptr` on a malformed cell
   // reference after recording a diagnostic.
   AstNode* parse_3d_ref(std::string_view sheet1, TextRange sheet1_range);
+  // Parses the part of a 3-D reference after its `!`: a cell, a cell range,
+  // a whole-column (`A:C`) or a whole-row (`1:3`) tail. `*is_range` is set
+  // when the tail names two distinct endpoints, in which case `*last` holds
+  // the second. Records a diagnostic and returns false on a malformed tail.
+  bool parse_3d_ref_tail(Reference* first, Reference* last, bool* is_range, TextRange* tail_range);
   // Parses the tail of a cross-workbook reference, from the `!` onwards.
   // The caller has identified the supporting workbook's 1-based index
   // (`[N]`) and the sheet name that followed the bracket, which is empty
@@ -239,6 +244,16 @@ class Parser {
   // Returns the column index encoded by an Ident token's letters; 0 means
   // not a valid column-letter run.
   static std::uint32_t decode_column_letters(std::string_view lex, bool* col_abs) noexcept;
+  // Decodes a whole-column endpoint (`A`, `$C`) into `out`'s column fields.
+  // Returns false when the token is not a valid column-letter run.
+  static bool decode_full_col_endpoint(const Token& tok, Reference* out) noexcept;
+  // Decodes a whole-row endpoint (`1`, `$3`) from an integer Number token
+  // into `out`'s row fields. Returns false when it is not a valid row.
+  static bool decode_full_row_endpoint(const Token& tok, Reference* out) noexcept;
+  // Builds the node for a whole-column / whole-row pair: `lhs` alone when
+  // both endpoints name the same column or row, otherwise a RangeOp over
+  // the two. The result spans [`lhs_range`, `rhs_range`].
+  AstNode* make_whole_axis_ref(const Reference& lhs, const Reference& rhs, TextRange lhs_range, TextRange rhs_range);
 
   // Promotes any tokenizer-level errors into `errors_`. Errors whose
   // source byte-range falls inside one of the parser-recognised
