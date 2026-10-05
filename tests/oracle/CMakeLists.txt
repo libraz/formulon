@@ -12,6 +12,7 @@ set(FORMULON_ORACLE_TEST_SOURCES
   oracle_anchor.cpp
   oracle_runner.cpp
   oracle_test.cpp
+  oracle_skip_registry_test.cpp
 )
 
 add_executable(formulon_oracle_tests ${FORMULON_ORACLE_TEST_SOURCES})
@@ -391,6 +392,8 @@ if(FORMULON_ORACLE_VARIANTS)
     oracle_runner.cpp
     roundtrip_authoring.cpp
     workbook_builder.cpp
+    workbook_builder_pivot.cpp
+    workbook_builder_print.cpp
     workbook_oracle_runner.cpp
     workbook_oracle_test.cpp
   )
@@ -522,6 +525,8 @@ add_executable(formulon_workbook_oracle_tests
   oracle_runner.cpp
   roundtrip_authoring.cpp
   workbook_builder.cpp
+  workbook_builder_pivot.cpp
+  workbook_builder_print.cpp
   workbook_oracle_runner.cpp
   workbook_oracle_test.cpp
 )
@@ -610,6 +615,8 @@ add_executable(formulon_workbook_builder_test
   json_reader.cpp
   oracle_runner.cpp
   workbook_builder.cpp
+  workbook_builder_pivot.cpp
+  workbook_builder_print.cpp
   workbook_builder_test.cpp
 )
 
