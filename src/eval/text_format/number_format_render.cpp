@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
@@ -40,6 +41,9 @@ namespace {
 //   * `=TEXT(1234, "[DBNum1]0")` -> `一二三四` (NOT `一千二百三十四`).
 //   * `=TEXT(1234, "[DBNum2]0")` -> `壱弐参四` (NOT `壱阡弐百参拾四`).
 //   * `=TEXT(1234, "[DBNum3]0")` -> `１２３４` (full-width Arabic).
+//
+// The exception is `[DBNum1]General`, whose integer part is positional
+// (`千二百三十四`); `render_numeric.cpp` owns it.
 //
 // Tables:
 //   * DBNum1: 〇一二三四五六七八九 (weak-form everyday kanji digits).
@@ -174,6 +178,33 @@ bool decimal_digits_all_zero(std::string_view digits) noexcept {
     }
   }
   return true;
+}
+
+void cap_integer_significant_digits(std::string* digits) {
+  constexpr std::size_t kSignificantDigits = 15u;
+  if (digits->size() <= kSignificantDigits) {
+    return;
+  }
+  const std::size_t original_length = digits->size();
+  std::string prefix = digits->substr(0, kSignificantDigits);
+  if ((*digits)[kSignificantDigits] >= '5') {
+    // Half-away-from-zero round-up, with carry propagation; an all-9s
+    // prefix carries out and grows by one digit (e.g. "999" -> "1000").
+    std::size_t i = prefix.size();
+    while (i > 0) {
+      --i;
+      if (prefix[i] != '9') {
+        ++prefix[i];
+        break;
+      }
+      prefix[i] = '0';
+      if (i == 0) {
+        prefix.insert(prefix.begin(), '1');
+      }
+    }
+  }
+  prefix.append(original_length - prefix.size(), '0');
+  *digits = std::move(prefix);
 }
 
 // --- Text-section walker ----------------------------------------------

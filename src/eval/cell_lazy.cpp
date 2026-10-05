@@ -25,6 +25,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "eval/text_format/display_text.h"
+#include "eval/text_format/number_format.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -237,57 +238,6 @@ const CellXf* resolve_cell_xf(std::string_view sheet_name, std::uint32_t row, st
   }
   const std::vector<CellXf>& xfs = workbook->styles().cell_xfs;
   return xf_index < xfs.size() ? &xfs[xf_index] : nullptr;
-}
-
-bool section_uses_color(std::string_view section) {
-  for (std::size_t i = 0; i + 4U < section.size(); ++i) {
-    if (section[i] != '[') {
-      continue;
-    }
-    const std::size_t close = section.find(']', i + 1U);
-    if (close == std::string_view::npos) {
-      break;
-    }
-    const std::string_view tag = section.substr(i + 1U, close - i - 1U);
-    if (tag == "Red" || tag == "Blue" || tag == "Green" || tag == "Yellow" || tag == "Magenta" || tag == "Cyan" ||
-        tag.rfind("Color", 0) == 0U) {
-      return true;
-    }
-    i = close;
-  }
-  return false;
-}
-
-// CELL("color") answers whether negative values use a colour. A one-section
-// number format applies to all numbers; in the usual multi-section form the
-// second section is the negative-number section. Semicolons in quoted text or
-// bracket directives do not divide format sections.
-bool number_format_colors_negative_values(std::string_view format) {
-  bool quoted = false;
-  std::size_t bracket_depth = 0;
-  std::size_t negative_start = std::string_view::npos;
-  std::size_t negative_end = format.size();
-  for (std::size_t i = 0; i < format.size(); ++i) {
-    const char c = format[i];
-    if (c == '"') {
-      quoted = !quoted;
-    } else if (!quoted && c == '[') {
-      ++bracket_depth;
-    } else if (!quoted && c == ']' && bracket_depth != 0) {
-      --bracket_depth;
-    } else if (!quoted && bracket_depth == 0 && c == ';') {
-      if (negative_start == std::string_view::npos) {
-        negative_start = i + 1U;
-      } else {
-        negative_end = i;
-        break;
-      }
-    }
-  }
-  if (negative_start == std::string_view::npos) {
-    return section_uses_color(format);
-  }
-  return section_uses_color(format.substr(negative_start, negative_end - negative_start));
 }
 
 std::string_view cell_prefix(const CellXf* xf) {
@@ -560,8 +510,10 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     }
     if (key == "color") {
       return Value::number(
-          number_format_colors_negative_values(number_format_for_xf(resolve_cell_xf(sheet, row, col, ctx), ctx)) ? 1.0
-                                                                                                                 : 0.0);
+          text_format::negative_section_has_color(number_format_for_xf(resolve_cell_xf(sheet, row, col, ctx), ctx),
+                                                  text_format::FormatDialect::kStored)
+              ? 1.0
+              : 0.0);
     }
     if (key == "format") {
       return arena_text(arena, cell_format_code(resolve_cell_xf(sheet, row, col, ctx)));

@@ -17,9 +17,11 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <string>
 #include <string_view>
 
+#include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
 
@@ -83,19 +85,16 @@ void best_rational(double target, long long max_p, long long max_q, long long* o
   *out_den = best_den < 1 ? 1 : best_den;
 }
 
-// Emit a non-negative integer `value` right-aligned to `width` characters
+// Emit the non-negative integer `digits` right-aligned to `width` characters
 // using the placeholder kinds in `[begin, end)`. Each placeholder kind
 // determines how unused leading positions render: `0` -> '0' pad, `?` ->
 // space pad, `#` -> nothing emitted. The DBNum mapping applies to digits
 // (and to `0`-pad positions) but never to spaces or absent positions.
-void emit_fraction_digits(const Section& section, std::string_view fmt, long long value, int begin, int end,
-                          std::string& out) {
-  (void)fmt;
+void emit_fraction_digits(const Section& section, std::string_view digits, int begin, int end, std::string& out) {
   const int width = end - begin;
   if (width <= 0) {
     return;
   }
-  std::string digits = std::to_string(value);
   if (static_cast<int>(digits.size()) > width) {
     // Overflow: Excel never produces this for our caps, but be defensive.
     // Emit the digits verbatim (the widest available run cap is enforced
@@ -139,11 +138,11 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
   // Compute integer part and fraction target. When no integer group is
   // present (`?/?`-style improper fractions), the search runs against the
   // full magnitude and the numerator is allowed to exceed 1.
-  long long integer_part = 0;
+  double integer_part = 0.0;
   double target = abs_v;
   if (has_int_group) {
-    integer_part = static_cast<long long>(std::floor(abs_v));
-    target = abs_v - static_cast<double>(integer_part);
+    integer_part = std::floor(abs_v);
+    target = abs_v - integer_part;
   }
 
   // Run the bounded Stern-Brocot search.
@@ -161,15 +160,18 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
   // (num == den) and we have an integer group, increment the integer and
   // zero out the fraction.
   if (has_int_group && num == den) {
-    integer_part += 1;
+    integer_part += 1.0;
     num = 0;
     den = 1;
   }
-  // A whole value has no fractional component to render. Emitting the
-  // numerator/denominator placeholders here produced e.g. `2 0/1` for
-  // `# ?/?`, whereas Excel suppresses the entire fraction (including its
-  // separating space).
+  // A whole value shows no fraction, but keeps its width: the separator,
+  // numerator, slash and denominator each become blanks (`59    ` for
+  // `# ?/?`), and a zero integer is shown even under `#`.
   const bool suppress_fraction = has_int_group && num == 0;
+  char int_buf[400];
+  const int int_len = std::snprintf(int_buf, sizeof(int_buf), "%.0f", integer_part);
+  std::string int_digits(int_buf, int_len > 0 ? static_cast<std::size_t>(int_len) : 0U);
+  cap_integer_significant_digits(&int_digits);
 
   std::string result;
   if (negative) {
@@ -218,15 +220,23 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
     // placeholder is `#`; otherwise the leading-pad behaviour from
     // `emit_fraction_digits` handles `0` and `?` correctly.
     const Tok lead_kind = section.tokens[static_cast<std::size_t>(int_begin)].kind;
-    if (integer_part == 0 && lead_kind == Tok::DigitOpt) {
+    if (integer_part == 0.0 && lead_kind == Tok::DigitOpt && !suppress_fraction) {
       // Emit nothing for the integer group.
     } else {
-      emit_fraction_digits(section, fmt, integer_part, int_begin, int_end, result);
+      emit_fraction_digits(section, int_digits, int_begin, int_end, result);
     }
     i = static_cast<std::size_t>(int_end);
     if (suppress_fraction) {
-      // Retain only suffix literals following the denominator group.
-      i = static_cast<std::size_t>(den_end);
+      for (; i < static_cast<std::size_t>(den_end); ++i) {
+        const Token& tk = section.tokens[i];
+        if (tk.kind == Tok::Literal) {
+          for (std::size_t k = tk.lit_begin; k < tk.lit_end; k += utf8_scalar_width(fmt, k)) {
+            result.push_back(' ');
+          }
+        } else {
+          result.push_back(' ');
+        }
+      }
     } else {
       // 3) Literals between integer group and numerator group (typically a
       // single space).
@@ -245,7 +255,7 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
     return;
   }
   // 4) Numerator group.
-  emit_fraction_digits(section, fmt, num, num_begin, num_end, result);
+  emit_fraction_digits(section, std::to_string(num), num_begin, num_end, result);
   i = static_cast<std::size_t>(num_end);
   // 5) Literals up to the slash (including the slash itself).
   while (i <= static_cast<std::size_t>(slash_index)) {
@@ -253,7 +263,7 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
     ++i;
   }
   // 6) Denominator group.
-  emit_fraction_digits(section, fmt, den, den_begin, den_end, result);
+  emit_fraction_digits(section, std::to_string(den), den_begin, den_end, result);
   i = static_cast<std::size_t>(den_end);
   // 7) Trailing literals.
   while (i < n_tokens) {

@@ -21,38 +21,56 @@
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_date.h"
 #include "eval/text_format/render_numeric.h"
+#include "utils/date_time.h"
 
 namespace formulon {
 namespace text_format {
+namespace {
 
-FormatStatus apply_format(double value, std::string_view format, std::string_view original_text, std::string& out,
-                          bool date1904) {
-  using number_format_detail::CondOp;
-  using number_format_detail::Section;
-  if (format.empty()) {
-    return FormatStatus::kOk;
-  }
+using number_format_detail::CondOp;
+using number_format_detail::Section;
+
+// Last serial of the 1900 calendar (9999-12-31). The 1904 system ends the
+// same day, `kDate1904EpochGap` serials earlier.
+constexpr double kMaxDateSerial1900 = 2958465.0;
+
+// A format code split into sections. The views in `raw` point into
+// `normalized`, so a `ParsedFormat` is filled in place and never moved.
+struct ParsedFormat {
+  std::string normalized;
+  std::vector<std::string_view> raw;
+  std::vector<Section> sections;
+};
+
+void parse_format(std::string_view format, FormatDialect dialect, ParsedFormat& parsed) {
   // Normalise the ja-JP full-width syntax once. All section/string views and
   // literal offsets below refer to this owned buffer for the duration of the
   // render; quoted and escaped payloads remain byte-for-byte unchanged.
-  const std::string normalized_format = number_format_detail::normalize_ja_jp_format_syntax(format);
-  const auto sections_raw = number_format_detail::split_sections(normalized_format);
-  if (sections_raw.empty()) {
+  parsed.normalized = number_format_detail::normalize_ja_jp_format_syntax(format);
+  parsed.raw = number_format_detail::split_sections(parsed.normalized);
+  parsed.sections.reserve(parsed.raw.size());
+  for (const auto& raw : parsed.raw) {
+    Section s;
+    number_format_detail::tokenize_section(raw, s, dialect);
+    number_format_detail::classify(s, raw);
+    parsed.sections.push_back(std::move(s));
+  }
+}
+
+}  // namespace
+
+FormatStatus apply_format(double value, std::string_view format, std::string& out, bool date1904,
+                          FormatDialect dialect) {
+  if (format.empty()) {
     return FormatStatus::kOk;
   }
-  std::vector<Section> sections;
-  sections.reserve(sections_raw.size());
-  for (const auto& raw : sections_raw) {
-    Section s;
-    number_format_detail::tokenize_section(raw, s);
-    number_format_detail::classify(s, raw);
-    sections.push_back(std::move(s));
+  ParsedFormat parsed;
+  parse_format(format, dialect, parsed);
+  const std::vector<std::string_view>& sections_raw = parsed.raw;
+  const std::vector<Section>& sections = parsed.sections;
+  if (sections.empty()) {
+    return FormatStatus::kOk;
   }
-
-  // Caller is passing `original_text`: if the value is text (non-numeric
-  // source) and we have a text section (index 3 for 4-section formats; any
-  // `@` token in a single-section format also applies), route there.
-  const bool has_original_text = !original_text.empty();
 
   // Returns true if `op(v, pred)` holds; `kNone` is treated as the always-true
   // unconditional sentinel.
@@ -93,15 +111,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
   int chosen = 0;
   const bool any_predicate = (!sections.empty() && sections[0].cond_op != CondOp::kNone) ||
                              (sections.size() >= 2 && sections[1].cond_op != CondOp::kNone);
-  if (has_original_text) {
-    if (sections.size() >= 4) {
-      chosen = 3;
-    } else {
-      // Single-section with an `@`: route through the numeric walker but
-      // `@` substitutes the text.
-      chosen = 0;
-    }
-  } else if (any_predicate) {
+  if (any_predicate) {
     used_conditional = true;
     chosen = -1;
     // Walk the first two sections, picking the first whose predicate holds.
@@ -189,25 +199,55 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
     }
   }
 
-  if (section.is_text ||
-      (has_original_text && !section.is_date && section.integer_zero_digits == 0 && section.integer_opt_digits == 0 &&
-       section.integer_pad_digits == 0 && section.fraction_zero_digits == 0 && section.fraction_opt_digits == 0 &&
-       section.fraction_pad_digits == 0)) {
-    number_format_detail::render_text_section(section, raw_fmt, original_text, out);
+  if (section.is_text) {
+    number_format_detail::render_text_section(section, raw_fmt, std::string_view{}, out);
     return FormatStatus::kOk;
   }
   if (section.is_date) {
-    // Excel rejects out-of-range date serials from TEXT: the valid range is
-    // [0, 2958465] (the latter is 9999-12-31). Surface as #VALUE! rather than
-    // silently emitting an empty string.
-    if (render_value < 0.0 || render_value > 2958465.0) {
-      return FormatStatus::kValueError;
+    // The calendar runs from serial 0 to 9999-12-31. The 1904 system also
+    // shows a negative serial, as its magnitude behind a leading minus.
+    const double max_serial = date1904 ? kMaxDateSerial1900 - date_time::kDate1904EpochGap : kMaxDateSerial1900;
+    const double min_serial = date1904 ? -max_serial : 0.0;
+    if (render_value < min_serial || render_value > max_serial) {
+      return FormatStatus::kOverflow;
+    }
+    if (render_value < 0.0) {
+      out.push_back('-');
+      render_value = -render_value;
     }
     number_format_detail::render_date(section, raw_fmt, render_value, out, date1904);
     return FormatStatus::kOk;
   }
   number_format_detail::render_numeric(section, raw_fmt, render_value, out);
   return FormatStatus::kOk;
+}
+
+FormatStatus apply_text_format(std::string_view text, std::string_view format, std::string& out,
+                               FormatDialect dialect) {
+  ParsedFormat parsed;
+  parse_format(format, dialect, parsed);
+  std::size_t chosen = 0;
+  if (parsed.sections.size() >= 4U) {
+    chosen = 3U;
+  } else if (parsed.sections.size() != 1U || !parsed.sections[0].is_text) {
+    out.append(text);
+    return FormatStatus::kOk;
+  }
+  const Section& section = parsed.sections[chosen];
+  if (section.has_invalid_bracket) {
+    return FormatStatus::kValueError;
+  }
+  number_format_detail::render_text_section(section, parsed.raw[chosen], text, out);
+  return FormatStatus::kOk;
+}
+
+bool negative_section_has_color(std::string_view format, FormatDialect dialect) {
+  ParsedFormat parsed;
+  parse_format(format, dialect, parsed);
+  if (parsed.sections.empty()) {
+    return false;
+  }
+  return parsed.sections[parsed.sections.size() >= 2U ? 1U : 0U].has_color;
 }
 
 }  // namespace text_format

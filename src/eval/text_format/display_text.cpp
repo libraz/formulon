@@ -19,52 +19,17 @@ namespace {
 
 constexpr std::string_view kOverflowText = "########";
 
-// True when `code` has a section that applies to text: a fourth section, or a
-// single section containing `@`.
-bool has_text_section(std::string_view code) {
-  const auto sections = number_format_detail::split_sections(code);
-  if (sections.size() >= 4U) {
-    return true;
-  }
-  if (sections.size() != 1U) {
-    return false;
-  }
-  number_format_detail::Section section;
-  number_format_detail::tokenize_section(sections[0], section);
-  number_format_detail::classify(section, sections[0]);
-  return section.is_text;
-}
-
 DisplayText render_text(std::string_view text, std::string_view code) {
   DisplayText result;
-  if (code.empty() || !has_text_section(code)) {
-    result.text = std::string(text);
-    return result;
-  }
-  // `apply_format` routes to the text section only for a non-empty original
-  // text, so an empty string is rendered through a placeholder byte that is
-  // removed afterwards.
-  constexpr char kPlaceholder = '\x01';
-  const std::string probe = text.empty() ? std::string(1, kPlaceholder) : std::string(text);
-  std::string out;
-  if (apply_format(0.0, code, probe, out) != FormatStatus::kOk) {
+  if (apply_text_format(text, code, result.text, FormatDialect::kStored) != FormatStatus::kOk) {
     result.text = std::string(text);
     result.status = DisplayStatus::kInvalidFormat;
-    return result;
   }
-  if (text.empty()) {
-    const auto pos = out.find(kPlaceholder);
-    if (pos != std::string::npos) {
-      out.erase(pos, 1U);
-    }
-  }
-  result.text = std::move(out);
   return result;
 }
 
 DisplayText render_number(double number, std::string_view code, bool date1904) {
   DisplayText result;
-  std::string general;
   if (!std::isfinite(number)) {
     result.text = std::string(kOverflowText);
     result.status = DisplayStatus::kOverflow;
@@ -75,28 +40,25 @@ DisplayText render_number(double number, std::string_view code, bool date1904) {
   bool general_only = code.empty();
   if (sections.size() == 1U) {
     number_format_detail::Section section;
-    number_format_detail::tokenize_section(sections[0], section);
+    number_format_detail::tokenize_section(sections[0], section, FormatDialect::kStored);
     number_format_detail::classify(section, sections[0]);
     general_only = general_only || section.is_text;
   }
   const std::string_view effective = general_only ? std::string_view("General") : code;
   std::string out;
-  if (apply_format(number, effective, out, date1904) == FormatStatus::kOk) {
-    result.text = std::move(out);
-    return result;
+  switch (apply_format(number, effective, out, date1904, FormatDialect::kStored)) {
+    case FormatStatus::kOk:
+      result.text = std::move(out);
+      break;
+    case FormatStatus::kOverflow:
+      result.text = std::string(kOverflowText);
+      result.status = DisplayStatus::kOverflow;
+      break;
+    case FormatStatus::kValueError:
+      apply_format(number, "General", result.text, date1904, FormatDialect::kStored);
+      result.status = DisplayStatus::kInvalidFormat;
+      break;
   }
-  // Failure is either an out-of-range serial or a malformed code; a valid
-  // serial tells them apart.
-  std::string probe;
-  const bool code_valid = apply_format(1.0, effective, probe, date1904) == FormatStatus::kOk;
-  if (code_valid) {
-    result.text = std::string(kOverflowText);
-    result.status = DisplayStatus::kOverflow;
-    return result;
-  }
-  apply_format(number, "General", general, date1904);
-  result.text = std::move(general);
-  result.status = DisplayStatus::kInvalidFormat;
   return result;
 }
 

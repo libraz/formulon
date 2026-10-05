@@ -468,16 +468,33 @@ namespace {
 // The eight color names a ja-JP format string may use, listed in the order
 // the English UI names them (black, blue, cyan, green, magenta, red, white,
 // yellow). Each is a single UTF-8 CJK character.
-constexpr std::string_view kColorNames[] = {"黒", "青", "水", "緑", "紫", "赤", "白", "黄"};
+constexpr std::string_view kLocalizedColorNames[] = {"黒", "青", "水", "緑", "紫", "赤", "白", "黄"};
 
-// Localized spelling of the indexed `ColorN` form.
-constexpr std::string_view kColorIndexPrefix = "色";
+// The same eight colors as a stored format code spells them.
+constexpr std::string_view kStoredColorNames[] = {"Black",   "Blue", "Cyan",  "Green",
+                                                  "Magenta", "Red",  "White", "Yellow"};
+
+// Localized and stored spellings of the indexed `ColorN` form.
+constexpr std::string_view kLocalizedColorIndexPrefix = "色";
+constexpr std::string_view kStoredColorIndexPrefix = "Color";
 
 // Highest index the indexed form accepts; `色57` is rejected.
 constexpr int kMaxColorIndex = 56;
 
 bool starts_with(std::string_view s, std::string_view prefix) noexcept {
   return s.size() >= prefix.size() && s.substr(0, prefix.size()) == prefix;
+}
+
+bool starts_with_ascii_ci(std::string_view s, std::string_view prefix) noexcept {
+  if (s.size() < prefix.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < prefix.size(); ++i) {
+    if (ascii_lower(s[i]) != ascii_lower(prefix[i])) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // Reads one decimal digit at `body[i]`, accepting the ASCII digits and their
@@ -503,18 +520,28 @@ int take_digit(std::string_view body, std::size_t& i) noexcept {
 
 }  // namespace
 
-bool is_color_specifier(std::string_view body) noexcept {
-  for (const std::string_view name : kColorNames) {
-    if (starts_with(body, name)) {
-      return true;
+bool is_color_specifier(std::string_view body, FormatDialect dialect) noexcept {
+  const bool stored = dialect == FormatDialect::kStored;
+  if (stored) {
+    for (const std::string_view name : kStoredColorNames) {
+      if (starts_with_ascii_ci(body, name)) {
+        return true;
+      }
+    }
+  } else {
+    for (const std::string_view name : kLocalizedColorNames) {
+      if (starts_with(body, name)) {
+        return true;
+      }
     }
   }
-  if (!starts_with(body, kColorIndexPrefix)) {
+  const std::string_view prefix = stored ? kStoredColorIndexPrefix : kLocalizedColorIndexPrefix;
+  if (!(stored ? starts_with_ascii_ci(body, prefix) : starts_with(body, prefix))) {
     return false;
   }
-  // `色` then optional blanks then the index. Trailing bytes after the digit
-  // run are ignored the same way they are after a name.
-  std::size_t i = kColorIndexPrefix.size();
+  // The index prefix then optional blanks then the index. Trailing bytes
+  // after the digit run are ignored the same way they are after a name.
+  std::size_t i = prefix.size();
   while (i < body.size() && (body[i] == ' ' || body[i] == '\t')) {
     ++i;
   }

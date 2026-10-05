@@ -6,6 +6,7 @@
 
 #include "eval/text_format/render_numeric.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -23,45 +24,6 @@ namespace formulon {
 namespace text_format {
 namespace number_format_detail {
 namespace {
-
-// Zeros every digit of `digits` past the 15th significant one, rounding the
-// 15th digit half-away-from-zero against the 16th (matching
-// `round_display_decimal`'s tie direction). `digits` holds decimal digits
-// only (no sign, no leading zeros besides a lone "0"); its length is
-// preserved so the value's magnitude does not change, only its trailing
-// digits collapse to zero. A no-op when `digits->size() <= 15`.
-//
-// Companion to the `rendered_decimals` clamp above, which caps *fractional*
-// significant digits the same way: once 15 significant digits have been
-// emitted, the rest are unrepresentable precision from the binary double,
-// not real information (`2^60` prints as the exact 19-digit integer via
-// `%.0f`, but Excel displays `1152921504606850000`).
-void cap_integer_significant_digits(std::string* digits) {
-  constexpr std::size_t kSignificantDigits = 15u;
-  if (digits->size() <= kSignificantDigits) {
-    return;
-  }
-  const std::size_t original_length = digits->size();
-  std::string prefix = digits->substr(0, kSignificantDigits);
-  if ((*digits)[kSignificantDigits] >= '5') {
-    // Half-away-from-zero round-up, with carry propagation; an all-9s
-    // prefix carries out and grows by one digit (e.g. "999" -> "1000").
-    std::size_t i = prefix.size();
-    while (i > 0) {
-      --i;
-      if (prefix[i] != '9') {
-        ++prefix[i];
-        break;
-      }
-      prefix[i] = '0';
-      if (i == 0) {
-        prefix.insert(prefix.begin(), '1');
-      }
-    }
-  }
-  prefix.append(original_length - prefix.size(), '0');
-  *digits = std::move(prefix);
-}
 
 // Rounds `v` to `decimals` fractional places, half-away-from-zero. The
 // result's integer and fractional digit strings are written into
@@ -256,6 +218,92 @@ void format_general(std::string& out, double v) {
     }
   }
   out.append(s.data(), end);
+}
+
+// Appends one 4-digit group (leading zeros allowed, value non-zero) as kanji
+// with 千/百/十 place units; a 1 before a place unit is dropped (1234 ->
+// 千二百三十四).
+void append_kanji_group(std::string& out, std::string_view group) {
+  static const char* const kPlaceUnits[4] = {"", "\xE5\x8D\x81", "\xE7\x99\xBE", "\xE5\x8D\x83"};  // 十 百 千
+  for (std::size_t i = 0; i < group.size(); ++i) {
+    const char digit = group[i];
+    const std::size_t place = group.size() - 1U - i;
+    if (digit == '0') {
+      continue;
+    }
+    if (place == 0U || digit != '1') {
+      append_digit_dbnum(out, DbNumMode::kDBNum1, digit);
+    }
+    out.append(kPlaceUnits[place]);
+  }
+}
+
+// Appends the integer `digits` as positional kanji in 4-digit groups under
+// 万/億/兆. A part above 兆 longer than one group has no larger unit and is
+// spelled digit by digit.
+void append_kanji_integer(std::string& out, std::string_view digits) {
+  static const char* const kGroupUnits[4] = {"", "\xE4\xB8\x87", "\xE5\x84\x84", "\xE5\x85\x86"};  // 万 億 兆
+  constexpr std::size_t kGroupDigits = 4U;
+  constexpr std::size_t kTopGroup = 3U;
+  const std::size_t first = digits.find_first_not_of('0');
+  if (first == std::string_view::npos) {
+    append_digit_dbnum(out, DbNumMode::kDBNum1, '0');
+    return;
+  }
+  digits.remove_prefix(first);
+  const std::size_t lower_digits = kTopGroup * kGroupDigits;
+  if (digits.size() > lower_digits) {
+    const std::string_view top = digits.substr(0, digits.size() - lower_digits);
+    if (top.size() <= kGroupDigits) {
+      append_kanji_group(out, top);
+    } else {
+      append_chars_dbnum(out, DbNumMode::kDBNum1, top);
+    }
+    out.append(kGroupUnits[kTopGroup]);
+    digits.remove_prefix(top.size());
+  }
+  std::size_t unit = (digits.size() + kGroupDigits - 1U) / kGroupDigits;
+  std::size_t begin = 0;
+  while (unit > 0U) {
+    --unit;
+    const std::size_t end = digits.size() - unit * kGroupDigits;
+    const std::string_view group = digits.substr(begin, end - begin);
+    if (group.find_first_not_of('0') != std::string_view::npos) {
+      append_kanji_group(out, group);
+      out.append(kGroupUnits[unit]);
+    }
+    begin = end;
+  }
+}
+
+// `[DBNum1]General`: the integer part in positional kanji, the fraction digit
+// by digit. A magnitude General would show in scientific form is written out
+// to 15 significant digits instead (1E+15 -> 千兆).
+void append_dbnum1_general(std::string& out, double abs_v) {
+  std::string general;
+  format_general(general, abs_v);
+  std::string int_digits;
+  std::string frac_digits;
+  if (general.find('E') == std::string::npos) {
+    const std::size_t dot = general.find('.');
+    int_digits = general.substr(0, dot);
+    frac_digits = dot == std::string::npos ? std::string() : general.substr(dot + 1U);
+  } else if (abs_v >= 1.0) {
+    const int exp10 = static_cast<int>(std::floor(std::log10(abs_v)));
+    bool negative = false;
+    format_fixed_digits(abs_v, std::max(0, 14 - exp10), &negative, &int_digits, &frac_digits);
+    while (!frac_digits.empty() && frac_digits.back() == '0') {
+      frac_digits.pop_back();
+    }
+  } else {
+    append_chars_dbnum(out, DbNumMode::kDBNum1, general);
+    return;
+  }
+  append_kanji_integer(out, int_digits);
+  if (!frac_digits.empty()) {
+    out.push_back('.');
+    append_chars_dbnum(out, DbNumMode::kDBNum1, frac_digits);
+  }
 }
 
 }  // namespace
@@ -550,10 +598,14 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
         // Render through the Excel-specific 11-character `General` formatter
         // on the absolute value; the sign prefix was already emitted above
         // (for single-section formats) or stripped by the section selector
-        // (two-section formats pass an already-positive `value`). A
-        // `[DBNum1-3]` qualifier applies to General the same as it does to
-        // every digit token elsewhere in this function; non-digit bytes
-        // (the decimal point, exponent marker, ...) pass through unchanged.
+        // (two-section formats pass an already-positive `value`).
+        // `[DBNum1]` spells the integer part positionally; `[DBNum2-3]`
+        // substitute digit by digit, and non-digit bytes (the decimal
+        // point, exponent marker, ...) pass through unchanged.
+        if (section.dbnum_mode == DbNumMode::kDBNum1) {
+          append_dbnum1_general(result, std::fabs(value));
+          break;
+        }
         std::string general;
         format_general(general, std::fabs(value));
         append_chars_dbnum(result, section.dbnum_mode, general);

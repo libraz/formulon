@@ -831,95 +831,27 @@ const ProbeRow kProbeRows[] = {
     {"DBNum1#/blank@1904", true, R"fmt([DBNum1]#,##0)fmt", Value::blank(), DisplayStatus::kOk, ""},
 };
 
-// Rows whose Excel text the engine does not reproduce; the engine's own
-// output must keep differing so a fix surfaces here.
-const char* const kKnownDivergences[] = {
-    "red-neg/-1",
-    "red-neg/-1234.5678",
-    "fraction/0",
-    "fraction/59",
-    "fraction/60",
-    "fraction/61",
-    "fraction/-1",
-    "fraction/2958465",
-    "fraction/2958466",
-    "fraction/1e-05",
-    "fraction/1000000000000000.0",
-    "fraction/123456789012345678",
-    "date/0",
-    "date/0.5",
-    "date/1e-05",
-    "ggge/0",
-    "ggge/0.5",
-    "ggge/1e-05",
-    "DBNum1/59",
-    "DBNum1/60",
-    "DBNum1/61",
-    "DBNum1/2958465",
-    "DBNum1/2958466",
-    "DBNum1/1234.5678",
-    "DBNum1/-1234.5678",
-    "DBNum1/1000000000000000.0",
-    "DBNum1/123456789012345678",
-    "red-neg/-1@1904",
-    "red-neg/-1234.5678@1904",
-    "fraction/0@1904",
-    "fraction/59@1904",
-    "fraction/60@1904",
-    "fraction/61@1904",
-    "fraction/-1@1904",
-    "fraction/2958465@1904",
-    "fraction/2958466@1904",
-    "fraction/1e-05@1904",
-    "fraction/1000000000000000.0@1904",
-    "fraction/123456789012345678@1904",
-    "date/-1@1904",
-    "date/2958465@1904",
-    "date/-1234.5678@1904",
-    "time/-1@1904",
-    "time/2958465@1904",
-    "time/-1234.5678@1904",
-    "[h]:mm/-1@1904",
-    "[h]:mm/2958465@1904",
-    "[h]:mm/-1234.5678@1904",
-    "ggge/-1@1904",
-    "ggge/2958465@1904",
-    "ggge/-1234.5678@1904",
-    "aaaa/-1@1904",
-    "aaaa/2958465@1904",
-    "aaaa/-1234.5678@1904",
-    "DBNum1/59@1904",
-    "DBNum1/60@1904",
-    "DBNum1/61@1904",
-    "DBNum1/2958465@1904",
-    "DBNum1/2958466@1904",
-    "DBNum1/1234.5678@1904",
-    "DBNum1/-1234.5678@1904",
-    "DBNum1/1000000000000000.0@1904",
-    "DBNum1/123456789012345678@1904",
-};
-
-bool is_known_divergence(const std::string& label) {
-  for (const char* known : kKnownDivergences) {
-    if (label == known) {
-      return true;
-    }
-  }
-  return false;
-}
-
 TEST(DisplayText, ProbeTable) {
   for (const ProbeRow& row : kProbeRows) {
     SCOPED_TRACE(row.label);
     const DisplayText got = format_value_for_display(row.value, row.code, row.date1904);
-    const bool matches = got.status == row.status && got.text == row.text;
-    if (is_known_divergence(row.label)) {
-      EXPECT_FALSE(matches) << "known divergence now matches Excel; drop it from the list";
-    } else {
-      EXPECT_TRUE(matches) << "got [" << got.text << "] status " << static_cast<int>(got.status) << ", want ["
-                           << row.text << "] status " << static_cast<int>(row.status);
-    }
+    EXPECT_EQ(got.text, row.text);
+    EXPECT_EQ(got.status, row.status);
   }
+}
+
+TEST(DisplayText, StoredDialectAcceptsEnglishColor) {
+  // A stored format code spells colours in English; the ja-JP TEXT() spelling
+  // is not a colour there and makes the code malformed.
+  const DisplayText red = format_value_for_display(Value::number(-1234.5678), "#,##0;[Red]-#,##0", false);
+  EXPECT_EQ(red.status, DisplayStatus::kOk);
+  EXPECT_EQ(red.text, "-1,235");
+  const DisplayText indexed = format_value_for_display(Value::number(5), "[Color10]0.00", false);
+  EXPECT_EQ(indexed.status, DisplayStatus::kOk);
+  EXPECT_EQ(indexed.text, "5.00");
+  const DisplayText localized = format_value_for_display(Value::number(-1), "0;[赤]-0", false);
+  EXPECT_EQ(localized.status, DisplayStatus::kInvalidFormat);
+  EXPECT_EQ(localized.text, "-1");
 }
 
 TEST(DisplayText, NegativeDateOverflows) {

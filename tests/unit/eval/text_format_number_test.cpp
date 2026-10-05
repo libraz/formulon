@@ -340,8 +340,20 @@ TEST(NumberFormatSections, FourSectionsNumericValueUsesFirst) {
 
 TEST(NumberFormatSections, TextSectionIsReachableThroughPublicFormatter) {
   std::string out;
-  EXPECT_EQ(apply_format(0.0, "0.0;(0.0);\"z\";\"text: \"@", "abc", out), FormatStatus::kOk);
+  EXPECT_EQ(apply_text_format("abc", "0.0;(0.0);\"z\";\"text: \"@", out), FormatStatus::kOk);
   EXPECT_EQ(out, "text: abc");
+}
+
+TEST(NumberFormatSections, EmptyTextTakesTheTextSection) {
+  std::string out;
+  EXPECT_EQ(apply_text_format("", "0;0;0;\"<\"@\">\"", out), FormatStatus::kOk);
+  EXPECT_EQ(out, "<>");
+}
+
+TEST(NumberFormatSections, TextWithoutATextSectionIsUnchanged) {
+  std::string out;
+  EXPECT_EQ(apply_text_format("abc", "0.00", out), FormatStatus::kOk);
+  EXPECT_EQ(out, "abc");
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +383,29 @@ TEST(NumberFormatBracketed, EnglishColorNameIsValueError) {
   EXPECT_EQ(apply_format(5.0, "[Blue]0.00", out), FormatStatus::kValueError);
   EXPECT_EQ(apply_format(5.0, "[green]0.00", out), FormatStatus::kValueError);
   EXPECT_EQ(apply_format(5.0, "[Color12]0.00", out), FormatStatus::kValueError);
+}
+
+TEST(NumberFormatBracketed, StoredDialectTakesEnglishColorNames) {
+  // A stored cell format spells colours in English, case-insensitively, and
+  // the ja-JP names are not colours there.
+  std::string out;
+  for (const char* code : {"[Black]0.00", "[Blue]0.00", "[Cyan]0.00", "[Green]0.00", "[Magenta]0.00", "[Red]0.00",
+                           "[White]0.00", "[Yellow]0.00", "[red]0.00", "[Color1]0.00", "[Color56]0.00"}) {
+    out.clear();
+    EXPECT_EQ(apply_format(5.0, code, out, false, FormatDialect::kStored), FormatStatus::kOk) << code;
+    EXPECT_EQ(out, "5.00") << code;
+  }
+  EXPECT_EQ(apply_format(5.0, "[Color57]0.00", out, false, FormatDialect::kStored), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[\xE8\xB5\xA4]0.00", out, false, FormatDialect::kStored),  // [赤]
+            FormatStatus::kValueError);
+}
+
+TEST(NumberFormatBracketed, NegativeSectionColorFollowsTheDialect) {
+  EXPECT_TRUE(negative_section_has_color("0;[Red]0", FormatDialect::kStored));
+  EXPECT_FALSE(negative_section_has_color("[Red]0;0", FormatDialect::kStored));
+  EXPECT_TRUE(negative_section_has_color("[Color3]0", FormatDialect::kStored));
+  EXPECT_FALSE(negative_section_has_color("0;[Red]0", FormatDialect::kLocalized));
+  EXPECT_TRUE(negative_section_has_color("0;[\xE8\xB5\xA4]0", FormatDialect::kLocalized));
 }
 
 TEST(NumberFormatBracketed, ColorNameMatchesAsAPrefix) {
@@ -557,12 +592,12 @@ TEST(NumberFormatGeneral, JaJpKeywordMatchesEnglishGeneral) {
 }
 
 TEST(NumberFormatGeneral, JaJpKeywordHonoursDbNumQualifier) {
-  // A `[DBNum1-3]` qualifier applies to General's digit output the same
-  // way it applies to a digit-token format; oracle-verified as per-ASCII-
-  // digit substitution (see tests/oracle/cases/text_format.yaml
-  // text_dbnum1), not full positional kanji-numeral conversion.
+  // `[DBNum1]` spells General's integer part positionally (Excel's
+  // Range.Text for `[DBNum1]General`), unlike a digit-token format such as
+  // `[DBNum1]0`, which substitutes per digit (oracle case text_dbnum1).
+  // `[DBNum3]` stays a per-digit substitution.
   EXPECT_EQ(Render(1234.0, "[DBNum1]G/\xE6\xA8\x99\xE6\xBA\x96"),
-            "\xE4\xB8\x80\xE4\xBA\x8C\xE4\xB8\x89\xE5\x9B\x9B");  // 一二三四
+            "\xE5\x8D\x83\xE4\xBA\x8C\xE7\x99\xBE\xE4\xB8\x89\xE5\x8D\x81\xE5\x9B\x9B");  // 千二百三十四
   EXPECT_EQ(Render(1234.0, "[DBNum3]G/\xE6\xA8\x99\xE6\xBA\x96"),
             "\xEF\xBC\x91\xEF\xBC\x92\xEF\xBC\x93\xEF\xBC\x94");  // １２３４
 }
@@ -609,10 +644,15 @@ TEST(NumberFormatFraction, MixedFractionWithIntegerOne) {
   EXPECT_EQ(Render(1.5, "# ?/?"), "1 1/2");
 }
 
-TEST(NumberFormatFraction, WholeValueSuppressesFractionComponent) {
-  // An exact integer must not render the synthetic 0/1 approximation.
-  EXPECT_EQ(Render(2.0, "# ?/?"), "2");
-  EXPECT_EQ(Render(-2.0, "# ?/?"), "-2");
+TEST(NumberFormatFraction, WholeValueBlanksTheFractionComponent) {
+  // An exact integer shows no 0/1 fraction, but the separator, numerator,
+  // slash and denominator keep their width as blanks, and a zero integer is
+  // shown even under `#` (Excel Range.Text).
+  EXPECT_EQ(Render(2.0, "# ?/?"), "2    ");
+  EXPECT_EQ(Render(-2.0, "# ?/?"), "-2    ");
+  EXPECT_EQ(Render(0.0, "# ?/?"), "0    ");
+  EXPECT_EQ(Render(1e-05, "# ?/?"), "0    ");
+  EXPECT_EQ(Render(123456789012345678.0, "# ?/?"), "123456789012346000    ");
 }
 
 TEST(NumberFormatFraction, NegativeMixedFraction) {

@@ -29,6 +29,9 @@ namespace number_format_detail {
 //   * `=TEXT(1234, "[DBNum1]0")` -> `一二三四` (NOT `一千二百三十四`).
 //   * `=TEXT(1234, "[DBNum2]0")` -> `壱弐参四` (NOT `壱阡弐百参拾四`).
 //   * `=TEXT(1234, "[DBNum3]0")` -> `１２３４` (full-width Arabic).
+//
+// The exception is `[DBNum1]General`, whose integer part is positional
+// (`千二百三十四`); `render_numeric.cpp` owns it.
 
 // Returns the per-digit substitution for `c` under `mode`, or an empty
 // string if no substitution applies (caller falls back to `c` verbatim).
@@ -57,6 +60,13 @@ void append_pad2_dbnum(std::string& out, unsigned value, DbNumMode mode);
 // the numeric walker to suppress a stray minus sign when a tiny negative
 // magnitude rounds down to a representation of zero.
 bool decimal_digits_all_zero(std::string_view digits) noexcept;
+
+// Zeros every digit of `digits` past the 15th significant one, rounding the
+// 15th half-away-from-zero against the 16th. `digits` holds decimal digits
+// only (no sign); its length is preserved, so only trailing digits collapse
+// to zero. Excel shows no more than 15 significant digits: `2^60` displays
+// as `1152921504606850000`, not the exact 19-digit integer `%.0f` prints.
+void cap_integer_significant_digits(std::string* digits);
 
 }  // namespace number_format_detail
 }  // namespace text_format

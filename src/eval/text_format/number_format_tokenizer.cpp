@@ -23,7 +23,7 @@ namespace formulon {
 namespace text_format {
 namespace number_format_detail {
 
-void tokenize_section(std::string_view fmt, Section& out) {
+void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect) {
   std::vector<Token>& toks = out.tokens;
   auto push_literal = [&](std::size_t b, std::size_t e) {
     if (b == e) {
@@ -60,9 +60,9 @@ void tokenize_section(std::string_view fmt, Section& out) {
     // Bracketed specifier. Recognised kinds:
     //   `[h]` / `[m]` / `[s]`   -> elapsed-time tokens (any run length).
     //   `[$...]`                -> locale-currency marker; silently dropped.
-    //   `[赤]` / `[青]` / ...    -> named color qualifier; silently dropped
-    //                               (Excel ignores color inside TEXT).
-    //   `[色N]` (N in 1..56)     -> indexed color qualifier; silently dropped.
+    //   `[赤]` / `[Red]` / ...   -> named color qualifier in `dialect`;
+    //                               silently dropped (no color in text).
+    //   `[色N]` / `[ColorN]`     -> indexed color qualifier; silently dropped.
     // Anything else (`[>100]`, `[DBNum1]`, unknown qualifiers) still trips
     // the invalid-bracket flag and surfaces as #VALUE!.
     if (c == '[') {
@@ -122,7 +122,7 @@ void tokenize_section(std::string_view fmt, Section& out) {
         t.kind = Tok::DateElapsedS;
         t.width = static_cast<std::uint8_t>(body.size());
         toks.push_back(t);
-      } else if (is_color_specifier(body)) {
+      } else if (is_color_specifier(body, dialect)) {
         // Named colour (`[赤]`) or indexed colour (`[色12]`). Excel discards
         // the colour inside TEXT, so the rest of the section still formats
         // the value. A section may carry at most one colour, though: Excel
@@ -132,6 +132,7 @@ void tokenize_section(std::string_view fmt, Section& out) {
           out.has_invalid_bracket = true;
         }
         saw_color = true;
+        out.has_color = true;
       } else if (const int dbnum = parse_dbnum_directive(body); dbnum > 0) {
         // `[DBNum1]` / `[DBNum2]` / `[DBNum3]`: digit-substitution mode for
         // the rest of the section. Multiple directives stack last-write-wins,

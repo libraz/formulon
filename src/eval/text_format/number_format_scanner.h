@@ -43,22 +43,20 @@ bool is_date_letter(char c) noexcept;
 // the caller already matched at least one character).
 std::size_t scan_run(std::string_view fmt, std::size_t& i, char letter) noexcept;
 
-// Returns true if `body` is a color qualifier: either a named color or the
-// indexed `色N` form with N in 1..56.
+// Returns true if `body` is a color qualifier in `dialect`: a named color or
+// the indexed form with N in 1..56.
 //
-// A format string is interpreted in the UI locale, so the accepted spellings
-// are the localized ones. Under the ja-JP profile that means `黒`, `青`, `水`,
-// `緑`, `紫`, `赤`, `白`, `黄` and `色N` — the English `Red` / `ColorN`
-// spellings are *not* accepted and fall through to the invalid-bracket path,
-// exactly as Excel rejects `=TEXT(5,"[Red]0.00")` with #VALUE!. The English
-// names OOXML stores in `numFmtCode` are a separate, locale-independent
-// surface matched where stored formats are read.
+// The localized dialect (a TEXT() argument) takes the ja-JP spellings `黒`,
+// `青`, `水`, `緑`, `紫`, `赤`, `白`, `黄` and `色N`; the English `Red` /
+// `ColorN` fall through to the invalid-bracket path, exactly as Excel rejects
+// `=TEXT(5,"[Red]0.00")` with #VALUE!. The stored dialect (a cell's
+// `numFmtCode`) takes the English `Black`, `Blue`, `Cyan`, `Green`,
+// `Magenta`, `Red`, `White`, `Yellow` and `ColorN`, ASCII case-insensitively.
 //
 // The name is a prefix: anything after it in the same bracket is ignored, so
 // `[赤色]` and `[色1x]` are both accepted. Leading whitespace is not.
-// Excel discards the color itself inside TEXT, so a match is treated the same
-// as `[$...]` — inert.
-bool is_color_specifier(std::string_view body) noexcept;
+// The colour itself is discarded, so a match is inert like `[$...]`.
+bool is_color_specifier(std::string_view body, FormatDialect dialect) noexcept;
 
 // Detects an Excel conditional-section directive of the form `[op N]`,
 // where `op` is one of `>`, `>=`, `<`, `<=`, `=`, `<>` and `N` is a literal

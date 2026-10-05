@@ -15,6 +15,8 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/text_format/number_format.h"
+
 namespace formulon {
 namespace text_format {
 namespace number_format_detail {
@@ -114,9 +116,13 @@ struct Section {
   // locale currency code (`[$...]`), a colour (`[赤]`, `[色12]`), a
   // `[DBNumN]` directive, or a conditional predicate. Excel rejects TEXT
   // with an unrecognised bracket — including a colour spelled in another
-  // locale, such as `[Red]` — so `apply_format` surfaces `#VALUE!` whenever
-  // this flag is set on any section it would have rendered.
+  // dialect, such as `[Red]` in a TEXT() argument — so `apply_format`
+  // surfaces `#VALUE!` whenever this flag is set on any section it would
+  // have rendered.
   bool has_invalid_bracket = false;
+
+  // Set when the section carries a colour qualifier in the parse dialect.
+  bool has_color = false;
 
   // DBNum1/2/3 digit-substitution mode. Set by the tokenizer when a
   // `[DBNumN]` directive is observed; consumed by the renderer.
@@ -191,9 +197,9 @@ struct Section {
 std::vector<std::string_view> split_sections(std::string_view fmt);
 
 // Tokenizes one section. Writes the token list into `out.tokens` and
-// surfaces invalid bracket qualifiers (colour names, conditional tests,
-// DBNum markers, etc.) through `out.has_invalid_bracket`.
-void tokenize_section(std::string_view fmt, Section& out);
+// surfaces invalid bracket qualifiers (colour names outside `dialect`,
+// malformed conditional tests, etc.) through `out.has_invalid_bracket`.
+void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect);
 
 // Populate the numeric/date summary on `section`. Also detect fractional
 // seconds `.0...` that immediately follow a second token (used to format

@@ -117,7 +117,9 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
     // Excel rejects out-of-range serials from TEXT.
     return;
   }
-  const ::formulon::date_time::YMD ymd = ::formulon::date_time::ymd_from_serial(serial, date1904);
+  // Serial 0 of the 1900 system reads as the day before 1900-01-01: `1900/1/0`.
+  const ::formulon::date_time::YMD ymd =
+      date1904 ? ::formulon::date_time::ymd_from_serial(serial, true) : ::formulon::date_time::legacy_1900_ymd(serial);
   const int sun0 = ::formulon::date_time::weekday_sun0(serial, date1904);
 
   // Decompose the time portion with optional fractional seconds.

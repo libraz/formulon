@@ -241,6 +241,32 @@ TEST(DateFormatMixedRejection, MonthAndZeroDigit) {
   EXPECT_EQ(s, FormatStatus::kValueError);
 }
 
+// ---------------------------------------------------------------------------
+// Calendar range (Excel Range.Text, ja-JP).
+// ---------------------------------------------------------------------------
+
+TEST(DateFormatRange, SerialZeroIsDayZeroOf1900) {
+  EXPECT_EQ(Render(0.0, "yyyy/m/d"), "1900/1/0");
+  EXPECT_EQ(Render(0.5, "yyyy/m/d"), "1900/1/0");
+  EXPECT_EQ(Render(0.0, R"(ggge"年"m"月"d"日")"), "明治33年1月0日");
+}
+
+TEST(DateFormatRange, OutOfRangeSerialIsOverflow) {
+  std::string out;
+  EXPECT_EQ(apply_format(-1.0, "yyyy/m/d", out), FormatStatus::kOverflow);
+  EXPECT_EQ(apply_format(2958466.0, "h:mm:ss", out), FormatStatus::kOverflow);
+  EXPECT_EQ(apply_format(2958465.0, "yyyy/m/d", out, /*date1904=*/true), FormatStatus::kOverflow);
+}
+
+TEST(DateFormatRange, Negative1904SerialShowsALeadingMinus) {
+  std::string out;
+  EXPECT_EQ(apply_format(-1.0, "yyyy/m/d", out, /*date1904=*/true), FormatStatus::kOk);
+  EXPECT_EQ(out, "-1904/1/2");
+  out.clear();
+  EXPECT_EQ(apply_format(-1234.5678, "[h]:mm", out, /*date1904=*/true), FormatStatus::kOk);
+  EXPECT_EQ(out, "-29629:37");
+}
+
 }  // namespace
 }  // namespace text_format
 }  // namespace formulon

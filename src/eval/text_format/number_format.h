@@ -17,11 +17,11 @@
 //   Section split:  `;` (up to 4 sections: positive; negative; zero; text),
 //                   and conditional selectors such as `[>100]`.
 //   Digit styles:    `[DBNum1]`, `[DBNum2]`, `[DBNum3]`.
-//   Discarded:      `[赤]` / `[青]` / ... colour specifiers, currency
+//   Discarded:      `[赤]` / `[Red]` / ... colour specifiers, currency
 //                   locale prefixes like `[$-409]` (treated as inert).
-//                   Colour names follow the format string's locale, so the
-//                   English spellings are rejected under the ja-JP profile
-//                   just as Excel rejects them.
+//                   Colour names follow the code's `FormatDialect`: the
+//                   ja-JP spellings for a TEXT() argument, the English
+//                   ones for a stored cell format.
 //   Text-section:   `@` substitutes the original text input in the text
 //                   section of the format.
 //
@@ -41,41 +41,52 @@
 namespace formulon {
 namespace text_format {
 
-/// Return codes for `apply_format`. The engine surfaces `Value` / `Num`
-/// errors to the caller rather than throwing; parsing failures and
-/// unrepresentable renderings both map to `kValueError` so the caller can
-/// forward them as Excel's `#VALUE!`.
+/// Spelling of a format code. A TEXT() format argument is written in the UI
+/// locale (`[赤]`, `G/標準`); a cell's stored code (styles.xml / XLSB) is the
+/// locale-independent canonical form (`[Red]`, `[Color10]`, `General`).
+/// Colour names are accepted only in the dialect's own spelling, exactly as
+/// Excel rejects `=TEXT(5,"[Red]0")` on a ja-JP host.
+enum class FormatDialect : int {
+  kLocalized = 0,
+  kStored = 1,
+};
+
+/// Return codes for `apply_format`. The engine surfaces failures to the
+/// caller rather than throwing; callers that only need Excel's TEXT()
+/// semantics map every non-`kOk` value to `#VALUE!`.
 enum class FormatStatus : int {
   kOk = 0,
+  /// The format code is malformed (e.g. an unrecognised bracket).
   kValueError = 1,
+  /// The code is valid but the value has no rendering in it: a date or time
+  /// section given a serial outside the workbook's calendar range.
+  kOverflow = 2,
 };
 
 /// Renders the numeric scalar `value` through `format`, appending the result
-/// to `out`. Returns `kOk` on success, `kValueError` on any format-parse or
-/// rendering failure.
+/// to `out`. An empty `format` yields an empty result.
 ///
-/// An empty `format` yields an empty result. `original_text` is the raw text
-/// form of the caller's value; if the format contains an `@` token in the
-/// text section, `original_text` is substituted there. When the caller
-/// passed a non-text value, `original_text` should be empty.
-///
-/// The engine does not perform any argument coercion itself: the caller is
-/// responsible for supplying a finite `value` (non-NaN, non-Inf) and a
-/// non-owning `std::string_view` for `original_text`. The format string is
-/// interpreted as UTF-8 bytes; quoted literal text and non-token bytes are
-/// copied verbatim.
+/// The caller supplies a finite `value` (non-NaN, non-Inf); no coercion is
+/// performed. The format string is interpreted as UTF-8 bytes; quoted literal
+/// text and non-token bytes are copied verbatim.
 /// `date1904` selects the workbook date epoch for date/time tokens (the
 /// serial->calendar conversion shifts by 1462 days under the 1904 system).
 /// Callers that render a value from a date1904 workbook (the TEXT builtin)
 /// must pass the workbook flag; the pure-numeric callers leave it false.
-FormatStatus apply_format(double value, std::string_view format, std::string_view original_text, std::string& out,
-                          bool date1904 = false);
+FormatStatus apply_format(double value, std::string_view format, std::string& out, bool date1904 = false,
+                          FormatDialect dialect = FormatDialect::kLocalized);
 
-/// Convenience overload for the pure-numeric path. Equivalent to
-/// `apply_format(value, format, {}, out, date1904)`.
-inline FormatStatus apply_format(double value, std::string_view format, std::string& out, bool date1904 = false) {
-  return apply_format(value, format, std::string_view{}, out, date1904);
-}
+/// Renders the text value `text` through the text section of `format`: the
+/// fourth section, or a single section containing `@`, with `@` replaced by
+/// `text`. A format without a text section shows `text` unchanged. An empty
+/// `text` is still a text value and takes the text section.
+FormatStatus apply_text_format(std::string_view text, std::string_view format, std::string& out,
+                               FormatDialect dialect = FormatDialect::kLocalized);
+
+/// True when the section of `format` that renders negative numbers (the
+/// second section, or the only one) carries a colour qualifier spelled in
+/// `dialect`.
+bool negative_section_has_color(std::string_view format, FormatDialect dialect);
 
 }  // namespace text_format
 }  // namespace formulon
