@@ -63,14 +63,7 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
   // so the kind dispatch below sees the same shape it would for a literal
   // `=ROWS(A1:C3)`. Single-cell Refs and scalar bindings are left as-is
   // (the scalar fallback already returns 1x1 for them).
-  const parser::AstNode* effective = &raw_arg;
-  if (raw_arg.kind() == parser::NodeKind::NameRef) {
-    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-    if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
-      effective = &resolved;
-    }
-  }
-  const parser::AstNode& arg_node = *effective;
+  const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
   const parser::NodeKind k = arg_node.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
     parser::Reference lhs{};
@@ -189,16 +182,7 @@ double sumproduct_coerce(const Value& v) {
 // is exhausted; every caller maps that to `#NUM!`.
 const ArrayValue* make_array_value(Arena& arena, std::uint32_t rows, std::uint32_t cols,
                                    const std::vector<Value>& cells) {
-  Value* buffer = nullptr;
-  const ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
-  if (arr == nullptr) {
-    return nullptr;
-  }
-  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  for (std::size_t i = 0; i < n; ++i) {
-    buffer[i] = cells[i];
-  }
-  return arr;
+  return array_from_values(rows, cols, cells.data(), cells.size(), arena);
 }
 
 // `Value::array(nullptr)` is not a legal value, so every `make_array_value`
@@ -301,14 +285,7 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   // accept the broader "Ref OR range-shaped" set: ROW(single-cell Ref)
   // is meaningful (returns its row), so unlike the SUM-style passthrough
   // we do not exclude bare Refs here.
-  const parser::AstNode* effective = &raw_arg;
-  if (raw_arg.kind() == parser::NodeKind::NameRef) {
-    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-    if (&resolved != &raw_arg && (resolved.kind() == parser::NodeKind::Ref || is_range_shaped_ast(resolved))) {
-      effective = &resolved;
-    }
-  }
-  const parser::AstNode& arg = *effective;
+  const parser::AstNode& arg = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/true);
   const parser::NodeKind k = arg.kind();
   parser::Reference rect_lhs{};
   parser::Reference rect_rhs{};
@@ -428,14 +405,7 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
     // shape it would for a literal `=SUMPRODUCT(A1:A3)`. Single-cell Refs
     // and scalar bindings are left as-is (the scalar fallback already
     // returns 1x1 for them). This mirrors `resolve_shape` above.
-    const parser::AstNode* effective = &raw_arg;
-    if (raw_arg.kind() == parser::NodeKind::NameRef) {
-      const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-      if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
-        effective = &resolved;
-      }
-    }
-    const parser::AstNode& arg_node = *effective;
+    const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
     const parser::NodeKind k = arg_node.kind();
     ArgArray a{};
     if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::Call) {
@@ -535,14 +505,7 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
   // LET-binding NameRef passthrough: mirror the pattern used by the other
   // shape-aware seams so `=LET(r, A1:A3, r+1)` sees the bound RangeOp / Call
   // AST rather than the NameRef wrapper.
-  const parser::AstNode* effective = &node;
-  if (node.kind() == parser::NodeKind::NameRef) {
-    const parser::AstNode& resolved = resolve_name_ast(node, ctx.name_env());
-    if (&resolved != &node && (resolved.kind() == parser::NodeKind::Ref || is_range_shaped_ast(resolved))) {
-      effective = &resolved;
-    }
-  }
-  const parser::AstNode& target = *effective;
+  const parser::AstNode& target = resolve_range_binding(node, ctx.name_env(), /*accept_ref=*/true);
   const parser::NodeKind k = target.kind();
 
   // BinaryOp -> recurse into the cellwise broadcaster.

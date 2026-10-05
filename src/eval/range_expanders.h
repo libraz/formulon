@@ -126,6 +126,12 @@ bool expand_column_call(const parser::AstNode& call, Arena& arena, const Functio
                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                         std::uint32_t* out_rows, std::uint32_t* out_cols);
 
+/// Flattens the `Value::Array` an array-condition / array-index broadcast
+/// produced into the expander out-params. An error result writes its code
+/// and a non-array result writes `#VALUE!`; both return `false`.
+bool expand_array_result(const Value& result, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                         std::uint32_t* out_rows, std::uint32_t* out_cols);
+
 }  // namespace eval
 }  // namespace formulon
 

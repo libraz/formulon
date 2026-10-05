@@ -38,6 +38,8 @@ namespace formulon {
 namespace eval {
 namespace {
 
+using builtins_detail::coerce_truncated_in_range;
+
 // ---------------------------------------------------------------------------
 // Base conversion helpers
 // ---------------------------------------------------------------------------
@@ -157,22 +159,11 @@ Expected<std::string, ErrorCode> encode_base_string(std::int64_t value, const Ba
 // Excel rejects Bool directly for `places` with `#VALUE!` — strict-Bool
 // rejection mirroring the input-digit side of BIN2*/OCT2*/HEX2*.
 Expected<int, ErrorCode> coerce_places(const Value& v) {
-  if (v.kind() == ValueKind::Bool) {
-    return ErrorCode::Value;
+  auto t = coerce_truncated_in_range(v, 1.0, 10.0, /*reject_bool=*/true);
+  if (!t) {
+    return t.error();
   }
-  auto p = coerce_to_number(v);
-  if (!p) {
-    return p.error();
-  }
-  const double d = p.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
-  const double t = std::trunc(d);
-  if (t < 1.0 || t > 10.0) {
-    return ErrorCode::Num;
-  }
-  return static_cast<int>(t);
+  return static_cast<int>(t.value());
 }
 
 // Extracts the input digit string for *2* source-side parsing. For Text,
@@ -262,22 +253,12 @@ Value convert_from_dec(const Value* args, std::uint32_t arity, Arena& arena, con
   // with `#VALUE!` rather than coercing TRUE/FALSE to 1/0. Matches EFFECT /
   // NOMINAL's strict-Bool rejection (see `financial_misc.cpp`). Bool inside
   // a range cell would have been flattened earlier; direct scalars only.
-  if (args[0].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
+  auto t = coerce_truncated_in_range(args[0], static_cast<double>(dst.min_signed), static_cast<double>(dst.max_signed),
+                                     /*reject_bool=*/true);
+  if (!t) {
+    return Value::error(t.error());
   }
-  auto n = coerce_to_number(args[0]);
-  if (!n) {
-    return Value::error(n.error());
-  }
-  const double d = n.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double t = std::trunc(d);
-  if (t < static_cast<double>(dst.min_signed) || t > static_cast<double>(dst.max_signed)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const auto value = static_cast<std::int64_t>(t);
+  const auto value = static_cast<std::int64_t>(t.value());
   int places = 0;
   const int* places_ptr = nullptr;
   if (arity >= 2) {
@@ -387,19 +368,12 @@ Expected<std::uint64_t, ErrorCode> coerce_48_bit_unsigned(const Value& v) {
 // value argument, the shift is Excel-truncated (34.67 -> 34) rather than
 // rejected.
 Expected<int, ErrorCode> coerce_shift(const Value& v) {
-  auto n = coerce_to_number(v);
-  if (!n) {
-    return n.error();
+  auto t = coerce_truncated_in_range(v, -static_cast<double>(kBitShiftMagnitudeMax),
+                                     static_cast<double>(kBitShiftMagnitudeMax), /*reject_bool=*/false);
+  if (!t) {
+    return t.error();
   }
-  const double d = n.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
-  const double t = std::trunc(d);
-  if (t < -static_cast<double>(kBitShiftMagnitudeMax) || t > static_cast<double>(kBitShiftMagnitudeMax)) {
-    return ErrorCode::Num;
-  }
-  return static_cast<int>(t);
+  return static_cast<int>(t.value());
 }
 
 using BitwiseOp = std::uint64_t (*)(std::uint64_t, std::uint64_t);
@@ -534,6 +508,29 @@ Value Gestep(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 }  // namespace
+
+namespace builtins_detail {
+
+Expected<double, ErrorCode> coerce_truncated_in_range(const Value& v, double lo, double hi, bool reject_bool) {
+  if (reject_bool && v.kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
+  }
+  auto n = coerce_to_number(v);
+  if (!n) {
+    return n.error();
+  }
+  const double d = n.value();
+  if (std::isnan(d) || std::isinf(d)) {
+    return ErrorCode::Num;
+  }
+  const double t = std::trunc(d);
+  if (t < lo || t > hi) {
+    return ErrorCode::Num;
+  }
+  return t;
+}
+
+}  // namespace builtins_detail
 
 void register_engineering_builtins(FunctionRegistry& registry) {
   // Base conversion. The spec pins BIN2DEC / OCT2DEC / HEX2DEC to exactly

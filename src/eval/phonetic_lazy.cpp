@@ -21,25 +21,10 @@
 #include "utils/error.h"
 #include "utils/text_ops.h"
 #include "value.h"
-#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
-
-// Same helper as info_lazy.cpp. Inlined here rather than extracted to a
-// shared header because PHONETIC is the only outside consumer today;
-// promoting `resolve_ref_sheet` later is a bigger refactor than this
-// commit warrants.
-const Sheet* resolve_ref_sheet_for_phonetic(std::string_view ref_sheet, const EvalContext& ctx) noexcept {
-  if (ref_sheet.empty()) {
-    return ctx.current_sheet();
-  }
-  if (ctx.workbook() == nullptr) {
-    return nullptr;
-  }
-  return ctx.workbook()->sheet_by_name(ref_sheet);
-}
 
 // Applies Mac's strict-text passthrough to a flattened scalar `v`:
 //   * Text  -> the text itself (unchanged).
@@ -129,7 +114,7 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
     if (r.is_full_col || r.is_full_row) {
       return Value::error(ErrorCode::Value);
     }
-    const Sheet* target = resolve_ref_sheet_for_phonetic(r.sheet, ctx);
+    const Sheet* target = ctx.sheet_for_qualifier(r.sheet);
     if (target == nullptr) {
       // Unbound context: #NAME?. Missing qualified sheet: #REF!. Same
       // mapping as ISFORMULA / FORMULATEXT.

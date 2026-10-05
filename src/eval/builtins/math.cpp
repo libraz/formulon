@@ -454,7 +454,10 @@ Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //     (CEILING.MATH: toward -infinity for negatives;
 //      FLOOR.MATH: toward +infinity i.e. toward zero for negatives).
 
-Value CeilingMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+// Shared body of CEILING.MATH (`ceiling = true`) and FLOOR.MATH. Positive
+// inputs always round in the function's own direction; a non-zero `mode`
+// flips the direction for negative inputs.
+Value math_mode_rounding(const Value* args, std::uint32_t arity, bool ceiling) {
   auto number = coerce_to_number(args[0]);
   if (!number) {
     return Value::error(number.error());
@@ -467,13 +470,13 @@ Value CeilingMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     }
     significance = coerced.value();
   }
-  bool away_from_zero = false;
+  bool flip_negative = false;
   if (arity >= 3) {
     auto coerced = coerce_to_number(args[2]);
     if (!coerced) {
       return Value::error(coerced.error());
     }
-    away_from_zero = coerced.value() != 0.0;
+    flip_negative = coerced.value() != 0.0;
   }
   const double n = number.value();
   if (n == 0.0) {
@@ -488,9 +491,8 @@ Value CeilingMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // 70.999... rather than exactly 71). Mirrors the legacy CEILING / FLOOR
   // path so the modern variants snap exact multiples the same way.
   const double scaled = snap_to_integer(n / abs_s);
-  // Positive inputs: always ceil. Negative inputs: ceil (toward +inf) for
-  // default mode, floor (away from zero) when mode != 0.
-  const double rounded = (n > 0.0 || !away_from_zero) ? std::ceil(scaled) : std::floor(scaled);
+  const bool use_ceil = (n > 0.0 || !flip_negative) ? ceiling : !ceiling;
+  const double rounded = use_ceil ? std::ceil(scaled) : std::floor(scaled);
   const double r = rounded * abs_s;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
@@ -498,48 +500,12 @@ Value CeilingMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(r);
 }
 
+Value CeilingMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  return math_mode_rounding(args, arity, /*ceiling=*/true);
+}
+
 Value FloorMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto number = coerce_to_number(args[0]);
-  if (!number) {
-    return Value::error(number.error());
-  }
-  double significance = 1.0;
-  if (arity >= 2) {
-    auto coerced = coerce_to_number(args[1]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    significance = coerced.value();
-  }
-  bool toward_zero = false;
-  if (arity >= 3) {
-    auto coerced = coerce_to_number(args[2]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    toward_zero = coerced.value() != 0.0;
-  }
-  const double n = number.value();
-  if (n == 0.0) {
-    return Value::number(0.0);
-  }
-  if (significance == 0.0) {
-    return Value::number(0.0);
-  }
-  const double abs_s = std::fabs(significance);
-  // `snap_to_integer` absorbs the IEEE-754 noise that would otherwise make
-  // e.g. `FLOOR.MATH(7.1, 0.1)` return `7` instead of `7.1`. Mirrors the
-  // legacy CEILING / FLOOR path so the modern variants snap exact multiples
-  // the same way.
-  const double scaled = snap_to_integer(n / abs_s);
-  // Positive inputs: always floor. Negative inputs: floor (toward -inf)
-  // for default mode, ceil (toward zero) when mode != 0.
-  const double rounded = (n > 0.0 || !toward_zero) ? std::floor(scaled) : std::ceil(scaled);
-  const double r = rounded * abs_s;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return math_mode_rounding(args, arity, /*ceiling=*/false);
 }
 
 // --- Parity-aware rounding ----------------------------------------------

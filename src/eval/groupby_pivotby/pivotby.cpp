@@ -31,33 +31,6 @@ struct ColSlot {
   std::size_t outer_group = 0;
 };
 
-// Maps a single row's group key to its group index, appending a new group on
-// first occurrence. `keys` is the source key array (row_fields or
-// col_fields); `row` is the absolute row index. Returns the group index.
-//
-// A composite copy of `representative_rows` is kept so callers can later
-// pull the canonical key cells via `keys.cells[representative_rows[g] *
-// keys.cols + c]`. Mirrors the inline group-build loop in
-// `eval_groupby_lazy`; factored here so both the row and column axes share
-// the same first-occurrence semantics.
-std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
-                              std::vector<std::uint32_t>* representative_rows,
-                              std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group,
-                              std::unordered_map<std::string, std::size_t>* index) {
-  const std::string key = normalized_group_key(keys, row);
-  const auto existing = index->find(key);
-  if (existing != index->end()) {
-    (*member_rows)[existing->second].push_back(row);
-    return existing->second;
-  }
-  const std::size_t group = representative_rows->size();
-  index->emplace(key, group);
-  representative_rows->push_back(row);
-  member_rows->push_back(std::vector<std::uint32_t>{row});
-  is_error_group->push_back(row_key_is_error(keys, row));
-  return group;
-}
-
 // Orders one axis's groups into `*out_order`. Error-keyed groups sink to the
 // bottom; sort_order=0 otherwise keeps first-occurrence order, and ±1 sorts
 // by the first value column's axis total (aggregated on the fly when

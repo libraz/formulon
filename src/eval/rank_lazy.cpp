@@ -348,66 +348,51 @@ std::size_t percentrank_floor_index(const std::vector<double>& sorted, double x)
   return k;
 }
 
-}  // namespace
-
-Value eval_percentrank_inc_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                                const EvalContext& ctx) {
+// Shared body of PERCENTRANK.INC / .EXC. The inclusive form ranks exact
+// matches at k / (N - 1); the exclusive one uses 1-based positions over
+// (N + 1), so an exact match at sorted[k] yields (k + 1) / (N + 1).
+Value percentrank_impl(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx, bool exclusive) {
   auto prepared = prepare_percentrank(call, arena, registry, ctx);
   if (std::holds_alternative<Value>(prepared)) {
     return std::get<Value>(prepared);
   }
   const PercentRankInputs& in = std::get<PercentRankInputs>(prepared);
   const std::size_t n = in.sorted.size();
-  // Excel returns #N/A for an array with fewer than two numeric cells
-  // (the `(N - 1)` divisor collapses).
-  if (n < 2U) {
+  // Excel returns #N/A for an empty array, and for the inclusive form also
+  // for a single numeric cell (the `(N - 1)` divisor collapses).
+  if (n < (exclusive ? 1U : 2U)) {
     return Value::error(ErrorCode::NA);
   }
   if (in.x < in.sorted.front() || in.x > in.sorted.back()) {
     return Value::error(ErrorCode::NA);
   }
   const std::size_t k = percentrank_floor_index(in.sorted, in.x);
+  const std::size_t pos = exclusive ? k + 1U : k;
+  const double denom = static_cast<double>(exclusive ? n + 1U : n - 1U);
   double raw = 0.0;
   if (in.sorted[k] == in.x) {
-    raw = static_cast<double>(k) / static_cast<double>(n - 1U);
+    raw = static_cast<double>(pos) / denom;
   } else {
     // Interpolate between sorted[k] and sorted[k + 1]. The outer range
     // check above guarantees k + 1 < n here.
     const double span = in.sorted[k + 1U] - in.sorted[k];
-    raw = (static_cast<double>(k) + (in.x - in.sorted[k]) / span) / static_cast<double>(n - 1U);
+    raw = (static_cast<double>(pos) + (in.x - in.sorted[k]) / span) / denom;
   }
   const double result = truncate_to_significance(raw, in.significance);
   return std::isfinite(result) ? Value::number(result) : Value::error(ErrorCode::Num);
 }
 
+}  // namespace
+
+Value eval_percentrank_inc_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx) {
+  return percentrank_impl(call, arena, registry, ctx, /*exclusive=*/false);
+}
+
 Value eval_percentrank_exc_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                 const EvalContext& ctx) {
-  auto prepared = prepare_percentrank(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const PercentRankInputs& in = std::get<PercentRankInputs>(prepared);
-  const std::size_t n = in.sorted.size();
-  if (n < 1U) {
-    return Value::error(ErrorCode::NA);
-  }
-  if (in.x < in.sorted.front() || in.x > in.sorted.back()) {
-    return Value::error(ErrorCode::NA);
-  }
-  // Exclusive uses divisor (N + 1) and 1-based positions, so an exact
-  // match at sorted[k] yields raw = (k + 1) / (N + 1).
-  const std::size_t k = percentrank_floor_index(in.sorted, in.x);
-  const double denom = static_cast<double>(n + 1U);
-  double raw = 0.0;
-  if (in.sorted[k] == in.x) {
-    raw = static_cast<double>(k + 1U) / denom;
-  } else {
-    // k + 1 < n because x < sorted.back() when no exact match is found.
-    const double span = in.sorted[k + 1U] - in.sorted[k];
-    raw = (static_cast<double>(k + 1U) + (in.x - in.sorted[k]) / span) / denom;
-  }
-  const double result = truncate_to_significance(raw, in.significance);
-  return std::isfinite(result) ? Value::number(result) : Value::error(ErrorCode::Num);
+  return percentrank_impl(call, arena, registry, ctx, /*exclusive=*/true);
 }
 
 }  // namespace eval

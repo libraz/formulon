@@ -144,6 +144,12 @@ Value invoke_lambda_values_with_ast(const LambdaValue* lv, std::uint32_t arity, 
                                     const parser::AstNode* const* ast_args, Arena& arena,
                                     const FunctionRegistry& registry, const EvalContext& ctx);
 
+/// Builds a synthetic `ArrayLiteral` AST whose cells are `Literal` nodes
+/// carrying `arr`'s values, so a slice passed through
+/// `invoke_lambda_values_with_ast` flattens like a written array literal.
+/// Returns nullptr for a null or empty `arr` and on allocation failure.
+const parser::AstNode* array_literal_ast(const ArrayValue* arr, Arena& arena);
+
 }  // namespace eval
 }  // namespace formulon
 

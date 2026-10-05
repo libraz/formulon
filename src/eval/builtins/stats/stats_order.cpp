@@ -141,6 +141,17 @@ Value Small(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return large_small(args, arity, false);
 }
 
+// Sorts the numeric data arguments and interpolates percentile `k`; an
+// empty numeric slice is `#NUM!`.
+static Value percentile_of_data(const Value* args, std::uint32_t data_count, double k, bool exclusive) {
+  std::vector<double> xs = collect_numerics(args, data_count);
+  if (xs.empty()) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::sort(xs.begin(), xs.end());
+  return exclusive ? percentile_exc_sorted(xs, k) : percentile_inc_sorted(xs, k);
+}
+
 // PERCENTILE.INC(array, k) / PERCENTILE(array, k) - linear-interpolation
 // percentile. k is the fractional rank in [0, 1]; out-of-range yields
 // `#NUM!`. Empty numeric slice yields `#NUM!`. The interpolation point is
@@ -156,12 +167,7 @@ Value PercentileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (k < 0.0 || k > 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  return percentile_inc_sorted(xs, k);
+  return percentile_of_data(args, data_count, k, /*exclusive=*/false);
 }
 
 // PERCENTILE.EXC(array, k) - exclusive-interpolation percentile. `k` must
@@ -177,12 +183,7 @@ Value PercentileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(k_raw.error());
   }
   const double k = k_raw.value();
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  return percentile_exc_sorted(xs, k);
+  return percentile_of_data(args, data_count, k, /*exclusive=*/true);
 }
 
 // QUARTILE.INC(array, quart) / QUARTILE(array, quart) - quartile by
@@ -199,13 +200,7 @@ Value QuartileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double q = std::trunc(q_in);
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  const double k = q / 4.0;
-  return percentile_inc_sorted(xs, k);
+  return percentile_of_data(args, data_count, q / 4.0, /*exclusive=*/false);
 }
 
 // QUARTILE.EXC(array, quart) - exclusive quartile, equivalent to
@@ -224,13 +219,7 @@ Value QuartileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double q = std::trunc(q_in);
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  const double k = q / 4.0;
-  return percentile_exc_sorted(xs, k);
+  return percentile_of_data(args, data_count, q / 4.0, /*exclusive=*/true);
 }
 
 // TRIMMEAN(array, percent) - mean after trimming `percent / 2` from each

@@ -214,21 +214,9 @@ double BetaPdfStd(double x, double alpha, double beta_shape) noexcept {
 // Jacobian 1 / (B - A). #NUM! on: alpha <= 0, beta <= 0, A >= B,
 // x < A, x > B.
 Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto x_e = read_number(args, 0);
-  if (!x_e) {
-    return Value::error(x_e.error());
-  }
-  auto alpha_e = read_number(args, 1);
-  if (!alpha_e) {
-    return Value::error(alpha_e.error());
-  }
-  auto beta_e = read_number(args, 2);
-  if (!beta_e) {
-    return Value::error(beta_e.error());
-  }
-  auto cum_e = coerce_to_bool(args[3]);
-  if (!cum_e) {
-    return Value::error(cum_e.error());
+  auto parsed = read_cumulative_triple(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
   auto a_e = read_optional_number(args, arity, 4, 0.0);
   if (!a_e) {
@@ -238,9 +226,9 @@ Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!b_e) {
     return Value::error(b_e.error());
   }
-  const double x = x_e.value();
-  const double alpha = alpha_e.value();
-  const double beta_shape = beta_e.value();
+  const double x = parsed.value().params.first;
+  const double alpha = parsed.value().params.second;
+  const double beta_shape = parsed.value().params.third;
   const double a = a_e.value();
   const double b = b_e.value();
   if (alpha <= 0.0 || beta_shape <= 0.0 || a >= b || x < a || x > b) {
@@ -248,7 +236,7 @@ Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double span = b - a;
   const double y = (x - a) / span;
-  if (cum_e.value()) {
+  if (parsed.value().cumulative) {
     // CDF boundaries: the regularized incomplete beta already returns 0
     // at y == 0 and 1 at y == 1 exactly, so no special-case is needed.
     const double r = stats::regularized_incomplete_beta(alpha, beta_shape, y);
@@ -286,17 +274,9 @@ Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // for y in (0, 1), then rescales via x = A + y * (B - A). #NUM! on
 // p <= 0, p >= 1, alpha <= 0, beta <= 0, A >= B.
 Value BetaInv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto p_e = read_number(args, 0);
-  if (!p_e) {
-    return Value::error(p_e.error());
-  }
-  auto alpha_e = read_number(args, 1);
-  if (!alpha_e) {
-    return Value::error(alpha_e.error());
-  }
-  auto beta_e = read_number(args, 2);
-  if (!beta_e) {
-    return Value::error(beta_e.error());
+  auto parsed = read_number_triple(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
   auto a_e = read_optional_number(args, arity, 3, 0.0);
   if (!a_e) {
@@ -306,9 +286,9 @@ Value BetaInv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!b_e) {
     return Value::error(b_e.error());
   }
-  const double p = p_e.value();
-  const double alpha = alpha_e.value();
-  const double beta_shape = beta_e.value();
+  const double p = parsed.value().first;
+  const double alpha = parsed.value().second;
+  const double beta_shape = parsed.value().third;
   const double a = a_e.value();
   const double b = b_e.value();
   if (p <= 0.0 || p >= 1.0 || alpha <= 0.0 || beta_shape <= 0.0 || a >= b) {

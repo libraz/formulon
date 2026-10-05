@@ -76,22 +76,6 @@ bool coerce_array(const ArrayValue& src, std::vector<double>& out, Value* out_er
   return true;
 }
 
-/// Flat row-major buffer + shape returned by `make_double_array`.
-ArrayValue* make_double_array(const std::vector<Value>& data, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
-  // Same overflow-defensive guard as `coerce_array`: bail on 32-bit
-  // wrap so the arena allocation request matches what the loop expects.
-  Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
-  if (arr == nullptr) {
-    return nullptr;
-  }
-  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  for (std::size_t i = 0; i < n; ++i) {
-    buffer[i] = data[i];
-  }
-  return arr;
-}
-
 /// Returns true if `v` is finite, false for NaN / +-inf. Used to gate
 /// final result cells; LINEST surfaces `#NUM!` for any non-finite
 /// statistic.
@@ -488,7 +472,7 @@ ArrayValue* build_prediction_output(const std::vector<double>& coeffs, const std
 
   const std::uint32_t out_rows = y_is_col ? n_obs : 1U;
   const std::uint32_t out_cols = y_is_col ? 1U : n_obs;
-  return make_double_array(cells, out_rows, out_cols, arena);
+  return array_from_values(out_rows, out_cols, cells.data(), cells.size(), arena);
 }
 
 /// Builds the LINEST / LOGEST output array. `coeffs` is in normal
@@ -514,7 +498,7 @@ ArrayValue* build_simple_output(const std::vector<double>& coeffs, std::uint32_t
   } else {
     cells[k] = Value::number(log_form ? 1.0 : 0.0);
   }
-  return make_double_array(cells, 1U, out_cols, arena);
+  return array_from_values(1U, out_cols, cells.data(), cells.size(), arena);
 }
 
 /// Builds the 5x(k+1) statistics matrix. `inv_a` is `A^{-1}` (the
@@ -621,7 +605,7 @@ ArrayValue* build_stats_output(const std::vector<double>& coeffs, const std::vec
   cells[4U * out_cols + 0U] = is_finite(ss_reg) ? Value::number(ss_reg) : Value::error(ErrorCode::NA);
   cells[4U * out_cols + 1U] = is_finite(ss_resid) ? Value::number(ss_resid) : Value::error(ErrorCode::NA);
 
-  return make_double_array(cells, out_rows, out_cols, arena);
+  return array_from_values(out_rows, out_cols, cells.data(), cells.size(), arena);
 }
 
 /// Replaces every entry of `dm.y` with `ln(y_i)`. Returns `false` if

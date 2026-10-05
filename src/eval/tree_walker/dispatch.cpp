@@ -104,6 +104,31 @@ bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode
   return true;
 }
 
+// Expands the rectangle [`lhs`, `rhs`] into `values` through `def`'s range
+// filters. An expansion error is pushed, or returned via `immediate_return`
+// (with `false`) when `def` propagates errors.
+bool append_expanded_range(const FunctionDef& def, const parser::Reference& lhs, const parser::Reference& rhs,
+                           Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                           std::vector<Value>* values, Value* immediate_return) {
+  auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+  if (!expanded) {
+    const Value err = Value::error(expanded.error());
+    if (def.propagate_errors) {
+      *immediate_return = err;
+      return false;
+    }
+    values->push_back(err);
+    return true;
+  }
+  Value range_err = Value::blank();
+  const std::vector<Value>& cells = expanded.value();
+  if (!append_range_sourced_values(def, cells.data(), cells.size(), values, &range_err)) {
+    *immediate_return = range_err;
+    return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 bool is_reference_shape(const parser::AstNode& node) noexcept {
@@ -357,14 +382,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // Substitute only when the resolved AST is genuinely range-shaped so
     // that a NameRef bound to a scalar (or a single-cell Ref) continues to
     // flow through the existing scalar branch with its original provenance.
-    const parser::AstNode* effective = &raw_arg;
-    if (raw_arg.kind() == parser::NodeKind::NameRef) {
-      const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-      if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
-        effective = &resolved;
-      }
-    }
-    const parser::AstNode& arg_node = *effective;
+    const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
     // Minimal array-literal support: when a range-aware function receives
     // a `{a;b;c}` style literal, flatten it in row-major order exactly like
     // a RangeOp argument. This is just enough to let LARGE / SMALL /
@@ -565,53 +583,25 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       const bool is_bare_pair = lhs_ast.kind() == parser::NodeKind::Ref && rhs_ast.kind() == parser::NodeKind::Ref;
       const bool whole_axis_pair = is_bare_pair && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row ||
                                                     rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row);
-      if (whole_axis_pair || (!is_bare_pair && declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs))) {
-        if (whole_axis_pair) {
-          chain_lhs = lhs_ast.as_ref();
-          chain_rhs = rhs_ast.as_ref();
-        }
-        auto expanded = ctx.expand_range(chain_lhs, chain_rhs, arena, registry);
-        if (!expanded) {
-          const Value err = Value::error(expanded.error());
+      if (whole_axis_pair) {
+        chain_lhs = lhs_ast.as_ref();
+        chain_rhs = rhs_ast.as_ref();
+      } else if (is_bare_pair || !declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs)) {
+        // Union the two endpoints into one rectangle and let `expand_range`
+        // validate sheet equality (mismatched qualifiers surface as #REF!).
+        ErrorCode endpoint_err = ErrorCode::Ref;
+        if (!union_endpoint_refs(lhs_ast, rhs_ast, arena, registry, ctx, &chain_lhs, &chain_rhs, &endpoint_err)) {
+          const Value err = Value::error(endpoint_err);
           if (def->propagate_errors) {
             return err;
           }
           values.push_back(err);
           continue;
         }
-        Value range_err = Value::blank();
-        const std::vector<Value>& expanded_values = expanded.value();
-        if (!append_range_sourced_values(*def, expanded_values.data(), expanded_values.size(), &values, &range_err)) {
-          return range_err;
-        }
-        continue;
       }
-      // Union the two endpoints into one rectangle and let `expand_range`
-      // validate sheet equality (mismatched qualifiers surface as #REF!).
-      parser::Reference union_lhs{};
-      parser::Reference union_rhs{};
-      ErrorCode endpoint_err = ErrorCode::Ref;
-      if (!union_endpoint_refs(lhs_ast, rhs_ast, arena, registry, ctx, &union_lhs, &union_rhs, &endpoint_err)) {
-        const Value err = Value::error(endpoint_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
-      if (!expanded) {
-        const Value err = Value::error(expanded.error());
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      Value range_err = Value::blank();
-      const std::vector<Value>& expanded_values = expanded.value();
-      if (!append_range_sourced_values(*def, expanded_values.data(), expanded_values.size(), &values, &range_err)) {
-        return range_err;
+      Value range_return = Value::blank();
+      if (!append_expanded_range(*def, chain_lhs, chain_rhs, arena, registry, ctx, &values, &range_return)) {
+        return range_return;
       }
       continue;
     }
@@ -655,15 +645,10 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         }
         const std::uint32_t rrows = union_rhs.row - union_lhs.row + 1u;
         const std::uint32_t rcols = union_rhs.col - union_lhs.col + 1u;
-        Value* buffer = nullptr;
-        ArrayValue* arr = allocate_array_value(rrows, rcols, arena, buffer, kMaxDerivedArrayCells);
+        const std::vector<Value>& ev = expanded.value();
+        ArrayValue* arr = array_from_values(rrows, rcols, ev.data(), ev.size(), arena);
         if (arr == nullptr) {
           return Value::error(ErrorCode::Num);
-        }
-        const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
-        const std::vector<Value>& ev = expanded.value();
-        for (std::size_t k = 0; k < total; ++k) {
-          buffer[k] = k < ev.size() ? ev[k] : Value::blank();
         }
         values.push_back(Value::array(arr));
         continue;
@@ -710,19 +695,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       isect_rhs.sheet = isect_sheet;
       isect_rhs.row = isect_r2;
       isect_rhs.col = isect_c2;
-      auto isect_expanded = ctx.expand_range(isect_lhs, isect_rhs, arena, registry);
-      if (!isect_expanded) {
-        const Value err = Value::error(isect_expanded.error());
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      Value range_err = Value::blank();
-      const std::vector<Value>& isect_values = isect_expanded.value();
-      if (!append_range_sourced_values(*def, isect_values.data(), isect_values.size(), &values, &range_err)) {
-        return range_err;
+      Value range_return = Value::blank();
+      if (!append_expanded_range(*def, isect_lhs, isect_rhs, arena, registry, ctx, &values, &range_return)) {
+        return range_return;
       }
       continue;
     }
@@ -871,19 +846,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         (arg_node.as_ref().is_full_col || arg_node.as_ref().is_full_row)) {
       had_range_shaped_arg = true;
       const parser::Reference& ref = arg_node.as_ref();
-      auto expanded = ctx.expand_range(ref, ref, arena, registry);
-      if (!expanded) {
-        const Value err = Value::error(expanded.error());
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      Value range_err = Value::blank();
-      const std::vector<Value>& expanded_values = expanded.value();
-      if (!append_range_sourced_values(*def, expanded_values.data(), expanded_values.size(), &values, &range_err)) {
-        return range_err;
+      Value range_return = Value::blank();
+      if (!append_expanded_range(*def, ref, ref, arena, registry, ctx, &values, &range_return)) {
+        return range_return;
       }
       continue;
     }

@@ -61,39 +61,6 @@ Value unwrap_1x1_array(const Value& v) {
   return v;
 }
 
-// Builds a synthetic `ArrayLiteral` AST that mirrors the cells of `arr`.
-// Used to give a per-row / per-column slice a range-shaped AST identity,
-// so range-aware functions inside the lambda body (`SUM`, `AVERAGE`, ...)
-// can flatten the slice through the dispatcher's existing ArrayLiteral
-// branch instead of receiving an opaque `Value::Array` they cannot coerce.
-//
-// Each cell becomes a `Literal` AST node carrying the cell's `Value`. The
-// resulting AST and all child nodes live in `arena` for the same lifetime
-// as the lambda invocation. Returns `nullptr` on allocation failure.
-const parser::AstNode* build_array_literal_for(const ArrayValue* arr, Arena& arena) {
-  const std::uint32_t rows = arr->rows;
-  const std::uint32_t cols = arr->cols;
-  // `make_array_literal` precondition: rows / cols must be >= 1. The
-  // empty-input guards in BYROW / BYCOL / SCAN ensure this never triggers
-  // for a valid slice.
-  if (rows == 0U || cols == 0U) {
-    return nullptr;
-  }
-  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  const parser::AstNode** children = arena.create_array<const parser::AstNode*>(total);
-  if (children == nullptr) {
-    return nullptr;
-  }
-  for (std::size_t i = 0; i < total; ++i) {
-    parser::AstNode* lit = parser::make_literal(arena, arr->cells[i]);
-    if (lit == nullptr) {
-      return nullptr;
-    }
-    children[i] = lit;
-  }
-  return parser::make_array_literal(arena, rows, cols, children);
-}
-
 // Where a helper's source argument lies on the grid when it is a reference.
 // Excel binds each callback argument taken from such a source as the cell
 // (MAP, REDUCE, SCAN) or the row / column (BYROW, BYCOL) it came from, so
@@ -280,7 +247,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
     // dispatcher's ArrayLiteral branch.
     const parser::AstNode* slice_ast = origin.valid ? (by_row ? origin_rect_ast(origin, i, 0U, i, cols_in - 1U, arena)
                                                               : origin_rect_ast(origin, 0U, i, rows_in - 1U, i, arena))
-                                                    : build_array_literal_for(slice_arr, arena);
+                                                    : array_literal_ast(slice_arr, arena);
     if (slice_ast == nullptr) {
       return Value::error(ErrorCode::Num);
     }

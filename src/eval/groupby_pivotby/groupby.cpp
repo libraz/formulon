@@ -115,18 +115,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     if (!include_row[i]) {
       continue;
     }
-    const std::uint32_t row = data_start_row + i;
-    const std::string key = normalized_group_key(*row_fields, row);
-    const auto existing = group_index.find(key);
-    if (existing != group_index.end()) {
-      group_rows[existing->second].push_back(row);
-    } else {
-      const std::size_t group = group_repr.size();
-      group_index.emplace(key, group);
-      group_repr.push_back(row);
-      group_rows.push_back(std::vector<std::uint32_t>{row});
-      group_is_error.push_back(row_key_is_error(*row_fields, row));
-    }
+    find_or_add_group(*row_fields, data_start_row + i, &group_repr, &group_rows, &group_is_error, &group_index);
   }
 
   if (group_repr.empty()) {

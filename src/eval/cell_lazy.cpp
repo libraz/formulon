@@ -347,14 +347,7 @@ Value build_width_result(const Sheet& sheet, std::uint32_t col, Arena& arena) {
 }
 
 Value resolve_cell_width(std::string_view sheet_name, std::uint32_t col, Arena& arena, const EvalContext& ctx) {
-  const Workbook* workbook = ctx.workbook();
-  const Sheet* target = ctx.current_sheet();
-  if (!sheet_name.empty()) {
-    if (workbook == nullptr) {
-      return Value::error(ErrorCode::Ref);
-    }
-    target = workbook->sheet_by_name(sheet_name);
-  }
+  const Sheet* target = ctx.sheet_for_qualifier(sheet_name);
   if (target == nullptr) {
     return Value::error(ErrorCode::Ref);
   }

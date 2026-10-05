@@ -11,7 +11,7 @@
 // equality, slice construction, aggregator invocation, output assembly and
 // sort tie-breaking. Each .cpp owns its public `eval_<fn>_lazy` entry point
 // and any helper that is specific to that surface (e.g. PIVOTBY's
-// `find_or_add_group`).
+// `order_axis_groups`).
 //
 // See `eval/lazy_impls.h` for the shared `LazyImpl` signature and the
 // `eval_node` recursion entry point.
@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "eval/function_registry.h"
@@ -151,6 +152,14 @@ std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row);
 /// True iff every column of the row's key is an Error value. Error-keyed
 /// groups sort to the bottom (after all valid groups).
 bool row_key_is_error(const ArrayValue& keys, std::uint32_t row);
+
+/// Maps `row`'s group key to its group index, appending a new group (its
+/// representative row, member list and error flag) on first occurrence so
+/// groups keep first-occurrence order.
+std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
+                              std::vector<std::uint32_t>* representative_rows,
+                              std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group,
+                              std::unordered_map<std::string, std::size_t>* index);
 
 /// Builds a 1-column array containing one cell per row in `row_indices` from
 /// `values`'s `value_col`-th column. Used to construct the per-group slice

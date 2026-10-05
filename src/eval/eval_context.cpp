@@ -162,6 +162,16 @@ Value adopt_into_arena(Arena& arena, Value value) {
 
 }  // namespace
 
+const Sheet* EvalContext::sheet_for_qualifier(std::string_view sheet_name) const noexcept {
+  if (sheet_name.empty()) {
+    return current_sheet_;
+  }
+  if (workbook_ == nullptr) {
+    return nullptr;
+  }
+  return workbook_->sheet_by_name(sheet_name);
+}
+
 Value EvalContext::resolve_ref(const parser::Reference& ref) const {
   Value short_circuit = Value::blank();
   const Sheet* target = resolve_ref_target(current_sheet_, workbook_, ref, &short_circuit);

@@ -241,6 +241,21 @@ int era_year_anchor(Era e) noexcept {
   return 1900;  // unreachable
 }
 
+// Validates an era-relative (year, month, day) against the Gregorian
+// calendar and writes its serial.
+bool serial_from_era_ymd(Era era, int era_year, int month, int day, double* out_serial) noexcept {
+  if (month < 1 || month > 12) {
+    return false;
+  }
+  const int gy = era_year - 1 + era_year_anchor(era);
+  const unsigned dim = days_in_month(gy, static_cast<unsigned>(month));
+  if (day < 1 || static_cast<unsigned>(day) > dim) {
+    return false;
+  }
+  *out_serial = date_time::serial_from_ymd(gy, static_cast<unsigned>(month), static_cast<unsigned>(day));
+  return true;
+}
+
 // After an era prefix has been consumed, parses the year/month/day tail in
 // the kanji form `<digits>年<digits>月<digits>日`. Mac Excel rejects 元
 // (gannen) and dot/slash separators when a *full-name* era prefix is used,
@@ -273,15 +288,9 @@ bool parse_era_kanji_ymd_tail(Era era, std::string_view s, double* out_serial, s
     return false;
   }
   s.remove_prefix(3);
-  if (month < 1 || month > 12) {
+  if (!serial_from_era_ymd(era, era_year, month, day, out_serial)) {
     return false;
   }
-  const int gy = era_year - 1 + era_year_anchor(era);
-  const unsigned dim = days_in_month(gy, static_cast<unsigned>(month));
-  if (day < 1 || static_cast<unsigned>(day) > dim) {
-    return false;
-  }
-  *out_serial = date_time::serial_from_ymd(gy, static_cast<unsigned>(month), static_cast<unsigned>(day));
   *rest = s;
   return true;
 }
@@ -312,15 +321,9 @@ bool parse_era_dot_ymd_tail(Era era, std::string_view s, double* out_serial, std
   if (scan_digits(s, 2, &day) == 0) {
     return false;
   }
-  if (month < 1 || month > 12) {
+  if (!serial_from_era_ymd(era, era_year, month, day, out_serial)) {
     return false;
   }
-  const int gy = era_year - 1 + era_year_anchor(era);
-  const unsigned dim = days_in_month(gy, static_cast<unsigned>(month));
-  if (day < 1 || static_cast<unsigned>(day) > dim) {
-    return false;
-  }
-  *out_serial = date_time::serial_from_ymd(gy, static_cast<unsigned>(month), static_cast<unsigned>(day));
   *rest = s;
   return true;
 }

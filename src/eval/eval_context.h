@@ -327,6 +327,11 @@ class EvalContext {
   /// context was default-constructed.
   const Sheet* current_sheet() const noexcept { return current_sheet_; }
 
+  /// Returns the sheet a reference qualifier names: the current sheet when
+  /// `sheet_name` is empty, otherwise the bound workbook's sheet of that
+  /// name. `nullptr` when no workbook is bound or the sheet is missing.
+  const Sheet* sheet_for_qualifier(std::string_view sheet_name) const noexcept;
+
   /// Returns the recursive-evaluation state this context is bound to, or
   /// `nullptr` when no state was supplied. Useful for tests that want to
   /// inspect the memoisation map after an evaluation.

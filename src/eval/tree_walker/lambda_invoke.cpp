@@ -4,6 +4,7 @@
 // reference resolution through a lambda body. The public contract is declared
 // in `tree_walker/dispatch.h`.
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -111,6 +112,26 @@ Value invoke_lambda_values_with_ast(const LambdaValue* lv, std::uint32_t arity, 
     return Value::error(ErrorCode::Calc);
   }
   return invoke_lambda_values_impl(lv, arity, args, ast_args, /*syntax_args=*/nullptr, arena, registry, ctx);
+}
+
+const parser::AstNode* array_literal_ast(const ArrayValue* arr, Arena& arena) {
+  // `make_array_literal` requires rows / cols >= 1.
+  if (arr == nullptr || arr->rows == 0U || arr->cols == 0U) {
+    return nullptr;
+  }
+  const std::size_t total = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
+  const parser::AstNode** children = arena.create_array<const parser::AstNode*>(total);
+  if (children == nullptr) {
+    return nullptr;
+  }
+  for (std::size_t i = 0; i < total; ++i) {
+    parser::AstNode* lit = parser::make_literal(arena, arr->cells[i]);
+    if (lit == nullptr) {
+      return nullptr;
+    }
+    children[i] = lit;
+  }
+  return parser::make_array_literal(arena, arr->rows, arr->cols, children);
 }
 
 namespace {

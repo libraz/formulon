@@ -12,10 +12,23 @@
 #ifndef FORMULON_EVAL_BUILTINS_ENGINEERING_H_
 #define FORMULON_EVAL_BUILTINS_ENGINEERING_H_
 
+#include "utils/expected.h"
+#include "value.h"
+
 namespace formulon {
 namespace eval {
 
 class FunctionRegistry;
+
+namespace builtins_detail {
+
+/// Coerces `v` to a finite number truncated toward zero and within
+/// [lo, hi]. A direct Bool is `#VALUE!` when `reject_bool`; non-finite or
+/// out-of-range values are `#NUM!`. Shared by the engineering integer
+/// arguments and the BESSEL order.
+Expected<double, ErrorCode> coerce_truncated_in_range(const Value& v, double lo, double hi, bool reject_bool);
+
+}  // namespace builtins_detail
 
 /// Registers the simple integer-only engineering built-ins into `registry`.
 ///

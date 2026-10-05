@@ -71,19 +71,11 @@ Value project_structured_ref(std::string_view table_name, std::string_view colum
   }
   const std::uint32_t rows = rect.row_last - rect.row_first + 1U;
   const std::uint32_t cols = rect.col_last - rect.col_first + 1U;
-  Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  const std::vector<Value>& expanded = cells.value();
+  ArrayValue* arr = array_from_values(rows, cols, expanded.data(), expanded.size(), arena);
   if (arr == nullptr) {
     *out_arena_exhausted = true;
     return Value::error(ErrorCode::Num);
-  }
-  // The seam hands back uninitialised storage, so every cell must be
-  // written even when the expansion returned fewer values than the
-  // rectangle covers (a clamped whole-row / whole-column endpoint).
-  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  const std::vector<Value>& expanded = cells.value();
-  for (std::size_t i = 0; i < total; ++i) {
-    buffer[i] = i < expanded.size() ? expanded[i] : Value::blank();
   }
   return Value::array(arr);
 }

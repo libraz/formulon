@@ -83,21 +83,6 @@ std::size_t find_sheet_index(const Workbook& workbook, const Sheet& sheet) noexc
   return 0;
 }
 
-// Returns the referenced cell's sheet, resolving qualifier via the
-// bound workbook. Returns `nullptr` when the qualifier is present but
-// no workbook is bound, or when the named sheet is missing. `ref_sheet`
-// is the sheet string from a `parser::Reference`; empty means "current
-// sheet".
-const Sheet* resolve_ref_sheet(std::string_view ref_sheet, const EvalContext& ctx) noexcept {
-  if (ref_sheet.empty()) {
-    return ctx.current_sheet();
-  }
-  if (ctx.workbook() == nullptr) {
-    return nullptr;
-  }
-  return ctx.workbook()->sheet_by_name(ref_sheet);
-}
-
 struct SingleReference {
   const Sheet* sheet = nullptr;
   std::uint32_t row = 0;
@@ -133,7 +118,7 @@ Expected<SingleReference, ErrorCode> resolve_single_reference(const parser::AstN
   if (top != bottom || left != right) {
     return ErrorCode::Value;
   }
-  const Sheet* sheet = resolve_ref_sheet(sheet_name, ctx);
+  const Sheet* sheet = ctx.sheet_for_qualifier(sheet_name);
   if (sheet == nullptr) {
     return ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref;
   }

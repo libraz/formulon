@@ -335,16 +335,15 @@ constexpr bool lazy_dispatch_is_strictly_sorted() {
 
 static_assert(lazy_dispatch_is_strictly_sorted(), "kLazyDispatch must stay in canonical-name order");
 
-}  // namespace
-
-LazyImpl find_lazy_impl(std::string_view name) noexcept {
+// Binary search over the canonical-name-ordered table; nullptr when absent.
+const LazyEntry* find_lazy_entry(std::string_view name) noexcept {
   std::size_t first = 0;
   std::size_t last = kLazyDispatchCount;
   while (first < last) {
     const std::size_t middle = first + (last - first) / 2;
     const int cmp = strings::case_insensitive_compare(name, kLazyDispatch[middle].name);
     if (cmp == 0) {
-      return kLazyDispatch[middle].impl;
+      return &kLazyDispatch[middle];
     }
     if (cmp < 0) {
       last = middle;
@@ -355,22 +354,16 @@ LazyImpl find_lazy_impl(std::string_view name) noexcept {
   return nullptr;
 }
 
+}  // namespace
+
+LazyImpl find_lazy_impl(std::string_view name) noexcept {
+  const LazyEntry* entry = find_lazy_entry(name);
+  return entry != nullptr ? entry->impl : nullptr;
+}
+
 LazyResultShape find_lazy_result_shape(std::string_view name) noexcept {
-  std::size_t first = 0;
-  std::size_t last = kLazyDispatchCount;
-  while (first < last) {
-    const std::size_t middle = first + (last - first) / 2;
-    const int cmp = strings::case_insensitive_compare(name, kLazyDispatch[middle].name);
-    if (cmp == 0) {
-      return kLazyDispatch[middle].shape;
-    }
-    if (cmp < 0) {
-      last = middle;
-    } else {
-      first = middle + 1;
-    }
-  }
-  return LazyResultShape::kNotLazy;
+  const LazyEntry* entry = find_lazy_entry(name);
+  return entry != nullptr ? entry->shape : LazyResultShape::kNotLazy;
 }
 
 const char* const* lazy_table_names() {

@@ -25,6 +25,7 @@
 #ifndef FORMULON_EVAL_ARRAY_ALLOC_H_
 #define FORMULON_EVAL_ARRAY_ALLOC_H_
 
+#include <cstddef>
 #include <cstdint>
 
 #include "utils/resource_budget.h"
@@ -65,6 +66,13 @@ static_assert(kMaxDerivedArrayCells * sizeof(Value) <= kMaxEvalArenaBytes,
 /// Neither pointer is owned by the caller: both live as long as the arena.
 ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& out_buffer,
                                  std::uint64_t max_cells = kMaxDynamicArrayCells);
+
+/// Allocates a `(rows, cols)` array under `kMaxDerivedArrayCells` and fills it
+/// row-major from the first `count` entries of `values`, padding the rest with
+/// Blank (a clamped range expansion can return fewer cells than its rectangle).
+/// Returns `nullptr` under the same conditions as `allocate_array_value`.
+ArrayValue* array_from_values(std::uint32_t rows, std::uint32_t cols, const Value* values, std::size_t count,
+                              Arena& arena);
 
 }  // namespace eval
 }  // namespace formulon

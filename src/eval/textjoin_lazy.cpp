@@ -22,10 +22,6 @@ namespace eval {
 
 namespace {
 
-// Excel caps the result of TEXTJOIN (and REPT / SUBSTITUTE and other text
-// builtins) at 32,767 UTF-16 units.
-constexpr std::uint64_t kExcelTextCapUnits = 32767u;
-
 // Longest UTF-8 sequence, and therefore the most trailing bytes of a buffer
 // whose decoding a later append can still change.
 constexpr std::size_t kMaxUtf8SequenceBytes = 4u;

@@ -50,14 +50,10 @@ ArrayValue* project_spill_at_anchor(std::string_view sheet, std::uint32_t row, s
     *out_err = ErrorCode::Ref;
     return nullptr;
   }
-  Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* arr = array_from_values(rows, cols, cells.data(), cells.size(), arena);
   if (arr == nullptr) {
     *out_err = ErrorCode::Num;
     return nullptr;
-  }
-  for (std::size_t i = 0; i < cells.size(); ++i) {
-    buffer[i] = cells[i];
   }
   return arr;
 }

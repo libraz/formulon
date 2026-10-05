@@ -575,20 +575,8 @@ Value ImExp(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return im_unary_text(&cplx_exp, args, arena);
 }
 
-Value ImLn(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  const Complex c = z.value();
-  if (c.re == 0.0 && c.im == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return text_complex(cplx_ln(c), arena);
-}
-
-// Shared kernel for IMLOG10 / IMLOG2 (and any future IMLOG_<base>): computes
-// log_base(z) = ln(z) * inv_ln_base. Returns #NUM! when z == 0; otherwise
+// Shared kernel for IMLN / IMLOG10 / IMLOG2: computes
+// log_base(z) = ln(z) * inv_ln_base (IMLN passes 1, which scales exactly). Returns #NUM! when z == 0; otherwise
 // scales the real and imaginary components of ln(z) by `inv_ln_base`. The
 // caller passes the precomputed `1 / ln(base)` constant so we keep one body.
 // Marked `noinline` so the body is emitted exactly once — the wrappers are
@@ -605,6 +593,10 @@ Value ImLn(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   }
   const Complex ln_z = cplx_ln(c);
   return text_complex(Complex{ln_z.re * inv_ln_base, ln_z.im * inv_ln_base, c.suffix}, arena);
+}
+
+Value ImLn(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  return im_log_base(1.0, args, arena);
 }
 
 Value ImLog10(const Value* args, std::uint32_t /*arity*/, Arena& arena) {

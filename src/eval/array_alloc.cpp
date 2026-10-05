@@ -37,5 +37,19 @@ ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& 
   return out;
 }
 
+ArrayValue* array_from_values(std::uint32_t rows, std::uint32_t cols, const Value* values, std::size_t count,
+                              Arena& arena) {
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
+    return nullptr;
+  }
+  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  for (std::size_t i = 0; i < total; ++i) {
+    buffer[i] = i < count ? values[i] : Value::blank();
+  }
+  return arr;
+}
+
 }  // namespace eval
 }  // namespace formulon

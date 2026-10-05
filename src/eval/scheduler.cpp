@@ -756,6 +756,22 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         (dynamic_reference_bearing ? isolated : pooled).push_back(scc_id);
       }
 
+      // Runs `sccs` in order on the calling thread; false once the arena is exhausted.
+      const auto run_on_caller = [&](const std::vector<std::size_t>& sccs) {
+        Arena& arena = *arenas[0U];
+        for (std::size_t position = 0U; position < sccs.size(); ++position) {
+          const SccOutcome o = process_scc(idx.components[sccs[position]], wb, engine.graph_, registry, iter_opts,
+                                           arena, progress_cb, progress_user_data, write_mutex, release_callback,
+                                           &release_queue, observation(layer_index, position + 1U));
+          if (o.arena_exhausted) {
+            return false;
+          }
+          cells_evaluated += o.cells_evaluated;
+          cycle_recoveries += o.cycle_recoveries;
+        }
+        return true;
+      };
+
       bool run_serial = pooled.size() <= 1U || configured_worker_count <= 1U || callback_cycle;
       if (!run_serial && worker_pool == nullptr) {
         // The pool is lazy so a no-op / serial-only recalc starts no OS
@@ -776,17 +792,8 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       if (run_serial) {
         // Tiny layer or single-worker mode: process serially on this thread.
         ++serial_fallback_steps;
-        Arena& arena = *arenas[0U];
-        for (std::size_t position = 0U; position < layer.size(); ++position) {
-          const std::size_t scc_id = layer[position];
-          const SccOutcome o = process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena,
-                                           progress_cb, progress_user_data, write_mutex, release_callback,
-                                           &release_queue, observation(layer_index, position + 1U));
-          if (o.arena_exhausted) {
-            return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
-          }
-          cells_evaluated += o.cells_evaluated;
-          cycle_recoveries += o.cycle_recoveries;
+        if (!run_on_caller(layer)) {
+          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
         }
         continue;
       }
@@ -830,17 +837,8 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       // dynamic-reference super-nodes run.
       if (!isolated.empty()) {
         ++serial_fallback_steps;
-        Arena& arena = *arenas[0U];
-        for (std::size_t position = 0U; position < isolated.size(); ++position) {
-          const std::size_t scc_id = isolated[position];
-          const SccOutcome o = process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena,
-                                           progress_cb, progress_user_data, write_mutex, release_callback,
-                                           &release_queue, observation(layer_index, position + 1U));
-          if (o.arena_exhausted) {
-            return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
-          }
-          cells_evaluated += o.cells_evaluated;
-          cycle_recoveries += o.cycle_recoveries;
+        if (!run_on_caller(isolated)) {
+          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
         }
       }
     }

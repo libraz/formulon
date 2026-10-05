@@ -77,6 +77,10 @@ inline double truncate_index(double value) noexcept {
 /// unchanged.
 Expected<double, ErrorCode> coerce_to_index_number(const Value& v);
 
+/// Excel's text-cell limit in UTF-16 units; text builtins whose result
+/// would exceed it (REPT, REPLACEB, TEXTJOIN, REGEXREPLACE, ...) yield `#VALUE!`.
+inline constexpr std::uint64_t kExcelTextCapUnits = 32767u;
+
 /// Coerces `v` to its Excel-visible string representation.
 ///
 /// * `Number` is rendered via `format_double` (Grisu3 shortest round-trip).

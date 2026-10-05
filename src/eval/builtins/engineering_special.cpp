@@ -47,6 +47,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/engineering.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -77,28 +78,14 @@ Expected<double, ErrorCode> coerce_real_arg(const Value& v) {
 // truncation toward zero; returns the integer order. Negative or non-finite
 // -> #NUM!. Bool is rejected with #VALUE! to match Excel 365.
 Expected<int, ErrorCode> coerce_bessel_order(const Value& v) {
-  if (v.kind() == ValueKind::Bool) {
-    return ErrorCode::Value;
-  }
-  auto n = coerce_to_number(v);
-  if (!n) {
-    return n.error();
-  }
-  const double d = n.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
-  const double t = std::trunc(d);
-  if (t < 0.0) {
-    return ErrorCode::Num;
-  }
   // Upper bound: guard against absurd orders that would overflow the
   // recurrence. Excel caps orders well below this; 2^30 is a defensive
   // ceiling that still accommodates any realistic engineering query.
-  if (t > static_cast<double>((1 << 30))) {
-    return ErrorCode::Num;
+  auto t = builtins_detail::coerce_truncated_in_range(v, 0.0, static_cast<double>((1 << 30)), /*reject_bool=*/true);
+  if (!t) {
+    return t.error();
   }
-  return static_cast<int>(t);
+  return static_cast<int>(t.value());
 }
 
 // ---------------------------------------------------------------------------
@@ -140,16 +127,8 @@ Value Erf(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // ERF.PRECISE: strict 1-arg erf(x). The registry enforces arity (min=max=1)
 // so an attempt to pass a second argument surfaces #VALUE! from the
 // dispatcher before this impl runs.
-Value ErfPrecise(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto a = coerce_real_arg(args[0]);
-  if (!a) {
-    return Value::error(a.error());
-  }
-  const double r = std::erf(a.value());
-  if (std::isnan(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+Value ErfPrecise(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  return Erf(args, 1, arena);
 }
 
 // ERFC(x) = 1 - erf(x). Uses std::erfc for better precision in the tail.

@@ -69,15 +69,10 @@ Value materialize_rectangle(const parser::Reference& top_left, const parser::Ref
   }
   const std::uint32_t rows = bottom_right.row - top_left.row + 1U;
   const std::uint32_t cols = bottom_right.col - top_left.col + 1U;
-  Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  const std::vector<Value>& ev = expanded.value();
+  ArrayValue* arr = array_from_values(rows, cols, ev.data(), ev.size(), arena);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
-  }
-  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  const std::vector<Value>& ev = expanded.value();
-  for (std::size_t k = 0; k < total; ++k) {
-    buffer[k] = k < ev.size() ? ev[k] : Value::blank();
   }
   return Value::array(arr);
 }

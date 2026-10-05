@@ -7,6 +7,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -33,30 +34,6 @@ namespace formulon {
 namespace eval {
 
 namespace {
-
-// Builds a synthetic `ArrayLiteral` AST mirroring `arr`. This lets a Lambda
-// body that expects a range-shaped argument (`SUM(v)`, `AVERAGE(v)`, ...)
-// see the slice through the dispatcher's existing ArrayLiteral branch
-// rather than as an opaque `Value::Array`. Mirrors the helper in
-// `lambda_helpers_lazy.cpp`.
-const parser::AstNode* build_array_literal_for_slice(const ArrayValue* arr, Arena& arena) {
-  if (arr == nullptr || arr->rows == 0U || arr->cols == 0U) {
-    return nullptr;
-  }
-  const std::size_t total = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
-  const parser::AstNode** children = arena.create_array<const parser::AstNode*>(total);
-  if (children == nullptr) {
-    return nullptr;
-  }
-  for (std::size_t i = 0; i < total; ++i) {
-    parser::AstNode* lit = parser::make_literal(arena, arr->cells[i]);
-    if (lit == nullptr) {
-      return nullptr;
-    }
-    children[i] = lit;
-  }
-  return parser::make_array_literal(arena, arr->rows, arr->cols, children);
-}
 
 // Number of arguments an aggregator receives per group: the group's value
 // slice, and nothing else.
@@ -366,6 +343,24 @@ bool row_key_is_error(const ArrayValue& keys, std::uint32_t row) {
   return false;
 }
 
+std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
+                              std::vector<std::uint32_t>* representative_rows,
+                              std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group,
+                              std::unordered_map<std::string, std::size_t>* index) {
+  const std::string key = normalized_group_key(keys, row);
+  const auto existing = index->find(key);
+  if (existing != index->end()) {
+    (*member_rows)[existing->second].push_back(row);
+    return existing->second;
+  }
+  const std::size_t group = representative_rows->size();
+  index->emplace(key, group);
+  representative_rows->push_back(row);
+  member_rows->push_back(std::vector<std::uint32_t>{row});
+  is_error_group->push_back(row_key_is_error(keys, row));
+  return group;
+}
+
 const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t value_col,
                                     const std::vector<std::uint32_t>& row_indices, Arena& arena) {
   const std::uint32_t n = static_cast<std::uint32_t>(row_indices.size());
@@ -385,7 +380,7 @@ const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t valu
 
 Value invoke_aggregator_for_group(const LambdaValue* agg, const ArrayValue* slice, Arena& arena,
                                   const FunctionRegistry& registry, const EvalContext& ctx) {
-  const parser::AstNode* slice_ast = build_array_literal_for_slice(slice, arena);
+  const parser::AstNode* slice_ast = array_literal_ast(slice, arena);
   if (slice_ast == nullptr) {
     return Value::error(ErrorCode::Num);
   }

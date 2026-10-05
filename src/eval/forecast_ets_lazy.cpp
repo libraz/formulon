@@ -115,47 +115,8 @@ bool coerce_strict_numeric(const Value& v, double* out, Value* out_err) {
 // Front-end: shared input preprocessing
 // ---------------------------------------------------------------------------
 
-// Reads an optional scalar argument as a non-negative integer (truncated
-// toward zero). Blank yields `default_value`. Errors propagate. Out-of-
-// domain (negative, non-finite, fractional outside the trunc rule) is
-// flagged via `*out_err` with the supplied error code.
-bool read_int_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                  std::int64_t default_value, std::int64_t* out, Value* out_err, ErrorCode oo_domain) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  if (v.is_blank()) {
-    *out = default_value;
-    return true;
-  }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    *out_err = Value::error(coerced.error());
-    return false;
-  }
-  const double d = coerced.value();
-  if (!std::isfinite(d)) {
-    *out_err = Value::error(oo_domain);
-    return false;
-  }
-  *out = static_cast<std::int64_t>(d);  // truncate toward zero
-  return true;
-}
-
-bool read_optional_int_arg(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx, std::int64_t default_value, std::int64_t* out, Value* out_err,
-                           ErrorCode domain_error) {
-  if (node == nullptr) {
-    *out = default_value;
-    return true;
-  }
-  return read_int_arg(*node, arena, registry, ctx, default_value, out, out_err, domain_error);
-}
-
-// Reads an optional scalar number argument. Same semantics as
-// `read_int_arg` minus the truncation step.
+// Reads an optional scalar number argument. Blank yields `default_value`;
+// errors propagate.
 bool read_double_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, double default_value, double* out, Value* out_err) {
   const Value v = eval_node(node, arena, registry, ctx);
@@ -174,6 +135,33 @@ bool read_double_arg(const parser::AstNode& node, Arena& arena, const FunctionRe
   }
   *out = coerced.value();
   return true;
+}
+
+// Reads an optional scalar argument as a non-negative integer (truncated
+// toward zero). Same semantics as `read_double_arg`; a non-finite value is
+// flagged via `*out_err` with the supplied error code.
+bool read_int_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                  std::int64_t default_value, std::int64_t* out, Value* out_err, ErrorCode oo_domain) {
+  double d = 0.0;
+  if (!read_double_arg(node, arena, registry, ctx, static_cast<double>(default_value), &d, out_err)) {
+    return false;
+  }
+  if (!std::isfinite(d)) {
+    *out_err = Value::error(oo_domain);
+    return false;
+  }
+  *out = static_cast<std::int64_t>(d);  // truncate toward zero
+  return true;
+}
+
+bool read_optional_int_arg(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, std::int64_t default_value, std::int64_t* out, Value* out_err,
+                           ErrorCode domain_error) {
+  if (node == nullptr) {
+    *out = default_value;
+    return true;
+  }
+  return read_int_arg(*node, arena, registry, ctx, default_value, out, out_err, domain_error);
 }
 
 bool read_required_finite_number(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

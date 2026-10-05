@@ -63,10 +63,6 @@ namespace {
 // and capping early gives a clean #VALUE! instead of a slow compile.
 constexpr std::size_t kMaxPatternBytes = 32767U;
 
-// Excel caps a text cell at 32,767 UTF-16 units. REGEXREPLACE output past
-// the cap surfaces #VALUE! instead of growing an unbounded buffer.
-constexpr std::uint64_t kExcelTextCapUnits = 32767U;
-
 // Conservative byte bound for the cap: a UTF-16 unit never needs more than
 // 4 UTF-8 bytes, so a required substitution output beyond this many bytes
 // always exceeds the cap and can be rejected before any buffer growth.

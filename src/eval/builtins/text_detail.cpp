@@ -11,6 +11,8 @@
 #include <utility>
 
 #include "eval/coerce.h"
+#include "eval/wildcard.h"
+#include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 
 namespace formulon {
@@ -90,6 +92,25 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
   out->haystack = std::move(haystack.value());
   out->start = start;
   return true;
+}
+
+std::size_t find_folded(const std::string& haystack, const std::string& needle, std::size_t start_byte,
+                        SearchUnit unit) {
+  const std::string lowered_haystack = to_lower_ascii(haystack);
+  const std::string lowered_needle = to_lower_ascii(needle);
+  // Fast path: a pattern with no `*`, `?` or `~` is a plain substring search.
+  // A bare `~` still needs the wildcard path because `~?` / `~*` unescape.
+  if (lowered_needle.find_first_of("*?~") == std::string::npos) {
+    return lowered_haystack.find(lowered_needle, start_byte);
+  }
+  // The wildcard matchers report offsets relative to the scanned suffix.
+  const std::string_view suffix = std::string_view(lowered_haystack).substr(start_byte);
+  const std::size_t rel =
+      unit == SearchUnit::DbcsByte ? wildcard_find_dbcs(lowered_needle, suffix) : wildcard_find(lowered_needle, suffix);
+  if (rel == std::string_view::npos) {
+    return std::string::npos;
+  }
+  return start_byte + rel;
 }
 
 Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity) {

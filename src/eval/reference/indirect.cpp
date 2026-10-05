@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "eval/dynamic_array/common.h"
+#include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/reference/common.h"
 #include "parser/ast.h"
@@ -79,18 +79,9 @@ Value eval_indirect_lazy(const parser::AstNode& call, Arena& arena, const Functi
       // spill, so collapse to a blank scalar. `SUM`/`COUNT` of this is 0.
       return Value::blank();
     }
-    Value* buffer = nullptr;
-    // The cells are a copy of the rectangle `expand_range` just admitted under
-    // the range-expansion bound, so the copy is bounded the same way. Using the
-    // narrower ceiling that applies to arrays a formula conjures from its
-    // arguments would reject a rectangle the read itself accepted.
-    ArrayValue* out = dynamic_array::allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+    ArrayValue* out = array_from_values(rows, cols, cells.data(), cells.size(), arena);
     if (out == nullptr) {
       return Value::error(ErrorCode::Num);
-    }
-    const std::size_t total = static_cast<std::size_t>(rows) * cols;
-    for (std::size_t i = 0; i < total && i < cells.size(); ++i) {
-      buffer[i] = cells[i];
     }
     return Value::array(out);
   }

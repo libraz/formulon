@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/dynamic_array/common.h"
@@ -56,14 +57,9 @@ Value index_whole_column(const std::vector<Value>& cells, std::uint32_t rows, st
 // single axis — `INDEX(array, 0, 0)` and its two-argument spelling
 // `INDEX(array, 0)`. Returns `#NUM!` on arena exhaustion.
 Value index_whole_array(const std::vector<Value>& cells, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
-  Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = array_from_values(rows, cols, cells.data(), cells.size(), arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
-  }
-  const std::size_t total = static_cast<std::size_t>(rows) * cols;
-  for (std::size_t i = 0; i < total; ++i) {
-    buffer[i] = cells[i];
   }
   return Value::array(out);
 }

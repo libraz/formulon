@@ -89,6 +89,21 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
   cap_integer_significant_digits(int_digits);
 }
 
+// Length of `s` once trailing fractional zeros, and then a bare '.', are dropped.
+std::size_t trimmed_fraction_length(std::string_view s) {
+  std::size_t end = s.size();
+  const std::size_t dot = s.find('.');
+  if (dot != std::string_view::npos) {
+    while (end > dot + 1 && s[end - 1] == '0') {
+      --end;
+    }
+    if (end > 0 && s[end - 1] == '.') {
+      --end;
+    }
+  }
+  return end;
+}
+
 // Excel's `General` format code produces an ~11-character-wide numeric
 // display: fixed-point when the value fits, scientific notation otherwise.
 // This matches Mac Excel 365 / ja-JP for TEXT() calls and is the rendering
@@ -161,17 +176,7 @@ void format_general(std::string& out, double v) {
     std::string_view exp_part = s.substr(epos + 1);
     // Trim trailing zeros from the mantissa's fractional part. `2.50000`
     // collapses to `2.5`; `1.00000` collapses to `1`.
-    std::size_t dot = mantissa.find('.');
-    std::size_t mantissa_end = mantissa.size();
-    if (dot != std::string_view::npos) {
-      while (mantissa_end > dot + 1 && mantissa[mantissa_end - 1] == '0') {
-        --mantissa_end;
-      }
-      if (mantissa_end > 0 && mantissa[mantissa_end - 1] == '.') {
-        --mantissa_end;
-      }
-    }
-    out.append(mantissa.data(), mantissa_end);
+    out.append(mantissa.data(), trimmed_fraction_length(mantissa));
     out.push_back('E');
     // Exponent: always emit an explicit sign, and pad the exponent digits
     // to at least two characters (e.g. `E+09`, not `E+9`). Mac Excel /
@@ -206,18 +211,7 @@ void format_general(std::string& out, double v) {
     out.append(std::to_string(v));
     return;
   }
-  std::string_view s(buf, static_cast<std::size_t>(n));
-  std::size_t dot = s.find('.');
-  std::size_t end = s.size();
-  if (dot != std::string_view::npos) {
-    while (end > dot + 1 && s[end - 1] == '0') {
-      --end;
-    }
-    if (end > 0 && s[end - 1] == '.') {
-      --end;
-    }
-  }
-  out.append(s.data(), end);
+  out.append(buf, trimmed_fraction_length(std::string_view(buf, static_cast<std::size_t>(n))));
 }
 
 // Appends one 4-digit group (leading zeros allowed, value non-zero) as kanji

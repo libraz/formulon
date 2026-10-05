@@ -21,6 +21,27 @@
 
 namespace formulon {
 namespace eval {
+namespace {
+
+// Evaluates a boolean flag argument through `coerce_to_bool`; an error
+// value or failed coercion lands in `*out_err`.
+bool eval_flag_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                   bool* out, Value* out_err) {
+  const Value flag = eval_node(node, arena, registry, ctx);
+  if (flag.is_error()) {
+    *out_err = flag;
+    return false;
+  }
+  auto coerced = coerce_to_bool(flag);
+  if (!coerced) {
+    *out_err = Value::error(coerced.error());
+    return false;
+  }
+  *out = coerced.value();
+  return true;
+}
+
+}  // namespace
 
 Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
@@ -114,27 +135,15 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
   // (Blank coerces to FALSE per `coerce_to_bool`).
   bool by_col = false;
   if (arity >= 2U) {
-    const Value flag = eval_node(call.as_call_arg(1), arena, registry, ctx);
-    if (flag.is_error()) {
-      return flag;
+    if (!eval_flag_arg(call.as_call_arg(1), arena, registry, ctx, &by_col, &err)) {
+      return err;
     }
-    auto coerced = coerce_to_bool(flag);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    by_col = coerced.value();
   }
   bool exactly_once = false;
   if (arity >= 3U) {
-    const Value flag = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (flag.is_error()) {
-      return flag;
+    if (!eval_flag_arg(call.as_call_arg(2), arena, registry, ctx, &exactly_once, &err)) {
+      return err;
     }
-    auto coerced = coerce_to_bool(flag);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    exactly_once = coerced.value();
   }
 
   // Walk lanes (rows or columns) once. `distinct` records first-occurrence
@@ -206,15 +215,9 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // range of sort_index (column-bound for row-sort, row-bound for col-sort).
   bool by_col = false;
   if (arity >= 4U && !is_omitted_arg(call.as_call_arg(3))) {
-    const Value flag = eval_node(call.as_call_arg(3), arena, registry, ctx);
-    if (flag.is_error()) {
-      return flag;
+    if (!eval_flag_arg(call.as_call_arg(3), arena, registry, ctx, &by_col, &err)) {
+      return err;
     }
-    auto coerced = coerce_to_bool(flag);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    by_col = coerced.value();
   }
 
   // sort_index defaults to 1 (1-based). Out-of-range -> #VALUE!. The

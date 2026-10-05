@@ -12,7 +12,6 @@
 
 #include "eval/builtins/text_detail.h"
 #include "eval/coerce.h"
-#include "eval/wildcard.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/text_ops.h"
@@ -69,23 +68,9 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       break;
     }
   }
-  // Case-fold on both sides (ASCII only; matches SEARCH's policy).
-  const std::string lowered_haystack = to_lower_ascii(sargs.haystack);
-  const std::string lowered_needle = to_lower_ascii(sargs.needle);
-  std::size_t match_byte = std::string::npos;
-  const bool has_metachar = lowered_needle.find_first_of("*?~") != std::string::npos;
-  if (!has_metachar) {
-    match_byte = lowered_haystack.find(lowered_needle, start_byte);
-  } else {
-    // SEARCHB uses byte-mode `?` (matches only SBCS codepoints under the
-    // ja-JP DBCS rule) so `=SEARCHB("?","漢ABC")` skips the kanji and
-    // lands on the 'A' (Mac Excel 365 parity).
-    const std::string_view suffix = std::string_view(lowered_haystack).substr(start_byte);
-    const std::size_t rel = wildcard_find_dbcs(lowered_needle, suffix);
-    if (rel != std::string_view::npos) {
-      match_byte = start_byte + rel;
-    }
-  }
+  // SEARCHB's `?` matches only SBCS codepoints under the ja-JP DBCS rule, so
+  // `=SEARCHB("?","漢ABC")` skips the kanji and lands on the 'A'.
+  const std::size_t match_byte = find_folded(sargs.haystack, sargs.needle, start_byte, SearchUnit::DbcsByte);
   if (match_byte == std::string::npos) {
     return Value::error(ErrorCode::Value);
   }
@@ -403,11 +388,6 @@ std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src) {
 // space before `new_text` is appended. `start_num < 1` or `num_bytes < 0`
 // -> `#VALUE!`. Result capped at Excel's 32,767-unit text limit.
 Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
-  // Excel caps the result of REPT (and a handful of related text functions)
-  // at 32,767 UTF-16 units. We reuse the same constant in REPT's overflow
-  // guard.
-  constexpr std::uint64_t kExcelTextCapUnits = 32767u;
-
   auto parsed = read_text_window_args(args, arity);
   if (!parsed) {
     return Value::error(parsed.error());

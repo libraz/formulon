@@ -24,7 +24,6 @@
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/jis0208_table.h"
-#include "eval/wildcard.h"
 #include "utils/arena.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
@@ -37,11 +36,6 @@ namespace {
 using text_detail::read_int_arg;
 using text_detail::read_optional_int_arg;
 using text_detail::read_text_window_args;
-
-// Excel caps the result of REPT (and a handful of related text functions)
-// at 32,767 UTF-16 units. We reuse the same constant in REPT's overflow
-// guard.
-constexpr std::uint64_t kExcelTextCapUnits = 32767u;
 
 // UPPER(text) / LOWER(text) - ASCII case fold. Multi-byte UTF-8 bytes are
 // preserved verbatim (see `text_ops::to_upper_ascii` for the contract).
@@ -364,29 +358,9 @@ Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!text_detail::read_search_args(args, arity, text_detail::SearchUnit::Utf16, &sargs, &early)) {
     return early;
   }
-  const std::string lowered_haystack = to_lower_ascii(sargs.haystack);
-  const std::string lowered_needle = to_lower_ascii(sargs.needle);
   const std::size_t start_byte = utf16_to_byte_offset(sargs.haystack, static_cast<std::uint32_t>(sargs.start - 1));
-  // Fast path: when the pattern carries no metacharacter at all (no `*`,
-  // `?`, or `~`), use a plain substring search on the lower-cased buffers.
-  // This keeps the common wildcard-free case allocation-free beyond the
-  // two `to_lower_ascii` copies that case-insensitive matching already
-  // requires. A bare `~` still needs the wildcard path because `~?` / `~*`
-  // must be un-escaped when comparing.
-  std::size_t pos = std::string::npos;
-  const bool has_metachar = lowered_needle.find_first_of("*?~") != std::string::npos;
-  if (!has_metachar) {
-    pos = lowered_haystack.find(lowered_needle, start_byte);
-  } else {
-    // Wildcard path: scan the haystack suffix starting at `start_byte`. The
-    // byte offset returned by `wildcard_find` is relative to that suffix, so
-    // we add `start_byte` back to obtain an absolute byte position.
-    const std::string_view suffix = std::string_view(lowered_haystack).substr(start_byte);
-    const std::size_t rel = wildcard_find(lowered_needle, suffix);
-    if (rel != std::string_view::npos) {
-      pos = start_byte + rel;
-    }
-  }
+  const std::size_t pos =
+      text_detail::find_folded(sargs.haystack, sargs.needle, start_byte, text_detail::SearchUnit::Utf16);
   if (pos == std::string::npos) {
     return Value::error(ErrorCode::Value);
   }

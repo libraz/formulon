@@ -126,14 +126,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   // shape decisions below need the original AST, not the NameRef. Single-
   // cell Refs and scalar bindings are intentionally left as-is so the
   // existing 1-cell / scalar-fallback semantics are preserved.
-  const parser::AstNode* effective = &raw_arg;
-  if (raw_arg.kind() == parser::NodeKind::NameRef) {
-    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-    if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
-      effective = &resolved;
-    }
-  }
-  const parser::AstNode& arg_node = *effective;
+  const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
   // OFFSET / CHOOSE / IF / ROW / COLUMN all need range-shaped expansion
   // glue (see per-branch comments below). Dispatch via a single
   // case-insensitive name lookup against `kRangeShapedNames` so the hot
@@ -193,24 +186,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
             // path and a bare `IF(cond, a, b)` cannot answer differently for
             // one formula. `expand_if_call` resolves through this branch.
             const Value result = eval_if_array_cond_lazy(arg_node, cond, arena, registry, ctx);
-            if (result.is_error()) {
-              *out_err_code = result.as_error();
-              return false;
-            }
-            if (!result.is_array()) {
-              *out_err_code = ErrorCode::Value;
-              return false;
-            }
-            const ArrayValue* array = result.as_array();
-            const std::size_t count = static_cast<std::size_t>(array->rows) * array->cols;
-            out_cells->assign(array->cells, array->cells + count);
-            if (out_rows != nullptr) {
-              *out_rows = array->rows;
-            }
-            if (out_cols != nullptr) {
-              *out_cols = array->cols;
-            }
-            return true;
+            return expand_array_result(result, out_cells, out_err_code, out_rows, out_cols);
           }
           auto coerced = coerce_to_bool(cond);
           if (!coerced) {

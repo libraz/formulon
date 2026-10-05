@@ -17,9 +17,9 @@
 #include <utility>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
-#include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/classic.h"
@@ -118,19 +118,10 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (!expanded) {
     return Value::error(expanded.error());
   }
-  Value* buffer = nullptr;
-  // The cells are a copy of the rectangle `expand_range` just admitted under
-  // the range-expansion bound, so the copy is bounded the same way. Using the
-  // narrower ceiling that applies to arrays a formula conjures from its
-  // arguments would reject a rectangle the read itself accepted.
-  ArrayValue* out = dynamic_array::allocate_array_value(height, width, arena, buffer, kMaxDerivedArrayCells);
+  const std::vector<Value>& cells = expanded.value();
+  ArrayValue* out = array_from_values(height, width, cells.data(), cells.size(), arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
-  }
-  const std::vector<Value>& cells = expanded.value();
-  const std::size_t total = static_cast<std::size_t>(height) * width;
-  for (std::size_t i = 0; i < total && i < cells.size(); ++i) {
-    buffer[i] = cells[i];
   }
   return Value::array(out);
 }
@@ -178,24 +169,7 @@ bool expand_choose_call(const parser::AstNode& call, Arena& arena, const Functio
   }
   if (idx_val.is_array()) {
     const Value result = eval_choose_array_index_lazy(call, idx_val, arena, registry, ctx);
-    if (result.is_error()) {
-      *out_err_code = result.as_error();
-      return false;
-    }
-    if (!result.is_array()) {
-      *out_err_code = ErrorCode::Value;
-      return false;
-    }
-    const ArrayValue* array = result.as_array();
-    const std::size_t count = static_cast<std::size_t>(array->rows) * array->cols;
-    out_cells->assign(array->cells, array->cells + count);
-    if (out_rows != nullptr) {
-      *out_rows = array->rows;
-    }
-    if (out_cols != nullptr) {
-      *out_cols = array->cols;
-    }
-    return true;
+    return expand_array_result(result, out_cells, out_err_code, out_rows, out_cols);
   }
   auto idx_num = coerce_to_number(idx_val);
   if (!idx_num) {
@@ -215,6 +189,28 @@ bool expand_choose_call(const parser::AstNode& call, Arena& arena, const Functio
   // these expanders, so chains flatten cleanly.
   return expand_resolved_range(call.as_call_arg(picked_slot), arena, registry, ctx, out_cells, out_err_code, out_rows,
                                out_cols);
+}
+
+bool expand_array_result(const Value& result, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                         std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  if (result.is_error()) {
+    *out_err_code = result.as_error();
+    return false;
+  }
+  if (!result.is_array()) {
+    *out_err_code = ErrorCode::Value;
+    return false;
+  }
+  const ArrayValue* array = result.as_array();
+  const std::size_t count = static_cast<std::size_t>(array->rows) * array->cols;
+  out_cells->assign(array->cells, array->cells + count);
+  if (out_rows != nullptr) {
+    *out_rows = array->rows;
+  }
+  if (out_cols != nullptr) {
+    *out_cols = array->cols;
+  }
+  return true;
 }
 
 bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
@@ -272,14 +268,7 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
   // "Ref OR range-shaped" set so a single-cell binding still yields a
   // meaningful row / column index.
   const parser::AstNode& raw_arg = call.as_call_arg(0);
-  const parser::AstNode* effective = &raw_arg;
-  if (raw_arg.kind() == parser::NodeKind::NameRef) {
-    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-    if (&resolved != &raw_arg && (resolved.kind() == parser::NodeKind::Ref || is_range_shaped_ast(resolved))) {
-      effective = &resolved;
-    }
-  }
-  const parser::AstNode& arg = *effective;
+  const parser::AstNode& arg = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/true);
 
   std::uint32_t top = 0;
   std::uint32_t left = 0;
