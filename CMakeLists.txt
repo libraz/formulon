@@ -204,6 +204,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/reference.cpp
   src/parser/ast_dump.cpp
   src/parser/ast_format.cpp
+  src/parser/ast_format_r1c1.cpp
   src/parser/formula_prefix.cpp
   src/parser/ast_shift.cpp
   src/parser/parser.cpp

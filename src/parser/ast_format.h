@@ -44,6 +44,18 @@ namespace parser {
 /// byte-exact stability.
 std::string format_formula(const AstNode& node);
 
+/// Excel's spelling of a binary operator (`+`, `<>`, `&`, ...).
+const char* binop_token(BinOp op) noexcept;
+
+/// Appends a sheet name, wrapped in single quotes (embedded quotes doubled)
+/// when `force_quote` is set or the name needs quoting. No trailing `!`.
+void append_sheet_name(std::string_view sheet, bool force_quote, std::string& out);
+
+/// Appends the `[n]Sheet!` qualifier of a cross-workbook reference. When the
+/// sheet needs quoting the book index goes inside the quotes
+/// (`'[1]My Sheet'!`); an empty sheet yields `[1]!` for a book-level name.
+void append_external_qualifier(std::uint32_t book, std::string_view sheet, std::string& out);
+
 /// Fills `out` with the parenthesis pairs each node of `root` prints with:
 /// the pairs written around it (`AstNode::paren_depth`), or one where its
 /// slot's precedence demands it. Both formatters print exactly these, and a

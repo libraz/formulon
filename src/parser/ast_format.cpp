@@ -39,36 +39,6 @@ using detail::kBpPow;
 using detail::kBpRange;
 using detail::kBpUnaryPrefix;
 
-const char* BinOpToken(BinOp op) noexcept {
-  switch (op) {
-    case BinOp::Add:
-      return "+";
-    case BinOp::Sub:
-      return "-";
-    case BinOp::Mul:
-      return "*";
-    case BinOp::Div:
-      return "/";
-    case BinOp::Pow:
-      return "^";
-    case BinOp::Concat:
-      return "&";
-    case BinOp::Eq:
-      return "=";
-    case BinOp::NotEq:
-      return "<>";
-    case BinOp::Lt:
-      return "<";
-    case BinOp::LtEq:
-      return "<=";
-    case BinOp::Gt:
-      return ">";
-    case BinOp::GtEq:
-      return ">=";
-  }
-  return "+";
-}
-
 // Returns the binding-power slot for the given binary operator. Every
 // binary operator is left-associative (including `^`, matching Excel 365's
 // left-to-right evaluation of a chained power); the per-side `min_bp` calls
@@ -194,14 +164,7 @@ void AppendNameSheetQualifier(const AstNode& node, std::string& out) {
   if (sheet.empty()) {
     return;
   }
-  const bool quoted = node.as_name_sheet_quoted() || sheet_name_needs_quoting(sheet);
-  if (quoted) {
-    out.push_back('\'');
-    AppendQuoteEscaped(sheet, out);
-    out.push_back('\'');
-  } else {
-    out.append(sheet);
-  }
+  append_sheet_name(sheet, node.as_name_sheet_quoted(), out);
   out.push_back('!');
 }
 
@@ -216,18 +179,7 @@ void FormatExternalRef(const AstNode& node, std::string& out) {
   const std::string_view name = node.as_external_ref_name();
   // The name form carries no sheet at all, and an absent qualifier is not
   // a name that needs quoting: `[1]!SrcTotal`, never `'[1]'!SrcTotal`.
-  const bool quoted = !sheet.empty() && sheet_name_needs_quoting(sheet);
-  if (quoted) {
-    out.push_back('\'');
-  }
-  out.push_back('[');
-  out.append(std::to_string(node.as_external_ref_book()));
-  out.push_back(']');
-  AppendQuoteEscaped(sheet, out);
-  if (quoted) {
-    out.push_back('\'');
-  }
-  out.push_back('!');
+  append_external_qualifier(node.as_external_ref_book(), sheet, out);
   if (!name.empty()) {
     out.append(name);
     return;
@@ -365,7 +317,7 @@ void FormatUnary(const AstNode& node, std::string& out, const ParenCounts& paren
 
 void FormatBinary(const AstNode& node, std::string& out, const ParenCounts& parens) {
   FormatNode(node.as_binary_lhs(), out, parens);
-  out.append(BinOpToken(node.as_binary_op()));
+  out.append(binop_token(node.as_binary_op()));
   FormatNode(node.as_binary_rhs(), out, parens);
 }
 
@@ -877,7 +829,7 @@ struct StorageEmitter {
         return;
       case NodeKind::BinaryOp:
         emit(node.as_binary_lhs(), out);
-        out.append(BinOpToken(node.as_binary_op()));
+        out.append(binop_token(node.as_binary_op()));
         emit(node.as_binary_rhs(), out);
         return;
       case NodeKind::RangeOp:
@@ -1039,6 +991,63 @@ struct StorageEmitter {
 };
 
 }  // namespace
+
+const char* binop_token(BinOp op) noexcept {
+  switch (op) {
+    case BinOp::Add:
+      return "+";
+    case BinOp::Sub:
+      return "-";
+    case BinOp::Mul:
+      return "*";
+    case BinOp::Div:
+      return "/";
+    case BinOp::Pow:
+      return "^";
+    case BinOp::Concat:
+      return "&";
+    case BinOp::Eq:
+      return "=";
+    case BinOp::NotEq:
+      return "<>";
+    case BinOp::Lt:
+      return "<";
+    case BinOp::LtEq:
+      return "<=";
+    case BinOp::Gt:
+      return ">";
+    case BinOp::GtEq:
+      return ">=";
+  }
+  return "+";
+}
+
+void append_sheet_name(std::string_view sheet, bool force_quote, std::string& out) {
+  if (force_quote || sheet_name_needs_quoting(sheet)) {
+    out.push_back('\'');
+    AppendQuoteEscaped(sheet, out);
+    out.push_back('\'');
+  } else {
+    out.append(sheet);
+  }
+}
+
+void append_external_qualifier(std::uint32_t book, std::string_view sheet, std::string& out) {
+  // The name form carries no sheet at all, and an absent qualifier is not
+  // a name that needs quoting: `[1]!SrcTotal`, never `'[1]'!SrcTotal`.
+  const bool quoted = !sheet.empty() && sheet_name_needs_quoting(sheet);
+  if (quoted) {
+    out.push_back('\'');
+  }
+  out.push_back('[');
+  out.append(std::to_string(book));
+  out.push_back(']');
+  AppendQuoteEscaped(sheet, out);
+  if (quoted) {
+    out.push_back('\'');
+  }
+  out.push_back('!');
+}
 
 void collect_parenthesized_nodes(const AstNode& root, std::unordered_map<const AstNode*, std::uint8_t>& out) {
   if (ast_depth_within_limit(root, kMaxFormulaAstDepth)) {
