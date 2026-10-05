@@ -8,6 +8,8 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
+#include <string_view>
 
 namespace formulon {
 namespace {
@@ -191,6 +193,21 @@ const char* builtin_num_fmt(std::uint16_t id) {
     return "";
   }
   return kBuiltinNumFmts[id];
+}
+
+std::optional<std::string_view> effective_num_fmt(const formulon::StylesTable& styles, std::uint16_t id) {
+  for (const formulon::NumFmtRecord& record : styles.num_fmts) {
+    if (record.id == id && record.format_string_index < styles.num_fmt_strings.size()) {
+      return styles.num_fmt_strings[record.format_string_index];
+    }
+  }
+  if (id < 164U) {
+    const char* builtin = formulon::builtin_num_fmt(id);
+    if (builtin != nullptr && builtin[0] != '\0') {
+      return std::string_view(builtin);
+    }
+  }
+  return std::nullopt;
 }
 
 }  // namespace formulon

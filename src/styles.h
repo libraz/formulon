@@ -13,7 +13,9 @@
 #define FORMULON_STYLES_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace formulon {
@@ -322,6 +324,12 @@ struct StylesTable {
 /// program lifetime; the table lives in `styles.cpp` so the styles reader
 /// and writer share a single definition.
 const char* builtin_num_fmt(std::uint16_t id);
+
+/// Resolves a number-format id using the effective OOXML mapping. A valid
+/// custom record wins over the built-in slot, and duplicate ids resolve to
+/// the first valid custom record in document order. `std::nullopt` means that
+/// neither a valid custom record nor a non-empty built-in format exists.
+std::optional<std::string_view> effective_num_fmt(const formulon::StylesTable& styles, std::uint16_t id);
 
 }  // namespace formulon
 
