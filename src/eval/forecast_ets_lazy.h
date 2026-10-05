@@ -20,9 +20,9 @@
 // `eval/lazy_impls.h` for the shared `LazyImpl` signature and the
 // `eval_node` recursion entry point.
 //
-// The implementation lives in a single TU (`forecast_ets_lazy.cpp`)
-// because the four impls share a substantial helper surface
-// (preprocessing, fit, ACF) that we deliberately keep in-TU.
+// `forecast_ets_lazy.cpp` holds argument reading, preprocessing and the four
+// impls; series preparation lives in `ets_series.cpp` and the smoothing fit
+// in `holt_winters.cpp`.
 
 #ifndef FORMULON_EVAL_FORECAST_ETS_LAZY_H_
 #define FORMULON_EVAL_FORECAST_ETS_LAZY_H_
