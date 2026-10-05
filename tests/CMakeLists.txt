@@ -23,6 +23,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/value_array_test.cpp
   unit/sheet_test.cpp
   unit/sheet_spill_test.cpp
+  unit/sheet_spill_validation_test.cpp
+  unit/sheet_read_range_test.cpp
+  unit/sheet_spill_lifetime_test.cpp
+  unit/sheet_spill_scale_test.cpp
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
   unit/utils/checked_mul_test.cpp
@@ -57,13 +61,13 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_cache_reader_test.cpp
   unit/io/pivot_cache_writer_test.cpp
   unit/io/pivot_table_reader_test.cpp
+  unit/io/pivot_table_reader_corruption_test.cpp
+  unit/io/pivot_table_reader_filters_test.cpp
+  unit/io/pivot_table_reader_attributes_test.cpp
   unit/io/pivot_table_writer_test.cpp
   unit/io/sax_shared_formula_test.cpp
   unit/io/sax_xml_reader_test.cpp
   unit/io/sheet_name_validation_test.cpp
-  unit/io/pivot_table_reader_corruption_test.cpp
-  unit/io/pivot_table_reader_filters_test.cpp
-  unit/io/pivot_table_reader_attributes_test.cpp
   unit/io/sheet_reader_lexing_parity_test.cpp
   unit/io/sheet_reader_test.cpp
   unit/io/sst_reader_test.cpp
@@ -84,34 +88,34 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_roundtrip_symmetry_test.cpp
   unit/io/sheet_roundtrip_symmetry_test.cpp
   unit/io/xlsb_roundtrip_symmetry_test.cpp
+  unit/io/xlsb_roundtrip_defined_names_test.cpp
+  unit/io/xlsb_roundtrip_numeric_layout_test.cpp
   unit/io/xlsb/book_protection_fixture_test.cpp
   unit/io/xlsb/feature_records_test.cpp
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
-  unit/io/xlsb_roundtrip_defined_names_test.cpp
-  unit/io/xlsb_roundtrip_numeric_layout_test.cpp
   unit/io/xlsb/ptg_test.cpp
   unit/io/xlsb/ptg_class_fixture_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
-  unit/io/xlsb/reader_test.cpp
-  unit/io/xlsb/record_test.cpp
-  unit/io/xlsb/record_writer_test.cpp
-  unit/io/xlsb/sheet_tail_test.cpp
   unit/io/xlsb/ptg_codec_function_classes_test.cpp
   unit/io/xlsb/ptg_codec_scalar_array_test.cpp
   unit/io/xlsb/ptg_codec_decoder_validation_test.cpp
-  unit/io/xlsb/sst_writer_test.cpp
+  unit/io/xlsb/reader_test.cpp
   unit/io/xlsb/reader_formula_test.cpp
   unit/io/xlsb/reader_validation_test.cpp
   unit/io/xlsb/reader_passthrough_test.cpp
+  unit/io/xlsb/record_test.cpp
+  unit/io/xlsb/record_writer_test.cpp
+  unit/io/xlsb/sheet_tail_test.cpp
+  unit/io/xlsb/sst_writer_test.cpp
   unit/io/xlsb/writer_test.cpp
+  unit/io/xlsb/writer_formula_test.cpp
+  unit/io/xlsb/writer_layout_test.cpp
+  unit/io/xlsb/writer_metadata_test.cpp
   unit/io/xlsb_fidelity_test.cpp
   unit/io/xlsb_phonetic_test.cpp
   unit/io/external_link_fixture_test.cpp
   unit/io/xlsb_pivot_fixture_test.cpp
-  unit/io/xlsb/writer_formula_test.cpp
-  unit/io/xlsb/writer_layout_test.cpp
-  unit/io/xlsb/writer_metadata_test.cpp
   unit/io/xlsb_retained_part_staleness_test.cpp
   unit/io/xlsb_reader_contract_test.cpp
   unit/io/ooxml_output_contract_test.cpp
@@ -136,6 +140,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/eval_state_test.cpp
   unit/eval/dep_graph_test.cpp
   unit/eval/dep_extractor_test.cpp
+  unit/eval/dep_extractor_names_test.cpp
+  unit/eval/dep_extractor_structured_refs_test.cpp
+  unit/eval/dep_extractor_3d_dynamic_test.cpp
   unit/eval/dynamic_reference_deps_test.cpp
   unit/eval/dirty_set_test.cpp
   unit/eval/iterative_progress_test.cpp
@@ -154,9 +161,6 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_math_test.cpp
   unit/eval/builtins_math2_test.cpp
   unit/eval/builtins_math3_test.cpp
-  unit/eval/dep_extractor_names_test.cpp
-  unit/eval/dep_extractor_structured_refs_test.cpp
-  unit/eval/dep_extractor_3d_dynamic_test.cpp
   unit/eval/builtins_math4_test.cpp
   unit/eval/builtins_text_test.cpp
   unit/eval/builtins_text2_test.cpp
@@ -191,6 +195,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_stats_a_test.cpp
   unit/eval/builtins_descriptive_stats_test.cpp
   unit/eval/builtins_distributions_test.cpp
+  unit/eval/builtins_distributions_beta_gamma_test.cpp
+  unit/eval/builtins_distributions_tail_test.cpp
   unit/eval/builtins_chisq_test.cpp
   unit/eval/builtins_t_test.cpp
   unit/eval/builtins_f_test.cpp
@@ -205,19 +211,31 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_database_test.cpp
   unit/eval/builtins_groupby_test.cpp
   unit/eval/builtins_pivotby_test.cpp
+  unit/eval/builtins_pivotby_multicol_test.cpp
+  unit/eval/builtins_pivotby_aggregators_test.cpp
+  unit/eval/builtins_pivotby_nested_totals_test.cpp
   unit/eval/builtins_ifs_test.cpp
   unit/eval/builtins_lookup_test.cpp
+  unit/eval/builtins_lookup_index_test.cpp
+  unit/eval/builtins_lookup_choose_test.cpp
   unit/eval/builtins_implicit_intersection_test.cpp
   unit/eval/builtins_references_test.cpp
-  unit/eval/builtins_distributions_beta_gamma_test.cpp
-  unit/eval/builtins_distributions_tail_test.cpp
+  unit/eval/builtins_references_indirect_test.cpp
+  unit/eval/builtins_references_offset_test.cpp
+  unit/eval/builtins_references_endpoints_test.cpp
   unit/eval/reference_lazy_test.cpp
   unit/eval/builtins_vlookup_test.cpp
   unit/eval/builtins_xlookup_test.cpp
   unit/eval/builtins_datetime_test.cpp
+  unit/eval/builtins_datetime_1904_test.cpp
+  unit/eval/builtins_datetime_calendar_test.cpp
+  unit/eval/builtins_datetime_clock_test.cpp
+  unit/eval/builtins_datetime_months_test.cpp
   unit/eval/builtins_datevalue_timevalue_test.cpp
   unit/eval/date_time_1904_test.cpp
   unit/eval/builtins_financial_test.cpp
+  unit/eval/builtins_financial_payments_test.cpp
+  unit/eval/builtins_financial_depreciation_test.cpp
   unit/eval/builtins_financial2_test.cpp
   unit/eval/builtins_financial_rates_test.cpp
   unit/eval/builtins_financial_coupon_test.cpp
@@ -225,31 +243,17 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_financial_bond_simple_test.cpp
   unit/eval/builtins_financial_duration_test.cpp
   unit/eval/builtins_financial_oddf_test.cpp
-  unit/eval/builtins_pivotby_multicol_test.cpp
-  unit/eval/builtins_pivotby_aggregators_test.cpp
-  unit/eval/builtins_pivotby_nested_totals_test.cpp
   unit/eval/builtins_financial_oddl_test.cpp
   unit/eval/builtins_financial_price_test.cpp
-  unit/eval/builtins_lookup_index_test.cpp
-  unit/eval/builtins_lookup_choose_test.cpp
   unit/eval/builtins_financial_yield_test.cpp
   unit/eval/builtins_forecast_ets_test.cpp
-  unit/eval/builtins_references_indirect_test.cpp
-  unit/eval/builtins_references_offset_test.cpp
-  unit/eval/builtins_references_endpoints_test.cpp
   unit/eval/builtins_regression_test.cpp
   unit/eval/builtins_hypothesis_test.cpp
   unit/eval/builtins_sumsq_test.cpp
   unit/eval/builtins_percentof_test.cpp
-  unit/eval/builtins_datetime_1904_test.cpp
-  unit/eval/builtins_datetime_calendar_test.cpp
-  unit/eval/builtins_datetime_clock_test.cpp
-  unit/eval/builtins_datetime_months_test.cpp
   unit/eval/builtins_sumx_test.cpp
   unit/eval/builtins_series_sum_test.cpp
   unit/eval/builtins_rank_test.cpp
-  unit/eval/builtins_financial_payments_test.cpp
-  unit/eval/builtins_financial_depreciation_test.cpp
   unit/eval/lazy_range_arg_shapes_test.cpp
   unit/eval/builtins_regex_test.cpp
   unit/eval/builtins_distributions_ext2_test.cpp
@@ -305,6 +309,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/pivot_show_values_as_test.cpp
   unit/pivot/pivot_types_test.cpp
   unit/cf/cf_evaluator_test.cpp
+  unit/cf/cf_evaluator_context_test.cpp
+  unit/cf/cf_evaluator_population_test.cpp
+  unit/cf/cf_evaluator_range_test.cpp
   unit/cf/cf_types_test.cpp
   unit/cf/scale_evaluator_test.cpp
   unit/print/page_setup_test.cpp
@@ -351,9 +358,6 @@ target_compile_definitions(formulon_unit_tests
 # `ZipReader.ReadEntryRejectsHighRatioEntry`) out of the fast loop we
 # rely on the `-j N` parallelism added to `make test`; they run
 # alongside the rest in <2 s wall-clock on a modern workstation.
-  unit/cf/cf_evaluator_context_test.cpp
-  unit/cf/cf_evaluator_population_test.cpp
-  unit/cf/cf_evaluator_range_test.cpp
 # Separating them into a dedicated SLOW binary would force the gtest
 # fixture to be duplicated, which is a worse trade.
 gtest_discover_tests(formulon_unit_tests)
