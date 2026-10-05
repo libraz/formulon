@@ -1860,11 +1860,12 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
 // invariant for any other reader that consults both under the same
 // lock, and because the dep-graph re-index it can trigger has to run
 // against the rewritten table.
-Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
-                                                   const eval::RecalcEngine::LockedMutator& mutator,
-                                                   std::vector<DefinedName>& defined_names, std::size_t sheet_index,
-                                                   parser::RowColAxis axis, parser::RowColEdit edit,
-                                                   std::uint32_t origin, std::uint32_t count, const char* op_name) {
+[[gnu::noinline]] Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
+                                                                     const eval::RecalcEngine::LockedMutator& mutator,
+                                                                     std::vector<DefinedName>& defined_names,
+                                                                     std::size_t sheet_index, parser::RowColAxis axis,
+                                                                     parser::RowColEdit edit, std::uint32_t origin,
+                                                                     std::uint32_t count, const char* op_name) {
   RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, edit, origin, count, op_name));
   const std::string target_sheet_name = sheets[sheet_index].name();
   // `apply_row_col_edit` above rejected an out-of-range `sheet_index`, and

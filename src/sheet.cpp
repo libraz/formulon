@@ -120,16 +120,22 @@ void Sheet::add_pivot_table(std::unique_ptr<pivot::PivotTable> table) {
 }
 
 std::vector<std::pair<std::uint32_t, std::uint32_t>> Sheet::comment_anchor_set() const {
-  std::vector<std::pair<std::uint32_t, std::uint32_t>> anchors;
-  anchors.reserve(comments_.size() + threaded_comments_.size());
+  // Packed (row << 32 | col) keys sort in the same order as the pairs.
+  std::vector<std::uint64_t> keys;
+  keys.reserve(comments_.size() + threaded_comments_.size());
   for (const CellComment& c : comments_) {
-    anchors.emplace_back(c.row, c.col);
+    keys.push_back((static_cast<std::uint64_t>(c.row) << 32U) | c.col);
   }
   for (const ThreadedComment& c : threaded_comments_) {
-    anchors.emplace_back(c.row, c.col);
+    keys.push_back((static_cast<std::uint64_t>(c.row) << 32U) | c.col);
   }
-  std::sort(anchors.begin(), anchors.end());
-  anchors.erase(std::unique(anchors.begin(), anchors.end()), anchors.end());
+  std::sort(keys.begin(), keys.end());
+  keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> anchors;
+  anchors.reserve(keys.size());
+  for (const std::uint64_t k : keys) {
+    anchors.emplace_back(static_cast<std::uint32_t>(k >> 32U), static_cast<std::uint32_t>(k));
+  }
   return anchors;
 }
 

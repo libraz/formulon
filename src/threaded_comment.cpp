@@ -30,8 +30,11 @@ bool IsUpperHex(char c) noexcept {
   return IsDigit(c) || (c >= 'A' && c <= 'F');
 }
 
-Error Invalid(std::string message, std::string_view value) {
-  return make_error(FormulonErrorCode::kThreadedCommentInvalid, std::move(message), "value=" + std::string(value));
+// Out of line so the string building is emitted once rather than at every validation site.
+[[gnu::noinline]] Error Invalid(std::string_view message, std::string_view value) {
+  std::string detail = "value=";
+  detail.append(value);
+  return make_error(FormulonErrorCode::kThreadedCommentInvalid, std::string(message), std::move(detail));
 }
 
 bool HasPerson(const std::vector<Person>& persons, std::string_view id) noexcept {

@@ -235,12 +235,8 @@ std::optional<double> top10_threshold(const Top10Filter& f, std::vector<double> 
   double count = f.percent ? std::floor(n * f.val / 100.0) : std::floor(f.val);
   count = std::max(1.0, std::min(count, n));
   const auto k = static_cast<std::size_t>(count);
-  if (f.top) {
-    std::sort(numbers.begin(), numbers.end(), std::greater<double>());
-  } else {
-    std::sort(numbers.begin(), numbers.end());
-  }
-  return numbers[k - 1U];
+  std::sort(numbers.begin(), numbers.end());
+  return f.top ? numbers[numbers.size() - k] : numbers[k - 1U];
 }
 
 /// Half-open serial interval `[lo, hi)` of a calendar-relative filter.
