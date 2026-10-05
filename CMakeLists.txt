@@ -190,6 +190,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/styles_reader.cpp
   src/io/xlsb/styles_writer.cpp
   src/io/xlsb/tail_refs.cpp
+  src/io/xlsb/workbook_bin_reader.cpp
   src/io/xlsb/writer.cpp
   src/cf/cf_evaluator.cpp
   src/cf/cf_helpers.cpp
