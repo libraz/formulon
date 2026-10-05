@@ -13,6 +13,7 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/ast_dump.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "parser/reference.h"
 #include "utils/arena.h"

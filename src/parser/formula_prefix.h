@@ -130,6 +130,12 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
   return out;
 }
 
+/// Respells each one-argument call to `SINGLE` / `ANCHORARRAY` in `formula`
+/// (a leading `=` optional) as the `@x` / `x#` operator Excel's formula bar
+/// shows for it, copying every other character verbatim. Returns `formula`
+/// unchanged when it holds none or does not parse.
+std::string spell_storage_operators(std::string_view formula);
+
 }  // namespace parser
 }  // namespace formulon
 

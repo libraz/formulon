@@ -86,12 +86,6 @@ using StorageFunctionNameSpeller = std::string (*)(std::string_view name);
 std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell,
                                    const std::vector<const AstNode*>* omitted_at = nullptr);
 
-/// Respells each one-argument call to `SINGLE` / `ANCHORARRAY` in `formula`
-/// (a leading `=` optional) as the `@x` / `x#` operator Excel's formula bar
-/// shows for it, copying every other character verbatim. Returns `formula`
-/// unchanged when it holds none or does not parse.
-std::string spell_storage_operators(std::string_view formula);
-
 }  // namespace parser
 }  // namespace formulon
 
