@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter_eval.h"
 #include "eval/aggregate_kernels.h"
 #include "eval/builtins/subtotal.h"
 #include "eval/coerce.h"
@@ -86,7 +87,7 @@ Expected<double, ErrorCode> read_scalar(const parser::AstNode& node, Arena& aren
 // --- Row visibility ------------------------------------------------------
 //
 // `SUBTOTAL(100+n)` and `AGGREGATE` with the hidden-row option bit skip cells
-// that sit on a manually hidden row. Visibility is a property of the sheet
+// that sit on any hidden row. Visibility is a property of the sheet
 // (`Sheet::layout().row_overrides`), so it is only knowable for an argument
 // that still carries the rows its cells came from.
 //
@@ -97,10 +98,16 @@ Expected<double, ErrorCode> read_scalar(const parser::AstNode& node, Arena& aren
 // what Excel does for a literal array and the conservative answer elsewhere —
 // a cell whose row we cannot name is never silently dropped from a total.
 //
-// Excel additionally distinguishes filter-hidden from manually hidden rows
-// (codes 1..11 already skip filter-hidden rows). Formulon models only the
-// `RowLayout::hidden` flag the OOXML reader and `fm_sheet_set_row_hidden`
-// write, so both variants read that one flag and 1..11 include everything.
+// `SUBTOTAL(1..11)` skips only filter-hidden rows. OOXML stores no filtered
+// flag, so the class is derived the way Excel does after a reload: while any
+// AutoFilter on the sheet (its own or a table's) carries a criterion, every
+// hidden row of that sheet counts as filtered; otherwise none does.
+
+/// Which hidden rows an aggregate skips.
+enum class HiddenScope : std::uint8_t {
+  kAll,       ///< Every hidden row (`SUBTOTAL(101..111)`, AGGREGATE's hidden option).
+  kFiltered,  ///< Only filter-hidden rows (`SUBTOTAL(1..11)`).
+};
 
 // Resolves the sheet a reference-shaped argument reads from, together with
 // the 0-based row its first (top-left) cell occupies. Returns nullptr when
@@ -155,13 +162,15 @@ const Sheet* reference_arg_origin(const parser::AstNode& node, const EvalContext
 }
 
 // Appends `count` visibility flags for the cells of one argument, given the
-// argument's resolved shape. Cells on a hidden row are marked true.
-void append_visibility(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t rows, std::uint32_t cols,
-                       std::vector<bool>* out_hidden) {
+// argument's resolved shape. Cells on a hidden row within `scope` are marked
+// true.
+void append_visibility(const parser::AstNode& node, const EvalContext& ctx, HiddenScope scope, std::uint32_t rows,
+                       std::uint32_t cols, std::vector<bool>* out_hidden) {
   const std::size_t count = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
   std::uint32_t top = 0;
   const Sheet* sheet = reference_arg_origin(node, ctx, &top);
-  if (sheet == nullptr || rows == 0U || cols == 0U) {
+  if (sheet == nullptr || rows == 0U || cols == 0U ||
+      (scope == HiddenScope::kFiltered && !sheet_has_filter_criteria(ctx.workbook(), *sheet))) {
     out_hidden->resize(out_hidden->size() + count, false);
     return;
   }
@@ -364,7 +373,7 @@ void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, st
 // error in `*out_err`. Returns true on a clean walk.
 //
 // `out_hidden` grows in lockstep with `out_cells`, one flag per appended
-// cell, so a later filter can drop the cells that sit on hidden rows without
+// cell (hidden rows within `scope`), so a later filter can drop them without
 // re-deriving where each one came from. `out_nested` (nullable) grows the same
 // way with the nested SUBTOTAL / AGGREGATE flags; null skips the detection.
 //
@@ -373,8 +382,8 @@ void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, st
 // the error-ignore bit decides whether errors short-circuit) are applied
 // later by `apply_filters`.
 bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
-                 const EvalContext& ctx, std::vector<Value>* out_cells, std::vector<bool>* out_hidden,
-                 std::vector<bool>* out_nested, Value* out_err) {
+                 const EvalContext& ctx, HiddenScope scope, std::vector<Value>* out_cells,
+                 std::vector<bool>* out_hidden, std::vector<bool>* out_nested, Value* out_err) {
   const parser::AstNode* effective = &arg_node;
   if (arg_node.kind() == parser::NodeKind::NameRef) {
     const parser::AstNode& resolved = resolve_name_ast(arg_node, ctx.name_env());
@@ -398,7 +407,7 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
     // the row mapping would be a guess.
     const std::size_t n = rr.cells.size();
     if (static_cast<std::size_t>(rr.rows) * static_cast<std::size_t>(rr.cols) == n) {
-      append_visibility(node, ctx, rr.rows, rr.cols, out_hidden);
+      append_visibility(node, ctx, scope, rr.rows, rr.cols, out_hidden);
       if (out_nested != nullptr) {
         append_nested_flags(node, ctx, rr.rows, rr.cols, out_nested);
       }
@@ -655,18 +664,18 @@ Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const Functi
   if (!code) {
     return Value::error(code.error());
   }
-  const bool skip_hidden = subtotal_code_skips_hidden(code.value());
+  const HiddenScope scope = subtotal_code_skips_hidden(code.value()) ? HiddenScope::kAll : HiddenScope::kFiltered;
 
   std::vector<Value> cells;
   std::vector<bool> hidden;
   std::vector<bool> nested;
   Value err = Value::blank();
   for (std::uint32_t i = 1; i < arity; ++i) {
-    if (!collect_arg(call.as_call_arg(i), arena, registry, ctx, &cells, &hidden, &nested, &err)) {
+    if (!collect_arg(call.as_call_arg(i), arena, registry, ctx, scope, &cells, &hidden, &nested, &err)) {
       return err;
     }
   }
-  drop_hidden_cells(&cells, make_drop_mask(cells.size(), skip_hidden, hidden, /*use_nested=*/true, nested));
+  drop_hidden_cells(&cells, make_drop_mask(cells.size(), /*use_hidden=*/true, hidden, /*use_nested=*/true, nested));
 
   // Hand the mode dispatch the same shape the eager dispatcher would have
   // built: the function code followed by the flattened data cells.
@@ -720,7 +729,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     if (arity != 4U) {
       return Value::error(ErrorCode::Value);
     }
-    if (!collect_arg(call.as_call_arg(2), arena, registry, ctx, &cells, &hidden, nested_out, &err)) {
+    if (!collect_arg(call.as_call_arg(2), arena, registry, ctx, HiddenScope::kAll, &cells, &hidden, nested_out, &err)) {
       return err;
     }
     drop_hidden_cells(&cells, make_drop_mask(cells.size(), ignore_hidden, hidden, ignore_nested, nested));
@@ -756,7 +765,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
 
   // Codes 1..13 — every remaining positional arg is data.
   for (std::uint32_t i = 2; i < arity; ++i) {
-    if (!collect_arg(call.as_call_arg(i), arena, registry, ctx, &cells, &hidden, nested_out, &err)) {
+    if (!collect_arg(call.as_call_arg(i), arena, registry, ctx, HiddenScope::kAll, &cells, &hidden, nested_out, &err)) {
       return err;
     }
   }

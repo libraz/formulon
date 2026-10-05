@@ -29,6 +29,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_spill_scale_test.cpp
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
+  unit/auto_filter_eval_test.cpp
   unit/auto_filter_model_test.cpp
   unit/validation_eval_test.cpp
   unit/theme_test.cpp
@@ -159,6 +160,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/recalc_engine_test.cpp
   unit/eval/cell_evaluator_test.cpp
   unit/eval/display_text_test.cpp
+  unit/eval/builtins_subtotal_filter_hidden_test.cpp
   unit/eval/volatile_tracker_test.cpp
   unit/eval/cross_sheet_test.cpp
   unit/eval/utf8_length_test.cpp

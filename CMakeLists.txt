@@ -118,6 +118,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/utf8_length.cpp
   src/external_book.cpp
   src/auto_filter.cpp
+  src/auto_filter_eval.cpp
   src/styles.cpp
   src/style_resolve.cpp
   src/theme.cpp
