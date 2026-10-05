@@ -234,6 +234,9 @@ set(FORMULON_CORE_SOURCES
   src/print/print_area.cpp
   src/print/pagination.cpp
   src/print/sheet_geometry.cpp
+  src/drawing/drawing_xml.cpp
+  src/drawing/image_header.cpp
+  src/drawing/drawing_edit.cpp
   src/eval/array_alloc.cpp
   src/eval/coerce.cpp
   src/eval/rng.cpp

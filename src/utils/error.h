@@ -146,6 +146,12 @@ enum class FormulonErrorCode : int32_t {
   /// changed since load; the writer re-emits those bytes verbatim, so the
   /// save is refused rather than dropping the change.
   kIoXlsbRetainedPartStale = 5022,
+  /// Image bytes passed for insertion are not a format the drawing writer
+  /// can embed (PNG, JPEG, GIF, BMP), or their header is truncated.
+  kIoImageUnsupported = 5023,
+  /// A sheet's drawing part could not be parsed, so typed drawing edits on
+  /// it are refused rather than rewriting bytes the model cannot see.
+  kIoDrawingUnparseable = 5024,
 
   // ===== 6000-6999: Crypto / Security =====
   /// Allocated but not currently produced: Formulon does not decrypt
@@ -438,6 +444,10 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kIoXlsbCorrupt";
     case FormulonErrorCode::kIoXlsbRetainedPartStale:
       return "kIoXlsbRetainedPartStale";
+    case FormulonErrorCode::kIoImageUnsupported:
+      return "kIoImageUnsupported";
+    case FormulonErrorCode::kIoDrawingUnparseable:
+      return "kIoDrawingUnparseable";
 
     // Crypto / Security
     case FormulonErrorCode::kCryptoAgileNotSupported:

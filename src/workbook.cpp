@@ -18,6 +18,7 @@
 
 #include "auto_filter.h"
 #include "defined_name.h"
+#include "drawing/drawing_edit.h"
 #include "eval/builtin_names.h"
 #include "eval/dep_graph.h"
 #include "eval/iterative_solver.h"
@@ -1932,6 +1933,8 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
   }
   shift_retained_extension_ranges(target, origin, count, edit == parser::RowColEdit::kDelete,
                                   axis == parser::RowColAxis::kRow);
+  shift_drawing_anchors(wb, sheet_index, origin, count, edit == parser::RowColEdit::kDelete,
+                        axis == parser::RowColAxis::kRow);
   std::vector<std::string> filters_after;
   filters_after.push_back(target.auto_filter_xml());
   for (TableMetadata& table : wb.mutable_tables()) {
