@@ -298,6 +298,7 @@ extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_i
   formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
   entry->height = height;
   entry->has_height = true;
+  entry->custom_height = true;
   return 0;
 }
 

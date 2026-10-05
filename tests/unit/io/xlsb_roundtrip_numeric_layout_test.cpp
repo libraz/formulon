@@ -111,6 +111,7 @@ TEST(XlsbWriteReadSymmetry, RowOverridesSurviveBothFormatsAlike) {
   tall.row = 0U;
   tall.height = 33.75;
   tall.has_height = true;
+  tall.custom_height = true;
   RowLayout hidden;
   hidden.row = 2U;
   hidden.hidden = true;
@@ -132,6 +133,7 @@ TEST(XlsbWriteReadSymmetry, RowOverridesSurviveBothFormatsAlike) {
     SCOPED_TRACE("row override " + std::to_string(i));
     EXPECT_EQ(rb[i].row, rx[i].row);
     EXPECT_EQ(rb[i].has_height, rx[i].has_height);
+    EXPECT_EQ(rb[i].custom_height, rx[i].custom_height);
     // `miyRw` is twips, so a height survives to 1/20 of a point.
     EXPECT_NEAR(rb[i].height, rx[i].height, 1.0 / 20.0);
     EXPECT_EQ(rb[i].hidden, rx[i].hidden);

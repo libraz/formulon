@@ -41,6 +41,10 @@ void apply_structured_page_setup(const pugi::xml_node& page_setup, PageSetup& ou
   if (pugi::xml_attribute attr = page_setup.attribute("fitToHeight"); attr) {
     out.fit_to_height = static_cast<std::uint32_t>(attr.as_uint(out.fit_to_height));
   }
+  if (pugi::xml_attribute attr = page_setup.attribute("pageOrder"); attr) {
+    out.page_order =
+        std::string_view(attr.value()) == "overThenDown" ? PageOrder::kOverThenDown : PageOrder::kDownThenOver;
+  }
 }
 
 void apply_structured_page_margins(const pugi::xml_node& page_margins, PageMargins& out) {
@@ -134,6 +138,7 @@ void refresh_structured_views(std::string_view element_name, std::string_view fr
     settings.page_setup.scale = defaults.scale;
     settings.page_setup.fit_to_width = defaults.fit_to_width;
     settings.page_setup.fit_to_height = defaults.fit_to_height;
+    settings.page_setup.page_order = defaults.page_order;
   } else if (is_page_margins) {
     settings.page_margins = PageMargins{};
   } else {

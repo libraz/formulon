@@ -140,6 +140,8 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* shee
       RowLayout row;
       row.row = row1 - 1U;
       row.height = value.as_number();
+      row.has_height = true;
+      row.custom_height = true;
       sheet->mutable_layout().row_overrides.push_back(row);
     }
   }

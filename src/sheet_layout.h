@@ -55,6 +55,9 @@ struct RowLayout {
   bool hidden = false;
   std::uint8_t outline_level = 0;
   bool has_height = false;
+  // True when the height is an explicit override (`customHeight="1"` /
+  // BrtRowHdr fUnsynced); false for an auto height that only caches `ht`.
+  bool custom_height = false;
   // A row style is effective only when OOXML `customFormat="1"` is
   // present. `style_xf == 0` remains meaningful when `s` is absent or
   // explicitly set to zero.
@@ -137,6 +140,13 @@ struct ManualBreak {
 /// Page orientation as stored in `<pageSetup orientation="...">`.
 enum class Orientation { kDefault, kPortrait, kLandscape };
 
+/// Order in which a sheet's pages are numbered and printed
+/// (`<pageSetup pageOrder>`).
+enum class PageOrder : std::int32_t {
+  kDownThenOver = 0,  ///< Each column of pages top to bottom, then the next column (default).
+  kOverThenDown = 1,  ///< Each row of pages left to right, then the next row.
+};
+
 /// Structured page setup parsed from `<pageSetup>` and `<sheetPr>`.
 ///
 /// Parsed alongside `SheetPrintSettings::page_setup_xml`; the raw string
@@ -149,9 +159,10 @@ struct PageSetup {
   std::uint32_t paper_size = ooxml_defaults::kPaperSize;
   /// `scale`, as a percentage.
   std::uint32_t scale = ooxml_defaults::kPageScalePercent;
-  std::uint32_t fit_to_width = 1;   ///< `fitToWidth`, in pages.
-  std::uint32_t fit_to_height = 1;  ///< `fitToHeight`, in pages.
-  bool fit_to_page = false;         ///< True when `<sheetPr><pageSetUpPr fitToPage="1"/>`.
+  std::uint32_t fit_to_width = 1;                   ///< `fitToWidth`, in pages.
+  std::uint32_t fit_to_height = 1;                  ///< `fitToHeight`, in pages.
+  bool fit_to_page = false;                         ///< True when `<sheetPr><pageSetUpPr fitToPage="1"/>`.
+  PageOrder page_order = PageOrder::kDownThenOver;  ///< `pageOrder` attribute.
 };
 
 /// Structured page margins parsed from `<pageMargins>`.

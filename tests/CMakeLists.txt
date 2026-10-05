@@ -65,6 +65,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_table_reader_filters_test.cpp
   unit/io/pivot_table_reader_attributes_test.cpp
   unit/io/pivot_table_writer_test.cpp
+  unit/io/row_custom_height_test.cpp
   unit/io/sax_shared_formula_test.cpp
   unit/io/sax_xml_reader_test.cpp
   unit/io/sheet_name_validation_test.cpp
@@ -316,7 +317,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/cf/scale_evaluator_test.cpp
   unit/print/page_setup_test.cpp
   unit/print/print_area_test.cpp
+  unit/print/pagination_detail_test.cpp
   unit/print/pagination_test.cpp
+  unit/print/sheet_geometry_test.cpp
   unit/registry_catalog_test.cpp
 )
 

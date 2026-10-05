@@ -391,8 +391,8 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 // `RowLayout` override. Caller has already emitted `<row r="N"`. Each
 // override field is emitted only when it differs from the OOXML
 // default (height -> none, hidden -> "0", outlineLevel -> 0). Excel
-// itself emits `customHeight="1"` alongside `ht`; we mirror that so a
-// reload reproduces the visual size.
+// emits `customHeight="1"` only for an explicit override, so an auto
+// height stays auto across a save.
 void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
   if (layout.has_height || layout.height > 0.0) {
     out.append(" ht=\"");
@@ -400,7 +400,10 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
     // recalc-save neither drifts the row metric nor respells 13.2 as
     // 13.199999999999999. Matches the column-width writer.
     append_xml_number(out, layout.height);
-    out.append("\" customHeight=\"1\"");
+    out.append("\"");
+    if (layout.custom_height) {
+      out.append(" customHeight=\"1\"");
+    }
   }
   if (layout.hidden) {
     out.append(" hidden=\"1\"");

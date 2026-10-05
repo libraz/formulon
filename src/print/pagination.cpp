@@ -10,6 +10,7 @@
 #include "cell.h"
 #include "print/page_setup.h"
 #include "print/print_area.h"
+#include "print/sheet_geometry.h"
 #include "sheet.h"
 #include "styles.h"
 #include "utils/index_sort.h"
@@ -20,237 +21,13 @@ namespace formulon {
 namespace print {
 namespace {
 
-// --- Excel column-width geometry constants. ---
-//
-// Excel stores a column's width in "character" units relative to the
-// default font's maximum digit width (MDW). The character-to-pixel
-// conversion below is Excel's documented formula; the constants are
-// named so the arithmetic carries no bare literals.
-//
-// Two distinct quantities share this stored-width input and must not be
-// confused:
-//
-//   * Print-layout width, consumed only by `paginate()`'s own break math
-//     (h_breaks / v_breaks / page count). Comparing a Windows Excel 365
-//     ja-JP build 16.0.20228/16.0.20326 capture taken at 100% display
-//     scaling (96 DPI) against one of the *same build* taken at 175%
-//     (168 DPI) shows `Range.Width` itself is DPI-dependent (Calibri 11
-//     resolves a 30-character column to 161.25 pt at 96 DPI and 171.0 pt
-//     at 168 DPI) -- but the resulting page-break positions are
-//     identical across both captures. Print output cannot depend on the
-//     authoring screen's DPI, so the break math needs a DPI-stable
-//     figure, which the 168-DPI capture's `Range.Width` approximates
-//     and the 96-DPI one does not.
-//   * Display width, `applied_geometry.column_widths_pt` in the workbook
-//     oracle goldens: a diagnostic/reporting figure, not compared by any
-//     verifier today (`workbook_oracle_test.cpp` never reads it). This
-//     is the 96-DPI `Range.Width` figure, unadjusted.
-//
-// Only Calibri 11's print-layout width is directly measured (from the
-// print-track captures' own break positions, not a `Range.Width` sweep).
-// Other fonts/sizes' print-layout widths are unmeasured; they are
-// inferred by scaling that font's *display* calibration by the ratio
-// between Calibri 11's print and display figures, separately for the
-// per-character rate and the padding term (`kPrintMdwRatio` /
-// `kPrintPaddingRatio` below) -- an approximation, not a second sweep.
-
-/// Calibri 11's print-layout points-per-character-unit and per-column
-/// padding: the pre-existing figure that both DPI captures' page breaks
-/// agree with, matching the classic `39/7`, `27/7` sevenths that predate
-/// this file's DPI investigation. This is also the print-layout fallback
-/// for any (Normal font family, size) `kColumnWidthCalibrations` below
-/// does not cover.
-constexpr double kPrintPointsPerColumnCharCalibri11 = 39.0 / 7.0;
-constexpr double kPrintColumnPaddingPtCalibri11 = 27.0 / 7.0;
-
-/// Calibri 11's *display* points-per-character-unit and per-column
-/// padding (`Range.Width` at 96 DPI) -- the `kColumnWidthCalibrations`
-/// entry for `{"Calibri", 11}`, restated here so the print/display
-/// ratios below don't depend on table lookup order.
-constexpr double kDisplayPointsPerColumnCharCalibri11 = 5.25;
-constexpr double kDisplayColumnPaddingPtCalibri11 = 3.75;
-
-/// Print-layout-to-display ratios for the per-character rate and the
-/// padding term, derived from Calibri 11 (the only font with a directly
-/// measured print-layout figure) and applied to every other font's
-/// display calibration to approximate its print-layout one.
-constexpr double kPrintMdwRatio = kPrintPointsPerColumnCharCalibri11 / kDisplayPointsPerColumnCharCalibri11;
-constexpr double kPrintPaddingRatio = kPrintColumnPaddingPtCalibri11 / kDisplayColumnPaddingPtCalibri11;
-
-/// Excel's standard default column width, in character units. Used when
-/// neither a `<col>` override nor `<sheetFormatPr defaultColWidth>`
-/// applies.
-constexpr double kStandardColWidthChars = 8.43;
-
-/// One (Normal font family, size) -> (MDW, padding) *display* calibration
-/// point, measured on Windows Excel 365 ja-JP (build 16.0.20228, 100%
-/// display scaling / 96 DPI) via `Range.Width` at stored widths 30/100
-/// chars. `Calibri`/11 reproduces `kDisplayPointsPerColumnCharCalibri11` /
-/// `kDisplayColumnPaddingPtCalibri11` above exactly.
-struct ColumnWidthCalibration {
-  const char* family;
-  int size;
-  double mdw_pt;
-  double pad_pt;
-};
-
-constexpr ColumnWidthCalibration kColumnWidthCalibrations[] = {
-    {"Calibri", 8, 4.5, 3.75},          {"Calibri", 9, 4.5, 3.75},           {"Calibri", 10, 5.25, 3.75},
-    {"Calibri", 11, 5.25, 3.75},        {"Calibri", 12, 6.0, 3.75},          {"Calibri", 14, 7.5, 5.25},
-    {"Calibri", 16, 8.25, 5.25},        {"Calibri", 18, 9.0, 5.25},          {"ＭＳ Ｐゴシック", 8, 4.5, 3.75},
-    {"ＭＳ Ｐゴシック", 9, 4.5, 3.75},  {"ＭＳ Ｐゴシック", 10, 5.25, 3.75}, {"ＭＳ Ｐゴシック", 11, 6.0, 3.75},
-    {"ＭＳ Ｐゴシック", 12, 6.0, 3.75}, {"ＭＳ Ｐゴシック", 14, 7.5, 5.25},  {"ＭＳ Ｐゴシック", 16, 8.25, 5.25},
-    {"ＭＳ Ｐゴシック", 18, 9.0, 5.25}, {"游ゴシック", 8, 4.5, 3.75},        {"游ゴシック", 9, 5.25, 3.75},
-    {"游ゴシック", 10, 5.25, 3.75},     {"游ゴシック", 11, 6.0, 3.75},       {"游ゴシック", 12, 6.75, 5.25},
-    {"游ゴシック", 14, 8.25, 5.25},     {"游ゴシック", 16, 9.0, 5.25},       {"游ゴシック", 18, 9.75, 6.75},
-    {"Meiryo UI", 8, 5.25, 3.75},       {"Meiryo UI", 9, 5.25, 3.75},        {"Meiryo UI", 10, 6.0, 3.75},
-    {"Meiryo UI", 11, 6.75, 5.25},      {"Meiryo UI", 12, 7.5, 5.25},        {"Meiryo UI", 14, 9.0, 5.25},
-    {"Meiryo UI", 16, 9.75, 6.75},      {"Meiryo UI", 18, 11.25, 6.75},
-};
-
-/// The resolved points-per-character-unit and per-column padding used by
-/// `ColumnCharsToPoints`, for either quantity -- the caller picks which
-/// one via `ResolveColumnPrintGeometry` / `ResolveColumnDisplayGeometry`.
-struct ColumnWidthGeometry {
-  double points_per_char = kPrintPointsPerColumnCharCalibri11;
-  double padding_pt = kPrintColumnPaddingPtCalibri11;
-};
-
-/// Looks up the measured *display* calibration for `(family, size)` in
-/// `kColumnWidthCalibrations`. Falls back to the Calibri-11 display
-/// figure for any family or integer size the table does not cover, and
-/// for any non-integer size -- interpolating between the sampled sizes
-/// would be inventing data the capture does not support. Reported as
-/// `applied_geometry.column_widths_pt` in the workbook oracle goldens;
-/// no verifier compares it today, but pagination's own break math must
-/// not read it directly -- see `ResolveColumnPrintGeometry`.
-ColumnWidthGeometry ResolveColumnDisplayGeometry(const std::string& family, double size) {
-  const int size_int = static_cast<int>(size);
-  if (static_cast<double>(size_int) == size) {
-    for (const ColumnWidthCalibration& row : kColumnWidthCalibrations) {
-      if (row.size == size_int && family == row.family) {
-        return ColumnWidthGeometry{row.mdw_pt, row.pad_pt};
-      }
-    }
-  }
-  return ColumnWidthGeometry{kDisplayPointsPerColumnCharCalibri11, kDisplayColumnPaddingPtCalibri11};
-}
-
-/// The geometry `paginate()`'s break math (h_breaks / v_breaks / page
-/// count) must use: `(family, size)`'s display calibration scaled by
-/// Calibri 11's print/display ratios. Reduces to the measured
-/// `kPrintPointsPerColumnCharCalibri11` / `kPrintColumnPaddingPtCalibri11`
-/// exactly for `{"Calibri", 11}` and for any untabulated font/size (both
-/// fall back to the Calibri-11 display figure before scaling).
-ColumnWidthGeometry ResolveColumnPrintGeometry(const std::string& family, double size) {
-  const ColumnWidthGeometry display = ResolveColumnDisplayGeometry(family, size);
-  return ColumnWidthGeometry{display.points_per_char * kPrintMdwRatio, display.padding_pt * kPrintPaddingRatio};
-}
-
-/// Resolves the workbook's Normal-style font: `cell_styles["Normal"]` ->
-/// `xf_id` -> `cell_style_xfs[xf_id].font_index` -> `fonts[font_index]`.
-/// Falls back to `fonts[0]` (the workbook's default font slot) when no
-/// `"Normal"` cell style is declared, or when its `xf_id` / `font_index`
-/// does not resolve. Returns `nullptr` only if `fonts` itself is empty,
-/// which `StylesTable`'s own seeding invariant rules out for any table
-/// produced by this codebase.
-const FontRecord* ResolveNormalFont(const StylesTable& styles) {
-  if (styles.fonts.empty()) {
-    return nullptr;
-  }
-  for (const CellStyleRecord& cell_style : styles.cell_styles) {
-    if (cell_style.name != "Normal") {
-      continue;
-    }
-    if (cell_style.xf_id < styles.cell_style_xfs.size()) {
-      const std::uint32_t font_index = styles.cell_style_xfs[cell_style.xf_id].font_index;
-      if (font_index < styles.fonts.size()) {
-        return &styles.fonts[font_index];
-      }
-    }
-    break;
-  }
-  return &styles.fonts[0];
-}
-
-/// Excel's default row height, in points, measured the same way as the
-/// column constants above (`applied_geometry.row_heights_pt`). Used when
-/// neither a `<row ht>` override nor `<sheetFormatPr defaultRowHeight>`
-/// applies. The nominal 15.0 is the 96-DPI screen figure; Excel resolves
-/// 102/7.
-constexpr double kStandardRowHeightPt = 102.0 / 7.0;
-
 /// Lower clamp for the effective scale factor (1%). Mirrors Excel's
 /// `<pageSetup scale>` minimum so a degenerate `scale="0"` cannot divide
 /// the printable area by zero.
 constexpr double kMinScaleFactor = 0.01;
 
-/// Converts an Excel column width in character units to a width in points.
-///
-/// A hidden or explicit zero-width column resolves to `chars == 0`; it
-/// must convert to exactly `0.0` pt so it never advances a page break or
-/// shifts the fit-to-page scale (Excel excludes it from pagination
-/// extent entirely -- see `ColumnWidthChars`). The flat padding term
-/// below models the cell-border/margin allowance every *visible* column
-/// carries and does not apply to a column with no printed width at all.
-double ColumnCharsToPoints(double chars, const ColumnWidthGeometry& geometry) {
-  if (chars == 0.0) {
-    return 0.0;
-  }
-  return chars * geometry.points_per_char + geometry.padding_pt;
-}
-
-/// Returns the width, in character units, of column `col` on `sheet`.
-///
-/// Precedence: an explicit `<col>` span covering `col`, then
-/// `<sheetFormatPr defaultColWidth>`, then Excel's 8.43-character
-/// standard default.
-double ColumnWidthChars(const Sheet& sheet, std::uint32_t col) {
-  for (const ColumnLayout& span : sheet.layout().columns) {
-    if (col >= span.first && col <= span.last) {
-      // Hidden columns occupy no printed width, so they never advance the
-      // page grid (Excel excludes them from pagination extent).
-      if (span.hidden) {
-        return 0.0;
-      }
-      return HasExplicitColumnWidth(span)
-                 ? span.width
-                 : (sheet.format_defaults().has_default_col_width ? sheet.format_defaults().default_col_width
-                                                                  : kStandardColWidthChars);
-    }
-  }
-  const SheetFormatDefaults& defaults = sheet.format_defaults();
-  if (defaults.has_default_col_width) {
-    return defaults.default_col_width;
-  }
-  return kStandardColWidthChars;
-}
-
-/// Returns the height, in points, of row `row` on `sheet`.
-///
-/// Precedence: an explicit `<row ht>` override, then
-/// `<sheetFormatPr defaultRowHeight>`, then Excel's 15-point standard
-/// default.
-double RowHeightPoints(const Sheet& sheet, std::uint32_t row) {
-  for (const RowLayout& override_row : sheet.layout().row_overrides) {
-    if (override_row.row == row) {
-      // Hidden rows occupy no printed height, so they never advance the
-      // page grid (Excel excludes them from pagination extent).
-      if (override_row.hidden) {
-        return 0.0;
-      }
-      return (override_row.has_height || override_row.height != 0.0)
-                 ? override_row.height
-                 : (sheet.format_defaults().has_default_row_height ? sheet.format_defaults().default_row_height
-                                                                   : kStandardRowHeightPt);
-    }
-  }
-  const SheetFormatDefaults& defaults = sheet.format_defaults();
-  if (defaults.has_default_row_height) {
-    return defaults.default_row_height;
-  }
-  return kStandardRowHeightPt;
-}
+/// Divisor turning the `<pageSetup scale>` percentage into a factor.
+constexpr double kPercentDivisor = 100.0;
 
 /// Computes the sheet's used range as a single rectangle, walking the
 /// populated cells. Returns false when the sheet has no non-blank cell.
@@ -307,15 +84,17 @@ struct AxisInput {
 /// Walks one axis, accumulating track sizes until the printable limit is
 /// reached. Appends the absolute index each break precedes to `out_breaks`
 /// and returns the number of pages produced (always >= 1 when the axis has
-/// at least one track).
+/// at least one track). `out_page_starts` receives the absolute index of
+/// each page's first track, in ascending order.
 std::uint32_t WalkAxis(const AxisInput& axis, std::vector<std::uint32_t>* out_breaks,
-                       std::vector<std::uint32_t>* out_manual_breaks) {
+                       std::vector<std::uint32_t>* out_manual_breaks, std::vector<std::uint32_t>* out_page_starts) {
   const std::size_t track_count = axis.track_sizes.size();
   if (track_count == 0) {
     return 0;
   }
 
   std::uint32_t pages = 1;
+  out_page_starts->push_back(axis.first);
   double accumulated = 0.0;
   for (std::size_t i = 0; i < track_count; ++i) {
     const auto absolute = static_cast<std::uint32_t>(axis.first + i);
@@ -339,12 +118,20 @@ std::uint32_t WalkAxis(const AxisInput& axis, std::vector<std::uint32_t>* out_br
       // multi_area_row_stacked_col_break` -> v=[3,7,7], where 3 is manual).
       (manual_break ? out_manual_breaks : out_breaks)->push_back(absolute);
       ++pages;
+      out_page_starts->push_back(absolute);
       accumulated = 0.0;
     }
     accumulated += size;
   }
   return pages;
 }
+
+/// The track range one page covers on one axis, with its scaled extent.
+struct PageSpan {
+  std::uint32_t first = 0;
+  std::uint32_t last = 0;
+  double extent_pt = 0.0;
+};
 
 /// Computes the uniform scale factor applied to cell sizes.
 ///
@@ -367,7 +154,6 @@ std::uint32_t WalkAxis(const AxisInput& axis, std::vector<std::uint32_t>* out_br
 double ComputeScaleFactor(const PageSetup& setup, const PrintableArea& area, double total_width_pt,
                           double total_height_pt, double title_width_pt, double title_height_pt) {
   if (!setup.fit_to_page) {
-    constexpr double kPercentDivisor = 100.0;
     return std::max(kMinScaleFactor, static_cast<double>(setup.scale) / kPercentDivisor);
   }
 
@@ -395,14 +181,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   }
   const Sheet& sheet = wb.sheet(sheet_index);
 
-  // Column width geometry depends on the workbook's Normal-style font
-  // (MDW varies by family and size); resolve it once for every
-  // ColumnCharsToPoints call below. Break math needs the print-layout
-  // geometry, not the display one -- see the comment block above
-  // `ResolveColumnPrintGeometry`.
-  const FontRecord* normal_font = ResolveNormalFont(wb.styles());
-  const ColumnWidthGeometry column_geometry =
-      normal_font != nullptr ? ResolveColumnPrintGeometry(normal_font->name, normal_font->size) : ColumnWidthGeometry{};
+  // Break math needs the print-layout geometry, not the display one.
+  const ColumnWidthModel column_geometry = resolve_column_width_model(wb.styles(), GeometryMode::kPrint);
 
   // 1. Resolve the print area. The reported `result.print_area` mirrors
   // Excel's `PageSetup.PrintArea` exactly: empty when the workbook
@@ -417,6 +197,28 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   PaginationResult result;
   result.print_area = area_or.value();
 
+  // Page description that depends only on the page setup, so it is reported
+  // even for a sheet with nothing to print.
+  const SheetPrintSettings& settings = sheet.print_settings();
+  const PageSetup& page_setup = settings.page_setup;
+  const PageMargins& page_margins = settings.page_margins;
+  {
+    const PaperDimensions paper = resolve_paper_dimensions(page_setup.paper_size);
+    result.paper.landscape = page_setup.orientation == Orientation::kLandscape;
+    result.paper.width_pt = result.paper.landscape ? paper.height_pt : paper.width_pt;
+    result.paper.height_pt = result.paper.landscape ? paper.width_pt : paper.height_pt;
+    result.paper.known = is_known_paper_size(page_setup.paper_size);
+    result.margins = MarginsPt{page_margins.left * kPointsPerInch,   page_margins.right * kPointsPerInch,
+                               page_margins.top * kPointsPerInch,    page_margins.bottom * kPointsPerInch,
+                               page_margins.header * kPointsPerInch, page_margins.footer * kPointsPerInch};
+    const PrintableArea printable = compute_printable_area(page_setup, page_margins);
+    result.printable = RectPt{result.margins.left, result.margins.top, printable.width_pt, printable.height_pt};
+    result.page_order = settings.page_setup.page_order;
+    result.scale = page_setup.fit_to_page
+                       ? 1.0
+                       : std::max(kMinScaleFactor, static_cast<double>(page_setup.scale) / kPercentDivisor);
+  }
+
   // Excel's `HPageBreaks` / `VPageBreaks` are populated against the
   // *populated* region of the print area, not its full geometric span:
   // a print area whose four corners are blank effectively paginates
@@ -427,6 +229,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   const bool has_used_range = ComputeUsedRange(sheet, &used_box);
 
   std::vector<CellRange> effective_areas;
+  // Index into `result.print_area` each effective area came from.
+  std::vector<std::uint32_t> area_indices;
   if (result.print_area.empty()) {
     // No explicit print area: fall back to the used range. An empty
     // sheet with no print area produces no pages.
@@ -434,6 +238,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
       return result;
     }
     effective_areas.push_back(used_box);
+    area_indices.push_back(0U);
   } else {
     // An explicit print area paginates as declared. Intersecting it with
     // the populated box used to look right on cases whose content reaches
@@ -457,7 +262,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     // sheet whose rectangles all drop out produces none.
     constexpr std::uint32_t kMaxRowIndex = Sheet::kMaxRows - 1U;
     constexpr std::uint32_t kMaxColIndex = Sheet::kMaxCols - 1U;
-    for (const CellRange& r : result.print_area) {
+    for (std::size_t area_index = 0; area_index < result.print_area.size(); ++area_index) {
+      const CellRange& r = result.print_area[area_index];
       CellRange clipped = r;
       if (r.last_row >= kMaxRowIndex) {
         if (!has_used_range) {
@@ -475,6 +281,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
         continue;
       }
       effective_areas.push_back(clipped);
+      area_indices.push_back(static_cast<std::uint32_t>(area_index));
     }
     if (effective_areas.empty()) {
       return result;
@@ -482,62 +289,28 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   }
 
   // Build the resolved track geometry once for the union extent. The old
-  // per-track RowHeightPoints / ColumnWidthChars calls each re-scanned every
+  // per-track effective_row_height_pt / effective_column_width_chars calls each re-scanned every
   // layout override, turning a 50k-row pagination into O(rows * overrides).
   // An override that carries only outline / hidden metadata has no `ht`, so
   // it must retain the sheet default height rather than becoming a 0pt row.
   const CellRange union_box = BoundingBox(effective_areas);
-  const SheetFormatDefaults& defaults = sheet.format_defaults();
-  const double default_row_h = defaults.has_default_row_height ? defaults.default_row_height : kStandardRowHeightPt;
-  const double default_col_w = defaults.has_default_col_width ? defaults.default_col_width : kStandardColWidthChars;
-  std::vector<double> row_heights(static_cast<std::size_t>(union_box.last_row - union_box.first_row) + 1U,
-                                  default_row_h);
-  std::vector<bool> row_overridden(row_heights.size(), false);
-  for (const RowLayout& layout : sheet.layout().row_overrides) {
-    if (layout.row < union_box.first_row || layout.row > union_box.last_row) {
-      continue;
-    }
-    const std::size_t index = static_cast<std::size_t>(layout.row - union_box.first_row);
-    if (row_overridden[index]) {
-      continue;
-    }
-    row_overridden[index] = true;
-    row_heights[index] =
-        layout.hidden ? 0.0 : (layout.has_height || layout.height != 0.0 ? layout.height : default_row_h);
-  }
-  std::vector<double> col_widths(static_cast<std::size_t>(union_box.last_col - union_box.first_col) + 1U,
-                                 default_col_w);
-  std::vector<bool> col_overridden(col_widths.size(), false);
-  for (const ColumnLayout& layout : sheet.layout().columns) {
-    const std::uint32_t first = std::max(layout.first, union_box.first_col);
-    const std::uint32_t last = std::min(layout.last, union_box.last_col);
-    if (first > last) {
-      continue;
-    }
-    for (std::uint32_t col = first; col <= last; ++col) {
-      const std::size_t index = static_cast<std::size_t>(col - union_box.first_col);
-      if (col_overridden[index]) {
-        continue;
-      }
-      col_overridden[index] = true;
-      col_widths[index] = layout.hidden ? 0.0 : (HasExplicitColumnWidth(layout) ? layout.width : default_col_w);
-    }
-  }
+  const double default_row_h = default_row_height_pt(sheet);
+  const std::vector<double> row_heights = row_heights_pt(sheet, union_box.first_row, union_box.last_row);
+  const std::vector<double> col_widths = column_widths_chars(sheet, union_box.first_col, union_box.last_col);
   const auto row_height = [&](std::uint32_t row) {
     if (row >= union_box.first_row && row <= union_box.last_row) {
       return row_heights[static_cast<std::size_t>(row - union_box.first_row)];
     }
-    return RowHeightPoints(sheet, row);
+    return effective_row_height_pt(sheet, row);
   };
   const auto col_width = [&](std::uint32_t col) {
     if (col >= union_box.first_col && col <= union_box.last_col) {
       return col_widths[static_cast<std::size_t>(col - union_box.first_col)];
     }
-    return ColumnWidthChars(sheet, col);
+    return effective_column_width_chars(sheet, col);
   };
 
   // 2. Printable body area is determined once from the page setup.
-  const SheetPrintSettings& settings = sheet.print_settings();
   PrintableArea body = compute_printable_area(settings.page_setup, settings.page_margins);
 
   // Print titles (repeat-rows / repeat-columns) are reprinted on every
@@ -570,7 +343,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   if (titles.repeat_cols.has_value()) {
     const auto [first, last] = *titles.repeat_cols;
     for (std::uint32_t col = first; col <= last; ++col) {
-      title_width += ColumnCharsToPoints(col_width(col), column_geometry);
+      title_width += column_chars_to_points(col_width(col), column_geometry);
     }
   }
 
@@ -581,7 +354,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // fit factor has to accommodate them alongside the data.
   double union_total_width = 0.0;
   for (double width : col_widths) {
-    union_total_width += ColumnCharsToPoints(width, column_geometry);
+    union_total_width += column_chars_to_points(width, column_geometry);
   }
   double union_total_height = 0.0;
   for (double height : row_heights) {
@@ -597,6 +370,17 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // raw model size instead would reserve `1 / scale` times too much
   // band and push data onto later pages -- at scale=50 a five-row title
   // block would claim the page space of ten.
+  result.scale = scale;
+  if (titles.repeat_rows.has_value()) {
+    result.print_titles.has_rows = true;
+    result.print_titles.first_row = titles.repeat_rows->first;
+    result.print_titles.last_row = titles.repeat_rows->second;
+  }
+  if (titles.repeat_cols.has_value()) {
+    result.print_titles.has_cols = true;
+    result.print_titles.first_col = titles.repeat_cols->first;
+    result.print_titles.last_col = titles.repeat_cols->second;
+  }
   body.height_pt = std::max(0.0, body.height_pt - title_height * scale);
   body.width_pt = std::max(0.0, body.width_pt - title_width * scale);
 
@@ -625,7 +409,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     row_axis.track_sizes = std::move(row_points);
     row_axis.manual = &settings.manual_row_breaks;
     row_axis.limit_pt = body.height_pt;
-    const std::uint32_t row_pages = WalkAxis(row_axis, &all_h, &manual_h);
+    std::vector<std::uint32_t> row_starts;
+    const std::uint32_t row_pages = WalkAxis(row_axis, &all_h, &manual_h, &row_starts);
 
     // Column axis: symmetric per-area walk through the same axis walker,
     // against the body width exactly as the row axis walks the body height.
@@ -637,19 +422,71 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     std::vector<double> col_points;
     col_points.reserve(rect.last_col - rect.first_col + 1);
     for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
-      col_points.push_back(ColumnCharsToPoints(col_width(col), column_geometry) * scale);
+      col_points.push_back(column_chars_to_points(col_width(col), column_geometry) * scale);
     }
     AxisInput col_axis;
     col_axis.first = rect.first_col;
     col_axis.track_sizes = std::move(col_points);
     col_axis.manual = &settings.manual_col_breaks;
     col_axis.limit_pt = body.width_pt;
-    const std::uint32_t col_pages = WalkAxis(col_axis, &all_v, &manual_v);
+    std::vector<std::uint32_t> col_starts;
+    const std::uint32_t col_pages = WalkAxis(col_axis, &all_v, &manual_v, &col_starts);
 
     total_pages += static_cast<std::uint64_t>(col_pages) * static_cast<std::uint64_t>(row_pages);
     if (total_pages > kMaxPaginationPages) {
       return make_error(FormulonErrorCode::kPrintPageCountOverflow, "Pagination page count exceeds the supported limit",
                         "pages=" + std::to_string(total_pages) + " limit=" + std::to_string(kMaxPaginationPages));
+    }
+
+    // Pages of this area: the walk's page starts bound each page's track
+    // range. Print areas follow one another; within one, `page_order`
+    // decides which axis runs fastest.
+    const auto pages_of_axis = [](const AxisInput& axis, const std::vector<std::uint32_t>& starts,
+                                  std::uint32_t area_last) {
+      std::vector<PageSpan> spans;
+      spans.reserve(starts.size());
+      for (std::size_t i = 0; i < starts.size(); ++i) {
+        PageSpan span;
+        span.first = starts[i];
+        span.last = i + 1 < starts.size() ? starts[i + 1] - 1U : area_last;
+        for (std::uint32_t track = span.first; track <= span.last; ++track) {
+          span.extent_pt += axis.track_sizes[track - axis.first];
+        }
+        spans.push_back(span);
+      }
+      return spans;
+    };
+    const std::vector<PageSpan> row_spans = pages_of_axis(row_axis, row_starts, rect.last_row);
+    const std::vector<PageSpan> col_spans = pages_of_axis(col_axis, col_starts, rect.last_col);
+    const auto emit_page = [&](const PageSpan& rows, const PageSpan& cols) {
+      PageLayout page;
+      page.area_index = area_indices[static_cast<std::size_t>(&rect - effective_areas.data())];
+      page.first_row = rows.first;
+      page.last_row = rows.last;
+      page.first_col = cols.first;
+      page.last_col = cols.last;
+      // Titles are reprinted ahead of every page that does not already
+      // contain them.
+      const bool rows_offset = titles.repeat_rows.has_value() && rows.first > titles.repeat_rows->second;
+      const bool cols_offset = titles.repeat_cols.has_value() && cols.first > titles.repeat_cols->second;
+      page.origin_x_pt = result.printable.x + (cols_offset ? title_width * scale : 0.0);
+      page.origin_y_pt = result.printable.y + (rows_offset ? title_height * scale : 0.0);
+      page.width_pt = cols.extent_pt;
+      page.height_pt = rows.extent_pt;
+      result.pages.push_back(page);
+    };
+    if (result.page_order == PageOrder::kOverThenDown) {
+      for (const PageSpan& rows : row_spans) {
+        for (const PageSpan& cols : col_spans) {
+          emit_page(rows, cols);
+        }
+      }
+    } else {
+      for (const PageSpan& cols : col_spans) {
+        for (const PageSpan& rows : row_spans) {
+          emit_page(rows, cols);
+        }
+      }
     }
   }
 
@@ -666,6 +503,18 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   };
   merge_manual(&all_h, &manual_h);
   merge_manual(&all_v, &manual_v);
+
+  // Flag the manual entries. A value that is also an automatic break of
+  // another area appears more than once; the first occurrence is the manual one.
+  const auto flag_manual = [](const std::vector<std::uint32_t>& all, const std::vector<std::uint32_t>& manual) {
+    std::vector<bool> flags(all.size(), false);
+    for (const std::uint32_t value : manual) {
+      flags[static_cast<std::size_t>(std::lower_bound(all.begin(), all.end(), value) - all.begin())] = true;
+    }
+    return flags;
+  };
+  result.h_break_manual = flag_manual(all_h, manual_h);
+  result.v_break_manual = flag_manual(all_v, manual_v);
 
   result.h_breaks = std::move(all_h);
   result.v_breaks = std::move(all_v);

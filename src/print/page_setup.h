@@ -9,6 +9,8 @@
 #ifndef FORMULON_PRINT_PAGE_SETUP_H_
 #define FORMULON_PRINT_PAGE_SETUP_H_
 
+#include <cstdint>
+
 #include "sheet.h"
 
 namespace formulon {
@@ -37,6 +39,10 @@ struct PaperDimensions {
   double width_pt = 0.0;   ///< Portrait width (short edge), in points.
   double height_pt = 0.0;  ///< Portrait height (long edge), in points.
 };
+
+/// True when `paper_size` is one of the codes `resolve_paper_dimensions`
+/// recognises, i.e. when its result is not the A4 fallback.
+bool is_known_paper_size(std::uint32_t paper_size) noexcept;
 
 /// Resolves an OOXML `paperSize` code to physical portrait dimensions.
 ///

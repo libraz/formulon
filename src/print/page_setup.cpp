@@ -74,6 +74,22 @@ PaperDimensions resolve_paper_dimensions(std::uint32_t paper_size) noexcept {
   }
 }
 
+bool is_known_paper_size(std::uint32_t paper_size) noexcept {
+  switch (paper_size) {
+    case kPaperLetter:
+    case kPaperLegal:
+    case kPaperA3:
+    case kPaperA4:
+    case kPaperA5:
+    case kPaperB4Jis:
+    case kPaperB5Jis:
+    case kPaperA6:
+      return true;
+    default:
+      return false;
+  }
+}
+
 PrintableArea compute_printable_area(const PageSetup& setup, const PageMargins& margins) noexcept {
   const PaperDimensions paper = resolve_paper_dimensions(setup.paper_size);
 

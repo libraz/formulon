@@ -740,6 +740,7 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     if (has_height) {
       entry.height = height;
       entry.has_height = true;
+      entry.custom_height = read_xsd_bool(row, "customHeight", false);
     }
     if (hidden_attr) {
       entry.hidden = read_xsd_bool(row, "hidden", false);
@@ -978,6 +979,7 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
   if (has_height) {
     entry.height = height;
     entry.has_height = true;
+    entry.custom_height = parse_xsd_bool(rec.custom_height, false);
   }
   if (!rec.hidden.empty()) {
     entry.hidden = parse_xsd_bool(rec.hidden, false);

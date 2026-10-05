@@ -64,7 +64,7 @@ TEST(XlsbWriter, RowAndColumnLayoutSurviveRoundTrip) {
   Workbook wb = Workbook::create_empty();
   Sheet& sheet = wb.sheet(wb.add_sheet("Layout"));
   sheet.mutable_layout().columns.push_back(ColumnLayout{1U, 3U, 17.25, true, 2U});
-  sheet.mutable_layout().row_overrides.push_back(RowLayout{4U, 28.5, true, 3U, true});
+  sheet.mutable_layout().row_overrides.push_back(RowLayout{4U, 28.5, true, 3U, true, true});
 
   auto bytes_or = write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;

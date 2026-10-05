@@ -222,6 +222,7 @@ set(FORMULON_CORE_SOURCES
   src/print/page_setup.cpp
   src/print/print_area.cpp
   src/print/pagination.cpp
+  src/print/sheet_geometry.cpp
   src/eval/array_alloc.cpp
   src/eval/coerce.cpp
   src/eval/rng.cpp

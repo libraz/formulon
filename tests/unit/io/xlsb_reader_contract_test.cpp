@@ -343,6 +343,7 @@ TEST(XlsbRowLayout, CustomHeightSurvivesAWriteReadCycle) {
   custom.row = 3;
   custom.height = 33.0;
   custom.has_height = true;
+  custom.custom_height = true;
   wb.sheet(0).mutable_layout().row_overrides.push_back(custom);
 
   auto written = io::xlsb::write_xlsb(wb);

@@ -75,7 +75,7 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
   if (layout != nullptr && layout->hidden) {
     flags2 |= 0x10U;  // fDyZero
   }
-  if (has_height) {
+  if (layout != nullptr && layout->custom_height) {
     flags2 |= 0x20U;  // fUnsynced
   }
   if (layout != nullptr && layout->has_style) {

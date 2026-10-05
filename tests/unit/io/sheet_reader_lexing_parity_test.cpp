@@ -185,7 +185,7 @@ LoadResult LoadSax(std::string_view sheet_xml) {
     const RowLayout& a = dom.rows[i];
     const RowLayout& b = sax.rows[i];
     if (a.row != b.row || a.height != b.height || a.hidden != b.hidden || a.outline_level != b.outline_level ||
-        a.has_height != b.has_height) {
+        a.has_height != b.has_height || a.custom_height != b.custom_height) {
       return ::testing::AssertionFailure() << "row override " << i << " differs (row " << a.row << " vs " << b.row
                                            << ", hidden " << a.hidden << " vs " << b.hidden << ")";
     }

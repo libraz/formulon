@@ -849,6 +849,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
           if (has_height) {
             layout.height = static_cast<double>(height_or.value()) / 20.0;
             layout.has_height = true;
+            layout.custom_height = true;
           }
           layout.hidden = (flags & 0x10U) != 0U;
           layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);

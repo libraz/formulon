@@ -22,7 +22,9 @@
 #include <cstdint>
 #include <vector>
 
+#include "print/page_setup.h"
 #include "print/print_area.h"
+#include "print/sheet_geometry.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -31,6 +33,53 @@ namespace formulon {
 class Workbook;
 
 namespace print {
+
+/// The physical paper a sheet prints on, orientation-adjusted.
+struct PaperInfo {
+  double width_pt = 0.0;   ///< Page width after the orientation swap, in points.
+  double height_pt = 0.0;  ///< Page height after the orientation swap, in points.
+  bool landscape = false;
+  /// False when `paperSize` is not a recognised code and A4 was substituted.
+  bool known = true;
+};
+
+/// Page margins in points.
+struct MarginsPt {
+  double left = 0.0;
+  double right = 0.0;
+  double top = 0.0;
+  double bottom = 0.0;
+  double header = 0.0;  ///< Page edge to header band.
+  double footer = 0.0;  ///< Page edge to footer band.
+};
+
+/// The repeat-rows / repeat-columns in effect (0-based, inclusive).
+struct PrintTitleSpan {
+  bool has_rows = false;
+  std::uint32_t first_row = 0;
+  std::uint32_t last_row = 0;
+  bool has_cols = false;
+  std::uint32_t first_col = 0;
+  std::uint32_t last_col = 0;
+};
+
+/// One physical page: the cell block it carries and where it sits.
+///
+/// `width_pt` / `height_pt` are the scaled extent of the page's own cell
+/// block (repeated titles excluded). `origin_*_pt` is the block's top-left
+/// corner on the paper; a page that reprints title rows / columns starts
+/// below / right of them.
+struct PageLayout {
+  std::uint32_t area_index = 0;  ///< Index into `PaginationResult::print_area` (0 for the used-range fallback).
+  std::uint32_t first_row = 0;
+  std::uint32_t last_row = 0;
+  std::uint32_t first_col = 0;
+  std::uint32_t last_col = 0;
+  double origin_x_pt = 0.0;
+  double origin_y_pt = 0.0;
+  double width_pt = 0.0;
+  double height_pt = 0.0;
+};
 
 /// The result of paginating one worksheet.
 struct PaginationResult {
@@ -49,6 +98,25 @@ struct PaginationResult {
   std::vector<std::uint32_t> v_breaks;
   /// Total physical page count: column-pages multiplied by row-pages.
   std::uint32_t page_count = 0;
+  /// Paper after the orientation swap.
+  PaperInfo paper;
+  /// Page margins in points.
+  MarginsPt margins;
+  /// Cell-body rectangle before print-title reservation, in points from the
+  /// page's top-left corner: it starts at the left / top margin.
+  RectPt printable;
+  /// Effective scale as a factor (1.0 is 100%): the `scale` percentage, or
+  /// the fit-to-page factor.
+  double scale = 1.0;
+  PageOrder page_order = PageOrder::kDownThenOver;
+  PrintTitleSpan print_titles;
+  /// Every physical page, in print order (`page_order`; print areas in
+  /// declaration order). `pages.size() == page_count`.
+  std::vector<PageLayout> pages;
+  /// Parallel to `h_breaks` / `v_breaks`: true when that break is a manual
+  /// one rather than computed by the page walk.
+  std::vector<bool> h_break_manual;
+  std::vector<bool> v_break_manual;
 };
 
 /// Paginates sheet `sheet_index` (0-based) of `wb`.
