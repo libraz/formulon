@@ -5,6 +5,7 @@
 
 set(FORMULON_C_API_TEST_SOURCES
   formulon_c_adhoc_arena_cap_test.cpp
+  formulon_c_auto_filter_test.cpp
   formulon_c_calc_mode_test.cpp
   formulon_c_cell_geometry_test.cpp
   formulon_c_cf_authoring_test.cpp
@@ -41,6 +42,8 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_styles_num_formats_test.cpp
   formulon_c_test.cpp
   formulon_c_theme_test.cpp
+  formulon_c_threaded_comments_test.cpp
+  formulon_c_validation_test.cpp
   formulon_c_values_test.cpp
   formulon_c_save_test.cpp
   formulon_c_trace_test.cpp

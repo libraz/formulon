@@ -126,6 +126,12 @@ function envelopeProbes(wb) {
     ['WidthModelResult', true, () => wb.getWidthModel(99, 0)],
     ['FormulaResult', true, () => wb.getFormula(99, 0, 0)],
     ['CellsInRangeResult', true, () => wb.getCellsInRange(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
+    ['AutoFilterResult', true, () => wb.getAutoFilter(99)],
+    ['AutoFilterEvalResult', true, () => wb.evaluateAutoFilter(99)],
+    ['ValidationOutcomeResult', true, () => wb.validateValue(99, 0, 0, { kind: 1, number: 1 })],
+    ['ThreadedCommentsResult', true, () => wb.getThreadedComments(99)],
+    // A released handle is the only failure path, which is not usable here.
+    ['PersonsResult', false, () => wb.getPersons()],
     ['DisplayTextResult', true, () => wb.getDisplayText(99, 0, 0)],
     // A released handle is the only failure path, which is not usable here.
     ['ThemeResult', false, () => wb.getTheme()],

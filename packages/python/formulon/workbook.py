@@ -42,6 +42,13 @@ __all__ = [
     "CfMatch",
     "CfValueObject",
     "ColorContext",
+    "FilterKind",
+    "FilterOperator",
+    "DynamicFilterType",
+    "SortBy",
+    "SortMethod",
+    "DateTimeGrouping",
+    "ValidationErrorStyle",
     "ColorResolution",
     "ColorSpec",
     "ColumnLayout",
@@ -108,6 +115,15 @@ __all__ = [
     "ValueKind",
     "WidthModel",
     "Workbook",
+    "AutoFilter",
+    "AutoFilterSortState",
+    "AutoFilterDateGroup",
+    "AutoFilterColumn",
+    "Mention",
+    "Person",
+    "AutoFilterSortCondition",
+    "ThreadedComment",
+    "ValidationOutcome",
 ]
 
 
@@ -322,6 +338,105 @@ class DisplayStatus(IntEnum):
     OK = 0
     OVERFLOW = 1
     INVALID_FORMAT = 2
+
+
+class FilterKind(IntEnum):
+    """Criterion of an AutoFilter column (``fm_filter_kind_t``)."""
+
+    NONE = 0
+    VALUES = 1
+    CUSTOM = 2
+    TOP10 = 3
+    DYNAMIC = 4
+    COLOR = 5
+    ICON = 6
+
+
+class FilterOperator(IntEnum):
+    """Comparison operator of a custom AutoFilter condition (``fm_filter_operator_t``)."""
+
+    EQUAL = 0
+    LESS_THAN = 1
+    LESS_THAN_OR_EQUAL = 2
+    NOT_EQUAL = 3
+    GREATER_THAN_OR_EQUAL = 4
+    GREATER_THAN = 5
+
+
+class DynamicFilterType(IntEnum):
+    """Dynamic AutoFilter type, in `ST_DynamicFilterType` schema order (``fm_dynamic_filter_type_t``)."""
+
+    NULL = 0
+    ABOVE_AVERAGE = 1
+    BELOW_AVERAGE = 2
+    TOMORROW = 3
+    TODAY = 4
+    YESTERDAY = 5
+    NEXT_WEEK = 6
+    THIS_WEEK = 7
+    LAST_WEEK = 8
+    NEXT_MONTH = 9
+    THIS_MONTH = 10
+    LAST_MONTH = 11
+    NEXT_QUARTER = 12
+    THIS_QUARTER = 13
+    LAST_QUARTER = 14
+    NEXT_YEAR = 15
+    THIS_YEAR = 16
+    LAST_YEAR = 17
+    YEAR_TO_DATE = 18
+    Q1 = 19
+    Q2 = 20
+    Q3 = 21
+    Q4 = 22
+    M1 = 23
+    M2 = 24
+    M3 = 25
+    M4 = 26
+    M5 = 27
+    M6 = 28
+    M7 = 29
+    M8 = 30
+    M9 = 31
+    M10 = 32
+    M11 = 33
+    M12 = 34
+
+
+class SortBy(IntEnum):
+    """What a sort condition sorts by (``fm_sort_by_t``)."""
+
+    VALUE = 0
+    CELL_COLOR = 1
+    FONT_COLOR = 2
+    ICON = 3
+
+
+class SortMethod(IntEnum):
+    """Sort method of an AutoFilter sort state (``fm_sort_method_t``)."""
+
+    NONE = 0
+    PIN_YIN = 1
+    STROKE = 2
+
+
+class DateTimeGrouping(IntEnum):
+    """Granularity of an AutoFilter date-group item (``fm_date_time_grouping_t``)."""
+
+    YEAR = 0
+    MONTH = 1
+    DAY = 2
+    HOUR = 3
+    MINUTE = 4
+    SECOND = 5
+
+
+class ValidationErrorStyle(IntEnum):
+    """Data-validation error style (``fm_validation_error_style_t``)."""
+
+    STOP = 0
+    WARNING = 1
+    INFORMATION = 2
 
 
 class ColorContext(IntEnum):
@@ -616,7 +731,7 @@ class DataValidation:
     ranges: List[MergeRange]
     type: int
     op: int
-    error_style: int
+    error_style: Union[ValidationErrorStyle, int]
     allow_blank: bool
     show_input_message: bool
     show_error_message: bool
@@ -642,7 +757,7 @@ class DataValidationInput:
     type: int
     ranges: List[MergeRange] = field(default_factory=list)
     op: int = 0
-    error_style: int = 0
+    error_style: Union[ValidationErrorStyle, int] = ValidationErrorStyle.STOP
     allow_blank: bool = False
     show_input_message: bool = False
     show_error_message: bool = False
@@ -653,6 +768,144 @@ class DataValidationInput:
     error_message: str = ""
     prompt_title: str = ""
     prompt_message: str = ""
+
+
+# `dxf_id` value meaning "no differential format".
+_FILTER_DXF_ID_NONE = 0xFFFFFFFF
+
+
+@dataclass
+class AutoFilterDateGroup:
+    """One ``<dateGroupItem>`` of a values filter; finer fields than ``grouping`` are zero."""
+
+    year: int = 0
+    month: int = 0
+    day: int = 0
+    hour: int = 0
+    minute: int = 0
+    second: int = 0
+    grouping: Union[DateTimeGrouping, int] = DateTimeGrouping.YEAR
+
+
+@dataclass
+class AutoFilterColumn:
+    """One ``<filterColumn>``; only the fields of the criterion selected by ``kind`` are read."""
+
+    col_id: int
+    hidden_button: bool = False
+    show_button: bool = True
+    kind: Union[FilterKind, int] = FilterKind.NONE
+    filter_blank: bool = False
+    values: List[str] = field(default_factory=list)
+    date_groups: List[AutoFilterDateGroup] = field(default_factory=list)
+    custom_and: bool = False
+    custom_count: int = 0
+    op1: Union[FilterOperator, int] = FilterOperator.EQUAL
+    val1: str = ""
+    op2: Union[FilterOperator, int] = FilterOperator.EQUAL
+    val2: str = ""
+    top: bool = True
+    percent: bool = False
+    has_filter_val: bool = False
+    top_val: float = 0.0
+    filter_val: float = 0.0
+    dynamic_type: Union[DynamicFilterType, int] = DynamicFilterType.NULL
+    has_dyn_val: bool = False
+    has_dyn_max_val: bool = False
+    dyn_val: float = 0.0
+    dyn_max_val: float = 0.0
+    val_iso: str = ""
+    max_val_iso: str = ""
+    dxf_id: int = _FILTER_DXF_ID_NONE
+    cell_color: bool = False
+    icon_set: int = 0
+    icon_id: int = 0
+    has_icon_id: bool = False
+
+
+@dataclass
+class AutoFilterSortCondition:
+    """One ``<sortCondition>`` of an AutoFilter sort state."""
+
+    ref: MergeRange
+    descending: bool = False
+    sort_by: Union[SortBy, int] = SortBy.VALUE
+    custom_list: str = ""
+    dxf_id: int = 0
+    has_dxf_id: bool = False
+    icon_set: int = 0
+    icon_id: int = 0
+    has_icon_id: bool = False
+
+
+@dataclass
+class AutoFilterSortState:
+    """The ``<sortState>`` of an AutoFilter; ``sort_method`` is a :class:`SortMethod`."""
+
+    ref: MergeRange
+    column_sort: bool = False
+    case_sensitive: bool = False
+    sort_method: Union[SortMethod, int] = SortMethod.NONE
+    conditions: List[AutoFilterSortCondition] = field(default_factory=list)
+
+
+@dataclass
+class AutoFilter:
+    """A sheet or table AutoFilter; ``range`` includes the header row, ``sort`` may be ``None``."""
+
+    range: MergeRange
+    columns: List[AutoFilterColumn] = field(default_factory=list)
+    sort: Optional[AutoFilterSortState] = None
+
+
+@dataclass(frozen=True)
+class ValidationOutcome:
+    """Result of :meth:`Workbook.validate_value`.
+
+    ``has_rule`` is ``False`` (and ``valid`` ``True``) when no rule covers the
+    cell; otherwise ``rule_index`` and ``error_style`` (a
+    :class:`ValidationErrorStyle`) describe the applied rule.
+    """
+
+    has_rule: bool
+    valid: bool
+    rule_index: int
+    error_style: Union[ValidationErrorStyle, int]
+
+
+@dataclass
+class Mention:
+    """One ``@person`` mention; ``start`` and ``length`` are UTF-16 code units."""
+
+    person_id: str
+    mention_id: str
+    start: int
+    length: int
+
+
+@dataclass
+class ThreadedComment:
+    """A threaded comment: a thread opener, or a reply when ``parent_id`` is non-empty."""
+
+    id: str
+    row: int = 0
+    col: int = 0
+    person_id: str = ""
+    created: str = ""
+    text: str = ""
+    parent_id: str = ""
+    done: bool = False
+    mentions: List[Mention] = field(default_factory=list)
+
+
+@dataclass
+class Person:
+    """One entry of the workbook's person list."""
+
+    id: str
+    display_name: str
+    user_id: str = ""
+    provider_id: str = ""
 
 
 @dataclass
@@ -1216,7 +1469,7 @@ class ColorSpec:
     the default ``kind=0`` makes the writer emit ``*_argb`` as ``rgb``.
     """
 
-    kind: int = 0
+    kind: Union[FilterKind, int] = FilterKind.NONE
     rgb: int = 0
     theme: int = 0
     tint: float = 0.0
@@ -1756,6 +2009,244 @@ def _pack_merge_array(ranges: Sequence[MergeRange], owned: List[int]) -> int:
             },
         )
     return ptr
+
+
+def _write_value_input(value: Value, value_ptr: int, owned: List[int]) -> None:
+    """Write ``value`` as an ``fm_value_t`` at ``value_ptr``.
+
+    A text payload's buffer is appended to ``owned`` for later release.
+    """
+    payload = b"\x00" * 8
+    if value.kind is ValueKind.NUMBER:
+        payload = struct.pack("<d", float(value.number or 0.0))
+    elif value.kind is ValueKind.BOOL:
+        payload = struct.pack("<i", 1 if value.boolean else 0) + b"\x00" * 4
+    elif value.kind is ValueKind.ERROR:
+        payload = struct.pack("<i", int(value.error_code or 0)) + b"\x00" * 4
+    elif value.kind is ValueKind.TEXT:
+        text_buf, _ = LIB.alloc_utf8(value.text or "")
+        owned.append(text_buf)
+        payload = struct.pack("<I", text_buf) + b"\x00" * 4
+    LIB.write_bytes(value_ptr, struct.pack("<i", int(value.kind)) + b"\x00" * 4 + payload)
+
+
+def _pack_mentions(mentions: Sequence[Mention], owned: List[int]) -> int:
+    """Pack ``mentions`` into a contiguous ``fm_mention`` array (0 when empty)."""
+    if not mentions:
+        return 0
+    base = _alloc_struct_array(S.MENTION, len(mentions), owned)
+    for i, m in enumerate(mentions):
+        ptr = base + i * S.MENTION.size
+        S.MENTION.pack(LIB, ptr, {"start": _uint(m.start, "start"), "length": _uint(m.length, "length")})
+        S.write_str_field(LIB, ptr, S.MENTION, "person_id", m.person_id, owned)
+        S.write_str_field(LIB, ptr, S.MENTION, "mention_id", m.mention_id, owned)
+    return base
+
+
+def _write_mentions(struct_ptr: int, layout: S.Struct, mentions: Sequence[Mention], owned: List[int]) -> None:
+    """Store a mention array and its count into the ``mentions`` / ``mention_count`` fields."""
+    LIB.write_bytes(struct_ptr + layout.offsets["mentions"][1], struct.pack("<I", _pack_mentions(mentions, owned)))
+    LIB.write_bytes(struct_ptr + layout.offsets["mention_count"][1], struct.pack("<I", len(mentions)))
+
+
+def _decode_mentions(base: int, count: int) -> List[Mention]:
+    out: List[Mention] = []
+    for i in range(count):
+        d = S.MENTION.unpack(LIB, base + i * S.MENTION.size)
+        out.append(
+            Mention(
+                person_id=LIB.read_cstr(d["person_id"]),
+                mention_id=LIB.read_cstr(d["mention_id"]),
+                start=d["start"],
+                length=d["length"],
+            )
+        )
+    return out
+
+
+def _pack_merge_at(ptr: int, r: MergeRange) -> None:
+    S.MERGE_RANGE.pack(
+        LIB,
+        ptr,
+        {
+            "first_row": _uint(r.first_row, "first_row"),
+            "first_col": _uint(r.first_col, "first_col"),
+            "last_row": _uint(r.last_row, "last_row"),
+            "last_col": _uint(r.last_col, "last_col"),
+        },
+    )
+
+
+def _decode_merge_at(ptr: int) -> MergeRange:
+    d = S.MERGE_RANGE.unpack(LIB, ptr)
+    return MergeRange(d["first_row"], d["first_col"], d["last_row"], d["last_col"])
+
+
+_FILTER_COLUMN_BOOLS = (
+    "hidden_button",
+    "show_button",
+    "filter_blank",
+    "custom_and",
+    "top",
+    "percent",
+    "has_filter_val",
+    "has_dyn_val",
+    "has_dyn_max_val",
+    "cell_color",
+    "has_icon_id",
+)
+_FILTER_COLUMN_INTS = ("kind", "custom_count", "op1", "op2", "dynamic_type", "icon_set", "icon_id")
+_FILTER_COLUMN_DOUBLES = ("top_val", "filter_val", "dyn_val", "dyn_max_val")
+_FILTER_COLUMN_STRINGS = ("val1", "val2", "val_iso", "max_val_iso")
+
+
+def _pack_filter_column(ptr: int, col: AutoFilterColumn, owned: List[int]) -> None:
+    fields: Dict[str, object] = {
+        "col_id": _uint(col.col_id, "col_id"),
+        "dxf_id": _uint(col.dxf_id, "dxf_id"),
+    }
+    for name in _FILTER_COLUMN_BOOLS:
+        fields[name] = 1 if getattr(col, name) else 0
+    for name in _FILTER_COLUMN_INTS:
+        fields[name] = _sint(int(getattr(col, name)), name)
+    for name in _FILTER_COLUMN_DOUBLES:
+        fields[name] = float(getattr(col, name))
+    fields["value_count"] = _uint(len(col.values), "value_count")
+    fields["date_group_count"] = _uint(len(col.date_groups), "date_group_count")
+    S.FILTER_COLUMN.pack(LIB, ptr, fields)
+    for name in _FILTER_COLUMN_STRINGS:
+        S.write_str_field(LIB, ptr, S.FILTER_COLUMN, name, getattr(col, name), owned)
+    if col.values:
+        arr = LIB.alloc(4 * len(col.values))
+        owned.append(arr)
+        for i, text in enumerate(col.values):
+            text_ptr, _ = LIB.alloc_utf8(text)
+            owned.append(text_ptr)
+            LIB.write_bytes(arr + 4 * i, struct.pack("<I", text_ptr))
+        LIB.write_bytes(ptr + S.FILTER_COLUMN.offsets["values"][1], struct.pack("<I", arr))
+    if col.date_groups:
+        base = _alloc_struct_array(S.DATE_GROUP_ITEM, len(col.date_groups), owned)
+        for i, g in enumerate(col.date_groups):
+            S.DATE_GROUP_ITEM.pack(
+                LIB,
+                base + i * S.DATE_GROUP_ITEM.size,
+                {
+                    "year": _uint(g.year, "year", 16),
+                    "month": _uint(g.month, "month", 8),
+                    "day": _uint(g.day, "day", 8),
+                    "hour": _uint(g.hour, "hour", 8),
+                    "minute": _uint(g.minute, "minute", 8),
+                    "second": _uint(g.second, "second", 8),
+                    "grouping": _uint(int(g.grouping), "grouping", 8),
+                },
+            )
+        LIB.write_bytes(ptr + S.FILTER_COLUMN.offsets["date_groups"][1], struct.pack("<I", base))
+
+
+def _pack_sort_condition(ptr: int, cond: AutoFilterSortCondition, owned: List[int]) -> None:
+    S.SORT_CONDITION.pack(
+        LIB,
+        ptr,
+        {
+            "descending": 1 if cond.descending else 0,
+            "sort_by": _sint(int(cond.sort_by), "sort_by"),
+            "dxf_id": _uint(cond.dxf_id, "dxf_id"),
+            "has_dxf_id": 1 if cond.has_dxf_id else 0,
+            "icon_set": _sint(cond.icon_set, "icon_set"),
+            "icon_id": _sint(cond.icon_id, "icon_id"),
+            "has_icon_id": 1 if cond.has_icon_id else 0,
+        },
+    )
+    _pack_merge_at(ptr + S.SORT_CONDITION.offsets["ref"][1], cond.ref)
+    S.write_str_field(LIB, ptr, S.SORT_CONDITION, "custom_list", cond.custom_list, owned)
+
+
+def _pack_auto_filter(ptr: int, af: AutoFilter, owned: List[int]) -> None:
+    """Fill the ``fm_auto_filter`` at ``ptr``; every nested buffer is appended to ``owned``."""
+    S.AUTO_FILTER.pack(
+        LIB,
+        ptr,
+        {
+            "column_count": _uint(len(af.columns), "column_count"),
+        },
+    )
+    off = S.AUTO_FILTER.offsets
+    _pack_merge_at(ptr + off["range"][1], af.range)
+    if af.columns:
+        base = _alloc_struct_array(S.FILTER_COLUMN, len(af.columns), owned)
+        for i, col in enumerate(af.columns):
+            _pack_filter_column(base + i * S.FILTER_COLUMN.size, col, owned)
+        LIB.write_bytes(ptr + off["columns"][1], struct.pack("<I", base))
+    sort = af.sort
+    if sort is None:
+        return
+    fields = {
+        "has_sort": 1,
+        "column_sort": 1 if sort.column_sort else 0,
+        "case_sensitive": 1 if sort.case_sensitive else 0,
+        "sort_method": _sint(int(sort.sort_method), "sort_method"),
+        "condition_count": _uint(len(sort.conditions), "condition_count"),
+    }
+    for name, value in fields.items():
+        LIB.write_bytes(ptr + off[name][1], struct.pack("<i" if name != "condition_count" else "<I", value))
+    _pack_merge_at(ptr + off["sort_ref"][1], sort.ref)
+    if sort.conditions:
+        base = _alloc_struct_array(S.SORT_CONDITION, len(sort.conditions), owned)
+        for i, cond in enumerate(sort.conditions):
+            _pack_sort_condition(base + i * S.SORT_CONDITION.size, cond, owned)
+        LIB.write_bytes(ptr + off["conditions"][1], struct.pack("<I", base))
+
+
+def _decode_filter_column(ptr: int) -> AutoFilterColumn:
+    d = S.FILTER_COLUMN.unpack(LIB, ptr)
+    values: List[str] = []
+    if d["value_count"]:
+        raw = LIB.read_bytes(d["values"], 4 * d["value_count"])
+        values = [LIB.read_cstr(p) for p in struct.unpack(f"<{d['value_count']}I", raw)]
+    groups: List[AutoFilterDateGroup] = []
+    for i in range(d["date_group_count"]):
+        g = S.DATE_GROUP_ITEM.unpack(LIB, d["date_groups"] + i * S.DATE_GROUP_ITEM.size)
+        groups.append(AutoFilterDateGroup(**g))
+    kwargs: Dict[str, object] = {name: bool(d[name]) for name in _FILTER_COLUMN_BOOLS}
+    kwargs.update({name: d[name] for name in _FILTER_COLUMN_INTS + _FILTER_COLUMN_DOUBLES})
+    kwargs.update({name: LIB.read_cstr(d[name]) for name in _FILTER_COLUMN_STRINGS})
+    return AutoFilterColumn(col_id=d["col_id"], dxf_id=d["dxf_id"], values=values, date_groups=groups, **kwargs)  # type: ignore[arg-type]
+
+
+def _decode_sort_condition(ptr: int) -> AutoFilterSortCondition:
+    d = S.SORT_CONDITION.unpack(LIB, ptr)
+    return AutoFilterSortCondition(
+        ref=_decode_merge_at(ptr + S.SORT_CONDITION.offsets["ref"][1]),
+        descending=bool(d["descending"]),
+        sort_by=d["sort_by"],
+        custom_list=LIB.read_cstr(d["custom_list"]),
+        dxf_id=d["dxf_id"],
+        has_dxf_id=bool(d["has_dxf_id"]),
+        icon_set=d["icon_set"],
+        icon_id=d["icon_id"],
+        has_icon_id=bool(d["has_icon_id"]),
+    )
+
+
+def _decode_auto_filter(ptr: int) -> AutoFilter:
+    d = S.AUTO_FILTER.unpack(LIB, ptr)
+    off = S.AUTO_FILTER.offsets
+    sort = None
+    if d["has_sort"]:
+        sort = AutoFilterSortState(
+            ref=_decode_merge_at(ptr + off["sort_ref"][1]),
+            column_sort=bool(d["column_sort"]),
+            case_sensitive=bool(d["case_sensitive"]),
+            sort_method=d["sort_method"],
+            conditions=[
+                _decode_sort_condition(d["conditions"] + i * S.SORT_CONDITION.size) for i in range(d["condition_count"])
+            ],
+        )
+    return AutoFilter(
+        range=_decode_merge_at(ptr + off["range"][1]),
+        columns=[_decode_filter_column(d["columns"] + i * S.FILTER_COLUMN.size) for i in range(d["column_count"])],
+        sort=sort,
+    )
 
 
 def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], owned: List[int]) -> int:
@@ -3628,29 +4119,32 @@ class Workbook:
         ``None`` or ``0`` means the engine maximum.
         """
         h = self._require()
+        return self._read_cell_range_page(
+            "fm_sheet_cells_in_range",
+            LIB.fm_sheet_cells_in_range,
+            h,
+            _uint(sheet, "sheet_index"),
+            _uint(cell_range.first_row, "first_row"),
+            _uint(cell_range.first_col, "first_col"),
+            _uint(cell_range.last_row, "last_row"),
+            _uint(cell_range.last_col, "last_col"),
+            _uint(cursor or 0, "cursor", 64),
+            _uint(limit or 0, "limit"),
+        )
+
+    @staticmethod
+    def _read_cell_range_page(op: str, fn, *args) -> "tuple[List[Cell], Optional[int]]":
+        """Call a ``(..., fm_cell_range_t** out)`` ABI function and drain its page."""
         out = _alloc_out_ptr()
         try:
-            _check(
-                LIB.fm_sheet_cells_in_range(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(cell_range.first_row, "first_row"),
-                    _uint(cell_range.first_col, "first_col"),
-                    _uint(cell_range.last_row, "last_row"),
-                    _uint(cell_range.last_col, "last_col"),
-                    _uint(cursor or 0, "cursor", 64),
-                    _uint(limit or 0, "limit"),
-                    out,
-                ),
-                "fm_sheet_cells_in_range",
-            )
+            _check(fn(*args, out), op)
             handle = LIB.read_u32(out)
         finally:
             LIB.free(out)
         if handle == 0:
             raise FormulonError(
                 _STATUS_BINDING_NULL_POINTER,
-                op="fm_sheet_cells_in_range",
+                op=op,
                 _diagnostic_override=("returned kOk with a null cell-range handle", ""),
             )
         try:
@@ -3688,6 +4182,313 @@ class Workbook:
         finally:
             LIB.fm_cell_range_destroy(handle)
         return cells, (None if next_cursor == _CELL_RANGE_NO_CURSOR else next_cursor)
+
+    # -- AutoFilter ----------------------------------------------------------
+    def _read_auto_filter(self, fn, index: int, op: str, index_name: str) -> Optional[AutoFilter]:
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.AUTO_FILTER)
+        present = _alloc_out_ptr()
+        try:
+            _check(fn(h, _uint(index, index_name), ptr, present), op)
+            if LIB.read_u32(present) == 0:
+                return None
+            return _decode_auto_filter(ptr)
+        finally:
+            LIB.free(ptr)
+            LIB.free(present)
+
+    def _write_auto_filter(self, fn, index: int, auto_filter: AutoFilter, op: str, index_name: str) -> None:
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.AUTO_FILTER, 1, owned)
+            _pack_auto_filter(ptr, auto_filter, owned)
+            _check(fn(h, _uint(index, index_name), ptr), op)
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def _evaluate_auto_filter(self, fn, index: int, op: str, index_name: str) -> "tuple[int, List[bool]]":
+        h = self._require()
+        len_ptr = _alloc_out_ptr()
+        first_ptr = _alloc_out_ptr()
+        buf = 0
+        try:
+            # Size the buffer first, then fetch.
+            _check(fn(h, _uint(index, index_name), 0, 0, len_ptr, first_ptr), op)
+            total = LIB.read_u32(len_ptr)
+            if total == 0:
+                return LIB.read_u32(first_ptr), []
+            buf = LIB.alloc(total)
+            _check(fn(h, _uint(index, index_name), buf, total, len_ptr, first_ptr), op)
+            flags = LIB.read_bytes(buf, total)
+            return LIB.read_u32(first_ptr), [b != 0 for b in flags]
+        finally:
+            LIB.free(len_ptr)
+            LIB.free(first_ptr)
+            if buf:
+                LIB.free(buf)
+
+    def get_auto_filter(self, sheet: int) -> Optional[AutoFilter]:
+        """Return the sheet AutoFilter, or ``None`` when the sheet has none."""
+        return self._read_auto_filter(LIB.fm_sheet_get_auto_filter, sheet, "fm_sheet_get_auto_filter", "sheet_index")
+
+    def set_auto_filter(self, sheet: int, auto_filter: AutoFilter) -> None:
+        """Replace the sheet AutoFilter. Row visibility is unchanged; see :meth:`apply_auto_filter`."""
+        self._write_auto_filter(
+            LIB.fm_sheet_set_auto_filter, sheet, auto_filter, "fm_sheet_set_auto_filter", "sheet_index"
+        )
+
+    def remove_auto_filter(self, sheet: int) -> None:
+        """Remove the sheet AutoFilter (no-op when absent). Row visibility is unchanged."""
+        h = self._require()
+        _check(LIB.fm_sheet_remove_auto_filter(h, _uint(sheet, "sheet_index")), "fm_sheet_remove_auto_filter")
+
+    def apply_auto_filter(self, sheet: int) -> None:
+        """Hide the body rows the sheet AutoFilter excludes and show the rest."""
+        h = self._require()
+        _check(LIB.fm_sheet_apply_auto_filter(h, _uint(sheet, "sheet_index")), "fm_sheet_apply_auto_filter")
+
+    def clear_auto_filter(self, sheet: int) -> None:
+        """Drop every column criterion of the sheet AutoFilter and show all its body rows."""
+        h = self._require()
+        _check(LIB.fm_sheet_clear_auto_filter(h, _uint(sheet, "sheet_index")), "fm_sheet_clear_auto_filter")
+
+    def evaluate_auto_filter(self, sheet: int) -> "tuple[int, List[bool]]":
+        """Evaluate the sheet AutoFilter without changing the sheet.
+
+        Returns ``(first_row, match)``: body row ``first_row + i`` matches when
+        ``match[i]`` is true.
+        """
+        return self._evaluate_auto_filter(
+            LIB.fm_sheet_evaluate_auto_filter, sheet, "fm_sheet_evaluate_auto_filter", "sheet_index"
+        )
+
+    def get_table_auto_filter(self, table_index: int) -> Optional[AutoFilter]:
+        """Return the AutoFilter of table ``table_index``, or ``None`` when it has none."""
+        return self._read_auto_filter(
+            LIB.fm_table_get_auto_filter, table_index, "fm_table_get_auto_filter", "table_index"
+        )
+
+    def set_table_auto_filter(self, table_index: int, auto_filter: AutoFilter) -> None:
+        """Replace the AutoFilter of table ``table_index``."""
+        self._write_auto_filter(
+            LIB.fm_table_set_auto_filter, table_index, auto_filter, "fm_table_set_auto_filter", "table_index"
+        )
+
+    def remove_table_auto_filter(self, table_index: int) -> None:
+        """Remove the AutoFilter of table ``table_index`` (no-op when absent)."""
+        h = self._require()
+        _check(LIB.fm_table_remove_auto_filter(h, _uint(table_index, "table_index")), "fm_table_remove_auto_filter")
+
+    def apply_table_auto_filter(self, table_index: int) -> None:
+        """Hide the body rows the table AutoFilter excludes and show the rest."""
+        h = self._require()
+        _check(LIB.fm_table_apply_auto_filter(h, _uint(table_index, "table_index")), "fm_table_apply_auto_filter")
+
+    def clear_table_auto_filter(self, table_index: int) -> None:
+        """Drop every column criterion of the table AutoFilter and show all its body rows."""
+        h = self._require()
+        _check(LIB.fm_table_clear_auto_filter(h, _uint(table_index, "table_index")), "fm_table_clear_auto_filter")
+
+    def evaluate_table_auto_filter(self, table_index: int) -> "tuple[int, List[bool]]":
+        """Evaluate the table AutoFilter; returns ``(first_row, match)`` as :meth:`evaluate_auto_filter`."""
+        return self._evaluate_auto_filter(
+            LIB.fm_table_evaluate_auto_filter, table_index, "fm_table_evaluate_auto_filter", "table_index"
+        )
+
+    # -- Validation checks -----------------------------------------------------
+    def validate_value(self, sheet: int, row: int, col: int, value: Value) -> ValidationOutcome:
+        """Check ``value`` against the data-validation rule covering ``(row, col)`` without storing it."""
+        h = self._require()
+        owned: List[int] = []
+        value_ptr = LIB.alloc(fm_value_t_size)
+        owned.append(value_ptr)
+        ptr = S.alloc_struct(LIB, S.VALIDATION_OUTCOME)
+        owned.append(ptr)
+        try:
+            _write_value_input(value, value_ptr, owned)
+            _check(
+                LIB.fm_sheet_validate_value(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), value_ptr, ptr
+                ),
+                "fm_sheet_validate_value",
+            )
+            d = S.VALIDATION_OUTCOME.unpack(LIB, ptr)
+        finally:
+            for p in owned:
+                LIB.free(p)
+        return ValidationOutcome(
+            has_rule=bool(d["has_rule"]),
+            valid=bool(d["valid"]),
+            rule_index=d["rule_index"],
+            error_style=d["error_style"],
+        )
+
+    def list_invalid_cells(
+        self, sheet: int, cursor: Optional[int] = None, limit: Optional[int] = None
+    ) -> "tuple[List[Cell], Optional[int]]":
+        """Return one page of the populated cells failing their data-validation rule (row-major).
+
+        Paging follows :meth:`get_cells_in_range`: pass the returned cursor back
+        for the next page; it is ``None`` once no further invalid cell exists.
+        """
+        h = self._require()
+        return self._read_cell_range_page(
+            "fm_sheet_list_invalid_cells",
+            LIB.fm_sheet_list_invalid_cells,
+            h,
+            _uint(sheet, "sheet_index"),
+            _uint(cursor or 0, "cursor", 64),
+            _uint(limit or 0, "limit"),
+        )
+
+    # -- Threaded comments and persons -------------------------------------------
+    def get_threaded_comments(self, sheet: int) -> List[ThreadedComment]:
+        """Return the sheet's threaded comments in file order (openers followed by their replies)."""
+        h = self._require()
+        n = _read_count(LIB.fm_sheet_threaded_comment_count, h, _uint(sheet, "sheet_index"))
+        ptr = S.alloc_struct(LIB, S.THREADED_COMMENT)
+        out: List[ThreadedComment] = []
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.THREADED_COMMENT, ptr)
+                _check(
+                    LIB.fm_sheet_threaded_comment_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
+                    "fm_sheet_threaded_comment_at",
+                )
+                d = S.THREADED_COMMENT.unpack(LIB, ptr)
+                out.append(
+                    ThreadedComment(
+                        id=LIB.read_cstr(d["id"]),
+                        row=d["row"],
+                        col=d["col"],
+                        person_id=LIB.read_cstr(d["person_id"]),
+                        created=LIB.read_cstr(d["created"]),
+                        text=LIB.read_cstr(d["text"]),
+                        parent_id=LIB.read_cstr(d["parent_id"]),
+                        done=bool(d["done"]),
+                        mentions=_decode_mentions(d["mentions"], d["mention_count"]),
+                    )
+                )
+        finally:
+            LIB.free(ptr)
+        return out
+
+    def add_threaded_comment(self, sheet: int, comment: ThreadedComment) -> None:
+        """Add a threaded comment: a new thread when ``parent_id`` is empty, else a reply."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.THREADED_COMMENT, 1, owned)
+            S.THREADED_COMMENT.pack(
+                LIB,
+                ptr,
+                {
+                    "row": _uint(comment.row, "row"),
+                    "col": _uint(comment.col, "col"),
+                    "done": 1 if comment.done else 0,
+                },
+            )
+            for fld in ("id", "person_id", "created", "text", "parent_id"):
+                S.write_str_field(LIB, ptr, S.THREADED_COMMENT, fld, getattr(comment, fld), owned)
+            _write_mentions(ptr, S.THREADED_COMMENT, comment.mentions, owned)
+            _check(
+                LIB.fm_sheet_add_threaded_comment(h, _uint(sheet, "sheet_index"), ptr),
+                "fm_sheet_add_threaded_comment",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def edit_threaded_comment(self, sheet: int, comment_id: str, text: str, mentions: Sequence[Mention] = ()) -> None:
+        """Replace the text and mentions of the comment ``comment_id``."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            id_ptr, _ = LIB.alloc_utf8(comment_id)
+            owned.append(id_ptr)
+            text_ptr, _ = LIB.alloc_utf8(text)
+            owned.append(text_ptr)
+            mentions_ptr = _pack_mentions(mentions, owned)
+            _check(
+                LIB.fm_sheet_edit_threaded_comment(
+                    h, _uint(sheet, "sheet_index"), id_ptr, text_ptr, mentions_ptr, _uint(len(mentions), "count")
+                ),
+                "fm_sheet_edit_threaded_comment",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_thread_resolved(self, sheet: int, thread_id: str, done: bool) -> None:
+        """Set the resolved state of the thread opened by ``thread_id``."""
+        h = self._require()
+        id_ptr, _ = LIB.alloc_utf8(thread_id)
+        try:
+            _check(
+                LIB.fm_sheet_set_thread_resolved(h, _uint(sheet, "sheet_index"), id_ptr, 1 if done else 0),
+                "fm_sheet_set_thread_resolved",
+            )
+        finally:
+            LIB.free(id_ptr)
+
+    def remove_threaded_comment(self, sheet: int, comment_id: str) -> None:
+        """Remove the comment ``comment_id``; removing a thread opener removes its whole thread."""
+        h = self._require()
+        id_ptr, _ = LIB.alloc_utf8(comment_id)
+        try:
+            _check(
+                LIB.fm_sheet_remove_threaded_comment(h, _uint(sheet, "sheet_index"), id_ptr),
+                "fm_sheet_remove_threaded_comment",
+            )
+        finally:
+            LIB.free(id_ptr)
+
+    def get_persons(self) -> List[Person]:
+        """Return the workbook's person list in file order."""
+        h = self._require()
+        n = _read_count(LIB.fm_workbook_person_count, h)
+        ptr = S.alloc_struct(LIB, S.PERSON)
+        out: List[Person] = []
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.PERSON, ptr)
+                _check(LIB.fm_workbook_person_at(h, _uint(i, "idx"), ptr), "fm_workbook_person_at")
+                d = S.PERSON.unpack(LIB, ptr)
+                out.append(
+                    Person(
+                        id=LIB.read_cstr(d["id"]),
+                        display_name=LIB.read_cstr(d["display_name"]),
+                        user_id=LIB.read_cstr(d["user_id"]),
+                        provider_id=LIB.read_cstr(d["provider_id"]),
+                    )
+                )
+        finally:
+            LIB.free(ptr)
+        return out
+
+    def add_person(self, person: Person) -> None:
+        """Append a person to the workbook's person list."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.PERSON, 1, owned)
+            for fld in ("id", "display_name", "user_id", "provider_id"):
+                S.write_str_field(LIB, ptr, S.PERSON, fld, getattr(person, fld), owned)
+            _check(LIB.fm_workbook_add_person(h, ptr), "fm_workbook_add_person")
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def remove_person(self, person_id: str) -> None:
+        """Remove the person ``person_id`` (refused while a comment or mention still names them)."""
+        h = self._require()
+        id_ptr, _ = LIB.alloc_utf8(person_id)
+        try:
+            _check(LIB.fm_workbook_remove_person(h, id_ptr), "fm_workbook_remove_person")
+        finally:
+            LIB.free(id_ptr)
 
     def get_merges_in_range(self, sheet: int, cell_range: MergeRange) -> List[MergeRange]:
         """Return every merge range on ``sheet`` that intersects ``cell_range``."""
@@ -3749,18 +4550,7 @@ class Workbook:
         status_ptr = _alloc_out_ptr()
         owned.extend((text_ptr, status_ptr))
         try:
-            payload = b"\x00" * 8
-            if value.kind is ValueKind.NUMBER:
-                payload = struct.pack("<d", float(value.number or 0.0))
-            elif value.kind is ValueKind.BOOL:
-                payload = struct.pack("<i", 1 if value.boolean else 0) + b"\x00" * 4
-            elif value.kind is ValueKind.ERROR:
-                payload = struct.pack("<i", int(value.error_code or 0)) + b"\x00" * 4
-            elif value.kind is ValueKind.TEXT:
-                text_buf, _ = LIB.alloc_utf8(value.text or "")
-                owned.append(text_buf)
-                payload = struct.pack("<I", text_buf) + b"\x00" * 4
-            LIB.write_bytes(value_ptr, struct.pack("<i", int(value.kind)) + b"\x00" * 4 + payload)
+            _write_value_input(value, value_ptr, owned)
             fmt_ptr, _ = LIB.alloc_utf8(format_code)
             owned.append(fmt_ptr)
             _check(

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "c_api/parts/cell_range.h"
 #include "c_api/parts/common.h"
 #include "cell.h"
 #include "eval/formula_text_utils.h"
@@ -27,6 +28,8 @@
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::cell_range_page_size;
+using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -584,9 +587,6 @@ const char* publish_scratch(const fm_workbook_t* wb, std::string text) {
   return store.back().c_str();
 }
 
-// Page size cap for `fm_sheet_cells_in_range`, and the size a zero limit asks for.
-constexpr std::uint32_t kMaxCellRangeLimit = 65536U;
-
 }  // namespace
 
 extern "C" fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -625,19 +625,6 @@ extern "C" fm_status_t fm_workbook_get_formula_r1c1(const fm_workbook_t* wb, siz
   return 0;
 }
 
-struct fm_cell_range {
-  struct Entry {
-    std::uint32_t row = 0;
-    std::uint32_t col = 0;
-    const char* formula = nullptr;
-    fm_value_t value{};
-  };
-  std::vector<Entry> entries;
-  // Owns every formula string and Text payload `entries` points at.
-  TextStore text;
-  std::uint64_t next_cursor = formulon::Sheet::kCellCursorEnd;
-};
-
 extern "C" fm_status_t fm_sheet_cells_in_range(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
                                                uint32_t first_col, uint32_t last_row, uint32_t last_col,
                                                uint64_t cursor, uint32_t limit, fm_cell_range_t** out) {
@@ -652,29 +639,16 @@ extern "C" fm_status_t fm_sheet_cells_in_range(const fm_workbook_t* wb, size_t s
   if (auto rc = check_sheet_rect(first_row, first_col, last_row, last_col, "fm_sheet_cells_in_range"); rc != 0) {
     return rc;
   }
-  constexpr std::uint64_t kCursorEnd =
-      static_cast<std::uint64_t>(formulon::Sheet::kMaxRows) * formulon::Sheet::kMaxCols;
-  if (cursor >= kCursorEnd) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_cells_in_range: cursor out of range", "cursor=" + std::to_string(cursor));
+  if (auto rc = check_cell_cursor(cursor, "fm_sheet_cells_in_range"); rc != 0) {
+    return rc;
   }
-  const std::uint32_t page = (limit == 0U || limit > kMaxCellRangeLimit) ? kMaxCellRangeLimit : limit;
   auto handle = std::unique_ptr<fm_cell_range_t>(new fm_cell_range_t{});
   handle->next_cursor = wb->workbook()
                             .sheet(sheet_index)
                             .cells_in_range(
-                                first_row, first_col, last_row, last_col, cursor, page,
+                                first_row, first_col, last_row, last_col, cursor, cell_range_page_size(limit),
                                 [](const formulon::Sheet::RangeCell& cell, void* ctx) {
-                                  auto* range = static_cast<fm_cell_range_t*>(ctx);
-                                  fm_cell_range_t::Entry entry;
-                                  entry.row = cell.row;
-                                  entry.col = cell.col;
-                                  if (!cell.formula_text.empty()) {
-                                    range->text.emplace_back(cell.formula_text);
-                                    entry.formula = range->text.back().c_str();
-                                  }
-                                  value_to_fm(cell.value, range->text, &entry.value);
-                                  range->entries.push_back(entry);
+                                  static_cast<fm_cell_range_t*>(ctx)->append(cell);
                                 },
                                 handle.get());
   *out = handle.release();

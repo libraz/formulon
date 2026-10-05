@@ -83,6 +83,15 @@ class StructLayoutTests(unittest.TestCase):
         "THEME_COLORS": 48,
         "THEME_FONTS": 16,
         "EFFECTIVE_STYLE": 96,
+        "DATE_GROUP_ITEM": 8,
+        "FILTER_COLUMN": 152,
+        # An inline `fm_merge_range` (16 bytes) leads the record.
+        "SORT_CONDITION": 48,
+        "AUTO_FILTER": 64,
+        "VALIDATION_OUTCOME": 16,
+        "MENTION": 16,
+        "THREADED_COMMENT": 40,
+        "PERSON": 16,
     }
 
     def test_struct_sizes(self) -> None:

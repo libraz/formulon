@@ -137,6 +137,39 @@ fm_status_t check_finite(double value, const char* api, const char* field) {
                            std::string(api) + ": " + field + "=" + std::to_string(value));
 }
 
+fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char* api) {
+  switch (in.kind) {
+    case FM_VAL_BLANK:
+      *out = formulon::Value::blank();
+      return 0;
+    case FM_VAL_NUMBER:
+      if (auto rc = check_finite(in.u.number, api, "value"); rc != 0) {
+        return rc;
+      }
+      *out = formulon::Value::number(in.u.number);
+      return 0;
+    case FM_VAL_BOOL:
+      *out = formulon::Value::boolean(in.u.boolean != 0);
+      return 0;
+    case FM_VAL_TEXT:
+      if (in.u.text == nullptr) {
+        return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "value text is NULL", api);
+      }
+      *out = formulon::Value::text(in.u.text);
+      return 0;
+    case FM_VAL_ERROR:
+      if (in.u.error_code < 0 || in.u.error_code > static_cast<int32_t>(formulon::ErrorCode::Unknown)) {
+        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "error code out of range",
+                                 std::string(api) + ": error=" + std::to_string(in.u.error_code));
+      }
+      *out = formulon::Value::error(static_cast<formulon::ErrorCode>(in.u.error_code));
+      return 0;
+    default:
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value kind not accepted",
+                               std::string(api) + ": kind=" + std::to_string(static_cast<int>(in.kind)));
+  }
+}
+
 fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* api, const char* field) {
   if (value >= 0 && value <= max) {
     return 0;

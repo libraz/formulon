@@ -22,7 +22,7 @@
 //   * `parts/sheet_view.cc`        -- view / protection / column / row
 //     layout.
 //   * `parts/sheet_ui.cc`         -- merges / comments / hyperlinks /
-//     validations.
+//     validations / AutoFilter / threaded comments and persons.
 //   * `parts/free_funcs.{h,cc}`    -- evalFormula / version /
 //     lastError* / statusString / the process-wide structured-log
 //     controls.

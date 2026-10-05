@@ -385,6 +385,7 @@ src/eval/aggregate_lazy.cpp
   src/eval/lookups/common.cpp
   src/eval/lookups/index.cpp
   src/eval/lookups/xlookup.cpp
+  src/c_api/parts/auto_filter.cpp
   src/c_api/parts/cells.cpp
   src/c_api/parts/cf_eval.cpp
   src/c_api/parts/eval_adhoc.cpp
@@ -412,6 +413,8 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/recalc.cpp
   src/c_api/parts/tables.cpp
   src/c_api/parts/theme.cpp
+  src/c_api/parts/threaded_comments.cpp
+  src/c_api/parts/validation.cpp
   src/c_api/generated/sheet_counts.cpp
   src/c_api/generated/styles_counts.cpp
   src/c_api/generated/workbook_counts.cpp

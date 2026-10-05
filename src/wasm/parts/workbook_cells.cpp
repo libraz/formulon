@@ -609,6 +609,59 @@ bool js_optional_index(const emscripten::val& v, double dflt, double max, double
   return d >= 0.0 && d <= max;
 }
 
+/// Reads a `{kind, number, boolean, text, errorCode}` value record into
+/// `out`; `text` owns the storage a `FM_VAL_TEXT` payload points at.
+void pull_value(const emscripten::val& value, std::string& text, fm_value_t* out) {
+  out->kind = static_cast<fm_value_kind_t>(js_pull_u32(value, "kind", 0U));
+  text = js_pull_string(value, "text");
+  switch (out->kind) {
+    case FM_VAL_NUMBER:
+      out->u.number = js_pull_double(value, "number", 0.0);
+      break;
+    case FM_VAL_BOOL:
+      out->u.boolean = js_pull_bool(value, "boolean", false) ? 1 : 0;
+      break;
+    case FM_VAL_TEXT:
+      out->u.text = text.c_str();
+      break;
+    case FM_VAL_ERROR:
+      out->u.error_code = static_cast<int32_t>(js_pull_u32(value, "errorCode", 0U));
+      break;
+    default:
+      break;
+  }
+}
+
+/// Fills `o.cells` / `o.nextCursor` from a cell-range page and destroys it.
+void fill_cells_page(emscripten::val& o, fm_cell_range_t* page) {
+  std::size_t count = 0;
+  uint64_t next = 0;
+  fm_cell_range_count(page, &count);
+  fm_cell_range_next_cursor(page, &next);
+  emscripten::val cells = emscripten::val::array();
+  for (std::size_t i = 0; i < count; ++i) {
+    uint32_t row = 0;
+    uint32_t col = 0;
+    const char* formula = nullptr;
+    fm_value_t v{};
+    if (fm_cell_range_at(page, i, &row, &col, &formula, &v) != 0) {
+      continue;
+    }
+    emscripten::val cell = emscripten::val::object();
+    cell.set("row", row);
+    cell.set("col", col);
+    cell.set("formula", formula != nullptr ? emscripten::val(std::string(formula)) : emscripten::val::null());
+    cell.set("value", translate_value(v));
+    cells.call<void>("push", cell);
+  }
+  fm_cell_range_destroy(page);
+  o.set("status", ok_status());
+  o.set("cells", cells);
+  if (next != UINT64_MAX) {
+    o.set("nextCursor", static_cast<double>(next));
+  }
+}
+
 }  // namespace
 
 emscripten::val JsWorkbook::getFormula(uint32_t sheet, uint32_t row, uint32_t col) const {
@@ -649,31 +702,58 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
     o.set("status", error_status(rc));
     return o;
   }
-  std::size_t count = 0;
-  uint64_t next = 0;
-  fm_cell_range_count(page, &count);
-  fm_cell_range_next_cursor(page, &next);
-  emscripten::val cells = emscripten::val::array();
-  for (std::size_t i = 0; i < count; ++i) {
-    uint32_t row = 0;
-    uint32_t col = 0;
-    const char* formula = nullptr;
-    fm_value_t v{};
-    if (fm_cell_range_at(page, i, &row, &col, &formula, &v) != 0) {
-      continue;
-    }
-    emscripten::val cell = emscripten::val::object();
-    cell.set("row", row);
-    cell.set("col", col);
-    cell.set("formula", formula != nullptr ? emscripten::val(std::string(formula)) : emscripten::val::null());
-    cell.set("value", translate_value(v));
-    cells.call<void>("push", cell);
+  fill_cells_page(o, page);
+  return o;
+}
+
+emscripten::val JsWorkbook::listInvalidCells(uint32_t sheet, emscripten::val cursor, emscripten::val limit) const {
+  emscripten::val o = emscripten::val::object();
+  o.set("cells", emscripten::val::array());
+  o.set("nextCursor", emscripten::val::null());
+  if (handle_ == nullptr) {
+    o.set("status", error_status(kBindingInvalidHandle));
+    return o;
   }
-  fm_cell_range_destroy(page);
-  o.set("status", ok_status());
-  o.set("cells", cells);
-  if (next != UINT64_MAX) {
-    o.set("nextCursor", static_cast<double>(next));
+  double cursor_value = 0.0;
+  double limit_value = 0.0;
+  if (!js_optional_index(cursor, 0.0, 9007199254740991.0, &cursor_value) ||
+      !js_optional_index(limit, 0.0, 4294967295.0, &limit_value)) {
+    o.set("status", binding_error_status(kInvalidArgument,
+                                         "listInvalidCells: `cursor` and `limit` must be non-negative integers"));
+    return o;
+  }
+  fm_cell_range_t* page = nullptr;
+  const fm_status_t rc = fm_sheet_list_invalid_cells(handle_, sheet, static_cast<uint64_t>(cursor_value),
+                                                     static_cast<uint32_t>(limit_value), &page);
+  if (rc != 0) {
+    o.set("status", error_status(rc));
+    return o;
+  }
+  fill_cells_page(o, page);
+  return o;
+}
+
+emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val value) const {
+  emscripten::val o = emscripten::val::object();
+  o.set("hasRule", false);
+  o.set("valid", true);
+  o.set("ruleIndex", 0U);
+  o.set("errorStyle", 0U);
+  if (handle_ == nullptr) {
+    o.set("status", error_status(kBindingInvalidHandle));
+    return o;
+  }
+  std::string text;
+  fm_value_t proposed{};
+  pull_value(value, text, &proposed);
+  fm_validation_outcome outcome{};
+  const fm_status_t rc = fm_sheet_validate_value(handle_, sheet, row, col, &proposed, &outcome);
+  o.set("status", status_from_rc(rc));
+  if (rc == 0) {
+    o.set("hasRule", outcome.has_rule != 0);
+    o.set("valid", outcome.valid != 0);
+    o.set("ruleIndex", outcome.rule_index);
+    o.set("errorStyle", static_cast<uint32_t>(outcome.error_style));
   }
   return o;
 }
@@ -690,25 +770,9 @@ emscripten::val JsWorkbook::formatValue(emscripten::val value, const std::string
   if (handle_ == nullptr) {
     return display_envelope(7000, nullptr, 0);
   }
+  std::string text;
   fm_value_t v{};
-  v.kind = static_cast<fm_value_kind_t>(js_pull_u32(value, "kind", 0U));
-  std::string text = js_pull_string(value, "text");
-  switch (v.kind) {
-    case FM_VAL_NUMBER:
-      v.u.number = js_pull_double(value, "number", 0.0);
-      break;
-    case FM_VAL_BOOL:
-      v.u.boolean = js_pull_bool(value, "boolean", false) ? 1 : 0;
-      break;
-    case FM_VAL_TEXT:
-      v.u.text = text.c_str();
-      break;
-    case FM_VAL_ERROR:
-      v.u.error_code = static_cast<int32_t>(js_pull_u32(value, "errorCode", 0U));
-      break;
-    default:
-      break;
-  }
+  pull_value(value, text, &v);
   const char* out = nullptr;
   int32_t display_status = 0;
   const fm_status_t rc = fm_workbook_format_value(handle_, &v, formatCode.c_str(), &out, &display_status);

@@ -259,10 +259,9 @@ Napi::Value Workbook::GetCellPhoneticProperties(const Napi::CallbackInfo& info) 
   uint32_t font_id = 0;
   uint32_t type = 0;
   uint32_t alignment = 0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_cell_phonetic_properties(handle_, sheet, row, col, &font_id, &type,
-                                                                    &alignment)
-                         : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_cell_phonetic_properties(handle_, sheet, row, col,
+                                                                                       &font_id, &type, &alignment)
+                                            : kBindingInvalidHandle;
   // The payload keys are declared unconditionally, so a failure reports the
   // defaults beside the status rather than dropping them.
   if (rc != 0) {
@@ -424,6 +423,74 @@ Napi::Value Workbook::GetFormulaR1C1(const Napi::CallbackInfo& info) {
   return MakeFormulaResult(env, rc, formula);
 }
 
+namespace {
+
+// Reads a `Value`-shaped JS object into `value`; `text` backs a text payload
+// and must outlive the C call.
+void ReadValueSpec(const Napi::Object& spec, std::string& text, fm_value_t& value) {
+  text = spec.Has("text") ? spec.Get("text").ToString().Utf8Value() : std::string();
+  value.kind = static_cast<fm_value_kind_t>(SpecPullInt32(spec, "kind", FM_VAL_BLANK));
+  switch (value.kind) {
+    case FM_VAL_NUMBER:
+      value.u.number = SpecPullDouble(spec, "number", 0.0);
+      break;
+    case FM_VAL_BOOL:
+      value.u.boolean = SpecPullInt32(spec, "boolean", 0) != 0 ? 1 : 0;
+      break;
+    case FM_VAL_TEXT:
+      value.u.text = text.c_str();
+      break;
+    case FM_VAL_ERROR:
+      value.u.error_code = SpecPullInt32(spec, "errorCode", 0);
+      break;
+    default:
+      break;
+  }
+}
+
+// Fills `out` ({status, cells, nextCursor}) from a cell-range page, which it
+// consumes. `rc` is the status of the call that produced `page`.
+void FillCellsPage(Napi::Env env, Napi::Object out, fm_cell_range_t* page, fm_status_t rc) {
+  Napi::Array cells = out.Get("cells").As<Napi::Array>();
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return;
+  }
+  size_t count = 0;
+  rc = fm_cell_range_count(page, &count);
+  for (size_t i = 0; rc == 0 && i < count; ++i) {
+    uint32_t row = 0;
+    uint32_t col = 0;
+    const char* formula = nullptr;
+    fm_value_t value{};
+    rc = fm_cell_range_at(page, i, &row, &col, &formula, &value);
+    if (rc != 0) {
+      break;
+    }
+    Napi::Object cell = Napi::Object::New(env);
+    cell.Set("row", Napi::Number::New(env, row));
+    cell.Set("col", Napi::Number::New(env, col));
+    cell.Set("formula", formula != nullptr ? static_cast<Napi::Value>(Napi::String::New(env, formula)) : env.Null());
+    cell.Set("value", TranslateValue(env, value));
+    cells.Set(static_cast<uint32_t>(i), cell);
+  }
+  uint64_t next = UINT64_MAX;
+  if (rc == 0) {
+    rc = fm_cell_range_next_cursor(page, &next);
+  }
+  fm_cell_range_destroy(page);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return;
+  }
+  out.Set("status", MakeOkStatus(env));
+  if (next != UINT64_MAX) {
+    out.Set("nextCursor", Napi::Number::New(env, static_cast<double>(next)));
+  }
+}
+
+}  // namespace
+
 Napi::Value Workbook::GetCellsInRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
@@ -451,37 +518,59 @@ Napi::Value Workbook::GetCellsInRange(const Napi::CallbackInfo& info) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
   }
-  size_t count = 0;
-  rc = fm_cell_range_count(page, &count);
-  for (size_t i = 0; rc == 0 && i < count; ++i) {
-    uint32_t row = 0;
-    uint32_t col = 0;
-    const char* formula = nullptr;
-    fm_value_t value{};
-    rc = fm_cell_range_at(page, i, &row, &col, &formula, &value);
-    if (rc != 0) {
-      break;
-    }
-    Napi::Object cell = Napi::Object::New(env);
-    cell.Set("row", Napi::Number::New(env, row));
-    cell.Set("col", Napi::Number::New(env, col));
-    cell.Set("formula", formula != nullptr ? static_cast<Napi::Value>(Napi::String::New(env, formula)) : env.Null());
-    cell.Set("value", TranslateValue(env, value));
-    cells.Set(static_cast<uint32_t>(i), cell);
+  FillCellsPage(env, out, page, rc);
+  return out;
+}
+
+Napi::Value Workbook::ListInvalidCells(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("cells", Napi::Array::New(env));
+  out.Set("nextCursor", env.Null());
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
   }
-  uint64_t next = UINT64_MAX;
-  if (rc == 0) {
-    rc = fm_cell_range_next_cursor(page, &next);
+  const bool has_cursor = info.Length() > 1 && info[1].IsNumber();
+  const uint64_t cursor = has_cursor ? static_cast<uint64_t>(info[1].As<Napi::Number>().DoubleValue()) : 0U;
+  const uint32_t limit = info.Length() > 2 && info[2].IsNumber() ? ArgU32(info, 2) : 0U;
+  fm_cell_range_t* page = nullptr;
+  const fm_status_t rc = fm_sheet_list_invalid_cells(handle_, ArgU32(info, 0), cursor, limit, &page);
+  FillCellsPage(env, out, page, rc);
+  return out;
+}
+
+Napi::Value Workbook::ValidateValue(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("hasRule", Napi::Boolean::New(env, false));
+  out.Set("valid", Napi::Boolean::New(env, false));
+  out.Set("ruleIndex", Napi::Number::New(env, 0));
+  out.Set("errorStyle", Napi::Number::New(env, 0));
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
   }
-  fm_cell_range_destroy(page);
+  if (info.Length() < 4 || !info[3].IsObject()) {
+    out.Set("status",
+            MakeBindingArgumentError(env, "validateValue expects (sheet:number, row:number, col:number, value:Value)"));
+    return out;
+  }
+  std::string text;
+  fm_value_t value{};
+  ReadValueSpec(info[3].As<Napi::Object>(), text, value);
+  fm_validation_outcome outcome{};
+  const fm_status_t rc =
+      fm_sheet_validate_value(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &value, &outcome);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
   }
   out.Set("status", MakeOkStatus(env));
-  if (next != UINT64_MAX) {
-    out.Set("nextCursor", Napi::Number::New(env, static_cast<double>(next)));
-  }
+  out.Set("hasRule", Napi::Boolean::New(env, outcome.has_rule != 0));
+  out.Set("valid", Napi::Boolean::New(env, outcome.valid != 0));
+  out.Set("ruleIndex", Napi::Number::New(env, outcome.rule_index));
+  out.Set("errorStyle", Napi::Number::New(env, outcome.error_style));
   return out;
 }
 
@@ -508,26 +597,10 @@ Napi::Value Workbook::FormatValue(const Napi::CallbackInfo& info) {
     return out;
   }
   const Napi::Object spec = info[0].As<Napi::Object>();
-  const std::string text = spec.Has("text") ? spec.Get("text").ToString().Utf8Value() : std::string();
   const std::string format_code = ArgString(info, 1);
+  std::string text;
   fm_value_t value{};
-  value.kind = static_cast<fm_value_kind_t>(SpecPullInt32(spec, "kind", FM_VAL_BLANK));
-  switch (value.kind) {
-    case FM_VAL_NUMBER:
-      value.u.number = SpecPullDouble(spec, "number", 0.0);
-      break;
-    case FM_VAL_BOOL:
-      value.u.boolean = SpecPullInt32(spec, "boolean", 0) != 0 ? 1 : 0;
-      break;
-    case FM_VAL_TEXT:
-      value.u.text = text.c_str();
-      break;
-    case FM_VAL_ERROR:
-      value.u.error_code = SpecPullInt32(spec, "errorCode", 0);
-      break;
-    default:
-      break;
-  }
+  ReadValueSpec(spec, text, value);
   const char* out_text = nullptr;
   int32_t display_status = 0;
   const fm_status_t rc = fm_workbook_format_value(handle_, &value, format_code.c_str(), &out_text, &display_status);

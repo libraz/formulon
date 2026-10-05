@@ -348,6 +348,34 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddValidation(const Napi::CallbackInfo& info);
   Napi::Value RemoveValidationAt(const Napi::CallbackInfo& info);
   Napi::Value ClearValidations(const Napi::CallbackInfo& info);
+  /// Validates `value` against the rule covering a cell, and lists the
+  /// populated cells that fail their rule (paged like `getCellsInRange`).
+  Napi::Value ValidateValue(const Napi::CallbackInfo& info);
+  Napi::Value ListInvalidCells(const Napi::CallbackInfo& info);
+
+  // Typed AutoFilter, sheet and table scoped.
+  Napi::Value GetAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value SetAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value RemoveAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value ApplyAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value ClearAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value EvaluateAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value GetTableAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value SetTableAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value RemoveTableAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value ApplyTableAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value ClearTableAutoFilter(const Napi::CallbackInfo& info);
+  Napi::Value EvaluateTableAutoFilter(const Napi::CallbackInfo& info);
+
+  // Threaded comments and the workbook person list.
+  Napi::Value GetThreadedComments(const Napi::CallbackInfo& info);
+  Napi::Value AddThreadedComment(const Napi::CallbackInfo& info);
+  Napi::Value EditThreadedComment(const Napi::CallbackInfo& info);
+  Napi::Value SetThreadResolved(const Napi::CallbackInfo& info);
+  Napi::Value RemoveThreadedComment(const Napi::CallbackInfo& info);
+  Napi::Value GetPersons(const Napi::CallbackInfo& info);
+  Napi::Value AddPerson(const Napi::CallbackInfo& info);
+  Napi::Value RemovePerson(const Napi::CallbackInfo& info);
 
   // ---- Argument helpers (visible to all part TUs) -------------------
   //

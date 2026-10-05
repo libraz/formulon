@@ -50,7 +50,7 @@ int main(void) {
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf) == 128, "fm_cell_xf ABI layout changed");
   _Static_assert(sizeof(fm_row_layout_t) == 40, "fm_row_layout_t ABI layout changed");
-  _Static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4 ? 40 : 48), "fm_sheet_view_t ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4 ? 44 : 48), "fm_sheet_view_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_print_range_t` from
   // pagination, and `fm_styles_batch` is passed in by pointer with fifteen
@@ -76,8 +76,40 @@ int main(void) {
                                 uint32_t, fm_cell_range_t**) = fm_sheet_cells_in_range;
   fm_status_t (*format_value)(const fm_workbook_t*, const fm_value_t*, const char*, const char**, int32_t*) =
       fm_workbook_format_value;
+  // Records the AutoFilter, validation and threaded-comment entry points read
+  // and write. The pointer-bearing ones are pinned per target.
+  _Static_assert(sizeof(fm_date_group_item) == 8, "fm_date_group_item ABI layout changed");
+  _Static_assert(sizeof(fm_filter_column) == (sizeof(void*) == 4 ? 152 : 192), "fm_filter_column ABI layout changed");
+  _Static_assert(sizeof(fm_sort_condition) == (sizeof(void*) == 4 ? 48 : 56), "fm_sort_condition ABI layout changed");
+  _Static_assert(sizeof(fm_auto_filter) == (sizeof(void*) == 4 ? 64 : 80), "fm_auto_filter ABI layout changed");
+  _Static_assert(sizeof(fm_validation_outcome) == 16, "fm_validation_outcome ABI layout changed");
+  _Static_assert(sizeof(fm_mention) == (sizeof(void*) == 4 ? 16 : 24), "fm_mention ABI layout changed");
+  _Static_assert(sizeof(fm_threaded_comment) == (sizeof(void*) == 4 ? 40 : 72),
+                 "fm_threaded_comment ABI layout changed");
+  _Static_assert(sizeof(fm_person) == 4 * sizeof(void*), "fm_person ABI layout changed");
+  fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter*, int32_t*) = fm_sheet_get_auto_filter;
+  fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter*) = fm_table_set_auto_filter;
+  fm_status_t (*evaluate_auto_filter)(const fm_workbook_t*, size_t, uint8_t*, size_t, size_t*, uint32_t*) =
+      fm_sheet_evaluate_auto_filter;
+  fm_status_t (*validate_value)(const fm_workbook_t*, size_t, uint32_t, uint32_t, const fm_value_t*,
+                                fm_validation_outcome*) = fm_sheet_validate_value;
+  fm_status_t (*list_invalid_cells)(const fm_workbook_t*, size_t, uint64_t, uint32_t, fm_cell_range_t**) =
+      fm_sheet_list_invalid_cells;
+  fm_status_t (*add_threaded_comment)(fm_workbook_t*, size_t, const fm_threaded_comment*) =
+      fm_sheet_add_threaded_comment;
+  fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const char*, const fm_mention*, uint32_t) =
+      fm_sheet_edit_threaded_comment;
+  fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person*) = fm_workbook_person_at;
   (void)cells_in_range;
   (void)format_value;
+  (void)get_auto_filter;
+  (void)set_table_auto_filter;
+  (void)evaluate_auto_filter;
+  (void)validate_value;
+  (void)list_invalid_cells;
+  (void)add_threaded_comment;
+  (void)edit_threaded_comment;
+  (void)person_at;
   (void)save_diagnostics;
   (void)read_diagnostics;
   (void)save_as;

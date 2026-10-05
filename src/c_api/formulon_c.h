@@ -1699,6 +1699,13 @@ FM_API fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, uint32_t sheet, f
 FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                         const char* author, const char* text);
 
+/** @brief Data-validation error style (`fm_data_validation::error_style`, `fm_validation_outcome::error_style`). */
+typedef enum {
+  FM_VALIDATION_ERROR_STYLE_STOP = 0,
+  FM_VALIDATION_ERROR_STYLE_WARNING = 1,
+  FM_VALIDATION_ERROR_STYLE_INFORMATION = 2,
+} fm_validation_error_style_t;
+
 /**
  * @brief Data-validation rule descriptor.
  *
@@ -1714,7 +1721,7 @@ FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint3
  *     6 textLength, 7 custom.
  *   * `op`   — 0 between, 1 notBetween, 2 equal, 3 notEqual,
  *     4 greaterThan, 5 lessThan, 6 greaterThanOrEqual, 7 lessThanOrEqual.
- *   * `error_style` — 0 stop, 1 warning, 2 information.
+ *   * `error_style` — an `fm_validation_error_style_t`.
  *   * `allow_blank` / `show_input_message` / `show_error_message` /
  *     `show_dropdown` — 0 = false, 1 = true. `show_dropdown` is the
  *     user-facing "is the in-cell dropdown arrow shown" meaning for
@@ -1813,6 +1820,223 @@ FM_API fm_status_t fm_sheet_remove_validation_at(fm_workbook_t* wb, uint32_t she
  *         `kInvalidArgument` when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, uint32_t sheet);
+
+/**
+ * @brief Result of checking a value against the data-validation rule that
+ *        covers a cell.
+ *
+ * `has_rule` is 0 when no rule covers the cell, and `valid` is then 1.
+ * Otherwise `rule_index` is the `fm_sheet_get_validation_at` index of the
+ * applied rule and `error_style` its error style (an
+ * `fm_validation_error_style_t`).
+ */
+typedef struct {
+  int32_t has_rule;
+  int32_t valid;
+  uint32_t rule_index;
+  uint8_t error_style;
+  uint8_t _pad[3];
+} fm_validation_outcome;
+
+/**
+ * @brief Checks `proposed` against the data-validation rule covering
+ *        `(row, col)`, without storing it.
+ *
+ * Excel applies one rule per cell: when sqrefs overlap, the first rule in
+ * `fm_sheet_get_validation_at` order wins. `proposed` is taken as the
+ * already-parsed value (text "5" is text, not a number). The rule's
+ * formulas, including a `custom` formula that refers to the cell itself,
+ * read the workbook as stored.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`, or a
+ *         `FM_VAL_TEXT` value carries a `NULL` text;
+ *         `kInvalidArgument` when `sheet_index` is out of range, the cell is
+ *         outside the grid, the number is not finite, the error code is out
+ *         of range, or the value kind is an array, reference or lambda.
+ */
+FM_API fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                           const fm_value_t* proposed, fm_validation_outcome* out);
+
+/**
+ * @brief Enumerates, one page at a time, the cells whose current value fails
+ *        the data-validation rule that covers them.
+ *
+ * Only populated cells are considered, with the meaning
+ * `fm_sheet_cells_in_range` gives the word, in row-major order. `cursor`,
+ * `limit` and the returned handle follow `fm_sheet_cells_in_range`: pass `0`
+ * for the first page and `fm_cell_range_next_cursor`'s value for each
+ * following one, which is `UINT64_MAX` once no further invalid cell exists.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or `cursor`
+ *         is past the last cell of the grid.
+ */
+FM_API fm_status_t fm_sheet_list_invalid_cells(const fm_workbook_t* wb, size_t sheet_index, uint64_t cursor,
+                                               uint32_t limit, fm_cell_range_t** out);
+
+/* -------------------------------------------------------------------------- */
+/* Threaded comments and persons                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief One `@person` mention inside a threaded comment's text.
+ *
+ * `start` and `length` are in UTF-16 code units of the text.
+ */
+typedef struct {
+  const char* person_id;
+  const char* mention_id;
+  uint32_t start;
+  uint32_t length;
+} fm_mention;
+
+/**
+ * @brief One threaded comment: a thread's opening comment, or a reply when
+ *        `parent_id` is non-empty.
+ *
+ * Ids are brace-wrapped uppercase GUIDs and `created` is
+ * `YYYY-MM-DDTHH:MM:SS.ss`; the caller supplies both, the engine never mints
+ * them. `done` is the thread's resolved state and is meaningful on the
+ * opening comment only. On input every `const char*` may be `NULL`, meaning
+ * empty, and `mentions` may be `NULL` only with a zero `mention_count`.
+ */
+typedef struct {
+  const char* id;
+  uint32_t row;
+  uint32_t col;
+  const char* person_id;
+  const char* created;
+  const char* text;
+  const char* parent_id;
+  int32_t done;
+  const fm_mention* mentions;
+  uint32_t mention_count;
+} fm_threaded_comment;
+
+/** @brief One entry of the workbook's person list. */
+typedef struct {
+  const char* id;
+  const char* display_name;
+  const char* user_id;
+  const char* provider_id;
+} fm_person;
+
+/**
+ * @brief Number of threaded comments on the sheet, replies included.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out_count == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_threaded_comment_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Reads comment `idx` of the sheet's flat list, in file order: each
+ *        thread's opening comment followed by its replies.
+ *
+ * Every string and the `mentions` array are read-scratch-backed views, with
+ * the lifetime `fm_sheet_get_auto_filter` describes.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out == NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_sheet_threaded_comment_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                                fm_threaded_comment* out);
+
+/**
+ * @brief Adds a threaded comment. An empty `parent_id` opens a new thread at
+ *        `row`/`col`, which must hold neither a note nor a thread; a
+ *        non-empty one appends a reply to that thread, taking its anchor and
+ *        ignoring `row`, `col` and `done`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `comment` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, a new
+ *         thread's cell is outside the grid, or `mentions` is `NULL` with a
+ *         non-zero count;
+ *         `kThreadedCommentInvalid` (9006) for a malformed id or timestamp,
+ *         a duplicate id, an unknown person or parent, a cell already
+ *         carrying a note or thread, or a mention outside the text. The
+ *         sheet is then unchanged.
+ */
+FM_API fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet_index,
+                                                 const fm_threaded_comment* comment);
+
+/**
+ * @brief Replaces the text and mentions of the comment with `id`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `id` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *         `mentions` is `NULL` with a non-zero count;
+ *         `kThreadedCommentInvalid` (9006) when no comment has `id` or a
+ *         mention is invalid.
+ */
+FM_API fm_status_t fm_sheet_edit_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
+                                                  const char* text, const fm_mention* mentions, uint32_t mention_count);
+
+/**
+ * @brief Sets the resolved state of the thread opened by `thread_id`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `thread_id` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kThreadedCommentInvalid` (9006) when `thread_id` names no opening
+ *         comment.
+ */
+FM_API fm_status_t fm_sheet_set_thread_resolved(fm_workbook_t* wb, size_t sheet_index, const char* thread_id,
+                                                int32_t done);
+
+/**
+ * @brief Removes the comment with `id`; removing an opening comment removes
+ *        its whole thread.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `id` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kThreadedCommentInvalid` (9006) when no comment has `id`.
+ */
+FM_API fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id);
+
+/**
+ * @brief Number of entries in the workbook's person list.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_person_count(const fm_workbook_t* wb, size_t* out_count);
+
+/**
+ * @brief Reads person `idx`, in file order. The strings are
+ *        read-scratch-backed views.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_workbook_person_at(const fm_workbook_t* wb, size_t idx, fm_person* out);
+
+/**
+ * @brief Appends a person to the workbook's person list.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any argument is `NULL`;
+ *         `kThreadedCommentInvalid` (9006) when the id is malformed or
+ *         already listed, or the display name is empty.
+ */
+FM_API fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person* person);
+
+/**
+ * @brief Removes the person with `id`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any argument is `NULL`;
+ *         `kThreadedCommentInvalid` (9006) when no person has `id`, or a
+ *         threaded comment or mention still names them.
+ */
+FM_API fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* id);
 
 /* -------------------------------------------------------------------------- */
 /* Recalc                                                                     */
@@ -4445,6 +4669,321 @@ FM_API fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t 
  *         `kInvalidArgument` for a bad sheet index or malformed fragment.
  */
 FM_API fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
+
+/* -------------------------------------------------------------------------- */
+/* Typed AutoFilter                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** @brief `<dateGroupItem>` granularity (`fm_date_group_item::grouping`); mirrors `ST_DateTimeGrouping`. */
+typedef enum {
+  FM_DATE_TIME_GROUPING_YEAR = 0,
+  FM_DATE_TIME_GROUPING_MONTH = 1,
+  FM_DATE_TIME_GROUPING_DAY = 2,
+  FM_DATE_TIME_GROUPING_HOUR = 3,
+  FM_DATE_TIME_GROUPING_MINUTE = 4,
+  FM_DATE_TIME_GROUPING_SECOND = 5,
+} fm_date_time_grouping_t;
+
+/** @brief Criterion selector (`fm_filter_column::kind`). */
+typedef enum {
+  FM_FILTER_KIND_NONE = 0,
+  FM_FILTER_KIND_VALUES = 1,
+  FM_FILTER_KIND_CUSTOM = 2,
+  FM_FILTER_KIND_TOP10 = 3,
+  FM_FILTER_KIND_DYNAMIC = 4,
+  FM_FILTER_KIND_COLOR = 5,
+  FM_FILTER_KIND_ICON = 6,
+} fm_filter_kind_t;
+
+/** @brief Custom-filter comparison operator (`fm_filter_column::op1` / `op2`); mirrors `ST_FilterOperator`. */
+typedef enum {
+  FM_FILTER_OPERATOR_EQUAL = 0,
+  FM_FILTER_OPERATOR_LESS_THAN = 1,
+  FM_FILTER_OPERATOR_LESS_THAN_OR_EQUAL = 2,
+  FM_FILTER_OPERATOR_NOT_EQUAL = 3,
+  FM_FILTER_OPERATOR_GREATER_THAN_OR_EQUAL = 4,
+  FM_FILTER_OPERATOR_GREATER_THAN = 5,
+} fm_filter_operator_t;
+
+/** @brief Dynamic-filter type (`fm_filter_column::dynamic_type`); `ST_DynamicFilterType` in schema order. */
+typedef enum {
+  FM_DYNAMIC_FILTER_NULL = 0,
+  FM_DYNAMIC_FILTER_ABOVE_AVERAGE = 1,
+  FM_DYNAMIC_FILTER_BELOW_AVERAGE = 2,
+  FM_DYNAMIC_FILTER_TOMORROW = 3,
+  FM_DYNAMIC_FILTER_TODAY = 4,
+  FM_DYNAMIC_FILTER_YESTERDAY = 5,
+  FM_DYNAMIC_FILTER_NEXT_WEEK = 6,
+  FM_DYNAMIC_FILTER_THIS_WEEK = 7,
+  FM_DYNAMIC_FILTER_LAST_WEEK = 8,
+  FM_DYNAMIC_FILTER_NEXT_MONTH = 9,
+  FM_DYNAMIC_FILTER_THIS_MONTH = 10,
+  FM_DYNAMIC_FILTER_LAST_MONTH = 11,
+  FM_DYNAMIC_FILTER_NEXT_QUARTER = 12,
+  FM_DYNAMIC_FILTER_THIS_QUARTER = 13,
+  FM_DYNAMIC_FILTER_LAST_QUARTER = 14,
+  FM_DYNAMIC_FILTER_NEXT_YEAR = 15,
+  FM_DYNAMIC_FILTER_THIS_YEAR = 16,
+  FM_DYNAMIC_FILTER_LAST_YEAR = 17,
+  FM_DYNAMIC_FILTER_YEAR_TO_DATE = 18,
+  FM_DYNAMIC_FILTER_Q1 = 19,
+  FM_DYNAMIC_FILTER_Q2 = 20,
+  FM_DYNAMIC_FILTER_Q3 = 21,
+  FM_DYNAMIC_FILTER_Q4 = 22,
+  FM_DYNAMIC_FILTER_M1 = 23,
+  FM_DYNAMIC_FILTER_M2 = 24,
+  FM_DYNAMIC_FILTER_M3 = 25,
+  FM_DYNAMIC_FILTER_M4 = 26,
+  FM_DYNAMIC_FILTER_M5 = 27,
+  FM_DYNAMIC_FILTER_M6 = 28,
+  FM_DYNAMIC_FILTER_M7 = 29,
+  FM_DYNAMIC_FILTER_M8 = 30,
+  FM_DYNAMIC_FILTER_M9 = 31,
+  FM_DYNAMIC_FILTER_M10 = 32,
+  FM_DYNAMIC_FILTER_M11 = 33,
+  FM_DYNAMIC_FILTER_M12 = 34,
+} fm_dynamic_filter_type_t;
+
+/** @brief Sort key source (`fm_sort_condition::sort_by`); mirrors `ST_SortBy`. */
+typedef enum {
+  FM_SORT_BY_VALUE = 0,
+  FM_SORT_BY_CELL_COLOR = 1,
+  FM_SORT_BY_FONT_COLOR = 2,
+  FM_SORT_BY_ICON = 3,
+} fm_sort_by_t;
+
+/** @brief Sort method (`fm_auto_filter::sort_method`); mirrors `ST_SortMethod`. */
+typedef enum {
+  FM_SORT_METHOD_NONE = 0,
+  FM_SORT_METHOD_PIN_YIN = 1,
+  FM_SORT_METHOD_STROKE = 2,
+} fm_sort_method_t;
+
+/**
+ * @brief One `<dateGroupItem>` of a values filter.
+ *
+ * `grouping` is the granularity the item matches at, an
+ * `fm_date_time_grouping_t`. Fields finer than `grouping` are zero.
+ */
+typedef struct {
+  uint16_t year;
+  uint8_t month;
+  uint8_t day;
+  uint8_t hour;
+  uint8_t minute;
+  uint8_t second;
+  uint8_t grouping;
+} fm_date_group_item;
+
+/**
+ * @brief One `<filterColumn>` of an AutoFilter.
+ *
+ * `col_id` is the 0-based offset from the AutoFilter range's first column.
+ * `kind` selects the criterion, and only that criterion's fields are read on
+ * input; on output the fields of every other criterion are zero.
+ *   * `kind` -- an `fm_filter_kind_t`.
+ *   * values -- `filter_blank` matches blank cells; `values` lists displayed
+ *     texts and `date_groups` date-group items.
+ *   * custom -- `custom_count` (1 or 2) conditions `op1`/`val1` and
+ *     `op2`/`val2`, joined by AND when `custom_and` is set. Operators
+ *     are `fm_filter_operator_t`.
+ *   * top10 -- `top` (else bottom), `percent`, the rank `top_val`, and the
+ *     `filter_val` threshold Excel last stored when `has_filter_val`.
+ *   * dynamic -- `dynamic_type` is an `fm_dynamic_filter_type_t`; `dyn_val` / `dyn_max_val` are the
+ *     stored bounds when their `has_` flag is set, and `val_iso` /
+ *     `max_val_iso` their ISO spellings.
+ *   * color -- `dxf_id` names the differential format whose fill
+ *     (`cell_color` set) or font colour matches; `UINT32_MAX` means absent.
+ *   * icon -- `icon_set` is the `formulon::cf::IconSetName` ordinal and
+ *     `icon_id` the icon index when `has_icon_id` (else "no icon").
+ *
+ * On input every `const char*` may be `NULL`, meaning empty, and an array
+ * pointer may be `NULL` only with a zero count.
+ */
+typedef struct {
+  uint32_t col_id;
+  int32_t hidden_button;
+  int32_t show_button;
+  int32_t kind;
+  int32_t filter_blank;
+  const char* const* values;
+  uint32_t value_count;
+  const fm_date_group_item* date_groups;
+  uint32_t date_group_count;
+  int32_t custom_and;
+  int32_t custom_count;
+  int32_t op1;
+  const char* val1;
+  int32_t op2;
+  const char* val2;
+  int32_t top;
+  int32_t percent;
+  int32_t has_filter_val;
+  double top_val;
+  double filter_val;
+  int32_t dynamic_type;
+  int32_t has_dyn_val;
+  int32_t has_dyn_max_val;
+  double dyn_val;
+  double dyn_max_val;
+  const char* val_iso;
+  const char* max_val_iso;
+  uint32_t dxf_id;
+  int32_t cell_color;
+  int32_t icon_set;
+  int32_t icon_id;
+  int32_t has_icon_id;
+} fm_filter_column;
+
+/**
+ * @brief One `<sortCondition>` of an AutoFilter's sort state.
+ *
+ * `sort_by` is an `fm_sort_by_t`. `dxf_id` is read
+ * only when `has_dxf_id`, `icon_id` only when `has_icon_id`; `icon_set` is
+ * the `formulon::cf::IconSetName` ordinal.
+ */
+typedef struct {
+  fm_merge_range ref;
+  int32_t descending;
+  int32_t sort_by;
+  const char* custom_list;
+  uint32_t dxf_id;
+  int32_t has_dxf_id;
+  int32_t icon_set;
+  int32_t icon_id;
+  int32_t has_icon_id;
+} fm_sort_condition;
+
+/**
+ * @brief A sheet or table AutoFilter.
+ *
+ * `range` includes the header row. `columns` must be in strictly ascending
+ * `col_id` order inside the range. The sort state is present when
+ * `has_sort`; `sort_method` is an `fm_sort_method_t`.
+ *
+ * Attributes and extensions the record does not carry (`xr:uid`, unknown
+ * `filterColumn` children, `extLst` payloads, a values filter's
+ * `calendarType`) are kept across a set: they are carried over from the
+ * AutoFilter being replaced, per column by `col_id`, so a get followed by a
+ * set of the unchanged record leaves the stored element as it was.
+ */
+typedef struct {
+  fm_merge_range range;
+  const fm_filter_column* columns;
+  uint32_t column_count;
+  int32_t has_sort;
+  fm_merge_range sort_ref;
+  int32_t column_sort;
+  int32_t case_sensitive;
+  int32_t sort_method;
+  const fm_sort_condition* conditions;
+  uint32_t condition_count;
+} fm_auto_filter;
+
+/**
+ * @brief Reads the sheet AutoFilter.
+ *
+ * `*out_present` is 0 and `*out` all-zero when the sheet has no AutoFilter.
+ * Every string and array reachable from `*out` is a read-scratch-backed view
+ * and may be invalidated by the next successful scratch-backed read on the
+ * same handle, by a mutation, or by handle destruction.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kAutoFilterInvalid` (8006) when the AutoFilter did not parse into
+ *         the typed model (only `fm_sheet_get_auto_filter_xml` reads it).
+ */
+FM_API fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t sheet_index, fm_auto_filter* out,
+                                            int32_t* out_present);
+
+/**
+ * @brief Replaces the sheet AutoFilter and maintains the sheet's hidden
+ *        `_xlnm._FilterDatabase` name over its range.
+ *
+ * Row visibility is not changed; call `fm_sheet_apply_auto_filter` to hide
+ * the rows the criteria exclude.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `filter` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, an
+ *         enumeration field is outside the domain listed on the record, or an
+ *         array pointer is `NULL` with a non-zero count;
+ *         `kAutoFilterInvalid` (8006) when the range is outside the grid,
+ *         column ids are outside the range or not ascending, a custom filter
+ *         has other than one or two conditions, or a date group item does
+ *         not fit its grouping.
+ */
+FM_API fm_status_t fm_sheet_set_auto_filter(fm_workbook_t* wb, size_t sheet_index, const fm_auto_filter* filter);
+
+/**
+ * @brief Removes the sheet AutoFilter and its `_xlnm._FilterDatabase` name.
+ *        Row visibility is not changed. No-op when the sheet has none.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_remove_auto_filter(fm_workbook_t* wb, size_t sheet_index);
+
+/**
+ * @brief Evaluates the sheet AutoFilter and sets every body row's hidden flag
+ *        to the negation of its match, as Excel's Reapply does; a matching
+ *        row hidden by hand is shown again, and rows outside the body are
+ *        untouched.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kNotFound` when the sheet has no AutoFilter;
+ *         `kAutoFilterInvalid` (8006) when it did not parse into the model.
+ */
+FM_API fm_status_t fm_sheet_apply_auto_filter(fm_workbook_t* wb, size_t sheet_index);
+
+/**
+ * @brief Drops every column criterion of the sheet AutoFilter and shows all
+ *        of its body rows. The range, the drop-down buttons and the sort
+ *        state stay.
+ *
+ * @return as `fm_sheet_apply_auto_filter`.
+ */
+FM_API fm_status_t fm_sheet_clear_auto_filter(fm_workbook_t* wb, size_t sheet_index);
+
+/**
+ * @brief Evaluates the sheet AutoFilter without changing the sheet.
+ *
+ * Body row `*out_first_row + i` matches the criteria when `out_match[i]` is
+ * 1. `*out_len` always receives the number of body rows; at most `cap`
+ * flags are written. Call with `cap == 0` (`out_match` may then be `NULL`)
+ * to size the buffer first.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `out_len` or `out_first_row` is
+ *         `NULL`, or `out_match` is `NULL` while `cap > 0`;
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kNotFound` when the sheet has no AutoFilter;
+ *         `kAutoFilterInvalid` (8006) when it did not parse into the model.
+ */
+FM_API fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, size_t sheet_index, uint8_t* out_match,
+                                                 size_t cap, size_t* out_len, uint32_t* out_first_row);
+
+/**
+ * @brief Table counterparts of the sheet AutoFilter entry points.
+ *
+ * `table_index` addresses the workbook table list as `fm_workbook_table_at`
+ * does, and the table's sheet is the one whose rows are evaluated and
+ * hidden. Tables carry no `_FilterDatabase` name. The contracts are those
+ * of the sheet functions, with `kInvalidArgument` for an out-of-range
+ * `table_index`.
+ */
+FM_API fm_status_t fm_table_get_auto_filter(const fm_workbook_t* wb, size_t table_index, fm_auto_filter* out,
+                                            int32_t* out_present);
+FM_API fm_status_t fm_table_set_auto_filter(fm_workbook_t* wb, size_t table_index, const fm_auto_filter* filter);
+FM_API fm_status_t fm_table_remove_auto_filter(fm_workbook_t* wb, size_t table_index);
+FM_API fm_status_t fm_table_apply_auto_filter(fm_workbook_t* wb, size_t table_index);
+FM_API fm_status_t fm_table_clear_auto_filter(fm_workbook_t* wb, size_t table_index);
+FM_API fm_status_t fm_table_evaluate_auto_filter(const fm_workbook_t* wb, size_t table_index, uint8_t* out_match,
+                                                 size_t cap, size_t* out_len, uint32_t* out_first_row);
 
 /**
  * @brief Sets or replaces the column width override for the inclusive

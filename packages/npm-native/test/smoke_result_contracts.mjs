@@ -127,6 +127,11 @@ function envelopeProbes(wb) {
     ['ThemeResult', false, () => wb.getTheme()],
     ['ResolvedColorResult', true, () => wb.resolveColor({ kind: 0 }, 99)],
     ['EffectiveStyleResult', true, () => wb.getEffectiveStyle(99, 0, 0)],
+    ['AutoFilterResult', true, () => wb.getAutoFilter(99)],
+    ['AutoFilterEvalResult', true, () => wb.evaluateAutoFilter(99)],
+    ['ThreadedCommentsResult', true, () => wb.getThreadedComments(99)],
+    ['PersonsResult', false, () => wb.getPersons()],
+    ['ValidationOutcomeResult', true, () => wb.validateValue(99, 0, 0, { kind: 1, number: 1 })],
   ];
 }
 

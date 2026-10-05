@@ -15,11 +15,11 @@
 #include "value.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
+using formulon::c_api::parts::value_from_fm;
 
 namespace {
 
@@ -38,41 +38,6 @@ void publish(const fm_workbook_t* wb, formulon::text_format::DisplayText display
   store.emplace_back(std::move(display.text));
   *out_text = store.back().c_str();
   *out_status = static_cast<int32_t>(display.status);
-}
-
-// Converts a caller-supplied scalar into a `Value`. A Text value aliases the
-// caller's string, which outlives the rendering call.
-fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char* api) {
-  switch (in.kind) {
-    case FM_VAL_BLANK:
-      *out = formulon::Value::blank();
-      return 0;
-    case FM_VAL_NUMBER:
-      if (auto rc = check_finite(in.u.number, api, "value"); rc != 0) {
-        return rc;
-      }
-      *out = formulon::Value::number(in.u.number);
-      return 0;
-    case FM_VAL_BOOL:
-      *out = formulon::Value::boolean(in.u.boolean != 0);
-      return 0;
-    case FM_VAL_TEXT:
-      if (in.u.text == nullptr) {
-        return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "value text is NULL", api);
-      }
-      *out = formulon::Value::text(in.u.text);
-      return 0;
-    case FM_VAL_ERROR:
-      if (in.u.error_code < 0 || in.u.error_code > static_cast<int32_t>(formulon::ErrorCode::Unknown)) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "error code out of range",
-                                 std::string(api) + ": error=" + std::to_string(in.u.error_code));
-      }
-      *out = formulon::Value::error(static_cast<formulon::ErrorCode>(in.u.error_code));
-      return 0;
-    default:
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value kind not renderable",
-                               std::string(api) + ": kind=" + std::to_string(static_cast<int>(in.kind)));
-  }
 }
 
 }  // namespace

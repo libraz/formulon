@@ -156,6 +156,12 @@ fm_status_t check_finite_non_negative(double value, const char* api, const char*
 // disagree about the cell right up until the first save.
 fm_status_t check_finite(double value, const char* api, const char* field);
 
+// Converts a caller-supplied scalar into a `Value`, rejecting a non-finite
+// number, a NULL text, an out-of-range error code, and the array / reference
+// / lambda kinds. A Text value aliases the caller's string, so the result is
+// valid only for the duration of the call.
+fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char* api);
+
 // Rejects an ordinal outside `[0, max]`. `max` is the last declared
 // enumerator of the model enum the field mirrors, so extending that enum
 // widens the domain at the same time. A value past it would otherwise be
@@ -296,6 +302,15 @@ struct fm_workbook {
   formulon::c_api::BorrowedArrayArena<fm_cf_cell_range_t> cf_range_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cfvo_t> cfvo_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cf_color_t> cf_color_scratch;
+
+  // Arrays behind the borrowed `const T*` fields of the typed AutoFilter and
+  // threaded-comment getters. They carry `read_scratch`'s lifetime: each
+  // producer clears them together with `read_scratch` before refilling.
+  formulon::c_api::BorrowedArrayArena<fm_filter_column> filter_column_scratch;
+  formulon::c_api::BorrowedArrayArena<const char*> filter_value_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_date_group_item> date_group_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_sort_condition> sort_condition_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_mention> mention_scratch;
 
   // Result of the most recent `fm_workbook_evaluate_formula_array`. Owns its
   // own text storage so cells stay readable via

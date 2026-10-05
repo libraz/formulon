@@ -41,6 +41,9 @@ VALUE_BLOB = ("blob16", 16, 8)
 # :meth:`Struct.unpack`; callers who need the sub-fields read them at
 # ``ptr + offset`` with their own struct.unpack_from calls.
 CFVO_BLOB = ("blob_cfvo", 12, 4)
+# Opaque 16-byte, 4-aligned blob: an inline ``fm_merge_range``. Pack and
+# unpack it with :data:`MERGE_RANGE` against ``ptr + offset``.
+MERGE_RANGE_BLOB = ("blob_merge_range", 16, 4)
 # Opaque 4-byte, 1-aligned blob: an inline ``fm_cf_color_t`` (four
 # ``uint8_t`` channels). Not decoded by :meth:`Struct.unpack`.
 CF_COLOR_BLOB = ("blob_cf_color", 4, 1)
@@ -886,3 +889,127 @@ def write_str_field(
     owned.append(ptr)
     kind, off = layout.offsets[field]
     lib.write_bytes(struct_ptr + off, struct.pack("<I", ptr))
+
+
+# ---------------------------------------------------------------------------
+# AutoFilter, validation outcome, threaded comments and persons
+# ---------------------------------------------------------------------------
+
+DATE_GROUP_ITEM = Struct(
+    "fm_date_group_item",
+    [
+        ("year", U16),
+        ("month", U8),
+        ("day", U8),
+        ("hour", U8),
+        ("minute", U8),
+        ("second", U8),
+        ("grouping", U8),
+    ],
+)
+
+FILTER_COLUMN = Struct(
+    "fm_filter_column",
+    [
+        ("col_id", U32),
+        ("hidden_button", I32),
+        ("show_button", I32),
+        ("kind", I32),
+        ("filter_blank", I32),
+        ("values", PTR),
+        ("value_count", U32),
+        ("date_groups", PTR),
+        ("date_group_count", U32),
+        ("custom_and", I32),
+        ("custom_count", I32),
+        ("op1", I32),
+        ("val1", PTR),
+        ("op2", I32),
+        ("val2", PTR),
+        ("top", I32),
+        ("percent", I32),
+        ("has_filter_val", I32),
+        ("top_val", F64),
+        ("filter_val", F64),
+        ("dynamic_type", I32),
+        ("has_dyn_val", I32),
+        ("has_dyn_max_val", I32),
+        ("dyn_val", F64),
+        ("dyn_max_val", F64),
+        ("val_iso", PTR),
+        ("max_val_iso", PTR),
+        ("dxf_id", U32),
+        ("cell_color", I32),
+        ("icon_set", I32),
+        ("icon_id", I32),
+        ("has_icon_id", I32),
+    ],
+)
+
+SORT_CONDITION = Struct(
+    "fm_sort_condition",
+    [
+        ("ref", MERGE_RANGE_BLOB),
+        ("descending", I32),
+        ("sort_by", I32),
+        ("custom_list", PTR),
+        ("dxf_id", U32),
+        ("has_dxf_id", I32),
+        ("icon_set", I32),
+        ("icon_id", I32),
+        ("has_icon_id", I32),
+    ],
+)
+
+AUTO_FILTER = Struct(
+    "fm_auto_filter",
+    [
+        ("range", MERGE_RANGE_BLOB),
+        ("columns", PTR),
+        ("column_count", U32),
+        ("has_sort", I32),
+        ("sort_ref", MERGE_RANGE_BLOB),
+        ("column_sort", I32),
+        ("case_sensitive", I32),
+        ("sort_method", I32),
+        ("conditions", PTR),
+        ("condition_count", U32),
+    ],
+)
+
+VALIDATION_OUTCOME = Struct(
+    "fm_validation_outcome",
+    [
+        ("has_rule", I32),
+        ("valid", I32),
+        ("rule_index", U32),
+        ("error_style", U8),
+        ("_pad", ("blob_pad3", 3, 1)),
+    ],
+)
+
+MENTION = Struct(
+    "fm_mention",
+    [("person_id", PTR), ("mention_id", PTR), ("start", U32), ("length", U32)],
+)
+
+THREADED_COMMENT = Struct(
+    "fm_threaded_comment",
+    [
+        ("id", PTR),
+        ("row", U32),
+        ("col", U32),
+        ("person_id", PTR),
+        ("created", PTR),
+        ("text", PTR),
+        ("parent_id", PTR),
+        ("done", I32),
+        ("mentions", PTR),
+        ("mention_count", U32),
+    ],
+)
+
+PERSON = Struct(
+    "fm_person",
+    [("id", PTR), ("display_name", PTR), ("user_id", PTR), ("provider_id", PTR)],
+)

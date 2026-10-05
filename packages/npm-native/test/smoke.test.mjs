@@ -12,3 +12,4 @@ import './smoke_pivot_mutators_status.mjs';
 import './smoke_regressions.mjs';
 import './smoke_cell_geometry_display.mjs';
 import './smoke_theme_styles.mjs';
+import './smoke_filter_validation_comments.mjs';

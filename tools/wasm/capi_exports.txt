@@ -121,12 +121,26 @@ fm_sheet_get_comment_count
 fm_sheet_get_comment_at_index
 fm_sheet_set_comment
 
+# -- Threaded comments / persons -------------------------------------------------
+fm_sheet_threaded_comment_count
+fm_sheet_threaded_comment_at
+fm_sheet_add_threaded_comment
+fm_sheet_edit_threaded_comment
+fm_sheet_set_thread_resolved
+fm_sheet_remove_threaded_comment
+fm_workbook_person_count
+fm_workbook_person_at
+fm_workbook_add_person
+fm_workbook_remove_person
+
 # -- Data validations ------------------------------------------------------------
 fm_sheet_get_validation_count
 fm_sheet_get_validation_at
 fm_sheet_add_validation
 fm_sheet_remove_validation_at
 fm_sheet_clear_validations
+fm_sheet_validate_value
+fm_sheet_list_invalid_cells
 
 # -- Sheet protection ------------------------------------------------------------
 fm_sheet_get_protection
@@ -135,6 +149,18 @@ fm_sheet_set_protection
 # -- Sheet view / layout ---------------------------------------------------------
 fm_sheet_get_auto_filter_xml
 fm_sheet_set_auto_filter_xml
+fm_sheet_get_auto_filter
+fm_sheet_set_auto_filter
+fm_sheet_remove_auto_filter
+fm_sheet_apply_auto_filter
+fm_sheet_clear_auto_filter
+fm_sheet_evaluate_auto_filter
+fm_table_get_auto_filter
+fm_table_set_auto_filter
+fm_table_remove_auto_filter
+fm_table_apply_auto_filter
+fm_table_clear_auto_filter
+fm_table_evaluate_auto_filter
 fm_sheet_get_view
 fm_sheet_set_zoom
 fm_sheet_set_freeze

@@ -228,6 +228,35 @@ EMSCRIPTEN_BINDINGS(formulon) {
                 emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, emscripten::val range) {
                   return self.getCellsInRange(sheet, range, emscripten::val::undefined(), emscripten::val::undefined());
                 }))
+      .function("getAutoFilter", &JsWorkbook::getAutoFilter)
+      .function("setAutoFilter", &JsWorkbook::setAutoFilter)
+      .function("removeAutoFilter", &JsWorkbook::removeAutoFilter)
+      .function("applyAutoFilter", &JsWorkbook::applyAutoFilter)
+      .function("clearAutoFilter", &JsWorkbook::clearAutoFilter)
+      .function("evaluateAutoFilter", &JsWorkbook::evaluateAutoFilter)
+      .function("getTableAutoFilter", &JsWorkbook::getTableAutoFilter)
+      .function("setTableAutoFilter", &JsWorkbook::setTableAutoFilter)
+      .function("removeTableAutoFilter", &JsWorkbook::removeTableAutoFilter)
+      .function("applyTableAutoFilter", &JsWorkbook::applyTableAutoFilter)
+      .function("clearTableAutoFilter", &JsWorkbook::clearTableAutoFilter)
+      .function("evaluateTableAutoFilter", &JsWorkbook::evaluateTableAutoFilter)
+      .function("validateValue", &JsWorkbook::validateValue)
+      .function("listInvalidCells", &JsWorkbook::listInvalidCells)
+      .function("listInvalidCells",
+                emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, emscripten::val cursor) {
+                  return self.listInvalidCells(sheet, cursor, emscripten::val::undefined());
+                }))
+      .function("listInvalidCells", emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet) {
+                  return self.listInvalidCells(sheet, emscripten::val::undefined(), emscripten::val::undefined());
+                }))
+      .function("getThreadedComments", &JsWorkbook::getThreadedComments)
+      .function("addThreadedComment", &JsWorkbook::addThreadedComment)
+      .function("editThreadedComment", &JsWorkbook::editThreadedComment)
+      .function("setThreadResolved", &JsWorkbook::setThreadResolved)
+      .function("removeThreadedComment", &JsWorkbook::removeThreadedComment)
+      .function("getPersons", &JsWorkbook::getPersons)
+      .function("addPerson", &JsWorkbook::addPerson)
+      .function("removePerson", &JsWorkbook::removePerson)
       .function("getCellRectPt", &JsWorkbook::getCellRectPt)
       .function("getColumnWidthPt", &JsWorkbook::getColumnWidthPt)
       .function("getDisplayText", &JsWorkbook::getDisplayText)

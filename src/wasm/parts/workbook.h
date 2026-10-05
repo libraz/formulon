@@ -390,6 +390,33 @@ class JsWorkbook {
   /// The merges intersecting `range`, in storage order.
   emscripten::val getMergesInRange(uint32_t sheet, emscripten::val range) const;
 
+  /// Typed AutoFilter model for a sheet or (workbook-wide table index) a table.
+  emscripten::val getAutoFilter(uint32_t sheet) const;
+  JsStatus setAutoFilter(uint32_t sheet, emscripten::val filter);
+  JsStatus removeAutoFilter(uint32_t sheet);
+  JsStatus applyAutoFilter(uint32_t sheet);
+  JsStatus clearAutoFilter(uint32_t sheet);
+  emscripten::val evaluateAutoFilter(uint32_t sheet) const;
+  emscripten::val getTableAutoFilter(uint32_t table) const;
+  JsStatus setTableAutoFilter(uint32_t table, emscripten::val filter);
+  JsStatus removeTableAutoFilter(uint32_t table);
+  JsStatus applyTableAutoFilter(uint32_t table);
+  JsStatus clearTableAutoFilter(uint32_t table);
+  emscripten::val evaluateTableAutoFilter(uint32_t table) const;
+
+  emscripten::val validateValue(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val value) const;
+  emscripten::val listInvalidCells(uint32_t sheet, emscripten::val cursor, emscripten::val limit) const;
+
+  emscripten::val getThreadedComments(uint32_t sheet) const;
+  JsStatus addThreadedComment(uint32_t sheet, emscripten::val comment);
+  JsStatus editThreadedComment(uint32_t sheet, const std::string& id, const std::string& text,
+                               emscripten::val mentions);
+  JsStatus setThreadResolved(uint32_t sheet, const std::string& threadId, bool done);
+  JsStatus removeThreadedComment(uint32_t sheet, const std::string& id);
+  emscripten::val getPersons() const;
+  JsStatus addPerson(emscripten::val person);
+  JsStatus removePerson(const std::string& id);
+
   emscripten::val getValidations(uint32_t sheet) const;
   JsStatus addValidation(uint32_t sheet, emscripten::val v);
   JsStatus removeValidationAt(uint32_t sheet, uint32_t index);

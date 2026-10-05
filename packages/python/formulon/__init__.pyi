@@ -230,6 +230,84 @@ class DisplayStatus(IntEnum):
     OVERFLOW = 1
     INVALID_FORMAT = 2
 
+class FilterKind(IntEnum):
+    NONE = 0
+    VALUES = 1
+    CUSTOM = 2
+    TOP10 = 3
+    DYNAMIC = 4
+    COLOR = 5
+    ICON = 6
+
+class FilterOperator(IntEnum):
+    EQUAL = 0
+    LESS_THAN = 1
+    LESS_THAN_OR_EQUAL = 2
+    NOT_EQUAL = 3
+    GREATER_THAN_OR_EQUAL = 4
+    GREATER_THAN = 5
+
+class DynamicFilterType(IntEnum):
+    NULL = 0
+    ABOVE_AVERAGE = 1
+    BELOW_AVERAGE = 2
+    TOMORROW = 3
+    TODAY = 4
+    YESTERDAY = 5
+    NEXT_WEEK = 6
+    THIS_WEEK = 7
+    LAST_WEEK = 8
+    NEXT_MONTH = 9
+    THIS_MONTH = 10
+    LAST_MONTH = 11
+    NEXT_QUARTER = 12
+    THIS_QUARTER = 13
+    LAST_QUARTER = 14
+    NEXT_YEAR = 15
+    THIS_YEAR = 16
+    LAST_YEAR = 17
+    YEAR_TO_DATE = 18
+    Q1 = 19
+    Q2 = 20
+    Q3 = 21
+    Q4 = 22
+    M1 = 23
+    M2 = 24
+    M3 = 25
+    M4 = 26
+    M5 = 27
+    M6 = 28
+    M7 = 29
+    M8 = 30
+    M9 = 31
+    M10 = 32
+    M11 = 33
+    M12 = 34
+
+class SortBy(IntEnum):
+    VALUE = 0
+    CELL_COLOR = 1
+    FONT_COLOR = 2
+    ICON = 3
+
+class SortMethod(IntEnum):
+    NONE = 0
+    PIN_YIN = 1
+    STROKE = 2
+
+class DateTimeGrouping(IntEnum):
+    YEAR = 0
+    MONTH = 1
+    DAY = 2
+    HOUR = 3
+    MINUTE = 4
+    SECOND = 5
+
+class ValidationErrorStyle(IntEnum):
+    STOP = 0
+    WARNING = 1
+    INFORMATION = 2
+
 class ColorContext(IntEnum):
     FONT = 0
     FILL_FOREGROUND = 1
@@ -401,7 +479,7 @@ class DataValidation:
     ranges: List[MergeRange]
     type: int
     op: int
-    error_style: int
+    error_style: Union[ValidationErrorStyle, int]
     allow_blank: bool
     show_input_message: bool
     show_error_message: bool
@@ -413,11 +491,206 @@ class DataValidation:
     prompt_title: str
     prompt_message: str
 
+class AutoFilterDateGroup:
+    year: int
+    month: int
+    day: int
+    hour: int
+    minute: int
+    second: int
+    grouping: Union[DateTimeGrouping, int]
+    def __init__(
+        self,
+        year: int = ...,
+        month: int = ...,
+        day: int = ...,
+        hour: int = ...,
+        minute: int = ...,
+        second: int = ...,
+        grouping: Union[DateTimeGrouping, int] = ...,
+    ) -> None: ...
+
+class AutoFilterColumn:
+    col_id: int
+    hidden_button: bool
+    show_button: bool
+    kind: Union[FilterKind, int]
+    filter_blank: bool
+    values: List[str]
+    date_groups: List[AutoFilterDateGroup]
+    custom_and: bool
+    custom_count: int
+    op1: Union[FilterOperator, int]
+    val1: str
+    op2: Union[FilterOperator, int]
+    val2: str
+    top: bool
+    percent: bool
+    has_filter_val: bool
+    top_val: float
+    filter_val: float
+    dynamic_type: Union[DynamicFilterType, int]
+    has_dyn_val: bool
+    has_dyn_max_val: bool
+    dyn_val: float
+    dyn_max_val: float
+    val_iso: str
+    max_val_iso: str
+    dxf_id: int
+    cell_color: bool
+    icon_set: int
+    icon_id: int
+    has_icon_id: bool
+    def __init__(
+        self,
+        col_id: int,
+        hidden_button: bool = ...,
+        show_button: bool = ...,
+        kind: Union[FilterKind, int] = ...,
+        filter_blank: bool = ...,
+        values: List[str] = ...,
+        date_groups: List[AutoFilterDateGroup] = ...,
+        custom_and: bool = ...,
+        custom_count: int = ...,
+        op1: Union[FilterOperator, int] = ...,
+        val1: str = ...,
+        op2: Union[FilterOperator, int] = ...,
+        val2: str = ...,
+        top: bool = ...,
+        percent: bool = ...,
+        has_filter_val: bool = ...,
+        top_val: float = ...,
+        filter_val: float = ...,
+        dynamic_type: Union[DynamicFilterType, int] = ...,
+        has_dyn_val: bool = ...,
+        has_dyn_max_val: bool = ...,
+        dyn_val: float = ...,
+        dyn_max_val: float = ...,
+        val_iso: str = ...,
+        max_val_iso: str = ...,
+        dxf_id: int = ...,
+        cell_color: bool = ...,
+        icon_set: int = ...,
+        icon_id: int = ...,
+        has_icon_id: bool = ...,
+    ) -> None: ...
+
+class AutoFilterSortCondition:
+    ref: MergeRange
+    descending: bool
+    sort_by: Union[SortBy, int]
+    custom_list: str
+    dxf_id: int
+    has_dxf_id: bool
+    icon_set: int
+    icon_id: int
+    has_icon_id: bool
+    def __init__(
+        self,
+        ref: MergeRange,
+        descending: bool = ...,
+        sort_by: Union[SortBy, int] = ...,
+        custom_list: str = ...,
+        dxf_id: int = ...,
+        has_dxf_id: bool = ...,
+        icon_set: int = ...,
+        icon_id: int = ...,
+        has_icon_id: bool = ...,
+    ) -> None: ...
+
+class AutoFilterSortState:
+    ref: MergeRange
+    column_sort: bool
+    case_sensitive: bool
+    sort_method: Union[SortMethod, int]
+    conditions: List[AutoFilterSortCondition]
+    def __init__(
+        self,
+        ref: MergeRange,
+        column_sort: bool = ...,
+        case_sensitive: bool = ...,
+        sort_method: Union[SortMethod, int] = ...,
+        conditions: List[AutoFilterSortCondition] = ...,
+    ) -> None: ...
+
+class AutoFilter:
+    range: MergeRange
+    columns: List[AutoFilterColumn]
+    sort: Optional[AutoFilterSortState]
+    def __init__(
+        self,
+        range: MergeRange,
+        columns: List[AutoFilterColumn] = ...,
+        sort: Optional[AutoFilterSortState] = ...,
+    ) -> None: ...
+
+class ValidationOutcome:
+    has_rule: bool
+    valid: bool
+    rule_index: int
+    error_style: Union[ValidationErrorStyle, int]
+    def __init__(
+        self,
+        has_rule: bool,
+        valid: bool,
+        rule_index: int,
+        error_style: Union[ValidationErrorStyle, int],
+    ) -> None: ...
+
+class Mention:
+    person_id: str
+    mention_id: str
+    start: int
+    length: int
+    def __init__(
+        self,
+        person_id: str,
+        mention_id: str,
+        start: int,
+        length: int,
+    ) -> None: ...
+
+class ThreadedComment:
+    id: str
+    row: int
+    col: int
+    person_id: str
+    created: str
+    text: str
+    parent_id: str
+    done: bool
+    mentions: List[Mention]
+    def __init__(
+        self,
+        id: str,
+        row: int = ...,
+        col: int = ...,
+        person_id: str = ...,
+        created: str = ...,
+        text: str = ...,
+        parent_id: str = ...,
+        done: bool = ...,
+        mentions: List[Mention] = ...,
+    ) -> None: ...
+
+class Person:
+    id: str
+    display_name: str
+    user_id: str
+    provider_id: str
+    def __init__(
+        self,
+        id: str,
+        display_name: str,
+        user_id: str = ...,
+        provider_id: str = ...,
+    ) -> None: ...
+
 class DataValidationInput:
     type: int
     ranges: List[MergeRange]
     op: int
-    error_style: int
+    error_style: Union[ValidationErrorStyle, int]
     allow_blank: bool
     show_input_message: bool
     show_error_message: bool
@@ -433,7 +706,7 @@ class DataValidationInput:
         type: int,
         ranges: List[MergeRange] = ...,
         op: int = ...,
-        error_style: int = ...,
+        error_style: Union[ValidationErrorStyle, int] = ...,
         allow_blank: bool = ...,
         show_input_message: bool = ...,
         show_error_message: bool = ...,
@@ -1381,6 +1654,35 @@ class Workbook:
         cursor: Optional[int] = ...,
         limit: Optional[int] = ...,
     ) -> Tuple[List[Cell], Optional[int]]: ...
+    def get_auto_filter(self, sheet: int) -> Optional[AutoFilter]: ...
+    def set_auto_filter(self, sheet: int, auto_filter: AutoFilter) -> None: ...
+    def remove_auto_filter(self, sheet: int) -> None: ...
+    def apply_auto_filter(self, sheet: int) -> None: ...
+    def clear_auto_filter(self, sheet: int) -> None: ...
+    def evaluate_auto_filter(self, sheet: int) -> Tuple[int, List[bool]]: ...
+    def get_table_auto_filter(self, table_index: int) -> Optional[AutoFilter]: ...
+    def set_table_auto_filter(self, table_index: int, auto_filter: AutoFilter) -> None: ...
+    def remove_table_auto_filter(self, table_index: int) -> None: ...
+    def apply_table_auto_filter(self, table_index: int) -> None: ...
+    def clear_table_auto_filter(self, table_index: int) -> None: ...
+    def evaluate_table_auto_filter(self, table_index: int) -> Tuple[int, List[bool]]: ...
+    def validate_value(self, sheet: int, row: int, col: int, value: Value) -> ValidationOutcome: ...
+    def list_invalid_cells(
+        self,
+        sheet: int,
+        cursor: Optional[int] = ...,
+        limit: Optional[int] = ...,
+    ) -> Tuple[List[Cell], Optional[int]]: ...
+    def get_threaded_comments(self, sheet: int) -> List[ThreadedComment]: ...
+    def add_threaded_comment(self, sheet: int, comment: ThreadedComment) -> None: ...
+    def edit_threaded_comment(
+        self, sheet: int, comment_id: str, text: str, mentions: Sequence[Mention] = ...
+    ) -> None: ...
+    def set_thread_resolved(self, sheet: int, thread_id: str, done: bool) -> None: ...
+    def remove_threaded_comment(self, sheet: int, comment_id: str) -> None: ...
+    def get_persons(self) -> List[Person]: ...
+    def add_person(self, person: Person) -> None: ...
+    def remove_person(self, person_id: str) -> None: ...
     def get_merges_in_range(self, sheet: int, cell_range: MergeRange) -> List[MergeRange]: ...
     def get_display_text(self, sheet: int, row: int, col: int) -> Tuple[str, DisplayStatus]: ...
     def format_value(self, value: Value, format_code: str = ...) -> Tuple[str, DisplayStatus]: ...

@@ -51,7 +51,7 @@ export interface Status {
 /** Flattened mirror of `fm_value_t`. Only the field selected by `kind`
  *  is meaningful; the others carry default-zero values. */
 export interface Value {
-  kind: number;
+  kind: FilterKind;
   /** Active when `kind === ValueKind.Number`. */
   number: number;
   /** Active when `kind === ValueKind.Bool` (0 or 1). */
@@ -221,7 +221,7 @@ export interface PivotCell {
   /** Absolute 0-based sheet column. */
   col: number;
   value: Value;
-  kind: number;
+  kind: FilterKind;
   /** Header nesting depth; 0 for data cells. */
   depth: number;
   /** Source field name when known. */
@@ -543,7 +543,7 @@ export interface CfValueObjectInput {
 /** Resolved CF match. Active fields depend on `kind`; the others carry
  *  default-zero values. */
 export interface CfMatch {
-  kind: number;
+  kind: FilterKind;
   priority: number;
   /** `1` when `dxfId` is meaningful; `0` otherwise. */
   dxfIdEngaged: number;
@@ -839,6 +839,140 @@ export const DisplayStatus: Readonly<{
 }>;
 export type DisplayStatus = 0 | 1 | 2;
 
+/** Criterion of an AutoFilter column. Mirrors `fm_filter_kind_t`. */
+export const FilterKind: Readonly<{
+  None: 0;
+  Values: 1;
+  Custom: 2;
+  Top10: 3;
+  Dynamic: 4;
+  Color: 5;
+  Icon: 6;
+}>;
+export type FilterKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** Comparison operator of a custom AutoFilter condition. Mirrors `fm_filter_operator_t`. */
+export const FilterOperator: Readonly<{
+  Equal: 0;
+  LessThan: 1;
+  LessThanOrEqual: 2;
+  NotEqual: 3;
+  GreaterThanOrEqual: 4;
+  GreaterThan: 5;
+}>;
+export type FilterOperator = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** Dynamic AutoFilter type, in `ST_DynamicFilterType` schema order. Mirrors `fm_dynamic_filter_type_t`. */
+export const DynamicFilterType: Readonly<{
+  Null: 0;
+  AboveAverage: 1;
+  BelowAverage: 2;
+  Tomorrow: 3;
+  Today: 4;
+  Yesterday: 5;
+  NextWeek: 6;
+  ThisWeek: 7;
+  LastWeek: 8;
+  NextMonth: 9;
+  ThisMonth: 10;
+  LastMonth: 11;
+  NextQuarter: 12;
+  ThisQuarter: 13;
+  LastQuarter: 14;
+  NextYear: 15;
+  ThisYear: 16;
+  LastYear: 17;
+  YearToDate: 18;
+  Q1: 19;
+  Q2: 20;
+  Q3: 21;
+  Q4: 22;
+  M1: 23;
+  M2: 24;
+  M3: 25;
+  M4: 26;
+  M5: 27;
+  M6: 28;
+  M7: 29;
+  M8: 30;
+  M9: 31;
+  M10: 32;
+  M11: 33;
+  M12: 34;
+}>;
+export type DynamicFilterType =
+  | 0
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15
+  | 16
+  | 17
+  | 18
+  | 19
+  | 20
+  | 21
+  | 22
+  | 23
+  | 24
+  | 25
+  | 26
+  | 27
+  | 28
+  | 29
+  | 30
+  | 31
+  | 32
+  | 33
+  | 34;
+
+/** What a sort condition sorts by. Mirrors `fm_sort_by_t`. */
+export const SortBy: Readonly<{
+  Value: 0;
+  CellColor: 1;
+  FontColor: 2;
+  Icon: 3;
+}>;
+export type SortBy = 0 | 1 | 2 | 3;
+
+/** Sort method of an AutoFilter sort state. Mirrors `fm_sort_method_t`. */
+export const SortMethod: Readonly<{
+  None: 0;
+  PinYin: 1;
+  Stroke: 2;
+}>;
+export type SortMethod = 0 | 1 | 2;
+
+/** Granularity of an AutoFilter date-group item. Mirrors `fm_date_time_grouping_t`. */
+export const DateTimeGrouping: Readonly<{
+  Year: 0;
+  Month: 1;
+  Day: 2;
+  Hour: 3;
+  Minute: 4;
+  Second: 5;
+}>;
+export type DateTimeGrouping = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** Data-validation error style. Mirrors `fm_validation_error_style_t`. */
+export const ValidationErrorStyle: Readonly<{
+  Stop: 0;
+  Warning: 1;
+  Information: 2;
+}>;
+export type ValidationErrorStyle = 0 | 1 | 2;
+
 /** Where a colour is used; decides what an automatic colour means. Mirrors
  *  `fm_color_context_t`. */
 export const ColorContext: Readonly<{
@@ -1048,6 +1182,164 @@ export interface FormulaResult {
   formula: string | null;
 }
 
+/** One `<dateGroupItem>` of a values filter. `grouping` is the granularity
+ *  the item matches at (a `DateTimeGrouping`); fields finer than `grouping` are zero. */
+export interface AutoFilterDateGroup {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  grouping: DateTimeGrouping;
+}
+
+/** One `<filterColumn>`. `colId` is the 0-based offset from the first column
+ *  of the AutoFilter range. `kind` selects the criterion and only that
+ *  criterion's fields are read on input (a `FilterKind`); on output every other criterion's
+ *  fields are zero. Custom operators `op1` / `op2` are
+ *  `FilterOperator`s; `dynamicType` is a `DynamicFilterType`.
+ *  `dxfId` of `4294967295` means absent. `iconSet` is the conditional-format
+ *  icon-set ordinal. Omitted input fields read as zero / false / empty,
+ *  except `showButton` (true) and `dxfId` (absent). */
+export interface AutoFilterColumn {
+  colId: number;
+  hiddenButton: boolean;
+  showButton: boolean;
+  kind: FilterKind;
+  filterBlank: boolean;
+  values: string[];
+  dateGroups: AutoFilterDateGroup[];
+  customAnd: boolean;
+  customCount: number;
+  op1: FilterOperator;
+  val1: string;
+  op2: FilterOperator;
+  val2: string;
+  top: boolean;
+  percent: boolean;
+  hasFilterVal: boolean;
+  topVal: number;
+  filterVal: number;
+  dynamicType: DynamicFilterType;
+  hasDynVal: boolean;
+  hasDynMaxVal: boolean;
+  dynVal: number;
+  dynMaxVal: number;
+  valIso: string;
+  maxValIso: string;
+  dxfId: number;
+  cellColor: boolean;
+  iconSet: number;
+  iconId: number;
+  hasIconId: boolean;
+}
+
+/** One `<sortCondition>`. `sortBy` is a `SortBy`. `dxfId` is read only when `hasDxfId`, `iconId` only when
+ *  `hasIconId`. */
+export interface AutoFilterSortCondition {
+  ref: MergeRange;
+  descending: boolean;
+  sortBy: SortBy;
+  customList: string;
+  dxfId: number;
+  hasDxfId: boolean;
+  iconSet: number;
+  iconId: number;
+  hasIconId: boolean;
+}
+
+/** The `<sortState>` of an AutoFilter. `sortMethod` is a
+ *  `SortMethod`. */
+export interface AutoFilterSortState {
+  ref: MergeRange;
+  columnSort: boolean;
+  caseSensitive: boolean;
+  sortMethod: SortMethod;
+  conditions: AutoFilterSortCondition[];
+}
+
+/** A sheet or table AutoFilter. `range` includes the header row; `columns`
+ *  must be in strictly ascending `colId` order inside it. */
+export interface AutoFilter {
+  range: MergeRange;
+  columns: AutoFilterColumn[];
+  sort: AutoFilterSortState | null;
+}
+
+/** Return type of `Workbook.getAutoFilter` / `getTableAutoFilter`. `autoFilter` is
+ *  `null` when there is none. */
+export interface AutoFilterResult {
+  status: Status;
+  autoFilter: AutoFilter | null;
+}
+
+/** Return type of `Workbook.evaluateAutoFilter` / `evaluateTableAutoFilter`.
+ *  `match[i]` tells whether body row `firstRow + i` satisfies the criteria. */
+export interface AutoFilterEvalResult {
+  status: Status;
+  firstRow: number;
+  match: boolean[];
+}
+
+/** Return type of `Workbook.validateValue`. `hasRule` is false when no rule
+ *  covers the cell, and `valid` is then true. `ruleIndex` is the
+ *  `getValidations` index of the applied rule and `errorStyle` its style
+ *  (a `ValidationErrorStyle`). */
+export interface ValidationOutcomeResult {
+  status: Status;
+  hasRule: boolean;
+  valid: boolean;
+  ruleIndex: number;
+  errorStyle: ValidationErrorStyle;
+}
+
+/** One `@person` mention in a threaded comment's text; `start` and `length`
+ *  are in UTF-16 code units. */
+export interface Mention {
+  personId: string;
+  mentionId: string;
+  start: number;
+  length: number;
+}
+
+/** One threaded comment: a thread's opening comment, or a reply when
+ *  `parentId` is non-empty. Ids are brace-wrapped uppercase GUIDs and
+ *  `created` is `YYYY-MM-DDTHH:MM:SS.ss`; the caller supplies both. `done`
+ *  is the thread's resolved state, meaningful on the opening comment only. */
+export interface ThreadedComment {
+  id: string;
+  row: number;
+  col: number;
+  personId: string;
+  created: string;
+  text: string;
+  parentId: string;
+  done: boolean;
+  mentions: Mention[];
+}
+
+/** One entry of the workbook's person list. */
+export interface Person {
+  id: string;
+  displayName: string;
+  userId: string;
+  providerId: string;
+}
+
+/** Result of `Workbook.getThreadedComments`, in file order: each thread's
+ *  opening comment followed by its replies. */
+export interface ThreadedCommentsResult {
+  status: Status;
+  comments: ThreadedComment[];
+}
+
+/** Result of `Workbook.getPersons`. */
+export interface PersonsResult {
+  status: Status;
+  persons: Person[];
+}
+
 /** One populated cell in `getCellsInRange`. `formula` is the stored A1
  *  formula, or `null` when the cell holds none. */
 export interface RangeCell {
@@ -1130,13 +1422,13 @@ export interface DataValidationRange {
  *    * `op`          — 0 between, 1 notBetween, 2 equal, 3 notEqual,
  *                       4 greaterThan, 5 lessThan,
  *                       6 greaterThanOrEqual, 7 lessThanOrEqual.
- *    * `errorStyle`  — 0 stop, 1 warning, 2 information.
+ *    * `errorStyle`  — a `ValidationErrorStyle`.
  */
 export interface DataValidationEntry {
   readonly ranges: ReadonlyArray<DataValidationRange>;
   readonly type: number;
   readonly op: number;
-  readonly errorStyle: number;
+  readonly errorStyle: ValidationErrorStyle;
   readonly allowBlank: boolean;
   readonly showInputMessage: boolean;
   readonly showErrorMessage: boolean;
@@ -1159,7 +1451,7 @@ export interface DataValidationInput {
   ranges?: ReadonlyArray<DataValidationRange>;
   type: number;
   op?: number;
-  errorStyle?: number;
+  errorStyle?: ValidationErrorStyle;
   allowBlank?: boolean;
   showInputMessage?: boolean;
   showErrorMessage?: boolean;
@@ -1244,7 +1536,7 @@ export interface CellXfResult {
  *  the writer emits the sibling `*Argb` as `rgb`. */
 export interface ColorSpec {
   /** 0=none, 1=rgb, 2=theme, 3=indexed, 4=auto. */
-  kind: number;
+  kind: FilterKind;
   /** AARRGGBB; meaningful when `kind` is 1. */
   rgb: number;
   /** Theme index; meaningful when `kind` is 2. */
@@ -1572,7 +1864,7 @@ export interface ExternalLinkRecord {
    *  `TargetMode="External"` (the common case). */
   targetExternal: boolean;
   /** External-link kind: 0 unknown, 1 externalBook, 2 ole, 3 dde. */
-  kind: number;
+  kind: FilterKind;
 }
 
 /** One inclusive cell-range entry inside a CF rule's `sqref` union. */
@@ -2637,6 +2929,46 @@ export interface Workbook {
   removeValidationAt(sheet: number, index: number): Status;
   /** Drops every validation rule on `sheet`. */
   clearValidations(sheet: number): Status;
+  /** Checks `value` against the data-validation rule covering `(row, col)` without storing it. */
+  validateValue(sheet: number, row: number, col: number, value: Value): ValidationOutcomeResult;
+  /** Enumerates the populated cells whose value fails their validation rule, one page at a time; `cursor` and `limit` follow `getCellsInRange`. */
+  listInvalidCells(sheet: number, cursor?: number | null, limit?: number | null): CellsInRangeResult;
+
+  /** Reads the sheet AutoFilter; `autoFilter` is `null` when the sheet has none. */
+  getAutoFilter(sheet: number): AutoFilterResult;
+  /** Replaces the sheet AutoFilter. Row visibility is unchanged until `applyAutoFilter`. */
+  setAutoFilter(sheet: number, autoFilter: AutoFilter): Status;
+  /** Removes the sheet AutoFilter; a no-op when there is none. */
+  removeAutoFilter(sheet: number): Status;
+  /** Hides the body rows the criteria exclude and shows the ones they match. */
+  applyAutoFilter(sheet: number): Status;
+  /** Drops every column criterion and shows all body rows. */
+  clearAutoFilter(sheet: number): Status;
+  /** Evaluates the sheet AutoFilter without changing the sheet. */
+  evaluateAutoFilter(sheet: number): AutoFilterEvalResult;
+  /** Table counterpart of `getAutoFilter`; `tableIdx` is the `tableAt` index. */
+  getTableAutoFilter(table: number): AutoFilterResult;
+  setTableAutoFilter(table: number, autoFilter: AutoFilter): Status;
+  removeTableAutoFilter(table: number): Status;
+  applyTableAutoFilter(table: number): Status;
+  clearTableAutoFilter(table: number): Status;
+  evaluateTableAutoFilter(table: number): AutoFilterEvalResult;
+
+  /** Returns every threaded comment on `sheet` in file order: each thread's opening comment followed by its replies. */
+  getThreadedComments(sheet: number): ThreadedCommentsResult;
+  /** Adds a threaded comment. An empty `parentId` opens a new thread at `row`/`col`; otherwise it replies to that thread. */
+  addThreadedComment(sheet: number, comment: Partial<ThreadedComment> & Pick<ThreadedComment, 'id' | 'text'>): Status;
+  /** Replaces the text and mentions of the comment with `id`. */
+  editThreadedComment(sheet: number, id: string, text: string, mentions: Mention[]): Status;
+  /** Sets the resolved state of the thread opened by `threadId`. */
+  setThreadResolved(sheet: number, threadId: string, done: boolean): Status;
+  /** Removes the comment with `id`; removing an opening comment removes its whole thread. */
+  removeThreadedComment(sheet: number, id: string): Status;
+  /** Returns the workbook's person list in file order. */
+  getPersons(): PersonsResult;
+  addPerson(person: Person): Status;
+  /** Removes the person with `id`; rejected while a comment or mention still names them. */
+  removePerson(id: string): Status;
 
   // Conditional formatting (read / mutate).
   /** Returns every CF rule on `sheet` in flattened priority order. The
@@ -2816,6 +3148,13 @@ declare const _default: {
   GeometryMode: typeof GeometryMode;
   DisplayStatus: typeof DisplayStatus;
   ColorContext: typeof ColorContext;
+  FilterKind: typeof FilterKind;
+  FilterOperator: typeof FilterOperator;
+  DynamicFilterType: typeof DynamicFilterType;
+  SortBy: typeof SortBy;
+  SortMethod: typeof SortMethod;
+  DateTimeGrouping: typeof DateTimeGrouping;
+  ValidationErrorStyle: typeof ValidationErrorStyle;
   ColorResolution: typeof ColorResolution;
   ThemeSource: typeof ThemeSource;
   EffectiveStyleSource: typeof EffectiveStyleSource;

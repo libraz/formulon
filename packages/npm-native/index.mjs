@@ -213,6 +213,70 @@ export const GeometryMode = Object.freeze({ Display: 0, Print: 1 });
 /** `fm_display_status_t` ordinals for `getDisplayText` / `formatValue`. */
 export const DisplayStatus = Object.freeze({ Ok: 0, Overflow: 1, InvalidFormat: 2 });
 
+/** `fm_filter_kind_t` ordinals: criterion of an AutoFilter column. */
+export const FilterKind = Object.freeze({ None: 0, Values: 1, Custom: 2, Top10: 3, Dynamic: 4, Color: 5, Icon: 6 });
+
+/** `fm_filter_operator_t` ordinals: comparison operator of a custom AutoFilter condition. */
+export const FilterOperator = Object.freeze({
+  Equal: 0,
+  LessThan: 1,
+  LessThanOrEqual: 2,
+  NotEqual: 3,
+  GreaterThanOrEqual: 4,
+  GreaterThan: 5,
+});
+
+/** `fm_dynamic_filter_type_t` ordinals: dynamic AutoFilter type, in `ST_DynamicFilterType` schema order. */
+export const DynamicFilterType = Object.freeze({
+  Null: 0,
+  AboveAverage: 1,
+  BelowAverage: 2,
+  Tomorrow: 3,
+  Today: 4,
+  Yesterday: 5,
+  NextWeek: 6,
+  ThisWeek: 7,
+  LastWeek: 8,
+  NextMonth: 9,
+  ThisMonth: 10,
+  LastMonth: 11,
+  NextQuarter: 12,
+  ThisQuarter: 13,
+  LastQuarter: 14,
+  NextYear: 15,
+  ThisYear: 16,
+  LastYear: 17,
+  YearToDate: 18,
+  Q1: 19,
+  Q2: 20,
+  Q3: 21,
+  Q4: 22,
+  M1: 23,
+  M2: 24,
+  M3: 25,
+  M4: 26,
+  M5: 27,
+  M6: 28,
+  M7: 29,
+  M8: 30,
+  M9: 31,
+  M10: 32,
+  M11: 33,
+  M12: 34,
+});
+
+/** `fm_sort_by_t` ordinals: what a sort condition sorts by. */
+export const SortBy = Object.freeze({ Value: 0, CellColor: 1, FontColor: 2, Icon: 3 });
+
+/** `fm_sort_method_t` ordinals: sort method of an AutoFilter sort state. */
+export const SortMethod = Object.freeze({ None: 0, PinYin: 1, Stroke: 2 });
+
+/** `fm_date_time_grouping_t` ordinals: granularity of an AutoFilter date-group item. */
+export const DateTimeGrouping = Object.freeze({ Year: 0, Month: 1, Day: 2, Hour: 3, Minute: 4, Second: 5 });
+
+/** `fm_validation_error_style_t` ordinals: data-validation error style. */
+export const ValidationErrorStyle = Object.freeze({ Stop: 0, Warning: 1, Information: 2 });
+
 /** `fm_color_context_t` ordinals: where a colour is used. */
 export const ColorContext = Object.freeze({ Font: 0, FillForeground: 1, FillBackground: 2, Border: 3 });
 
@@ -289,6 +353,13 @@ export default {
   GeometryMode,
   DisplayStatus,
   ColorContext,
+  FilterKind,
+  FilterOperator,
+  DynamicFilterType,
+  SortBy,
+  SortMethod,
+  DateTimeGrouping,
+  ValidationErrorStyle,
   ColorResolution,
   ThemeSource,
   EffectiveStyleSource,
