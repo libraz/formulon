@@ -798,6 +798,171 @@ Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
   return out;
 }
 
+Napi::Value Workbook::SetCellStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  const std::string name = SpecHas(record, "name") ? record.Get("name").ToString().Utf8Value() : std::string();
+  fm_cell_style_record_t cs{};
+  cs.name = name.c_str();
+  cs.xf_id = SpecPullU32(record, "xfId", 0U);
+  cs.builtin_id = SpecPullU32(record, "builtinId", FM_CELL_STYLE_BUILTIN_ID_NONE);
+  cs.i_level = SpecPullU32(record, "iLevel", 0U);
+  cs.hidden = SpecPullBool(record, "hidden", false) ? 1 : 0;
+  cs.custom_builtin = SpecPullBool(record, "customBuiltin", false) ? 1 : 0;
+  if (env.IsExceptionPending()) {
+    return env.Undefined();
+  }
+  return MakeStatus(env, fm_styles_set_cell_style(handle_, &cs));
+}
+
+Napi::Value Workbook::RemoveCellStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::string name = ArgString(info, 0);
+  return MakeStatus(env, fm_styles_remove_cell_style(handle_, name.c_str()));
+}
+
+// ---- Theme, colour resolution, effective style ----------------------
+
+Napi::Value Workbook::GetTheme(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  fm_theme_colors colors{};
+  fm_theme_fonts fonts{};
+  int32_t source = 0;
+  fm_status_t rc = kBindingInvalidHandle;
+  if (handle_ != nullptr) {
+    rc = fm_workbook_get_theme_colors(handle_, &colors, &source);
+    if (rc == 0) {
+      rc = fm_workbook_get_theme_fonts(handle_, &fonts);
+    }
+  }
+  if (rc != 0) {
+    colors = fm_theme_colors{};
+    fonts = fm_theme_fonts{};
+    source = 0;
+  }
+  Napi::Array arr = Napi::Array::New(env, 12);
+  for (uint32_t i = 0; i < 12; ++i) {
+    arr.Set(i, Napi::Number::New(env, colors.argb[i]));
+  }
+  const auto face = [&env](const char* s) { return Napi::String::New(env, s != nullptr ? s : ""); };
+  Napi::Object fontsOut = Napi::Object::New(env);
+  fontsOut.Set("majorLatin", face(fonts.major_latin));
+  fontsOut.Set("majorEastAsian", face(fonts.major_east_asian));
+  fontsOut.Set("minorLatin", face(fonts.minor_latin));
+  fontsOut.Set("minorEastAsian", face(fonts.minor_east_asian));
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("source", Napi::Number::New(env, source));
+  out.Set("colors", arr);
+  out.Set("fonts", fontsOut);
+  return out;
+}
+
+Napi::Value Workbook::SetThemeColors(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  if (info.Length() < 1 || !info[0].IsArray() || info[0].As<Napi::Array>().Length() != 12) {
+    return MakeBindingArgumentError(env, "setThemeColors expects an array of 12 ARGB numbers");
+  }
+  Napi::Array arr = info[0].As<Napi::Array>();
+  fm_theme_colors colors{};
+  for (uint32_t i = 0; i < 12; ++i) {
+    colors.argb[i] = static_cast<uint32_t>(arr.Get(i).ToNumber().Int64Value());
+  }
+  return MakeStatus(env, fm_workbook_set_theme_colors(handle_, &colors));
+}
+
+Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  const auto pull = [&record](const char* key) {
+    return SpecHas(record, key) ? record.Get(key).ToString().Utf8Value() : std::string();
+  };
+  const std::string major_latin = pull("majorLatin");
+  const std::string major_ea = pull("majorEastAsian");
+  const std::string minor_latin = pull("minorLatin");
+  const std::string minor_ea = pull("minorEastAsian");
+  fm_theme_fonts fonts{};
+  fonts.major_latin = major_latin.c_str();
+  fonts.major_east_asian = major_ea.c_str();
+  fonts.minor_latin = minor_latin.c_str();
+  fonts.minor_east_asian = minor_ea.c_str();
+  return MakeStatus(env, fm_workbook_set_theme_fonts(handle_, &fonts));
+}
+
+Napi::Value Workbook::ResolveColor(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  fm_color_spec spec{};
+  if (info.Length() > 0 && info[0].IsObject()) {
+    Napi::Object holder = Napi::Object::New(env);
+    holder.Set("spec", info[0]);
+    spec = PullColorSpec(holder, "spec");
+  }
+  uint32_t argb = 0;
+  int32_t resolution = 0;
+  const fm_status_t rc =
+      handle_ != nullptr
+          ? fm_workbook_resolve_color(handle_, spec, static_cast<int32_t>(ArgU32(info, 1)), &argb, &resolution)
+          : kBindingInvalidHandle;
+  if (rc != 0) {
+    argb = 0;
+    resolution = 0;
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("argb", Napi::Number::New(env, argb));
+  out.Set("resolution", Napi::Number::New(env, resolution));
+  return out;
+}
+
+Napi::Value Workbook::GetEffectiveStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  fm_effective_style es{};
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_effective_style(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &es)
+                         : kBindingInvalidHandle;
+  if (rc != 0) {
+    es = fm_effective_style{};
+  }
+  const auto colorOf = [&env](uint32_t argb, int32_t resolution) {
+    Napi::Object c = Napi::Object::New(env);
+    c.Set("argb", Napi::Number::New(env, argb));
+    c.Set("resolution", Napi::Number::New(env, resolution));
+    return c;
+  };
+  static const char* const kSides[5] = {"left", "right", "top", "bottom", "diagonal"};
+  Napi::Object borders = Napi::Object::New(env);
+  for (size_t i = 0; i < 5; ++i) {
+    borders.Set(kSides[i], colorOf(es.border_argb[i], es.border_resolution[i]));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("xfIndex", Napi::Number::New(env, es.xf_index));
+  out.Set("source", Napi::Number::New(env, es.source));
+  out.Set("fontIndex", Napi::Number::New(env, es.font_index));
+  out.Set("fillIndex", Napi::Number::New(env, es.fill_index));
+  out.Set("borderIndex", Napi::Number::New(env, es.border_index));
+  out.Set("font", colorOf(es.font_argb, es.font_resolution));
+  out.Set("fillForeground", colorOf(es.fill_fg_argb, es.fill_fg_resolution));
+  out.Set("fillBackground", colorOf(es.fill_bg_argb, es.fill_bg_resolution));
+  out.Set("borders", borders);
+  out.Set("locked", Napi::Boolean::New(env, es.locked != 0));
+  out.Set("hidden", Napi::Boolean::New(env, es.hidden != 0));
+  out.Set("numFmtCode", Napi::String::New(env, es.num_fmt_code != nullptr ? es.num_fmt_code : ""));
+  return out;
+}
+
 // ---- Conditional formatting (read / mutate) -------------------------
 
 Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {

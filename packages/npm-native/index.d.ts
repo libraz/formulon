@@ -839,6 +839,47 @@ export const DisplayStatus: Readonly<{
 }>;
 export type DisplayStatus = 0 | 1 | 2;
 
+/** Where a colour is used; decides what an automatic colour means. Mirrors
+ *  `fm_color_context_t`. */
+export const ColorContext: Readonly<{
+  Font: 0;
+  FillForeground: 1;
+  FillBackground: 2;
+  Border: 3;
+}>;
+export type ColorContext = 0 | 1 | 2 | 3;
+
+/** How a colour was resolved. Mirrors `fm_color_resolution_t`: `Exact` is a
+ *  literal or a theme / palette colour from the workbook's own data;
+ *  `DefaultTheme` and `ThemeUnparseable` resolved against the default theme;
+ *  `IndexOutOfRange` is black; `AutoContext` is an automatic colour chosen by
+ *  context (black for font and border, white for fills). */
+export const ColorResolution: Readonly<{
+  Exact: 0;
+  DefaultTheme: 1;
+  IndexOutOfRange: 2;
+  ThemeUnparseable: 3;
+  AutoContext: 4;
+}>;
+export type ColorResolution = 0 | 1 | 2 | 3 | 4;
+
+/** Where `getTheme` read the theme from. Mirrors the C `out_source` values. */
+export const ThemeSource: Readonly<{
+  Part: 0;
+  Default: 1;
+  Unparseable: 2;
+}>;
+export type ThemeSource = 0 | 1 | 2;
+
+/** Where `getEffectiveStyle` took its xf from. */
+export const EffectiveStyleSource: Readonly<{
+  Cell: 0;
+  Row: 1;
+  Column: 2;
+  Default: 3;
+}>;
+export type EffectiveStyleSource = 0 | 1 | 2 | 3;
+
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
  *  counts, tab visibility, and the display / orientation flags mirrored
  *  from OOXML `<sheetView>`. Booleans are encoded as `0`/`1` to match
@@ -1439,6 +1480,75 @@ export interface CellStyleResult {
   iLevel: number;
   hidden: boolean;
   customBuiltin: boolean;
+}
+
+/** Argument of `Workbook.setCellStyle`. Mirrors `CellStyleResult` without the status. */
+export interface CellStyleRecord {
+  /** Display name of the style. */
+  name: string;
+  /** Index into the `<cellStyleXfs>` table; defaults to 0. */
+  xfId?: number;
+  /** OOXML built-in ordinal (`0..53`); defaults to `0xFFFFFFFF` (custom). */
+  builtinId?: number;
+  /** Outline level of the `RowLevel_n` / `ColLevel_n` styles; defaults to 0. */
+  iLevel?: number;
+  hidden?: boolean;
+  customBuiltin?: boolean;
+}
+
+/** Theme typefaces. `*EastAsian` is the `a:ea` face, else the Jpan script face. */
+export interface ThemeFonts {
+  majorLatin: string;
+  majorEastAsian: string;
+  minorLatin: string;
+  minorEastAsian: string;
+}
+
+/** Return type of `Workbook.getTheme()`. */
+export interface ThemeResult {
+  status: Status;
+  /** One of `ThemeSource.*`. */
+  source: ThemeSource;
+  /** The 12 scheme colours as 0xFFRRGGBB in `a:clrScheme` order: dk1, lt1,
+   *  dk2, lt2, accent1..6, hlink, folHlink. */
+  colors: number[];
+  fonts: ThemeFonts;
+}
+
+/** A resolved colour: 0xAARRGGBB as Excel renders it, plus how it was obtained. */
+export interface ResolvedColor {
+  argb: number;
+  resolution: ColorResolution;
+}
+
+/** Return type of `Workbook.resolveColor(spec, context)`. */
+export interface ResolvedColorResult extends ResolvedColor {
+  status: Status;
+}
+
+/** Return type of `Workbook.getEffectiveStyle(sheet, row, col)`. Named-style
+ *  inheritance is not recomputed and conditional formatting is not applied. */
+export interface EffectiveStyleResult {
+  status: Status;
+  xfIndex: number;
+  /** One of `EffectiveStyleSource.*`. */
+  source: EffectiveStyleSource;
+  fontIndex: number;
+  fillIndex: number;
+  borderIndex: number;
+  font: ResolvedColor;
+  fillForeground: ResolvedColor;
+  fillBackground: ResolvedColor;
+  borders: {
+    left: ResolvedColor;
+    right: ResolvedColor;
+    top: ResolvedColor;
+    bottom: ResolvedColor;
+    diagonal: ResolvedColor;
+  };
+  locked: boolean;
+  hidden: boolean;
+  numFmtCode: string;
 }
 
 /** Element type returned by `Workbook.getExternalLinks()`. Mirrors
@@ -2445,6 +2555,24 @@ export interface Workbook {
   /** Returns the named-style xf record at `index`. Output shape mirrors
    *  `getCellXf`. */
   getCellStyleXf(index: number): CellXfResult;
+  /** Adds or replaces the `<cellStyle>` entry named `record.name`. Absent
+   *  fields default to `xfId` 0, a custom style (`0xFFFFFFFF`), level 0 and
+   *  both flags false. */
+  setCellStyle(record: CellStyleRecord): Status;
+  /** Removes the named cell style; cell formats that used it fall back to Normal. */
+  removeCellStyle(name: string): Status;
+
+  // Theme, colour resolution, effective style.
+  /** Reads the theme's 12 scheme colours and typefaces. */
+  getTheme(): ThemeResult;
+  /** Writes the theme's 12 scheme colours (0xFFRRGGBB, `a:clrScheme` order; alpha ignored). */
+  setThemeColors(colors: number[]): Status;
+  /** Writes the theme's major / minor typefaces. */
+  setThemeFonts(fonts: ThemeFonts): Status;
+  /** Resolves a colour specification to the colour Excel renders. */
+  resolveColor(spec: ColorSpec, context: ColorContext): ResolvedColorResult;
+  /** Reads the formatting a cell shows: its xf with colours resolved against the theme and palette. */
+  getEffectiveStyle(sheet: number, row: number, col: number): EffectiveStyleResult;
 
   // Sheet UI features (merges, comments, hyperlinks, validations).
   /** Adds a merge range to `sheet`. */
@@ -2687,6 +2815,10 @@ declare const _default: {
   SheetVisibility: typeof SheetVisibility;
   GeometryMode: typeof GeometryMode;
   DisplayStatus: typeof DisplayStatus;
+  ColorContext: typeof ColorContext;
+  ColorResolution: typeof ColorResolution;
+  ThemeSource: typeof ThemeSource;
+  EffectiveStyleSource: typeof EffectiveStyleSource;
   ExternalLinkKind: typeof ExternalLinkKind;
   ErrorCode: typeof ErrorCode;
   WorkbookFormat: typeof WorkbookFormat;

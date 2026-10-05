@@ -215,8 +215,15 @@ fm_styles_add_cell_xf
 fm_styles_add_dxf
 fm_styles_add_cell_style_xf
 fm_styles_set_cell_style
+fm_styles_remove_cell_style
 fm_styles_set_font
 fm_workbook_set_default_font
+fm_workbook_get_theme_colors
+fm_workbook_set_theme_colors
+fm_workbook_get_theme_fonts
+fm_workbook_set_theme_fonts
+fm_workbook_resolve_color
+fm_sheet_get_effective_style
 
 # -- Pivot layout projection -----------------------------------------------------
 fm_workbook_pivot_count

@@ -149,7 +149,11 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   style_xf.has_horizontal_align = 1;
   uint32_t xf_id = 0;
   ASSERT_EQ(fm_styles_add_cell_style_xf(wb.handle, style_xf, &xf_id), 0);
-  ASSERT_EQ(fm_styles_set_cell_style(wb.handle, "Highlight", xf_id, FM_CELL_STYLE_BUILTIN_ID_NONE), 0);
+  fm_cell_style_record_t highlight{};
+  highlight.name = "Highlight";
+  highlight.xf_id = xf_id;
+  highlight.builtin_id = FM_CELL_STYLE_BUILTIN_ID_NONE;
+  ASSERT_EQ(fm_styles_set_cell_style(wb.handle, &highlight), 0);
 
   fm_cell_xf cell_xf{};
   cell_xf.has_alignment = 1;
@@ -205,10 +209,16 @@ TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
   ASSERT_EQ(fm_styles_get_cell_style_xf(wb.handle, xf_id, &reread), 0);
   EXPECT_EQ(reread.justify_last_line, 1);
 
-  // 0..47 is the whole OOXML ordinal space; anything else needs the sentinel.
-  EXPECT_NE(fm_styles_set_cell_style(wb.handle, "Custom", xf_id, 48), 0);
-  EXPECT_EQ(fm_styles_set_cell_style(wb.handle, "Custom", xf_id, FM_CELL_STYLE_BUILTIN_ID_NONE), 0);
-  EXPECT_NE(fm_styles_set_cell_style(wb.handle, "Custom", xf_id + 1U, FM_CELL_STYLE_BUILTIN_ID_NONE), 0);
+  // 0..53 is the whole OOXML ordinal space; anything else needs the sentinel.
+  fm_cell_style_record_t custom{};
+  custom.name = "Custom";
+  custom.xf_id = xf_id;
+  custom.builtin_id = 54;
+  EXPECT_NE(fm_styles_set_cell_style(wb.handle, &custom), 0);
+  custom.builtin_id = FM_CELL_STYLE_BUILTIN_ID_NONE;
+  EXPECT_EQ(fm_styles_set_cell_style(wb.handle, &custom), 0);
+  custom.xf_id = xf_id + 1U;
+  EXPECT_NE(fm_styles_set_cell_style(wb.handle, &custom), 0);
 }
 
 TEST(FormulonCApiStyles, AddBatchDeduplicatesAllStyleTables) {

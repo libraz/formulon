@@ -32,3 +32,4 @@
 removed fm_workbook_pivot_field_add_aggregation :: wrote a field-level aggregation list nothing read; value aggregation is the data field's, subtotals are fm_workbook_pivot_field_add_subtotal_fn
 removed fm_workbook_pivot_field_clear_aggregations :: counterpart of the removed fm_workbook_pivot_field_add_aggregation
 signature fm_workbook_pivot_field_set_date_group :: gains interval_days and the Start/End serials of Excel's Days grouping, which replaces the Sunday-aligned FM_PIVOT_DATE_WEEK
+signature fm_styles_set_cell_style :: takes one fm_cell_style_record_t carrying i_level, hidden and custom_builtin instead of name, xf_id and builtin_id

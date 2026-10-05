@@ -5159,22 +5159,22 @@ typedef struct {
  *
  * `name` is a NUL-terminated UTF-8 model-backed view into the workbook's
  * styles table; it is valid until the next mutation of the cell-style
- * list (`fm_styles_set_cell_style`) or until the handle is destroyed.
- * `xf_id` indexes into the parallel
+ * list (`fm_styles_set_cell_style`, `fm_styles_remove_cell_style`) or
+ * until the handle is destroyed. `xf_id` indexes into the parallel
  * `<cellStyleXfs>` table (queryable via
  * `fm_styles_get_cell_style_xf_count` / `fm_styles_get_cell_style_xf`).
  *
- * `builtin_id` carries the OOXML built-in style ordinal (`0..47`); the
+ * `builtin_id` carries the OOXML built-in style ordinal (`0..53`); the
  * sentinel `FM_CELL_STYLE_BUILTIN_ID_NONE` indicates the entry is
  * custom and the attribute was absent on the source document. `i_level`
- * is the outline level for built-in heading styles (`0` for everything
- * else). The boolean flags follow the wide-POD convention used
- * elsewhere on this surface.
+ * is the outline level of the `RowLevel_n` / `ColLevel_n` styles
+ * (`builtin_id` 1 / 2, `0..6`) and `0` for everything else. The boolean
+ * flags follow the wide-POD convention used elsewhere on this surface.
  */
 typedef struct {
   const char* name;       /* UTF-8, NUL-terminated; never NULL */
   uint32_t xf_id;         /* index into cell_style_xfs */
-  uint32_t builtin_id;    /* 0..47, or FM_CELL_STYLE_BUILTIN_ID_NONE */
+  uint32_t builtin_id;    /* 0..53, or FM_CELL_STYLE_BUILTIN_ID_NONE */
   uint32_t i_level;       /* outline level for heading styles */
   int32_t hidden;         /* 0=false, 1=true */
   int32_t custom_builtin; /* 0=false, 1=true */
@@ -5583,9 +5583,36 @@ FM_API fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf record, u
  * Excel ranges return `kInvalidArgument`. */
 FM_API fm_status_t fm_styles_add_cell_style_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_id);
 
-/** Adds or replaces a named `<cellStyle>` record. `xf_id` must reference an
- * existing named-style xf. Pass `FM_CELL_STYLE_BUILTIN_ID_NONE` for custom styles. */
-FM_API fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const char* name, uint32_t xf_id, uint32_t builtin_id);
+/**
+ * @brief Adds or replaces the named `<cellStyle>` record `record->name`.
+ *
+ * An existing style of that name is overwritten field for field; otherwise
+ * the record is appended. `record->name` is copied. `xf_id` must reference
+ * an existing named-style xf; `builtin_id` is `0..53` or
+ * `FM_CELL_STYLE_BUILTIN_ID_NONE` for a custom style; `i_level` is `0..6`
+ * for `builtin_id` 1 / 2 and must be `0` otherwise.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `record` or `record->name` is `NULL`;
+ *         `kInvalidArgument` for an empty name or an out-of-range field.
+ */
+FM_API fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const fm_cell_style_record_t* record);
+
+/**
+ * @brief Removes the named `<cellStyle>` record `name`.
+ *
+ * When no other named style shares the removed record's `xf_id`, every
+ * cell xf that inherits from it is repointed at Normal (`xf_id` 0), and each
+ * attribute group whose `apply_*` flag is zero takes Normal's value; groups
+ * whose flag is set keep their own. Neither `<cellXfs>` nor
+ * `<cellStyleXfs>` is compacted, so every xf index stays valid.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `name` is `NULL`;
+ *         `kInvalidArgument` when no style has that name or it is the
+ *         Normal style (`builtin_id` 0).
+ */
+FM_API fm_status_t fm_styles_remove_cell_style(fm_workbook_t* wb, const char* name);
 
 /**
  * @brief Adds and deduplicates a batch of fonts, fills, borders, and cell xfs.
@@ -5600,6 +5627,172 @@ FM_API fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const char* name,
  * returns from validation / precondition checks.
  */
 FM_API fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_batch* batch);
+
+/* -------------------------------------------------------------------------- */
+/* Theme, colour resolution and effective style                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief The 12 theme colours as 0xFFRRGGBB, in `a:clrScheme` order:
+ *        dk1, lt1, dk2, lt2, accent1..accent6, hlink, folHlink.
+ *
+ * This is not the order of a spreadsheet colour's `theme` index
+ * (`fm_color_spec::theme`), which swaps the first two pairs
+ * (0=lt1, 1=dk1, 2=lt2, 3=dk2).
+ */
+typedef struct {
+  uint32_t argb[12];
+} fm_theme_colors;
+
+/**
+ * @brief The theme's major (heading) and minor (body) typefaces.
+ *
+ * `*_east_asian` is the `a:ea` face when it names one, otherwise the
+ * `a:font script="Jpan"` face. Getter strings are read-scratch-backed views.
+ */
+typedef struct {
+  const char* major_latin;
+  const char* major_east_asian;
+  const char* minor_latin;
+  const char* minor_east_asian;
+} fm_theme_fonts;
+
+/** @brief Where a colour is used; decides what an automatic colour means. */
+typedef enum {
+  FM_COLOR_CONTEXT_FONT = 0,
+  FM_COLOR_CONTEXT_FILL_FG = 1,
+  FM_COLOR_CONTEXT_FILL_BG = 2,
+  FM_COLOR_CONTEXT_BORDER = 3,
+} fm_color_context_t;
+
+/**
+ * @brief How a colour was resolved.
+ *
+ * `FM_COLOR_RESOLUTION_EXACT`: literal RGB, or a theme / palette colour
+ * resolved from the workbook's own data. `DEFAULT_THEME` /
+ * `THEME_UNPARSEABLE`: a theme colour resolved against the default
+ * (Office 2013-2022) theme because the theme part is absent / unparseable.
+ * `INDEX_OUT_OF_RANGE`: a theme or palette index beyond its table; the
+ * colour is black. `AUTO_CONTEXT`: an automatic or system colour (or no
+ * colour at all) chosen by context: black for font and border, white for
+ * fills.
+ */
+typedef enum {
+  FM_COLOR_RESOLUTION_EXACT = 0,
+  FM_COLOR_RESOLUTION_DEFAULT_THEME = 1,
+  FM_COLOR_RESOLUTION_INDEX_OUT_OF_RANGE = 2,
+  FM_COLOR_RESOLUTION_THEME_UNPARSEABLE = 3,
+  FM_COLOR_RESOLUTION_AUTO_CONTEXT = 4,
+} fm_color_resolution_t;
+
+/**
+ * @brief The formatting a cell shows, read from the selected `<cellXfs>`
+ *        record directly.
+ *
+ * `source` names the level that supplied `xf_index`: 0 the cell, 1 its row
+ * (a row style takes effect only with `customFormat`), 2 its column, 3 the
+ * default xf 0. An xf, font, fill or border index beyond its table reads as
+ * 0. Colours are resolved against the theme and `<indexedColors>`; each
+ * `*_resolution` is an `fm_color_resolution_t`. `border_*[5]` are left,
+ * right, top, bottom, diagonal. Named-style inheritance is not recomputed
+ * and conditional formatting is not applied. `num_fmt_code` is a
+ * read-scratch-backed view.
+ */
+typedef struct {
+  uint32_t xf_index;
+  int32_t source; /* 0=cell, 1=row, 2=column, 3=default */
+  uint32_t font_index;
+  uint32_t fill_index;
+  uint32_t border_index;
+  uint32_t font_argb;
+  int32_t font_resolution;
+  uint32_t fill_fg_argb;
+  int32_t fill_fg_resolution;
+  uint32_t fill_bg_argb;
+  int32_t fill_bg_resolution;
+  uint32_t border_argb[5];
+  int32_t border_resolution[5];
+  int32_t locked; /* 0/1 */
+  int32_t hidden; /* 0/1 */
+  const char* num_fmt_code;
+} fm_effective_style;
+
+/**
+ * @brief Reads the theme's 12 scheme colours.
+ *
+ * `*out_source` is 0 when they come from the workbook's theme part, 1 when
+ * the workbook has no theme part and 2 when its theme part cannot be
+ * parsed; in both latter cases the default theme's colours are reported.
+ * The theme is parsed on every call.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_get_theme_colors(const fm_workbook_t* wb, fm_theme_colors* out, int32_t* out_source);
+
+/**
+ * @brief Writes the theme's 12 scheme colours. The alpha byte is ignored.
+ *
+ * Only `a:clrScheme` of the existing theme part is rewritten. A workbook
+ * without a theme part first gets a minimal valid one carrying the default
+ * theme, registered with its content type and workbook relationship.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kIoXmlParse` when the existing theme part cannot be parsed (the
+ *         part is left untouched).
+ */
+FM_API fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_theme_colors* colors);
+
+/**
+ * @brief Reads the theme's major and minor typefaces. The default theme's
+ *        faces are reported when the theme part is absent or unparseable
+ *        (see `fm_workbook_get_theme_colors` for telling the cases apart).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_theme_fonts* out);
+
+/**
+ * @brief Writes the theme's major and minor typefaces. The strings are
+ *        copied. Part generation and failure rules match
+ *        `fm_workbook_set_theme_colors`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument or any face is `NULL`;
+ *         `kIoXmlParse` when the existing theme part cannot be parsed.
+ */
+FM_API fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_theme_fonts* fonts);
+
+/**
+ * @brief Resolves a colour specification to the 0xAARRGGBB Excel renders.
+ *
+ * Theme colours take `spec.tint`; indexed colours read the workbook's
+ * `<indexedColors>` over the built-in palette; `kFmColorAuto`,
+ * `kFmColorNone` and the system indices 64 / 65 depend on `context`
+ * (an `fm_color_context_t`). `*out_resolution` is an
+ * `fm_color_resolution_t`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` for an unknown `context` or `spec.kind`, or a
+ *         non-finite theme tint.
+ */
+FM_API fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_color_spec spec, int32_t context,
+                                             uint32_t* out_argb, int32_t* out_resolution);
+
+/**
+ * @brief Reads the effective style of the cell at `(row, col)`; see
+ *        `fm_effective_style`. The cell need not exist.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or the
+ *         coordinate is outside the grid.
+ */
+FM_API fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                fm_effective_style* out);
 
 /* -------------------------------------------------------------------------- */
 /* External links                                                             */

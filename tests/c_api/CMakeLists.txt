@@ -40,6 +40,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_styles_mutation_test.cpp
   formulon_c_styles_num_formats_test.cpp
   formulon_c_test.cpp
+  formulon_c_theme_test.cpp
   formulon_c_values_test.cpp
   formulon_c_save_test.cpp
   formulon_c_trace_test.cpp

@@ -12,6 +12,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "utils/error.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
@@ -632,11 +633,142 @@ JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {
   return out;
 }
 
-JsStatus JsWorkbook::setCellStyle(const std::string& name, uint32_t xfId, uint32_t builtinId) {
+JsStatus JsWorkbook::setCellStyle(emscripten::val record) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  return status_from_rc(fm_styles_set_cell_style(handle_, name.c_str(), xfId, builtinId));
+  const std::string name = js_pull_string(record, "name");
+  fm_cell_style_record_t cs{};
+  cs.name = name.c_str();
+  cs.xf_id = js_pull_u32(record, "xfId", 0U);
+  cs.builtin_id = js_pull_u32(record, "builtinId", FM_CELL_STYLE_BUILTIN_ID_NONE);
+  cs.i_level = js_pull_u32(record, "iLevel", 0U);
+  cs.hidden = js_pull_bool(record, "hidden", false) ? 1 : 0;
+  cs.custom_builtin = js_pull_bool(record, "customBuiltin", false) ? 1 : 0;
+  return status_from_rc(fm_styles_set_cell_style(handle_, &cs));
+}
+
+JsStatus JsWorkbook::removeCellStyle(const std::string& name) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  return status_from_rc(fm_styles_remove_cell_style(handle_, name.c_str()));
+}
+
+namespace {
+
+emscripten::val js_resolved_color(uint32_t argb, int32_t resolution) {
+  emscripten::val o = emscripten::val::object();
+  o.set("argb", argb);
+  o.set("resolution", resolution);
+  return o;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::getTheme() const {
+  fm_theme_colors colors{};
+  fm_theme_fonts fonts{};
+  int32_t source = 0;
+  fm_status_t rc = handle_ != nullptr ? fm_workbook_get_theme_colors(handle_, &colors, &source) : 7000;
+  if (rc == 0) {
+    rc = fm_workbook_get_theme_fonts(handle_, &fonts);
+  }
+  if (rc != 0) {
+    colors = fm_theme_colors{};
+    fonts = fm_theme_fonts{};
+    source = 0;
+  }
+  const auto face = [](const char* s) { return std::string(s != nullptr ? s : ""); };
+  emscripten::val list = emscripten::val::array();
+  for (uint32_t i = 0; i < 12U; ++i) {
+    list.set(i, colors.argb[i]);
+  }
+  emscripten::val f = emscripten::val::object();
+  f.set("majorLatin", face(fonts.major_latin));
+  f.set("majorEastAsian", face(fonts.major_east_asian));
+  f.set("minorLatin", face(fonts.minor_latin));
+  f.set("minorEastAsian", face(fonts.minor_east_asian));
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  o.set("source", source);
+  o.set("colors", list);
+  o.set("fonts", f);
+  return o;
+}
+
+JsStatus JsWorkbook::setThemeColors(emscripten::val colors) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  if (!colors.isArray() || colors["length"].as<uint32_t>() != 12U) {
+    return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
+                                "setThemeColors: `colors` must be an array of 12 ARGB numbers");
+  }
+  fm_theme_colors tc{};
+  for (uint32_t i = 0; i < 12U; ++i) {
+    tc.argb[i] = colors[i].as<uint32_t>();
+  }
+  return status_from_rc(fm_workbook_set_theme_colors(handle_, &tc));
+}
+
+JsStatus JsWorkbook::setThemeFonts(emscripten::val fonts) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  const std::string major_latin = js_pull_string(fonts, "majorLatin");
+  const std::string major_ea = js_pull_string(fonts, "majorEastAsian");
+  const std::string minor_latin = js_pull_string(fonts, "minorLatin");
+  const std::string minor_ea = js_pull_string(fonts, "minorEastAsian");
+  fm_theme_fonts tf{};
+  tf.major_latin = major_latin.c_str();
+  tf.major_east_asian = major_ea.c_str();
+  tf.minor_latin = minor_latin.c_str();
+  tf.minor_east_asian = minor_ea.c_str();
+  return status_from_rc(fm_workbook_set_theme_fonts(handle_, &tf));
+}
+
+emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) const {
+  uint32_t argb = 0;
+  int32_t resolution = 0;
+  emscripten::val holder = emscripten::val::object();
+  holder.set("c", spec);
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_resolve_color(handle_, js_pull_color_spec(holder, "c"),
+                                                                        context, &argb, &resolution)
+                                            : 7000;
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  o.set("argb", rc == 0 ? argb : 0U);
+  o.set("resolution", rc == 0 ? resolution : 0);
+  return o;
+}
+
+emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint32_t col) const {
+  fm_effective_style e{};
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_effective_style(handle_, sheet, row, col, &e) : 7000;
+  if (rc != 0) {
+    e = fm_effective_style{};
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  o.set("xfIndex", e.xf_index);
+  o.set("source", e.source);
+  o.set("fontIndex", e.font_index);
+  o.set("fillIndex", e.fill_index);
+  o.set("borderIndex", e.border_index);
+  o.set("font", js_resolved_color(e.font_argb, e.font_resolution));
+  o.set("fillForeground", js_resolved_color(e.fill_fg_argb, e.fill_fg_resolution));
+  o.set("fillBackground", js_resolved_color(e.fill_bg_argb, e.fill_bg_resolution));
+  static const char* const kSides[5] = {"left", "right", "top", "bottom", "diagonal"};
+  emscripten::val borders = emscripten::val::object();
+  for (int i = 0; i < 5; ++i) {
+    borders.set(kSides[i], js_resolved_color(e.border_argb[i], e.border_resolution[i]));
+  }
+  o.set("borders", borders);
+  o.set("locked", e.locked != 0);
+  o.set("hidden", e.hidden != 0);
+  o.set("numFmtCode", std::string(e.num_fmt_code != nullptr ? e.num_fmt_code : ""));
+  return o;
 }
 
 }  // namespace parts

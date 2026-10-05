@@ -720,6 +720,40 @@ CELL_STYLE_RECORD = Struct(
     ],
 )
 
+THEME_COLORS = Struct("fm_theme_colors", [("argb", ("blob_u32x12", 48, 4))])
+
+THEME_FONTS = Struct(
+    "fm_theme_fonts",
+    [
+        ("major_latin", PTR),
+        ("major_east_asian", PTR),
+        ("minor_latin", PTR),
+        ("minor_east_asian", PTR),
+    ],
+)
+
+EFFECTIVE_STYLE = Struct(
+    "fm_effective_style",
+    [
+        ("xf_index", U32),
+        ("source", I32),
+        ("font_index", U32),
+        ("fill_index", U32),
+        ("border_index", U32),
+        ("font_argb", U32),
+        ("font_resolution", I32),
+        ("fill_fg_argb", U32),
+        ("fill_fg_resolution", I32),
+        ("fill_bg_argb", U32),
+        ("fill_bg_resolution", I32),
+        ("border_argb", ("blob_u32x5", 20, 4)),
+        ("border_resolution", ("blob_i32x5", 20, 4)),
+        ("locked", I32),
+        ("hidden", I32),
+        ("num_fmt_code", PTR),
+    ],
+)
+
 EXTERNAL_LINK_RECORD = Struct(
     "fm_external_link_record_t",
     [

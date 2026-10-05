@@ -38,19 +38,19 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 240 instance methods plus the three static factories. Of those
-instance methods, 238 are shared with WASM; seven remain WASM-only, while
+register 247 instance methods plus the three static factories. Of those
+instance methods, 245 are shared with WASM; six remain WASM-only, while
 `dispose()` and `memoryUsage()` are native-only lifecycle helpers.
 The shared `Workbook` methods use the same status-bearing result envelopes
 and field shapes; switching packages still requires updating the module
 import and validating the target platform's native prebuild. The additional
-native-only methods are operational helpers; the seven
+native-only methods are operational helpers; the six
 WASM-only methods remain available through the WASM package.
 
 The WASM-only methods are, in full:
 
 ```
-addCellStyleXf, setCellStyle
+addCellStyleXf
 createTable, updateTable, removeTable
 getSheetAutoFilterXml, setSheetAutoFilterXml
 ```
@@ -113,7 +113,8 @@ Styles
   getFont, getFill, getBorder, getNumFmt
   addFont, addFill, addBorder, addNumFmt, addXf
   fontCount, fillCount, borderCount, xfCount
-  cellStyleCount, cellStyleXfCount, getCellStyle, getCellStyleXf
+  cellStyleCount, cellStyleXfCount, getCellStyle, getCellStyleXf, setCellStyle, removeCellStyle
+  getTheme, setThemeColors, setThemeFonts, resolveColor, getEffectiveStyle
 
 Merges / comments / hyperlinks / validations
   addMerge, removeMerge, removeMergeAt, clearMerges, getMerges

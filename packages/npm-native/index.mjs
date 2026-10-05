@@ -213,6 +213,24 @@ export const GeometryMode = Object.freeze({ Display: 0, Print: 1 });
 /** `fm_display_status_t` ordinals for `getDisplayText` / `formatValue`. */
 export const DisplayStatus = Object.freeze({ Ok: 0, Overflow: 1, InvalidFormat: 2 });
 
+/** `fm_color_context_t` ordinals: where a colour is used. */
+export const ColorContext = Object.freeze({ Font: 0, FillForeground: 1, FillBackground: 2, Border: 3 });
+
+/** `fm_color_resolution_t` ordinals: how a colour was resolved. */
+export const ColorResolution = Object.freeze({
+  Exact: 0,
+  DefaultTheme: 1,
+  IndexOutOfRange: 2,
+  ThemeUnparseable: 3,
+  AutoContext: 4,
+});
+
+/** Where `getTheme` read the theme from (the C `out_source` values). */
+export const ThemeSource = Object.freeze({ Part: 0, Default: 1, Unparseable: 2 });
+
+/** Where `getEffectiveStyle` took its xf from. */
+export const EffectiveStyleSource = Object.freeze({ Cell: 0, Row: 1, Column: 2, Default: 3 });
+
 /** External-link kinds (mirror of `formulon::io::ExternalLinkRecord::Kind`). */
 export const ExternalLinkKind = Object.freeze({ Unknown: 0, ExternalBook: 1, Ole: 2, Dde: 3 });
 
@@ -270,6 +288,10 @@ export default {
   SheetVisibility,
   GeometryMode,
   DisplayStatus,
+  ColorContext,
+  ColorResolution,
+  ThemeSource,
+  EffectiveStyleSource,
   ExternalLinkKind,
   ErrorCode,
   WorkbookFormat,

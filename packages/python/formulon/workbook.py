@@ -41,6 +41,8 @@ __all__ = [
     "CfColor",
     "CfMatch",
     "CfValueObject",
+    "ColorContext",
+    "ColorResolution",
     "ColorSpec",
     "ColumnLayout",
     "Comment",
@@ -53,6 +55,7 @@ __all__ = [
     "DefinedName",
     "DifferentialFormat",
     "DisplayStatus",
+    "EffectiveStyle",
     "ErrorCode",
     "ExternalLink",
     "ExternalLinkKind",
@@ -90,12 +93,17 @@ __all__ = [
     "RectPt",
     "RowLayout",
     "SaveDiagnostics",
+    "ResolvedColor",
     "SheetFormatDefaults",
     "SheetProtection",
     "SheetView",
     "SheetVisibility",
     "SpillInfo",
+    "EffectiveStyleSource",
     "Table",
+    "Theme",
+    "ThemeFonts",
+    "ThemeSource",
     "Value",
     "ValueKind",
     "WidthModel",
@@ -314,6 +322,42 @@ class DisplayStatus(IntEnum):
     OK = 0
     OVERFLOW = 1
     INVALID_FORMAT = 2
+
+
+class ColorContext(IntEnum):
+    """Where a colour is used (``fm_color_context_t``); decides what auto means."""
+
+    FONT = 0
+    FILL_FOREGROUND = 1
+    FILL_BACKGROUND = 2
+    BORDER = 3
+
+
+class ColorResolution(IntEnum):
+    """How a colour was resolved (``fm_color_resolution_t``)."""
+
+    EXACT = 0
+    DEFAULT_THEME = 1
+    INDEX_OUT_OF_RANGE = 2
+    THEME_UNPARSEABLE = 3
+    AUTO_CONTEXT = 4
+
+
+class ThemeSource(IntEnum):
+    """Where the reported theme colours came from."""
+
+    PART = 0
+    DEFAULT = 1
+    UNPARSEABLE = 2
+
+
+class EffectiveStyleSource(IntEnum):
+    """Which level supplied a cell's effective xf."""
+
+    CELL = 0
+    ROW = 1
+    COLUMN = 2
+    DEFAULT = 3
 
 
 class CalcMode(IntEnum):
@@ -1433,10 +1477,58 @@ class CellStyle:
 
     name: str
     xf_id: int
-    builtin_id: int
-    i_level: int
+    builtin_id: int = CELL_STYLE_BUILTIN_ID_NONE
+    i_level: int = 0
+    hidden: bool = False
+    custom_builtin: bool = False
+
+
+@dataclass(frozen=True)
+class ThemeFonts:
+    """The theme's major (heading) and minor (body) typefaces."""
+
+    major_latin: str = ""
+    major_east_asian: str = ""
+    minor_latin: str = ""
+    minor_east_asian: str = ""
+
+
+@dataclass(frozen=True)
+class Theme:
+    """The theme read back: ``colors`` are 12 ``0xFFRRGGBB`` values in ``a:clrScheme`` order."""
+
+    source: ThemeSource
+    colors: List[int]
+    fonts: ThemeFonts
+
+
+@dataclass(frozen=True)
+class ResolvedColor:
+    """A colour resolved to ``0xAARRGGBB`` and how it was resolved."""
+
+    argb: int
+    resolution: ColorResolution
+
+
+@dataclass(frozen=True)
+class EffectiveStyle:
+    """The formatting a cell shows, read from its selected xf record.
+
+    ``borders`` holds left, right, top, bottom, diagonal.
+    """
+
+    xf_index: int
+    source: EffectiveStyleSource
+    font_index: int
+    fill_index: int
+    border_index: int
+    font: ResolvedColor
+    fill_foreground: ResolvedColor
+    fill_background: ResolvedColor
+    borders: List[ResolvedColor]
+    locked: bool
     hidden: bool
-    custom_builtin: bool
+    num_fmt_code: str
 
 
 @dataclass(frozen=True)
@@ -5403,23 +5495,157 @@ class Workbook:
             for owned_ptr in owned:
                 LIB.free(owned_ptr)
 
-    def set_cell_style(self, name: str, xf_id: int, builtin_id: int = CELL_STYLE_BUILTIN_ID_NONE) -> None:
-        """Add or replace a named ``<cellStyle>`` record.
+    def set_cell_style(self, record: CellStyle) -> None:
+        """Add or replace the named ``<cellStyle>`` record ``record.name``.
 
-        ``xf_id`` must reference an existing named-style xf -- register one
-        with :meth:`add_cell_style_xf` first. ``builtin_id`` is an Excel
-        built-in style ordinal (0..47); leave it at
+        ``record.xf_id`` must reference an existing named-style xf -- register
+        one with :meth:`add_cell_style_xf` first. ``builtin_id`` is an Excel
+        built-in style ordinal (0..53); leave it at
         ``CELL_STYLE_BUILTIN_ID_NONE`` for a custom style.
+        """
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.CELL_STYLE_RECORD)
+        owned: List[int] = []
+        try:
+            S.CELL_STYLE_RECORD.pack(
+                LIB,
+                ptr,
+                {
+                    "xf_id": _uint(record.xf_id, "xf_id"),
+                    "builtin_id": _uint(record.builtin_id, "builtin_id"),
+                    "i_level": _uint(record.i_level, "i_level"),
+                    "hidden": 1 if record.hidden else 0,
+                    "custom_builtin": 1 if record.custom_builtin else 0,
+                },
+            )
+            S.write_str_field(LIB, ptr, S.CELL_STYLE_RECORD, "name", record.name, owned, allow_empty=True)
+            _check(LIB.fm_styles_set_cell_style(h, ptr), "fm_styles_set_cell_style")
+        finally:
+            LIB.free(ptr)
+            for owned_ptr in owned:
+                LIB.free(owned_ptr)
+
+    def remove_cell_style(self, name: str) -> None:
+        """Remove the named cell style ``name``.
+
+        Cell xfs inheriting from it are repointed at Normal; no xf index
+        shifts. The Normal style and unknown names raise ``FormulonError``.
         """
         h = self._require()
         name_ptr, _ = LIB.alloc_utf8(name)
         try:
-            _check(
-                LIB.fm_styles_set_cell_style(h, name_ptr, _uint(xf_id, "xf_id"), _uint(builtin_id, "builtin_id")),
-                "fm_styles_set_cell_style",
-            )
+            _check(LIB.fm_styles_remove_cell_style(h, name_ptr), "fm_styles_remove_cell_style")
         finally:
             LIB.free(name_ptr)
+
+    def get_theme(self) -> Theme:
+        """Read the theme's 12 scheme colours and typefaces.
+
+        The default theme is reported when the part is absent or unparseable;
+        ``Theme.source`` tells the cases apart.
+        """
+        h = self._require()
+        colors_ptr = S.alloc_struct(LIB, S.THEME_COLORS)
+        fonts_ptr = S.alloc_struct(LIB, S.THEME_FONTS)
+        source_ptr = _alloc_out_ptr()
+        try:
+            _check(LIB.fm_workbook_get_theme_colors(h, colors_ptr, source_ptr), "fm_workbook_get_theme_colors")
+            source = LIB.read_i32(source_ptr)
+            colors = list(struct.unpack("<12I", LIB.read_bytes(colors_ptr, S.THEME_COLORS.size)))
+            _check(LIB.fm_workbook_get_theme_fonts(h, fonts_ptr), "fm_workbook_get_theme_fonts")
+            f = S.THEME_FONTS.unpack(LIB, fonts_ptr)
+            fonts = ThemeFonts(
+                major_latin=LIB.read_cstr(f["major_latin"]),
+                major_east_asian=LIB.read_cstr(f["major_east_asian"]),
+                minor_latin=LIB.read_cstr(f["minor_latin"]),
+                minor_east_asian=LIB.read_cstr(f["minor_east_asian"]),
+            )
+            return Theme(source=ThemeSource(source), colors=colors, fonts=fonts)
+        finally:
+            LIB.free(colors_ptr)
+            LIB.free(fonts_ptr)
+            LIB.free(source_ptr)
+
+    def set_theme_colors(self, colors: Sequence[int]) -> None:
+        """Replace the theme's 12 scheme colours (``a:clrScheme`` order; alpha ignored)."""
+        h = self._require()
+        values = [_uint(c, "colors") for c in colors]
+        if len(values) != 12:
+            raise ValueError(f"formulon: colors must hold 12 entries, got {len(values)}")
+        ptr = S.alloc_struct(LIB, S.THEME_COLORS)
+        try:
+            LIB.write_bytes(ptr, struct.pack("<12I", *values))
+            _check(LIB.fm_workbook_set_theme_colors(h, ptr), "fm_workbook_set_theme_colors")
+        finally:
+            LIB.free(ptr)
+
+    def set_theme_fonts(self, fonts: ThemeFonts) -> None:
+        """Replace the theme's major and minor typefaces."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.THEME_FONTS)
+        owned: List[int] = []
+        try:
+            for fname in ("major_latin", "major_east_asian", "minor_latin", "minor_east_asian"):
+                S.write_str_field(LIB, ptr, S.THEME_FONTS, fname, getattr(fonts, fname), owned, allow_empty=True)
+            _check(LIB.fm_workbook_set_theme_fonts(h, ptr), "fm_workbook_set_theme_fonts")
+        finally:
+            LIB.free(ptr)
+            for owned_ptr in owned:
+                LIB.free(owned_ptr)
+
+    def resolve_color(self, spec: ColorSpec, context: Union[ColorContext, int] = ColorContext.FONT) -> ResolvedColor:
+        """Resolve ``spec`` to the ``0xAARRGGBB`` Excel renders.
+
+        ``context`` decides what an automatic or absent colour means (black
+        for font and border, white for fills).
+        """
+        h = self._require()
+        spec_ptr = S.alloc_struct(LIB, S.COLOR_SPEC)
+        argb_ptr = _alloc_out_ptr()
+        res_ptr = _alloc_out_ptr()
+        try:
+            _pack_color(spec_ptr, spec)
+            _check(
+                LIB.fm_workbook_resolve_color(h, spec_ptr, _sint(context, "context"), argb_ptr, res_ptr),
+                "fm_workbook_resolve_color",
+            )
+            return ResolvedColor(LIB.read_u32(argb_ptr), ColorResolution(LIB.read_i32(res_ptr)))
+        finally:
+            LIB.free(spec_ptr)
+            LIB.free(argb_ptr)
+            LIB.free(res_ptr)
+
+    def get_effective_style(self, sheet: int, row: int, col: int) -> EffectiveStyle:
+        """Read the effective style of the cell at ``(row, col)``; the cell need not exist."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.EFFECTIVE_STYLE)
+        try:
+            _check(
+                LIB.fm_sheet_get_effective_style(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), ptr
+                ),
+                "fm_sheet_get_effective_style",
+            )
+            d = S.EFFECTIVE_STYLE.unpack(LIB, ptr)
+            offsets = S.EFFECTIVE_STYLE.offsets
+            border_argb = struct.unpack("<5I", LIB.read_bytes(ptr + offsets["border_argb"][1], 20))
+            border_res = struct.unpack("<5i", LIB.read_bytes(ptr + offsets["border_resolution"][1], 20))
+            return EffectiveStyle(
+                xf_index=d["xf_index"],
+                source=EffectiveStyleSource(d["source"]),
+                font_index=d["font_index"],
+                fill_index=d["fill_index"],
+                border_index=d["border_index"],
+                font=ResolvedColor(d["font_argb"], ColorResolution(d["font_resolution"])),
+                fill_foreground=ResolvedColor(d["fill_fg_argb"], ColorResolution(d["fill_fg_resolution"])),
+                fill_background=ResolvedColor(d["fill_bg_argb"], ColorResolution(d["fill_bg_resolution"])),
+                borders=[ResolvedColor(a, ColorResolution(r)) for a, r in zip(border_argb, border_res)],
+                locked=bool(d["locked"]),
+                hidden=bool(d["hidden"]),
+                num_fmt_code=LIB.read_cstr(d["num_fmt_code"]),
+            )
+        finally:
+            LIB.free(ptr)
 
     def get_cell_style(self, index: int) -> CellStyle:
         """Return the named cell style at ``index``."""

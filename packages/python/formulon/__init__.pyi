@@ -230,6 +230,30 @@ class DisplayStatus(IntEnum):
     OVERFLOW = 1
     INVALID_FORMAT = 2
 
+class ColorContext(IntEnum):
+    FONT = 0
+    FILL_FOREGROUND = 1
+    FILL_BACKGROUND = 2
+    BORDER = 3
+
+class ColorResolution(IntEnum):
+    EXACT = 0
+    DEFAULT_THEME = 1
+    INDEX_OUT_OF_RANGE = 2
+    THEME_UNPARSEABLE = 3
+    AUTO_CONTEXT = 4
+
+class ThemeSource(IntEnum):
+    PART = 0
+    DEFAULT = 1
+    UNPARSEABLE = 2
+
+class EffectiveStyleSource(IntEnum):
+    CELL = 0
+    ROW = 1
+    COLUMN = 2
+    DEFAULT = 3
+
 class CalcMode(IntEnum):
     AUTO = 0
     MANUAL = 1
@@ -912,6 +936,68 @@ class CellStyle:
     i_level: int
     hidden: bool
     custom_builtin: bool
+    def __init__(
+        self,
+        name: str,
+        xf_id: int,
+        builtin_id: int = ...,
+        i_level: int = ...,
+        hidden: bool = ...,
+        custom_builtin: bool = ...,
+    ) -> None: ...
+
+class ThemeFonts:
+    major_latin: str
+    major_east_asian: str
+    minor_latin: str
+    minor_east_asian: str
+    def __init__(
+        self,
+        major_latin: str = ...,
+        major_east_asian: str = ...,
+        minor_latin: str = ...,
+        minor_east_asian: str = ...,
+    ) -> None: ...
+
+class Theme:
+    source: ThemeSource
+    colors: List[int]
+    fonts: ThemeFonts
+    def __init__(self, source: ThemeSource, colors: List[int], fonts: ThemeFonts) -> None: ...
+
+class ResolvedColor:
+    argb: int
+    resolution: ColorResolution
+    def __init__(self, argb: int, resolution: ColorResolution) -> None: ...
+
+class EffectiveStyle:
+    xf_index: int
+    source: EffectiveStyleSource
+    font_index: int
+    fill_index: int
+    border_index: int
+    font: ResolvedColor
+    fill_foreground: ResolvedColor
+    fill_background: ResolvedColor
+    borders: List[ResolvedColor]
+    locked: bool
+    hidden: bool
+    num_fmt_code: str
+    def __init__(
+        self,
+        xf_index: int,
+        source: EffectiveStyleSource,
+        font_index: int,
+        fill_index: int,
+        border_index: int,
+        font: ResolvedColor,
+        fill_foreground: ResolvedColor,
+        fill_background: ResolvedColor,
+        borders: List[ResolvedColor],
+        locked: bool,
+        hidden: bool,
+        num_fmt_code: str,
+    ) -> None: ...
 
 class ExternalLink:
     index: int
@@ -1355,7 +1441,13 @@ class Workbook:
         cell_xfs: Optional[Sequence[CellXf]] = ...,
     ) -> StyleBatchIndices: ...
     def add_dxf(self, record: DifferentialFormat) -> int: ...
-    def set_cell_style(self, name: str, xf_id: int, builtin_id: int = ...) -> None: ...
+    def set_cell_style(self, record: CellStyle) -> None: ...
+    def remove_cell_style(self, name: str) -> None: ...
+    def get_theme(self) -> Theme: ...
+    def set_theme_colors(self, colors: Sequence[int]) -> None: ...
+    def set_theme_fonts(self, fonts: ThemeFonts) -> None: ...
+    def resolve_color(self, spec: ColorSpec, context: Union[ColorContext, int] = ...) -> ResolvedColor: ...
+    def get_effective_style(self, sheet: int, row: int, col: int) -> EffectiveStyle: ...
     def get_cell_style(self, index: int) -> CellStyle: ...
     def get_cell_style_xf(self, index: int) -> CellXf: ...
 

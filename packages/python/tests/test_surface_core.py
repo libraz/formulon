@@ -80,6 +80,9 @@ class StructLayoutTests(unittest.TestCase):
         "PRINT_TITLES": 24,
         # Five `uint32`s, then four tail-aligned `double`s.
         "PAGE_LAYOUT": 56,
+        "THEME_COLORS": 48,
+        "THEME_FONTS": 16,
+        "EFFECTIVE_STYLE": 96,
     }
 
     def test_struct_sizes(self) -> None:

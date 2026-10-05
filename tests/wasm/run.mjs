@@ -20,6 +20,7 @@ import { registerPivotRegressions } from './run_pivot_regressions.mjs';
 import { registerSheetPivot } from './run_sheet_pivot.mjs';
 import { registerStyles } from './run_styles.mjs';
 import { registerSurfaceRecalc } from './run_surface_recalc.mjs';
+import { registerThemeStyles } from './run_theme_styles.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,6 +55,7 @@ async function run() {
   registerMetadataLayout(Module, test);
   registerPivotRegressions(Module, test);
   registerCellGeometryDisplay(Module, test);
+  registerThemeStyles(Module, test);
 
   // ---- Run --------------------------------------------------------------
   for (const c of cases) {

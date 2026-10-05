@@ -123,6 +123,10 @@ function envelopeProbes(wb) {
     ['FormulaResult', true, () => wb.getFormula(99, 0, 0)],
     ['CellsInRangeResult', true, () => wb.getCellsInRange(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
     ['DisplayTextResult', true, () => wb.getDisplayText(99, 0, 0)],
+    // A released handle is the only failure path of `getTheme`.
+    ['ThemeResult', false, () => wb.getTheme()],
+    ['ResolvedColorResult', true, () => wb.resolveColor({ kind: 0 }, 99)],
+    ['EffectiveStyleResult', true, () => wb.getEffectiveStyle(99, 0, 0)],
   ];
 }
 

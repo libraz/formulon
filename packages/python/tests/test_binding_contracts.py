@@ -21,6 +21,7 @@ from unittest import mock
 import formulon
 from formulon import (
     CalcMode,
+    CellStyle,
     CellXf,
     ConditionalFormatInput,
     DifferentialFormat,
@@ -600,7 +601,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             xf_id = wb.add_cell_style_xf(StyleAndCalcAccessorTests._xf())
             before = wb.cell_style_count()
-            wb.set_cell_style("MyStyle", xf_id)
+            wb.set_cell_style(CellStyle("MyStyle", xf_id))
             names = [wb.get_cell_style(i).name for i in range(wb.cell_style_count())]
         self.assertGreater(len(names), before)
         self.assertIn("MyStyle", names)
@@ -608,7 +609,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
     def test_named_cell_style_rejects_an_unregistered_xf_id(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.set_cell_style("Bogus", 9999)
+                wb.set_cell_style(CellStyle("Bogus", 9999))
 
 
 class OneShotEvaluationTests(unittest.TestCase):

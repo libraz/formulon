@@ -347,7 +347,21 @@ class JsWorkbook {
   emscripten::val getCellStyle(uint32_t index) const;
   emscripten::val getCellStyleXf(uint32_t index) const;
   JsAddStyleResult addCellStyleXf(emscripten::val record);
-  JsStatus setCellStyle(const std::string& name, uint32_t xfId, uint32_t builtinId);
+  /// Adds or replaces a `<cellStyle>` from `{ name, xfId, builtinId, iLevel, hidden, customBuiltin }`.
+  JsStatus setCellStyle(emscripten::val record);
+  /// Removes the named style; cell formats that used it fall back to Normal.
+  JsStatus removeCellStyle(const std::string& name);
+
+  // ---- Theme, colour resolution and effective style ----------------------
+
+  /// `{ status, source, colors, fonts }`: the 12 scheme colours in `a:clrScheme` order and the theme typefaces.
+  emscripten::val getTheme() const;
+  JsStatus setThemeColors(emscripten::val colors);
+  JsStatus setThemeFonts(emscripten::val fonts);
+  /// `{ status, argb, resolution }` for a `ColorSpec` used in `context` (`ColorContext.*`).
+  emscripten::val resolveColor(emscripten::val spec, int32_t context) const;
+  /// `{ status, xfIndex, source, ..., font, borders, numFmtCode }`: the formatting a cell shows.
+  emscripten::val getEffectiveStyle(uint32_t sheet, uint32_t row, uint32_t col) const;
 
   emscripten::val getExternalLinks() const;
 

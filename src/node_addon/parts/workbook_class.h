@@ -317,6 +317,15 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value CellStyleXfCount(const Napi::CallbackInfo& info);
   Napi::Value GetCellStyle(const Napi::CallbackInfo& info);
   Napi::Value GetCellStyleXf(const Napi::CallbackInfo& info);
+  Napi::Value SetCellStyle(const Napi::CallbackInfo& info);
+  Napi::Value RemoveCellStyle(const Napi::CallbackInfo& info);
+
+  // Theme, colour resolution, effective style.
+  Napi::Value GetTheme(const Napi::CallbackInfo& info);
+  Napi::Value SetThemeColors(const Napi::CallbackInfo& info);
+  Napi::Value SetThemeFonts(const Napi::CallbackInfo& info);
+  Napi::Value ResolveColor(const Napi::CallbackInfo& info);
+  Napi::Value GetEffectiveStyle(const Napi::CallbackInfo& info);
 
   // Sheet UI features (merges, comments, hyperlinks, validations).
   Napi::Value AddMerge(const Napi::CallbackInfo& info);

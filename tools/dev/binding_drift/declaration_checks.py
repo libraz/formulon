@@ -53,7 +53,6 @@ WASM_ONLY_METHODS = {
     "createTable",
     "getSheetAutoFilterXml",
     "removeTable",
-    "setCellStyle",
     "setSheetAutoFilterXml",
     "updateTable",
 }

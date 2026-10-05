@@ -1612,6 +1612,108 @@ export interface ExternalLinkRecord {
   kind: number;
 }
 
+/** Argument of `Workbook.setCellStyle`. Mirrors `CellStyleResult` without the status. */
+export interface CellStyleRecord {
+  /** Display name of the style. */
+  name: string;
+  /** Index into the `<cellStyleXfs>` table; defaults to 0. */
+  xfId?: number;
+  /** OOXML built-in ordinal (`0..53`); defaults to `0xFFFFFFFF` (custom). */
+  builtinId?: number;
+  /** Outline level of the `RowLevel_n` / `ColLevel_n` styles; defaults to 0. */
+  iLevel?: number;
+  hidden?: boolean;
+  customBuiltin?: boolean;
+}
+
+/** Where a colour is used; decides what an automatic colour means. Mirrors `fm_color_context_t`. */
+export enum ColorContext {
+  Font = 0,
+  FillForeground = 1,
+  FillBackground = 2,
+  Border = 3,
+}
+
+/** How a colour was resolved. Mirrors `fm_color_resolution_t`. `Exact` is a literal or workbook-supplied
+ *  colour; `DefaultTheme` / `ThemeUnparseable` mean the default (Office 2013-2022) theme was used because
+ *  the theme part is absent / unparseable; `IndexOutOfRange` is black; `AutoContext` is an automatic colour
+ *  (black for font and border, white for fills). */
+export enum ColorResolution {
+  Exact = 0,
+  DefaultTheme = 1,
+  IndexOutOfRange = 2,
+  ThemeUnparseable = 3,
+  AutoContext = 4,
+}
+
+/** Where `getTheme` read the theme from. Mirrors the C `out_source` values. */
+export enum ThemeSource {
+  Part = 0,
+  Default = 1,
+  Unparseable = 2,
+}
+
+/** Where `getEffectiveStyle` took its xf from. */
+export enum EffectiveStyleSource {
+  Cell = 0,
+  Row = 1,
+  Column = 2,
+  Default = 3,
+}
+
+/** The theme's typefaces; `*EastAsian` is the `a:ea` face, else the `Jpan` script face. */
+export interface ThemeFonts {
+  majorLatin: string;
+  majorEastAsian: string;
+  minorLatin: string;
+  minorEastAsian: string;
+}
+
+/** Return type of `Workbook.getTheme()`. */
+export interface ThemeResult {
+  status: Status;
+  /** One of `ThemeSource.*`. */
+  source: ThemeSource;
+  /** 0xFFRRGGBB in `clrScheme` order: dk1, lt1, dk2, lt2, accent1..6, hlink, folHlink. */
+  colors: number[];
+  fonts: ThemeFonts;
+}
+
+/** A resolved colour: 0xFFRRGGBB plus how it was obtained. */
+export interface ResolvedColor {
+  argb: number;
+  resolution: ColorResolution;
+}
+
+/** Return type of `Workbook.resolveColor(...)`. */
+export interface ResolvedColorResult extends ResolvedColor {
+  status: Status;
+}
+
+/** Return type of `Workbook.getEffectiveStyle(...)`. */
+export interface EffectiveStyleResult {
+  status: Status;
+  xfIndex: number;
+  /** One of `EffectiveStyleSource.*`. */
+  source: EffectiveStyleSource;
+  fontIndex: number;
+  fillIndex: number;
+  borderIndex: number;
+  font: ResolvedColor;
+  fillForeground: ResolvedColor;
+  fillBackground: ResolvedColor;
+  borders: {
+    left: ResolvedColor;
+    right: ResolvedColor;
+    top: ResolvedColor;
+    bottom: ResolvedColor;
+    diagonal: ResolvedColor;
+  };
+  locked: boolean;
+  hidden: boolean;
+  numFmtCode: string;
+}
+
 /** Return type of `Workbook.getCellStyle(index)`. Mirrors
  *  `formulon::io::CellStyleRecord`. `xfId` indexes into the named-style
  *  xf table reachable via `Workbook.getCellStyleXf(...)`. */
@@ -2539,10 +2641,30 @@ export interface Workbook {
    *  `<cellStyleXfs>` index, which is what `setCellStyle` and
    *  `CellXf.xfId` reference. */
   addCellStyleXf(record: CellXf): AddStyleResult;
-  /** Adds or replaces the `<cellStyle>` entry named `name`. `builtinId` is
-   *  an OOXML ordinal `0..47`, or `0xFFFFFFFF` for a custom style; it is
-   *  required because the binding takes a fixed argument count. */
-  setCellStyle(name: string, xfId: number, builtinId: number): Status;
+  /** Adds or replaces the `<cellStyle>` entry named `record.name`. Absent
+   *  fields default to `xfId` 0, a custom style (`0xFFFFFFFF`), level 0 and
+   *  both flags false. */
+  setCellStyle(record: CellStyleRecord): Status;
+  /** Removes the `<cellStyle>` named `name`; cell formats that used it are
+   *  repointed at the Normal style. */
+  removeCellStyle(name: string): Status;
+
+  /** The 12 theme colours (`clrScheme` order) and the theme typefaces. The
+   *  default theme is reported when the part is absent or unparseable;
+   *  `source` tells the cases apart. */
+  getTheme(): ThemeResult;
+  /** Rewrites the 12 scheme colours (`clrScheme` order, alpha ignored). A
+   *  workbook without a theme part first gets a minimal one. */
+  setThemeColors(colors: number[]): Status;
+  /** Rewrites the theme's major and minor typefaces. */
+  setThemeFonts(fonts: ThemeFonts): Status;
+  /** Resolves a colour specification to ARGB against the theme and the
+   *  indexed palette; `context` decides what an automatic colour means. */
+  resolveColor(spec: ColorSpec, context: ColorContext): ResolvedColorResult;
+  /** The formatting a cell shows: the xf chosen from cell, row, column or
+   *  the default, with its colours resolved. Conditional formatting is not
+   *  applied. */
+  getEffectiveStyle(sheet: number, row: number, col: number): EffectiveStyleResult;
 
   /** Returns every external-link record carried by the workbook in
    *  `<externalReferences>` document order. Empty for fresh workbooks

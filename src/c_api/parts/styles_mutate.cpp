@@ -24,6 +24,7 @@ using formulon::effective_num_fmt;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::num_fmt_id_known;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::set_last_error;
 
 namespace {
 
@@ -582,37 +583,59 @@ extern "C" fm_status_t fm_styles_add_cell_style_xf(fm_workbook_t* wb, fm_cell_xf
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const char* name, uint32_t xf_id,
-                                                uint32_t builtin_id) {
+extern "C" fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const fm_cell_style_record_t* record) {
   clear_last_error();
-  if (wb == nullptr || name == nullptr) {
+  if (wb == nullptr || record == nullptr || record->name == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_set_cell_style: NULL argument");
   }
   auto& styles = wb->workbook().mutable_styles();
-  if (name[0] == '\0' || xf_id >= styles.cell_style_xfs.size()) {
+  if (record->name[0] == '\0' || record->xf_id >= styles.cell_style_xfs.size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_styles_set_cell_style: invalid name or xf_id");
   }
-  // The OOXML ordinal space is 0..47; anything else must use the sentinel,
-  // which suppresses the attribute instead of writing an unknown ordinal.
-  if (builtin_id > 47U && builtin_id != FM_CELL_STYLE_BUILTIN_ID_NONE) {
+  // Anything past the OOXML ordinal space must use the sentinel, which
+  // suppresses the attribute instead of writing an unknown ordinal.
+  const uint32_t builtin_id = record->builtin_id;
+  if (builtin_id > formulon::CellStyleRecord::kBuiltinIdMax && builtin_id != FM_CELL_STYLE_BUILTIN_ID_NONE) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_styles_set_cell_style: builtin_id out of range",
                              "builtin_id=" + std::to_string(builtin_id));
   }
-  for (auto& style : styles.cell_styles) {
-    if (style.name == name) {
-      style.xf_id = xf_id;
-      style.builtin_id = builtin_id;
+  // Only RowLevel_n / ColLevel_n carry an outline level.
+  const uint32_t max_level = (builtin_id == 1U || builtin_id == 2U) ? 6U : 0U;
+  if (record->i_level > max_level) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_set_cell_style: i_level out of range",
+        "builtin_id=" + std::to_string(builtin_id) + " i_level=" + std::to_string(record->i_level));
+  }
+  formulon::CellStyleRecord style;
+  style.name = record->name;
+  style.xf_id = record->xf_id;
+  style.builtin_id = builtin_id;
+  style.i_level = record->i_level;
+  style.hidden = record->hidden != 0;
+  style.custom_builtin = record->custom_builtin != 0;
+  for (auto& existing : styles.cell_styles) {
+    if (existing.name == style.name) {
+      existing = std::move(style);
       return 0;
     }
   }
-  formulon::CellStyleRecord style;
-  style.name = name;
-  style.xf_id = xf_id;
-  style.builtin_id = builtin_id;
   styles.cell_styles.push_back(std::move(style));
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_remove_cell_style(fm_workbook_t* wb, const char* name) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_remove_cell_style: NULL argument");
+  }
+  auto r = formulon::remove_cell_style(wb->workbook().mutable_styles(), name);
+  if (!r) {
+    return set_last_error(r.error());
+  }
   return 0;
 }
 
