@@ -702,6 +702,15 @@ if(Python3_Interpreter_FOUND)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   set_tests_properties(formulon_divergence_projection_unit PROPERTIES LABELS "oracle;oracle-metadata")
+  # The DataBar / IconSet match payloads are computed from documented
+  # semantics rather than captured, so this is the only check on them that
+  # does not need Excel.
+  add_test(
+    NAME formulon_cf_visual_semantics_unit
+    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.cf_visual_semantics_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(formulon_cf_visual_semantics_unit PROPERTIES LABELS "oracle;oracle-metadata")
   # This entry covers the spec and address handling only. The suite's
   # authoring half needs the Formulon Python binding, which the oracle
   # venv does not install -- it carries the capture dependencies (PyYAML,
