@@ -61,6 +61,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/sax_shared_formula_test.cpp
   unit/io/sax_xml_reader_test.cpp
   unit/io/sheet_name_validation_test.cpp
+  unit/io/pivot_table_reader_corruption_test.cpp
+  unit/io/pivot_table_reader_filters_test.cpp
+  unit/io/pivot_table_reader_attributes_test.cpp
   unit/io/sheet_reader_lexing_parity_test.cpp
   unit/io/sheet_reader_test.cpp
   unit/io/sst_reader_test.cpp
@@ -85,6 +88,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/feature_records_test.cpp
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
+  unit/io/xlsb_roundtrip_defined_names_test.cpp
+  unit/io/xlsb_roundtrip_numeric_layout_test.cpp
   unit/io/xlsb/ptg_test.cpp
   unit/io/xlsb/ptg_class_fixture_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
@@ -92,12 +97,21 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/record_test.cpp
   unit/io/xlsb/record_writer_test.cpp
   unit/io/xlsb/sheet_tail_test.cpp
+  unit/io/xlsb/ptg_codec_function_classes_test.cpp
+  unit/io/xlsb/ptg_codec_scalar_array_test.cpp
+  unit/io/xlsb/ptg_codec_decoder_validation_test.cpp
   unit/io/xlsb/sst_writer_test.cpp
+  unit/io/xlsb/reader_formula_test.cpp
+  unit/io/xlsb/reader_validation_test.cpp
+  unit/io/xlsb/reader_passthrough_test.cpp
   unit/io/xlsb/writer_test.cpp
   unit/io/xlsb_fidelity_test.cpp
   unit/io/xlsb_phonetic_test.cpp
   unit/io/external_link_fixture_test.cpp
   unit/io/xlsb_pivot_fixture_test.cpp
+  unit/io/xlsb/writer_formula_test.cpp
+  unit/io/xlsb/writer_layout_test.cpp
+  unit/io/xlsb/writer_metadata_test.cpp
   unit/io/xlsb_retained_part_staleness_test.cpp
   unit/io/xlsb_reader_contract_test.cpp
   unit/io/ooxml_output_contract_test.cpp

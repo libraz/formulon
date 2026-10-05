@@ -1,11 +1,4 @@
-//
-// Round-trip tests for the MS-XLSB Ptg codec (encoder + decoder).
-//
-// Each case parses an A1 formula to the engine AST, encodes it to a Ptg
-// (`rgce`) byte stream, decodes that stream back to an AST, and asserts
-// the re-formatted formula text matches the original. This exercises the
-// encode <-> decode pair as a single round-trip without needing a full
-// xlsb package.
+// XLSB Ptg codec tests grouped by reference, function, scalar, and validation behavior.
 
 #include <cstdio>
 #include <cstring>
@@ -25,62 +18,18 @@
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
+#include "ptg_codec_test_helpers.h"
 #include "utils/arena.h"
 
 namespace formulon {
 namespace io {
 namespace xlsb {
 namespace {
-
-// Parses `formula` (without leading `=`), encodes to Ptg, decodes back,
-// and returns the re-formatted formula text. `sheet_names` resolves a
-// qualified reference's sheet to its 0-based index on both sides; the
-// `SheetRangeTable` / `XlsbSheetRange` list that actually carries the
-// `ixti` numbering is built here (via `collect_ptg_sheet_ranges` on the
-// encode side, mirrored 1:1 into `XlsbSheetRange`s for decode) so a
-// single-sheet qualified reference and a genuine 3-D range share one
-// `ixti` space exactly as the production writer does.
-std::string RoundTrip(std::string_view formula, const std::vector<std::string>& sheet_names = {}) {
-  Arena enc_arena;
-  parser::Parser p(formula, enc_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr);
-  EXPECT_TRUE(p.errors().empty()) << "parse errors for: " << formula;
-
-  SheetRangeTable sheet_ranges;
-  std::unordered_set<std::uint64_t> seen;
-  collect_ptg_sheet_ranges(*root, sheet_names, sheet_ranges, seen);
-
-  auto encoded = encode_ptgs(*root, sheet_names, sheet_ranges, {}, PtgRootClass::kValue);
-  EXPECT_TRUE(static_cast<bool>(encoded))
-      << "encode failed for: " << formula << " | " << (encoded ? "" : encoded.error().message);
-  if (!encoded) {
-    return "<encode-failed>";
-  }
-
-  std::vector<XlsbSheetRange> decode_ranges;
-  decode_ranges.reserve(sheet_ranges.size());
-  for (const auto& [itab_first, itab_last] : sheet_ranges) {
-    decode_ranges.push_back(XlsbSheetRange{itab_first, itab_last});
-  }
-
-  Arena dec_arena;
-  ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
-  ByteSpan rgcb{encoded.value().rgcb.data(), encoded.value().rgcb.size()};
-  auto decoded = decode_ptgs(rgce, rgcb, dec_arena, sheet_names, {}, decode_ranges, {});
-  EXPECT_TRUE(static_cast<bool>(decoded))
-      << "decode failed for: " << formula << " | " << (decoded ? "" : decoded.error().message);
-  if (!decoded) {
-    return "<decode-failed>";
-  }
-  return parser::format_formula(*decoded.value());
-}
-
+using namespace ptg_codec_test_support;
 TEST(XlsbPtgCodec, ArithmeticWithPrecedence) {
   // `A1+B2*3`: PtgRef, PtgRef, PtgInt, PtgMul, PtgAdd.
   EXPECT_EQ(RoundTrip("A1+B2*3"), "A1+B2*3");
 }
-
 TEST(XlsbPtgCodec, AttrChooseSkipsU16JumpOffsets) {
   // PtgInt(1), followed by PtgAttrChoose with count=1 and two 16-bit
   // jump offsets. [MS-XLSB] 2.5.98.25 defines rgOffset as an array of
@@ -101,7 +50,6 @@ TEST(XlsbPtgCodec, AttrChooseSkipsU16JumpOffsets) {
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "1");
 }
-
 TEST(XlsbPtgCodec, AttrChooseWithMultipleBranchesSkipsU16JumpOffsets) {
   // Same as above but cOffset=2 (three CHOOSE branches), followed by a
   // PtgFuncVar(id=100, CHOOSE) to prove the stream realigns correctly
@@ -123,12 +71,6 @@ TEST(XlsbPtgCodec, AttrChooseWithMultipleBranchesSkipsU16JumpOffsets) {
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "CHOOSE(2,10,20,30)");
 }
-
-// A `BrtName` record local to a sheet other than the formula's own is only
-// reachable as `Sheet!Name`; one local to the host sheet, or workbook
-// scoped, stays unqualified. `PtgNameX` through this workbook's own
-// ExternSheet entry is the qualified spelling, so it names a local record
-// with its sheet even on that sheet (Excel stores `Sheet1!Fn` on Sheet1 so).
 TEST(XlsbPtgCodec, NameLocalToAnotherSheetDecodesSheetQualified) {
   const std::vector<std::string> sheets = {"Sheet1", "My Sheet"};
   const std::vector<XlsbName> names = {XlsbName{1, "Local", false}, XlsbName{0, "Own", false},
@@ -156,11 +98,6 @@ TEST(XlsbPtgCodec, NameLocalToAnotherSheetDecodesSheetQualified) {
     EXPECT_EQ(parser::format_formula(*decoded.value()), c.want);
   }
 }
-
-// Excel 365 writes `Sheet2!Local` as `PtgNameX` through a sheetless
-// book-scope ExternSheet entry (value class at a cell formula's root), and
-// `Sheet2!Fn(3)` as the reference-class name-ref, the argument and
-// `PtgFuncVar(255)`; both read back with the qualifier.
 TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
   const std::vector<std::string> sheets = {"Sheet1", "Sheet2"};
   NameTable table;
@@ -198,10 +135,6 @@ TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
     EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
   }
 }
-
-// A cell reference invoked as a callee is the reference-class `PtgRef` /
-// `PtgRef3d`, the arguments and `PtgFuncVar(255)`; bytes as Excel 365
-// saved `A1(1)` and `Sheet1!LOG10(100)`.
 TEST(XlsbPtgCodec, CellReferenceCalleeMatchesExcelBytes) {
   const std::vector<std::string> sheets = {"Sheet1"};
   struct Case {
@@ -236,36 +169,6 @@ TEST(XlsbPtgCodec, CellReferenceCalleeMatchesExcelBytes) {
     EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
   }
 }
-
-// Encodes `formula` on a one-sheet workbook and returns `rgce` + `rgcb`.
-EncodedFormula EncodeOnSheet1(std::string_view formula, PtgRootClass root_class) {
-  const std::vector<std::string> sheets = {"Sheet1"};
-  Arena arena;
-  parser::Parser p(formula, arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << formula;
-  EXPECT_TRUE(p.errors().empty()) << formula;
-  if (root == nullptr) {
-    return {};
-  }
-  SheetRangeTable ranges;
-  std::unordered_set<std::uint64_t> seen;
-  collect_ptg_sheet_ranges(*root, sheets, ranges, seen);
-  // A cell formula is encoded as typed into Excel 365: with the dynamic-array
-  // mark exactly where Excel gives it one.
-  const PtgEvaluation evaluation =
-      root_class == PtgRootClass::kReference || formula_is_dynamic_array(*root, NameShapes())
-          ? PtgEvaluation::kDynamicArray
-          : PtgEvaluation::kLegacy;
-  auto encoded = encode_ptgs(*root, sheets, ranges, {}, root_class, std::nullopt, evaluation);
-  EXPECT_TRUE(static_cast<bool>(encoded)) << formula << " | " << (encoded ? "" : encoded.error().message);
-  return encoded ? encoded.value() : EncodedFormula{};
-}
-
-// Bytes as Excel 365 saved each formula. A
-// union or intersection of plain references in a cell sits behind the memory
-// token carrying Excel's precomputed result; `PtgMemArea`'s leading four
-// bytes are unused, which Excel leaves uninitialised and this writes as zero.
 TEST(XlsbPtgCodec, ReferenceOperationsMatchExcelBytes) {
   const std::vector<std::uint8_t> a1a2 = {0x25, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0xC0};
   const std::vector<std::uint8_t> b1b2 = {0x25, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0xC0, 0x01, 0xC0};
@@ -307,9 +210,6 @@ TEST(XlsbPtgCodec, ReferenceOperationsMatchExcelBytes) {
     EXPECT_EQ(encoded.rgcb, c.rgcb) << c.formula;
   }
 }
-
-// A defined name's body caches nothing: its root union or intersection sits
-// behind reference-class `PtgMemFunc` (Excel's `UName` / `IName` records).
 TEST(XlsbPtgCodec, NameBodyReferenceOperationsMatchExcelBytes) {
   const std::vector<std::uint8_t> a1a2 = {0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
                                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -332,10 +232,6 @@ TEST(XlsbPtgCodec, NameBodyReferenceOperationsMatchExcelBytes) {
   EXPECT_EQ(EncodeOnSheet1("(Sheet1!$A$1:$A$2,Sheet1!$B$1:$B$2)", PtgRootClass::kReference).rgce, union_want);
   EXPECT_EQ(EncodeOnSheet1("Sheet1!$A$1:$B$2 Sheet1!$B$1:$C$3", PtgRootClass::kReference).rgce, isect_want);
 }
-
-// Excel renders a formula from its tokens, so every parenthesis the text
-// needs is a `PtgParen` right after the subexpression it closes; without
-// them Excel showed `(1+2)*3` as `1+2*3`. `(A1:A2)(1)` is Excel's bytes.
 TEST(XlsbPtgCodec, ParenthesesBecomePtgParen) {
   struct Case {
     const char* formula;
@@ -353,11 +249,6 @@ TEST(XlsbPtgCodec, ParenthesesBecomePtgParen) {
     EXPECT_EQ(RoundTrip(c.formula), c.formula);
   }
 }
-
-// The writer stores a callee with no function id and no hidden-name route
-// as a defined-name call, which is right only for names no one defined; so
-// every built-in has to have one of the two. LET / LAMBDA are lowered by
-// their own AST shapes.
 TEST(XlsbPtgCodec, EveryBuiltinHasAnXlsbEncoding) {
   std::vector<std::string> missing;
   auto check = [&missing](std::string_view name) {
@@ -374,10 +265,6 @@ TEST(XlsbPtgCodec, EveryBuiltinHasAnXlsbEncoding) {
   }
   EXPECT_TRUE(missing.empty()) << (missing.empty() ? "" : missing.front());
 }
-
-// `PtgRefN` / `PtgAreaN` against a base cell, with the bytes Excel 365 saved
-// for tests/fixtures/excel/xlsb_feature_rel.xlsb's conditional formats. The
-// base is the top-left of the sqref's bounding box.
 TEST(XlsbPtgCodec, RelativeReferencesAgainstABaseCellMatchExcelBytes) {
   struct Case {
     const char* formula;
@@ -408,10 +295,6 @@ TEST(XlsbPtgCodec, RelativeReferencesAgainstABaseCellMatchExcelBytes) {
     EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
   }
 }
-
-// A relative offset is taken modulo the grid both ways, so a reference
-// across the grid's edge wraps: from A1 the last cell is one step up and
-// left, and from the last cell A1 is one step down and right.
 TEST(XlsbPtgCodec, RelativeOffsetsWrapAroundTheGrid) {
   struct Case {
     const char* formula;
@@ -439,9 +322,6 @@ TEST(XlsbPtgCodec, RelativeOffsetsWrapAroundTheGrid) {
     EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
   }
 }
-
-// Without a base cell nothing changes: relative references stay `PtgRef`,
-// and a `PtgRefN` has nothing to resolve against.
 TEST(XlsbPtgCodec, RelativeTokensNeedABaseCell) {
   EXPECT_EQ(EncodeOnSheet1("A1", PtgRootClass::kValue).rgce,
             (std::vector<std::uint8_t>{0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0}));
@@ -450,729 +330,6 @@ TEST(XlsbPtgCodec, RelativeTokensNeedABaseCell) {
   auto decoded = decode_ptgs(ByteSpan{ref_n.data(), ref_n.size()}, {}, arena, {}, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
-}
-
-// A cell formula calling a volatile function opens with `PtgAttrSemi`;
-// bytes as Excel 365 saved them. Without it
-// Excel did not recalculate an engine-written =RAND() on F9.
-TEST(XlsbPtgCodec, VolatileFormulasOpenWithAttrSemi) {
-  struct Case {
-    const char* formula;
-    std::vector<std::uint8_t> rgce;
-  };
-  const Case cases[] = {
-      {"RAND()", {0x19, 0x01, 0x00, 0x00, 0x41, 0x3F, 0x00}},
-      {"RAND()+A1", {0x19, 0x01, 0x00, 0x00, 0x41, 0x3F, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x03}},
-      {"SUM(A1,RAND())",
-       {0x19, 0x01, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x41, 0x3F, 0x00, 0x42, 0x02, 0x04, 0x00}},
-      {"OFFSET(A1,0,0)", {0x19, 0x01, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0,
-                          0x1E, 0x00, 0x00, 0x1E, 0x00, 0x00, 0x42, 0x03, 0x4E, 0x00}},
-      {"A1+1", {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x1E, 0x01, 0x00, 0x03}},
-  };
-  for (const Case& c : cases) {
-    EXPECT_EQ(EncodeOnSheet1(c.formula, PtgRootClass::kValue).rgce, c.rgce) << c.formula;
-    EXPECT_EQ(RoundTrip(c.formula), c.formula);
-  }
-  // A defined name's body is marked the same way (Excel's `MyNow` = NOW()).
-  const std::vector<std::uint8_t> name_body = EncodeOnSheet1("NOW()", PtgRootClass::kReference).rgce;
-  ASSERT_GE(name_body.size(), 4U);
-  EXPECT_EQ(std::vector<std::uint8_t>(name_body.begin(), name_body.begin() + 4),
-            (std::vector<std::uint8_t>{0x19, 0x01, 0x00, 0x00}));
-}
-
-// A reference argument takes the class of the parameter it feeds, and an
-// operator's operand the class that parameter gives it; bytes as Excel 365
-// saved them. A reference-class operand
-// under IF made Excel compute =IF(A1>0,A2,A3) as #VALUE!, a value-class one
-// under SUMPRODUCT showed as =SUMPRODUCT(@A1:A2*2).
-TEST(XlsbPtgCodec, ArgumentClassesFollowTheParameter) {
-  struct Case {
-    const char* formula;
-    std::vector<std::uint8_t> rgce;
-  };
-  const Case cases[] = {
-      {"ISNUMBER(A1:A3)",
-       {0x45, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0xC0, 0x41, 0x80, 0x00}},
-      {"INDEX(A1:A3,2)", {0x25, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
-                          0xC0, 0x00, 0xC0, 0x1E, 0x02, 0x00, 0x42, 0x02, 0x1D, 0x00}},
-      {"ABS(A1)", {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x41, 0x18, 0x00}},
-      {"SUMPRODUCT(A1:A2*2)", {0x65, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xC0,
-                               0x00, 0xC0, 0x1E, 0x02, 0x00, 0x05, 0x42, 0x01, 0xE4, 0x00}},
-      {"VLOOKUP(2,A1:A3,1,0)", {0x1E, 0x02, 0x00, 0x25, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
-                                0xC0, 0x00, 0xC0, 0x1E, 0x01, 0x00, 0x1E, 0x00, 0x00, 0x42, 0x04, 0x66, 0x00}},
-      {"IF(A1>0,A2,A3)", {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x1E, 0x00, 0x00, 0x0D, 0x19, 0x02, 0x0B,
-                          0x00, 0x24, 0x01, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x19, 0x08, 0x0E, 0x00, 0x24, 0x02,
-                          0x00, 0x00, 0x00, 0x00, 0xC0, 0x19, 0x08, 0x03, 0x00, 0x42, 0x03, 0x01, 0x00}},
-  };
-  for (const Case& c : cases) {
-    EXPECT_EQ(EncodeOnSheet1(c.formula, PtgRootClass::kValue).rgce, c.rgce) << c.formula;
-  }
-}
-
-// The class list's tail repeats its last letter, or its last two when marked.
-TEST(XlsbPtgCodec, ParameterClassTailRepeats) {
-  EXPECT_EQ(xlsb_parameter_class("SUMPRODUCT", 7), 'F');
-  const char sumifs[] = "RRVRVRV";
-  for (std::uint32_t i = 0; i < 7U; ++i) {
-    EXPECT_EQ(xlsb_parameter_class("sumifs", i), sumifs[i]) << i;
-  }
-  EXPECT_EQ(xlsb_parameter_class("ABS", 0), 'V');
-  EXPECT_EQ(xlsb_parameter_class("NOT.A.FUNCTION", 3), 'V');
-}
-
-// A parenthesised union or intersection called as a function (#REF! in
-// Excel) is stored like any other reference operation there: reference-class
-// `PtgMemArea` caching its rectangles, `PtgParen`, the arguments and
-// `PtgFuncVar(255)`; bytes as Excel 365 saved them.
-TEST(XlsbPtgCodec, ReferenceOperationCalleeMatchesExcelBytes) {
-  const EncodedFormula union_call = EncodeOnSheet1("(A1,B1)(1)", PtgRootClass::kValue);
-  EXPECT_EQ(union_call.rgce, (std::vector<std::uint8_t>{0x26, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x24, 0x00, 0x00,
-                                                        0x00, 0x00, 0x00, 0xC0, 0x24, 0x00, 0x00, 0x00, 0x00, 0x01,
-                                                        0xC0, 0x10, 0x15, 0x1E, 0x01, 0x00, 0x42, 0x02, 0xFF, 0x00}));
-  EXPECT_EQ(union_call.rgcb,
-            (std::vector<std::uint8_t>{0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                       0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}));
-  const EncodedFormula isect_call = EncodeOnSheet1("(A1:B2 B1:B3)(1)", PtgRootClass::kValue);
-  EXPECT_EQ(isect_call.rgce, (std::vector<std::uint8_t>{
-                                 0x26, 0x00, 0x00, 0x00, 0x00, 0x1B, 0x00, 0x25, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
-                                 0x00, 0x00, 0x00, 0xC0, 0x01, 0xC0, 0x25, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00,
-                                 0x00, 0x01, 0xC0, 0x01, 0xC0, 0x0F, 0x15, 0x1E, 0x01, 0x00, 0x42, 0x02, 0xFF, 0x00}));
-  EXPECT_EQ(isect_call.rgcb, (std::vector<std::uint8_t>{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
-                                                        0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}));
-  EXPECT_EQ(RoundTrip("(A1,B1)(1)"), "(A1,B1)(1)");
-  EXPECT_EQ(RoundTrip("(A1:B2 B1:B3)(1)"), "(A1:B2 B1:B3)(1)");
-}
-
-// Formulas Excel 365 marks dynamic-array on entry because an area is
-// evaluated as an array, and ones it does not (measured).
-TEST(XlsbPtgCodec, ArrayEvaluationFollowsTheParameterClasses) {
-  for (const char* formula : {"A1:A2", "A1:A2*2", "SUM(A1:A2*2)", "COUNTIF(A1:A2,A1:A2)", "AND(A1:A2>0)",
-                              "ISNUMBER(A1:A2)", "LEN(A1:A2)", "IF(A1:A2>0,1,0)", "A1:B2 B2:C3"}) {
-    Arena arena;
-    parser::Parser p(formula, arena);
-    const parser::AstNode* root = p.parse();
-    ASSERT_NE(root, nullptr) << formula;
-    EXPECT_TRUE(formula_is_dynamic_array(*root, NameShapes())) << formula;
-  }
-  for (const char* formula : {"A1", "A1+1", "SUM(A1:A2)", "SUMPRODUCT(A1:A2)", "MATCH(1,A1:A2,0)",
-                              "VLOOKUP(1,A1:B2,2,0)", "INDEX(A1:A2,1)", "(A1:A2,B1:B2)", "A1 B1", "ROWS(A1:A2)"}) {
-    Arena arena;
-    parser::Parser p(formula, arena);
-    const parser::AstNode* root = p.parse();
-    ASSERT_NE(root, nullptr) << formula;
-    EXPECT_FALSE(formula_is_dynamic_array(*root, NameShapes())) << formula;
-  }
-}
-
-// A legacy formula (no dynamic-array mark) intersects an operator's area
-// operand, so SUM(A1:A2*2) stores it value class where a dynamic-array one
-// stores it array class; bytes as Excel 365 saved a legacy workbook's E1 and
-// its CSE block {=A1:A2*2}.
-TEST(XlsbPtgCodec, LegacyFormulaIntersectsOperatorOperands) {
-  const std::vector<std::uint8_t> area = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0xC0};
-  auto encode = [](const char* formula, PtgEvaluation evaluation) {
-    Arena arena;
-    parser::Parser p(formula, arena);
-    parser::AstNode* root = p.parse();
-    EXPECT_NE(root, nullptr) << formula;
-    auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue, std::nullopt, evaluation);
-    EXPECT_TRUE(static_cast<bool>(encoded)) << formula;
-    return encoded ? encoded.value().rgce : std::vector<std::uint8_t>{};
-  };
-  auto with_class = [&area](std::uint8_t area_ptg, std::initializer_list<std::uint8_t> tail) {
-    std::vector<std::uint8_t> out = {area_ptg};
-    out.insert(out.end(), area.begin(), area.end());
-    out.insert(out.end(), tail);
-    return out;
-  };
-  EXPECT_EQ(encode("SUM(A1:A2*2)", PtgEvaluation::kLegacy),
-            with_class(0x45, {0x1E, 0x02, 0x00, 0x05, 0x19, 0x10, 0x00, 0x00}));
-  EXPECT_EQ(encode("A1:A2*2", PtgEvaluation::kLegacy), with_class(0x45, {0x1E, 0x02, 0x00, 0x05}));
-  EXPECT_EQ(encode("SUM(A1:A2*2)", PtgEvaluation::kDynamicArray),
-            with_class(0x65, {0x1E, 0x02, 0x00, 0x05, 0x19, 0x10, 0x00, 0x00}));
-}
-
-// A written `@` is a call to the hidden `_xlfn.SINGLE` name in either
-// evaluation mode; bytes as Excel 365 saved `=@A1`, a cell it stored
-// without the dynamic-array mark.
-TEST(XlsbPtgCodec, WrittenAtStoresAsSingleCall) {
-  const NameTable names = {{"_xlfn.SINGLE", 2U}};
-  const std::vector<std::uint8_t> expected = {0x23, 0x02, 0x00, 0x00, 0x00, 0x24, 0x00, 0x00,
-                                              0x00, 0x00, 0x00, 0xC0, 0x42, 0x02, 0xFF, 0x00};
-  for (const PtgEvaluation evaluation : {PtgEvaluation::kLegacy, PtgEvaluation::kDynamicArray}) {
-    Arena arena;
-    parser::Parser p("@A1", arena);
-    parser::AstNode* root = p.parse();
-    ASSERT_NE(root, nullptr);
-    auto encoded = encode_ptgs(*root, {}, {}, names, PtgRootClass::kValue, std::nullopt, evaluation);
-    ASSERT_TRUE(static_cast<bool>(encoded)) << encoded.error().message;
-    EXPECT_EQ(encoded.value().rgce, expected);
-  }
-}
-
-// A legacy formula stores Excel's implied `@` as nothing; a CSE block keeps
-// every written one.
-TEST(XlsbPtgCodec, LegacyFormulaStoresNoImpliedAt) {
-  const NameTable names = {{"_xlfn.SINGLE", 2U}};
-  auto encode = [&names](const char* formula, PtgEvaluation evaluation) {
-    Arena arena;
-    parser::Parser p(formula, arena);
-    parser::AstNode* root = p.parse();
-    EXPECT_NE(root, nullptr) << formula;
-    auto encoded = encode_ptgs(*root, {}, {}, names, PtgRootClass::kValue, std::nullopt, evaluation);
-    EXPECT_TRUE(static_cast<bool>(encoded)) << formula;
-    return encoded ? encoded.value().rgce : std::vector<std::uint8_t>{};
-  };
-  EXPECT_EQ(encode("SUM(@A1:A2*2)", PtgEvaluation::kLegacy), encode("SUM(A1:A2*2)", PtgEvaluation::kLegacy));
-  EXPECT_EQ(encode("@A1:A2", PtgEvaluation::kLegacy), encode("A1:A2", PtgEvaluation::kLegacy));
-  EXPECT_NE(encode("SUM(@A1:A2)", PtgEvaluation::kLegacy), encode("SUM(A1:A2)", PtgEvaluation::kLegacy));
-  EXPECT_NE(encode("@A1:A2", PtgEvaluation::kLegacyArray), encode("A1:A2", PtgEvaluation::kLegacyArray));
-}
-
-// IF, CHOOSE and IFERROR carry the jump attributes Excel writes around their
-// branches: PtgAttrIf past the true branch and its goto, a PtgAttrChoose
-// table, PtgAttrIfError past the fallback, and a PtgAttrGoto after each
-// branch landing on the call token's last byte. Bytes as Excel 365 saved them.
-TEST(XlsbPtgCodec, BranchingCallsCarryExcelsJumpAttributes) {
-  const std::vector<std::uint8_t> a1 = {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};
-  const std::vector<std::uint8_t> ref_a1 = {0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};
-  auto join = [](std::initializer_list<std::vector<std::uint8_t>> parts) {
-    std::vector<std::uint8_t> out;
-    for (const auto& part : parts) {
-      out.insert(out.end(), part.begin(), part.end());
-    }
-    return out;
-  };
-  EXPECT_EQ(EncodeOnSheet1("IF(A1,A1,A1)", PtgRootClass::kValue).rgce,
-            join({a1,
-                  {0x19, 0x02, 0x0B, 0x00},
-                  ref_a1,
-                  {0x19, 0x08, 0x0E, 0x00},
-                  ref_a1,
-                  {0x19, 0x08, 0x03, 0x00, 0x42, 0x03, 0x01, 0x00}}));
-  EXPECT_EQ(EncodeOnSheet1("CHOOSE(A1,A1,A1,A1,A1)", PtgRootClass::kValue).rgce,
-            join({a1,
-                  {0x19, 0x04, 0x04, 0x00, 0x0A, 0x00, 0x15, 0x00, 0x20, 0x00, 0x2B, 0x00, 0x36, 0x00},
-                  ref_a1,
-                  {0x19, 0x08, 0x24, 0x00},
-                  ref_a1,
-                  {0x19, 0x08, 0x19, 0x00},
-                  ref_a1,
-                  {0x19, 0x08, 0x0E, 0x00},
-                  ref_a1,
-                  {0x19, 0x08, 0x03, 0x00, 0x42, 0x05, 0x64, 0x00}}));
-  EXPECT_EQ(EncodeOnSheet1("IFERROR(A1,A1)", PtgRootClass::kValue).rgce,
-            join({a1, {0x19, 0x80, 0x07, 0x00}, ref_a1, {0x19, 0x08, 0x02, 0x00, 0x41, 0xE0, 0x01}}));
-  EXPECT_EQ(RoundTrip("IF(A1>0,CHOOSE(2,A1,B1),IFERROR(1/0,2))"), "IF(A1>0,CHOOSE(2,A1,B1),IFERROR(1/0,2))");
-  EXPECT_EQ(EncodeOnSheet1("IF(A1>0,1)", PtgRootClass::kValue).rgce,
-            join({a1,
-                  {0x1E, 0x00, 0x00, 0x0D, 0x19, 0x02, 0x07, 0x00, 0x1E, 0x01, 0x00, 0x19, 0x08, 0x03, 0x00, 0x42, 0x02,
-                   0x01, 0x00}}));
-}
-
-// A conditional format evaluates an operand under a parameter other than a
-// value one as an array, and everything inside it: references, names and
-// function results take array class (`AND(MONTH(H3)=MONTH(TODAY()),...)` ->
-// 0x6C / 0x61), while the root and its direct operands keep value class.
-// Bytes as Excel 365 saved typed rules anchored at their own cell; the
-// PtgAttrSemi operand, which Excel ignores, is left out of the comparison.
-TEST(XlsbPtgCodec, ConditionalFormatArrayOperandsCarryArrayClassInward) {
-  auto encode = [](const char* formula) {
-    Arena arena;
-    parser::Parser p(formula, arena);
-    parser::AstNode* root = p.parse();
-    EXPECT_NE(root, nullptr) << formula;
-    auto encoded =
-        encode_ptgs(*root, {"S"}, {}, {}, PtgRootClass::kValue, PtgBaseCell{5U, 7U}, PtgEvaluation::kConditionalFormat);
-    EXPECT_TRUE(static_cast<bool>(encoded)) << formula;
-    std::vector<std::uint8_t> rgce = encoded ? encoded.value().rgce : std::vector<std::uint8_t>{};
-    if (rgce.size() >= 4U && rgce[0] == 0x19 && rgce[1] == 0x01) {
-      rgce.erase(rgce.begin() + 2, rgce.begin() + 4);
-    }
-    return rgce;
-  };
-  const std::vector<std::uint8_t> ref_n = {0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};
-  auto join = [](std::initializer_list<std::vector<std::uint8_t>> parts) {
-    std::vector<std::uint8_t> out;
-    for (const auto& part : parts) {
-      out.insert(out.end(), part.begin(), part.end());
-    }
-    return out;
-  };
-  EXPECT_EQ(
-      encode("AND(H6<WEEKDAY(TODAY()))"),
-      join({{0x19, 0x01, 0x6C}, ref_n, {0x61, 0xDD, 0x00, 0x62, 0x01, 0x46, 0x00, 0x09, 0x42, 0x01, 0x24, 0x00}}));
-  EXPECT_EQ(encode("AND(MONTH(H6)=MONTH(TODAY()),YEAR(H6)=YEAR(TODAY()))"),
-            join({{0x19, 0x01, 0x6C},
-                  ref_n,
-                  {0x61, 0x44, 0x00, 0x61, 0xDD, 0x00, 0x61, 0x44, 0x00, 0x0B, 0x6C},
-                  ref_n,
-                  {0x61, 0x45, 0x00, 0x61, 0xDD, 0x00, 0x61, 0x45, 0x00, 0x0B, 0x42, 0x02, 0x24, 0x00}}));
-  EXPECT_EQ(
-      encode("H6<WEEKDAY(TODAY())-1"),
-      join({{0x19, 0x01, 0x4C}, ref_n, {0x41, 0xDD, 0x00, 0x42, 0x01, 0x46, 0x00, 0x1E, 0x01, 0x00, 0x04, 0x09}}));
-}
-
-// A call that can return a reference keeps reference class where its
-// parameter takes one (ROWS, AREAS, SUM, ISREF) and value class in a value
-// parameter or at the root. Bytes as Excel 365 saved them.
-TEST(XlsbPtgCodec, ReferenceReturningCallsFollowTheirSlot) {
-  auto hex = [](std::string_view formula) {
-    std::string out;
-    for (const std::uint8_t b : EncodeOnSheet1(formula, PtgRootClass::kValue).rgce) {
-      char buf[4];
-      std::snprintf(buf, sizeof(buf), "%02x ", b);
-      out += buf;
-    }
-    return out;
-  };
-  const std::string offset = "19 01 00 00 24 00 00 00 00 00 c0 1e 00 00 1e 00 00 ";
-  EXPECT_EQ(hex("ROWS(OFFSET(A1,0,0))"), offset + "22 03 4e 00 41 4c 00 ");
-  EXPECT_EQ(hex("ISREF(OFFSET(A1,0,0))"), offset + "22 03 4e 00 41 69 00 ");
-  EXPECT_EQ(hex("ABS(OFFSET(A1,0,0))"), offset + "42 03 4e 00 41 18 00 ");
-  EXPECT_EQ(hex("OFFSET(A1,0,0)"), offset + "42 03 4e 00 ");
-  EXPECT_EQ(hex("SUM(INDEX(A1:C3,1,1))"),
-            "25 00 00 00 00 02 00 00 00 00 c0 02 c0 1e 01 00 1e 01 00 22 03 1d 00 19 10 00 00 ");
-  EXPECT_EQ(
-      hex("AREAS(IF(TRUE,A1,B1))"),
-      "1d 01 19 02 0b 00 24 00 00 00 00 00 c0 19 08 0e 00 24 00 00 00 00 01 c0 19 08 03 00 22 03 01 00 41 4b 00 ");
-}
-
-// A written pair of parentheses is one PtgParen after its operand, redundant
-// or not; bytes as Excel 365 saved `=AND(A1<(WEEKDAY(TODAY())))`, which
-// decodes back to the same text.
-TEST(XlsbPtgCodec, WrittenParenthesesRoundTripAsPtgParen) {
-  const std::vector<std::uint8_t> excel = {0x19, 0x01, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x41,
-                                           0xDD, 0x00, 0x42, 0x01, 0x46, 0x00, 0x15, 0x09, 0x42, 0x01, 0x24, 0x00};
-  EXPECT_EQ(EncodeOnSheet1("AND(A1<(WEEKDAY(TODAY())))", PtgRootClass::kValue).rgce, excel);
-  Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{excel.data(), excel.size()}, ByteSpan{}, arena, {"Sheet1"}, {}, {}, {});
-  ASSERT_TRUE(static_cast<bool>(decoded));
-  EXPECT_EQ(parser::format_formula(*decoded.value()), "AND(A1<(WEEKDAY(TODAY())))");
-  EXPECT_EQ(RoundTrip("((1+2))*3"), "((1+2))*3");
-}
-
-TEST(XlsbPtgCodec, SumOverArea) {
-  EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
-}
-
-TEST(XlsbPtgCodec, WholeColumnAndRowRefsEncodeAsSentinelAreas) {
-  EXPECT_EQ(RoundTrip("SUM(A:A)"), "SUM(A:A)");
-  EXPECT_EQ(RoundTrip("SUM(1:1)"), "SUM(1:1)");
-  EXPECT_EQ(RoundTrip("SUM($A:B)"), "SUM($A:B)");
-  EXPECT_EQ(RoundTrip("SUM(1:$2)"), "SUM(1:$2)");
-  // Bytes as Excel 365 saved them: the spanned axis is absolute, and a
-  // span of columns or rows is one area.
-  const std::vector<std::uint8_t> full_col_a = {0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x40, 0x00, 0x40};
-  std::vector<std::uint8_t> excel = {0x45};
-  excel.insert(excel.end(), full_col_a.begin(), full_col_a.end());
-  EXPECT_EQ(EncodeOnSheet1("A:A", PtgRootClass::kValue).rgce, excel);
-  EXPECT_EQ(EncodeOnSheet1("A:B", PtgRootClass::kValue).rgce,
-            (std::vector<std::uint8_t>{0x45, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x40, 0x01, 0x40}));
-  EXPECT_EQ(EncodeOnSheet1("SUM(1:2)", PtgRootClass::kValue).rgce,
-            (std::vector<std::uint8_t>{0x25, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x80, 0xFF, 0xBF,
-                                       0x19, 0x10, 0x00, 0x00}));
-}
-
-TEST(XlsbPtgCodec, IfWithStrings) {
-  EXPECT_EQ(RoundTrip("IF(A1>0,\"pos\",\"neg\")"), "IF(A1>0,\"pos\",\"neg\")");
-}
-
-TEST(XlsbPtgCodec, Concat) {
-  EXPECT_EQ(RoundTrip("B1&\"x\""), "B1&\"x\"");
-}
-
-TEST(XlsbPtgCodec, UnaryMinus) {
-  EXPECT_EQ(RoundTrip("-A1"), "-A1");
-}
-
-TEST(XlsbPtgCodec, PostfixPercent) {
-  EXPECT_EQ(RoundTrip("A1%"), "A1%");
-}
-
-TEST(XlsbPtgCodec, ThreeDimensionalReference) {
-  // `Sheet2!A1` resolves through the sheet-name list to a PtgRef3d.
-  const std::vector<std::string> sheets = {"Sheet1", "Sheet2"};
-  EXPECT_EQ(RoundTrip("Sheet2!A1", sheets), "Sheet2!A1");
-}
-
-TEST(XlsbPtgCodec, GenuineThreeDimensionalRangeRoundTrips) {
-  // A genuine multi-sheet range (`Sheet1:Sheet3!B2`) is hand-built here
-  // rather than parsed from text: the text parser does not yet lower
-  // `'Sheet1:Sheet3'!B2` (or an unquoted `Sheet1:Sheet3!B2`) to a `Ref3D`
-  // node, so this exercises the encoder/decoder pair -- the actual XLSB
-  // fidelity contract -- directly. `encode_ptgs` resolves the node's
-  // `(begin, end)` span through a `SheetRangeTable` built the same way
-  // the production writer builds one (`collect_ptg_sheet_ranges`), and
-  // `decode_ptgs` resolves it back through the equivalent `XlsbSheetRange`
-  // list, mirroring how a real `BrtExternSheet` record round-trips.
-  const std::vector<std::string> sheets = {"Sheet1", "Sheet2", "Sheet3"};
-  Arena arena;
-  parser::Reference cell;
-  cell.row = 1;
-  cell.col = 1;  // B2
-  parser::AstNode* node = parser::make_ref3d(arena, "Sheet1", "Sheet3", cell);
-  ASSERT_NE(node, nullptr);
-
-  const SheetRangeTable sheet_ranges = {{0, 2}};  // Sheet1 (itab 0) : Sheet3 (itab 2)
-  auto encoded = encode_ptgs(*node, sheets, sheet_ranges, {}, PtgRootClass::kValue);
-  ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
-
-  Arena dec_arena;
-  ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
-  const std::vector<XlsbSheetRange> decode_ranges = {{0, 2}};
-  auto decoded = decode_ptgs(rgce, ByteSpan{}, dec_arena, sheets, {}, decode_ranges, {});
-  ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
-  EXPECT_EQ(parser::format_formula(*decoded.value()), "Sheet1:Sheet3!B2");
-}
-
-TEST(XlsbPtgCodec, GenuineThreeDimensionalRangeTailRoundTrips) {
-  // A genuine 3-D range tail (`Sheet1:Sheet3!A1:B2`) encodes as PtgArea3d
-  // (ixti + RgceArea) and decodes back to a range-tail `Ref3D`, preserving
-  // both the sheet span and the cell rectangle. The parser now lowers this
-  // form directly, so drive it through the text `RoundTrip` helper.
-  const std::vector<std::string> sheets = {"Sheet1", "Sheet2", "Sheet3"};
-  EXPECT_EQ(RoundTrip("SUM(Sheet1:Sheet3!A1:B2)", sheets), "SUM(Sheet1:Sheet3!A1:B2)");
-
-  // Also drive the encoder/decoder directly from a hand-built node to pin
-  // the PtgArea3d codec contract independent of the parser.
-  Arena arena;
-  parser::Reference a;  // A1
-  parser::Reference b;  // B2
-  b.row = 1;
-  b.col = 1;
-  parser::AstNode* node = parser::make_ref3d_range(arena, "Sheet1", "Sheet3", a, b);
-  ASSERT_NE(node, nullptr);
-  const SheetRangeTable sheet_ranges = {{0, 2}};
-  auto encoded = encode_ptgs(*node, sheets, sheet_ranges, {}, PtgRootClass::kValue);
-  ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
-  Arena dec_arena;
-  ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
-  const std::vector<XlsbSheetRange> decode_ranges = {{0, 2}};
-  auto decoded = decode_ptgs(rgce, ByteSpan{}, dec_arena, sheets, {}, decode_ranges, {});
-  ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
-  EXPECT_EQ(parser::format_formula(*decoded.value()), "Sheet1:Sheet3!A1:B2");
-}
-
-TEST(XlsbPtgCodec, SingleAndMultiSheetReferencesShareOneIxtiSpace) {
-  // Once a workbook emits any `BrtExternSheet` entry, every `PtgRef3d`
-  // (single- or multi-sheet) resolves its `ixti` through that one table
-  // -- see `SheetRangeTable`'s doc comment. This pins that a formula
-  // mixing a plain single-sheet ref with a genuine 3-D range encodes
-  // and decodes both correctly against a shared table.
-  const std::vector<std::string> sheets = {"Sheet1", "Sheet2", "Sheet3"};
-  EXPECT_EQ(RoundTrip("Sheet2!A1+Sheet1!A1", sheets), "Sheet2!A1+Sheet1!A1");
-}
-
-TEST(XlsbPtgCodec, ConstantArray) {
-  EXPECT_EQ(RoundTrip("{1,2;3,4}"), "{1,2;3,4}");
-}
-
-TEST(XlsbPtgCodec, ConstantArrayNonSquareRowVector) {
-  // A 1-row, 3-column array: distinguishes which `PtgExtraArray` u32 is
-  // rows vs. cols (a square fixture can't). Encoder writes rows=1,
-  // cols=3; if the reader swapped the fields it would either reject the
-  // dimension (1x3 -> read as 3x1 needs 3 rows worth of elements, which
-  // *is* available here since count is symmetric at 3, but the element
-  // shape would transpose) or -- for this asymmetric row/col case --
-  // round-trip to `{1;2;3}` instead of `{1,2,3}`.
-  EXPECT_EQ(RoundTrip("{1,2,3}"), "{1,2,3}");
-}
-
-TEST(XlsbPtgCodec, ConstantArrayNonSquareColumnVector) {
-  // The transpose of the above: 3 rows, 1 column.
-  EXPECT_EQ(RoundTrip("{1;2;3}"), "{1;2;3}");
-}
-
-TEST(XlsbPtgCodec, ErrorLiteral) {
-  EXPECT_EQ(RoundTrip("#DIV/0!"), "#DIV/0!");
-}
-
-TEST(XlsbPtgCodec, AbsoluteReference) {
-  EXPECT_EQ(RoundTrip("$A$1"), "$A$1");
-  EXPECT_EQ(RoundTrip("$A1"), "$A1");
-  EXPECT_EQ(RoundTrip("A$1"), "A$1");
-}
-
-TEST(XlsbPtgCodec, AllComparisons) {
-  EXPECT_EQ(RoundTrip("A1<B1"), "A1<B1");
-  EXPECT_EQ(RoundTrip("A1<=B1"), "A1<=B1");
-  EXPECT_EQ(RoundTrip("A1=B1"), "A1=B1");
-  EXPECT_EQ(RoundTrip("A1>=B1"), "A1>=B1");
-  EXPECT_EQ(RoundTrip("A1>B1"), "A1>B1");
-  EXPECT_EQ(RoundTrip("A1<>B1"), "A1<>B1");
-}
-
-TEST(XlsbPtgCodec, NestedFunctions) {
-  EXPECT_EQ(RoundTrip("ROUND(SUM(A1:A3),2)"), "ROUND(SUM(A1:A3),2)");
-}
-
-TEST(XlsbPtgCodec, Post2007BuiltinsUseNativeFunctionIds) {
-  EXPECT_EQ(RoundTrip("ASC(\"Ａ\")"), "ASC(\"Ａ\")");
-  // `JIS` is the ja-JP formula-bar spelling of `DBCS`; Excel stores the
-  // call as `DBCS` in both containers and has one function id (215) for
-  // it. The codec therefore canonicalises the spelling rather than
-  // preserving it — the Writer resolves `JIS` to id 215 through the
-  // table's alias, and the Reader hands that id back as `DBCS`, which
-  // is exactly what Excel's own formula text would say.
-  EXPECT_EQ(RoundTrip("JIS(\"A\")"), "DBCS(\"A\")");
-  EXPECT_EQ(RoundTrip("DBCS(\"A\")"), "DBCS(\"A\")");
-  EXPECT_EQ(RoundTrip("EDATE(A1,1)"), "EDATE(A1,1)");
-  EXPECT_EQ(RoundTrip("EOMONTH(A1,1)"), "EOMONTH(A1,1)");
-  EXPECT_EQ(RoundTrip("WORKDAY(A1,1)"), "WORKDAY(A1,1)");
-  EXPECT_EQ(RoundTrip("NETWORKDAYS(A1,B1)"), "NETWORKDAYS(A1,B1)");
-  EXPECT_EQ(RoundTrip("IFERROR(A1,0)"), "IFERROR(A1,0)");
-  EXPECT_EQ(RoundTrip("COUNTIFS(A1,1)"), "COUNTIFS(A1,1)");
-  EXPECT_EQ(RoundTrip("SUMIFS(A1,B1,1)"), "SUMIFS(A1,B1,1)");
-  EXPECT_EQ(RoundTrip("AVERAGEIF(A1,1)"), "AVERAGEIF(A1,1)");
-  EXPECT_EQ(RoundTrip("AVERAGEIFS(A1,B1,1)"), "AVERAGEIFS(A1,B1,1)");
-}
-
-TEST(XlsbPtgCodec, PowerAndDivide) {
-  EXPECT_EQ(RoundTrip("A1^2/B1"), "A1^2/B1");
-}
-
-TEST(XlsbPtgCodec, DecoderRejectsTruncatedStream) {
-  // PtgInt (0x1E) needs a 2-byte operand; supply only the tag.
-  Arena arena;
-  const std::vector<std::uint8_t> bytes = {0x1E};
-  ByteSpan span{bytes.data(), bytes.size()};
-  auto decoded = decode_ptgs(span, ByteSpan{}, arena, {}, {}, {}, {});
-  ASSERT_FALSE(static_cast<bool>(decoded));
-  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
-}
-
-TEST(XlsbPtgCodec, DecoderRejectsUnknownPtg) {
-  // 0x18 (PtgElfLel) is marked Unsupported in the dispatch table.
-  Arena arena;
-  const std::vector<std::uint8_t> bytes = {0x18, 0x00};
-  ByteSpan span{bytes.data(), bytes.size()};
-  auto decoded = decode_ptgs(span, ByteSpan{}, arena, {}, {}, {}, {});
-  ASSERT_FALSE(static_cast<bool>(decoded));
-  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
-}
-
-TEST(XlsbPtgCodec, PtgArrayDecodesRowsBeforeColsFromRawWireBytes) {
-  // Raw-byte decode of a genuinely non-square (1 row x 3 cols) array
-  // constant, independent of the encoder. `PtgExtraArray`
-  // ([MS-XLSB] 2.5.97.41) is documented as `DRw` (row count) followed
-  // by `DCol` (col count), each a plain u32 -- not a class-marked or
-  // otherwise reordered pair, and the elements follow row-outer /
-  // col-inner. A square real-Excel fixture cannot settle either point on
-  // its own, so this test pins them from the wire bytes. If the reader
-  // swapped the two u32 fields, this byte layout (rows=1, cols=3) would
-  // either be rejected (3 rows needs 3x as many trailing elements) or,
-  // for a same-total-count swap, transpose to `{1;2;3}`.
-  const std::vector<std::uint8_t> rgce = {
-      0x60,                                                  // PtgArray (array-class)
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 14-byte placeholder
-      0x00, 0x00, 0x00, 0x00, 0x00,
-  };
-  std::vector<std::uint8_t> rgcb;
-  emit_u32(rgcb, 1U);  // DRw: rows = 1
-  emit_u32(rgcb, 3U);  // DCol: cols = 3
-  for (const double v : {1.0, 2.0, 3.0}) {
-    rgcb.push_back(0x00);  // SerAr numeric tag
-    std::uint8_t bytes[8];
-    std::memcpy(bytes, &v, sizeof(v));
-    rgcb.insert(rgcb.end(), bytes, bytes + 8);
-  }
-  Arena arena;
-  auto decoded =
-      decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, {}, {}, {}, {});
-  ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
-  EXPECT_EQ(parser::format_formula(*decoded.value()), "{1,2,3}");
-}
-
-// Array constants of text, booleans and errors, bytes as Excel 365 saved
-// them. The token's last four bytes are memory Excel leaves uninitialised.
-TEST(XlsbPtgCodec, PtgArrayElementsMatchExcelBytes) {
-  struct Case {
-    const char* formula;
-    std::vector<std::uint8_t> rgce_head;  // opcode + the 10 bytes Excel sets
-    std::vector<std::uint8_t> rgcb;
-  };
-  const Case cases[] = {
-      {"{\"a\",\"b\";\"c\",\"d\"}",
-       {0x40, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-       {0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x61, 0x00, 0x01,
-        0x01, 0x00, 0x62, 0x00, 0x01, 0x01, 0x00, 0x63, 0x00, 0x01, 0x01, 0x00, 0x64, 0x00}},
-      {"{TRUE;FALSE}",
-       {0x40, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-       {0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x01, 0x02, 0x00}},
-      {"{1;#N/A;\"z\"}",
-       {0x40, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-       {0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0xF0, 0x3F, 0x04, 0x2A, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x7A, 0x00}},
-  };
-  for (const Case& c : cases) {
-    const EncodedFormula encoded = EncodeOnSheet1(c.formula, PtgRootClass::kValue);
-    ASSERT_EQ(encoded.rgce.size(), 15U) << c.formula;
-    EXPECT_EQ(std::vector<std::uint8_t>(encoded.rgce.begin(), encoded.rgce.begin() + 11), c.rgce_head) << c.formula;
-    EXPECT_EQ(encoded.rgcb, c.rgcb) << c.formula;
-    EXPECT_EQ(RoundTrip(c.formula), c.formula);
-  }
-}
-
-TEST(XlsbPtgCodec, PtgRefRowAtGridBoundIsRecordCorrupt) {
-  // PtgRef (0x24) with row == Sheet::kMaxRows, one past the last valid
-  // row (1048575). A crafted/corrupt row must be rejected at the Ref
-  // node construction site rather than silently wrapping in a later
-  // A1-text re-parse (`format_a1` would otherwise print `A1048577`).
-  const std::vector<std::uint8_t> rgce = {
-      0x24,                    // PtgRef
-      0x00, 0x00, 0x10, 0x00,  // row = 1048576 (u32 LE) == Sheet::kMaxRows
-      0x00, 0x00,              // col = 0, absolute
-  };
-  Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
-  ASSERT_FALSE(static_cast<bool>(decoded));
-  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-}
-
-TEST(XlsbPtgCodec, PtgAreaReversedCornersIsRecordCorrupt) {
-  // PtgArea (0x25) with row1 > row2: both corners are individually
-  // in-domain, but the range is not normalized.
-  const std::vector<std::uint8_t> rgce = {
-      0x25,                    // PtgArea
-      0x05, 0x00, 0x00, 0x00,  // row1 = 5
-      0x01, 0x00, 0x00, 0x00,  // row2 = 1 (< row1)
-      0x00, 0x00,              // col1 = 0, absolute
-      0x00, 0x00,              // col2 = 0, absolute
-  };
-  Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
-  ASSERT_FALSE(static_cast<bool>(decoded));
-  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-}
-
-TEST(XlsbPtgCodec, PtgRefErrWithSentinelCoordinatesStillDecodesAsRef) {
-  // PtgRefErr (0x2A) carries a `#REF!`-form single-cell reference; real
-  // Excel files encode the dead payload with the maximum sentinel
-  // row/col. Because this Ptg kind never materializes a `Reference`
-  // (only `ErrorCode::Ref`), the domain check at Ref/Area construction
-  // sites must not reject it.
-  const std::vector<std::uint8_t> rgce = {
-      0x2A,                    // PtgRefErr
-      0xFF, 0xFF, 0xFF, 0xFF,  // sentinel row payload (discarded)
-      0xFF, 0xFF,              // sentinel col payload (discarded)
-  };
-  Arena arena;
-  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
-  ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
-  EXPECT_EQ(parser::format_formula(*decoded.value()), "#REF!");
-}
-
-TEST(XlsbPtgCodec, DecoderKeepsParenTokenInTheText) {
-  // PtgInt(1), PtgInt(2), PtgAdd, PtgParen: the written parentheses Excel
-  // shows, which leave the value stack unchanged.
-  const std::vector<std::uint8_t> rgce = {0x1E, 0x01, 0x00, 0x1E, 0x02, 0x00, 0x03, 0x15};
-  Arena arena;
-  ByteSpan main{rgce.data(), rgce.size()};
-  ByteSpan extra{nullptr, 0};
-  auto decoded = decode_ptgs(main, extra, arena, {}, {}, {}, {});
-  ASSERT_TRUE(static_cast<bool>(decoded));
-  EXPECT_EQ(parser::format_formula(*decoded.value()), "(1+2)");
-}
-
-TEST(XlsbPtgCodec, DecoderConsumesMemoryCachePtgsWithoutChangingExpression) {
-  // Each memory marker precedes an ordinary PtgInt(1) expression. PtgMemArea
-  // additionally has a zero-range PtgExtraMem cache in RgbExtra.
-  const std::vector<std::uint8_t> mem_area = {0x26, 0, 0, 0, 0, 3, 0, 0x1E, 1, 0};
-  const std::vector<std::uint8_t> mem_err = {0x27, 0x17, 0, 0, 0, 3, 0, 0x1E, 1, 0};
-  const std::vector<std::uint8_t> mem_no_mem = {0x28, 0, 0, 0, 0, 3, 0, 0x1E, 1, 0};
-  const std::vector<std::uint8_t> mem_func = {0x29, 3, 0, 0x1E, 1, 0};
-  const std::vector<std::uint8_t> extra_mem = {0, 0, 0, 0};
-
-  const auto expect_expression = [&extra_mem](const std::vector<std::uint8_t>& rgce, bool has_extra_mem) {
-    Arena arena;
-    ByteSpan main{rgce.data(), rgce.size()};
-    ByteSpan extra = has_extra_mem ? ByteSpan{extra_mem.data(), extra_mem.size()} : ByteSpan{};
-    auto decoded = decode_ptgs(main, extra, arena, {}, {}, {}, {});
-    ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
-    EXPECT_EQ(parser::format_formula(*decoded.value()), "1");
-  };
-  expect_expression(mem_area, true);
-  expect_expression(mem_err, false);
-  expect_expression(mem_no_mem, false);
-  expect_expression(mem_func, false);
-}
-
-TEST(XlsbPtgCodec, DecoderRejectsTruncatedMemAreaExtraCache) {
-  const std::vector<std::uint8_t> rgce = {0x26, 0, 0, 0, 0, 3, 0, 0x1E, 1, 0};
-  // PtgExtraMem declares one 16-byte range but supplies none.
-  const std::vector<std::uint8_t> extra = {1, 0, 0, 0};
-  Arena arena;
-  auto decoded =
-      decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{extra.data(), extra.size()}, arena, {}, {}, {}, {});
-  ASSERT_FALSE(static_cast<bool>(decoded));
-  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
-}
-
-TEST(XlsbPtgCodec, DecoderRejectsAstDeeperThanSharedLimit) {
-  Arena enc_arena;
-  parser::AstNode* root = parser::make_literal(enc_arena, Value::number(1));
-  for (std::uint32_t depth = 1; depth <= parser::kMaxFormulaAstDepth; ++depth) {
-    root = parser::make_unary_op(enc_arena, parser::UnaryOp::Plus, root);
-  }
-  ASSERT_NE(root, nullptr);
-  auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue);
-  ASSERT_TRUE(static_cast<bool>(encoded));
-
-  Arena dec_arena;
-  ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
-  ByteSpan rgcb{encoded.value().rgcb.data(), encoded.value().rgcb.size()};
-  auto decoded = decode_ptgs(rgce, rgcb, dec_arena, {}, {}, {}, {});
-  ASSERT_FALSE(static_cast<bool>(decoded));
-  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbCorrupt);
-}
-
-TEST(XlsbPtgCodec, EncoderUsesExcelClassesForReferenceArgumentsAndFunctionResults) {
-  Arena arena;
-  parser::Parser p("SUM(A1:A2,1)", arena);
-  parser::AstNode* root = p.parse();
-  ASSERT_NE(root, nullptr);
-  ASSERT_TRUE(p.errors().empty());
-  auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue);
-  ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
-
-  // Real Excel writes the range argument as reference-class PtgArea (0x25)
-  // and the SUM result as value-class PtgFuncVar (0x42). Array-class 0x65
-  // and reference-class 0x22 respectively make Excel repair the worksheet.
-  ASSERT_GE(encoded.value().rgce.size(), 4U);
-  EXPECT_EQ(encoded.value().rgce.front(), 0x25U);
-  EXPECT_EQ(encoded.value().rgce[encoded.value().rgce.size() - 4U], 0x42U);
-}
-
-TEST(XlsbPtgCodec, EncoderRejectsUnregisteredDefinedName) {
-  // A `NameRef` only lowers to `PtgName` when the caller's `name_table`
-  // (built from `collect_ptg_names` across the whole workbook) already
-  // carries an `ilbl` for it; an empty table means "not registered".
-  Arena arena;
-  parser::Parser p("MyName", arena);
-  parser::AstNode* root = p.parse();
-  ASSERT_NE(root, nullptr);
-  auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue);
-  ASSERT_FALSE(static_cast<bool>(encoded));
-  EXPECT_EQ(encoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
-}
-
-TEST(XlsbPtgCodec, EncoderLowersRegisteredDefinedName) {
-  Arena arena;
-  parser::Parser p("MyName", arena);
-  parser::AstNode* root = p.parse();
-  ASSERT_NE(root, nullptr);
-  const NameTable names = {{"MyName", 1U}};
-  auto encoded = encode_ptgs(*root, {}, {}, names, PtgRootClass::kValue);
-  ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
-
-  Arena dec_arena;
-  ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
-  const std::vector<XlsbName> name_table = {{-1, "MyName", false}};
-  auto decoded = decode_ptgs(rgce, ByteSpan{}, dec_arena, {}, name_table, {}, {});
-  ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
-  EXPECT_EQ(parser::format_formula(*decoded.value()), "MyName");
 }
 
 }  // namespace
