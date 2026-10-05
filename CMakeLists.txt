@@ -203,6 +203,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/parser.cpp
   src/parser/parser_atoms.cpp
   src/parser/parser_reference.cpp
+  src/parser/parser_let_lambda.cpp
   src/parser/ref_transforms.cpp
   src/pivot/aggregator.cpp
   src/pivot/filter_engine.cpp

@@ -1,7 +1,7 @@
 //
-// Internal helpers shared between parser.cpp, parser_atoms.cpp, and
-// parser_reference.cpp. Not a public header; do not include from outside
-// src/parser/.
+// Internal helpers shared between parser.cpp, parser_atoms.cpp,
+// parser_reference.cpp, and parser_let_lambda.cpp. Not a public header; do not
+// include from outside src/parser/.
 
 #ifndef FORMULON_PARSER_PARSER_DETAIL_H_
 #define FORMULON_PARSER_PARSER_DETAIL_H_

@@ -34,8 +34,9 @@
 //
 // Source layout: this TU owns the parser entry point, the Pratt expression
 // loop, atom dispatch, and the panic-mode plumbing. Per-atom helpers live in
-// `parser_atoms.cpp`; cell-ref decoding, LET special-form handling, and
-// sheet-qualified refs live in `parser_reference.cpp`.
+// `parser_atoms.cpp`; cell-ref decoding and sheet-qualified refs live in
+// `parser_reference.cpp`; LET / LAMBDA special forms live in
+// `parser_let_lambda.cpp`.
 
 #include "parser/parser.h"
 
