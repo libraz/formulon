@@ -1,10 +1,10 @@
 //
 // Private seam between the tree-walker's recursive node visitor
 // (`tree_walker/walker.cpp`) and the function-call dispatch path
-// (`tree_walker/dispatch.cpp`). The two translation units were split out
+// (`tree_walker/dispatch.cpp`) and the runtime lambda invocation path
+// (`tree_walker/lambda_invoke.cpp`). The translation units were split out
 // of the original monolithic `tree_walker.cpp` to keep compile units
-// digestible; this header publishes the two entry points walker.cpp
-// needs from dispatch.cpp.
+// digestible; this header publishes the entry points walker.cpp needs.
 //
 // `dispatch_call` is invoked from `eval_node` for every `Call` AST node:
 // it handles name-bound lambda dispatch, lazy/special-form routing
@@ -13,7 +13,8 @@
 // `FunctionDef::impl`.
 //
 // `invoke_lambda` is shared between the `LambdaCall` AST case (handled
-// in walker.cpp) and the name-bound dispatch path (in dispatch.cpp).
+// in walker.cpp) and the name-bound dispatch path (in dispatch.cpp); it is
+// defined in lambda_invoke.cpp.
 // Its already-evaluated-arguments siblings `invoke_lambda_values` /
 // `invoke_lambda_values_with_ast` are the single lambda-invocation entry
 // point for the lazy lambda helpers, so the arity and

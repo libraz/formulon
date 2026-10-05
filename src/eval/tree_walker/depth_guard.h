@@ -1,10 +1,10 @@
 //
 // Private helper for the tree-walk evaluator: a tiny RAII counter guard
 // that bounds runaway recursion through `EvalContext::resolve_ref` and
-// user-defined LAMBDA closures. Kept header-only so the two evaluator
-// translation units that need it (`tree_walker/walker.cpp` and
-// `tree_walker/dispatch.cpp`) can construct guards inline without an
-// extra function-call hop.
+// user-defined LAMBDA closures. Kept header-only so the evaluator
+// translation units that need it (`tree_walker/walker.cpp`,
+// `tree_walker/dispatch.cpp` and `tree_walker/lambda_invoke.cpp`) can
+// construct guards inline without an extra function-call hop.
 //
 // This header is internal to the tree-walker family and is not part of
 // the public evaluator surface — production callers reach the evaluator

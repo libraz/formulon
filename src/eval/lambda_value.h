@@ -53,7 +53,7 @@ struct LambdaValue {
   /// — must satisfy `param_count - optional_count <= arity <= param_count`;
   /// anything outside that window surfaces `#VALUE!`. The rule is enforced
   /// in one place, `invoke_lambda_values_with_ast` in
-  /// `eval/tree_walker/dispatch.cpp`.
+  /// `eval/tree_walker/lambda_invoke.cpp`.
   std::uint32_t param_count;
   /// Number of trailing parameters declared with `[name]` bracket syntax.
   /// When the call site provides fewer than `param_count` arguments, the

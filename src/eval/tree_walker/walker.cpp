@@ -4,11 +4,12 @@
 // linkage in `eval/lazy_impls.h` so lazy-impl TUs can recurse back into
 // it), and the read-only spill-collision detector.
 //
-// The function-call dispatch path (`dispatch_call`, `invoke_lambda`,
-// range-argument expansion) lives in `tree_walker/dispatch.cpp`; the
+// The function-call dispatch path (`dispatch_call`, range-argument
+// expansion) lives in `tree_walker/dispatch.cpp`, the runtime lambda
+// invocation (`invoke_lambda`) in `tree_walker/lambda_invoke.cpp`; the
 // array-broadcasting helpers (`broadcast_binop`, `broadcast_unary`,
 // `apply_binop_per_cell`) live in `tree_walker/broadcast.cpp`. The
-// three TUs split the original monolithic `tree_walker.cpp` while
+// TUs split the original monolithic `tree_walker.cpp` while
 // preserving file-local helpers and the existing `formulon::eval`
 // namespace shape (anonymous helpers are local to each TU).
 //
