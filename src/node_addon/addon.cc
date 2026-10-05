@@ -10,15 +10,19 @@
 //   * `parts/workbook_class.{h,cc}` -- `Workbook` ObjectWrap definition,
 //     ctor / dtor, static factories, argument helpers, and the
 //     `DefineClass` registration table.
-//   * `parts/lifecycle.cc`         -- cell mutation / read, recalc,
-//     save, iterative-solver registration, isValid.
+//   * `parts/cells.cc`             -- cell mutation / read, phonetic
+//     metadata, ad-hoc formula evaluation, lambda text.
+//   * `parts/lifecycle.cc`         -- calc policy, recalc, save,
+//     iterative-solver registration, diagnostics, isValid.
 //   * `parts/sheet.cc`             -- sheet operations, row/col edits,
 //     metadata iteration, defined-name mutation.
 //   * `parts/pivot_cache.cc`       -- PivotCache mutation surface.
 //   * `parts/pivot_table.cc`       -- PivotTable mutation surface.
 //   * `parts/styles.cc`            -- styles + EvaluateCfRange.
-//   * `parts/sheet_view.cc`        -- view / column / row layout +
-//     merges / comments / hyperlinks / validations.
+//   * `parts/sheet_view.cc`        -- view / protection / column / row
+//     layout.
+//   * `parts/sheet_ui.cc`         -- merges / comments / hyperlinks /
+//     validations.
 //   * `parts/free_funcs.{h,cc}`    -- evalFormula / version /
 //     lastError* / statusString / the process-wide structured-log
 //     controls.
