@@ -1,0 +1,31 @@
+suite: text_format_display
+description: TEXT() renderings that match cell display text (fraction padding, DBNum General, serial 0 dates, era format)
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: text_fraction_pad_0
+    formula: "=TEXT(0, \"# ?/?\")"
+  - id: text_fraction_pad_2
+    formula: "=TEXT(2, \"# ?/?\")"
+  - id: text_fraction_pad_59
+    formula: "=TEXT(59, \"# ?/?\")"
+  - id: text_fraction_pad_123456789
+    formula: "=TEXT(123456789, \"# ?/?\")"
+  - id: text_dbnum1_general_1234
+    formula: "=TEXT(1234, \"[DBNum1]G/標準\")"
+  - id: text_dbnum1_general_1234_5678
+    formula: "=TEXT(1234.5678, \"[DBNum1]G/標準\")"
+  - id: text_dbnum1_general_1e15
+    formula: "=TEXT(1E+15, \"[DBNum1]G/標準\")"
+  - id: text_date_ymd_serial_0
+    formula: "=TEXT(0, \"yyyy/m/d\")"
+  - id: text_date_era_serial_0
+    formula: "=TEXT(0, \"ggge\"\"年\"\"m\"\"月\"\"d\"\"日\"\"\")"
+  - id: text_date_ymd_serial_half
+    formula: "=TEXT(0.5, \"yyyy/m/d\")"
+  - id: text_date_era_serial_half
+    formula: "=TEXT(0.5, \"ggge\"\"年\"\"m\"\"月\"\"d\"\"日\"\"\")"
+  - id: text_date_ymd_serial_tiny
+    formula: "=TEXT(0.00001, \"yyyy/m/d\")"
+  - id: text_date_era_serial_tiny
+    formula: "=TEXT(0.00001, \"ggge\"\"年\"\"m\"\"月\"\"d\"\"日\"\"\")"
