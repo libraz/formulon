@@ -8,18 +8,14 @@
 // `read_int`) that the three reference-family pipelines all touch.
 //
 // The public A1-text parser (`parse_a1_ref`, `column_letters`, `A1Parse`)
-// continues to live in `eval/a1_parse.h`; the bodies are defined in
-// `reference/common.cpp` and are reachable from outside the subdirectory
-// through that header. Public lazy impl declarations
-// (`eval_indirect_lazy`, `eval_offset_lazy`) live in `reference/indirect.h`
-// and `reference/offset.h`; the range-expander / range-resolver externs
-// live in `eval/range_expanders.h` and `eval/range_resolvers.h`.
+// lives in `eval/a1_parse.h`, with its bodies in `eval/a1_parse.cpp`.
+// Public lazy impl declarations (`eval_indirect_lazy`, `eval_offset_lazy`)
+// live in `reference/indirect.h` and `reference/offset.h`; the
+// range-expander / range-resolver externs live in `eval/range_expanders.h`
+// and `eval/range_resolvers.h`.
 //
-// TODO(D-07): the A1 endpoint parser duplicates work that the OOXML-side
-// `src/io/a1_ref.h` already does for a more restricted dialect. Hoisting
-// a shared parser into a refs layer depends on cross-layer design
-// decisions (eval -> io dependency direction); defer the unification
-// until that lands. Until then, the parser stays local here.
+// The A1 endpoint parser stays local to eval rather than sharing the OOXML
+// side's `src/io/a1_ref.h`, which would need an eval -> io dependency.
 
 #ifndef FORMULON_EVAL_REFERENCE_COMMON_H_
 #define FORMULON_EVAL_REFERENCE_COMMON_H_

@@ -353,6 +353,7 @@ src/eval/aggregate_lazy.cpp
   src/eval/textjoin_lazy.cpp
   src/eval/textsplit_lazy.cpp
   src/eval/trimrange_lazy.cpp
+  src/eval/a1_parse.cpp
   src/eval/reference/common.cpp
   src/eval/reference/indirect.cpp
   src/eval/reference/intersection.cpp

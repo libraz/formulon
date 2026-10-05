@@ -3,7 +3,8 @@
 // own header so the central dispatch table (`tree_walker_lazy_table.cpp`)
 // can include it directly without pulling in the OFFSET / intersection
 // surfaces. The accompanying text-to-rectangle decoder lives in
-// `eval/a1_parse.h` (public) and `reference/common.h` (intra-subdir).
+// `eval/a1_parse.h` (public, defined in `eval/a1_parse.cpp`) and
+// `reference/common.h` (intra-subdir).
 
 #ifndef FORMULON_EVAL_REFERENCE_INDIRECT_H_
 #define FORMULON_EVAL_REFERENCE_INDIRECT_H_
