@@ -175,6 +175,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/func_id_table.cpp
   src/io/xlsb/metadata_bin.cpp
   src/io/xlsb/ptg.cpp
+  src/io/xlsb/ptg_declarations.cpp
   src/io/xlsb/ptg_reader.cpp
   src/io/xlsb/ptg_writer.cpp
   src/io/xlsb/pivot_reader.cpp
@@ -191,6 +192,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/styles_writer.cpp
   src/io/xlsb/tail_refs.cpp
   src/io/xlsb/workbook_bin_reader.cpp
+  src/io/xlsb/workbook_bin_writer.cpp
   src/io/xlsb/writer.cpp
   src/cf/cf_evaluator.cpp
   src/cf/cf_helpers.cpp
