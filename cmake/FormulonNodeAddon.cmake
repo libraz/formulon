@@ -69,6 +69,7 @@ add_library(formulon_node MODULE
   src/node_addon/addon.cc
   src/node_addon/parts/addon_common.cc
   src/node_addon/parts/cells.cc
+  src/node_addon/parts/conditional_format.cc
   src/node_addon/parts/free_funcs.cc
   src/node_addon/parts/lifecycle.cc
   src/node_addon/parts/pivot_cache.cc
