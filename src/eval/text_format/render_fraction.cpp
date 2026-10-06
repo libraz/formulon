@@ -103,14 +103,16 @@ void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, s
   // exceeds the denominator range.
   consider_boundary(1);
 
-  long double x = static_cast<long double>(target);
+  // Expand in binary64 as Excel does: a wider long double (x86-64, aarch64
+  // Linux, WASM) turns 1/0.1 into 9.99..., not 10, and picks a different term.
+  double x = target;
   std::uint64_t p_prev2 = 0;
   std::uint64_t p_prev1 = 1;
   std::uint64_t q_prev2 = 1;
   std::uint64_t q_prev1 = 0;
   for (int iter = 0; iter < 256 && std::isfinite(x); ++iter) {
-    const long double a_value = std::floor(x);
-    if (a_value < 0.0L) {
+    const double a_value = std::floor(x);
+    if (a_value < 0.0) {
       break;
     }
     if (q_prev2 > max_q) {
@@ -118,8 +120,8 @@ void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, s
       break;
     }
     const std::uint64_t quotient_limit = q_prev1 == 0 ? max_q : (max_q - q_prev2) / q_prev1;
-    // Compare before casting: a long double as narrow as double cannot represent UINT64_MAX exactly.
-    if (a_value >= static_cast<long double>(quotient_limit) + 1.0L) {
+    // Compare before casting: a double cannot represent UINT64_MAX exactly.
+    if (static_cast<long double>(a_value) >= static_cast<long double>(quotient_limit) + 1.0L) {
       // When even the first reciprocal is out of range Excel returns zero, not 1/max_q.
       if (p_prev1 == 0 && q_prev1 == 1) {
         break;
@@ -145,15 +147,15 @@ void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, s
       break;
     }
     consider_candidate(target_decimal, p, q, &best);
-    const long double fractional = x - a_value;
-    if (fractional == 0.0L) {
+    const double fractional = x - a_value;
+    if (fractional == 0.0) {
       break;
     }
     p_prev2 = p_prev1;
     p_prev1 = p;
     q_prev2 = q_prev1;
     q_prev1 = q;
-    x = 1.0L / fractional;
+    x = 1.0 / fractional;
   }
 
   *out_num = best.numerator;
