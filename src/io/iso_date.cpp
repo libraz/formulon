@@ -55,6 +55,33 @@ int DaysInMonth(int year, int month) noexcept {
   return kDaysInMonth[month - 1];
 }
 
+// ISO 8601 permits a UTC marker or a signed hour/minute offset. Excel keeps
+// the wall-clock value, so the validated offset is intentionally ignored.
+bool TakeTimezoneSuffix(std::string_view s, std::size_t* pos) noexcept {
+  if (*pos >= s.size()) {
+    return true;
+  }
+  if (s[*pos] == 'Z' || s[*pos] == 'z') {
+    ++(*pos);
+    return true;
+  }
+  if (s[*pos] != '+' && s[*pos] != '-') {
+    return false;
+  }
+  ++(*pos);
+  int tz_h = 0;
+  int tz_m = 0;
+  if (!TakeDigits(s, pos, 2, &tz_h) || !TakeChar(s, pos, ':') || !TakeDigits(s, pos, 2, &tz_m)) {
+    return false;
+  }
+  // OOXML's XSD timezone range ends at fourteen hours; 14:00 is the only valid
+  // offset at that boundary. Minutes are always below 60.
+  if (tz_m >= 60) {
+    return false;
+  }
+  return tz_h < 14 || (tz_h == 14 && tz_m == 0);
+}
+
 }  // namespace
 
 bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
@@ -76,12 +103,8 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
 
   double serial = date_time::serial_from_ymd(year, static_cast<unsigned>(month), static_cast<unsigned>(day));
 
-  if (pos < text.size()) {
-    // A time component must follow, introduced by 'T' (strict OOXML) or a
-    // space (lenient producers). Reject anything else.
-    if (text[pos] != 'T' && text[pos] != 't' && text[pos] != ' ') {
-      return false;
-    }
+  if (pos < text.size() && (text[pos] == 'T' || text[pos] == 't' || text[pos] == ' ')) {
+    // A time component follows 'T' (strict OOXML) or a space (lenient producers).
     ++pos;
     int hour = 0;
     int minute = 0;
@@ -113,23 +136,13 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
       }
     }
     serial += frac;
+  }
 
-    // Optional time-zone designator: 'Z' or '(+|-)hh:mm'. Excel stores a
-    // wall-clock serial, so the offset is accepted but not applied.
-    if (pos < text.size()) {
-      if (text[pos] == 'Z' || text[pos] == 'z') {
-        ++pos;
-      } else if (text[pos] == '+' || text[pos] == '-') {
-        ++pos;
-        int tz_h = 0;
-        int tz_m = 0;
-        if (!TakeDigits(text, &pos, 2, &tz_h) || !TakeChar(text, &pos, ':') || !TakeDigits(text, &pos, 2, &tz_m)) {
-          return false;
-        }
-      } else {
-        return false;
-      }
-    }
+  // Optional time-zone designator: 'Z' or '(+|-)hh:mm'. Excel stores a
+  // wall-clock serial, so the offset is accepted but not applied. This is
+  // shared by date-only and date-time forms.
+  if (!TakeTimezoneSuffix(text, &pos)) {
+    return false;
   }
 
   if (pos != text.size()) {

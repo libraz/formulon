@@ -83,6 +83,38 @@ TEST(IsoDate, TimeZoneOffsetIsAcceptedButIgnored) {
   ASSERT_TRUE(parse_iso_date_serial("2024-01-01T00:00:00+09:00", &serial));
 }
 
+TEST(IsoDate, TimeZoneBoundsAreValidatedWithoutChangingOutputOnFailure) {
+  for (const char* text : {"2024-01-01T12:00:00+99:99", "2024-01-01T12:00:00+09:60", "2024-01-01T12:00:00+14:01",
+                           "2024-01-01T12:00:00-15:00"}) {
+    SCOPED_TRACE(text);
+    double serial = -123.0;
+    EXPECT_FALSE(parse_iso_date_serial(text, &serial));
+    EXPECT_DOUBLE_EQ(serial, -123.0);
+  }
+}
+
+TEST(IsoDate, PlainDateAcceptsTheDocumentedTimeZoneSuffix) {
+  for (const char* text : {"2024-01-01Z", "2024-01-01+09:00", "2024-01-01-14:00"}) {
+    SCOPED_TRACE(text);
+    double serial = 0.0;
+    ASSERT_TRUE(parse_iso_date_serial(text, &serial));
+    EXPECT_DOUBLE_EQ(serial, 45292.0);
+  }
+  double serial = -123.0;
+  EXPECT_FALSE(parse_iso_date_serial("2024-01-01+14:01", &serial));
+  EXPECT_DOUBLE_EQ(serial, -123.0);
+}
+
+TEST(IsoDate, ValidOffsetsPreserveWallClockInBothSigns) {
+  for (const char* text : {"2024-01-01T12:00:00Z", "2024-01-01T12:00:00+00:00", "2024-01-01T12:00:00+09:30",
+                           "2024-01-01T12:00:00-09:30", "2024-01-01T12:00:00+14:00", "2024-01-01T12:00:00-14:00"}) {
+    SCOPED_TRACE(text);
+    double serial = 0.0;
+    ASSERT_TRUE(parse_iso_date_serial(text, &serial));
+    EXPECT_DOUBLE_EQ(serial, 45292.5);
+  }
+}
+
 TEST(IsoDate, TrailingZDesignatorIsAccepted) {
   double serial = 0.0;
   EXPECT_TRUE(parse_iso_date_serial("2024-01-01T00:00:00Z", &serial));
