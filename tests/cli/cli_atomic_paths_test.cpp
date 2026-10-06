@@ -1,4 +1,6 @@
 // `formulon_cli` end-to-end tests grouped by command surface.
+#include <cstring>
+
 #include "cli/cli.h"
 #include "cli_test_support.h"
 
