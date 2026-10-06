@@ -38,6 +38,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/utils/checked_mul_test.cpp
   unit/utils/a1_column_test.cpp
   unit/utils/budget_charge_test.cpp
+  unit/utils/date_time_test.cpp
   unit/utils/double_format_test.cpp
   unit/utils/double_parse_test.cpp
   unit/utils/index_sort_test.cpp

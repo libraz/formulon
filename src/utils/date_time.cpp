@@ -49,14 +49,30 @@ constexpr double kSecondsPerDay = 86400.0;
 }  // namespace
 
 std::int64_t days_from_civil(int y, unsigned m, unsigned d) noexcept {
+  // Canonicalise the month first. `m` is unsigned, so doing this in the
+  // original Hinnant expression would make month 0 and large month values
+  // wrap before they can roll into the corresponding year.
+  const std::int64_t month0 = static_cast<std::int64_t>(m) - 1;
+  std::int64_t year = static_cast<std::int64_t>(y) + month0 / 12;
+  std::int64_t month_rem = month0 % 12;
+  if (month_rem < 0) {
+    --year;
+    month_rem += 12;
+  }
+  const unsigned canonical_month = static_cast<unsigned>(month_rem) + 1u;
+
   // Hinnant, "chrono-Compatible Low-Level Date Algorithms", algorithm (7).
-  // Normalises any out-of-range month/day as a side effect.
-  y -= static_cast<int>(m <= 2);
-  const int era = (y >= 0 ? y : y - 399) / 400;
-  const unsigned yoe = static_cast<unsigned>(y - era * 400);                 // [0, 399]
-  const unsigned doy = (153u * (m > 2 ? m - 3 : m + 9) + 2u) / 5u + d - 1u;  // [0, 365]
-  const unsigned doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;             // [0, 146096]
-  return static_cast<std::int64_t>(era) * 146097 + static_cast<std::int64_t>(doe) - 719468;
+  // Compute the day count for the canonical month's first day, then add the
+  // (possibly out-of-range) day offset in signed arithmetic. This keeps the
+  // public unsigned day parameter from wrapping at UINT_MAX.
+  year -= static_cast<std::int64_t>(canonical_month <= 2u);
+  const std::int64_t era = (year >= 0 ? year : year - 399) / 400;
+  const std::int64_t yoe = year - era * 400;  // [0, 399]
+  const std::int64_t month_index = canonical_month > 2u ? canonical_month - 3u : canonical_month + 9u;
+  const std::int64_t doy = (153 * month_index + 2) / 5;
+  const std::int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;  // [0, 146096]
+  const std::int64_t first_of_month = era * 146097 + doe - 719468;
+  return first_of_month + static_cast<std::int64_t>(d) - 1;
 }
 
 YMD civil_from_days(std::int64_t z) noexcept {
@@ -65,12 +81,15 @@ YMD civil_from_days(std::int64_t z) noexcept {
   const std::int64_t era = (z >= 0 ? z : z - 146096) / 146097;
   const unsigned doe = static_cast<unsigned>(z - era * 146097);                    // [0, 146096]
   const unsigned yoe = (doe - doe / 1460u + doe / 36524u - doe / 146096u) / 365u;  // [0, 399]
-  const int y = static_cast<int>(yoe) + static_cast<int>(era) * 400;
-  const unsigned doy = doe - (365u * yoe + yoe / 4u - yoe / 100u);  // [0, 365]
-  const unsigned mp = (5u * doy + 2u) / 153u;                       // [0, 11]
-  const unsigned d = doy - (153u * mp + 2u) / 5u + 1u;              // [1, 31]
-  const unsigned m = mp < 10u ? mp + 3u : mp - 9u;                  // [1, 12]
-  return YMD{y + static_cast<int>(m <= 2u), m, d};
+  const unsigned doy = doe - (365u * yoe + yoe / 4u - yoe / 100u);                 // [0, 365]
+  const unsigned mp = (5u * doy + 2u) / 153u;                                      // [0, 11]
+  const unsigned d = doy - (153u * mp + 2u) / 5u + 1u;                             // [1, 31]
+  const unsigned m = mp < 10u ? mp + 3u : mp - 9u;                                 // [1, 12]
+  // Keep the reconstructed year wide until the Jan/Feb adjustment is done.
+  // The final cast is intentional: only day counts whose civil year fits the
+  // public `int` year field are representable by this API.
+  const std::int64_t year = era * 400 + static_cast<std::int64_t>(yoe) + (m <= 2u ? 1 : 0);
+  return YMD{static_cast<int>(year), m, d};
 }
 
 YMD ymd_from_serial(double serial_floor, bool date1904) noexcept {
