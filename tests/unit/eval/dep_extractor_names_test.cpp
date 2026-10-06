@@ -141,6 +141,20 @@ TEST(DepExtractor, NameRefVolatileBodyPropagates) {
   EXPECT_TRUE(deps.cell_deps.empty());
 }
 
+TEST(DepExtractor, QualifiedBuiltinNameBodyHasNoCellDependencies) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({
+      DefinedName{"SUM", "LAMBDA(x,x+100)", 0, false, ""},
+      DefinedName{"Region", "Sheet1!SUM(A2)", -1, false, ""},
+  });
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Region", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+}
+
 TEST(DepExtractor, NamedLambdaBodyCellsAndVolatilityAreExpandedOnce) {
   Workbook wb = Workbook::create();
   wb.set_defined_names({DefinedName{"Named", "LAMBDA(x,x+A1+RAND())", -1, false, ""}});

@@ -185,6 +185,30 @@ TEST(EvalContextRecursive, FormulaChain) {
   EXPECT_EQ(v.as_number(), 12.0);
 }
 
+TEST(EvalContextFormulaEntry, QualifiedBuiltinIsRejectedByAdhocAndRecursivePaths) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("SUM", "LAMBDA(x,x+100)", 0)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=Sheet1!SUM(7)")));
+
+  Arena adhoc_arena;
+  const Value adhoc = evaluate_formula_text(wb, sheet, 0U, 0U, "=Sheet1!SUM(7)", adhoc_arena, default_registry());
+  ASSERT_TRUE(adhoc.is_error()) << adhoc.debug_to_string();
+  EXPECT_EQ(adhoc.as_error(), ErrorCode::Name);
+
+  EvalState state;
+  EvalContext ctx(wb, sheet, state);
+  parser::Reference ref = MakeLocalRef(0U, 1U);  // B1 stores the same invalid entry.
+  Arena recursive_arena;
+  const Value recursive = ctx.resolve_ref(ref, recursive_arena, default_registry());
+  ASSERT_TRUE(recursive.is_error()) << recursive.debug_to_string();
+  EXPECT_EQ(recursive.as_error(), ErrorCode::Name);
+
+  Arena cf_arena;
+  EXPECT_FALSE(evaluate_cf_formula(wb, sheet, 0U, 0U, 0U, 0U, "=Sheet1!SUM(7)", cf_arena, default_registry()));
+  EXPECT_TRUE(evaluate_cf_formula(wb, sheet, 0U, 0U, 0U, 0U, "=1", cf_arena, default_registry()));
+}
+
 TEST(EvalContextRecursive, ReadOnlyRangeUsesCommittedSpillAnchorScalar) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(5)")));

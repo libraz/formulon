@@ -47,12 +47,7 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   // helper keeps this strip in lockstep across every recalc entry.
   const std::string_view src = strip_formula_prefix(cell_data.formula_text);
 
-  parser::AstNode* root = parser::parse_strict(src, arena);
-  // A sheet- or book-qualified built-in call is rejected at entry; the stored
-  // text still reaches here, so it fails the same way a parse error does.
-  if (root != nullptr && find_qualified_builtin_call(*root) != nullptr) {
-    root = nullptr;
-  }
+  parser::AstNode* root = parse_formula_entry(src, arena);
   if (root == nullptr) {
     // Hard parse failure, or a valid prefix followed by unparseable trailing
     // tokens. Either way we refuse to evaluate a recovered prefix as if it

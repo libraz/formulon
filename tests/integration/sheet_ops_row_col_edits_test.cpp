@@ -5,6 +5,98 @@ namespace formulon {
 namespace {
 using namespace sheet_ops_test;
 
+TEST(WorkbookRowColEdits, QualifiedBuiltinsStayOpaqueAndEdgeFreeAfterEdits) {
+  for (const bool rows : {false, true}) {
+    for (const bool deletion : {false, true}) {
+      SCOPED_TRACE(std::string(rows ? "rows" : "cols") + (deletion ? " delete" : " insert"));
+      Workbook wb = Workbook::create();
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 1, "=Sheet1!SUM(C3)")));
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 2, 2, "=B2")));
+      EXPECT_TRUE(wb.recalc_engine().dep_graph().dependencies_of({0, 1, 1}).empty());
+      ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+      ASSERT_TRUE(static_cast<bool>(rows ? (deletion ? wb.delete_rows(0, 0, 1) : wb.insert_rows(0, 0, 1))
+                                         : (deletion ? wb.delete_cols(0, 0, 1) : wb.insert_cols(0, 0, 1))));
+      const std::uint32_t moved = deletion ? 0U : 2U;
+      const std::uint32_t dependent = deletion ? 1U : 3U;
+      const eval::CellNodeId invalid{0, rows ? moved : 1U, rows ? 1U : moved};
+      EXPECT_TRUE(wb.recalc_engine().dep_graph().dependencies_of(invalid).empty());
+      ASSERT_NE(wb.sheet(0).cell_at(invalid.row, invalid.col), nullptr);
+      EXPECT_EQ(wb.sheet(0).cell_at(invalid.row, invalid.col)->formula_text, "=Sheet1!SUM(C3)");
+      ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+      for (const auto coordinate :
+           {CellAddress{invalid.row, invalid.col}, CellAddress{rows ? dependent : 2U, rows ? 2U : dependent}}) {
+        const Cell* cell = wb.sheet(0).cell_at(coordinate.row, coordinate.col);
+        ASSERT_NE(cell, nullptr);
+        ASSERT_TRUE(cell->cached_value.is_error());
+        EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Name);
+      }
+    }
+  }
+}
+
+TEST(WorkbookRowColEdits, QualifiedBuiltinsStayEdgeFreeWhenNamesForceFullReindex) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Region", "=Sheet1!$A$2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 1, "=Sheet1!SUM(C3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 2, 2, "=B2")));
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 0, 1)));
+  ASSERT_EQ(wb.defined_names().size(), 1U);
+  EXPECT_EQ(wb.defined_names()[0].formula, "=Sheet1!$A$3");
+  EXPECT_TRUE(wb.recalc_engine().dep_graph().dependencies_of({0, 2, 1}).empty());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0).cell_at(3, 2)->cached_value.is_error());
+  EXPECT_EQ(wb.sheet(0).cell_at(3, 2)->cached_value.as_error(), ErrorCode::Name);
+}
+
+TEST(WorkbookRowColEdits, QualifiedBuiltinsStayEdgeFreeWhenNamesAreRetargeted) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Region", "=C1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 1, "=Sheet1!SUM(Region)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=B1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Region", "=A1")));
+  EXPECT_TRUE(wb.recalc_engine().dep_graph().dependencies_of({0, 0, 1}).empty());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0).cell_at(0, 0)->cached_value.is_error());
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_error(), ErrorCode::Name);
+}
+
+TEST(WorkbookRowColEdits, MovedInvalidFormulasAreRecalculatedAtTheirNewCoordinates) {
+  for (const bool rows : {false, true}) {
+    for (const bool deletion : {false, true}) {
+      SCOPED_TRACE(std::string(rows ? "rows" : "cols") + (deletion ? " delete" : " insert"));
+      Workbook wb = Workbook::create();
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 1, "=A1 3")));
+      const auto edited = rows ? (deletion ? wb.delete_rows(0, 0, 1) : wb.insert_rows(0, 0, 1))
+                               : (deletion ? wb.delete_cols(0, 0, 1) : wb.insert_cols(0, 0, 1));
+      ASSERT_TRUE(static_cast<bool>(edited));
+      const std::uint32_t moved = deletion ? 0U : 2U;
+      const Cell* cell = wb.sheet(0).cell_at(rows ? moved : 1U, rows ? 1U : moved);
+      ASSERT_NE(cell, nullptr);
+      EXPECT_EQ(cell->formula_text, "=A1 3");
+      ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+      cell = wb.sheet(0).cell_at(rows ? moved : 1U, rows ? 1U : moved);
+      ASSERT_NE(cell, nullptr);
+      ASSERT_TRUE(cell->cached_value.is_error());
+      EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Name);
+    }
+  }
+}
+
+TEST(WorkbookRowColEdits, DeletingInvalidFormulasDoesNotOverwriteReplacementValues) {
+  for (const bool rows : {false, true}) {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=A1 3")));
+    ASSERT_TRUE(static_cast<bool>(rows ? wb.delete_rows(0, 0, 1) : wb.delete_cols(0, 0, 1)));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(42.0))));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    const Cell* cell = wb.sheet(0).cell_at(0, 0);
+    ASSERT_NE(cell, nullptr);
+    EXPECT_TRUE(cell->formula_text.empty());
+    ASSERT_TRUE(cell->cached_value.is_number());
+    EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 42.0);
+  }
+}
+
 TEST(WorkbookSheetOps, InsertRowsRekeysAllDependenciesBeforeRegisteringNewCoordinates) {
   Workbook wb = Workbook::create();
   constexpr std::uint32_t kRows = 60U;

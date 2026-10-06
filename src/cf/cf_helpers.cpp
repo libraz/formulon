@@ -15,13 +15,13 @@
 
 #include "cf/cf_evaluator.h"
 #include "cf/cf_types.h"
+#include "eval/builtin_names.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/scalar_ops.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
-#include "parser/parser.h"
 #include "sheet.h"
 #include "utils/date_time.h"
 #include "utils/double_parse.h"
@@ -191,9 +191,8 @@ Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx) 
 
   // The model holds CF formulas in canonical formula-bar spelling (the
   // readers strip Excel's storage prefixes on load), without a leading `=`.
-  parser::Parser parser(source, *ctx.arena);
-  const parser::AstNode* root = parser.parse();
-  if (root == nullptr || !parser.errors().empty()) {
+  const parser::AstNode* root = eval::parse_formula_entry(source, *ctx.arena);
+  if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
 

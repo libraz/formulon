@@ -5,6 +5,8 @@
 #include "eval/function_registry.h"
 #include "eval/special_forms_catalog.h"
 #include "eval/tree_walker.h"
+#include "parser/parser.h"
+#include "utils/arena.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -126,6 +128,14 @@ const AstNode* find_qualified_builtin_call(const AstNode& root) {
     }
   }
   return nullptr;
+}
+
+AstNode* parse_formula_entry(std::string_view src, Arena& arena) {
+  AstNode* root = parser::parse_strict(src, arena);
+  if (root == nullptr || find_qualified_builtin_call(*root) != nullptr) {
+    return nullptr;
+  }
+  return root;
 }
 
 }  // namespace eval

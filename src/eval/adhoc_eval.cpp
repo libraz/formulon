@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "eval/builtin_names.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/formula_text_utils.h"
@@ -14,7 +15,6 @@
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
-#include "parser/parser.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -73,7 +73,7 @@ Value parse_and_evaluate(const Workbook& workbook, const Sheet& sheet, std::uint
   // matching the recalc path's use of `strip_formula_prefix`.
   const std::string_view src = strip_formula_prefix(formula);
 
-  parser::AstNode* root = parser::parse_strict(src, arena);
+  parser::AstNode* root = parse_formula_entry(src, arena);
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
@@ -100,7 +100,7 @@ bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint
                          const FunctionRegistry& registry) {
   const std::string_view src = strip_formula_prefix(formula);
 
-  parser::AstNode* root = parser::parse_strict(src, arena);
+  parser::AstNode* root = parse_formula_entry(src, arena);
   if (root == nullptr) {
     // A malformed rule formula does not fire (coerces to false).
     return false;

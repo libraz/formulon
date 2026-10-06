@@ -8,13 +8,13 @@
 #include <string_view>
 
 #include "defined_name.h"
+#include "eval/builtin_names.h"
 #include "eval/eval_context.h"
 #include "eval/formula_text_utils.h"
 #include "eval/lazy_impls.h"        // eval_node
 #include "eval/name_env_resolve.h"  // is_range_shaped_ast
 #include "eval/shape_ops_lazy.h"    // eval_node_as_array
 #include "parser/ast.h"
-#include "parser/parser.h"
 #include "sheet.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -123,7 +123,7 @@ const parser::AstNode* prepare_defined_name_body(const DefinedName* def, Arena& 
     }
   }
   const std::string_view src = strip_formula_prefix(def->formula);
-  parser::AstNode* root = src.empty() ? nullptr : parser::parse_strict(src, arena);
+  parser::AstNode* root = src.empty() ? nullptr : parse_formula_entry(src, arena);
   if (root == nullptr) {
     *out_err = ErrorCode::Name;
     return nullptr;

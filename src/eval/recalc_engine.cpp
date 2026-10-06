@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/builtin_names.h"
 #include "eval/cell_evaluator.h"
 #include "eval/dep_extractor.h"
 #include "eval/dep_graph.h"
@@ -27,7 +28,6 @@
 #include "eval/spill_release.h"
 #include "eval/volatile_tracker.h"
 #include "parser/ast.h"
-#include "parser/parser.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -1068,7 +1068,7 @@ partial_recalc_next_wave:
                 formula.remove_prefix(1);
               }
               potential_arena.reset();
-              parser::AstNode* producer_ast = parser::parse_strict(formula, potential_arena);
+              parser::AstNode* producer_ast = parse_formula_entry(formula, potential_arena);
               if (producer_ast == nullptr) {
                 // A stale/unparseable candidate cannot commit a spill; its cell
                 // will surface the ordinary formula error if it is dirty.

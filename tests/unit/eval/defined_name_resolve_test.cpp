@@ -647,6 +647,21 @@ TEST(DefinedNameResolve, NamedLambdaParseFailureIsNameError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
+TEST(DefinedNameResolve, QualifiedBuiltinInBodyIsEntryError) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  wb.set_defined_names({
+      DefinedName{"SUM", "LAMBDA(x,x+100)", 0, false, ""},
+      DefinedName{"Bad", "Sheet1!SUM(7)", -1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Bad", a, ctx);
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
 TEST(DefinedNameResolve, NamedLambdaSupportsNamedRecursion) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));

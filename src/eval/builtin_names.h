@@ -18,6 +18,8 @@
 #include "parser/ast.h"
 
 namespace formulon {
+class Arena;
+
 namespace eval {
 
 /// Returns the canonical UPPERCASE name of the built-in `name` refers to
@@ -31,6 +33,14 @@ const char* resolve_builtin_function_name(std::string_view name);
 /// Excel would reject the formula at entry; its `range()` locates the
 /// offending callee.
 const parser::AstNode* find_qualified_builtin_call(const parser::AstNode& root);
+
+/// Parses a formula body at a public formula-entry boundary. The parser
+/// accepts qualified names syntactically because they may denote defined
+/// names; a qualified built-in is nevertheless invalid formula entry and is
+/// treated like any other parse failure by evaluation and indexing callers.
+/// The returned AST is owned by `arena`, or nullptr when parsing fails or the
+/// AST contains a qualified built-in call.
+parser::AstNode* parse_formula_entry(std::string_view src, Arena& arena);
 
 }  // namespace eval
 }  // namespace formulon

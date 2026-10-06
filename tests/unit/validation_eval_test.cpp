@@ -632,6 +632,14 @@ TEST(ValidationEval, RelativeFormulaShiftsFromSqrefAnchor) {
   EXPECT_TRUE(f.Check(Value::number(1.0), 2, 0).valid);
 }
 
+TEST(ValidationEval, QualifiedBuiltinCustomFormulaDoesNotPass) {
+  Fixture f;
+  ASSERT_TRUE(static_cast<bool>(
+      f.wb.set_defined_name_scoped("SUM", "LAMBDA(x,x+100)", static_cast<std::int32_t>(f.sheet_index))));
+  f.AddRule(Ty::kCustom, Op::kNone, true, "S!SUM(7)");
+  EXPECT_FALSE(f.Check(Value::number(0.0)).valid);
+}
+
 TEST(ValidationEval, NoRuleAndOutcomeFields) {
   Fixture f;
   f.AddRule(Ty::kWhole, Op::kEqual, true, "3", "", 4, 4);

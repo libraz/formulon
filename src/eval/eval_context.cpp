@@ -12,6 +12,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/builtin_names.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_state.h"
 #include "eval/formula_text_utils.h"
@@ -21,7 +22,6 @@
 #include "eval/spill_committer.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
-#include "parser/parser.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "sheet_name.h"
@@ -278,7 +278,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   // literal in the formula surfaces in `result` as a view into the same
   // bytes, and both outlive the snapshot the text was copied out of.
   const std::string_view source = arena.intern(strip_formula_prefix(read.formula_text()));
-  parser::AstNode* root = parser::parse_strict(source, arena);
+  parser::AstNode* root = parse_formula_entry(source, arena);
 
   Value result = Value::blank();
   if (root == nullptr) {

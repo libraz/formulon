@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "defined_name.h"
+#include "eval/builtin_names.h"
 #include "eval/cell_lazy.h"
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
@@ -24,7 +25,6 @@
 #include "eval/tree_walker/dispatch.h"
 #include "eval/volatile_tracker.h"
 #include "parser/ast.h"
-#include "parser/parser.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "sheet_name.h"
@@ -305,7 +305,7 @@ void visit_defined_name_body(const DefinedName& def, WalkState& state, Visit&& v
     return;
   }
 
-  parser::AstNode* root = parser::parse_strict(src, *state.name_arena);
+  parser::AstNode* root = parse_formula_entry(src, *state.name_arena);
   if (root == nullptr) {
     return;  // Unparseable (or valid-prefix-plus-garbage) formula: skip.
   }

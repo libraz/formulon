@@ -612,6 +612,24 @@ TEST(SubtotalNested, CandidateCellShapes) {
   }
 }
 
+TEST(SubtotalNested, InvalidQualifiedBuiltinCellPropagatesToOuterSubtotal) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1U, 0U, Value::number(4.0));  // A2
+  SetFormula(wb, 0U, 1U, "=Sheet1!SUM(SUBTOTAL(9,A2))");   // B1 is entry-invalid.
+  SetFormula(wb, 0U, 2U, "=SUBTOTAL(9,B1)");
+  Recalc(wb);
+
+  const Cell* invalid = wb.sheet(0).cell_at(0U, 1U);
+  ASSERT_NE(invalid, nullptr);
+  ASSERT_TRUE(invalid->cached_value.is_error()) << invalid->cached_value.debug_to_string();
+  EXPECT_EQ(invalid->cached_value.as_error(), ErrorCode::Name);
+
+  const Cell* outer = wb.sheet(0).cell_at(0U, 2U);
+  ASSERT_NE(outer, nullptr);
+  ASSERT_TRUE(outer->cached_value.is_error()) << outer->cached_value.debug_to_string();
+  EXPECT_EQ(outer->cached_value.as_error(), ErrorCode::Name);
+}
+
 TEST(SubtotalNested, SpillCellsFollowTheAnchorFormula) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 25, Value::number(512.0));  // Z1

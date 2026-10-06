@@ -66,6 +66,10 @@ namespace {
 // sheet-name helpers. Declared here so the early `add_sheet_validated`
 // definition can call it.
 Expected<void, Error> validate_sheet_name(std::string_view name);
+
+parser::AstNode* parse_indexable_formula(std::string_view body, Arena& arena) {
+  return eval::parse_formula_entry(body, arena);
+}
 }  // namespace
 
 Workbook::Workbook() : engine_(std::make_unique<eval::RecalcEngine>()), kind_(WorkbookKind::kXlsx) {}
@@ -286,7 +290,7 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
         const eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
         if (!body.empty()) {
           parser_arena.reset();
-          parser::AstNode* root = parser::parse_strict(body, parser_arena);
+          parser::AstNode* root = parse_indexable_formula(body, parser_arena);
           if (root != nullptr) {
             mutator.register_formula(node, *root, workbook);
           }
@@ -426,7 +430,7 @@ std::vector<std::string> collect_affected_names(const std::vector<DefinedName>& 
         continue;
       }
       arena.reset();
-      const parser::AstNode* root = parser::parse_strict(body, arena);
+      const parser::AstNode* root = parse_indexable_formula(body, arena);
       if (root != nullptr && references_any_name(*root, affected)) {
         affected.emplace_back(entry.name);
         grew = true;
@@ -470,7 +474,7 @@ void reindex_formulas_if(std::vector<Sheet>& sheets, const eval::RecalcEngine::L
           continue;
         }
         parser_arena.reset();
-        parser::AstNode* root = parser::parse_strict(body, parser_arena);
+        parser::AstNode* root = parse_indexable_formula(body, parser_arena);
         if (root == nullptr || !affected(*root)) {
           continue;
         }
@@ -1373,12 +1377,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   }
 
   Arena tmp_arena;
-  parser::AstNode* root = parser::parse_strict(src, tmp_arena);
-  // Excel refuses a sheet- or book-qualified call to a built-in at entry;
-  // treat it like any other formula that fails to parse.
-  if (root != nullptr && eval::find_qualified_builtin_call(*root) != nullptr) {
-    root = nullptr;
-  }
+  parser::AstNode* root = parse_indexable_formula(src, tmp_arena);
 
   // The compound mutation runs under a single hold of the engine mutex
   // so a concurrent `recalc_parallel` does not see a half-applied
@@ -1654,26 +1653,10 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
         if (cell.formula_text.empty()) {
           continue;
         }
-        std::string_view body = cell.formula_text;
-        bool had_equals = false;
-        if (!body.empty() && body.front() == '=') {
-          body = body.substr(1);
-          had_equals = true;
-        }
-        if (body.empty()) {
-          continue;
-        }
-        parser_arena.reset();
-        parser::Parser parser(body, parser_arena);
-        parser::AstNode* root = parser.parse();
-        if (root == nullptr || !parser.errors().empty()) {
-          continue;  // Unparseable formula; leave alone (matches Excel "carry through unchanged").
-        }
-        const parser::AstNode* shifted = parser::shift_refs(*root, parser_arena, transform);
-        const bool ast_changed = (shifted != nullptr && shifted != root);
 
-        // Resolve the cell's post-shift coordinates. Only cells on the
-        // target sheet move; off-target cells keep their (row, col).
+        // Resolve the cell's post-shift coordinates before parsing the formula.
+        // An opaque formula still moves with its cell; skipping it on parse
+        // failure would leave the dependency graph keyed at the old address.
         std::uint32_t new_row = row;
         std::uint32_t new_col = static_cast<std::uint32_t>(col);
         bool dropped = false;
@@ -1689,21 +1672,39 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
         }
         const bool cell_moves = (new_row != row) || (new_col != static_cast<std::uint32_t>(col));
 
+        std::string_view body = cell.formula_text;
+        bool had_equals = false;
+        if (!body.empty() && body.front() == '=') {
+          body = body.substr(1);
+          had_equals = true;
+        }
+
+        bool ast_changed = false;
+        std::string effective_formula = cell.formula_text;
+        parser_arena.reset();
+        if (!body.empty()) {
+          parser::AstNode* root = parse_indexable_formula(body, parser_arena);
+          if (root != nullptr) {
+            const parser::AstNode* shifted = parser::shift_refs(*root, parser_arena, transform);
+            ast_changed = (shifted != nullptr && shifted != root);
+            if (ast_changed) {
+              effective_formula.clear();
+              if (had_equals) {
+                effective_formula.push_back('=');
+              }
+              effective_formula.append(parser::format_formula(*shifted));
+            }
+          }
+        }
+
         if (!ast_changed && !cell_moves && !dropped) {
           continue;  // Cell unaffected by the edit.
         }
 
         // Keep the rewritten text alongside the key transition. It is
         // applied only after every disappearing / moving old key has been
-        // unregistered.
-        std::string effective_formula = cell.formula_text;
-        if (ast_changed) {
-          effective_formula.clear();
-          if (had_equals) {
-            effective_formula.push_back('=');
-          }
-          effective_formula.append(parser::format_formula(*shifted));
-        }
+        // unregistered. Parse failures and an empty body remain opaque and
+        // therefore retain their original text exactly.
 
         const eval::CellNodeId old_node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
         const eval::CellNodeId new_node{static_cast<std::uint16_t>(sheet_idx), new_row, new_col};
@@ -1739,9 +1740,11 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
       body.remove_prefix(1);
     }
     parser_arena.reset();
-    parser::Parser parser(body, parser_arena);
-    parser::AstNode* root = parser.parse();
-    if (root == nullptr || !parser.errors().empty()) {
+    parser::AstNode* root = parse_indexable_formula(body, parser_arena);
+    if (root == nullptr) {
+      // The cell has moved, but its formula is opaque. Keep the text as-is
+      // and wake the new coordinate without inventing dependency edges.
+      mutator.mark_dirty(update.new_node);
       continue;
     }
     mutator.register_formula(update.new_node, *root, workbook);
@@ -1788,7 +1791,7 @@ void reregister_three_d_span_owners_after_row_col_edit(const std::vector<eval::C
       continue;
     }
     parser_arena.reset();
-    parser::AstNode* root = parser::parse_strict(body, parser_arena);
+    parser::AstNode* root = parse_indexable_formula(body, parser_arena);
     if (root == nullptr) {
       continue;
     }

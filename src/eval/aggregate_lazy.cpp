@@ -11,6 +11,7 @@
 
 #include "auto_filter.h"
 #include "eval/aggregate_kernels.h"
+#include "eval/builtin_names.h"
 #include "eval/builtins/subtotal.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
@@ -19,7 +20,6 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
-#include "parser/parser.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -294,7 +294,7 @@ bool cell_formula_has_nested_call(const Sheet& sheet, std::uint32_t row, std::ui
     return false;
   }
   Arena arena;
-  const parser::AstNode* root = parser::parse_strict(strip_formula_prefix(read.formula_text()), arena);
+  const parser::AstNode* root = parse_formula_entry(strip_formula_prefix(read.formula_text()), arena);
   return root != nullptr && ast_has_nested_call(*root);
 }
 

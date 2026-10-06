@@ -53,6 +53,29 @@ TEST(CFEvaluator, ExpressionRuleAcceptsXlfnPrefixedFunction) {
 
   EXPECT_TRUE(match_rule(r, Value::blank(), ctx));
 }
+
+TEST(CFEvaluator, StoredExpressionQualifiedBuiltinDoesNotMatch) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("SUM", "LAMBDA(x,x+100)", 0)));
+
+  ConditionalFormat block;
+  block.sqref.push_back(MakeRange(0U, 0U, 0U, 0U));
+  CFRule rule = MakeRule(RuleType::Expression);
+  rule.formula1 = "Sheet1!SUM(7)";
+  block.rules.push_back(std::move(rule));
+  sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  Arena arena;
+  eval::EvalState state;
+  eval::EvalContext eval_ctx(wb, sheet, state);
+  CFHost host;
+  host.arena = &arena;
+  host.registry = &eval::default_registry();
+  host.eval_ctx = &eval_ctx;
+  EXPECT_TRUE(evaluate_cf_at(sheet, At(0U, 0U), host).empty());
+}
+
 // ---------------------------------------------------------------------------
 // Context-aware overload: Expression rules and CellIs with non-literal
 // formula1 / formula2.

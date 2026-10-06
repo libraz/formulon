@@ -67,6 +67,23 @@ TEST(BuiltinNames, AcceptedQualifiedFormsAreNotFlagged) {
   }
 }
 
+TEST(BuiltinNames, FormulaEntryGateRejectsQualifiedBuiltinsOnly) {
+  for (const char* src : {"Sheet1!SUM(1)", "[0]!LET(a,1,a)", "SUM(Sheet1!SUM(1))"}) {
+    Arena arena;
+    std::string storage = parser::strip_storage_prefixes(src);
+    EXPECT_EQ(parse_formula_entry(storage, arena), nullptr) << src;
+  }
+
+  for (const char* src : {"Sheet1!MyFn(1)", "Sheet1!NOSUCH(1)", "SUM(1)", "A1+1"}) {
+    Arena arena;
+    std::string storage = parser::strip_storage_prefixes(src);
+    EXPECT_NE(parse_formula_entry(storage, arena), nullptr) << src;
+  }
+
+  Arena malformed_arena;
+  EXPECT_EQ(parse_formula_entry("SUM(", malformed_arena), nullptr);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
