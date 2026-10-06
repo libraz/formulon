@@ -290,7 +290,8 @@ AnchorPoint shift_point(AnchorPoint p, std::uint32_t index, std::uint32_t count,
   }
   if (!is_delete) {
     const std::uint32_t limit = row_axis ? Sheet::kMaxRows : Sheet::kMaxCols;
-    line = std::min(line + count, limit - 1);
+    const std::uint64_t shifted = static_cast<std::uint64_t>(line) + count;
+    line = static_cast<std::uint32_t>(std::min<std::uint64_t>(shifted, limit - 1U));
   } else if (line >= index + count) {
     line -= count;
   } else {

@@ -1,6 +1,7 @@
 #include "drawing/drawing_edit.h"
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -410,6 +411,42 @@ TEST(DrawingEdit, AnchorsFollowMeasuredRowColumnRules) {
     ExpectAnchor(objects[i++], c.move_from, c.move_to);
     ExpectAnchor(objects[i], {4, 5, 50800, 38100}, {7, 5, 127000, 419100});
   }
+}
+
+TEST(DrawingEdit, LargeInsertClampsAnchorsWithoutWrapping) {
+  const std::uint32_t huge_count = std::numeric_limits<std::uint32_t>::max();
+
+  Workbook rows = ThreePlacements();
+  shift_drawing_anchors(rows, 0, 0, huge_count, false, true);
+  std::vector<DrawingObject> objects = List(rows);
+  ASSERT_EQ(objects.size(), 3U);
+  EXPECT_EQ(objects[0].from.row, Sheet::kMaxRows - 1U);
+  EXPECT_EQ(objects[0].to.row, Sheet::kMaxRows - 1U);
+  EXPECT_EQ(objects[1].from.row, Sheet::kMaxRows - 1U);
+  EXPECT_EQ(objects[1].to.row, Sheet::kMaxRows - 1U);
+  EXPECT_EQ(objects[2].from.row, 4U);
+  EXPECT_EQ(objects[2].to.row, 7U);
+
+  Workbook columns = ThreePlacements();
+  shift_drawing_anchors(columns, 0, 0, huge_count, false, false);
+  objects = List(columns);
+  ASSERT_EQ(objects.size(), 3U);
+  EXPECT_EQ(objects[0].from.col, Sheet::kMaxCols - 1U);
+  EXPECT_EQ(objects[0].to.col, Sheet::kMaxCols - 1U);
+  EXPECT_EQ(objects[1].from.col, Sheet::kMaxCols - 1U);
+  EXPECT_EQ(objects[1].to.col, Sheet::kMaxCols - 1U);
+  EXPECT_EQ(objects[2].from.col, 5U);
+  EXPECT_EQ(objects[2].to.col, 5U);
+
+  // A regular insertion still shifts anchors by its exact count.
+  Workbook ordinary = ThreePlacements();
+  shift_drawing_anchors(ordinary, 0, 5, 2, false, true);
+  objects = List(ordinary);
+  ASSERT_EQ(objects.size(), 3U);
+  EXPECT_EQ(objects[0].from.row, 4U);
+  EXPECT_EQ(objects[0].to.row, 9U);
+  EXPECT_EQ(objects[1].from.row, 4U);
+  EXPECT_EQ(objects[1].to.row, 7U);
 }
 
 TEST(DrawingEdit, OneCellAndAbsoluteAnchorsOnRowDelete) {
