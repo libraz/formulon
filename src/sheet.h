@@ -918,14 +918,10 @@ class Sheet {
   /// scans the registered spill rectangles, avoiding a per-phantom index.
   /// Use `spill_region_at_anchor` to look up by anchor.
   ///
-  /// That scan is linear in the number of committed spill anchors, and it
-  /// runs once per coordinate: every scalar read and every write that has to
-  /// check for spill invalidation pays it, so a sheet with many anchors makes
-  /// each of those O(anchors) and a full flat enumeration O(cells x anchors).
-  /// The cost follows the anchor count rather than any rectangle's area,
-  /// which is what keeps it slow rather than pathological; `read_range`
-  /// amortises it over a rectangle, and there is nothing to amortise for a
-  /// single coordinate short of indexing the spill table spatially.
+  /// The scan runs once per coordinate — every scalar read and every write
+  /// that checks for spill invalidation pays it — so it consults a row-band
+  /// index and visits only the regions sharing the coordinate's band, plus
+  /// any region tall enough to be kept outside the index.
   ///
   /// Carries the same borrowed-Text lifetime as `spill_region_at_anchor`.
   const SpillRegion* spill_region_covering(std::uint32_t row, std::uint32_t col) const noexcept;

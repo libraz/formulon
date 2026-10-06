@@ -37,14 +37,126 @@ namespace formulon {
 // The table is keyed only by anchor cell and owns each region's payload.
 // Phantom lookup scans these rectangles rather than retaining one hash-map
 // entry per spilled cell: a 1,000 x 100 spill is one region, not 99,999
-// duplicate reverse-index nodes. Iteration order is undefined; consumers
+// duplicate reverse-index nodes. A row-band index narrows that scan to the
+// regions near the queried rows. Iteration order is undefined; consumers
 // that need a deterministic order must sort externally.
 struct SpillTable {
+  // The band index points into `by_anchor`, so a copy would dangle.
+  SpillTable() = default;
+  SpillTable(const SpillTable&) = delete;
+  SpillTable& operator=(const SpillTable&) = delete;
+
+  // Mutate only through `add_region` / `erase_region` / `clear_regions`, which keep the band index in step.
   std::unordered_map<CellAddress, SpillRegion, CellAddressHash> by_anchor;
   // A failed dynamic-array commit leaves the anchor's attempted rectangle
   // here so later writes/removals inside that rectangle can re-dirty the
   // producer without requiring the user to touch the formula again.
   std::unordered_map<CellAddress, BlockedSpillFootprint, CellAddressHash> blocked_by_anchor;
+
+  // Rows per band of the committed-region index. A region spanning more than
+  // `kMaxIndexedBands` bands (a whole-column spill) goes to `tall_regions`,
+  // which every query visits, so insertion stays bounded.
+  static constexpr std::uint32_t kBandRows = 64U;
+  static constexpr std::uint64_t kMaxIndexedBands = 64U;
+
+  // Map nodes are stable across rehash, so the index holds region pointers.
+  std::unordered_map<std::uint32_t, std::vector<const SpillRegion*>> regions_by_band;
+  std::vector<const SpillRegion*> tall_regions;
+
+  bool add_region(const CellAddress& anchor, SpillRegion region) {
+    const auto inserted = by_anchor.emplace(anchor, std::move(region));
+    if (!inserted.second) {
+      return false;
+    }
+    const SpillRegion* stored = &inserted.first->second;
+    const std::uint32_t first_band = first_band_of(*stored);
+    const std::uint32_t last_band = last_band_of(*stored);
+    if (static_cast<std::uint64_t>(last_band) - first_band + 1U > kMaxIndexedBands) {
+      tall_regions.push_back(stored);
+      return true;
+    }
+    for (std::uint32_t band = first_band; band <= last_band; ++band) {
+      regions_by_band[band].push_back(stored);
+    }
+    return true;
+  }
+
+  void erase_region(std::unordered_map<CellAddress, SpillRegion, CellAddressHash>::iterator it) noexcept {
+    const SpillRegion* stored = &it->second;
+    const std::uint32_t first_band = first_band_of(*stored);
+    const std::uint32_t last_band = last_band_of(*stored);
+    if (static_cast<std::uint64_t>(last_band) - first_band + 1U > kMaxIndexedBands) {
+      tall_regions.erase(std::remove(tall_regions.begin(), tall_regions.end(), stored), tall_regions.end());
+    } else {
+      for (std::uint32_t band = first_band; band <= last_band; ++band) {
+        const auto bucket = regions_by_band.find(band);
+        if (bucket == regions_by_band.end()) {
+          continue;
+        }
+        auto& regions = bucket->second;
+        regions.erase(std::remove(regions.begin(), regions.end(), stored), regions.end());
+        if (regions.empty()) {
+          regions_by_band.erase(bucket);
+        }
+      }
+    }
+    by_anchor.erase(it);
+  }
+
+  void clear_regions() noexcept {
+    by_anchor.clear();
+    regions_by_band.clear();
+    tall_regions.clear();
+  }
+
+  // Calls `fn(const SpillRegion&)` for every committed region that may
+  // intersect rows `[row_begin, row_end)`, possibly more than once, until it
+  // returns true. Returns whether it did.
+  template <typename Fn>
+  bool any_region_near_rows(std::uint64_t row_begin, std::uint64_t row_end, Fn&& fn) const {
+    for (const SpillRegion* region : tall_regions) {
+      if (fn(*region)) {
+        return true;
+      }
+    }
+    if (row_end <= row_begin) {
+      return false;
+    }
+    const auto first_band = static_cast<std::uint32_t>(row_begin / kBandRows);
+    const auto last_band = static_cast<std::uint32_t>((row_end - 1U) / kBandRows);
+    if (static_cast<std::uint64_t>(last_band) - first_band + 1U <= regions_by_band.size()) {
+      for (std::uint32_t band = first_band; band <= last_band; ++band) {
+        const auto bucket = regions_by_band.find(band);
+        if (bucket == regions_by_band.end()) {
+          continue;
+        }
+        for (const SpillRegion* region : bucket->second) {
+          if (fn(*region)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+    // A query spanning more bands than are populated walks the populated ones instead.
+    for (const auto& [band, regions] : regions_by_band) {
+      if (band < first_band || band > last_band) {
+        continue;
+      }
+      for (const SpillRegion* region : regions) {
+        if (fn(*region)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+ private:
+  static std::uint32_t first_band_of(const SpillRegion& region) noexcept { return region.anchor_row / kBandRows; }
+  static std::uint32_t last_band_of(const SpillRegion& region) noexcept {
+    return static_cast<std::uint32_t>((static_cast<std::uint64_t>(region.anchor_row) + region.rows - 1U) / kBandRows);
+  }
 };
 
 namespace {
@@ -916,15 +1028,20 @@ std::optional<BlockedSpillFootprint> Sheet::committed_spill_footprint_covering(s
   if (spill_table_ == nullptr) {
     return std::nullopt;
   }
-  for (const auto& [unused, region] : spill_table_->by_anchor) {
-    (void)unused;
-    if (!RectIntersectsSpan(region, row, static_cast<std::uint64_t>(row) + 1U, col,
-                            static_cast<std::uint64_t>(col) + 1U)) {
-      continue;
+  // Committed regions never overlap, so the first covering one is the only one.
+  const SpillRegion* covering = nullptr;
+  const std::uint64_t row_end = static_cast<std::uint64_t>(row) + 1U;
+  spill_table_->any_region_near_rows(row, row_end, [&](const SpillRegion& region) {
+    if (!RectIntersectsSpan(region, row, row_end, col, static_cast<std::uint64_t>(col) + 1U)) {
+      return false;
     }
-    return BlockedSpillFootprint{region.anchor_row, region.anchor_col, region.rows, region.cols};
+    covering = &region;
+    return true;
+  });
+  if (covering == nullptr) {
+    return std::nullopt;
   }
-  return std::nullopt;
+  return BlockedSpillFootprint{covering->anchor_row, covering->anchor_col, covering->rows, covering->cols};
 }
 
 std::vector<SpillFootprint> Sheet::committed_spill_footprints() const {
@@ -1022,18 +1139,20 @@ const SpillRegion* Sheet::spill_region_covering_locked(std::uint32_t row, std::u
   if (spill_table_ == nullptr) {
     return nullptr;
   }
-  for (const auto& entry : spill_table_->by_anchor) {
-    const SpillRegion& region = entry.second;
-    if (!RectIntersectsSpan(region, row, static_cast<std::uint64_t>(row) + 1U, col,
-                            static_cast<std::uint64_t>(col) + 1U)) {
-      continue;
+  // Committed regions never overlap, so the first covering one is the only one.
+  const SpillRegion* covering = nullptr;
+  const std::uint64_t row_end = static_cast<std::uint64_t>(row) + 1U;
+  spill_table_->any_region_near_rows(row, row_end, [&](const SpillRegion& region) {
+    if (!RectIntersectsSpan(region, row, row_end, col, static_cast<std::uint64_t>(col) + 1U)) {
+      return false;
     }
-    if (row == region.anchor_row && col == region.anchor_col) {
-      return nullptr;
-    }
-    return &region;
+    covering = &region;
+    return true;
+  });
+  if (covering != nullptr && row == covering->anchor_row && col == covering->anchor_col) {
+    return nullptr;
   }
-  return nullptr;
+  return covering;
 }
 
 bool Sheet::spill_would_collide(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
@@ -1130,22 +1249,18 @@ Sheet::SpillAdmission Sheet::probe_spill_footprint_locked(std::uint32_t anchor_r
   }
 
   // Spill rectangles and merged ranges are rectangle-intersection tests over
-  // their own tables, so they already cost their table size rather than the
+  // their own tables (spills through the row-band index), never the
   // footprint's area; only the stored-cell sweep needed the sparse walk.
   //
   // A pre-existing region at this anchor is the producer's own spill. It is
   // ignored wholesale: ad-hoc evaluation is read-only and cannot clear it,
   // while commit_spill clears it before reaching this predicate.
-  if (spill_table_ != nullptr) {
-    for (const auto& entry : spill_table_->by_anchor) {
-      const SpillRegion& region = entry.second;
-      if (region.anchor_row == anchor_row && region.anchor_col == anchor_col) {
-        continue;
-      }
-      if (RectIntersectsSpan(region, anchor_row, row_end, anchor_col, col_end)) {
-        return SpillAdmission::kBlocked;
-      }
-    }
+  if (spill_table_ != nullptr &&
+      spill_table_->any_region_near_rows(anchor_row, row_end, [&](const SpillRegion& region) {
+        return !(region.anchor_row == anchor_row && region.anchor_col == anchor_col) &&
+               RectIntersectsSpan(region, anchor_row, row_end, anchor_col, col_end);
+      })) {
+    return SpillAdmission::kBlocked;
   }
   // Merged cells occupy their complete rectangle even when only the top-left
   // coordinate has a stored Cell. Any intersection is a blocker, including a
@@ -1405,8 +1520,8 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // `cells[0]` is no longer reachable through `region`.
   const Value first_cell = region.cells[0];
   const CellAddress anchor_addr{anchor_row, anchor_col};
-  const auto inserted = spill_table_->by_anchor.emplace(anchor_addr, std::move(region));
-  assert(inserted.second && "commit_spill: anchor entry already present after clear");
+  const bool inserted = spill_table_->add_region(anchor_addr, std::move(region));
+  assert(inserted && "commit_spill: anchor entry already present after clear");
   (void)inserted;
 
   // Anchor's cached_value mirrors the first cell of the region so that
@@ -1477,7 +1592,7 @@ void Sheet::clear_spill_locked(std::uint32_t anchor_row, std::uint32_t anchor_co
     return;
   }
   if (region_it != spill_table_->by_anchor.end()) {
-    spill_table_->by_anchor.erase(region_it);
+    spill_table_->erase_region(region_it);
   }
   if (blocked_it != spill_table_->blocked_by_anchor.end()) {
     spill_table_->blocked_by_anchor.erase(blocked_it);
@@ -1489,7 +1604,7 @@ void Sheet::clear_committed_spills_locked() noexcept {
   if (spill_table_ == nullptr || spill_table_->by_anchor.empty()) {
     return;
   }
-  spill_table_->by_anchor.clear();
+  spill_table_->clear_regions();
   cell_enumeration_revision_.bump();
 }
 

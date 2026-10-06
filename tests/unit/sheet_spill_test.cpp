@@ -605,5 +605,65 @@ TEST(SheetSpillTest, CommitRefusalRecordsTheSameFootprintAsAnExplicitReject) {
   EXPECT_EQ(s.resolve_cell_value(0U, 0U), other.resolve_cell_value(0U, 0U));
 }
 
+// Point and footprint queries go through a row-band index; they must agree
+// with a brute-force scan of the committed rectangles across band edges, a
+// region too tall to index, and regions cleared after commit.
+TEST(SheetSpillTest, IndexedSpillQueriesMatchBruteForceScan) {
+  Sheet s("Sheet1");
+  const auto commit = [&s](std::uint32_t row, std::uint32_t col, std::uint32_t rows, std::uint32_t cols) {
+    return s.commit_spill(row, col, rows, cols, std::vector<Value>(std::size_t{rows} * cols, Value::number(1.0)));
+  };
+  ASSERT_TRUE(commit(60U, 0U, 10U, 2U));    // crosses the first band edge
+  ASSERT_TRUE(commit(127U, 3U, 2U, 1U));    // crosses the second
+  ASSERT_TRUE(commit(0U, 10U, 5000U, 1U));  // taller than the indexed span
+  ASSERT_TRUE(commit(300U, 0U, 1U, 1U));
+  ASSERT_TRUE(commit(400U, 5U, 3U, 3U));
+  s.clear_spill(300U, 0U);
+  s.clear_spill(127U, 3U);
+
+  const std::vector<SpillFootprint> regions = s.committed_spill_footprints();
+  ASSERT_EQ(regions.size(), 3U);
+  const auto intersects = [](const SpillFootprint& f, std::uint32_t row, std::uint32_t col, std::uint32_t rows,
+                             std::uint32_t cols) {
+    return f.anchor_row < std::uint64_t{row} + rows && row < std::uint64_t{f.anchor_row} + f.rows &&
+           f.anchor_col < std::uint64_t{col} + cols && col < std::uint64_t{f.anchor_col} + f.cols;
+  };
+  for (std::uint32_t row = 0U; row < 520U; ++row) {
+    for (std::uint32_t col = 0U; col < 12U; ++col) {
+      const SpillFootprint* expected = nullptr;
+      for (const SpillFootprint& f : regions) {
+        if (intersects(f, row, col, 1U, 1U)) {
+          expected = &f;
+        }
+      }
+      const auto covering = s.committed_spill_footprint_covering(row, col);
+      ASSERT_EQ(covering.has_value(), expected != nullptr) << row << "," << col;
+      if (expected != nullptr) {
+        EXPECT_EQ(covering->anchor_row, expected->anchor_row);
+        EXPECT_EQ(covering->anchor_col, expected->anchor_col);
+        const bool is_anchor = row == expected->anchor_row && col == expected->anchor_col;
+        EXPECT_EQ(s.spill_region_covering(row, col) != nullptr, !is_anchor) << row << "," << col;
+      } else {
+        EXPECT_EQ(s.spill_region_covering(row, col), nullptr) << row << "," << col;
+      }
+      for (const std::uint32_t extent : {1U, 3U, 70U}) {
+        // A cleared region leaves its anchor's cached value stored, which still blocks.
+        bool collides = false;
+        for (const SpillFootprint& cleared : {SpillFootprint{300U, 0U, 1U, 1U}, SpillFootprint{127U, 3U, 1U, 1U}}) {
+          const Cell* stored = s.cell_at(cleared.anchor_row, cleared.anchor_col);
+          const bool own = cleared.anchor_row == row && cleared.anchor_col == col;
+          collides = collides || (!own && stored != nullptr && !stored->cached_value.is_blank() &&
+                                  intersects(cleared, row, col, extent, 2U));
+        }
+        for (const SpillFootprint& f : regions) {
+          const bool own = f.anchor_row == row && f.anchor_col == col;
+          collides = collides || (!own && intersects(f, row, col, extent, 2U));
+        }
+        EXPECT_EQ(s.spill_would_collide(row, col, extent, 2U), collides) << row << "," << col << " x" << extent;
+      }
+    }
+  }
+}
+
 }  // namespace
 }  // namespace formulon
