@@ -64,6 +64,11 @@ struct ParsedCell {
   ///                  `sst_index`, with `is_sst_index = true`
   ///   * `Blank` — when `<v>` and `<is>` are both absent
   Value value = Value::blank();
+  /// True only when `value` came from a successfully parsed `t="d"` ISO
+  /// 8601 date payload. The decoder keeps that payload on the canonical
+  /// 1900 serial axis; the sheet reader applies the workbook's 1904 offset
+  /// once, immediately before storing the literal or formula cache.
+  bool is_iso_date = false;
   /// Bundle 2.3 hand-off: when `t="s"`, the parser surfaces the SST index
   /// here instead of resolving it. The reader records (row, col,
   /// sst_index) in a side table and replaces the placeholder text once the

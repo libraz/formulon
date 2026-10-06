@@ -289,6 +289,7 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
     double serial = 0.0;
     if (parse_iso_date_serial(v_text, &serial)) {
       out.value = Value::number(serial);
+      out.is_iso_date = true;
     } else {
       // Non-conforming producer: keep the raw text rather than failing.
       text_storage.emplace_back(std::string(v_text));

@@ -94,14 +94,15 @@ void SnapshotSheet(const Sheet& sheet, LoadResult* out) {
 /// Excel-canonical minimum style table, so the host has to be emptied the
 /// way the OOXML reader empties it; leaving the seed in place would clamp
 /// `s="5"` to 0 and pin the wrong disposition here.
-Workbook MakeStylelessHost() {
+Workbook MakeStylelessHost(bool date1904 = false) {
   Workbook wb = Workbook::create_empty();
   wb.set_styles(StylesTable{});
+  wb.set_date1904(date1904);
   wb.add_sheet("Sheet1");
   return wb;
 }
 
-LoadResult LoadDom(std::string_view sheet_xml) {
+LoadResult LoadDom(std::string_view sheet_xml, bool date1904 = false) {
   LoadResult result;
   pugi::xml_document doc;
   // `load_xml_buffer` is the loader every part reader goes through, and it
@@ -113,7 +114,7 @@ LoadResult LoadDom(std::string_view sheet_xml) {
     result.code = FormulonErrorCode::kIoXmlParse;
     return result;
   }
-  Workbook wb = MakeStylelessHost();
+  Workbook wb = MakeStylelessHost(date1904);
   SheetReadContext ctx;
   std::deque<std::string>& text_storage = wb.mutable_text_storage();
   auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage);
@@ -133,9 +134,9 @@ LoadResult LoadDom(std::string_view sheet_xml) {
 
 /// Reads `sheet_xml` through the streaming path, which reports cells and
 /// row overrides from the one scan.
-LoadResult LoadSax(std::string_view sheet_xml) {
+LoadResult LoadSax(std::string_view sheet_xml, bool date1904 = false) {
   LoadResult result;
-  Workbook wb = MakeStylelessHost();
+  Workbook wb = MakeStylelessHost(date1904);
   SheetReadContext ctx;
   std::deque<std::string>& text_storage = wb.mutable_text_storage();
   const ByteSpan span{reinterpret_cast<const std::uint8_t*>(sheet_xml.data()), sheet_xml.size()};
@@ -210,6 +211,29 @@ TEST(SheetReaderLexingParity, WellFormedStyleAndRowOverrideAgree) {
   ASSERT_EQ(dom.rows.size(), 1U);
   EXPECT_EQ(dom.rows[0].row, 4U);
   EXPECT_DOUBLE_EQ(dom.rows[0].height, 20.0);
+}
+
+TEST(SheetReaderDateSystem, IsoDatesMatchBetweenDomAndSaxAndRebase1904Values) {
+  const std::string xml = WrapSheet(
+      "<row r=\"1\">"
+      "<c r=\"A1\" t=\"d\"><v>1904-01-01</v></c>"
+      "<c r=\"B1\" t=\"d\"><f>A1+1</f><v>1904-01-02</v></c>"
+      "<c r=\"C1\"><v>1462</v></c>"
+      "</row>");
+  const LoadResult dom = LoadDom(xml, /*date1904=*/true);
+  const LoadResult sax = LoadSax(xml, /*date1904=*/true);
+  ASSERT_TRUE(dom.ok);
+  ASSERT_TRUE(sax.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 3U);
+
+  EXPECT_EQ(dom.cells[0].kind, ValueKind::Number);
+  EXPECT_DOUBLE_EQ(dom.cells[0].number, 0.0);
+  EXPECT_EQ(dom.cells[1].formula, "=A1+1");
+  EXPECT_EQ(dom.cells[1].kind, ValueKind::Number);
+  EXPECT_DOUBLE_EQ(dom.cells[1].number, 1.0);
+  EXPECT_EQ(dom.cells[2].kind, ValueKind::Number);
+  EXPECT_DOUBLE_EQ(dom.cells[2].number, 1462.0);
 }
 
 TEST(SheetReaderLexingParity, EntityDecodedFormulaAndRowAttributesAgree) {

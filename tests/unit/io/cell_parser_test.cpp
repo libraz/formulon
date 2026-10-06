@@ -344,6 +344,7 @@ TEST(CellParser, IsoDateTypeBecomesSerialNumber) {
   ASSERT_PARSE_OK(parsed, "<c r=\"A1\" t=\"d\"><v>1976-11-22</v></c>", doc, storage);
   ASSERT_TRUE(parsed.value.is_number());
   EXPECT_DOUBLE_EQ(parsed.value.as_number(), 28086.0);
+  EXPECT_TRUE(parsed.is_iso_date);
 }
 
 TEST(CellParser, IsoDateTimeTypeIncludesTimeFraction) {
@@ -371,6 +372,16 @@ TEST(CellParser, IsoDateMalformedBodyFallsBackToText) {
   ASSERT_PARSE_OK(parsed, "<c r=\"A1\" t=\"d\"><v>not-a-date</v></c>", doc, storage);
   ASSERT_TRUE(parsed.value.is_text());
   EXPECT_EQ(parsed.value.as_text(), "not-a-date");
+  EXPECT_FALSE(parsed.is_iso_date);
+}
+
+TEST(CellParser, NumericSerialIsNotAnIsoDate) {
+  pugi::xml_document doc;
+  std::deque<std::string> storage;
+  ASSERT_PARSE_OK(parsed, "<c r=\"A1\"><v>1462</v></c>", doc, storage);
+  ASSERT_TRUE(parsed.value.is_number());
+  EXPECT_DOUBLE_EQ(parsed.value.as_number(), 1462.0);
+  EXPECT_FALSE(parsed.is_iso_date);
 }
 
 // Evaluates `src` against the default registry under the Mac profile.

@@ -46,6 +46,7 @@
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "utils/date_time.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
@@ -276,6 +277,16 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
 Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view formula_text, std::uint32_t xf_index,
                                       const std::vector<PhoneticRun>* phonetic_runs, PhoneticProperties phonetic_props,
                                       std::size_t sheet_index, Workbook& workbook, SheetReadContext& ctx) {
+  // `decode_cell_payload` deliberately produces all ISO dates on the
+  // canonical 1900 serial axis so DOM and SAX share one pure decoder. The
+  // workbook epoch is applied exactly once at this shared storage boundary,
+  // and only for a successfully parsed `t="d"` payload. Ordinary numeric
+  // literals with the same value must keep their original serial unchanged.
+  Value stored_value = parsed.value;
+  if (workbook.date1904() && parsed.is_iso_date && stored_value.is_number()) {
+    stored_value = Value::number(stored_value.as_number() - date_time::kDate1904EpochGap);
+  }
+
   // A `<c s="900">` against a five-entry `<cellXfs>` names no style. Fall
   // back to the default xf so the loaded workbook stays self-consistent:
   // `fm_cell_get_xf` resolves for every cell that loaded, and a save does
@@ -303,10 +314,10 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     // This is essential when a workbook uses functions Formulon does not yet
     // implement: eagerly replacing a valid loaded cache with #NAME? makes a
     // read-only inspection or save/load round-trip lose useful data.
-    if (!parsed.value.is_blank() && !parsed.is_sst_index) {
-      workbook.sheet(sheet_index).set_cell_cached_value_borrowed(parsed.row, parsed.col, parsed.value);
+    if (!stored_value.is_blank() && !parsed.is_sst_index) {
+      workbook.sheet(sheet_index).set_cell_cached_value_borrowed(parsed.row, parsed.col, stored_value);
     }
-  } else if (parsed.value.is_blank()) {
+  } else if (stored_value.is_blank()) {
     // Skip blank-blank cells to keep the row map sparse, unless a style
     // index exists: then the format is the payload and must materialise
     // the cell below.
@@ -325,12 +336,12 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     Sheet& sheet = workbook.sheet(sheet_index);
     const Cell* existing = sheet.cell_at(parsed.row, parsed.col);
     if (existing != nullptr && !existing->formula_text.empty()) {
-      auto wv = workbook.set_cell_value(sheet_index, parsed.row, parsed.col, parsed.value);
+      auto wv = workbook.set_cell_value(sheet_index, parsed.row, parsed.col, stored_value);
       if (!wv) {
         return wv.error();
       }
     } else {
-      sheet.set_cell_value(parsed.row, parsed.col, parsed.value);
+      sheet.set_cell_value(parsed.row, parsed.col, stored_value);
     }
   }
 
