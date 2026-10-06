@@ -186,7 +186,7 @@ std::unique_ptr<pivot::PivotCache> BuildClockPivotCache() {
   cache->mutable_fields().push_back(pivot::PivotCacheField{"Date", {}});
   cache->mutable_fields().push_back(pivot::PivotCacheField{"Amount", {}});
 
-  for (const auto [date, amount] : std::vector<std::pair<double, double>>{{100.0, 100.0}, {200.0, 200.0}}) {
+  for (const auto& [date, amount] : std::vector<std::pair<double, double>>{{100.0, 100.0}, {200.0, 200.0}}) {
     pivot::PivotCacheRecord record;
     record.cells.push_back(Value::number(date));
     record.cells.push_back(Value::number(amount));
