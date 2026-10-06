@@ -107,28 +107,6 @@ const parser::Reference* anchor_ref_of(const parser::AstNode& node) noexcept {
   return &cur->as_ref();
 }
 
-// Locates `name` in `fields` by `custom_name` (preferred when non-empty,
-// matching the OOXML reader's behaviour) or `source_name`. Returns the
-// 0-based index when exactly one field matches. An absent result covers both
-// an unknown name and an ambiguous caption shared by distinct fields.
-// Comparison is case-sensitive: Mac's GETPIVOTDATA requires an exact text
-// match, including whitespace. A field that matches through both its custom
-// and source names still contributes only one candidate.
-std::optional<std::size_t> find_field_index(const std::vector<pivot::PivotField>& fields,
-                                            std::string_view name) noexcept {
-  std::optional<std::size_t> match;
-  for (std::size_t i = 0; i < fields.size(); ++i) {
-    const pivot::PivotField& f = fields[i];
-    if (pivot::pivot_field_has_name(f, name)) {
-      if (match.has_value() && *match != i) {
-        return std::nullopt;
-      }
-      match = i;
-    }
-  }
-  return match;
-}
-
 // Locates `name` in `data_fields`, by display name first and then by the
 // name of the source field the entry aggregates. Returns the 0-based
 // index, or `static_cast<std::size_t>(-1)` when no data field matches.
@@ -400,7 +378,7 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
       return Value::error(kPivotRefError);
     }
 
-    const std::optional<std::size_t> fi = find_field_index(table->fields(), field_text.value());
+    const std::optional<std::size_t> fi = pivot::find_unique_field_by_name(*table, field_text.value());
     if (!fi.has_value()) {
       return Value::error(kPivotRefError);
     }

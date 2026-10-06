@@ -31,14 +31,38 @@ inline std::string pivot_field_display_name(const PivotField& field) {
   return field.custom_name.empty() ? field.source_name : field.custom_name;
 }
 
-/// Resolves `name` to an index into `table.fields()`. Direct field names win
-/// over data-field display names, so a data field named after another pivot
-/// field cannot shadow it. Returns `nullopt` when nothing matches.
-inline std::optional<std::size_t> resolve_field_by_any_name(const PivotTable& table, std::string_view name) {
+/// Locates the one field `name` designates directly. Returns `nullopt` for an
+/// unknown name and for a name shared by distinct fields (e.g. a caption two
+/// fields both carry, or one field's caption equal to another's source name).
+/// A field matching through both its names counts once. Comparison is
+/// case-sensitive.
+inline std::optional<std::size_t> find_unique_field_by_name(const PivotTable& table, std::string_view name) {
+  std::optional<std::size_t> match;
   for (std::size_t i = 0; i < table.fields().size(); ++i) {
     if (pivot_field_has_name(table.fields()[i], name)) {
-      return i;
+      if (match.has_value()) {
+        return std::nullopt;
+      }
+      match = i;
     }
+  }
+  return match;
+}
+
+/// Resolves `name` to an index into `table.fields()`. Direct field names win
+/// over data-field display names, so a data field named after another pivot
+/// field cannot shadow it. Returns `nullopt` when nothing matches or when the
+/// direct name is ambiguous.
+inline std::optional<std::size_t> resolve_field_by_any_name(const PivotTable& table, std::string_view name) {
+  bool direct_match = false;
+  for (const PivotField& field : table.fields()) {
+    if (pivot_field_has_name(field, name)) {
+      direct_match = true;
+      break;
+    }
+  }
+  if (direct_match) {
+    return find_unique_field_by_name(table, name);
   }
   for (const PivotDataField& data_field : table.data_fields()) {
     if (data_field.name == name && data_field.field_index < table.fields().size()) {

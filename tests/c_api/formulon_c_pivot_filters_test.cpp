@@ -477,6 +477,38 @@ TEST(FormulonCApiPivot, ValueFilterRejectsUnknownFieldNameWithoutMutation) {
   ASSERT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), 0) << fm_last_error_message();
 }
 
+TEST(FormulonCApiPivot, FilterRejectsAmbiguousFieldNameWithoutMutation) {
+  // A caption shared by two distinct fields names neither of them, exactly
+  // like an unknown name.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  fm_pivot_field_spec_t dup_spec{};
+  dup_spec.source_name = "Amount";
+  dup_spec.custom_name = "Region";
+  dup_spec.axis = FM_PIVOT_AXIS_VALUE;
+  dup_spec.number_format = "";
+  std::size_t dup_field = 99;
+  ASSERT_EQ(fm_workbook_pivot_field_add(wb.handle, 0, pivot_idx, &dup_spec, &dup_field), 0) << fm_last_error_message();
+
+  fm_pivot_filter_spec_t spec{};
+  spec.axis = FM_PIVOT_AXIS_ROW;
+  spec.field_name = "Region";
+  spec.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
+  spec.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
+  spec.value_text = "N";
+  spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
+  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), invalid);
+
+  std::size_t count = 99;
+  ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
 TEST(FormulonCApiPivot, FilterErrorUsesApiName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
