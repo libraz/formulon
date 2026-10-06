@@ -1,5 +1,8 @@
 // End-to-end date/time built-in tests: constructors and extractors.
 
+#include <limits>
+#include <utility>
+
 #include "builtins_datetime_test_helpers.h"
 namespace formulon {
 namespace eval {
@@ -8,6 +11,59 @@ namespace {
 // ---------------------------------------------------------------------------
 // DATE
 // ---------------------------------------------------------------------------
+
+TEST(DateTimeTime, OverflowingComponentsReturnNumError) {
+  for (const char* formula : {"=TIME(1E308,0,0)", "=TIME(0,1E308,0)", "=TIME(1E308,-1E308,0)"}) {
+    SCOPED_TRACE(formula);
+    const Value value = EvalSource(formula);
+    ASSERT_TRUE(value.is_error());
+    EXPECT_EQ(value.as_error(), ErrorCode::Num);
+  }
+  const Value carry = EvalSource("=TIME(25,0,0)");
+  ASSERT_TRUE(carry.is_number());
+  EXPECT_DOUBLE_EQ(carry.as_number(), 1.0 / 24.0);
+}
+
+TEST(DateTimeTime, ComponentUpperBoundsApplyBeforeDayWrapping) {
+  for (const char* formula : {"=TIME(32768,0,0)", "=TIME(0,32768,0)", "=TIME(0,0,32768)", "=TIME(0,0,1E308)"}) {
+    SCOPED_TRACE(formula);
+    const Value value = EvalSource(formula);
+    ASSERT_TRUE(value.is_error());
+    EXPECT_EQ(value.as_error(), ErrorCode::Num);
+  }
+  for (const auto& row :
+       {std::pair{"=TIME(32767,0,0)", 7.0 / 24.0},
+        std::pair{"=TIME(0,32767,0)", (32767.0 * 60.0 - 22.0 * 86400.0) / 86400.0},
+        std::pair{"=TIME(0,0,32767)", 32767.0 / 86400.0}, std::pair{"=TIME(32767.9,0,0)", 7.0 / 24.0}}) {
+    SCOPED_TRACE(row.first);
+    const Value value = EvalSource(row.first);
+    ASSERT_TRUE(value.is_number());
+    EXPECT_DOUBLE_EQ(value.as_number(), row.second);
+  }
+}
+
+TEST(DateTimeNumericSafety, NonFiniteCellTimesReturnNumError) {
+  Workbook workbook = Workbook::create();
+  for (double input : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+                       -std::numeric_limits<double>::infinity()}) {
+    workbook.sheet(0).set_cell_value(0, 0, Value::number(input));
+    for (const char* formula : {"=HOUR(A1)", "=MINUTE(A1)", "=SECOND(A1)"}) {
+      const Value value = EvalSourceIn(formula, workbook, workbook.sheet(0));
+      ASSERT_TRUE(value.is_error()) << formula;
+      EXPECT_EQ(value.as_error(), ErrorCode::Num);
+    }
+  }
+}
+
+TEST(DateTimeNumericSafety, HugeSelectorsReturnNumError) {
+  for (const char* formula : {"=WEEKDAY(1,1E300)", "=WEEKDAY(1,-1E300)", "=WEEKNUM(1,1E300)", "=WEEKNUM(1,-1E300)",
+                              "=YEARFRAC(1,2,1E300)", "=YEARFRAC(1,2,-1E300)"}) {
+    SCOPED_TRACE(formula);
+    const Value value = EvalSource(formula);
+    ASSERT_TRUE(value.is_error());
+    EXPECT_EQ(value.as_error(), ErrorCode::Num);
+  }
+}
 
 TEST(DateTimeDate, CurrentDateSerial) {
   const Value v = EvalSource("=DATE(2026, 4, 23)");

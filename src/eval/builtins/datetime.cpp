@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstdint>
 #include <ctime>
+#include <limits>
 #include <string_view>
 
 #include "eval/builtins/registration_helpers.h"
@@ -181,7 +182,12 @@ Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std:
   if (!n) {
     return n.error();
   }
-  return static_cast<int>(std::trunc(n.value()));
+  const double truncated = std::trunc(n.value());
+  if (!std::isfinite(truncated) || truncated < static_cast<double>(std::numeric_limits<int>::lowest()) ||
+      truncated > static_cast<double>(std::numeric_limits<int>::max())) {
+    return ErrorCode::Num;
+  }
+  return static_cast<int>(truncated);
 }
 
 Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v, bool date1904) {
@@ -284,9 +290,10 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
   return Value::number(serial);
 }
 
-/// TIME(hour, minute, second). Each component is truncated; out-of-range
-/// inputs are accepted and normalised modulo 24/60/60. A negative result
-/// (e.g. `TIME(-1, 0, 0)`) yields `#NUM!` per Excel.
+/// TIME(hour, minute, second). Each component is truncated; positive values
+/// above Excel's documented 32767-component limit yield `#NUM!`. Accepted
+/// inputs are normalised modulo 24/60/60. A negative result (e.g.
+/// `TIME(-1, 0, 0)`) yields `#NUM!` per Excel.
 Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto hours = read_truncated_number_arg(args, 0);
   if (!hours) {
@@ -300,8 +307,11 @@ Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!seconds) {
     return Value::error(seconds.error());
   }
+  if (hours.value() > 32767.0 || minutes.value() > 32767.0 || seconds.value() > 32767.0) {
+    return Value::error(ErrorCode::Num);
+  }
   const double total = hours.value() * 3600.0 + minutes.value() * 60.0 + seconds.value();
-  if (total < 0.0) {
+  if (!std::isfinite(total) || total < 0.0) {
     return Value::error(ErrorCode::Num);
   }
   // Normalise modulo a full day so `TIME(25, 0, 0) == TIME(1, 0, 0)`.
