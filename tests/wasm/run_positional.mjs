@@ -10,6 +10,18 @@ function expectTypeError(fn) {
   assert.throws(fn, TypeError);
 }
 
+function deleteAfterLifecycleProbe(wb, lifecycle) {
+  if (wb.isDeleted()) return;
+  try {
+    wb.delete();
+  } catch (error) {
+    // Older artifacts can leave deleteLater scheduled after the getter
+    // returns; there is no synchronous flush API. The fixed guard leaves the
+    // workbook normally deletable here.
+    if (lifecycle !== 'deleteLater') throw error;
+  }
+}
+
 export function registerPositional(Module, test, hookProbe) {
   if (hookProbe !== undefined) {
     test('WASM positional guards install before factory hooks', () => {
@@ -207,16 +219,7 @@ export function registerPositional(Module, test, hookProbe) {
         assert.equal(wb.xfCount().value, before);
         assert.equal(wb.isDeleted(), false);
       } finally {
-        if (!wb.isDeleted()) {
-          try {
-            wb.delete();
-          } catch (error) {
-            // Older artifacts can leave deleteLater scheduled after the
-            // getter returns; there is no synchronous flush API. The fixed
-            // guard leaves the workbook normally deletable here.
-            if (lifecycle !== 'deleteLater') throw error;
-          }
-        }
+        deleteAfterLifecycleProbe(wb, lifecycle);
       }
     }
   });
@@ -244,13 +247,7 @@ export function registerPositional(Module, test, hookProbe) {
         assert.equal(wb.xfCount().value, before);
         assert.equal(wb.isDeleted(), false);
       } finally {
-        if (!wb.isDeleted()) {
-          try {
-            wb.delete();
-          } catch (error) {
-            if (lifecycle !== 'deleteLater') throw error;
-          }
-        }
+        deleteAfterLifecycleProbe(wb, lifecycle);
       }
     }
   });
