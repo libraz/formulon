@@ -27,6 +27,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -409,6 +410,25 @@ TEST(GetPivotDataLazy, DuplicateCustomCaptionAcrossAxesReturnsRef) {
   const Value v = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Axis\", \"North\")", ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(GetPivotDataLazy, PivotPushedOffGridByRowInsertTurnsDependentIntoRef) {
+  Workbook wb = BuildBasicWorkbook();
+  ASSERT_TRUE(static_cast<bool>(
+      wb.set_cell_formula(0U, 0U, 5U, "=GETPIVOTDATA(\"Sum of Amount\", A3, \"Region\", \"North\")")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  const Cell* before = wb.sheet(0).cell_at(0U, 5U);
+  ASSERT_NE(before, nullptr);
+  ASSERT_TRUE(before->cached_value.is_number());
+  EXPECT_EQ(before->cached_value.as_number(), 300.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0U, 1U, Sheet::kMaxRows - 2U)));
+  EXPECT_TRUE(wb.sheet(0).pivot_tables().empty());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  const Cell* after = wb.sheet(0).cell_at(0U, 5U);
+  ASSERT_NE(after, nullptr);
+  ASSERT_TRUE(after->cached_value.is_error());
+  EXPECT_EQ(after->cached_value.as_error(), ErrorCode::Ref);
 }
 
 TEST(GetPivotDataLazy, DistinctRowAndColumnFieldsUseTheirLeafOffsets) {

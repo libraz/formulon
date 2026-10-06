@@ -242,8 +242,11 @@ void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, 
         anchor = anchor < index + count ? index : anchor - count;
       } else {
         const std::uint64_t shifted = static_cast<std::uint64_t>(anchor) + count;
-        anchor = static_cast<std::uint32_t>(
-            std::min<std::uint64_t>(shifted, row_axis ? Sheet::kMaxRows - 1U : Sheet::kMaxCols - 1U));
+        if (shifted >= (row_axis ? Sheet::kMaxRows : Sheet::kMaxCols)) {
+          pivot.reset();
+          continue;
+        }
+        anchor = static_cast<std::uint32_t>(shifted);
       }
     }
     std::uint32_t span_rows = pivot->span_rows();
@@ -257,6 +260,7 @@ void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, 
     pivot->set_anchor(row_axis ? anchor : pivot->anchor_row(), row_axis ? pivot->anchor_col() : anchor, span_rows,
                       span_cols);
   }
+  pivots.erase(std::remove(pivots.begin(), pivots.end(), nullptr), pivots.end());
 }
 
 }  // namespace

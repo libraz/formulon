@@ -195,19 +195,12 @@ TEST(SheetTest, StructuralEditsKeepPivotSpansInsideGridAtEdges) {
       s.insert_cols(insert_at, 1U);
     }
 
-    ASSERT_EQ(s.pivot_tables().size(), 3U);
+    // A pivot pushed wholly off the grid is dropped, like merges and validations.
+    ASSERT_EQ(s.pivot_tables().size(), 1U);
     EXPECT_EQ(s.pivot_tables()[0]->anchor_row(), rows ? bound - 2U : 4U);
     EXPECT_EQ(s.pivot_tables()[0]->anchor_col(), rows ? 4U : bound - 2U);
     EXPECT_EQ(s.pivot_tables()[0]->span_rows(), 2U);
     EXPECT_EQ(s.pivot_tables()[0]->span_cols(), 2U);
-    EXPECT_EQ(s.pivot_tables()[1]->anchor_row(), rows ? bound - 1U : 8U);
-    EXPECT_EQ(s.pivot_tables()[1]->anchor_col(), rows ? 8U : bound - 1U);
-    EXPECT_EQ(s.pivot_tables()[1]->span_rows(), 1U);
-    EXPECT_EQ(s.pivot_tables()[1]->span_cols(), 1U);
-    EXPECT_EQ(s.pivot_tables()[2]->anchor_row(), rows ? bound - 1U : 12U);
-    EXPECT_EQ(s.pivot_tables()[2]->anchor_col(), rows ? 12U : bound - 1U);
-    EXPECT_EQ(s.pivot_tables()[2]->span_rows(), rows ? 0U : 1U);
-    EXPECT_EQ(s.pivot_tables()[2]->span_cols(), rows ? 1U : 0U);
   }
 }
 
