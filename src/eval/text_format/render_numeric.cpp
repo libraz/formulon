@@ -338,18 +338,14 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
 
   int exponent = 0;
   if (section.has_scientific) {
-    // Scientific notation uses engineering groups sized by every integer
-    // placeholder before the decimal point. Required `0`/`?` placeholders
-    // still act as the minimum padding when the normalized mantissa is
-    // shorter than that group.
+    // Engineering groups span all integer placeholders; required `0`/`?` still set minimum padding.
     const int integer_group =
         std::max(1, section.integer_zero_digits + section.integer_opt_digits + section.integer_pad_digits);
     double mantissa = scaled;
     if (mantissa != 0.0) {
       const double abs_m = std::fabs(mantissa);
       const int raw_exponent = static_cast<int>(std::floor(std::log10(abs_m)));
-      // C++ integer division truncates toward zero. Scientific notation needs
-      // floor division so values in (-1, 0) stay in the preceding group.
+      // Floor division keeps values in (-1, 0) in the preceding group.
       int quotient = raw_exponent / integer_group;
       if (raw_exponent < 0 && raw_exponent % integer_group != 0) {
         --quotient;
@@ -370,9 +366,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
     }
     format_fixed_digits(mantissa, frac_digits, &negative, &int_digits, &frac_digits_str);
 
-    // Rounding can promote 99.999 to 100.00 (or 9.999 to 10.00). Carry the
-    // engineering exponent by one whole group and format the renormalized
-    // mantissa again so the integer side stays within its group.
+    // Rounding can carry into a new group (99.999 -> 100.00); renormalize and format again.
     if (mantissa != 0.0 && static_cast<int>(int_digits.size()) > integer_group) {
       for (int i = 0; i < integer_group; ++i) {
         mantissa /= 10.0;
@@ -645,9 +639,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
       }
       case Tok::SciPlus:
       case Tok::SciMinus:
-        // The mantissa was prepared above; the rest of the token stream is
-        // still walked here so exponent placeholders and surrounding
-        // literals retain their format positions.
+        // Walk the remaining tokens so exponent placeholders and literals keep their positions.
         result.push_back('E');
         if (exponent >= 0) {
           if (tk.kind == Tok::SciPlus) {

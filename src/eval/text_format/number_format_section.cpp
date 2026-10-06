@@ -389,8 +389,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
     return fmt[tk.lit_begin] == want;
   };
   if (!any_date && point_index < 0) {
-    // Find exactly one structural slash candidate. Quoted/escaped slashes
-    // deliberately do not participate in fraction recognition.
+    // Exactly one structural slash; quoted or escaped slashes never form a fraction.
     int slash_idx = -1;
     int slash_count = 0;
     for (std::size_t i = 0; i < section.tokens.size(); ++i) {
@@ -406,10 +405,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
       while (num_begin > 0 && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin) - 1].kind)) {
         --num_begin;
       }
-      // Walk right from slash to find either a raw integer denominator or a
-      // variable placeholder run. A raw run beginning with zero remains
-      // variable only when every raw digit is zero (`/000`); `/08` and
-      // `/0010` are fixed denominators with a literal zero prefix.
+      // A raw run starting with 0 is variable only when all zeros (`/000`); `/08` is fixed.
       int den_begin = slash_idx + 1;
       int den_end = den_begin;
       bool fixed_denominator = false;
@@ -448,15 +444,12 @@ void classify(Section& section, std::string_view fmt) noexcept {
         fixed_denominator = true;
         fixed_den_end = raw_den_end;
         if (fixed_denominator_value > kMaxFractionDenominator) {
-          // Keep all fraction arithmetic within the uint64_t bound used by
-          // the renderer. Wider literal denominators are malformed for this
-          // bounded format engine rather than partially rendered.
+          // Denominators wider than the renderer's uint64_t bound are malformed, not partially rendered.
           section.has_invalid_bracket = true;
           fixed_denominator = false;
         }
       } else {
-        // A run containing only raw zero bytes is a normal zero-placeholder
-        // denominator. This also handles mixed forms such as `0?` and `?0`.
+        // An all-zero run is a zero-placeholder denominator, as are mixed `0?` and `?0`.
         while (static_cast<std::size_t>(den_end) < section.tokens.size() &&
                is_digit_tok2(section.tokens[static_cast<std::size_t>(den_end)].kind)) {
           ++den_end;
@@ -465,9 +458,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
           const Token& first = section.tokens[static_cast<std::size_t>(den_begin)];
           if (first.kind == Tok::Literal && first.protected_literal && first.lit_begin < fmt.size() &&
               first.lit_end > first.lit_begin && fmt[first.lit_begin] >= '1' && fmt[first.lit_begin] <= '9') {
-            // A quoted or escaped fixed denominator is not a structural
-            // denominator. Excel rejects this syntax rather than treating
-            // the payload as a supported fraction format.
+            // Excel rejects a quoted or escaped fixed denominator.
             section.has_invalid_bracket = true;
           }
         }
@@ -506,8 +497,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
         section.fraction_den_max_digits = fixed_denominator ? 0 : den_end - den_begin;
         section.fraction_fixed_denominator = fixed_denominator;
         section.fraction_fixed_denominator_value = fixed_denominator ? fixed_denominator_value : 1U;
-        // A trailing comma is a scaling marker for ordinary numbers, but it
-        // is invalid syntax after a fraction denominator.
+        // A trailing comma after a fraction denominator is invalid, not a scaling marker.
         for (std::size_t i = static_cast<std::size_t>(den_end); i < section.tokens.size(); ++i) {
           if (section.tokens[i].kind == Tok::Comma) {
             section.has_invalid_bracket = true;

@@ -128,9 +128,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
     const bool first_predicate = sections[0].cond_op != CondOp::kNone;
     const bool second_predicate = sections.size() >= 2U && sections[1].cond_op != CondOp::kNone;
     if (sections.size() >= 3U) {
-      // With three or four sections, an unconditional first/second arm is an
-      // implicit positive/negative predicate respectively. Explicit
-      // predicates replace only their own arm; section 2 is the raw fallback.
+      // Unconditional arms 0/1 are implicit positive/negative predicates; section 2 is the raw fallback.
       const bool first_matches =
           first_predicate ? cond_match(sections[0].cond_op, sections[0].cond_value, value) : value > 0.0;
       if (first_matches) {
@@ -162,13 +160,11 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
           chosen = 0;
           chosen_predicate_matched = true;
         } else {
-          // The unconditional second arm is the catch-all fallback for a
-          // format whose first arm carries the predicate.
+          // The unconditional second arm is the fallback when the first arm carries the predicate.
           chosen = 1;
         }
       } else {
-        // An unconditional first arm is the implicit positive arm when the
-        // second arm carries the predicate. Zero belongs to neither arm.
+        // An unconditional first arm is the implicit positive arm; zero belongs to neither arm.
         if (value > 0.0) {
           chosen = 0;
         } else if (cond_match(sections[1].cond_op, sections[1].cond_value, value)) {
@@ -179,8 +175,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
         }
       }
     } else {
-      // A lone predicate section still renders when it does not match; the
-      // sign treatment below distinguishes its fallback from a match.
+      // A lone predicate section still renders on a miss; the sign treatment below tells the cases apart.
       chosen = 0;
       chosen_predicate_matched = cond_match(sections[0].cond_op, sections[0].cond_value, value);
     }
@@ -221,10 +216,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
     bool use_magnitude = false;
     if (section.cond_op != CondOp::kNone) {
       if (chosen_predicate_matched) {
-        // A selected negative predicate section normally receives the
-        // magnitude. The strict threshold rules match Excel's sign treatment:
-        // `<` uses magnitude for a nonpositive threshold, while `<=` and `=`
-        // require a negative threshold.
+        // Excel passes the magnitude for `<` at a threshold <= 0, and for `<=`/`=` at a threshold < 0.
         switch (section.cond_op) {
           case CondOp::kLt:
             use_magnitude = section.cond_value <= 0.0;
@@ -237,9 +229,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
             break;
         }
       } else if (sections.size() == 1U && !chosen_predicate_matched) {
-        // A lone predicate that misses on a negative value falls back to the
-        // positive display arm for a negative-only condition or a condition
-        // covering all positive values. Equality remains signed when false.
+        // A negative miss renders positively for negative-only or all-positive predicates; `=` stays signed.
         switch (section.cond_op) {
           case CondOp::kLt:
             use_magnitude = section.cond_value <= 0.0;
@@ -260,13 +250,10 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
         }
       }
     } else if (sections.size() >= 3U && chosen == 1) {
-      // An unconditional second arm in a three/four-section conditional
-      // format is the implicit negative magnitude arm. Section 2 remains a
-      // raw fallback and keeps the sign.
+      // Section 1 is the implicit negative-magnitude arm; section 2 is the raw fallback and keeps the sign.
       use_magnitude = true;
     } else if (sections.size() == 2U && sections[0].cond_op != CondOp::kNone) {
-      // With two sections, only a predicate that covers every positive value
-      // makes the unconditional second arm behave as the negative section.
+      // Only a predicate covering every positive value makes the second arm the negative section.
       const CondOp first_op = sections[0].cond_op;
       use_magnitude = ((first_op == CondOp::kGt || first_op == CondOp::kGe) && sections[0].cond_value <= 0.0) ||
                       (first_op == CondOp::kNe && sections[0].cond_value < 0.0);
@@ -278,18 +265,14 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
   }
 
   if (section.is_text) {
-    // A numeric value selected a text-only section (for example `@` or
-    // `"pre"@`). Numeric TEXT/display formatting falls back to General and
-    // ignores the text section's literals; the text builtin calls
-    // apply_text_format directly when the original value is text/bool.
+    // A number selecting a text-only section (`@`, `"pre"@`) renders as General without its literals.
     return apply_format(value, "General", out, date1904, dialect);
   }
   if (section.is_date) {
     // The calendar runs from serial 0 to 9999-12-31. The 1904 system also
     // shows a negative serial, as its magnitude behind a leading minus.
     const double max_serial = date1904 ? kMaxDateSerial1900 - date_time::kDate1904EpochGap : kMaxDateSerial1900;
-    // The final calendar day includes its time-of-day fraction. The next
-    // whole day is outside Excel's date range in either epoch.
+    // The last calendar day keeps its time fraction; the next whole day is out of range in either epoch.
     const bool out_of_range =
         date1904 ? std::fabs(render_value) >= max_serial + 1.0 : render_value < 0.0 || render_value >= max_serial + 1.0;
     if (out_of_range) {

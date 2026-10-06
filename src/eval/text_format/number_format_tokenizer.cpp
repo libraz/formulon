@@ -450,9 +450,7 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       default:
         break;
     }
-    // An unquoted slash is a structural fraction separator candidate. Keep
-    // its exact source range so the classifier can distinguish it from a
-    // quoted or escaped slash payload.
+    // Keep the slash's source range so the classifier can tell it from a quoted slash.
     if (c == '/') {
       Token t;
       t.kind = Tok::Literal;

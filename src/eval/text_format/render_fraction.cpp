@@ -118,13 +118,9 @@ void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, s
       break;
     }
     const std::uint64_t quotient_limit = q_prev1 == 0 ? max_q : (max_q - q_prev2) / q_prev1;
-    // Compare before converting the partial quotient. On platforms where
-    // long double is the same precision as double, UINT64_MAX itself is not
-    // distinguishable from its neighbouring values; the bounded quotient
-    // limit keeps every subsequent cast below 1e18 and therefore defined.
+    // Compare before casting: a long double as narrow as double cannot represent UINT64_MAX exactly.
     if (a_value >= static_cast<long double>(quotient_limit) + 1.0L) {
-      // Excel returns zero when even the first reciprocal is outside the
-      // denominator range; it does not substitute 1/max_q at this boundary.
+      // When even the first reciprocal is out of range Excel returns zero, not 1/max_q.
       if (p_prev1 == 0 && q_prev1 == 1) {
         break;
       }
@@ -279,9 +275,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
     den = section.fraction_fixed_denominator_value;
     fraction_num = rounded_product(target, den);
   } else {
-    // The numerator is a layout concern only. Removing its placeholder cap
-    // is required for improper forms such as `?/?` -> `2469/2`; the whole
-    // part is folded in after this bounded fractional search.
+    // The numerator is uncapped so improper forms such as `?/?` render `2469/2`.
     const std::uint64_t max_q = fraction_pow10(section.fraction_den_max_digits) - 1U;
     best_rational(target, max_q, &fraction_num, &den);
   }
@@ -403,10 +397,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
   }
   // 6) Denominator group.
   if (section.fraction_fixed_denominator) {
-    // Excel treats a raw denominator with a leading zero as a fixed numeric
-    // value while displaying zeros for its significant digit width.
-    // The remaining positions become spaces (`/008` -> `0  `), whereas
-    // an unprefixed fixed denominator is copied as its numeric digits.
+    // A zero-prefixed fixed denominator shows zeros for its significant width, then spaces (`/008` -> `0  `).
     const bool has_zero_prefix =
         den_begin < den_end && section.tokens[static_cast<std::size_t>(den_begin)].kind == Tok::DigitZero;
     if (!has_zero_prefix) {
@@ -418,8 +409,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
       result.append(static_cast<std::size_t>(den_end - den_begin) - denominator_digits.size(), ' ');
     }
   } else {
-    // Denominator runs beginning with `0` are right-aligned; every other
-    // run is left-aligned so `?0` becomes `20` while `0?` becomes `02`.
+    // Runs starting with `0` right-align, others left-align (`?0` -> `20`, `0?` -> `02`).
     const bool denominator_trailing_pad =
         den_begin < den_end && section.tokens[static_cast<std::size_t>(den_begin)].kind != Tok::DigitZero;
     emit_fraction_digits(section, denominator_digits, den_begin, den_end, result, denominator_trailing_pad);
