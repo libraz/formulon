@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { appendEmptyZipEntry, readZipEntryText, VAL } from './smoke_support.mjs';
 
+const nestedErrorClass = (value) => (typeof value === 'symbol' ? TypeError : RangeError);
+
 export function registerCellsIo(Module, test) {
   test('setText / setBool / setBlank round-trip', () => {
     const wb = Module.Workbook.createDefault();
@@ -133,14 +135,20 @@ export function registerCellsIo(Module, test) {
         ];
         assert.ok(wb.setCellPhoneticRuns(0, 0, 0, runs).ok);
         const beforeRuns = wb.getCellPhoneticRuns(0, 0, 0).runs;
-        const badRuns = wb.setCellPhoneticRuns(0, 0, 0, [{ sb: value, eb: 2, text: '壊' }]);
-        assert.equal(badRuns.ok, false, `setCellPhoneticRuns sb=${String(value)} accepted`);
+        assert.throws(
+          () => wb.setCellPhoneticRuns(0, 0, 0, [{ sb: value, eb: 2, text: '壊' }]),
+          nestedErrorClass(value),
+          `setCellPhoneticRuns sb=${String(value)} accepted`,
+        );
         assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, beforeRuns);
 
         assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 }).ok);
         const beforeProps = wb.getCellPhoneticProperties(0, 0, 0);
-        const badProps = wb.setCellPhoneticProperties(0, 0, 0, { fontId: value, type: 2, alignment: 2 });
-        assert.equal(badProps.ok, false, `setCellPhoneticProperties fontId=${String(value)} accepted`);
+        assert.throws(
+          () => wb.setCellPhoneticProperties(0, 0, 0, { fontId: value, type: 2, alignment: 2 }),
+          nestedErrorClass(value),
+          `setCellPhoneticProperties fontId=${String(value)} accepted`,
+        );
         assert.deepEqual(
           {
             fontId: wb.getCellPhoneticProperties(0, 0, 0).fontId,
@@ -150,8 +158,11 @@ export function registerCellsIo(Module, test) {
           { fontId: beforeProps.fontId, type: beforeProps.type, alignment: beforeProps.alignment },
         );
 
-        const badValue = wb.formatValue({ kind: value, number: 1, boolean: 0, text: '', errorCode: 0 }, 'General');
-        assert.equal(badValue.status.ok, false, `formatValue kind=${String(value)} accepted`);
+        assert.throws(
+          () => wb.formatValue({ kind: value, number: 1, boolean: 0, text: '', errorCode: 0 }, 'General'),
+          nestedErrorClass(value),
+          `formatValue kind=${String(value)} accepted`,
+        );
       } finally {
         wb.delete();
       }
@@ -163,11 +174,16 @@ export function registerCellsIo(Module, test) {
     for (const value of invalid) {
       const wb = Module.Workbook.createDefault();
       try {
-        const booleanValue = wb.formatValue({ kind: 2, number: 0, boolean: value, text: '', errorCode: 0 }, 'General');
-        assert.equal(booleanValue.status.ok, false, `formatValue boolean=${String(value)} accepted`);
-
-        const errorValue = wb.formatValue({ kind: 4, number: 0, boolean: 0, text: '', errorCode: value }, 'General');
-        assert.equal(errorValue.status.ok, false, `formatValue errorCode=${String(value)} accepted`);
+        assert.throws(
+          () => wb.formatValue({ kind: 2, number: 0, boolean: value, text: '', errorCode: 0 }, 'General'),
+          nestedErrorClass(value),
+          `formatValue boolean=${String(value)} accepted`,
+        );
+        assert.throws(
+          () => wb.formatValue({ kind: 4, number: 0, boolean: 0, text: '', errorCode: value }, 'General'),
+          nestedErrorClass(value),
+          `formatValue errorCode=${String(value)} accepted`,
+        );
       } finally {
         wb.delete();
       }
@@ -254,7 +270,7 @@ export function registerCellsIo(Module, test) {
     }
   });
 
-  test('table update rejects throwing nested getters before changing the table', () => {
+  test('table update rethrows nested getter failures before changing the table', () => {
     const getterFields = ['ref', 'styleName', 'headerRow', 'totalsRow'];
     for (const field of getterFields) {
       const wb = Module.Workbook.createDefault();
@@ -277,9 +293,7 @@ export function registerCellsIo(Module, test) {
             throw new Error(`table update ${field} getter`);
           },
         });
-        const result = wb.updateTable(created.index, spec);
-        assert.equal(result.ok, false, `updateTable ${field} getter escaped`);
-        assert.match(result.message, new RegExp(`table update ${field} getter|field access threw`));
+        assert.throws(() => wb.updateTable(created.index, spec), new RegExp(`table update ${field} getter`));
         assert.equal(readZipEntryText(wb.save().bytes, 'xl/tables/table1.xml'), before);
       } finally {
         wb.delete();
@@ -327,13 +341,17 @@ export function registerCellsIo(Module, test) {
     for (const value of invalid) {
       const wb = Module.Workbook.createDefault();
       try {
-        const created = wb.createTable({
-          sheetIndex: value,
-          ref: 'A1:B3',
-          name: 'BadTable',
-          columns: ['Product', 'Amount'],
-        });
-        assert.equal(created.status.ok, false, `createTable sheetIndex=${String(value)} accepted`);
+        assert.throws(
+          () =>
+            wb.createTable({
+              sheetIndex: value,
+              ref: 'A1:B3',
+              name: 'BadTable',
+              columns: ['Product', 'Amount'],
+            }),
+          nestedErrorClass(value),
+          `createTable sheetIndex=${String(value)} accepted`,
+        );
         assert.equal(wb.tableCount().value, 0);
       } finally {
         wb.delete();

@@ -135,7 +135,7 @@ test('paging cursor and limit reject values outside native integer ranges', () =
   const wb = addon.Workbook.createDefault();
   const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
   try {
-    for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 64]) {
+    for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
       assert.throws(() => wb.getCellsInRange(0, range, value), RangeError, `get cursor=${String(value)}`);
       assert.throws(() => wb.listInvalidCells(0, value), RangeError, `invalid cursor=${String(value)}`);
     }
@@ -143,6 +143,8 @@ test('paging cursor and limit reject values outside native integer ranges', () =
       assert.throws(() => wb.getCellsInRange(0, range, undefined, value), RangeError, `get limit=${String(value)}`);
       assert.throws(() => wb.listInvalidCells(0, undefined, value), RangeError, `invalid limit=${String(value)}`);
     }
+    assert.doesNotThrow(() => wb.getCellsInRange(0, range, Number.MAX_SAFE_INTEGER));
+    assert.doesNotThrow(() => wb.listInvalidCells(0, Number.MAX_SAFE_INTEGER));
   } finally {
     wb.dispose();
   }
@@ -159,6 +161,21 @@ test('missing optional positional arguments retain their existing defaults', () 
     assert.doesNotThrow(() => wb.listInvalidCells(0, undefined, undefined));
     assert.doesNotThrow(() => wb.getCellsInRange(0, range, null, null));
     assert.doesNotThrow(() => wb.listInvalidCells(0, null, null));
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('getCellsInRange reads its range argument like the merge methods', () => {
+  const wb = addon.Workbook.createDefault();
+  try {
+    assert.equal(wb.setNumber(0, 0, 0, 7).ok, true);
+    const nullish = wb.getCellsInRange(0, null);
+    assert.equal(nullish.status.ok, true);
+    assert.equal(nullish.cells.length, 1);
+    assert.equal(wb.getMergesInRange(0, null).status.ok, true);
+    assert.throws(() => wb.getCellsInRange(0, 5), TypeError);
+    assert.throws(() => wb.getMergesInRange(0, 5), TypeError);
   } finally {
     wb.dispose();
   }

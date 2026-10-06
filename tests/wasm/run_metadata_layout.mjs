@@ -350,16 +350,15 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
-  test('typed print patches reject lossy numbers before changing the page setup', () => {
+  test('typed print patches throw on lossy numbers before changing the page setup', () => {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.setSheetPageSetup(0, { orientation: 2, scale: 125 }).ok);
       const expectRejected = (patch, field) => {
-        const status = wb.setSheetPageSetup(0, patch);
-        assert.equal(status.ok, false, `${field}: ${JSON.stringify(status)}`);
-        assert.equal(status.status, 2, `${field}: ${JSON.stringify(status)}`);
-        assert.match(status.message, /setSheetPageSetup/);
-        assert.match(status.message, new RegExp(`\`${field}\``));
+        assert.throws(() => wb.setSheetPageSetup(0, patch), {
+          name: 'RangeError',
+          message: new RegExp(`setSheetPageSetup.*\`${field}\``),
+        });
         const setup = wb.getSheetPageSetup(0);
         assert.equal(setup.orientation, 2);
         assert.equal(setup.scale, 125);
@@ -382,7 +381,7 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
-  test('typed print patches reject coercion and preserve header/footer fields', () => {
+  test('typed print patches throw on coercion and preserve header/footer fields', () => {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.setSheetPrintOptions(0, { gridLines: true }).ok);
@@ -392,40 +391,28 @@ export function registerMetadataLayout(Module, test) {
           throw new Error('print-options getter');
         },
       });
-      let boolStatus;
-      assert.doesNotThrow(() => {
-        boolStatus = wb.setSheetPrintOptions(0, throwingOptions);
-      });
-      assert.equal(boolStatus.ok, false, JSON.stringify(boolStatus));
-      assert.equal(boolStatus.status, 2);
-      assert.match(boolStatus.message, /setSheetPrintOptions/);
-      assert.match(boolStatus.message, /gridLines/);
+      assert.throws(() => wb.setSheetPrintOptions(0, throwingOptions), /print-options getter/);
       assert.match(wb.getSheetPrintOptionsXml(0).xml, /gridLines="true"/);
 
       assert.ok(wb.setSheetPageMargins(0, { left: 0.5 }).ok);
-      const marginStatus = wb.setSheetPageMargins(0, { left: '0.75' });
-      assert.equal(marginStatus.ok, false, JSON.stringify(marginStatus));
-      assert.equal(marginStatus.status, 2);
-      assert.match(marginStatus.message, /setSheetPageMargins/);
-      assert.match(marginStatus.message, /left/);
+      assert.throws(() => wb.setSheetPageMargins(0, { left: '0.75' }), {
+        name: 'TypeError',
+        message: /setSheetPageMargins.*left/,
+      });
       assert.equal(wb.getSheetPageMargins(0).left, 0.5);
 
       assert.ok(wb.setSheetHeaderFooter(0, { oddHeader: 'before' }).ok);
-      let headerStatus;
-      assert.doesNotThrow(() => {
-        headerStatus = wb.setSheetHeaderFooter(0, { oddHeader: 42 });
+      assert.throws(() => wb.setSheetHeaderFooter(0, { oddHeader: 42 }), {
+        name: 'TypeError',
+        message: /setSheetHeaderFooter.*oddHeader/,
       });
-      assert.equal(headerStatus.ok, false, JSON.stringify(headerStatus));
-      assert.equal(headerStatus.status, 2);
-      assert.match(headerStatus.message, /setSheetHeaderFooter/);
-      assert.match(headerStatus.message, /oddHeader/);
       assert.match(wb.getSheetHeaderFooterXml(0).xml, /before/);
     } finally {
       wb.delete();
     }
   });
 
-  test('header/footer getter failures return a status before any mutation', () => {
+  test('header/footer getter failures are rethrown before any mutation', () => {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.setSheetHeaderFooter(0, { oddHeader: 'before' }).ok);
@@ -436,14 +423,7 @@ export function registerMetadataLayout(Module, test) {
         },
       });
 
-      let status;
-      assert.doesNotThrow(() => {
-        status = wb.setSheetHeaderFooter(0, lateFailure);
-      });
-      assert.equal(status.ok, false, JSON.stringify(status));
-      assert.equal(status.status, 2);
-      assert.match(status.message, /setSheetHeaderFooter/);
-      assert.match(status.message, /alignWithMargins/);
+      assert.throws(() => wb.setSheetHeaderFooter(0, lateFailure), /late header getter/);
       assert.match(wb.getSheetHeaderFooterXml(0).xml, /before/);
       assert.doesNotMatch(wb.getSheetHeaderFooterXml(0).xml, /after/);
     } finally {

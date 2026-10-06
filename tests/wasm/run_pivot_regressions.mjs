@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { PIVOT, VAL } from './smoke_support.mjs';
 
+const nestedErrorClass = (value) => (typeof value === 'symbol' ? TypeError : RangeError);
+
 function makeCheckedPivot(Module) {
   const wb = Module.Workbook.createDefault();
   const must = (result, what) => {
@@ -109,14 +111,17 @@ export function registerPivotRegressions(Module, test) {
     }
   });
 
-  test('pivot nested integers reject narrowing before C mutation', () => {
+  test('pivot nested integers throw on narrowing before C mutation', () => {
     const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('pivot numeric')];
     for (const value of invalid) {
       const { wb, pivot } = makeCheckedPivot(Module);
       try {
         const before = wb.pivotFieldCount(0, pivot).value;
-        const added = wb.pivotFieldAdd(0, pivot, { sourceName: 'Region', axis: value });
-        assert.equal(added.status.ok, false, `pivotFieldAdd axis=${String(value)} accepted`);
+        assert.throws(
+          () => wb.pivotFieldAdd(0, pivot, { sourceName: 'Region', axis: value }),
+          nestedErrorClass(value),
+          `pivotFieldAdd axis=${String(value)} accepted`,
+        );
         assert.equal(wb.pivotFieldCount(0, pivot).value, before);
       } finally {
         wb.delete();
@@ -125,12 +130,16 @@ export function registerPivotRegressions(Module, test) {
       const data = makeCheckedPivot(Module);
       try {
         const before = data.wb.pivotDataFieldCount(0, data.pivot).value;
-        const added = data.wb.pivotDataFieldAdd(0, data.pivot, {
-          name: 'Bad',
-          fieldIndex: value,
-          aggregation: 0,
-        });
-        assert.equal(added.status.ok, false, `pivotDataFieldAdd fieldIndex=${String(value)} accepted`);
+        assert.throws(
+          () =>
+            data.wb.pivotDataFieldAdd(0, data.pivot, {
+              name: 'Bad',
+              fieldIndex: value,
+              aggregation: 0,
+            }),
+          nestedErrorClass(value),
+          `pivotDataFieldAdd fieldIndex=${String(value)} accepted`,
+        );
         assert.equal(data.wb.pivotDataFieldCount(0, data.pivot).value, before);
       } finally {
         data.wb.delete();
@@ -138,7 +147,7 @@ export function registerPivotRegressions(Module, test) {
     }
   });
 
-  test('pivot filters reject invalid axis, value kind, and field index before mutation', () => {
+  test('pivot filters throw on invalid axis, value kind, and field index before mutation', () => {
     const invalid = [
       { axis: 2 ** 32 },
       { valueKind: 1.5 },
@@ -150,15 +159,19 @@ export function registerPivotRegressions(Module, test) {
       const { wb, pivot } = makeCheckedPivot(Module);
       try {
         const before = wb.pivotFilterCount(0, pivot).value;
-        const added = wb.pivotFilterAdd(0, pivot, {
-          axis: 0,
-          fieldName: 'Region',
-          type: 1,
-          valueKind: 1,
-          valueDouble: 15,
-          ...override,
-        });
-        assert.equal(added.ok, false, `pivotFilterAdd ${JSON.stringify(override)} accepted`);
+        assert.throws(
+          () =>
+            wb.pivotFilterAdd(0, pivot, {
+              axis: 0,
+              fieldName: 'Region',
+              type: 1,
+              valueKind: 1,
+              valueDouble: 15,
+              ...override,
+            }),
+          nestedErrorClass(Object.values(override)[0]),
+          `pivotFilterAdd ${String(Object.values(override)[0])} accepted`,
+        );
         assert.equal(wb.pivotFilterCount(0, pivot).value, before);
         assert.deepEqual(checkedPivotGrid(wb, pivot), CHECKED_PIVOT_GRID);
       } finally {
@@ -167,13 +180,16 @@ export function registerPivotRegressions(Module, test) {
     }
   });
 
-  test('pivot order arrays reject invalid elements before replacing the order', () => {
+  test('pivot order arrays throw on invalid elements before replacing the order', () => {
     const invalid = [2 ** 32 + 1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('pivot order')];
     for (const value of invalid) {
       const { wb, pivot } = makeCheckedPivot(Module);
       try {
-        const result = wb.pivotSetRowFieldOrder(0, pivot, [value]);
-        assert.equal(result.ok, false, `pivotSetRowFieldOrder element=${String(value)} accepted`);
+        assert.throws(
+          () => wb.pivotSetRowFieldOrder(0, pivot, [value]),
+          nestedErrorClass(value),
+          `pivotSetRowFieldOrder element=${String(value)} accepted`,
+        );
         assert.deepEqual(checkedPivotGrid(wb, pivot), CHECKED_PIVOT_GRID);
       } finally {
         wb.delete();
@@ -209,7 +225,7 @@ export function registerPivotRegressions(Module, test) {
     }
   });
 
-  test('pivot nested getters are caught before any C mutation', () => {
+  test('pivot nested getter failures are rethrown before any C mutation', () => {
     const { wb, pivot } = makeCheckedPivot(Module);
     try {
       const fieldCount = wb.pivotFieldCount(0, pivot).value;
@@ -220,8 +236,7 @@ export function registerPivotRegressions(Module, test) {
           throw new Error('pivot field getter');
         },
       });
-      const field = wb.pivotFieldAdd(0, pivot, fieldSpec);
-      assert.equal(field.status.ok, false);
+      assert.throws(() => wb.pivotFieldAdd(0, pivot, fieldSpec), /pivot field getter/);
       assert.equal(wb.pivotFieldCount(0, pivot).value, fieldCount);
 
       const indices = [];
@@ -231,8 +246,7 @@ export function registerPivotRegressions(Module, test) {
           throw new Error('pivot order getter');
         },
       });
-      const order = wb.pivotSetRowFieldOrder(0, pivot, indices);
-      assert.equal(order.ok, false);
+      assert.throws(() => wb.pivotSetRowFieldOrder(0, pivot, indices), /pivot order getter/);
       assert.deepEqual(checkedPivotGrid(wb, pivot), CHECKED_PIVOT_GRID);
     } finally {
       wb.delete();

@@ -514,26 +514,22 @@ Napi::Value Workbook::GetCellsInRange(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  if (info.Length() < 2 || !info[1].IsObject()) {
+  if (info.Length() < 2) {
     out.Set("status",
             MakeBindingArgumentError(env, "getCellsInRange expects (sheet:number, range:object, cursor?, limit?)"));
     return out;
   }
-  const Napi::Object range = info[1].As<Napi::Object>();
   const bool has_cursor = info.Length() > 2 && info[2].IsNumber();
   const uint64_t cursor = has_cursor ? static_cast<uint64_t>(info[2].As<Napi::Number>().DoubleValue()) : 0U;
   const uint32_t limit = info.Length() > 3 && info[3].IsNumber() ? ArgU32(info, 3) : 0U;
   CheckedSpecReader reader(env);
-  const uint32_t first_row = reader.U32(range, "firstRow", 0U);
-  const uint32_t first_col = reader.U32(range, "firstCol", 0U);
-  const uint32_t last_row = reader.U32(range, "lastRow", 0U);
-  const uint32_t last_col = reader.U32(range, "lastCol", 0U);
-  if (!reader.ok()) {
+  fm_merge_range range{};
+  if (!MergeRangeArg(reader, info, 1, &range)) {
     return env.Undefined();
   }
   fm_cell_range_t* page = nullptr;
-  fm_status_t rc =
-      fm_sheet_cells_in_range(handle_, ArgU32(info, 0), first_row, first_col, last_row, last_col, cursor, limit, &page);
+  fm_status_t rc = fm_sheet_cells_in_range(handle_, ArgU32(info, 0), range.first_row, range.first_col, range.last_row,
+                                           range.last_col, cursor, limit, &page);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;

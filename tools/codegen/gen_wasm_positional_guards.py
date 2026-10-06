@@ -9,7 +9,8 @@ surface drift stops generation before an artifact can be built.
 
 The generated file is passed to emscripten as --pre-js. It contains no
 native code, so the guard lives in the JS glue and does not change the wasm
-module.
+module. The same wrapper throws the nested-field rejections the native readers
+record, so a bad field raises TypeError/RangeError as on the Node surface.
 """
 
 from __future__ import annotations
@@ -25,7 +26,6 @@ from typing import Iterable
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
-DEFAULT_OUTPUT = REPO_ROOT / "src/wasm/generated/checked_arguments.pre.js"
 EXPECTED_NODE_REGISTRATIONS = 274
 
 MASK_NAMES = (
@@ -252,7 +252,18 @@ def _render(metadata: dict[str, object]) -> str:
   const UINT32_MAX = 0xffffffff;
   const INT32_MIN = -0x80000000;
   const INT32_MAX = 0x7fffffff;
-  const UINT64_LIMIT = 18446744073709551616;
+  const UINT64_MAX_EXACT = Number.MAX_SAFE_INTEGER;
+  // The native readers record a nested-field rejection here while a wrapped
+  // call is active; the wrapper throws it after the method returns, so native
+  // frames unwind normally and both surfaces raise the same error class.
+  const argumentErrors = {{ depth: 0, pending: undefined, thrown: undefined }};
+  module[Symbol.for('formulon.argumentErrors')] = argumentErrors;
+
+  function nestedArgumentError(pending) {{
+    if (pending.kind === 1) return new RangeError(pending.message);
+    if (pending.kind === 2 && pending.thrown !== undefined) return pending.thrown.value;
+    return new TypeError(pending.message);
+  }}
 
   function argumentType(name, index, expected) {{
     throw new TypeError(name + ' argument ' + (index + 1) + ' must be a primitive ' + expected);
@@ -275,7 +286,7 @@ def _render(metadata: dict[str, object]) -> str:
     if (kind === 'int32' && (value < INT32_MIN || value > INT32_MAX)) {{
       argumentRange(name, index, kind);
     }}
-    if (kind === 'uint64' && (value < 0 || value >= UINT64_LIMIT)) {{
+    if (kind === 'uint64' && (value < 0 || value > UINT64_MAX_EXACT)) {{
       argumentRange(name, index, kind);
     }}
   }}
@@ -331,15 +342,27 @@ def _render(metadata: dict[str, object]) -> str:
       const receiverKey = trackWorkbookCall ? receiverStateKey(this) : null;
       const receiverTracked = receiverKey !== null;
       if (receiverTracked) activeWorkbookCalls.set(receiverKey, (activeWorkbookCalls.get(receiverKey) ?? 0) + 1);
+      // A getter may re-enter another wrapped method mid-read; each call
+      // owns only the rejection recorded during its own native frame.
+      const outerPending = argumentErrors.pending;
+      argumentErrors.pending = undefined;
+      argumentErrors.depth += 1;
+      let pending;
+      let result;
       try {{
-        return Reflect.apply(original, this, args);
+        result = Reflect.apply(original, this, args);
       }} finally {{
+        argumentErrors.depth -= 1;
+        pending = argumentErrors.pending;
+        argumentErrors.pending = outerPending;
         if (receiverTracked) {{
           const depth = activeWorkbookCalls.get(receiverKey) ?? 1;
           if (depth <= 1) activeWorkbookCalls.delete(receiverKey);
           else activeWorkbookCalls.set(receiverKey, depth - 1);
         }}
       }}
+      if (pending !== undefined) throw nestedArgumentError(pending);
+      return result;
     }};
     Object.defineProperty(wrapped, 'name', {{ value: original.name, configurable: true }});
     const argCountDescriptor = Object.getOwnPropertyDescriptor(original, 'argCount');
@@ -502,7 +525,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--node-source", type=Path, default=DEFAULT_NODE_SOURCE)
     parser.add_argument("--wasm-source", type=Path, default=DEFAULT_WASM_SOURCE)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
         generate(args.node_source, args.wasm_source, args.output)

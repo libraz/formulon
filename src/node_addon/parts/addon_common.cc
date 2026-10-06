@@ -144,13 +144,26 @@ bool CheckedSpecReader::String(const Napi::Value& value, const char* key, std::s
     out->clear();
     return false;
   }
-  const Napi::String converted = present.ToString();
-  ObservePending();
-  if (!ok()) {
+  // Same acceptance as the WASM surface: a string or a one-byte buffer, never
+  // a coerced value.
+  const bool byte_view = present.IsTypedArray() && [&present] {
+    const napi_typedarray_type type = present.As<Napi::TypedArray>().TypedArrayType();
+    return type == napi_int8_array || type == napi_uint8_array || type == napi_uint8_clamped_array;
+  }();
+  if (present.IsString()) {
+    *out = present.As<Napi::String>().Utf8Value();
+  } else if (present.IsArrayBuffer()) {
+    Napi::ArrayBuffer buffer = present.As<Napi::ArrayBuffer>();
+    out->assign(static_cast<const char*>(buffer.Data()), buffer.ByteLength());
+  } else if (byte_view) {
+    Napi::TypedArray view = present.As<Napi::TypedArray>();
+    const auto* data = static_cast<const char*>(view.ArrayBuffer().Data()) + view.ByteOffset();
+    out->assign(data, view.ByteLength());
+  } else {
     out->clear();
+    ReportType(key, "string or one-byte buffer");
     return false;
   }
-  *out = converted.Utf8Value();
   ObservePending();
   return ok();
 }
@@ -545,6 +558,34 @@ void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_
   out.show_as = static_cast<fm_pivot_show_as_t>(reader.U32(spec, "showAs", 0U));
   out.show_as_base_field = reader.I32(spec, "showAsBaseField", -1);
   out.show_as_base_item = reader.I32(spec, "showAsBaseItem", -1);
+}
+
+// Reads a `{ firstRow, lastRow, firstCol, lastCol }` range object.
+bool ReadMergeRange(CheckedSpecReader& reader, const Napi::Object& range, fm_merge_range* out) {
+  out->first_row = reader.U32(range, "firstRow", 0U);
+  out->last_row = reader.U32(range, "lastRow", 0U);
+  out->first_col = reader.U32(range, "firstCol", 0U);
+  out->last_col = reader.U32(range, "lastCol", 0U);
+  return reader.ok();
+}
+
+// Reads the range at `info[idx]`; a missing/nullish argument reads as all
+// zeros, while a supplied non-object is rejected by the reader.
+bool MergeRangeArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_merge_range* out) {
+  *out = fm_merge_range{};
+  if (info.Length() <= idx) {
+    return true;
+  }
+  Napi::Value value = info[idx];
+  Napi::Value present;
+  if (!reader.Value(value, "range", &present)) {
+    return reader.ok();
+  }
+  Napi::Object object;
+  if (!reader.Object(present, "range", &object)) {
+    return false;
+  }
+  return ReadMergeRange(reader, object, out);
 }
 
 }  // namespace formulon_node

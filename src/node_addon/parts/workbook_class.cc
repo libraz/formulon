@@ -31,6 +31,10 @@ struct PositionalArgSpec {
   std::uint64_t optional_null_mask;
 };
 
+// A uint64 argument arrives as a Number, which is exact only up to 2^53 - 1;
+// a larger value could not name the cursor the caller holds.
+constexpr double kMaxSafeInteger = 9007199254740991.0;
+
 bool RejectArgumentType(const Napi::CallbackInfo& info, std::size_t idx, const char* expected) {
   Napi::TypeError::New(info.Env(), expected).ThrowAsJavaScriptException();
   (void)idx;
@@ -109,8 +113,8 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
         return RejectArgumentType(info, idx, "positional argument must be a number");
       }
       const double number = value.As<Napi::Number>().DoubleValue();
-      if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number >= 0x1p64) {
-        return RejectArgumentRange(info, idx, "positional argument is outside uint64 range");
+      if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number > kMaxSafeInteger) {
+        return RejectArgumentRange(info, idx, "positional argument is outside the safe-integer range");
       }
     }
     if ((spec.optional_u64_mask & bit) != 0 && idx < info.Length()) {
@@ -123,8 +127,8 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
           return RejectArgumentType(info, idx, "positional argument must be a number");
         }
         const double number = value.As<Napi::Number>().DoubleValue();
-        if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number >= 0x1p64) {
-          return RejectArgumentRange(info, idx, "positional argument is outside uint64 range");
+        if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number > kMaxSafeInteger) {
+          return RejectArgumentRange(info, idx, "positional argument is outside the safe-integer range");
         }
       }
     }

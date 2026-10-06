@@ -41,6 +41,26 @@ test('cell phonetic run integers reject narrowing before replacing existing runs
   }
 });
 
+test('cell phonetic run text rejects coercible non-strings like the WASM surface', async () => {
+  const mod = await getModule();
+  withWorkbook(mod.Workbook, (wb) => {
+    assert.ok(wb.setText(0, 0, 0, '東京都').ok);
+    assert.ok(wb.setCellPhoneticRuns(0, 0, 0, validRuns()).ok);
+    const before = wb.getCellPhoneticRuns(0, 0, 0).runs;
+    for (const value of [42, true, { toString: () => 'ト' }]) {
+      assert.throws(
+        () => wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], text: value }, validRuns()[1]]),
+        TypeError,
+        `setCellPhoneticRuns text=${String(value)}`,
+      );
+      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, before);
+    }
+    const bytes = new TextEncoder().encode('トウキョウ');
+    assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], text: bytes }, validRuns()[1]]).ok);
+    assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, before);
+  });
+});
+
 test('cell phonetic properties reject narrowing before changing the stored properties', async () => {
   const mod = await getModule();
   const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY];

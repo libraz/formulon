@@ -210,6 +210,13 @@ class CheckedSpecReader final {
   bool failed_ = false;
 };
 
+/// Reads a `{ firstRow, lastRow, firstCol, lastCol }` range object.
+bool ReadMergeRange(CheckedSpecReader& reader, const Napi::Object& range, fm_merge_range* out);
+
+/// Reads the range at `info[idx]`; a missing/nullish argument reads as all
+/// zeros, while a supplied non-object is rejected by the reader.
+bool MergeRangeArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_merge_range* out);
+
 /// Builds an `fm_pivot_data_field_spec_t` from a JS spec object. The
 /// `name_buf` / `nfmt_buf` strings keep the borrowed `const char*`
 /// pointers alive for the caller; `has_nfmt` is set when the spec

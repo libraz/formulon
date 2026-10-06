@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 
+const isNestedRangeValue = (value) => typeof value === 'number';
+
 export function registerStyles(Module, test) {
   test('xf index round-trips through setCellXfIndex / getCellXfIndex', () => {
     const wb = Module.Workbook.createDefault();
@@ -427,19 +429,11 @@ export function registerStyles(Module, test) {
     }
   });
 
-  test('style narrow numeric fields reject masked values without mutating tables', () => {
+  test('style narrow numeric fields throw on masked values without mutating tables', () => {
     const wb = Module.Workbook.createDefault();
     try {
       const assertRejected = (label, invoke, count) => {
-        let result;
-        try {
-          result = invoke();
-        } catch (error) {
-          assert.fail(`${label} threw instead of returning status: ${error}`);
-        }
-        assert.ok(result && result.status, `${label}: missing status`);
-        assert.equal(result.status.ok, false, `${label}: ${JSON.stringify(result.status)}`);
-        assert.equal(result.status.status, 2, `${label}: ${JSON.stringify(result.status)}`);
+        assert.throws(invoke, RangeError, `${label} accepted`);
         assert.equal(count(), count.before, `${label}: mutation changed table count`);
       };
 
@@ -471,21 +465,17 @@ export function registerStyles(Module, test) {
     }
   });
 
-  test('style nested numeric fields reject fractions, non-finite values, and wrong primitives', () => {
+  test('style nested numeric fields throw on fractions, non-finite values, and wrong primitives', () => {
     const invalid = [1.5, Number.NaN, Number.POSITIVE_INFINITY, '1', true, {}, Symbol('numeric')];
     for (const value of invalid) {
       const wb = Module.Workbook.createDefault();
       try {
         const before = wb.fontCount().value;
-        let result;
-        try {
-          result = wb.addFont({ name: 'bad-value', underline: value });
-        } catch (error) {
-          assert.fail(`font.underline=${String(value)} threw: ${error}`);
-        }
-        assert.ok(result && result.status, `font.underline=${String(value)} missing status`);
-        assert.equal(result.status.ok, false, `font.underline=${String(value)} accepted`);
-        assert.equal(result.status.status, 2, `font.underline=${String(value)} status`);
+        assert.throws(
+          () => wb.addFont({ name: 'bad-value', underline: value }),
+          isNestedRangeValue(value) ? RangeError : TypeError,
+          `font.underline=${String(value)} accepted`,
+        );
         assert.equal(wb.fontCount().value, before, `font.underline=${String(value)} mutated table`);
       } finally {
         wb.delete();
@@ -493,31 +483,26 @@ export function registerStyles(Module, test) {
     }
   });
 
-  test('style and conditional-format u32/i32 fields reject wraparound values', () => {
+  test('style and conditional-format u32/i32 fields throw on wraparound values', () => {
     const wb = Module.Workbook.createDefault();
     try {
       const xfBefore = wb.xfCount().value;
-      const xf = wb.addXf({ fontIndex: 0x100000000, fillIndex: 0, borderIndex: 0 });
-      assert.equal(xf.status.ok, false, `xf.fontIndex wrapped: ${JSON.stringify(xf.status)}`);
-      assert.equal(xf.status.status, 2);
+      assert.throws(() => wb.addXf({ fontIndex: 0x100000000, fillIndex: 0, borderIndex: 0 }), RangeError);
       assert.equal(wb.xfCount().value, xfBefore);
 
       const fontBefore = wb.fontCount().value;
-      const font = wb.addFont({ name: 'bad-u32', colorArgb: 0x100000000 });
-      assert.equal(font.status.ok, false, `font.colorArgb wrapped: ${JSON.stringify(font.status)}`);
-      assert.equal(font.status.status, 2);
+      assert.throws(() => wb.addFont({ name: 'bad-u32', colorArgb: 0x100000000 }), RangeError);
       assert.equal(wb.fontCount().value, fontBefore);
 
       const styleXfBefore = wb.cellStyleXfCount().value;
-      const styleXf = wb.addCellStyleXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, xfId: 0x100000000 });
-      assert.equal(styleXf.status.ok, false, `cellStyleXf.xfId wrapped: ${JSON.stringify(styleXf.status)}`);
-      assert.equal(styleXf.status.status, 2);
+      assert.throws(
+        () => wb.addCellStyleXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, xfId: 0x100000000 }),
+        RangeError,
+      );
       assert.equal(wb.cellStyleXfCount().value, styleXfBefore);
 
       const themeBefore = wb.getTheme().colors;
-      const theme = wb.setThemeColors([0x100000000, ...themeBefore.slice(1)]);
-      assert.equal(theme.ok, false, `theme color wrapped: ${JSON.stringify(theme)}`);
-      assert.equal(theme.status, 2);
+      assert.throws(() => wb.setThemeColors([0x100000000, ...themeBefore.slice(1)]), RangeError);
       assert.deepEqual(wb.getTheme().colors, themeBefore);
 
       const dxf = wb.addDxf({ font: { name: 'cf-dxf' } });
@@ -530,17 +515,13 @@ export function registerStyles(Module, test) {
         dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 1, g: 2, b: 3 } },
       };
       const cfBefore = wb.getConditionalFormats(0).length;
-      const cf = wb.addConditionalFormat(0, base);
-      assert.equal(cf.status.ok, false, `cf.priority wrapped: ${JSON.stringify(cf.status)}`);
-      assert.equal(cf.status.status, 2);
+      assert.throws(() => wb.addConditionalFormat(0, base), RangeError);
       assert.equal(wb.getConditionalFormats(0).length, cfBefore);
 
       const rangeRule = structuredClone(base);
       rangeRule.priority = 0;
       rangeRule.sqref[0].firstRow = 0x100000000;
-      const range = wb.addConditionalFormat(0, rangeRule);
-      assert.equal(range.status.ok, false, `cf.sqref wrapped: ${JSON.stringify(range.status)}`);
-      assert.equal(range.status.status, 2);
+      assert.throws(() => wb.addConditionalFormat(0, rangeRule), RangeError);
       assert.equal(wb.getConditionalFormats(0).length, cfBefore);
     } finally {
       wb.delete();
@@ -580,7 +561,7 @@ export function registerStyles(Module, test) {
     }
   });
 
-  test('conditional-format nested narrow numeric fields reject masked values without mutation', () => {
+  test('conditional-format nested narrow numeric fields throw on masked values without mutation', () => {
     const wb = Module.Workbook.createDefault();
     try {
       const base = {
@@ -605,15 +586,7 @@ export function registerStyles(Module, test) {
         if (override.dataBar.min) {
           rule.dataBar.min = override.dataBar.min;
         }
-        let result;
-        try {
-          result = wb.addConditionalFormat(0, rule);
-        } catch (error) {
-          assert.fail(`${label} threw instead of returning status: ${error}`);
-        }
-        assert.ok(result && result.status, `${label}: missing status`);
-        assert.equal(result.status.ok, false, `${label}: ${JSON.stringify(result.status)}`);
-        assert.equal(result.status.status, 2, `${label}: ${JSON.stringify(result.status)}`);
+        assert.throws(() => wb.addConditionalFormat(0, rule), RangeError, `${label} accepted`);
         assert.equal(wb.getConditionalFormats(0).length, before, `${label}: mutation changed count`);
       }
     } finally {
@@ -621,7 +594,7 @@ export function registerStyles(Module, test) {
     }
   });
 
-  test('conditional-format nested numeric fields reject wrong primitives and preserve settings', () => {
+  test('conditional-format nested numeric fields throw on wrong primitives and preserve settings', () => {
     const values = [1.5, Number.NaN, Number.POSITIVE_INFINITY, '1', true, {}, Symbol('cf-numeric')];
     for (const value of values) {
       const wb = Module.Workbook.createDefault();
@@ -635,15 +608,11 @@ export function registerStyles(Module, test) {
             fill: { r: value, g: 2, b: 3 },
           },
         };
-        let result;
-        try {
-          result = wb.addConditionalFormat(0, rule);
-        } catch (error) {
-          assert.fail(`dataBar.fill.r=${String(value)} threw: ${error}`);
-        }
-        assert.ok(result && result.status, `dataBar.fill.r=${String(value)} missing status`);
-        assert.equal(result.status.ok, false, `dataBar.fill.r=${String(value)} accepted`);
-        assert.equal(result.status.status, 2, `dataBar.fill.r=${String(value)} status`);
+        assert.throws(
+          () => wb.addConditionalFormat(0, rule),
+          isNestedRangeValue(value) ? RangeError : TypeError,
+          `dataBar.fill.r=${String(value)} accepted`,
+        );
         assert.equal(wb.getConditionalFormats(0).length, 0, `dataBar.fill.r=${String(value)} mutated rules`);
       } finally {
         wb.delete();
@@ -734,8 +703,7 @@ export function registerStyles(Module, test) {
       });
       const beforeFonts = wb.fontCount().value;
       for (let i = 0; i < 8; i += 1) {
-        const result = wb.addFont(lateFont);
-        assert.equal(result.status.ok, false, JSON.stringify(result.status));
+        assert.throws(() => wb.addFont(lateFont), /late font getter/);
       }
       assert.equal(wb.fontCount().value, beforeFonts);
     } finally {

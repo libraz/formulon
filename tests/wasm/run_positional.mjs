@@ -85,7 +85,7 @@ export function registerPositional(Module, test, hookProbe) {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.setNumber(0, 0, 0, 42).ok);
-      for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 64]) {
+      for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
         expectRangeError(() => wb.getCellsInRange(0, RANGE, value, 1));
         expectRangeError(() => wb.getCellsInRange(0, RANGE, 0, value));
         expectRangeError(() => wb.listInvalidCells(0, value, 1));
@@ -176,8 +176,10 @@ export function registerPositional(Module, test, hookProbe) {
         lastRow: { value: 0 },
         lastCol: { value: 0 },
       });
-      const nested = getCellsLeaf.call(wb, 0, nestedRange, 0, 1);
-      assert.equal(nested.status.ok, false);
+      assert.throws(() => getCellsLeaf.call(wb, 0, nestedRange, 0, 1), {
+        name: 'TypeError',
+        message: /cannot dispose Workbook during an active method call/,
+      });
       assert.equal(wb.isDeleted(), false);
       assert.equal(wb.getValue(0, 0, 0).value.number, 42);
     } finally {
@@ -197,8 +199,11 @@ export function registerPositional(Module, test, hookProbe) {
             return 1;
           },
         });
-        const result = wb.addXf(spec);
-        assert.equal(result.status.ok, false, `${String(lifecycle)} unexpectedly succeeded`);
+        assert.throws(
+          () => wb.addXf(spec),
+          /cannot dispose Workbook during an active method call/,
+          `${String(lifecycle)} unexpectedly succeeded`,
+        );
         assert.equal(wb.xfCount().value, before);
         assert.equal(wb.isDeleted(), false);
       } finally {
@@ -231,8 +236,11 @@ export function registerPositional(Module, test, hookProbe) {
             return 1;
           },
         });
-        const result = wb.addXf(spec);
-        assert.equal(result.status.ok, false, `${String(lifecycle)} inherited call unexpectedly succeeded`);
+        assert.throws(
+          () => wb.addXf(spec),
+          /cannot dispose Workbook during an active method call/,
+          `${String(lifecycle)} inherited call unexpectedly succeeded`,
+        );
         assert.equal(wb.xfCount().value, before);
         assert.equal(wb.isDeleted(), false);
       } finally {

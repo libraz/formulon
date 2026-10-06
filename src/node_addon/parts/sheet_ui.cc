@@ -17,34 +17,6 @@ namespace formulon_node {
 
 namespace {
 
-// Reads a `{ firstRow, lastRow, firstCol, lastCol }` range object.
-bool ReadMergeRange(CheckedSpecReader& reader, const Napi::Object& range, fm_merge_range* out) {
-  out->first_row = reader.U32(range, "firstRow", 0U);
-  out->last_row = reader.U32(range, "lastRow", 0U);
-  out->first_col = reader.U32(range, "firstCol", 0U);
-  out->last_col = reader.U32(range, "lastCol", 0U);
-  return reader.ok();
-}
-
-// Reads the range at `info[idx]`; a missing/nullish argument reads as all
-// zeros, while a supplied non-object is rejected by the reader.
-bool MergeRangeArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_merge_range* out) {
-  *out = fm_merge_range{};
-  if (info.Length() <= idx) {
-    return true;
-  }
-  Napi::Value value = info[idx];
-  Napi::Value present;
-  if (!reader.Value(value, "range", &present)) {
-    return reader.ok();
-  }
-  Napi::Object object;
-  if (!reader.Object(present, "range", &object)) {
-    return false;
-  }
-  return ReadMergeRange(reader, object, out);
-}
-
 // Enumerates a per-sheet list through its count / at-index pair into a
 // `ListResult` array, stopping at the first failed element read.
 template <typename T>

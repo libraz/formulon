@@ -38,6 +38,13 @@ enum SafeReaderOperation : int32_t {
   kSafeBytesSnapshot = 4,
 };
 
+// The error class the pre-js wrapper raises for a reader rejection.
+enum ArgumentErrorKind : int32_t {
+  kArgumentErrorType = 0,
+  kArgumentErrorRange = 1,
+  kArgumentErrorAccess = 2,
+};
+
 }  // namespace
 
 // `success` reports whether the operation itself completed. A completed
@@ -90,6 +97,10 @@ EM_JS(emscripten::EM_VAL, fm_wasm_safe_reader_operation,
     HEAP32[success >> 2] = 1;
     return Emval.toHandle(result);
   } catch (e) {
+    var errors = Module[Symbol.for('formulon.argumentErrors')];
+    if (errors) {
+      errors.thrown = { value: e };
+    }
     HEAP32[success >> 2] = 0;
     return Emval.toHandle(undefined);
   }
@@ -97,6 +108,24 @@ EM_JS(emscripten::EM_VAL, fm_wasm_safe_reader_operation,
 // clang-format on
 
 EM_JS_DEPS(fm_wasm_safe_reader, "$Emval");
+
+// Hands a reader's first rejection to the pre-js method wrapper, which throws
+// it once the native method has returned: kind 0 is a TypeError, 1 a
+// RangeError, 2 rethrows the caller's getter exception. Outside a wrapped call
+// there is no wrapper to throw, so the envelope's status stays the report.
+// clang-format off
+EM_JS(void, fm_wasm_record_argument_error, (int32_t kind, const char* message), {
+  var errors = Module[Symbol.for('formulon.argumentErrors')];
+  if (!errors || errors.depth === 0 || errors.pending !== undefined) {
+    return;
+  }
+  var thrown = kind === 2 ? errors.thrown : undefined;
+  errors.thrown = undefined;
+  errors.pending = { kind: kind, message: UTF8ToString(message), thrown: thrown };
+});
+// clang-format on
+
+EM_JS_DEPS(fm_wasm_argument_error, "$UTF8ToString");
 
 // Copies a previously snapshotted plain Uint8Array into a C++ vector's
 // allocation. The source is produced by the trampoline above, and both the
@@ -166,6 +195,7 @@ void JsNarrowNumericReader::reject_access(const char* key, const char* field) {
   }
   const char* name = field != nullptr ? field : key;
   message_ = operation_ + ": `" + (name != nullptr ? name : "<field>") + "` field access threw";
+  fm_wasm_record_argument_error(kArgumentErrorAccess, message_.c_str());
 }
 
 void JsNarrowNumericReader::reject(const char* key, const char* field, const char* range) {
@@ -174,6 +204,7 @@ void JsNarrowNumericReader::reject(const char* key, const char* field, const cha
   }
   const char* name = field != nullptr ? field : key;
   message_ = operation_ + ": `" + (name != nullptr ? name : "<field>") + "` must be a finite integer in " + range;
+  fm_wasm_record_argument_error(kArgumentErrorRange, message_.c_str());
 }
 
 void JsNarrowNumericReader::reject_type(const char* field, const char* expected) {
@@ -182,6 +213,7 @@ void JsNarrowNumericReader::reject_type(const char* field, const char* expected)
   }
   message_ = operation_ + ": `" + (field != nullptr ? field : "<field>") + "` must be " +
              (expected != nullptr ? expected : "the expected type");
+  fm_wasm_record_argument_error(kArgumentErrorType, message_.c_str());
 }
 
 emscripten::val JsNarrowNumericReader::safe_operation(const emscripten::val& owner, const emscripten::val& key,
@@ -216,7 +248,7 @@ bool JsNarrowNumericReader::read_integer(const emscripten::val& value, const cha
   // Check the JavaScript primitive before asking embind for a C++ value.
   // In particular, Symbol and BigInt must never reach val::as on this path.
   if (!value.isNumber()) {
-    reject(key, field, range);
+    reject_type(field != nullptr ? field : key, "a Number");
     return false;
   }
   const double candidate = value.as<double>();

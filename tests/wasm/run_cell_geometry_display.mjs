@@ -64,20 +64,24 @@ export function registerCellGeometryDisplay(Module, test) {
     });
   });
 
-  test('getCellsInRange validates every range integer before the C call', () => {
+  test('getCellsInRange throws on every invalid range integer before the C call', () => {
     const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('range integer')];
     withWorkbook(Module, (wb) => {
       assert.ok(wb.setNumber(0, 0, 0, 7).ok);
       for (const value of invalid) {
         for (const key of ['firstRow', 'firstCol', 'lastRow', 'lastCol']) {
-          const result = wb.getCellsInRange(0, {
-            firstRow: 0,
-            firstCol: 0,
-            lastRow: 4,
-            lastCol: 4,
-            [key]: value,
-          });
-          assert.equal(result.status.ok, false, `getCellsInRange ${key}=${String(value)} accepted`);
+          assert.throws(
+            () =>
+              wb.getCellsInRange(0, {
+                firstRow: 0,
+                firstCol: 0,
+                lastRow: 4,
+                lastCol: 4,
+                [key]: value,
+              }),
+            typeof value === 'symbol' ? TypeError : RangeError,
+            `getCellsInRange ${key}=${String(value)} accepted`,
+          );
         }
       }
 
@@ -88,8 +92,7 @@ export function registerCellGeometryDisplay(Module, test) {
           throw new Error('cell range getter');
         },
       });
-      const getterResult = wb.getCellsInRange(0, range);
-      assert.equal(getterResult.status.ok, false);
+      assert.throws(() => wb.getCellsInRange(0, range), /cell range getter/);
     });
   });
 

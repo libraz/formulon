@@ -194,7 +194,7 @@ export function registerFilterValidationComments(Module, test) {
     });
   });
 
-  test('UI numeric readers reject lossy validation fields before mutation', () => {
+  test('UI numeric readers throw on lossy validation fields before mutation', () => {
     withWorkbook(Module, (wb) => {
       const base = {
         ranges: [range(0, 0, 2, 0)],
@@ -208,18 +208,22 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(before.length, 1);
 
       for (const value of [256, Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1, Symbol('type')]) {
-        const rejected = wb.addValidation(0, { ...base, type: value });
-        assert.equal(rejected.ok, false, `type=${String(value)}`);
-        assert.equal(rejected.status, 2, `type=${String(value)}`);
+        assert.throws(
+          () => wb.addValidation(0, { ...base, type: value }),
+          typeof value === 'symbol' ? TypeError : RangeError,
+          `type=${String(value)}`,
+        );
         assert.equal(wb.getValidations(0).length, before.length);
       }
 
-      const badRange = wb.addValidation(0, {
-        ...base,
-        ranges: [{ ...base.ranges[0], firstRow: 2 ** 32 }],
-      });
-      assert.equal(badRange.ok, false);
-      assert.equal(badRange.status, 2);
+      assert.throws(
+        () =>
+          wb.addValidation(0, {
+            ...base,
+            ranges: [{ ...base.ranges[0], firstRow: 2 ** 32 }],
+          }),
+        RangeError,
+      );
       assert.deepEqual(wb.getValidations(0), before);
 
       // Nullish enum fields keep their documented zero defaults.
@@ -228,7 +232,7 @@ export function registerFilterValidationComments(Module, test) {
     });
   });
 
-  test('AutoFilter date-group integers reject wraparound before replacing a filter', () => {
+  test('AutoFilter date-group integers throw on wraparound before replacing a filter', () => {
     withWorkbook(Module, (wb) => {
       const good = {
         range: range(0, 0, 2, 0),
@@ -253,25 +257,27 @@ export function registerFilterValidationComments(Module, test) {
           },
         ],
       };
-      const rejected = wb.setAutoFilter(0, bad);
-      assert.equal(rejected.ok, false);
-      assert.equal(rejected.status, 2);
+      assert.throws(() => wb.setAutoFilter(0, bad), RangeError);
       assert.deepEqual(wb.getAutoFilter(0).autoFilter, before);
 
-      const nonFinite = wb.setAutoFilter(0, {
-        ...good,
-        columns: [{ ...good.columns[0], colId: Number.NaN }],
-      });
-      assert.equal(nonFinite.ok, false);
-      assert.equal(nonFinite.status, 2);
+      assert.throws(
+        () =>
+          wb.setAutoFilter(0, {
+            ...good,
+            columns: [{ ...good.columns[0], colId: Number.NaN }],
+          }),
+        RangeError,
+      );
       assert.deepEqual(wb.getAutoFilter(0).autoFilter, before);
 
-      const wrongPrimitive = wb.setAutoFilter(0, {
-        ...good,
-        columns: [{ ...good.columns[0], kind: 'bad' }],
-      });
-      assert.equal(wrongPrimitive.ok, false);
-      assert.equal(wrongPrimitive.status, 2);
+      assert.throws(
+        () =>
+          wb.setAutoFilter(0, {
+            ...good,
+            columns: [{ ...good.columns[0], kind: 'bad' }],
+          }),
+        TypeError,
+      );
       assert.deepEqual(wb.getAutoFilter(0).autoFilter, before);
 
       const defaults = wb.setAutoFilter(0, {
@@ -290,27 +296,31 @@ export function registerFilterValidationComments(Module, test) {
     });
   });
 
-  test('threaded mention and image integer readers reject before C mutation', () => {
+  test('threaded mention and image integer readers throw before C mutation', () => {
     withWorkbook(Module, (wb) => {
       assert.ok(wb.addPerson({ id: ALICE, displayName: 'Alice' }).ok);
       const beforeComments = wb.getThreadedComments(0).comments.length;
-      const badMention = wb.addThreadedComment(0, {
-        id: THREAD,
-        row: 0,
-        col: 0,
-        personId: ALICE,
-        created: CREATED,
-        text: '@Alice',
-        mentions: [{ personId: ALICE, mentionId: MENTION, start: 2 ** 32, length: 1 }],
-      });
-      assert.equal(badMention.ok, false);
-      assert.equal(badMention.status, 2);
+      assert.throws(
+        () =>
+          wb.addThreadedComment(0, {
+            id: THREAD,
+            row: 0,
+            col: 0,
+            personId: ALICE,
+            created: CREATED,
+            text: '@Alice',
+            mentions: [{ personId: ALICE, mentionId: MENTION, start: 2 ** 32, length: 1 }],
+          }),
+        RangeError,
+      );
       assert.equal(wb.getThreadedComments(0).comments.length, beforeComments);
 
       for (const value of [Number.NaN, 1.5, Symbol('rowOffEmu')]) {
-        const badImage = wb.insertImage(0, new Uint8Array([1, 2, 3]), { rowOffEmu: value });
-        assert.equal(badImage.status.ok, false);
-        assert.equal(badImage.status.status, 2, `rowOffEmu=${String(value)}`);
+        assert.throws(
+          () => wb.insertImage(0, new Uint8Array([1, 2, 3]), { rowOffEmu: value }),
+          typeof value === 'symbol' ? TypeError : RangeError,
+          `rowOffEmu=${String(value)}`,
+        );
         assert.equal(wb.listDrawingObjects(0).length, 0);
       }
 
@@ -321,14 +331,12 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(boundary.status.ok, false);
       assert.equal(wb.listDrawingObjects(0).length, 0);
 
-      const positiveLimit = wb.insertImage(0, new Uint8Array([1, 2, 3]), { widthEmu: 2 ** 63 });
-      assert.equal(positiveLimit.status.ok, false);
-      assert.equal(positiveLimit.status.status, 2);
+      assert.throws(() => wb.insertImage(0, new Uint8Array([1, 2, 3]), { widthEmu: 2 ** 63 }), RangeError);
       assert.equal(wb.listDrawingObjects(0).length, 0);
     });
   });
 
-  test('nested readers contain throwing getters and hostile string conversions', () => {
+  test('nested readers rethrow getter failures and reject hostile string conversions', () => {
     withWorkbook(Module, (wb) => {
       const beforeValidationCount = wb.getValidations(0).length;
       const largeText = 'x'.repeat(1024 * 1024);
@@ -341,9 +349,11 @@ export function registerFilterValidationComments(Module, test) {
             throw new Error('formula2 getter should stay inside the JS reader boundary');
           },
         });
-        const result = wb.addValidation(0, input);
-        assert.equal(result.ok, false, `throwing getter unexpectedly succeeded at iteration ${i}`);
-        assert.equal(result.status, 2);
+        assert.throws(
+          () => wb.addValidation(0, input),
+          /formula2 getter should stay inside the JS reader boundary/,
+          `throwing getter unexpectedly succeeded at iteration ${i}`,
+        );
         assert.equal(wb.getValidations(0).length, beforeValidationCount);
       }
 
@@ -355,9 +365,7 @@ export function registerFilterValidationComments(Module, test) {
           },
         }),
       };
-      const filterResult = wb.setAutoFilter(0, proxyFilter);
-      assert.equal(filterResult.ok, false);
-      assert.equal(filterResult.status, 2);
+      assert.throws(() => wb.setAutoFilter(0, proxyFilter), /columns getter should stay inside the JS reader boundary/);
 
       const badString = {
         formula1: {
@@ -366,9 +374,7 @@ export function registerFilterValidationComments(Module, test) {
           },
         },
       };
-      const stringResult = wb.addValidation(0, badString);
-      assert.equal(stringResult.ok, false);
-      assert.equal(stringResult.status, 2);
+      assert.throws(() => wb.addValidation(0, badString), TypeError);
       assert.equal(wb.getValidations(0).length, beforeValidationCount);
 
       const bytesProxy = new Proxy(new Uint8Array([1, 2, 3]), {
