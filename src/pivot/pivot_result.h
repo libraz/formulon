@@ -24,6 +24,12 @@ namespace formulon::pivot {
 struct AxisHierarchyNode {
   std::string label;
   std::vector<AxisHierarchyNode> children;
+  /// Typed key for this rendered item. Every node of a date-grouped level
+  /// (its keys are synthetic sort keys, not source values) leaves this empty
+  /// and is addressed by label only. Other nodes retain their Value kind so
+  /// GETPIVOTDATA can distinguish, for example, number 1 from text "1" before
+  /// falling back to a display-label match.
+  std::optional<Value> identity = std::nullopt;
 };
 
 /// One row-axis subtotal emitted after all descendant leaves for `labels`.
@@ -137,11 +143,11 @@ struct PivotResult {
   std::vector<std::vector<Value>> col_leaf_totals;
 
   /// Lifetime-stable backing store for any `Value::text` payload appearing
-  /// in `values`, `subtotals`, or `grand_total`. The evaluator may need to
-  /// surface text values from the source cache (e.g. when MAX-ing over a
-  /// pure-text column); copying the underlying bytes here decouples the
-  /// result's lifetime from the cache it was computed against, satisfying
-  /// the contract spelled out on this struct's docstring.
+  /// in `values`, `subtotals`, `grand_total`, or axis `identity`. The
+  /// evaluator may need to surface text values from the source cache (e.g.
+  /// when MAX-ing over a pure-text column); copying the underlying bytes here
+  /// decouples the result's lifetime from the cache it was computed against,
+  /// satisfying the contract spelled out on this struct's docstring.
   ///
   /// `std::deque` gives pointer/iterator stability across appends so
   /// `string_view`s into earlier entries remain valid as later entries are

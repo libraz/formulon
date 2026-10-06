@@ -1,6 +1,8 @@
 // Ordering and comparator behavior for `formulon::pivot::evaluate`.
 
 #include <cstddef>
+#include <limits>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -46,6 +48,30 @@ TEST(PivotComparatorParity, NumberBeforeTextBeforeBool) {
 
   EXPECT_LT(eval::cmp_value_asc(num, text_val), 0);
   EXPECT_LT(eval::cmp_value_asc(text_val, bool_val), 0);
+}
+
+TEST(PivotComparatorParity, OrdersNonFiniteNumbersAfterFiniteValues) {
+  const Value negative_infinity = Value::number(-std::numeric_limits<double>::infinity());
+  const Value finite = Value::number(42.0);
+  const Value positive_infinity = Value::number(std::numeric_limits<double>::infinity());
+  const Value nan = Value::number(std::numeric_limits<double>::quiet_NaN());
+
+  EXPECT_TRUE(value_less(negative_infinity, finite));
+  EXPECT_TRUE(value_less(finite, positive_infinity));
+  EXPECT_TRUE(value_less(positive_infinity, nan));
+  EXPECT_FALSE(value_less(nan, positive_infinity));
+  EXPECT_FALSE(value_less(nan, nan));
+
+  std::map<Value, int, ValueLess> values;
+  values.emplace(negative_infinity, 1);
+  values.emplace(finite, 2);
+  values.emplace(positive_infinity, 3);
+  values.emplace(nan, 4);
+  EXPECT_EQ(values.size(), 4U);
+  EXPECT_EQ(values.at(negative_infinity), 1);
+  EXPECT_EQ(values.at(finite), 2);
+  EXPECT_EQ(values.at(positive_infinity), 3);
+  EXPECT_EQ(values.at(nan), 4);
 }
 
 TEST(PivotEvaluator, FieldDescendingSortReversesHierarchyAndValues) {

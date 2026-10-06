@@ -8,6 +8,7 @@
 #include <optional>
 #include <vector>
 
+#include "numeric_aggregate_kernels.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
@@ -49,14 +50,10 @@ struct ArithmeticSummary {
   double min = std::numeric_limits<double>::infinity();
   double max = -std::numeric_limits<double>::infinity();
   std::size_t count = 0;
-  std::vector<double> samples;
 };
 
-ArithmeticSummary summarize_arithmetic(const std::vector<Value>& values, bool keep_samples = false) {
+ArithmeticSummary summarize_arithmetic(const std::vector<Value>& values) {
   ArithmeticSummary summary;
-  if (keep_samples) {
-    summary.samples.reserve(values.size());
-  }
   for (const auto& v : values) {
     double x = 0.0;
     if (!coerce_arithmetic(v, x)) {
@@ -67,11 +64,28 @@ ArithmeticSummary summarize_arithmetic(const std::vector<Value>& values, bool ke
     summary.min = (summary.count == 0 || x < summary.min) ? x : summary.min;
     summary.max = (summary.count == 0 || x > summary.max) ? x : summary.max;
     ++summary.count;
-    if (keep_samples) {
-      summary.samples.push_back(x);
-    }
   }
   return summary;
+}
+
+std::optional<double> numeric_view_get(const void* context, std::size_t index) {
+  const auto& values = *static_cast<const std::vector<Value>*>(context);
+  double number = 0.0;
+  if (!coerce_arithmetic(values[index], number)) {
+    return std::nullopt;
+  }
+  return number;
+}
+
+numeric_aggregate_kernels::NumericInputView numeric_view(const std::vector<Value>& values) {
+  return numeric_aggregate_kernels::NumericInputView{&values, values.size(), &numeric_view_get};
+}
+
+Value lift_kernel_result(Expected<double, ErrorCode> result) {
+  if (!result) {
+    return Value::error(result.error());
+  }
+  return Value::number(result.value());
 }
 
 Value AggregateSum(const std::vector<Value>& values) {
@@ -120,15 +134,7 @@ Value AggregateAverage(const std::vector<Value>& values) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
   }
-  const ArithmeticSummary summary = summarize_arithmetic(values);
-  if (summary.count == 0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double avg = summary.sum / static_cast<double>(summary.count);
-  if (std::isnan(avg) || std::isinf(avg)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(avg);
+  return lift_kernel_result(numeric_aggregate_kernels::run_average(numeric_view(values)));
 }
 
 Value AggregateMax(const std::vector<Value>& values) {
@@ -156,36 +162,12 @@ Value AggregateMin(const std::vector<Value>& values) {
   return Value::number(min);
 }
 
-// Two-pass variance computation. Mirrors `VAR.S` / `VAR.P` from
-// `src/eval/builtins/stats.cpp`: collect numerics (booleans coerce as
-// 0/1, text and blanks are ignored), then compute mean and sum of
-// squared deviations. `population` controls the divisor: when true, n;
-// otherwise n - 1. The `min_n` guard rejects samples too small for the
-// chosen variant (n < 2 for sample, n < 1 for population) with
-// `#DIV/0!`, matching Excel's pivot behaviour. Errors in the input
-// dominate (handled by the caller's `first_error` short-circuit).
 Value variance_helper(const std::vector<Value>& values, bool population) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
   }
-  const ArithmeticSummary summary = summarize_arithmetic(values, /*keep_samples=*/true);
-  const std::vector<double>& xs = summary.samples;
-  const std::size_t min_n = population ? 1u : 2u;
-  if (xs.size() < min_n) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double mean = summary.sum / static_cast<double>(xs.size());
-  double ss = 0.0;
-  for (double x : xs) {
-    const double d = x - mean;
-    ss += d * d;
-  }
-  const double divisor = population ? static_cast<double>(xs.size()) : static_cast<double>(xs.size() - 1u);
-  const double r = ss / divisor;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  // Booleans count as 0/1, text and blanks are skipped; too few values yield #DIV/0! as in Excel's pivot.
+  return lift_kernel_result(numeric_aggregate_kernels::run_variance(numeric_view(values), !population));
 }
 
 Value AggregateVar(const std::vector<Value>& values) {
@@ -197,15 +179,10 @@ Value AggregateVarP(const std::vector<Value>& values) {
 }
 
 Value stddev_helper(const std::vector<Value>& values, bool population) {
-  Value v = variance_helper(values, population);
-  if (!v.is_number()) {
-    return v;
+  if (const Value* err = first_error(values); err != nullptr) {
+    return *err;
   }
-  const double r = std::sqrt(v.as_number());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return lift_kernel_result(numeric_aggregate_kernels::run_stdev(numeric_view(values), !population));
 }
 
 Value AggregateStdDev(const std::vector<Value>& values) {

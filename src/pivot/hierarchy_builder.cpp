@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "pivot/date_serial.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_types.h"
@@ -30,9 +31,9 @@ namespace {
 // When a `PivotField` declares a `date_group`, the field's source `Value`
 // (which the cache stores as a date serial) is mapped to a bucket
 // `(sort_key, label)` pair. The sort key feeds the hierarchy's
-// `std::map<Value, HierNode, ValueLess>` so leaves order chronologically
-// (e.g. 2023 < 2024 < 2025); the label is what the renderer / GETPIVOTDATA
-// see as the bucket name.
+// `std::map<HierarchyKey, HierNode, HierarchyKeyLess>` so leaves order
+// chronologically (e.g. 2023 < 2024 < 2025); the label is what the renderer /
+// GETPIVOTDATA see as the bucket name.
 //
 // MVP scope: Year, Quarter, Month, Day for both Gregorian and Japanese
 // calendars; Week / Hour / Minute / Second pass through unchanged
@@ -45,6 +46,7 @@ namespace {
 struct DateBucket {
   Value sort_key;     ///< Numeric sort handle (chronological order).
   std::string label;  ///< Display string for the bucket.
+  HierarchyBand band = HierarchyBand::Normal;
 };
 
 // Two-digit zero-padded decimal append (no <iomanip>).
@@ -94,11 +96,11 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
   using formulon::japanese_era::classify_era;
   using formulon::japanese_era::EraInfo;
 
-  // Negative / non-finite serials are not valid Excel dates; pass them
-  // through so the existing display path renders the raw number.
-  if (!(serial >= 0.0)) {
+  // Invalid serials are not date buckets; keep the raw number in its own band
+  // so it cannot merge with a synthetic bucket key.
+  if (!is_valid_date_serial(serial, date1904)) {
     Value raw = Value::number(serial);
-    return {raw, display_string(raw)};
+    return {raw, display_string(raw), HierarchyBand::Raw};
   }
   const double serial_floor = std::floor(serial);
   const YMD ymd = ymd_from_serial(serial_floor, date1904);
@@ -171,13 +173,13 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
         // Catch-all: everything below an explicit Start narrower than the data minimum, sorted first.
         std::string label = "<";
         append_days_group_date(label, start, date1904);
-        return {Value::number(-std::numeric_limits<double>::infinity()), std::move(label)};
+        return {Value::number(-std::numeric_limits<double>::infinity()), std::move(label), HierarchyBand::Before};
       }
       if (serial_floor > end) {
         // Mirror image: everything above an explicit End narrower than the data maximum, sorted last.
         std::string label = ">";
         append_days_group_date(label, end, date1904);
-        return {Value::number(std::numeric_limits<double>::infinity()), std::move(label)};
+        return {Value::number(std::numeric_limits<double>::infinity()), std::move(label), HierarchyBand::After};
       }
       const double bucket_index = std::floor((serial_floor - start) / interval);
       const double bucket_start = start + bucket_index * interval;
@@ -235,7 +237,7 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
     }
   }
   Value raw = Value::number(serial);
-  return {raw, display_string(raw)};
+  return {raw, display_string(raw), HierarchyBand::Raw};
 }
 
 /// Removes the leaves of `node`'s subtree whose position in `keep` is
@@ -291,11 +293,11 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
   HierNode* cursor = &root;
   for (const HierLevel& level : levels) {
     const Value raw = cell_value(cache, record, level.field_index);
-    Value key = raw;
+    HierarchyKey key{HierarchyBand::Normal, raw};
     std::string label_override;
     if (level.date_group != nullptr && raw.is_number()) {
       DateBucket bucket = bucket_date(raw.as_number(), *level.date_group, date1904);
-      key = bucket.sort_key;
+      key = {bucket.band, bucket.sort_key};
       label_override = std::move(bucket.label);
     } else if (raw.is_blank()) {
       // A source cell with no value still occupies a group on the axis, so
@@ -315,28 +317,39 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
   return cursor;
 }
 
-std::string node_label(const Value& key, const HierNode& child) {
+std::string node_label(const HierarchyKey& key, const HierNode& child) {
   if (!child.label_override.empty()) {
     return child.label_override;
   }
-  return display_string(key);
+  return display_string(key.value);
 }
 
 void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, std::size_t depth,
-                        std::vector<AxisHierarchyNode>& out, std::vector<HierNode*>& leaves) {
+                        std::vector<AxisHierarchyNode>& out, std::vector<HierNode*>& leaves,
+                        std::deque<std::string>& text_storage) {
   if (tree.children.empty()) {
     return;
   }
   out.reserve(tree.children.size());
   const std::vector<OrderedHierarchyChild> entries = ordered_children(tree, levels, depth);
-  const auto append = [&](const Value& key, HierNode& child) {
+  const auto append = [&](const HierarchyKey& key, HierNode& child) {
     AxisHierarchyNode node;
     node.label = node_label(key, child);
+    // A date-grouped level's keys are synthetic, so its items are addressed by label only.
+    const bool date_grouped = depth < levels.size() && levels[depth].date_group != nullptr;
+    if (key.band == HierarchyBand::Normal && !date_grouped) {
+      if (key.value.is_text()) {
+        text_storage.emplace_back(key.value.as_text());
+        node.identity = Value::text(text_storage.back());
+      } else {
+        node.identity = key.value;
+      }
+    }
     if (child.children.empty()) {
       child.leaf_index = leaves.size();
       leaves.push_back(&child);
     } else {
-      finalize_hierarchy(child, levels, depth + 1U, node.children, leaves);
+      finalize_hierarchy(child, levels, depth + 1U, node.children, leaves, text_storage);
     }
     out.push_back(std::move(node));
   };

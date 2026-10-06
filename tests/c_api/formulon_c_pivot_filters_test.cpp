@@ -449,6 +449,34 @@ TEST(FormulonCApiPivot, PivotFilterRejectsUnknownFieldNameWithoutMutation) {
   EXPECT_EQ(count, 1U);
 }
 
+TEST(FormulonCApiPivot, ValueFilterRejectsUnknownFieldNameWithoutMutation) {
+  // The engine skips a filter whose field does not resolve, so a value filter
+  // naming no pivot field must be rejected rather than accepted as a no-op.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  fm_pivot_filter_spec_t spec{};
+  spec.axis = FM_PIVOT_AXIS_ROW;
+  spec.field_name = "NoSuchField";
+  spec.type = FM_PIVOT_FILTER_VALUE_TOP_10;
+  spec.value_kind = FM_PIVOT_FILTER_VALUE_INT;
+  spec.value_int = 1;
+  spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
+  spec.data_field_index = 0;
+  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), invalid);
+
+  std::size_t count = 99;
+  ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &count), 0);
+  EXPECT_EQ(count, 0U);
+
+  spec.field_name = "Region";
+  ASSERT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), 0) << fm_last_error_message();
+}
+
 TEST(FormulonCApiPivot, FilterErrorUsesApiName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

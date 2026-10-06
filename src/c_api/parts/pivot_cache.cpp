@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -115,6 +116,11 @@ extern "C" fm_status_t fm_workbook_pivot_cache_create(fm_workbook_t* wb, std::ui
       if (c->cache_id() > max_id) {
         max_id = c->cache_id();
       }
+    }
+    if (any && max_id == std::numeric_limits<std::uint32_t>::max()) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_workbook_pivot_cache_create: auto-assignment would overflow",
+                               "max_existing_id=" + std::to_string(max_id));
     }
     assigned = any ? (max_id + 1U) : 1U;
   } else {

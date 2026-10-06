@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "pivot/aggregator.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_result.h"
@@ -414,6 +415,22 @@ TEST(PivotEvaluator, ArithmeticAggregatesMapOverflowToNumError) {
   }
 }
 
+TEST(PivotEvaluator, AverageKeepsPlainSumRoundingAndOverflow) {
+  const Value last_bit =
+      apply_aggregation(Aggregation::Average, {Value::number(0.1), Value::number(0.2), Value::number(0.3)});
+  ASSERT_TRUE(last_bit.is_number()) << last_bit.debug_to_string();
+  EXPECT_DOUBLE_EQ(last_bit.as_number(), (0.1 + 0.2 + 0.3) / 3.0);
+
+  const Value absorbed =
+      apply_aggregation(Aggregation::Average, {Value::number(1.0e16), Value::number(1.0), Value::number(-1.0e16)});
+  ASSERT_TRUE(absorbed.is_number()) << absorbed.debug_to_string();
+  EXPECT_DOUBLE_EQ(absorbed.as_number(), 0.0);
+
+  const Value overflow = apply_aggregation(Aggregation::Average, {Value::number(1.0e308), Value::number(1.0e308)});
+  ASSERT_TRUE(overflow.is_error()) << overflow.debug_to_string();
+  EXPECT_EQ(overflow.as_error(), ErrorCode::Num);
+}
+
 TEST(PivotEvaluator, MaxMinMapAStoredNonFiniteValueToNumError) {
   auto run = [&](Aggregation agg, double extreme) {
     PivotCache cache;
@@ -515,6 +532,28 @@ TEST(PivotEvaluator, StdDevAndVarFamily) {
     EXPECT_DOUBLE_EQ(r.values[north][0][0].as_number(), std::sqrt(north_ss / 3.0));
     EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), std::sqrt(south_ss / 2.0));
   }
+}
+
+TEST(PivotEvaluator, ExtremeDispersionOverflowIsNumError) {
+  const std::vector<Value> equal = {Value::number(1.0e308), Value::number(1.0e308)};
+  for (Aggregation agg : {Aggregation::Var, Aggregation::VarP, Aggregation::StdDev, Aggregation::StdDevP}) {
+    const Value result = apply_aggregation(agg, equal);
+    ASSERT_TRUE(result.is_error()) << static_cast<int>(agg) << ": " << result.debug_to_string();
+    EXPECT_EQ(result.as_error(), ErrorCode::Num) << static_cast<int>(agg);
+  }
+
+  const double max = std::numeric_limits<double>::max();
+  const Value opposing = apply_aggregation(Aggregation::StdDevP, {Value::number(max), Value::number(-max)});
+  ASSERT_TRUE(opposing.is_error()) << opposing.debug_to_string();
+  EXPECT_EQ(opposing.as_error(), ErrorCode::Num);
+}
+
+TEST(PivotEvaluator, AdjacentLargeValuesMatchExcelPopulationVariance) {
+  constexpr double first = 1.0e150;
+  const Value variance =
+      apply_aggregation(Aggregation::VarP, {Value::number(first), Value::number(std::nextafter(first, 0.0))});
+  ASSERT_TRUE(variance.is_number()) << variance.debug_to_string();
+  EXPECT_DOUBLE_EQ(variance.as_number(), 1.650920409798954e+268);
 }
 
 TEST(PivotEvaluator, VarAndStdDevSampleNeedTwoValuesElseDiv0) {

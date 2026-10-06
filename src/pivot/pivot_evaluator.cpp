@@ -22,6 +22,7 @@
 #include "pivot/pivot_evaluator.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -33,6 +34,7 @@
 #include <vector>
 
 #include "pivot/aggregator.h"
+#include "pivot/date_serial.h"
 #include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/hierarchy_builder.h"
@@ -363,6 +365,28 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
                         "field=" + pivot_field_display_name(table.fields()[fi]) + " field_index=" + std::to_string(fi));
     }
   }
+  for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
+    const auto& date_group = table.fields()[fi].date_group;
+    if (!date_group.has_value() || date_group->granularity != DateGrouping::Days) {
+      continue;
+    }
+    if (date_group->interval_days == 0) {
+      return make_error(FormulonErrorCode::kEvalPivotInvalid, "date grouping interval_days must be non-zero",
+                        "field_index=" + std::to_string(fi));
+    }
+    // Compare authored bounds before flooring so the core model agrees with
+    // the C API for inverted fractional windows (e.g. 0.9 > 0.1).
+    if (date_group->start_serial.has_value() && date_group->end_serial.has_value() &&
+        *date_group->start_serial > *date_group->end_serial) {
+      return make_error(FormulonErrorCode::kEvalPivotInvalid, "date grouping start must not exceed end",
+                        "field_index=" + std::to_string(fi));
+    }
+    if ((date_group->start_serial.has_value() && !is_valid_date_serial(*date_group->start_serial, env.date1904)) ||
+        (date_group->end_serial.has_value() && !is_valid_date_serial(*date_group->end_serial, env.date1904))) {
+      return make_error(FormulonErrorCode::kEvalPivotInvalid, "date grouping bound is outside the date serial domain",
+                        "field_index=" + std::to_string(fi));
+    }
+  }
 
   // 2. Filter records.
   //
@@ -423,7 +447,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // filters); every hierarchy level for that field reuses the result.
   std::unordered_map<std::uint32_t, PivotDateGroup> resolved_days_group_cache;
   auto resolved_date_group = [&](std::uint32_t fi, const PivotDateGroup& dg) -> const PivotDateGroup* {
-    if (dg.granularity != DateGrouping::Days || (dg.start_serial.has_value() && dg.end_serial.has_value())) {
+    if (dg.granularity != DateGrouping::Days) {
       return &dg;
     }
     if (auto it = resolved_days_group_cache.find(fi); it != resolved_days_group_cache.end()) {
@@ -435,10 +459,10 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     double data_max = 0.0;
     for (const PivotCacheRecord& rec : cache.records()) {
       const Value v = cell_value(cache, rec, fi);
-      if (!v.is_number() || !(v.as_number() >= 0.0)) {
+      if (!v.is_number() || !is_valid_date_serial(v.as_number(), resolved_env.date1904)) {
         continue;  // Mirrors bucket_date's own valid-serial domain.
       }
-      const double n = v.as_number();
+      const double n = std::floor(v.as_number());
       if (!have_bound) {
         data_min = n;
         data_max = n;
@@ -448,11 +472,16 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
         data_max = std::max(data_max, n);
       }
     }
-    if (!resolved.start_serial.has_value()) {
+    if (resolved.start_serial.has_value()) {
+      resolved.start_serial = std::floor(*resolved.start_serial);
+    } else {
       resolved.start_serial = have_bound ? data_min : 0.0;
     }
     if (!resolved.end_serial.has_value()) {
-      resolved.end_serial = have_bound ? (data_max + 1.0) : *resolved.start_serial;
+      const double auto_end = have_bound ? (data_max + 1.0) : *resolved.start_serial;
+      resolved.end_serial = std::min(auto_end, last_valid_date_serial(resolved_env.date1904));
+    } else {
+      resolved.end_serial = std::floor(*resolved.end_serial);
     }
     return &resolved_days_group_cache.emplace(fi, resolved).first->second;
   };
@@ -529,8 +558,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   PivotResult result;
   std::vector<HierNode*> row_leaves;
   std::vector<HierNode*> col_leaves;
-  finalize_hierarchy(row_tree, row_levels, 0U, result.rows, row_leaves);
-  finalize_hierarchy(col_tree, col_levels, 0U, result.cols, col_leaves);
+  finalize_hierarchy(row_tree, row_levels, 0U, result.rows, row_leaves, result.text_storage);
+  finalize_hierarchy(col_tree, col_levels, 0U, result.cols, col_leaves, result.text_storage);
   resolve_page_selections(table, cache, options, result);
 
   // Degenerate axis: if a side has no field configured, treat it as a
@@ -945,7 +974,14 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   };
 
   for (const PivotFilter& f : table.active_filters()) {
-    apply_value_filter(f, resolve_field_by_any_name(table, f.field_name));
+    const std::optional<std::size_t> field_index = resolve_field_by_any_name(table, f.field_name);
+    // An unresolved active filter has no field to act on. Treat it as the
+    // no-op promised by PreparedRecordFilter instead of allowing a value
+    // filter to fall back to the innermost axis field.
+    if (!field_index.has_value()) {
+      continue;
+    }
+    apply_value_filter(f, field_index);
   }
   for (const AuthoredValueFilter& authored : table.authored_value_filters()) {
     if (const auto projected = authored_value_filter_as_pivot_filter(table, authored)) {

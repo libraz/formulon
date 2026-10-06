@@ -50,13 +50,15 @@ const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, s
 // Excel's own" mark: a span read out of a file described the report as it
 // then stood, so a field, an order, a filter or a move all invalidate it
 // as surely as they invalidate the aggregates. Positioning stays the
-// caller's; the extent goes back to being projected at save time.
-void invalidate_pivot_result(formulon::pivot::PivotTable& table);
+// caller's; the extent goes back to being projected at save time. Every
+// formula is also marked dirty so GETPIVOTDATA recomputes against the change.
+void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable& table);
 
-// Invalidates `last_result_` on every pivot table (across all sheets)
-// that draws from `cache_id`. Called after any pivot-cache mutation so a
-// subsequent layout recomputes against the changed cache instead of
-// returning a stale memoised projection.
+// Invalidates derived state on every pivot table (across all sheets) that
+// draws from `cache_id`. Called after any pivot-cache mutation so a
+// subsequent layout or GETPIVOTDATA recomputes against the changed cache
+// instead of returning stale memoised state. Formula cells are dirtied once
+// when at least one matching table exists.
 void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id);
 
 // Interns `utf8` in the cache's text storage and returns a Value::text

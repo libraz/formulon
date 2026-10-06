@@ -1334,11 +1334,12 @@ typedef enum {
 /**
  * @brief Reads the text Excel displays for the cell at `(row, col)`.
  *
- * Rendered from the cell's value and its XF number format under the
- * workbook's date system, independent of column width: a `*x` repeat fill
- * contributes no characters and an overflow is reported through
- * `*out_status` rather than as a width-dependent `#` run. An absent cell is
- * `""`. `*out_text` is a read-scratch-backed view.
+ * Rendered from the resolved value and effective cell/row/column/default
+ * XF number format under the workbook's date system, independent of column
+ * width: a `*x` repeat fill contributes no characters and an overflow is
+ * reported through `*out_status` rather than as a width-dependent `#` run.
+ * A coordinate with no value or spill result is `""`. `*out_text` is a
+ * read-scratch-backed view.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -3873,7 +3874,7 @@ FM_API fm_status_t fm_workbook_pivot_cache_id_at(const fm_workbook_t* wb, size_t
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
  *         `kInvalidArgument` when `requested_id` collides with an
- *         existing cache.
+ *         existing cache or auto-assignment would overflow.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_create(fm_workbook_t* wb, uint32_t requested_id, uint32_t* out_cache_id);
 
@@ -4151,8 +4152,9 @@ FM_API fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t* wb,
  *
  * @return `kInvalidArgument` for an unknown `granularity`/`calendar`,
  *         or -- when `granularity` is `FM_PIVOT_DATE_DAYS` -- for
- *         `interval_days == 0` or an explicit `start_serial_or_neg1` >
- *         an explicit `end_serial_or_neg1`.
+ *         `interval_days == 0`, invalid/non-finite explicit serial bounds,
+ *         or an explicit `start_serial_or_neg1` > an explicit
+ *         `end_serial_or_neg1` (the raw bounds are compared before flooring).
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                           size_t field_idx, int32_t granularity, int32_t calendar,

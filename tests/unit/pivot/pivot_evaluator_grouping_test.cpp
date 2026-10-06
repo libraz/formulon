@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -16,6 +18,7 @@
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
+#include "pivot/value_order.h"
 #include "pivot_evaluator_fixtures.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
@@ -431,6 +434,97 @@ TEST(PivotEvaluator, DateGroupingByYearHonorsDate1904Epoch) {
   EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 10.0);
 }
 
+TEST(PivotEvaluator, DateGroupingInvalidSerialsRemainDistinctAndAggregate) {
+  PivotCache cache = build_two_field_cache();
+  const double last_valid = date_time::serial_from_ymd(9999, 12U, 31U);
+  const std::vector<std::pair<double, double>> cases = {
+      {-std::numeric_limits<double>::infinity(), 1.0},
+      {std::numeric_limits<double>::infinity(), 2.0},
+      {std::numeric_limits<double>::quiet_NaN(), 3.0},
+      {std::numeric_limits<double>::max(), 4.0},
+      {0.75, 5.0},
+      {last_valid + 0.75, 6.0},
+      {last_valid + 1.0, 7.0},
+  };
+  for (const auto& [serial, amount] : cases) {
+    push_record(cache, serial, amount);
+  }
+
+  PivotTable table = build_date_grouped_table(DateGrouping::Day, CalendarSystem::Gregorian);
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), cases.size());
+
+  std::map<std::string, double> amount_by_label;
+  for (std::size_t i = 0; i < r.rows.size(); ++i) {
+    ASSERT_EQ(r.values[i].size(), 1U);
+    ASSERT_EQ(r.values[i][0].size(), 1U);
+    ASSERT_TRUE(r.values[i][0][0].is_number());
+    EXPECT_TRUE(amount_by_label.emplace(r.rows[i].label, r.values[i][0][0].as_number()).second)
+        << "duplicate label=" << r.rows[i].label;
+  }
+  const auto expect_amount = [&](const std::string& label, double amount) {
+    const auto it = amount_by_label.find(label);
+    ASSERT_NE(it, amount_by_label.end()) << "missing label=" << label;
+    EXPECT_DOUBLE_EQ(it->second, amount) << "label=" << label;
+  };
+  expect_amount(display_string(Value::number(-std::numeric_limits<double>::infinity())), 1.0);
+  expect_amount(display_string(Value::number(std::numeric_limits<double>::infinity())), 2.0);
+  expect_amount(display_string(Value::number(std::numeric_limits<double>::quiet_NaN())), 3.0);
+  expect_amount(display_string(Value::number(std::numeric_limits<double>::max())), 4.0);
+  expect_amount("1899-12-31", 5.0);
+  expect_amount("9999-12-31", 6.0);
+  expect_amount(display_string(Value::number(last_valid + 1.0)), 7.0);
+}
+
+TEST(PivotEvaluator, DateGroupingRawSerialNeverMergesWithBucketKey) {
+  // Raw 3000000 is outside the date domain; it must stay apart from the
+  // Minute bucket whose index is also 3000000 and sort after valid buckets.
+  PivotCache cache = build_two_field_cache();
+  push_record(cache, 3000000.5 / 1440.0, 1.0);                         // Minute index 3000000
+  push_record(cache, 3000000.0, 2.0);                                  // Raw invalid serial
+  push_record(cache, date_time::serial_from_ymd(2024, 3U, 15U), 4.0);  // Later valid minute
+
+  PivotTable table = build_date_grouped_table(DateGrouping::Minute, CalendarSystem::Gregorian);
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 3U);
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 4.0);
+  EXPECT_EQ(r.rows[2].label, display_string(Value::number(3000000.0)));
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 2.0);
+}
+
+TEST(PivotEvaluator, DateGroupingByYearInvalidSerialsRemainDistinctAndAggregate) {
+  PivotCache cache = build_two_field_cache();
+  push_record(cache, -std::numeric_limits<double>::infinity(), 1.0);
+  push_record(cache, std::numeric_limits<double>::infinity(), 2.0);
+  push_record(cache, std::numeric_limits<double>::quiet_NaN(), 3.0);
+  push_record(cache, std::numeric_limits<double>::max(), 4.0);
+  push_record(cache, date_time::serial_from_ymd(2024, 3U, 15U), 5.0);
+
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 5U);
+
+  std::map<std::string, double> amount_by_label;
+  for (std::size_t i = 0; i < r.rows.size(); ++i) {
+    ASSERT_EQ(r.values[i].size(), 1U);
+    ASSERT_EQ(r.values[i][0].size(), 1U);
+    ASSERT_TRUE(amount_by_label.emplace(r.rows[i].label, r.values[i][0][0].as_number()).second)
+        << "duplicate label=" << r.rows[i].label;
+  }
+  EXPECT_DOUBLE_EQ(amount_by_label.at(display_string(Value::number(-std::numeric_limits<double>::infinity()))), 1.0);
+  EXPECT_DOUBLE_EQ(amount_by_label.at(display_string(Value::number(std::numeric_limits<double>::infinity()))), 2.0);
+  EXPECT_DOUBLE_EQ(amount_by_label.at(display_string(Value::number(std::numeric_limits<double>::quiet_NaN()))), 3.0);
+  EXPECT_DOUBLE_EQ(amount_by_label.at(display_string(Value::number(std::numeric_limits<double>::max()))), 4.0);
+  EXPECT_DOUBLE_EQ(amount_by_label.at("2024"), 5.0);
+}
+
 TEST(PivotEvaluator, DateGroupingByDaysIntervalAutoStart) {
   PivotCache cache = build_days_interval_cache();
   PivotTable table = build_days_grouped_table(/*start_serial=*/std::nullopt);
@@ -557,6 +651,127 @@ TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitEndAboveDataMaxAddsCatchA
   }
   EXPECT_DOUBLE_EQ(r.values[8][0][0].as_number(), 5.0);   // 1900/2/25..1900/3/1: 5 records.
   EXPECT_DOUBLE_EQ(r.values[9][0][0].as_number(), 10.0);  // 1900/3/2..1900/3/11: 10 records.
+}
+
+TEST(PivotEvaluator, DateGroupingDaysCatchallsDoNotMergeRawNonfiniteValues) {
+  PivotCache cache = build_two_field_cache();
+  push_record(cache, -std::numeric_limits<double>::infinity(), 1.0);
+  push_record(cache, std::numeric_limits<double>::infinity(), 2.0);
+  push_record(cache, std::numeric_limits<double>::quiet_NaN(), 3.0);
+  push_record(cache, std::numeric_limits<double>::max(), 4.0);
+  push_record(cache, 0.0, 5.0);   // Before the explicit Start.
+  push_record(cache, 10.0, 6.0);  // After the explicit End.
+
+  PivotTable table = build_days_grouped_table(/*start_serial=*/5.0, /*interval_days=*/1, /*end_serial=*/5.0);
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 6U);
+
+  std::map<std::string, double> amount_by_label;
+  for (std::size_t i = 0; i < r.rows.size(); ++i) {
+    ASSERT_EQ(r.values[i].size(), 1U);
+    ASSERT_EQ(r.values[i][0].size(), 1U);
+    ASSERT_TRUE(r.values[i][0][0].is_number());
+    ASSERT_TRUE(amount_by_label.emplace(r.rows[i].label, r.values[i][0][0].as_number()).second)
+        << "duplicate label=" << r.rows[i].label;
+  }
+  const auto expect_amount = [&](const std::string& label, double amount) {
+    const auto it = amount_by_label.find(label);
+    ASSERT_NE(it, amount_by_label.end()) << "missing label=" << label;
+    EXPECT_DOUBLE_EQ(it->second, amount) << "label=" << label;
+  };
+  expect_amount(display_string(Value::number(-std::numeric_limits<double>::infinity())), 1.0);
+  expect_amount(display_string(Value::number(std::numeric_limits<double>::infinity())), 2.0);
+  expect_amount(display_string(Value::number(std::numeric_limits<double>::quiet_NaN())), 3.0);
+  expect_amount(display_string(Value::number(std::numeric_limits<double>::max())), 4.0);
+  expect_amount("<1900/1/5", 5.0);
+  expect_amount(">1900/1/5", 6.0);
+}
+
+TEST(PivotEvaluator, DateGroupingByDaysFloorsFractionalBounds) {
+  PivotCache cache = build_days_interval_cache();
+  PivotTable table = build_days_grouped_table(/*start_serial=*/1.9, /*interval_days=*/7, /*end_serial=*/60.9);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 11U);
+  EXPECT_EQ(r.rows[0].label, "<1900/1/1");
+  EXPECT_EQ(r.rows[1].label, "1900/1/1 - 1900/1/7");
+  EXPECT_EQ(r.rows[9].label, "1900/2/26 - 1900/2/29");
+  EXPECT_EQ(r.rows[10].label, ">1900/2/29");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(r.values[9][0][0].as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(r.values[10][0][0].as_number(), 10.0);
+}
+
+TEST(PivotEvaluator, DateGroupingByDaysAutoEndClampsAtLastValidDate) {
+  PivotCache cache = build_two_field_cache();
+  const double last_valid = date_time::serial_from_ymd(9999, 12U, 31U);
+  push_record(cache, last_valid + 0.75, 1.0);
+  push_record(cache, last_valid + 1.0, 2.0);  // Invalid raw serial, excluded from auto bounds.
+
+  PivotTable table = build_days_grouped_table(/*start_serial=*/std::nullopt, /*interval_days=*/7);
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_EQ(r.rows[0].label, "9999/12/31 - 9999/12/31");
+  EXPECT_EQ(r.rows[1].label, display_string(Value::number(last_valid + 1.0)));
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 2.0);
+}
+
+TEST(PivotEvaluator, DateGroupingMaxFractionAndNextDayRespectEpoch) {
+  for (const bool date1904 : {false, true}) {
+    PivotCache cache = build_two_field_cache();
+    const double last_valid = date_time::serial_from_ymd(9999, 12U, 31U, date1904);
+    push_record(cache, last_valid + 0.75, 1.0);
+    push_record(cache, last_valid + 1.0, 2.0);
+
+    PivotTable table = build_date_grouped_table(DateGrouping::Day, CalendarSystem::Gregorian);
+    PivotFilterEnv env;
+    env.date1904 = date1904;
+    auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
+    ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+    const PivotResult& r = r_or.value();
+    ASSERT_EQ(r.rows.size(), 2U) << "date1904=" << date1904;
+    EXPECT_EQ(r.rows[0].label, "9999-12-31") << "date1904=" << date1904;
+    EXPECT_EQ(r.rows[1].label, display_string(Value::number(last_valid + 1.0))) << "date1904=" << date1904;
+    EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
+    EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 2.0);
+  }
+}
+
+TEST(PivotEvaluator, DateGroupingByDaysRejectsInvalidExplicitBounds) {
+  const double last_valid = date_time::serial_from_ymd(9999, 12U, 31U);
+  const double invalid_bounds[] = {
+      -0.1,
+      std::numeric_limits<double>::quiet_NaN(),
+      std::numeric_limits<double>::infinity(),
+      last_valid + 1.0,
+  };
+  for (const double invalid : invalid_bounds) {
+    for (const bool invalid_start : {true, false}) {
+      PivotCache cache = build_days_interval_cache();
+      PivotTable table = build_days_grouped_table(
+          invalid_start ? std::optional<double>(invalid) : std::optional<double>(0.0),
+          /*interval_days=*/7, invalid_start ? std::optional<double>(70.0) : std::optional<double>(invalid));
+      auto r_or = evaluate(table, cache);
+      ASSERT_FALSE(static_cast<bool>(r_or)) << "invalid=" << invalid << " start=" << invalid_start;
+      EXPECT_EQ(r_or.error().code, FormulonErrorCode::kEvalPivotInvalid)
+          << "invalid=" << invalid << " start=" << invalid_start;
+    }
+  }
+}
+
+TEST(PivotEvaluator, DateGroupingByDaysRejectsRawInvertedFractionalBounds) {
+  PivotCache cache = build_days_interval_cache();
+  PivotTable table = build_days_grouped_table(/*start_serial=*/0.9, /*interval_days=*/7, /*end_serial=*/0.1);
+  auto r_or = evaluate(table, cache);
+  ASSERT_FALSE(static_cast<bool>(r_or));
+  EXPECT_EQ(r_or.error().code, FormulonErrorCode::kEvalPivotInvalid);
 }
 
 TEST(PivotEvaluator, CacheIdMismatchYieldsMissing) {

@@ -1,12 +1,12 @@
 //
 // Hierarchy construction for the pivot evaluator.
 //
-// The hierarchy is built as a nested `std::map<Value, HierNode, ValueLess>`
-// so the ordering emerges naturally from `ValueLess`. After every record
-// is inserted, `finalize_hierarchy` flattens the tree into the public
-// `AxisHierarchyNode` shape and remembers the leaf
-// path that each surviving record lands on so the per-leaf aggregation
-// pass can reuse the work without rewalking the tree.
+// The hierarchy is built as a nested `std::map<HierarchyKey, HierNode,
+// HierarchyKeyLess>` so the ordering emerges naturally from `HierarchyKeyLess`.
+// After every record is inserted, `finalize_hierarchy` flattens the tree into
+// the public `AxisHierarchyNode` shape and remembers the leaf path that each
+// surviving record lands on so the per-leaf aggregation pass can reuse the
+// work without rewalking the tree.
 //
 // Date-grouping is handled inside `insert_path`: when a level carries a
 // `PivotDateGroup`, the raw cache value is bucketed first (year /
@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <optional>
 #include <string>
@@ -36,8 +37,34 @@
 
 namespace formulon::pivot {
 
+/// Sort bands keep synthetic buckets distinct from values that happen to carry
+/// the same numeric payload. Before/After are the Days catch-all buckets;
+/// Normal holds ordinary keys and date buckets; Raw holds numbers of a
+/// date-grouped field outside the date domain, so they never merge with a
+/// synthetic bucket key and sort after every valid bucket.
+enum class HierarchyBand : std::uint8_t {
+  Before = 0,
+  Normal = 1,
+  Raw = 2,
+  After = 3,
+};
+
+struct HierarchyKey {
+  HierarchyBand band = HierarchyBand::Normal;
+  Value value;
+};
+
+struct HierarchyKeyLess {
+  bool operator()(const HierarchyKey& lhs, const HierarchyKey& rhs) const noexcept {
+    if (lhs.band != rhs.band) {
+      return static_cast<std::uint8_t>(lhs.band) < static_cast<std::uint8_t>(rhs.band);
+    }
+    return value_less(lhs.value, rhs.value);
+  }
+};
+
 struct HierNode {
-  std::map<Value, HierNode, ValueLess> children;
+  std::map<HierarchyKey, HierNode, HierarchyKeyLess> children;
   /// Cache-record indices below this node. They permit value-based sorting
   /// without reconstructing a hierarchy path after aggregation.
   std::vector<std::size_t> record_indices;
@@ -68,7 +95,7 @@ struct HierLevel {
 };
 
 struct OrderedHierarchyChild {
-  const Value* key;
+  const HierarchyKey* key;
   HierNode* node;
 };
 
@@ -89,8 +116,10 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
       depth < levels.size() ? levels[depth].manual_order : nullptr;
   sort_by_index(entries, [&](const OrderedHierarchyChild& lhs, const OrderedHierarchyChild& rhs) {
     if (manual_order != nullptr) {
-      const auto lit = manual_order->find(*lhs.key);
-      const auto rit = manual_order->find(*rhs.key);
+      const auto lit =
+          lhs.key->band == HierarchyBand::Normal ? manual_order->find(lhs.key->value) : manual_order->end();
+      const auto rit =
+          rhs.key->band == HierarchyBand::Normal ? manual_order->find(rhs.key->value) : manual_order->end();
       const bool l_mapped = lit != manual_order->end();
       const bool r_mapped = rit != manual_order->end();
       if (l_mapped && r_mapped) {
@@ -112,7 +141,7 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
         return !ascending;
       }
     }
-    const ValueLess less;
+    const HierarchyKeyLess less;
     return ascending ? less(*lhs.key, *rhs.key) : less(*rhs.key, *lhs.key);
   });
   return entries;
@@ -130,16 +159,19 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
                       bool date1904 = false);
 
 /// Returns the display label for `(key, child)`: the override if set,
-/// otherwise the standard `display_string(key)`. Used by all hierarchy
+/// otherwise the standard `display_string(key.value)`. Used by all hierarchy
 /// flatten / subtotal-walk sites so date-grouped buckets surface their
 /// formatted label rather than the synthetic numeric sort key.
-std::string node_label(const Value& key, const HierNode& child);
+std::string node_label(const HierarchyKey& key, const HierNode& child);
 
 /// Recursively flattens a hierarchy into `AxisHierarchyNode` form. On the
 /// way, assigns each leaf a dense index and pushes the corresponding
 /// `HierNode*` into `leaves` so a second pass can attach record indices.
+/// Text identities are copied into `text_storage`, whose lifetime is the
+/// resulting `PivotResult`; synthetic Before/After keys have no identity.
 void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, std::size_t depth,
-                        std::vector<AxisHierarchyNode>& out, std::vector<HierNode*>& leaves);
+                        std::vector<AxisHierarchyNode>& out, std::vector<HierNode*>& leaves,
+                        std::deque<std::string>& text_storage);
 
 /// Removes the leaves at DFS pre-order positions where `keep[i]` is false,
 /// then drops any node whose subtree becomes empty, including roots. One

@@ -13,6 +13,7 @@
 #include <variant>
 #include <vector>
 
+#include "pivot/date_serial.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
@@ -87,22 +88,44 @@ std::optional<double> filter_number_value_high(const PivotFilter& f) {
   return std::nullopt;
 }
 
+// Date bounds are a stricter numeric domain than ordinary value filters:
+// non-finite payloads are invalid dates and therefore leave the date filter
+// inert. Ordinary value filters keep their own coercion above, which does not
+// reject non-finite payloads.
+std::optional<double> date_filter_number_value(const PivotFilter& f) {
+  if (const auto* d = std::get_if<double>(&f.value)) {
+    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
+  }
+  if (const auto* i = std::get_if<int>(&f.value)) {
+    return static_cast<double>(*i);
+  }
+  return std::nullopt;
+}
+
+std::optional<double> date_filter_number_value_high(const PivotFilter& f) {
+  const auto high = filter_number_value_high(f);
+  if (!high || !std::isfinite(*high)) {
+    return std::nullopt;
+  }
+  return high;
+}
+
 // Evaluates a `LabelDate` filter against the underlying numeric value
 // of a record's field. The `field_name` ostensibly identifies a date
 // column, so the cache value should be a date serial; non-numeric cells
 // (text labels, blanks, errors) are not in the date domain and skip the
 // filter rather than being dropped.
-bool label_date_filter_passes(const PivotFilter& f, const Value& v) {
-  if (!v.is_number()) {
+bool label_date_filter_passes(const PivotFilter& f, const Value& v, bool date1904) {
+  if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904)) {
     return true;  // Non-numeric cells skip the date filter.
   }
   const double serial = v.as_number();
-  const double lo = filter_number_value(f);
-  const auto hi_or = filter_number_value_high(f);
-  if (!hi_or) {
-    return true;  // Half-open / no upper bound: treat as no-op.
+  const auto lo_or = date_filter_number_value(f);
+  const auto hi_or = date_filter_number_value_high(f);
+  if (!lo_or || !hi_or || !is_valid_date_serial(*lo_or, date1904) || !is_valid_date_serial(*hi_or, date1904)) {
+    return true;  // Missing, non-finite or out-of-domain bound: treat as no-op.
   }
-  return serial >= lo && serial <= *hi_or;
+  return serial >= *lo_or && serial <= *hi_or;
 }
 
 // Evaluates a single label-flavoured filter against `label`.
@@ -370,7 +393,7 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
     if (f.type == FilterType::LabelDate) {
       // Date-range filters need the underlying numeric serial; the
       // rendered label string would lose precision and locale.
-      if (!label_date_filter_passes(f, v)) {
+      if (!label_date_filter_passes(f, v, date1904_)) {
         return false;
       }
       continue;
@@ -403,8 +426,11 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
     if (!f.value_high) {
       continue;  // Unbounded above: no-op, matching `PivotFilter`.
     }
+    if (!is_valid_date_serial(f.value, date1904_) || !is_valid_date_serial(*f.value_high, date1904_)) {
+      continue;  // Invalid bounds are outside the date domain.
+    }
     const Value v = cell_value(cache, record, f.field_index);
-    if (!v.is_number()) {
+    if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904_)) {
       continue;  // Non-numeric cells are outside the date domain.
     }
     const double serial = v.as_number();
@@ -417,7 +443,7 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
   // absolute `dateBetween` family above.
   for (const ResolvedPeriod& resolved : period_windows_) {
     const Value v = cell_value(cache, record, resolved.field_index);
-    if (!v.is_number()) {
+    if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904_)) {
       continue;  // Non-numeric cells are outside the date domain.
     }
     const double serial = v.as_number();
@@ -427,13 +453,10 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
   }
   for (const ResolvedRecurring& resolved : recurring_months_) {
     const Value v = cell_value(cache, record, resolved.field_index);
-    if (!v.is_number()) {
+    if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904_)) {
       continue;  // Non-numeric cells are outside the date domain.
     }
     const double serial = v.as_number();
-    if (serial < 0.0) {
-      continue;  // Outside the serial domain `ymd_from_serial` is defined on.
-    }
     const unsigned month = date_time::ymd_from_serial(std::floor(serial), date1904_).m;
     if (month < resolved.month_low || month > resolved.month_high) {
       return false;

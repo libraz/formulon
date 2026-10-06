@@ -24,11 +24,13 @@
 //          `custom_name` (or `source_name`) -- case-sensitive, matching
 //          Mac Excel's GETPIVOTDATA exact-match contract.
 //        * Determine whether the field is on the row axis or the col
-//          axis; record the pair as a (depth, item_text) entry on the
-//          appropriate axis.
+//          axis; retain both the original typed item and its coerced label
+//          as a (depth, item) entry on the appropriate axis.
 //        * Walk the row hierarchy depth-first to find the leaf whose
-//          ancestors match every recorded row-axis pair (in the order
-//          declared by `row_field_order`). Same for the col hierarchy.
+//          ancestors match every recorded row-axis pair by typed identity
+//          first, then by a unique display label (in the order declared by
+//          `row_field_order`). Same for the col hierarchy; ambiguous labels
+//          return `#REF!`.
 //        * An axis is addressed all-or-nothing. Naming some of an
 //          axis's fields but not all of them is a partial path and
 //          surfaces `#REF!` -- the design corpus (§15.1.4) keeps this
@@ -52,6 +54,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -62,6 +65,7 @@
 #include "eval/lazy_impls.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_index.h"
@@ -105,20 +109,24 @@ const parser::Reference* anchor_ref_of(const parser::AstNode& node) noexcept {
 
 // Locates `name` in `fields` by `custom_name` (preferred when non-empty,
 // matching the OOXML reader's behaviour) or `source_name`. Returns the
-// 0-based index, or `static_cast<std::size_t>(-1)` when no field
-// matches. Comparison is case-sensitive: Mac's GETPIVOTDATA requires an
-// exact text match, including whitespace.
-std::size_t find_field_index(const std::vector<pivot::PivotField>& fields, std::string_view name) noexcept {
+// 0-based index when exactly one field matches. An absent result covers both
+// an unknown name and an ambiguous caption shared by distinct fields.
+// Comparison is case-sensitive: Mac's GETPIVOTDATA requires an exact text
+// match, including whitespace. A field that matches through both its custom
+// and source names still contributes only one candidate.
+std::optional<std::size_t> find_field_index(const std::vector<pivot::PivotField>& fields,
+                                            std::string_view name) noexcept {
+  std::optional<std::size_t> match;
   for (std::size_t i = 0; i < fields.size(); ++i) {
     const pivot::PivotField& f = fields[i];
-    if (!f.custom_name.empty() && f.custom_name == name) {
-      return i;
-    }
-    if (f.source_name == name) {
-      return i;
+    if (pivot::pivot_field_has_name(f, name)) {
+      if (match.has_value() && *match != i) {
+        return std::nullopt;
+      }
+      match = i;
     }
   }
-  return static_cast<std::size_t>(-1);
+  return match;
 }
 
 // Locates `name` in `data_fields`, by display name first and then by the
@@ -164,69 +172,96 @@ std::size_t depth_in_axis(const std::vector<std::uint32_t>& axis_order, std::siz
   return static_cast<std::size_t>(-1);
 }
 
-// Walks an axis hierarchy tree following `path`. Each `path[i]` is the
-// label expected at depth `i`. Returns the leaf index assigned to the
-// matching leaf, or `static_cast<std::size_t>(-1)` on any mismatch.
+struct LookupItem {
+  Value value;
+  std::string label;
+};
+
+std::size_t axis_leaf_count(const pivot::AxisHierarchyNode& node) noexcept {
+  std::size_t count = 0;
+  std::vector<const pivot::AxisHierarchyNode*> stack{&node};
+  while (!stack.empty()) {
+    const pivot::AxisHierarchyNode* current = stack.back();
+    stack.pop_back();
+    if (current->children.empty()) {
+      ++count;
+      continue;
+    }
+    for (const pivot::AxisHierarchyNode& child : current->children) {
+      stack.push_back(&child);
+    }
+  }
+  return count;
+}
+
+// Walks an axis hierarchy tree following `path`. Each `path[i]` retains the
+// original typed item and its display label. Typed identity is tried first;
+// a label is a fallback only when it identifies one child uniquely. Returns
+// the leaf index assigned to the matching leaf, or
+// `static_cast<std::size_t>(-1)` on any mismatch or ambiguity.
 //
 // The leaf index is computed by counting leaves in document order,
 // matching the dense indexing used by `pivot::evaluate` in
 // `finalize_hierarchy`.
 std::size_t walk_hierarchy(const std::vector<pivot::AxisHierarchyNode>& roots,
-                           const std::vector<std::string>& path) noexcept {
+                           const std::vector<LookupItem>& path) noexcept {
   if (path.empty() || roots.empty()) {
     return static_cast<std::size_t>(-1);
   }
   std::size_t leaf_index = 0;
   const std::vector<pivot::AxisHierarchyNode>* level = &roots;
   for (std::size_t depth = 0; depth < path.size(); ++depth) {
-    const std::string& want = path[depth];
-    bool matched = false;
+    const LookupItem& want = path[depth];
+    const pivot::AxisHierarchyNode* typed_match = nullptr;
+    std::size_t typed_matches = 0;
+    const pivot::AxisHierarchyNode* label_match = nullptr;
+    std::size_t label_matches = 0;
     for (const pivot::AxisHierarchyNode& node : *level) {
-      if (node.label == want) {
-        // Descend.
-        if (depth + 1 == path.size()) {
-          // Leaf level: this node must be a leaf for the path to be
-          // valid. A non-leaf at the final position means the caller
-          // gave a partial address at this axis, which the MVP refuses.
-          if (!node.children.empty()) {
-            return static_cast<std::size_t>(-1);
-          }
-          return leaf_index;
-        }
-        if (node.children.empty()) {
-          // Path expects to descend further, but we're already at a
-          // leaf -- the caller asked for a deeper item than the pivot
-          // exposes.
-          return static_cast<std::size_t>(-1);
-        }
-        level = &node.children;
-        matched = true;
+      if (node.identity.has_value() && *node.identity == want.value) {
+        ++typed_matches;
+        typed_match = &node;
+      }
+      if (node.label == want.label) {
+        ++label_matches;
+        label_match = &node;
+      }
+    }
+
+    const pivot::AxisHierarchyNode* matched = nullptr;
+    if (typed_matches != 0U) {
+      if (typed_matches != 1U) {
+        return static_cast<std::size_t>(-1);
+      }
+      matched = typed_match;
+    } else {
+      if (label_matches != 1U) {
+        return static_cast<std::size_t>(-1);
+      }
+      matched = label_match;
+    }
+
+    // Count only siblings before the selected node. Descending into the
+    // selected subtree preserves its prefix and avoids repeatedly traversing
+    // that subtree at every deeper level.
+    for (const pivot::AxisHierarchyNode& node : *level) {
+      if (&node == matched) {
         break;
       }
-      // Non-matching subtree: skip its leaf count so the leaf_index
-      // counter stays aligned with `pivot::evaluate`'s dense ordering.
-      if (node.children.empty()) {
-        ++leaf_index;
-      } else {
-        // Count all leaves in this subtree.
-        std::vector<const pivot::AxisHierarchyNode*> stack;
-        stack.push_back(&node);
-        while (!stack.empty()) {
-          const pivot::AxisHierarchyNode* top = stack.back();
-          stack.pop_back();
-          if (top->children.empty()) {
-            ++leaf_index;
-          } else {
-            for (const pivot::AxisHierarchyNode& c : top->children) {
-              stack.push_back(&c);
-            }
-          }
-        }
-      }
+      leaf_index += axis_leaf_count(node);
     }
-    if (!matched) {
+
+    if (depth + 1 == path.size()) {
+      // Leaf level: this node must be a leaf for the path to be valid.
+      if (!matched->children.empty()) {
+        return static_cast<std::size_t>(-1);
+      }
+      return leaf_index;
+    }
+    if (matched->children.empty()) {
+      // Path expects to descend further, but we're already at a leaf.
       return static_cast<std::size_t>(-1);
     }
+    level = &matched->children;
   }
   return static_cast<std::size_t>(-1);
 }
@@ -336,11 +371,11 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // axis. Each pair is keyed by the field's depth on its axis so we
   // can sort them into row_field_order / col_field_order order.
   const std::size_t pair_count = (arity - 2U) / 2U;
-  // Initialise paths to empty strings; fill the depths we receive and
-  // refuse the lookup later if any depth is left blank (partial path).
-  std::vector<std::string> row_path(table->row_field_order().size());
+  // Retain both the original typed item and its display label. Paths are
+  // filled by axis depth and rejected later if any depth is left unset.
+  std::vector<std::optional<LookupItem>> row_path(table->row_field_order().size());
   std::vector<bool> row_path_set(table->row_field_order().size(), false);
-  std::vector<std::string> col_path(table->col_field_order().size());
+  std::vector<std::optional<LookupItem>> col_path(table->col_field_order().size());
   std::vector<bool> col_path_set(table->col_field_order().size(), false);
 
   for (std::size_t p = 0; p < pair_count; ++p) {
@@ -365,24 +400,25 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
       return Value::error(kPivotRefError);
     }
 
-    const std::size_t fi = find_field_index(table->fields(), field_text.value());
-    if (fi == static_cast<std::size_t>(-1)) {
+    const std::optional<std::size_t> fi = find_field_index(table->fields(), field_text.value());
+    if (!fi.has_value()) {
       return Value::error(kPivotRefError);
     }
-    const std::size_t row_depth = depth_in_axis(table->row_field_order(), fi);
-    const std::size_t col_depth = depth_in_axis(table->col_field_order(), fi);
+    const std::size_t row_depth = depth_in_axis(table->row_field_order(), *fi);
+    const std::size_t col_depth = depth_in_axis(table->col_field_order(), *fi);
+    LookupItem lookup_item{iv, std::move(item_text.value())};
     if (row_depth != static_cast<std::size_t>(-1)) {
       if (row_path_set[row_depth]) {
         // Caller addressed the same field twice: ambiguous, refuse.
         return Value::error(kPivotRefError);
       }
-      row_path[row_depth] = std::move(item_text.value());
+      row_path[row_depth] = std::move(lookup_item);
       row_path_set[row_depth] = true;
     } else if (col_depth != static_cast<std::size_t>(-1)) {
       if (col_path_set[col_depth]) {
         return Value::error(kPivotRefError);
       }
-      col_path[col_depth] = std::move(item_text.value());
+      col_path[col_depth] = std::move(lookup_item);
       col_path_set[col_depth] = true;
     } else {
       // Field is on neither row nor col axis (or doesn't exist).
@@ -452,14 +488,24 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
 
   std::size_t row_leaf = 0;
   if (row_complete) {
-    row_leaf = walk_hierarchy(pivot_result.rows, row_path);
+    std::vector<LookupItem> resolved_row_path;
+    resolved_row_path.reserve(row_path.size());
+    for (const std::optional<LookupItem>& item : row_path) {
+      resolved_row_path.push_back(*item);
+    }
+    row_leaf = walk_hierarchy(pivot_result.rows, resolved_row_path);
     if (row_leaf == static_cast<std::size_t>(-1)) {
       return Value::error(kPivotRefError);
     }
   }
   std::size_t col_leaf = 0;
   if (col_complete) {
-    col_leaf = walk_hierarchy(pivot_result.cols, col_path);
+    std::vector<LookupItem> resolved_col_path;
+    resolved_col_path.reserve(col_path.size());
+    for (const std::optional<LookupItem>& item : col_path) {
+      resolved_col_path.push_back(*item);
+    }
+    col_leaf = walk_hierarchy(pivot_result.cols, resolved_col_path);
     if (col_leaf == static_cast<std::size_t>(-1)) {
       return Value::error(kPivotRefError);
     }

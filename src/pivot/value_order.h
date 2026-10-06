@@ -27,6 +27,7 @@
 #ifndef FORMULON_PIVOT_VALUE_ORDER_H_
 #define FORMULON_PIVOT_VALUE_ORDER_H_
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 
@@ -45,8 +46,18 @@ inline bool value_less(const Value& a, const Value& b) noexcept {
     return ra < rb;
   }
   switch (a.kind()) {
-    case ValueKind::Number:
-      return a.as_number() < b.as_number();
+    case ValueKind::Number: {
+      const double av = a.as_number();
+      const double bv = b.as_number();
+      const bool a_nan = std::isnan(av);
+      const bool b_nan = std::isnan(bv);
+      if (a_nan != b_nan) {
+        return !a_nan;
+      }
+      // Treat NaNs as one class after all numeric values; infinities retain
+      // their ordinary numeric order.
+      return !a_nan && av < bv;
+    }
     case ValueKind::Bool:
       // false < true.
       return !a.as_boolean() && b.as_boolean();

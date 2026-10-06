@@ -1,8 +1,10 @@
 // Stable C ABI PivotTable authoring and cache tests.
 
+#include <iterator>
 #include <limits>
 
 #include "formulon_c_pivot_test_helpers.h"
+#include "utils/date_time.h"
 
 TEST(FormulonCApiPivot, CreatePivotFromScratch) {
   WorkbookGuard wb;
@@ -171,6 +173,98 @@ TEST(FormulonCApiPivot, PivotCacheMutationInvalidatesMemoisedLayout) {
     EXPECT_TRUE(has_data_value(projected.handle, 1400.0)) << "layout returned a stale memoised projection";
     EXPECT_FALSE(has_data_value(projected.handle, 400.0)) << "stale North value survived the cache mutation";
   }
+}
+
+TEST(FormulonCApiPivot, PivotMutationsInvalidateGetPivotDataFormula) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  // A1 is outside the report at D1, so this exercises the normal formula
+  // dependency path rather than reading a projected pivot cell directly.
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=GETPIVOTDATA(\"Sum of Amount\",D1,\"Region\",\"North\")"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  auto get_a1 = [&]() {
+    fm_value_t value{};
+    EXPECT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &value), 0);
+    return value;
+  };
+  fm_value_t value = get_a1();
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 400.0);
+
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0, 1, 1100.0), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  value = get_a1();
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 1400.0);
+
+  fm_pivot_data_field_spec_t average_spec{};
+  average_spec.name = "Sum of Amount";
+  average_spec.field_index = 1U;
+  average_spec.aggregation = FM_PIVOT_AGG_AVERAGE;
+  average_spec.number_format = "";
+  average_spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
+  average_spec.show_as_base_field = -1;
+  average_spec.show_as_base_item = -1;
+  ASSERT_EQ(fm_workbook_pivot_data_field_set(wb.handle, 0, pivot_idx, 0, &average_spec), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  value = get_a1();
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 700.0);
+
+  // Keeping this formula's result warm before removal proves that the
+  // successful lifecycle mutation itself dirties formula cells.
+  ASSERT_EQ(fm_workbook_pivot_remove(wb.handle, 0, pivot_idx), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  value = get_a1();
+  ASSERT_EQ(value.kind, FM_VAL_ERROR);
+  EXPECT_EQ(value.u.error_code, static_cast<std::int32_t>(formulon::ErrorCode::Ref));
+}
+
+TEST(FormulonCApiPivot, LoadedPivotCacheMutationReprojectsAuthoredLocation) {
+  WorkbookGuard original;
+  ASSERT_EQ(fm_workbook_create(&original.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(original.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(original.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
+
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_last_error_message();
+  EXPECT_NE(SavedPivotXml(loaded.handle).find("<location ref=\"D1:E4\""), std::string::npos);
+
+  // The loaded location is marked authored. Add a new shared item and record
+  // so the evaluated report grows by one row; saving must then use the new
+  // projected extent instead of preserving the stale authored ref.
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_text(loaded.handle, cache_id, 0, "West"), 0)
+      << fm_last_error_message();
+  std::size_t new_record = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_record_add(loaded.handle, cache_id, &new_record), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(loaded.handle, cache_id, new_record, 0, 2.0), 0)
+      << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(loaded.handle, cache_id, new_record, 1, 500.0), 0)
+      << fm_last_error_message();
+
+  PivotCellsGuard projected;
+  ASSERT_EQ(fm_workbook_pivot_layout(loaded.handle, 0, 0, &projected.handle), 0) << fm_last_error_message();
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ASSERT_EQ(fm_pivot_cells_bounds(projected.handle, &top, &left, &rows, &cols), 0);
+  EXPECT_EQ(top, 0U);
+  EXPECT_EQ(left, 3U);
+  EXPECT_EQ(rows, 5U);
+  EXPECT_EQ(cols, 2U);
+
+  const std::string pivot_xml = SavedPivotXml(loaded.handle);
+  EXPECT_NE(pivot_xml.find("<location ref=\"D1:E5\""), std::string::npos) << pivot_xml;
 }
 
 TEST(FormulonCApiPivot, PivotCacheSharedItemsAcceptErrorValues) {
@@ -357,10 +451,154 @@ TEST(FormulonCApiPivot, DateGroupRejectsZeroIntervalAndInvertedWindowWithoutMuta
                                                    FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, /*interval_days=*/7,
                                                    /*start_serial=*/61.0, /*end_serial=*/60.0),
             expected);
+  // Compare the raw values before flooring: 0.9 > 0.1 is still inverted.
+  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_DATE_DAYS,
+                                                   FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, /*interval_days=*/7,
+                                                   /*start_serial=*/0.9, /*end_serial=*/0.1),
+            expected);
 
   BufferGuard after;
   ASSERT_EQ(fm_workbook_save(wb.handle, &after.data, &after.len), 0) << fm_last_error_message();
   EXPECT_EQ(std::vector<std::uint8_t>(after.data, after.data + after.len), snapshot);
+}
+
+TEST(FormulonCApiPivot, DateGroupRejectsInvalidSerialBoundsWithoutMutation) {
+  const fm_status_t expected = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  for (const bool date1904 : {false, true}) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    if (date1904) {
+      wb.handle->workbook().set_date1904(true);
+    }
+    std::uint32_t cache_id = 0;
+    std::size_t pivot_idx = 0;
+    const double dates[] = {
+        formulon::date_time::serial_from_ymd(2024, 1U, 1U, date1904),
+        formulon::date_time::serial_from_ymd(2025, 1U, 1U, date1904),
+        formulon::date_time::serial_from_ymd(2024, 6U, 1U, date1904),
+        formulon::date_time::serial_from_ymd(2025, 6U, 1U, date1904),
+    };
+    const double amounts[] = {100.0, 200.0, 300.0, 400.0};
+
+    ASSERT_EQ(fm_workbook_pivot_cache_create(wb.handle, 0, &cache_id), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_workbook_pivot_cache_set_worksheet_source(wb.handle, cache_id, 1, "A1:B5", "Sheet1", nullptr), 0)
+        << fm_last_error_message();
+    std::size_t date_cache_field = 99;
+    std::size_t amount_cache_field = 99;
+    ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb.handle, cache_id, "Date", &date_cache_field), 0)
+        << fm_last_error_message();
+    ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb.handle, cache_id, "Amount", &amount_cache_field), 0)
+        << fm_last_error_message();
+    for (std::size_t record = 0; record < std::size(dates); ++record) {
+      std::size_t record_idx = 99;
+      ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb.handle, cache_id, &record_idx), 0) << fm_last_error_message();
+      ASSERT_EQ(
+          fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, record_idx, date_cache_field, dates[record]),
+          0)
+          << fm_last_error_message();
+      ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, record_idx, amount_cache_field,
+                                                          amounts[record]),
+                0)
+          << fm_last_error_message();
+    }
+
+    ASSERT_EQ(fm_workbook_pivot_create(wb.handle, 0, "PT", cache_id, 0U, 3U, &pivot_idx), 0) << fm_last_error_message();
+    fm_pivot_field_spec_t date_spec{};
+    date_spec.source_name = "Date";
+    date_spec.custom_name = "";
+    date_spec.axis = FM_PIVOT_AXIS_ROW;
+    date_spec.subtotal_top = 0;
+    date_spec.number_format = "";
+    std::size_t date_field = 99;
+    ASSERT_EQ(fm_workbook_pivot_field_add(wb.handle, 0, pivot_idx, &date_spec, &date_field), 0)
+        << fm_last_error_message();
+    const std::uint32_t row_order[] = {static_cast<std::uint32_t>(date_field)};
+    ASSERT_EQ(fm_workbook_pivot_set_row_field_order(wb.handle, 0, pivot_idx, row_order, 1U), 0)
+        << fm_last_error_message();
+    fm_pivot_field_spec_t amount_spec{};
+    amount_spec.source_name = "Amount";
+    amount_spec.custom_name = "";
+    amount_spec.axis = FM_PIVOT_AXIS_VALUE;
+    amount_spec.subtotal_top = 0;
+    amount_spec.number_format = "";
+    std::size_t amount_field = 99;
+    ASSERT_EQ(fm_workbook_pivot_field_add(wb.handle, 0, pivot_idx, &amount_spec, &amount_field), 0)
+        << fm_last_error_message();
+    fm_pivot_data_field_spec_t data_spec{};
+    data_spec.name = "Sum of Amount";
+    data_spec.field_index = static_cast<std::uint32_t>(amount_field);
+    data_spec.aggregation = FM_PIVOT_AGG_SUM;
+    data_spec.number_format = "";
+    data_spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
+    data_spec.show_as_base_field = -1;
+    data_spec.show_as_base_item = -1;
+    std::size_t data_field = 99;
+    ASSERT_EQ(fm_workbook_pivot_data_field_add(wb.handle, 0, pivot_idx, &data_spec, &data_field), 0)
+        << fm_last_error_message();
+    ASSERT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_DATE_YEAR,
+                                                     FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, 1, -1.0, -1.0),
+              0)
+        << fm_last_error_message();
+
+    auto has_data_value = [&](fm_pivot_cells_t* cells, double want) {
+      for (const fm_pivot_cell_t& cell : CollectCells(cells)) {
+        if (cell.kind == FM_PIVOT_CELL_DATA && cell.value.kind == FM_VAL_NUMBER && cell.value.u.number == want) {
+          return true;
+        }
+      }
+      return false;
+    };
+    {
+      PivotCellsGuard projected;
+      ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+      EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "2024"));
+      EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "2025"));
+      EXPECT_TRUE(has_data_value(projected.handle, 400.0));
+      EXPECT_TRUE(has_data_value(projected.handle, 600.0));
+    }
+
+    BufferGuard before;
+    ASSERT_EQ(fm_workbook_save(wb.handle, &before.data, &before.len), 0) << fm_last_error_message();
+    const std::vector<std::uint8_t> snapshot(before.data, before.data + before.len);
+    const double last_valid = formulon::date_time::serial_from_ymd(9999, 12U, 31U, date1904);
+    const double invalid[] = {
+        -2.0,
+        -0.1,
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity(),
+        last_valid + 1.0,
+        std::numeric_limits<double>::max(),
+    };
+    for (const double raw : invalid) {
+      EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_DATE_DAYS,
+                                                       FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, 7, raw, 70.0),
+                expected)
+          << "invalid start=" << raw << " date1904=" << date1904;
+      EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_DATE_DAYS,
+                                                       FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, 7, 0.0, raw),
+                expected)
+          << "invalid end=" << raw << " date1904=" << date1904;
+    }
+
+    // Force the memoised result through the cache mutation path before
+    // re-evaluating. The successful no-op write also proves the rejected
+    // setters did not leave the field in an invalid state.
+    ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0, 1, 100.0), 0)
+        << fm_last_error_message();
+    {
+      PivotCellsGuard projected;
+      ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+      EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "2024"));
+      EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "2025"));
+      EXPECT_TRUE(has_data_value(projected.handle, 400.0));
+      EXPECT_TRUE(has_data_value(projected.handle, 600.0));
+    }
+
+    BufferGuard after;
+    ASSERT_EQ(fm_workbook_save(wb.handle, &after.data, &after.len), 0) << fm_last_error_message();
+    EXPECT_EQ(std::vector<std::uint8_t>(after.data, after.data + after.len), snapshot);
+  }
 }
 
 TEST(FormulonCApiPivot, StructEnumMutatorsRejectRawValuesWithoutMutation) {

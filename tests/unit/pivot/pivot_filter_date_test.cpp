@@ -1,8 +1,11 @@
 // Calendar and date-window filters for pivot fields.
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -376,6 +379,159 @@ TEST(PivotEvaluator, LabelDateFilterUnboundedHighIsNoOp) {
 
   // No upper bound -> all four records survive.
   ASSERT_EQ(r.rows.size(), 4U);
+}
+
+TEST(PivotEvaluator, LabelDateFiltersWithInvalidNumericCriteriaAreNoOp) {
+  const double invalid[] = {
+      std::numeric_limits<double>::quiet_NaN(),
+      std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::max(),
+  };
+  for (const double raw : invalid) {
+    PivotCache active_cache = build_label_date_filter_cache();
+    PivotTable active_table = build_label_date_filter_table();
+    PivotFilter active;
+    active.axis = PivotAxis::Row;
+    active.field_name = "Date";
+    active.type = FilterType::LabelDate;
+    active.value = raw;
+    active.value_high = date_time::serial_from_ymd(2025, 12U, 31U);
+    active_table.mutable_active_filters().push_back(active);
+    auto active_or = evaluate(active_table, active_cache);
+    ASSERT_TRUE(static_cast<bool>(active_or)) << active_or.error().message << " low=" << raw;
+    EXPECT_EQ(active_or.value().rows.size(), 4U) << "invalid low=" << raw;
+
+    active_cache = build_label_date_filter_cache();
+    active_table = build_label_date_filter_table();
+    active.value = 0.0;
+    active.value_high = raw;
+    active_table.mutable_active_filters().push_back(active);
+    active_or = evaluate(active_table, active_cache);
+    ASSERT_TRUE(static_cast<bool>(active_or)) << active_or.error().message << " high=" << raw;
+    EXPECT_EQ(active_or.value().rows.size(), 4U) << "invalid high=" << raw;
+
+    PivotCache authored_cache = build_label_date_filter_cache();
+    PivotTable authored_table = build_label_date_filter_table();
+    AuthoredValueFilter authored;
+    authored.field_index = 0;
+    authored.type = FilterType::LabelDate;
+    authored.value = raw;
+    authored.value_high = date_time::serial_from_ymd(2025, 12U, 31U);
+    authored_table.mutable_authored_value_filters().push_back(authored);
+    auto authored_or = evaluate(authored_table, authored_cache);
+    ASSERT_TRUE(static_cast<bool>(authored_or)) << authored_or.error().message << " low=" << raw;
+    EXPECT_EQ(authored_or.value().rows.size(), 4U) << "invalid authored low=" << raw;
+
+    authored_cache = build_label_date_filter_cache();
+    authored_table = build_label_date_filter_table();
+    authored.value = 0.0;
+    authored.value_high = raw;
+    authored_table.mutable_authored_value_filters().push_back(authored);
+    authored_or = evaluate(authored_table, authored_cache);
+    ASSERT_TRUE(static_cast<bool>(authored_or)) << authored_or.error().message << " high=" << raw;
+    EXPECT_EQ(authored_or.value().rows.size(), 4U) << "invalid authored high=" << raw;
+  }
+}
+
+TEST(PivotEvaluator, RelativeAndRecurringDateFiltersPassInvalidNumericRecords) {
+  const double invalid[] = {
+      std::numeric_limits<double>::quiet_NaN(),
+      std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::max(),
+  };
+
+  PivotCache period_cache = build_label_date_filter_cache();
+  for (std::size_t i = 0; i < std::size(invalid); ++i) {
+    PivotCacheRecord record;
+    record.cells = {Value::number(invalid[i]), Value::number(100.0 + static_cast<double>(i))};
+    period_cache.mutable_records().push_back(std::move(record));
+  }
+  PivotTable period_table = build_label_date_filter_table();
+  AuthoredPeriodFilter period;
+  period.field_index = 0;
+  period.period = RelativePeriod::ThisYear;
+  period_table.mutable_authored_period_filters().push_back(period);
+  PivotFilterEnv env;
+  env.pinned_now = date_time::CivilTime{{2024, 6U, 15U}, {0U, 0U, 0U}};
+  auto period_or = evaluate(period_table, period_cache, PivotLayoutOptions{}, env);
+  ASSERT_TRUE(static_cast<bool>(period_or)) << period_or.error().message;
+  ASSERT_EQ(period_or.value().rows.size(), 7U);
+  double period_total = 0.0;
+  for (const auto& row_slot : period_or.value().values) {
+    period_total += row_slot[0][0].as_number();
+  }
+  EXPECT_DOUBLE_EQ(period_total, 10.0 + 20.0 + 30.0 + 100.0 + 101.0 + 102.0 + 103.0);
+
+  PivotCache recurring_cache = build_label_date_filter_cache();
+  for (std::size_t i = 0; i < std::size(invalid); ++i) {
+    PivotCacheRecord record;
+    record.cells = {Value::number(invalid[i]), Value::number(100.0 + static_cast<double>(i))};
+    recurring_cache.mutable_records().push_back(std::move(record));
+  }
+  PivotTable recurring_table = build_label_date_filter_table();
+  AuthoredRecurringFilter recurring;
+  recurring.field_index = 0;
+  recurring.month_low = 1;
+  recurring.month_high = 1;
+  recurring_table.mutable_authored_recurring_filters().push_back(recurring);
+  auto recurring_or = evaluate(recurring_table, recurring_cache);
+  ASSERT_TRUE(static_cast<bool>(recurring_or)) << recurring_or.error().message;
+  ASSERT_EQ(recurring_or.value().rows.size(), 5U);
+  double recurring_total = 0.0;
+  for (const auto& row_slot : recurring_or.value().values) {
+    recurring_total += row_slot[0][0].as_number();
+  }
+  EXPECT_DOUBLE_EQ(recurring_total, 10.0 + 100.0 + 101.0 + 102.0 + 103.0);
+}
+
+TEST(PivotEvaluator, ValueFiltersRetainNonFiniteComparisonSemantics) {
+  const double invalid[] = {
+      std::numeric_limits<double>::quiet_NaN(),
+      std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity(),
+  };
+  for (const double raw : invalid) {
+    PivotCache active_cache = build_basic_cache();
+    PivotTable active_table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+    PivotFilter active;
+    active.axis = PivotAxis::Row;
+    active.field_name = "Region";
+    active.type = FilterType::ValueGreaterThan;
+    active.value = raw;
+    active_table.mutable_active_filters().push_back(active);
+    auto active_or = evaluate(active_table, active_cache);
+    ASSERT_TRUE(static_cast<bool>(active_or)) << active_or.error().message;
+    const std::size_t expected_active = std::isinf(raw) && std::signbit(raw) ? 2U : 0U;
+    EXPECT_EQ(active_or.value().rows.size(), expected_active) << "active invalid=" << raw;
+
+    PivotCache authored_cache = build_basic_cache();
+    PivotTable authored_table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+    AuthoredValueFilter authored;
+    authored.field_index = 0;
+    authored.type = FilterType::ValueTop10;
+    authored.value = raw;
+    authored_table.mutable_authored_value_filters().push_back(authored);
+    auto authored_or = evaluate(authored_table, authored_cache);
+    ASSERT_TRUE(static_cast<bool>(authored_or)) << authored_or.error().message;
+    const std::size_t expected_authored = std::isinf(raw) && raw > 0.0 ? 2U : 0U;
+    EXPECT_EQ(authored_or.value().rows.size(), expected_authored) << "authored invalid=" << raw;
+
+    PivotCache between_cache = build_basic_cache();
+    PivotTable between_table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+    PivotFilter between;
+    between.axis = PivotAxis::Row;
+    between.field_name = "Region";
+    between.type = FilterType::ValueBetween;
+    between.value = 0.0;
+    between.value_high = raw;
+    between_table.mutable_active_filters().push_back(between);
+    auto between_or = evaluate(between_table, between_cache);
+    ASSERT_TRUE(static_cast<bool>(between_or)) << between_or.error().message;
+    const std::size_t expected_between = std::isinf(raw) && raw > 0.0 ? 2U : 0U;
+    EXPECT_EQ(between_or.value().rows.size(), expected_between) << "active between invalid=" << raw;
+  }
 }
 
 TEST(PivotEvaluator, AuthoredDateFilterPrunesRecordsByTheirSerial) {

@@ -39,13 +39,14 @@ class FunctionRegistry;
 
 /// `GETPIVOTDATA(data_field, pivot_anchor, [field1, item1, ...])` --
 /// returns the value of a single pivot cell. `data_field` and the
-/// optional field/item arguments are evaluated eagerly and coerced to
-/// text; `pivot_anchor` is required to be a single cell `Ref` or a
-/// `RangeOp` (whose top-left cell is used as the anchor). Any other AST
-/// shape, an unknown data field, an unknown item, an arity mismatch
-/// (no anchor, or odd field/item count), or an anchor not contained in
-/// any pivot table on the workbook surfaces `#REF!`. Errors in any
-/// argument propagate.
+/// field-name arguments are evaluated eagerly and coerced to text; item
+/// arguments retain their original Value kind for exact typed matching,
+/// with display text used as a unique fallback. `pivot_anchor` is required
+/// to be a single cell `Ref` or a `RangeOp` (whose top-left cell is used as
+/// the anchor). Any other AST shape, an unknown data field, an unknown item,
+/// an arity mismatch (no anchor, or odd field/item count), or an anchor not
+/// contained in any pivot table on the workbook surfaces `#REF!`. Errors in
+/// any argument propagate.
 Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);
 

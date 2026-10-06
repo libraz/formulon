@@ -1,5 +1,7 @@
 // Stable C ABI PivotTable lifecycle and number-format tests.
 
+#include <limits>
+
 #include "formulon_c_pivot_test_helpers.h"
 
 TEST(FormulonCApiPivot, RemovePivotAndCache) {
@@ -26,6 +28,64 @@ TEST(FormulonCApiPivot, RemovePivotAndCache) {
   std::size_t after_caches = 99;
   ASSERT_EQ(fm_workbook_pivot_cache_count(wb.handle, &after_caches), 0);
   EXPECT_EQ(after_caches, 0U);
+}
+
+TEST(FormulonCApiPivot, AutoPivotCacheIdRejectsOverflowAndPreservesOutput) {
+  const std::uint32_t max_id = std::numeric_limits<std::uint32_t>::max();
+  const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+
+  WorkbookGuard at_ceiling;
+  ASSERT_EQ(fm_workbook_create(&at_ceiling.handle), 0);
+  std::uint32_t assigned = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_create(at_ceiling.handle, max_id, &assigned), 0) << fm_last_error_message();
+  EXPECT_EQ(assigned, max_id);
+  std::size_t cache_count = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_count(at_ceiling.handle, &cache_count), 0);
+  EXPECT_EQ(cache_count, 1U);
+
+  assigned = 0xA5A5A5A5U;
+  EXPECT_EQ(fm_workbook_pivot_cache_create(at_ceiling.handle, 0U, &assigned), invalid);
+  EXPECT_EQ(assigned, 0xA5A5A5A5U);
+  ASSERT_EQ(fm_workbook_pivot_cache_count(at_ceiling.handle, &cache_count), 0);
+  EXPECT_EQ(cache_count, 1U);
+
+  // A free explicit id below the ceiling remains valid, and auto-assignment
+  // can still allocate the next id when max(existing_ids) is max-1.
+  WorkbookGuard below_ceiling;
+  ASSERT_EQ(fm_workbook_create(&below_ceiling.handle), 0);
+  assigned = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_create(below_ceiling.handle, max_id - 1U, &assigned), 0) << fm_last_error_message();
+  EXPECT_EQ(assigned, max_id - 1U);
+  assigned = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_create(below_ceiling.handle, 0U, &assigned), 0) << fm_last_error_message();
+  EXPECT_EQ(assigned, max_id);
+}
+
+TEST(FormulonCApiPivot, RecreatedPivotWakesGetPivotDataAfterRef) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=GETPIVOTDATA(\"Sum of Amount\",D1,\"Region\",\"North\")"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  ASSERT_EQ(fm_workbook_pivot_remove(wb.handle, 0, pivot_idx), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &value), 0);
+  ASSERT_EQ(value.kind, FM_VAL_ERROR);
+  EXPECT_EQ(value.u.error_code, static_cast<std::int32_t>(formulon::ErrorCode::Ref));
+
+  // Recreating and configuring a pivot at the same anchor must dirty the
+  // already existing formula, so a subsequent recalc recovers from #REF!.
+  std::uint32_t recreated_cache_id = 0;
+  std::size_t recreated_pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &recreated_cache_id, &recreated_pivot_idx), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &value), 0);
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 400.0);
 }
 
 TEST(FormulonCApiPivot, CacheRemoveBlockedByPivot) {

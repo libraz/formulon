@@ -569,6 +569,31 @@ TEST(PivotEvaluator, ValueTop10MultiLevelRowAxis) {
   }
 }
 
+TEST(PivotEvaluator, ValueFilterWithUnknownFieldIsNoOpOnNestedAxis) {
+  PivotCache cache = build_region_product_cache(
+      {{"North", "A", 10.0}, {"North", "B", 50.0}, {"South", "A", 80.0}, {"South", "B", 30.0}});
+  PivotTable table = build_region_product_table(Aggregation::Sum);
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Missing";
+  f.type = FilterType::ValueTop10;
+  f.value = 1;
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  ASSERT_EQ(r.rows[0].children.size(), 2U);
+  ASSERT_EQ(r.rows[1].children.size(), 2U);
+  EXPECT_EQ(r.values.size(), 4U);
+  const std::vector<double> expected = {10.0, 50.0, 80.0, 30.0};
+  for (std::size_t leaf = 0; leaf < expected.size(); ++leaf) {
+    ASSERT_EQ(r.values[leaf].size(), 1U);
+    EXPECT_DOUBLE_EQ(r.values[leaf][0][0].as_number(), expected[leaf]) << "leaf=" << leaf;
+  }
+}
+
 TEST(PivotEvaluator, ValueTop10OnOuterFieldKeepsWholeGroups) {
   PivotCache cache = build_region_product_cache({{"North", "A", 10.0},
                                                  {"North", "B", 50.0},

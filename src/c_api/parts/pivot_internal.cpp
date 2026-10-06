@@ -20,6 +20,15 @@ namespace formulon {
 namespace c_api {
 namespace parts {
 
+namespace {
+
+void clear_pivot_derived_state(formulon::pivot::PivotTable& table) {
+  table.clear_last_result();
+  table.clear_span_authored();
+}
+
+}  // namespace
+
 std::vector<std::unique_ptr<formulon::pivot::PivotCache>>& mutable_pivot_caches(formulon::Workbook& wb) {
   return const_cast<std::vector<std::unique_ptr<formulon::pivot::PivotCache>>&>(wb.pivot_caches());
 }
@@ -86,18 +95,23 @@ const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, s
   return table;
 }
 
-void invalidate_pivot_result(formulon::pivot::PivotTable& table) {
-  table.clear_last_result();
-  table.clear_span_authored();
+void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable& table) {
+  clear_pivot_derived_state(table);
+  wb.mark_all_formulas_dirty();
 }
 
 void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id) {
+  bool matched = false;
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     for (auto& table : wb.sheet(s).mutable_pivot_tables()) {
       if (table != nullptr && table->pivot_cache_id() == cache_id) {
-        table->clear_last_result();
+        clear_pivot_derived_state(*table);
+        matched = true;
       }
     }
+  }
+  if (matched) {
+    wb.mark_all_formulas_dirty();
   }
 }
 
