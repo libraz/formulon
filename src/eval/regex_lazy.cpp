@@ -814,23 +814,20 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // loop-invariant, the subjects are not.
   const CompiledPattern program(pattern, case_insensitive);
 
-  if (!text_arg.is_array) {
-    KernelResult kr = regex_kernel(program, text_arg.scalar, /*find_all=*/false,
-                                   /*on_match_limit_returns_no_match=*/true);
-    if (!kr.ok) {
-      return kr.err;
-    }
-    return Value::boolean(!kr.matches.empty());
-  }
-
-  return broadcast_over_text(text_arg.array, arena, [&](std::string_view subject) -> Value {
+  auto per_subject = [&](std::string_view subject) -> Value {
     KernelResult kr = regex_kernel(program, subject, /*find_all=*/false,
                                    /*on_match_limit_returns_no_match=*/true);
     if (!kr.ok) {
       return kr.err;
     }
     return Value::boolean(!kr.matches.empty());
-  });
+  };
+
+  if (!text_arg.is_array) {
+    return per_subject(text_arg.scalar);
+  }
+
+  return broadcast_over_text(text_arg.array, arena, per_subject);
 }
 
 // ---------------------------------------------------------------------------
@@ -885,17 +882,18 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // Compile once for the whole call; every subject reuses the program.
   const CompiledPattern program(pattern, case_insensitive);
 
-  if (!text_arg.is_array) {
-    // find_all is needed for modes 1 and 3; modes 0 and 2 want only the
-    // first match. Cheap to over-collect, so we always find_all. The
-    // kernel iterates internally — bounded by subject length.
-    const bool find_all = (mode == 1 || mode == 3);
-    KernelResult kr = regex_kernel(program, text_arg.scalar, find_all,
+  // find_all is needed for modes 1 and 3; modes 0 and 2 want only the first match.
+  auto per_subject = [&](std::string_view subject) -> Value {
+    KernelResult kr = regex_kernel(program, subject, /*find_all=*/mode_yields_array,
                                    /*on_match_limit_returns_no_match=*/false);
     if (!kr.ok) {
       return kr.err;
     }
-    return extract_dispatch(kr, text_arg.scalar, mode, arena);
+    return extract_dispatch(kr, subject, mode, arena);
+  };
+
+  if (!text_arg.is_array) {
+    return per_subject(text_arg.scalar);
   }
 
   // Array broadcast (only meaningful for scalar-yielding modes).
@@ -903,14 +901,7 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return Value::error(ErrorCode::Calc);
   }
 
-  return broadcast_over_text(text_arg.array, arena, [&](std::string_view subject) -> Value {
-    KernelResult kr = regex_kernel(program, subject, /*find_all=*/(mode == 1 || mode == 3),
-                                   /*on_match_limit_returns_no_match=*/false);
-    if (!kr.ok) {
-      return kr.err;
-    }
-    return extract_dispatch(kr, subject, mode, arena);
-  });
+  return broadcast_over_text(text_arg.array, arena, per_subject);
 }
 
 // ---------------------------------------------------------------------------

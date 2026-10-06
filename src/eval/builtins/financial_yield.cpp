@@ -101,41 +101,18 @@ Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arit
 // Computes the YIELD result. Returns the yield-to-maturity (decimal) on
 // success or `ErrorCode::Num` on any validation / numerical failure.
 Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity, bool date1904) {
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return settlement.error();
+  auto in = read_coupon_bond(args, arity, date1904);
+  if (!in) {
+    return in.error();
   }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return maturity.error();
-  }
-  auto tail = read_coupon_bond_tail(args, arity, 2);
-  if (!tail) {
-    return tail.error();
-  }
-  const auto [rate, pr_v, red, frequency, basis] = tail.value();
-
-  // Validation mirrors PRICE. The `pr <= 0` check is the YIELD-specific addition; PRICE
-  // accepts a zero yld but YIELD rejects a non-positive market price
-  // (zero would mean "infinite yield").
-  if (settlement.value() >= maturity.value()) {
-    return ErrorCode::Num;
-  }
+  const auto& [tail, cd, freq_d, cf, ai] = in.value();
+  const double rate = tail.rate;
+  const double pr_v = tail.amount;
+  const double red = tail.redemption;
+  // YIELD rejects a non-positive market price (zero would mean "infinite yield"); PRICE accepts a zero yld.
   if (pr_v <= 0.0) {
     return ErrorCode::Num;
   }
-
-  CouponDates cd{};
-  if (!compute_coupon_dates(settlement.value(), maturity.value(), frequency, basis, date1904, &cd)) {
-    return ErrorCode::Num;
-  }
-  if (cd.coupons_remaining <= 0 || cd.period_days <= 0.0) {
-    return ErrorCode::Num;
-  }
-
-  const double freq_d = static_cast<double>(frequency);
-  const double cf = 100.0 * rate / freq_d;
-  const double ai = 100.0 * rate * cd.days_bs / (cd.period_days * freq_d);
   const std::int32_t n = cd.coupons_remaining;
 
   // --- n == 1: closed-form analytic inversion of the simple-interest

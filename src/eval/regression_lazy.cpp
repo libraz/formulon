@@ -138,184 +138,149 @@ bool compute_slope_intercept(const std::variant<Value, NumericPairs>& prepared, 
   return true;
 }
 
+enum class PairStat {
+  Correl,
+  CovarianceP,
+  CovarianceS,
+  Slope,
+  Intercept,
+  Rsq,
+  Steyx,
+  SumX2PY2,
+  SumX2MY2,
+  SumXMY2,
+};
+
+// Shared driver for the 2-arity pairwise statistics: prepares the pairs once, then reduces per `kind`.
+Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, PairStat kind) {
+  auto prepared = prepare_pairs(call, arena, registry, ctx);
+  if (std::holds_alternative<Value>(prepared)) {
+    return std::get<Value>(prepared);
+  }
+  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
+  const std::size_t n = pairs.second.size();
+  switch (kind) {
+    case PairStat::Slope:
+    case PairStat::Intercept: {
+      double slope = 0.0;
+      double intercept = 0.0;
+      Value err = Value::blank();
+      if (!compute_slope_intercept(prepared, &slope, &intercept, &err)) {
+        return err;
+      }
+      return finite_number(kind == PairStat::Slope ? slope : intercept);
+    }
+    case PairStat::SumX2PY2:
+    case PairStat::SumX2MY2:
+    case PairStat::SumXMY2: {
+      // Collection runs left to right: array_x lands in `pairs.first`, array_y in `pairs.second`.
+      const std::vector<double>& x = pairs.first;
+      const std::vector<double>& y = pairs.second;
+      if (x.empty()) {
+        return Value::error(ErrorCode::NA);
+      }
+      double total = 0.0;
+      for (std::size_t i = 0; i < x.size(); ++i) {
+        if (kind == PairStat::SumX2PY2) {
+          total += x[i] * x[i] + y[i] * y[i];
+        } else if (kind == PairStat::SumX2MY2) {
+          total += x[i] * x[i] - y[i] * y[i];
+        } else {
+          const double d = x[i] - y[i];
+          total += d * d;
+        }
+      }
+      return finite_number(total);
+    }
+    default:
+      break;
+  }
+  // Pearson / RSQ need n >= 2, COVARIANCE.P needs n >= 1, STEYX needs n >= 3 (n - 2 degrees of freedom).
+  const std::size_t min_n = kind == PairStat::Steyx ? 3U : (kind == PairStat::CovarianceP ? 1U : 2U);
+  if (n < min_n) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const RegressionStats s = compute_regression_stats(pairs);
+  switch (kind) {
+    case PairStat::Correl:
+      // A zero marginal variance makes the denominator zero.
+      if (s.sum_xx == 0.0 || s.sum_yy == 0.0) {
+        return Value::error(ErrorCode::Div0);
+      }
+      return finite_number(s.sum_xy / std::sqrt(s.sum_xx * s.sum_yy));
+    case PairStat::CovarianceP:
+      return finite_number(s.sum_xy / static_cast<double>(n));
+    case PairStat::CovarianceS:
+      return finite_number(s.sum_xy / static_cast<double>(n - 1U));
+    case PairStat::Rsq:
+      if (s.sum_xx == 0.0 || s.sum_yy == 0.0) {
+        return Value::error(ErrorCode::Div0);
+      }
+      // CORREL^2 computed directly avoids the intermediate sqrt.
+      return finite_number((s.sum_xy * s.sum_xy) / (s.sum_xx * s.sum_yy));
+    default: {  // Steyx
+      if (s.sum_xx == 0.0) {
+        return Value::error(ErrorCode::Div0);
+      }
+      const double residual_ss = s.sum_yy - (s.sum_xy * s.sum_xy) / s.sum_xx;
+      // Rounding can leave a tiny negative on an exact fit; clamp before the root.
+      const double clamped = residual_ss < 0.0 ? 0.0 : residual_ss;
+      return finite_number(std::sqrt(clamped / static_cast<double>(n - 2U)));
+    }
+  }
+}
+
 }  // namespace
 
 Value eval_correl_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  // Pearson correlation is undefined for fewer than two points (the
-  // sample variances collapse to zero) and when either marginal
-  // variance is exactly zero (the denominator would be zero).
-  if (pairs.second.size() < 2U) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const RegressionStats s = compute_regression_stats(pairs);
-  if (s.sum_xx == 0.0 || s.sum_yy == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  return finite_number(s.sum_xy / std::sqrt(s.sum_xx * s.sum_yy));
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::Correl);
 }
 
 Value eval_covariance_p_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  // Population covariance is defined for any n >= 1 (variance of a
-  // single point is zero); only n == 0 is degenerate.
-  if (pairs.second.empty()) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const RegressionStats s = compute_regression_stats(pairs);
-  return finite_number(s.sum_xy / static_cast<double>(pairs.second.size()));
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::CovarianceP);
 }
 
 Value eval_covariance_s_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  // Sample covariance uses divisor (n - 1); a single point yields 0/0.
-  if (pairs.second.size() < 2U) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const RegressionStats s = compute_regression_stats(pairs);
-  return finite_number(s.sum_xy / static_cast<double>(pairs.second.size() - 1U));
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::CovarianceS);
 }
 
 Value eval_slope_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
-  double slope = 0.0;
-  double intercept = 0.0;
-  Value err = Value::blank();
-  if (!compute_slope_intercept(prepare_pairs(call, arena, registry, ctx), &slope, &intercept, &err)) {
-    return err;
-  }
-  return finite_number(slope);
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::Slope);
 }
 
 Value eval_intercept_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx) {
-  double slope = 0.0;
-  double intercept = 0.0;
-  Value err = Value::blank();
-  if (!compute_slope_intercept(prepare_pairs(call, arena, registry, ctx), &slope, &intercept, &err)) {
-    return err;
-  }
-  return finite_number(intercept);
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::Intercept);
 }
 
 Value eval_rsq_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  if (pairs.second.size() < 2U) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const RegressionStats s = compute_regression_stats(pairs);
-  if (s.sum_xx == 0.0 || s.sum_yy == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  // RSQ = CORREL^2 = sum_xy^2 / (sum_xx * sum_yy). Computing the ratio
-  // directly avoids the intermediate sqrt in CORREL and stays closer
-  // to the double-precision limit.
-  return finite_number((s.sum_xy * s.sum_xy) / (s.sum_xx * s.sum_yy));
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::Rsq);
 }
 
 Value eval_steyx_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  // Residual standard error has (n - 2) degrees of freedom, so we need at
-  // least 3 pairs. A collinear x-vector (sum_xx == 0) also makes the
-  // regression undefined.
-  if (pairs.second.size() < 3U) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const RegressionStats s = compute_regression_stats(pairs);
-  if (s.sum_xx == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double residual_ss = s.sum_yy - (s.sum_xy * s.sum_xy) / s.sum_xx;
-  // Floating-point subtraction can produce a tiny negative when the fit
-  // is essentially exact; clamp to zero before taking the root.
-  const double clamped = residual_ss < 0.0 ? 0.0 : residual_ss;
-  return finite_number(std::sqrt(clamped / static_cast<double>(pairs.second.size() - 2U)));
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::Steyx);
 }
 
 Value eval_sumx2py2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  // SUMX2PY2 / SUMX2MY2 / SUMXMY2 take `(array_x, array_y)`, the opposite
-  // of `(known_y, known_x)`; collection still runs left to right, so
-  // array_x lands in `pairs.first` and array_y in `pairs.second`.
-  const std::vector<double>& x = pairs.first;
-  const std::vector<double>& y = pairs.second;
-  if (x.empty()) {
-    return Value::error(ErrorCode::NA);
-  }
-  double total = 0.0;
-  for (std::size_t i = 0; i < x.size(); ++i) {
-    total += x[i] * x[i] + y[i] * y[i];
-  }
-  return finite_number(total);
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::SumX2PY2);
 }
 
 Value eval_sumx2my2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  const std::vector<double>& x = pairs.first;
-  const std::vector<double>& y = pairs.second;
-  if (x.empty()) {
-    return Value::error(ErrorCode::NA);
-  }
-  double total = 0.0;
-  for (std::size_t i = 0; i < x.size(); ++i) {
-    total += x[i] * x[i] - y[i] * y[i];
-  }
-  return finite_number(total);
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::SumX2MY2);
 }
 
 Value eval_sumxmy2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  auto prepared = prepare_pairs(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-  const std::vector<double>& x = pairs.first;
-  const std::vector<double>& y = pairs.second;
-  if (x.empty()) {
-    return Value::error(ErrorCode::NA);
-  }
-  double total = 0.0;
-  for (std::size_t i = 0; i < x.size(); ++i) {
-    const double d = x[i] - y[i];
-    total += d * d;
-  }
-  return finite_number(total);
+  return eval_pair_stat(call, arena, registry, ctx, PairStat::SumXMY2);
 }
 
 Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

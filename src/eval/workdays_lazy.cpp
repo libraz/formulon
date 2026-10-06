@@ -303,100 +303,55 @@ Value add_workdays(double start, double days, std::uint8_t mask, const std::vect
   return Value::number(cur);
 }
 
+// Shared driver for NETWORKDAYS / WORKDAY and their .INTL forms: `add_days` selects WORKDAY, `intl` the
+// weekend-mask calendar (and the 4th argument).
+Value eval_workdays_driver(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, bool add_days, bool intl) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > (intl ? 4U : 3U)) {
+    return Value::error(ErrorCode::Value);
+  }
+  double start = 0.0;
+  double second = 0.0;
+  Value err = Value::blank();
+  if (!eval_leading_numbers(call, arena, registry, ctx, &start, &second, &err)) {
+    return err;
+  }
+  const bool date1904 = ctx.date1904();
+  if (!is_valid_workday_serial(start, date1904) ||
+      !(add_days ? is_valid_workday_count(second, date1904) : is_valid_workday_serial(second, date1904))) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::uint8_t mask = kSatSunWeekendMask;
+  std::vector<double> holidays;
+  if (intl ? !resolve_intl_calendar(call, arity, arena, registry, ctx, &mask, &holidays, &err)
+           : !collect_holidays(call, arity, arena, registry, ctx, &holidays, &err)) {
+    return err;
+  }
+  return add_days ? add_workdays(start, second, mask, holidays, date1904)
+                  : count_workdays(start, second, mask, holidays, date1904);
+}
+
 }  // namespace
 
 Value eval_networkdays_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 2U || arity > 3U) {
-    return Value::error(ErrorCode::Value);
-  }
-  double start = 0.0;
-  double end = 0.0;
-  Value err = Value::blank();
-  if (!eval_leading_numbers(call, arena, registry, ctx, &start, &end, &err)) {
-    return err;
-  }
-  const bool date1904 = ctx.date1904();
-  if (!is_valid_workday_serial(start, date1904) || !is_valid_workday_serial(end, date1904)) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::vector<double> holidays;
-  if (!collect_holidays(call, arity, arena, registry, ctx, &holidays, &err)) {
-    return err;
-  }
-  return count_workdays(start, end, kSatSunWeekendMask, holidays, date1904);
+  return eval_workdays_driver(call, arena, registry, ctx, /*add_days=*/false, /*intl=*/false);
 }
 
 Value eval_workday_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 2U || arity > 3U) {
-    return Value::error(ErrorCode::Value);
-  }
-  double start = 0.0;
-  double days = 0.0;
-  Value err = Value::blank();
-  if (!eval_leading_numbers(call, arena, registry, ctx, &start, &days, &err)) {
-    return err;
-  }
-  const bool date1904 = ctx.date1904();
-  if (!is_valid_workday_serial(start, date1904) || !is_valid_workday_count(days, date1904)) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::vector<double> holidays;
-  if (!collect_holidays(call, arity, arena, registry, ctx, &holidays, &err)) {
-    return err;
-  }
-  return add_workdays(start, days, kSatSunWeekendMask, holidays, date1904);
+  return eval_workdays_driver(call, arena, registry, ctx, /*add_days=*/true, /*intl=*/false);
 }
 
 Value eval_networkdays_intl_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                  const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 2U || arity > 4U) {
-    return Value::error(ErrorCode::Value);
-  }
-  double start = 0.0;
-  double end = 0.0;
-  Value err = Value::blank();
-  if (!eval_leading_numbers(call, arena, registry, ctx, &start, &end, &err)) {
-    return err;
-  }
-  const bool date1904 = ctx.date1904();
-  if (!is_valid_workday_serial(start, date1904) || !is_valid_workday_serial(end, date1904)) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::uint8_t mask = 0;
-  std::vector<double> holidays;
-  if (!resolve_intl_calendar(call, arity, arena, registry, ctx, &mask, &holidays, &err)) {
-    return err;
-  }
-  return count_workdays(start, end, mask, holidays, date1904);
+  return eval_workdays_driver(call, arena, registry, ctx, /*add_days=*/false, /*intl=*/true);
 }
 
 Value eval_workday_intl_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 2U || arity > 4U) {
-    return Value::error(ErrorCode::Value);
-  }
-  double start = 0.0;
-  double days = 0.0;
-  Value err = Value::blank();
-  if (!eval_leading_numbers(call, arena, registry, ctx, &start, &days, &err)) {
-    return err;
-  }
-  const bool date1904 = ctx.date1904();
-  if (!is_valid_workday_serial(start, date1904) || !is_valid_workday_count(days, date1904)) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::uint8_t mask = 0;
-  std::vector<double> holidays;
-  if (!resolve_intl_calendar(call, arity, arena, registry, ctx, &mask, &holidays, &err)) {
-    return err;
-  }
-  return add_workdays(start, days, mask, holidays, date1904);
+  return eval_workdays_driver(call, arena, registry, ctx, /*add_days=*/true, /*intl=*/true);
 }
 
 }  // namespace eval

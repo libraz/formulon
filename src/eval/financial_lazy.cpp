@@ -306,6 +306,26 @@ double mirr_closed_form(const std::vector<double>& flows, double finance_rate, d
   return std::pow(ratio, 1.0 / static_cast<double>(n - 1)) - 1.0;
 }
 
+// Reads an optional guess argument into `*guess`; a blank leaves the caller's default so a trailing
+// comma matches an omitted argument. Returns false with the error in `*out_err` on error or non-numeric.
+bool read_optional_guess(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, double* guess, Value* out_err) {
+  const Value guess_v = eval_node(arg, arena, registry, ctx);
+  if (guess_v.is_error()) {
+    *out_err = guess_v;
+    return false;
+  }
+  if (!guess_v.is_blank()) {
+    auto coerced = coerce_to_number(guess_v);
+    if (!coerced) {
+      *out_err = Value::error(coerced.error());
+      return false;
+    }
+    *guess = coerced.value();
+  }
+  return true;
+}
+
 }  // namespace
 
 Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -329,30 +349,14 @@ Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   }
 
   double rate = 0.1;  // default guess per Excel.
-  if (arity == 2U) {
-    const Value guess_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
-    if (guess_v.is_error()) {
-      return guess_v;
-    }
-    // Blank guess falls back to 0.1, matching Excel's behaviour when the
-    // second argument is elided with a trailing comma. `coerce_to_number`
-    // returns 0 for blank, which is a valid (but different) starting
-    // guess — we therefore only apply the coerced value when the cell is
-    // not blank, so `=IRR(A1:A4,)` and `=IRR(A1:A4)` behave identically.
-    if (!guess_v.is_blank()) {
-      auto coerced = coerce_to_number(guess_v);
-      if (!coerced) {
-        return Value::error(coerced.error());
-      }
-      rate = coerced.value();
-      // An explicit out-of-domain guess (the NPV expansion needs
-      // 1 + rate > 0) is an input error, not an iteration failure, so
-      // Excel surfaces #VALUE! here rather than the #NUM! the in-loop
-      // boundary check uses when Newton walks past -1 on its own.
-      if (rate <= -1.0) {
-        return Value::error(ErrorCode::Value);
-      }
-    }
+  Value guess_err = Value::blank();
+  if (arity == 2U && !read_optional_guess(call.as_call_arg(1), arena, registry, ctx, &rate, &guess_err)) {
+    return guess_err;
+  }
+  // An explicit out-of-domain guess (the NPV expansion needs 1 + rate > 0) is an input error, so
+  // Excel surfaces #VALUE! rather than the #NUM! the in-loop boundary check uses.
+  if (rate <= -1.0) {
+    return Value::error(ErrorCode::Value);
   }
 
   // Try Newton-Raphson first; it converges quickly for the well-posed
@@ -685,19 +689,8 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
 
   double guess = 0.1;  // default guess per Excel.
-  if (arity == 3U) {
-    const Value guess_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (guess_v.is_error()) {
-      return guess_v;
-    }
-    // Blank guess falls back to 0.1 so `=XIRR(v, d,)` matches `=XIRR(v, d)`.
-    if (!guess_v.is_blank()) {
-      auto coerced = coerce_to_number(guess_v);
-      if (!coerced) {
-        return Value::error(coerced.error());
-      }
-      guess = coerced.value();
-    }
+  if (arity == 3U && !read_optional_guess(call.as_call_arg(2), arena, registry, ctx, &guess, &err)) {
+    return err;
   }
   // Mac Excel rejects any negative guess; Newton-Raphson would still
   // converge from there, but Excel treats negative guesses as an input

@@ -404,6 +404,36 @@ bool sum_matching_if(const IfInputs& in, const ParsedCriterion& parsed, ExcelPro
   return true;
 }
 
+// Shared SUMIF / AVERAGEIF driver; `average` selects the final reduction.
+Value eval_sum_or_average_if(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx, bool average) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 2 && arity != 3) {
+    return Value::error(ErrorCode::Value);
+  }
+  IfInputs inputs;
+  Value err = Value::blank();
+  if (!resolve_if_inputs(call, arity, arena, registry, ctx, &inputs, &err)) {
+    return err;
+  }
+  return lift_criteria({inputs.criterion}, arena, [&](const ParsedCriteria& parsed) {
+    double sum = 0.0;
+    double count = 0.0;
+    Value match_err = Value::blank();
+    if (!sum_matching_if(inputs, *parsed[0], ctx.excel_profile(), &sum, &count, &match_err)) {
+      return match_err;
+    }
+    if (!average) {
+      return Value::number(sum);
+    }
+    if (count == 0.0) {
+      return Value::error(ErrorCode::Div0);
+    }
+    const double mean = sum / count;
+    return std::isfinite(mean) ? Value::number(mean) : Value::error(ErrorCode::Num);
+  });
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -470,24 +500,7 @@ Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const Functio
 // when the criterion itself passed on a non-numeric cell.
 Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity != 2 && arity != 3) {
-    return Value::error(ErrorCode::Value);
-  }
-  IfInputs inputs;
-  Value err = Value::blank();
-  if (!resolve_if_inputs(call, arity, arena, registry, ctx, &inputs, &err)) {
-    return err;
-  }
-  return lift_criteria({inputs.criterion}, arena, [&](const ParsedCriteria& parsed) {
-    double sum = 0.0;
-    double count = 0.0;
-    Value match_err = Value::blank();
-    if (!sum_matching_if(inputs, *parsed[0], ctx.excel_profile(), &sum, &count, &match_err)) {
-      return match_err;
-    }
-    return Value::number(sum);
-  });
+  return eval_sum_or_average_if(call, arena, registry, ctx, /*average=*/false);
 }
 
 // AVERAGEIF(range, criterion [, average_range])
@@ -503,28 +516,7 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 // comment above for details.
 Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity != 2 && arity != 3) {
-    return Value::error(ErrorCode::Value);
-  }
-  IfInputs inputs;
-  Value err = Value::blank();
-  if (!resolve_if_inputs(call, arity, arena, registry, ctx, &inputs, &err)) {
-    return err;
-  }
-  return lift_criteria({inputs.criterion}, arena, [&](const ParsedCriteria& parsed) {
-    double sum = 0.0;
-    double count = 0.0;
-    Value match_err = Value::blank();
-    if (!sum_matching_if(inputs, *parsed[0], ctx.excel_profile(), &sum, &count, &match_err)) {
-      return match_err;
-    }
-    if (count == 0.0) {
-      return Value::error(ErrorCode::Div0);
-    }
-    const double average = sum / count;
-    return std::isfinite(average) ? Value::number(average) : Value::error(ErrorCode::Num);
-  });
+  return eval_sum_or_average_if(call, arena, registry, ctx, /*average=*/true);
 }
 
 // COUNTIFS(range1, crit1 [, range2, crit2, ...])

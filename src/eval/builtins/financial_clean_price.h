@@ -20,6 +20,8 @@
 
 #include <cstdint>
 
+#include "eval/builtins/financial_helpers.h"
+#include "eval/coupon_schedule.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -50,6 +52,20 @@ namespace financial_detail {
 /// domain, negative rate / yld, non-positive redemption, coupon-schedule
 /// failure, non-finite intermediate or final value).
 Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity, bool date1904);
+
+/// Argument prelude shared by PRICE and YIELD: the parsed tail plus the coupon schedule and the
+/// per-period coupon / accrued interest derived from it.
+struct CouponBondInputs {
+  CouponBondTail tail;
+  CouponDates cd;
+  double freq_d;
+  double cf;
+  double ai;
+};
+
+/// Reads args[0..6] and builds `CouponBondInputs`. `#NUM!` on date ordering, coupon-schedule failure or
+/// an exhausted schedule; the caller applies its own sign rule on `tail.amount`.
+Expected<CouponBondInputs, ErrorCode> read_coupon_bond(const Value* args, std::uint32_t arity, bool date1904);
 
 }  // namespace financial_detail
 }  // namespace eval

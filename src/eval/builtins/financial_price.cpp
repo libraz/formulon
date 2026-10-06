@@ -47,12 +47,7 @@
 namespace formulon {
 namespace eval {
 namespace financial_detail {
-// Computes the clean price per 100 face. Returns `#NUM!` on any
-// validation or numerical failure. Factored out of the Value-returning
-// `Price` so YIELD (Newton iteration over yld in `financial_yield.cpp`)
-// can call the same closed form without re-parsing arguments. Declared in
-// `financial_clean_price.h` so the YIELD TU can include only that header.
-Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
+Expected<CouponBondInputs, ErrorCode> read_coupon_bond(const Value* args, std::uint32_t arity, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
@@ -65,33 +60,47 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
   if (!tail) {
     return tail.error();
   }
-  const auto [rate, yld, red, frequency, basis] = tail.value();
-
-  // Every domain check past the reads is `#NUM!`, so the tail reader's
-  // rate / redemption checks may run ahead of the date ordering.
+  // Every domain check past the reads is `#NUM!`, so the tail reader's rate / redemption checks may run
+  // ahead of the date ordering.
   if (settlement.value() >= maturity.value()) {
     return ErrorCode::Num;
   }
+  CouponBondInputs out{tail.value(), CouponDates{}, 0.0, 0.0, 0.0};
+  if (!compute_coupon_dates(settlement.value(), maturity.value(), out.tail.frequency, out.tail.basis, date1904,
+                            &out.cd)) {
+    return ErrorCode::Num;
+  }
+  if (out.cd.coupons_remaining <= 0 || out.cd.period_days <= 0.0) {
+    return ErrorCode::Num;
+  }
+  out.freq_d = static_cast<double>(out.tail.frequency);
+  out.cf = 100.0 * out.tail.rate / out.freq_d;
+  out.ai = 100.0 * out.tail.rate * out.cd.days_bs / (out.cd.period_days * out.freq_d);
+  return out;
+}
+
+// Computes the clean price per 100 face. Returns `#NUM!` on any
+// validation or numerical failure. Factored out of the Value-returning
+// `Price` so YIELD (Newton iteration over yld in `financial_yield.cpp`)
+// can call the same closed form without re-parsing arguments. Declared in
+// `financial_clean_price.h` so the YIELD TU can include only that header.
+Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
+  auto in = read_coupon_bond(args, arity, date1904);
+  if (!in) {
+    return in.error();
+  }
+  const auto& [tail, cd, freq_d, cf, ai] = in.value();
+  const double yld = tail.amount;
+  const double red = tail.redemption;
   if (yld < 0.0) {
     return ErrorCode::Num;
   }
 
-  CouponDates cd{};
-  if (!compute_coupon_dates(settlement.value(), maturity.value(), frequency, basis, date1904, &cd)) {
-    return ErrorCode::Num;
-  }
-  if (cd.coupons_remaining <= 0 || cd.period_days <= 0.0) {
-    return ErrorCode::Num;
-  }
-
-  const double freq_d = static_cast<double>(frequency);
   // `bond_dsc` (not the raw `days_nc`) is the DSC the bond formula
   // needs: it satisfies `days_bs + bond_dsc == period_days` for all
   // bases, including bases 2 / 3 where the raw COUPDAYSNC value would
   // break the identity. See `coupon_schedule.h` for the rationale.
   const double t1 = cd.bond_dsc / cd.period_days;
-  const double cf = 100.0 * rate / freq_d;
-  const double ai = 100.0 * rate * cd.days_bs / (cd.period_days * freq_d);
   const std::int32_t n = cd.coupons_remaining;
   const double yfreq = yld / freq_d;
 

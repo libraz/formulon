@@ -275,6 +275,40 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   return Value::array(out_arr);
 }
 
+/// Shared inputs of REDUCE / SCAN: seed, source array and the 2-arity callable.
+struct FoldInputs {
+  Value acc = Value::blank();
+  const parser::AstNode* acc_ast = nullptr;
+  const ArrayValue* in = nullptr;
+  const LambdaValue* lv = nullptr;
+  SourceOrigin origin;
+};
+
+/// Reads `(initial_value, array, lambda)`; on failure returns false with the error in `*out_err`.
+bool read_fold_inputs(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx, FoldInputs* fi, Value* out_err) {
+  if (call.as_call_arity() != 3U) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  // The seed binds like a LAMBDA argument, so a reference seed stays a reference for the first call.
+  fi->acc = eval_binding_source(call.as_call_arg(0), arena, registry, ctx, &fi->acc_ast);
+  if (fi->acc.is_error()) {
+    *out_err = fi->acc;
+    return false;
+  }
+  fi->in = eval_array_arg(call.as_call_arg(1), arena, registry, ctx, out_err);
+  if (fi->in == nullptr) {
+    return false;
+  }
+  fi->lv = resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, out_err);
+  if (fi->lv == nullptr) {
+    return false;
+  }
+  fi->origin = source_origin(call.as_call_arg(1), fi->in, arena, registry, ctx);
+  return true;
+}
+
 }  // namespace
 
 Value eval_byrow_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -388,26 +422,16 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
 
 Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  if (call.as_call_arity() != 3U) {
-    return Value::error(ErrorCode::Value);
-  }
-  // initial_value binds like a LAMBDA argument, so a reference seed stays a
-  // reference for the first call; an error propagates.
-  const parser::AstNode* acc_ast = nullptr;
-  Value acc = eval_binding_source(call.as_call_arg(0), arena, registry, ctx, &acc_ast);
-  if (acc.is_error()) {
-    return acc;
-  }
+  FoldInputs fi;
   Value err = Value::blank();
-  const ArrayValue* in = eval_array_arg(call.as_call_arg(1), arena, registry, ctx, &err);
-  if (in == nullptr) {
+  if (!read_fold_inputs(call, arena, registry, ctx, &fi, &err)) {
     return err;
   }
-  const LambdaValue* lv = resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
-  if (lv == nullptr) {
-    return err;
-  }
-  const SourceOrigin origin = source_origin(call.as_call_arg(1), in, arena, registry, ctx);
+  Value acc = fi.acc;
+  const parser::AstNode* acc_ast = fi.acc_ast;
+  const ArrayValue* in = fi.in;
+  const LambdaValue* lv = fi.lv;
+  const SourceOrigin origin = fi.origin;
 
   // An empty input is a no-op fold: REDUCE returns the seed unchanged
   // (the Mac Excel observed behaviour for `=REDUCE(0, FILTER(...empty...), ...)`).
@@ -434,24 +458,16 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
 
 Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
-  if (call.as_call_arity() != 3U) {
-    return Value::error(ErrorCode::Value);
-  }
-  const parser::AstNode* acc_ast = nullptr;
-  Value acc = eval_binding_source(call.as_call_arg(0), arena, registry, ctx, &acc_ast);
-  if (acc.is_error()) {
-    return acc;
-  }
+  FoldInputs fi;
   Value err = Value::blank();
-  const ArrayValue* in = eval_array_arg(call.as_call_arg(1), arena, registry, ctx, &err);
-  if (in == nullptr) {
+  if (!read_fold_inputs(call, arena, registry, ctx, &fi, &err)) {
     return err;
   }
-  const LambdaValue* lv = resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
-  if (lv == nullptr) {
-    return err;
-  }
-  const SourceOrigin origin = source_origin(call.as_call_arg(1), in, arena, registry, ctx);
+  Value acc = fi.acc;
+  const parser::AstNode* acc_ast = fi.acc_ast;
+  const ArrayValue* in = fi.in;
+  const LambdaValue* lv = fi.lv;
+  const SourceOrigin origin = fi.origin;
 
   const std::uint32_t rows = in->rows;
   const std::uint32_t cols = in->cols;
