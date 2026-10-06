@@ -273,14 +273,15 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
       const PivotDataField& df = table.data_fields()[df_idx];
       std::vector<Value> column;
       append_leaf_set_field_values(cache, buckets, rows, surviving_col_leaves, df.field_index, column);
-      subtotal.values[df_idx] = aggregate_or_blank(df.aggregation, column, result);
+      subtotal.values[df_idx] = aggregate_or_blank(subtotal.aggregation.value_or(df.aggregation), column, result);
     }
     for (std::size_t c = 0; c < subtotal.col_values.size() && c < surviving_col_leaves.size(); ++c) {
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_values[c].size(); ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
         std::vector<Value> column;
         append_leaf_set_field_values(cache, buckets, rows, {surviving_col_leaves[c]}, df.field_index, column);
-        subtotal.col_values[c][df_idx] = aggregate_or_blank(df.aggregation, column, result);
+        subtotal.col_values[c][df_idx] =
+            aggregate_or_blank(subtotal.aggregation.value_or(df.aggregation), column, result);
       }
     }
     for (std::size_t cs = 0; cs < subtotal.col_subtotal_values.size() && cs < col_subtotal_leaf_sets.size(); ++cs) {
@@ -687,6 +688,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
                            RowSubtotal subtotal;
                            subtotal.labels = labels;
                            subtotal.depth = static_cast<std::uint32_t>(depth);
+                           subtotal.aggregation = spec;
                            subtotal.values = row_values;
                            subtotal.col_values = std::move(col_values);
                            row_subtotal_leaf_sets.emplace_back(

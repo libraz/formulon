@@ -32,6 +32,8 @@ struct AxisHierarchyNode {
 struct RowSubtotal {
   std::vector<std::string> labels;
   std::uint32_t depth = 0;
+  /// A custom subtotal aggregation, or empty to use each data field's aggregation.
+  std::optional<Aggregation> aggregation;
   std::vector<Value> values;
   /// Per-column-leaf subtotal values. `col_values[col_leaf][data_field]`
   /// lets layout render a subtotal row across a populated column axis.

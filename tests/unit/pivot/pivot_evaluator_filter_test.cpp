@@ -379,6 +379,65 @@ TEST(PivotEvaluator, ValueFilterRecalculatesGrandTotalFromSurvivingLeavesOnly) {
   EXPECT_DOUBLE_EQ(r.grand_total.as_number(), 500.0);
 }
 
+TEST(PivotEvaluator, ValueFiltersPreserveCustomRowSubtotalAggregations) {
+  struct Case {
+    const char* field;
+    PivotAxis axis;
+    double threshold;
+    double north_average;
+    double north_max;
+    double north_column_base;
+    std::size_t subtotal_count;
+    std::vector<double> multipliers;
+  };
+  const Case cases[] = {
+      {"Product", PivotAxis::Row, 0.0, 12.375, 40.0, 1.5, 4U, {1.0, 2.0, 10.0, 20.0}},
+      {"Product", PivotAxis::Row, 500.0, 16.5, 40.0, 2.0, 2U, {1.0, 2.0, 10.0, 20.0}},
+      {"Year", PivotAxis::Col, 500.0, 22.5, 40.0, 1.5, 4U, {10.0, 20.0}},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(std::string(c.field) + ":" + std::to_string(c.threshold));
+    PivotCache cache = build_subtotal_grid_cache();
+    PivotTable table = build_subtotal_grid_table();
+    table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Average, SubtotalFn::Max};
+    PivotFilter filter;
+    filter.axis = c.axis;
+    filter.field_name = c.field;
+    filter.type = FilterType::ValueGreaterThan;
+    filter.value = c.threshold;
+    table.mutable_active_filters().push_back(std::move(filter));
+
+    auto evaluated = evaluate(table, cache);
+    ASSERT_TRUE(static_cast<bool>(evaluated));
+    const PivotResult& result = evaluated.value();
+    ASSERT_EQ(result.row_subtotals.size(), c.subtotal_count);
+    ASSERT_EQ(result.subtotals.size(), c.subtotal_count);
+    for (std::size_t i = 0; i < result.row_subtotals.size(); ++i) {
+      const RowSubtotal& subtotal = result.row_subtotals[i];
+      ASSERT_EQ(subtotal.labels.size(), 1U);
+      if (c.subtotal_count == 2U) {
+        EXPECT_EQ(subtotal.labels[0], "South");
+      }
+      const double region_scale = subtotal.labels[0] == "North" ? 1.0 : 10.0;
+      EXPECT_TRUE(subtotal.labels[0] == "North" || subtotal.labels[0] == "South");
+      const bool average = i % 2U == 0U;
+      const double total = (average ? c.north_average : c.north_max) * region_scale;
+      ASSERT_EQ(subtotal.values.size(), 1U);
+      ASSERT_TRUE(subtotal.values[0].is_number());
+      EXPECT_DOUBLE_EQ(subtotal.values[0].as_number(), total);
+      ASSERT_EQ(result.subtotals[i].size(), 1U);
+      EXPECT_DOUBLE_EQ(result.subtotals[i][0].as_number(), total);
+      ASSERT_EQ(subtotal.col_values.size(), c.multipliers.size());
+      for (std::size_t col = 0; col < c.multipliers.size(); ++col) {
+        ASSERT_EQ(subtotal.col_values[col].size(), 1U);
+        ASSERT_TRUE(subtotal.col_values[col][0].is_number());
+        const double column_base = average ? c.north_column_base : 2.0;
+        EXPECT_DOUBLE_EQ(subtotal.col_values[col][0].as_number(), column_base * region_scale * c.multipliers[col]);
+      }
+    }
+  }
+}
+
 TEST(CheckedIndex, RejectsEveryDoubleOutsideTheContainerBound) {
   constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
   constexpr double kInf = std::numeric_limits<double>::infinity();
