@@ -52,7 +52,7 @@ Formulon deliberately does **not** cover:
 | Chart / drawing rendering | Belongs to a rendering layer, not the engine. |
 | PowerQuery (M) / DAX | Separate engine, separate problem domain. |
 | Pivot cache regeneration | The stored `pivotCacheRecords` snapshot is preserved as-is, never rebuilt from the source range. PivotTable *results* are evaluated on demand through the API. |
-| Spreadsheet UI | Rendering belongs to the caller. The engine exposes what a UI needs to drive it — viewport recalc (`partialRecalc`), conditional-format evaluation over a range, spill info. |
+| Spreadsheet UI | Rendering belongs to the caller. The engine exposes what a UI needs to drive it — viewport recalc (`partialRecalc`), conditional-format evaluation over a range, spill info, cell geometry and display text, effective styles with resolved colours, and AutoFilter and data-validation evaluation. |
 
 These are **permanent** non-goals, not "not yet." The scope is finite on purpose.
 

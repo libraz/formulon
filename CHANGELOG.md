@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-06
+
 ### BREAKING
 
 - C ABI: `fm_cell_xf` grows from 88 to 128 bytes (apply flags, `quotePrefix`
@@ -15,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - C ABI: `fm_styles_set_cell_style` takes one `fm_cell_style_record_t` (name,
   `xf_id`, `builtin_id`, `i_level`, `hidden`, `custom_builtin`). The JS
   `setCellStyle` and Python `set_cell_style` take the matching record.
+- The native Node addon and WASM validate arguments strictly before entering
+  native code: a wrongly typed or out-of-range positional or nested argument
+  throws `TypeError` / `RangeError` instead of being coerced. String fields
+  take a string (or, on Node, a one-byte buffer), and 64-bit cursors are
+  bounded by `Number.MAX_SAFE_INTEGER` on both surfaces.
 
 ### Added
 
@@ -82,11 +89,75 @@ Everything below is available through the C ABI, WASM, native Node and Python.
 - The WASM size report's ceilings moved to 3.50 MiB / 896 KiB Brotli soft
   and 3.75 MiB / 928 KiB Brotli hard, keeping the 0.25 MiB and 32 KiB gap
   between each soft and hard ceiling.
+- Number formats are validated the way Excel validates them: more than four
+  sections, a condition in the third section or later, `@` mixed with
+  numeric or date tokens, and an unterminated quote, bracket, escape, `_`
+  or `*` are rejected. Conditional sections take Excel's implicit sign
+  arms, and a value no arm accepts is `#VALUE!` in `TEXT` and `#####` in
+  display text. A text-only section shows numbers as General.
+- Fractions are rendered by a continued-fraction search with fixed and
+  zero-prefixed denominators and `%` applied first; scientific formats
+  support engineering grouping, and commas before the decimal point scale.
+  Dates render from one rounded second with midnight carry.
+- A cell with an explicit style 0 is distinct from an unstyled cell and
+  overrides its row or column style; the distinction round-trips through
+  `.xlsx` and `.xlsb`. `CELL()` and display text read the effective
+  cell, row or column format, and spilled cells are saved with their
+  effective style.
+- Formulas that call a sheet- or workbook-qualified built-in are rejected at
+  every entry point (cells, conditional formats, defined names, validation),
+  not only `set_cell_formula`.
+- Pivot fields named ambiguously (a name shared by distinct fields) are
+  rejected by filters and the C API without mutation, and `GETPIVOTDATA`
+  returns `#REF!` for them. Value filters on an unknown field are rejected
+  at authoring time.
+- A row or column insert removes a pivot table pushed wholly off the grid;
+  a `GETPIVOTDATA` reading it becomes `#REF!`.
+- `TIME` caps each component at 32767 as Excel does, and the date and time
+  functions return `#NUM!` for non-finite or out-of-range inputs.
+
+### Performance
+
+- The WASM module no longer links libc `printf`: numbers are formatted by a
+  byte-identical in-tree formatter built on double-conversion.
+- Loading a sheet with many dynamic-array anchors is no longer quadratic:
+  committed spills are indexed by row band.
+- Adding formulas under whole-column watchers no longer costs quadratic
+  time during dirty marking.
+- Duplicated function preludes and out-of-line paths are shared, shrinking
+  the WASM module (`.wasm` 3,292,036 bytes raw, 901,702 bytes Brotli).
 
 ### Fixed
 
 - Stored number formats with English colour names (`[Red]`, `[ColorN]`) no
   longer render as `########` in display text and `CELL`.
+- `FIXED` and `DOLLAR` accept the full Excel decimals range.
+- `RANDBETWEEN` and `RANDARRAY` stay finite and in range when the bounds are
+  huge or span beyond the 64-bit integer range.
+- Dates past month 12 were computed two days off in the civil-date
+  conversion.
+- ISO `t="d"` date cells are rebased onto the 1904 date system when the
+  workbook uses it, and date-only ISO strings with a `Z` or `+hh:mm` suffix
+  are accepted.
+- Toggling the 1904 date system keeps the saved `<workbookPr>` in step with
+  the model; package-root parts such as `customXml` get correct relationship
+  targets in `.xlsx` and `.xlsb`; unknown relationship types are
+  attribute-escaped.
+- Formulas referencing a missing sheet recalculate when that sheet is added
+  or renamed into existence. Changing iteration, the profile, the 1904 date
+  system or the pinned clock dirties every formula (and clears pivot
+  results where they depend on it). A partial recalc marks dependents
+  outside its closure dirty, so a later full recalc refreshes them.
+- Row and column edits rewrite defined names and unowned table and pivot
+  cache ranges, dirty committed spill anchors, drop data validations and
+  ranges pushed wholly off the grid, and no longer overflow drawing anchors
+  near the grid edge. Removing or moving a sheet remaps the active and
+  first visible tab.
+- Pivot authoring edits dirty dependent formulas so `GETPIVOTDATA`
+  refreshes; custom subtotals re-aggregate with their own function after a
+  value filter; invalid date serials stay out of date groups.
+- `INDIRECT` and `OFFSET` fill a clamped expansion shorter than its
+  rectangle with blanks instead of uninitialised cells.
 - Conditional-format theme, indexed and auto colours no longer render black:
   they resolve against the workbook theme and palette in the engine and in
   the C API payloads, and survive an XLSB save and load.
@@ -1934,7 +2005,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/libraz/formulon/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/libraz/formulon/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/libraz/formulon/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/libraz/formulon/compare/v0.10.0...v0.11.0
