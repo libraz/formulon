@@ -26,15 +26,19 @@ namespace io {
 // Path-shaping helpers
 // ---------------------------------------------------------------------------
 
-/// Strips a leading `"xl/"` segment when present; the value is returned
-/// as a view into the original path. Used to convert package paths
-/// into the relative form Excel emits for workbook-level relationships.
-std::string_view WithoutXlPrefix(std::string_view path);
+/// Builds the `Target=` value for a workbook rels file. Package parts below
+/// `xl/` lose that leading segment because the rels file lives in `xl/`;
+/// package-root parts step out of that directory with `../` (for example,
+/// `customXml/item1.xml` becomes `../customXml/item1.xml`). The returned
+/// string owns its storage so callers cannot retain a view into a temporary.
+std::string TargetRelativeToWorkbook(std::string_view package_path);
 
 /// Builds the `Target=` value for a worksheet rels file: prefixes the
 /// path with `"../"` so it resolves against the `xl/worksheets/`
 /// directory (e.g. `"xl/printerSettings/printerSettings1.bin"` ->
-/// `"../printerSettings/printerSettings1.bin"`).
+/// `"../printerSettings/printerSettings1.bin"`); package-root parts use
+/// `"../../"` (e.g. `"customXml/item1.xml"` ->
+/// `"../../customXml/item1.xml"`).
 std::string TargetRelativeToWorksheet(std::string_view package_path);
 
 // ---------------------------------------------------------------------------

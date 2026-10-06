@@ -27,10 +27,12 @@
 #include "io/workbook_kind_ooxml.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
 #include "passthrough_part.h"
+#include "pugixml.hpp"
 #include "unknown_relationship.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
@@ -72,6 +74,45 @@ constexpr std::string_view kCtPerson = "application/vnd.ms-excel.person+xml";
 // Relationship URI only this writer emits.
 constexpr std::string_view kRelCalcChain =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
+
+/// Synchronises the date-system attributes in a retained `<workbookPr>`
+/// fragment with the model flag. For a parseable fragment, the reader's
+/// canonical `date1904` and legacy `1904` attributes are removed before the
+/// writer emits the canonical name when the model is true. A semantically
+/// matching canonical fragment is returned byte-for-byte so unrelated raw
+/// attributes do not drift on a no-op save. A malformed fragment stays opaque
+/// to preserve the established passthrough contract.
+std::string SynchronizedWorkbookPr(const Workbook& wb) {
+  const std::string& raw = wb.workbook_pr_xml();
+  if (raw.empty()) {
+    return wb.date1904() ? std::string("<workbookPr date1904=\"1\"/>") : std::string();
+  }
+
+  pugi::xml_document doc;
+  const pugi::xml_parse_result parsed =
+      doc.load_buffer(raw.data(), raw.size(), pugi::parse_default, pugi::encoding_utf8);
+  pugi::xml_node root = doc.first_child();
+  if (!parsed || !root || root.type() != pugi::node_element || std::string_view(root.name()) != "workbookPr") {
+    // Keep the established raw-fragment contract when an extension or a
+    // non-conforming producer supplied a fragment pugixml cannot parse.
+    return raw;
+  }
+
+  const char* const legacy_name = "1904";
+  const pugi::xml_attribute legacy = root.attribute(legacy_name);
+  const bool raw_date1904 = read_xsd_bool(root, "date1904", false) || read_xsd_bool(root, legacy_name, false);
+  if (!legacy && raw_date1904 == wb.date1904()) {
+    return raw;
+  }
+
+  root.remove_attribute("date1904");
+  root.remove_attribute(legacy_name);
+  if (wb.date1904()) {
+    pugi::xml_attribute date_attr = root.append_attribute("date1904");
+    date_attr.set_value("1");
+  }
+  return raw_xml(root);
+}
 
 void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& names) {
   if (names.empty()) {
@@ -340,12 +381,11 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     out.append(wb.file_sharing_xml());
     out.push_back('\n');
   }
-  if (!wb.workbook_pr_xml().empty()) {
+  const std::string workbook_pr_xml = SynchronizedWorkbookPr(wb);
+  if (!workbook_pr_xml.empty()) {
     out.append("  ");
-    out.append(wb.workbook_pr_xml());
+    out.append(workbook_pr_xml);
     out.push_back('\n');
-  } else if (wb.date1904()) {
-    out.append("  <workbookPr date1904=\"1\"/>\n");
   }
   if (!wb.workbook_protection_xml().empty()) {
     out.append("  ");
@@ -475,7 +515,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
     const Sheet& sheet = wb.sheet(i);
     if (sheet.is_opaque_ooxml_sheet()) {
       AppendRelationship(out, static_cast<std::uint32_t>(i + 1), sheet.opaque_ooxml_relationship_type(),
-                         WithoutXlPrefix(sheet.opaque_ooxml_part_path()));
+                         TargetRelativeToWorkbook(sheet.opaque_ooxml_part_path()));
     } else {
       const std::string target = "worksheets/sheet" + std::to_string(i + 1) + ".xml";
       AppendRelationship(out, static_cast<std::uint32_t>(i + 1), kRelWorksheet, target);
@@ -491,7 +531,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   // prefix from `definition_path` so the form matches what Excel emits
   // (e.g. `Target="pivotCache/pivotCacheDefinition1.xml"`).
   for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
-    AppendRelationship(out, c.workbook_rid, kRelPivotCacheDefinition, WithoutXlPrefix(c.definition_path));
+    AppendRelationship(out, c.workbook_rid, kRelPivotCacheDefinition, TargetRelativeToWorkbook(c.definition_path));
   }
   // External link relationships. Same `xl/` prefix stripping as pivot
   // caches above; targets land as `Target="externalLinks/externalLink1.xml"`.
@@ -512,7 +552,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
       }
       continue;
     }
-    AppendRelationship(out, e.workbook_rid, kRelExternalLink, WithoutXlPrefix(e.record->part_path),
+    AppendRelationship(out, e.workbook_rid, kRelExternalLink, TargetRelativeToWorkbook(e.record->part_path),
                        /*target_external=*/false, /*escape_target=*/true);
   }
   // Round-tripped relationships whose Type URI the reader did not
@@ -543,7 +583,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
     AppendRelationship(out, next_rid++, kRelSheetMetadata, "metadata.xml");
   }
   if (plan.generated_persons) {
-    AppendRelationship(out, next_rid++, kRelPerson, WithoutXlPrefix(kPersonsPartPath));
+    AppendRelationship(out, next_rid++, kRelPerson, TargetRelativeToWorkbook(kPersonsPartPath));
   }
   for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
     // Only emit a relationship whose target actually exists in the
@@ -565,8 +605,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
       }
       continue;
     }
-    const std::string_view target =
-        r.target_external ? std::string_view(r.target) : WithoutXlPrefix(std::string_view(r.target));
+    const std::string target = r.target_external ? r.target : TargetRelativeToWorkbook(r.target);
     AppendRelationship(out, next_rid++, std::string_view(r.type), target, r.target_external,
                        /*escape_target=*/true);
   }

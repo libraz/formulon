@@ -13,12 +13,14 @@
 namespace formulon {
 namespace io {
 
-std::string_view WithoutXlPrefix(std::string_view path) {
+std::string TargetRelativeToWorkbook(std::string_view path) {
   constexpr std::string_view kXlPrefix = "xl/";
   if (path.size() >= kXlPrefix.size() && path.substr(0, kXlPrefix.size()) == kXlPrefix) {
-    path.remove_prefix(kXlPrefix.size());
+    return std::string(path.substr(kXlPrefix.size()));
   }
-  return path;
+  std::string out("../");
+  out.append(path);
+  return out;
 }
 
 std::string TargetRelativeToWorksheet(std::string_view package_path) {
@@ -29,7 +31,8 @@ std::string TargetRelativeToWorksheet(std::string_view package_path) {
     out.append(package_path.substr(kXlPrefix.size()));
     return out;
   }
-  out.assign(package_path);
+  out.assign("../../");
+  out.append(package_path);
   return out;
 }
 

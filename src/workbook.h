@@ -757,19 +757,17 @@ class Workbook {
   // Mac-authored workbooks. A serial in the 1904 system is 1462 less than
   // the 1900 serial for the same calendar day, so losing this flag on a
   // save shifts every date four years. The flag is parsed from
-  // `<workbookPr date1904>` and re-emitted verbatim via the raw
-  // `<workbookPr>` capture below.
+  // `<workbookPr date1904>` and synchronised with the retained raw
+  // `<workbookPr>` attributes when the writer emits the part.
 
   /// True when the workbook uses the 1904 date system. Defaults to false
   /// (1900 system). Consumed by date-serial conversions
   /// (`date_time::serial_from_ymd` / `ymd_from_serial`).
   bool date1904() const noexcept { return date1904_; }
 
-  /// Sets the 1904-date-system flag. Plain model value; the raw
-  /// `<workbookPr>` capture (`workbook_pr_xml`) is the source of truth for
-  /// re-emission when present, so programmatic callers that need the
-  /// attribute written should clear `workbook_pr_xml` or rely on the
-  /// synthesised fallback the writer emits when no raw block exists.
+  /// Sets the 1904-date-system flag. The writer synchronises the retained
+  /// `<workbookPr>` fragment's `date1904` / legacy `1904` attributes with
+  /// this model value while preserving the other raw attributes.
   void set_date1904(bool value) noexcept { date1904_ = value; }
 
   // ---------------------------------------------------------------------------

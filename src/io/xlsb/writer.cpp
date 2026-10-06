@@ -676,7 +676,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
                                  (rel.type == kRelSheetMetadata && rel.target == "xl/metadata.bin"))) {
       continue;
     }
-    const std::string target = rel.target_external ? rel.target : std::string(WithoutXlPrefix(rel.target));
+    const std::string target = rel.target_external ? rel.target : TargetRelativeToWorkbook(rel.target);
     AppendRelationship(out, next_rid++, rel.type, target, rel.target_external, /*escape_target=*/true);
   }
   out.append("</Relationships>\n");

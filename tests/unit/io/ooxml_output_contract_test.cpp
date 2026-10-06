@@ -680,6 +680,113 @@ TEST(OoxmlExternalLinks, MissingBodyPartDropsBothHalvesAndCounts) {
   EXPECT_GE(saved.value().diagnostics.dropped_relationship_count, 1U);
 }
 
+TEST(OoxmlWorkbookRelationships, RootCustomXmlUsesWorkbookRelativeTargetAndSurvivesReload) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+
+  PassthroughPart custom_xml;
+  custom_xml.path = "customXml/item1.xml";
+  custom_xml.content_type = "application/xml";
+  const std::string custom_body = "<item><value>opaque</value></item>";
+  custom_xml.bytes.assign(custom_body.begin(), custom_body.end());
+  PassthroughPart sheet_custom_xml;
+  sheet_custom_xml.path = "customXml/item2.xml";
+  sheet_custom_xml.content_type = "application/xml";
+  const std::string sheet_custom_body = "<item><sheet-value>opaque</sheet-value></item>";
+  sheet_custom_xml.bytes.assign(sheet_custom_body.begin(), sheet_custom_body.end());
+  wb.set_passthrough_parts({custom_xml, sheet_custom_xml});
+
+  const std::string custom_type = "http://example.test/relationships/customXml";
+  const std::string external_type = "http://example.test/relationships/external";
+  wb.set_unknown_workbook_rels({UnknownRelationship{"rId8", custom_type, custom_xml.path, false},
+                                UnknownRelationship{"rId9", external_type, "https://example.test/book.xlsx", true}});
+  wb.sheet(0).set_unknown_relationships({UnknownRelationship{"rId7", custom_type, sheet_custom_xml.path, false}});
+
+  auto first = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
+  std::string first_rels;
+  ASSERT_TRUE(test::extract_part(test::span_of(first.value()), "xl/_rels/workbook.xml.rels", &first_rels));
+  EXPECT_NE(first_rels.find("Target=\"../customXml/item1.xml\""), std::string::npos) << first_rels;
+  EXPECT_NE(first_rels.find("Target=\"https://example.test/book.xlsx\" TargetMode=\"External\""), std::string::npos)
+      << first_rels;
+  std::string first_sheet_rels;
+  ASSERT_TRUE(
+      test::extract_part(test::span_of(first.value()), "xl/worksheets/_rels/sheet1.xml.rels", &first_sheet_rels));
+  EXPECT_NE(first_sheet_rels.find("Target=\"../../customXml/item2.xml\""), std::string::npos) << first_sheet_rels;
+
+  auto loaded = io::read_ooxml(test::span_of(first.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ASSERT_EQ(loaded.value().workbook.unknown_workbook_rels().size(), 2U);
+  EXPECT_EQ(loaded.value().workbook.unknown_workbook_rels()[0].target, custom_xml.path);
+  EXPECT_EQ(loaded.value().workbook.unknown_workbook_rels()[1].target, "https://example.test/book.xlsx");
+  EXPECT_TRUE(loaded.value().workbook.unknown_workbook_rels()[1].target_external);
+  ASSERT_EQ(loaded.value().workbook.sheet(0).unknown_relationships().size(), 1U);
+  EXPECT_EQ(loaded.value().workbook.sheet(0).unknown_relationships()[0].target, sheet_custom_xml.path);
+
+  auto second = io::write_ooxml(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(second)) << second.error().message;
+  std::string second_rels;
+  ASSERT_TRUE(test::extract_part(test::span_of(second.value()), "xl/_rels/workbook.xml.rels", &second_rels));
+  EXPECT_NE(second_rels.find("Target=\"../customXml/item1.xml\""), std::string::npos) << second_rels;
+  EXPECT_NE(second_rels.find("Target=\"https://example.test/book.xlsx\" TargetMode=\"External\""), std::string::npos)
+      << second_rels;
+  std::string second_sheet_rels;
+  ASSERT_TRUE(
+      test::extract_part(test::span_of(second.value()), "xl/worksheets/_rels/sheet1.xml.rels", &second_sheet_rels));
+  EXPECT_NE(second_sheet_rels.find("Target=\"../../customXml/item2.xml\""), std::string::npos) << second_sheet_rels;
+  std::string second_body;
+  ASSERT_TRUE(test::extract_part(test::span_of(second.value()), "customXml/item1.xml", &second_body));
+  EXPECT_EQ(second_body, custom_body);
+  std::string second_sheet_body;
+  ASSERT_TRUE(test::extract_part(test::span_of(second.value()), "customXml/item2.xml", &second_sheet_body));
+  EXPECT_EQ(second_sheet_body, sheet_custom_body);
+}
+
+TEST(OoxmlWorkbookPr, DateFlagSyncsCanonicalAttributesAndPreservesMalformedLegacyFragments) {
+  struct Case {
+    const char* raw;
+    bool date1904;
+    bool reload;
+    const char* required;
+    const char* forbidden;
+  };
+  const Case cases[] = {
+      {"<workbookPr codeName=\"Book\" date1904=\"1\" defaultThemeVersion=\"1\"/>", true, true, "date1904=\"1\"", ""},
+      {"<workbookPr codeName=\"Book\" date1904=\"1\" defaultThemeVersion=\"1\"/>", false, true, "codeName=\"Book\"",
+       "date1904="},
+      // XML 1.0 does not permit an attribute name beginning with a digit, so
+      // the reader can only retain this historical alias as an opaque raw
+      // fragment. The writer must keep the established malformed-fragment
+      // passthrough contract instead of attempting string-level XML surgery.
+      {"<workbookPr codeName=\"Book\" 1904=\"1\" defaultThemeVersion=\"1\"/>", true, false, "1904=\"1\"", ""},
+      {"<workbookPr codeName=\"Book\" 1904=\"1\" defaultThemeVersion=\"1\"/>", false, false, "1904=\"1\"", ""},
+  };
+  for (const Case& c : cases) {
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet("Sheet1");
+    wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+    wb.set_workbook_pr_xml(c.raw);
+    wb.set_date1904(c.date1904);
+
+    auto saved = io::write_ooxml(wb);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    std::string workbook_xml;
+    ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), "xl/workbook.xml", &workbook_xml));
+    EXPECT_NE(workbook_xml.find(c.required), std::string::npos) << workbook_xml;
+    if (*c.forbidden != '\0') {
+      EXPECT_EQ(workbook_xml.find(c.forbidden), std::string::npos) << workbook_xml;
+    }
+
+    if (c.reload) {
+      auto reloaded = io::read_ooxml(test::span_of(saved.value()));
+      ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+      EXPECT_EQ(reloaded.value().workbook.date1904(), c.date1904);
+      EXPECT_NE(reloaded.value().workbook.workbook_pr_xml().find("codeName=\"Book\""), std::string::npos);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Unmodelled `<worksheet>` children survive in their schema position.
 // ---------------------------------------------------------------------------

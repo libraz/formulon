@@ -86,6 +86,75 @@ TEST(XlsbWriter, PassthroughPartsRoundTripVerbatim) {
   EXPECT_EQ(read_or.value().workbook.unknown_package_rels()[0].target, "docProps/thumbnail.jpeg");
 }
 
+TEST(XlsbWriter, RootCustomXmlUsesWorkbookRelativeTargetAndSurvivesReload) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.sheet(wb.add_sheet("S1"));
+  sheet.set_cell_value(0U, 0U, Value::number(10.0));
+
+  PassthroughPart custom_xml;
+  custom_xml.path = "customXml/item1.xml";
+  custom_xml.content_type = "application/xml";
+  const std::string custom_body = "<item><value>opaque</value></item>";
+  custom_xml.bytes.assign(custom_body.begin(), custom_body.end());
+  PassthroughPart sheet_custom_xml;
+  sheet_custom_xml.path = "customXml/item2.xml";
+  sheet_custom_xml.content_type = "application/xml";
+  const std::string sheet_custom_body = "<item><sheet-value>opaque</sheet-value></item>";
+  sheet_custom_xml.bytes.assign(sheet_custom_body.begin(), sheet_custom_body.end());
+  wb.set_passthrough_parts({custom_xml, sheet_custom_xml});
+
+  const std::string custom_type = "http://example.test/relationships/customXml";
+  const std::string external_type = "http://example.test/relationships/external";
+  wb.set_unknown_workbook_rels({UnknownRelationship{"rId8", custom_type, custom_xml.path, false},
+                                UnknownRelationship{"rId9", external_type, "https://example.test/book.xlsx", true}});
+  sheet.set_unknown_relationships({UnknownRelationship{"rId7", custom_type, sheet_custom_xml.path, false}});
+
+  auto first = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
+  ZipReader first_zip;
+  ASSERT_TRUE(static_cast<bool>(first_zip.open(SpanOf(first.value()))));
+  auto first_rels_or = first_zip.read_entry("xl/_rels/workbook.bin.rels");
+  ASSERT_TRUE(static_cast<bool>(first_rels_or));
+  const std::string first_rels(first_rels_or.value().begin(), first_rels_or.value().end());
+  EXPECT_NE(first_rels.find("Target=\"../customXml/item1.xml\""), std::string::npos) << first_rels;
+  EXPECT_NE(first_rels.find("Target=\"https://example.test/book.xlsx\" TargetMode=\"External\""), std::string::npos)
+      << first_rels;
+  auto first_sheet_rels_or = first_zip.read_entry("xl/worksheets/_rels/sheet1.bin.rels");
+  ASSERT_TRUE(static_cast<bool>(first_sheet_rels_or));
+  const std::string first_sheet_rels(first_sheet_rels_or.value().begin(), first_sheet_rels_or.value().end());
+  EXPECT_NE(first_sheet_rels.find("Target=\"../../customXml/item2.xml\""), std::string::npos) << first_sheet_rels;
+
+  auto loaded = read_xlsb(SpanOf(first.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ASSERT_EQ(loaded.value().workbook.unknown_workbook_rels().size(), 2U);
+  EXPECT_EQ(loaded.value().workbook.unknown_workbook_rels()[0].target, custom_xml.path);
+  EXPECT_EQ(loaded.value().workbook.unknown_workbook_rels()[1].target, "https://example.test/book.xlsx");
+  EXPECT_TRUE(loaded.value().workbook.unknown_workbook_rels()[1].target_external);
+  ASSERT_EQ(loaded.value().workbook.sheet(0).unknown_relationships().size(), 1U);
+  EXPECT_EQ(loaded.value().workbook.sheet(0).unknown_relationships()[0].target, sheet_custom_xml.path);
+
+  auto second = write_xlsb(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(second)) << second.error().message;
+  ZipReader second_zip;
+  ASSERT_TRUE(static_cast<bool>(second_zip.open(SpanOf(second.value()))));
+  auto second_rels_or = second_zip.read_entry("xl/_rels/workbook.bin.rels");
+  ASSERT_TRUE(static_cast<bool>(second_rels_or));
+  const std::string second_rels(second_rels_or.value().begin(), second_rels_or.value().end());
+  EXPECT_NE(second_rels.find("Target=\"../customXml/item1.xml\""), std::string::npos) << second_rels;
+  EXPECT_NE(second_rels.find("Target=\"https://example.test/book.xlsx\" TargetMode=\"External\""), std::string::npos)
+      << second_rels;
+  auto second_sheet_rels_or = second_zip.read_entry("xl/worksheets/_rels/sheet1.bin.rels");
+  ASSERT_TRUE(static_cast<bool>(second_sheet_rels_or));
+  const std::string second_sheet_rels(second_sheet_rels_or.value().begin(), second_sheet_rels_or.value().end());
+  EXPECT_NE(second_sheet_rels.find("Target=\"../../customXml/item2.xml\""), std::string::npos) << second_sheet_rels;
+  auto second_body_or = second_zip.read_entry("customXml/item1.xml");
+  ASSERT_TRUE(static_cast<bool>(second_body_or));
+  EXPECT_EQ(std::string(second_body_or.value().begin(), second_body_or.value().end()), custom_body);
+  auto second_sheet_body_or = second_zip.read_entry("customXml/item2.xml");
+  ASSERT_TRUE(static_cast<bool>(second_sheet_body_or));
+  EXPECT_EQ(std::string(second_sheet_body_or.value().begin(), second_sheet_body_or.value().end()), sheet_custom_body);
+}
+
 TEST(XlsbWriter, DropsXlsxMetadataAndItsWorkbookRelationship) {
   Workbook wb = Workbook::create_empty();
   Sheet& sheet = wb.sheet(wb.add_sheet("S1"));
