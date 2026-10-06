@@ -37,6 +37,8 @@
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/auto_filter_xml.h"
+#include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
@@ -55,6 +57,37 @@ constexpr std::uint32_t kAnchorCol = 3;
 // Edits happen at row/col 1, before every anchor, and move one band.
 constexpr std::uint32_t kEditOrigin = 1;
 constexpr std::uint32_t kEditCount = 1;
+
+TEST(StructuralEditMatrix, DeletionRemovesConsumedValidationsAndPreservesSurvivingRanges) {
+  for (const bool rows : {false, true}) {
+    SCOPED_TRACE(rows ? "rows" : "cols");
+    Workbook wb = Workbook::create();
+    DataValidation consumed;
+    consumed.type = 3;
+    consumed.formula1 = "\"one,two\"";
+    consumed.ranges.push_back(MergeRange{1, 1, 1, 1});
+    DataValidation surviving = consumed;
+    surviving.ranges.push_back(MergeRange{3, 3, 3, 3});
+    wb.sheet(0).mutable_validations().push_back(std::move(consumed));
+    wb.sheet(0).mutable_validations().push_back(std::move(surviving));
+
+    ASSERT_TRUE(static_cast<bool>(rows ? wb.delete_rows(0, 1, 1) : wb.delete_cols(0, 1, 1)));
+    ASSERT_EQ(wb.sheet(0).validations().size(), 1U);
+    const auto& ranges = wb.sheet(0).validations()[0].ranges;
+    ASSERT_EQ(ranges.size(), 1U);
+    EXPECT_EQ(ranges[0].first_row, rows ? 2U : 3U);
+    EXPECT_EQ(ranges[0].last_row, rows ? 2U : 3U);
+    EXPECT_EQ(ranges[0].first_col, rows ? 3U : 2U);
+    EXPECT_EQ(ranges[0].last_col, rows ? 3U : 2U);
+
+    auto written = io::write_ooxml(wb);
+    ASSERT_TRUE(static_cast<bool>(written));
+    auto loaded = io::read_ooxml(io::ByteSpan{written.value().data(), written.value().size()});
+    ASSERT_TRUE(static_cast<bool>(loaded));
+    ASSERT_EQ(loaded.value().workbook.sheet(0).validations().size(), 1U);
+    EXPECT_EQ(loaded.value().workbook.sheet(0).validations()[0].formula1, "\"one,two\"");
+  }
+}
 
 /// Builds a workbook whose single sheet carries one instance of every
 /// structure a row/column edit has to move.

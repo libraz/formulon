@@ -371,6 +371,9 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   for (DataValidation& dv : validations_) {
     ShiftRangeList(dv.ranges, index, count, is_delete, row_axis);
   }
+  validations_.erase(std::remove_if(validations_.begin(), validations_.end(),
+                                    [](const DataValidation& dv) { return dv.ranges.empty(); }),
+                     validations_.end());
   ShiftConditionalFormats(conditional_formats_, index, count, is_delete, row_axis);
   if (row_axis) {
     ShiftRowLayouts(layout_.row_overrides, index, count, is_delete);
