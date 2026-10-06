@@ -162,6 +162,21 @@ TEST(BuiltinsAggregateFn, Code11IsVarPopulation) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsAggregateFn, ExtremeMomentOverflowIsNumError) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0e308));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(1.0e308));
+
+  for (const char* formula :
+       {"=AGGREGATE(1,0,A1:A2)", "=AGGREGATE(7,0,A1:A2)", "=AGGREGATE(8,0,A1:A2)", "=AGGREGATE(10,0,A1:A2)",
+        "=AGGREGATE(11,0,A1:A2)", "=SUBTOTAL(1,A1:A2)", "=SUBTOTAL(7,A1:A2)", "=SUBTOTAL(8,A1:A2)",
+        "=SUBTOTAL(10,A1:A2)", "=SUBTOTAL(11,A1:A2)"}) {
+    const Value result = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(result.is_error()) << formula << ": " << result.debug_to_string();
+    EXPECT_EQ(result.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
 TEST(BuiltinsAggregateFn, Code12IsMedian) {
   Workbook wb = MakeOneToFive();
   const Value v = EvalSourceIn("=AGGREGATE(12,0,A1:A5)", wb, wb.sheet(0));

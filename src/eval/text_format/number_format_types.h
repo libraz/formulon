@@ -21,6 +21,10 @@ namespace formulon {
 namespace text_format {
 namespace number_format_detail {
 
+// Last serial of the 1900 calendar (9999-12-31). The 1904 system ends the
+// same day, `kDate1904EpochGap` serials earlier.
+constexpr double kMaxDateSerial1900 = 2958465.0;
+
 // --- Token representation ----------------------------------------------
 
 enum class Tok : std::uint8_t {
@@ -71,14 +75,22 @@ enum class Tok : std::uint8_t {
 
 struct Token {
   Tok kind = Tok::Literal;
-  // Length hint (0..4) used for date tokens to carry the run length encoded
-  // in the format (e.g. yyyy vs yy, hh vs h). Also reused by FracSecDigits
-  // to store the fractional-digit count.
-  std::uint8_t width = 0;
+  // Length hint used for date tokens to carry the run length encoded in the
+  // format (e.g. yyyy vs yy, hh vs h). Also reused by FracSecDigits to store
+  // the fractional-digit count. Keep this wide enough for a user-supplied
+  // fractional-second run; the renderer caps arithmetic precision separately.
+  std::size_t width = 0;
   // Byte range inside the format string (Literal only). `lit_begin <=
   // lit_end`; empty slices are legal and simply contribute no output.
   std::size_t lit_begin = 0;
   std::size_t lit_end = 0;
+  // A literal copied from a quoted or escaped payload cannot introduce a
+  // structural fraction slash. The tokenizer sets this on those payloads so
+  // the classifier can distinguish `?/"/"?` from `?/?`.
+  bool protected_literal = false;
+  // True only for an unquoted, unescaped `/` byte. Fraction classification
+  // uses this marker instead of treating every literal slash as structural.
+  bool fraction_slash_candidate = false;
 };
 
 // DBNum digit-substitution mode controlled by the `[DBNum1]`, `[DBNum2]`,
@@ -166,14 +178,13 @@ struct Section {
   // --- Fraction format (`# ?/?`, `# ??/??`, etc.) ----------------------
   // When `is_fraction` is true the section renders `value` as an
   // (optional integer + ) numerator / denominator triple computed by a
-  // bounded Stern-Brocot mediant search. The token-stream-walk path is
+  // bounded continued-fraction search. The token-stream-walk path is
   // bypassed; literals before the integer group, between integer and
   // numerator, and after the denominator are still emitted from `tokens`.
   bool is_fraction = false;
-  // Maximum digit count of each placeholder run. 10^N - 1 gives the cap
-  // used by the rational-approximation search.
+  // Placeholder widths control padding. Only the denominator width sets
+  // the rational-approximation cap (10^N - 1, bounded to seven digits).
   int fraction_int_max_digits = 0;
-  int fraction_num_max_digits = 0;
   int fraction_den_max_digits = 0;
   // Inclusive token-index bounds for each digit-placeholder run. When
   // `fraction_int_max_digits == 0` the integer group is absent and
@@ -186,6 +197,12 @@ struct Section {
   int fraction_den_end = 0;
   // Index of the `/` literal token between numerator and denominator.
   int fraction_slash_index = -1;
+  // A raw denominator containing a non-zero digit is a checked fixed integer
+  // denominator (`# ?/8`, `# ?/08`, `# ?/16`). An all-zero run and placeholder
+  // denominators remain bounded variable searches; quoted/escaped fixed
+  // denominators are invalid formats.
+  bool fraction_fixed_denominator = false;
+  std::uint64_t fraction_fixed_denominator_value = 1;
 };
 
 // --- Tokenizer entry points (implemented in number_format_tokenizer.cpp) ---

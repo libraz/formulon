@@ -480,6 +480,7 @@ void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.xf_index = xf_index;
+  slot.has_explicit_xf = true;
   cell_enumeration_revision_.bump();
 }
 

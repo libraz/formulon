@@ -30,6 +30,7 @@
 #include "io/xlsb/sst_writer.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "style_resolve.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
@@ -45,7 +46,7 @@ namespace {
 /// to skip implicitly-default-constructed columns produced by sheet
 /// row growth (see `Sheet::set_cell_value` docs).
 bool IsEmptySlot(const Cell& cell) {
-  return cell.formula_text.empty() && cell.cached_value.is_blank();
+  return cell.formula_text.empty() && cell.cached_value.is_blank() && cell.xf_index == 0U && !cell.has_explicit_xf;
 }
 
 /// Emits a `BrtRowHdr` for `row`. [MS-XLSB] §2.4.770 layout:
@@ -727,7 +728,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
         if (downgraded_array_anchors.count(anchor_key(ph->second.anchor_row, ph->second.anchor_col)) != 0U) {
           continue;
         }
-        const std::uint32_t xf_index = cell != nullptr ? cell->xf_index : 0U;
+        const std::uint32_t xf_index = select_effective_xf(sheet, row, col).xf_index;
         emit_array_phantom(body, col, xf_index, ph->second.value, ph->second.anchor_row, ph->second.anchor_col,
                            ph->second.always_calculates);
       }

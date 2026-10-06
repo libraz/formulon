@@ -1,35 +1,50 @@
 //
-// Numeric aggregation kernels shared by SUBTOTAL (`builtins/subtotal.cpp`),
-// AGGREGATE (`aggregate_lazy.cpp`), and the QUARTILE / PERCENTILE family
-// (`builtins/stats.cpp`).
+// Numeric aggregation kernels shared by SUBTOTAL (`src/eval/builtins/subtotal.cpp`),
+// AGGREGATE (`src/eval/aggregate_lazy.cpp`), AVERAGE (`src/eval/builtins/aggregate.cpp`),
+// the stats family (`src/eval/builtins/stats.cpp`, `src/eval/builtins/stats/stats_order.cpp`),
+// and the pivot aggregator (`src/pivot/aggregator.cpp`).
 //
-// Each kernel consumes a `std::vector<double>` of *already-filtered* numeric
-// values: callers are responsible for dropping non-numeric inputs (Text,
-// Blank, Bool when applicable) and for short-circuiting on Error cells.
-// What the kernels add is the post-collection arithmetic + Excel-visible
-// error-code surfacing (empty-input -> #DIV/0!, non-finite intermediate ->
-// #NUM!, k out of range -> #NUM!, etc.).
+// Each kernel consumes either a `std::vector<double>` of already-filtered
+// numeric values or a `NumericInputView`. The view lets a caller retain its
+// source values and expose only the numeric cells through a small getter;
+// returning `nullopt` skips one input. Callers remain responsible for
+// short-circuiting on Error cells before invoking a view kernel. What the
+// kernels add is the post-collection arithmetic + Excel-visible error-code
+// surfacing (empty-input -> #DIV/0!, non-finite intermediate -> #NUM!, k out
+// of range -> #NUM!, etc.).
 //
 // Algorithm note: `run_variance` and `run_stdev` deliberately use the
 // two-pass mean / sum-of-squared-deviations formulation rather than
 // Welford's online recurrence. Both SUBTOTAL and AGGREGATE were already
 // two-pass before the consolidation, so keeping that algorithm gives
 // bit-identical results to the pre-refactor implementations across the
-// oracle corpus. The same applies to PERCENTILE.INC / .EXC, which match
-// the position formulas Mac Excel 365 reports.
+// oracle corpus; `run_average` is the plain sum / count likewise. The same
+// applies to PERCENTILE.INC / .EXC, which match the position formulas Mac
+// Excel 365 reports.
 
-#ifndef FORMULON_EVAL_AGGREGATE_KERNELS_H_
-#define FORMULON_EVAL_AGGREGATE_KERNELS_H_
+#ifndef FORMULON_NUMERIC_AGGREGATE_KERNELS_H_
+#define FORMULON_NUMERIC_AGGREGATE_KERNELS_H_
 
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 #include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
-namespace eval {
-namespace aggregate_kernels {
+namespace numeric_aggregate_kernels {
+
+/// Borrowed numeric input. `context` is passed unchanged to `get` for each
+/// index in `[0, size)`. A `nullopt` result means that the source element is
+/// not part of the numeric aggregate. The view never owns or outlives the
+/// pointed-to context; vector overloads below provide the common owning-free
+/// adapter for already-filtered slices.
+struct NumericInputView {
+  const void* context = nullptr;
+  std::size_t size = 0;
+  std::optional<double> (*get)(const void* context, std::size_t index) = nullptr;
+};
 
 /// Sum of all elements. Returns `#NUM!` when the running total goes
 /// non-finite (overflow). Empty input returns 0.
@@ -40,7 +55,9 @@ Expected<double, ErrorCode> run_sum(const std::vector<double>& xs);
 /// for SUBTOTAL/AGGREGATE; not the mathematical identity 1).
 Expected<double, ErrorCode> run_product(const std::vector<double>& xs);
 
-/// Arithmetic mean. Empty input returns `#DIV/0!`. Non-finite mean -> `#NUM!`.
+/// Arithmetic mean (plain sum / count). Empty input returns `#DIV/0!`. A
+/// non-finite result returns `#NUM!`.
+Expected<double, ErrorCode> run_average(const NumericInputView& values);
 Expected<double, ErrorCode> run_average(const std::vector<double>& xs);
 
 /// Maximum / minimum. Empty input returns 0 (matches Excel's SUBTOTAL /
@@ -53,13 +70,13 @@ Expected<double, ErrorCode> run_min(const std::vector<double>& xs);
 /// n-1, requires at least 2 elements); `sample = false` selects the
 /// population variance (denominator n, requires at least 1 element).
 /// Insufficient elements -> `#DIV/0!`; non-finite intermediate ->
-/// `#NUM!`. Two-pass algorithm: `mean = sum/n`, then
-/// `var = sum((x-mean)^2) / denom`.
+/// `#NUM!`.
+Expected<double, ErrorCode> run_variance(const NumericInputView& values, bool sample);
 Expected<double, ErrorCode> run_variance(const std::vector<double>& xs, bool sample);
 
-/// Standard deviation, `sqrt(run_variance(xs, sample))`. Propagates the
-/// variance's `#DIV/0!` / `#NUM!`. A negative variance from floating
-/// rounding becomes `#NUM!`.
+/// Standard deviation: the square root of `run_variance`; a variance that
+/// overflows reports `#NUM!`.
+Expected<double, ErrorCode> run_stdev(const NumericInputView& values, bool sample);
 Expected<double, ErrorCode> run_stdev(const std::vector<double>& xs, bool sample);
 
 /// PERCENTILE.INC at fractional rank `k` in [0, 1]. `xs_sorted` must be
@@ -82,8 +99,8 @@ Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_
 /// so callers must not pre-sort and may `std::move` their vector in.
 /// Returns `#NUM!` for an empty slice and for a non-finite midpoint.
 ///
-/// Shared between MEDIAN (`stats/stats_order.cpp`) and AGGREGATE function
-/// 12 (`aggregate_lazy.cpp`). Excel treats the two spellings as
+/// Shared between MEDIAN (`src/eval/builtins/stats/stats_order.cpp`) and AGGREGATE function
+/// 12 (`src/eval/aggregate_lazy.cpp`). Excel treats the two spellings as
 /// interchangeable, so a single definition is what keeps them from
 /// reporting different error codes for the same filtered input.
 Expected<double, ErrorCode> run_median(std::vector<double> xs);
@@ -93,8 +110,8 @@ Expected<double, ErrorCode> run_median(std::vector<double> xs);
 /// used for tie-breaking. Returns `#N/A` when the slice is empty or no
 /// value repeats. `xs` is consumed in its original (unsorted) order so
 /// the first-occurrence rule is observable; callers must NOT pre-sort.
-/// Shared between MODE / MODE.SNGL (`stats/stats_order.cpp`) and
-/// AGGREGATE function 13 (`aggregate_lazy.cpp`) so the two cannot
+/// Shared between MODE / MODE.SNGL (`src/eval/builtins/stats/stats_order.cpp`) and
+/// AGGREGATE function 13 (`src/eval/aggregate_lazy.cpp`) so the two cannot
 /// diverge on the tie-break rule.
 Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs);
 
@@ -108,11 +125,10 @@ struct ValueRun {
 
 /// Groups `xs` into runs of exactly equal values, in ascending value order.
 /// Shared by the mode kernel here and `build_mode_frequencies` in
-/// `builtins/stats.cpp` so both apply the same first-occurrence grouping.
+/// `src/eval/builtins/stats.cpp` so both apply the same first-occurrence grouping.
 std::vector<ValueRun> group_equal_values(const std::vector<double>& xs);
 
-}  // namespace aggregate_kernels
-}  // namespace eval
+}  // namespace numeric_aggregate_kernels
 }  // namespace formulon
 
-#endif  // FORMULON_EVAL_AGGREGATE_KERNELS_H_
+#endif  // FORMULON_NUMERIC_AGGREGATE_KERNELS_H_

@@ -1,15 +1,15 @@
 #include "eval/text_format/display_text.h"
 
 #include <cmath>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#include "cell.h"
 #include "eval/text_format/number_format.h"
-#include "eval/text_format/number_format_types.h"
 #include "sheet.h"
+#include "style_resolve.h"
 #include "styles.h"
 #include "workbook.h"
 
@@ -35,16 +35,7 @@ DisplayText render_number(double number, std::string_view code, bool date1904) {
     result.status = DisplayStatus::kOverflow;
     return result;
   }
-  // A text-only format (`@`) shows numbers as General.
-  const auto sections = number_format_detail::split_sections(code);
-  bool general_only = code.empty();
-  if (sections.size() == 1U) {
-    number_format_detail::Section section;
-    number_format_detail::tokenize_section(sections[0], section, FormatDialect::kStored);
-    number_format_detail::classify(section, sections[0]);
-    general_only = general_only || section.is_text;
-  }
-  const std::string_view effective = general_only ? std::string_view("General") : code;
+  const std::string_view effective = code.empty() ? std::string_view("General") : code;
   std::string out;
   switch (apply_format(number, effective, out, date1904, FormatDialect::kStored)) {
     case FormatStatus::kOk:
@@ -86,24 +77,20 @@ std::string_view number_format_code_for_xf(const StylesTable& styles, const Cell
   if (xf == nullptr) {
     return {};
   }
-  for (const NumFmtRecord& custom : styles.num_fmts) {
-    if (custom.id == xf->num_fmt_id && custom.format_string_index < styles.num_fmt_strings.size()) {
-      return styles.num_fmt_strings[custom.format_string_index];
-    }
-  }
-  const char* builtin = builtin_num_fmt(xf->num_fmt_id);
-  return builtin == nullptr ? std::string_view{} : std::string_view(builtin);
+  const std::optional<std::string_view> code = effective_num_fmt(styles, xf->num_fmt_id);
+  return code ? *code : std::string_view{};
 }
 
 DisplayText format_cell_for_display(const Workbook& workbook, const Sheet& sheet, std::uint32_t row,
                                     std::uint32_t col) {
-  const Cell* cell = sheet.cell_at(row, col);
-  if (cell == nullptr) {
-    return DisplayText{};
-  }
+  const EffectiveXf choice = select_effective_xf(sheet, row, col);
   const std::vector<CellXf>& xfs = workbook.styles().cell_xfs;
-  const CellXf* xf = cell->xf_index < xfs.size() ? &xfs[cell->xf_index] : nullptr;
-  return format_value_for_display(cell->cached_value, number_format_code_for_xf(workbook.styles(), xf),
+  const CellXf* xf = nullptr;
+  if (!xfs.empty()) {
+    const std::uint32_t xf_index = choice.xf_index < xfs.size() ? choice.xf_index : 0U;
+    xf = &xfs[xf_index];
+  }
+  return format_value_for_display(sheet.resolve_cell_value(row, col), number_format_code_for_xf(workbook.styles(), xf),
                                   workbook.date1904());
 }
 

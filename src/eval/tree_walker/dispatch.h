@@ -1,8 +1,9 @@
 //
 // Private seam between the tree-walker's recursive node visitor
 // (`tree_walker/walker.cpp`) and the function-call dispatch path
-// (`tree_walker/dispatch.cpp`) and the runtime lambda invocation path
-// (`tree_walker/lambda_invoke.cpp`). The translation units were split out
+// (`tree_walker/dispatch.cpp`), the runtime lambda invocation path
+// (`tree_walker/lambda_invoke.cpp`) and LET/LAMBDA binding resolution
+// (`tree_walker/binding_source.cpp`). The translation units were split out
 // of the original monolithic `tree_walker.cpp` to keep compile units
 // digestible; this header publishes the entry points walker.cpp needs.
 //

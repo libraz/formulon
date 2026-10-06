@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -804,6 +805,52 @@ TEST(BuiltinsVarP, Range) {
   const Value v = EvalSourceIn("=VAR.P(A1:A8)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 4.0, 1e-12);
+}
+
+TEST(BuiltinsStatsExtreme, EqualLargeRangeOverflowIsNumError) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0e308));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(1.0e308));
+
+  for (const char* formula : {"=VAR.S(A1:A2)", "=VAR.P(A1:A2)", "=STDEV.S(A1:A2)", "=STDEV.P(A1:A2)"}) {
+    const Value result = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(result.is_error()) << formula << ": " << result.debug_to_string();
+    EXPECT_EQ(result.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
+TEST(BuiltinsStatsExtreme, OpposingMaximumPopulationStdDevIsNumError) {
+  Workbook wb = Workbook::create();
+  const double max = std::numeric_limits<double>::max();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(max));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(-max));
+
+  const Value stdev = EvalSourceIn("=STDEV.P(A1:A2)", wb, wb.sheet(0));
+  ASSERT_TRUE(stdev.is_error()) << stdev.debug_to_string();
+  EXPECT_EQ(stdev.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsStatsExtreme, SquaredDeviationOverflowIsNumError) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0e155));
+  for (std::uint32_t row = 1U; row < 1000U; ++row) {
+    wb.sheet(0).set_cell_value(row, 0, Value::number(0.0));
+  }
+
+  const Value variance = EvalSourceIn("=VAR.P(A1:A1000)", wb, wb.sheet(0));
+  ASSERT_TRUE(variance.is_error()) << variance.debug_to_string();
+  EXPECT_EQ(variance.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsStatsExtreme, AdjacentLargeValuesMatchExcelPopulationVariance) {
+  constexpr double first = 1.0e150;
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(first));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(std::nextafter(first, 0.0)));
+
+  const Value variance = EvalSourceIn("=VAR.P(A1:A2)", wb, wb.sheet(0));
+  ASSERT_TRUE(variance.is_number()) << variance.debug_to_string();
+  EXPECT_DOUBLE_EQ(variance.as_number(), 1.650920409798954e+268);
 }
 
 }  // namespace

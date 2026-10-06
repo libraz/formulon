@@ -59,7 +59,9 @@ enum class FormatStatus : int {
   /// The format code is malformed (e.g. an unrecognised bracket).
   kValueError = 1,
   /// The code is valid but the value has no rendering in it: a date or time
-  /// section given a serial outside the workbook's calendar range.
+  /// section given a serial outside the workbook's calendar range, a value no
+  /// conditional arm accepts, or numeric scaling/normalization overflowed to
+  /// a non-finite value.
   kOverflow = 2,
 };
 

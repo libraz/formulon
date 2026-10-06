@@ -1,23 +1,16 @@
 //
-// Fraction-format rendering for the Excel TEXT() engine. Covers `# ?/?`,
-// `# ??/??`, `0/0`, and friends. Implements Excel's bounded
-// best-rational-approximation via a Stern-Brocot mediant search.
-//
-// Compared to the more familiar continued-fraction algorithm, Stern-Brocot
-// occasionally picks a different mediant when the target lies near a
-// Farey-neighbour boundary; Mac Excel's empirical output matches
-// Stern-Brocot, so we follow that.
-//
-// For a value `v` (already absolute) and a denominator cap `max_q` and
-// numerator cap `max_p`, the search finds (p, q) minimising |v - p/q|
-// with 1 <= q <= max_q and 0 <= p <= max_p. When an integer group is
-// present the search runs against `frac = v - floor(v)` only.
+// Fraction-format rendering for the Excel TEXT() engine. Variable
+// denominators use a bounded continued-fraction search; fixed denominators
+// round directly. Numerator placeholder width controls padding, not magnitude.
 
 #include "eval/text_format/render_fraction.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -30,59 +23,193 @@ namespace text_format {
 namespace number_format_detail {
 namespace {
 
-// Returns 10^N for small non-negative N. Always fits in a long long for
-// the digit-counts we accept (Excel caps fraction placeholder runs well
-// below 18 digits in practice; for safety we cap at 9 here).
-long long fraction_pow10(int n) noexcept {
-  long long r = 1;
+// Excel caps variable-denominator approximation at seven digits even when
+// the format has more placeholders. The improper numerator is a decimal
+// string: a finite double's whole part can run to 309 digits.
+constexpr std::uint64_t kMaxVariableDenominator = 9999999ULL;
+
+// Compute 10^N without overflow for the supported placeholder widths.
+// best_rational applies Excel's seven-digit variable-denominator cap; wider
+// placeholder runs retain their layout.
+std::uint64_t fraction_pow10(int n) noexcept {
+  std::uint64_t r = 1;
   for (int i = 0; i < n && i < 18; ++i) {
     r *= 10;
   }
   return r;
 }
 
-// Stern-Brocot bounded mediant search. Returns the best (num, den) with
-// `1 <= den <= max_q` and `0 <= num <= max_p`, ties broken by smaller den
-// then smaller num (the search's natural traversal order).
-void best_rational(double target, long long max_p, long long max_q, long long* out_num, long long* out_den) noexcept {
+std::uint64_t rounded_product(double target, std::uint64_t denominator) noexcept {
+  const long double product = static_cast<long double>(target) * static_cast<long double>(denominator);
+  if (!(product > 0.0L)) {
+    return 0;
+  }
+  const long double rounded = std::floor(product + 0.5L);
+  if (rounded >= static_cast<long double>(denominator)) {
+    return denominator;
+  }
+  return static_cast<std::uint64_t>(rounded);
+}
+
+struct RationalCandidate {
+  std::uint64_t numerator = 0;
+  std::uint64_t denominator = 1;
+  long double error = std::numeric_limits<long double>::max();
+};
+
+// Long double supplies arithmetic headroom for the bounded search. Candidate
+// comparisons account for the input's double precision on every platform.
+void consider_candidate(long double target, std::uint64_t numerator, std::uint64_t denominator,
+                        RationalCandidate* best) noexcept {
+  if (denominator == 0) {
+    return;
+  }
+  const long double approximation = static_cast<long double>(numerator) / static_cast<long double>(denominator);
+  const long double error = std::fabs(target - approximation);
+  // Excel treats adjacent binary64 values at a rational midpoint as ties
+  // (17/144 with a one-digit denominator chooses 1/8, not 1/9). Use the
+  // input's precision rather than platform-dependent long-double precision.
+  // Scale the bound by approximation error, so an exact rational never ties
+  // with a non-exact one and tiny fractions remain distinguishable from zero.
+  const long double tie_bound = 32.0L * std::numeric_limits<double>::epsilon() * std::max(error, best->error);
+  const bool tied = std::fabs(error - best->error) <= tie_bound;
+  if ((!tied && error < best->error) || (tied && (denominator < best->denominator ||
+                                                  (denominator == best->denominator && numerator < best->numerator)))) {
+    best->numerator = numerator;
+    best->denominator = denominator;
+    best->error = error;
+  }
+}
+
+// Bounded continued-fraction search. It keeps the convergents in an integer
+// denominator and jumps over large partial quotients, avoiding the linear
+// Stern-Brocot walk that made values such as 1/20000 hit its iteration cap.
+void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, std::uint64_t* out_den) noexcept {
+  max_q = std::min(max_q, kMaxVariableDenominator);
   if (max_q < 1) {
     max_q = 1;
   }
-  if (max_p < 0) {
-    max_p = 0;
-  }
-  long long a_num = 0;
-  long long a_den = 1;
-  long long b_num = 1;
-  long long b_den = 0;  // Represents +infinity.
-  long long best_num = 0;
-  long long best_den = 1;
-  double best_err = std::fabs(target - 0.0);
-  for (int iter = 0; iter < 10000; ++iter) {
-    const long long m_num = a_num + b_num;
-    const long long m_den = a_den + b_den;
-    if (m_den > max_q || m_num > max_p) {
+  const long double target_decimal = static_cast<long double>(target);
+  RationalCandidate best;
+
+  auto consider_boundary = [&](std::uint64_t denominator) noexcept {
+    if (denominator > 0) {
+      consider_candidate(target_decimal, rounded_product(target, denominator), denominator, &best);
+    }
+  };
+
+  // A denominator-one endpoint is always a useful initial candidate,
+  // including tiny fractional parts whose first continued-fraction term
+  // exceeds the denominator range.
+  consider_boundary(1);
+
+  long double x = static_cast<long double>(target);
+  std::uint64_t p_prev2 = 0;
+  std::uint64_t p_prev1 = 1;
+  std::uint64_t q_prev2 = 1;
+  std::uint64_t q_prev1 = 0;
+  for (int iter = 0; iter < 256 && std::isfinite(x); ++iter) {
+    const long double a_value = std::floor(x);
+    if (a_value < 0.0L) {
       break;
     }
-    const double m = static_cast<double>(m_num) / static_cast<double>(m_den);
-    const double err = std::fabs(target - m);
-    if (err < best_err) {
-      best_err = err;
-      best_num = m_num;
-      best_den = m_den;
-    }
-    if (target < m) {
-      b_num = m_num;
-      b_den = m_den;
-    } else if (target > m) {
-      a_num = m_num;
-      a_den = m_den;
-    } else {
+    if (q_prev2 > max_q) {
+      consider_boundary(max_q);
       break;
     }
+    const std::uint64_t quotient_limit = q_prev1 == 0 ? max_q : (max_q - q_prev2) / q_prev1;
+    // Compare before converting the partial quotient. On platforms where
+    // long double is the same precision as double, UINT64_MAX itself is not
+    // distinguishable from its neighbouring values; the bounded quotient
+    // limit keeps every subsequent cast below 1e18 and therefore defined.
+    if (a_value >= static_cast<long double>(quotient_limit) + 1.0L) {
+      // Excel returns zero when even the first reciprocal is outside the
+      // denominator range; it does not substitute 1/max_q at this boundary.
+      if (p_prev1 == 0 && q_prev1 == 1) {
+        break;
+      }
+      const std::uint64_t t = quotient_limit;
+      if (t > 0) {
+        consider_candidate(target_decimal, p_prev2 + p_prev1 * t, q_prev2 + q_prev1 * t, &best);
+      }
+      consider_candidate(target_decimal, p_prev1, q_prev1, &best);
+      consider_boundary(max_q);
+      break;
+    }
+    const std::uint64_t a = static_cast<std::uint64_t>(a_value);
+
+    if (a != 0 && p_prev1 > (std::numeric_limits<std::uint64_t>::max() - p_prev2) / a) {
+      consider_boundary(max_q);
+      break;
+    }
+    const std::uint64_t p = p_prev2 + p_prev1 * a;
+    const std::uint64_t q = q_prev2 + q_prev1 * a;
+    if (q > max_q || q == 0) {
+      consider_boundary(max_q);
+      break;
+    }
+    consider_candidate(target_decimal, p, q, &best);
+    const long double fractional = x - a_value;
+    if (fractional == 0.0L) {
+      break;
+    }
+    p_prev2 = p_prev1;
+    p_prev1 = p;
+    q_prev2 = q_prev1;
+    q_prev1 = q;
+    x = 1.0L / fractional;
   }
-  *out_num = best_num;
-  *out_den = best_den < 1 ? 1 : best_den;
+
+  *out_num = best.numerator;
+  *out_den = best.denominator < 1 ? 1 : best.denominator;
+}
+
+// Multiply a decimal digit string by an 18-digit-or-smaller denominator. The
+// per-digit product plus carry is at most 9e18 + 1e18, safely below UINT64_MAX.
+std::string multiply_decimal(std::string_view digits, std::uint64_t multiplier) {
+  if (multiplier == 0 || digits.empty() || (digits.size() == 1 && digits[0] == '0')) {
+    return "0";
+  }
+  std::string reversed;
+  reversed.reserve(digits.size() + 20);
+  std::uint64_t carry = 0;
+  for (std::size_t i = digits.size(); i > 0; --i) {
+    const std::uint64_t digit = static_cast<std::uint64_t>(digits[i - 1] - '0');
+    const std::uint64_t product = digit * multiplier + carry;
+    reversed.push_back(static_cast<char>('0' + product % 10U));
+    carry = product / 10U;
+  }
+  while (carry != 0) {
+    reversed.push_back(static_cast<char>('0' + carry % 10U));
+    carry /= 10U;
+  }
+  std::reverse(reversed.begin(), reversed.end());
+  return reversed;
+}
+
+std::string add_decimal(std::string_view digits, std::uint64_t addend) {
+  const std::string addend_digits = std::to_string(addend);
+  std::string reversed;
+  reversed.reserve(std::max(digits.size(), addend_digits.size()) + 1);
+  std::size_t i = digits.size();
+  std::size_t j = addend_digits.size();
+  std::uint64_t carry = 0;
+  while (i > 0 || j > 0 || carry != 0) {
+    std::uint64_t sum = carry;
+    if (i > 0) {
+      sum += static_cast<std::uint64_t>(digits[--i] - '0');
+    }
+    if (j > 0) {
+      sum += static_cast<std::uint64_t>(addend_digits[--j] - '0');
+    }
+    reversed.push_back(static_cast<char>('0' + sum % 10U));
+    carry = sum / 10U;
+  }
+  if (reversed.empty()) {
+    reversed.push_back('0');
+  }
+  std::reverse(reversed.begin(), reversed.end());
+  return reversed;
 }
 
 // Emit the non-negative integer `digits` right-aligned to `width` characters
@@ -90,7 +217,8 @@ void best_rational(double target, long long max_p, long long max_q, long long* o
 // determines how unused leading positions render: `0` -> '0' pad, `?` ->
 // space pad, `#` -> nothing emitted. The DBNum mapping applies to digits
 // (and to `0`-pad positions) but never to spaces or absent positions.
-void emit_fraction_digits(const Section& section, std::string_view digits, int begin, int end, std::string& out) {
+void emit_fraction_digits(const Section& section, std::string_view digits, int begin, int end, std::string& out,
+                          bool trailing_pad = false) {
   const int width = end - begin;
   if (width <= 0) {
     return;
@@ -109,7 +237,8 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
   std::size_t digit_cursor = 0;
   for (int k = 0; k < width; ++k) {
     const Tok kind = section.tokens[static_cast<std::size_t>(begin + k)].kind;
-    if (k < pad) {
+    const bool is_padding = trailing_pad ? k >= static_cast<int>(digits.size()) : k < pad;
+    if (is_padding) {
       // Leading-position behaviour by placeholder kind.
       if (kind == Tok::DigitZero) {
         append_digit_dbnum(out, section.dbnum_mode, '0');
@@ -118,7 +247,7 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
       }
       // `#`: emit nothing.
     } else {
-      const char d = digits[digit_cursor++];
+      const char d = trailing_pad ? digits[static_cast<std::size_t>(k)] : digits[digit_cursor++];
       append_digit_dbnum(out, section.dbnum_mode, d);
     }
   }
@@ -126,7 +255,7 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
 
 }  // namespace
 
-void render_fraction(const Section& section, std::string_view fmt, double value, std::string& out) {
+FormatStatus render_fraction(const Section& section, std::string_view fmt, double value, std::string& out) {
   // Sign: emit minus prefix on the rendered form for negative values, then
   // operate on the absolute magnitude. Excel's fraction format does not
   // honour `?`/`#` for sign placement -- the leading `-` is unconditional.
@@ -135,43 +264,53 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
 
   const bool has_int_group = section.fraction_int_max_digits > 0;
 
-  // Compute integer part and fraction target. When no integer group is
-  // present (`?/?`-style improper fractions), the search runs against the
-  // full magnitude and the numerator is allowed to exceed 1.
+  // Split the magnitude before approximation. The bounded search only needs
+  // the fractional part, while an improper numerator is assembled as
+  // `whole * denominator + fraction_numerator` below using decimal strings.
+  // That preserves values whose whole part is wider than uint64_t.
   double integer_part = 0.0;
   double target = abs_v;
-  if (has_int_group) {
-    integer_part = std::floor(abs_v);
-    target = abs_v - integer_part;
-  }
+  integer_part = std::floor(abs_v);
+  target = abs_v - integer_part;
 
-  // Run the bounded Stern-Brocot search.
-  const long long max_p = fraction_pow10(section.fraction_num_max_digits) - 1;
-  const long long max_q = fraction_pow10(section.fraction_den_max_digits) - 1;
-  long long num = 0;
-  long long den = 1;
-  // For improper fractions (no integer group) the numerator bound is the
-  // raw cap; for proper fractions (target < 1) Stern-Brocot's invariant
-  // `m_num <= m_den` means the cap on `p` is implicitly at most `max_q`,
-  // so passing the raw `max_p` is also safe.
-  best_rational(target, max_p, max_q, &num, &den);
+  std::uint64_t fraction_num = 0;
+  std::uint64_t den = 1;
+  if (section.fraction_fixed_denominator) {
+    den = section.fraction_fixed_denominator_value;
+    fraction_num = rounded_product(target, den);
+  } else {
+    // The numerator is a layout concern only. Removing its placeholder cap
+    // is required for improper forms such as `?/?` -> `2469/2`; the whole
+    // part is folded in after this bounded fractional search.
+    const std::uint64_t max_q = fraction_pow10(section.fraction_den_max_digits) - 1U;
+    best_rational(target, max_q, &fraction_num, &den);
+  }
 
   // Rounding promotion: if the best approximation rounds up to 1 exactly
   // (num == den) and we have an integer group, increment the integer and
   // zero out the fraction.
-  if (has_int_group && num == den) {
+  if (has_int_group && fraction_num == den) {
     integer_part += 1.0;
-    num = 0;
+    if (!std::isfinite(integer_part)) {
+      return FormatStatus::kOverflow;
+    }
+    fraction_num = 0;
     den = 1;
   }
   // A whole value shows no fraction, but keeps its width: the separator,
   // numerator, slash and denominator each become blanks (`59    ` for
   // `# ?/?`), and a zero integer is shown even under `#`.
-  const bool suppress_fraction = has_int_group && num == 0;
+  const bool suppress_fraction = has_int_group && fraction_num == 0;
   char int_buf[400];
   const int int_len = std::snprintf(int_buf, sizeof(int_buf), "%.0f", integer_part);
+  if (int_len < 0 || static_cast<std::size_t>(int_len) >= sizeof(int_buf)) {
+    return FormatStatus::kOverflow;
+  }
   std::string int_digits(int_buf, int_len > 0 ? static_cast<std::size_t>(int_len) : 0U);
   cap_integer_significant_digits(&int_digits);
+  const std::string numerator_digits =
+      has_int_group ? std::to_string(fraction_num) : add_decimal(multiply_decimal(int_digits, den), fraction_num);
+  const std::string denominator_digits = std::to_string(den);
 
   std::string result;
   if (negative) {
@@ -252,10 +391,10 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
       ++i;
     }
     out.append(result);
-    return;
+    return FormatStatus::kOk;
   }
   // 4) Numerator group.
-  emit_fraction_digits(section, std::to_string(num), num_begin, num_end, result);
+  emit_fraction_digits(section, numerator_digits, num_begin, num_end, result);
   i = static_cast<std::size_t>(num_end);
   // 5) Literals up to the slash (including the slash itself).
   while (i <= static_cast<std::size_t>(slash_index)) {
@@ -263,7 +402,28 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
     ++i;
   }
   // 6) Denominator group.
-  emit_fraction_digits(section, std::to_string(den), den_begin, den_end, result);
+  if (section.fraction_fixed_denominator) {
+    // Excel treats a raw denominator with a leading zero as a fixed numeric
+    // value while displaying zeros for its significant digit width.
+    // The remaining positions become spaces (`/008` -> `0  `), whereas
+    // an unprefixed fixed denominator is copied as its numeric digits.
+    const bool has_zero_prefix =
+        den_begin < den_end && section.tokens[static_cast<std::size_t>(den_begin)].kind == Tok::DigitZero;
+    if (!has_zero_prefix) {
+      result.append(denominator_digits);
+    } else {
+      for (std::size_t digit = 0; digit < denominator_digits.size(); ++digit) {
+        append_digit_dbnum(result, section.dbnum_mode, '0');
+      }
+      result.append(static_cast<std::size_t>(den_end - den_begin) - denominator_digits.size(), ' ');
+    }
+  } else {
+    // Denominator runs beginning with `0` are right-aligned; every other
+    // run is left-aligned so `?0` becomes `20` while `0?` becomes `02`.
+    const bool denominator_trailing_pad =
+        den_begin < den_end && section.tokens[static_cast<std::size_t>(den_begin)].kind != Tok::DigitZero;
+    emit_fraction_digits(section, denominator_digits, den_begin, den_end, result, denominator_trailing_pad);
+  }
   i = static_cast<std::size_t>(den_end);
   // 7) Trailing literals.
   while (i < n_tokens) {
@@ -272,6 +432,7 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
   }
 
   out.append(result);
+  return FormatStatus::kOk;
 }
 
 }  // namespace number_format_detail

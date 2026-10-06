@@ -46,10 +46,10 @@
 #include <cstdint>
 #include <vector>
 
-#include "eval/aggregate_kernels.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -131,7 +131,7 @@ bool collect_numeric(const Value* args, std::uint32_t arity, std::vector<double>
 }
 
 // Converts an `Expected<double, ErrorCode>` from a shared
-// `aggregate_kernels::run_*` call into the `Value` shape SUBTOTAL's
+// `numeric_aggregate_kernels::run_*` call into the `Value` shape SUBTOTAL's
 // dispatcher expects.
 Value lift_kernel_result(Expected<double, ErrorCode> result) {
   if (!result) {
@@ -146,7 +146,7 @@ Value run_sum(const Value* args, std::uint32_t arity) {
   if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  return lift_kernel_result(aggregate_kernels::run_sum(xs));
+  return lift_kernel_result(numeric_aggregate_kernels::run_sum(xs));
 }
 
 Value run_product(const Value* args, std::uint32_t arity) {
@@ -155,7 +155,7 @@ Value run_product(const Value* args, std::uint32_t arity) {
   if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  return lift_kernel_result(aggregate_kernels::run_product(xs));
+  return lift_kernel_result(numeric_aggregate_kernels::run_product(xs));
 }
 
 Value run_min_max(const Value* args, std::uint32_t arity, bool want_max) {
@@ -164,7 +164,7 @@ Value run_min_max(const Value* args, std::uint32_t arity, bool want_max) {
   if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  return lift_kernel_result(want_max ? aggregate_kernels::run_max(xs) : aggregate_kernels::run_min(xs));
+  return lift_kernel_result(want_max ? numeric_aggregate_kernels::run_max(xs) : numeric_aggregate_kernels::run_min(xs));
 }
 
 Value run_average(const Value* args, std::uint32_t arity) {
@@ -173,7 +173,7 @@ Value run_average(const Value* args, std::uint32_t arity) {
   if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  return lift_kernel_result(aggregate_kernels::run_average(xs));
+  return lift_kernel_result(numeric_aggregate_kernels::run_average(xs));
 }
 
 Value run_count(const Value* args, std::uint32_t arity) {
@@ -204,7 +204,7 @@ Value run_variance(const Value* args, std::uint32_t arity, bool population) {
   if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  return lift_kernel_result(aggregate_kernels::run_variance(xs, /*sample=*/!population));
+  return lift_kernel_result(numeric_aggregate_kernels::run_variance(xs, /*sample=*/!population));
 }
 
 Value run_stdev(const Value* args, std::uint32_t arity, bool population) {
@@ -213,7 +213,7 @@ Value run_stdev(const Value* args, std::uint32_t arity, bool population) {
   if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  return lift_kernel_result(aggregate_kernels::run_stdev(xs, /*sample=*/!population));
+  return lift_kernel_result(numeric_aggregate_kernels::run_stdev(xs, /*sample=*/!population));
 }
 
 }  // namespace

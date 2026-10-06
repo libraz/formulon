@@ -1,14 +1,15 @@
 //
 // Implementation of the numeric aggregation kernels declared in
-// `aggregate_kernels.h`. See that header for the rationale around algorithm
+// `numeric_aggregate_kernels.h`. See that header for the rationale around algorithm
 // choice (two-pass variance, Excel-aligned percentile position formulas).
 
-#include "eval/aggregate_kernels.h"
+#include "numeric_aggregate_kernels.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "utils/expected.h"
@@ -16,8 +17,7 @@
 #include "value.h"
 
 namespace formulon {
-namespace eval {
-namespace aggregate_kernels {
+namespace numeric_aggregate_kernels {
 namespace {
 
 // Mean of the two middle elements, computed so that a pair whose sum
@@ -29,6 +29,22 @@ double midpoint_without_overflow(double low, double high) {
     return low + (high - low) * 0.5;
   }
   return low * 0.5 + high * 0.5;
+}
+
+// Collects the numeric elements of `view` in source order; `nullopt` elements
+// are skipped.
+std::vector<double> materialize(const NumericInputView& view) {
+  std::vector<double> xs;
+  if (view.get == nullptr) {
+    return xs;
+  }
+  xs.reserve(view.size);
+  for (std::size_t i = 0; i < view.size; ++i) {
+    if (const std::optional<double> value = view.get(view.context, i); value.has_value()) {
+      xs.push_back(*value);
+    }
+  }
+  return xs;
 }
 
 }  // namespace
@@ -56,6 +72,10 @@ Expected<double, ErrorCode> run_product(const std::vector<double>& xs) {
     return ErrorCode::Num;
   }
   return total;
+}
+
+Expected<double, ErrorCode> run_average(const NumericInputView& values) {
+  return run_average(materialize(values));
 }
 
 Expected<double, ErrorCode> run_average(const std::vector<double>& xs) {
@@ -104,6 +124,10 @@ Expected<double, ErrorCode> run_min(const std::vector<double>& xs) {
   return run_extreme(xs, /*want_max=*/false);
 }
 
+Expected<double, ErrorCode> run_variance(const NumericInputView& values, bool sample) {
+  return run_variance(materialize(values), sample);
+}
+
 Expected<double, ErrorCode> run_variance(const std::vector<double>& xs, bool sample) {
   const std::size_t n = xs.size();
   const std::size_t need = sample ? 2U : 1U;
@@ -129,6 +153,10 @@ Expected<double, ErrorCode> run_variance(const std::vector<double>& xs, bool sam
     return ErrorCode::Num;
   }
   return var;
+}
+
+Expected<double, ErrorCode> run_stdev(const NumericInputView& values, bool sample) {
+  return run_stdev(materialize(values), sample);
 }
 
 Expected<double, ErrorCode> run_stdev(const std::vector<double>& xs, bool sample) {
@@ -256,6 +284,5 @@ Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs)
   return best_value;
 }
 
-}  // namespace aggregate_kernels
-}  // namespace eval
+}  // namespace numeric_aggregate_kernels
 }  // namespace formulon

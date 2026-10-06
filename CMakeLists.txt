@@ -167,6 +167,7 @@ set(FORMULON_CORE_SOURCES
   src/io/pivot_table_writer.cpp
   src/io/format_detect.cpp
   src/io/sax_xml_reader.cpp
+  src/io/sheet_layout_reader.cpp
   src/io/sheet_overlay_reader.cpp
   src/io/sheet_reader.cpp
   src/io/sst_reader.cpp
@@ -219,6 +220,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/ast_format_r1c1.cpp
   src/parser/formula_prefix.cpp
   src/parser/ast_shift.cpp
+  src/parser/parse_error.cpp
   src/parser/parser.cpp
   src/parser/parser_atoms.cpp
   src/parser/parser_reference.cpp
@@ -319,6 +321,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/text_format/render_date.cpp
   src/eval/text_format/render_fraction.cpp
   src/eval/stats/special_functions.cpp
+  src/eval/tree_walker/binding_source.cpp
   src/eval/tree_walker/broadcast.cpp
   src/eval/tree_walker/dispatch.cpp
   src/eval/tree_walker/lambda_invoke.cpp
@@ -342,7 +345,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/spill_committer.cpp
   src/eval/special_forms_lazy.cpp
   src/eval/structured_ref.cpp
-  src/eval/aggregate_kernels.cpp
+  src/numeric_aggregate_kernels.cpp
 src/eval/aggregate_lazy.cpp
   src/eval/areas_lazy.cpp
   src/eval/cell_lazy.cpp

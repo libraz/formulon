@@ -44,6 +44,7 @@
 #include "parser/parser.h"
 #include "phonetic.h"
 #include "sheet.h"
+#include "style_resolve.h"
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
@@ -58,11 +59,35 @@ namespace {
 // Cell emission
 // ---------------------------------------------------------------------------
 
+// True when a cell's explicit default style must be written as `s="0"`: only a
+// blank, formula-less cell does not own its style, so only there does the
+// attribute carry meaning (it blocks row/column style inheritance).
+bool ForcesDefaultStyle(const Cell& cell) {
+  return cell.has_explicit_xf && cell.formula_text.empty() && cell.cached_value.is_blank();
+}
+
+// True when a row or column style would apply to `(row, col)` were its own
+// style not written; an explicit default style is only observable then.
+bool InheritsNonDefaultStyle(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
+  const SheetLayout& layout = sheet.layout();
+  for (const RowLayout& r : layout.row_overrides) {
+    if (r.row == row && r.has_style && r.style_xf != 0U) {
+      return true;
+    }
+  }
+  for (const ColumnLayout& c : layout.columns) {
+    if (c.first <= col && col <= c.last && c.has_style && c.style_xf != 0U) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Emits an `s="N"` attribute when `xf_index` is non-zero. The default
-// xf (index 0) is omitted for byte parity with Excel's writer, which
-// emits `<c>` without `s=` for the default-formatted majority of cells.
-void AppendStyleAttr(std::string& out, std::uint32_t xf_index) {
-  if (xf_index == 0U) {
+// xf (index 0) is omitted for byte parity with Excel's writer unless `force`
+// is set (see `ForcesDefaultStyle`).
+void AppendStyleAttr(std::string& out, std::uint32_t xf_index, bool force) {
+  if (xf_index == 0U && !force) {
     return;
   }
   out.append(" s=\"");
@@ -71,11 +96,12 @@ void AppendStyleAttr(std::string& out, std::uint32_t xf_index) {
 }
 
 // Emits the <c> element for an Error value at `addr`.
-void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code, std::uint32_t xf_index) {
+void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code, std::uint32_t xf_index,
+                        bool force_style) {
   out.append("<c r=\"");
   out.append(addr);
   out.append("\"");
-  AppendStyleAttr(out, xf_index);
+  AppendStyleAttr(out, xf_index, force_style);
   out.append(" t=\"e\"><v>");
   out.append(display_name(stored_cell_error(code)));
   out.append("</v></c>");
@@ -103,9 +129,9 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // block would read kana over characters it does not cover.
 void AppendLiteralCellBody(std::string& out, const Value& value, const std::vector<PhoneticRun>& phonetic,
                            PhoneticProperties phonetic_props, const SharedStrings* shared_strings,
-                           std::uint32_t xf_index) {
+                           std::uint32_t xf_index, bool force_style) {
   out.push_back('"');
-  AppendStyleAttr(out, xf_index);
+  AppendStyleAttr(out, xf_index, force_style);
   if (value.is_number()) {
     // Defensive: NaN / +/-Inf must never reach append_xml_number, which
     // would emit `nan`/`inf` text inside `<v>` (Excel rejects this on
@@ -230,11 +256,11 @@ void AppendFormulaValue(std::string& out, const Value& cv) {
 // value typed as a formula result's, and `<f ca="1"/>` when the anchor is
 // recalculated every time (measured).
 void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col, std::uint32_t xf_index,
-                          const Value& value, bool always_calculates) {
+                          bool force_style, const Value& value, bool always_calculates) {
   out.append("<c r=\"");
   out.append(a1::encode_a1(row, col));
   out.append("\"");
-  AppendStyleAttr(out, xf_index);
+  AppendStyleAttr(out, xf_index, force_style);
   AppendFormulaValueType(out, value);
   out.push_back('>');
   if (always_calculates) {
@@ -261,7 +287,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // the <v> is downgraded.
   if (!has_formula && cell.cached_value.is_number() && !std::isfinite(cell.cached_value.as_number())) {
     const std::string addr = a1::encode_a1(row, col);
-    AppendErrorCellXml(out, addr, ErrorCode::Num, cell.xf_index);
+    AppendErrorCellXml(out, addr, ErrorCode::Num, cell.xf_index, ForcesDefaultStyle(cell));
     return true;
   }
 
@@ -274,7 +300,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     out.append("<c r=\"");
     out.append(addr);
     out.append("\"");
-    AppendStyleAttr(out, cell.xf_index);
+    AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell));
     out.append("/>");
     return true;
   }
@@ -306,7 +332,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // that tells Excel this `t="array"` is a modern spill rather than a
     // legacy CSE array on reopen; emitted only when the saved package
     // carries a resolved entry for it.
-    AppendStyleAttr(out, cell.xf_index);
+    AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell));
     AppendFormulaValueType(out, cell.cached_value);
     if (dynamic) {
       out.append(" cm=\"");
@@ -383,7 +409,8 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // through the inline-string block, spans intact.
   out.append("<c r=\"");
   out.append(addr);
-  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, shared_strings, cell.xf_index);
+  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, shared_strings, cell.xf_index,
+                        ForcesDefaultStyle(cell));
   return true;
 }
 
@@ -456,7 +483,9 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     const std::size_t idx =
         static_cast<std::size_t>(row - region->anchor_row) * region->cols + (col - region->anchor_col);
     const Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
-    AppendPhantomCellXml(body, row, col, col < stored ? row_cells[col].xf_index : 0U, value, it->second);
+    const bool force_style =
+        col < stored && ForcesDefaultStyle(row_cells[col]) && InheritsNonDefaultStyle(sheet, row, col);
+    AppendPhantomCellXml(body, row, col, select_effective_xf(sheet, row, col).xf_index, force_style, value, it->second);
   };
   for (std::uint32_t col = 0; col < stored; ++col) {
     if (sheet.spill_region_covering(row, col) != nullptr) {
@@ -492,7 +521,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
 }  // namespace
 
 bool CellIsEmitted(const Cell& cell) {
-  return !cell.formula_text.empty() || !cell.cached_value.is_blank() || cell.xf_index != 0U;
+  return !cell.formula_text.empty() || !cell.cached_value.is_blank() || cell.xf_index != 0U || cell.has_explicit_xf;
 }
 
 std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings,

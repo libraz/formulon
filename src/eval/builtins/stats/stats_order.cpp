@@ -22,9 +22,9 @@
 #include <utility>
 #include <vector>
 
-#include "eval/aggregate_kernels.h"
 #include "eval/array_alloc.h"
 #include "eval/builtins/stats/stats_helpers.h"
+#include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -35,11 +35,11 @@ namespace stats_detail {
 // MEDIAN(value, ...) - median of numeric values. Non-numerics are skipped;
 // an empty collection yields `#NUM!`. For an even count the result is the
 // arithmetic mean of the two middle elements. The arithmetic and the
-// error-code surface live in `aggregate_kernels::run_median`, which
+// error-code surface live in `numeric_aggregate_kernels::run_median`, which
 // AGGREGATE function 12 shares, so the two spellings of this aggregate
 // cannot drift apart.
 Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto result = aggregate_kernels::run_median(collect_numerics(args, arity));
+  auto result = numeric_aggregate_kernels::run_median(collect_numerics(args, arity));
   if (!result) {
     return Value::error(result.error());
   }
@@ -53,7 +53,7 @@ Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // surfaces cannot diverge.
 Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const std::vector<double> xs = collect_numerics(args, arity);
-  auto r = aggregate_kernels::mode_first_occurrence(xs);
+  auto r = numeric_aggregate_kernels::mode_first_occurrence(xs);
   if (!r) {
     return Value::error(r.error());
   }

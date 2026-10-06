@@ -225,6 +225,19 @@ TEST(BuiltinsStdevPA, SqrtOfVarpa) {
   EXPECT_DOUBLE_EQ(v.as_number(), std::sqrt(2.25));
 }
 
+TEST(BuiltinsStatsAExtreme, EqualLargeRangeOverflowIsNumError) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0e308));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(1.0e308));
+
+  for (const char* formula :
+       {"=AVERAGEA(A1:A2)", "=VARA(A1:A2)", "=VARPA(A1:A2)", "=STDEVA(A1:A2)", "=STDEVPA(A1:A2)"}) {
+    const Value result = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(result.is_error()) << formula << ": " << result.debug_to_string();
+    EXPECT_EQ(result.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Legacy VARP / STDEVP (aliases of VAR.P / STDEV.P, NOT A-variants).
 // ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -225,6 +226,47 @@ TEST(BuiltinsCellFormat, BuiltinNumberFormatCodes) {
   EXPECT_EQ(EvalSourceIn("=CELL(\"format\", A2)", wb, wb.sheet(0)).as_text(), "D1");
 }
 
+TEST(BuiltinsCellStyle, InheritedColumnStyleCoversSpillPhantomAndBlank) {
+  Workbook wb = Workbook::create();
+  StylesTable styles;
+  styles.cell_xfs.push_back(CellXf{});  // xf 0: explicit cell override/default.
+  CellXf column_style{};
+  column_style.num_fmt_id = 10U;  // 0.00%
+  column_style.has_protection = true;
+  column_style.locked = false;
+  styles.cell_xfs.push_back(column_style);  // xf 1: column B style.
+  wb.set_styles(std::move(styles));
+
+  ColumnLayout column_b{};
+  column_b.first = 1U;
+  column_b.last = 1U;
+  column_b.has_style = true;
+  column_b.style_xf = 1U;
+  wb.sheet(0).mutable_layout().columns.push_back(column_b);
+
+  // B1 is a materialised spill phantom, while B2 remains a genuinely blank
+  // cell. Both coordinates still inherit the column's effective style.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=B1")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+
+  const Value spill_ref = wb.sheet(0).cell_at(0U, 2U)->cached_value;
+  ASSERT_TRUE(spill_ref.is_number());
+  EXPECT_DOUBLE_EQ(spill_ref.as_number(), 2.0);
+
+  EXPECT_EQ(EvalSourceIn("=CELL(\"format\", B1)", wb, wb.sheet(0)).as_text(), "P2");
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=CELL(\"protect\", B1)", wb, wb.sheet(0)).as_number(), 0.0);
+  EXPECT_EQ(EvalSourceIn("=CELL(\"format\", B2)", wb, wb.sheet(0)).as_text(), "P2");
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=CELL(\"protect\", B2)", wb, wb.sheet(0)).as_number(), 0.0);
+
+  // A coordinate-level xf, including an explicit xf 0, takes precedence
+  // over the column style even when the coordinate is a spill phantom.
+  wb.sheet(0).set_cell_xf_index(0U, 1U, 0U);
+  EXPECT_EQ(EvalSourceIn("=CELL(\"format\", B1)", wb, wb.sheet(0)).as_text(), "G");
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=CELL(\"protect\", B1)", wb, wb.sheet(0)).as_number(), 1.0);
+}
+
 TEST(BuiltinsCellColor, DefaultFormatReturnsZero) {
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=CELL(\"color\", A1)", wb, wb.sheet(0));
@@ -345,6 +387,23 @@ TEST(BuiltinsCellProtect, ProtectionElementAbsentIsLocked) {
   wb.set_styles(std::move(styles));
   wb.sheet(0).set_cell_value(0, 0, Value::number(5.0));
   wb.sheet(0).set_cell_xf_index(0, 0, 1U);
+  const Value v = EvalSourceIn("=CELL(\"protect\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsCellProtect, AbsentProtectionElementDefaultsLocked) {
+  // The protection child is authoritative only when present. An in-memory
+  // false `locked` value without that child still has the OOXML default 1.
+  Workbook wb = Workbook::create();
+  StylesTable styles;
+  styles.cell_xfs.push_back(CellXf{});  // xf 0.
+  CellXf no_protection{};
+  no_protection.locked = false;
+  styles.cell_xfs.push_back(no_protection);
+  wb.set_styles(std::move(styles));
+  wb.sheet(0).set_cell_value(0U, 0U, Value::number(5.0));
+  wb.sheet(0).set_cell_xf_index(0U, 0U, 1U);
   const Value v = EvalSourceIn("=CELL(\"protect\", A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);

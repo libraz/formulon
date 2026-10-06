@@ -592,9 +592,9 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
 /// Column + style-table index decoded by `ReadCellHeader`.
 struct CellHeaderInfo {
   std::uint32_t col = 0;
-  /// 0-based index into `StylesTable::cell_xfs`. `0` is the default xf
-  /// and is never stored on a cell (mirrors the OOXML reader's
-  /// `xf_index != 0` guard before calling `set_cell_xf_index`).
+  /// 0-based index into `StylesTable::cell_xfs`. `0` is the default xf;
+  /// value records skip storing it, blank and formula records store it as an
+  /// explicit assignment.
   std::uint32_t xf_index = 0;
 };
 
@@ -628,8 +628,7 @@ Expected<CellHeaderInfo, Error> ReadCellHeader(ByteSpan& cursor) {
 }
 
 /// Stores `xf_index` on `(sheet_index, row, col)` when it differs from
-/// the default xf (`0`), mirroring the OOXML sheet reader's
-/// `xf_index != 0` guard before calling `Workbook::set_cell_xf_index`.
+/// the default xf (`0`); a value record's default style is implicit.
 Expected<void, Error> ApplyXfIndex(Workbook& wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                    std::uint32_t xf_index) {
   if (xf_index == 0) {
@@ -951,7 +950,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         return col_or.error();
       }
       wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::blank());
-      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+      if (auto r = wb.set_cell_xf_index(sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+          !r) {
         return r.error();
       }
       ++state.cells_decoded;
@@ -1233,7 +1233,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       if (!cached.is_blank()) {
         wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, cached);
       }
-      if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index); !r) {
+      if (auto r = wb.set_cell_xf_index(sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+          !r) {
         return r.error();
       }
       ++state.cells_decoded;

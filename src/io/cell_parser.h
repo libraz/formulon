@@ -90,6 +90,10 @@ struct ParsedCell {
   /// `s=` attribute on the `<c>` element. Defaults to `0` (the default
   /// xf) when the attribute is absent.
   std::uint32_t xf_index = 0;
+  /// True when the `<c>` element carried a non-empty `s=` attribute,
+  /// including an explicit `s="0"`. This distinguishes an explicitly
+  /// default-formatted cell from an unstyled storage gap.
+  bool has_explicit_xf = false;
 };
 
 /// Parses one `<c>` element. `node` must be a valid `<c>` element node;

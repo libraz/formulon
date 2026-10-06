@@ -50,6 +50,23 @@ TEST(DisplayRoundingTies, TextMatchesRoundOnTextifiedRound) {
   EXPECT_EQ(via_text, via_round);
 }
 
+TEST(DisplayRoundingSafety, LargeTextValuesAndScalingOverflow) {
+  EXPECT_EQ(EvalText("=TEXT(1E308,\"0\")"), "1" + std::string(308, '0'));
+  const Value value = EvalSource("=TEXT(1E307,\"0%\")");
+  ASSERT_TRUE(value.is_error());
+  EXPECT_EQ(value.as_error(), ErrorCode::Value);
+}
+
+TEST(DisplayRoundingSafety, HugeDecimalsReturnValueError) {
+  for (const char* formula : {"=FIXED(1,1E300)", "=FIXED(1,-1E300)", "=DOLLAR(1,1E300)", "=DOLLAR(1,-1E300)",
+                              "=USDOLLAR(1,1E300)", "=USDOLLAR(1,-1E300)"}) {
+    SCOPED_TRACE(formula);
+    const Value value = EvalSource(formula);
+    ASSERT_TRUE(value.is_error());
+    EXPECT_EQ(value.as_error(), ErrorCode::Value);
+  }
+}
+
 TEST(DisplayRoundingTies, FixedMatchesRound) {
   EXPECT_EQ(EvalText("=FIXED(1.005,2)"), "1.01");
   EXPECT_EQ(EvalText("=FIXED(2.675,2)"), "2.68");

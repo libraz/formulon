@@ -25,7 +25,7 @@ namespace number_format_detail {
 
 void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect) {
   std::vector<Token>& toks = out.tokens;
-  auto push_literal = [&](std::size_t b, std::size_t e) {
+  auto push_literal = [&](std::size_t b, std::size_t e, bool protected_literal = false) {
     if (b == e) {
       return;
     }
@@ -33,6 +33,7 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
     t.kind = Tok::Literal;
     t.lit_begin = b;
     t.lit_end = e;
+    t.protected_literal = protected_literal;
     toks.push_back(t);
   };
 
@@ -46,14 +47,23 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       while (j < fmt.size() && fmt[j] != '"') {
         ++j;
       }
-      push_literal(i + 1, j);
-      i = j < fmt.size() ? j + 1 : j;
+      if (j == fmt.size()) {
+        out.has_invalid_bracket = true;
+        return;
+      }
+      push_literal(i + 1, j, true);
+      i = j + 1;
       continue;
+    }
+    // Escape, spacing, and fill operators each require a following scalar.
+    if ((c == '\\' || c == '!' || c == '_' || c == '*') && i + 1 == fmt.size()) {
+      out.has_invalid_bracket = true;
+      return;
     }
     // Escape `\x` or `!x` -> next UTF-8 scalar is a literal.
     if ((c == '\\' || c == '!') && i + 1 < fmt.size()) {
       const std::size_t payload_width = utf8_scalar_width(fmt, i + 1);
-      push_literal(i + 1, i + 1 + payload_width);
+      push_literal(i + 1, i + 1 + payload_width, true);
       i += 1 + payload_width;
       continue;
     }
@@ -71,8 +81,12 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       while (j < fmt.size() && fmt[j] != ']') {
         ++j;
       }
-      const std::string_view body = fmt.substr(body_begin, (j < fmt.size() ? j : fmt.size()) - body_begin);
-      i = j < fmt.size() ? j + 1 : j;
+      if (j == fmt.size()) {
+        out.has_invalid_bracket = true;
+        return;
+      }
+      const std::string_view body = fmt.substr(body_begin, j - body_begin);
+      i = j + 1;
       // Elapsed time markers: any run of `h`, `m`, or `s` (case-insensitive).
       bool all_h = !body.empty();
       bool all_m = !body.empty();
@@ -92,12 +106,12 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       if (all_h) {
         Token t;
         t.kind = Tok::DateElapsedH;
-        t.width = static_cast<std::uint8_t>(body.size());
+        t.width = body.size();
         toks.push_back(t);
       } else if (all_m) {
         Token t;
         t.kind = Tok::DateElapsedM;
-        t.width = static_cast<std::uint8_t>(body.size());
+        t.width = body.size();
         toks.push_back(t);
       } else if (!body.empty() && body.front() == '$') {
         // Locale-currency marker. Form: `[$<symbol>-<lcid>]` or `[$<symbol>]`
@@ -120,7 +134,7 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       } else if (all_s) {
         Token t;
         t.kind = Tok::DateElapsedS;
-        t.width = static_cast<std::uint8_t>(body.size());
+        t.width = body.size();
         toks.push_back(t);
       } else if (is_color_specifier(body, dialect)) {
         // Named colour (`[赤]`) or indexed colour (`[色12]`). Excel discards
@@ -173,8 +187,7 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
     }
     // Underscore-skip `_X`: Excel reserves the width of character `X` and
     // emits a matching amount of whitespace. TEXT's output uses a single
-    // space regardless of `X`. If `_` is the last byte of the format with
-    // nothing following, fall through to the single-byte literal path.
+    // space regardless of `X`.
     if (c == '_' && i + 1 < fmt.size()) {
       Token t;
       t.kind = Tok::Space;
@@ -184,9 +197,7 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
     }
     // Asterisk-fill `*X`: in cell formats this pads the cell with `X` to
     // fill the column width. TEXT() has no column width, so Mac Excel 365
-    // emits this as a no-op (both `*` and the fill char are skipped). If
-    // `*` is the last byte of the format with nothing following, fall
-    // through to the single-byte literal path.
+    // emits this as a no-op (both `*` and the fill char are skipped).
     if (c == '*' && i + 1 < fmt.size()) {
       i += 1 + utf8_scalar_width(fmt, i + 1);
       continue;
@@ -438,6 +449,19 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       }
       default:
         break;
+    }
+    // An unquoted slash is a structural fraction separator candidate. Keep
+    // its exact source range so the classifier can distinguish it from a
+    // quoted or escaped slash payload.
+    if (c == '/') {
+      Token t;
+      t.kind = Tok::Literal;
+      t.lit_begin = i;
+      t.lit_end = i + 1;
+      t.fraction_slash_candidate = true;
+      toks.push_back(t);
+      ++i;
+      continue;
     }
     // Fallback: preserve one complete UTF-8 scalar as a literal. Malformed
     // input is consumed one byte at a time by `utf8_scalar_width`, so it is

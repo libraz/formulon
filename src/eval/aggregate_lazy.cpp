@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "auto_filter.h"
-#include "eval/aggregate_kernels.h"
 #include "eval/builtin_names.h"
 #include "eval/builtins/subtotal.h"
 #include "eval/coerce.h"
@@ -19,6 +18,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
+#include "numeric_aggregate_kernels.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -532,7 +532,7 @@ std::vector<double> to_numbers(const std::vector<Value>& cells) {
 // ---------------------------------------------------------------------------
 // Mode runners (codes 1..13). The numeric-aggregator slots (SUM / PRODUCT /
 // MIN / MAX / AVERAGE / VAR.* / STDEV.*) all delegate to the shared kernels
-// in `aggregate_kernels.h` so SUBTOTAL and AGGREGATE cannot drift. Empty-
+// in `numeric_aggregate_kernels.h` so SUBTOTAL and AGGREGATE cannot drift. Empty-
 // range behaviour matches Excel's convention for SUBTOTAL / AGGREGATE:
 // SUM/PRODUCT/MIN/MAX -> 0, AVERAGE/VAR/STDEV -> #DIV/0!, MEDIAN -> #DIV/0!,
 // COUNT/COUNTA -> 0, MODE.SNGL -> #N/A.
@@ -584,19 +584,19 @@ Value run_large_small(std::vector<double> xs, double k_raw, bool want_large) {
 }
 
 // PERCENTILE.INC. Domain / position-formula logic lives in
-// `aggregate_kernels::percentile_sorted_inc`; this wrapper sorts in place
+// `numeric_aggregate_kernels::percentile_sorted_inc`; this wrapper sorts in place
 // and lifts the kernel result to `Value`.
 Value run_percentile_inc(std::vector<double> xs, double p) {
   std::sort(xs.begin(), xs.end());
-  return lift_kernel_result(aggregate_kernels::percentile_sorted_inc(xs, p));
+  return lift_kernel_result(numeric_aggregate_kernels::percentile_sorted_inc(xs, p));
 }
 
 // PERCENTILE.EXC. Domain / position-formula logic lives in
-// `aggregate_kernels::percentile_sorted_exc`; this wrapper sorts in place
+// `numeric_aggregate_kernels::percentile_sorted_exc`; this wrapper sorts in place
 // and lifts the kernel result to `Value`.
 Value run_percentile_exc(std::vector<double> xs, double p) {
   std::sort(xs.begin(), xs.end());
-  return lift_kernel_result(aggregate_kernels::percentile_sorted_exc(xs, p));
+  return lift_kernel_result(numeric_aggregate_kernels::percentile_sorted_exc(xs, p));
 }
 
 // QUARTILE.INC delegates to PERCENTILE.INC at p ∈ {0, 0.25, 0.5, 0.75, 1.0}.
@@ -764,35 +764,35 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
 
   switch (code) {
     case kCodeAverage:
-      return lift_kernel_result(aggregate_kernels::run_average(to_numbers(cells)));
+      return lift_kernel_result(numeric_aggregate_kernels::run_average(to_numbers(cells)));
     case kCodeCount:
       return run_count(cells);
     case kCodeCountA:
       return run_counta(cells);
     case kCodeMax:
-      return lift_kernel_result(aggregate_kernels::run_max(to_numbers(cells)));
+      return lift_kernel_result(numeric_aggregate_kernels::run_max(to_numbers(cells)));
     case kCodeMin:
-      return lift_kernel_result(aggregate_kernels::run_min(to_numbers(cells)));
+      return lift_kernel_result(numeric_aggregate_kernels::run_min(to_numbers(cells)));
     case kCodeProduct:
-      return lift_kernel_result(aggregate_kernels::run_product(to_numbers(cells)));
+      return lift_kernel_result(numeric_aggregate_kernels::run_product(to_numbers(cells)));
     case kCodeStdevS:
-      return lift_kernel_result(aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/true));
+      return lift_kernel_result(numeric_aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/true));
     case kCodeStdevP:
-      return lift_kernel_result(aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/false));
+      return lift_kernel_result(numeric_aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/false));
     case kCodeSum:
-      return lift_kernel_result(aggregate_kernels::run_sum(to_numbers(cells)));
+      return lift_kernel_result(numeric_aggregate_kernels::run_sum(to_numbers(cells)));
     case kCodeVarS:
-      return lift_kernel_result(aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/true));
+      return lift_kernel_result(numeric_aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/true));
     case kCodeVarP:
-      return lift_kernel_result(aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/false));
+      return lift_kernel_result(numeric_aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/false));
     case kCodeMedian:
       // The shared kernel sorts internally; do NOT pre-sort. Its empty-slice
       // code is `#NUM!`, which is what standalone MEDIAN reports.
-      return lift_kernel_result(aggregate_kernels::run_median(to_numbers(cells)));
+      return lift_kernel_result(numeric_aggregate_kernels::run_median(to_numbers(cells)));
     case kCodeModeSngl:
       // First-occurrence tie-break (Excel MODE.SNGL): the shared kernel
       // consumes the cells in input order, so do NOT sort first.
-      return lift_kernel_result(aggregate_kernels::mode_first_occurrence(to_numbers(cells)));
+      return lift_kernel_result(numeric_aggregate_kernels::mode_first_occurrence(to_numbers(cells)));
     default:
       // Unreachable: code is constrained to [1, 13] in this branch.
       return Value::error(ErrorCode::Value);

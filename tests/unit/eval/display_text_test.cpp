@@ -151,6 +151,10 @@ const ProbeRow kProbeRows[] = {
     {"hidden;;;/1e-05", false, R"fmt(;;;)fmt", Value::number(1e-05), DisplayStatus::kOk, ""},
     {"hidden;;;/1000000000000000.0", false, R"fmt(;;;)fmt", Value::number(1000000000000000.0), DisplayStatus::kOk, ""},
     {"hidden;;;/123456789012345678", false, R"fmt(;;;)fmt", Value::number(123456789012345678), DisplayStatus::kOk, ""},
+    {"cond-miss/1", false, R"fmt([>10]0;[<0]0)fmt", Value::number(1), DisplayStatus::kOverflow, "########"},
+    {"cond-miss/0", false, R"fmt([>10]0;[<0]0)fmt", Value::number(0), DisplayStatus::kOverflow, "########"},
+    {"cond-miss/-5", false, R"fmt(0;[>10]0)fmt", Value::number(-5), DisplayStatus::kOverflow, "########"},
+    {"cond-miss/0-second", false, R"fmt(0;[>10]0)fmt", Value::number(0), DisplayStatus::kOverflow, "########"},
     {"date/0", false, R"fmt(yyyy/m/d)fmt", Value::number(0), DisplayStatus::kOk, "1900/1/0"},
     {"date/59", false, R"fmt(yyyy/m/d)fmt", Value::number(59), DisplayStatus::kOk, "1900/2/28"},
     {"date/60", false, R"fmt(yyyy/m/d)fmt", Value::number(60), DisplayStatus::kOk, "1900/2/29"},
@@ -861,6 +865,15 @@ TEST(DisplayText, NegativeDateOverflows) {
   const DisplayText t = format_value_for_display(Value::number(-1234.5678), "h:mm:ss", false);
   EXPECT_EQ(t.status, DisplayStatus::kOverflow);
   EXPECT_EQ(t.text, "########");
+}
+
+TEST(DisplayText, TextOnlyNumericFormatsStillValidateTheirTokens) {
+  const DisplayText invalid = format_value_for_display(Value::number(12), "yyyy@", false);
+  EXPECT_EQ(invalid.status, DisplayStatus::kInvalidFormat);
+  EXPECT_EQ(invalid.text, "12");
+  const DisplayText valid = format_value_for_display(Value::number(12), "\"pre\"@", false);
+  EXPECT_EQ(valid.status, DisplayStatus::kOk);
+  EXPECT_EQ(valid.text, "12");
 }
 
 TEST(DisplayText, WidthIndependentKinds) {

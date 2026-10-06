@@ -36,11 +36,11 @@
 #include <utility>
 #include <vector>
 
-#include "eval/aggregate_kernels.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
 #include "utils/index_sort.h"
 #include "value.h"
@@ -197,7 +197,7 @@ Value percentile_inc_sorted(const std::vector<double>& xs, double k) {
   // `Expected<double, ErrorCode>` so we lift through `finite_number_result`
   // for the success path and propagate `#NUM!` verbatim on failure (which
   // can still arise on a non-finite interpolated blend).
-  auto r = aggregate_kernels::percentile_sorted_inc(xs, k);
+  auto r = numeric_aggregate_kernels::percentile_sorted_inc(xs, k);
   if (!r) {
     return Value::error(r.error());
   }
@@ -210,7 +210,7 @@ Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
   // (matching Mac Excel 365's `#NUM!` at the open-interval boundaries),
   // so callers do not have to re-validate `k` against `1/(n+1)` or
   // `n/(n+1)` themselves.
-  auto r = aggregate_kernels::percentile_sorted_exc(xs, k);
+  auto r = numeric_aggregate_kernels::percentile_sorted_exc(xs, k);
   if (!r) {
     return Value::error(r.error());
   }
@@ -219,16 +219,15 @@ Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
 
 ModeFrequencies build_mode_frequencies(const std::vector<double>& xs) {
   ModeFrequencies freq;
-  std::vector<aggregate_kernels::ValueRun> runs = aggregate_kernels::group_equal_values(xs);
-  for (const aggregate_kernels::ValueRun& run : runs) {
+  std::vector<numeric_aggregate_kernels::ValueRun> runs = numeric_aggregate_kernels::group_equal_values(xs);
+  for (const numeric_aggregate_kernels::ValueRun& run : runs) {
     freq.best_count = std::max(freq.best_count, run.count);
   }
-  sort_by_index(runs, [](const aggregate_kernels::ValueRun& lhs, const aggregate_kernels::ValueRun& rhs) {
-    return lhs.first < rhs.first;
-  });
+  sort_by_index(runs, [](const numeric_aggregate_kernels::ValueRun& lhs,
+                         const numeric_aggregate_kernels::ValueRun& rhs) { return lhs.first < rhs.first; });
   freq.values.reserve(runs.size());
   freq.counts.reserve(runs.size());
-  for (const aggregate_kernels::ValueRun& run : runs) {
+  for (const numeric_aggregate_kernels::ValueRun& run : runs) {
     freq.values.push_back(run.value);
     freq.counts.push_back(run.count);
   }

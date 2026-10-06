@@ -319,12 +319,12 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     }
   } else if (stored_value.is_blank()) {
     // Skip blank-blank cells to keep the row map sparse, unless a style
-    // index exists: then the format is the payload and must materialise
-    // the cell below.
+    // index or explicit style attribute exists: then the format metadata
+    // is the payload and must materialise the cell below.
     if (parsed.is_sst_index) {
       ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
     }
-    if (xf_index == 0U) {
+    if (xf_index == 0U && !parsed.has_explicit_xf) {
       return Expected<void, Error>::Ok();
     }
   } else {
@@ -349,7 +349,7 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
   }
 
-  if (xf_index != 0U) {
+  if (xf_index != 0U || parsed.has_explicit_xf) {
     auto sx = workbook.set_cell_xf_index(sheet_index, parsed.row, parsed.col, xf_index);
     if (!sx) {
       return sx.error();
@@ -426,8 +426,8 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       // `RowCells::ensure()`, so it must not advance `cell_growth` either
       // -- otherwise a later real write in the same row would be charged
       // as if the gap it bridges were smaller than it actually is.
-      const bool materializes =
-          !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index || parsed.xf_index != 0U;
+      const bool materializes = !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index ||
+                                parsed.xf_index != 0U || parsed.has_explicit_xf;
       if (materializes) {
         const std::uint64_t growth = cell_growth.charge_for(parsed.row, parsed.col);
         if (growth != 0U) {
@@ -461,288 +461,6 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
   // Spill registration is the caller's job (see `SheetReadContext::
   // array_anchors`): it must run after `ctx.pending_sst_cells` has been
   // resolved, which this function does not do.
-  return Expected<void, Error>::Ok();
-}
-
-// ---------------------------------------------------------------------------
-// View / layout helpers. Each lives in an anonymous namespace so the
-// translation unit owns its parsing fences; the public driver
-// `read_sheet_view_and_layout` composes them in document order.
-// ---------------------------------------------------------------------------
-
-namespace {
-
-/// Saturating cast from a possibly-signed C string to `std::uint8_t`.
-/// Used for `outlineLevel`; OOXML caps the value at 7 but we accept up
-/// to 255 defensively and clamp negatives to 0.
-std::uint8_t ParseOutlineLevel(const char* text) noexcept {
-  if (text == nullptr || *text == '\0') {
-    return 0U;
-  }
-  // strtol is locale-independent for ASCII digits and doesn't pull in
-  // <iostream>. The result is clamped to [0, 255] so callers see a
-  // valid `uint8_t` even on garbage input.
-  char* end = nullptr;
-  const long n = std::strtol(text, &end, 10);
-  if (end == text) {
-    return 0U;
-  }
-  if (n <= 0) {
-    return 0U;
-  }
-  if (n >= 255) {
-    return 255U;
-  }
-  return static_cast<std::uint8_t>(n);
-}
-
-/// Parses `<sheetView zoomScale="...">` and `<pane state="frozen"
-/// xSplit="N" ySplit="M">` into `view`. Missing or out-of-range
-/// `zoomScale` falls back to `SheetView::kDefaultZoomScale`. A `<pane>`
-/// element whose `state` is neither `frozen` nor `frozenSplit` (or that
-/// is absent) leaves `freeze_rows` / `freeze_cols` at zero.
-void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
-  pugi::xml_node sheet_views = worksheet.child("sheetViews");
-  if (!sheet_views) {
-    return;
-  }
-  pugi::xml_node sheet_view = sheet_views.child("sheetView");
-  if (!sheet_view) {
-    return;
-  }
-  if (sheet_view.attribute("zoomScale")) {
-    const std::int32_t raw = attr_i32(sheet_view, "zoomScale", 0);
-    if (raw >= 10 && raw <= 400) {
-      view.zoom_scale = static_cast<std::uint32_t>(raw);
-    }
-  }
-  // Display attributes. Three default to true in the schema, so absence
-  // means "shown"; the tri-state reader applies each attribute's real
-  // default rather than a blanket false.
-  view.show_grid_lines = read_xsd_bool(sheet_view, "showGridLines", true);
-  view.show_row_col_headers = read_xsd_bool(sheet_view, "showRowColHeaders", true);
-  view.show_zeros = read_xsd_bool(sheet_view, "showZeros", true);
-  view.right_to_left = read_xsd_bool(sheet_view, "rightToLeft", false);
-  view.tab_selected = read_xsd_bool(sheet_view, "tabSelected", false);
-  if (pugi::xml_attribute v = sheet_view.attribute("view"); v) {
-    const std::string_view mode = v.value();
-    // "normal" is the schema default; keep the model empty for it so a
-    // default sheet stays byte-clean on re-emit.
-    if (mode != "normal") {
-      view.view_mode.assign(mode);
-    }
-  }
-  pugi::xml_node pane = sheet_view.child("pane");
-  if (pane) {
-    // `ST_PaneState` has three values; two of them freeze. `frozenSplit`
-    // is a frozen pane that also remembers a movable split position, so
-    // its xSplit/ySplit bind the frozen extent exactly like `frozen`.
-    const std::string_view state = attr_str(pane, "state");
-    if (state == "frozen" || state == "frozenSplit") {
-      const std::int32_t y = attr_i32(pane, "ySplit", 0);
-      const std::int32_t x = attr_i32(pane, "xSplit", 0);
-      if (y > 0) {
-        view.freeze_rows = static_cast<std::uint32_t>(y);
-      }
-      if (x > 0) {
-        view.freeze_cols = static_cast<std::uint32_t>(x);
-      }
-    }
-  }
-}
-
-/// Parses `<sheetPr><tabHidden val="1"/></sheetPr>` into `view`.
-/// OOXML also accepts `<sheetPr><tabColor .../>`, but only `tabHidden`
-/// is a visibility-affecting flag for the worksheet part itself. The
-/// workbook-level `<sheet state="hidden">` form is handled in
-/// `read_ooxml`; this helper preserves any prior `tab_hidden` state so
-/// the merge is OR-style.
-void ApplySheetPrTabHidden(const pugi::xml_node& worksheet, SheetView& view) {
-  pugi::xml_node sheet_pr = worksheet.child("sheetPr");
-  if (!sheet_pr) {
-    return;
-  }
-  // Some writers emit `tabHidden` as a direct attribute (`<sheetPr
-  // tabHidden="1"/>`); others emit it as a child element with a `val`
-  // attribute. Accept both shapes.
-  if (attr_bool(sheet_pr, "tabHidden")) {
-    view.tab_hidden = true;
-  }
-  if (pugi::xml_node child = sheet_pr.child("tabHidden"); child) {
-    if (child.attribute("val")) {
-      if (attr_bool(child, "val")) {
-        view.tab_hidden = true;
-      }
-    } else {
-      // Bare `<tabHidden/>` element with no `val` attribute is treated
-      // as `val="1"` to match what Excel's older writers emit.
-      view.tab_hidden = true;
-    }
-  }
-}
-
-/// Parses `<sheetFormatPr defaultColWidth defaultRowHeight baseColWidth/>`
-/// into `defaults`. The element appears before `<cols>` in the worksheet
-/// part. Absent attributes leave the corresponding fields at their
-/// struct defaults; `defaultColWidth` / `defaultRowHeight` also set the
-/// `has_*` flags so a consumer can distinguish an explicit `0` from an
-/// absent attribute.
-///
-/// A measurement outside the shared non-negative-double lexical space is
-/// treated as absent, flag included: these three sizes are what the
-/// paginator falls back to for every un-overridden track, so admitting an
-/// infinity or a NaN here changes the page count of the whole sheet.
-void ApplySheetFormatDefaults(const pugi::xml_node& worksheet, SheetFormatDefaults& defaults) {
-  pugi::xml_node fmt = worksheet.child("sheetFormatPr");
-  if (!fmt) {
-    return;
-  }
-  double measurement = 0.0;
-  if (parse_xsd_nonneg_double(attr_str(fmt, "defaultColWidth"), &measurement)) {
-    defaults.default_col_width = measurement;
-    defaults.has_default_col_width = true;
-  }
-  if (parse_xsd_nonneg_double(attr_str(fmt, "defaultRowHeight"), &measurement)) {
-    defaults.default_row_height = measurement;
-    defaults.has_default_row_height = true;
-  }
-  if (parse_xsd_nonneg_double(attr_str(fmt, "baseColWidth"), &measurement)) {
-    defaults.base_col_width = measurement;
-  }
-}
-
-/// Parses `<cols><col min max width style hidden outlineLevel/></cols>` into
-/// `layout.columns`. Width and style retain attribute presence, so explicit
-/// zero values remain distinct from an omitted attribute. A valid span that
-/// carries only hidden / outline metadata is retained even when it has no
-/// width; pure `customWidth=1` / `bestFit=1` markers remain a no-op.
-void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
-  pugi::xml_node cols = worksheet.child("cols");
-  if (!cols) {
-    return;
-  }
-  for (pugi::xml_node col = cols.child("col"); col; col = col.next_sibling("col")) {
-    if (!col.attribute("min") || !col.attribute("max")) {
-      continue;
-    }
-    const std::int32_t min_v = attr_i32(col, "min", 0);
-    const std::int32_t max_v = attr_i32(col, "max", 0);
-    if (min_v < 1 || max_v < min_v) {
-      continue;
-    }
-    ColumnLayout entry;
-    entry.first = static_cast<std::uint32_t>(min_v - 1);
-    entry.last = static_cast<std::uint32_t>(max_v - 1);
-    double width = 0.0;
-    if (parse_xsd_nonneg_double(attr_str(col, "width"), &width)) {
-      entry.width = width;
-      entry.has_width = true;
-    }
-    if (pugi::xml_attribute style_attr = col.attribute("style"); style_attr) {
-      entry.style_xf = attr_u32(col, "style", 0U);
-      entry.has_style = true;
-    }
-    if (pugi::xml_attribute hidden_attr = col.attribute("hidden"); hidden_attr) {
-      entry.hidden = attr_bool(col, "hidden");
-    }
-    if (pugi::xml_attribute outline_attr = col.attribute("outlineLevel"); outline_attr) {
-      entry.outline_level = ParseOutlineLevel(outline_attr.value());
-    }
-    if (!entry.has_width && !entry.has_style && !col.attribute("hidden") && !col.attribute("outlineLevel")) {
-      // A span with only a marker such as `bestFit` has no observable
-      // layout state in this model.
-      continue;
-    }
-    layout.columns.push_back(entry);
-  }
-}
-
-/// Walks `<sheetData><row .../></sheetData>` collecting per-row
-/// overrides (height / hidden / outline / custom row style) into
-/// `layout.row_overrides`. A row `s=` attribute is effective only when
-/// `customFormat="1"`; when customFormat is true but `s` is absent, the
-/// effective style is the explicit default xf 0.
-/// Rows that carry only `r` (the row number) are skipped — they are
-/// just position markers and have no override payload.
-void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
-  pugi::xml_node sheet_data = worksheet.child("sheetData");
-  if (!sheet_data) {
-    return;
-  }
-  for (pugi::xml_node row = sheet_data.child("row"); row; row = row.next_sibling("row")) {
-    pugi::xml_attribute r_attr = row.attribute("r");
-    pugi::xml_attribute ht_attr = row.attribute("ht");
-    pugi::xml_attribute hidden_attr = row.attribute("hidden");
-    pugi::xml_attribute outline_attr = row.attribute("outlineLevel");
-    pugi::xml_attribute custom_format_attr = row.attribute("customFormat");
-    pugi::xml_attribute style_attr = row.attribute("s");
-    const bool custom_format = custom_format_attr && read_xsd_bool(row, "customFormat", false);
-    // An `ht` outside the shared non-negative-double lexical space is
-    // treated as absent for both the contribute test below and the stored
-    // override, so a row carrying nothing else does not become an
-    // all-defaults entry.
-    double height = 0.0;
-    const bool has_height = ht_attr && parse_xsd_nonneg_double(attr_str(row, "ht"), &height);
-    if (!has_height && !hidden_attr && !outline_attr && !custom_format) {
-      continue;
-    }
-    if (!r_attr) {
-      continue;
-    }
-    // A row number outside the shared non-negative-integer lexical space
-    // is treated as absent and the override is dropped, on both read
-    // paths: attaching the override to whatever prefix happened to parse
-    // would silently restyle an unrelated row.
-    std::uint32_t r_v = 0;
-    if (!parse_xsd_nonneg_int(attr_str(row, "r"), &r_v) || r_v < 1U) {
-      continue;
-    }
-    RowLayout entry;
-    entry.row = r_v - 1U;
-    if (has_height) {
-      entry.height = height;
-      entry.has_height = true;
-      entry.custom_height = read_xsd_bool(row, "customHeight", false);
-    }
-    if (hidden_attr) {
-      entry.hidden = read_xsd_bool(row, "hidden", false);
-    }
-    if (outline_attr) {
-      entry.outline_level = ParseOutlineLevel(outline_attr.value());
-    }
-    if (custom_format) {
-      entry.has_style = true;
-      entry.style_xf = style_attr ? attr_u32(row, "s", 0U) : 0U;
-    }
-    layout.row_overrides.push_back(entry);
-  }
-}
-
-}  // namespace
-
-Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet_doc, std::size_t sheet_index,
-                                                 Workbook& workbook) {
-  if (sheet_index >= workbook.sheet_count()) {
-    std::string ctx("context=sheet_reader.view_layout sheet_index=");
-    ctx.append(std::to_string(sheet_index));
-    ctx.append(" sheet_count=");
-    ctx.append(std::to_string(workbook.sheet_count()));
-    return make_error(FormulonErrorCode::kInvalidArgument, "read_sheet_view_and_layout: sheet_index out of range",
-                      std::move(ctx));
-  }
-  pugi::xml_node worksheet = sheet_doc.child("worksheet");
-  if (!worksheet) {
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "sheet doc: missing <worksheet> root",
-                      "context=sheet_reader.view_layout");
-  }
-  Sheet& sheet = workbook.sheet(sheet_index);
-  SheetView& view = sheet.mutable_view();
-  SheetLayout& layout = sheet.mutable_layout();
-  ApplySheetView(worksheet, view);
-  ApplySheetPrTabHidden(worksheet, view);
-  ApplySheetFormatDefaults(worksheet, sheet.mutable_format_defaults());
-  ApplyColumnLayouts(worksheet, layout);
-  ApplyRowOverrides(worksheet, layout);
   return Expected<void, Error>::Ok();
 }
 
@@ -848,12 +566,13 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   ParsedCell cell = parsed;
   cell.row = rec.row;
   cell.col = rec.col;
+  cell.has_explicit_xf = !rec.s.empty();
 
   // Persist the cell's `s=` xf index when present. The SAX scanner
   // surfaces it as a string view; parse to integer here through the same
   // lexer and with the same degrade-to-0 disposition the DOM cell parser
-  // uses. Empty / "0" collapses to the default sentinel and we skip the
-  // call to keep the row map sparse.
+  // uses. An explicit non-empty `s=` remains meaningful even when it
+  // normalises to the default sentinel `0`.
   std::uint32_t xf = 0;
   if (!parse_xsd_nonneg_int(rec.s, &xf)) {
     xf = 0;
@@ -878,7 +597,8 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   // Charge before `ApplyParsedCell` materialises -- mirrors the DOM
   // path's placement and no-op guard exactly (see `read_sheet_data`), so
   // a truly empty record never advances `cell_growth`.
-  const bool materializes = !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index || xf != 0U;
+  const bool materializes =
+      !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index || xf != 0U || cell.has_explicit_xf;
   if (materializes) {
     const std::uint64_t growth = cell_growth.charge_for(rec.row, rec.col);
     if (growth != 0U) {
@@ -947,7 +667,7 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
     entry.hidden = parse_xsd_bool(rec.hidden, false);
   }
   if (!rec.outline_level.empty()) {
-    entry.outline_level = ParseOutlineLevel(std::string(rec.outline_level).c_str());
+    entry.outline_level = parse_outline_level(std::string(rec.outline_level).c_str());
   }
   if (custom_format) {
     entry.has_style = true;

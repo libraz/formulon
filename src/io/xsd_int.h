@@ -15,6 +15,7 @@
 #define FORMULON_IO_XSD_INT_H_
 
 #include <cstdint>
+#include <cstdlib>
 #include <string_view>
 
 namespace formulon {
@@ -50,6 +51,30 @@ inline bool parse_xsd_nonneg_int(std::string_view text, std::uint32_t* out) noex
   }
   *out = static_cast<std::uint32_t>(acc);
   return true;
+}
+
+/// Saturating cast from a possibly-signed C string to `std::uint8_t`.
+/// Used for `outlineLevel`; OOXML caps the value at 7 but we accept up
+/// to 255 defensively and clamp negatives to 0.
+inline std::uint8_t parse_outline_level(const char* text) noexcept {
+  if (text == nullptr || *text == '\0') {
+    return 0U;
+  }
+  // strtol is locale-independent for ASCII digits and doesn't pull in
+  // <iostream>. The result is clamped to [0, 255] so callers see a
+  // valid `uint8_t` even on garbage input.
+  char* end = nullptr;
+  const long n = std::strtol(text, &end, 10);
+  if (end == text) {
+    return 0U;
+  }
+  if (n <= 0) {
+    return 0U;
+  }
+  if (n >= 255) {
+    return 255U;
+  }
+  return static_cast<std::uint8_t>(n);
 }
 
 }  // namespace io

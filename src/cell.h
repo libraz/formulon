@@ -88,9 +88,9 @@ struct Cell {
   /// alignment). `0` is the default xf and is the value Excel writes when
   /// no `s=` attribute is present on the `<c>` element. The OOXML reader
   /// populates this field from the `s=` attribute; the writer emits it
-  /// back when non-zero. Carried as `std::uint32_t` for parity with the
-  /// `cellXfs` index width (Excel allows up to ~65,000 entries; we leave
-  /// headroom for future widening).
+  /// back when non-zero or explicitly assigned. Carried as `std::uint32_t`
+  /// for parity with the `cellXfs` index width (Excel allows up to ~65,000
+  /// entries; we leave headroom for future widening).
   std::uint32_t xf_index = 0;
   /// The `<phoneticPr>` block attached to the same string item as
   /// `phonetic_runs`. Meaningful only when that vector is non-empty; the
@@ -101,6 +101,11 @@ struct Cell {
   /// Dynamic-array formula: loaded from the file's array-formula form, set by
   /// `Workbook::set_cell_formula` through `eval::may_produce_spill`.
   bool dynamic_array = false;
+  /// True when a caller or reader explicitly assigned this cell's style,
+  /// including an assignment to the default XF (index zero). This keeps an
+  /// explicit blank cell distinct from a row-vector gap materialised while
+  /// growing storage for a later column.
+  bool has_explicit_xf = false;
 };
 
 }  // namespace formulon

@@ -50,6 +50,7 @@
 #include "io/ooxml_defs.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
+#include "io/sheet_layout_reader.h"
 #include "io/sheet_overlay_reader.h"
 #include "io/sheet_reader.h"
 #include "io/sst_reader.h"
@@ -1076,11 +1077,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     }
   }
 
-  // 7. Defined names — parsed from the same `wb_doc` we already loaded
-  // above. Pure metadata extraction; the writer slice (Bundle 2.5) will
-  // emit them back. Resolution at evaluation time arrives in Phase 4.
-  // We run this after sheet construction so future name validation can
-  // cross-reference sheet indices without re-shuffling the call order.
+  // 7. Defined names, read from `wb_doc` after sheet construction and resolved lazily at evaluation time.
   auto defined_names_or = read_defined_names(wb_doc);
   if (!defined_names_or) {
     return defined_names_or.error();

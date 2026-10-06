@@ -25,9 +25,10 @@ class SharedStrings;
 /// True when a save writes a `<c>` element for `cell`.
 ///
 /// A cell is omitted only when it holds nothing at all: no formula, a
-/// blank value, and the default style. A blank cell carrying a style
-/// index still ships, as a bare `<c r="..." s="N"/>`, because Excel
-/// preserves the formatting of an empty cell.
+/// blank value, and no explicit style assignment. A blank cell carrying
+/// a style index (including explicit `s="0"`) still ships, as a bare
+/// `<c r="..." s="N"/>`, because Excel preserves the formatting of an
+/// empty cell.
 ///
 /// Shared so `<dimension>` is derived from the same test that decides
 /// what `<sheetData>` contains. The two answering differently is what

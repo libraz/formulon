@@ -340,8 +340,10 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   // over one malformed value would trade a formatting loss for a load
   // failure. The streaming reader applies the same lexer and the same
   // disposition to the same attribute.
+  const std::string_view s_attr = attr_str(node, "s");
+  const bool has_explicit_xf = !s_attr.empty();
   std::uint32_t xf_index = 0;
-  if (!parse_xsd_nonneg_int(attr_str(node, "s"), &xf_index)) {
+  if (!parse_xsd_nonneg_int(s_attr, &xf_index)) {
     xf_index = 0;
   }
 
@@ -389,6 +391,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   out.col = col;
   out.formula = std::move(formula);
   out.xf_index = xf_index;
+  out.has_explicit_xf = has_explicit_xf;
 
   // Capture <rPh> phonetic runs from the inline-string block (when
   // present). SST-referenced cells (t="s") carry their phonetic on the

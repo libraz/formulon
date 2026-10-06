@@ -27,6 +27,7 @@
 
 #include "cell.h"
 #include "gtest/gtest.h"
+#include "io/sheet_layout_reader.h"
 #include "io/sheet_reader.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"

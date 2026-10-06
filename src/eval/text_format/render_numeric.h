@@ -18,7 +18,7 @@ namespace number_format_detail {
 
 // Render one numeric section through the walk-tokens pipeline. Delegates to
 // `render_fraction` when `section.is_fraction` is set.
-void render_numeric(const Section& section, std::string_view fmt, double value, std::string& out);
+FormatStatus render_numeric(const Section& section, std::string_view fmt, double value, std::string& out);
 
 }  // namespace number_format_detail
 }  // namespace text_format

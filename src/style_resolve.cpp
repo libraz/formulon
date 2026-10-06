@@ -12,14 +12,17 @@
 namespace formulon {
 namespace {
 
-struct XfChoice {
-  std::uint32_t xf_index = 0;
-  StyleSource source = StyleSource::kDefault;
-};
+bool cell_owns_style(const Cell& cell) noexcept {
+  return cell.has_explicit_xf || cell.xf_index != 0U || !cell.formula_text.empty() || !cell.cached_value.is_blank();
+}
 
-XfChoice choose_xf(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
+}  // namespace
+
+EffectiveXf select_effective_xf(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
   if (const Cell* cell = sheet.cell_at(row, col)) {
-    return {cell->xf_index, StyleSource::kCell};
+    if (cell_owns_style(*cell)) {
+      return {cell->xf_index, StyleSource::kCell};
+    }
   }
   const SheetLayout& layout = sheet.layout();
   const auto row_it = std::find_if(layout.row_overrides.begin(), layout.row_overrides.end(),
@@ -35,6 +38,8 @@ XfChoice choose_xf(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
   }
   return {0U, StyleSource::kDefault};
 }
+
+namespace {
 
 /// A record built programmatically may set only its `*_argb` sibling; that
 /// literal is then the colour, matching what the writer emits.
@@ -52,7 +57,7 @@ ColorSpec with_literal_fallback(const ColorSpec& spec, std::uint32_t argb, std::
 
 EffectiveStyle effective_style(const Workbook& wb, const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
   const StylesTable& styles = wb.styles();
-  const XfChoice choice = choose_xf(sheet, row, col);
+  const EffectiveXf choice = select_effective_xf(sheet, row, col);
   EffectiveStyle out;
   out.source = choice.source;
   out.xf_index = choice.xf_index < styles.cell_xfs.size() ? choice.xf_index : 0U;

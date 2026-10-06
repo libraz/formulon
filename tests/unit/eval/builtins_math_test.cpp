@@ -10,15 +10,18 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // ---------------------------------------------------------------------------
 // ABS
@@ -629,6 +632,29 @@ TEST(MathAverage, EmptyArgListIsArityViolation) {
   const Value v = EvalSource("=AVERAGE()");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(MathAverage, SumOverflowIsNumError) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0e308));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(1.0e308));
+  const Value average = EvalSourceIn("=AVERAGE(A1:A2)", wb, wb.sheet(0));
+  ASSERT_TRUE(average.is_error()) << average.debug_to_string();
+  EXPECT_EQ(average.as_error(), ErrorCode::Num);
+
+  const Value direct = EvalSource("=AVERAGE(9E307,9E307)");
+  ASSERT_TRUE(direct.is_error()) << direct.debug_to_string();
+  EXPECT_EQ(direct.as_error(), ErrorCode::Num);
+}
+
+TEST(MathAverage, PlainSumKeepsLastBitAndAbsorption) {
+  const Value last_bit = EvalSource("=(AVERAGE(0.1,0.2,0.3)-0.2)*1");
+  ASSERT_TRUE(last_bit.is_number()) << last_bit.debug_to_string();
+  EXPECT_DOUBLE_EQ(last_bit.as_number(), 2.7755575615628914e-17);
+
+  const Value absorbed = EvalSource("=AVERAGE(1E16,1,-1E16)");
+  ASSERT_TRUE(absorbed.is_number()) << absorbed.debug_to_string();
+  EXPECT_DOUBLE_EQ(absorbed.as_number(), 0.0);
 }
 
 // ---------------------------------------------------------------------------

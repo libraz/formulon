@@ -20,6 +20,8 @@
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_writer_cell.h"
+#include "io/sheet_reader.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "pugixml.hpp"
@@ -251,6 +253,33 @@ TEST(CellParser, EmptyCellIsBlank) {
   EXPECT_EQ(parsed.col, 0U);
   EXPECT_TRUE(parsed.value.is_blank());
   EXPECT_TRUE(parsed.formula.empty());
+}
+
+TEST(CellParser, ExplicitZeroStyleMaterializesThroughDomAndSax) {
+  const std::string xml = "<worksheet><sheetData><row r=\"1\"><c r=\"A1\" s=\"0\"/></row></sheetData></worksheet>";
+
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml.c_str()));
+  Workbook dom_workbook = Workbook::create();
+  SheetReadContext dom_ctx;
+  std::deque<std::string> dom_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, dom_workbook, dom_ctx, dom_storage)));
+  const Cell* dom_cell = dom_workbook.sheet(0).cell_at(0U, 0U);
+  ASSERT_NE(dom_cell, nullptr);
+  EXPECT_EQ(dom_cell->xf_index, 0U);
+  EXPECT_TRUE(dom_cell->has_explicit_xf);
+  EXPECT_NE(BuildSheetDataXml(dom_workbook.sheet(0)).find("<c r=\"A1\" s=\"0\"/>"), std::string::npos);
+
+  Workbook sax_workbook = Workbook::create();
+  SheetReadContext sax_ctx;
+  std::deque<std::string> sax_storage;
+  const ByteSpan bytes{reinterpret_cast<const std::uint8_t*>(xml.data()), xml.size()};
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data_sax(bytes, 0U, sax_workbook, sax_ctx, sax_storage)));
+  const Cell* sax_cell = sax_workbook.sheet(0).cell_at(0U, 0U);
+  ASSERT_NE(sax_cell, nullptr);
+  EXPECT_EQ(sax_cell->xf_index, 0U);
+  EXPECT_TRUE(sax_cell->has_explicit_xf);
+  EXPECT_NE(BuildSheetDataXml(sax_workbook.sheet(0)).find("<c r=\"A1\" s=\"0\"/>"), std::string::npos);
 }
 
 TEST(CellParser, RejectsMissingRefAttribute) {

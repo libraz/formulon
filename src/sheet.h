@@ -693,11 +693,10 @@ class Sheet {
   /// runs, so setting these on an unannotated cell has no on-disk effect.
   void set_cell_phonetic_props(std::uint32_t row, std::uint32_t col, PhoneticProperties props);
 
-  /// Stores the cellXfs index for the cell at `(row, col)`. The cell must
-  /// already exist (created via `set_cell_value` / `set_cell_formula`); on
-  /// an absent cell this method is a no-op. `xf_index = 0` references the
-  /// workbook's default cellXf and is the on-disk default Excel writes when
-  /// no `s=` attribute is present.
+  /// Stores the cellXfs index for the cell at `(row, col)`, materialising a
+  /// blank cell when needed. The assignment is tracked even for
+  /// `xf_index = 0`, so an explicit default XF can override row/column
+  /// inheritance while an unrelated row-vector gap continues to inherit.
   void set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index);
 
   /// Returns a non-owning pointer to the cell at `(row, col)`, or `nullptr`

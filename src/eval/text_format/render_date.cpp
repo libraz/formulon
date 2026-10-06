@@ -62,13 +62,23 @@ const char* weekday_long(int sun0) noexcept {
   return kTable[sun0];
 }
 
-void append_elapsed_int_dbnum(std::string& out, long long value, std::uint8_t width, DbNumMode mode) {
+void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t width, DbNumMode mode) {
   const std::string digits = std::to_string(value);
-  const std::size_t min_width = static_cast<std::size_t>(width);
-  for (std::size_t i = digits.size(); i < min_width; ++i) {
+  for (std::size_t i = digits.size(); i < width; ++i) {
     append_digit_dbnum(out, mode, '0');
   }
   append_chars_dbnum(out, mode, digits);
+}
+
+constexpr long long kSecondsPerDay = 86400;
+constexpr std::size_t kMaxMeaningfulFractionDigits = 15;
+
+std::uint64_t power10(std::size_t exponent) noexcept {
+  std::uint64_t result = 1;
+  for (std::size_t i = 0; i < exponent; ++i) {
+    result *= 10;
+  }
+  return result;
 }
 
 // ja-JP weekday tokens (`aaa` / `aaaa`). Index 0 = Sunday to match the
@@ -112,31 +122,58 @@ const EraInfo& classify_era(int year, unsigned month, unsigned day) noexcept {
 
 }  // namespace
 
-void render_date(const Section& section, std::string_view fmt, double serial, std::string& out, bool date1904) {
-  if (serial < 0.0 || serial > 2958465.0) {
+FormatStatus render_date(const Section& section, std::string_view fmt, double serial, std::string& out, bool date1904) {
+  const double max_serial =
+      date1904 ? kMaxDateSerial1900 - ::formulon::date_time::kDate1904EpochGap : kMaxDateSerial1900;
+  if (!std::isfinite(serial) || serial < 0.0 || serial >= max_serial + 1.0) {
     // Excel rejects out-of-range serials from TEXT.
-    return;
+    return FormatStatus::kOverflow;
   }
-  // Serial 0 of the 1900 system reads as the day before 1900-01-01: `1900/1/0`.
-  const ::formulon::date_time::YMD ymd =
-      date1904 ? ::formulon::date_time::ymd_from_serial(serial, true) : ::formulon::date_time::legacy_1900_ymd(serial);
-  const int sun0 = ::formulon::date_time::weekday_sun0(serial, date1904);
 
-  // Decompose the time portion with optional fractional seconds.
-  const double frac_day = serial - std::floor(serial);
-  // Total seconds (float-precision) so fractional seconds survive.
-  double total_seconds_f = frac_day * 86400.0;
-  // Round to `frac_sec_digits` if requested, otherwise to whole seconds.
-  double rounded = total_seconds_f;
-  if (section.frac_sec_digits == 0) {
-    rounded = std::floor(total_seconds_f + 0.5);
-  } else {
-    const double scale = std::pow(10.0, section.frac_sec_digits);
-    rounded = std::floor(total_seconds_f * scale + 0.5) / scale;
+  // Decompose the time portion into an integral second and a sub-second
+  // fraction. Only the fraction is scaled: scaling the complete serial by
+  // 10^15 would overflow before elapsed-hour/minute/second formatting sees
+  // the value.
+  const double day_floor_f = std::floor(serial);
+  const long long day_floor = static_cast<long long>(day_floor_f);
+  const double frac_day = serial - day_floor_f;
+  const double total_seconds_f = frac_day * static_cast<double>(kSecondsPerDay);
+  const double whole_seconds_f = std::floor(total_seconds_f);
+  const long long whole_seconds = static_cast<long long>(whole_seconds_f);
+  const double subsecond = total_seconds_f - whole_seconds_f;
+  const std::size_t requested_fraction_digits =
+      section.frac_sec_digits > 0 ? static_cast<std::size_t>(section.frac_sec_digits) : 0U;
+  const std::size_t meaningful_fraction_digits = requested_fraction_digits < kMaxMeaningfulFractionDigits
+                                                     ? requested_fraction_digits
+                                                     : kMaxMeaningfulFractionDigits;
+  const std::uint64_t fraction_scale = power10(meaningful_fraction_digits);
+  std::uint64_t fraction_ticks =
+      static_cast<std::uint64_t>(std::floor(subsecond * static_cast<double>(fraction_scale) + 0.5));
+  long long rounded_seconds_in_day = whole_seconds;
+  if (fraction_ticks >= fraction_scale) {
+    ++rounded_seconds_in_day;
+    fraction_ticks = 0;
   }
-  // Extract integer h/m/s and fractional remainder.
-  long long total_int_seconds = static_cast<long long>(std::floor(rounded));
-  const double sub_sec_float = rounded - static_cast<double>(total_int_seconds);
+
+  // Calendar and ordinary time tokens share the rounded day. A carry beyond
+  // 9999-12-31 is a date overflow even when the source serial itself still
+  // lies within the final day's fractional range.
+  const long long day_carry = rounded_seconds_in_day / kSecondsPerDay;
+  const long long day_for_calendar = day_floor + day_carry;
+  if (static_cast<double>(day_for_calendar) > max_serial) {
+    return FormatStatus::kOverflow;
+  }
+  const long long seconds_of_day = rounded_seconds_in_day % kSecondsPerDay;
+  const double calendar_serial = static_cast<double>(day_for_calendar);
+  const ::formulon::date_time::YMD ymd = date1904 ? ::formulon::date_time::ymd_from_serial(calendar_serial, true)
+                                                  : ::formulon::date_time::legacy_1900_ymd(calendar_serial);
+  const int sun0 = ::formulon::date_time::weekday_sun0(calendar_serial, date1904);
+
+  // Elapsed fields use the same rounded second as ordinary h/m/s fields.
+  // `day_floor` is only a few million in the supported date range, so this
+  // product remains well within int64_t while retaining all day carries.
+  const long long total_rounded_seconds = day_floor * kSecondsPerDay + rounded_seconds_in_day;
+
   // If AM/PM is in use, we need to know it before formatting hours.
   bool use_am_pm = false;
   for (const Token& tk : section.tokens) {
@@ -146,7 +183,6 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
     }
   }
 
-  const long long seconds_of_day = ((total_int_seconds % 86400) + 86400) % 86400;
   unsigned hour_24 = static_cast<unsigned>(seconds_of_day / 3600);
   unsigned minute = static_cast<unsigned>((seconds_of_day / 60) % 60);
   unsigned second = static_cast<unsigned>(seconds_of_day % 60);
@@ -270,19 +306,17 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
         append_pad2_dbnum(out, second, dbnum);
         break;
       case Tok::DateElapsedH: {
-        // Total hours since serial 0 (integer floor).
-        const long long total_hours = static_cast<long long>(std::floor(serial * 24.0));
+        const long long total_hours = total_rounded_seconds / 3600;
         append_elapsed_int_dbnum(out, total_hours, tk.width, dbnum);
         break;
       }
       case Tok::DateElapsedM: {
-        const long long total_minutes = static_cast<long long>(std::floor(serial * 1440.0));
+        const long long total_minutes = total_rounded_seconds / 60;
         append_elapsed_int_dbnum(out, total_minutes, tk.width, dbnum);
         break;
       }
       case Tok::DateElapsedS: {
-        const long long total_sec = static_cast<long long>(std::floor(serial * 86400.0));
-        append_elapsed_int_dbnum(out, total_sec, tk.width, dbnum);
+        append_elapsed_int_dbnum(out, total_rounded_seconds, tk.width, dbnum);
         break;
       }
       case Tok::AmPm:
@@ -293,24 +327,16 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
         break;
       case Tok::FracSecDigits: {
         // Render fractional seconds at the requested precision.
-        const int digits = static_cast<int>(tk.width);
+        const std::size_t digits = tk.width;
         if (digits > 0) {
           out.push_back('.');
-          double f = sub_sec_float;
-          if (f < 0.0) {
-            f = 0.0;
+          std::string fraction = std::to_string(fraction_ticks);
+          if (fraction.size() < meaningful_fraction_digits) {
+            fraction.insert(0, meaningful_fraction_digits - fraction.size(), '0');
           }
-          for (int k = 0; k < digits; ++k) {
-            f *= 10.0;
-            int d = static_cast<int>(std::floor(f));
-            if (d > 9) {
-              d = 9;
-            } else if (d < 0) {
-              d = 0;
-            }
-            const char ch = static_cast<char>('0' + d);
-            append_digit_dbnum(out, dbnum, ch);
-            f -= static_cast<double>(d);
+          append_chars_dbnum(out, dbnum, fraction);
+          for (std::size_t k = meaningful_fraction_digits; k < digits; ++k) {
+            append_digit_dbnum(out, dbnum, '0');
           }
         }
         break;
@@ -328,6 +354,7 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
         break;
     }
   }
+  return FormatStatus::kOk;
 }
 
 }  // namespace number_format_detail

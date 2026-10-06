@@ -16,6 +16,7 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/sheet_layout_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "styles.h"

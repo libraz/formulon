@@ -52,8 +52,9 @@ DisplayText format_value_for_display(const Value& value, std::string_view code, 
 /// (custom formats first, then the built-in table); empty for a null `xf`.
 std::string_view number_format_code_for_xf(const StylesTable& styles, const CellXf* xf);
 
-/// Display text of the cell at (`row`, `col`) of `sheet`, using the cell's xf
-/// number format and the workbook's date system. An absent cell is empty.
+/// Display text of (`row`, `col`) of `sheet`, using the effective cell/row/
+/// column/default XF and the workbook's date system. A truly empty coordinate
+/// is empty; a spill phantom uses its resolved value and inherited style.
 DisplayText format_cell_for_display(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col);
 
 }  // namespace text_format

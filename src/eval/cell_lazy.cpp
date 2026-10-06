@@ -29,6 +29,7 @@
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "style_resolve.h"
 #include "styles.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
@@ -183,8 +184,18 @@ Value resolve_topleft_value(std::string_view sheet, std::uint32_t row, std::uint
   return ctx.resolve_ref(r, arena, registry);
 }
 
+const CellXf* effective_cell_xf(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
+  const EffectiveXf choice = select_effective_xf(sheet, row, col);
+  const std::vector<CellXf>& xfs = workbook.styles().cell_xfs;
+  if (xfs.empty()) {
+    return nullptr;
+  }
+  const std::uint32_t xf_index = choice.xf_index < xfs.size() ? choice.xf_index : 0U;
+  return &xfs[xf_index];
+}
+
 // Resolves CELL("protect") for the cell at `(sheet, row, col)`: reads the
-// cell's cell-format (`xf`) protection `locked` flag from the workbook's
+// effective cell-format (`xf`) protection `locked` flag from the workbook's
 // StylesTable. Excel returns 1 for a locked cell and 0 for an unlocked one.
 //
 // Defaults follow the OOXML schema: the effective `locked` flag defaults to
@@ -205,20 +216,9 @@ Value resolve_cell_locked(std::string_view sheet, std::uint32_t row, std::uint32
       return Value::error(ErrorCode::Ref);
     }
   }
-  // The cell's xf index (0 = default xf when the cell is absent).
-  std::uint32_t xf_index = 0;
-  if (target != nullptr) {
-    if (const Cell* cell = target->cell_at(row, col); cell != nullptr) {
-      xf_index = cell->xf_index;
-    }
-  }
-  bool locked = true;
-  if (workbook != nullptr) {
-    const std::vector<CellXf>& cell_xfs = workbook->styles().cell_xfs;
-    if (xf_index < cell_xfs.size()) {
-      locked = cell_xfs[xf_index].locked;
-    }
-  }
+  const CellXf* xf =
+      workbook != nullptr && target != nullptr ? effective_cell_xf(*workbook, *target, row, col) : nullptr;
+  const bool locked = xf == nullptr || !xf->has_protection || xf->locked;
   return Value::number(locked ? 1.0 : 0.0);
 }
 
@@ -232,12 +232,7 @@ const CellXf* resolve_cell_xf(std::string_view sheet_name, std::uint32_t row, st
   if (workbook == nullptr || target == nullptr) {
     return nullptr;
   }
-  std::uint32_t xf_index = 0;
-  if (const Cell* cell = target->cell_at(row, col); cell != nullptr) {
-    xf_index = cell->xf_index;
-  }
-  const std::vector<CellXf>& xfs = workbook->styles().cell_xfs;
-  return xf_index < xfs.size() ? &xfs[xf_index] : nullptr;
+  return effective_cell_xf(*workbook, *target, row, col);
 }
 
 std::string_view cell_prefix(const CellXf* xf) {

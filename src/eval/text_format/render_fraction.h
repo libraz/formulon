@@ -3,7 +3,7 @@
 //
 // Fraction rendering for the Excel TEXT() engine (`# ?/?`, `# ??/??`,
 // `0/0`, ...). Implements Excel's bounded best-rational-approximation
-// via a Stern-Brocot mediant search.
+// via a bounded continued-fraction search.
 
 #ifndef FORMULON_EVAL_TEXT_FORMAT_RENDER_FRACTION_H_
 #define FORMULON_EVAL_TEXT_FORMAT_RENDER_FRACTION_H_
@@ -19,7 +19,7 @@ namespace number_format_detail {
 
 // Render one fraction-format section. The dispatcher in `render_numeric`
 // calls this when `Section::is_fraction` is true.
-void render_fraction(const Section& section, std::string_view fmt, double value, std::string& out);
+FormatStatus render_fraction(const Section& section, std::string_view fmt, double value, std::string& out);
 
 }  // namespace number_format_detail
 }  // namespace text_format

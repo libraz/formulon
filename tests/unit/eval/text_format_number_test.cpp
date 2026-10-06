@@ -6,9 +6,11 @@
 // `value_numbervalue_test.cpp`.
 
 #include <cmath>
+#include <limits>
 #include <string>
 #include <string_view>
 
+#include "eval/text_format/display_text.h"
 #include "eval/text_format/number_format.h"
 #include "gtest/gtest.h"
 
@@ -28,6 +30,50 @@ std::string Render(double value, std::string_view format) {
 // ---------------------------------------------------------------------------
 // Integer-only formats (no decimal point)
 // ---------------------------------------------------------------------------
+
+TEST(NumberFormatIntegers, LargeFiniteValuesProduceCompleteDigitsWithoutNulls) {
+  const std::string digits = "1" + std::string(308, '0');
+  EXPECT_EQ(Render(1E308, "0"), digits);
+  EXPECT_EQ(Render(-1E308, "0.00"), "-" + digits + ".00");
+  const auto display = format_value_for_display(Value::number(1E308), "0", false);
+  EXPECT_EQ(display.status, DisplayStatus::kOk);
+  EXPECT_EQ(display.text, digits);
+}
+
+TEST(NumberFormatIntegers, MaximumFiniteDoubleCanRoundBeyondItsBinaryRange) {
+  const double value = std::numeric_limits<double>::max();
+  const std::string expected = "179769313486232" + std::string(294, '0');
+  EXPECT_EQ(Render(value, "0"), expected);
+  EXPECT_EQ(Render(-value, "0"), "-" + expected);
+  // General budgets 11 characters; the three-digit exponent leaves four fractional digits.
+  EXPECT_EQ(Render(value, "General"), "1.7977E+308");
+}
+
+TEST(NumberFormatPercent, ScalingOverflowReturnsOverflowWithoutAppending) {
+  std::string out = "prefix";
+  EXPECT_EQ(apply_format(1E307, "0%", out), FormatStatus::kOverflow);
+  EXPECT_EQ(out, "prefix");
+  const auto display = format_value_for_display(Value::number(1E307), "0%", false);
+  EXPECT_EQ(display.status, DisplayStatus::kOverflow);
+  EXPECT_EQ(display.text, "########");
+}
+
+TEST(NumberFormatScientific, WideRequiredMantissaPaddingRemainsRenderable) {
+  const std::string format = std::string(310, '0') + "E+00";
+  std::string out;
+  EXPECT_EQ(apply_format(1E308, format, out), FormatStatus::kOk);
+  EXPECT_EQ(out.size(), 314U);
+  EXPECT_EQ(out.substr(310), "E+00");
+  EXPECT_EQ(out[0], '0');
+  EXPECT_EQ(out[1], '1');
+}
+
+TEST(NumberFormatScientific, ExcessiveEngineeringGroupOverflowLeavesOutputUntouched) {
+  const std::string format = std::string(1000, '0') + "E+00";
+  std::string out = "prefix";
+  EXPECT_EQ(apply_format(1E-300, format, out), FormatStatus::kOverflow);
+  EXPECT_EQ(out, "prefix");
+}
 
 TEST(NumberFormatIntegers, ZeroPad) {
   EXPECT_EQ(Render(5.0, "000"), "005");
@@ -239,6 +285,75 @@ TEST(NumberFormatScientific, ExpNegativeExponent) {
   EXPECT_EQ(Render(0.0001234, "0.00E+00"), "1.23E-04");
 }
 
+TEST(NumberFormatScientific, ExcelMantissaNormalizationAndStoredDisplayParity) {
+  struct Case {
+    double value;
+    const char* format;
+    const char* expected;
+  };
+  const Case cases[] = {
+      {9.999, "0.00E+00", "1.00E+01"},
+      {-9.999, "0.00E+00", "-1.00E+01"},
+      {999.999, "##0.00E+00", "1.00E+03"},
+      {12345.0, "00.00E+00", "01.23E+04"},
+      {12345.0, "##0.00E+00", "12.35E+03"},
+      {0.012345, "##0.00E+00", "12.35E-03"},
+      {12345.0, "###.00E+00", "12.35E+03"},
+      {0.0012345, "#.00E+00", "1.23E-03"},
+      {1234.0, "00.00E+00", "12.34E+02"},
+      {1234.0, "000.00E+00", "001.23E+03"},
+      {1234.0, "##00.00E+00", "1234.00E+00"},
+      {12345.0, "?0.00E+00", " 1.23E+04"},
+      {12345.0, "??0.00E+00", " 12.35E+03"},
+      {1.0, "0.##E+00", "1.E+00"},
+      {1.23, "\"USD \"0.00E+00\" end\"", "USD 1.23E+00 end"},
+  };
+  for (const Case& test_case : cases) {
+    std::string out;
+    EXPECT_EQ(apply_format(test_case.value, test_case.format, out), FormatStatus::kOk) << test_case.format;
+    EXPECT_EQ(out, test_case.expected) << test_case.format;
+
+    const auto display = format_value_for_display(Value::number(test_case.value), test_case.format, false);
+    EXPECT_EQ(display.status, DisplayStatus::kOk) << test_case.format;
+    EXPECT_EQ(display.text, test_case.expected) << test_case.format;
+  }
+}
+
+TEST(NumberFormatScientific, OptionalFractionPlaceholdersTrimOnlyOptionalDigits) {
+  EXPECT_EQ(Render(1.201, "0.#0"), "1.20");
+  EXPECT_EQ(Render(1.201, "0.0#"), "1.2");
+}
+
+TEST(NumberFormatNumeric, RepeatedPointsAndInterleavedLiteralsRemainStable) {
+  EXPECT_EQ(Render(1.2345, "0.00.00"), "1.23.45");
+  EXPECT_EQ(Render(1.23995, "0.00.00"), "1.24.00");
+  EXPECT_EQ(Render(1.2345, "0.00\"x\"00"), "1.23x45");
+}
+
+TEST(NumberFormatSections, NumericAndTextPlaceholderIsInvalid) {
+  for (const char* format : {"0 @", "0.00@", "yyyy@", "General@", "0.00E+00@"}) {
+    std::string out = "prefix";
+    EXPECT_EQ(apply_format(5.0, format, out), FormatStatus::kValueError) << format;
+    EXPECT_EQ(out, "prefix") << format;
+
+    const auto display = format_value_for_display(Value::number(5.0), format, false);
+    EXPECT_EQ(display.status, DisplayStatus::kInvalidFormat) << format;
+    EXPECT_EQ(display.text, "5") << format;
+  }
+}
+
+TEST(NumberFormatSections, RepeatedPercentAndScientificPercentAreInvalid) {
+  for (const char* format : {"0%%", "0.00E+00%"}) {
+    std::string out = "prefix";
+    EXPECT_EQ(apply_format(5.0, format, out), FormatStatus::kValueError) << format;
+    EXPECT_EQ(out, "prefix") << format;
+
+    const auto display = format_value_for_display(Value::number(5.0), format, false);
+    EXPECT_EQ(display.status, DisplayStatus::kInvalidFormat) << format;
+    EXPECT_EQ(display.text, "5") << format;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Literal passthrough / escapes / quoted text
 // ---------------------------------------------------------------------------
@@ -258,6 +373,32 @@ TEST(NumberFormatLiteral, BackslashEscape) {
 
 TEST(NumberFormatLiteral, BangEscape) {
   EXPECT_EQ(Render(10.0, "!@0"), "@10");
+}
+
+TEST(NumberFormatLiteral, IncompleteSyntaxReturnsErrorWithoutAppending) {
+  for (const char* code : {"0!", "0\\", "0_", "0*", "0\"open", "[h", "[$-411", "@!", "@\\", "@_", "@*", "@\"open"}) {
+    SCOPED_TRACE(code);
+    std::string out = "prefix";
+    EXPECT_EQ(apply_format(12.0, code, out), FormatStatus::kValueError);
+    EXPECT_EQ(out, "prefix");
+    EXPECT_EQ(apply_text_format("hello", code, out), FormatStatus::kValueError);
+    EXPECT_EQ(out, "prefix");
+    const auto number_display = format_value_for_display(Value::number(12), code, false);
+    EXPECT_EQ(number_display.status, DisplayStatus::kInvalidFormat);
+    EXPECT_EQ(number_display.text, "12");
+    const auto text_display = format_value_for_display(Value::text("hello"), code, false);
+    EXPECT_EQ(text_display.status, DisplayStatus::kInvalidFormat);
+    EXPECT_EQ(text_display.text, "hello");
+  }
+}
+
+TEST(NumberFormatLiteral, CompleteEscapesAndDelimitersRemainValid) {
+  EXPECT_EQ(Render(12, "0\\!"), "12!");
+  EXPECT_EQ(Render(12, "0!x"), "12x");
+  EXPECT_EQ(Render(12, "0\"open\""), "12open");
+  std::string out;
+  EXPECT_EQ(apply_text_format("hello", "@\\!", out), FormatStatus::kOk);
+  EXPECT_EQ(out, "hello!");
 }
 
 // Mac Excel 16.111.3 (ja-JP) accepts the syntax-bearing full-width forms
@@ -489,11 +630,11 @@ TEST(NumberFormatBracketed, ConditionalLeMatchesNegative) {
   EXPECT_EQ(Render(0.0, "[<=0]0.00;0.00"), "0.00");
 }
 
-TEST(NumberFormatBracketed, ConditionalExplicitMinusIsNotDoubled) {
-  // A conditional section is not inherently a negative section. Its literal
-  // minus supplies the sign itself, so the numeric renderer must use the
-  // magnitude rather than adding a second prefix.
-  EXPECT_EQ(Render(-1.5, "[<=0]-0.00;0.00"), "-1.50");
+TEST(NumberFormatBracketed, ConditionalLiteralMinusPreservesSignedPredicate) {
+  // Excel keeps the negative sign selected by the value and also copies the
+  // explicit literal minus from a matching conditional section.
+  EXPECT_EQ(Render(-1.5, "[<=0]-0.00;0.00"), "--1.50");
+  EXPECT_EQ(Render(-1.5, "[<0]-0.00;0.00"), "-1.50");
 }
 
 TEST(NumberFormatBracketed, ConditionalEqOperator) {
@@ -535,10 +676,12 @@ TEST(NumberFormatUnderscoreSkip, SpaceBeforeDigits) {
   EXPECT_EQ(Render(5.0, "_(0.00"), " 5.00");
 }
 
-TEST(NumberFormatUnderscoreSkip, TrailingUnderscoreIsLiteral) {
-  // A dangling `_` at end-of-format has no following byte to reserve;
-  // it falls back to the single-byte literal path.
-  EXPECT_EQ(Render(5.0, "0_"), "5_");
+TEST(NumberFormatUnderscoreSkip, LiteralTrailingUnderscoreRequiresEscape) {
+  // Mac Excel 16.113.3 rejects a dangling `_`; an escaped underscore is literal.
+  std::string out = "prefix";
+  EXPECT_EQ(apply_format(5.0, "0_", out), FormatStatus::kValueError);
+  EXPECT_EQ(out, "prefix");
+  EXPECT_EQ(Render(5.0, "0\\_"), "5_");
 }
 
 // ---------------------------------------------------------------------------
@@ -678,6 +821,133 @@ TEST(NumberFormatFraction, ImproperFractionNoIntegerGroup) {
   // numerator/denominator search target. 0.5 -> "1/2" with no integer
   // group and no preceding space.
   EXPECT_EQ(Render(0.5, "?/?"), "1/2");
+}
+
+TEST(NumberFormatFraction, PercentScalingAppliesBeforeMixedFraction) {
+  EXPECT_EQ(Render(0.0125, "# ?/?%"), "1 1/4%");
+}
+
+TEST(NumberFormatFraction, ScalingCommaIsInvalidForFractionFormats) {
+  for (const char* format : {"# ?/?,", "# ?/?,\"K\""}) {
+    std::string out = "prefix";
+    EXPECT_EQ(apply_format(1234.5, format, out), FormatStatus::kValueError) << format;
+    EXPECT_EQ(out, "prefix") << format;
+  }
+}
+
+TEST(NumberFormatFraction, FixedDenominatorAndPlaceholderWidths) {
+  EXPECT_EQ(Render(0.3, "# ?/8"), " 2/8");
+  EXPECT_EQ(Render(1.3, "# ?/8"), "1 2/8");
+  EXPECT_EQ(Render(1.3, "?/8"), "10/8");
+  EXPECT_EQ(Render(0.3, "# ?/16"), " 5/16");
+  EXPECT_EQ(Render(0.5, "# ?/10"), " 5/10");
+  EXPECT_EQ(Render(0.5,
+                   "?"
+                   "?/??"),
+            " 1/2 ");
+  EXPECT_EQ(Render(0.123,
+                   "# ?/"
+                   "??"),
+            " 8/65");
+  EXPECT_EQ(Render(0.123,
+                   "# ??"
+                   "/?"),
+            "  1/8");
+}
+
+TEST(NumberFormatFraction, ImproperFractionExpandsBeyondPlaceholderWidth) {
+  EXPECT_EQ(Render(12.5, "?/?"), "25/2");
+  EXPECT_EQ(Render(1234.5, "?/?"), "2469/2");
+  EXPECT_EQ(Render(1000000.125, "?/?"), "8000001/8");
+  EXPECT_EQ(Render(0.00005,
+                   "?/"
+                   "?????"),
+            "1/20000");
+  const std::string tiny_expected = "0/1" + std::string(17, ' ');
+  EXPECT_EQ(Render(std::ldexp(1.0, -64),
+                   "?/"
+                   "??????????????????"),
+            tiny_expected);
+  EXPECT_EQ(Render(std::numeric_limits<double>::denorm_min(),
+                   "?/"
+                   "??????????????????"),
+            tiny_expected);
+  const std::string max_expected = "179769313486232" + std::string(294, '0') + "/1";
+  EXPECT_EQ(Render(std::numeric_limits<double>::max(), "?/?"), max_expected);
+  std::string out = "prefix";
+  EXPECT_EQ(apply_format(std::numeric_limits<double>::max(), "# ?/?%", out), FormatStatus::kOverflow);
+  EXPECT_EQ(out, "prefix");
+}
+
+TEST(NumberFormatFraction, NearEqualApproximationsPreferSmallerDenominator) {
+  // Mac Excel 16.113.3 chooses 1/8 at this Farey-neighbour boundary,
+  // including the adjacent binary64 values represented by these literals.
+  for (double value : {17.0 / 144.0, 0.11805555555555554, 0.11805555555555557}) {
+    EXPECT_EQ(Render(value, "?/?"), "1/8") << value;
+  }
+}
+
+TEST(NumberFormatFraction, VariableDenominatorSearchCapsAtSevenDigits) {
+  const std::string format = "?/" + std::string(18, '?');
+  EXPECT_EQ(Render(1.0 / 9999999.0, format), "1/9999999" + std::string(11, ' '));
+  EXPECT_EQ(Render(1.0 / 10000000.0, format), "0/1" + std::string(17, ' '));
+  EXPECT_EQ(Render(0.5000000000000001, format), "1/2" + std::string(17, ' '));
+  EXPECT_EQ(Render(1e-16, format), "0/1" + std::string(17, ' '));
+}
+
+TEST(NumberFormatFraction, FirstReciprocalOutsidePlaceholderRangeRendersZero) {
+  const std::string format = "?/" + std::string(6, '?');
+  EXPECT_EQ(Render(1.0 / 999999.0, format), "1/999999");
+  EXPECT_EQ(Render(1e-6, format), "0/1" + std::string(5, ' '));
+  EXPECT_EQ(Render(0.09, "?/?"), "0/1");
+  EXPECT_EQ(Render(0.1, "?/?"), "0/1");
+  EXPECT_EQ(Render(0.11, "?/?"), "1/9");
+  // Later continued-fraction boundaries still compare intermediate ratios.
+  EXPECT_EQ(Render(0.3, "?/?"), "2/7");
+}
+
+TEST(NumberFormatFraction, ZeroAndOptionalPlaceholderControls) {
+  EXPECT_EQ(Render(0.5, "00/00"), "01/02");
+  EXPECT_EQ(Render(0.5, "##/##"), "1/2");
+  EXPECT_EQ(Render(0.5, "# ?/0"), " 1/2");
+  EXPECT_EQ(Render(0.8, "# ?/2"), "1    ");
+  EXPECT_EQ(Render(0.75, "# ?/2"), "1    ");
+  EXPECT_EQ(Render(0.3, "# ?/8%"), "30    %");
+}
+
+TEST(NumberFormatFraction, ZeroPrefixedFixedDenominatorsKeepLiteralWidth) {
+  EXPECT_EQ(Render(0.5, "# ?/08"), " 4/0 ");
+  EXPECT_EQ(Render(0.5, "# ?/008"), " 4/0  ");
+  EXPECT_EQ(Render(0.5, "# ?/0010"), " 5/00  ");
+  EXPECT_EQ(Render(0.5, "?/008"), "4/0  ");
+  EXPECT_EQ(Render(0.75, "# ?/008"), " 6/0  ");
+  EXPECT_EQ(Render(1.0, "# ?/008"), "1      ");
+  // An all-zero denominator remains a variable placeholder run.
+  EXPECT_EQ(Render(0.5, "# ?/000"), " 1/002");
+  EXPECT_EQ(Render(0.5, "# ?/0?"), " 1/02");
+  EXPECT_EQ(Render(0.5, "# ?/?0"), " 1/20");
+}
+
+TEST(NumberFormatFraction, QuotedAndEscapedSlashIsLiteral) {
+  EXPECT_EQ(Render(0.5, "# ?\"/\"?"), "  /1");
+  EXPECT_EQ(Render(0.5, "# ?\\/?"), "  /1");
+}
+
+TEST(NumberFormatFraction, QuotedAndEscapedFixedDenominatorIsInvalid) {
+  for (const char* format : {"# ?/\"8\"", "# ?/\\8"}) {
+    std::string out = "prefix";
+    EXPECT_EQ(apply_format(0.5, format, out), FormatStatus::kValueError) << format;
+    EXPECT_EQ(out, "prefix") << format;
+  }
+}
+
+TEST(NumberFormatScale, CommaBeforeDecimalScalesIntegerSection) {
+  EXPECT_EQ(Render(1234.5, "0,.00"), "1.23");
+  EXPECT_EQ(Render(1234.5, "#,##0,.00"), "1.23");
+  EXPECT_EQ(Render(1234.5, "0,,.00"), "0.00");
+  // A comma between fractional placeholders is a passthrough separator, not
+  // a trailing scale marker.
+  EXPECT_EQ(Render(1.2345, "0.0,0"), "1.23");
 }
 
 }  // namespace

@@ -37,7 +37,11 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
   // no sign byte. Mac Excel's two-section formats (`#,##0_);(#,##0)`) expect
   // the positive section to emit "0 " for both `+0` and `-0`; without this
   // guard the minus leaks out via `signbit(-0.0)`.
-  const double rounded = ::formulon::text_format::round_display_decimal(v, decimals);
+  const double decimal_rounded = ::formulon::text_format::round_display_decimal(v, decimals);
+  // A finite value at the double limit can round beyond its binary range.
+  // Convert the original magnitude in that case; the digit-string cap below
+  // still rounds its integer part to Excel's 15 significant digits.
+  const double rounded = std::isfinite(decimal_rounded) ? decimal_rounded : v;
   *negative = rounded < 0.0;
   const double abs_v = std::fabs(rounded);
   // `snprintf` only converts an already Excel-rounded decimal value to its
@@ -313,11 +317,7 @@ void append_dbnum1_general(std::string& out, double abs_v) {
 //   3. Round the absolute value to that precision; capture sign separately.
 //   4. Walk the tokens and weave the integer/fraction digit strings into
 //      the output alongside literals, commas, and percent.
-void render_numeric(const Section& section, std::string_view fmt, double value, std::string& out) {
-  if (section.is_fraction) {
-    render_fraction(section, fmt, value, out);
-    return;
-  }
+FormatStatus render_numeric(const Section& section, std::string_view fmt, double value, std::string& out) {
   double scaled = value;
   if (section.has_percent) {
     scaled *= 100.0;
@@ -325,90 +325,67 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
   for (int i = 0; i < section.trailing_comma_scale; ++i) {
     scaled /= 1000.0;
   }
+  if (!std::isfinite(scaled)) {
+    return FormatStatus::kOverflow;
+  }
+  if (section.is_fraction) {
+    return render_fraction(section, fmt, scaled, out);
+  }
   const int frac_digits = section.fraction_zero_digits + section.fraction_opt_digits + section.fraction_pad_digits;
   bool negative = false;
   std::string int_digits;
   std::string frac_digits_str;
 
+  int exponent = 0;
   if (section.has_scientific) {
-    // Scientific notation: compute mantissa/exponent, format mantissa
-    // through the fixed path, then append the exponent with the configured
-    // sign behaviour.
+    // Scientific notation uses engineering groups sized by every integer
+    // placeholder before the decimal point. Required `0`/`?` placeholders
+    // still act as the minimum padding when the normalized mantissa is
+    // shorter than that group.
+    const int integer_group =
+        std::max(1, section.integer_zero_digits + section.integer_opt_digits + section.integer_pad_digits);
     double mantissa = scaled;
-    int exponent = 0;
     if (mantissa != 0.0) {
-      // Normalise mantissa so the integer part has `integer_digits_total`
-      // digits; default is one digit.
-      const int int_total = section.integer_zero_digits + section.integer_opt_digits + section.integer_pad_digits;
-      const int want_int_digits = int_total > 0 ? int_total : 1;
       const double abs_m = std::fabs(mantissa);
-      const double log10_m = std::log10(abs_m);
-      // Target: floor(log10(|mantissa|)) == want_int_digits - 1.
-      const int target = want_int_digits - 1;
-      int shift = static_cast<int>(std::floor(log10_m)) - target;
-      // Walk toward target in a stable way (avoid pow() rounding drift for
-      // exact powers of 10).
-      if (shift > 0) {
-        for (int i = 0; i < shift; ++i) {
+      const int raw_exponent = static_cast<int>(std::floor(std::log10(abs_m)));
+      // C++ integer division truncates toward zero. Scientific notation needs
+      // floor division so values in (-1, 0) stay in the preceding group.
+      int quotient = raw_exponent / integer_group;
+      if (raw_exponent < 0 && raw_exponent % integer_group != 0) {
+        --quotient;
+      }
+      exponent = quotient * integer_group;
+      if (exponent > 0) {
+        for (int i = 0; i < exponent; ++i) {
           mantissa /= 10.0;
         }
-      } else if (shift < 0) {
-        for (int i = 0; i < -shift; ++i) {
+      } else if (exponent < 0) {
+        for (int i = 0; i > exponent; --i) {
           mantissa *= 10.0;
         }
       }
-      exponent = shift;
+      if (!std::isfinite(mantissa)) {
+        return FormatStatus::kOverflow;
+      }
     }
     format_fixed_digits(mantissa, frac_digits, &negative, &int_digits, &frac_digits_str);
-    // Fall through into the standard walker below, but also remember the
-    // exponent to emit when we hit the scientific marker.
-    // We lay out a specialised walker here rather than reusing the fixed
-    // path's literal copier because the scientific token needs to consume
-    // both the SciPlus/SciMinus token and the subsequent digit tokens that
-    // describe the exponent width.
-    std::string result;
-    if (negative) {
-      result.push_back('-');
-    }
-    // int_digits is already normalised by the scaling + format_fixed_digits
-    // call above; append it verbatim.
-    result.append(int_digits);
-    if (section.has_point && frac_digits > 0) {
-      result.push_back('.');
-      // Pad `frac_digits_str` to `frac_digits` characters.
-      if (static_cast<int>(frac_digits_str.size()) < frac_digits) {
-        frac_digits_str.append(static_cast<std::size_t>(frac_digits) - frac_digits_str.size(), '0');
-      } else if (static_cast<int>(frac_digits_str.size()) > frac_digits) {
-        frac_digits_str.resize(static_cast<std::size_t>(frac_digits));
-      }
-      result.append(frac_digits_str);
-    }
-    // Exponent marker + digits. Sign emission: SciPlus always emits '+' or
-    // '-'; SciMinus emits only '-'.
-    // Use capital or lowercase 'E' matching the format string? In this
-    // simplified implementation we always emit 'E'. (Mac Excel on a ja-JP
-    // keyboard renders a capital E by default.)
-    result.push_back('E');
-    if (exponent >= 0) {
-      if (section.sci_plus) {
-        result.push_back('+');
-      }
-    } else {
-      result.push_back('-');
-    }
-    const int abs_exp = exponent >= 0 ? exponent : -exponent;
-    std::string exp_str = std::to_string(abs_exp);
-    // Pad to at least `sci_digits` digits.
-    if (static_cast<int>(exp_str.size()) < section.sci_digits) {
-      exp_str.insert(exp_str.begin(), static_cast<std::size_t>(section.sci_digits) - exp_str.size(), '0');
-    }
-    result.append(exp_str);
-    out.append(result);
-    (void)fmt;
-    return;
-  }
 
-  format_fixed_digits(scaled, frac_digits, &negative, &int_digits, &frac_digits_str);
+    // Rounding can promote 99.999 to 100.00 (or 9.999 to 10.00). Carry the
+    // engineering exponent by one whole group and format the renormalized
+    // mantissa again so the integer side stays within its group.
+    if (mantissa != 0.0 && static_cast<int>(int_digits.size()) > integer_group) {
+      for (int i = 0; i < integer_group; ++i) {
+        mantissa /= 10.0;
+      }
+      exponent += integer_group;
+      if (!std::isfinite(mantissa)) {
+        return FormatStatus::kOverflow;
+      }
+      format_fixed_digits(mantissa, frac_digits, &negative, &int_digits, &frac_digits_str);
+    }
+  } else {
+    format_fixed_digits(scaled, frac_digits, &negative, &int_digits, &frac_digits_str);
+  }
 
   // `General` chooses its own display precision below.  Its sign must
   // therefore come from the unrounded input, not from the zero-decimal
@@ -440,19 +417,20 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
     --trim;
   }
 
-  // Locate the decimal point inside the token stream so we can partition the
-  // digit tokens into integer / fraction stacks. This mirrors the classifier,
-  // but we need the position again at walk time to drive the interleaving.
+  // Locate the decimal point and scientific marker inside the token stream so
+  // we can partition the digit tokens into integer / fraction / exponent
+  // stacks. This mirrors the classifier, but we need the positions again at
+  // walk time to drive the interleaving.
   int point_index = -1;
+  int scientific_index = -1;
   for (std::size_t i = 0; i < section.tokens.size(); ++i) {
-    if (section.tokens[i].kind == Tok::Point) {
+    if (point_index < 0 && section.tokens[i].kind == Tok::Point) {
       point_index = static_cast<int>(i);
-      break;
+    }
+    if (scientific_index < 0 && (section.tokens[i].kind == Tok::SciPlus || section.tokens[i].kind == Tok::SciMinus)) {
+      scientific_index = static_cast<int>(i);
     }
   }
-  // Scientific tokens were handled in the earlier branch; for plain numeric
-  // rendering we ignore any post-scientific digit tokens (there are none in
-  // practice since the scientific branch returns early).
   auto is_digit_tok = [](Tok k) { return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad; };
 
   // Gather integer digit token positions (in token order). We distribute the
@@ -464,8 +442,51 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
     if (point_index >= 0 && static_cast<int>(i) >= point_index) {
       break;
     }
+    if (scientific_index >= 0 && static_cast<int>(i) >= scientific_index) {
+      break;
+    }
     if (is_digit_tok(section.tokens[i].kind)) {
       int_digit_positions.push_back(i);
+    }
+  }
+
+  // Scientific exponent placeholders consume the prepared exponent digits
+  // independently of the mantissa's integer/fraction streams. Keep the same
+  // right-aligned slot behavior as the common numeric walker so literals,
+  // DBNum substitution, and `_X` spaces remain in their original positions.
+  std::vector<std::size_t> exponent_digit_positions;
+  std::vector<std::string> exponent_slot_text;
+  std::string exponent_digits;
+  if (section.has_scientific) {
+    const int abs_exponent = exponent < 0 ? -exponent : exponent;
+    exponent_digits = std::to_string(abs_exponent);
+    bool after_marker = false;
+    for (std::size_t i = 0; i < section.tokens.size(); ++i) {
+      const Tok kind = section.tokens[i].kind;
+      if (kind == Tok::SciPlus || kind == Tok::SciMinus) {
+        after_marker = true;
+        continue;
+      }
+      if (after_marker && is_digit_tok(kind)) {
+        exponent_digit_positions.push_back(i);
+      }
+    }
+    exponent_slot_text.resize(exponent_digit_positions.size());
+    const std::size_t n_exponent_tokens = exponent_digit_positions.size();
+    const std::size_t n_exponent_digits = exponent_digits.size();
+    if (n_exponent_tokens > 0 && n_exponent_digits > 0) {
+      if (n_exponent_digits >= n_exponent_tokens) {
+        const std::size_t prefix_len = n_exponent_digits - n_exponent_tokens + 1;
+        exponent_slot_text[0].assign(exponent_digits, 0, prefix_len);
+        for (std::size_t i = 1; i < n_exponent_tokens; ++i) {
+          exponent_slot_text[i].assign(1, exponent_digits[prefix_len + i - 1]);
+        }
+      } else {
+        const std::size_t fallback_count = n_exponent_tokens - n_exponent_digits;
+        for (std::size_t i = 0; i < n_exponent_digits; ++i) {
+          exponent_slot_text[fallback_count + i].assign(1, exponent_digits[i]);
+        }
+      }
     }
   }
   const std::size_t n_int_tokens = int_digit_positions.size();
@@ -513,7 +534,9 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
   std::size_t int_cursor = 0;
   std::size_t int_token_cursor = 0;
   std::size_t frac_cursor = 0;
+  std::size_t exponent_token_cursor = 0;
   bool past_point = false;
+  bool in_exponent = false;
 
   auto emit_int_digit_char = [&](char digit) {
     if (section.thousands_separator && int_cursor > 0 && (n_int_digits - int_cursor) % 3 == 0) {
@@ -532,7 +555,22 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
       case Tok::DigitZero:
       case Tok::DigitOpt:
       case Tok::DigitPad:
-        if (past_point) {
+        if (in_exponent) {
+          const std::string* slot = nullptr;
+          if (exponent_token_cursor < exponent_slot_text.size()) {
+            slot = &exponent_slot_text[exponent_token_cursor];
+          }
+          if (slot != nullptr && !slot->empty()) {
+            for (char d : *slot) {
+              append_digit_dbnum(result, section.dbnum_mode, d);
+            }
+          } else if (tk.kind == Tok::DigitZero) {
+            append_digit_dbnum(result, section.dbnum_mode, '0');
+          } else if (tk.kind == Tok::DigitPad) {
+            result.push_back(' ');
+          }
+          ++exponent_token_cursor;
+        } else if (past_point) {
           if (frac_cursor < frac_digits_str.size()) {
             emit_frac_digit_char(frac_digits_str[frac_cursor]);
             ++frac_cursor;
@@ -607,16 +645,28 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
       }
       case Tok::SciPlus:
       case Tok::SciMinus:
-        // Scientific path handled above; should not reach here.
+        // The mantissa was prepared above; the rest of the token stream is
+        // still walked here so exponent placeholders and surrounding
+        // literals retain their format positions.
+        result.push_back('E');
+        if (exponent >= 0) {
+          if (tk.kind == Tok::SciPlus) {
+            result.push_back('+');
+          }
+        } else {
+          result.push_back('-');
+        }
+        in_exponent = true;
         break;
       case Tok::At:
-        // `@` in a numeric context is ignored (Excel emits nothing).
+        // Text-only sections are dispatched before numeric rendering.
         break;
       default:
         break;
     }
   }
   out.append(result);
+  return FormatStatus::kOk;
 }
 
 }  // namespace number_format_detail

@@ -50,34 +50,44 @@ Value text_builtin_impl(const Value* args, std::uint32_t /*arity*/, Arena& arena
     return Value::error(ErrorCode::Value);
   }
 
-  // Mac Excel ja-JP returns the uppercase boolean text and ignores the
-  // format string entirely for a bool value. This matches the observable
-  // oracle and the documented Excel contract for TEXT(TRUE, ...) /
-  // TEXT(FALSE, ...).
-  if (v.is_boolean()) {
-    return Value::text(v.as_boolean() ? std::string_view{"TRUE"} : std::string_view{"FALSE"});
-  }
-
   auto fmt = coerce_to_text(args[1]);
   if (!fmt) {
     return Value::error(fmt.error());
   }
   const std::string& format_text = fmt.value();
-  if (format_text.empty()) {
-    return Value::text({});
+
+  // Booleans use the text-section path. That preserves their visible TRUE /
+  // FALSE spelling while still applying a text placeholder and validating
+  // malformed sections in the format.
+  if (v.is_boolean()) {
+    const std::string_view boolean_text = v.as_boolean() ? "TRUE" : "FALSE";
+    std::string out;
+    const auto status = ::formulon::text_format::apply_text_format(boolean_text, format_text, out);
+    if (status != ::formulon::text_format::FormatStatus::kOk) {
+      return Value::error(ErrorCode::Value);
+    }
+    return Value::text(arena.intern(out));
   }
 
   // Text goes through the shared numeric-coercion ladder, the same one
   // arithmetic and FLOOR use, so anything `=A1+0` accepts TEXT formats as
   // well: numeric strings ("42", " $1,234 "), percent, currency, and
-  // date / time text. Only a value the ladder itself rejects ("abc") is
-  // #VALUE!.
+  // date / time text. A value the ladder rejects (for example "abc") is
+  // rendered through the format's text section instead.
   double number = 0.0;
   if (v.is_text()) {
     bool from_date_text = false;
     auto coerced = coerce_text_to_number(v.as_text(), &from_date_text);
     if (!coerced) {
-      return Value::error(coerced.error());
+      if (coerced.error() != ErrorCode::Value) {
+        return Value::error(coerced.error());
+      }
+      std::string out;
+      const auto status = ::formulon::text_format::apply_text_format(v.as_text(), format_text, out);
+      if (status != ::formulon::text_format::FormatStatus::kOk) {
+        return Value::error(ErrorCode::Value);
+      }
+      return Value::text(arena.intern(out));
     }
     number = coerced.value();
     // The ladder's date fallback always yields a 1900-system serial. The
@@ -128,7 +138,11 @@ Expected<int, ErrorCode> fixed_read_int(const Value& v) {
   if (std::isnan(d.value()) || std::isinf(d.value())) {
     return ErrorCode::Num;
   }
-  return static_cast<int>(std::trunc(d.value()));
+  const double truncated = std::trunc(d.value());
+  if (truncated < -127.0 || truncated > 127.0) {
+    return ErrorCode::Value;
+  }
+  return static_cast<int>(truncated);
 }
 
 Expected<double, ErrorCode> read_finite_number_arg(const Value* args, std::uint32_t index) {
@@ -152,9 +166,6 @@ Expected<int, ErrorCode> read_optional_fixed_decimals(const Value* args, std::ui
       return parsed.error();
     }
     decimals = parsed.value();
-  }
-  if (decimals > 127 || decimals < -127) {
-    return ErrorCode::Value;
   }
   return decimals;
 }

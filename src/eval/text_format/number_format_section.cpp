@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string_view>
 #include <vector>
 
@@ -26,6 +27,10 @@ namespace formulon {
 namespace text_format {
 namespace number_format_detail {
 namespace {
+
+// An 18-digit fixed denominator keeps one decimal digit times the
+// denominator plus carry below UINT64_MAX in the fraction renderer.
+constexpr std::uint64_t kMaxFractionDenominator = 999999999999999999ULL;
 
 // After tokenization, rewrite DateMOrMin tokens into either DateM/DateMM
 // (month) or DateMin/DateMMMin (minute) based on surrounding context.
@@ -153,6 +158,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
   int frac_opt = 0;
   int frac_pad = 0;
   bool has_percent = false;
+  int percent_count = 0;
   bool saw_sci = false;
   bool sci_plus = false;
   int sci_digits = 0;
@@ -194,6 +200,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
     }
     if (tk.kind == Tok::Percent) {
       has_percent = true;
+      ++percent_count;
     }
     if (tk.kind == Tok::SciPlus || tk.kind == Tok::SciMinus) {
       saw_sci = true;
@@ -242,6 +249,24 @@ void classify(Section& section, std::string_view fmt) noexcept {
       }
     }
   }
+  // A comma run immediately after the last integer placeholder and before
+  // the decimal point is also a scale marker (`0,.00`, `#,##0,.00`). A comma
+  // between fractional placeholders (`0.0,0`) remains an inert separator.
+  if (point_index >= 0 && last_integer_digit_index >= 0 && last_integer_digit_index + 1 < point_index) {
+    bool only_scaling_commas = true;
+    int before_point_commas = 0;
+    for (int i = last_integer_digit_index + 1; i < point_index; ++i) {
+      if (section.tokens[static_cast<std::size_t>(i)].kind == Tok::Comma) {
+        ++before_point_commas;
+      } else {
+        only_scaling_commas = false;
+        break;
+      }
+    }
+    if (only_scaling_commas) {
+      trailing_commas += before_point_commas;
+    }
+  }
   // Thousands-separator test: any `,` between two integer digit tokens
   // triggers it. Bounded by the integer part so a scaling comma placed after
   // the fraction cannot be mistaken for a group separator.
@@ -288,7 +313,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
           // renderer skips them when emitting the regular date sequence.
           Token marker;
           marker.kind = Tok::FracSecDigits;
-          marker.width = static_cast<std::uint8_t>(digits);
+          marker.width = static_cast<std::size_t>(digits);
           section.tokens[i + 1] = marker;
           // Clear the fractional digit tokens (mark them as empty literals).
           for (std::size_t k = i + 2; k < j; ++k) {
@@ -308,13 +333,12 @@ void classify(Section& section, std::string_view fmt) noexcept {
   }
 
   section.is_date = any_date;
-  // A section is classified as `text` whenever it contains an `@` token and
-  // no numeric digit tokens. Stray date letters that slipped into literal
-  // phrases (e.g. the `s` in "text is @") are tolerated: we demote them to
-  // literals during text rendering by ignoring any non-`@` / non-Literal
-  // token in `render_text_section`.
-  section.is_text =
-      any_at && int_zero == 0 && int_opt == 0 && int_pad == 0 && frac_zero == 0 && frac_opt == 0 && frac_pad == 0;
+  // A text section contains `@` and literal text, without numeric or date
+  // tokens. Literal phrases containing date letters must be quoted.
+  const bool has_numeric_tokens = int_zero != 0 || int_opt != 0 || int_pad != 0 || frac_zero != 0 || frac_opt != 0 ||
+                                  frac_pad != 0 || has_general || saw_sci || has_percent;
+  const bool invalid_mixed_at = any_at && (any_date || has_numeric_tokens);
+  section.is_text = any_at && !invalid_mixed_at;
   section.integer_zero_digits = int_zero;
   section.integer_opt_digits = int_opt;
   section.integer_pad_digits = int_pad;
@@ -328,6 +352,14 @@ void classify(Section& section, std::string_view fmt) noexcept {
   section.sci_plus = sci_plus;
   section.sci_digits = sci_digits;
 
+  // Excel rejects a text placeholder mixed with any numeric, date, General,
+  // or scientific token. A lone text section (including quoted literals
+  // around `@`) remains valid. Repeated percent markers and scientific
+  // percent formats are also invalid stored number formats.
+  if (invalid_mixed_at || percent_count > 1 || (saw_sci && has_percent)) {
+    section.has_invalid_bracket = true;
+  }
+
   // Excel rejects formats that mix date tokens with number-digit tokens in
   // the same section (e.g. `mm###`). Mac Excel 365 and IronCalc both
   // surface `#VALUE!` here. Reuse the `has_invalid_bracket` channel so
@@ -338,22 +370,11 @@ void classify(Section& section, std::string_view fmt) noexcept {
 
   // --- Fraction format detection (`# ?/?`, `0/0`, etc.) ----------------
   //
-  // A fraction format has these features:
-  //   * Exactly one literal '/' byte token in the section.
-  //   * Immediately before the slash: a contiguous run of digit-placeholder
-  //     tokens (`#`/`?`/`0`) -- the numerator group.
-  //   * Immediately after the slash: a contiguous run of digit-placeholder
-  //     tokens -- the denominator group.
-  //   * Optionally before the numerator: an integer-placeholder run and
-  //     exactly one literal-space byte that visually separates the integer
-  //     from the numerator.
-  //   * No `.` (Point) token (fractions and decimal points are mutually
-  //     exclusive).
-  //
-  // When detected, we set `is_fraction` and the digit-group bounds; the
-  // renderer's `render_numeric` branches into `render_fraction` based on
-  // the flag. Date sections never qualify (the slash inside a date is a
-  // date separator).
+  // Fraction structure is driven by an unquoted, unescaped slash token. A
+  // slash copied from a quoted or escaped payload remains an ordinary
+  // literal, even when it sits between digit placeholders. A raw denominator
+  // containing a non-zero digit is fixed; all-zero and placeholder runs
+  // remain variable bounded searches.
   auto is_digit_tok2 = [](Tok k) { return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad; };
   auto is_single_byte_literal = [&fmt](const Token& tk, char want) {
     if (tk.kind != Tok::Literal) {
@@ -368,11 +389,12 @@ void classify(Section& section, std::string_view fmt) noexcept {
     return fmt[tk.lit_begin] == want;
   };
   if (!any_date && point_index < 0) {
-    // Find slash candidate.
+    // Find exactly one structural slash candidate. Quoted/escaped slashes
+    // deliberately do not participate in fraction recognition.
     int slash_idx = -1;
     int slash_count = 0;
     for (std::size_t i = 0; i < section.tokens.size(); ++i) {
-      if (is_single_byte_literal(section.tokens[i], '/')) {
+      if (section.tokens[i].fraction_slash_candidate) {
         slash_idx = static_cast<int>(i);
         ++slash_count;
       }
@@ -384,17 +406,81 @@ void classify(Section& section, std::string_view fmt) noexcept {
       while (num_begin > 0 && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin) - 1].kind)) {
         --num_begin;
       }
-      // Walk right from slash to find denominator group.
+      // Walk right from slash to find either a raw integer denominator or a
+      // variable placeholder run. A raw run beginning with zero remains
+      // variable only when every raw digit is zero (`/000`); `/08` and
+      // `/0010` are fixed denominators with a literal zero prefix.
       int den_begin = slash_idx + 1;
       int den_end = den_begin;
-      while (static_cast<std::size_t>(den_end) + 1 <= section.tokens.size() &&
-             is_digit_tok2(section.tokens[static_cast<std::size_t>(den_end)].kind)) {
-        ++den_end;
+      bool fixed_denominator = false;
+      std::uint64_t fixed_denominator_value = 0;
+      int fixed_den_end = den_begin;
+      int raw_den_end = den_begin;
+      bool raw_den_overflow = false;
+      bool raw_den_nonzero = false;
+      while (raw_den_end < static_cast<int>(section.tokens.size())) {
+        const Token& token = section.tokens[static_cast<std::size_t>(raw_den_end)];
+        char digit = '\0';
+        if (token.kind == Tok::DigitZero) {
+          digit = '0';
+        } else if (token.kind == Tok::Literal && !token.protected_literal && token.lit_end == token.lit_begin + 1 &&
+                   token.lit_begin < fmt.size()) {
+          const char raw = fmt[token.lit_begin];
+          if (raw >= '0' && raw <= '9') {
+            digit = raw;
+          }
+        }
+        if (digit == '\0') {
+          break;
+        }
+        raw_den_nonzero = raw_den_nonzero || digit != '0';
+        const std::uint64_t digit_value = static_cast<std::uint64_t>(digit - '0');
+        constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
+        if (fixed_denominator_value > (kMax - digit_value) / 10U) {
+          section.has_invalid_bracket = true;
+          raw_den_overflow = true;
+          break;
+        }
+        fixed_denominator_value = fixed_denominator_value * 10U + digit_value;
+        ++raw_den_end;
       }
+      if (!raw_den_overflow && raw_den_end > den_begin && raw_den_nonzero) {
+        fixed_denominator = true;
+        fixed_den_end = raw_den_end;
+        if (fixed_denominator_value > kMaxFractionDenominator) {
+          // Keep all fraction arithmetic within the uint64_t bound used by
+          // the renderer. Wider literal denominators are malformed for this
+          // bounded format engine rather than partially rendered.
+          section.has_invalid_bracket = true;
+          fixed_denominator = false;
+        }
+      } else {
+        // A run containing only raw zero bytes is a normal zero-placeholder
+        // denominator. This also handles mixed forms such as `0?` and `?0`.
+        while (static_cast<std::size_t>(den_end) < section.tokens.size() &&
+               is_digit_tok2(section.tokens[static_cast<std::size_t>(den_end)].kind)) {
+          ++den_end;
+        }
+        if (den_end == den_begin && den_begin < static_cast<int>(section.tokens.size())) {
+          const Token& first = section.tokens[static_cast<std::size_t>(den_begin)];
+          if (first.kind == Tok::Literal && first.protected_literal && first.lit_begin < fmt.size() &&
+              first.lit_end > first.lit_begin && fmt[first.lit_begin] >= '1' && fmt[first.lit_begin] <= '9') {
+            // A quoted or escaped fixed denominator is not a structural
+            // denominator. Excel rejects this syntax rather than treating
+            // the payload as a supported fraction format.
+            section.has_invalid_bracket = true;
+          }
+        }
+      }
+
+      if (fixed_denominator) {
+        den_end = fixed_den_end;
+      }
+
       // Numerator and denominator both need to be at least one digit.
       const bool has_num =
           num_end >= num_begin && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin)].kind);
-      const bool has_den = den_end > den_begin;
+      const bool has_den = fixed_denominator ? fixed_den_end > den_begin : den_end > den_begin;
       if (has_num && has_den) {
         // Optional integer group: a literal-space immediately precedes the
         // numerator group, and a digit-placeholder run precedes the space.
@@ -417,8 +503,17 @@ void classify(Section& section, std::string_view fmt) noexcept {
         section.fraction_den_end = den_end;
         section.fraction_slash_index = slash_idx;
         section.fraction_int_max_digits = int_end - int_begin;
-        section.fraction_num_max_digits = (num_end + 1) - num_begin;
-        section.fraction_den_max_digits = den_end - den_begin;
+        section.fraction_den_max_digits = fixed_denominator ? 0 : den_end - den_begin;
+        section.fraction_fixed_denominator = fixed_denominator;
+        section.fraction_fixed_denominator_value = fixed_denominator ? fixed_denominator_value : 1U;
+        // A trailing comma is a scaling marker for ordinary numbers, but it
+        // is invalid syntax after a fraction denominator.
+        for (std::size_t i = static_cast<std::size_t>(den_end); i < section.tokens.size(); ++i) {
+          if (section.tokens[i].kind == Tok::Comma) {
+            section.has_invalid_bracket = true;
+            break;
+          }
+        }
       }
     }
   }
