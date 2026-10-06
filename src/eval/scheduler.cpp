@@ -298,11 +298,13 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       }
       return out;
     }
-    if (obs.log != nullptr) {
-      // A reader already evaluated as a singleton in this recalc starts the
-      // solve from the value it showed before.
+    {
+      // A reader already evaluated as a singleton starts from the value it showed before.
       std::lock_guard<std::mutex> guard(write_mutex);
-      obs.log->restore_prior_values(wb, cells);
+      if (obs.log != nullptr) {
+        obs.log->restore_prior_values(wb, cells);
+      }
+      prepare_iterative_component_seeds(wb, cells);
     }
     const IterativeOutcome outcome =
         run_iterative_solve(cells, iter_opts, evaluate_one, commit, progress_cb, progress_user_data);
@@ -919,6 +921,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
 
     // Phase 5: clear the dirty set.
     engine.dirty_.clear();
+    engine.disabled_cycle_refs_pending_ = false;
 
     if (stats != nullptr) {
       stats->cells_evaluated = cells_evaluated;

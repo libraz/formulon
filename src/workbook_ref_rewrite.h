@@ -35,8 +35,9 @@ namespace formulon {
 // Tables and pivot caches hang off the workbook rather than off a `Sheet`, so
 // each resolves its own owner: a table through its `sheet_index`, a cache
 // through the sheet name recorded in its worksheet source. An owner that does
-// not resolve falls back to the first slot, which is the whole table whenever
-// the transform is uniform.
+// not resolve uses `unowned_transform` instead of borrowing slot zero. This is
+// important for a row/column edit: an unqualified reference on a missing
+// worksheet must not be treated as local to the first sheet.
 //
 // `direct_sheet_old/new` covers OOXML's worksheetSource/@sheet field, which is
 // a plain metadata string rather than a formula AST. For removal,
@@ -44,15 +45,15 @@ namespace formulon {
 // source became unavailable.
 //
 // Callers pass one slot per sheet. A short `per_sheet` degrades the excess
-// sheets to the first slot rather than skipping the rewrite, so no exit path
-// leaves a formula holder describing pre-edit coordinates.
+// sheet-attached metadata to the first slot rather than skipping the rewrite,
+// so no exit path leaves a formula holder describing pre-edit coordinates.
 void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
                                      const std::vector<const parser::RefTransform*>& per_sheet,
                                      std::vector<TableMetadata>& tables,
                                      std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
                                      std::string_view direct_sheet_old, std::string_view direct_sheet_new,
-                                     std::string_view removed_sheet_name,
-                                     std::vector<std::uint32_t>& dropped_cache_ids);
+                                     std::string_view removed_sheet_name, std::vector<std::uint32_t>& dropped_cache_ids,
+                                     const parser::RefTransform& unowned_transform);
 
 // Applies one AST transform to every formula-bearing holder in the workbook.
 // The caller supplies the transform policy, so rename and removal share the
@@ -76,10 +77,19 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
                                  std::string_view direct_sheet_new, std::string_view removed_sheet_name,
                                  std::vector<std::uint32_t>& dropped_cache_ids, bool& defined_names_changed);
 
-/// Applies `transform` to every defined name's formula. Returns true when at
-/// least one definition changed, which means every formula that references a
-/// name now resolves to a different range than the dep graph was built from.
-bool rewrite_defined_names(std::vector<DefinedName>& names, const parser::RefTransform& transform);
+/// Remaps valid `<workbookView>` `activeTab` / `firstSheet` indices in the raw
+/// `<bookViews>` fragment. Each entry in `old_to_new` maps one pre-mutation
+/// sheet index to its post-mutation index. Missing index attributes use the
+/// OOXML default of zero and are materialized only when that default changes.
+/// Invalid/out-of-range attributes remain untouched. Malformed fragments,
+/// wrong roots, and fragments that need no valid change remain byte-identical.
+bool remap_book_views_xml(std::string& book_views_xml, const std::vector<std::uint32_t>& old_to_new);
+
+/// Applies the transform associated with each name's owning sheet. Workbook
+/// scoped names and names whose owner is outside `per_sheet` use the explicit
+/// `unowned_transform` policy instead of borrowing a sheet slot.
+bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<const parser::RefTransform*>& per_sheet,
+                           const parser::RefTransform& unowned_transform);
 
 // Moves the ranges inside `sheet`'s retained worksheet extensions -- the
 // raw `<extLst>` and the `.xlsb` tail records -- for a row/column edit, by

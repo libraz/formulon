@@ -1,9 +1,107 @@
 // Structural workbook mutation tests grouped by public surface.
+#include "io/ooxml_reader.h"
+#include "pugixml.hpp"
 #include "sheet_ops_test_support.h"
 
 namespace formulon {
 namespace {
 using namespace sheet_ops_test;
+
+void ExpectBookViewIndices(const Workbook& wb, const std::vector<std::pair<unsigned, unsigned>>& expected) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(wb.book_views_xml().c_str()));
+  std::size_t index = 0U;
+  for (pugi::xml_node view : doc.child("bookViews").children("workbookView")) {
+    ASSERT_LT(index, expected.size());
+    EXPECT_EQ(view.attribute("activeTab").as_uint(), expected[index].first) << index;
+    EXPECT_EQ(view.attribute("firstSheet").as_uint(), expected[index].second) << index;
+    ++index;
+  }
+  EXPECT_EQ(index, expected.size());
+}
+
+TEST(WorkbookSheetOps, RemoveRemapsEveryBookViewAndPreservesOtherMetadata) {
+  Workbook wb = ThreeSheetWorkbook();
+  wb.set_book_views_xml(
+      "<bookViews xmlns:xr=\"urn:test\">"
+      "<workbookView activeTab=\"2\" firstSheet=\"1\" xr:uid=\"keep\">"
+      "<extLst><!--keep-comment--><?keep instruction?>"
+      "<ext uri=\"extension\"><xr:extra value=\"unchanged\"/></ext></extLst>"
+      "</workbookView><workbookView activeTab=\"1\" firstSheet=\"2\" windowWidth=\"640\"/>"
+      "</bookViews>");
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(0U)));
+  ExpectBookViewIndices(wb, {{1U, 0U}, {0U, 1U}});
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(wb.book_views_xml().c_str()));
+  const auto root = doc.child("bookViews");
+  const auto first = root.child("workbookView");
+  EXPECT_STREQ(root.attribute("xmlns:xr").value(), "urn:test");
+  EXPECT_STREQ(first.attribute("xr:uid").value(), "keep");
+  EXPECT_STREQ(first.child("extLst").child("ext").child("xr:extra").attribute("value").value(), "unchanged");
+  EXPECT_EQ(first.next_sibling("workbookView").attribute("windowWidth").as_uint(), 640U);
+  EXPECT_NE(wb.book_views_xml().find("<!--keep-comment-->"), std::string::npos);
+  EXPECT_NE(wb.book_views_xml().find("<?keep instruction?>"), std::string::npos);
+}
+
+TEST(WorkbookSheetOps, RemoveSelectedLastSheetKeepsBookViewsInBoundsAfterRoundTrip) {
+  Workbook wb = ThreeSheetWorkbook();
+  wb.set_book_views_xml("<bookViews><workbookView activeTab=\"2\" firstSheet=\"2\"/></bookViews>");
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(2U)));
+  ExpectBookViewIndices(wb, {{1U, 1U}});
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved));
+  auto loaded = io::read_ooxml(io::ByteSpan{saved.value().data(), saved.value().size()});
+  ASSERT_TRUE(static_cast<bool>(loaded));
+  ExpectBookViewIndices(loaded.value().workbook, {{1U, 1U}});
+}
+
+TEST(WorkbookSheetOps, MoveBookViewsFollowTheirSheetsInBothDirections) {
+  for (bool forward : {true, false}) {
+    SCOPED_TRACE(forward);
+    Workbook wb = ThreeSheetWorkbook();
+    wb.set_book_views_xml(
+        "<bookViews><workbookView activeTab=\"0\" firstSheet=\"0\"/>"
+        "<workbookView activeTab=\"1\" firstSheet=\"1\"/>"
+        "<workbookView activeTab=\"2\" firstSheet=\"2\"/></bookViews>");
+    ASSERT_TRUE(static_cast<bool>(wb.move_sheet(forward ? 0U : 2U, forward ? 2U : 0U)));
+    if (forward) {
+      ExpectBookViewIndices(wb, {{2U, 2U}, {0U, 0U}, {1U, 1U}});
+    } else {
+      ExpectBookViewIndices(wb, {{1U, 1U}, {2U, 2U}, {0U, 0U}});
+    }
+  }
+}
+
+TEST(WorkbookSheetOps, MoveMaterializesImplicitFirstSheetBookViewIndices) {
+  Workbook wb = ThreeSheetWorkbook();
+  wb.set_book_views_xml("<bookViews><workbookView windowWidth=\"640\"/></bookViews>");
+  ASSERT_TRUE(static_cast<bool>(wb.move_sheet(0U, 2U)));
+  ExpectBookViewIndices(wb, {{2U, 2U}});
+}
+
+TEST(WorkbookSheetOps, UnaffectedBookViewsRemainByteIdentical) {
+  Workbook wb = ThreeSheetWorkbook();
+  const std::string xml = "<bookViews>\n  <workbookView activeTab='0' firstSheet='0' />\n</bookViews>";
+  wb.set_book_views_xml(xml);
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(2U)));
+  EXPECT_EQ(wb.book_views_xml(), xml);
+  ASSERT_TRUE(static_cast<bool>(wb.move_sheet(0U, 0U)));
+  EXPECT_EQ(wb.book_views_xml(), xml);
+  ASSERT_FALSE(static_cast<bool>(wb.move_sheet(0U, 9U)));
+  EXPECT_EQ(wb.book_views_xml(), xml);
+}
+
+TEST(WorkbookSheetOps, UnparseableAndUnresolvedBookViewsRemainUnchanged) {
+  for (const std::string xml : {"<bookViews><workbookView activeTab=\"999\" firstSheet=\"bad\"/></bookViews>",
+                                "<bookViews><workbookView activeTab=\"-1\" firstSheet=\"4294967296\"/></bookViews>",
+                                "<bookViews><workbookView", "<extLst><workbookView activeTab=\"0\"/></extLst>", ""}) {
+    SCOPED_TRACE(xml);
+    Workbook wb = ThreeSheetWorkbook();
+    wb.set_book_views_xml(xml);
+    ASSERT_TRUE(static_cast<bool>(wb.move_sheet(0U, 2U)));
+    EXPECT_EQ(wb.book_views_xml(), xml);
+  }
+}
 
 TEST(WorkbookSheetOps, SheetMovePreservesRawWorksheetMetadata) {
   Workbook wb = ThreeSheetWorkbook();
@@ -376,6 +474,140 @@ TEST(WorkbookSheetOps, SetDefinedNameRejectsEmptyName) {
   auto r = wb.set_defined_name("", "=1");
   ASSERT_FALSE(static_cast<bool>(r));
   EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidArgument);
+}
+
+TEST(WorkbookSheetOps, BulkDefinedNameReplacementReindexesAliasesAndPreservesUnrelatedSpill) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));
+
+  wb.set_defined_names({DefinedName{"Base", "=A1", -1, false, ""}, DefinedName{"Alias", "=Base", -1, false, ""},
+                        DefinedName{"UnrelatedSpill", "=SEQUENCE(2,1)", -1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=Alias")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=UnrelatedSpill")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(0U, 1U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(0U, 1U).as_number(), 1.0);
+  ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(1U, 3U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(1U, 3U).as_number(), 2.0);
+
+  // Retarget Base while keeping Alias unchanged. The unrelated named spill
+  // changes only its comment/hidden metadata and must stay committed while
+  // the affected alias formula is re-registered.
+  wb.set_defined_names({DefinedName{"Base", "=A2", -1, false, ""}, DefinedName{"Alias", "=Base", -1, false, ""},
+                        DefinedName{"UnrelatedSpill", "=SEQUENCE(2,1)", -1, true, "preserve"}});
+  const Value spill_before_recalc = wb.sheet(0U).resolve_cell_value(1U, 3U);
+  ASSERT_TRUE(spill_before_recalc.is_number());
+  EXPECT_DOUBLE_EQ(spill_before_recalc.as_number(), 2.0);
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(0U, 1U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(0U, 1U).as_number(), 2.0);
+  ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(1U, 3U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(1U, 3U).as_number(), 2.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(8.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(0U, 1U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(0U, 1U).as_number(), 8.0);
+
+  // Removing Base also removes the value behind Alias. The unrelated spill
+  // remains available and is not swept by the name-list replacement.
+  wb.set_defined_names({DefinedName{"Alias", "=Base", -1, false, ""},
+                        DefinedName{"UnrelatedSpill", "=SEQUENCE(2,1)", -1, true, "preserve"}});
+  const Value spill_before_remove_recalc = wb.sheet(0U).resolve_cell_value(1U, 3U);
+  ASSERT_TRUE(spill_before_remove_recalc.is_number());
+  EXPECT_DOUBLE_EQ(spill_before_remove_recalc.as_number(), 2.0);
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value removed_alias = wb.sheet(0U).resolve_cell_value(0U, 1U);
+  ASSERT_TRUE(removed_alias.is_error());
+  EXPECT_EQ(removed_alias.as_error(), ErrorCode::Name);
+  ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(1U, 3U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(1U, 3U).as_number(), 2.0);
+}
+
+TEST(WorkbookSheetOps, BulkDefinedNamesRespectGlobalAndLocalScopes) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Alpha");
+  wb.add_sheet("Beta");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 1U, 0U, Value::number(20.0))));
+  wb.set_defined_names(
+      {DefinedName{"Rate", "=Alpha!A1", -1, false, ""}, DefinedName{"Rate", "=Beta!A1", 1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=Rate")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 1U, "=Rate")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(0U, 1U).is_number());
+  ASSERT_TRUE(wb.sheet(1U).resolve_cell_value(0U, 1U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(0U, 1U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(1U).resolve_cell_value(0U, 1U).as_number(), 2.0);
+
+  wb.set_defined_names(
+      {DefinedName{"Rate", "=Alpha!A1", -1, false, ""}, DefinedName{"Rate", "=Beta!A2", 1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(0U, 1U).is_number());
+  ASSERT_TRUE(wb.sheet(1U).resolve_cell_value(0U, 1U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(0U, 1U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(1U).resolve_cell_value(0U, 1U).as_number(), 20.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 1U, 0U, Value::number(30.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(1U).resolve_cell_value(0U, 1U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(1U).resolve_cell_value(0U, 1U).as_number(), 30.0);
+  ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(0U, 1U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(0U, 1U).as_number(), 1.0);
+}
+
+TEST(WorkbookSheetOps, BulkDefinedNameAdditionRecoversCachedNameError) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Later")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value before = wb.sheet(0U).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(before.is_error());
+  EXPECT_EQ(before.as_error(), ErrorCode::Name);
+  wb.set_defined_names({DefinedName{"Later", "=42", -1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value after = wb.sheet(0U).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(after.is_number());
+  EXPECT_DOUBLE_EQ(after.as_number(), 42.0);
+}
+
+TEST(WorkbookSheetOps, BulkDefinedNameMetadataChangePreservesCommittedSpill) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({DefinedName{"Array", "=SEQUENCE(2,1)", -1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Array")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  wb.set_defined_names({DefinedName{"ARRAY", "=SEQUENCE(2,1)", -1, true, "comment"}});
+  const Value tail = wb.sheet(0U).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(tail.is_number());
+  EXPECT_DOUBLE_EQ(tail.as_number(), 2.0);
+  auto recalc = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(recalc));
+  EXPECT_EQ(recalc.value().cells_evaluated, 0U);
+}
+
+TEST(WorkbookSheetOps, LoadedDefinedNameAliasesStayLiveAfterSourceEdit) {
+  Workbook src = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0U, 0U, 0U, Value::number(5.0))));
+  src.set_defined_names({DefinedName{"Base", "=A1", -1, false, ""}, DefinedName{"Alias", "=Base", -1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0U, 0U, 1U, "=Alias")));
+  ASSERT_TRUE(static_cast<bool>(src.recalc(eval::default_registry())));
+  auto saved = src.save();
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+
+  auto loaded = io::read_ooxml(io::ByteSpan{saved.value().data(), saved.value().size()});
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& dst = loaded.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(dst.recalc(eval::default_registry())));
+  const Value first = dst.sheet(0U).resolve_cell_value(0U, 1U);
+  ASSERT_TRUE(first.is_number());
+  EXPECT_DOUBLE_EQ(first.as_number(), 5.0);
+
+  ASSERT_TRUE(static_cast<bool>(dst.set_cell_value(0U, 0U, 0U, Value::number(9.0))));
+  ASSERT_TRUE(static_cast<bool>(dst.recalc(eval::default_registry())));
+  const Value after_edit = dst.sheet(0U).resolve_cell_value(0U, 1U);
+  ASSERT_TRUE(after_edit.is_number());
+  EXPECT_DOUBLE_EQ(after_edit.as_number(), 9.0);
 }
 
 }  // namespace

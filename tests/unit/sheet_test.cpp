@@ -166,6 +166,51 @@ TEST(SheetTest, StructuralEditsShiftPivotAnchorOnBothAxes) {
   EXPECT_EQ(s.pivot_tables()[0]->anchor_col(), 9U);
 }
 
+TEST(SheetTest, StructuralEditsKeepPivotSpansInsideGridAtEdges) {
+  for (const bool rows : {false, true}) {
+    SCOPED_TRACE(rows ? "rows" : "columns");
+    Sheet s("Sheet1");
+    const std::uint32_t bound = rows ? Sheet::kMaxRows : Sheet::kMaxCols;
+    const std::uint32_t insert_at = bound - 3U;
+
+    auto near_edge = std::make_unique<pivot::PivotTable>();
+    auto fully_shifted = std::make_unique<pivot::PivotTable>();
+    auto zero_span = std::make_unique<pivot::PivotTable>();
+    if (rows) {
+      near_edge->set_anchor(insert_at, 4U, 3U, 2U);
+      fully_shifted->set_anchor(bound - 1U, 8U, 1U, 1U);
+      zero_span->set_anchor(bound - 1U, 12U, 0U, 1U);
+    } else {
+      near_edge->set_anchor(4U, insert_at, 2U, 3U);
+      fully_shifted->set_anchor(8U, bound - 1U, 1U, 1U);
+      zero_span->set_anchor(12U, bound - 1U, 1U, 0U);
+    }
+    s.add_pivot_table(std::move(near_edge));
+    s.add_pivot_table(std::move(fully_shifted));
+    s.add_pivot_table(std::move(zero_span));
+
+    if (rows) {
+      s.insert_rows(insert_at, 1U);
+    } else {
+      s.insert_cols(insert_at, 1U);
+    }
+
+    ASSERT_EQ(s.pivot_tables().size(), 3U);
+    EXPECT_EQ(s.pivot_tables()[0]->anchor_row(), rows ? bound - 2U : 4U);
+    EXPECT_EQ(s.pivot_tables()[0]->anchor_col(), rows ? 4U : bound - 2U);
+    EXPECT_EQ(s.pivot_tables()[0]->span_rows(), 2U);
+    EXPECT_EQ(s.pivot_tables()[0]->span_cols(), 2U);
+    EXPECT_EQ(s.pivot_tables()[1]->anchor_row(), rows ? bound - 1U : 8U);
+    EXPECT_EQ(s.pivot_tables()[1]->anchor_col(), rows ? 8U : bound - 1U);
+    EXPECT_EQ(s.pivot_tables()[1]->span_rows(), 1U);
+    EXPECT_EQ(s.pivot_tables()[1]->span_cols(), 1U);
+    EXPECT_EQ(s.pivot_tables()[2]->anchor_row(), rows ? bound - 1U : 12U);
+    EXPECT_EQ(s.pivot_tables()[2]->anchor_col(), rows ? 12U : bound - 1U);
+    EXPECT_EQ(s.pivot_tables()[2]->span_rows(), rows ? 0U : 1U);
+    EXPECT_EQ(s.pivot_tables()[2]->span_cols(), rows ? 1U : 0U);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Overwrite semantics
 // ---------------------------------------------------------------------------

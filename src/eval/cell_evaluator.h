@@ -106,6 +106,16 @@ bool settle_component_by_reads(const Workbook& workbook, const std::vector<CellN
                                const std::function<Value(CellNodeId, EvalState*)>& evaluate,
                                const std::function<void(CellNodeId, Value)>& commit);
 
+/// Prepares the cached values of an iterative component for its first solve.
+/// A cycle persisted while iterative calculation was disabled holds `#REF!`,
+/// which is not a useful numerical seed. Until the first full recalculation
+/// after iteration is enabled (`RecalcEngine::disabled_cycle_refs_pending`), a
+/// formula member with a cached `#REF!` is reset to Blank; afterwards a
+/// `#REF!` is a genuine solver result and seeds the solve like any value.
+/// Only the supplied component is visited. Callers must hold the recalc
+/// write lock while restoring any prior values and invoking this helper.
+void prepare_iterative_component_seeds(Workbook& workbook, const std::vector<CellNodeId>& cells);
+
 }  // namespace eval
 }  // namespace formulon
 

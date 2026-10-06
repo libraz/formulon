@@ -13,6 +13,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -66,6 +67,8 @@ namespace {
 // sheet-name helpers. Declared here so the early `add_sheet_validated`
 // definition can call it.
 Expected<void, Error> validate_sheet_name(std::string_view name);
+void reindex_formulas_referencing_sheet(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                                        const Workbook& workbook, std::string_view changed_sheet);
 
 parser::AstNode* parse_indexable_formula(std::string_view body, Arena& arena) {
   return eval::parse_formula_entry(body, arena);
@@ -222,6 +225,10 @@ std::size_t Workbook::add_sheet(std::string name) {
     return kMaxSheets;
   }
   sheets_.emplace_back(Sheet{std::move(name)});
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  if (mutator.has_ever_registered_formula()) {
+    reindex_formulas_referencing_sheet(sheets_, mutator, *this, sheets_.back().name());
+  }
   return sheets_.size() - 1U;
 }
 
@@ -229,6 +236,10 @@ Expected<std::size_t, Error> Workbook::add_sheet_checked(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
   sheets_.emplace_back(Sheet{std::move(name)});
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  if (mutator.has_ever_registered_formula()) {
+    reindex_formulas_referencing_sheet(sheets_, mutator, *this, sheets_.back().name());
+  }
   return sheets_.size() - 1U;
 }
 
@@ -243,6 +254,10 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
   }
   RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
   sheets_.emplace_back(Sheet{std::move(name)});
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  if (mutator.has_ever_registered_formula()) {
+    reindex_formulas_referencing_sheet(sheets_, mutator, *this, sheets_.back().name());
+  }
   return &sheets_.back();
 }
 
@@ -304,7 +319,7 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
 }
 
 // Which reference spelling `references_any` compares against its candidates.
-enum class RefKind : std::uint8_t { kName, kTable };
+enum class RefKind : std::uint8_t { kName, kTable, kSheet };
 
 // True once any entry of `candidates` (case-insensitive) is named by a
 // reference of `kind` in `node`'s subtree. A name is a `NameRef`, a `[0]!Name`
@@ -318,24 +333,38 @@ enum class RefKind : std::uint8_t { kName, kTable };
 // reference only costs an unnecessary reindex, never a missed one.
 bool references_any(const parser::AstNode& node, const std::vector<std::string>& candidates, RefKind kind) {
   const auto matches = [&](RefKind ref_kind, std::string_view ref) {
-    return ref_kind == kind && std::any_of(candidates.begin(), candidates.end(),
-                                           [&](const std::string& n) { return strings::case_insensitive_eq(n, ref); });
+    if (ref_kind != kind) {
+      return false;
+    }
+    return std::any_of(candidates.begin(), candidates.end(), [&](const std::string& n) {
+      return kind == RefKind::kSheet ? sheet_names::equal(n, ref) : strings::case_insensitive_eq(n, ref);
+    });
   };
   const auto any = [&](const parser::AstNode& child) { return references_any(child, candidates, kind); };
   switch (node.kind()) {
     case parser::NodeKind::NameRef:
-      return matches(RefKind::kName, node.as_name());
+      return matches(RefKind::kSheet, node.as_name_sheet()) || matches(RefKind::kName, node.as_name());
     case parser::NodeKind::StructuredRef:
       return matches(RefKind::kTable, node.as_structured_ref_table());
     case parser::NodeKind::ExternalRef:
-      return parser::is_self_book_name_ref(node) && matches(RefKind::kName, node.as_external_ref_name());
+      // External workbook sheets and literals are outside this workbook. The
+      // self-book form is a defined-name spelling and has no sheet qualifier.
+      return kind != RefKind::kSheet && parser::is_self_book_name_ref(node) &&
+             matches(RefKind::kName, node.as_external_ref_name());
     case parser::NodeKind::Literal:
     case parser::NodeKind::ErrorLiteral:
     case parser::NodeKind::ErrorPlaceholder:
-    case parser::NodeKind::Ref:
-    case parser::NodeKind::SpillRef:
-    case parser::NodeKind::Ref3D:
       return false;
+    case parser::NodeKind::Ref:
+      return matches(RefKind::kSheet, node.as_ref().sheet);
+    case parser::NodeKind::SpillRef:
+      if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        return any(*anchor);
+      }
+      return matches(RefKind::kSheet, node.as_spill_ref().sheet);
+    case parser::NodeKind::Ref3D:
+      return matches(RefKind::kSheet, node.as_ref3d_sheet_begin()) ||
+             matches(RefKind::kSheet, node.as_ref3d_sheet_end());
     case parser::NodeKind::UnaryOp:
       return any(node.as_unary_operand());
     case parser::NodeKind::BinaryOp:
@@ -403,23 +432,23 @@ bool references_any_table(const parser::AstNode& root, const std::vector<std::st
   return references_any(root, candidates, RefKind::kTable);
 }
 
-// Closure of defined names whose resolved value can change when
-// `changed_name` is added, retargeted, or removed: `changed_name` itself,
-// plus every other defined name whose own formula references it
-// (transitively). `defined_names` is a handful of entries in practice, so
-// the O(names^2) fixpoint here is cheap next to reparsing every formula
-// cell in the workbook, which the caller below does exactly once per
-// affected cell rather than once per cell regardless of relevance.
-std::vector<std::string> collect_affected_names(const std::vector<DefinedName>& defined_names,
-                                                std::string_view changed_name) {
-  std::vector<std::string> affected{std::string(changed_name)};
+bool references_any_sheet(const parser::AstNode& root, const std::vector<std::string>& candidates) {
+  return references_any(root, candidates, RefKind::kSheet);
+}
+
+bool contains_affected_name(const std::vector<std::string>& affected, std::string_view candidate) {
+  return std::any_of(affected.begin(), affected.end(),
+                     [&](const std::string& name) { return strings::case_insensitive_eq(name, candidate); });
+}
+
+std::vector<std::string> close_affected_names(const std::vector<DefinedName>& defined_names,
+                                              std::vector<std::string> affected) {
   Arena arena;
   bool grew = true;
   while (grew) {
     grew = false;
     for (const DefinedName& entry : defined_names) {
-      if (std::any_of(affected.begin(), affected.end(),
-                      [&](const std::string& n) { return strings::case_insensitive_eq(n, entry.name); })) {
+      if (contains_affected_name(affected, entry.name)) {
         continue;
       }
       std::string_view body = entry.formula;
@@ -438,6 +467,44 @@ std::vector<std::string> collect_affected_names(const std::vector<DefinedName>& 
     }
   }
   return affected;
+}
+
+// Closure of defined names whose resolved value can change when
+// `changed_name` is added, retargeted, or removed: `changed_name` itself,
+// plus every other defined name whose own formula references it
+// (transitively). `defined_names` is a handful of entries in practice, so
+// the O(names^2) fixpoint here is cheap next to reparsing every formula
+// cell in the workbook, which the caller below does exactly once per
+// affected cell rather than once per cell regardless of relevance.
+std::vector<std::string> collect_affected_names(const std::vector<DefinedName>& defined_names,
+                                                std::string_view changed_name) {
+  return close_affected_names(defined_names, {std::string(changed_name)});
+}
+
+// Seeds the same reverse-alias closure from every defined name whose body
+// mentions `changed_sheet`. Direct sheet references are handled separately;
+// these seeds cover formulas that reach the sheet only through a name.
+std::vector<std::string> collect_affected_names_referencing_sheet(const std::vector<DefinedName>& defined_names,
+                                                                  std::string_view changed_sheet) {
+  std::vector<std::string> affected;
+  const std::vector<std::string> sheet_candidates{std::string(changed_sheet)};
+  Arena arena;
+  for (const DefinedName& entry : defined_names) {
+    std::string_view body = entry.formula;
+    if (!body.empty() && body.front() == '=') {
+      body.remove_prefix(1);
+    }
+    if (body.empty()) {
+      continue;
+    }
+    arena.reset();
+    const parser::AstNode* root = parse_indexable_formula(body, arena);
+    if (root != nullptr && references_any_sheet(*root, sheet_candidates) &&
+        !contains_affected_name(affected, entry.name)) {
+      affected.emplace_back(entry.name);
+    }
+  }
+  return close_affected_names(defined_names, std::move(affected));
 }
 
 // Re-registers and dirties only the formula cells whose value can change
@@ -493,6 +560,16 @@ void reindex_formulas_referencing_name(std::vector<Sheet>& sheets, const eval::R
   const std::vector<std::string> affected = collect_affected_names(workbook.defined_names(), changed_name);
   reindex_formulas_if(sheets, mutator, workbook,
                       [&](const parser::AstNode& root) { return references_any_name(root, affected); });
+}
+
+void reindex_formulas_referencing_sheet(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                                        const Workbook& workbook, std::string_view changed_sheet) {
+  const std::vector<std::string> sheet_candidates{std::string(changed_sheet)};
+  const std::vector<std::string> affected_names =
+      collect_affected_names_referencing_sheet(workbook.defined_names(), changed_sheet);
+  reindex_formulas_if(sheets, mutator, workbook, [&](const parser::AstNode& root) {
+    return references_any_sheet(root, sheet_candidates) || references_any_name(root, affected_names);
+  });
 }
 
 // Hidden sheet-scoped name Excel keeps over a sheet AutoFilter's range.
@@ -708,6 +785,9 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // name while formatting, then the final name makes all newly-written text
   // resolvable for the next recalc.
   sheets_[index].set_name(std::move(new_name));
+  if (mutator.has_ever_registered_formula()) {
+    reindex_formulas_referencing_sheet(sheets_, mutator, *this, sheets_[index].name());
+  }
   return Expected<void, Error>::Ok();
 }
 
@@ -726,6 +806,19 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
   }
 
   const std::string removed_name = sheets_[index].name();
+
+  std::vector<std::uint32_t> old_to_new(sheets_.size());
+  const std::uint32_t new_last_index = static_cast<std::uint32_t>(sheets_.size() - 2U);
+  for (std::uint32_t old_index = 0; old_index < old_to_new.size(); ++old_index) {
+    if (old_index < index) {
+      old_to_new[old_index] = old_index;
+    } else if (old_index > index) {
+      old_to_new[old_index] = old_index - 1U;
+    } else {
+      old_to_new[old_index] = std::min(index, new_last_index);
+    }
+  }
+  remap_book_views_xml(book_views_xml_, old_to_new);
 
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   std::vector<std::string_view> pre_removal_sheet_order;
@@ -813,6 +906,20 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
     return Expected<void, Error>::Ok();
   }
 
+  std::vector<std::uint32_t> old_to_new(sheets_.size());
+  for (std::uint32_t old_index = 0; old_index < old_to_new.size(); ++old_index) {
+    if (old_index == from_index) {
+      old_to_new[old_index] = to_index;
+    } else if (from_index < to_index && old_index > from_index && old_index <= to_index) {
+      old_to_new[old_index] = old_index - 1U;
+    } else if (from_index > to_index && old_index >= to_index && old_index < from_index) {
+      old_to_new[old_index] = old_index + 1U;
+    } else {
+      old_to_new[old_index] = old_index;
+    }
+  }
+  remap_book_views_xml(book_views_xml_, old_to_new);
+
   // `to_index` is the destination in the *post-removal* sheet list, which
   // matches Excel's UI semantics. Implementation: lift the sheet out,
   // then insert at the destination. The sheet vector mutation and the
@@ -857,6 +964,44 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
   // re-evaluate.
   reindex_all_formulas(sheets_, mutator, *this);
   return Expected<void, Error>::Ok();
+}
+
+void Workbook::set_defined_names(std::vector<DefinedName> names) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  std::vector<std::string> changed;
+  {
+    // Declaration order matters for duplicate definitions. Metadata and
+    // case-only spelling changes do not alter name resolution.
+    using Definitions = std::vector<std::pair<std::int32_t, std::string_view>>;
+    const auto group = [](const std::vector<DefinedName>& entries) {
+      std::unordered_map<std::string, Definitions> grouped;
+      for (const DefinedName& entry : entries) {
+        grouped[strings::to_ascii_lower(entry.name)].emplace_back(entry.local_sheet_id, entry.formula);
+      }
+      return grouped;
+    };
+    const auto before = group(defined_names_);
+    const auto after = group(names);
+    for (const auto& [name, definitions] : before) {
+      const auto found = after.find(name);
+      if (found == after.end() || definitions != found->second) {
+        changed.push_back(name);
+      }
+    }
+    for (const auto& [name, definitions] : after) {
+      if (before.find(name) == before.end()) {
+        changed.push_back(name);
+      }
+    }
+  }
+  defined_names_ = std::move(names);
+  if (changed.empty()) {
+    return;
+  }
+  const auto affected = close_affected_names(defined_names_, std::move(changed));
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  reindex_formulas_if(sheets_, mutator, *this,
+                      [&](const parser::AstNode& root) { return references_any_name(root, affected); });
 }
 
 Expected<void, Error> Workbook::set_defined_name(std::string name, std::string formula) {
@@ -924,6 +1069,7 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
 
 Expected<void, Error> Workbook::set_defined_name_hidden(std::string_view name, std::int32_t local_sheet_id,
                                                         bool hidden) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   for (DefinedName& entry : defined_names_) {
     if (entry.local_sheet_id == local_sheet_id && strings::case_insensitive_eq(entry.name, name)) {
       entry.hidden = hidden;
@@ -1214,6 +1360,14 @@ void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::Locke
 using SpillAnchorQuery = std::vector<CellAddress> (Sheet::*)(std::uint32_t, std::uint32_t, std::uint32_t,
                                                              std::uint32_t) const;
 
+MergeRange normalize_merge_range(MergeRange merge) noexcept {
+  const std::uint32_t first_row = std::min(merge.first_row, merge.last_row);
+  const std::uint32_t first_col = std::min(merge.first_col, merge.last_col);
+  const std::uint32_t last_row = std::max(merge.first_row, merge.last_row);
+  const std::uint32_t last_col = std::max(merge.first_col, merge.last_col);
+  return MergeRange{first_row, first_col, last_row, last_col};
+}
+
 void mark_spill_anchors_intersecting_merge(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
                                            const std::vector<Sheet>& sheets, const MergeRange& merge,
                                            SpillAnchorQuery query) {
@@ -1430,6 +1584,13 @@ Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange me
     return make_error(FormulonErrorCode::kInvalidArgument, "add_merge: sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index));
   }
+  merge = normalize_merge_range(merge);
+  if (!Sheet::rect_in_grid(merge.first_row, merge.first_col, merge.last_row, merge.last_col)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "add_merge: range out of grid",
+                      "first_row=" + std::to_string(merge.first_row) + " first_col=" + std::to_string(merge.first_col) +
+                          " last_row=" + std::to_string(merge.last_row) +
+                          " last_col=" + std::to_string(merge.last_col));
+  }
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   sheets_[sheet_index].add_merge(merge);
@@ -1446,6 +1607,7 @@ Expected<void, Error> Workbook::remove_merges_intersecting(std::size_t sheet_ind
     return make_error(FormulonErrorCode::kInvalidArgument, "remove_merges_intersecting: sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index));
   }
+  merge = normalize_merge_range(merge);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   const std::vector<MergeRange> removed = sheets_[sheet_index].remove_merges_intersecting(merge);
@@ -1496,6 +1658,53 @@ Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& re
   return eval::recalc_parallel(*this, registry, cfg, stats);
 }
 
+namespace {
+
+void mark_all_formulas_dirty_locked(const std::vector<Sheet>& sheets,
+                                    const eval::RecalcEngine::LockedMutator& mutator) {
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    for (const auto& [row, cells] : sheets[sheet_idx].rows()) {
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        if (cells[col].formula_text.empty()) {
+          continue;
+        }
+        mutator.mark_dirty(
+            eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
+      }
+    }
+  }
+}
+
+void invalidate_context_dependent_state_locked(std::vector<Sheet>& sheets,
+                                               const eval::RecalcEngine::LockedMutator& mutator) {
+  for (Sheet& sheet : sheets) {
+    for (const std::unique_ptr<pivot::PivotTable>& table : sheet.mutable_pivot_tables()) {
+      if (table == nullptr) {
+        continue;
+      }
+      table->clear_last_result();
+      table->clear_span_authored();
+    }
+  }
+  mark_all_formulas_dirty_locked(sheets, mutator);
+}
+
+bool same_civil_time(const date_time::CivilTime& lhs, const date_time::CivilTime& rhs) noexcept {
+  return lhs.date.y == rhs.date.y && lhs.date.m == rhs.date.m && lhs.date.d == rhs.date.d && lhs.time.h == rhs.time.h &&
+         lhs.time.m == rhs.time.m && lhs.time.s == rhs.time.s;
+}
+
+}  // namespace
+
+void Workbook::set_excel_profile(ExcelProfile profile) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (same_profile(excel_profile_, profile)) {
+    return;
+  }
+  excel_profile_ = profile;
+  invalidate_context_dependent_state_locked(sheets_, engine_->locked_mutator());
+}
+
 void Workbook::set_iterative_options(IterativeOptions opts) {
   // Bound the iteration budget where it enters the model rather than at
   // each producer. The solver has no wall-clock limit, and cancellation
@@ -1507,7 +1716,41 @@ void Workbook::set_iterative_options(IterativeOptions opts) {
   // its own loop without any cyclic component ever forming and so would
   // not be covered by a bound enforced inside the solver.
   opts.max_iterations = std::min(opts.max_iterations, kMaxIterationsCap);
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const IterativeOptions previous = engine_->iterative_options();
+  const bool changed = previous.enabled != opts.enabled || previous.max_iterations != opts.max_iterations ||
+                       previous.max_change != opts.max_change;
   engine_->set_iterative_options(opts);
+  if (changed) {
+    mark_all_formulas_dirty_locked(sheets_, engine_->locked_mutator());
+  }
+}
+
+void Workbook::set_date1904(bool value) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (date1904_ == value) {
+    return;
+  }
+  date1904_ = value;
+  invalidate_context_dependent_state_locked(sheets_, engine_->locked_mutator());
+}
+
+void Workbook::set_pinned_now(date_time::CivilTime value) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (pinned_now_.has_value() && same_civil_time(*pinned_now_, value)) {
+    return;
+  }
+  pinned_now_ = value;
+  invalidate_context_dependent_state_locked(sheets_, engine_->locked_mutator());
+}
+
+void Workbook::clear_pinned_now() {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (!pinned_now_.has_value()) {
+    return;
+  }
+  pinned_now_.reset();
+  invalidate_context_dependent_state_locked(sheets_, engine_->locked_mutator());
 }
 
 const IterativeOptions& Workbook::iterative_options() const noexcept {
@@ -1530,18 +1773,7 @@ void Workbook::mark_row_visibility_dependents_dirty() {
 
 void Workbook::mark_all_formulas_dirty() {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  for (std::size_t sheet_idx = 0; sheet_idx < sheets_.size(); ++sheet_idx) {
-    for (const auto& [row, cells] : sheets_[sheet_idx].rows()) {
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        if (cells[col].formula_text.empty()) {
-          continue;
-        }
-        mutator.mark_dirty(
-            eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
-      }
-    }
-  }
+  mark_all_formulas_dirty_locked(sheets_, engine_->locked_mutator());
 }
 
 namespace {
@@ -1890,7 +2122,11 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   // the range `MyRef` used to cover. `set_defined_name_scoped` and
   // `remove_sheet` already take this fallback for the same reason.
   const parser::RowColShiftTransform name_transform(target_sheet_name, axis, edit, origin, count);
-  bool names_changed = rewrite_defined_names(defined_names, name_transform);
+  const parser::RowColShiftTransform local_transform(target_sheet_name, axis, edit, origin, count,
+                                                     /*local_means_target=*/true);
+  std::vector<const parser::RefTransform*> per_sheet_transforms(sheets.size(), &name_transform);
+  per_sheet_transforms[sheet_index] = &local_transform;
+  bool names_changed = rewrite_defined_names(defined_names, per_sheet_transforms, name_transform);
   // Snapshot the pending-footprint records before formula text rewrites.
   // `Sheet::set_cell_formula` quite correctly clears a user-overwritten
   // blocked anchor; a structural rewrite of that same formula is not a user
@@ -1905,6 +2141,8 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   }
   Sheet& target = sheets[sheet_index];
   const std::vector<BlockedSpillFootprint> blocked_before = blocked_before_all[sheet_index];
+  // The edit clears committed spills; snapshot their anchors so those formulas are re-dirtied.
+  const std::vector<SpillFootprint> committed_before = target.committed_spill_footprints();
   // AutoFilters on the edited sheet, serialized before the move, to detect a
   // change that alters which hidden rows count as filtered.
   const bool had_sheet_filter = target.has_auto_filter();
@@ -1922,13 +2160,9 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   // The text is rewritten against pre-edit coordinates, like the cells above
   // and unlike the sqref/anchor rectangles, which `Sheet::insert_rows` and
   // friends move afterwards.
-  const parser::RowColShiftTransform local_transform(target_sheet_name, axis, edit, origin, count,
-                                                     /*local_means_target=*/true);
-  std::vector<const parser::RefTransform*> per_sheet_transforms(sheets.size(), &name_transform);
-  per_sheet_transforms[sheet_index] = &local_transform;
   std::vector<std::uint32_t> ignored_cache_ids;
   rewrite_sheet_metadata_formulas(sheets, per_sheet_transforms, wb.mutable_tables(), wb.mutable_pivot_caches(), {}, {},
-                                  {}, ignored_cache_ids);
+                                  {}, ignored_cache_ids, name_transform);
   if (axis == parser::RowColAxis::kRow) {
     if (edit == parser::RowColEdit::kInsert) {
       target.insert_rows(origin, count);
@@ -1980,6 +2214,19 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   }
   reregister_three_d_span_owners_after_row_col_edit(three_d_owners, sheets, mutator, wb, sheet_index, axis, edit,
                                                     origin, count);
+  // Map each snapshotted anchor through the edit; deleted anchors and non-formula cells are skipped.
+  for (const SpillFootprint& footprint : committed_before) {
+    const CellShift shift =
+        shift_cell_coords_for_row_col_edit(axis, edit, origin, count, footprint.anchor_row, footprint.anchor_col);
+    if (!shift.kept) {
+      continue;
+    }
+    const Cell* cell = target.cell_at(shift.new_row, shift.new_col);
+    if (cell == nullptr || cell->formula_text.empty()) {
+      continue;
+    }
+    mutator.mark_dirty(make_node(sheet_index, shift.new_row, shift.new_col));
+  }
   std::vector<BlockedSpillFootprint> blocked_mapped =
       remap_blocked_spill_footprints(blocked_before, axis, edit, origin, count);
   // Do not resurrect a record whose formula anchor was deleted or moved past

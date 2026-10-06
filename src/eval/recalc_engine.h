@@ -203,6 +203,11 @@ class RecalcEngine {
     /// the physical row/column move.
     std::vector<CellNodeId> three_d_span_owners_covering_sheet(std::uint16_t edited_sheet) const;
     const DepGraph& dep_graph() const noexcept;
+    /// True after any formula has been registered, including a formula whose
+    /// current AST has no static dependency edges. This sticky bit lets
+    /// workbook topology edits skip scans on genuinely formula-free sheets
+    /// without mistaking an empty graph for an empty formula registry.
+    bool has_ever_registered_formula() const noexcept;
 
    private:
     friend class RecalcEngine;
@@ -334,8 +339,17 @@ class RecalcEngine {
   /// spelling for a single pass.
   void set_iterative_options(IterativeOptions opts) noexcept {
     opts.max_iterations = std::min(opts.max_iterations, kMaxIterationsCap);
+    if (!iterative_.enabled && opts.enabled) {
+      disabled_cycle_refs_pending_ = true;
+    }
     iterative_ = opts;
   }
+
+  /// True from the moment iterative calculation is enabled until the next
+  /// full recalculation completes. While set, a cached `#REF!` in a cyclic
+  /// component is the placeholder a disabled-iteration pass stored, and
+  /// `prepare_iterative_component_seeds` resets it to Blank before solving.
+  bool disabled_cycle_refs_pending() const noexcept { return disabled_cycle_refs_pending_; }
 
   /// Returns the active iterative-calc options.
   const IterativeOptions& iterative_options() const noexcept { return iterative_; }
@@ -406,6 +420,9 @@ class RecalcEngine {
   void mark_dirty_locked(CellNodeId cell);
   void mark_range_dependents_dirty_locked(CellNodeId cell);
   void reset_graph_locked();
+  bool is_admissible_potential_spill_producer_locked(const Workbook& workbook, const FunctionRegistry& registry,
+                                                     CellNodeId producer, SpillPotential static_potential,
+                                                     Arena& potential_arena) const;
   void update_potential_spill_producer_locked(CellNodeId cell, SpillPotential potential);
   Expected<RecalcStats, Error> recalc_locked(Workbook& workbook, const FunctionRegistry& registry);
   Expected<RecalcStats, Error> partial_recalc_locked(Workbook& workbook, const FunctionRegistry& registry,
@@ -454,17 +471,39 @@ class RecalcEngine {
 
     /// Ends a wave: learns its reads and returns the stale readers (see
     /// `reconcile_dynamic_reads_locked`, which takes `closure`).
-    const std::vector<CellNodeId>& end_wave(const std::unordered_set<CellNodeId, CellNodeIdHash>* closure);
+    const std::vector<CellNodeId>& end_wave(const std::unordered_set<CellNodeId, CellNodeIdHash>* closure,
+                                            const FunctionRegistry* registry = nullptr);
+
+    /// Seeds a partial-recalc closure with candidate spill producers learned
+    /// from a previous dynamic-read wave. The candidate relationship is
+    /// intentionally ephemeral: only the exact spill footprint discovered
+    /// after evaluation is installed in the persistent graph.
+    bool seed_pending_candidates(const FunctionRegistry& registry,
+                                 std::unordered_set<CellNodeId, CellNodeIdHash>& closure,
+                                 std::vector<CellNodeId>& bfs_queue);
 
     /// Marks the readers the last `end_wave` found stale dirty.
     void mark_stale_dirty();
 
    private:
+    using CandidateSet = std::unordered_set<CellNodeId, CellNodeIdHash>;
+    using CandidatePairs = std::unordered_map<CellNodeId, CandidateSet, CellNodeIdHash>;
+
+    /// Finds indexed potential producers that could cover the runtime reads
+    /// observed in this partial wave. This deliberately does not add graph
+    /// edges: each pair is attempted once, retained as a temporary closure
+    /// seed for later waves of this partial call, and learned by the normal
+    /// exact-footprint pass only when a real spill commits.
+    void discover_pending_candidates(const FunctionRegistry& registry,
+                                     const std::unordered_set<CellNodeId, CellNodeIdHash>& closure);
+
     RecalcEngine& engine_;
     const Workbook& workbook_;
     DynamicReadLog log_;
     std::unordered_set<CellNodeId, CellNodeIdHash> refreshed_;
     std::vector<CellNodeId> stale_;
+    CandidatePairs pending_candidates_;
+    CandidatePairs attempted_candidates_;
     std::uint64_t next_ordinal_ = 0U;
     bool first_wave_ = true;
   };
@@ -503,6 +542,9 @@ class RecalcEngine {
   // and `arena_`. Held for the full duration of each public entry; the
   // parallel scheduler also acquires it once at recalc entry.
   mutable std::mutex mutex_;
+  // Registration history is intentionally sticky: graph resets and formula
+  // unregistration do not make a later sheet/name mutation safe to skip.
+  bool has_ever_registered_formula_ = false;
 
   DepGraph graph_;
   // Compact rectangle dependencies (whole-row / whole-column references and
@@ -572,6 +614,8 @@ class RecalcEngine {
   // Iterative-calc knobs. Default-disabled so existing callers keep the
   // legacy `#REF!` behaviour for cyclic SCCs without opting in.
   IterativeOptions iterative_;
+  // See `disabled_cycle_refs_pending()`.
+  bool disabled_cycle_refs_pending_ = false;
   // Optional progress callback for the iterative solver. `nullptr`
   // disables it (the legacy contract). `progress_user_data_` is
   // forwarded verbatim to every invocation; the engine does not own it.

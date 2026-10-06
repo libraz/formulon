@@ -881,5 +881,119 @@ TEST(SpillCollision, SpillAtTableEdgeJustFitsNoCollision) {
   EXPECT_NE(wb.sheet(0).spill_region_at_anchor(0U, 3U), nullptr);
 }
 
+TEST(SpillCollision, AddMergeNormalizesReversedRangeAndWakesCommittedSpill) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+
+  // The reversed rectangle normalises to B1:C2 and intersects the committed
+  // A1:B2 spill in column B.
+  ASSERT_TRUE(static_cast<bool>(wb.add_merge(0U, MergeRange{1U, 2U, 0U, 1U})));
+  ASSERT_EQ(wb.sheet(0).merges().size(), 1U);
+  EXPECT_EQ(wb.sheet(0).merges()[0].first_row, 0U);
+  EXPECT_EQ(wb.sheet(0).merges()[0].first_col, 1U);
+  EXPECT_EQ(wb.sheet(0).merges()[0].last_row, 1U);
+  EXPECT_EQ(wb.sheet(0).merges()[0].last_col, 2U);
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+  const Value a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(a1.is_error());
+  EXPECT_EQ(a1.as_error(), ErrorCode::Spill);
+}
+
+TEST(SpillCollision, AddMergeRejectsOutOfGridRangeWithoutMutation) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const std::vector<SpillFootprint> before = wb.sheet(0).committed_spill_footprints();
+  ASSERT_EQ(before.size(), 1U);
+
+  for (const MergeRange invalid : {MergeRange{0U, 0U, Sheet::kMaxRows, 0U}, MergeRange{0U, 0U, 0U, Sheet::kMaxCols}}) {
+    const auto result = wb.add_merge(0U, invalid);
+    ASSERT_FALSE(static_cast<bool>(result));
+    EXPECT_EQ(result.error().code, FormulonErrorCode::kInvalidArgument);
+  }
+  EXPECT_TRUE(wb.sheet(0).merges().empty());
+
+  const std::vector<SpillFootprint> after = wb.sheet(0).committed_spill_footprints();
+  ASSERT_EQ(after.size(), before.size());
+  EXPECT_EQ(after[0].anchor_row, before[0].anchor_row);
+  EXPECT_EQ(after[0].anchor_col, before[0].anchor_col);
+  EXPECT_EQ(after[0].rows, before[0].rows);
+  EXPECT_EQ(after[0].cols, before[0].cols);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 1.0);
+}
+
+TEST(SpillCollision, RemoveMergeNormalizesReversedQueryAndWakesBlockedSpill) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.add_merge(0U, MergeRange{1U, 0U, 2U, 1U})));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Spill);
+  ASSERT_EQ(wb.sheet(0).blocked_spill_anchors().size(), 1U);
+
+  // The raw reversed endpoints do not intersect the stored merge until both
+  // axes are normalised: row 3 is above the merge's last row 2, while the
+  // normalised query spans rows 0..3 and columns 0..2.
+  ASSERT_TRUE(static_cast<bool>(wb.remove_merges_intersecting(0U, MergeRange{3U, 2U, 0U, 0U})));
+  EXPECT_TRUE(wb.sheet(0).merges().empty());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value b3 = wb.sheet(0).resolve_cell_value(2U, 1U);
+  ASSERT_TRUE(b3.is_number());
+  EXPECT_DOUBLE_EQ(b3.as_number(), 6.0);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(SpillCollision, RemoveMergeAcceptsOutsideGridQuery) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.add_merge(0U, MergeRange{0U, 0U, 1U, 1U})));
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_merges_intersecting(
+      0U, MergeRange{Sheet::kMaxRows, Sheet::kMaxCols, Sheet::kMaxRows, Sheet::kMaxCols})));
+  ASSERT_EQ(wb.sheet(0).merges().size(), 1U);
+  EXPECT_EQ(wb.sheet(0).merges()[0].first_row, 0U);
+  EXPECT_EQ(wb.sheet(0).merges()[0].first_col, 0U);
+  EXPECT_EQ(wb.sheet(0).merges()[0].last_row, 1U);
+  EXPECT_EQ(wb.sheet(0).merges()[0].last_col, 1U);
+}
+
+TEST(SpillCollision, DistantRowAndColumnEditsRestoreCommittedSpills) {
+  for (const bool rows : {false, true}) {
+    for (const bool deletion : {false, true}) {
+      SCOPED_TRACE(std::string(rows ? "rows" : "cols") + (deletion ? " delete" : " insert"));
+      Workbook wb = Workbook::create();
+      wb.set_excel_profile(mac_365_ja_jp_profile());
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2,2)")));
+      ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+      ASSERT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+
+      const auto edited = rows ? (deletion ? wb.delete_rows(0U, 10U, 1U) : wb.insert_rows(0U, 10U, 1U))
+                               : (deletion ? wb.delete_cols(0U, 10U, 1U) : wb.insert_cols(0U, 10U, 1U));
+      ASSERT_TRUE(static_cast<bool>(edited));
+      EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+
+      ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+      EXPECT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+      const Value a1 = wb.sheet(0).resolve_cell_value(0U, 0U);
+      const Value b1 = wb.sheet(0).resolve_cell_value(0U, 1U);
+      const Value a2 = wb.sheet(0).resolve_cell_value(1U, 0U);
+      const Value b2 = wb.sheet(0).resolve_cell_value(1U, 1U);
+      ASSERT_TRUE(a1.is_number());
+      ASSERT_TRUE(b1.is_number());
+      ASSERT_TRUE(a2.is_number());
+      ASSERT_TRUE(b2.is_number());
+      EXPECT_DOUBLE_EQ(a1.as_number(), 1.0);
+      EXPECT_DOUBLE_EQ(b1.as_number(), 2.0);
+      EXPECT_DOUBLE_EQ(a2.as_number(), 3.0);
+      EXPECT_DOUBLE_EQ(b2.as_number(), 4.0);
+    }
+  }
+}
+
 }  // namespace
 }  // namespace formulon

@@ -455,21 +455,21 @@ class Workbook {
   void mark_all_formulas_dirty();
 
   // ---------------------------------------------------------------------------
-  // Passive round-trip metadata (Bundle 2.4)
+  // Defined names and table metadata
   // ---------------------------------------------------------------------------
   //
-  // Defined names and tables are preserved so the OOXML writer slice can
-  // emit them back unchanged. Neither participates in the dep graph at
-  // this layer; named-range / structured-reference resolution at
-  // evaluation time arrives in Phase 4.
+  // Defined names and tables preserve their round-trip metadata and supply
+  // named-range and structured-reference dependencies to the recalc engine.
 
   /// Read-only access to the workbook's defined-name list (in source
   /// declaration order).
   const std::vector<DefinedName>& defined_names() const noexcept { return defined_names_; }
 
-  /// Replaces the workbook's defined-name list. Move-assigns to keep
-  /// the I/O hand-off allocation-free for large name lists.
-  void set_defined_names(std::vector<DefinedName> names) { defined_names_ = std::move(names); }
+  /// Replaces the workbook's defined-name list and refreshes dependencies
+  /// of formulas using changed definitions. Metadata-only changes preserve
+  /// cached values and spill geometry. Formula validation remains deferred
+  /// to evaluation, matching the I/O readers' raw name-list hand-off.
+  void set_defined_names(std::vector<DefinedName> names);
 
   /// Sets the formula text of the workbook-scoped defined name `name`,
   /// or appends it if it does not exist. An empty `formula` removes
@@ -768,7 +768,7 @@ class Workbook {
   /// Sets the 1904-date-system flag. The writer synchronises the retained
   /// `<workbookPr>` fragment's `date1904` / legacy `1904` attributes with
   /// this model value while preserving the other raw attributes.
-  void set_date1904(bool value) noexcept { date1904_ = value; }
+  void set_date1904(bool value);
 
   // ---------------------------------------------------------------------------
   // Clock seam
@@ -792,10 +792,10 @@ class Workbook {
   /// Pins every clock-dependent result to `value`. Intended for tests and
   /// for hosts that need a reproducible recalc; production callers leave it
   /// unset so the host clock shows through.
-  void set_pinned_now(date_time::CivilTime value) noexcept { pinned_now_ = value; }
+  void set_pinned_now(date_time::CivilTime value);
 
   /// Releases the pin so clock-dependent results follow the host clock again.
-  void clear_pinned_now() noexcept { pinned_now_.reset(); }
+  void clear_pinned_now();
 
   // ---------------------------------------------------------------------------
   // Workbook-level element round-trip (`<workbookPr>` / `<workbookProtection>`
@@ -854,7 +854,7 @@ class Workbook {
   ExcelProfile excel_profile() const noexcept { return excel_profile_; }
 
   /// Sets the full formula-behaviour profile used by future recalc calls.
-  void set_excel_profile(ExcelProfile profile) noexcept { excel_profile_ = profile; }
+  void set_excel_profile(ExcelProfile profile);
 
   // ---------------------------------------------------------------------------
   // Styles

@@ -1,4 +1,6 @@
 // Structural workbook mutation tests grouped by public surface.
+#include <functional>
+
 #include "sheet_ops_test_support.h"
 
 namespace formulon {
@@ -382,6 +384,164 @@ TEST(WorkbookSheetOps, RenameRewritesSheetNamedMetadata) {
   EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().sheet, "Delta");
   EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().ref, "Delta!$A$1:$B$2");
 }
+
+namespace {
+
+using AddMissingSheet = std::function<void(Workbook&)>;
+
+void ExerciseMissingSheetRecovery(const AddMissingSheet& add_missing) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Source");
+  wb.add_sheet("Summary");
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Leaf", "=Missing!A1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Outer", "=Leaf")));
+
+  // These formulas are entered while Missing does not exist. The evaluator
+  // reports #REF!, and the dep extractor intentionally has no target edge to
+  // register yet. Adding the sheet must recover every static reference form.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 0U, "=Missing!A1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 1U, "=SUM(Missing!A1:A2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 2U, "=SUM(Source:Missing!A1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 3U, "=Outer")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 4U, "=Missing!D1#")));
+  // This spill is unrelated to the missing sheet and must remain committed
+  // while the recovery pass reparses affected formulas.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 5U, "=SEQUENCE(2,1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  for (std::uint32_t col = 0U; col < 5U; ++col) {
+    const Value value = wb.sheet(1U).resolve_cell_value(0U, col);
+    ASSERT_TRUE(value.is_error()) << "column=" << col;
+    EXPECT_EQ(value.as_error(), ErrorCode::Ref) << "column=" << col;
+  }
+  const Value unrelated_before = wb.sheet(1U).resolve_cell_value(1U, 5U);
+  ASSERT_TRUE(unrelated_before.is_number());
+  EXPECT_DOUBLE_EQ(unrelated_before.as_number(), 2.0);
+
+  add_missing(wb);
+  const std::size_t missing = wb.sheet_index_by_name("Missing");
+  ASSERT_NE(missing, static_cast<std::size_t>(-1));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(missing, 0U, 0U, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(missing, 1U, 0U, Value::number(20.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(missing, 0U, 3U, "=SEQUENCE(2,1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const Value direct = wb.sheet(1U).resolve_cell_value(0U, 0U);
+  const Value range = wb.sheet(1U).resolve_cell_value(0U, 1U);
+  const Value span = wb.sheet(1U).resolve_cell_value(0U, 2U);
+  const Value alias = wb.sheet(1U).resolve_cell_value(0U, 3U);
+  const Value spill_ref = wb.sheet(1U).resolve_cell_value(0U, 4U);
+  ASSERT_TRUE(direct.is_number());
+  ASSERT_TRUE(range.is_number());
+  ASSERT_TRUE(span.is_number());
+  ASSERT_TRUE(alias.is_number());
+  ASSERT_TRUE(spill_ref.is_number());
+  EXPECT_DOUBLE_EQ(direct.as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(range.as_number(), 30.0);
+  // Source!A1 + Summary!A1 + Missing!A1.
+  EXPECT_DOUBLE_EQ(span.as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(alias.as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(spill_ref.as_number(), 1.0);
+  const Value spill_ref_tail = wb.sheet(1U).resolve_cell_value(1U, 4U);
+  ASSERT_TRUE(spill_ref_tail.is_number());
+  EXPECT_DOUBLE_EQ(spill_ref_tail.as_number(), 2.0);
+  const Value unrelated_after = wb.sheet(1U).resolve_cell_value(1U, 5U);
+  ASSERT_TRUE(unrelated_after.is_number());
+  EXPECT_DOUBLE_EQ(unrelated_after.as_number(), 2.0);
+
+  // The recovered formulas must retain live dependencies after the first
+  // successful recalc, including the range and the 3-D endpoint.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(missing, 0U, 0U, Value::number(15.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(1U).resolve_cell_value(0U, 0U).is_number());
+  ASSERT_TRUE(wb.sheet(1U).resolve_cell_value(0U, 1U).is_number());
+  ASSERT_TRUE(wb.sheet(1U).resolve_cell_value(0U, 2U).is_number());
+  ASSERT_TRUE(wb.sheet(1U).resolve_cell_value(0U, 3U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(1U).resolve_cell_value(0U, 0U).as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(1U).resolve_cell_value(0U, 1U).as_number(), 35.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(1U).resolve_cell_value(0U, 2U).as_number(), 31.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(1U).resolve_cell_value(0U, 3U).as_number(), 15.0);
+}
+
+TEST(WorkbookSheetOps, AddSheetRecoversMissingSheetReferences) {
+  ExerciseMissingSheetRecovery([](Workbook& wb) { wb.add_sheet("Missing"); });
+}
+
+TEST(WorkbookSheetOps, AddSheetRecoversMissingReferenceWithNoGraphNodes) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Missing!A1")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value before = wb.sheet(0U).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(before.is_error());
+  EXPECT_EQ(before.as_error(), ErrorCode::Ref);
+  ASSERT_EQ(wb.recalc_engine().dep_graph().node_count(), 0U);
+
+  const std::size_t missing = wb.add_sheet("Missing");
+  ASSERT_EQ(missing, 1U);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(missing, 0U, 0U, Value::number(12.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value after = wb.sheet(0U).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(after.is_number());
+  EXPECT_DOUBLE_EQ(after.as_number(), 12.0);
+}
+
+TEST(WorkbookSheetOps, AddSheetCheckedRecoversMissingSheetReferences) {
+  ExerciseMissingSheetRecovery([](Workbook& wb) { ASSERT_TRUE(static_cast<bool>(wb.add_sheet_checked("Missing"))); });
+}
+
+TEST(WorkbookSheetOps, AddSheetValidatedRecoversMissingSheetReferences) {
+  ExerciseMissingSheetRecovery([](Workbook& wb) { ASSERT_TRUE(static_cast<bool>(wb.add_sheet_validated("Missing"))); });
+}
+
+TEST(WorkbookSheetOps, RenameToMissingRecoversQualifiedLocalNameAliases) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Source");
+  wb.add_sheet("Other");
+  wb.add_sheet("Summary");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(7.0))));
+
+  // LocalLeaf is deliberately scoped to Summary. Alias and Alias2 exercise
+  // the reverse alias closure through a qualified local NameRef.
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("LocalLeaf", "=Missing!A1", 2)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Alias", "=Summary!LocalLeaf")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Alias2", "=Alias")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2U, 0U, 0U, "=Missing!A1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2U, 0U, 1U, "=Summary!LocalLeaf")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2U, 0U, 2U, "=Alias")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2U, 0U, 3U, "=Alias2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2U, 0U, 5U, "=SEQUENCE(2,1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t col = 0U; col < 4U; ++col) {
+    const Value value = wb.sheet(2U).resolve_cell_value(0U, col);
+    ASSERT_TRUE(value.is_error()) << "column=" << col;
+    EXPECT_EQ(value.as_error(), ErrorCode::Ref) << "column=" << col;
+  }
+  ASSERT_TRUE(wb.sheet(2U).resolve_cell_value(1U, 5U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(2U).resolve_cell_value(1U, 5U).as_number(), 2.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(1U, "Missing")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t col = 0U; col < 4U; ++col) {
+    const Value value = wb.sheet(2U).resolve_cell_value(0U, col);
+    ASSERT_TRUE(value.is_number()) << "column=" << col;
+    EXPECT_DOUBLE_EQ(value.as_number(), 7.0) << "column=" << col;
+  }
+  ASSERT_TRUE(wb.sheet(2U).resolve_cell_value(1U, 5U).is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(2U).resolve_cell_value(1U, 5U).as_number(), 2.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(11.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t col = 0U; col < 4U; ++col) {
+    const Value value = wb.sheet(2U).resolve_cell_value(0U, col);
+    ASSERT_TRUE(value.is_number()) << "column=" << col;
+    EXPECT_DOUBLE_EQ(value.as_number(), 11.0) << "column=" << col;
+  }
+}
+
+}  // namespace
 
 }  // namespace
 }  // namespace formulon

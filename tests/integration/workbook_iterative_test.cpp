@@ -23,6 +23,7 @@
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
+#include "eval/scheduler.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "value.h"
@@ -60,6 +61,167 @@ TEST(WorkbookIterative, DefaultDisabledStillSurfacesRefForCycle) {
   ASSERT_TRUE(b1.is_error());
   EXPECT_EQ(a1.as_error(), ErrorCode::Ref);
   EXPECT_EQ(b1.as_error(), ErrorCode::Ref);
+}
+
+TEST(WorkbookIterative, ChangingOptionsInvalidatesCachedCycleResults) {
+  // A self-referential averaging formula converges to 2 only when iterative
+  // calculation is enabled. Changing the workbook option must therefore
+  // re-run the already-cached cycle in both directions.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=(A1+2)/2")));
+
+  auto disabled_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(disabled_stats));
+  EXPECT_EQ(disabled_stats.value().cycle_cells, 1U);
+  Value a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(a1.is_error());
+  EXPECT_EQ(a1.as_error(), ErrorCode::Ref);
+
+  IterativeOptions enabled;
+  enabled.enabled = true;
+  enabled.max_iterations = 100U;
+  enabled.max_change = 1e-9;
+  wb.set_iterative_options(enabled);
+
+  auto enabled_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(enabled_stats));
+  EXPECT_EQ(enabled_stats.value().iterative_cells, 1U);
+  EXPECT_EQ(enabled_stats.value().cycle_cells, 0U);
+  a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(a1.is_number());
+  EXPECT_NEAR(a1.as_number(), 2.0, 1e-9);
+
+  // Re-applying the effective options is a no-op and must not cause a
+  // needless formula evaluation on the next pass.
+  wb.set_iterative_options(enabled);
+  auto no_op_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(no_op_stats));
+  EXPECT_EQ(no_op_stats.value().cells_evaluated, 0U);
+  EXPECT_EQ(no_op_stats.value().iterative_cells, 0U);
+  EXPECT_EQ(no_op_stats.value().cycle_cells, 0U);
+
+  // A numeric option change is also a recalculation boundary. One allowed
+  // sweep cannot meet the tolerance from the cached 2.0 seed, so the
+  // cycle remains unresolved while retaining its numeric approximation.
+  enabled.max_iterations = 1U;
+  wb.set_iterative_options(enabled);
+  auto budget_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(budget_stats));
+  EXPECT_EQ(budget_stats.value().cycle_cells, 1U);
+  EXPECT_EQ(budget_stats.value().iterative_cells, 0U);
+  a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(a1.is_number());
+  EXPECT_NEAR(a1.as_number(), 2.0, 1e-9);
+
+  enabled.enabled = false;
+  wb.set_iterative_options(enabled);
+  auto disabled_again_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(disabled_again_stats));
+  EXPECT_EQ(disabled_again_stats.value().cycle_cells, 1U);
+  EXPECT_EQ(disabled_again_stats.value().iterative_cells, 0U);
+  a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(a1.is_error());
+  EXPECT_EQ(a1.as_error(), ErrorCode::Ref);
+}
+
+TEST(WorkbookIterative, EnablingIterationPreservesIndependentRefUntilRecalc) {
+  // A1 is an ordinary formula whose #REF! is genuine. B1 is an independent
+  // circular formula that should be re-seeded only when its SCC is actually
+  // evaluated. Enabling the option dirties both formulas, but must not erase
+  // either cached result before the caller chooses a recalc scope.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=#REF!")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=(B1+2)/2")));
+
+  auto disabled_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(disabled_stats));
+  EXPECT_EQ(disabled_stats.value().cycle_cells, 1U);
+  const Value disabled_a1 = StoredValue(wb, 0U, 0U, 0U);
+  const Value disabled_b1 = StoredValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(disabled_a1.is_error()) << "A1 kind=" << static_cast<int>(disabled_a1.kind());
+  ASSERT_TRUE(disabled_b1.is_error()) << "B1 kind=" << static_cast<int>(disabled_b1.kind());
+  EXPECT_EQ(disabled_a1.as_error(), ErrorCode::Ref);
+  EXPECT_EQ(disabled_b1.as_error(), ErrorCode::Ref);
+
+  IterativeOptions enabled;
+  enabled.enabled = true;
+  enabled.max_iterations = 100U;
+  enabled.max_change = 1e-9;
+  wb.set_iterative_options(enabled);
+
+  // This is the regression witness: changing an option must not globally
+  // rewrite cached #REF! values before the subsequent recalc.
+  const Value cached_a1 = StoredValue(wb, 0U, 0U, 0U);
+  const Value cached_b1 = StoredValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(cached_a1.is_error()) << "A1 kind=" << static_cast<int>(cached_a1.kind());
+  ASSERT_TRUE(cached_b1.is_error()) << "B1 kind=" << static_cast<int>(cached_b1.kind());
+  EXPECT_EQ(cached_a1.as_error(), ErrorCode::Ref);
+  EXPECT_EQ(cached_b1.as_error(), ErrorCode::Ref);
+
+  eval::SheetCellRange b1;
+  b1.sheet_id = 0U;
+  b1.first_row = 0U;
+  b1.last_row = 0U;
+  b1.first_col = 1U;
+  b1.last_col = 1U;
+  auto partial_stats = wb.partial_recalc(eval::default_registry(), b1);
+  ASSERT_TRUE(static_cast<bool>(partial_stats));
+  EXPECT_EQ(partial_stats.value().iterative_cells, 1U);
+  ASSERT_TRUE(StoredValue(wb, 0U, 0U, 1U).is_number());
+  EXPECT_NEAR(StoredValue(wb, 0U, 0U, 1U).as_number(), 2.0, 1e-9);
+  // A1 was outside the partial viewport and remains both the genuine error
+  // value and dirty for the next full pass.
+  const Value partial_a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(partial_a1.is_error()) << "A1 kind=" << static_cast<int>(partial_a1.kind());
+  EXPECT_EQ(partial_a1.as_error(), ErrorCode::Ref);
+
+  auto full_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(full_stats));
+  EXPECT_EQ(full_stats.value().cells_evaluated, 1U);
+  const Value full_a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(full_a1.is_error()) << "A1 kind=" << static_cast<int>(full_a1.kind());
+  EXPECT_EQ(full_a1.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(StoredValue(wb, 0U, 0U, 1U).is_number());
+  EXPECT_NEAR(StoredValue(wb, 0U, 0U, 1U).as_number(), 2.0, 1e-9);
+}
+
+TEST(WorkbookIterative, EnablingIterationPreservesIndependentRefOnParallelRecalc) {
+  // Keep the same two independent formula shapes on the parallel entry point
+  // so option toggling cannot diverge between the serial and worker paths.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=#REF!")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=(B1+2)/2")));
+
+  eval::SchedulerConfig cfg;
+  cfg.num_threads = 2U;
+  auto disabled_stats = wb.recalc_parallel(eval::default_registry(), cfg, nullptr);
+  ASSERT_TRUE(static_cast<bool>(disabled_stats));
+  const Value disabled_a1 = StoredValue(wb, 0U, 0U, 0U);
+  const Value disabled_b1 = StoredValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(disabled_a1.is_error()) << "A1 kind=" << static_cast<int>(disabled_a1.kind());
+  ASSERT_TRUE(disabled_b1.is_error()) << "B1 kind=" << static_cast<int>(disabled_b1.kind());
+  EXPECT_EQ(disabled_a1.as_error(), ErrorCode::Ref);
+  EXPECT_EQ(disabled_b1.as_error(), ErrorCode::Ref);
+
+  IterativeOptions enabled;
+  enabled.enabled = true;
+  enabled.max_iterations = 100U;
+  enabled.max_change = 1e-9;
+  wb.set_iterative_options(enabled);
+  const Value cached_a1 = StoredValue(wb, 0U, 0U, 0U);
+  const Value cached_b1 = StoredValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(cached_a1.is_error()) << "A1 kind=" << static_cast<int>(cached_a1.kind());
+  ASSERT_TRUE(cached_b1.is_error()) << "B1 kind=" << static_cast<int>(cached_b1.kind());
+  EXPECT_EQ(cached_a1.as_error(), ErrorCode::Ref);
+  EXPECT_EQ(cached_b1.as_error(), ErrorCode::Ref);
+
+  auto enabled_stats = wb.recalc_parallel(eval::default_registry(), cfg, nullptr);
+  ASSERT_TRUE(static_cast<bool>(enabled_stats));
+  const Value full_a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(full_a1.is_error()) << "A1 kind=" << static_cast<int>(full_a1.kind());
+  EXPECT_EQ(full_a1.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(StoredValue(wb, 0U, 0U, 1U).is_number());
+  EXPECT_NEAR(StoredValue(wb, 0U, 0U, 1U).as_number(), 2.0, 1e-9);
 }
 
 TEST(WorkbookIterative, EnabledIdentityCycleObservedBehaviour) {
@@ -258,6 +420,56 @@ TEST(WorkbookIterative, OptionsClampTheIterationBudgetOnTheWayIn) {
   opts.max_iterations = 0U;
   wb.set_iterative_options(opts);
   EXPECT_EQ(wb.iterative_options().max_iterations, 0U);
+}
+
+TEST(WorkbookIterative, GenuineRefFromEnabledSolveSeedsTheNextSolve) {
+  // A #REF! produced by an enabled solve is a real value, so the next solve
+  // seeds from it (IFERROR -> 0, ending at 99), not from the blank seed
+  // reserved for a #REF! left behind by a disabled-iteration cycle.
+  Workbook wb = Workbook::create();
+  IterativeOptions enabled;
+  enabled.enabled = true;
+  enabled.max_iterations = 100U;
+  enabled.max_change = 1e-9;
+  wb.set_iterative_options(enabled);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::boolean(true))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(B1,#REF!,IFERROR(A1+1,0))")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value first = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(first.is_error());
+  EXPECT_EQ(first.as_error(), ErrorCode::Ref);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::boolean(false))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value second = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(second.is_number()) << second.debug_to_string();
+  EXPECT_DOUBLE_EQ(second.as_number(), 99.0);
+}
+
+TEST(WorkbookIterative, GenuineRefFromEnabledSolveSeedsTheNextParallelSolve) {
+  // Parallel-scheduler counterpart of the serial test above.
+  eval::SchedulerConfig cfg;
+  cfg.num_threads = 2U;
+  Workbook wb = Workbook::create();
+  IterativeOptions enabled;
+  enabled.enabled = true;
+  enabled.max_iterations = 100U;
+  enabled.max_change = 1e-9;
+  wb.set_iterative_options(enabled);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::boolean(true))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(B1,#REF!,IFERROR(A1+1,0))")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(eval::default_registry(), cfg, nullptr)));
+  const Value first = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(first.is_error());
+  EXPECT_EQ(first.as_error(), ErrorCode::Ref);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::boolean(false))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(eval::default_registry(), cfg, nullptr)));
+  const Value second = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(second.is_number()) << second.debug_to_string();
+  EXPECT_DOUBLE_EQ(second.as_number(), 99.0);
 }
 
 }  // namespace

@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -14,7 +15,11 @@
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "passthrough_part.h"
+#include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
+#include "pivot/pivot_types.h"
 #include "sheet.h"
+#include "utils/date_time.h"
 #include "value.h"
 
 namespace formulon {
@@ -175,6 +180,67 @@ Value recalc_a1(Workbook& wb) {
   return cell == nullptr ? Value::blank() : cell->cached_value;
 }
 
+std::unique_ptr<pivot::PivotCache> BuildClockPivotCache() {
+  auto cache = std::make_unique<pivot::PivotCache>();
+  cache->set_cache_id(1U);
+  cache->mutable_fields().push_back(pivot::PivotCacheField{"Date", {}});
+  cache->mutable_fields().push_back(pivot::PivotCacheField{"Amount", {}});
+
+  for (const auto [date, amount] : std::vector<std::pair<double, double>>{{100.0, 100.0}, {200.0, 200.0}}) {
+    pivot::PivotCacheRecord record;
+    record.cells.push_back(Value::number(date));
+    record.cells.push_back(Value::number(amount));
+    cache->mutable_records().push_back(std::move(record));
+  }
+  return cache;
+}
+
+std::unique_ptr<pivot::PivotTable> BuildClockPivotTable() {
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_name("ClockPivot");
+  table->set_pivot_cache_id(1U);
+  table->set_anchor(0U, 0U, 1U, 1U);
+
+  pivot::PivotField date_field;
+  date_field.source_name = "Date";
+  table->mutable_fields().push_back(std::move(date_field));
+
+  pivot::PivotField amount_field;
+  amount_field.source_name = "Amount";
+  amount_field.axis = pivot::PivotAxis::Value;
+  table->mutable_fields().push_back(std::move(amount_field));
+
+  pivot::PivotDataField amount_data;
+  amount_data.name = "Sum of Amount";
+  amount_data.field_index = 1U;
+  amount_data.aggregation = pivot::Aggregation::Sum;
+  table->mutable_data_fields().push_back(std::move(amount_data));
+
+  pivot::AuthoredPeriodFilter period;
+  period.field_index = 0U;
+  period.period = pivot::RelativePeriod::ThisQuarter;
+  table->mutable_authored_period_filters().push_back(period);
+  return table;
+}
+
+Workbook BuildClockPivotWorkbook() {
+  Workbook wb = Workbook::create();
+  wb.add_pivot_cache(BuildClockPivotCache());
+  wb.sheet(0U).add_pivot_table(BuildClockPivotTable());
+  return wb;
+}
+
+pivot::PivotTable* ClockPivot(Workbook& wb) {
+  const auto& tables = wb.sheet(0U).pivot_tables();
+  return tables.empty() ? nullptr : tables.front().get();
+}
+
+Value RecalcCell(Workbook& wb, std::uint32_t row, std::uint32_t col) {
+  EXPECT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Cell* cell = wb.sheet(0U).cell_at(row, col);
+  return cell == nullptr ? Value::blank() : cell->cached_value;
+}
+
 }  // namespace
 
 TEST(WorkbookTest, RedefiningLambdaNameRecalcsItsCallers) {
@@ -301,6 +367,173 @@ TEST(WorkbookTest, RedefiningWorkbookNameRecalcsSelfBookReferences) {
   v = recalc_a1(wb);
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+}
+
+TEST(WorkbookTest, ChangingExcelProfileRecalculatesCachedFormulasAndDependents) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::text("あ"))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::text("ア"))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=COUNTIF(A1:A2,\"あ\")")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=B1*10")));
+
+  const auto expect_values = [&](double count) {
+    const Cell* root = wb.sheet(0U).cell_at(0U, 1U);
+    const Cell* dependent = wb.sheet(0U).cell_at(1U, 1U);
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(dependent, nullptr);
+    ASSERT_TRUE(root->cached_value.is_number());
+    ASSERT_TRUE(dependent->cached_value.is_number());
+    EXPECT_DOUBLE_EQ(root->cached_value.as_number(), count);
+    EXPECT_DOUBLE_EQ(dependent->cached_value.as_number(), count * 10.0);
+  };
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  expect_values(1.0);
+
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  expect_values(2.0);
+
+  wb.set_excel_profile(win_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  expect_values(1.0);
+
+  wb.set_excel_profile(win_365_ja_jp_profile());
+  const auto unchanged = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(unchanged));
+  EXPECT_EQ(unchanged.value().cells_evaluated, 0U);
+  expect_values(1.0);
+}
+
+TEST(WorkbookTest, ChangingExcelProfileInvalidatesPivotAndFormulaCaches) {
+  Workbook wb = BuildClockPivotWorkbook();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=GETPIVOTDATA(\"Sum of Amount\",A1)")));
+  wb.set_pinned_now(date_time::CivilTime{{1900, 5U, 15U}, {0U, 0U, 0U}});
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  pivot::PivotTable* table = ClockPivot(wb);
+  ASSERT_NE(table, nullptr);
+  const auto before = table->last_result();
+  ASSERT_NE(before, nullptr);
+  table->mark_span_authored();
+  ASSERT_TRUE(table->has_authored_span());
+
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  EXPECT_EQ(table->last_result(), nullptr);
+  EXPECT_FALSE(table->has_authored_span());
+  auto changed = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(changed));
+  EXPECT_EQ(changed.value().cells_evaluated, 1U);
+  const auto after = table->last_result();
+  ASSERT_NE(after, nullptr);
+  EXPECT_NE(after, before);
+
+  table->mark_span_authored();
+  ASSERT_TRUE(table->has_authored_span());
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  auto unchanged = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(unchanged));
+  EXPECT_EQ(unchanged.value().cells_evaluated, 0U);
+  EXPECT_EQ(table->last_result(), after);
+  EXPECT_TRUE(table->has_authored_span());
+}
+
+TEST(WorkbookTest, RePinningNowInvalidatesRelativePivotAndFormulaCaches) {
+  Workbook wb = BuildClockPivotWorkbook();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=GETPIVOTDATA(\"Sum of Amount\",A1)")));
+  const date_time::CivilTime may{{1900, 5U, 15U}, {6U, 7U, 8U}};
+  const date_time::CivilTime august{{1900, 8U, 15U}, {6U, 7U, 8U}};
+  wb.set_pinned_now(may);
+
+  Value result = RecalcCell(wb, 0U, 1U);
+  ASSERT_TRUE(result.is_number());
+  EXPECT_DOUBLE_EQ(result.as_number(), 100.0);
+  pivot::PivotTable* table = ClockPivot(wb);
+  ASSERT_NE(table, nullptr);
+  const auto may_snapshot = table->last_result();
+  ASSERT_NE(may_snapshot, nullptr);
+  table->mark_span_authored();
+  ASSERT_TRUE(table->has_authored_span());
+
+  wb.set_pinned_now(august);
+  EXPECT_FALSE(table->has_authored_span());
+  result = RecalcCell(wb, 0U, 1U);
+  ASSERT_TRUE(result.is_number());
+  EXPECT_DOUBLE_EQ(result.as_number(), 200.0);
+  const auto august_snapshot = table->last_result();
+  ASSERT_NE(august_snapshot, nullptr);
+  EXPECT_NE(august_snapshot, may_snapshot);
+
+  // All six civil fields are unchanged, so setting the same pin again is a
+  // no-op: the cached pivot and its dependent formula remain clean.
+  wb.set_pinned_now(august);
+  auto no_op_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(no_op_stats));
+  EXPECT_EQ(no_op_stats.value().cells_evaluated, 0U);
+  EXPECT_EQ(table->last_result(), august_snapshot);
+}
+
+TEST(WorkbookTest, DateEpochChangeInvalidatesDateFormulaAndPivotCache) {
+  Workbook wb = BuildClockPivotWorkbook();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=GETPIVOTDATA(\"Sum of Amount\",A1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=DATE(2026,1,1)")));
+  wb.set_pinned_now(date_time::CivilTime{{1900, 5U, 15U}, {0U, 0U, 0U}});
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Cell* date_cell = wb.sheet(0U).cell_at(0U, 2U);
+  ASSERT_NE(date_cell, nullptr);
+  ASSERT_TRUE(date_cell->cached_value.is_number());
+  const double serial_1900 = date_cell->cached_value.as_number();
+  EXPECT_DOUBLE_EQ(serial_1900, date_time::serial_from_ymd(2026, 1U, 1U, false));
+  pivot::PivotTable* table = ClockPivot(wb);
+  ASSERT_NE(table, nullptr);
+  ASSERT_NE(table->last_result(), nullptr);
+  table->mark_span_authored();
+  ASSERT_TRUE(table->has_authored_span());
+
+  wb.set_date1904(true);
+  EXPECT_EQ(table->last_result(), nullptr);
+  EXPECT_FALSE(table->has_authored_span());
+  auto epoch_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(epoch_stats));
+  EXPECT_EQ(epoch_stats.value().cells_evaluated, 2U);
+  date_cell = wb.sheet(0U).cell_at(0U, 2U);
+  ASSERT_NE(date_cell, nullptr);
+  ASSERT_TRUE(date_cell->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(date_cell->cached_value.as_number(), serial_1900 - date_time::kDate1904EpochGap);
+
+  // Re-applying the effective epoch is a no-op and preserves the refreshed
+  // pivot result and clean formula cache.
+  const auto refreshed_snapshot = table->last_result();
+  ASSERT_NE(refreshed_snapshot, nullptr);
+  wb.set_date1904(true);
+  auto no_op_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(no_op_stats));
+  EXPECT_EQ(no_op_stats.value().cells_evaluated, 0U);
+  EXPECT_EQ(table->last_result(), refreshed_snapshot);
+}
+
+TEST(WorkbookTest, ClearingPinnedNowInvalidatesOnceAndDuplicateClearIsNoOp) {
+  Workbook wb = BuildClockPivotWorkbook();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=GETPIVOTDATA(\"Sum of Amount\",A1)")));
+  wb.set_pinned_now(date_time::CivilTime{{1900, 5U, 15U}, {0U, 0U, 0U}});
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const pivot::PivotTable* table = ClockPivot(wb);
+  ASSERT_NE(table, nullptr);
+  ASSERT_NE(table->last_result(), nullptr);
+
+  wb.clear_pinned_now();
+  EXPECT_EQ(table->last_result(), nullptr);
+  auto unpin_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(unpin_stats));
+  EXPECT_EQ(unpin_stats.value().cells_evaluated, 1U);
+  const auto host_snapshot = table->last_result();
+  ASSERT_NE(host_snapshot, nullptr);
+
+  wb.clear_pinned_now();
+  auto duplicate_clear_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(duplicate_clear_stats));
+  EXPECT_EQ(duplicate_clear_stats.value().cells_evaluated, 0U);
+  EXPECT_EQ(table->last_result(), host_snapshot);
 }
 
 }  // namespace

@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -123,6 +124,10 @@ void RecalcEngine::LockedMutator::reset_graph() const {
 
 const DepGraph& RecalcEngine::LockedMutator::dep_graph() const noexcept {
   return engine_.graph_;
+}
+
+bool RecalcEngine::LockedMutator::has_ever_registered_formula() const noexcept {
+  return engine_.has_ever_registered_formula_;
 }
 
 namespace {
@@ -381,11 +386,148 @@ void RecalcEngine::DynamicReadPass::settle_sccs(std::vector<std::vector<CellNode
 }
 
 const std::vector<CellNodeId>& RecalcEngine::DynamicReadPass::end_wave(
-    const std::unordered_set<CellNodeId, CellNodeIdHash>* closure) {
+    const std::unordered_set<CellNodeId, CellNodeIdHash>* closure, const FunctionRegistry* registry) {
   stale_ = engine_.reconcile_dynamic_reads_locked(workbook_, log_, closure, refreshed_);
+  if (closure != nullptr && registry != nullptr) {
+    discover_pending_candidates(*registry, *closure);
+  }
   log_.clear_wave();
   first_wave_ = false;
+  std::sort(stale_.begin(), stale_.end(), CellNodeIdOrder{});
+  stale_.erase(std::unique(stale_.begin(), stale_.end()), stale_.end());
   return stale_;
+}
+
+void RecalcEngine::DynamicReadPass::discover_pending_candidates(
+    const FunctionRegistry& registry, const std::unordered_set<CellNodeId, CellNodeIdHash>& closure) {
+  Arena potential_arena;
+  for (const DynamicRead& read : log_.reads()) {
+    if (read.sheet_id >= workbook_.sheet_count() ||
+        read.sheet_id >= engine_.potential_spill_producers_by_sheet_.size()) {
+      continue;
+    }
+
+    // Discovery is only for a blank coordinate whose producer has not committed; check the single-cell case only.
+    if (read.rect.single_cell()) {
+      Sheet::CellRead target;
+      workbook_.sheet(static_cast<std::uint16_t>(read.sheet_id))
+          .read_formula_cell(read.rect.row_first, read.rect.col_first, target);
+      if (target.is_formula() || !target.value().is_blank()) {
+        continue;
+      }
+    }
+
+    CandidateSet* pending = nullptr;
+    CandidateSet* attempted = nullptr;
+    const auto attempted_it = attempted_candidates_.find(read.reader);
+    if (attempted_it != attempted_candidates_.end()) {
+      attempted = &attempted_it->second;
+    }
+    for (const auto& [producer, static_potential] : engine_.potential_spill_producers_by_sheet_[read.sheet_id]) {
+      // A spill extends only down and right, so an anchor past either last coordinate cannot intersect the read.
+      if (producer.row > read.rect.row_last || producer.col > read.rect.col_last) {
+        continue;
+      }
+      if (log_.commit_ordinal(producer).has_value()) {
+        // A producer committed in this wave is covered by spill-footprint reconciliation.
+        continue;
+      }
+      if (closure.count(producer) != 0U) {
+        // A producer already in the closure was expanded by the ordinary BFS.
+        continue;
+      }
+      if (attempted != nullptr && attempted->count(producer) != 0U) {
+        continue;
+      }
+      if (!engine_.is_admissible_potential_spill_producer_locked(workbook_, registry, producer, static_potential,
+                                                                 potential_arena)) {
+        continue;
+      }
+      if (pending == nullptr) {
+        pending = &pending_candidates_[read.reader];
+      }
+      if (pending->insert(producer).second) {
+        stale_.push_back(read.reader);
+      }
+    }
+    // Drop an empty entry so the next wave does not visit it.
+    if (pending != nullptr && pending->empty()) {
+      pending_candidates_.erase(read.reader);
+    }
+  }
+}
+
+bool RecalcEngine::DynamicReadPass::seed_pending_candidates(const FunctionRegistry& registry,
+                                                            std::unordered_set<CellNodeId, CellNodeIdHash>& closure,
+                                                            std::vector<CellNodeId>& bfs_queue) {
+  bool expanded = false;
+  Arena potential_arena;
+  for (auto pending_it = pending_candidates_.begin(); pending_it != pending_candidates_.end();) {
+    const CellNodeId reader = pending_it->first;
+    if (closure.count(reader) == 0U) {
+      ++pending_it;
+      continue;
+    }
+    CandidateSet& attempted = attempted_candidates_[reader];
+    for (const CellNodeId producer : pending_it->second) {
+      attempted.insert(producer);
+      if (producer.sheet_id >= engine_.potential_spill_producers_by_sheet_.size()) {
+        continue;
+      }
+      const auto candidate_it = engine_.potential_spill_producers_by_sheet_[producer.sheet_id].find(producer);
+      if (candidate_it == engine_.potential_spill_producers_by_sheet_[producer.sheet_id].end()) {
+        continue;
+      }
+      if (!engine_.is_admissible_potential_spill_producer_locked(workbook_, registry, producer, candidate_it->second,
+                                                                 potential_arena)) {
+        continue;
+      }
+      if (closure.insert(producer).second) {
+        bfs_queue.push_back(producer);
+        expanded = true;
+      }
+    }
+    pending_it = pending_candidates_.erase(pending_it);
+  }
+
+  // An attempted pair remains a temporary seed for every later wave of this
+  // partial call. A producer can be clean when first admitted, then become
+  // dirty after a compact-range watcher learns its spill footprint. Keeping
+  // the seed lets the next closure expand through that producer's authored
+  // dependencies without rediscovering the pair or adding a speculative
+  // graph edge. Revalidation removes candidates that were rewritten away.
+  for (auto attempted_it = attempted_candidates_.begin(); attempted_it != attempted_candidates_.end();) {
+    if (closure.count(attempted_it->first) == 0U) {
+      ++attempted_it;
+      continue;
+    }
+    CandidateSet& attempted = attempted_it->second;
+    for (auto producer_it = attempted.begin(); producer_it != attempted.end();) {
+      const CellNodeId producer = *producer_it;
+      if (producer.sheet_id >= engine_.potential_spill_producers_by_sheet_.size()) {
+        producer_it = attempted.erase(producer_it);
+        continue;
+      }
+      const auto candidate_it = engine_.potential_spill_producers_by_sheet_[producer.sheet_id].find(producer);
+      if (candidate_it == engine_.potential_spill_producers_by_sheet_[producer.sheet_id].end() ||
+          !engine_.is_admissible_potential_spill_producer_locked(workbook_, registry, producer, candidate_it->second,
+                                                                 potential_arena)) {
+        producer_it = attempted.erase(producer_it);
+        continue;
+      }
+      if (closure.insert(producer).second) {
+        bfs_queue.push_back(producer);
+        expanded = true;
+      }
+      ++producer_it;
+    }
+    if (attempted.empty()) {
+      attempted_it = attempted_candidates_.erase(attempted_it);
+    } else {
+      ++attempted_it;
+    }
+  }
+  return expanded;
 }
 
 void RecalcEngine::DynamicReadPass::mark_stale_dirty() {
@@ -533,6 +675,7 @@ Expected<void, Error> RecalcEngine::evaluate_cyclic_component_locked(const Seria
   // A reader first evaluated as a singleton in this recalc has already
   // stepped once; the solver starts from the value it showed before.
   pass.dynamic.log().restore_prior_values(pass.workbook, cells);
+  prepare_iterative_component_seeds(pass.workbook, cells);
   const IterativeOutcome outcome =
       run_iterative_solve(cells, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
   if (arena_->exhausted()) {
@@ -586,6 +729,12 @@ void RecalcEngine::register_formula(CellNodeId cell, const parser::AstNode& ast,
 }
 
 void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNode& ast, const Workbook& workbook) {
+  // Keep this separate from graph node presence: a syntactically valid
+  // formula that currently references a missing sheet can have no static
+  // dependency edges at all, yet must be reconsidered when that sheet is
+  // appended or renamed into existence.
+  has_ever_registered_formula_ = true;
+
   // A rewrite can change a producer's result shape. Remove its previous
   // candidate-index membership before replacing graph/volatile metadata.
   update_potential_spill_producer_locked(cell, SpillPotential::kNever);
@@ -727,6 +876,36 @@ void RecalcEngine::update_potential_spill_producer_locked(CellNodeId cell, Spill
   } else {
     producers.insert_or_assign(cell, potential);
   }
+}
+
+bool RecalcEngine::is_admissible_potential_spill_producer_locked(const Workbook& workbook,
+                                                                 const FunctionRegistry& registry, CellNodeId producer,
+                                                                 SpillPotential static_potential,
+                                                                 Arena& potential_arena) const {
+  if (producer.sheet_id >= workbook.sheet_count()) {
+    return false;
+  }
+  SpillPotential candidate = static_potential;
+  if (candidate == SpillPotential::kNeedsRegistry) {
+    const Sheet& producer_sheet = workbook.sheet(producer.sheet_id);
+    const Cell* producer_cell = producer_sheet.cell_at(producer.row, producer.col);
+    if (producer_cell == nullptr || producer_cell->formula_text.empty()) {
+      return false;
+    }
+    std::string_view formula = producer_cell->formula_text;
+    if (!formula.empty() && formula.front() == '=') {
+      formula.remove_prefix(1);
+    }
+    potential_arena.reset();
+    parser::AstNode* producer_ast = parse_formula_entry(formula, potential_arena);
+    if (producer_ast == nullptr) {
+      // A stale/unparseable candidate cannot commit a spill; its cell will
+      // surface the ordinary formula error if it is dirty.
+      return false;
+    }
+    candidate = spill_potential(*producer_ast, registry);
+  }
+  return candidate != SpillPotential::kNever;
 }
 
 Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const FunctionRegistry& registry) {
@@ -906,6 +1085,7 @@ recalc_next_wave:
 
   // ---- Phase 5: clear the dirty set. ----
   dirty_.clear();
+  disabled_cycle_refs_pending_ = false;
   return stats;
 }
 
@@ -1021,20 +1201,51 @@ partial_recalc_next_wave:
     }
   }
 
-  // Before the first committed spill exists there is no derived edge from a
-  // compact range watcher to its producer. A viewport containing that
-  // watcher must nevertheless pull in every indexed potential producer on
-  // the referenced sheet whose down/right geometry could intersect it. Clean
-  // candidates enter the closure so their dependencies can participate in
-  // graph expansion; only dirty members of the resulting closure evaluate.
-  // Each authored range entry is processed independently, and newly reached
-  // watchers are expanded in the same fixed-point loop.
+  // Pull indexed potential spill producers into the closure: no derived edge exists before the first commit.
   bool expanded_potential_producers = true;
   std::unordered_set<std::uint32_t> processed_range_entries;
   processed_range_entries.reserve(range_dependencies_.distinct_range_count());
   Arena potential_arena;
+
+  // The potential-producer index ignores the registry, so re-classify each candidate against it.
+  const auto is_admissible_potential_producer = [&](CellNodeId producer, SpillPotential static_potential) {
+    return is_admissible_potential_spill_producer_locked(workbook, registry, producer, static_potential,
+                                                         potential_arena);
+  };
+
+  const auto enqueue_potential_producer = [&](CellNodeId producer, SpillPotential static_potential) {
+    if (!is_admissible_potential_producer(producer, static_potential)) {
+      return;
+    }
+    if (closure.insert(producer).second) {
+      expanded_potential_producers = true;
+      bfs_queue.push_back(producer);
+    }
+  };
+
+  // A phantom spill coordinate has no edge to its uncommitted anchor; scan for producers above-left.
+  std::size_t potential_coordinate_head = 0;
   while (expanded_potential_producers) {
     expanded_potential_producers = false;
+    if (dynamic.seed_pending_candidates(registry, closure, bfs_queue)) {
+      expanded_potential_producers = true;
+    }
+    while (potential_coordinate_head < bfs_queue.size()) {
+      const CellNodeId current = bfs_queue[potential_coordinate_head++];
+      if (current.sheet_id >= sheet_count || current.sheet_id >= potential_spill_producers_by_sheet_.size()) {
+        continue;
+      }
+      const Cell* current_cell = workbook.sheet(current.sheet_id).cell_at(current.row, current.col);
+      if (current_cell != nullptr && (!current_cell->formula_text.empty() || !current_cell->cached_value.is_blank())) {
+        continue;
+      }
+      for (const auto& [producer, static_potential] : potential_spill_producers_by_sheet_[current.sheet_id]) {
+        if (producer.sheet_id != current.sheet_id || producer.row > current.row || producer.col > current.col) {
+          continue;
+        }
+        enqueue_potential_producer(producer, static_potential);
+      }
+    }
     range_dependencies_.for_each_distinct_range(
         [&](std::uint32_t range_id, const CellRangeDependency& range, const std::vector<CellNodeId>& owners) {
           if (range.sheet_id >= sheet_count || range.sheet_id >= potential_spill_producers_by_sheet_.size()) {
@@ -1050,39 +1261,11 @@ partial_recalc_next_wave:
           }
           processed_range_entries.insert(range_id);
           for (const auto& [producer, static_potential] : potential_spill_producers_by_sheet_[range.sheet_id]) {
-            // Excel spills only down and right from the anchor. The producer may
-            // begin before the watcher's first row/column, but an anchor beyond
-            // either inclusive last bound cannot reach the compact rectangle.
+            // A spill extends only down and right, so an anchor past either last bound cannot reach the range.
             if (producer.row > range.row_last || producer.col > range.col_last) {
               continue;
             }
-            SpillPotential candidate = static_potential;
-            if (candidate == SpillPotential::kNeedsRegistry) {
-              const Sheet& producer_sheet = workbook.sheet(producer.sheet_id);
-              const Cell* producer_cell = producer_sheet.cell_at(producer.row, producer.col);
-              if (producer_cell == nullptr || producer_cell->formula_text.empty()) {
-                continue;
-              }
-              std::string_view formula = producer_cell->formula_text;
-              if (!formula.empty() && formula.front() == '=') {
-                formula.remove_prefix(1);
-              }
-              potential_arena.reset();
-              parser::AstNode* producer_ast = parse_formula_entry(formula, potential_arena);
-              if (producer_ast == nullptr) {
-                // A stale/unparseable candidate cannot commit a spill; its cell
-                // will surface the ordinary formula error if it is dirty.
-                continue;
-              }
-              candidate = spill_potential(*producer_ast, registry);
-            }
-            if (candidate == SpillPotential::kNever) {
-              continue;
-            }
-            if (closure.insert(producer).second) {
-              expanded_potential_producers = true;
-              bfs_queue.push_back(producer);
-            }
+            enqueue_potential_producer(producer, static_potential);
           }
         });
     while (bfs_head < bfs_queue.size()) {
@@ -1231,7 +1414,7 @@ partial_recalc_next_wave:
   }
   // Judged before the closure is unmarked, so a target this viewport left
   // dirty still reads as unevaluated.
-  const std::vector<CellNodeId>& stale_readers = dynamic.end_wave(&closure);
+  const std::vector<CellNodeId>& stale_readers = dynamic.end_wave(&closure, &registry);
   for (const CellNodeId reader : stale_readers) {
     if (closure.count(reader) != 0U) {
       dependency_retry_in_closure = true;

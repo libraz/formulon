@@ -16,6 +16,7 @@
 #include "eval/formula_text_utils.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
+#include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -110,6 +111,29 @@ bool settle_component_by_reads(const Workbook& workbook, const std::vector<CellN
         return v;
       },
       [&](std::size_t i, Value v) { commit(cells[i], v); });
+}
+
+void prepare_iterative_component_seeds(Workbook& workbook, const std::vector<CellNodeId>& cells) {
+  if (!workbook.recalc_engine().disabled_cycle_refs_pending()) {
+    return;
+  }
+  const std::size_t sheet_count = workbook.sheet_count();
+  for (const CellNodeId cell : cells) {
+    if (cell.sheet_id >= sheet_count) {
+      continue;
+    }
+    Sheet& sheet = workbook.sheet(cell.sheet_id);
+    Sheet::CellRead read;
+    sheet.read_formula_cell(cell.row, cell.col, read);
+    if (!read.is_formula()) {
+      continue;
+    }
+    const Value cached = read.value();
+    if (!cached.is_error() || cached.as_error() != ErrorCode::Ref) {
+      continue;
+    }
+    sheet.set_cell_cached_value(cell.row, cell.col, Value::blank());
+  }
 }
 
 }  // namespace eval

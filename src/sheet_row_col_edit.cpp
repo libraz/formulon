@@ -111,6 +111,11 @@ void ShiftSpan(std::uint32_t& first, std::uint32_t& last, std::uint32_t index, s
   if (last < index) {
     return;  // Both endpoints below the insert; unchanged.
   }
+  // A range pushed wholly beyond the sheet has no surviving cells; drop it rather than clamp to a singleton.
+  if (first >= index && static_cast<std::uint64_t>(first) + count >= bound) {
+    *out_drop = true;
+    return;
+  }
   auto shift_one = [count, bound](std::uint32_t value) -> std::uint32_t {
     const std::uint64_t shifted = static_cast<std::uint64_t>(value) + count;
     if (shifted >= bound) {
@@ -241,8 +246,16 @@ void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, 
             std::min<std::uint64_t>(shifted, row_axis ? Sheet::kMaxRows - 1U : Sheet::kMaxCols - 1U));
       }
     }
-    pivot->set_anchor(row_axis ? anchor : pivot->anchor_row(), row_axis ? pivot->anchor_col() : anchor,
-                      pivot->span_rows(), pivot->span_cols());
+    std::uint32_t span_rows = pivot->span_rows();
+    std::uint32_t span_cols = pivot->span_cols();
+    // Clip the span on the edited axis to the grid; a zero span stays zero.
+    if (row_axis && span_rows != 0U) {
+      span_rows = std::min(span_rows, Sheet::kMaxRows - anchor);
+    } else if (!row_axis && span_cols != 0U) {
+      span_cols = std::min(span_cols, Sheet::kMaxCols - anchor);
+    }
+    pivot->set_anchor(row_axis ? anchor : pivot->anchor_row(), row_axis ? pivot->anchor_col() : anchor, span_rows,
+                      span_cols);
   }
 }
 

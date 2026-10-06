@@ -51,6 +51,17 @@ Value CustomSpill(const Value* /*args*/, std::uint32_t /*arity*/, Arena& arena) 
   return Value::array(array);
 }
 
+Value CustomVerticalSpill(const Value* /*args*/, std::uint32_t /*arity*/, Arena& arena) {
+  Value* cells = nullptr;
+  ArrayValue* array = allocate_array_value(2U, 1U, arena, cells);
+  if (array == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  cells[0] = Value::number(7.0);
+  cells[1] = Value::number(8.0);
+  return Value::array(array);
+}
+
 Value CustomArrayAbs(const Value* /*args*/, std::uint32_t /*arity*/, Arena& arena) {
   Value* cells = nullptr;
   ArrayValue* array = allocate_array_value(1U, 2U, arena, cells);
@@ -384,6 +395,157 @@ TEST(PartialRecalc, InitialPhantomOnlySpillDependencyAndRemoteDirtyContract) {
   EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{1U, 0U, 1U}));
 }
 
+TEST(PartialRecalc, DirectPhantomReadPullsPotentialProducerBeforeFirstCommit) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+
+  // B1 reads A2, which is initially only a virtual spill cell. Since A1 has
+  // not been evaluated yet, there is no committed spill edge from B1's direct
+  // dependency to the producer. A viewport containing B1 must still admit
+  // A1 as the potential producer before evaluating the direct read.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A2")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 1U))));
+
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(1U, 0U).as_number(), 2.0);
+}
+
+TEST(PartialRecalc, CrossSheetDirectPhantomReadRefreshesAfterProducerRewrite) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  const std::size_t producer_sheet = wb.add_sheet("Producer");
+
+  // The watcher is on Sheet1 while its direct phantom read and potential
+  // producer are on Producer. The first partial pass has no committed spill
+  // edge to follow, so closure expansion must stay scoped to Producer.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(producer_sheet, 0U, 0U, "=SEQUENCE(2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=Producer!A2")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 1U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(producer_sheet).resolve_cell_value(1U, 0U).as_number(), 2.0);
+
+  // Rewriting the producer must replace the committed footprint and refresh
+  // the cross-sheet phantom in the same viewport-bounded call.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(producer_sheet, 0U, 0U, "=SEQUENCE(2,1,10,10)")));
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 1U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(producer_sheet).resolve_cell_value(1U, 0U).as_number(), 20.0);
+}
+
+TEST(PartialRecalc, RegistrySensitiveDirectReadUsesRuntimeProducerShape) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  FunctionRegistry registry;
+  register_builtins(registry);
+  ASSERT_TRUE(registry.register_function(FunctionDef{"CUSTOMVERTICALSPILL", 0U, kVariadic, &CustomVerticalSpill}));
+
+  // CUSTOMVERTICALSPILL is registry-sensitive in the potential index because formula
+  // registration has no host registry. The runtime registry still classifies
+  // it as array-capable before the direct phantom read admits its anchor.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=CUSTOMVERTICALSPILL()")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A2")));
+
+  auto stats = wb.partial_recalc(registry, SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_GE(stats.value().cells_evaluated, 2U);
+  const Value anchor = CellValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(anchor.is_number()) << "anchor kind=" << static_cast<int>(anchor.kind())
+                                  << (anchor.is_error()
+                                          ? " error=" + std::to_string(static_cast<int>(anchor.as_error()))
+                                          : "");
+  EXPECT_DOUBLE_EQ(anchor.as_number(), 7.0);
+  const Value watcher = CellValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(watcher.is_number()) << "watcher kind=" << static_cast<int>(watcher.kind());
+  EXPECT_DOUBLE_EQ(watcher.as_number(), 8.0);
+  const Value phantom = wb.sheet(0).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind());
+  EXPECT_DOUBLE_EQ(phantom.as_number(), 8.0);
+}
+
+TEST(PartialRecalc, DirectCandidateExpansionSkipsOccupiedCoordinate) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(42.0))));
+
+  // B1 is an unrelated occupied literal. A1 is a geometrically possible
+  // producer for B1, but it cannot be admitted from an occupied coordinate:
+  // doing so would evaluate A1 and change unrelated cells even though the
+  // viewport never reads A1 or its phantom cells.
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 1U))));
+
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 42.0);
+  EXPECT_TRUE(CellValue(wb, 0U, 0U, 0U).is_blank());
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+}
+
+TEST(PartialRecalc, StoredBlankTargetStillAdmitsDirectSpillProducer) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  // A blank stored cell is an available spill slot. The static closure path
+  // must treat it like an unmaterialized phantom, not like an occupied value.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::blank())));    // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2)")));  // A1:A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A2")));           // B1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_GE(stats.value().cells_evaluated, 2U);
+  const Value watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value phantom = wb.sheet(0).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(watcher.is_number()) << "watcher kind=" << static_cast<int>(watcher.kind());
+  ASSERT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind());
+  EXPECT_DOUBLE_EQ(watcher.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(phantom.as_number(), 2.0);
+}
+
+TEST(PartialRecalc, StoredBlankTargetStillAdmitsDynamicSpillProducer) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  // The dynamic-read candidate path sees A2 as an existing blank cell. That
+  // blank is still a legal spill destination and must not suppress A1's
+  // potential-producer admission.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::blank())));         // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2)")));       // A1:A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDIRECT(\"A2\")")));  // B1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_GE(stats.value().cells_evaluated, 2U);
+  const Value watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value phantom = wb.sheet(0).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(watcher.is_number()) << "watcher kind=" << static_cast<int>(watcher.kind());
+  ASSERT_TRUE(anchor.is_number()) << "anchor kind=" << static_cast<int>(anchor.kind());
+  ASSERT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind());
+  EXPECT_DOUBLE_EQ(watcher.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(anchor.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(phantom.as_number(), 2.0);
+}
+
+TEST(PartialRecalc, DynamicReadSkipsOccupiedLiteralTarget) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(42.0))));    // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2)")));       // A1:A2 candidate
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDIRECT(\"A2\")")));  // B1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cells_evaluated, 1U);  // only the volatile reader
+  const Value watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value anchor = CellValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(watcher.is_number()) << "watcher kind=" << static_cast<int>(watcher.kind());
+  EXPECT_DOUBLE_EQ(watcher.as_number(), 42.0);
+  EXPECT_TRUE(anchor.is_blank());
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+  EXPECT_FALSE(wb.recalc_engine().dep_graph().has_dependency_source(CellNodeId{0U, 0U, 1U}, CellNodeId{0U, 0U, 0U},
+                                                                    DepGraph::DependencySource::kDynamicReference));
+}
+
 TEST(PartialRecalc, DefinedNameReindexClearsStaleSpillInViewport) {
   Workbook wb = Workbook::create();
   wb.set_excel_profile(mac_365_ja_jp_profile());
@@ -596,6 +758,264 @@ TEST(PartialRecalc, MultiStageSpillChainCompletesInOneCall) {
   ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 4U))));
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 4U).as_number(), 2.0);
   EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 3U).as_number(), 2.0);
+}
+
+TEST(PartialRecalc, DynamicReadDiscoversUncommittedSpillProducerInSameCall) {
+  // B1's INDIRECT read resolves to A2 only after B1 is evaluated. Before the
+  // first spill commit there is no graph edge from that phantom to A1, so the
+  // partial closure must discover the north-west potential producer from the
+  // runtime read and retry B1 in the same call.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2)")));       // A1:A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDIRECT(\"A2\")")));  // B1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_GE(stats.value().cells_evaluated, 2U);
+  const Value watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value phantom = wb.sheet(0).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(watcher.is_number()) << "watcher kind=" << static_cast<int>(watcher.kind());
+  ASSERT_TRUE(anchor.is_number()) << "anchor kind=" << static_cast<int>(anchor.kind());
+  ASSERT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind());
+  EXPECT_DOUBLE_EQ(watcher.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(anchor.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(phantom.as_number(), 2.0);
+}
+
+TEST(PartialRecalc, DynamicReadDiscoversCrossSheetSpillProducerInSameCall) {
+  // The runtime target is on another sheet. Candidate discovery must use the
+  // target sheet's north-west anchor, rather than accidentally searching the
+  // reader's sheet or adding a cross-sheet graph edge to a guessed cell.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  const std::size_t producer_sheet = wb.add_sheet("Producer");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(producer_sheet, 0U, 0U, "=SEQUENCE(2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDIRECT(\"Producer!A2\")")));
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_GE(stats.value().cells_evaluated, 2U);
+  const Value watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value anchor = CellValue(wb, producer_sheet, 0U, 0U);
+  const Value phantom = wb.sheet(producer_sheet).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(watcher.is_number()) << "watcher kind=" << static_cast<int>(watcher.kind());
+  ASSERT_TRUE(anchor.is_number()) << "anchor kind=" << static_cast<int>(anchor.kind());
+  ASSERT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind());
+  EXPECT_DOUBLE_EQ(watcher.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(anchor.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(phantom.as_number(), 2.0);
+}
+
+TEST(PartialRecalc, DynamicReadScalarCandidateDoesNotCreateFalseCycle) {
+  // A1 can spill only when B1 is non-zero. With B1 reading the as-yet-empty
+  // A2 phantom, A1 must settle to scalar zero. The candidate relationship is
+  // temporary; it must not become a persistent B1 -> A1 edge that turns the
+  // conditional producer into a false SCC or schedules endless retries.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(B1,SEQUENCE(2),0)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDIRECT(\"A2\")")));
+
+  auto first = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(first));
+  EXPECT_GE(first.value().cells_evaluated, 2U);
+  const Value first_anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value first_watcher = CellValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(first_anchor.is_number()) << "anchor kind=" << static_cast<int>(first_anchor.kind());
+  ASSERT_TRUE(first_watcher.is_number()) << "watcher kind=" << static_cast<int>(first_watcher.kind());
+  EXPECT_DOUBLE_EQ(first_anchor.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(first_watcher.as_number(), 0.0);
+  EXPECT_FALSE(wb.recalc_engine().dep_graph().has_dependency_source(CellNodeId{0U, 0U, 1U}, CellNodeId{0U, 0U, 0U},
+                                                                    DepGraph::DependencySource::kDynamicReference));
+
+  auto second = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(second));
+  // INDIRECT remains volatile, so the reader itself runs once on a later
+  // viewport call. The attempted scalar candidate must not add another
+  // retry or turn the temporary relationship into a cycle.
+  EXPECT_LE(second.value().cells_evaluated, 4U);
+  EXPECT_EQ(second.value().cycle_cells, 0U);
+  const Value second_watcher = CellValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(second_watcher.is_number()) << "watcher kind=" << static_cast<int>(second_watcher.kind());
+  EXPECT_DOUBLE_EQ(second_watcher.as_number(), 0.0);
+  EXPECT_FALSE(wb.recalc_engine().dep_graph().has_dependency_source(CellNodeId{0U, 0U, 1U}, CellNodeId{0U, 0U, 0U},
+                                                                    DepGraph::DependencySource::kDynamicReference));
+}
+
+TEST(PartialRecalc, DynamicReadReexploresScalarCandidateAfterItStartsGrowing) {
+  // The first call evaluates A1's conditional producer as scalar because C1
+  // is zero. After C1 changes, the next partial call must re-explore the
+  // temporary candidate and admit the now-growing A1 spill rather than
+  // retaining the prior scalar rejection forever.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 2U, Value::number(0.0))));         // C1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(C1,SEQUENCE(2),0)")));  // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDIRECT(\"A2\")")));      // B1
+
+  auto scalar = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(scalar));
+  const Value scalar_anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value scalar_watcher = CellValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(scalar_anchor.is_number()) << "anchor kind=" << static_cast<int>(scalar_anchor.kind());
+  ASSERT_TRUE(scalar_watcher.is_number()) << "watcher kind=" << static_cast<int>(scalar_watcher.kind());
+  EXPECT_DOUBLE_EQ(scalar_anchor.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(scalar_watcher.as_number(), 0.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 2U, Value::number(1.0))));
+  auto growing = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(growing));
+  EXPECT_GE(growing.value().cells_evaluated, 2U);
+  const Value growing_anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value growing_watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value growing_phantom = wb.sheet(0).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(growing_anchor.is_number()) << "anchor kind=" << static_cast<int>(growing_anchor.kind());
+  ASSERT_TRUE(growing_watcher.is_number()) << "watcher kind=" << static_cast<int>(growing_watcher.kind());
+  ASSERT_TRUE(growing_phantom.is_number()) << "phantom kind=" << static_cast<int>(growing_phantom.kind());
+  EXPECT_DOUBLE_EQ(growing_anchor.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(growing_watcher.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(growing_phantom.as_number(), 2.0);
+}
+
+TEST(PartialRecalc, DynamicReadWholeColumnDoesNotEnumerateRuntimeRectangle) {
+  // INDIRECT records a full-column rectangle while INDEX needs only one
+  // selected cell. Candidate discovery must scan the bounded producer index
+  // without walking all 1,048,576 coordinates in the runtime read.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2)")));                   // A1:A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDEX(INDIRECT(\"A:A\"),2,1)")));  // B1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_LE(stats.value().cells_evaluated, 4U);
+  const Value watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value phantom = wb.sheet(0).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(anchor.is_number()) << "anchor kind=" << static_cast<int>(anchor.kind())
+                                  << " evals=" << stats.value().cells_evaluated;
+  ASSERT_TRUE(watcher.is_number()) << "watcher kind=" << static_cast<int>(watcher.kind());
+  ASSERT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind());
+  EXPECT_DOUBLE_EQ(watcher.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(phantom.as_number(), 2.0);
+}
+
+TEST(PartialRecalc, DynamicReadSmallSpillThatMissesTargetStopsRetrying) {
+  // A1 is array-capable but its one-cell result cannot reach A2. The
+  // speculative pair must be attempted once, leave B1 at zero, and finish
+  // without installing a false dynamic edge or retrying forever.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1)")));       // A1 only
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDIRECT(\"A2\")")));  // B1
+
+  auto first = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(first));
+  EXPECT_LE(first.value().cells_evaluated, 4U);
+  const Value first_watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value first_anchor = CellValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(first_watcher.is_number()) << "watcher kind=" << static_cast<int>(first_watcher.kind());
+  ASSERT_TRUE(first_anchor.is_number()) << "anchor kind=" << static_cast<int>(first_anchor.kind());
+  EXPECT_DOUBLE_EQ(first_watcher.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(first_anchor.as_number(), 1.0);
+  EXPECT_TRUE(wb.sheet(0).resolve_cell_value(1U, 0U).is_blank());
+  EXPECT_FALSE(wb.recalc_engine().dep_graph().has_dependency_source(CellNodeId{0U, 0U, 1U}, CellNodeId{0U, 0U, 0U},
+                                                                    DepGraph::DependencySource::kDynamicReference));
+
+  auto second = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(second));
+  EXPECT_LE(second.value().cells_evaluated, 2U);  // the volatile reader itself runs once
+  const Value second_watcher = CellValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(second_watcher.is_number()) << "watcher kind=" << static_cast<int>(second_watcher.kind());
+  EXPECT_DOUBLE_EQ(second_watcher.as_number(), 0.0);
+}
+
+TEST(PartialRecalc, DynamicReadDiscoversCleanProducerWithDirtyAncestor) {
+  // D1 -> C1 is dirty after the input edit, while A1's conditional producer
+  // is still clean until closure propagation reaches it. A viewport containing
+  // only B1 must admit clean A1 so its dirty ancestor can wake the producer.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(0.0))));         // D1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=D1")));                    // C1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(C1,SEQUENCE(2),0)")));  // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDIRECT(\"A2\")")));      // B1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  const Value initial_anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value initial_watcher = CellValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(initial_anchor.is_number()) << "anchor kind=" << static_cast<int>(initial_anchor.kind());
+  ASSERT_TRUE(initial_watcher.is_number()) << "watcher kind=" << static_cast<int>(initial_watcher.kind());
+  EXPECT_DOUBLE_EQ(initial_anchor.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(initial_watcher.as_number(), 0.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(1.0))));
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 2U}));
+  EXPECT_FALSE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_GE(stats.value().cells_evaluated, 2U);
+  const Value anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value phantom = wb.sheet(0).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(anchor.is_number()) << "anchor kind=" << static_cast<int>(anchor.kind());
+  ASSERT_TRUE(watcher.is_number()) << "watcher kind=" << static_cast<int>(watcher.kind());
+  ASSERT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind());
+  EXPECT_DOUBLE_EQ(anchor.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(watcher.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(phantom.as_number(), 2.0);
+}
+
+TEST(PartialRecalc, DynamicReadCleanProducerFollowsCompactRangeAncestor) {
+  // C1's SUM(E:E) starts clean and has no spill-derived edge. After a new
+  // D100 spill populates E100, only C1 is directly dirtied. B1's viewport
+  // closure must admit clean A1, expand through C1's compact range, then
+  // refresh A1's conditional spill before resolving the A2 read.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(E:E)")));              // C1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(C1,SEQUENCE(2),0)")));  // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=INDIRECT(\"A2\")")));      // B1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  const Value initial_anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value initial_watcher = CellValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(initial_anchor.is_number()) << "anchor kind=" << static_cast<int>(initial_anchor.kind());
+  ASSERT_TRUE(initial_watcher.is_number()) << "watcher kind=" << static_cast<int>(initial_watcher.kind());
+  EXPECT_DOUBLE_EQ(initial_anchor.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(initial_watcher.as_number(), 0.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 99U, 3U, "=SEQUENCE(1,2)")));  // D100:E100
+  EXPECT_FALSE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 2U}));
+  EXPECT_FALSE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_GE(stats.value().cells_evaluated, 3U);
+  const Value anchor = CellValue(wb, 0U, 0U, 0U);
+  const Value watcher = CellValue(wb, 0U, 0U, 1U);
+  const Value range_sum = CellValue(wb, 0U, 0U, 2U);
+  const Value phantom = wb.sheet(0).resolve_cell_value(1U, 0U);
+  ASSERT_TRUE(anchor.is_number()) << "anchor kind=" << static_cast<int>(anchor.kind())
+                                  << " evals=" << stats.value().cells_evaluated;
+  ASSERT_TRUE(watcher.is_number()) << "watcher kind=" << static_cast<int>(watcher.kind())
+                                   << " evals=" << stats.value().cells_evaluated;
+  ASSERT_TRUE(range_sum.is_number()) << "range sum kind=" << static_cast<int>(range_sum.kind())
+                                     << " evals=" << stats.value().cells_evaluated;
+  EXPECT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind())
+                                   << " evals=" << stats.value().cells_evaluated << " anchor=" << anchor.as_number()
+                                   << " watcher=" << watcher.as_number();
+  EXPECT_DOUBLE_EQ(anchor.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(watcher.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(range_sum.as_number(), 2.0);
+  EXPECT_EQ(stats.value().cycle_cells, 0U);
+  EXPECT_FALSE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+  EXPECT_FALSE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 1U}));
+  EXPECT_FALSE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 2U}));
+  if (phantom.is_number()) {
+    EXPECT_DOUBLE_EQ(phantom.as_number(), 2.0);
+  }
 }
 
 }  // namespace

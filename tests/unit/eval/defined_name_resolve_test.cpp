@@ -7,7 +7,9 @@
 
 #include "eval/defined_name_resolve.h"
 
+#include <chrono>
 #include <cstddef>
+#include <future>
 #include <string_view>
 #include <vector>
 
@@ -688,6 +690,48 @@ TEST(DefinedNameResolve, NamedLambdaRunawayRecursionHitsCalcCap) {
   const Value v = EvalOrDie("=loopfn(0)", a, ctx);
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
+TEST(DefinedNameResolve, HiddenMutationWaitsForConcurrentWorkbookMutation) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rate", "=1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=B1+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1/2")));
+  IterativeOptions options;
+  options.enabled = true;
+  options.max_iterations = 2U;
+  wb.set_iterative_options(options);
+  struct ProgressState {
+    Workbook* workbook;
+    std::future<Expected<void, Error>> update;
+    std::future_status while_calculating = std::future_status::deferred;
+    bool called = false;
+  } state{&wb, {}, std::future_status::deferred, false};
+  wb.set_iterative_progress(
+      [](std::uint32_t, double, std::uint32_t, void* data) {
+        auto& progress = *static_cast<ProgressState*>(data);
+        progress.called = true;
+        std::promise<void> started;
+        auto entered = started.get_future();
+        progress.update = std::async(std::launch::async, [&] {
+          started.set_value();
+          return progress.workbook->set_defined_name_hidden("Rate", -1, true);
+        });
+        entered.wait();
+        // Recalc holds the engine lock throughout this callback.
+        progress.while_calculating = progress.update.wait_for(std::chrono::milliseconds(50));
+        return false;
+      },
+      &state);
+  const auto recalculated = wb.recalc(default_registry());
+  wb.set_iterative_progress(nullptr, nullptr);
+  ASSERT_TRUE(static_cast<bool>(recalculated));
+  ASSERT_TRUE(state.called);
+  EXPECT_EQ(state.while_calculating, std::future_status::timeout);
+  const auto result = state.update.get();
+  ASSERT_TRUE(static_cast<bool>(result));
+  ASSERT_EQ(wb.defined_names().size(), 1U);
+  EXPECT_TRUE(wb.defined_names()[0].hidden);
 }
 
 }  // namespace

@@ -332,6 +332,67 @@ Workbook MakeCrossSheetWorkbook() {
   return wb;
 }
 
+/// Extends the ordinary cross-sheet fixture with metadata whose owner cannot
+/// be inferred from the workbook. These holders must use the caller's
+/// unowned policy instead of accidentally borrowing Sheet1's local transform.
+Workbook MakeCrossSheetWorkbookWithUnownedSources() {
+  Workbook wb = MakeCrossSheetWorkbook();
+
+  auto missing_sheet_cache = std::make_unique<pivot::PivotCache>();
+  missing_sheet_cache->set_cache_id(2U);
+  missing_sheet_cache->mutable_worksheet_source() = {true, "$D$6:$D$7", "Missing", ""};
+  wb.add_pivot_cache(std::move(missing_sheet_cache));
+
+  auto qualified_cache = std::make_unique<pivot::PivotCache>();
+  qualified_cache->set_cache_id(3U);
+  qualified_cache->mutable_worksheet_source() = {true, "Sheet1!$D$6:$D$7", "", ""};
+  wb.add_pivot_cache(std::move(qualified_cache));
+
+  auto remote_cache = std::make_unique<pivot::PivotCache>();
+  remote_cache->set_cache_id(4U);
+  remote_cache->mutable_worksheet_source() = {true, "$D$6:$D$7", "Sheet2", ""};
+  wb.add_pivot_cache(std::move(remote_cache));
+
+  TableMetadata unowned_table;
+  unowned_table.id = 3;
+  unowned_table.name = "UnownedTable";
+  unowned_table.display_name = "UnownedTable";
+  unowned_table.ref = "D6:D7";
+  unowned_table.sheet_index = wb.sheet_count() + 10U;
+  unowned_table.columns.push_back(TableColumn{1, "Value", {}, {}, "Sheet1!D6*2"});
+  wb.mutable_tables().push_back(std::move(unowned_table));
+
+  return wb;
+}
+
+/// Builds two sheets whose defined names exercise every owner policy used by
+/// a row/column edit. The local name is deliberately anchored at A1 and has
+/// two dependents: the first is the exact A1 reproduction, while the second
+/// survives a delete of row/column zero so the four-operation matrix can also
+/// observe the resulting #REF! mapping.
+Workbook MakeDefinedNameOwnerWorkbook() {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(7.0))));
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(1, 0, 0, Value::number(11.0))));
+
+  wb.set_defined_names({
+      DefinedName{"Local", "$A$1", 0, false, ""},
+      DefinedName{"OtherLocal", "$A$1", 1, false, ""},
+      DefinedName{"OtherQualified", "Sheet1!$A$1", 1, false, ""},
+      DefinedName{"GlobalQualified", "Sheet1!$A$1", -1, false, ""},
+      DefinedName{"InvalidQualified", "Sheet1!$A$1", 99, false, ""},
+      DefinedName{"GlobalUnqualified", "$A$1", -1, false, ""},
+      DefinedName{"InvalidUnqualified", "$A$1", 99, false, ""},
+  });
+
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 2, "=Local")));
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 2, "=Local")));
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 0, 2, "=OtherLocal")));
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 0, 3, "=OtherQualified")));
+  return wb;
+}
+
 /// The cross-sheet rule on Sheet2 — the one qualified with the edited sheet.
 const std::string& CrossSheetCfFormula(const Workbook& wb) {
   return *wb.sheet(1).conditional_formats().at(0).rules.at(0).formula1;
@@ -878,6 +939,122 @@ TEST(StructuralEditMatrix, PivotWorksheetSourceRefShiftsOnRowInsert) {
   ASSERT_NE(wb.pivot_caches()[0], nullptr);
   EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().ref, "$D$7:$D$8");
   EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().sheet, "Sheet1");
+}
+
+TEST(StructuralEditMatrix, UnownedMetadataDoesNotBorrowFirstSheetTransform) {
+  for (const bool rows : {false, true}) {
+    for (const bool insert : {false, true}) {
+      SCOPED_TRACE(std::string(rows ? "rows" : "cols") + (insert ? " insert" : " delete"));
+      Workbook wb = MakeCrossSheetWorkbookWithUnownedSources();
+      if (rows) {
+        ASSERT_TRUE(static_cast<bool>(insert ? wb.insert_rows(0, kEditOrigin, kEditCount)
+                                             : wb.delete_rows(0, kEditOrigin, kEditCount)));
+      } else {
+        ASSERT_TRUE(static_cast<bool>(insert ? wb.insert_cols(0, kEditOrigin, kEditCount)
+                                             : wb.delete_cols(0, kEditOrigin, kEditCount)));
+      }
+
+      const std::string local_ref = rows ? (insert ? "$D$7:$D$8" : "$D$5:$D$6") : (insert ? "$E$6:$E$7" : "$C$6:$C$7");
+      const std::string qualified_ref = rows ? (insert ? "Sheet1!$D$7:$D$8" : "Sheet1!$D$5:$D$6")
+                                             : (insert ? "Sheet1!$E$6:$E$7" : "Sheet1!$C$6:$C$7");
+
+      ASSERT_EQ(wb.pivot_caches().size(), 4U);
+      ASSERT_NE(wb.pivot_caches()[0], nullptr);
+      ASSERT_NE(wb.pivot_caches()[1], nullptr);
+      ASSERT_NE(wb.pivot_caches()[2], nullptr);
+      ASSERT_NE(wb.pivot_caches()[3], nullptr);
+      EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().ref, local_ref);
+      EXPECT_EQ(wb.pivot_caches()[1]->worksheet_source().ref, "$D$6:$D$7")
+          << "a source on a missing sheet has no safe local owner";
+      EXPECT_EQ(wb.pivot_caches()[2]->worksheet_source().ref, qualified_ref)
+          << "a qualified source still follows Sheet1 even without worksheetSource/@sheet";
+      EXPECT_EQ(wb.pivot_caches()[3]->worksheet_source().ref, "$D$6:$D$7")
+          << "a valid source on Sheet2 is outside the edited sheet";
+
+      ASSERT_EQ(wb.tables().size(), 3U);
+      EXPECT_EQ(wb.tables()[0].ref, rows ? (insert ? "D7:D8" : "D5:D6") : (insert ? "E6:E7" : "C6:C7"));
+      EXPECT_EQ(wb.tables()[1].ref, "A1:B2");
+      EXPECT_EQ(wb.tables()[2].ref, "D6:D7") << "a table whose sheet index is outside the workbook has no local owner";
+      EXPECT_EQ(wb.tables()[2].columns[0].calculated_column_formula,
+                rows ? (insert ? "Sheet1!D7*2" : "Sheet1!D5*2") : (insert ? "Sheet1!E6*2" : "Sheet1!C6*2"));
+    }
+  }
+}
+
+TEST(StructuralEditMatrix, DefinedNamesUseTheirOwningSheetTransform) {
+  const auto run_case = [](const bool rows, const bool deletion) {
+    SCOPED_TRACE(std::string(rows ? "rows" : "cols") + (deletion ? " delete" : " insert"));
+    Workbook wb = MakeDefinedNameOwnerWorkbook();
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    const Cell* initial_local = wb.sheet(0).cell_at(0, 2);
+    const Cell* initial_other_local = wb.sheet(1).cell_at(0, 2);
+    const Cell* initial_other_qualified = wb.sheet(1).cell_at(0, 3);
+    ASSERT_NE(initial_local, nullptr);
+    ASSERT_NE(initial_other_local, nullptr);
+    ASSERT_NE(initial_other_qualified, nullptr);
+    ASSERT_TRUE(initial_local->cached_value.is_number());
+    ASSERT_TRUE(initial_other_local->cached_value.is_number());
+    ASSERT_TRUE(initial_other_qualified->cached_value.is_number());
+    EXPECT_DOUBLE_EQ(initial_local->cached_value.as_number(), 7.0);
+    EXPECT_DOUBLE_EQ(initial_other_local->cached_value.as_number(), 11.0);
+    EXPECT_DOUBLE_EQ(initial_other_qualified->cached_value.as_number(), 7.0);
+
+    if (rows) {
+      ASSERT_TRUE(static_cast<bool>(deletion ? wb.delete_rows(0, 0, 1) : wb.insert_rows(0, 0, 1)));
+    } else {
+      ASSERT_TRUE(static_cast<bool>(deletion ? wb.delete_cols(0, 0, 1) : wb.insert_cols(0, 0, 1)));
+    }
+
+    const std::string local_formula = deletion ? "#REF!" : (rows ? "$A$2" : "$B$1");
+    const std::string qualified_formula = deletion ? "#REF!" : (rows ? "Sheet1!$A$2" : "Sheet1!$B$1");
+    const std::string unchanged_formula = "$A$1";
+    ASSERT_EQ(wb.defined_names().size(), 7U);
+    EXPECT_EQ(wb.defined_names()[0].formula, local_formula);
+    EXPECT_EQ(wb.defined_names()[1].formula, unchanged_formula)
+        << "an unqualified name owned by Sheet2 is outside a Sheet1 edit";
+    EXPECT_EQ(wb.defined_names()[2].formula, qualified_formula)
+        << "a qualified reference follows Sheet1 even when owned by Sheet2";
+    EXPECT_EQ(wb.defined_names()[3].formula, qualified_formula)
+        << "a global name uses the explicit qualified-only fallback";
+    EXPECT_EQ(wb.defined_names()[4].formula, qualified_formula)
+        << "an invalid owner uses the explicit qualified-only fallback";
+    EXPECT_EQ(wb.defined_names()[5].formula, unchanged_formula)
+        << "a global unqualified name has no sheet owner to edit";
+    EXPECT_EQ(wb.defined_names()[6].formula, unchanged_formula)
+        << "an invalid owner cannot make an unqualified name local";
+
+    const std::uint32_t surviving_local_row = rows ? (deletion ? 0U : 1U) : 0U;
+    const std::uint32_t surviving_local_col = rows ? 2U : (deletion ? 1U : 3U);
+    const Cell* local_result = wb.sheet(0).cell_at(surviving_local_row, surviving_local_col);
+    ASSERT_NE(local_result, nullptr);
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    if (deletion) {
+      ASSERT_TRUE(local_result->cached_value.is_error());
+      EXPECT_EQ(local_result->cached_value.as_error(), ErrorCode::Ref);
+    } else {
+      ASSERT_TRUE(local_result->cached_value.is_number());
+      EXPECT_DOUBLE_EQ(local_result->cached_value.as_number(), 7.0);
+    }
+    const Cell* other_local_result = wb.sheet(1).cell_at(0, 2);
+    ASSERT_NE(other_local_result, nullptr);
+    ASSERT_TRUE(other_local_result->cached_value.is_number());
+    EXPECT_DOUBLE_EQ(other_local_result->cached_value.as_number(), 11.0);
+    const Cell* qualified_result = wb.sheet(1).cell_at(0, 3);
+    ASSERT_NE(qualified_result, nullptr);
+    if (deletion) {
+      ASSERT_TRUE(qualified_result->cached_value.is_error());
+      EXPECT_EQ(qualified_result->cached_value.as_error(), ErrorCode::Ref);
+    } else {
+      ASSERT_TRUE(qualified_result->cached_value.is_number());
+      EXPECT_DOUBLE_EQ(qualified_result->cached_value.as_number(), 7.0);
+    }
+  };
+
+  for (const bool rows : {false, true}) {
+    for (const bool deletion : {false, true}) {
+      run_case(rows, deletion);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

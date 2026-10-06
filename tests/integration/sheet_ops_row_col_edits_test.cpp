@@ -1,4 +1,6 @@
 // Structural workbook mutation tests grouped by public surface.
+#include <limits>
+
 #include "sheet_ops_test_support.h"
 
 namespace formulon {
@@ -457,6 +459,127 @@ TEST(WorkbookRowColEdits, DeleteRowsClampsStraddlingMerge) {
   EXPECT_EQ(s.merges()[0].first_row, 2U);
   // Last row was 8 (past the deletion); shifts up by 3 to 5.
   EXPECT_EQ(s.merges()[0].last_row, 5U);
+}
+
+TEST(WorkbookRowColEdits, InsertDropsOffGridRangesAndKeepsPartialOverhangConsistent) {
+  for (const bool rows : {false, true}) {
+    SCOPED_TRACE(rows ? "rows" : "columns");
+    Workbook wb = Workbook::create();
+    Sheet& s = wb.sheet(0);
+    const std::uint32_t bound = rows ? Sheet::kMaxRows : Sheet::kMaxCols;
+    const std::uint32_t insert_at = bound - 4U;
+    const std::uint32_t count = 2U;
+
+    const auto make_range = [rows](std::uint32_t first, std::uint32_t last) {
+      return rows ? MergeRange{first, 0U, last, 1U} : MergeRange{0U, first, 1U, last};
+    };
+    const auto make_cf_range = [rows](std::uint32_t first, std::uint32_t last) {
+      return rows ? cf::CFCellRange{CellAddress{first, 0U}, CellAddress{last, 1U}}
+                  : cf::CFCellRange{CellAddress{0U, first}, CellAddress{1U, last}};
+    };
+    const auto make_hyperlink = [](const MergeRange& range, const char* target) {
+      Hyperlink hyperlink;
+      hyperlink.row = range.first_row;
+      hyperlink.col = range.first_col;
+      hyperlink.last_row = range.last_row;
+      hyperlink.last_col = range.last_col;
+      hyperlink.target = target;
+      return hyperlink;
+    };
+
+    // The first range is wholly pushed off-grid. The second starts at the
+    // insertion point and overhangs by one coordinate; it must remain as a
+    // valid clipped range. The third is below the edit and is unchanged.
+    const MergeRange off_grid = make_range(bound - 2U, bound - 1U);
+    const MergeRange partial = make_range(insert_at, bound - 2U);
+    const MergeRange untouched = make_range(0U, 1U);
+    s.mutable_merges() = {off_grid, partial, untouched};
+    s.mutable_hyperlinks() = {make_hyperlink(off_grid, "https://off-grid"), make_hyperlink(partial, "https://partial"),
+                              make_hyperlink(untouched, "https://untouched")};
+    DataValidation validation;
+    validation.ranges = {off_grid, partial, untouched};
+    s.mutable_validations().push_back(std::move(validation));
+    cf::ConditionalFormat conditional;
+    conditional.sqref = {make_cf_range(bound - 2U, bound - 1U), make_cf_range(insert_at, bound - 2U),
+                         make_cf_range(0U, 1U)};
+    s.mutable_conditional_formats().push_back(std::move(conditional));
+
+    const auto edited = rows ? wb.insert_rows(0U, insert_at, count) : wb.insert_cols(0U, insert_at, count);
+    ASSERT_TRUE(static_cast<bool>(edited));
+
+    const MergeRange expected_partial = make_range(bound - 2U, bound - 1U);
+    const MergeRange expected_untouched = untouched;
+    ASSERT_EQ(s.merges().size(), 2U);
+    EXPECT_EQ(s.merges()[0].first_row, expected_partial.first_row);
+    EXPECT_EQ(s.merges()[0].first_col, expected_partial.first_col);
+    EXPECT_EQ(s.merges()[0].last_row, expected_partial.last_row);
+    EXPECT_EQ(s.merges()[0].last_col, expected_partial.last_col);
+    EXPECT_EQ(s.merges()[1].first_row, expected_untouched.first_row);
+    EXPECT_EQ(s.merges()[1].first_col, expected_untouched.first_col);
+    EXPECT_EQ(s.merges()[1].last_row, expected_untouched.last_row);
+    EXPECT_EQ(s.merges()[1].last_col, expected_untouched.last_col);
+
+    ASSERT_EQ(s.hyperlinks().size(), 2U);
+    EXPECT_EQ(s.hyperlinks()[0].row, expected_partial.first_row);
+    EXPECT_EQ(s.hyperlinks()[0].col, expected_partial.first_col);
+    EXPECT_EQ(s.hyperlinks()[0].last_row, expected_partial.last_row);
+    EXPECT_EQ(s.hyperlinks()[0].last_col, expected_partial.last_col);
+    EXPECT_EQ(s.hyperlinks()[0].target, "https://partial");
+    EXPECT_EQ(s.hyperlinks()[1].row, expected_untouched.first_row);
+    EXPECT_EQ(s.hyperlinks()[1].col, expected_untouched.first_col);
+    EXPECT_EQ(s.hyperlinks()[1].last_row, expected_untouched.last_row);
+    EXPECT_EQ(s.hyperlinks()[1].last_col, expected_untouched.last_col);
+    EXPECT_EQ(s.hyperlinks()[1].target, "https://untouched");
+
+    ASSERT_EQ(s.validations().size(), 1U);
+    ASSERT_EQ(s.validations()[0].ranges.size(), 2U);
+    EXPECT_EQ(s.validations()[0].ranges[0].first_row, expected_partial.first_row);
+    EXPECT_EQ(s.validations()[0].ranges[0].first_col, expected_partial.first_col);
+    EXPECT_EQ(s.validations()[0].ranges[0].last_row, expected_partial.last_row);
+    EXPECT_EQ(s.validations()[0].ranges[0].last_col, expected_partial.last_col);
+    EXPECT_EQ(s.validations()[0].ranges[1].first_row, expected_untouched.first_row);
+    EXPECT_EQ(s.validations()[0].ranges[1].first_col, expected_untouched.first_col);
+    EXPECT_EQ(s.validations()[0].ranges[1].last_row, expected_untouched.last_row);
+    EXPECT_EQ(s.validations()[0].ranges[1].last_col, expected_untouched.last_col);
+
+    ASSERT_EQ(s.conditional_formats().size(), 1U);
+    ASSERT_EQ(s.conditional_formats()[0].sqref.size(), 2U);
+    EXPECT_EQ(s.conditional_formats()[0].sqref[0].first.row, expected_partial.first_row);
+    EXPECT_EQ(s.conditional_formats()[0].sqref[0].first.col, expected_partial.first_col);
+    EXPECT_EQ(s.conditional_formats()[0].sqref[0].last.row, expected_partial.last_row);
+    EXPECT_EQ(s.conditional_formats()[0].sqref[0].last.col, expected_partial.last_col);
+    EXPECT_EQ(s.conditional_formats()[0].sqref[1].first.row, expected_untouched.first_row);
+    EXPECT_EQ(s.conditional_formats()[0].sqref[1].first.col, expected_untouched.first_col);
+    EXPECT_EQ(s.conditional_formats()[0].sqref[1].last.row, expected_untouched.last_row);
+    EXPECT_EQ(s.conditional_formats()[0].sqref[1].last.col, expected_untouched.last_col);
+  }
+}
+
+TEST(WorkbookRowColEdits, InsertMaxCountDropsWhollyOffGridRangesWithoutWraparound) {
+  for (const bool rows : {false, true}) {
+    SCOPED_TRACE(rows ? "rows" : "columns");
+    Workbook wb = Workbook::create();
+    Sheet& s = wb.sheet(0);
+    const MergeRange range = rows ? MergeRange{0U, 0U, 0U, 1U} : MergeRange{0U, 0U, 1U, 0U};
+    s.mutable_merges().push_back(range);
+    Hyperlink hyperlink;
+    hyperlink.row = range.first_row;
+    hyperlink.col = range.first_col;
+    hyperlink.last_row = range.last_row;
+    hyperlink.last_col = range.last_col;
+    hyperlink.target = "https://off-grid";
+    s.mutable_hyperlinks().push_back(std::move(hyperlink));
+    DataValidation validation;
+    validation.ranges.push_back(range);
+    s.mutable_validations().push_back(std::move(validation));
+
+    const auto edited = rows ? wb.insert_rows(0U, 0U, std::numeric_limits<std::uint32_t>::max())
+                             : wb.insert_cols(0U, 0U, std::numeric_limits<std::uint32_t>::max());
+    ASSERT_TRUE(static_cast<bool>(edited));
+    EXPECT_TRUE(s.merges().empty());
+    EXPECT_TRUE(s.hyperlinks().empty());
+    EXPECT_TRUE(s.validations().empty());
+  }
 }
 
 TEST(WorkbookRowColEdits, InsertRowsRewritesDefinedName) {

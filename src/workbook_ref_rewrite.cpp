@@ -15,11 +15,14 @@
 #include "eval/recalc_engine.h"
 #include "io/ext_lst_refs.h"
 #include "io/xlsb/tail_refs.h"
+#include "io/xml_utils.h"
+#include "io/xsd_int.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
 #include "parser/parser.h"
 #include "pivot/pivot_cache.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "sheet_name.h"
 #include "table.h"
@@ -77,13 +80,67 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::Ref
 
 }  // namespace
 
+bool remap_book_views_xml(std::string& book_views_xml, const std::vector<std::uint32_t>& old_to_new) {
+  if (book_views_xml.empty() || old_to_new.empty()) {
+    return false;
+  }
+
+  pugi::xml_document document;
+  const pugi::xml_parse_result parsed = document.load_buffer(
+      book_views_xml.data(), book_views_xml.size(),
+      pugi::parse_default | pugi::parse_comments | pugi::parse_pi | pugi::parse_ws_pcdata, pugi::encoding_utf8);
+  if (!parsed) {
+    return false;
+  }
+  const pugi::xml_node root = document.document_element();
+  if (!root || std::string_view(root.name()) != "bookViews") {
+    return false;
+  }
+
+  const std::uint32_t default_new_index = old_to_new.front();
+  bool changed = false;
+  const auto remap_attribute = [&](pugi::xml_node view, const char* name) {
+    pugi::xml_attribute attribute = view.attribute(name);
+    if (!attribute) {
+      if (default_new_index == 0U) {
+        return;
+      }
+      view.append_attribute(name).set_value(default_new_index);
+      changed = true;
+      return;
+    }
+
+    std::uint32_t old_index = 0;
+    if (!io::parse_xsd_nonneg_int(attribute.value(), &old_index) || old_index >= old_to_new.size()) {
+      return;
+    }
+    const std::uint32_t new_index = old_to_new[old_index];
+    if (new_index == old_index) {
+      return;
+    }
+    attribute.set_value(new_index);
+    changed = true;
+  };
+
+  for (pugi::xml_node view = root.child("workbookView"); view; view = view.next_sibling("workbookView")) {
+    remap_attribute(view, "activeTab");
+    remap_attribute(view, "firstSheet");
+  }
+  if (!changed) {
+    return false;
+  }
+
+  book_views_xml = io::raw_xml(root);
+  return true;
+}
+
 void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
                                      const std::vector<const parser::RefTransform*>& per_sheet,
                                      std::vector<TableMetadata>& tables,
                                      std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
                                      std::string_view direct_sheet_old, std::string_view direct_sheet_new,
-                                     std::string_view removed_sheet_name,
-                                     std::vector<std::uint32_t>& dropped_cache_ids) {
+                                     std::string_view removed_sheet_name, std::vector<std::uint32_t>& dropped_cache_ids,
+                                     const parser::RefTransform& unowned_transform) {
   dropped_cache_ids.clear();
   if (per_sheet.empty()) {
     // No transform to apply at all. A short `per_sheet` is instead absorbed
@@ -184,7 +241,9 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
   }
 
   for (TableMetadata& table : tables) {
-    const parser::RefTransform& transform = *per_sheet[table.sheet_index < per_sheet.size() ? table.sheet_index : 0U];
+    const parser::RefTransform& transform =
+        table.sheet_index < sheets.size() ? *per_sheet[table.sheet_index < per_sheet.size() ? table.sheet_index : 0U]
+                                          : unowned_transform;
     rewrite_field(table.ref, transform);
     for (TableColumn& column : table.columns) {
       rewrite_field(column.calculated_column_formula, transform);
@@ -199,14 +258,16 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     if (!direct_sheet_old.empty() && sheet_names::equal(source.sheet, direct_sheet_old)) {
       source.sheet.assign(direct_sheet_new);
     }
-    std::size_t owner_sheet = 0;
+    std::optional<std::size_t> owner_sheet;
     for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
       if (sheet_names::equal(sheets[sheet_idx].name(), source.sheet)) {
         owner_sheet = sheet_idx;
         break;
       }
     }
-    const FormulaRewriteResult ref_result = rewrite_formula(source.ref, *per_sheet[owner_sheet]);
+    const parser::RefTransform& transform =
+        owner_sheet.has_value() ? *per_sheet[*owner_sheet < per_sheet.size() ? *owner_sheet : 0U] : unowned_transform;
+    const FormulaRewriteResult ref_result = rewrite_formula(source.ref, transform);
     if (ref_result.changed) {
       source.ref = ref_result.text;
     }
@@ -272,13 +333,21 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
   // per-sheet table points at the single transform the caller supplied.
   const std::vector<const parser::RefTransform*> uniform(sheets.size(), &transform);
   rewrite_sheet_metadata_formulas(sheets, uniform, tables, pivot_caches, direct_sheet_old, direct_sheet_new,
-                                  removed_sheet_name, dropped_cache_ids);
+                                  removed_sheet_name, dropped_cache_ids, transform);
 }
 
-bool rewrite_defined_names(std::vector<DefinedName>& names, const parser::RefTransform& transform) {
+bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<const parser::RefTransform*>& per_sheet,
+                           const parser::RefTransform& unowned_transform) {
   bool any_changed = false;
   for (DefinedName& entry : names) {
-    FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
+    const parser::RefTransform* transform = &unowned_transform;
+    if (entry.local_sheet_id >= 0) {
+      const std::size_t owner = static_cast<std::size_t>(entry.local_sheet_id);
+      if (owner < per_sheet.size() && per_sheet[owner] != nullptr) {
+        transform = per_sheet[owner];
+      }
+    }
+    FormulaRewriteResult result = rewrite_formula(entry.formula, *transform);
     if (result.changed) {
       entry.formula = std::move(result.text);
       any_changed = true;
