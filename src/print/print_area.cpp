@@ -274,24 +274,22 @@ bool ParseTitleToken(std::string_view token, PrintTitles* out_titles) {
   return true;
 }
 
-}  // namespace
-
-bool parse_area_token(std::string_view token, CellRange* out_range) {
-  return ParseRangeToken(StripAnchors(token), out_range);
-}
-
-Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, std::uint32_t sheet_index) {
-  std::vector<CellRange> ranges;
-  const std::string* formula = FindSheetScopedFormula(wb, sheet_index, kPrintAreaName);
+/// Looks up a sheet-scoped defined name and splits its comma-separated body
+/// into cleaned (sheet-unqualified, unanchored) tokens. An absent name yields
+/// an empty vector.
+Expected<std::vector<std::string>, Error> SplitDefinedNameAreas(const Workbook& wb, std::uint32_t sheet_index,
+                                                                std::string_view defined_name,
+                                                                const char* empty_body_msg,
+                                                                const char* empty_token_msg) {
+  std::vector<std::string> tokens;
+  const std::string* formula = FindSheetScopedFormula(wb, sheet_index, defined_name);
   if (formula == nullptr) {
-    // An absent print area is not an error: callers fall back to the
-    // sheet's used range.
-    return ranges;
+    return tokens;
   }
 
   const std::string_view body = Trim(*formula);
   if (body.empty()) {
-    return make_error(FormulonErrorCode::kPrintInvalidArea, "Empty Print_Area formula",
+    return make_error(FormulonErrorCode::kPrintInvalidArea, empty_body_msg,
                       "sheet_index=" + std::to_string(sheet_index));
   }
 
@@ -304,10 +302,30 @@ Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, s
     const std::string_view raw = Trim(body.substr(start, comma - start));
     start = comma + 1;
     if (raw.empty()) {
-      return make_error(FormulonErrorCode::kPrintInvalidArea, "Empty area in Print_Area formula",
+      return make_error(FormulonErrorCode::kPrintInvalidArea, empty_token_msg,
                         "sheet_index=" + std::to_string(sheet_index));
     }
-    const std::string cleaned = StripAnchors(StripSheetQualifier(raw));
+    tokens.push_back(StripAnchors(StripSheetQualifier(raw)));
+  }
+  return tokens;
+}
+
+}  // namespace
+
+bool parse_area_token(std::string_view token, CellRange* out_range) {
+  return ParseRangeToken(StripAnchors(token), out_range);
+}
+
+Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, std::uint32_t sheet_index) {
+  // An absent print area is not an error (empty result): callers fall back to
+  // the sheet's used range.
+  auto tokens = SplitDefinedNameAreas(wb, sheet_index, kPrintAreaName, "Empty Print_Area formula",
+                                      "Empty area in Print_Area formula");
+  if (!tokens) {
+    return tokens.error();
+  }
+  std::vector<CellRange> ranges;
+  for (const std::string& cleaned : tokens.value()) {
     CellRange range;
     if (!ParseRangeToken(cleaned, &range)) {
       return make_error(FormulonErrorCode::kPrintInvalidArea, "Malformed Print_Area range",
@@ -319,31 +337,13 @@ Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, s
 }
 
 Expected<PrintTitles, Error> resolve_print_titles(const Workbook& wb, std::uint32_t sheet_index) {
+  auto tokens = SplitDefinedNameAreas(wb, sheet_index, kPrintTitlesName, "Empty Print_Titles formula",
+                                      "Empty token in Print_Titles formula");
+  if (!tokens) {
+    return tokens.error();
+  }
   PrintTitles titles;
-  const std::string* formula = FindSheetScopedFormula(wb, sheet_index, kPrintTitlesName);
-  if (formula == nullptr) {
-    return titles;
-  }
-
-  const std::string_view body = Trim(*formula);
-  if (body.empty()) {
-    return make_error(FormulonErrorCode::kPrintInvalidArea, "Empty Print_Titles formula",
-                      "sheet_index=" + std::to_string(sheet_index));
-  }
-
-  std::size_t start = 0;
-  while (start <= body.size()) {
-    std::size_t comma = FindAreaSeparator(body, start);
-    if (comma == std::string_view::npos) {
-      comma = body.size();
-    }
-    const std::string_view raw = Trim(body.substr(start, comma - start));
-    start = comma + 1;
-    if (raw.empty()) {
-      return make_error(FormulonErrorCode::kPrintInvalidArea, "Empty token in Print_Titles formula",
-                        "sheet_index=" + std::to_string(sheet_index));
-    }
-    const std::string cleaned = StripAnchors(StripSheetQualifier(raw));
+  for (const std::string& cleaned : tokens.value()) {
     if (!ParseTitleToken(cleaned, &titles)) {
       return make_error(FormulonErrorCode::kPrintInvalidArea, "Malformed Print_Titles token",
                         "sheet_index=" + std::to_string(sheet_index) + " token=" + cleaned);
