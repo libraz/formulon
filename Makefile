@@ -46,9 +46,10 @@ BIOME_PATHS := packages/npm packages/npm-native tests/wasm src/wasm
 # walk through the ~10k oracle parametric tests.
 CTEST_JOBS ?= 0
 
-# Build parallelism for every `cmake --build` recipe. Empty lets the
-# generator pick; `make wasm JOBS=2` caps a build on a shared host.
-JOBS ?=
+# Build parallelism for every `cmake --build` recipe; `make wasm JOBS=2`
+# caps a build on a shared host. Never empty: a bare `--parallel` under the
+# Unix Makefiles generator is unbounded and exhausts a CI runner's memory.
+JOBS ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 
 SRC_DIRS := src tests
 CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 2>/dev/null)
