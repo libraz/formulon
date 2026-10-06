@@ -81,6 +81,55 @@ bool spill_intersects_range(const SpillFootprint& footprint, const CellRangeDepe
          static_cast<std::uint64_t>(range.col_first) < spill_col_end;
 }
 
+// Cells probed straight above and straight left of a spill target for a blocker; none found admits conservatively.
+constexpr std::uint32_t kSpillBlockerProbeCells = 64U;
+
+// Largest runtime read rectangle whose open cells are checked one by one before admitting a producer.
+constexpr std::uint64_t kMaxCheckedSpillReadCells = 256U;
+
+// A stored formula or non-blank literal blocks every spill covering it. A phantom does not: its producer may shrink.
+bool blocks_spill(const Cell* cell) noexcept {
+  return cell != nullptr && (!cell->formula_text.empty() || !cell->cached_value.is_blank());
+}
+
+// A coordinate a not-yet-committed spill might fill, with the nearest stored blocker straight above and left of it.
+struct SpillTarget {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::int64_t blocker_row = -1;
+  std::int64_t blocker_col = -1;
+
+  SpillTarget(const Sheet& sheet, std::uint32_t target_row, std::uint32_t target_col) noexcept
+      : row(target_row), col(target_col) {
+    for (std::uint32_t step = 1U; step <= kSpillBlockerProbeCells && step <= row; ++step) {
+      if (blocks_spill(sheet.cell_at(row - step, col))) {
+        blocker_row = static_cast<std::int64_t>(row - step);
+        break;
+      }
+    }
+    for (std::uint32_t step = 1U; step <= kSpillBlockerProbeCells && step <= col; ++step) {
+      if (blocks_spill(sheet.cell_at(row, col - step))) {
+        blocker_col = static_cast<std::int64_t>(col - step);
+        break;
+      }
+    }
+  }
+
+  // A spill covering the target covers the whole producer-to-target rectangle, so a blocker inside it rules the
+  // producer out unless the blocker is the producer's own cell.
+  bool reachable_from(CellNodeId producer) const noexcept {
+    if (producer.row > row || producer.col > col) {
+      return false;
+    }
+    const auto producer_row = static_cast<std::int64_t>(producer.row);
+    const auto producer_col = static_cast<std::int64_t>(producer.col);
+    if (producer_row <= blocker_row && !(producer_row == blocker_row && producer.col == col)) {
+      return false;
+    }
+    return !(producer_col <= blocker_col && !(producer_col == blocker_col && producer.row == row));
+  }
+};
+
 }  // namespace
 
 // ----------------------------------------------------------------------------
@@ -407,12 +456,23 @@ void RecalcEngine::DynamicReadPass::discover_pending_candidates(
       continue;
     }
 
-    // Discovery is only for a blank coordinate whose producer has not committed; check the single-cell case only.
-    if (read.rect.single_cell()) {
-      Sheet::CellRead target;
-      workbook_.sheet(static_cast<std::uint16_t>(read.sheet_id))
-          .read_formula_cell(read.rect.row_first, read.rect.col_first, target);
-      if (target.is_formula() || !target.value().is_blank()) {
+    // Discovery is only for a blank coordinate whose producer has not committed. A small rectangle is checked cell
+    // by cell; a larger one keeps the geometric test alone.
+    const Sheet& read_sheet = workbook_.sheet(static_cast<std::uint16_t>(read.sheet_id));
+    const bool checks_targets =
+        static_cast<std::uint64_t>(read.rect.rows()) * read.rect.cols() <= kMaxCheckedSpillReadCells;
+    std::vector<SpillTarget> open_targets;
+    if (checks_targets) {
+      for (std::uint32_t row = read.rect.row_first; row <= read.rect.row_last; ++row) {
+        for (std::uint32_t col = read.rect.col_first; col <= read.rect.col_last; ++col) {
+          Sheet::CellRead target;
+          read_sheet.read_formula_cell(row, col, target);
+          if (!target.is_formula() && target.value().is_blank()) {
+            open_targets.emplace_back(read_sheet, row, col);
+          }
+        }
+      }
+      if (open_targets.empty()) {
         continue;
       }
     }
@@ -426,6 +486,11 @@ void RecalcEngine::DynamicReadPass::discover_pending_candidates(
     for (const auto& [producer, static_potential] : engine_.potential_spill_producers_by_sheet_[read.sheet_id]) {
       // A spill extends only down and right, so an anchor past either last coordinate cannot intersect the read.
       if (producer.row > read.rect.row_last || producer.col > read.rect.col_last) {
+        continue;
+      }
+      const CellNodeId candidate = producer;
+      if (checks_targets && std::none_of(open_targets.begin(), open_targets.end(),
+                                         [candidate](const SpillTarget& t) { return t.reachable_from(candidate); })) {
         continue;
       }
       if (log_.commit_ordinal(producer).has_value()) {
@@ -850,7 +915,8 @@ void RecalcEngine::mark_dirty_locked(CellNodeId cell) {
 }
 
 void RecalcEngine::mark_range_dependents_dirty_locked(CellNodeId cell) {
-  range_dependencies_.for_each_owner_covering(cell, [this](CellNodeId owner) { dirty_.mark(owner); });
+  range_dependencies_.for_each_new_owner_covering(cell, dirty_.generation(),
+                                                  [this](CellNodeId owner) { dirty_.mark(owner); });
 }
 
 void RecalcEngine::reset_graph_locked() {
@@ -1236,11 +1302,12 @@ partial_recalc_next_wave:
         continue;
       }
       const Cell* current_cell = workbook.sheet(current.sheet_id).cell_at(current.row, current.col);
-      if (current_cell != nullptr && (!current_cell->formula_text.empty() || !current_cell->cached_value.is_blank())) {
+      if (blocks_spill(current_cell)) {
         continue;
       }
+      const SpillTarget target(workbook.sheet(current.sheet_id), current.row, current.col);
       for (const auto& [producer, static_potential] : potential_spill_producers_by_sheet_[current.sheet_id]) {
-        if (producer.sheet_id != current.sheet_id || producer.row > current.row || producer.col > current.col) {
+        if (producer.sheet_id != current.sheet_id || !target.reachable_from(producer)) {
           continue;
         }
         enqueue_potential_producer(producer, static_potential);
@@ -1433,6 +1500,18 @@ partial_recalc_next_wave:
       to_unmark.push_back(c);
     }
   });
+  // Hand dirtiness on to dependents outside the closure so a later pass still reaches them.
+  const auto mark_outside_closure = [&](CellNodeId dependent) {
+    if (closure.count(dependent) == 0U) {
+      dirty_.mark(dependent);
+    }
+  };
+  for (CellNodeId c : to_unmark) {
+    for (CellNodeId dependent : graph_.dependents_of_ref(c)) {
+      mark_outside_closure(dependent);
+    }
+    range_dependencies_.for_each_owner_covering(c, mark_outside_closure);
+  }
   for (CellNodeId c : to_unmark) {
     dirty_.unmark(c);
   }

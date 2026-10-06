@@ -21,7 +21,7 @@ std::uint32_t RangeDepIndex::intern_range(const CellRangeDependency& range) {
   if (!free_range_ids_.empty()) {
     range_id = free_range_ids_.back();
     free_range_ids_.pop_back();
-    ranges_[range_id].range = range;
+    ranges_[range_id] = RangeEntry{range, {}};
   } else {
     range_id = static_cast<std::uint32_t>(ranges_.size());
     ranges_.push_back(RangeEntry{range, {}});
@@ -81,8 +81,13 @@ std::vector<std::uint32_t> RangeDepIndex::erase_owner(CellNodeId owner) {
   }
 
   for (const OwnedRange& owned : it->second) {
-    std::vector<CellNodeId>& owners = ranges_[owned.range_id].owners;
+    RangeEntry& entry = ranges_[owned.range_id];
+    std::vector<CellNodeId>& owners = entry.owners;
     const std::size_t last_index = owners.size() - 1U;
+    // Keep the visited prefix exact: a not-yet-visited tail owner swapped into it ends the prefix there.
+    if (owned.owner_index < entry.visited_owners) {
+      entry.visited_owners = last_index < entry.visited_owners ? entry.visited_owners - 1U : owned.owner_index;
+    }
     if (owned.owner_index != last_index) {
       // Swap-remove: the owner moved into the vacated slot must learn its new
       // index, otherwise its own erase would target a stranger's slot.

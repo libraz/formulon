@@ -546,6 +546,165 @@ TEST(PartialRecalc, DynamicReadSkipsOccupiedLiteralTarget) {
                                                                     DepGraph::DependencySource::kDynamicReference));
 }
 
+TEST(PartialRecalc, DirectReadSkipsProducerBlockedAboveTarget) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  // A spill reaching A9 from A1 would cover A5, so A1 cannot feed C1's read.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2)")));    // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 4U, 0U, Value::number(5.0))));  // A5
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=A9")));             // C1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 2U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cells_evaluated, 1U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_TRUE(CellValue(wb, 0U, 0U, 0U).is_blank());
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+}
+
+TEST(PartialRecalc, DirectReadSkipsProducerBlockedLeftOfTarget) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  // A spill reaching E1 from A1 would cover C1, so A1 cannot feed A3's read.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,2)")));  // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 2U, Value::number(5.0))));  // C1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=E1")));             // A3
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(2U, 0U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cells_evaluated, 1U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 2U, 0U).as_number(), 0.0);
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+}
+
+TEST(PartialRecalc, DirectReadStillAdmitsProducerWhoseOwnCellIsTheNearestBlocker) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  // A3 is the producer itself; the literal above it in A1 does not block it.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(5.0))));  // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=SEQUENCE(3)")));    // A3:A5
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=A5")));             // C1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 2U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 3.0);
+}
+
+TEST(PartialRecalc, FormulaBlockerAboveTargetAdmitsOnlyProducersBelowIt) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2)")));  // A1, blocked by A3
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=1+1")));          // A3
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 5U, 0U, "=SEQUENCE(4)")));  // A6:A9
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=A9")));           // C1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 2U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 4.0);
+  EXPECT_TRUE(CellValue(wb, 0U, 0U, 0U).is_blank());
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+}
+
+TEST(PartialRecalc, StaleProducerGrowingIntoTargetIsStillAdmitted) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(2.0))));  // D1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=D1")));             // C1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(C1)")));   // A1:A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 4U, "=A5")));             // E1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 4U).as_number(), 0.0);
+
+  // A1 is clean and its committed spill stops at A2, but its input grows it over A5.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(5.0))));
+  ASSERT_FALSE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 4U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 4U).as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(4U, 0U).as_number(), 5.0);
+}
+
+TEST(PartialRecalc, DependentOutsideViewportRefreshesOnLaterFullRecalc) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));  // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1")));             // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=B1*10")));          // C1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 10.0);
+
+  // The edit dirties B1 only; C1 lies outside B1's viewport closure.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 1U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 2.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 20.0);
+}
+
+TEST(PartialRecalc, RangeDependentOutsideViewportRefreshesOnLaterFullRecalc) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));  // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1")));             // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(5.0))));  // B2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B1:B2)")));     // C1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=SUM(B:B)")));       // D1, compact range
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 6.0);
+  ASSERT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 6.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 1U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 2.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 7.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 7.0);
+}
+
+TEST(PartialRecalc, CrossSheetDependentOutsideViewportRefreshesOnLaterFullRecalc) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));  // Sheet1!A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1")));             // Sheet1!B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 0U, "=Sheet1!B1*10")));   // Sheet2!A1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_DOUBLE_EQ(CellValue(wb, 1U, 0U, 0U).as_number(), 10.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 1U))));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 1U, 0U, 0U).as_number(), 20.0);
+}
+
+TEST(PartialRecalc, DynamicReadSkipsFullyOccupiedRectangle) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,3)")));             // A1 candidate
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(1.0))));             // B2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 2U, 1U, Value::number(2.0))));             // B3
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 4U, "=SUM(INDIRECT(\"B2:B3\"))")));  // E1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 4U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cells_evaluated, 1U);  // only the volatile reader
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 4U).as_number(), 3.0);
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 0U}));
+}
+
+TEST(PartialRecalc, DynamicReadRectangleStillAdmitsProducerReachingAnOpenCell) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3)")));               // A1:A3
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 3U, 0U, Value::number(4.0))));             // A4
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 4U, "=SUM(INDIRECT(\"A3:A4\"))")));  // E1
+
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 4U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_GE(stats.value().cells_evaluated, 2U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 4U).as_number(), 7.0);
+}
+
 TEST(PartialRecalc, DefinedNameReindexClearsStaleSpillInViewport) {
   Workbook wb = Workbook::create();
   wb.set_excel_profile(mac_365_ja_jp_profile());

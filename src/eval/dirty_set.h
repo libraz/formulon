@@ -15,6 +15,7 @@
 #define FORMULON_EVAL_DIRTY_SET_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <unordered_set>
 #include <utility>
 
@@ -42,10 +43,21 @@ class DirtySet {
   bool contains(CellNodeId cell) const { return cells_.find(cell) != cells_.end(); }
 
   /// Removes `cell` from the set; no-op when absent.
-  void unmark(CellNodeId cell) { cells_.erase(cell); }
+  void unmark(CellNodeId cell) {
+    if (cells_.erase(cell) != 0U) {
+      ++generation_;
+    }
+  }
 
   /// Empties the set.
-  void clear() noexcept { cells_.clear(); }
+  void clear() noexcept {
+    cells_.clear();
+    ++generation_;
+  }
+
+  /// Changes whenever a cell leaves the set and never otherwise, so a caller
+  /// can trust "already marked" memos taken under an unchanged generation.
+  std::uint64_t generation() const noexcept { return generation_; }
 
   /// Number of cells currently marked dirty.
   std::size_t size() const noexcept { return cells_.size(); }
@@ -64,6 +76,8 @@ class DirtySet {
 
  private:
   std::unordered_set<CellNodeId, CellNodeIdHash> cells_;
+  // Starts above the zero that marks a never-visited range entry.
+  std::uint64_t generation_ = 1U;
 };
 
 }  // namespace formulon::eval

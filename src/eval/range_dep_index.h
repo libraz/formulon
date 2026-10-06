@@ -23,7 +23,8 @@
 // buckets and a whole-column rectangle a fixed `kMaxRows / kBandRows`, which
 // keeps insertion bounded regardless of the referenced area. A coverage
 // lookup still visits every owner of each covering rectangle, so bulk
-// writers that need no dirty marking (workbook load) bypass it.
+// writers that need no dirty marking (workbook load) bypass it, and dirty
+// marking revisits only owners added since its previous visit.
 //
 // Not thread-safe: the recalc engine owns the instance and mutates it under
 // its own mutex.
@@ -107,6 +108,34 @@ class RangeDepIndex {
     }
   }
 
+  /// Like `for_each_owner_covering`, but within one `generation` each owner
+  /// slot of a covering rectangle is visited at most once: a later call with
+  /// the same generation visits only owners added since. Lets dirty marking,
+  /// which is idempotent until the dirty set drops a cell, skip rectangles
+  /// whose owners are already marked. Starting a new generation revisits
+  /// every owner.
+  template <typename Fn>
+  void for_each_new_owner_covering(CellNodeId cell, std::uint64_t generation, Fn&& fn) {
+    const auto band = bands_.find(band_key(cell.sheet_id, cell.row));
+    if (band == bands_.end()) {
+      return;
+    }
+    for (const std::uint32_t range_id : band->second) {
+      RangeEntry& entry = ranges_[range_id];
+      if (!entry.range.contains(cell)) {
+        continue;
+      }
+      if (entry.visited_generation != generation) {
+        entry.visited_generation = generation;
+        entry.visited_owners = 0U;
+      }
+      for (std::size_t i = entry.visited_owners; i < entry.owners.size(); ++i) {
+        fn(entry.owners[i]);
+      }
+      entry.visited_owners = static_cast<std::uint32_t>(entry.owners.size());
+    }
+  }
+
   /// Invokes `fn(std::uint32_t range_id)` once per interned rectangle that
   /// covers `cell`. `fn` must not mutate the index.
   template <typename Fn>
@@ -154,9 +183,13 @@ class RangeDepIndex {
  private:
   // One interned rectangle. An entry whose owner list is empty is a released
   // slot: its id lives in `free_range_ids_` and is skipped by iteration.
+  // `owners[0, visited_owners)` were visited by `for_each_new_owner_covering`
+  // during `visited_generation`.
   struct RangeEntry {
     CellRangeDependency range;
     std::vector<CellNodeId> owners;
+    std::uint64_t visited_generation = 0U;
+    std::uint32_t visited_owners = 0U;
   };
 
   // Back-reference from an owner to its slot inside `RangeEntry::owners`, so

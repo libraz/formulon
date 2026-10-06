@@ -10,11 +10,13 @@
 #include <string>
 
 #include "cell.h"
+#include "eval/builtin_names.h"
 #include "eval/dep_graph.h"
 #include "eval/function_registry.h"
 #include "eval/scheduler.h"
 #include "eval/volatile_tracker.h"
 #include "gtest/gtest.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
@@ -625,6 +627,34 @@ TEST(RecalcEngine, LastWatcherReleasesTheRangeNode) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(6.0))));
   EXPECT_TRUE(graph.dependents_of(CellNodeId{0U, 0U, 0U}).empty());
   EXPECT_TRUE(graph.empty());
+}
+
+// Repeated writes under one rectangle mark its watchers once, yet a watcher
+// registered after that marking, without being dirtied itself, is still
+// reached by the next write even after an earlier watcher's removal moves it.
+TEST(RecalcEngine, RangeWatcherMarkingReachesWatchersAddedSinceTheLastWrite) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=COUNT(A:A)")));  // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=COUNT(A:A)")));  // B2
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  RecalcEngine& engine = wb.recalc_engine();
+  const CellNodeId b1{0U, 0U, 1U};
+  const CellNodeId b2{0U, 1U, 1U};
+  const CellNodeId b3{0U, 2U, 1U};
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  EXPECT_TRUE(engine.dirty().contains(b1));
+  EXPECT_TRUE(engine.dirty().contains(b2));
+
+  Arena arena;
+  const parser::AstNode* ast = parse_formula_entry("COUNT(A:A)", arena);
+  ASSERT_NE(ast, nullptr);
+  engine.register_formula(b3, *ast, wb);
+  ASSERT_FALSE(engine.dirty().contains(b3));
+  engine.unregister_formula(b1);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));
+  EXPECT_TRUE(engine.dirty().contains(b3));
 }
 
 // ---------------------------------------------------------------------------
