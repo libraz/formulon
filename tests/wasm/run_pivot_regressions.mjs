@@ -1,6 +1,54 @@
 import assert from 'node:assert/strict';
 import { PIVOT, VAL } from './smoke_support.mjs';
 
+function makeCheckedPivot(Module) {
+  const wb = Module.Workbook.createDefault();
+  const must = (result, what) => {
+    const status = typeof result.ok === 'boolean' ? result : result.status;
+    assert.ok(status.ok, `${what}: ${JSON.stringify(status)}`);
+    return result;
+  };
+  const cache = must(wb.pivotCacheCreate(0), 'pivotCacheCreate').index;
+  must(
+    wb.pivotCacheSetWorksheetSource(cache, { present: true, ref: 'A1:B3', sheet: 'Sheet1' }),
+    'pivotCacheSetWorksheetSource',
+  );
+  must(wb.pivotCacheFieldAdd(cache, 'Region'), 'pivotCacheFieldAdd Region');
+  must(wb.pivotCacheFieldAdd(cache, 'Amount'), 'pivotCacheFieldAdd Amount');
+  for (const [region, amount] of [
+    ['East', 10],
+    ['West', 30],
+  ]) {
+    const record = must(wb.pivotCacheRecordAdd(cache), 'pivotCacheRecordAdd').index;
+    must(wb.pivotCacheRecordSetText(cache, record, 0, region), 'pivotCacheRecordSetText');
+    must(wb.pivotCacheRecordSetNumber(cache, record, 1, amount), 'pivotCacheRecordSetNumber');
+  }
+  const pivot = must(wb.pivotCreate(0, 'Pivot1', cache, 0, 4), 'pivotCreate').index;
+  const region = must(wb.pivotFieldAdd(0, pivot, { sourceName: 'Region', axis: 0 }), 'region field').index;
+  const amount = must(wb.pivotFieldAdd(0, pivot, { sourceName: 'Amount', axis: 2 }), 'amount field').index;
+  must(wb.pivotSetRowFieldOrder(0, pivot, [region]), 'pivotSetRowFieldOrder');
+  must(
+    wb.pivotDataFieldAdd(0, pivot, { name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 }),
+    'pivotDataFieldAdd',
+  );
+  return { wb, pivot, region, amount };
+}
+
+function checkedPivotGrid(wb, pivot) {
+  const layout = wb.pivotLayout(0, pivot);
+  assert.ok(layout.status.ok, JSON.stringify(layout.status));
+  const rows = new Map();
+  for (const cell of layout.cells) {
+    const value = cell.value;
+    const text = value.kind === VAL.NUMBER ? String(value.number) : value.kind === VAL.TEXT ? value.text : '';
+    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.cols).fill(''));
+    rows.get(cell.row)[cell.col - layout.left] = text;
+  }
+  return [...rows.keys()].sort((a, b) => a - b).map((row) => rows.get(row).join('|'));
+}
+
+const CHECKED_PIVOT_GRID = ['行ラベル|Sum of Amount', 'East|10', 'West|30', '総計|40'];
+
 export function registerPivotRegressions(Module, test) {
   test('pivotFieldAddItemAt hides the blank item an empty label cannot name', () => {
     const wb = Module.Workbook.createDefault();
@@ -56,6 +104,136 @@ export function registerPivotRegressions(Module, test) {
       assert.ok(wb.pivotFieldAddItem(0, pivot.index, regionField.index, 'North', true).ok);
       assert.ok(wb.pivotFieldAddItemAt(0, pivot.index, regionField.index, 1, false).ok);
       assert.equal(sumDataCells(), 100);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('pivot nested integers reject narrowing before C mutation', () => {
+    const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('pivot numeric')];
+    for (const value of invalid) {
+      const { wb, pivot } = makeCheckedPivot(Module);
+      try {
+        const before = wb.pivotFieldCount(0, pivot).value;
+        const added = wb.pivotFieldAdd(0, pivot, { sourceName: 'Region', axis: value });
+        assert.equal(added.status.ok, false, `pivotFieldAdd axis=${String(value)} accepted`);
+        assert.equal(wb.pivotFieldCount(0, pivot).value, before);
+      } finally {
+        wb.delete();
+      }
+
+      const data = makeCheckedPivot(Module);
+      try {
+        const before = data.wb.pivotDataFieldCount(0, data.pivot).value;
+        const added = data.wb.pivotDataFieldAdd(0, data.pivot, {
+          name: 'Bad',
+          fieldIndex: value,
+          aggregation: 0,
+        });
+        assert.equal(added.status.ok, false, `pivotDataFieldAdd fieldIndex=${String(value)} accepted`);
+        assert.equal(data.wb.pivotDataFieldCount(0, data.pivot).value, before);
+      } finally {
+        data.wb.delete();
+      }
+    }
+  });
+
+  test('pivot filters reject invalid axis, value kind, and field index before mutation', () => {
+    const invalid = [
+      { axis: 2 ** 32 },
+      { valueKind: 1.5 },
+      { valueKind: Number.NaN },
+      { valueKind: Symbol('pivot filter') },
+      { dataFieldIndex: 2 ** 32 },
+    ];
+    for (const override of invalid) {
+      const { wb, pivot } = makeCheckedPivot(Module);
+      try {
+        const before = wb.pivotFilterCount(0, pivot).value;
+        const added = wb.pivotFilterAdd(0, pivot, {
+          axis: 0,
+          fieldName: 'Region',
+          type: 1,
+          valueKind: 1,
+          valueDouble: 15,
+          ...override,
+        });
+        assert.equal(added.ok, false, `pivotFilterAdd ${JSON.stringify(override)} accepted`);
+        assert.equal(wb.pivotFilterCount(0, pivot).value, before);
+        assert.deepEqual(checkedPivotGrid(wb, pivot), CHECKED_PIVOT_GRID);
+      } finally {
+        wb.delete();
+      }
+    }
+  });
+
+  test('pivot order arrays reject invalid elements before replacing the order', () => {
+    const invalid = [2 ** 32 + 1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('pivot order')];
+    for (const value of invalid) {
+      const { wb, pivot } = makeCheckedPivot(Module);
+      try {
+        const result = wb.pivotSetRowFieldOrder(0, pivot, [value]);
+        assert.equal(result.ok, false, `pivotSetRowFieldOrder element=${String(value)} accepted`);
+        assert.deepEqual(checkedPivotGrid(wb, pivot), CHECKED_PIVOT_GRID);
+      } finally {
+        wb.delete();
+      }
+    }
+  });
+
+  test('pivot valid nested controls and nullish defaults remain accepted', () => {
+    const { wb, pivot, amount } = makeCheckedPivot(Module);
+    try {
+      const data = wb.pivotDataFieldAdd(0, pivot, {
+        name: 'Count of Amount',
+        fieldIndex: amount,
+        aggregation: 1,
+        numberFormat: null,
+        showAs: undefined,
+        showAsBaseField: null,
+        showAsBaseItem: undefined,
+      });
+      assert.ok(data.status.ok, JSON.stringify(data.status));
+      assert.equal(wb.pivotDataFieldCount(0, pivot).value, 2);
+      const filter = wb.pivotFilterAdd(0, pivot, {
+        axis: 0,
+        fieldName: 'Region',
+        type: 1,
+        valueKind: 1,
+        valueDouble: 15,
+      });
+      assert.ok(filter.ok, JSON.stringify(filter));
+      assert.ok(wb.pivotSetRowFieldOrder(0, pivot, [0]).ok);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('pivot nested getters are caught before any C mutation', () => {
+    const { wb, pivot } = makeCheckedPivot(Module);
+    try {
+      const fieldCount = wb.pivotFieldCount(0, pivot).value;
+      const fieldSpec = { axis: 0 };
+      Object.defineProperty(fieldSpec, 'sourceName', {
+        enumerable: true,
+        get() {
+          throw new Error('pivot field getter');
+        },
+      });
+      const field = wb.pivotFieldAdd(0, pivot, fieldSpec);
+      assert.equal(field.status.ok, false);
+      assert.equal(wb.pivotFieldCount(0, pivot).value, fieldCount);
+
+      const indices = [];
+      Object.defineProperty(indices, 0, {
+        enumerable: true,
+        get() {
+          throw new Error('pivot order getter');
+        },
+      });
+      const order = wb.pivotSetRowFieldOrder(0, pivot, indices);
+      assert.equal(order.ok, false);
+      assert.deepEqual(checkedPivotGrid(wb, pivot), CHECKED_PIVOT_GRID);
     } finally {
       wb.delete();
     }

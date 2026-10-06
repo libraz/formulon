@@ -350,6 +350,107 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
+  test('typed print patches reject lossy numbers before changing the page setup', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setSheetPageSetup(0, { orientation: 2, scale: 125 }).ok);
+      const expectRejected = (patch, field) => {
+        const status = wb.setSheetPageSetup(0, patch);
+        assert.equal(status.ok, false, `${field}: ${JSON.stringify(status)}`);
+        assert.equal(status.status, 2, `${field}: ${JSON.stringify(status)}`);
+        assert.match(status.message, /setSheetPageSetup/);
+        assert.match(status.message, new RegExp(`\`${field}\``));
+        const setup = wb.getSheetPageSetup(0);
+        assert.equal(setup.orientation, 2);
+        assert.equal(setup.scale, 125);
+      };
+
+      expectRejected({ scale: 2 ** 32 + 100 }, 'pageSetup.scale');
+      expectRejected({ scale: 100.5 }, 'pageSetup.scale');
+      expectRejected({ scale: Number.NaN }, 'pageSetup.scale');
+      expectRejected({ scale: Number.POSITIVE_INFINITY }, 'pageSetup.scale');
+      expectRejected({ orientation: 1.5 }, 'pageSetup.orientation');
+
+      // Nullish values keep the old patch meaning: the attribute is omitted
+      // from this update and the prior value remains in force.
+      assert.ok(wb.setSheetPageSetup(0, { scale: null, orientation: undefined }).ok);
+      const unchanged = wb.getSheetPageSetup(0);
+      assert.equal(unchanged.orientation, 2);
+      assert.equal(unchanged.scale, 125);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('typed print patches reject coercion and preserve header/footer fields', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setSheetPrintOptions(0, { gridLines: true }).ok);
+      const throwingOptions = {};
+      Object.defineProperty(throwingOptions, 'gridLines', {
+        get() {
+          throw new Error('print-options getter');
+        },
+      });
+      let boolStatus;
+      assert.doesNotThrow(() => {
+        boolStatus = wb.setSheetPrintOptions(0, throwingOptions);
+      });
+      assert.equal(boolStatus.ok, false, JSON.stringify(boolStatus));
+      assert.equal(boolStatus.status, 2);
+      assert.match(boolStatus.message, /setSheetPrintOptions/);
+      assert.match(boolStatus.message, /gridLines/);
+      assert.match(wb.getSheetPrintOptionsXml(0).xml, /gridLines="true"/);
+
+      assert.ok(wb.setSheetPageMargins(0, { left: 0.5 }).ok);
+      const marginStatus = wb.setSheetPageMargins(0, { left: '0.75' });
+      assert.equal(marginStatus.ok, false, JSON.stringify(marginStatus));
+      assert.equal(marginStatus.status, 2);
+      assert.match(marginStatus.message, /setSheetPageMargins/);
+      assert.match(marginStatus.message, /left/);
+      assert.equal(wb.getSheetPageMargins(0).left, 0.5);
+
+      assert.ok(wb.setSheetHeaderFooter(0, { oddHeader: 'before' }).ok);
+      let headerStatus;
+      assert.doesNotThrow(() => {
+        headerStatus = wb.setSheetHeaderFooter(0, { oddHeader: 42 });
+      });
+      assert.equal(headerStatus.ok, false, JSON.stringify(headerStatus));
+      assert.equal(headerStatus.status, 2);
+      assert.match(headerStatus.message, /setSheetHeaderFooter/);
+      assert.match(headerStatus.message, /oddHeader/);
+      assert.match(wb.getSheetHeaderFooterXml(0).xml, /before/);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('header/footer getter failures return a status before any mutation', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setSheetHeaderFooter(0, { oddHeader: 'before' }).ok);
+      const lateFailure = { oddHeader: 'after' };
+      Object.defineProperty(lateFailure, 'alignWithMargins', {
+        get() {
+          throw new Error('late header getter');
+        },
+      });
+
+      let status;
+      assert.doesNotThrow(() => {
+        status = wb.setSheetHeaderFooter(0, lateFailure);
+      });
+      assert.equal(status.ok, false, JSON.stringify(status));
+      assert.equal(status.status, 2);
+      assert.match(status.message, /setSheetHeaderFooter/);
+      assert.match(status.message, /alignWithMargins/);
+      assert.match(wb.getSheetHeaderFooterXml(0).xml, /before/);
+      assert.doesNotMatch(wb.getSheetHeaderFooterXml(0).xml, /after/);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('setSheetVisibility states veryHidden, which the bool setter cannot', () => {
     const wb = Module.Workbook.createDefault();
     try {

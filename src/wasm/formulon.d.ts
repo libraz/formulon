@@ -22,7 +22,8 @@ export enum ValueKind {
   Lambda = 7,
 }
 
-/** Result envelope returned by every fallible binding call. */
+/** Status carried by binding result envelopes. Argument validation may
+ *  throw `TypeError` or `RangeError` before returning a result. */
 export interface Status {
   /** True when the underlying C ABI returned `kOk`. */
   ok: boolean;

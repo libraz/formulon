@@ -19,11 +19,11 @@ namespace {
 /// Reads an optional string property as the C tri-state: absent stays
 /// `nullptr` (leave that section alone), present owns its bytes in
 /// `storage` so the borrowed pointer outlives the call.
-const char* PullOptionalString(const Napi::Object& spec, const char* key, std::string& storage) {
-  if (!SpecHas(spec, key)) {
+const char* PullOptionalString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key,
+                               std::string& storage) {
+  if (!reader.String(spec, key, &storage)) {
     return nullptr;
   }
-  storage = spec.Get(key).ToString().Utf8Value();
   return storage.c_str();
 }
 
@@ -231,21 +231,23 @@ Napi::Value Workbook::SetSheetPageSetup(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const Napi::Object spec = info[1].As<Napi::Object>();
+  CheckedSpecReader reader(env);
   fm_page_setup_t out{};
-  out.orientation_engaged = SpecHas(spec, "orientation") ? 1 : 0;
-  out.orientation = SpecPullU32(spec, "orientation", 0U);
-  out.paper_size_engaged = SpecHas(spec, "paperSize") ? 1 : 0;
-  out.paper_size = SpecPullU32(spec, "paperSize", 0U);
-  out.scale_engaged = SpecHas(spec, "scale") ? 1 : 0;
-  out.scale = SpecPullU32(spec, "scale", 0U);
-  out.fit_to_width_engaged = SpecHas(spec, "fitToWidth") ? 1 : 0;
-  out.fit_to_width = SpecPullU32(spec, "fitToWidth", 0U);
-  out.fit_to_height_engaged = SpecHas(spec, "fitToHeight") ? 1 : 0;
-  out.fit_to_height = SpecPullU32(spec, "fitToHeight", 0U);
-  out.fit_to_page_engaged = SpecHas(spec, "fitToPage") ? 1 : 0;
-  out.fit_to_page = SpecPullBool(spec, "fitToPage", false) ? 1 : 0;
-  if (env.IsExceptionPending()) {
-    // A malformed field left a pending JS exception (see SpecPullU32):
+  bool present = false;
+  out.orientation = reader.U32(spec, "orientation", 0U, &present);
+  out.orientation_engaged = present ? 1 : 0;
+  out.paper_size = reader.U32(spec, "paperSize", 0U, &present);
+  out.paper_size_engaged = present ? 1 : 0;
+  out.scale = reader.U32(spec, "scale", 0U, &present);
+  out.scale_engaged = present ? 1 : 0;
+  out.fit_to_width = reader.U32(spec, "fitToWidth", 0U, &present);
+  out.fit_to_width_engaged = present ? 1 : 0;
+  out.fit_to_height = reader.U32(spec, "fitToHeight", 0U, &present);
+  out.fit_to_height_engaged = present ? 1 : 0;
+  out.fit_to_page = reader.Bool(spec, "fitToPage", false, &present) ? 1 : 0;
+  out.fit_to_page_engaged = present ? 1 : 0;
+  if (!reader.ok()) {
+    // A malformed field left a pending JS exception:
     // stop before the C ABI call commits a default value for it.
     return env.Undefined();
   }
@@ -263,21 +265,23 @@ Napi::Value Workbook::SetSheetPageMargins(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const Napi::Object spec = info[1].As<Napi::Object>();
+  CheckedSpecReader reader(env);
   fm_page_margins_t out{};
-  out.left_engaged = SpecHas(spec, "left") ? 1 : 0;
-  out.left = SpecPullDouble(spec, "left", 0.0);
-  out.right_engaged = SpecHas(spec, "right") ? 1 : 0;
-  out.right = SpecPullDouble(spec, "right", 0.0);
-  out.top_engaged = SpecHas(spec, "top") ? 1 : 0;
-  out.top = SpecPullDouble(spec, "top", 0.0);
-  out.bottom_engaged = SpecHas(spec, "bottom") ? 1 : 0;
-  out.bottom = SpecPullDouble(spec, "bottom", 0.0);
-  out.header_engaged = SpecHas(spec, "header") ? 1 : 0;
-  out.header = SpecPullDouble(spec, "header", 0.0);
-  out.footer_engaged = SpecHas(spec, "footer") ? 1 : 0;
-  out.footer = SpecPullDouble(spec, "footer", 0.0);
-  if (env.IsExceptionPending()) {
-    // A malformed field left a pending JS exception (see SpecPullDouble):
+  bool present = false;
+  out.left = reader.Double(spec, "left", 0.0, &present);
+  out.left_engaged = present ? 1 : 0;
+  out.right = reader.Double(spec, "right", 0.0, &present);
+  out.right_engaged = present ? 1 : 0;
+  out.top = reader.Double(spec, "top", 0.0, &present);
+  out.top_engaged = present ? 1 : 0;
+  out.bottom = reader.Double(spec, "bottom", 0.0, &present);
+  out.bottom_engaged = present ? 1 : 0;
+  out.header = reader.Double(spec, "header", 0.0, &present);
+  out.header_engaged = present ? 1 : 0;
+  out.footer = reader.Double(spec, "footer", 0.0, &present);
+  out.footer_engaged = present ? 1 : 0;
+  if (!reader.ok()) {
+    // A malformed field left a pending JS exception:
     // stop before the C ABI call commits a default value for it.
     return env.Undefined();
   }
@@ -295,15 +299,20 @@ Napi::Value Workbook::SetSheetPrintOptions(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const Napi::Object spec = info[1].As<Napi::Object>();
+  CheckedSpecReader reader(env);
   fm_print_options_t out{};
-  out.grid_lines_engaged = SpecHas(spec, "gridLines") ? 1 : 0;
-  out.grid_lines = SpecPullBool(spec, "gridLines", false) ? 1 : 0;
-  out.headings_engaged = SpecHas(spec, "headings") ? 1 : 0;
-  out.headings = SpecPullBool(spec, "headings", false) ? 1 : 0;
-  out.horizontal_centered_engaged = SpecHas(spec, "horizontalCentered") ? 1 : 0;
-  out.horizontal_centered = SpecPullBool(spec, "horizontalCentered", false) ? 1 : 0;
-  out.vertical_centered_engaged = SpecHas(spec, "verticalCentered") ? 1 : 0;
-  out.vertical_centered = SpecPullBool(spec, "verticalCentered", false) ? 1 : 0;
+  bool present = false;
+  out.grid_lines = reader.Bool(spec, "gridLines", false, &present) ? 1 : 0;
+  out.grid_lines_engaged = present ? 1 : 0;
+  out.headings = reader.Bool(spec, "headings", false, &present) ? 1 : 0;
+  out.headings_engaged = present ? 1 : 0;
+  out.horizontal_centered = reader.Bool(spec, "horizontalCentered", false, &present) ? 1 : 0;
+  out.horizontal_centered_engaged = present ? 1 : 0;
+  out.vertical_centered = reader.Bool(spec, "verticalCentered", false, &present) ? 1 : 0;
+  out.vertical_centered_engaged = present ? 1 : 0;
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_sheet_set_print_options(handle_, ArgU32(info, 0), &out));
 }
 
@@ -318,6 +327,7 @@ Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const Napi::Object spec = info[1].As<Napi::Object>();
+  CheckedSpecReader reader(env);
   // The six section strings are borrowed by the C struct, so their
   // storage has to outlive the call.
   std::string odd_header;
@@ -327,20 +337,24 @@ Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
   std::string first_header;
   std::string first_footer;
   fm_header_footer_t out{};
-  out.odd_header = PullOptionalString(spec, "oddHeader", odd_header);
-  out.odd_footer = PullOptionalString(spec, "oddFooter", odd_footer);
-  out.even_header = PullOptionalString(spec, "evenHeader", even_header);
-  out.even_footer = PullOptionalString(spec, "evenFooter", even_footer);
-  out.first_header = PullOptionalString(spec, "firstHeader", first_header);
-  out.first_footer = PullOptionalString(spec, "firstFooter", first_footer);
-  out.different_odd_even_engaged = SpecHas(spec, "differentOddEven") ? 1 : 0;
-  out.different_odd_even = SpecPullBool(spec, "differentOddEven", false) ? 1 : 0;
-  out.different_first_engaged = SpecHas(spec, "differentFirst") ? 1 : 0;
-  out.different_first = SpecPullBool(spec, "differentFirst", false) ? 1 : 0;
-  out.scale_with_doc_engaged = SpecHas(spec, "scaleWithDoc") ? 1 : 0;
-  out.scale_with_doc = SpecPullBool(spec, "scaleWithDoc", false) ? 1 : 0;
-  out.align_with_margins_engaged = SpecHas(spec, "alignWithMargins") ? 1 : 0;
-  out.align_with_margins = SpecPullBool(spec, "alignWithMargins", false) ? 1 : 0;
+  out.odd_header = PullOptionalString(reader, spec, "oddHeader", odd_header);
+  out.odd_footer = PullOptionalString(reader, spec, "oddFooter", odd_footer);
+  out.even_header = PullOptionalString(reader, spec, "evenHeader", even_header);
+  out.even_footer = PullOptionalString(reader, spec, "evenFooter", even_footer);
+  out.first_header = PullOptionalString(reader, spec, "firstHeader", first_header);
+  out.first_footer = PullOptionalString(reader, spec, "firstFooter", first_footer);
+  bool present = false;
+  out.different_odd_even = reader.Bool(spec, "differentOddEven", false, &present) ? 1 : 0;
+  out.different_odd_even_engaged = present ? 1 : 0;
+  out.different_first = reader.Bool(spec, "differentFirst", false, &present) ? 1 : 0;
+  out.different_first_engaged = present ? 1 : 0;
+  out.scale_with_doc = reader.Bool(spec, "scaleWithDoc", false, &present) ? 1 : 0;
+  out.scale_with_doc_engaged = present ? 1 : 0;
+  out.align_with_margins = reader.Bool(spec, "alignWithMargins", false, &present) ? 1 : 0;
+  out.align_with_margins_engaged = present ? 1 : 0;
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_sheet_set_header_footer(handle_, ArgU32(info, 0), &out));
 }
 

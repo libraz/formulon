@@ -56,10 +56,40 @@ export function registerCellGeometryDisplay(Module, test) {
       }
       assert.deepEqual(seen, ['0,0', '0,1', '1,0']);
 
-      const bad = wb.getCellsInRange(0, RANGE_A1_F6, -1);
-      assert.equal(bad.status.ok, false);
-      assert.deepEqual(bad.cells, []);
-      assert.equal(bad.nextCursor, null);
+      assert.throws(() => wb.getCellsInRange(0, RANGE_A1_F6, -1), RangeError);
+      const unchanged = wb.getCellsInRange(0, RANGE_A1_F6);
+      assert.ok(unchanged.status.ok);
+      assert.deepEqual(unchanged.cells, all.cells);
+      assert.equal(unchanged.nextCursor, null);
+    });
+  });
+
+  test('getCellsInRange validates every range integer before the C call', () => {
+    const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('range integer')];
+    withWorkbook(Module, (wb) => {
+      assert.ok(wb.setNumber(0, 0, 0, 7).ok);
+      for (const value of invalid) {
+        for (const key of ['firstRow', 'firstCol', 'lastRow', 'lastCol']) {
+          const result = wb.getCellsInRange(0, {
+            firstRow: 0,
+            firstCol: 0,
+            lastRow: 4,
+            lastCol: 4,
+            [key]: value,
+          });
+          assert.equal(result.status.ok, false, `getCellsInRange ${key}=${String(value)} accepted`);
+        }
+      }
+
+      const range = { firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 4 };
+      Object.defineProperty(range, 'firstRow', {
+        enumerable: true,
+        get() {
+          throw new Error('cell range getter');
+        },
+      });
+      const getterResult = wb.getCellsInRange(0, range);
+      assert.equal(getterResult.status.ok, false);
     });
   });
 

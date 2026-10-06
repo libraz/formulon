@@ -225,11 +225,15 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   fm_viewport vp{};
   if (info.Length() > 0 && info[0].IsObject()) {
     Napi::Object vpobj = info[0].As<Napi::Object>();
-    vp.sheet = vpobj.Get("sheet").ToNumber().Uint32Value();
-    vp.first_row = vpobj.Get("firstRow").ToNumber().Uint32Value();
-    vp.last_row = vpobj.Get("lastRow").ToNumber().Uint32Value();
-    vp.first_col = vpobj.Get("firstCol").ToNumber().Uint32Value();
-    vp.last_col = vpobj.Get("lastCol").ToNumber().Uint32Value();
+    CheckedSpecReader reader(env);
+    vp.sheet = reader.U32(vpobj, "sheet", 0U);
+    vp.first_row = reader.U32(vpobj, "firstRow", 0U);
+    vp.last_row = reader.U32(vpobj, "lastRow", 0U);
+    vp.first_col = reader.U32(vpobj, "firstCol", 0U);
+    vp.last_col = reader.U32(vpobj, "lastCol", 0U);
+    if (!reader.ok()) {
+      return env.Undefined();
+    }
   }
   uint32_t recomputed = 0;
   (void)TakeIterativeProgressThrew();

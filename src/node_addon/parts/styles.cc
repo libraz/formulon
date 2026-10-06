@@ -17,21 +17,22 @@
 namespace formulon_node {
 namespace {
 
-fm_cf_color_t PullCfColor(const Napi::Object& spec) {
+fm_cf_color_t PullCfColor(CheckedSpecReader& reader, const Napi::Object& spec) {
   fm_cf_color_t out{};
-  out.r = static_cast<uint8_t>(SpecPullU32(spec, "r", 0U) & 0xFFU);
-  out.g = static_cast<uint8_t>(SpecPullU32(spec, "g", 0U) & 0xFFU);
-  out.b = static_cast<uint8_t>(SpecPullU32(spec, "b", 0U) & 0xFFU);
-  out.a = static_cast<uint8_t>(SpecPullU32(spec, "a", 255U) & 0xFFU);
+  out.r = reader.U8(spec, "r", 0U);
+  out.g = reader.U8(spec, "g", 0U);
+  out.b = reader.U8(spec, "b", 0U);
+  out.a = reader.U8(spec, "a", 255U);
   return out;
 }
 
-fm_cfvo_t PullCfvo(const Napi::Object& spec, formulon::c_api::BorrowedStringArena* strings) {
+fm_cfvo_t PullCfvo(CheckedSpecReader& reader, const Napi::Object& spec, formulon::c_api::BorrowedStringArena* strings) {
   fm_cfvo_t out{};
-  out.type = static_cast<uint8_t>(SpecPullU32(spec, "type", 0U) & 0xFFU);
-  out.gte = SpecPullBool(spec, "gte", true) ? 1 : 0;
-  if (SpecHas(spec, "value")) {
-    out.value = strings->emplace(spec.Get("value").ToString().Utf8Value());
+  out.type = reader.U8(spec, "type", 0U);
+  out.gte = reader.Bool(spec, "gte", true) ? 1 : 0;
+  std::string value;
+  if (reader.String(spec, "value", &value)) {
+    out.value = strings->emplace(value);
   }
   return out;
 }
@@ -60,17 +61,17 @@ Napi::Object CfvoToJs(Napi::Env env, const fm_cfvo_t& cfvo) {
 /// the writer emits the sibling `*Argb` as literal `rgb`. A supplied
 /// selector is authoritative; this binding does not resolve theme/indexed /
 /// auto colours.
-fm_color_spec PullColorSpec(const Napi::Object& owner, const char* key) {
+fm_color_spec PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
   fm_color_spec spec{};
-  if (!SpecHas(owner, key) || !owner.Get(key).IsObject()) {
+  Napi::Object v;
+  if (!reader.Object(owner, key, &v)) {
     return spec;
   }
-  Napi::Object v = owner.Get(key).As<Napi::Object>();
-  spec.kind = static_cast<uint8_t>(SpecPullU32(v, "kind", 0U) & 0xFFU);
-  spec.rgb = SpecPullU32(v, "rgb", 0U);
-  spec.theme = SpecPullU32(v, "theme", 0U);
-  spec.tint = SpecPullDouble(v, "tint", 0.0);
-  spec.indexed = SpecPullU32(v, "indexed", 0U);
+  spec.kind = reader.U8(v, "kind", 0U);
+  spec.rgb = reader.U32(v, "rgb", 0U);
+  spec.theme = reader.U32(v, "theme", 0U);
+  spec.tint = reader.Double(v, "tint", 0.0);
+  spec.indexed = reader.U32(v, "indexed", 0U);
   return spec;
 }
 
@@ -110,29 +111,26 @@ Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record& f) {
 
 /// Reads a font record out of a JS object. `name_storage` owns the font
 /// name for the duration of the C ABI call, which borrows the pointer.
-void PullFontRecord(const Napi::Object& record, std::string* name_storage, fm_font_record* out) {
-  if (SpecHas(record, "name")) {
-    *name_storage = record.Get("name").ToString().Utf8Value();
-  } else {
-    name_storage->clear();
-  }
+void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::string* name_storage,
+                    fm_font_record* out) {
+  reader.String(record, "name", name_storage);
   out->name = name_storage->c_str();
-  out->size = SpecPullDouble(record, "size", 11.0);
-  out->bold = SpecPullBool(record, "bold", false) ? 1 : 0;
-  out->italic = SpecPullBool(record, "italic", false) ? 1 : 0;
-  out->strike = SpecPullBool(record, "strike", false) ? 1 : 0;
-  out->has_bold = SpecPullBool(record, "hasBold", false) ? 1 : 0;
-  out->has_italic = SpecPullBool(record, "hasItalic", false) ? 1 : 0;
-  out->has_strike = SpecPullBool(record, "hasStrike", false) ? 1 : 0;
-  out->underline = static_cast<uint8_t>(SpecPullU32(record, "underline", 0U) & 0xFFU);
-  out->vert_align = static_cast<uint8_t>(SpecPullU32(record, "vertAlign", 0U) & 0xFFU);
-  out->has_family = SpecPullBool(record, "hasFamily", false) ? 1 : 0;
-  out->family = static_cast<uint8_t>(SpecPullU32(record, "family", 0U) & 0xFFU);
-  out->has_charset = SpecPullBool(record, "hasCharset", false) ? 1 : 0;
-  out->charset = static_cast<uint8_t>(SpecPullU32(record, "charset", 0U) & 0xFFU);
-  out->scheme = static_cast<uint8_t>(SpecPullU32(record, "scheme", 0U) & 0xFFU);
-  out->color_argb = SpecPullU32(record, "colorArgb", 0xFF000000U);
-  out->color = PullColorSpec(record, "color");
+  out->size = reader.Double(record, "size", 11.0);
+  out->bold = reader.Bool(record, "bold", false) ? 1 : 0;
+  out->italic = reader.Bool(record, "italic", false) ? 1 : 0;
+  out->strike = reader.Bool(record, "strike", false) ? 1 : 0;
+  out->has_bold = reader.Bool(record, "hasBold", false) ? 1 : 0;
+  out->has_italic = reader.Bool(record, "hasItalic", false) ? 1 : 0;
+  out->has_strike = reader.Bool(record, "hasStrike", false) ? 1 : 0;
+  out->underline = reader.U8(record, "underline", 0U);
+  out->vert_align = reader.U8(record, "vertAlign", 0U);
+  out->has_family = reader.Bool(record, "hasFamily", false) ? 1 : 0;
+  out->family = reader.U8(record, "family", 0U);
+  out->has_charset = reader.Bool(record, "hasCharset", false) ? 1 : 0;
+  out->charset = reader.U8(record, "charset", 0U);
+  out->scheme = reader.U8(record, "scheme", 0U);
+  out->color_argb = reader.U32(record, "colorArgb", 0xFF000000U);
+  out->color = PullColorSpec(reader, record, "color");
 }
 
 Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record& f) {
@@ -145,13 +143,13 @@ Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record& f) {
   return out;
 }
 
-fm_fill_record PullFillRecord(const Napi::Object& record) {
+fm_fill_record PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record) {
   fm_fill_record out{};
-  out.pattern = static_cast<uint8_t>(SpecPullU32(record, "pattern", 0U) & 0xFFU);
-  out.fg_argb = SpecPullU32(record, "fgArgb", 0U);
-  out.bg_argb = SpecPullU32(record, "bgArgb", 0U);
-  out.fg = PullColorSpec(record, "fg");
-  out.bg = PullColorSpec(record, "bg");
+  out.pattern = reader.U8(record, "pattern", 0U);
+  out.fg_argb = reader.U32(record, "fgArgb", 0U);
+  out.bg_argb = reader.U32(record, "bgArgb", 0U);
+  out.fg = PullColorSpec(reader, record, "fg");
+  out.bg = PullColorSpec(reader, record, "bg");
   return out;
 }
 
@@ -175,27 +173,27 @@ Napi::Object BorderRecordToJs(Napi::Env env, const fm_border_record& b) {
   return out;
 }
 
-fm_border_side PullBorderSide(const Napi::Object& owner, const char* key) {
+fm_border_side PullBorderSide(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
   fm_border_side s{};
-  if (!SpecHas(owner, key) || !owner.Get(key).IsObject()) {
+  Napi::Object v;
+  if (!reader.Object(owner, key, &v)) {
     return s;
   }
-  Napi::Object v = owner.Get(key).As<Napi::Object>();
-  s.style = static_cast<uint8_t>(SpecPullU32(v, "style", 0U) & 0xFFU);
-  s.color_argb = SpecPullU32(v, "colorArgb", 0U);
-  s.color = PullColorSpec(v, "color");
+  s.style = reader.U8(v, "style", 0U);
+  s.color_argb = reader.U32(v, "colorArgb", 0U);
+  s.color = PullColorSpec(reader, v, "color");
   return s;
 }
 
-fm_border_record PullBorderRecord(const Napi::Object& record) {
+fm_border_record PullBorderRecord(CheckedSpecReader& reader, const Napi::Object& record) {
   fm_border_record out{};
-  out.left = PullBorderSide(record, "left");
-  out.right = PullBorderSide(record, "right");
-  out.top = PullBorderSide(record, "top");
-  out.bottom = PullBorderSide(record, "bottom");
-  out.diagonal = PullBorderSide(record, "diagonal");
-  out.diagonal_up = SpecPullBool(record, "diagonalUp", false) ? 1 : 0;
-  out.diagonal_down = SpecPullBool(record, "diagonalDown", false) ? 1 : 0;
+  out.left = PullBorderSide(reader, record, "left");
+  out.right = PullBorderSide(reader, record, "right");
+  out.top = PullBorderSide(reader, record, "top");
+  out.bottom = PullBorderSide(reader, record, "bottom");
+  out.diagonal = PullBorderSide(reader, record, "diagonal");
+  out.diagonal_up = reader.Bool(record, "diagonalUp", false) ? 1 : 0;
+  out.diagonal_down = reader.Bool(record, "diagonalDown", false) ? 1 : 0;
   return out;
 }
 
@@ -422,13 +420,14 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  CheckedSpecReader reader(env);
   std::string name;
   fm_font_record fr{};
-  PullFontRecord(record, &name, &fr);
-  if (env.IsExceptionPending()) {
-    // A malformed field left a pending JS exception (see SpecPullInt32 /
-    // SpecPullU32 / SpecPullDouble): stop before the C ABI call commits a
-    // default value for it. The exception surfaces to JS on return.
+  PullFontRecord(reader, record, &name, &fr);
+  if (!reader.ok()) {
+    // A malformed field left a pending JS exception: stop before the C ABI
+    // call commits a default value for it. The exception surfaces to JS on
+    // return.
     return env.Undefined();
   }
   uint32_t idx = 0;
@@ -446,10 +445,11 @@ Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
   }
   const uint32_t font_index = ArgU32(info, 0);
   Napi::Object record = (info.Length() > 1 && info[1].IsObject()) ? info[1].As<Napi::Object>() : Napi::Object::New(env);
+  CheckedSpecReader reader(env);
   std::string name;
   fm_font_record fr{};
-  PullFontRecord(record, &name, &fr);
-  if (env.IsExceptionPending()) {
+  PullFontRecord(reader, record, &name, &fr);
+  if (!reader.ok()) {
     // See the matching guard in AddFont.
     return env.Undefined();
   }
@@ -462,10 +462,11 @@ Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  CheckedSpecReader reader(env);
   std::string name;
   fm_font_record fr{};
-  PullFontRecord(record, &name, &fr);
-  if (env.IsExceptionPending()) {
+  PullFontRecord(reader, record, &name, &fr);
+  if (!reader.ok()) {
     // See the matching guard in AddFont.
     return env.Undefined();
   }
@@ -478,8 +479,9 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
-  const fm_fill_record fr = PullFillRecord(record);
-  if (env.IsExceptionPending()) {
+  CheckedSpecReader reader(env);
+  const fm_fill_record fr = PullFillRecord(reader, record);
+  if (!reader.ok()) {
     // See the matching guard in AddFont. The return value is discarded
     // in favor of the pending exception either way.
     return env.Undefined();
@@ -498,8 +500,9 @@ Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
-  const fm_border_record br = PullBorderRecord(record);
-  if (env.IsExceptionPending()) {
+  CheckedSpecReader reader(env);
+  const fm_border_record br = PullBorderRecord(reader, record);
+  if (!reader.ok()) {
     // See the matching guard in AddFont. The return value is discarded
     // in favor of the pending exception either way.
     return env.Undefined();
@@ -532,71 +535,79 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  CheckedSpecReader reader(env);
   fm_cell_xf xf{};
-  xf.font_index = record.Has("fontIndex") ? record.Get("fontIndex").ToNumber().Uint32Value() : 0U;
-  xf.fill_index = record.Has("fillIndex") ? record.Get("fillIndex").ToNumber().Uint32Value() : 0U;
-  xf.border_index = record.Has("borderIndex") ? record.Get("borderIndex").ToNumber().Uint32Value() : 0U;
-  xf.num_fmt_id = record.Has("numFmtId") ? static_cast<uint16_t>(record.Get("numFmtId").ToNumber().Uint32Value()) : 0U;
-  xf.horizontal_align =
-      record.Has("horizontalAlign") ? static_cast<uint8_t>(record.Get("horizontalAlign").ToNumber().Uint32Value()) : 0U;
-  xf.vertical_align =
-      record.Has("verticalAlign") ? static_cast<uint8_t>(record.Get("verticalAlign").ToNumber().Uint32Value()) : 2U;
-  xf.wrap_text = (record.Has("wrapText") && record.Get("wrapText").ToBoolean().Value()) ? 1 : 0;
-  xf.justify_last_line = SpecPullBool(record, "justifyLastLine", false) ? 1 : 0;
-  xf.xf_id = SpecPullU32(record, "xfId", 0U);
-  xf.has_horizontal_align = SpecHas(record, "hasHorizontalAlign")
-                                ? (SpecPullBool(record, "hasHorizontalAlign", false) ? 1 : 0)
-                                : (SpecHas(record, "horizontalAlign") ? 1 : 0);
-  xf.has_vertical_align = SpecHas(record, "hasVerticalAlign")
-                              ? (SpecPullBool(record, "hasVerticalAlign", false) ? 1 : 0)
-                              : (SpecHas(record, "verticalAlign") ? 1 : 0);
-  xf.has_wrap_text = SpecHas(record, "hasWrapText") ? (SpecPullBool(record, "hasWrapText", false) ? 1 : 0)
-                                                    : (SpecHas(record, "wrapText") ? 1 : 0);
-  xf.has_justify_last_line = SpecHas(record, "hasJustifyLastLine")
-                                 ? (SpecPullBool(record, "hasJustifyLastLine", false) ? 1 : 0)
-                                 : (SpecHas(record, "justifyLastLine") ? 1 : 0);
-  const bool has_explicit_alignment = SpecHas(record, "hasAlignment");
-  const bool has_supplied_alignment =
-      SpecHas(record, "horizontalAlign") || SpecHas(record, "verticalAlign") || SpecHas(record, "wrapText") ||
-      SpecHas(record, "justifyLastLine") || SpecHas(record, "textRotation") || SpecHas(record, "indent") ||
-      SpecHas(record, "relativeIndent") || SpecHas(record, "shrinkToFit") || SpecHas(record, "readingOrder") ||
-      SpecHas(record, "hasHorizontalAlign") || SpecHas(record, "hasVerticalAlign") || SpecHas(record, "hasWrapText") ||
-      SpecHas(record, "hasJustifyLastLine");
-  xf.has_alignment =
-      has_explicit_alignment ? (SpecPullBool(record, "hasAlignment", false) ? 1 : 0) : (has_supplied_alignment ? 1 : 0);
-  if (SpecHas(record, "textRotation")) {
-    xf.has_text_rotation = 1;
-    xf.text_rotation = SpecPullU32(record, "textRotation", 0U);
-  }
-  if (SpecHas(record, "indent")) {
-    xf.has_indent = 1;
-    xf.indent = SpecPullU32(record, "indent", 0U);
-  }
-  if (SpecHas(record, "relativeIndent")) {
-    xf.has_relative_indent = 1;
-    xf.relative_indent = SpecPullInt32(record, "relativeIndent", 0);
-  }
-  if (SpecHas(record, "shrinkToFit")) {
-    xf.has_shrink_to_fit = 1;
-    xf.shrink_to_fit = SpecPullBool(record, "shrinkToFit", false) ? 1 : 0;
-  }
-  if (SpecHas(record, "readingOrder")) {
-    xf.has_reading_order = 1;
-    xf.reading_order = SpecPullU32(record, "readingOrder", 0U);
-  }
-  xf.apply_number_format = SpecPullBool(record, "applyNumberFormat", false) ? 1 : 0;
-  xf.apply_font = SpecPullBool(record, "applyFont", false) ? 1 : 0;
-  xf.apply_fill = SpecPullBool(record, "applyFill", false) ? 1 : 0;
-  xf.apply_border = SpecPullBool(record, "applyBorder", false) ? 1 : 0;
-  xf.apply_alignment = SpecPullBool(record, "applyAlignment", false) ? 1 : 0;
-  xf.apply_protection = SpecPullBool(record, "applyProtection", false) ? 1 : 0;
-  xf.quote_prefix = SpecPullBool(record, "quotePrefix", false) ? 1 : 0;
-  xf.has_protection = SpecHas(record, "hasProtection")
-                          ? (SpecPullBool(record, "hasProtection", false) ? 1 : 0)
-                          : ((SpecHas(record, "locked") || SpecHas(record, "hidden")) ? 1 : 0);
-  xf.locked = SpecPullBool(record, "locked", true) ? 1 : 0;
-  xf.hidden = SpecPullBool(record, "hidden", false) ? 1 : 0;
-  if (env.IsExceptionPending()) {
+  xf.font_index = reader.U32(record, "fontIndex", 0U);
+  xf.fill_index = reader.U32(record, "fillIndex", 0U);
+  xf.border_index = reader.U32(record, "borderIndex", 0U);
+  xf.num_fmt_id = reader.U16(record, "numFmtId", 0U);
+  bool horizontal_align_present = false;
+  bool vertical_align_present = false;
+  bool wrap_text_present = false;
+  bool justify_last_line_present = false;
+  xf.horizontal_align = reader.U8(record, "horizontalAlign", 0U, &horizontal_align_present);
+  xf.vertical_align = reader.U8(record, "verticalAlign", 2U, &vertical_align_present);
+  xf.wrap_text = reader.Bool(record, "wrapText", false, &wrap_text_present) ? 1 : 0;
+  xf.justify_last_line = reader.Bool(record, "justifyLastLine", false, &justify_last_line_present) ? 1 : 0;
+  xf.xf_id = reader.U32(record, "xfId", 0U);
+  bool has_horizontal_align_present = false;
+  bool has_vertical_align_present = false;
+  bool has_wrap_text_present = false;
+  bool has_justify_last_line_present = false;
+  const bool has_horizontal_align_value =
+      reader.Bool(record, "hasHorizontalAlign", false, &has_horizontal_align_present);
+  const bool has_vertical_align_value = reader.Bool(record, "hasVerticalAlign", false, &has_vertical_align_present);
+  const bool has_wrap_text_value = reader.Bool(record, "hasWrapText", false, &has_wrap_text_present);
+  const bool has_justify_last_line_value =
+      reader.Bool(record, "hasJustifyLastLine", false, &has_justify_last_line_present);
+  xf.has_horizontal_align =
+      has_horizontal_align_present ? (has_horizontal_align_value ? 1 : 0) : (horizontal_align_present ? 1 : 0);
+  xf.has_vertical_align =
+      has_vertical_align_present ? (has_vertical_align_value ? 1 : 0) : (vertical_align_present ? 1 : 0);
+  xf.has_wrap_text = has_wrap_text_present ? (has_wrap_text_value ? 1 : 0) : (wrap_text_present ? 1 : 0);
+  xf.has_justify_last_line =
+      has_justify_last_line_present ? (has_justify_last_line_value ? 1 : 0) : (justify_last_line_present ? 1 : 0);
+  bool has_alignment_present = false;
+  const bool has_alignment_value = reader.Bool(record, "hasAlignment", false, &has_alignment_present);
+  bool text_rotation_present = false;
+  bool indent_present = false;
+  bool relative_indent_present = false;
+  bool shrink_to_fit_present = false;
+  bool reading_order_present = false;
+  xf.text_rotation = reader.U32(record, "textRotation", 0U, &text_rotation_present);
+  xf.indent = reader.U32(record, "indent", 0U, &indent_present);
+  xf.relative_indent = reader.I32(record, "relativeIndent", 0, &relative_indent_present);
+  xf.shrink_to_fit = reader.Bool(record, "shrinkToFit", false, &shrink_to_fit_present) ? 1 : 0;
+  xf.reading_order = reader.U32(record, "readingOrder", 0U, &reading_order_present);
+  xf.has_text_rotation = text_rotation_present ? 1 : 0;
+  xf.has_indent = indent_present ? 1 : 0;
+  xf.has_relative_indent = relative_indent_present ? 1 : 0;
+  xf.has_shrink_to_fit = shrink_to_fit_present ? 1 : 0;
+  xf.has_reading_order = reading_order_present ? 1 : 0;
+  const bool has_supplied_alignment = horizontal_align_present || vertical_align_present || wrap_text_present ||
+                                      justify_last_line_present || text_rotation_present || indent_present ||
+                                      relative_indent_present || shrink_to_fit_present || reading_order_present ||
+                                      has_horizontal_align_present || has_vertical_align_present ||
+                                      has_wrap_text_present || has_justify_last_line_present;
+  xf.has_alignment = has_alignment_present ? (has_alignment_value ? 1 : 0) : (has_supplied_alignment ? 1 : 0);
+  xf.apply_number_format = reader.Bool(record, "applyNumberFormat", false) ? 1 : 0;
+  xf.apply_font = reader.Bool(record, "applyFont", false) ? 1 : 0;
+  xf.apply_fill = reader.Bool(record, "applyFill", false) ? 1 : 0;
+  xf.apply_border = reader.Bool(record, "applyBorder", false) ? 1 : 0;
+  xf.apply_alignment = reader.Bool(record, "applyAlignment", false) ? 1 : 0;
+  xf.apply_protection = reader.Bool(record, "applyProtection", false) ? 1 : 0;
+  xf.quote_prefix = reader.Bool(record, "quotePrefix", false) ? 1 : 0;
+  bool has_protection_present = false;
+  bool locked_present = false;
+  bool hidden_present = false;
+  const bool has_protection_value = reader.Bool(record, "hasProtection", false, &has_protection_present);
+  const bool locked_value = reader.Bool(record, "locked", true, &locked_present);
+  const bool hidden_value = reader.Bool(record, "hidden", false, &hidden_present);
+  xf.has_protection =
+      has_protection_present ? (has_protection_value ? 1 : 0) : ((locked_present || hidden_present) ? 1 : 0);
+  xf.locked = locked_value ? 1 : 0;
+  xf.hidden = hidden_value ? 1 : 0;
+  if (!reader.ok()) {
     // See the matching guard in AddFont. The return value is discarded
     // in favor of the pending exception either way.
     return env.Undefined();
@@ -621,43 +632,40 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
   std::string alignment_xml;
   std::string protection_xml;
   fm_dxf_record dxf{};
+  CheckedSpecReader reader(env);
 
-  if (record.Has("font") && record.Get("font").IsObject()) {
+  Napi::Object font;
+  if (reader.Object(record, "font", &font)) {
     dxf.font_engaged = 1;
-    PullFontRecord(record.Get("font").As<Napi::Object>(), &font_name, &dxf.font);
+    PullFontRecord(reader, font, &font_name, &dxf.font);
   }
 
-  if (record.Has("fill") && record.Get("fill").IsObject()) {
+  Napi::Object fill;
+  if (reader.Object(record, "fill", &fill)) {
     dxf.fill_engaged = 1;
-    dxf.fill = PullFillRecord(record.Get("fill").As<Napi::Object>());
+    dxf.fill = PullFillRecord(reader, fill);
   }
 
-  if (record.Has("border") && record.Get("border").IsObject()) {
+  Napi::Object border;
+  if (reader.Object(record, "border", &border)) {
     dxf.border_engaged = 1;
-    dxf.border = PullBorderRecord(record.Get("border").As<Napi::Object>());
+    dxf.border = PullBorderRecord(reader, border);
   }
 
-  if (record.Has("numFmt") && record.Get("numFmt").IsObject()) {
-    Napi::Object num_fmt = record.Get("numFmt").As<Napi::Object>();
+  Napi::Object num_fmt;
+  if (reader.Object(record, "numFmt", &num_fmt)) {
     dxf.num_fmt_engaged = 1;
-    dxf.num_fmt_id = static_cast<uint16_t>(SpecPullU32(num_fmt, "numFmtId", 0U) & 0xFFFFU);
-    if (num_fmt.Has("formatCode") && !num_fmt.Get("formatCode").IsUndefined() && !num_fmt.Get("formatCode").IsNull()) {
-      num_fmt_code = num_fmt.Get("formatCode").ToString().Utf8Value();
-    }
+    dxf.num_fmt_id = reader.U16(num_fmt, "numFmtId", 0U);
+    reader.String(num_fmt, "formatCode", &num_fmt_code);
     dxf.num_fmt_code = num_fmt_code.c_str();
   }
 
-  if (record.Has("alignmentXml") && !record.Get("alignmentXml").IsUndefined() && !record.Get("alignmentXml").IsNull()) {
-    alignment_xml = record.Get("alignmentXml").ToString().Utf8Value();
-  }
-  if (record.Has("protectionXml") && !record.Get("protectionXml").IsUndefined() &&
-      !record.Get("protectionXml").IsNull()) {
-    protection_xml = record.Get("protectionXml").ToString().Utf8Value();
-  }
+  reader.String(record, "alignmentXml", &alignment_xml);
+  reader.String(record, "protectionXml", &protection_xml);
   dxf.alignment_xml = alignment_xml.c_str();
   dxf.protection_xml = protection_xml.c_str();
 
-  if (env.IsExceptionPending()) {
+  if (!reader.ok()) {
     // See the matching guard in AddFont. The return value is discarded
     // in favor of the pending exception either way.
     return env.Undefined();
@@ -803,15 +811,17 @@ Napi::Value Workbook::SetCellStyle(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
-  const std::string name = SpecHas(record, "name") ? record.Get("name").ToString().Utf8Value() : std::string();
+  CheckedSpecReader reader(env);
+  std::string name;
+  reader.String(record, "name", &name);
   fm_cell_style_record_t cs{};
   cs.name = name.c_str();
-  cs.xf_id = SpecPullU32(record, "xfId", 0U);
-  cs.builtin_id = SpecPullU32(record, "builtinId", FM_CELL_STYLE_BUILTIN_ID_NONE);
-  cs.i_level = SpecPullU32(record, "iLevel", 0U);
-  cs.hidden = SpecPullBool(record, "hidden", false) ? 1 : 0;
-  cs.custom_builtin = SpecPullBool(record, "customBuiltin", false) ? 1 : 0;
-  if (env.IsExceptionPending()) {
+  cs.xf_id = reader.U32(record, "xfId", 0U);
+  cs.builtin_id = reader.U32(record, "builtinId", FM_CELL_STYLE_BUILTIN_ID_NONE);
+  cs.i_level = reader.U32(record, "iLevel", 0U);
+  cs.hidden = reader.Bool(record, "hidden", false) ? 1 : 0;
+  cs.custom_builtin = reader.Bool(record, "customBuiltin", false) ? 1 : 0;
+  if (!reader.ok()) {
     return env.Undefined();
   }
   return MakeStatus(env, fm_styles_set_cell_style(handle_, &cs));
@@ -872,9 +882,14 @@ Napi::Value Workbook::SetThemeColors(const Napi::CallbackInfo& info) {
     return MakeBindingArgumentError(env, "setThemeColors expects an array of 12 ARGB numbers");
   }
   Napi::Array arr = info[0].As<Napi::Array>();
+  CheckedSpecReader reader(env);
   fm_theme_colors colors{};
   for (uint32_t i = 0; i < 12; ++i) {
-    colors.argb[i] = static_cast<uint32_t>(arr.Get(i).ToNumber().Int64Value());
+    const std::string key = std::to_string(i);
+    colors.argb[i] = reader.U32(arr, key.c_str(), 0U);
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
   }
   return MakeStatus(env, fm_workbook_set_theme_colors(handle_, &colors));
 }
@@ -885,13 +900,18 @@ Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
-  const auto pull = [&record](const char* key) {
-    return SpecHas(record, key) ? record.Get(key).ToString().Utf8Value() : std::string();
-  };
-  const std::string major_latin = pull("majorLatin");
-  const std::string major_ea = pull("majorEastAsian");
-  const std::string minor_latin = pull("minorLatin");
-  const std::string minor_ea = pull("minorEastAsian");
+  CheckedSpecReader reader(env);
+  std::string major_latin;
+  std::string major_ea;
+  std::string minor_latin;
+  std::string minor_ea;
+  reader.String(record, "majorLatin", &major_latin);
+  reader.String(record, "majorEastAsian", &major_ea);
+  reader.String(record, "minorLatin", &minor_latin);
+  reader.String(record, "minorEastAsian", &minor_ea);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   fm_theme_fonts fonts{};
   fonts.major_latin = major_latin.c_str();
   fonts.major_east_asian = major_ea.c_str();
@@ -902,18 +922,21 @@ Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::ResolveColor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  CheckedSpecReader reader(env);
   fm_color_spec spec{};
   if (info.Length() > 0 && info[0].IsObject()) {
     Napi::Object holder = Napi::Object::New(env);
     holder.Set("spec", info[0]);
-    spec = PullColorSpec(holder, "spec");
+    spec = PullColorSpec(reader, holder, "spec");
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
   }
   uint32_t argb = 0;
   int32_t resolution = 0;
-  const fm_status_t rc =
-      handle_ != nullptr
-          ? fm_workbook_resolve_color(handle_, spec, static_cast<int32_t>(ArgU32(info, 1)), &argb, &resolution)
-          : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_resolve_color(handle_, spec, ArgI32(info, 1), &argb, &resolution)
+                             : kBindingInvalidHandle;
   if (rc != 0) {
     argb = 0;
     resolution = 0;
@@ -1121,83 +1144,121 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   std::vector<fm_cf_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
   formulon::c_api::BorrowedStringArena cfvo_strings;
-  if (v.Has("sqref")) {
-    Napi::Value sqref_js = v.Get("sqref");
-    if (sqref_js.IsArray()) {
-      Napi::Array sqref_arr = sqref_js.As<Napi::Array>();
-      const uint32_t n = sqref_arr.Length();
-      ranges_buf.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        Napi::Value rng_v = sqref_arr.Get(i);
-        if (!rng_v.IsObject()) {
-          continue;
-        }
-        Napi::Object rng = rng_v.As<Napi::Object>();
-        fm_cf_cell_range_t r{};
-        r.first_row = rng.Get("firstRow").ToNumber().Uint32Value();
-        r.first_col = rng.Get("firstCol").ToNumber().Uint32Value();
-        r.last_row = rng.Get("lastRow").ToNumber().Uint32Value();
-        r.last_col = rng.Get("lastCol").ToNumber().Uint32Value();
-        ranges_buf.push_back(r);
+  CheckedSpecReader reader(env);
+  Napi::Array sqref_arr;
+  if (reader.Array(v, "sqref", &sqref_arr)) {
+    const uint32_t n = sqref_arr.Length();
+    if (!reader.ok()) {
+      return env.Undefined();
+    }
+    ranges_buf.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+      if (!reader.ok()) {
+        break;
       }
+      Napi::Value rng_v;
+      if (!reader.ArrayElement(sqref_arr, i, &rng_v)) {
+        if (!reader.ok()) {
+          break;
+        }
+        continue;
+      }
+      if (!rng_v.IsObject()) {
+        continue;
+      }
+      Napi::Object rng = rng_v.As<Napi::Object>();
+      fm_cf_cell_range_t r{};
+      r.first_row = reader.U32(rng, "firstRow", 0U);
+      r.first_col = reader.U32(rng, "firstCol", 0U);
+      r.last_row = reader.U32(rng, "lastRow", 0U);
+      r.last_col = reader.U32(rng, "lastCol", 0U);
+      ranges_buf.push_back(r);
     }
   }
-  const std::string id = SpecHas(v, "id") ? v.Get("id").ToString().Utf8Value() : std::string();
-  const std::string formula1 = SpecHas(v, "formula1") ? v.Get("formula1").ToString().Utf8Value() : std::string();
-  const std::string formula2 = SpecHas(v, "formula2") ? v.Get("formula2").ToString().Utf8Value() : std::string();
-  const std::string text = SpecHas(v, "text") ? v.Get("text").ToString().Utf8Value() : std::string();
+  std::string id;
+  std::string formula1;
+  std::string formula2;
+  std::string text;
+  reader.String(v, "id", &id);
+  reader.String(v, "formula1", &formula1);
+  reader.String(v, "formula2", &formula2);
+  reader.String(v, "text", &text);
 
   fm_cf_rule_t rule{};
   rule.id = id.empty() ? nullptr : id.c_str();
-  rule.type = static_cast<uint8_t>(SpecPullU32(v, "type", 0U) & 0xFFU);
-  rule.priority = SpecPullInt32(v, "priority", 0);
-  rule.stop_if_true = SpecPullBool(v, "stopIfTrue", false) ? 1 : 0;
-  if (SpecHas(v, "dxfId")) {
+  rule.type = reader.U8(v, "type", 0U);
+  rule.priority = reader.I32(v, "priority", 0);
+  rule.stop_if_true = reader.Bool(v, "stopIfTrue", false) ? 1 : 0;
+  bool dxf_id_present = false;
+  rule.dxf_id = reader.U32(v, "dxfId", 0U, &dxf_id_present);
+  if (dxf_id_present) {
     rule.dxf_id_engaged = 1;
-    rule.dxf_id = SpecPullU32(v, "dxfId", 0U);
   }
   rule.sqref = ranges_buf.empty() ? nullptr : ranges_buf.data();
   rule.sqref_count = static_cast<uint32_t>(ranges_buf.size());
   rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
-  if (SpecHas(v, "op")) {
+  bool op_present = false;
+  rule.op = reader.U8(v, "op", 0U, &op_present);
+  if (op_present) {
     rule.op_engaged = 1;
-    rule.op = static_cast<uint8_t>(SpecPullU32(v, "op", 0U) & 0xFFU);
   }
-  if (SpecHas(v, "rank")) {
+  bool rank_present = false;
+  rule.rank = reader.I32(v, "rank", 0, &rank_present);
+  if (rank_present) {
     rule.rank_engaged = 1;
-    rule.rank = SpecPullInt32(v, "rank", 0);
   }
-  rule.percent = SpecPullBool(v, "percent", false) ? 1 : 0;
-  rule.bottom = SpecPullBool(v, "bottom", false) ? 1 : 0;
-  rule.above_average = SpecPullBool(v, "aboveAverage", true) ? 1 : 0;
-  rule.equal_average = SpecPullBool(v, "equalAverage", false) ? 1 : 0;
-  if (SpecHas(v, "stdDev")) {
+  rule.percent = reader.Bool(v, "percent", false) ? 1 : 0;
+  rule.bottom = reader.Bool(v, "bottom", false) ? 1 : 0;
+  rule.above_average = reader.Bool(v, "aboveAverage", true) ? 1 : 0;
+  rule.equal_average = reader.Bool(v, "equalAverage", false) ? 1 : 0;
+  bool std_dev_present = false;
+  rule.std_dev = reader.Double(v, "stdDev", 0.0, &std_dev_present);
+  if (std_dev_present) {
     rule.std_dev_engaged = 1;
-    rule.std_dev = SpecPullDouble(v, "stdDev", 0.0);
   }
   rule.text = text.empty() ? nullptr : text.c_str();
-  if (SpecHas(v, "timePeriod")) {
+  bool time_period_present = false;
+  rule.time_period = reader.U8(v, "timePeriod", 0U, &time_period_present);
+  if (time_period_present) {
     rule.time_period_engaged = 1;
-    rule.time_period = static_cast<uint8_t>(SpecPullU32(v, "timePeriod", 0U) & 0xFFU);
   }
-  if (SpecHas(v, "colorScale") && v.Get("colorScale").IsObject()) {
-    Napi::Object cs = v.Get("colorScale").As<Napi::Object>();
-    if (SpecHas(cs, "thresholds") && cs.Get("thresholds").IsArray()) {
-      Napi::Array arr = cs.Get("thresholds").As<Napi::Array>();
+  Napi::Object cs;
+  if (reader.Object(v, "colorScale", &cs)) {
+    Napi::Array arr;
+    if (reader.Array(cs, "thresholds", &arr)) {
       color_scale_thresholds.reserve(arr.Length());
       for (uint32_t i = 0; i < arr.Length(); ++i) {
-        if (arr.Get(i).IsObject()) {
-          color_scale_thresholds.push_back(PullCfvo(arr.Get(i).As<Napi::Object>(), &cfvo_strings));
+        if (!reader.ok()) {
+          break;
+        }
+        Napi::Value threshold;
+        if (!reader.ArrayElement(arr, i, &threshold)) {
+          if (!reader.ok()) {
+            break;
+          }
+          continue;
+        }
+        if (threshold.IsObject()) {
+          color_scale_thresholds.push_back(PullCfvo(reader, threshold.As<Napi::Object>(), &cfvo_strings));
         }
       }
     }
-    if (SpecHas(cs, "colors") && cs.Get("colors").IsArray()) {
-      Napi::Array arr = cs.Get("colors").As<Napi::Array>();
+    if (reader.Array(cs, "colors", &arr)) {
       color_scale_colors.reserve(arr.Length());
       for (uint32_t i = 0; i < arr.Length(); ++i) {
-        if (arr.Get(i).IsObject()) {
-          color_scale_colors.push_back(PullCfColor(arr.Get(i).As<Napi::Object>()));
+        if (!reader.ok()) {
+          break;
+        }
+        Napi::Value color;
+        if (!reader.ArrayElement(arr, i, &color)) {
+          if (!reader.ok()) {
+            break;
+          }
+          continue;
+        }
+        if (color.IsObject()) {
+          color_scale_colors.push_back(PullCfColor(reader, color.As<Napi::Object>()));
         }
       }
     }
@@ -1205,76 +1266,97 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     rule.color_scale_colors = color_scale_colors.empty() ? nullptr : color_scale_colors.data();
     rule.color_scale_count = static_cast<uint32_t>(color_scale_thresholds.size());
   }
-  if (SpecHas(v, "dataBar") && v.Get("dataBar").IsObject()) {
-    Napi::Object db = v.Get("dataBar").As<Napi::Object>();
+  Napi::Object db;
+  if (reader.Object(v, "dataBar", &db)) {
     rule.data_bar_engaged = 1;
-    if (SpecHas(db, "min") && db.Get("min").IsObject()) {
-      rule.data_bar_min = PullCfvo(db.Get("min").As<Napi::Object>(), &cfvo_strings);
+    Napi::Object min;
+    if (reader.Object(db, "min", &min)) {
+      rule.data_bar_min = PullCfvo(reader, min, &cfvo_strings);
     }
-    if (SpecHas(db, "max") && db.Get("max").IsObject()) {
-      rule.data_bar_max = PullCfvo(db.Get("max").As<Napi::Object>(), &cfvo_strings);
+    Napi::Object max;
+    if (reader.Object(db, "max", &max)) {
+      rule.data_bar_max = PullCfvo(reader, max, &cfvo_strings);
     }
-    if (SpecHas(db, "fill") && db.Get("fill").IsObject()) {
-      rule.data_bar_fill = PullCfColor(db.Get("fill").As<Napi::Object>());
+    Napi::Object fill;
+    if (reader.Object(db, "fill", &fill)) {
+      rule.data_bar_fill = PullCfColor(reader, fill);
     }
-    rule.data_bar_show_value = SpecPullBool(db, "showValue", true) ? 1 : 0;
-    rule.data_bar_min_length_pct = static_cast<uint8_t>(SpecPullU32(db, "minLengthPct", 10U) & 0xFFU);
-    rule.data_bar_max_length_pct = static_cast<uint8_t>(SpecPullU32(db, "maxLengthPct", 90U) & 0xFFU);
+    rule.data_bar_show_value = reader.Bool(db, "showValue", true) ? 1 : 0;
+    rule.data_bar_min_length_pct = reader.U8(db, "minLengthPct", 10U);
+    rule.data_bar_max_length_pct = reader.U8(db, "maxLengthPct", 90U);
     // `x14` extension payload. An omitted key leaves the `*_engaged` flag
     // clear, which the C ABI reads as "keep the model default" (gradient
     // on, automatic axis, negative fill equal to the positive fill, no
     // border, black axis).
-    if (SpecHas(db, "gradient")) {
+    bool gradient_present = false;
+    const bool gradient = reader.Bool(db, "gradient", true, &gradient_present);
+    if (gradient_present) {
       rule.data_bar_gradient_engaged = 1;
-      rule.data_bar_gradient = SpecPullBool(db, "gradient", true) ? 1 : 0;
+      rule.data_bar_gradient = gradient ? 1 : 0;
     }
-    if (SpecHas(db, "axisPosition")) {
+    bool axis_position_present = false;
+    rule.data_bar_axis_position = reader.U8(db, "axisPosition", 0U, &axis_position_present);
+    if (axis_position_present) {
       rule.data_bar_axis_position_engaged = 1;
-      rule.data_bar_axis_position = static_cast<uint8_t>(SpecPullU32(db, "axisPosition", 0U) & 0xFFU);
     }
-    if (SpecHas(db, "negativeFill") && db.Get("negativeFill").IsObject()) {
+    Napi::Object negative_fill;
+    if (reader.Object(db, "negativeFill", &negative_fill)) {
       rule.data_bar_negative_fill_engaged = 1;
-      rule.data_bar_negative_fill = PullCfColor(db.Get("negativeFill").As<Napi::Object>());
+      rule.data_bar_negative_fill = PullCfColor(reader, negative_fill);
     }
-    if (SpecHas(db, "border") && db.Get("border").IsObject()) {
+    Napi::Object border;
+    if (reader.Object(db, "border", &border)) {
       rule.data_bar_border_engaged = 1;
-      rule.data_bar_border = PullCfColor(db.Get("border").As<Napi::Object>());
+      rule.data_bar_border = PullCfColor(reader, border);
     }
-    if (SpecHas(db, "negativeBorder") && db.Get("negativeBorder").IsObject()) {
+    Napi::Object negative_border;
+    if (reader.Object(db, "negativeBorder", &negative_border)) {
       rule.data_bar_negative_border_engaged = 1;
-      rule.data_bar_negative_border = PullCfColor(db.Get("negativeBorder").As<Napi::Object>());
+      rule.data_bar_negative_border = PullCfColor(reader, negative_border);
     }
-    if (SpecHas(db, "axisColor") && db.Get("axisColor").IsObject()) {
+    Napi::Object axis_color;
+    if (reader.Object(db, "axisColor", &axis_color)) {
       rule.data_bar_axis_color_engaged = 1;
-      rule.data_bar_axis_color = PullCfColor(db.Get("axisColor").As<Napi::Object>());
+      rule.data_bar_axis_color = PullCfColor(reader, axis_color);
     }
-    rule.data_bar_direction = static_cast<uint8_t>(SpecPullU32(db, "direction", 0U) & 0xFFU);
+    rule.data_bar_direction = reader.U8(db, "direction", 0U);
   }
-  if (SpecHas(v, "iconSet") && v.Get("iconSet").IsObject()) {
-    Napi::Object is = v.Get("iconSet").As<Napi::Object>();
+  Napi::Object is;
+  if (reader.Object(v, "iconSet", &is)) {
     rule.icon_set_engaged = 1;
-    rule.icon_set_name = static_cast<uint8_t>(SpecPullU32(is, "name", 0U) & 0xFFU);
-    if (SpecHas(is, "thresholds") && is.Get("thresholds").IsArray()) {
-      Napi::Array arr = is.Get("thresholds").As<Napi::Array>();
+    rule.icon_set_name = reader.U8(is, "name", 0U);
+    Napi::Array arr;
+    if (reader.Array(is, "thresholds", &arr)) {
       icon_set_thresholds.reserve(arr.Length());
       for (uint32_t i = 0; i < arr.Length(); ++i) {
-        if (arr.Get(i).IsObject()) {
-          icon_set_thresholds.push_back(PullCfvo(arr.Get(i).As<Napi::Object>(), &cfvo_strings));
+        if (!reader.ok()) {
+          break;
+        }
+        Napi::Value threshold;
+        if (!reader.ArrayElement(arr, i, &threshold)) {
+          if (!reader.ok()) {
+            break;
+          }
+          continue;
+        }
+        if (threshold.IsObject()) {
+          icon_set_thresholds.push_back(PullCfvo(reader, threshold.As<Napi::Object>(), &cfvo_strings));
         }
       }
     }
     rule.icon_set_thresholds = icon_set_thresholds.empty() ? nullptr : icon_set_thresholds.data();
     rule.icon_set_threshold_count = static_cast<uint32_t>(icon_set_thresholds.size());
-    rule.icon_set_reverse = SpecPullBool(is, "reverse", false) ? 1 : 0;
-    rule.icon_set_show_value = SpecPullBool(is, "showValue", true) ? 1 : 0;
-    rule.icon_set_percent = SpecPullBool(is, "percent", true) ? 1 : 0;
+    rule.icon_set_reverse = reader.Bool(is, "reverse", false) ? 1 : 0;
+    rule.icon_set_show_value = reader.Bool(is, "showValue", true) ? 1 : 0;
+    rule.icon_set_percent = reader.Bool(is, "percent", true) ? 1 : 0;
     // An omitted floor keeps Excel's default, `percent 0`.
-    if (SpecHas(is, "floor") && is.Get("floor").IsObject()) {
+    Napi::Object floor;
+    if (reader.Object(is, "floor", &floor)) {
       rule.icon_set_floor_engaged = 1;
-      rule.icon_set_floor = PullCfvo(is.Get("floor").As<Napi::Object>(), &cfvo_strings);
+      rule.icon_set_floor = PullCfvo(reader, floor, &cfvo_strings);
     }
   }
-  if (env.IsExceptionPending()) {
+  if (!reader.ok()) {
     // See the matching guard in AddFont. The return value is discarded
     // in favor of the pending exception either way.
     return env.Undefined();

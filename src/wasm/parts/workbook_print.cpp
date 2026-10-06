@@ -9,10 +9,10 @@
 // break enumerators return arrays rather than count + getter pairs,
 // matching the rest of the JS surface.
 //
-// The patch setters read each field with the shared `js_pull_*` helpers and
-// derive the `_engaged` flag from key presence, so `{ orientation: 1 }`
-// changes the orientation and nothing else - the same semantics the C
-// struct spells out with explicit flags.
+// The patch setters snapshot each field through JsNarrowNumericReader before
+// deriving its `_engaged` flag. This keeps getter/proxy failures and lossy
+// primitive conversions inside the binding boundary, while `{ orientation:
+// 1 }` still changes the orientation and nothing else.
 //
 // @size-budget: 8 KB
 
@@ -34,6 +34,10 @@ namespace {
 
 using XmlGetter = fm_status_t (*)(const fm_workbook_t*, size_t, const char**);
 using XmlSetter = fm_status_t (*)(fm_workbook_t*, size_t, const char*);
+
+bool value_present(const emscripten::val& value) {
+  return !value.isUndefined() && !value.isNull();
+}
 
 emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGetter getter) {
   emscripten::val out = emscripten::val::object();
@@ -251,19 +255,29 @@ JsStatus JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
+  JsNarrowNumericReader reader("setSheetPageSetup");
   fm_page_setup_t out{};
-  out.orientation_engaged = js_has(setup, "orientation") ? 1 : 0;
-  out.orientation = js_pull_u32(setup, "orientation", 0U);
-  out.paper_size_engaged = js_has(setup, "paperSize") ? 1 : 0;
-  out.paper_size = js_pull_u32(setup, "paperSize", 0U);
-  out.scale_engaged = js_has(setup, "scale") ? 1 : 0;
-  out.scale = js_pull_u32(setup, "scale", 0U);
-  out.fit_to_width_engaged = js_has(setup, "fitToWidth") ? 1 : 0;
-  out.fit_to_width = js_pull_u32(setup, "fitToWidth", 0U);
-  out.fit_to_height_engaged = js_has(setup, "fitToHeight") ? 1 : 0;
-  out.fit_to_height = js_pull_u32(setup, "fitToHeight", 0U);
-  out.fit_to_page_engaged = js_has(setup, "fitToPage") ? 1 : 0;
-  out.fit_to_page = js_pull_bool(setup, "fitToPage", false) ? 1 : 0;
+  const emscripten::val orientation = reader.value(setup, "orientation", "pageSetup.orientation");
+  out.orientation_engaged = value_present(orientation) ? 1 : 0;
+  out.orientation = reader.u32_value(orientation, 0U, "pageSetup.orientation");
+  const emscripten::val paper_size = reader.value(setup, "paperSize", "pageSetup.paperSize");
+  out.paper_size_engaged = value_present(paper_size) ? 1 : 0;
+  out.paper_size = reader.u32_value(paper_size, 0U, "pageSetup.paperSize");
+  const emscripten::val scale = reader.value(setup, "scale", "pageSetup.scale");
+  out.scale_engaged = value_present(scale) ? 1 : 0;
+  out.scale = reader.u32_value(scale, 0U, "pageSetup.scale");
+  const emscripten::val fit_to_width = reader.value(setup, "fitToWidth", "pageSetup.fitToWidth");
+  out.fit_to_width_engaged = value_present(fit_to_width) ? 1 : 0;
+  out.fit_to_width = reader.u32_value(fit_to_width, 0U, "pageSetup.fitToWidth");
+  const emscripten::val fit_to_height = reader.value(setup, "fitToHeight", "pageSetup.fitToHeight");
+  out.fit_to_height_engaged = value_present(fit_to_height) ? 1 : 0;
+  out.fit_to_height = reader.u32_value(fit_to_height, 0U, "pageSetup.fitToHeight");
+  const emscripten::val fit_to_page = reader.value(setup, "fitToPage", "pageSetup.fitToPage");
+  out.fit_to_page_engaged = value_present(fit_to_page) ? 1 : 0;
+  out.fit_to_page = reader.boolean_value(fit_to_page, false, "pageSetup.fitToPage") ? 1 : 0;
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   return status_from_rc(fm_sheet_set_page_setup(handle_, sheet, &out));
 }
 
@@ -271,19 +285,29 @@ JsStatus JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins
   if (handle_ == nullptr) {
     return error_status(7000);
   }
+  JsNarrowNumericReader reader("setSheetPageMargins");
   fm_page_margins_t out{};
-  out.left_engaged = js_has(margins, "left") ? 1 : 0;
-  out.left = js_pull_double(margins, "left", 0.0);
-  out.right_engaged = js_has(margins, "right") ? 1 : 0;
-  out.right = js_pull_double(margins, "right", 0.0);
-  out.top_engaged = js_has(margins, "top") ? 1 : 0;
-  out.top = js_pull_double(margins, "top", 0.0);
-  out.bottom_engaged = js_has(margins, "bottom") ? 1 : 0;
-  out.bottom = js_pull_double(margins, "bottom", 0.0);
-  out.header_engaged = js_has(margins, "header") ? 1 : 0;
-  out.header = js_pull_double(margins, "header", 0.0);
-  out.footer_engaged = js_has(margins, "footer") ? 1 : 0;
-  out.footer = js_pull_double(margins, "footer", 0.0);
+  const emscripten::val left = reader.value(margins, "left", "pageMargins.left");
+  out.left_engaged = value_present(left) ? 1 : 0;
+  out.left = reader.number_value(left, 0.0, "pageMargins.left");
+  const emscripten::val right = reader.value(margins, "right", "pageMargins.right");
+  out.right_engaged = value_present(right) ? 1 : 0;
+  out.right = reader.number_value(right, 0.0, "pageMargins.right");
+  const emscripten::val top = reader.value(margins, "top", "pageMargins.top");
+  out.top_engaged = value_present(top) ? 1 : 0;
+  out.top = reader.number_value(top, 0.0, "pageMargins.top");
+  const emscripten::val bottom = reader.value(margins, "bottom", "pageMargins.bottom");
+  out.bottom_engaged = value_present(bottom) ? 1 : 0;
+  out.bottom = reader.number_value(bottom, 0.0, "pageMargins.bottom");
+  const emscripten::val header = reader.value(margins, "header", "pageMargins.header");
+  out.header_engaged = value_present(header) ? 1 : 0;
+  out.header = reader.number_value(header, 0.0, "pageMargins.header");
+  const emscripten::val footer = reader.value(margins, "footer", "pageMargins.footer");
+  out.footer_engaged = value_present(footer) ? 1 : 0;
+  out.footer = reader.number_value(footer, 0.0, "pageMargins.footer");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   return status_from_rc(fm_sheet_set_page_margins(handle_, sheet, &out));
 }
 
@@ -291,15 +315,24 @@ JsStatus JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val option
   if (handle_ == nullptr) {
     return error_status(7000);
   }
+  JsNarrowNumericReader reader("setSheetPrintOptions");
   fm_print_options_t out{};
-  out.grid_lines_engaged = js_has(options, "gridLines") ? 1 : 0;
-  out.grid_lines = js_pull_bool(options, "gridLines", false) ? 1 : 0;
-  out.headings_engaged = js_has(options, "headings") ? 1 : 0;
-  out.headings = js_pull_bool(options, "headings", false) ? 1 : 0;
-  out.horizontal_centered_engaged = js_has(options, "horizontalCentered") ? 1 : 0;
-  out.horizontal_centered = js_pull_bool(options, "horizontalCentered", false) ? 1 : 0;
-  out.vertical_centered_engaged = js_has(options, "verticalCentered") ? 1 : 0;
-  out.vertical_centered = js_pull_bool(options, "verticalCentered", false) ? 1 : 0;
+  const emscripten::val grid_lines = reader.value(options, "gridLines", "printOptions.gridLines");
+  out.grid_lines_engaged = value_present(grid_lines) ? 1 : 0;
+  out.grid_lines = reader.boolean_value(grid_lines, false, "printOptions.gridLines") ? 1 : 0;
+  const emscripten::val headings = reader.value(options, "headings", "printOptions.headings");
+  out.headings_engaged = value_present(headings) ? 1 : 0;
+  out.headings = reader.boolean_value(headings, false, "printOptions.headings") ? 1 : 0;
+  const emscripten::val horizontal_centered =
+      reader.value(options, "horizontalCentered", "printOptions.horizontalCentered");
+  out.horizontal_centered_engaged = value_present(horizontal_centered) ? 1 : 0;
+  out.horizontal_centered = reader.boolean_value(horizontal_centered, false, "printOptions.horizontalCentered") ? 1 : 0;
+  const emscripten::val vertical_centered = reader.value(options, "verticalCentered", "printOptions.verticalCentered");
+  out.vertical_centered_engaged = value_present(vertical_centered) ? 1 : 0;
+  out.vertical_centered = reader.boolean_value(vertical_centered, false, "printOptions.verticalCentered") ? 1 : 0;
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   return status_from_rc(fm_sheet_set_print_options(handle_, sheet, &out));
 }
 
@@ -315,21 +348,37 @@ JsStatus JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val header
   std::string even_footer;
   std::string first_header;
   std::string first_footer;
+  JsNarrowNumericReader reader("setSheetHeaderFooter");
   fm_header_footer_t out{};
-  out.odd_header = js_pull_optional_string(headerFooter, "oddHeader", odd_header);
-  out.odd_footer = js_pull_optional_string(headerFooter, "oddFooter", odd_footer);
-  out.even_header = js_pull_optional_string(headerFooter, "evenHeader", even_header);
-  out.even_footer = js_pull_optional_string(headerFooter, "evenFooter", even_footer);
-  out.first_header = js_pull_optional_string(headerFooter, "firstHeader", first_header);
-  out.first_footer = js_pull_optional_string(headerFooter, "firstFooter", first_footer);
-  out.different_odd_even_engaged = js_has(headerFooter, "differentOddEven") ? 1 : 0;
-  out.different_odd_even = js_pull_bool(headerFooter, "differentOddEven", false) ? 1 : 0;
-  out.different_first_engaged = js_has(headerFooter, "differentFirst") ? 1 : 0;
-  out.different_first = js_pull_bool(headerFooter, "differentFirst", false) ? 1 : 0;
-  out.scale_with_doc_engaged = js_has(headerFooter, "scaleWithDoc") ? 1 : 0;
-  out.scale_with_doc = js_pull_bool(headerFooter, "scaleWithDoc", false) ? 1 : 0;
-  out.align_with_margins_engaged = js_has(headerFooter, "alignWithMargins") ? 1 : 0;
-  out.align_with_margins = js_pull_bool(headerFooter, "alignWithMargins", false) ? 1 : 0;
+  const emscripten::val odd_header_value = reader.value(headerFooter, "oddHeader", "headerFooter.oddHeader");
+  out.odd_header = reader.optional_string_value(odd_header_value, odd_header, "headerFooter.oddHeader");
+  const emscripten::val odd_footer_value = reader.value(headerFooter, "oddFooter", "headerFooter.oddFooter");
+  out.odd_footer = reader.optional_string_value(odd_footer_value, odd_footer, "headerFooter.oddFooter");
+  const emscripten::val even_header_value = reader.value(headerFooter, "evenHeader", "headerFooter.evenHeader");
+  out.even_header = reader.optional_string_value(even_header_value, even_header, "headerFooter.evenHeader");
+  const emscripten::val even_footer_value = reader.value(headerFooter, "evenFooter", "headerFooter.evenFooter");
+  out.even_footer = reader.optional_string_value(even_footer_value, even_footer, "headerFooter.evenFooter");
+  const emscripten::val first_header_value = reader.value(headerFooter, "firstHeader", "headerFooter.firstHeader");
+  out.first_header = reader.optional_string_value(first_header_value, first_header, "headerFooter.firstHeader");
+  const emscripten::val first_footer_value = reader.value(headerFooter, "firstFooter", "headerFooter.firstFooter");
+  out.first_footer = reader.optional_string_value(first_footer_value, first_footer, "headerFooter.firstFooter");
+  const emscripten::val different_odd_even =
+      reader.value(headerFooter, "differentOddEven", "headerFooter.differentOddEven");
+  out.different_odd_even_engaged = value_present(different_odd_even) ? 1 : 0;
+  out.different_odd_even = reader.boolean_value(different_odd_even, false, "headerFooter.differentOddEven") ? 1 : 0;
+  const emscripten::val different_first = reader.value(headerFooter, "differentFirst", "headerFooter.differentFirst");
+  out.different_first_engaged = value_present(different_first) ? 1 : 0;
+  out.different_first = reader.boolean_value(different_first, false, "headerFooter.differentFirst") ? 1 : 0;
+  const emscripten::val scale_with_doc = reader.value(headerFooter, "scaleWithDoc", "headerFooter.scaleWithDoc");
+  out.scale_with_doc_engaged = value_present(scale_with_doc) ? 1 : 0;
+  out.scale_with_doc = reader.boolean_value(scale_with_doc, false, "headerFooter.scaleWithDoc") ? 1 : 0;
+  const emscripten::val align_with_margins =
+      reader.value(headerFooter, "alignWithMargins", "headerFooter.alignWithMargins");
+  out.align_with_margins_engaged = value_present(align_with_margins) ? 1 : 0;
+  out.align_with_margins = reader.boolean_value(align_with_margins, false, "headerFooter.alignWithMargins") ? 1 : 0;
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   return status_from_rc(fm_sheet_set_header_footer(handle_, sheet, &out));
 }
 

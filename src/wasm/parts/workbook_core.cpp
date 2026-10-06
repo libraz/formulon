@@ -153,12 +153,16 @@ JsWorkbook* JsWorkbook::createEmpty() {
 
 JsWorkbook* JsWorkbook::loadBytes(emscripten::val bytes) {
   auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
-  const std::vector<uint8_t> buf = val_to_bytes(bytes);
-  if (buf.empty()) {
+  const JsBytesReadResult read = val_to_bytes_checked(bytes);
+  if (!read.ok || read.bytes.empty()) {
+    // `loadBytes` historically returns an invalid wrapper and refreshes the
+    // C diagnostic for malformed, non-Uint8Array, and empty input. Keep that
+    // factory contract while ensuring conversion failures stay inside the JS
+    // boundary.
     (void)fm_workbook_load(nullptr, 0, &wb->handle_);
     return wb.release();
   }
-  (void)fm_workbook_load(buf.data(), buf.size(), &wb->handle_);
+  (void)fm_workbook_load(read.bytes.data(), read.bytes.size(), &wb->handle_);
   return wb.release();
 }
 
@@ -532,8 +536,14 @@ emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
     o.set("recomputed", static_cast<uint32_t>(0));
     return o;
   }
-  const uint32_t vp_sheet = viewport["sheet"].as<uint32_t>();
-  const fm_merge_range bounds = js_pull_range(viewport);
+  JsNarrowNumericReader reader("partialRecalc");
+  const uint32_t vp_sheet = reader.u32(viewport, "sheet", 0U, "viewport.sheet");
+  const fm_merge_range bounds = js_pull_range(viewport, &reader);
+  if (!reader.ok()) {
+    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    o.set("recomputed", static_cast<uint32_t>(0));
+    return o;
+  }
   fm_viewport vp{vp_sheet, bounds.first_row, bounds.last_row, bounds.first_col, bounds.last_col};
   uint32_t recomputed = 0;
   progress_callback_threw_ = false;

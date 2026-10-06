@@ -10,9 +10,9 @@
 //   * Value-object structs (`JsStatus`, `JsValue`, `JsCellResult`, ...)
 //     that the JS-facing API surface returns.
 //   * Translation helpers (`translate_value`, `translate_cf_*`,
-//     `merge_range_to_val`, `bytes_to_val`, `val_to_bytes`).
+//     `merge_range_to_val`, `bytes_to_val`, `val_to_bytes_checked`).
 //   * Status builders (`ok_status`, `error_status`, `status_from_rc`).
-//   * `js_pull_*` / `js_set_*` field readers and record builders.
+//   * checked nested-field readers and `js_set_*` record builders.
 //
 // The helpers are deliberately out of line: they sit on the cold side of
 // the binding surface, and a single emission in `embind_common.cpp` lets
@@ -282,6 +282,60 @@ JsStatus binding_error_status(int32_t code, const char* message);
 /// Bridges a `fm_status_t` into a `JsStatus` envelope.
 JsStatus status_from_rc(fm_status_t rc);
 
+/// Per-call validator for fields in nested binding records. Binding parsers
+/// share this reader to reject lossy conversions before the C ABI mutates a
+/// workbook. Every access
+/// to caller-owned JavaScript values goes through a JS try/catch trampoline so
+/// proxy/getter exceptions become the reader's first error under
+/// `-fno-exceptions`.
+/// Missing, `null`, and `undefined` retain the supplied default.
+class JsNarrowNumericReader {
+ public:
+  explicit JsNarrowNumericReader(const char* operation);
+
+  uint32_t u32(const emscripten::val& owner, const char* key, uint32_t dflt, const char* field = nullptr);
+  int32_t i32(const emscripten::val& owner, const char* key, int32_t dflt, const char* field = nullptr);
+  uint8_t u8(const emscripten::val& owner, const char* key, uint8_t dflt, const char* field = nullptr);
+  uint16_t u16(const emscripten::val& owner, const char* key, uint16_t dflt, const char* field = nullptr);
+  uint8_t u8_value(const emscripten::val& value, uint8_t dflt, const char* field);
+  uint16_t u16_value(const emscripten::val& value, uint16_t dflt, const char* field);
+  uint32_t u32_value(const emscripten::val& value, uint32_t dflt, const char* field);
+  int32_t i32_value(const emscripten::val& value, int32_t dflt, const char* field);
+  int64_t i64(const emscripten::val& owner, const char* key, int64_t dflt, const char* field = nullptr);
+  double number(const emscripten::val& owner, const char* key, double dflt, const char* field = nullptr);
+  double number_value(const emscripten::val& value, double dflt, const char* field);
+  bool boolean(const emscripten::val& owner, const char* key, bool dflt, const char* field = nullptr);
+  bool boolean_value(const emscripten::val& value, bool dflt, const char* field);
+  std::string string(const emscripten::val& owner, const char* key, const char* field = nullptr);
+  std::string string_value(const emscripten::val& value, const char* field);
+  const char* optional_string(const emscripten::val& owner, const char* key, std::string& storage,
+                              const char* field = nullptr);
+  const char* optional_string_value(const emscripten::val& value, std::string& storage, const char* field);
+  emscripten::val value(const emscripten::val& owner, const char* key, const char* field = nullptr);
+  bool has_own(const emscripten::val& owner, const char* key, const char* field = nullptr);
+  bool is_array(const emscripten::val& value, const char* field = nullptr);
+  uint32_t length(const emscripten::val& array, const char* field = nullptr);
+  emscripten::val array_element(const emscripten::val& array, uint32_t index, const char* field = nullptr);
+
+  bool ok() const;
+  const std::string& message() const;
+
+ private:
+  bool read_integer(const emscripten::val& value, const char* key, const char* field, double lower, double upper,
+                    const char* range, double* number);
+  bool read_number(const emscripten::val& value, const char* key, const char* field, double* number);
+  emscripten::val safe_operation(const emscripten::val& owner, const emscripten::val& key, int32_t operation,
+                                 bool* succeeded);
+  emscripten::val safe_get(const emscripten::val& owner, const emscripten::val& key, const char* field,
+                           bool* succeeded);
+  void reject_access(const char* key, const char* field);
+  void reject(const char* key, const char* field, const char* range);
+  void reject_type(const char* field, const char* expected);
+
+  std::string operation_;
+  std::string message_;
+};
+
 /// Builds a `JsNumberResult` from `rc`, carrying `value` only on success.
 JsNumberResult number_result(fm_status_t rc, double value);
 
@@ -348,10 +402,19 @@ emscripten::val empty_pivot_layout_result(JsStatus status);
 /// inclusion in the pivotLayout `cells` array.
 emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell);
 
-/// Copies the contents of a JS Uint8Array (passed via `emscripten::val`)
-/// into a `std::vector<uint8_t>`. Returns an empty vector when the
-/// argument is not a typed array.
-std::vector<uint8_t> val_to_bytes(const emscripten::val& v);
+/// Result of a guarded byte-array read. `ok == false` means the input was not
+/// the accepted Uint8Array shape or a JS proxy/typed-array operation threw;
+/// `message` is suitable for a binding-level invalid-argument envelope.
+struct JsBytesReadResult {
+  bool ok = true;
+  std::vector<uint8_t> bytes;
+  std::string message;
+};
+
+/// Reads a caller-supplied Uint8Array through the JS try/catch boundary. The
+/// result distinguishes an invalid input from a valid empty array so factory
+/// callers can preserve their existing invalid-workbook contract.
+JsBytesReadResult val_to_bytes_checked(const emscripten::val& v);
 
 /// Materialises a fresh JS `Uint8Array` from a contiguous byte range.
 /// Element-by-element copy via `set(i, val)` for layout independence.
@@ -369,67 +432,24 @@ emscripten::val bytes_to_val(const uint8_t* data, std::size_t len);
 // reading through `val::as<T>` directly so a missing one converts exactly
 // as before.
 
-/// True when `v[key]` is present (neither `undefined` nor `null`).
-bool js_has(const emscripten::val& v, const char* key);
+/// Reads a range record with the explicit numeric reader. Missing / nullish
+/// fields retain the all-zero defaults.
+fm_merge_range js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader);
 
-/// Returns the `uint32_t` value of `v[key]`, or `dflt` when missing.
-uint32_t js_pull_u32(const emscripten::val& v, const char* key, uint32_t dflt);
-
-/// Returns the low-byte `uint8_t` value of `v[key]`, or `dflt` when missing.
-inline uint8_t js_pull_u8(const emscripten::val& v, const char* key, uint8_t dflt) {
-  return static_cast<uint8_t>(js_pull_u32(v, key, dflt) & 0xFFU);
-}
-
-/// Returns the `uint16_t` value of `v[key]`, or `dflt` when missing.
-inline uint16_t js_pull_u16(const emscripten::val& v, const char* key, uint16_t dflt) {
-  return static_cast<uint16_t>(js_pull_u32(v, key, dflt) & 0xFFFFU);
-}
-
-/// Returns the `int32_t` value of `v[key]`, or `dflt` when missing.
-int32_t js_pull_i32(const emscripten::val& v, const char* key, int32_t dflt);
-
-/// Returns the `double` value of `v[key]`, or `dflt` when missing.
-double js_pull_double(const emscripten::val& v, const char* key, double dflt);
-
-/// Returns the `bool` value of `v[key]`, or `dflt` when missing.
-bool js_pull_bool(const emscripten::val& v, const char* key, bool dflt);
-
-/// Returns the string value of `v[key]`, or an empty string when missing.
-std::string js_pull_string(const emscripten::val& v, const char* key);
-
-/// Reads an optional string field as the C tri-state: `nullptr` when
-/// missing, otherwise `storage.c_str()` holding the copied value.
-const char* js_pull_optional_string(const emscripten::val& v, const char* key, std::string& storage);
-
-/// Returns `arr.length` as `uint32_t`.
-uint32_t js_length(const emscripten::val& arr);
-
-/// Reads the required `{firstRow, lastRow, firstCol, lastCol}` fields of
-/// a range record.
-fm_merge_range js_pull_range(const emscripten::val& v);
-
-/// Reads `v[key]` as an array of range records. An own property that is
-/// not an array, or no own property at all, reads as empty.
-std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char* key);
-
-/// Reads a JS number array as `uint32_t`; `undefined` / `null` read as
-/// empty.
-std::vector<uint32_t> js_pull_u32_list(const emscripten::val& arr);
-
-/// Reads exactly `n` numbers from `arr` into `out`. Returns false, leaving
-/// `out` untouched, unless `arr` is an array of length `n`.
-bool js_pull_u32_array(const emscripten::val& arr, uint32_t* out, uint32_t n);
+/// Reads a range list with the explicit numeric reader. Other WASM families
+/// must use the same per-call reader before invoking a C mutator.
+std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
 
 /// Pulls the `{kind, rgb, theme, tint, indexed}` colour specification out
 /// of `v[key]`. An absent object leaves `kind` at `kFmColorNone`, which
 /// makes the writer emit the sibling `*Argb` as literal `rgb`. A supplied
 /// selector is authoritative; the binding does not resolve theme/indexed /
 /// auto colours.
-fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key);
+fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
 
 /// Pulls a `{style, colorArgb, color}` border-side record out of `v`,
 /// defaulting every absent field to zero.
-fm_border_side js_pull_border_side(const emscripten::val& v);
+fm_border_side js_pull_border_side(const emscripten::val& v, JsNarrowNumericReader* reader);
 
 /// One string field of a record built by `js_set_cstr_fields`.
 struct JsStrField {

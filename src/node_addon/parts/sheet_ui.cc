@@ -6,6 +6,7 @@
 #include <cstring>
 #include <deque>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "node_addon/parts/workbook_class.h"
@@ -17,18 +18,31 @@ namespace formulon_node {
 namespace {
 
 // Reads a `{ firstRow, lastRow, firstCol, lastCol }` range object.
-fm_merge_range ReadMergeRange(const Napi::Object& range) {
-  fm_merge_range m{};
-  m.first_row = range.Get("firstRow").ToNumber().Uint32Value();
-  m.last_row = range.Get("lastRow").ToNumber().Uint32Value();
-  m.first_col = range.Get("firstCol").ToNumber().Uint32Value();
-  m.last_col = range.Get("lastCol").ToNumber().Uint32Value();
-  return m;
+bool ReadMergeRange(CheckedSpecReader& reader, const Napi::Object& range, fm_merge_range* out) {
+  out->first_row = reader.U32(range, "firstRow", 0U);
+  out->last_row = reader.U32(range, "lastRow", 0U);
+  out->first_col = reader.U32(range, "firstCol", 0U);
+  out->last_col = reader.U32(range, "lastCol", 0U);
+  return reader.ok();
 }
 
-// Reads the range at `info[idx]`; a missing or non-object argument reads as all zeros.
-fm_merge_range MergeRangeArg(const Napi::CallbackInfo& info, size_t idx) {
-  return info.Length() > idx && info[idx].IsObject() ? ReadMergeRange(info[idx].As<Napi::Object>()) : fm_merge_range{};
+// Reads the range at `info[idx]`; a missing/nullish argument reads as all
+// zeros, while a supplied non-object is rejected by the reader.
+bool MergeRangeArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_merge_range* out) {
+  *out = fm_merge_range{};
+  if (info.Length() <= idx) {
+    return true;
+  }
+  Napi::Value value = info[idx];
+  Napi::Value present;
+  if (!reader.Value(value, "range", &present)) {
+    return reader.ok();
+  }
+  Napi::Object object;
+  if (!reader.Object(present, "range", &object)) {
+    return false;
+  }
+  return ReadMergeRange(reader, object, out);
 }
 
 // Enumerates a per-sheet list through its count / at-index pair into a
@@ -67,8 +81,13 @@ Napi::Value Workbook::AddMerge(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
+  CheckedSpecReader reader(env);
+  fm_merge_range range{};
+  if (!MergeRangeArg(reader, info, 1, &range)) {
+    return env.Undefined();
+  }
   const uint32_t sheet = ArgU32(info, 0);
-  fm_status_t rc = fm_sheet_add_merge(handle_, sheet, MergeRangeArg(info, 1));
+  fm_status_t rc = fm_sheet_add_merge(handle_, sheet, range);
   return MakeStatus(env, rc);
 }
 
@@ -77,8 +96,13 @@ Napi::Value Workbook::RemoveMerge(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
+  CheckedSpecReader reader(env);
+  fm_merge_range range{};
+  if (!MergeRangeArg(reader, info, 1, &range)) {
+    return env.Undefined();
+  }
   const uint32_t sheet = ArgU32(info, 0);
-  fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, MergeRangeArg(info, 1));
+  fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, range);
   return MakeStatus(env, rc);
 }
 
@@ -126,8 +150,12 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return FinishListResult(env, arr, kBindingInvalidHandle);
   }
+  CheckedSpecReader reader(env);
+  fm_merge_range range{};
+  if (!MergeRangeArg(reader, info, 1, &range)) {
+    return env.Undefined();
+  }
   const uint32_t sheet = ArgU32(info, 0);
-  const fm_merge_range range = MergeRangeArg(info, 1);
   uint32_t total = 0;
   fm_status_t rc = fm_sheet_merges_in_range(handle_, sheet, range, nullptr, 0, &total);
   if (rc != 0) {
@@ -401,79 +429,64 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   Napi::Object v = info[1].As<Napi::Object>();
+  CheckedSpecReader reader(env);
 
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until
   // `fm_sheet_add_validation` returns.
   std::vector<fm_merge_range> ranges_buf;
-  if (v.Has("ranges")) {
-    Napi::Value ranges_js = v.Get("ranges");
-    if (ranges_js.IsArray()) {
-      Napi::Array ranges_arr = ranges_js.As<Napi::Array>();
-      const uint32_t n = ranges_arr.Length();
-      ranges_buf.reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        Napi::Value rng_v = ranges_arr.Get(i);
-        if (!rng_v.IsObject()) {
-          continue;
-        }
-        ranges_buf.push_back(ReadMergeRange(rng_v.As<Napi::Object>()));
+  Napi::Array ranges_arr;
+  if (reader.Array(v, "ranges", &ranges_arr)) {
+    const uint32_t n = ranges_arr.Length();
+    ranges_buf.reserve(n);
+    for (uint32_t i = 0; i < n && reader.ok(); ++i) {
+      Napi::Value range_value;
+      if (!reader.ArrayElement(ranges_arr, i, &range_value)) {
+        continue;
       }
+      Napi::Object range;
+      if (!reader.Object(range_value, "ranges[]", &range)) {
+        break;
+      }
+      fm_merge_range parsed{};
+      if (!ReadMergeRange(reader, range, &parsed)) {
+        break;
+      }
+      ranges_buf.push_back(parsed);
     }
   }
-  auto pull_string = [&](const char* key) -> std::string {
-    if (!v.Has(key)) {
-      return std::string();
-    }
-    Napi::Value f = v.Get(key);
-    if (f.IsUndefined() || f.IsNull()) {
-      return std::string();
-    }
-    return f.ToString().Utf8Value();
-  };
-  auto pull_u8 = [&](const char* key) -> uint8_t {
-    if (!v.Has(key)) {
-      return 0;
-    }
-    Napi::Value f = v.Get(key);
-    if (f.IsUndefined() || f.IsNull()) {
-      return 0;
-    }
-    return static_cast<uint8_t>(f.ToNumber().Uint32Value() & 0xFFU);
-  };
-  auto pull_bool = [&](const char* key, bool dflt) -> bool {
-    if (!v.Has(key)) {
-      return dflt;
-    }
-    Napi::Value f = v.Get(key);
-    if (f.IsUndefined() || f.IsNull()) {
-      return dflt;
-    }
-    return f.ToBoolean().Value();
-  };
-  const std::string formula1 = pull_string("formula1");
-  const std::string formula2 = pull_string("formula2");
-  const std::string error_title = pull_string("errorTitle");
-  const std::string error_message = pull_string("errorMessage");
-  const std::string prompt_title = pull_string("promptTitle");
-  const std::string prompt_message = pull_string("promptMessage");
+  std::string formula1;
+  std::string formula2;
+  std::string error_title;
+  std::string error_message;
+  std::string prompt_title;
+  std::string prompt_message;
+  reader.String(v, "formula1", &formula1);
+  reader.String(v, "formula2", &formula2);
+  reader.String(v, "errorTitle", &error_title);
+  reader.String(v, "errorMessage", &error_message);
+  reader.String(v, "promptTitle", &prompt_title);
+  reader.String(v, "promptMessage", &prompt_message);
 
   fm_data_validation dv{};
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   dv.range_count = static_cast<uint32_t>(ranges_buf.size());
-  dv.type = pull_u8("type");
-  dv.op = pull_u8("op");
-  dv.error_style = pull_u8("errorStyle");
-  dv.allow_blank = pull_bool("allowBlank", false) ? 1 : 0;
-  dv.show_input_message = pull_bool("showInputMessage", false) ? 1 : 0;
-  dv.show_error_message = pull_bool("showErrorMessage", false) ? 1 : 0;
-  dv.show_dropdown = pull_bool("showDropDown", true) ? 1 : 0;
+  dv.type = reader.U8(v, "type", 0U);
+  dv.op = reader.U8(v, "op", 0U);
+  dv.error_style = reader.U8(v, "errorStyle", 0U);
+  dv.allow_blank = reader.Bool(v, "allowBlank", false) ? 1 : 0;
+  dv.show_input_message = reader.Bool(v, "showInputMessage", false) ? 1 : 0;
+  dv.show_error_message = reader.Bool(v, "showErrorMessage", false) ? 1 : 0;
+  dv.show_dropdown = reader.Bool(v, "showDropDown", true) ? 1 : 0;
   dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   dv.error_title = error_title.empty() ? nullptr : error_title.c_str();
   dv.error_message = error_message.empty() ? nullptr : error_message.c_str();
   dv.prompt_title = prompt_title.empty() ? nullptr : prompt_title.c_str();
   dv.prompt_message = prompt_message.empty() ? nullptr : prompt_message.c_str();
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   fm_status_t rc = fm_sheet_add_validation(handle_, sheet, dv);
   return MakeStatus(env, rc);
 }
@@ -505,8 +518,8 @@ namespace {
 
 constexpr uint32_t kAbsentDxfId = UINT32_MAX;
 
-std::string PullString(const Napi::Object& spec, const char* key) {
-  return SpecHas(spec, key) ? spec.Get(key).ToString().Utf8Value() : std::string();
+bool PullString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, std::string* out) {
+  return reader.String(spec, key, out);
 }
 
 Napi::Value MergeRangeToJs(Napi::Env env, const fm_merge_range& r) {
@@ -518,12 +531,13 @@ Napi::Value MergeRangeToJs(Napi::Env env, const fm_merge_range& r) {
   return o;
 }
 
-fm_merge_range PullRange(const Napi::Object& spec, const char* key) {
-  fm_merge_range m{};
-  if (SpecHas(spec, key) && spec.Get(key).IsObject()) {
-    m = ReadMergeRange(spec.Get(key).As<Napi::Object>());
+bool PullRange(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, fm_merge_range* out) {
+  *out = fm_merge_range{};
+  Napi::Object object;
+  if (!reader.Object(spec, key, &object)) {
+    return reader.ok();
   }
-  return m;
+  return ReadMergeRange(reader, object, out);
 }
 
 Napi::Value CStr(Napi::Env env, const char* s) {
@@ -643,122 +657,167 @@ struct AutoFilterInput {
   }
 };
 
-void ReadFilterColumn(const Napi::Object& spec, AutoFilterInput& in, fm_filter_column& c) {
-  c.col_id = SpecPullU32(spec, "colId", 0U);
-  c.hidden_button = SpecPullBool(spec, "hiddenButton", false) ? 1 : 0;
-  c.show_button = SpecPullBool(spec, "showButton", true) ? 1 : 0;
-  c.kind = SpecPullInt32(spec, "kind", 0);
-  c.filter_blank = SpecPullBool(spec, "filterBlank", false) ? 1 : 0;
+void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in, fm_filter_column& c) {
+  c = fm_filter_column{};
+  c.col_id = reader.U32(spec, "colId", 0U);
+  c.hidden_button = reader.Bool(spec, "hiddenButton", false) ? 1 : 0;
+  c.show_button = reader.Bool(spec, "showButton", true) ? 1 : 0;
+  c.kind = reader.I32(spec, "kind", 0);
+  c.filter_blank = reader.Bool(spec, "filterBlank", false) ? 1 : 0;
   in.value_ptrs.emplace_back();
   std::vector<const char*>& ptrs = in.value_ptrs.back();
-  if (spec.Has("values") && spec.Get("values").IsArray()) {
-    const Napi::Array values = spec.Get("values").As<Napi::Array>();
+  Napi::Array values;
+  if (reader.Array(spec, "values", &values)) {
     for (uint32_t i = 0; i < values.Length(); ++i) {
-      ptrs.push_back(in.Keep(values.Get(i).ToString().Utf8Value()));
+      Napi::Value value;
+      if (!reader.ArrayElement(values, i, &value)) {
+        continue;
+      }
+      std::string text;
+      if (!reader.String(value, "values[]", &text)) {
+        break;
+      }
+      ptrs.push_back(in.Keep(std::move(text)));
     }
   }
   c.values = ptrs.empty() ? nullptr : ptrs.data();
   c.value_count = static_cast<uint32_t>(ptrs.size());
   in.groups.emplace_back();
   std::vector<fm_date_group_item>& groups = in.groups.back();
-  if (spec.Has("dateGroups") && spec.Get("dateGroups").IsArray()) {
-    const Napi::Array arr = spec.Get("dateGroups").As<Napi::Array>();
+  Napi::Array date_groups;
+  if (reader.Array(spec, "dateGroups", &date_groups)) {
+    const Napi::Array& arr = date_groups;
     for (uint32_t i = 0; i < arr.Length(); ++i) {
-      if (!arr.Get(i).IsObject()) {
+      Napi::Value group_value;
+      if (!reader.ArrayElement(arr, i, &group_value)) {
         continue;
       }
-      const Napi::Object g = arr.Get(i).As<Napi::Object>();
+      Napi::Object g;
+      if (!reader.Object(group_value, "dateGroups[]", &g)) {
+        break;
+      }
       fm_date_group_item item{};
-      item.year = static_cast<uint16_t>(SpecPullU32(g, "year", 0U));
-      item.month = static_cast<uint8_t>(SpecPullU32(g, "month", 0U));
-      item.day = static_cast<uint8_t>(SpecPullU32(g, "day", 0U));
-      item.hour = static_cast<uint8_t>(SpecPullU32(g, "hour", 0U));
-      item.minute = static_cast<uint8_t>(SpecPullU32(g, "minute", 0U));
-      item.second = static_cast<uint8_t>(SpecPullU32(g, "second", 0U));
-      item.grouping = static_cast<uint8_t>(SpecPullU32(g, "grouping", 0U));
+      item.year = reader.U16(g, "year", 0U);
+      item.month = reader.U8(g, "month", 0U);
+      item.day = reader.U8(g, "day", 0U);
+      item.hour = reader.U8(g, "hour", 0U);
+      item.minute = reader.U8(g, "minute", 0U);
+      item.second = reader.U8(g, "second", 0U);
+      item.grouping = reader.U8(g, "grouping", 0U);
+      if (!reader.ok()) {
+        break;
+      }
       groups.push_back(item);
     }
   }
   c.date_groups = groups.empty() ? nullptr : groups.data();
   c.date_group_count = static_cast<uint32_t>(groups.size());
-  c.custom_and = SpecPullBool(spec, "customAnd", false) ? 1 : 0;
-  c.custom_count = SpecPullInt32(spec, "customCount", 0);
-  c.op1 = SpecPullInt32(spec, "op1", 0);
-  c.val1 = in.Keep(PullString(spec, "val1"));
-  c.op2 = SpecPullInt32(spec, "op2", 0);
-  c.val2 = in.Keep(PullString(spec, "val2"));
-  c.top = SpecPullBool(spec, "top", false) ? 1 : 0;
-  c.percent = SpecPullBool(spec, "percent", false) ? 1 : 0;
-  c.has_filter_val = SpecPullBool(spec, "hasFilterVal", false) ? 1 : 0;
-  c.top_val = SpecPullDouble(spec, "topVal", 0.0);
-  c.filter_val = SpecPullDouble(spec, "filterVal", 0.0);
-  c.dynamic_type = SpecPullInt32(spec, "dynamicType", 0);
-  c.has_dyn_val = SpecPullBool(spec, "hasDynVal", false) ? 1 : 0;
-  c.has_dyn_max_val = SpecPullBool(spec, "hasDynMaxVal", false) ? 1 : 0;
-  c.dyn_val = SpecPullDouble(spec, "dynVal", 0.0);
-  c.dyn_max_val = SpecPullDouble(spec, "dynMaxVal", 0.0);
-  c.val_iso = in.Keep(PullString(spec, "valIso"));
-  c.max_val_iso = in.Keep(PullString(spec, "maxValIso"));
-  c.dxf_id = SpecPullU32(spec, "dxfId", kAbsentDxfId);
-  c.cell_color = SpecPullBool(spec, "cellColor", false) ? 1 : 0;
-  c.icon_set = SpecPullInt32(spec, "iconSet", 0);
-  c.icon_id = SpecPullInt32(spec, "iconId", 0);
-  c.has_icon_id = SpecPullBool(spec, "hasIconId", false) ? 1 : 0;
+  c.custom_and = reader.Bool(spec, "customAnd", false) ? 1 : 0;
+  c.custom_count = reader.I32(spec, "customCount", 0);
+  c.op1 = reader.I32(spec, "op1", 0);
+  std::string val1;
+  PullString(reader, spec, "val1", &val1);
+  c.val1 = in.Keep(std::move(val1));
+  c.op2 = reader.I32(spec, "op2", 0);
+  std::string val2;
+  PullString(reader, spec, "val2", &val2);
+  c.val2 = in.Keep(std::move(val2));
+  c.top = reader.Bool(spec, "top", false) ? 1 : 0;
+  c.percent = reader.Bool(spec, "percent", false) ? 1 : 0;
+  c.has_filter_val = reader.Bool(spec, "hasFilterVal", false) ? 1 : 0;
+  c.top_val = reader.Double(spec, "topVal", 0.0);
+  c.filter_val = reader.Double(spec, "filterVal", 0.0);
+  c.dynamic_type = reader.I32(spec, "dynamicType", 0);
+  c.has_dyn_val = reader.Bool(spec, "hasDynVal", false) ? 1 : 0;
+  c.has_dyn_max_val = reader.Bool(spec, "hasDynMaxVal", false) ? 1 : 0;
+  c.dyn_val = reader.Double(spec, "dynVal", 0.0);
+  c.dyn_max_val = reader.Double(spec, "dynMaxVal", 0.0);
+  std::string val_iso;
+  std::string max_val_iso;
+  PullString(reader, spec, "valIso", &val_iso);
+  PullString(reader, spec, "maxValIso", &max_val_iso);
+  c.val_iso = in.Keep(std::move(val_iso));
+  c.max_val_iso = in.Keep(std::move(max_val_iso));
+  c.dxf_id = reader.U32(spec, "dxfId", kAbsentDxfId);
+  c.cell_color = reader.Bool(spec, "cellColor", false) ? 1 : 0;
+  c.icon_set = reader.I32(spec, "iconSet", 0);
+  c.icon_id = reader.I32(spec, "iconId", 0);
+  c.has_icon_id = reader.Bool(spec, "hasIconId", false) ? 1 : 0;
 }
 
-void ReadSortCondition(const Napi::Object& spec, AutoFilterInput& in, fm_sort_condition& c) {
-  c.ref = PullRange(spec, "ref");
-  c.descending = SpecPullBool(spec, "descending", false) ? 1 : 0;
-  c.sort_by = SpecPullInt32(spec, "sortBy", 0);
-  c.custom_list = in.Keep(PullString(spec, "customList"));
-  c.dxf_id = SpecPullU32(spec, "dxfId", kAbsentDxfId);
-  c.has_dxf_id = SpecPullBool(spec, "hasDxfId", false) ? 1 : 0;
-  c.icon_set = SpecPullInt32(spec, "iconSet", 0);
-  c.icon_id = SpecPullInt32(spec, "iconId", 0);
-  c.has_icon_id = SpecPullBool(spec, "hasIconId", false) ? 1 : 0;
+void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in, fm_sort_condition& c) {
+  c = fm_sort_condition{};
+  PullRange(reader, spec, "ref", &c.ref);
+  c.descending = reader.Bool(spec, "descending", false) ? 1 : 0;
+  c.sort_by = reader.I32(spec, "sortBy", 0);
+  std::string custom_list;
+  PullString(reader, spec, "customList", &custom_list);
+  c.custom_list = in.Keep(std::move(custom_list));
+  c.dxf_id = reader.U32(spec, "dxfId", kAbsentDxfId);
+  c.has_dxf_id = reader.Bool(spec, "hasDxfId", false) ? 1 : 0;
+  c.icon_set = reader.I32(spec, "iconSet", 0);
+  c.icon_id = reader.I32(spec, "iconId", 0);
+  c.has_icon_id = reader.Bool(spec, "hasIconId", false) ? 1 : 0;
 }
 
 // Reads the `AutoFilter` record at `info[idx]`; false when it is not an object.
-bool ReadAutoFilter(const Napi::CallbackInfo& info, size_t idx, AutoFilterInput& in) {
+bool ReadAutoFilter(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, AutoFilterInput& in) {
   if (info.Length() <= idx || !info[idx].IsObject()) {
     return false;
   }
   const Napi::Object spec = info[idx].As<Napi::Object>();
   fm_auto_filter& f = in.filter;
-  f.range = PullRange(spec, "range");
-  const Napi::Array columns = spec.Has("columns") && spec.Get("columns").IsArray()
-                                  ? spec.Get("columns").As<Napi::Array>()
-                                  : Napi::Array::New(info.Env());
-  const Napi::Object sort = SpecHas(spec, "sort") && spec.Get("sort").IsObject() ? spec.Get("sort").As<Napi::Object>()
-                                                                                 : Napi::Object::New(info.Env());
-  const bool has_sort = SpecHas(spec, "sort") && spec.Get("sort").IsObject();
-  const Napi::Array conditions = sort.Has("conditions") && sort.Get("conditions").IsArray()
-                                     ? sort.Get("conditions").As<Napi::Array>()
-                                     : Napi::Array::New(info.Env());
-  for (uint32_t i = 0; i < columns.Length(); ++i) {
-    if (!columns.Get(i).IsObject()) {
-      continue;
+  PullRange(reader, spec, "range", &f.range);
+  Napi::Array columns;
+  if (reader.Array(spec, "columns", &columns)) {
+    for (uint32_t i = 0; i < columns.Length() && reader.ok(); ++i) {
+      Napi::Value column_value;
+      if (!reader.ArrayElement(columns, i, &column_value)) {
+        continue;
+      }
+      Napi::Object column;
+      if (!reader.Object(column_value, "columns[]", &column)) {
+        break;
+      }
+      in.columns.emplace_back();
+      ReadFilterColumn(reader, column, in, in.columns.back());
     }
-    in.columns.emplace_back();
-    ReadFilterColumn(columns.Get(i).As<Napi::Object>(), in, in.columns.back());
   }
-  for (uint32_t i = 0; i < conditions.Length(); ++i) {
-    if (!conditions.Get(i).IsObject()) {
-      continue;
+  Napi::Object sort;
+  const bool has_sort = reader.Object(spec, "sort", &sort);
+  if (!reader.ok()) {
+    return false;
+  }
+  Napi::Array conditions;
+  if (has_sort && reader.Array(sort, "conditions", &conditions)) {
+    for (uint32_t i = 0; i < conditions.Length() && reader.ok(); ++i) {
+      Napi::Value condition_value;
+      if (!reader.ArrayElement(conditions, i, &condition_value)) {
+        continue;
+      }
+      Napi::Object condition;
+      if (!reader.Object(condition_value, "conditions[]", &condition)) {
+        break;
+      }
+      in.conditions.emplace_back();
+      ReadSortCondition(reader, condition, in, in.conditions.back());
     }
-    in.conditions.emplace_back();
-    ReadSortCondition(conditions.Get(i).As<Napi::Object>(), in, in.conditions.back());
+  }
+  if (!reader.ok()) {
+    return false;
   }
   f.columns = in.columns.empty() ? nullptr : in.columns.data();
   f.column_count = static_cast<uint32_t>(in.columns.size());
   f.has_sort = has_sort ? 1 : 0;
-  f.sort_ref = PullRange(sort, "ref");
-  f.column_sort = SpecPullBool(sort, "columnSort", false) ? 1 : 0;
-  f.case_sensitive = SpecPullBool(sort, "caseSensitive", false) ? 1 : 0;
-  f.sort_method = SpecPullInt32(sort, "sortMethod", 0);
+  if (has_sort) {
+    PullRange(reader, sort, "ref", &f.sort_ref);
+    f.column_sort = reader.Bool(sort, "columnSort", false) ? 1 : 0;
+    f.case_sensitive = reader.Bool(sort, "caseSensitive", false) ? 1 : 0;
+    f.sort_method = reader.I32(sort, "sortMethod", 0);
+  }
   f.conditions = in.conditions.empty() ? nullptr : in.conditions.data();
   f.condition_count = static_cast<uint32_t>(in.conditions.size());
-  return true;
+  return reader.ok();
 }
 
 // Shared by the sheet and table entry points: `table` selects which C
@@ -825,9 +884,16 @@ Napi::Value Workbook::SetAutoFilter(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
+  CheckedSpecReader reader(env);
   AutoFilterInput in;
-  if (!ReadAutoFilter(info, 1, in)) {
+  if (!ReadAutoFilter(reader, info, 1, in)) {
+    if (!reader.ok()) {
+      return env.Undefined();
+    }
     return MakeBindingArgumentError(env, "setAutoFilter expects (sheet:number, autoFilter:object)");
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
   }
   return MakeStatus(env, fm_sheet_set_auto_filter(handle_, ArgU32(info, 0), &in.filter));
 }
@@ -837,9 +903,16 @@ Napi::Value Workbook::SetTableAutoFilter(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
+  CheckedSpecReader reader(env);
   AutoFilterInput in;
-  if (!ReadAutoFilter(info, 1, in)) {
+  if (!ReadAutoFilter(reader, info, 1, in)) {
+    if (!reader.ok()) {
+      return env.Undefined();
+    }
     return MakeBindingArgumentError(env, "setTableAutoFilter expects (tableIdx:number, autoFilter:object)");
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
   }
   return MakeStatus(env, fm_table_set_auto_filter(handle_, ArgU32(info, 0), &in.filter));
 }
@@ -909,27 +982,40 @@ Napi::Value Workbook::EvaluateTableAutoFilter(const Napi::CallbackInfo& info) {
 namespace {
 
 // Reads the `Mention[]` at `arr`; `ids` backs the borrowed strings.
-void ReadMentions(const Napi::Value& arr, std::vector<std::string>& ids, std::vector<fm_mention>& out) {
-  if (!arr.IsArray()) {
-    return;
+bool ReadMentions(CheckedSpecReader& reader, const Napi::Value& arr, std::vector<std::string>& ids,
+                  std::vector<fm_mention>& out) {
+  Napi::Array list;
+  if (!reader.Array(arr, "mentions", &list)) {
+    return reader.ok();
   }
-  const Napi::Array list = arr.As<Napi::Array>();
   ids.reserve(static_cast<size_t>(list.Length()) * 2U);
   out.reserve(list.Length());
-  for (uint32_t i = 0; i < list.Length(); ++i) {
-    if (!list.Get(i).IsObject()) {
+  for (uint32_t i = 0; i < list.Length() && reader.ok(); ++i) {
+    Napi::Value mention_value;
+    if (!reader.ArrayElement(list, i, &mention_value)) {
       continue;
     }
-    const Napi::Object m = list.Get(i).As<Napi::Object>();
-    ids.push_back(PullString(m, "personId"));
-    ids.push_back(PullString(m, "mentionId"));
+    Napi::Object m;
+    if (!reader.Object(mention_value, "mentions[]", &m)) {
+      break;
+    }
+    std::string person_id;
+    std::string mention_id;
+    PullString(reader, m, "personId", &person_id);
+    PullString(reader, m, "mentionId", &mention_id);
+    ids.push_back(std::move(person_id));
+    ids.push_back(std::move(mention_id));
     fm_mention c{};
     c.person_id = ids[ids.size() - 2].c_str();
     c.mention_id = ids.back().c_str();
-    c.start = SpecPullU32(m, "start", 0U);
-    c.length = SpecPullU32(m, "length", 0U);
+    c.start = reader.U32(m, "start", 0U);
+    c.length = reader.U32(m, "length", 0U);
+    if (!reader.ok()) {
+      break;
+    }
     out.push_back(c);
   }
+  return reader.ok();
 }
 
 }  // namespace
@@ -981,26 +1067,38 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   if (info.Length() < 2 || !info[1].IsObject()) {
     return MakeBindingArgumentError(env, "addThreadedComment expects (sheet:number, comment:object)");
   }
+  CheckedSpecReader reader(env);
   const Napi::Object spec = info[1].As<Napi::Object>();
-  const std::string id = PullString(spec, "id");
-  const std::string person_id = PullString(spec, "personId");
-  const std::string created = PullString(spec, "created");
-  const std::string text = PullString(spec, "text");
-  const std::string parent_id = PullString(spec, "parentId");
+  std::string id;
+  std::string person_id;
+  std::string created;
+  std::string text;
+  std::string parent_id;
+  PullString(reader, spec, "id", &id);
+  PullString(reader, spec, "personId", &person_id);
+  PullString(reader, spec, "created", &created);
+  PullString(reader, spec, "text", &text);
+  PullString(reader, spec, "parentId", &parent_id);
   std::vector<std::string> mention_ids;
   std::vector<fm_mention> mentions;
-  ReadMentions(spec.Get("mentions"), mention_ids, mentions);
+  Napi::Array mention_array;
+  if (reader.Array(spec, "mentions", &mention_array)) {
+    ReadMentions(reader, mention_array, mention_ids, mentions);
+  }
   fm_threaded_comment c{};
   c.id = id.c_str();
-  c.row = SpecPullU32(spec, "row", 0U);
-  c.col = SpecPullU32(spec, "col", 0U);
+  c.row = reader.U32(spec, "row", 0U);
+  c.col = reader.U32(spec, "col", 0U);
   c.person_id = person_id.c_str();
   c.created = created.c_str();
   c.text = text.c_str();
   c.parent_id = parent_id.c_str();
-  c.done = SpecPullBool(spec, "done", false) ? 1 : 0;
+  c.done = reader.Bool(spec, "done", false) ? 1 : 0;
   c.mentions = mentions.empty() ? nullptr : mentions.data();
   c.mention_count = static_cast<uint32_t>(mentions.size());
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_sheet_add_threaded_comment(handle_, ArgU32(info, 0), &c));
 }
 
@@ -1009,11 +1107,17 @@ Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
+  CheckedSpecReader reader(env);
   const std::string id = ArgString(info, 1);
   const std::string text = ArgString(info, 2);
   std::vector<std::string> mention_ids;
   std::vector<fm_mention> mentions;
-  ReadMentions(info.Length() > 3 ? info[3] : env.Undefined(), mention_ids, mentions);
+  if (info.Length() > 3) {
+    ReadMentions(reader, info[3], mention_ids, mentions);
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_sheet_edit_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), text.c_str(),
                                                         mentions.empty() ? nullptr : mentions.data(),
                                                         static_cast<uint32_t>(mentions.size())));
@@ -1070,16 +1174,24 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     return MakeBindingArgumentError(env, "addPerson expects (person:object)");
   }
+  CheckedSpecReader reader(env);
   const Napi::Object spec = info[0].As<Napi::Object>();
-  const std::string id = PullString(spec, "id");
-  const std::string display_name = PullString(spec, "displayName");
-  const std::string user_id = PullString(spec, "userId");
-  const std::string provider_id = PullString(spec, "providerId");
+  std::string id;
+  std::string display_name;
+  std::string user_id;
+  std::string provider_id;
+  PullString(reader, spec, "id", &id);
+  PullString(reader, spec, "displayName", &display_name);
+  PullString(reader, spec, "userId", &user_id);
+  PullString(reader, spec, "providerId", &provider_id);
   fm_person p{};
   p.id = id.c_str();
   p.display_name = display_name.c_str();
   p.user_id = user_id.c_str();
   p.provider_id = provider_id.c_str();
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_workbook_add_person(handle_, &p));
 }
 
@@ -1222,20 +1334,26 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
             MakeBindingArgumentError(env, "insertImage expects (sheet:number, bytes:Uint8Array, opts?:object)"));
     return out;
   }
+  CheckedSpecReader reader(env);
   const Napi::Object spec = has_opts ? info[2].As<Napi::Object>() : Napi::Object::New(env);
-  const std::string name = PullString(spec, "name");
-  const std::string descr = PullString(spec, "descr");
+  std::string name;
+  std::string descr;
+  PullString(reader, spec, "name", &name);
+  PullString(reader, spec, "descr", &descr);
   fm_image_insert opts{};
   opts.name = name.c_str();
   opts.descr = descr.c_str();
-  opts.anchor_kind = SpecPullInt32(spec, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
-  opts.edit_as = SpecPullInt32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
-  opts.row = SpecPullU32(spec, "row", 0U);
-  opts.col = SpecPullU32(spec, "col", 0U);
-  opts.row_off_emu = static_cast<int64_t>(SpecPullDouble(spec, "rowOffEmu", 0.0));
-  opts.col_off_emu = static_cast<int64_t>(SpecPullDouble(spec, "colOffEmu", 0.0));
-  opts.width_emu = static_cast<int64_t>(SpecPullDouble(spec, "widthEmu", 0.0));
-  opts.height_emu = static_cast<int64_t>(SpecPullDouble(spec, "heightEmu", 0.0));
+  opts.anchor_kind = reader.I32(spec, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
+  opts.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
+  opts.row = reader.U32(spec, "row", 0U);
+  opts.col = reader.U32(spec, "col", 0U);
+  opts.row_off_emu = reader.I64(spec, "rowOffEmu", 0);
+  opts.col_off_emu = reader.I64(spec, "colOffEmu", 0);
+  opts.width_emu = reader.I64(spec, "widthEmu", 0);
+  opts.height_emu = reader.I64(spec, "heightEmu", 0);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   uint32_t object_id = 0;
   const fm_status_t rc = fm_sheet_insert_image(handle_, ArgU32(info, 0), data, len, &opts, &object_id);
   out.Set("objectId", Num(env, rc == 0 ? object_id : 0));

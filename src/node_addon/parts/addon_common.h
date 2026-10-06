@@ -158,37 +158,64 @@ Napi::Object TranslateCfColor(Napi::Env env, const fm_cf_color_t& c);
 Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m);
 
 // ---------------------------------------------------------------------
-// JS-spec pullers (read optional fields out of JS objects)
-// ---------------------------------------------------------------------
+/// Per-call reader for nested binding object fields. It owns the pending-error
+/// bit for one binding invocation, so nested parsers stop touching JS objects
+/// as soon as a getter or checked conversion fails.
+class CheckedSpecReader final {
+ public:
+  explicit CheckedSpecReader(Napi::Env env) : env_(env) {}
 
-/// Pulls an optional int32 field from a JS spec object; returns `dflt`
-/// when the field is missing / undefined / null.
-int32_t SpecPullInt32(const Napi::Object& spec, const char* key, int32_t dflt);
+  bool ok() const noexcept { return !failed_ && !env_.IsExceptionPending(); }
 
-/// Pulls an optional uint32 field; returns `dflt` when missing.
-uint32_t SpecPullU32(const Napi::Object& spec, const char* key, uint32_t dflt);
+  /// Copies a non-nullish value into `out`, recording any pending getter
+  /// exception on this reader. Nullish values are absent and keep defaults.
+  bool Value(const Napi::Value& value, const char* key, Napi::Value* out);
+  /// Reads one array element while retaining the same per-call error state.
+  /// Missing/nullish elements are absent and do not fail the reader.
+  bool ArrayElement(const Napi::Array& owner, uint32_t index, Napi::Value* out);
+  bool String(const Napi::Object& owner, const char* key, std::string* out);
+  bool String(const Napi::Value& value, const char* key, std::string* out);
+  bool Object(const Napi::Object& owner, const char* key, Napi::Object* out);
+  bool Object(const Napi::Value& value, const char* key, Napi::Object* out);
+  bool Array(const Napi::Object& owner, const char* key, Napi::Array* out);
+  bool Array(const Napi::Value& value, const char* key, Napi::Array* out);
+  bool Bool(const Napi::Object& owner, const char* key, bool dflt, bool* present = nullptr);
+  bool Bool(const Napi::Value& value, const char* key, bool dflt);
+  double Double(const Napi::Object& owner, const char* key, double dflt, bool* present = nullptr);
+  double Double(const Napi::Value& value, const char* key, double dflt);
+  uint8_t U8(const Napi::Object& owner, const char* key, uint8_t dflt, bool* present = nullptr);
+  uint8_t U8(const Napi::Value& value, const char* key, uint8_t dflt);
+  uint16_t U16(const Napi::Object& owner, const char* key, uint16_t dflt, bool* present = nullptr);
+  uint16_t U16(const Napi::Value& value, const char* key, uint16_t dflt);
+  uint32_t U32(const Napi::Object& owner, const char* key, uint32_t dflt, bool* present = nullptr);
+  uint32_t U32(const Napi::Value& value, const char* key, uint32_t dflt);
+  int32_t I32(const Napi::Object& owner, const char* key, int32_t dflt, bool* present = nullptr);
+  int32_t I32(const Napi::Value& value, const char* key, int32_t dflt);
+  /// Reads a signed int64 from a JavaScript Number without narrowing through
+  /// a wider unsigned intermediate. The valid interval is [-2^63, 2^63).
+  int64_t I64(const Napi::Object& owner, const char* key, int64_t dflt, bool* present = nullptr);
+  int64_t I64(const Napi::Value& value, const char* key, int64_t dflt);
 
-/// Pulls an optional double field; returns `dflt` when missing.
-double SpecPullDouble(const Napi::Object& spec, const char* key, double dflt);
+ private:
+  bool ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present = nullptr);
+  bool ReadNumber(const Napi::Object& owner, const char* key, double* out, bool* present = nullptr);
+  bool ReadNumber(const Napi::Value& value, const char* key, double* out);
+  bool ReadInteger(const Napi::Object& owner, const char* key, double* out, double min_value, double max_value,
+                   const char* range_name, bool* present = nullptr);
+  void ObservePending();
+  void ReportType(const char* key, const char* expected);
+  void ReportRange(const char* key, const char* range_name);
 
-/// Pulls an optional bool field; returns `dflt` when missing.
-bool SpecPullBool(const Napi::Object& spec, const char* key, bool dflt);
-
-/// Returns whether the spec carries a non-null entry for `key`. Used to
-/// decide whether a `const char*` field should be forwarded as nullptr.
-bool SpecHas(const Napi::Object& spec, const char* key);
-
-/// Pulls a numeric array from `info[idx]` into a `std::vector<uint32_t>`.
-/// Returns an empty vector when the argument is missing / undefined /
-/// null or not array-shaped.
-std::vector<uint32_t> ReadU32Array(const Napi::CallbackInfo& info, size_t idx);
+  Napi::Env env_;
+  bool failed_ = false;
+};
 
 /// Builds an `fm_pivot_data_field_spec_t` from a JS spec object. The
 /// `name_buf` / `nfmt_buf` strings keep the borrowed `const char*`
 /// pointers alive for the caller; `has_nfmt` is set when the spec
 /// carries a non-null `numberFormat`.
-void BuildDataFieldSpec(const Napi::Object& spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
-                        std::string& nfmt_buf, bool& has_nfmt);
+void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_spec_t& out,
+                        std::string& name_buf, std::string& nfmt_buf, bool& has_nfmt);
 
 }  // namespace formulon_node
 

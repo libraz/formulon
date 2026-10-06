@@ -23,21 +23,23 @@ namespace wasm {
 namespace parts {
 namespace {
 
-fm_cf_color_t js_pull_cf_color(emscripten::val v) {
+fm_cf_color_t js_pull_cf_color(emscripten::val v, JsNarrowNumericReader& reader) {
   fm_cf_color_t out{};
-  out.r = js_pull_u8(v, "r", 0U);
-  out.g = js_pull_u8(v, "g", 0U);
-  out.b = js_pull_u8(v, "b", 0U);
-  out.a = js_pull_u8(v, "a", 255U);
+  out.r = reader.u8(v, "r", 0U, "color.r");
+  out.g = reader.u8(v, "g", 0U, "color.g");
+  out.b = reader.u8(v, "b", 0U, "color.b");
+  out.a = reader.u8(v, "a", 255U, "color.a");
   return out;
 }
 
-fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* strings) {
+fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* strings,
+                       JsNarrowNumericReader& reader) {
   fm_cfvo_t out{};
-  out.type = js_pull_u8(v, "type", 0U);
-  out.gte = js_pull_bool(v, "gte", true) ? 1 : 0;
-  if (js_has(v, "value")) {
-    out.value = strings->emplace(js_pull_string(v, "value"));
+  out.type = reader.u8(v, "type", 0U, "cfvo.type");
+  out.gte = reader.boolean(v, "gte", true, "cfvo.gte") ? 1 : 0;
+  const emscripten::val value = reader.value(v, "value", "cfvo.value");
+  if (!value.isUndefined() && !value.isNull()) {
+    out.value = strings->emplace(reader.string_value(value, "cfvo.value"));
   }
   return out;
 }
@@ -266,132 +268,155 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   std::vector<fm_cf_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
   formulon::c_api::BorrowedStringArena cfvo_strings;
-  const std::vector<fm_merge_range> merge_ranges = js_pull_ranges(v, "sqref");
+  JsNarrowNumericReader reader("addConditionalFormat");
+  const std::vector<fm_merge_range> merge_ranges = js_pull_ranges(v, "sqref", &reader);
   std::vector<fm_cf_cell_range_t> ranges_buf;
   ranges_buf.reserve(merge_ranges.size());
   for (const fm_merge_range& m : merge_ranges) {
     ranges_buf.push_back(fm_cf_cell_range_t{m.first_row, m.first_col, m.last_row, m.last_col});
   }
-  const std::string id = js_pull_string(v, "id");
-  const std::string formula1 = js_pull_string(v, "formula1");
-  const std::string formula2 = js_pull_string(v, "formula2");
-  const std::string text = js_pull_string(v, "text");
+  const std::string id = reader.string(v, "id", "rule.id");
+  const std::string formula1 = reader.string(v, "formula1", "rule.formula1");
+  const std::string formula2 = reader.string(v, "formula2", "rule.formula2");
+  const std::string text = reader.string(v, "text", "rule.text");
 
   fm_cf_rule_t rule{};
   rule.id = id.empty() ? nullptr : id.c_str();
-  rule.type = js_pull_u8(v, "type", 0U);
-  rule.priority = static_cast<int32_t>(js_pull_u32(v, "priority", 0U));
-  rule.stop_if_true = js_pull_bool(v, "stopIfTrue", false) ? 1 : 0;
-  if (js_has(v, "dxfId")) {
+  rule.type = reader.u8(v, "type", 0U, "rule.type");
+  rule.priority = reader.i32(v, "priority", 0, "rule.priority");
+  rule.stop_if_true = reader.boolean(v, "stopIfTrue", false, "rule.stopIfTrue") ? 1 : 0;
+  const emscripten::val dxf_id = reader.value(v, "dxfId", "rule.dxfId");
+  if (!dxf_id.isUndefined() && !dxf_id.isNull()) {
     rule.dxf_id_engaged = 1;
-    rule.dxf_id = js_pull_u32(v, "dxfId", 0U);
+    rule.dxf_id = reader.u32_value(dxf_id, 0U, "rule.dxfId");
   }
   rule.sqref = ranges_buf.empty() ? nullptr : ranges_buf.data();
   rule.sqref_count = static_cast<uint32_t>(ranges_buf.size());
   rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
-  if (js_has(v, "op")) {
+  const emscripten::val op = reader.value(v, "op", "rule.op");
+  if (!op.isUndefined() && !op.isNull()) {
     rule.op_engaged = 1;
-    rule.op = js_pull_u8(v, "op", 0U);
+    rule.op = reader.u8_value(op, 0U, "rule.op");
   }
-  if (js_has(v, "rank")) {
+  const emscripten::val rank = reader.value(v, "rank", "rule.rank");
+  if (!rank.isUndefined() && !rank.isNull()) {
     rule.rank_engaged = 1;
-    rule.rank = js_pull_i32(v, "rank", 0);
+    rule.rank = reader.i32_value(rank, 0, "rule.rank");
   }
-  rule.percent = js_pull_bool(v, "percent", false) ? 1 : 0;
-  rule.bottom = js_pull_bool(v, "bottom", false) ? 1 : 0;
-  rule.above_average = js_pull_bool(v, "aboveAverage", true) ? 1 : 0;
-  rule.equal_average = js_pull_bool(v, "equalAverage", false) ? 1 : 0;
-  if (js_has(v, "stdDev")) {
+  rule.percent = reader.boolean(v, "percent", false, "rule.percent") ? 1 : 0;
+  rule.bottom = reader.boolean(v, "bottom", false, "rule.bottom") ? 1 : 0;
+  rule.above_average = reader.boolean(v, "aboveAverage", true, "rule.aboveAverage") ? 1 : 0;
+  rule.equal_average = reader.boolean(v, "equalAverage", false, "rule.equalAverage") ? 1 : 0;
+  const emscripten::val std_dev = reader.value(v, "stdDev", "rule.stdDev");
+  if (!std_dev.isUndefined() && !std_dev.isNull()) {
     rule.std_dev_engaged = 1;
-    rule.std_dev = js_pull_double(v, "stdDev", 0.0);
+    rule.std_dev = reader.number_value(std_dev, 0.0, "rule.stdDev");
   }
   rule.text = text.empty() ? nullptr : text.c_str();
-  if (js_has(v, "timePeriod")) {
+  const emscripten::val time_period = reader.value(v, "timePeriod", "rule.timePeriod");
+  if (!time_period.isUndefined() && !time_period.isNull()) {
     rule.time_period_engaged = 1;
-    rule.time_period = js_pull_u8(v, "timePeriod", 0U);
+    rule.time_period = reader.u8_value(time_period, 0U, "rule.timePeriod");
   }
-  if (js_has(v, "colorScale")) {
-    emscripten::val cs = v["colorScale"];
-    if (cs.hasOwnProperty("thresholds") && cs["thresholds"].isArray()) {
-      const uint32_t n = js_length(cs["thresholds"]);
+  const emscripten::val color_scale = reader.value(v, "colorScale", "colorScale");
+  if (!color_scale.isUndefined() && !color_scale.isNull()) {
+    const emscripten::val thresholds = reader.value(color_scale, "thresholds", "colorScale.thresholds");
+    if (reader.is_array(thresholds, "colorScale.thresholds")) {
+      const uint32_t n = reader.length(thresholds, "colorScale.thresholds");
       color_scale_thresholds.reserve(n);
       for (uint32_t i = 0; i < n; ++i) {
-        color_scale_thresholds.push_back(js_pull_cfvo(cs["thresholds"][i], &cfvo_strings));
+        color_scale_thresholds.push_back(
+            js_pull_cfvo(reader.array_element(thresholds, i, "colorScale.thresholds[]"), &cfvo_strings, reader));
       }
     }
-    if (cs.hasOwnProperty("colors") && cs["colors"].isArray()) {
-      const uint32_t n = js_length(cs["colors"]);
+    const emscripten::val colors = reader.value(color_scale, "colors", "colorScale.colors");
+    if (reader.is_array(colors, "colorScale.colors")) {
+      const uint32_t n = reader.length(colors, "colorScale.colors");
       color_scale_colors.reserve(n);
       for (uint32_t i = 0; i < n; ++i) {
-        color_scale_colors.push_back(js_pull_cf_color(cs["colors"][i]));
+        color_scale_colors.push_back(js_pull_cf_color(reader.array_element(colors, i, "colorScale.colors[]"), reader));
       }
     }
     rule.color_scale_thresholds = color_scale_thresholds.empty() ? nullptr : color_scale_thresholds.data();
     rule.color_scale_colors = color_scale_colors.empty() ? nullptr : color_scale_colors.data();
     rule.color_scale_count = static_cast<uint32_t>(color_scale_thresholds.size());
   }
-  if (js_has(v, "dataBar")) {
-    emscripten::val db = v["dataBar"];
+  const emscripten::val data_bar = reader.value(v, "dataBar", "dataBar");
+  if (!data_bar.isUndefined() && !data_bar.isNull()) {
     rule.data_bar_engaged = 1;
-    rule.data_bar_min = js_pull_cfvo(db["min"], &cfvo_strings);
-    rule.data_bar_max = js_pull_cfvo(db["max"], &cfvo_strings);
-    rule.data_bar_fill = js_pull_cf_color(db["fill"]);
-    rule.data_bar_show_value = js_pull_bool(db, "showValue", true) ? 1 : 0;
-    rule.data_bar_min_length_pct = js_pull_u8(db, "minLengthPct", 10U);
-    rule.data_bar_max_length_pct = js_pull_u8(db, "maxLengthPct", 90U);
+    rule.data_bar_min = js_pull_cfvo(reader.value(data_bar, "min", "dataBar.min"), &cfvo_strings, reader);
+    rule.data_bar_max = js_pull_cfvo(reader.value(data_bar, "max", "dataBar.max"), &cfvo_strings, reader);
+    rule.data_bar_fill = js_pull_cf_color(reader.value(data_bar, "fill", "dataBar.fill"), reader);
+    rule.data_bar_show_value = reader.boolean(data_bar, "showValue", true, "dataBar.showValue") ? 1 : 0;
+    rule.data_bar_min_length_pct = reader.u8(data_bar, "minLengthPct", 10U, "dataBar.minLengthPct");
+    rule.data_bar_max_length_pct = reader.u8(data_bar, "maxLengthPct", 90U, "dataBar.maxLengthPct");
     // `x14` extension payload. An omitted key leaves the corresponding
     // `*_engaged` flag clear, which the C ABI reads as "keep the model
     // default" (gradient on, automatic axis, negative fill equal to the
     // positive fill, no border, black axis).
-    if (js_has(db, "gradient")) {
+    const emscripten::val gradient = reader.value(data_bar, "gradient", "dataBar.gradient");
+    if (!gradient.isUndefined() && !gradient.isNull()) {
       rule.data_bar_gradient_engaged = 1;
-      rule.data_bar_gradient = js_pull_bool(db, "gradient", true) ? 1 : 0;
+      rule.data_bar_gradient = reader.boolean_value(gradient, true, "dataBar.gradient") ? 1 : 0;
     }
-    if (js_has(db, "axisPosition")) {
+    const emscripten::val axis_position = reader.value(data_bar, "axisPosition", "dataBar.axisPosition");
+    if (!axis_position.isUndefined() && !axis_position.isNull()) {
       rule.data_bar_axis_position_engaged = 1;
-      rule.data_bar_axis_position = js_pull_u8(db, "axisPosition", 0U);
+      rule.data_bar_axis_position = reader.u8_value(axis_position, 0U, "dataBar.axisPosition");
     }
-    if (js_has(db, "negativeFill")) {
+    const emscripten::val negative_fill = reader.value(data_bar, "negativeFill", "dataBar.negativeFill");
+    if (!negative_fill.isUndefined() && !negative_fill.isNull()) {
       rule.data_bar_negative_fill_engaged = 1;
-      rule.data_bar_negative_fill = js_pull_cf_color(db["negativeFill"]);
+      rule.data_bar_negative_fill = js_pull_cf_color(negative_fill, reader);
     }
-    if (js_has(db, "border")) {
+    const emscripten::val border = reader.value(data_bar, "border", "dataBar.border");
+    if (!border.isUndefined() && !border.isNull()) {
       rule.data_bar_border_engaged = 1;
-      rule.data_bar_border = js_pull_cf_color(db["border"]);
+      rule.data_bar_border = js_pull_cf_color(border, reader);
     }
-    if (js_has(db, "negativeBorder")) {
+    const emscripten::val negative_border = reader.value(data_bar, "negativeBorder", "dataBar.negativeBorder");
+    if (!negative_border.isUndefined() && !negative_border.isNull()) {
       rule.data_bar_negative_border_engaged = 1;
-      rule.data_bar_negative_border = js_pull_cf_color(db["negativeBorder"]);
+      rule.data_bar_negative_border = js_pull_cf_color(negative_border, reader);
     }
-    if (js_has(db, "axisColor")) {
+    const emscripten::val axis_color = reader.value(data_bar, "axisColor", "dataBar.axisColor");
+    if (!axis_color.isUndefined() && !axis_color.isNull()) {
       rule.data_bar_axis_color_engaged = 1;
-      rule.data_bar_axis_color = js_pull_cf_color(db["axisColor"]);
+      rule.data_bar_axis_color = js_pull_cf_color(axis_color, reader);
     }
-    rule.data_bar_direction = js_pull_u8(db, "direction", 0U);
+    rule.data_bar_direction = reader.u8(data_bar, "direction", 0U, "dataBar.direction");
   }
-  if (js_has(v, "iconSet")) {
-    emscripten::val is = v["iconSet"];
+  const emscripten::val icon_set = reader.value(v, "iconSet", "iconSet");
+  if (!icon_set.isUndefined() && !icon_set.isNull()) {
     rule.icon_set_engaged = 1;
-    rule.icon_set_name = js_pull_u8(is, "name", 0U);
-    if (is.hasOwnProperty("thresholds") && is["thresholds"].isArray()) {
-      const uint32_t n = js_length(is["thresholds"]);
+    rule.icon_set_name = reader.u8(icon_set, "name", 0U, "iconSet.name");
+    const emscripten::val thresholds = reader.value(icon_set, "thresholds", "iconSet.thresholds");
+    if (reader.is_array(thresholds, "iconSet.thresholds")) {
+      const uint32_t n = reader.length(thresholds, "iconSet.thresholds");
       icon_set_thresholds.reserve(n);
       for (uint32_t i = 0; i < n; ++i) {
-        icon_set_thresholds.push_back(js_pull_cfvo(is["thresholds"][i], &cfvo_strings));
+        icon_set_thresholds.push_back(
+            js_pull_cfvo(reader.array_element(thresholds, i, "iconSet.thresholds[]"), &cfvo_strings, reader));
       }
     }
     rule.icon_set_thresholds = icon_set_thresholds.empty() ? nullptr : icon_set_thresholds.data();
     rule.icon_set_threshold_count = static_cast<uint32_t>(icon_set_thresholds.size());
-    rule.icon_set_reverse = js_pull_bool(is, "reverse", false) ? 1 : 0;
-    rule.icon_set_show_value = js_pull_bool(is, "showValue", true) ? 1 : 0;
-    rule.icon_set_percent = js_pull_bool(is, "percent", true) ? 1 : 0;
+    rule.icon_set_reverse = reader.boolean(icon_set, "reverse", false, "iconSet.reverse") ? 1 : 0;
+    rule.icon_set_show_value = reader.boolean(icon_set, "showValue", true, "iconSet.showValue") ? 1 : 0;
+    rule.icon_set_percent = reader.boolean(icon_set, "percent", true, "iconSet.percent") ? 1 : 0;
     // An omitted floor keeps Excel's default, `percent 0`.
-    if (js_has(is, "floor")) {
+    const emscripten::val floor = reader.value(icon_set, "floor", "iconSet.floor");
+    if (!floor.isUndefined() && !floor.isNull()) {
       rule.icon_set_floor_engaged = 1;
-      rule.icon_set_floor = js_pull_cfvo(is["floor"], &cfvo_strings);
+      rule.icon_set_floor = js_pull_cfvo(floor, &cfvo_strings, reader);
     }
   }
+  if (!reader.ok()) {
+    r.status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    return r;
+  }
+
   std::size_t new_index = 0;
   fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);
   if (rc != 0) {

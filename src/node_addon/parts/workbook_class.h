@@ -389,6 +389,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Made public-static so per-area TUs can reach them without a friend
   // declaration per part. JS callers never touch them.
   static uint32_t ArgU32(const Napi::CallbackInfo& info, size_t idx);
+  static int32_t ArgI32(const Napi::CallbackInfo& info, size_t idx);
   static double ArgDouble(const Napi::CallbackInfo& info, size_t idx);
   static std::string ArgString(const Napi::CallbackInfo& info, size_t idx);
   static bool ArgBool(const Napi::CallbackInfo& info, size_t idx);

@@ -52,7 +52,11 @@ JsStatus JsWorkbook::addMerge(uint32_t sheet, emscripten::val range) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  const fm_merge_range m = js_pull_range(range);
+  JsNarrowNumericReader reader("addMerge");
+  const fm_merge_range m = js_pull_range(range, &reader);
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   fm_status_t rc = fm_sheet_add_merge(handle_, sheet, m);
   return status_from_rc(rc);
 }
@@ -61,7 +65,11 @@ JsStatus JsWorkbook::removeMerge(uint32_t sheet, emscripten::val range) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  const fm_merge_range m = js_pull_range(range);
+  JsNarrowNumericReader reader("removeMerge");
+  const fm_merge_range m = js_pull_range(range, &reader);
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, m);
   return status_from_rc(rc);
 }
@@ -138,7 +146,12 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
     arr.set("status", error_status(7000));
     return arr;
   }
-  const fm_merge_range query = js_pull_range(range);
+  JsNarrowNumericReader reader("getMergesInRange");
+  const fm_merge_range query = js_pull_range(range, &reader);
+  if (!reader.ok()) {
+    arr.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    return arr;
+  }
   uint32_t total = 0;
   fm_status_t rc = fm_sheet_merges_in_range(handle_, sheet, query, nullptr, 0, &total);
   std::vector<fm_merge_range> found(rc == 0 ? total : 0);
@@ -348,24 +361,37 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until
   // `fm_sheet_add_validation` returns.
-  const std::vector<fm_merge_range> ranges_buf = js_pull_ranges(v, "ranges");
-  const std::string formula1 = js_pull_string(v, "formula1");
-  const std::string formula2 = js_pull_string(v, "formula2");
-  const std::string error_title = js_pull_string(v, "errorTitle");
-  const std::string error_message = js_pull_string(v, "errorMessage");
-  const std::string prompt_title = js_pull_string(v, "promptTitle");
-  const std::string prompt_message = js_pull_string(v, "promptMessage");
+  JsNarrowNumericReader reader("addValidation");
+  const std::vector<fm_merge_range> ranges_buf = js_pull_ranges(v, "ranges", &reader);
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  const std::string formula1 = reader.string(v, "formula1", "validation.formula1");
+  const std::string formula2 = reader.string(v, "formula2", "validation.formula2");
+  const std::string error_title = reader.string(v, "errorTitle", "validation.errorTitle");
+  const std::string error_message = reader.string(v, "errorMessage", "validation.errorMessage");
+  const std::string prompt_title = reader.string(v, "promptTitle", "validation.promptTitle");
+  const std::string prompt_message = reader.string(v, "promptMessage", "validation.promptMessage");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
 
   fm_data_validation dv{};
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   dv.range_count = static_cast<uint32_t>(ranges_buf.size());
-  dv.type = js_pull_u8(v, "type", 0U);
-  dv.op = js_pull_u8(v, "op", 0U);
-  dv.error_style = js_pull_u8(v, "errorStyle", 0U);
-  dv.allow_blank = js_pull_bool(v, "allowBlank", false) ? 1 : 0;
-  dv.show_input_message = js_pull_bool(v, "showInputMessage", false) ? 1 : 0;
-  dv.show_error_message = js_pull_bool(v, "showErrorMessage", false) ? 1 : 0;
-  dv.show_dropdown = js_pull_bool(v, "showDropDown", true) ? 1 : 0;
+  dv.type = reader.u8(v, "type", 0U, "validation.type");
+  dv.op = reader.u8(v, "op", 0U, "validation.op");
+  dv.error_style = reader.u8(v, "errorStyle", 0U, "validation.errorStyle");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  dv.allow_blank = reader.boolean(v, "allowBlank", false, "validation.allowBlank") ? 1 : 0;
+  dv.show_input_message = reader.boolean(v, "showInputMessage", false, "validation.showInputMessage") ? 1 : 0;
+  dv.show_error_message = reader.boolean(v, "showErrorMessage", false, "validation.showErrorMessage") ? 1 : 0;
+  dv.show_dropdown = reader.boolean(v, "showDropDown", true, "validation.showDropDown") ? 1 : 0;
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   dv.error_title = error_title.empty() ? nullptr : error_title.c_str();
@@ -517,92 +543,168 @@ struct FilterColumnStore {
   std::string max_val_iso;
 };
 
-/// Reads the JS array `v[key]`; absent or non-array reads as empty.
-emscripten::val js_pull_array(const emscripten::val& v, const char* key) {
-  emscripten::val a = v[key];
-  return a.isArray() ? a : emscripten::val::array();
+/// Reads the JS array `v[key]`; absent or non-array reads as empty. Property
+/// access and Array.isArray both go through the reader's JS try/catch path.
+emscripten::val js_pull_array(const emscripten::val& v, const char* key, JsNarrowNumericReader& reader) {
+  if (v.isUndefined() || v.isNull()) {
+    return emscripten::val::array();
+  }
+  const emscripten::val a = reader.value(v, key, key);
+  if (!reader.ok() || a.isUndefined() || a.isNull()) {
+    return emscripten::val::array();
+  }
+  return reader.is_array(a, key) ? a : emscripten::val::array();
 }
 
-fm_date_group_item pull_date_group(const emscripten::val& v) {
+fm_date_group_item pull_date_group(const emscripten::val& v, JsNarrowNumericReader& reader) {
   fm_date_group_item d{};
-  d.year = js_pull_u16(v, "year", 0U);
-  d.month = js_pull_u8(v, "month", 0U);
-  d.day = js_pull_u8(v, "day", 0U);
-  d.hour = js_pull_u8(v, "hour", 0U);
-  d.minute = js_pull_u8(v, "minute", 0U);
-  d.second = js_pull_u8(v, "second", 0U);
-  d.grouping = js_pull_u8(v, "grouping", 0U);
+  d.year = reader.u16(v, "year", 0U, "dateGroups[].year");
+  d.month = reader.u8(v, "month", 0U, "dateGroups[].month");
+  d.day = reader.u8(v, "day", 0U, "dateGroups[].day");
+  d.hour = reader.u8(v, "hour", 0U, "dateGroups[].hour");
+  d.minute = reader.u8(v, "minute", 0U, "dateGroups[].minute");
+  d.second = reader.u8(v, "second", 0U, "dateGroups[].second");
+  d.grouping = reader.u8(v, "grouping", 0U, "dateGroups[].grouping");
   return d;
 }
 
-int32_t pull_flag(const emscripten::val& v, const char* key) {
-  return js_pull_bool(v, key, false) ? 1 : 0;
+int32_t pull_flag(const emscripten::val& v, const char* key, JsNarrowNumericReader& reader, bool dflt = false) {
+  return reader.boolean(v, key, dflt, key) ? 1 : 0;
 }
 
-void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filter_column& c) {
-  c.col_id = js_pull_u32(v, "colId", 0U);
-  c.hidden_button = pull_flag(v, "hiddenButton");
-  c.show_button = js_pull_bool(v, "showButton", true) ? 1 : 0;
-  c.kind = js_pull_i32(v, "kind", 0);
-  c.filter_blank = pull_flag(v, "filterBlank");
-  const emscripten::val values = js_pull_array(v, "values");
-  const uint32_t value_count = js_length(values);
+void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filter_column& c,
+                        JsNarrowNumericReader& reader) {
+  c = fm_filter_column{};
+  c.col_id = reader.u32(v, "colId", 0U, "filterColumn.colId");
+  if (!reader.ok()) {
+    return;
+  }
+  c.hidden_button = pull_flag(v, "hiddenButton", reader);
+  c.show_button = pull_flag(v, "showButton", reader, true);
+  if (!reader.ok()) {
+    return;
+  }
+  c.kind = reader.i32(v, "kind", 0, "filterColumn.kind");
+  if (!reader.ok()) {
+    return;
+  }
+  c.filter_blank = pull_flag(v, "filterBlank", reader);
+  if (!reader.ok()) {
+    return;
+  }
+  const emscripten::val values = js_pull_array(v, "values", reader);
+  const uint32_t value_count = reader.length(values, "filterColumn.values.length");
+  if (!reader.ok()) {
+    return;
+  }
   st.values.reserve(value_count);
   for (uint32_t i = 0; i < value_count; ++i) {
-    st.values.push_back(values[i].as<std::string>());
+    const emscripten::val value = reader.array_element(values, i, "filterColumn.values[]");
+    if (!reader.ok()) {
+      return;
+    }
+    st.values.push_back(reader.string_value(value, "filterColumn.values[]"));
+    if (!reader.ok()) {
+      return;
+    }
   }
   for (const std::string& s : st.values) {
     st.value_ptrs.push_back(s.c_str());
   }
   c.values = st.value_ptrs.empty() ? nullptr : st.value_ptrs.data();
   c.value_count = static_cast<uint32_t>(st.value_ptrs.size());
-  const emscripten::val groups = js_pull_array(v, "dateGroups");
-  const uint32_t group_count = js_length(groups);
+  const emscripten::val groups = js_pull_array(v, "dateGroups", reader);
+  const uint32_t group_count = reader.length(groups, "filterColumn.dateGroups.length");
+  if (!reader.ok()) {
+    return;
+  }
   for (uint32_t i = 0; i < group_count; ++i) {
-    st.date_groups.push_back(pull_date_group(groups[i]));
+    if (!reader.ok()) {
+      return;
+    }
+    const emscripten::val group = reader.array_element(groups, i, "dateGroups[]");
+    if (!reader.ok()) {
+      return;
+    }
+    if (group.isUndefined() || group.isNull()) {
+      continue;
+    }
+    st.date_groups.push_back(pull_date_group(group, reader));
+  }
+  if (!reader.ok()) {
+    return;
   }
   c.date_groups = st.date_groups.empty() ? nullptr : st.date_groups.data();
   c.date_group_count = static_cast<uint32_t>(st.date_groups.size());
-  c.custom_and = pull_flag(v, "customAnd");
-  c.custom_count = js_pull_i32(v, "customCount", 0);
-  c.op1 = js_pull_i32(v, "op1", 0);
-  c.op2 = js_pull_i32(v, "op2", 0);
-  st.val1 = js_pull_string(v, "val1");
-  st.val2 = js_pull_string(v, "val2");
-  st.val_iso = js_pull_string(v, "valIso");
-  st.max_val_iso = js_pull_string(v, "maxValIso");
+  c.custom_and = pull_flag(v, "customAnd", reader);
+  c.custom_count = reader.i32(v, "customCount", 0, "filterColumn.customCount");
+  c.op1 = reader.i32(v, "op1", 0, "filterColumn.op1");
+  c.op2 = reader.i32(v, "op2", 0, "filterColumn.op2");
+  if (!reader.ok()) {
+    return;
+  }
+  st.val1 = reader.string(v, "val1", "filterColumn.val1");
+  st.val2 = reader.string(v, "val2", "filterColumn.val2");
+  st.val_iso = reader.string(v, "valIso", "filterColumn.valIso");
+  st.max_val_iso = reader.string(v, "maxValIso", "filterColumn.maxValIso");
+  if (!reader.ok()) {
+    return;
+  }
   c.val1 = st.val1.c_str();
   c.val2 = st.val2.c_str();
   c.val_iso = st.val_iso.c_str();
   c.max_val_iso = st.max_val_iso.c_str();
-  c.top = pull_flag(v, "top");
-  c.percent = pull_flag(v, "percent");
-  c.has_filter_val = pull_flag(v, "hasFilterVal");
-  c.top_val = js_pull_double(v, "topVal", 0.0);
-  c.filter_val = js_pull_double(v, "filterVal", 0.0);
-  c.dynamic_type = js_pull_i32(v, "dynamicType", 0);
-  c.has_dyn_val = pull_flag(v, "hasDynVal");
-  c.has_dyn_max_val = pull_flag(v, "hasDynMaxVal");
-  c.dyn_val = js_pull_double(v, "dynVal", 0.0);
-  c.dyn_max_val = js_pull_double(v, "dynMaxVal", 0.0);
-  c.dxf_id = js_pull_u32(v, "dxfId", UINT32_MAX);
-  c.cell_color = pull_flag(v, "cellColor");
-  c.icon_set = js_pull_i32(v, "iconSet", 0);
-  c.icon_id = js_pull_i32(v, "iconId", 0);
-  c.has_icon_id = pull_flag(v, "hasIconId");
+  c.top = pull_flag(v, "top", reader);
+  c.percent = pull_flag(v, "percent", reader);
+  c.has_filter_val = pull_flag(v, "hasFilterVal", reader);
+  c.top_val = reader.number(v, "topVal", 0.0, "filterColumn.topVal");
+  c.filter_val = reader.number(v, "filterVal", 0.0, "filterColumn.filterVal");
+  c.dynamic_type = reader.i32(v, "dynamicType", 0, "filterColumn.dynamicType");
+  if (!reader.ok()) {
+    return;
+  }
+  c.has_dyn_val = pull_flag(v, "hasDynVal", reader);
+  c.has_dyn_max_val = pull_flag(v, "hasDynMaxVal", reader);
+  c.dyn_val = reader.number(v, "dynVal", 0.0, "filterColumn.dynVal");
+  c.dyn_max_val = reader.number(v, "dynMaxVal", 0.0, "filterColumn.dynMaxVal");
+  c.dxf_id = reader.u32(v, "dxfId", UINT32_MAX, "filterColumn.dxfId");
+  if (!reader.ok()) {
+    return;
+  }
+  c.cell_color = pull_flag(v, "cellColor", reader);
+  c.icon_set = reader.i32(v, "iconSet", 0, "filterColumn.iconSet");
+  c.icon_id = reader.i32(v, "iconId", 0, "filterColumn.iconId");
+  if (!reader.ok()) {
+    return;
+  }
+  c.has_icon_id = pull_flag(v, "hasIconId", reader);
 }
 
-void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_sort_condition& c) {
-  c.ref = js_pull_range(v["ref"]);
-  c.descending = pull_flag(v, "descending");
-  c.sort_by = js_pull_i32(v, "sortBy", 0);
-  custom_list = js_pull_string(v, "customList");
+void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_sort_condition& c,
+                         JsNarrowNumericReader& reader) {
+  c = fm_sort_condition{};
+  c.ref = js_pull_range(reader.value(v, "ref", "sortCondition.ref"), &reader);
+  if (!reader.ok()) {
+    return;
+  }
+  c.descending = pull_flag(v, "descending", reader);
+  c.sort_by = reader.i32(v, "sortBy", 0, "sortCondition.sortBy");
+  if (!reader.ok()) {
+    return;
+  }
+  custom_list = reader.string(v, "customList", "sortCondition.customList");
   c.custom_list = custom_list.c_str();
-  c.dxf_id = js_pull_u32(v, "dxfId", 0U);
-  c.has_dxf_id = pull_flag(v, "hasDxfId");
-  c.icon_set = js_pull_i32(v, "iconSet", 0);
-  c.icon_id = js_pull_i32(v, "iconId", 0);
-  c.has_icon_id = pull_flag(v, "hasIconId");
+  c.dxf_id = reader.u32(v, "dxfId", 0U, "sortCondition.dxfId");
+  if (!reader.ok()) {
+    return;
+  }
+  c.has_dxf_id = pull_flag(v, "hasDxfId", reader);
+  c.icon_set = reader.i32(v, "iconSet", 0, "sortCondition.iconSet");
+  c.icon_id = reader.i32(v, "iconId", 0, "sortCondition.iconId");
+  if (!reader.ok()) {
+    return;
+  }
+  c.has_icon_id = pull_flag(v, "hasIconId", reader);
 }
 
 emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index) {
@@ -626,35 +728,80 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
   if (wb == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
+  JsNarrowNumericReader reader("setAutoFilter");
   fm_auto_filter f{};
-  f.range = js_pull_range(filter["range"]);
-  const emscripten::val columns = js_pull_array(filter, "columns");
-  const uint32_t column_count = js_length(columns);
+  f.range = js_pull_range(reader.value(filter, "range", "autoFilter.range"), &reader);
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  const emscripten::val columns = js_pull_array(filter, "columns", reader);
+  const uint32_t column_count = reader.length(columns, "autoFilter.columns.length");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   std::vector<FilterColumnStore> stores(column_count);
   std::vector<fm_filter_column> cols(column_count);
   for (uint32_t i = 0; i < column_count; ++i) {
-    pull_filter_column(columns[i], stores[i], cols[i]);
+    if (!reader.ok()) {
+      break;
+    }
+    const emscripten::val column = reader.array_element(columns, i, "columns[]");
+    if (!reader.ok()) {
+      break;
+    }
+    if (column.isUndefined() || column.isNull()) {
+      continue;
+    }
+    pull_filter_column(column, stores[i], cols[i], reader);
+  }
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
   }
   f.columns = cols.empty() ? nullptr : cols.data();
   f.column_count = column_count;
-  const emscripten::val sort = filter["sort"];
+  const emscripten::val sort = reader.value(filter, "sort", "autoFilter.sort");
   std::vector<std::string> custom_lists;
   std::vector<fm_sort_condition> conditions;
   if (!sort.isUndefined() && !sort.isNull()) {
     f.has_sort = 1;
-    f.sort_ref = js_pull_range(sort["ref"]);
-    f.column_sort = pull_flag(sort, "columnSort");
-    f.case_sensitive = pull_flag(sort, "caseSensitive");
-    f.sort_method = js_pull_i32(sort, "sortMethod", 0);
-    const emscripten::val list = js_pull_array(sort, "conditions");
-    const uint32_t n = js_length(list);
+    f.sort_ref = js_pull_range(reader.value(sort, "ref", "sort.ref"), &reader);
+    if (!reader.ok()) {
+      return binding_error_status(kInvalidArgument, reader.message().c_str());
+    }
+    f.column_sort = pull_flag(sort, "columnSort", reader);
+    f.case_sensitive = pull_flag(sort, "caseSensitive", reader);
+    f.sort_method = reader.i32(sort, "sortMethod", 0, "sort.sortMethod");
+    if (!reader.ok()) {
+      return binding_error_status(kInvalidArgument, reader.message().c_str());
+    }
+    const emscripten::val list = js_pull_array(sort, "conditions", reader);
+    const uint32_t n = reader.length(list, "sort.conditions.length");
+    if (!reader.ok()) {
+      return binding_error_status(kInvalidArgument, reader.message().c_str());
+    }
     custom_lists.resize(n);
     conditions.resize(n);
     for (uint32_t i = 0; i < n; ++i) {
-      pull_sort_condition(list[i], custom_lists[i], conditions[i]);
+      if (!reader.ok()) {
+        break;
+      }
+      const emscripten::val condition = reader.array_element(list, i, "conditions[]");
+      if (!reader.ok()) {
+        break;
+      }
+      if (condition.isUndefined() || condition.isNull()) {
+        continue;
+      }
+      pull_sort_condition(condition, custom_lists[i], conditions[i], reader);
+    }
+    if (!reader.ok()) {
+      return binding_error_status(kInvalidArgument, reader.message().c_str());
     }
     f.conditions = conditions.empty() ? nullptr : conditions.data();
     f.condition_count = n;
+  }
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
   }
   return status_from_rc(ops.set(wb, index, &f));
 }
@@ -753,17 +900,33 @@ struct MentionStore {
   std::vector<fm_mention> items;
 };
 
-void pull_mentions(const emscripten::val& list, MentionStore& st) {
-  const uint32_t n = (list.isArray() ? js_length(list) : 0U);
+void pull_mentions(const emscripten::val& list, MentionStore& st, JsNarrowNumericReader& reader) {
+  const uint32_t n = reader.is_array(list, "mentions") ? reader.length(list, "mentions.length") : 0U;
+  if (!reader.ok()) {
+    return;
+  }
   st.person_ids.resize(n);
   st.mention_ids.resize(n);
   st.items.resize(n);
   for (uint32_t i = 0; i < n; ++i) {
-    const emscripten::val m = list[i];
-    st.person_ids[i] = js_pull_string(m, "personId");
-    st.mention_ids[i] = js_pull_string(m, "mentionId");
-    st.items[i] = {st.person_ids[i].c_str(), st.mention_ids[i].c_str(), js_pull_u32(m, "start", 0U),
-                   js_pull_u32(m, "length", 0U)};
+    if (!reader.ok()) {
+      break;
+    }
+    const emscripten::val m = reader.array_element(list, i, "mentions[]");
+    if (!reader.ok()) {
+      break;
+    }
+    if (m.isUndefined() || m.isNull()) {
+      continue;
+    }
+    st.person_ids[i] = reader.string(m, "personId", "mention.personId");
+    st.mention_ids[i] = reader.string(m, "mentionId", "mention.mentionId");
+    const uint32_t start = reader.u32(m, "start", 0U, "mention.start");
+    const uint32_t length = reader.u32(m, "length", 0U, "mention.length");
+    st.items[i] = {st.person_ids[i].c_str(), st.mention_ids[i].c_str(), start, length};
+    if (!reader.ok()) {
+      break;
+    }
   }
 }
 
@@ -825,22 +988,32 @@ JsStatus JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment)
   if (handle_ == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
-  const std::string id = js_pull_string(comment, "id");
-  const std::string person_id = js_pull_string(comment, "personId");
-  const std::string created = js_pull_string(comment, "created");
-  const std::string text = js_pull_string(comment, "text");
-  const std::string parent_id = js_pull_string(comment, "parentId");
+  JsNarrowNumericReader reader("addThreadedComment");
+  const std::string id = reader.string(comment, "id", "comment.id");
+  const std::string person_id = reader.string(comment, "personId", "comment.personId");
+  const std::string created = reader.string(comment, "created", "comment.created");
+  const std::string text = reader.string(comment, "text", "comment.text");
+  const std::string parent_id = reader.string(comment, "parentId", "comment.parentId");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   MentionStore mentions;
-  pull_mentions(comment["mentions"], mentions);
+  pull_mentions(reader.value(comment, "mentions", "comment.mentions"), mentions, reader);
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   fm_threaded_comment c{};
   c.id = id.c_str();
-  c.row = js_pull_u32(comment, "row", 0U);
-  c.col = js_pull_u32(comment, "col", 0U);
+  c.row = reader.u32(comment, "row", 0U, "comment.row");
+  c.col = reader.u32(comment, "col", 0U, "comment.col");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   c.person_id = person_id.c_str();
   c.created = created.c_str();
   c.text = text.c_str();
   c.parent_id = parent_id.c_str();
-  c.done = pull_flag(comment, "done");
+  c.done = pull_flag(comment, "done", reader);
   c.mentions = mentions.items.empty() ? nullptr : mentions.items.data();
   c.mention_count = static_cast<uint32_t>(mentions.items.size());
   return status_from_rc(fm_sheet_add_threaded_comment(handle_, sheet, &c));
@@ -851,8 +1024,12 @@ JsStatus JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, 
   if (handle_ == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
+  JsNarrowNumericReader reader("editThreadedComment");
   MentionStore store;
-  pull_mentions(mentions, store);
+  pull_mentions(mentions, store, reader);
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   return status_from_rc(fm_sheet_edit_threaded_comment(handle_, sheet, id.c_str(), text.c_str(),
                                                        store.items.empty() ? nullptr : store.items.data(),
                                                        static_cast<uint32_t>(store.items.size())));
@@ -897,10 +1074,14 @@ JsStatus JsWorkbook::addPerson(emscripten::val person) {
   if (handle_ == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
-  const std::string id = js_pull_string(person, "id");
-  const std::string display_name = js_pull_string(person, "displayName");
-  const std::string user_id = js_pull_string(person, "userId");
-  const std::string provider_id = js_pull_string(person, "providerId");
+  JsNarrowNumericReader reader("addPerson");
+  const std::string id = reader.string(person, "id", "person.id");
+  const std::string display_name = reader.string(person, "displayName", "person.displayName");
+  const std::string user_id = reader.string(person, "userId", "person.userId");
+  const std::string provider_id = reader.string(person, "providerId", "person.providerId");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   const fm_person p = {id.c_str(), display_name.c_str(), user_id.c_str(), provider_id.c_str()};
   return status_from_rc(fm_workbook_add_person(handle_, &p));
 }
@@ -923,6 +1104,15 @@ emscripten::val image_info_to_val(fm_status_t rc, const fm_image_info& info) {
   o.set("format", rc == 0 ? info.format : 0);
   o.set("pxWidth", rc == 0 ? info.px_width : 0U);
   o.set("pxHeight", rc == 0 ? info.px_height : 0U);
+  return o;
+}
+
+emscripten::val image_info_binding_error(JsStatus status) {
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status);
+  o.set("format", 0);
+  o.set("pxWidth", 0U);
+  o.set("pxHeight", 0U);
   return o;
 }
 
@@ -953,7 +1143,11 @@ emscripten::val JsWorkbook::probeImage(emscripten::val bytes) const {
   if (handle_ == nullptr) {
     return image_info_to_val(kBindingInvalidHandle, fm_image_info{});
   }
-  const std::vector<uint8_t> data = val_to_bytes(bytes);
+  const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
+  if (!bytes_result.ok) {
+    return image_info_binding_error(binding_error_status(kInvalidArgument, bytes_result.message.c_str()));
+  }
+  const std::vector<uint8_t>& data = bytes_result.bytes;
   fm_image_info info{};
   const fm_status_t rc = fm_workbook_probe_image(handle_, data.data(), data.size(), &info);
   return image_info_to_val(rc, info);
@@ -1001,20 +1195,31 @@ emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, e
     o.set("status", error_status(kBindingInvalidHandle));
     return o;
   }
-  const std::vector<uint8_t> data = val_to_bytes(bytes);
   std::string name_store;
   std::string descr_store;
+  JsNarrowNumericReader reader("insertImage");
+  const emscripten::val options = opts.isUndefined() || opts.isNull() ? emscripten::val::object() : opts;
+  const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
+  if (!bytes_result.ok) {
+    o.set("status", binding_error_status(kInvalidArgument, bytes_result.message.c_str()));
+    return o;
+  }
+  const std::vector<uint8_t>& data = bytes_result.bytes;
   fm_image_insert ins{};
-  ins.name = js_pull_optional_string(opts, "name", name_store);
-  ins.descr = js_pull_optional_string(opts, "descr", descr_store);
-  ins.anchor_kind = js_pull_i32(opts, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
-  ins.edit_as = js_pull_i32(opts, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
-  ins.row = js_pull_u32(opts, "row", 0U);
-  ins.col = js_pull_u32(opts, "col", 0U);
-  ins.row_off_emu = static_cast<int64_t>(js_pull_double(opts, "rowOffEmu", 0.0));
-  ins.col_off_emu = static_cast<int64_t>(js_pull_double(opts, "colOffEmu", 0.0));
-  ins.width_emu = static_cast<int64_t>(js_pull_double(opts, "widthEmu", 0.0));
-  ins.height_emu = static_cast<int64_t>(js_pull_double(opts, "heightEmu", 0.0));
+  ins.name = reader.optional_string(options, "name", name_store, "image.name");
+  ins.descr = reader.optional_string(options, "descr", descr_store, "image.descr");
+  ins.anchor_kind = reader.i32(options, "anchorKind", FM_ANCHOR_KIND_ONE_CELL, "image.anchorKind");
+  ins.edit_as = reader.i32(options, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL, "image.editAs");
+  ins.row = reader.u32(options, "row", 0U, "image.row");
+  ins.col = reader.u32(options, "col", 0U, "image.col");
+  ins.row_off_emu = reader.i64(options, "rowOffEmu", 0, "image.rowOffEmu");
+  ins.col_off_emu = reader.i64(options, "colOffEmu", 0, "image.colOffEmu");
+  ins.width_emu = reader.i64(options, "widthEmu", 0, "image.widthEmu");
+  ins.height_emu = reader.i64(options, "heightEmu", 0, "image.heightEmu");
+  if (!reader.ok()) {
+    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    return o;
+  }
   uint32_t id = 0;
   const fm_status_t rc = fm_sheet_insert_image(handle_, sheet, data.data(), data.size(), &ins, &id);
   o.set("status", status_from_rc(rc));

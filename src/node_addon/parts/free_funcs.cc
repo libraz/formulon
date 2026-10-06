@@ -3,8 +3,10 @@
 
 #include "node_addon/parts/free_funcs.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -67,6 +69,26 @@ void LogSinkTrampoline(const char* record, std::size_t len, void* /*user_data*/)
   }
 }
 
+bool ReadInt32(const Napi::CallbackInfo& info, std::size_t idx, std::int32_t* out) {
+  if (idx >= info.Length()) {
+    return true;
+  }
+  const Napi::Value value = info[idx];
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(info.Env(), "positional argument must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number) || std::trunc(number) != number ||
+      number < static_cast<double>(std::numeric_limits<std::int32_t>::min()) ||
+      number > static_cast<double>(std::numeric_limits<std::int32_t>::max())) {
+    Napi::RangeError::New(info.Env(), "positional argument is outside int32 range").ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = static_cast<std::int32_t>(number);
+  return true;
+}
+
 }  // namespace
 
 // Read-only ad-hoc evaluation anchored at `Sheet1!A1`, matching the embind
@@ -78,7 +100,11 @@ Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   std::string formula;
   if (info.Length() > 0) {
-    formula = info[0].ToString().Utf8Value();
+    if (!info[0].IsString()) {
+      Napi::TypeError::New(env, "formula must be a string").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    formula = info[0].As<Napi::String>().Utf8Value();
   }
 
   fm_workbook_t* wb = nullptr;
@@ -120,8 +146,8 @@ Napi::Value LastErrorContext(const Napi::CallbackInfo& info) {
 Napi::Value StatusString(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   int32_t code = 0;
-  if (info.Length() > 0) {
-    code = info[0].ToNumber().Int32Value();
+  if (!ReadInt32(info, 0, &code)) {
+    return env.Undefined();
   }
   const char* s = fm_status_string(static_cast<fm_status_t>(code));
   return Napi::String::New(env, s != nullptr ? s : "");
@@ -130,8 +156,8 @@ Napi::Value StatusString(const Napi::CallbackInfo& info) {
 Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   int32_t code = 0;
-  if (info.Length() > 0) {
-    code = info[0].ToNumber().Int32Value();
+  if (!ReadInt32(info, 0, &code)) {
+    return env.Undefined();
   }
   const char* s = fm_error_display_name(static_cast<fm_error_code_t>(code));
   return Napi::String::New(env, s != nullptr ? s : "");
@@ -140,8 +166,8 @@ Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info) {
 Napi::Value SetLogMinLevel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   int32_t level = 0;
-  if (info.Length() > 0) {
-    level = info[0].ToNumber().Int32Value();
+  if (!ReadInt32(info, 0, &level)) {
+    return env.Undefined();
   }
   return MakeStatus(env, fm_set_log_min_level(level));
 }

@@ -23,6 +23,31 @@ namespace formulon {
 namespace wasm {
 namespace parts {
 
+namespace {
+
+bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscripten::val& spec,
+                                   fm_pivot_data_field_spec_t& out, std::string& name_buf, std::string& nfmt_buf,
+                                   bool& has_nfmt) {
+  // Read the optional strings before the numeric fields. Once the reader
+  // rejects a numeric value, no further access to the caller's object is
+  // allowed before returning the binding error.
+  out.name = reader.optional_string(spec, "name", name_buf, "pivotDataField.name");
+  out.number_format = reader.optional_string(spec, "numberFormat", nfmt_buf, "pivotDataField.numberFormat");
+  has_nfmt = out.number_format != nullptr;
+  if (!reader.ok()) {
+    return false;
+  }
+  out.field_index = reader.u32(spec, "fieldIndex", 0U, "pivotDataField.fieldIndex");
+  out.aggregation =
+      static_cast<fm_pivot_aggregation_t>(reader.u32(spec, "aggregation", 0U, "pivotDataField.aggregation"));
+  out.show_as = static_cast<fm_pivot_show_as_t>(reader.u32(spec, "showAs", 0U, "pivotDataField.showAs"));
+  out.show_as_base_field = reader.i32(spec, "showAsBaseField", -1, "pivotDataField.showAsBaseField");
+  out.show_as_base_item = reader.i32(spec, "showAsBaseItem", -1, "pivotDataField.showAsBaseItem");
+  return reader.ok();
+}
+
+}  // namespace
+
 // ---- PivotCache --------------------------------------------------------
 
 JsNumberResult JsWorkbook::pivotCacheCount() const {
@@ -107,13 +132,17 @@ JsStatus JsWorkbook::pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  const bool present = js_pull_bool(source, "present", true);
   std::string ref;
   std::string sheet;
   std::string name;
-  const char* ref_ptr = js_pull_optional_string(source, "ref", ref);
-  const char* sheet_ptr = js_pull_optional_string(source, "sheet", sheet);
-  const char* name_ptr = js_pull_optional_string(source, "name", name);
+  JsNarrowNumericReader reader("pivotCacheSetWorksheetSource");
+  const bool present = reader.boolean(source, "present", true, "pivotCacheSource.present");
+  const char* ref_ptr = reader.optional_string(source, "ref", ref, "pivotCacheSource.ref");
+  const char* sheet_ptr = reader.optional_string(source, "sheet", sheet, "pivotCacheSource.sheet");
+  const char* name_ptr = reader.optional_string(source, "name", name, "pivotCacheSource.name");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   fm_status_t rc =
       fm_workbook_pivot_cache_set_worksheet_source(handle_, cacheId, present ? 1 : 0, ref_ptr, sheet_ptr, name_ptr);
   return status_from_rc(rc);
@@ -397,16 +426,29 @@ JsAddStyleResult JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, em
   std::string source_name;
   std::string custom_name;
   std::string number_format;
+  JsNarrowNumericReader reader("pivotFieldAdd");
+  // Every nested read uses this per-call reader so getter/proxy failures and
+  // lossy integer conversions are reported before the C ABI is called.
+  const char* source_name_ptr = reader.optional_string(spec, "sourceName", source_name, "pivotField.sourceName");
+  const char* custom_name_ptr = reader.optional_string(spec, "customName", custom_name, "pivotField.customName");
+  const bool subtotal_top = reader.boolean(spec, "subtotalTop", false, "pivotField.subtotalTop");
+  const char* number_format_ptr =
+      reader.optional_string(spec, "numberFormat", number_format, "pivotField.numberFormat");
 
   fm_pivot_field_spec_t c_spec{};
   // `sourceName` is required; an omitted key passes NULL through rather
   // than `js_pull_string`'s empty-string default, which the C ABI's own
   // required-field check does not treat the same as a missing argument.
-  c_spec.source_name = js_pull_optional_string(spec, "sourceName", source_name);
-  c_spec.custom_name = js_pull_optional_string(spec, "customName", custom_name);
-  c_spec.axis = static_cast<fm_pivot_axis_t>(js_pull_u32(spec, "axis", 0U));
-  c_spec.subtotal_top = js_pull_bool(spec, "subtotalTop", false) ? 1 : 0;
-  c_spec.number_format = js_pull_optional_string(spec, "numberFormat", number_format);
+  c_spec.source_name = source_name_ptr;
+  c_spec.custom_name = custom_name_ptr;
+  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.u32(spec, "axis", 0U, "pivotField.axis"));
+  c_spec.subtotal_top = subtotal_top ? 1 : 0;
+  c_spec.number_format = number_format_ptr;
+
+  if (!reader.ok()) {
+    r.status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    return r;
+  }
 
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_field_add(handle_, sheet, pivotIdx, &c_spec, &out);
@@ -546,7 +588,30 @@ JsStatus set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivot
   if (wb == nullptr) {
     return error_status(7000);
   }
-  const std::vector<uint32_t> v = js_pull_u32_list(indices);
+  JsNarrowNumericReader reader("pivotFieldOrder");
+  if (indices.isUndefined() || indices.isNull()) {
+    return status_from_rc(fn(wb, sheet, pivotIdx, nullptr, 0));
+  }
+  if (!reader.is_array(indices, "pivotFieldOrder")) {
+    return binding_error_status(kInvalidArgument, "pivot field order must be an array");
+  }
+  const uint32_t length = reader.length(indices, "pivotFieldOrder");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  std::vector<uint32_t> v;
+  v.reserve(length);
+  for (uint32_t i = 0; i < length && reader.ok(); ++i) {
+    // Read the raw element once through the guarded property reader, then
+    // let the checked conversion reject a symbol, fraction, non-finite value,
+    // or uint32 overflow. No subsequent JS reads occur after failure.
+    const std::string key = std::to_string(i);
+    const emscripten::val value = reader.value(indices, key.c_str(), "pivotFieldOrder.indices");
+    v.push_back(reader.u32_value(value, 0U, "pivotFieldOrder.indices"));
+  }
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   return status_from_rc(fn(wb, sheet, pivotIdx, v.empty() ? nullptr : v.data(), v.size()));
 }
 
@@ -571,18 +636,8 @@ JsNumberResult JsWorkbook::pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx
 
 void JsWorkbook::build_data_field_spec(emscripten::val spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
                                        std::string& nfmt_buf, bool& has_nfmt) {
-  // `name` is required; an omitted key passes NULL through rather than
-  // `js_pull_string`'s empty-string default, which the C ABI's own
-  // required-field check does not treat the same as a missing argument.
-  out.name = js_pull_optional_string(spec, "name", name_buf);
-  out.number_format = js_pull_optional_string(spec, "numberFormat", nfmt_buf);
-  has_nfmt = out.number_format != nullptr;
-  out.field_index = js_pull_u32(spec, "fieldIndex", 0U);
-  out.aggregation = static_cast<fm_pivot_aggregation_t>(js_pull_u32(spec, "aggregation", 0U));
-  out.show_as = static_cast<fm_pivot_show_as_t>(js_pull_u32(spec, "showAs", 0U));
-  // -1 sentinels are explicitly modelled as int32; treat absent/null as -1.
-  out.show_as_base_field = js_pull_i32(spec, "showAsBaseField", -1);
-  out.show_as_base_item = js_pull_i32(spec, "showAsBaseItem", -1);
+  JsNarrowNumericReader reader("buildDataFieldSpec");
+  (void)build_data_field_spec_checked(reader, spec, out, name_buf, nfmt_buf, has_nfmt);
 }
 
 JsAddStyleResult JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec) {
@@ -595,7 +650,11 @@ JsAddStyleResult JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIdx
   std::string name_buf;
   std::string nfmt_buf;
   bool has_nfmt = false;
-  build_data_field_spec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+  JsNarrowNumericReader reader("pivotDataFieldAdd");
+  if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf, has_nfmt)) {
+    r.status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    return r;
+  }
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_data_field_add(handle_, sheet, pivotIdx, &c_spec, &out);
   if (rc != 0) {
@@ -623,7 +682,10 @@ JsStatus JsWorkbook::pivotDataFieldSet(uint32_t sheet, uint32_t pivotIdx, uint32
   std::string name_buf;
   std::string nfmt_buf;
   bool has_nfmt = false;
-  build_data_field_spec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+  JsNarrowNumericReader reader("pivotDataFieldSet");
+  if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf, has_nfmt)) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   fm_status_t rc = fm_workbook_pivot_data_field_set(handle_, sheet, pivotIdx, dataFieldIdx, &c_spec);
   return status_from_rc(rc);
 }
@@ -646,23 +708,32 @@ JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripte
   // required-field check does not treat the same as a missing argument.
   std::string field_name;
   std::string value_text;
+  JsNarrowNumericReader reader("pivotFilterAdd");
+  const char* field_name_ptr = reader.optional_string(spec, "fieldName", field_name, "pivotFilter.fieldName");
+  const double value_double = reader.number(spec, "valueDouble", 0.0, "pivotFilter.valueDouble");
+  const char* value_text_ptr = reader.optional_string(spec, "valueText", value_text, "pivotFilter.valueText");
+  const double value_high_double = reader.number(spec, "valueHighDouble", 0.0, "pivotFilter.valueHighDouble");
 
   fm_pivot_filter_spec_t c_spec{};
-  c_spec.axis = static_cast<fm_pivot_axis_t>(js_pull_u32(spec, "axis", 0U));
-  c_spec.field_name = js_pull_optional_string(spec, "fieldName", field_name);
-  c_spec.type = static_cast<fm_pivot_filter_type_t>(js_pull_u32(spec, "type", 0U));
+  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.u32(spec, "axis", 0U, "pivotFilter.axis"));
+  c_spec.field_name = field_name_ptr;
+  c_spec.type = static_cast<fm_pivot_filter_type_t>(reader.u32(spec, "type", 0U, "pivotFilter.type"));
   // valueKind defaults to NONE (-1) when omitted; the C ABI rejects NONE
   // for non-range filters.
-  c_spec.value_kind =
-      static_cast<fm_pivot_filter_value_kind_t>(js_pull_i32(spec, "valueKind", FM_PIVOT_FILTER_VALUE_NONE));
-  c_spec.value_int = js_pull_i32(spec, "valueInt", 0);
-  c_spec.value_double = js_pull_double(spec, "valueDouble", 0.0);
-  c_spec.value_text = js_pull_optional_string(spec, "valueText", value_text);
-  c_spec.value_high_kind =
-      static_cast<fm_pivot_filter_value_kind_t>(js_pull_i32(spec, "valueHighKind", FM_PIVOT_FILTER_VALUE_NONE));
-  c_spec.value_high_int = js_pull_i32(spec, "valueHighInt", 0);
-  c_spec.value_high_double = js_pull_double(spec, "valueHighDouble", 0.0);
-  c_spec.data_field_index = js_pull_u32(spec, "dataFieldIndex", 0U);
+  c_spec.value_kind = static_cast<fm_pivot_filter_value_kind_t>(
+      reader.i32(spec, "valueKind", FM_PIVOT_FILTER_VALUE_NONE, "pivotFilter.valueKind"));
+  c_spec.value_int = reader.i32(spec, "valueInt", 0, "pivotFilter.valueInt");
+  c_spec.value_double = value_double;
+  c_spec.value_text = value_text_ptr;
+  c_spec.value_high_kind = static_cast<fm_pivot_filter_value_kind_t>(
+      reader.i32(spec, "valueHighKind", FM_PIVOT_FILTER_VALUE_NONE, "pivotFilter.valueHighKind"));
+  c_spec.value_high_int = reader.i32(spec, "valueHighInt", 0, "pivotFilter.valueHighInt");
+  c_spec.value_high_double = value_high_double;
+  c_spec.data_field_index = reader.u32(spec, "dataFieldIndex", 0U, "pivotFilter.dataFieldIndex");
+
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
 
   fm_status_t rc = fm_workbook_pivot_filter_add(handle_, sheet, pivotIdx, &c_spec);
   return status_from_rc(rc);

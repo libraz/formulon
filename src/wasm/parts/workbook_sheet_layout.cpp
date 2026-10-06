@@ -238,9 +238,36 @@ JsSheetProtectionResult JsWorkbook::getSheetProtection(uint32_t sheet) const {
   return r;
 }
 
-JsStatus JsWorkbook::setSheetProtection(uint32_t sheet, JsSheetProtection in) {
+JsStatus JsWorkbook::setSheetProtection(uint32_t sheet, emscripten::val input) {
   if (handle_ == nullptr) {
     return error_status(7000);
+  }
+  JsNarrowNumericReader reader("setSheetProtection");
+  JsSheetProtection in{};
+  in.enabled = reader.i32(input, "enabled", 0, "protection.enabled");
+  in.algorithmName = reader.string(input, "algorithmName", "protection.algorithmName");
+  in.hashValue = reader.string(input, "hashValue", "protection.hashValue");
+  in.saltValue = reader.string(input, "saltValue", "protection.saltValue");
+  in.spinCount = reader.u32(input, "spinCount", 0U, "protection.spinCount");
+  in.legacyPassword = reader.string(input, "legacyPassword", "protection.legacyPassword");
+  in.sheet = reader.i32(input, "sheet", 0, "protection.sheet");
+  in.objects = reader.i32(input, "objects", 0, "protection.objects");
+  in.scenarios = reader.i32(input, "scenarios", 0, "protection.scenarios");
+  in.formatCells = reader.i32(input, "formatCells", 0, "protection.formatCells");
+  in.formatColumns = reader.i32(input, "formatColumns", 0, "protection.formatColumns");
+  in.formatRows = reader.i32(input, "formatRows", 0, "protection.formatRows");
+  in.insertColumns = reader.i32(input, "insertColumns", 0, "protection.insertColumns");
+  in.insertRows = reader.i32(input, "insertRows", 0, "protection.insertRows");
+  in.insertHyperlinks = reader.i32(input, "insertHyperlinks", 0, "protection.insertHyperlinks");
+  in.deleteColumns = reader.i32(input, "deleteColumns", 0, "protection.deleteColumns");
+  in.deleteRows = reader.i32(input, "deleteRows", 0, "protection.deleteRows");
+  in.selectLockedCells = reader.i32(input, "selectLockedCells", 0, "protection.selectLockedCells");
+  in.selectUnlockedCells = reader.i32(input, "selectUnlockedCells", 0, "protection.selectUnlockedCells");
+  in.sort = reader.i32(input, "sort", 0, "protection.sort");
+  in.autoFilter = reader.i32(input, "autoFilter", 0, "protection.autoFilter");
+  in.pivotTables = reader.i32(input, "pivotTables", 0, "protection.pivotTables");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
   }
   fm_sheet_protection_t p{};
   p.enabled = in.enabled;
@@ -514,28 +541,51 @@ JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defa
   if (handle_ == nullptr) {
     return error_status(7000);
   }
+  JsNarrowNumericReader reader("setSheetFormatDefaults");
+  const emscripten::val default_col_width = reader.value(defaults, "defaultColWidth", "format.defaultColWidth");
+  const emscripten::val default_row_height = reader.value(defaults, "defaultRowHeight", "format.defaultRowHeight");
+  const emscripten::val base_col_width = reader.value(defaults, "baseColWidth", "format.baseColWidth");
+  const emscripten::val has_default_col_width =
+      reader.value(defaults, "hasDefaultColWidth", "format.hasDefaultColWidth");
+  const emscripten::val has_default_row_height =
+      reader.value(defaults, "hasDefaultRowHeight", "format.hasDefaultRowHeight");
+  const bool default_col_width_present = !default_col_width.isUndefined() && !default_col_width.isNull();
+  const bool default_row_height_present = !default_row_height.isUndefined() && !default_row_height.isNull();
   fm_sheet_format_defaults d{};
-  d.default_col_width = js_pull_double(defaults, "defaultColWidth", 0.0);
-  d.default_row_height = js_pull_double(defaults, "defaultRowHeight", 0.0);
-  d.base_col_width = js_pull_double(defaults, "baseColWidth", 8.0);
-  d.has_default_col_width = js_pull_bool(defaults, "hasDefaultColWidth", js_has(defaults, "defaultColWidth")) ? 1 : 0;
+  d.default_col_width = reader.number_value(default_col_width, 0.0, "format.defaultColWidth");
+  d.default_row_height = reader.number_value(default_row_height, 0.0, "format.defaultRowHeight");
+  d.base_col_width = reader.number_value(base_col_width, 8.0, "format.baseColWidth");
+  d.has_default_col_width =
+      reader.boolean_value(has_default_col_width, default_col_width_present, "format.hasDefaultColWidth") ? 1 : 0;
   d.has_default_row_height =
-      js_pull_bool(defaults, "hasDefaultRowHeight", js_has(defaults, "defaultRowHeight")) ? 1 : 0;
+      reader.boolean_value(has_default_row_height, default_row_height_present, "format.hasDefaultRowHeight") ? 1 : 0;
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   return status_from_rc(fm_sheet_set_format_defaults(handle_, sheet, &d));
 }
 
 emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range, int32_t mode) const {
   fm_rect_pt r{};
-  fm_status_t rc = 7000;
-  if (handle_ != nullptr) {
-    const fm_merge_range b = js_pull_range(range);
-    rc = fm_sheet_cell_rect_pt(handle_, sheet, b.first_row, b.first_col, b.last_row, b.last_col, mode, &r);
-  }
-  if (rc != 0) {
-    r = fm_rect_pt{};
+  JsStatus status;
+  if (handle_ == nullptr) {
+    status = error_status(kBindingInvalidHandle);
+  } else {
+    JsNarrowNumericReader reader("getCellRectPt");
+    const fm_merge_range b = js_pull_range(range, &reader);
+    if (!reader.ok()) {
+      status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    } else {
+      const fm_status_t rc =
+          fm_sheet_cell_rect_pt(handle_, sheet, b.first_row, b.first_col, b.last_row, b.last_col, mode, &r);
+      status = status_from_rc(rc);
+      if (rc != 0) {
+        r = fm_rect_pt{};
+      }
+    }
   }
   emscripten::val o = js_rect_pt(r);
-  o.set("status", status_from_rc(rc));
+  o.set("status", status);
   return o;
 }
 

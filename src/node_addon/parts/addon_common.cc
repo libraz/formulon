@@ -3,6 +3,9 @@
 
 #include "node_addon/parts/addon_common.h"
 
+#include <cmath>
+#include <limits>
+
 namespace formulon_node {
 
 namespace {
@@ -17,31 +20,346 @@ Napi::Object MakeStatusEnvelope(Napi::Env env, bool ok, fm_status_t code, const 
   return o;
 }
 
-// Reads the number at `key` into `out`. Returns false when the key is
-// missing / undefined / null, or (after throwing a TypeError) not a number.
-bool SpecPullNumber(const Napi::Object& spec, const char* key, Napi::Number& out) {
-  if (!spec.Has(key)) {
+}  // namespace
+
+// FORMULON-ALLOW: N-API uses JavaScript exceptions for argument validation.
+void CheckedSpecReader::ObservePending() {
+  if (!failed_ && env_.IsExceptionPending()) {
+    failed_ = true;
+  }
+}
+
+void CheckedSpecReader::ReportType(const char* key, const char* expected) {
+  if (failed_ || env_.IsExceptionPending()) {
+    failed_ = true;
+    return;
+  }
+  Napi::TypeError::New(env_, std::string(key) + " must be a " + expected).ThrowAsJavaScriptException();
+  failed_ = true;
+}
+
+void CheckedSpecReader::ReportRange(const char* key, const char* range_name) {
+  if (failed_ || env_.IsExceptionPending()) {
+    failed_ = true;
+    return;
+  }
+  Napi::RangeError::New(env_, std::string(key) + " is outside " + range_name + " range").ThrowAsJavaScriptException();
+  failed_ = true;
+}
+
+bool CheckedSpecReader::ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present) {
+  if (present != nullptr) {
+    *present = false;
+  }
+  if (!ok()) {
     return false;
   }
-  Napi::Value v = spec.Get(key);
-  if (v.IsUndefined() || v.IsNull()) {
+  const bool has_property = owner.Has(key);
+  ObservePending();
+  if (!ok() || !has_property) {
     return false;
   }
-  if (!v.IsNumber()) {
-    // `.As<Napi::Number>()` below is an unchecked cast: under
-    // NAPI_DISABLE_CPP_EXCEPTIONS it does not throw a C++ exception on a
-    // non-number value, it leaves a *pending* JS exception and returns a
-    // default -- indistinguishable, to this function's caller, from a
-    // successful parse. Throwing here explicitly makes the failure
-    // immediate and deterministic instead of implementation-defined.
-    Napi::TypeError::New(spec.Env(), std::string(key) + " must be a number").ThrowAsJavaScriptException();
+  *out = owner.Get(key);
+  ObservePending();
+  if (!ok() || out->IsUndefined() || out->IsNull()) {
     return false;
   }
-  out = v.As<Napi::Number>();
+  if (present != nullptr) {
+    *present = true;
+  }
   return true;
 }
 
-}  // namespace
+bool CheckedSpecReader::Value(const Napi::Value& value, const char* key, Napi::Value* out) {
+  if (!ok() || value.IsUndefined() || value.IsNull()) {
+    return false;
+  }
+  *out = value;
+  ObservePending();
+  if (!ok()) {
+    return false;
+  }
+  (void)key;
+  return true;
+}
+
+bool CheckedSpecReader::ArrayElement(const Napi::Array& owner, uint32_t index, Napi::Value* out) {
+  if (!ok()) {
+    return false;
+  }
+  *out = owner.Get(index);
+  ObservePending();
+  if (!ok()) {
+    return false;
+  }
+  return Value(*out, "array element", out);
+}
+
+bool CheckedSpecReader::ReadNumber(const Napi::Object& owner, const char* key, double* out, bool* present) {
+  Napi::Value value;
+  if (!ReadOptional(owner, key, &value, present)) {
+    return ok();
+  }
+  return ReadNumber(value, key, out);
+}
+
+bool CheckedSpecReader::ReadNumber(const Napi::Value& value, const char* key, double* out) {
+  Napi::Value present;
+  if (!Value(value, key, &present)) {
+    return ok();
+  }
+  if (!present.IsNumber()) {
+    ReportType(key, "number");
+    return false;
+  }
+  *out = present.As<Napi::Number>().DoubleValue();
+  ObservePending();
+  return ok();
+}
+
+bool CheckedSpecReader::ReadInteger(const Napi::Object& owner, const char* key, double* out, double min_value,
+                                    double max_value, const char* range_name, bool* present) {
+  if (!ReadNumber(owner, key, out, present)) {
+    return false;
+  }
+  if (!std::isfinite(*out) || std::trunc(*out) != *out || *out < min_value || *out > max_value) {
+    ReportRange(key, range_name);
+    return false;
+  }
+  return true;
+}
+
+bool CheckedSpecReader::String(const Napi::Object& owner, const char* key, std::string* out) {
+  Napi::Value value;
+  if (!ReadOptional(owner, key, &value)) {
+    out->clear();
+    return false;
+  }
+  return String(value, key, out);
+}
+
+bool CheckedSpecReader::String(const Napi::Value& value, const char* key, std::string* out) {
+  Napi::Value present;
+  if (!Value(value, key, &present)) {
+    out->clear();
+    return false;
+  }
+  const Napi::String converted = present.ToString();
+  ObservePending();
+  if (!ok()) {
+    out->clear();
+    return false;
+  }
+  *out = converted.Utf8Value();
+  ObservePending();
+  return ok();
+}
+
+bool CheckedSpecReader::Object(const Napi::Object& owner, const char* key, Napi::Object* out) {
+  Napi::Value value;
+  if (!ReadOptional(owner, key, &value)) {
+    return false;
+  }
+  return Object(value, key, out);
+}
+
+bool CheckedSpecReader::Object(const Napi::Value& value, const char* key, Napi::Object* out) {
+  Napi::Value present;
+  if (!Value(value, key, &present)) {
+    return false;
+  }
+  if (!present.IsObject()) {
+    ReportType(key, "object");
+    return false;
+  }
+  *out = present.As<Napi::Object>();
+  ObservePending();
+  return ok();
+}
+
+bool CheckedSpecReader::Array(const Napi::Object& owner, const char* key, Napi::Array* out) {
+  Napi::Value value;
+  if (!ReadOptional(owner, key, &value)) {
+    return false;
+  }
+  return Array(value, key, out);
+}
+
+bool CheckedSpecReader::Array(const Napi::Value& value, const char* key, Napi::Array* out) {
+  Napi::Value present;
+  if (!Value(value, key, &present)) {
+    return false;
+  }
+  if (!present.IsArray()) {
+    ReportType(key, "array");
+    return false;
+  }
+  *out = present.As<Napi::Array>();
+  ObservePending();
+  return ok();
+}
+
+bool CheckedSpecReader::Bool(const Napi::Object& owner, const char* key, bool dflt, bool* present) {
+  Napi::Value value;
+  if (!ReadOptional(owner, key, &value, present)) {
+    return dflt;
+  }
+  return Bool(value, key, dflt);
+}
+
+bool CheckedSpecReader::Bool(const Napi::Value& value, const char* key, bool dflt) {
+  Napi::Value present;
+  if (!Value(value, key, &present)) {
+    return dflt;
+  }
+  const bool result = present.ToBoolean().Value();
+  ObservePending();
+  return result;
+}
+
+double CheckedSpecReader::Double(const Napi::Object& owner, const char* key, double dflt, bool* present) {
+  double value = dflt;
+  if (!ReadNumber(owner, key, &value, present)) {
+    return dflt;
+  }
+  return value;
+}
+
+double CheckedSpecReader::Double(const Napi::Value& value, const char* key, double dflt) {
+  double result = dflt;
+  if (!ReadNumber(value, key, &result)) {
+    return dflt;
+  }
+  return result;
+}
+
+uint8_t CheckedSpecReader::U8(const Napi::Object& owner, const char* key, uint8_t dflt, bool* present) {
+  double value = static_cast<double>(dflt);
+  if (!ReadInteger(owner, key, &value, 0.0, static_cast<double>(std::numeric_limits<uint8_t>::max()), "uint8",
+                   present)) {
+    return dflt;
+  }
+  return static_cast<uint8_t>(value);
+}
+
+uint8_t CheckedSpecReader::U8(const Napi::Value& value, const char* key, uint8_t dflt) {
+  double result = static_cast<double>(dflt);
+  if (!ReadNumber(value, key, &result)) {
+    return dflt;
+  }
+  if (!std::isfinite(result) || std::trunc(result) != result || result < 0.0 ||
+      result > static_cast<double>(std::numeric_limits<uint8_t>::max())) {
+    ReportRange(key, "uint8");
+    return dflt;
+  }
+  return static_cast<uint8_t>(result);
+}
+
+uint16_t CheckedSpecReader::U16(const Napi::Object& owner, const char* key, uint16_t dflt, bool* present) {
+  double value = static_cast<double>(dflt);
+  if (!ReadInteger(owner, key, &value, 0.0, static_cast<double>(std::numeric_limits<uint16_t>::max()), "uint16",
+                   present)) {
+    return dflt;
+  }
+  return static_cast<uint16_t>(value);
+}
+
+uint16_t CheckedSpecReader::U16(const Napi::Value& value, const char* key, uint16_t dflt) {
+  double result = static_cast<double>(dflt);
+  if (!ReadNumber(value, key, &result)) {
+    return dflt;
+  }
+  if (!std::isfinite(result) || std::trunc(result) != result || result < 0.0 ||
+      result > static_cast<double>(std::numeric_limits<uint16_t>::max())) {
+    ReportRange(key, "uint16");
+    return dflt;
+  }
+  return static_cast<uint16_t>(result);
+}
+
+uint32_t CheckedSpecReader::U32(const Napi::Object& owner, const char* key, uint32_t dflt, bool* present) {
+  double value = static_cast<double>(dflt);
+  if (!ReadInteger(owner, key, &value, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max()), "uint32",
+                   present)) {
+    return dflt;
+  }
+  return static_cast<uint32_t>(value);
+}
+
+uint32_t CheckedSpecReader::U32(const Napi::Value& value, const char* key, uint32_t dflt) {
+  double result = static_cast<double>(dflt);
+  if (!ReadNumber(value, key, &result)) {
+    return dflt;
+  }
+  if (!std::isfinite(result) || std::trunc(result) != result || result < 0.0 ||
+      result > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
+    ReportRange(key, "uint32");
+    return dflt;
+  }
+  return static_cast<uint32_t>(result);
+}
+
+int32_t CheckedSpecReader::I32(const Napi::Object& owner, const char* key, int32_t dflt, bool* present) {
+  double value = static_cast<double>(dflt);
+  if (!ReadInteger(owner, key, &value, static_cast<double>(std::numeric_limits<int32_t>::min()),
+                   static_cast<double>(std::numeric_limits<int32_t>::max()), "int32", present)) {
+    return dflt;
+  }
+  return static_cast<int32_t>(value);
+}
+
+int32_t CheckedSpecReader::I32(const Napi::Value& value, const char* key, int32_t dflt) {
+  double result = static_cast<double>(dflt);
+  if (!ReadNumber(value, key, &result)) {
+    return dflt;
+  }
+  if (!std::isfinite(result) || std::trunc(result) != result ||
+      result < static_cast<double>(std::numeric_limits<int32_t>::min()) ||
+      result > static_cast<double>(std::numeric_limits<int32_t>::max())) {
+    ReportRange(key, "int32");
+    return dflt;
+  }
+  return static_cast<int32_t>(result);
+}
+
+int64_t CheckedSpecReader::I64(const Napi::Object& owner, const char* key, int64_t dflt, bool* present) {
+  double value = static_cast<double>(dflt);
+  if (!ReadNumber(owner, key, &value, present)) {
+    return dflt;
+  }
+  if (!std::isfinite(value) || std::trunc(value) != value || value < -0x1p63 || value >= 0x1p63) {
+    ReportRange(key, "int64");
+    return dflt;
+  }
+  if (value == -0x1p63) {
+    return std::numeric_limits<int64_t>::min();
+  }
+  return static_cast<int64_t>(value);
+}
+
+int64_t CheckedSpecReader::I64(const Napi::Value& value, const char* key, int64_t dflt) {
+  Napi::Value present;
+  if (!Value(value, key, &present)) {
+    return dflt;
+  }
+  if (!present.IsNumber()) {
+    ReportType(key, "number");
+    return dflt;
+  }
+  const double number = present.As<Napi::Number>().DoubleValue();
+  ObservePending();
+  if (!ok()) {
+    return dflt;
+  }
+  if (!std::isfinite(number) || std::trunc(number) != number || number < -0x1p63 || number >= 0x1p63) {
+    ReportRange(key, "int64");
+    return dflt;
+  }
+  if (number == -0x1p63) {
+    return std::numeric_limits<int64_t>::min();
+  }
+  return static_cast<int64_t>(number);
+}
 
 Napi::Object MakeOkStatus(Napi::Env env) {
   return MakeStatusEnvelope(env, true, 0, "", "");
@@ -211,76 +529,22 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
   return o;
 }
 
-int32_t SpecPullInt32(const Napi::Object& spec, const char* key, int32_t dflt) {
-  Napi::Number n;
-  return SpecPullNumber(spec, key, n) ? n.Int32Value() : dflt;
-}
-
-uint32_t SpecPullU32(const Napi::Object& spec, const char* key, uint32_t dflt) {
-  Napi::Number n;
-  return SpecPullNumber(spec, key, n) ? n.Uint32Value() : dflt;
-}
-
-double SpecPullDouble(const Napi::Object& spec, const char* key, double dflt) {
-  Napi::Number n;
-  return SpecPullNumber(spec, key, n) ? n.DoubleValue() : dflt;
-}
-
-bool SpecPullBool(const Napi::Object& spec, const char* key, bool dflt) {
-  if (!spec.Has(key)) {
-    return dflt;
-  }
-  Napi::Value v = spec.Get(key);
-  if (v.IsUndefined() || v.IsNull()) {
-    return dflt;
-  }
-  return v.ToBoolean().Value();
-}
-
-bool SpecHas(const Napi::Object& spec, const char* key) {
-  if (!spec.Has(key)) {
-    return false;
-  }
-  Napi::Value v = spec.Get(key);
-  return !v.IsUndefined() && !v.IsNull();
-}
-
-std::vector<uint32_t> ReadU32Array(const Napi::CallbackInfo& info, size_t idx) {
-  std::vector<uint32_t> out;
-  if (idx >= info.Length()) {
-    return out;
-  }
-  Napi::Value v = info[idx];
-  if (!v.IsArray()) {
-    return out;
-  }
-  Napi::Array arr = v.As<Napi::Array>();
-  const uint32_t len = arr.Length();
-  out.reserve(len);
-  for (uint32_t i = 0; i < len; ++i) {
-    out.push_back(arr.Get(i).As<Napi::Number>().Uint32Value());
-  }
-  return out;
-}
-
-void BuildDataFieldSpec(const Napi::Object& spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
-                        std::string& nfmt_buf, bool& has_nfmt) {
+void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_spec_t& out,
+                        std::string& name_buf, std::string& nfmt_buf, bool& has_nfmt) {
   // `name` is required; an omitted key passes NULL through rather than
   // the coerced literal string "undefined" `.ToString()` would otherwise
   // produce, so the C ABI's own kBindingNullPointer check is what rejects
   // the call. See the `sourceName` comment in `pivot_table.cc`'s
   // `PivotFieldAdd`.
-  const bool has_name = SpecHas(spec, "name");
-  name_buf = has_name ? spec.Get("name").ToString().Utf8Value() : std::string();
-  has_nfmt = SpecHas(spec, "numberFormat");
-  nfmt_buf = has_nfmt ? spec.Get("numberFormat").ToString().Utf8Value() : std::string();
+  const bool has_name = reader.String(spec, "name", &name_buf);
+  has_nfmt = reader.String(spec, "numberFormat", &nfmt_buf);
   out.name = has_name ? name_buf.c_str() : nullptr;
-  out.field_index = SpecPullU32(spec, "fieldIndex", 0U);
-  out.aggregation = static_cast<fm_pivot_aggregation_t>(SpecPullU32(spec, "aggregation", 0U));
+  out.field_index = reader.U32(spec, "fieldIndex", 0U);
+  out.aggregation = static_cast<fm_pivot_aggregation_t>(reader.U32(spec, "aggregation", 0U));
   out.number_format = has_nfmt ? nfmt_buf.c_str() : nullptr;
-  out.show_as = static_cast<fm_pivot_show_as_t>(SpecPullU32(spec, "showAs", 0U));
-  out.show_as_base_field = SpecPullInt32(spec, "showAsBaseField", -1);
-  out.show_as_base_item = SpecPullInt32(spec, "showAsBaseItem", -1);
+  out.show_as = static_cast<fm_pivot_show_as_t>(reader.U32(spec, "showAs", 0U));
+  out.show_as_base_field = reader.I32(spec, "showAsBaseField", -1);
+  out.show_as_base_item = reader.I32(spec, "showAsBaseItem", -1);
 }
 
 }  // namespace formulon_node

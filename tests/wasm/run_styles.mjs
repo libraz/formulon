@@ -426,4 +426,320 @@ export function registerStyles(Module, test) {
       wb.delete();
     }
   });
+
+  test('style narrow numeric fields reject masked values without mutating tables', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const assertRejected = (label, invoke, count) => {
+        let result;
+        try {
+          result = invoke();
+        } catch (error) {
+          assert.fail(`${label} threw instead of returning status: ${error}`);
+        }
+        assert.ok(result && result.status, `${label}: missing status`);
+        assert.equal(result.status.ok, false, `${label}: ${JSON.stringify(result.status)}`);
+        assert.equal(result.status.status, 2, `${label}: ${JSON.stringify(result.status)}`);
+        assert.equal(count(), count.before, `${label}: mutation changed table count`);
+      };
+
+      const fontCount = () => wb.fontCount().value;
+      fontCount.before = fontCount();
+      assertRejected('font.underline=256', () => wb.addFont({ name: 'bad-u8', underline: 256 }), fontCount);
+
+      const fillCount = () => wb.fillCount().value;
+      fillCount.before = fillCount();
+      assertRejected('fill.pattern=256', () => wb.addFill({ pattern: 256 }), fillCount);
+
+      const borderCount = () => wb.borderCount().value;
+      borderCount.before = borderCount();
+      assertRejected('border.left.style=256', () => wb.addBorder({ left: { style: 256 } }), borderCount);
+
+      const xfCount = () => wb.xfCount().value;
+      xfCount.before = xfCount();
+      assertRejected(
+        'xf.numFmtId=65536',
+        () => wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 65536 }),
+        xfCount,
+      );
+
+      const dxfCount = () => wb.dxfCount().value;
+      dxfCount.before = dxfCount();
+      assertRejected('dxf.numFmt.numFmtId=65536', () => wb.addDxf({ numFmt: { numFmtId: 65536 } }), dxfCount);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('style nested numeric fields reject fractions, non-finite values, and wrong primitives', () => {
+    const invalid = [1.5, Number.NaN, Number.POSITIVE_INFINITY, '1', true, {}, Symbol('numeric')];
+    for (const value of invalid) {
+      const wb = Module.Workbook.createDefault();
+      try {
+        const before = wb.fontCount().value;
+        let result;
+        try {
+          result = wb.addFont({ name: 'bad-value', underline: value });
+        } catch (error) {
+          assert.fail(`font.underline=${String(value)} threw: ${error}`);
+        }
+        assert.ok(result && result.status, `font.underline=${String(value)} missing status`);
+        assert.equal(result.status.ok, false, `font.underline=${String(value)} accepted`);
+        assert.equal(result.status.status, 2, `font.underline=${String(value)} status`);
+        assert.equal(wb.fontCount().value, before, `font.underline=${String(value)} mutated table`);
+      } finally {
+        wb.delete();
+      }
+    }
+  });
+
+  test('style and conditional-format u32/i32 fields reject wraparound values', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const xfBefore = wb.xfCount().value;
+      const xf = wb.addXf({ fontIndex: 0x100000000, fillIndex: 0, borderIndex: 0 });
+      assert.equal(xf.status.ok, false, `xf.fontIndex wrapped: ${JSON.stringify(xf.status)}`);
+      assert.equal(xf.status.status, 2);
+      assert.equal(wb.xfCount().value, xfBefore);
+
+      const fontBefore = wb.fontCount().value;
+      const font = wb.addFont({ name: 'bad-u32', colorArgb: 0x100000000 });
+      assert.equal(font.status.ok, false, `font.colorArgb wrapped: ${JSON.stringify(font.status)}`);
+      assert.equal(font.status.status, 2);
+      assert.equal(wb.fontCount().value, fontBefore);
+
+      const styleXfBefore = wb.cellStyleXfCount().value;
+      const styleXf = wb.addCellStyleXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, xfId: 0x100000000 });
+      assert.equal(styleXf.status.ok, false, `cellStyleXf.xfId wrapped: ${JSON.stringify(styleXf.status)}`);
+      assert.equal(styleXf.status.status, 2);
+      assert.equal(wb.cellStyleXfCount().value, styleXfBefore);
+
+      const themeBefore = wb.getTheme().colors;
+      const theme = wb.setThemeColors([0x100000000, ...themeBefore.slice(1)]);
+      assert.equal(theme.ok, false, `theme color wrapped: ${JSON.stringify(theme)}`);
+      assert.equal(theme.status, 2);
+      assert.deepEqual(wb.getTheme().colors, themeBefore);
+
+      const dxf = wb.addDxf({ font: { name: 'cf-dxf' } });
+      assert.ok(dxf.status.ok);
+      const base = {
+        sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        type: 3,
+        priority: 0x100000000,
+        dxfId: dxf.index,
+        dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 1, g: 2, b: 3 } },
+      };
+      const cfBefore = wb.getConditionalFormats(0).length;
+      const cf = wb.addConditionalFormat(0, base);
+      assert.equal(cf.status.ok, false, `cf.priority wrapped: ${JSON.stringify(cf.status)}`);
+      assert.equal(cf.status.status, 2);
+      assert.equal(wb.getConditionalFormats(0).length, cfBefore);
+
+      const rangeRule = structuredClone(base);
+      rangeRule.priority = 0;
+      rangeRule.sqref[0].firstRow = 0x100000000;
+      const range = wb.addConditionalFormat(0, rangeRule);
+      assert.equal(range.status.ok, false, `cf.sqref wrapped: ${JSON.stringify(range.status)}`);
+      assert.equal(range.status.status, 2);
+      assert.equal(wb.getConditionalFormats(0).length, cfBefore);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('style nullish narrow fields retain their existing defaults', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const absentFont = wb.addFont({ name: 'nullish-font' });
+      assert.ok(absentFont.status.ok);
+      assert.equal(wb.getFont(absentFont.index).underline, 0);
+      const nullFont = wb.addFont({ name: 'null-font', underline: null });
+      assert.ok(nullFont.status.ok);
+      assert.equal(wb.getFont(nullFont.index).underline, 0);
+      const undefinedFont = wb.addFont({ name: 'undefined-font', underline: undefined });
+      assert.ok(undefinedFont.status.ok);
+      assert.equal(wb.getFont(undefinedFont.index).underline, 0);
+
+      const fill = wb.addFill({ pattern: null });
+      assert.ok(fill.status.ok);
+      assert.equal(wb.getFill(fill.index).pattern, 0);
+
+      const border = wb.addBorder({ left: { style: undefined } });
+      assert.ok(border.status.ok);
+      assert.equal(wb.getBorder(border.index).left.style, 0);
+
+      const xf = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: null });
+      assert.ok(xf.status.ok);
+      assert.equal(wb.getCellXf(xf.index).numFmtId, 0);
+
+      const dxf = wb.addDxf({ numFmt: { numFmtId: undefined } });
+      assert.ok(dxf.status.ok);
+      assert.equal(wb.getDxf(dxf.index).numFmt.numFmtId, 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('conditional-format nested narrow numeric fields reject masked values without mutation', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const base = {
+        sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        type: 3,
+        dataBar: {
+          min: { type: 3 },
+          max: { type: 4 },
+          fill: { r: 1, g: 2, b: 3 },
+        },
+      };
+      const invalid = [
+        ['dataBar.fill.r=256', { dataBar: { fill: { r: 256 } } }],
+        ['dataBar.minLengthPct=256', { dataBar: { minLengthPct: 256 } }],
+        ['dataBar.maxLengthPct=256', { dataBar: { maxLengthPct: 256 } }],
+        ['cfvo.type=256', { dataBar: { min: { type: 256 } } }],
+      ];
+      for (const [label, override] of invalid) {
+        const before = wb.getConditionalFormats(0).length;
+        const rule = structuredClone(base);
+        Object.assign(rule.dataBar, override.dataBar);
+        if (override.dataBar.min) {
+          rule.dataBar.min = override.dataBar.min;
+        }
+        let result;
+        try {
+          result = wb.addConditionalFormat(0, rule);
+        } catch (error) {
+          assert.fail(`${label} threw instead of returning status: ${error}`);
+        }
+        assert.ok(result && result.status, `${label}: missing status`);
+        assert.equal(result.status.ok, false, `${label}: ${JSON.stringify(result.status)}`);
+        assert.equal(result.status.status, 2, `${label}: ${JSON.stringify(result.status)}`);
+        assert.equal(wb.getConditionalFormats(0).length, before, `${label}: mutation changed count`);
+      }
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('conditional-format nested numeric fields reject wrong primitives and preserve settings', () => {
+    const values = [1.5, Number.NaN, Number.POSITIVE_INFINITY, '1', true, {}, Symbol('cf-numeric')];
+    for (const value of values) {
+      const wb = Module.Workbook.createDefault();
+      try {
+        const rule = {
+          sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+          type: 3,
+          dataBar: {
+            min: { type: 3 },
+            max: { type: 4 },
+            fill: { r: value, g: 2, b: 3 },
+          },
+        };
+        let result;
+        try {
+          result = wb.addConditionalFormat(0, rule);
+        } catch (error) {
+          assert.fail(`dataBar.fill.r=${String(value)} threw: ${error}`);
+        }
+        assert.ok(result && result.status, `dataBar.fill.r=${String(value)} missing status`);
+        assert.equal(result.status.ok, false, `dataBar.fill.r=${String(value)} accepted`);
+        assert.equal(result.status.status, 2, `dataBar.fill.r=${String(value)} status`);
+        assert.equal(wb.getConditionalFormats(0).length, 0, `dataBar.fill.r=${String(value)} mutated rules`);
+      } finally {
+        wb.delete();
+      }
+    }
+  });
+
+  test('conditional-format nullish nested fields retain existing defaults', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const result = wb.addConditionalFormat(0, {
+        sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        type: 3,
+        dataBar: {
+          min: { type: 3, gte: null },
+          max: { type: 4, gte: undefined },
+          fill: { r: null, g: undefined, b: 3, a: null },
+          minLengthPct: null,
+          maxLengthPct: undefined,
+          axisPosition: null,
+          direction: undefined,
+        },
+      });
+      assert.ok(result.status.ok, JSON.stringify(result.status));
+      const bar = wb.getConditionalFormats(0)[0].dataBar;
+      assert.equal(bar.fill.r, 0);
+      assert.equal(bar.fill.g, 0);
+      assert.equal(bar.fill.b, 3);
+      assert.equal(bar.fill.a, 255);
+      assert.equal(bar.minLengthPct, 10);
+      assert.equal(bar.maxLengthPct, 90);
+      assert.equal(bar.axisPosition, 0);
+      assert.equal(bar.direction, 0);
+      assert.equal(wb.getConditionalFormats(0)[0].dataBar.min.gte, true);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('style and conditional-format readers snapshot stateful fields once', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      let horizontalReads = 0;
+      const xfSpec = {};
+      Object.defineProperty(xfSpec, 'horizontalAlign', {
+        get() {
+          horizontalReads += 1;
+          return horizontalReads === 1 ? 1 : undefined;
+        },
+      });
+      const xf = wb.addXf(xfSpec);
+      assert.ok(xf.status.ok, JSON.stringify(xf.status));
+      assert.equal(horizontalReads, 1);
+      const storedXf = wb.getCellXf(xf.index);
+      assert.equal(storedXf.horizontalAlign, 1);
+      assert.equal(storedXf.hasHorizontalAlign, true);
+
+      const firstDxf = wb.addDxf({ font: { name: 'first' } });
+      const secondDxf = wb.addDxf({ font: { name: 'second' } });
+      assert.ok(firstDxf.status.ok, JSON.stringify(firstDxf.status));
+      assert.ok(secondDxf.status.ok, JSON.stringify(secondDxf.status));
+      let dxfReads = 0;
+      const rule = {
+        sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        type: 3,
+        dataBar: {
+          min: { type: 3 },
+          max: { type: 4 },
+          fill: { r: 1, g: 2, b: 3 },
+        },
+      };
+      Object.defineProperty(rule, 'dxfId', {
+        get() {
+          dxfReads += 1;
+          return dxfReads === 1 ? secondDxf.index : undefined;
+        },
+      });
+      const cf = wb.addConditionalFormat(0, rule);
+      assert.ok(cf.status.ok, JSON.stringify(cf.status));
+      assert.equal(dxfReads, 1);
+      assert.equal(wb.getConditionalFormats(0)[0].dxfId, secondDxf.index);
+
+      const lateFont = { name: 'late font '.repeat(1024) };
+      Object.defineProperty(lateFont, 'size', {
+        get() {
+          throw new Error('late font getter');
+        },
+      });
+      const beforeFonts = wb.fontCount().value;
+      for (let i = 0; i < 8; i += 1) {
+        const result = wb.addFont(lateFont);
+        assert.equal(result.status.ok, false, JSON.stringify(result.status));
+      }
+      assert.equal(wb.fontCount().value, beforeFonts);
+    } finally {
+      wb.delete();
+    }
+  });
 }

@@ -121,6 +121,59 @@ export function registerCellsIo(Module, test) {
     }
   });
 
+  test('cell nested integer fields reject narrowing before C mutations', () => {
+    const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('cell integer')];
+    for (const value of invalid) {
+      const wb = Module.Workbook.createDefault();
+      try {
+        assert.ok(wb.setText(0, 0, 0, '東京都').ok);
+        const runs = [
+          { sb: 0, eb: 2, text: 'トウキョウ' },
+          { sb: 2, eb: 3, text: 'ト' },
+        ];
+        assert.ok(wb.setCellPhoneticRuns(0, 0, 0, runs).ok);
+        const beforeRuns = wb.getCellPhoneticRuns(0, 0, 0).runs;
+        const badRuns = wb.setCellPhoneticRuns(0, 0, 0, [{ sb: value, eb: 2, text: '壊' }]);
+        assert.equal(badRuns.ok, false, `setCellPhoneticRuns sb=${String(value)} accepted`);
+        assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, beforeRuns);
+
+        assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 }).ok);
+        const beforeProps = wb.getCellPhoneticProperties(0, 0, 0);
+        const badProps = wb.setCellPhoneticProperties(0, 0, 0, { fontId: value, type: 2, alignment: 2 });
+        assert.equal(badProps.ok, false, `setCellPhoneticProperties fontId=${String(value)} accepted`);
+        assert.deepEqual(
+          {
+            fontId: wb.getCellPhoneticProperties(0, 0, 0).fontId,
+            type: wb.getCellPhoneticProperties(0, 0, 0).type,
+            alignment: wb.getCellPhoneticProperties(0, 0, 0).alignment,
+          },
+          { fontId: beforeProps.fontId, type: beforeProps.type, alignment: beforeProps.alignment },
+        );
+
+        const badValue = wb.formatValue({ kind: value, number: 1, boolean: 0, text: '', errorCode: 0 }, 'General');
+        assert.equal(badValue.status.ok, false, `formatValue kind=${String(value)} accepted`);
+      } finally {
+        wb.delete();
+      }
+    }
+  });
+
+  test('cell Value boolean and errorCode use checked signed integers', () => {
+    const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('cell value integer')];
+    for (const value of invalid) {
+      const wb = Module.Workbook.createDefault();
+      try {
+        const booleanValue = wb.formatValue({ kind: 2, number: 0, boolean: value, text: '', errorCode: 0 }, 'General');
+        assert.equal(booleanValue.status.ok, false, `formatValue boolean=${String(value)} accepted`);
+
+        const errorValue = wb.formatValue({ kind: 4, number: 0, boolean: 0, text: '', errorCode: value }, 'General');
+        assert.equal(errorValue.status.ok, false, `formatValue errorCode=${String(value)} accepted`);
+      } finally {
+        wb.delete();
+      }
+    }
+  });
+
   test('setDefaultFont replaces font 0, which addFont can only append beside', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -198,6 +251,93 @@ export function registerCellsIo(Module, test) {
       }
     } finally {
       wb.delete();
+    }
+  });
+
+  test('table update rejects throwing nested getters before changing the table', () => {
+    const getterFields = ['ref', 'styleName', 'headerRow', 'totalsRow'];
+    for (const field of getterFields) {
+      const wb = Module.Workbook.createDefault();
+      try {
+        const created = wb.createTable({
+          sheetIndex: 0,
+          ref: 'A1:B3',
+          name: 'Sales',
+          columns: ['Product', 'Amount'],
+          styleName: 'TableStyleMedium2',
+          headerRow: false,
+          totalsRow: true,
+        });
+        assert.ok(created.status.ok, `createTable failed: ${JSON.stringify(created.status)}`);
+        const before = readZipEntryText(wb.save().bytes, 'xl/tables/table1.xml');
+        const spec = {};
+        Object.defineProperty(spec, field, {
+          enumerable: true,
+          get() {
+            throw new Error(`table update ${field} getter`);
+          },
+        });
+        const result = wb.updateTable(created.index, spec);
+        assert.equal(result.ok, false, `updateTable ${field} getter escaped`);
+        assert.match(result.message, new RegExp(`table update ${field} getter|field access threw`));
+        assert.equal(readZipEntryText(wb.save().bytes, 'xl/tables/table1.xml'), before);
+      } finally {
+        wb.delete();
+      }
+    }
+  });
+
+  test('table update reads each optional field once before the C call', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const created = wb.createTable({
+        sheetIndex: 0,
+        ref: 'A1:B3',
+        name: 'Sales',
+        columns: ['Product', 'Amount'],
+        styleName: 'TableStyleMedium2',
+        headerRow: false,
+        totalsRow: true,
+      });
+      assert.ok(created.status.ok, `createTable failed: ${JSON.stringify(created.status)}`);
+      const values = { ref: 'A1:B4', styleName: 'TableStyleLight9', headerRow: true, totalsRow: false };
+      const reads = Object.fromEntries(Object.keys(values).map((key) => [key, 0]));
+      const spec = {};
+      for (const [key, value] of Object.entries(values)) {
+        Object.defineProperty(spec, key, {
+          enumerable: true,
+          get() {
+            reads[key] += 1;
+            if (reads[key] > 1) throw new Error(`table update ${key} getter read twice`);
+            return value;
+          },
+        });
+      }
+      const result = wb.updateTable(created.index, spec);
+      assert.ok(result.ok, JSON.stringify(result));
+      assert.deepEqual(reads, { ref: 1, styleName: 1, headerRow: 1, totalsRow: 1 });
+      assert.equal(wb.tableAt(created.index).ref, 'A1:B4');
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('createTable rejects a narrowing sheetIndex before table_create', () => {
+    const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('table sheet')];
+    for (const value of invalid) {
+      const wb = Module.Workbook.createDefault();
+      try {
+        const created = wb.createTable({
+          sheetIndex: value,
+          ref: 'A1:B3',
+          name: 'BadTable',
+          columns: ['Product', 'Amount'],
+        });
+        assert.equal(created.status.ok, false, `createTable sheetIndex=${String(value)} accepted`);
+        assert.equal(wb.tableCount().value, 0);
+      } finally {
+        wb.delete();
+      }
     }
   });
 

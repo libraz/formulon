@@ -36,9 +36,9 @@
 # ---------------------------------------
 #
 # * Engine is built `-fno-exceptions -fno-rtti`. We keep that here
-#   (`-sDISABLE_EXCEPTION_CATCHING=1`); the embind binding never throws
-#   because `JsWorkbook` and friends route every failure through a
-#   `{ ok, status, message }` envelope.
+#   (`-sDISABLE_EXCEPTION_CATCHING=1`). Native methods return failures
+#   through result envelopes; JS argument guards can throw before entry.
+#   Caller-owned getters are caught in JS before returning to C++.
 #
 # * `MODULARIZE=1 + EXPORT_NAME=createFormulon + EXPORT_ES6=1` produces
 #   an ES module factory: `import createFormulon from './formulon.js'`.
@@ -135,6 +135,37 @@ else()
   target_link_libraries(formulon_wasm PRIVATE formulon_static)
 endif()
 
+# The N-API registration table is the canonical declaration of primitive
+# positional argument types. Generate the embind pre-js from that table so
+# both JavaScript surfaces reject coercing values before embind enters a
+# native method. The generated file is glue only and is therefore kept out
+# of the wasm link itself.
+if(FM_WASM_VARIANT STREQUAL "embind")
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  set(_FM_WASM_POSITIONAL_GUARD_SCRIPT
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/codegen/gen_wasm_positional_guards.py")
+  set(_FM_WASM_POSITIONAL_GUARD_PRE_JS
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/checked_arguments.pre.js")
+  add_custom_command(
+    OUTPUT "${_FM_WASM_POSITIONAL_GUARD_PRE_JS}"
+    COMMAND "${Python3_EXECUTABLE}" "${_FM_WASM_POSITIONAL_GUARD_SCRIPT}"
+            --node-source "${CMAKE_CURRENT_SOURCE_DIR}/src/node_addon/parts/workbook_class.cc"
+            --wasm-source "${CMAKE_CURRENT_SOURCE_DIR}/src/wasm/parts/bindings_register.cpp"
+            --output "${_FM_WASM_POSITIONAL_GUARD_PRE_JS}"
+    DEPENDS
+      "${_FM_WASM_POSITIONAL_GUARD_SCRIPT}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/node_addon/parts/workbook_class.cc"
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/wasm/parts/bindings_register.cpp"
+    COMMENT "Generating WASM positional argument guards"
+    VERBATIM
+  )
+  add_custom_target(formulon_wasm_positional_guards
+    DEPENDS "${_FM_WASM_POSITIONAL_GUARD_PRE_JS}")
+  add_dependencies(formulon_wasm formulon_wasm_positional_guards)
+  set_property(TARGET formulon_wasm APPEND PROPERTY LINK_DEPENDS
+    "${_FM_WASM_POSITIONAL_GUARD_PRE_JS}")
+endif()
+
 # Shared optimisation flags.
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(_FM_WASM_OPT_FLAGS "-O0;-g")
@@ -205,6 +236,8 @@ if(FM_WASM_VARIANT STREQUAL "embind")
     "-sSTACK_SIZE=${_FM_WASM_STACK_SIZE}"
     "--closure=0"
   )
+  list(APPEND _FM_WASM_COMMON_LINK_FLAGS
+    "--pre-js=${_FM_WASM_POSITIONAL_GUARD_PRE_JS}")
 
   # Compile flags for the embind TU only. formulon_core is built
   # -fno-exceptions -fno-rtti (the project-wide stance). embind, however,

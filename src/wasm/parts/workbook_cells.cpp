@@ -77,21 +77,33 @@ JsStatus JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t 
   if (handle_ == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
-  if (!runs.isArray()) {
+  JsNarrowNumericReader reader("setCellPhoneticRuns");
+  if (!reader.is_array(runs, "setCellPhoneticRuns.runs")) {
     return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
                                 "setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
   }
-  const uint32_t count = js_length(runs);
+  const uint32_t count = reader.length(runs, "setCellPhoneticRuns.runs.length");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
   // Two passes for the same reason `createTable` needs them: no `c_str()`
   // may be taken before `texts` has finished growing.
   std::vector<std::string> texts;
   texts.reserve(count);
   std::vector<fm_phonetic_run_t> records;
   records.reserve(count);
-  for (uint32_t i = 0; i < count; ++i) {
-    const emscripten::val run = runs[i];
-    texts.push_back(js_pull_string(run, "text"));
-    records.push_back(fm_phonetic_run_t{js_pull_u32(run, "sb", 0U), js_pull_u32(run, "eb", 0U), nullptr});
+  for (uint32_t i = 0; i < count && reader.ok(); ++i) {
+    const emscripten::val run = reader.array_element(runs, i, "setCellPhoneticRuns.run");
+    const emscripten::val sb_value = reader.value(run, "sb", "setCellPhoneticRuns.sb");
+    const emscripten::val eb_value = reader.value(run, "eb", "setCellPhoneticRuns.eb");
+    const emscripten::val text_value = reader.value(run, "text", "setCellPhoneticRuns.text");
+    const uint32_t sb = reader.u32_value(sb_value, 0U, "setCellPhoneticRuns.sb");
+    const uint32_t eb = reader.u32_value(eb_value, 0U, "setCellPhoneticRuns.eb");
+    texts.push_back(reader.string_value(text_value, "setCellPhoneticRuns.text"));
+    records.push_back(fm_phonetic_run_t{sb, eb, nullptr});
+  }
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
   }
   for (uint32_t i = 0; i < count; ++i) {
     records[i].text = texts[i].c_str();
@@ -104,9 +116,14 @@ JsStatus JsWorkbook::setCellPhoneticProperties(uint32_t sheet, uint32_t row, uin
   if (handle_ == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
-  const fm_status_t rc = fm_workbook_set_cell_phonetic_properties(
-      handle_, sheet, row, col, js_pull_u32(properties, "fontId", 0U), js_pull_u32(properties, "type", 0U),
-      js_pull_u32(properties, "alignment", 0U));
+  JsNarrowNumericReader reader("setCellPhoneticProperties");
+  const uint32_t font_id = reader.u32(properties, "fontId", 0U, "phoneticProperties.fontId");
+  const uint32_t type = reader.u32(properties, "type", 0U, "phoneticProperties.type");
+  const uint32_t alignment = reader.u32(properties, "alignment", 0U, "phoneticProperties.alignment");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  const fm_status_t rc = fm_workbook_set_cell_phonetic_properties(handle_, sheet, row, col, font_id, type, alignment);
   return status_from_rc(rc);
 }
 
@@ -394,29 +411,42 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
     out.status = error_status(7000);
     return out;
   }
-  const uint32_t sheet = js_pull_u32(spec, "sheetIndex", 0U);
-  const std::string ref = js_pull_string(spec, "ref");
-  const std::string name = js_pull_string(spec, "name");
-  std::string display_name = js_pull_string(spec, "displayName");
+  JsNarrowNumericReader reader("createTable");
+  const uint32_t sheet = reader.u32(spec, "sheetIndex", 0U, "createTable.sheetIndex");
+  const std::string ref = reader.string(spec, "ref", "createTable.ref");
+  const std::string name = reader.string(spec, "name", "createTable.name");
+  std::string display_name = reader.string(spec, "displayName", "createTable.displayName");
   if (display_name.empty()) {
     display_name = name;
   }
-  const std::string style_name = js_pull_string(spec, "styleName");
-  const bool header_row = js_pull_bool(spec, "headerRow", true);
-  const bool totals_row = js_pull_bool(spec, "totalsRow", false);
-  emscripten::val columns = spec["columns"];
-  if (!columns.isArray()) {
-    out.status = binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
-                                      "createTable: `columns` must be an array of column names");
+  const std::string style_name = reader.string(spec, "styleName", "createTable.styleName");
+  const bool header_row = reader.boolean(spec, "headerRow", true, "createTable.headerRow");
+  const bool totals_row = reader.boolean(spec, "totalsRow", false, "createTable.totalsRow");
+  const emscripten::val columns = reader.value(spec, "columns", "createTable.columns");
+  if (!reader.ok()) {
+    out.status = binding_error_status(kInvalidArgument, reader.message().c_str());
     return out;
   }
-  const uint32_t count = js_length(columns);
+  if (!reader.is_array(columns, "createTable.columns")) {
+    out.status = binding_error_status(kInvalidArgument, "createTable: `columns` must be an array of column names");
+    return out;
+  }
+  const uint32_t count = reader.length(columns, "createTable.columns.length");
+  if (!reader.ok()) {
+    out.status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    return out;
+  }
   // The pointer vector is filled in a second pass so that no `c_str()` is
   // taken before `names` has finished growing.
   std::vector<std::string> names;
   names.reserve(count);
-  for (uint32_t i = 0; i < count; ++i) {
-    names.push_back(columns[i].as<std::string>());
+  for (uint32_t i = 0; i < count && reader.ok(); ++i) {
+    const emscripten::val column = reader.array_element(columns, i, "createTable.columns[]");
+    names.push_back(reader.string_value(column, "createTable.columns[]"));
+  }
+  if (!reader.ok()) {
+    out.status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    return out;
   }
   std::vector<const char*> pointers;
   pointers.reserve(count);
@@ -444,8 +474,26 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
   // The C ABI keeps `ref` non-null, so an omitted ref is resolved to the
   // current value before forwarding the partial update. Other omitted fields
   // use the C ABI's preservation sentinels directly.
+  JsNarrowNumericReader reader("updateTable");
   std::string ref;
-  if (js_pull_optional_string(spec, "ref", ref) == nullptr) {
+  std::string style_name;
+  const char* ref_ptr = reader.optional_string(spec, "ref", ref, "updateTable.ref");
+  const char* style_name_ptr = reader.optional_string(spec, "styleName", style_name, "updateTable.styleName");
+  const auto optional_bool = [&reader, &spec](const char* key, const char* field) {
+    const emscripten::val value = reader.value(spec, key, field);
+    if (!reader.ok() || value.isUndefined() || value.isNull()) {
+      return int32_t{-1};
+    }
+    return reader.boolean_value(value, false, field) ? int32_t{1} : int32_t{0};
+  };
+  const int32_t header_row = optional_bool("headerRow", "updateTable.headerRow");
+  const int32_t totals_row = optional_bool("totalsRow", "updateTable.totalsRow");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+
+  std::string effective_ref;
+  if (ref_ptr == nullptr) {
     const char* current_ref = nullptr;
     const char* ignored_name = nullptr;
     const char* ignored_display_name = nullptr;
@@ -455,20 +503,10 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
     if (lookup_rc != 0) {
       return status_from_rc(lookup_rc);
     }
-    ref = current_ref != nullptr ? current_ref : std::string();
+    effective_ref = current_ref != nullptr ? current_ref : std::string();
+    ref_ptr = effective_ref.c_str();
   }
-
-  std::string style_name;
-  const char* style_name_ptr = js_pull_optional_string(spec, "styleName", style_name);
-
-  const auto optional_bool = [&spec](const char* key) {
-    if (!js_has(spec, key)) {
-      return int32_t{-1};
-    }
-    return js_pull_bool(spec, key, false) ? int32_t{1} : int32_t{0};
-  };
-  return status_from_rc(fm_workbook_table_update(handle_, idx, ref.c_str(), style_name_ptr, optional_bool("headerRow"),
-                                                 optional_bool("totalsRow")));
+  return status_from_rc(fm_workbook_table_update(handle_, idx, ref_ptr, style_name_ptr, header_row, totals_row));
 }
 
 JsStatus JsWorkbook::removeTable(uint32_t idx) {
@@ -610,26 +648,28 @@ bool js_optional_index(const emscripten::val& v, double dflt, double max, double
 }
 
 /// Reads a `{kind, number, boolean, text, errorCode}` value record into
-/// `out`; `text` owns the storage a `FM_VAL_TEXT` payload points at.
-void pull_value(const emscripten::val& value, std::string& text, fm_value_t* out) {
-  out->kind = static_cast<fm_value_kind_t>(js_pull_u32(value, "kind", 0U));
-  text = js_pull_string(value, "text");
+/// `out`; `text` owns the storage a `FM_VAL_TEXT` payload points at. Returns
+/// false when any nested field fails validation.
+bool pull_value(JsNarrowNumericReader& reader, const emscripten::val& value, std::string& text, fm_value_t* out) {
+  out->kind = static_cast<fm_value_kind_t>(reader.i32(value, "kind", 0, "value.kind"));
+  text = reader.string(value, "text", "value.text");
   switch (out->kind) {
     case FM_VAL_NUMBER:
-      out->u.number = js_pull_double(value, "number", 0.0);
+      out->u.number = reader.number(value, "number", 0.0, "value.number");
       break;
     case FM_VAL_BOOL:
-      out->u.boolean = js_pull_bool(value, "boolean", false) ? 1 : 0;
+      out->u.boolean = reader.i32(value, "boolean", 0, "value.boolean") != 0 ? 1 : 0;
       break;
     case FM_VAL_TEXT:
       out->u.text = text.c_str();
       break;
     case FM_VAL_ERROR:
-      out->u.error_code = static_cast<int32_t>(js_pull_u32(value, "errorCode", 0U));
+      out->u.error_code = reader.i32(value, "errorCode", 0, "value.errorCode");
       break;
     default:
       break;
   }
+  return reader.ok();
 }
 
 /// Fills `o.cells` / `o.nextCursor` from a cell-range page and destroys it.
@@ -693,7 +733,12 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
                                          "getCellsInRange: `cursor` and `limit` must be non-negative integers"));
     return o;
   }
-  const fm_merge_range bounds = js_pull_range(range);
+  JsNarrowNumericReader reader("getCellsInRange");
+  const fm_merge_range bounds = js_pull_range(range, &reader);
+  if (!reader.ok()) {
+    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    return o;
+  }
   fm_cell_range_t* page = nullptr;
   const fm_status_t rc =
       fm_sheet_cells_in_range(handle_, sheet, bounds.first_row, bounds.first_col, bounds.last_row, bounds.last_col,
@@ -745,7 +790,11 @@ emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t
   }
   std::string text;
   fm_value_t proposed{};
-  pull_value(value, text, &proposed);
+  JsNarrowNumericReader reader("validateValue");
+  if (!pull_value(reader, value, text, &proposed)) {
+    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    return o;
+  }
   fm_validation_outcome outcome{};
   const fm_status_t rc = fm_sheet_validate_value(handle_, sheet, row, col, &proposed, &outcome);
   o.set("status", status_from_rc(rc));
@@ -772,7 +821,14 @@ emscripten::val JsWorkbook::formatValue(emscripten::val value, const std::string
   }
   std::string text;
   fm_value_t v{};
-  pull_value(value, text, &v);
+  JsNarrowNumericReader reader("formatValue");
+  if (!pull_value(reader, value, text, &v)) {
+    emscripten::val out = emscripten::val::object();
+    out.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    out.set("text", std::string());
+    out.set("displayStatus", 0);
+    return out;
+  }
   const char* out = nullptr;
   int32_t display_status = 0;
   const fm_status_t rc = fm_workbook_format_value(handle_, &v, formatCode.c_str(), &out, &display_status);

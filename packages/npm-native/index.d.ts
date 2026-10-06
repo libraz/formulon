@@ -31,7 +31,8 @@ export const ValueKind: Readonly<{
   Lambda: 7;
 }>;
 
-/** Result envelope returned by every fallible binding call. */
+/** Status carried by binding result envelopes. Argument validation may
+ *  throw `TypeError` or `RangeError` before returning a result. */
 export interface Status {
   /** True when the underlying C ABI returned `kOk`. */
   ok: boolean;
@@ -2494,7 +2495,7 @@ export interface Workbook {
   /** Reads the cell's formula in R1C1 notation relative to the cell (no leading `=`); `null` for a non-formula cell. */
   getFormulaR1C1(sheet: number, row: number, col: number): FormulaResult;
   /** Enumerates the populated cells of `range` row-major, one page at a time. Pass the previous `nextCursor` as `cursor` to resume; `limit` 0 / omitted means the maximum (65,536). */
-  getCellsInRange(sheet: number, range: MergeRange, cursor?: number, limit?: number): CellsInRangeResult;
+  getCellsInRange(sheet: number, range: MergeRange, cursor?: number | null, limit?: number | null): CellsInRangeResult;
   /** Reads the text Excel displays for the cell, from its value and XF number format under the workbook's date system. */
   getDisplayText(sheet: number, row: number, col: number): DisplayTextResult;
   /** Renders `value` under the stored-form number format `formatCode` (empty means General). */

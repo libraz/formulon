@@ -125,44 +125,43 @@ Napi::Value Workbook::SetSheetProtection(const Napi::CallbackInfo& info) {
 
   // Keep the std::string buffers alive until after the C ABI call so the
   // borrowed `const char*` fields stay valid.
-  auto pull_string = [&](const char* key) -> std::string {
-    if (!SpecHas(in, key)) {
-      return std::string();
-    }
-    return in.Get(key).ToString().Utf8Value();
-  };
-  const std::string algorithm_name = pull_string("algorithmName");
-  const std::string hash_value = pull_string("hashValue");
-  const std::string salt_value = pull_string("saltValue");
-  const std::string legacy_password = pull_string("legacyPassword");
+  CheckedSpecReader reader(env);
+  std::string algorithm_name;
+  std::string hash_value;
+  std::string salt_value;
+  std::string legacy_password;
+  (void)reader.String(in, "algorithmName", &algorithm_name);
+  (void)reader.String(in, "hashValue", &hash_value);
+  (void)reader.String(in, "saltValue", &salt_value);
+  (void)reader.String(in, "legacyPassword", &legacy_password);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
 
   fm_sheet_protection_t p{};
-  p.enabled = SpecPullInt32(in, "enabled", 0);
+  p.enabled = reader.I32(in, "enabled", 0);
   p.algorithm_name = algorithm_name.c_str();
   p.hash_value = hash_value.c_str();
   p.salt_value = salt_value.c_str();
-  p.spin_count = SpecPullU32(in, "spinCount", 0U);
+  p.spin_count = reader.U32(in, "spinCount", 0U);
   p.legacy_password = legacy_password.c_str();
-  p.sheet = SpecPullInt32(in, "sheet", 0);
-  p.objects = SpecPullInt32(in, "objects", 0);
-  p.scenarios = SpecPullInt32(in, "scenarios", 0);
-  p.format_cells = SpecPullInt32(in, "formatCells", 0);
-  p.format_columns = SpecPullInt32(in, "formatColumns", 0);
-  p.format_rows = SpecPullInt32(in, "formatRows", 0);
-  p.insert_columns = SpecPullInt32(in, "insertColumns", 0);
-  p.insert_rows = SpecPullInt32(in, "insertRows", 0);
-  p.insert_hyperlinks = SpecPullInt32(in, "insertHyperlinks", 0);
-  p.delete_columns = SpecPullInt32(in, "deleteColumns", 0);
-  p.delete_rows = SpecPullInt32(in, "deleteRows", 0);
-  p.select_locked_cells = SpecPullInt32(in, "selectLockedCells", 0);
-  p.select_unlocked_cells = SpecPullInt32(in, "selectUnlockedCells", 0);
-  p.sort = SpecPullInt32(in, "sort", 0);
-  p.auto_filter = SpecPullInt32(in, "autoFilter", 0);
-  p.pivot_tables = SpecPullInt32(in, "pivotTables", 0);
-  if (env.IsExceptionPending()) {
-    // A malformed field left a pending JS exception (see SpecPullInt32 /
-    // SpecPullU32): stop before the C ABI call commits a default value
-    // for it.
+  p.sheet = reader.I32(in, "sheet", 0);
+  p.objects = reader.I32(in, "objects", 0);
+  p.scenarios = reader.I32(in, "scenarios", 0);
+  p.format_cells = reader.I32(in, "formatCells", 0);
+  p.format_columns = reader.I32(in, "formatColumns", 0);
+  p.format_rows = reader.I32(in, "formatRows", 0);
+  p.insert_columns = reader.I32(in, "insertColumns", 0);
+  p.insert_rows = reader.I32(in, "insertRows", 0);
+  p.insert_hyperlinks = reader.I32(in, "insertHyperlinks", 0);
+  p.delete_columns = reader.I32(in, "deleteColumns", 0);
+  p.delete_rows = reader.I32(in, "deleteRows", 0);
+  p.select_locked_cells = reader.I32(in, "selectLockedCells", 0);
+  p.select_unlocked_cells = reader.I32(in, "selectUnlockedCells", 0);
+  p.sort = reader.I32(in, "sort", 0);
+  p.auto_filter = reader.I32(in, "autoFilter", 0);
+  p.pivot_tables = reader.I32(in, "pivotTables", 0);
+  if (!reader.ok()) {
     return env.Undefined();
   }
   fm_status_t rc = fm_sheet_set_protection(handle_, sheet, &p);
@@ -431,8 +430,8 @@ Napi::Value Workbook::ClearRowHeight(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   fm_sheet_format_defaults d{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d) : kBindingInvalidHandle;
   if (rc != 0) {
     d = fm_sheet_format_defaults{};
   }
@@ -455,12 +454,18 @@ Napi::Value Workbook::SetSheetFormatDefaults(const Napi::CallbackInfo& info) {
     return MakeBindingArgumentError(env, "setSheetFormatDefaults expects (sheet:number, defaults:object)");
   }
   const Napi::Object spec = info[1].As<Napi::Object>();
+  CheckedSpecReader reader(env);
+  bool has_default_col_width = false;
+  bool has_default_row_height = false;
   fm_sheet_format_defaults d{};
-  d.default_col_width = SpecPullDouble(spec, "defaultColWidth", 0.0);
-  d.default_row_height = SpecPullDouble(spec, "defaultRowHeight", 0.0);
-  d.base_col_width = SpecPullDouble(spec, "baseColWidth", 8.0);
-  d.has_default_col_width = SpecPullBool(spec, "hasDefaultColWidth", SpecHas(spec, "defaultColWidth")) ? 1 : 0;
-  d.has_default_row_height = SpecPullBool(spec, "hasDefaultRowHeight", SpecHas(spec, "defaultRowHeight")) ? 1 : 0;
+  d.default_col_width = reader.Double(spec, "defaultColWidth", 0.0, &has_default_col_width);
+  d.default_row_height = reader.Double(spec, "defaultRowHeight", 0.0, &has_default_row_height);
+  d.base_col_width = reader.Double(spec, "baseColWidth", 8.0);
+  d.has_default_col_width = reader.Bool(spec, "hasDefaultColWidth", has_default_col_width) ? 1 : 0;
+  d.has_default_row_height = reader.Bool(spec, "hasDefaultRowHeight", has_default_row_height) ? 1 : 0;
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   return MakeStatus(env, fm_sheet_set_format_defaults(handle_, ArgU32(info, 0), &d));
 }
 
@@ -476,9 +481,16 @@ Napi::Value Workbook::GetCellRectPt(const Napi::CallbackInfo& info) {
     status = MakeBindingArgumentError(env, "getCellRectPt expects (sheet:number, range:object, mode:number)");
   } else {
     const Napi::Object range = info[1].As<Napi::Object>();
-    const fm_status_t rc = fm_sheet_cell_rect_pt(
-        handle_, ArgU32(info, 0), SpecPullU32(range, "firstRow", 0U), SpecPullU32(range, "firstCol", 0U),
-        SpecPullU32(range, "lastRow", 0U), SpecPullU32(range, "lastCol", 0U), ArgMode(info, 2), &rect);
+    CheckedSpecReader reader(env);
+    const uint32_t first_row = reader.U32(range, "firstRow", 0U);
+    const uint32_t first_col = reader.U32(range, "firstCol", 0U);
+    const uint32_t last_row = reader.U32(range, "lastRow", 0U);
+    const uint32_t last_col = reader.U32(range, "lastCol", 0U);
+    if (!reader.ok()) {
+      return env.Undefined();
+    }
+    const fm_status_t rc = fm_sheet_cell_rect_pt(handle_, ArgU32(info, 0), first_row, first_col, last_row, last_col,
+                                                 ArgMode(info, 2), &rect);
     if (rc != 0) {
       rect = fm_rect_pt{};
     }
@@ -538,7 +550,8 @@ Napi::Value Workbook::ColumnCharsToPt(const Napi::CallbackInfo& info) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   double pt = 0.0;
-  const fm_status_t rc = fm_sheet_column_chars_to_pt(handle_, ArgU32(info, 0), ArgMode(info, 1), ArgDouble(info, 2), &pt);
+  const fm_status_t rc =
+      fm_sheet_column_chars_to_pt(handle_, ArgU32(info, 0), ArgMode(info, 1), ArgDouble(info, 2), &pt);
   return MakeNumberResult(env, rc, pt);
 }
 

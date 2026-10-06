@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "node_addon/parts/workbook_class.h"
@@ -111,28 +112,38 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
   }
   const Napi::Array runs = info[3].As<Napi::Array>();
   const uint32_t count = runs.Length();
+  CheckedSpecReader reader(env);
   // Two passes so no `c_str()` is taken before `texts` has finished growing.
   std::vector<std::string> texts;
   texts.reserve(count);
   std::vector<fm_phonetic_run_t> records;
   records.reserve(count);
   for (uint32_t i = 0; i < count; ++i) {
-    Napi::Value element = runs.Get(i);
-    if (!element.IsObject()) {
+    Napi::Value element;
+    if (!reader.ArrayElement(runs, i, &element)) {
+      if (!reader.ok()) {
+        return env.Undefined();
+      }
       return MakeBindingArgumentError(env, "setCellPhoneticRuns: each run must be an object { sb, eb, text }");
     }
-    const Napi::Object run = element.As<Napi::Object>();
-    const Napi::Value text = run.Get("text");
-    texts.push_back(text.IsString() ? text.As<Napi::String>().Utf8Value() : std::string());
-    records.push_back(fm_phonetic_run_t{SpecPullU32(run, "sb", 0U), SpecPullU32(run, "eb", 0U), nullptr});
+    Napi::Object run;
+    if (!reader.Object(element, "run", &run)) {
+      if (!reader.ok()) {
+        return env.Undefined();
+      }
+      return MakeBindingArgumentError(env, "setCellPhoneticRuns: each run must be an object { sb, eb, text }");
+    }
+    std::string text;
+    (void)reader.String(run, "text", &text);
+    texts.push_back(std::move(text));
+    records.push_back(fm_phonetic_run_t{reader.U32(run, "sb", 0U), reader.U32(run, "eb", 0U), nullptr});
   }
   for (uint32_t i = 0; i < count; ++i) {
     records[i].text = texts[i].c_str();
   }
-  if (env.IsExceptionPending()) {
-    // A malformed `sb`/`eb` left a pending JS exception (see
-    // SpecPullU32): stop before the C ABI call commits a default value
-    // for it.
+  if (!reader.ok()) {
+    // A malformed field left a pending JS exception: stop before the C ABI
+    // call commits a default value for it.
     return env.Undefined();
   }
   fm_status_t rc = fm_workbook_set_cell_phonetic_runs(handle_, sheet, row, col, records.data(), records.size());
@@ -152,12 +163,13 @@ Napi::Value Workbook::SetCellPhoneticProperties(const Napi::CallbackInfo& info) 
         env, "setCellPhoneticProperties: `properties` must be an object { fontId, type, alignment }");
   }
   const Napi::Object props = info[3].As<Napi::Object>();
-  const uint32_t font_id = SpecPullU32(props, "fontId", 0U);
-  const uint32_t type = SpecPullU32(props, "type", 0U);
-  const uint32_t alignment = SpecPullU32(props, "alignment", 0U);
-  if (env.IsExceptionPending()) {
-    // A malformed field left a pending JS exception (see SpecPullU32):
-    // stop before the C ABI call commits a default value for it.
+  CheckedSpecReader reader(env);
+  const uint32_t font_id = reader.U32(props, "fontId", 0U);
+  const uint32_t type = reader.U32(props, "type", 0U);
+  const uint32_t alignment = reader.U32(props, "alignment", 0U);
+  if (!reader.ok()) {
+    // A malformed field left a pending JS exception: stop before the C ABI
+    // call commits a default value for it.
     return env.Undefined();
   }
   fm_status_t rc = fm_workbook_set_cell_phonetic_properties(handle_, sheet, row, col, font_id, type, alignment);
@@ -427,25 +439,26 @@ namespace {
 
 // Reads a `Value`-shaped JS object into `value`; `text` backs a text payload
 // and must outlive the C call.
-void ReadValueSpec(const Napi::Object& spec, std::string& text, fm_value_t& value) {
-  text = spec.Has("text") ? spec.Get("text").ToString().Utf8Value() : std::string();
-  value.kind = static_cast<fm_value_kind_t>(SpecPullInt32(spec, "kind", FM_VAL_BLANK));
+bool ReadValueSpec(CheckedSpecReader& reader, const Napi::Object& spec, std::string& text, fm_value_t& value) {
+  (void)reader.String(spec, "text", &text);
+  value.kind = static_cast<fm_value_kind_t>(reader.I32(spec, "kind", FM_VAL_BLANK));
   switch (value.kind) {
     case FM_VAL_NUMBER:
-      value.u.number = SpecPullDouble(spec, "number", 0.0);
+      value.u.number = reader.Double(spec, "number", 0.0);
       break;
     case FM_VAL_BOOL:
-      value.u.boolean = SpecPullInt32(spec, "boolean", 0) != 0 ? 1 : 0;
+      value.u.boolean = reader.I32(spec, "boolean", 0) != 0 ? 1 : 0;
       break;
     case FM_VAL_TEXT:
       value.u.text = text.c_str();
       break;
     case FM_VAL_ERROR:
-      value.u.error_code = SpecPullInt32(spec, "errorCode", 0);
+      value.u.error_code = reader.I32(spec, "errorCode", 0);
       break;
     default:
       break;
   }
+  return reader.ok();
 }
 
 // Fills `out` ({status, cells, nextCursor}) from a cell-range page, which it
@@ -510,10 +523,17 @@ Napi::Value Workbook::GetCellsInRange(const Napi::CallbackInfo& info) {
   const bool has_cursor = info.Length() > 2 && info[2].IsNumber();
   const uint64_t cursor = has_cursor ? static_cast<uint64_t>(info[2].As<Napi::Number>().DoubleValue()) : 0U;
   const uint32_t limit = info.Length() > 3 && info[3].IsNumber() ? ArgU32(info, 3) : 0U;
+  CheckedSpecReader reader(env);
+  const uint32_t first_row = reader.U32(range, "firstRow", 0U);
+  const uint32_t first_col = reader.U32(range, "firstCol", 0U);
+  const uint32_t last_row = reader.U32(range, "lastRow", 0U);
+  const uint32_t last_col = reader.U32(range, "lastCol", 0U);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   fm_cell_range_t* page = nullptr;
-  fm_status_t rc = fm_sheet_cells_in_range(handle_, ArgU32(info, 0), SpecPullU32(range, "firstRow", 0U),
-                                           SpecPullU32(range, "firstCol", 0U), SpecPullU32(range, "lastRow", 0U),
-                                           SpecPullU32(range, "lastCol", 0U), cursor, limit, &page);
+  fm_status_t rc =
+      fm_sheet_cells_in_range(handle_, ArgU32(info, 0), first_row, first_col, last_row, last_col, cursor, limit, &page);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
@@ -558,7 +578,10 @@ Napi::Value Workbook::ValidateValue(const Napi::CallbackInfo& info) {
   }
   std::string text;
   fm_value_t value{};
-  ReadValueSpec(info[3].As<Napi::Object>(), text, value);
+  CheckedSpecReader reader(env);
+  if (!ReadValueSpec(reader, info[3].As<Napi::Object>(), text, value)) {
+    return env.Undefined();
+  }
   fm_validation_outcome outcome{};
   const fm_status_t rc =
       fm_sheet_validate_value(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &value, &outcome);
@@ -600,7 +623,10 @@ Napi::Value Workbook::FormatValue(const Napi::CallbackInfo& info) {
   const std::string format_code = ArgString(info, 1);
   std::string text;
   fm_value_t value{};
-  ReadValueSpec(spec, text, value);
+  CheckedSpecReader reader(env);
+  if (!ReadValueSpec(reader, spec, text, value)) {
+    return env.Undefined();
+  }
   const char* out_text = nullptr;
   int32_t display_status = 0;
   const fm_status_t rc = fm_workbook_format_value(handle_, &value, format_code.c_str(), &out_text, &display_status);

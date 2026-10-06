@@ -261,7 +261,7 @@ class JsWorkbook {
 
   JsSheetViewResult getSheetView(uint32_t sheet) const;
   JsSheetProtectionResult getSheetProtection(uint32_t sheet) const;
-  JsStatus setSheetProtection(uint32_t sheet, JsSheetProtection in);
+  JsStatus setSheetProtection(uint32_t sheet, emscripten::val in);
   JsStatus setSheetZoom(uint32_t sheet, uint32_t zoomScale);
   JsStatus setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols);
   JsStatus setSheetTabHidden(uint32_t sheet, bool hidden);

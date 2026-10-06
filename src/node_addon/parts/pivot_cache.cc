@@ -115,13 +115,17 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
   }
   const uint32_t cache_id = ArgU32(info, 0);
   Napi::Object source = (info.Length() > 1 && info[1].IsObject()) ? info[1].As<Napi::Object>() : Napi::Object::New(env);
-  const bool present = SpecPullBool(source, "present", true);
-  const bool has_ref = SpecHas(source, "ref");
-  const bool has_sheet = SpecHas(source, "sheet");
-  const bool has_name = SpecHas(source, "name");
-  const std::string ref = has_ref ? source.Get("ref").ToString().Utf8Value() : std::string();
-  const std::string sheet = has_sheet ? source.Get("sheet").ToString().Utf8Value() : std::string();
-  const std::string name = has_name ? source.Get("name").ToString().Utf8Value() : std::string();
+  CheckedSpecReader reader(env);
+  const bool present = reader.Bool(source, "present", true);
+  std::string ref;
+  std::string sheet;
+  std::string name;
+  const bool has_ref = reader.String(source, "ref", &ref);
+  const bool has_sheet = reader.String(source, "sheet", &sheet);
+  const bool has_name = reader.String(source, "name", &name);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   fm_status_t rc = fm_workbook_pivot_cache_set_worksheet_source(
       handle_, cache_id, present ? 1 : 0, has_ref ? ref.c_str() : nullptr, has_sheet ? sheet.c_str() : nullptr,
       has_name ? name.c_str() : nullptr);
