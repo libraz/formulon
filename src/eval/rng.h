@@ -21,6 +21,21 @@ namespace eval {
 /// `builtins/math_rng.cpp` for the original rationale.
 std::mt19937_64& thread_local_rng();
 
+/// Samples a finite real value from the half-open interval `[min, max)`.
+///
+/// Finite spans use the standard library distribution so the normal-range
+/// sequence remains unchanged. When subtraction overflows, a unit sample is
+/// interpolated between the endpoints without forming the overflowing span.
+/// A singleton is returned directly, preserving its exact double value.
+double sample_uniform_real(double min, double max, std::mt19937_64& rng);
+
+/// Samples an integral-valued double from the closed interval `[min, max]`.
+///
+/// Integral double endpoints that fit in int64_t use the standard integer
+/// distribution. Larger magnitudes are sampled by stable double interpolation
+/// and flooring, avoiding an out-of-range floating-to-integer conversion.
+double sample_uniform_integer(double min, double max, std::mt19937_64& rng);
+
 }  // namespace eval
 }  // namespace formulon
 

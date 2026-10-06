@@ -11,10 +11,12 @@
 //      dispatch, spill-aware reads, OOXML anchor / phantom suppression);
 //      SEQUENCE is the first acceptance test for that machinery.
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <utility>
 
 #include "cell.h"
 #include "eval/eval_context.h"
@@ -696,6 +698,88 @@ TEST(BuiltinsRandarray, MinEqualsMaxIsDeterministic) {
   for (std::size_t i = 0; i < 4U; ++i) {
     ASSERT_TRUE(cells[i].is_number());
     EXPECT_DOUBLE_EQ(cells[i].as_number(), 7.5);
+  }
+}
+
+TEST(BuiltinsRandarray, HugeIntegralSingletonsArePreserved) {
+  // Bounds outside int64_t still represent exact integral doubles. A
+  // singleton must be returned unchanged instead of being cast through the
+  // signed integer distribution's implementation-defined domain.
+  for (const auto& sample : {std::pair<double, double>(1e20, 1e20), std::pair<double, double>(-1e20, -1e20)}) {
+    Arena arena;
+    const Value v = CallRandArray(arena, {Value::number(1), Value::number(1), Value::number(sample.first),
+                                          Value::number(sample.second), Value::boolean(true)});
+    ASSERT_TRUE(v.is_array());
+    ASSERT_TRUE(v.as_array_cells()[0].is_number());
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), sample.first);
+  }
+}
+
+TEST(BuiltinsRandarray, Int64BoundaryInputsStayFiniteAndIntegral) {
+  // -2^63 is representable in int64_t; the nearest representable double below
+  // +2^63 is also safe. The exact +2^63 endpoint and a value below -2^63 are
+  // intentionally unsafe integer-distribution inputs and must still remain
+  // valid double-valued results.
+  const double safe_lower = -9223372036854775808.0;
+  const double safe_upper = 9223372036854774784.0;
+  const double unsafe_lower = -9223372036854777856.0;
+  const double unsafe_upper = 9223372036854777856.0;
+  const std::array<std::pair<double, double>, 4> bounds = {{
+      {safe_lower, safe_lower},
+      {safe_upper, safe_upper},
+      {unsafe_lower, unsafe_lower},
+      {unsafe_upper, unsafe_upper},
+  }};
+  for (const auto& sample : bounds) {
+    Arena arena;
+    const Value v = CallRandArray(arena, {Value::number(1), Value::number(1), Value::number(sample.first),
+                                          Value::number(sample.second), Value::boolean(true)});
+    ASSERT_TRUE(v.is_array());
+    ASSERT_TRUE(v.as_array_cells()[0].is_number());
+    const double x = v.as_array_cells()[0].as_number();
+    EXPECT_TRUE(std::isfinite(x));
+    EXPECT_DOUBLE_EQ(x, sample.first);
+    EXPECT_EQ(std::trunc(x), x);
+  }
+}
+
+TEST(BuiltinsRandarray, HugeIntegralRangesStayInRange) {
+  const std::array<std::pair<double, double>, 3> ranges = {{
+      {1e20, 1e21},
+      {-1e21, -1e20},
+      {-1e20, 1e20},
+  }};
+  for (const auto& sample : ranges) {
+    Arena arena;
+    const Value v = CallRandArray(arena, {Value::number(200), Value::number(1), Value::number(sample.first),
+                                          Value::number(sample.second), Value::boolean(true)});
+    ASSERT_TRUE(v.is_array());
+    const Value* cells = v.as_array_cells();
+    for (std::size_t i = 0; i < 200U; ++i) {
+      ASSERT_TRUE(cells[i].is_number()) << "iter=" << i;
+      const double x = cells[i].as_number();
+      EXPECT_TRUE(std::isfinite(x)) << "iter=" << i;
+      EXPECT_GE(x, sample.first) << "iter=" << i;
+      EXPECT_LE(x, sample.second) << "iter=" << i;
+      EXPECT_EQ(std::trunc(x), x) << "iter=" << i;
+    }
+  }
+}
+
+TEST(BuiltinsRandarray, HugeRealRangeStaysFiniteAndHalfOpen) {
+  constexpr double kMin = -1e308;
+  constexpr double kMax = 1e308;
+  Arena arena;
+  const Value v =
+      CallRandArray(arena, {Value::number(200), Value::number(1), Value::number(kMin), Value::number(kMax)});
+  ASSERT_TRUE(v.is_array());
+  const Value* cells = v.as_array_cells();
+  for (std::size_t i = 0; i < 200U; ++i) {
+    ASSERT_TRUE(cells[i].is_number()) << "iter=" << i;
+    const double x = cells[i].as_number();
+    EXPECT_TRUE(std::isfinite(x)) << "iter=" << i;
+    EXPECT_GE(x, kMin) << "iter=" << i;
+    EXPECT_LT(x, kMax) << "iter=" << i;
   }
 }
 

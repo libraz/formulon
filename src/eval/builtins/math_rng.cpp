@@ -12,7 +12,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <random>
 
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
@@ -58,10 +57,7 @@ Value RandBetween_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
   if (lo_d > hi_d) {
     return Value::error(ErrorCode::Num);
   }
-  const auto lo = static_cast<std::int64_t>(lo_d);
-  const auto hi = static_cast<std::int64_t>(hi_d);
-  std::uniform_int_distribution<std::int64_t> dist(lo, hi);
-  return Value::number(static_cast<double>(dist(thread_local_rng())));
+  return Value::number(sample_uniform_integer(lo_d, hi_d, thread_local_rng()));
 }
 
 }  // namespace

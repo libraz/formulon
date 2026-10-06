@@ -22,7 +22,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <random>
 
 #include "eval/array_alloc.h"
 #include "eval/builtins/numeric_helpers.h"
@@ -220,25 +219,15 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   std::mt19937_64& rng = thread_local_rng();
   if (whole_number) {
-    const auto lo = static_cast<std::int64_t>(min_v);
-    const auto hi = static_cast<std::int64_t>(max_v);
-    std::uniform_int_distribution<std::int64_t> dist(lo, hi);
     for (std::size_t i = 0; i < n; ++i) {
-      buffer[i] = Value::number(static_cast<double>(dist(rng)));
+      buffer[i] = Value::number(sample_uniform_integer(min_v, max_v, rng));
     }
   } else {
     // `std::uniform_real_distribution` matches Excel's documented
     // half-open `[min, max)` for non-whole RANDARRAY. When `min == max`
     // the distribution returns `min` deterministically.
-    if (min_v == max_v) {
-      for (std::size_t i = 0; i < n; ++i) {
-        buffer[i] = Value::number(min_v);
-      }
-    } else {
-      std::uniform_real_distribution<double> dist(min_v, max_v);
-      for (std::size_t i = 0; i < n; ++i) {
-        buffer[i] = Value::number(dist(rng));
-      }
+    for (std::size_t i = 0; i < n; ++i) {
+      buffer[i] = Value::number(sample_uniform_real(min_v, max_v, rng));
     }
   }
 

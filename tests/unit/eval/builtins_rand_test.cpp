@@ -12,8 +12,11 @@
 //
 // No oracle fixtures: the generator cannot reproduce nondeterministic values
 // from Excel, so volatility is asserted structurally here instead.
+#include <array>
+#include <cmath>
 #include <set>
 #include <string_view>
+#include <utility>
 
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
@@ -29,6 +32,21 @@ namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+
+const FunctionDef* RandBetweenDef() {
+  const FunctionDef* def = default_registry().lookup("RANDBETWEEN");
+  EXPECT_NE(def, nullptr) << "RANDBETWEEN must be registered in the default registry";
+  return def;
+}
+
+Value CallRandBetween(Arena& arena, double bottom, double top) {
+  const FunctionDef* def = RandBetweenDef();
+  if (def == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  Value args[2] = {Value::number(bottom), Value::number(top)};
+  return def->impl(args, 2U, arena);
+}
 
 // ---------------------------------------------------------------------------
 // Registry pin -- catches accidental drops / renames during refactors.
@@ -134,6 +152,64 @@ TEST(BuiltinsRandBetween, BoolBottomCoercesToOne) {
     EXPECT_GE(x, 1.0) << "iter=" << i;
     EXPECT_LE(x, 5.0) << "iter=" << i;
     EXPECT_EQ(x, static_cast<double>(static_cast<long long>(x))) << "iter=" << i << " value=" << x;
+  }
+}
+
+TEST(BuiltinsRandBetween, HugeIntegralSingletonsArePreserved) {
+  // Bounds outside int64_t still represent exact integral doubles. A
+  // singleton must be returned unchanged instead of being cast through the
+  // signed integer distribution's implementation-defined domain.
+  for (const auto& sample : {std::pair<std::string_view, double>("=RANDBETWEEN(1e20,1e20)", 1e20),
+                             std::pair<std::string_view, double>("=RANDBETWEEN(-1e20,-1e20)", -1e20)}) {
+    const Value v = EvalSource(sample.first);
+    ASSERT_TRUE(v.is_number()) << sample.first;
+    EXPECT_DOUBLE_EQ(v.as_number(), sample.second) << sample.first;
+  }
+}
+
+TEST(BuiltinsRandBetween, Int64BoundaryInputsStayFiniteAndIntegral) {
+  // -2^63 is representable in int64_t; the nearest representable double below
+  // +2^63 is also safe. The exact +2^63 endpoint and a value below -2^63 are
+  // intentionally unsafe integer-distribution inputs and must still remain
+  // valid double-valued results.
+  const double safe_lower = -9223372036854775808.0;
+  const double safe_upper = 9223372036854774784.0;
+  const double unsafe_lower = -9223372036854777856.0;
+  const double unsafe_upper = 9223372036854777856.0;
+  const std::array<std::pair<double, double>, 5> bounds = {{
+      {safe_lower, safe_lower},
+      {safe_upper, safe_upper},
+      {0x1p63, 0x1p63},
+      {unsafe_lower, unsafe_lower},
+      {unsafe_upper, unsafe_upper},
+  }};
+  for (const auto& sample : bounds) {
+    Arena arena;
+    const Value v = CallRandBetween(arena, sample.first, sample.second);
+    ASSERT_TRUE(v.is_number());
+    const double x = v.as_number();
+    EXPECT_TRUE(std::isfinite(x));
+    EXPECT_DOUBLE_EQ(x, sample.first);
+    EXPECT_EQ(std::trunc(x), x);
+  }
+}
+
+TEST(BuiltinsRandBetween, HugeIntegralRangesStayInRange) {
+  const std::array<std::pair<std::string_view, std::pair<double, double>>, 3> ranges = {{
+      {"=RANDBETWEEN(1e20,1e21)", {1e20, 1e21}},
+      {"=RANDBETWEEN(-1e21,-1e20)", {-1e21, -1e20}},
+      {"=RANDBETWEEN(-1e20,1e20)", {-1e20, 1e20}},
+  }};
+  for (const auto& sample : ranges) {
+    for (int i = 0; i < 100; ++i) {
+      const Value v = EvalSource(sample.first);
+      ASSERT_TRUE(v.is_number()) << sample.first << " iter=" << i;
+      const double x = v.as_number();
+      EXPECT_TRUE(std::isfinite(x)) << sample.first << " iter=" << i;
+      EXPECT_GE(x, sample.second.first) << sample.first << " iter=" << i;
+      EXPECT_LE(x, sample.second.second) << sample.first << " iter=" << i;
+      EXPECT_EQ(std::trunc(x), x) << sample.first << " iter=" << i;
+    }
   }
 }
 
