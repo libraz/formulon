@@ -10,7 +10,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -19,6 +18,7 @@
 #include "eval/text_format/render_common.h"
 #include "eval/text_format/render_fraction.h"
 #include "eval/text_format/rounding.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace text_format {
@@ -44,7 +44,7 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
   const double rounded = std::isfinite(decimal_rounded) ? decimal_rounded : v;
   *negative = rounded < 0.0;
   const double abs_v = std::fabs(rounded);
-  // `snprintf` only converts an already Excel-rounded decimal value to its
+  // `format_fixed` only converts an already Excel-rounded decimal value to its
   // digit string. It must not decide the tie direction: Apple libc rounds
   // `%.0f` ties to even, while Excel rounds them away from zero.
   const int requested_decimals = decimals < 0 ? 0 : decimals;
@@ -57,12 +57,12 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
     rendered_decimals = std::min(requested_decimals, std::max(0, 14 - exponent));
   }
   char buf[64];
-  const int n = std::snprintf(buf, sizeof(buf), "%.*f", rendered_decimals, abs_v);
+  const int n = format_fixed(buf, sizeof(buf), abs_v, rendered_decimals);
   if (n < 0 || static_cast<std::size_t>(n) >= sizeof(buf)) {
-    // Fallback: fall back to sprintf with a heap buffer (extremely rare).
+    // Fallback: a heap buffer for the oversized text (extremely rare).
     std::string out;
     out.resize(static_cast<std::size_t>(rendered_decimals) + 32u);
-    const int m = std::snprintf(&out[0], out.size(), "%.*f", rendered_decimals, abs_v);
+    const int m = format_fixed(&out[0], out.size(), abs_v, rendered_decimals);
     if (m > 0) {
       out.resize(static_cast<std::size_t>(m));
     } else {
@@ -165,9 +165,10 @@ void format_general(std::string& out, double v) {
       frac = 0;
     }
     char buf[64];
-    const int n = std::snprintf(buf, sizeof(buf), "%.*e", frac, v);
+    const int n = format_exponential(buf, sizeof(buf), v, frac);
     if (n <= 0) {
-      out.append(std::to_string(v));
+      format_fixed(buf, sizeof(buf), v, 6);
+      out.append(buf);
       return;
     }
     std::string_view s(buf, static_cast<std::size_t>(n));
@@ -210,9 +211,10 @@ void format_general(std::string& out, double v) {
     frac = 0;
   }
   char buf[64];
-  const int n = std::snprintf(buf, sizeof(buf), "%.*f", frac, v);
+  const int n = format_fixed(buf, sizeof(buf), v, frac);
   if (n <= 0) {
-    out.append(std::to_string(v));
+    format_fixed(buf, sizeof(buf), v, 6);
+    out.append(buf);
     return;
   }
   out.append(buf, trimmed_fraction_length(std::string_view(buf, static_cast<std::size_t>(n))));
@@ -403,7 +405,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
     int_digits.clear();
   }
 
-  // Fraction adjustment: the snprintf produced exactly `frac_digits` chars.
+  // Fraction adjustment: the formatter produced exactly `frac_digits` chars.
   // Trim trailing zeros matching the `#` tokens (scan right-to-left).
   int trim = section.fraction_opt_digits;
   while (trim > 0 && !frac_digits_str.empty() && frac_digits_str.back() == '0') {

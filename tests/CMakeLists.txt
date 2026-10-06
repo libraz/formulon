@@ -42,6 +42,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/utils/double_format_test.cpp
   unit/utils/double_parse_test.cpp
   unit/utils/index_sort_test.cpp
+  unit/utils/number_text_test.cpp
   unit/utils/rect_iterator_test.cpp
   unit/utils/resource_budget_test.cpp
   unit/utils/thread_launch_test.cpp

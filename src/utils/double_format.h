@@ -24,7 +24,7 @@
 //        1E+19       ->  "10000000000000000000"(20 chars,  decimal)
 //        1E+20       ->  "1E+20"               (sci, decimal would be 21 chars)
 //
-// Implementation is dependency-free (`<cstdio>`, `<cmath>`, `<string>`).
+// Implementation is dependency-free (`<cmath>`, `<string>`, `number_text.h`).
 
 #ifndef FORMULON_UTILS_DOUBLE_FORMAT_H_
 #define FORMULON_UTILS_DOUBLE_FORMAT_H_

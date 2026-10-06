@@ -9,7 +9,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -17,6 +16,7 @@
 #include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace text_format {
@@ -296,7 +296,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
   // `# ?/?`), and a zero integer is shown even under `#`.
   const bool suppress_fraction = has_int_group && fraction_num == 0;
   char int_buf[400];
-  const int int_len = std::snprintf(int_buf, sizeof(int_buf), "%.0f", integer_part);
+  const int int_len = format_fixed(int_buf, sizeof(int_buf), integer_part, 0);
   if (int_len < 0 || static_cast<std::size_t>(int_len) >= sizeof(int_buf)) {
     return FormatStatus::kOverflow;
   }

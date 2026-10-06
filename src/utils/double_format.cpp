@@ -6,10 +6,11 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+
+#include "utils/number_text.h"
 
 namespace formulon {
 
@@ -48,7 +49,7 @@ void append_excel_exponent(std::string& out, int exp) {
     out.push_back(static_cast<char>('0' + abs_exp));
   } else {
     char tmp[16];
-    std::snprintf(tmp, sizeof(tmp), "%d", abs_exp);
+    format_signed(tmp, sizeof(tmp), abs_exp);
     out.append(tmp);
   }
 }
@@ -79,7 +80,7 @@ void format_double(std::string& out, double v) {
   // divergences at 16+ sig digits — e.g. literal `1234567890123456` —
   // are documented in tests/divergence.yaml.)
   char buf[40];
-  int n = std::snprintf(buf, sizeof(buf), "%.15g", abs_v);
+  int n = format_general(buf, sizeof(buf), abs_v, 15);
   if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(buf)) {
     // Defensive fallback: should not happen for finite doubles.
     if (negative) {

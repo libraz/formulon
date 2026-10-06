@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <optional>
@@ -23,6 +22,7 @@
 #include "parser/ast_format.h"
 #include "parser/parser.h"
 #include "utils/arena.h"
+#include "utils/number_text.h"
 #include "utils/structured_log.h"
 
 namespace formulon {
@@ -364,10 +364,19 @@ std::optional<cf::CfValueObject> DecodeCfvo(ByteSpan p, bool in_icon_set, const 
 }
 
 std::string FormatGuid(const std::uint8_t* g) {
-  char buf[40];
-  std::snprintf(buf, sizeof(buf), "{%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X}", g[3], g[2],
-                g[1], g[0], g[5], g[4], g[7], g[6], g[8], g[9], g[10], g[11], g[12], g[13], g[14], g[15]);
-  return buf;
+  // Bytes in GUID text order: the first three groups are stored little-endian.
+  static constexpr int kTextOrder[16] = {3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15};
+  std::string out = "{";
+  for (int i = 0; i < 16; ++i) {
+    if (i == 4 || i == 6 || i == 8 || i == 10) {
+      out.push_back('-');
+    }
+    char hex[4];
+    format_hex(hex, sizeof(hex), g[kTextOrder[i]], 2, true);
+    out.append(hex);
+  }
+  out.push_back('}');
+  return out;
 }
 
 /// Decodes the visual payload and x14 link that follow a BrtBeginCFRule, up

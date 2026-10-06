@@ -1,8 +1,7 @@
 #include "io/color_spec_xml.h"
 
-#include <cstdio>
-
 #include "io/xml_utils.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace io {
@@ -39,7 +38,7 @@ void append_color_spec_attrs(std::string& out, const ColorSpec& spec, std::uint3
   char buf[24];
   switch (spec.kind) {
     case ColorSpec::Kind::kTheme:
-      std::snprintf(buf, sizeof(buf), "%u", static_cast<unsigned>(spec.theme));
+      format_unsigned(buf, sizeof(buf), spec.theme);
       out.append(" theme=\"");
       out.append(buf);
       out.push_back('"');
@@ -50,7 +49,7 @@ void append_color_spec_attrs(std::string& out, const ColorSpec& spec, std::uint3
       }
       return;
     case ColorSpec::Kind::kIndexed:
-      std::snprintf(buf, sizeof(buf), "%u", static_cast<unsigned>(spec.indexed));
+      format_unsigned(buf, sizeof(buf), spec.indexed);
       out.append(" indexed=\"");
       out.append(buf);
       out.push_back('"');
@@ -62,7 +61,7 @@ void append_color_spec_attrs(std::string& out, const ColorSpec& spec, std::uint3
     case ColorSpec::Kind::kNone:
       break;
   }
-  std::snprintf(buf, sizeof(buf), "%08X", spec.kind == ColorSpec::Kind::kRgb ? spec.rgb : fallback_argb);
+  format_hex(buf, sizeof(buf), spec.kind == ColorSpec::Kind::kRgb ? spec.rgb : fallback_argb, 8, true);
   out.append(" rgb=\"");
   out.append(buf);
   out.push_back('"');

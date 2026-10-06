@@ -3,7 +3,6 @@
 #include "io/xlsb/protection_records.h"
 
 #include <array>
-#include <cstdio>
 #include <string_view>
 
 #include "io/xlsb/record.h"
@@ -11,6 +10,7 @@
 #include "io/xml_escape.h"
 #include "io/xsd_bool.h"
 #include "pugixml.hpp"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace io {
@@ -70,7 +70,7 @@ bool ReadBlob(ByteSpan& p, std::vector<std::uint8_t>& out) {
 
 std::string LegacyHex(std::uint16_t pwd) {
   char buf[5];
-  std::snprintf(buf, sizeof(buf), "%04X", static_cast<unsigned>(pwd));
+  format_hex(buf, sizeof(buf), pwd, 4, true);
   return buf;
 }
 

@@ -8,6 +8,7 @@
 
 #include "eval/lambda_value.h"
 #include "utils/expected.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 
@@ -61,7 +62,7 @@ std::string Value::debug_to_string() const {
     case ValueKind::Blank:
       return "Blank";
     case ValueKind::Number:
-      return "Number(" + std::to_string(data_.number) + ")";
+      return "Number(" + fixed_string(data_.number, 6) + ")";
     case ValueKind::Bool:
       return std::string("Bool(") + (data_.boolean ? "true" : "false") + ")";
     case ValueKind::Error:

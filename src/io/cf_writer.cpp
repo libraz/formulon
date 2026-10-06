@@ -6,7 +6,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <string>
 #include <string_view>
 
@@ -21,6 +20,7 @@
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
+#include "utils/number_text.h"
 
 namespace formulon::io {
 namespace {
@@ -544,7 +544,7 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) 
     }
     if (r.std_dev.has_value()) {
       char buf[32];
-      std::snprintf(buf, sizeof(buf), "%g", r.std_dev.value());
+      format_general(buf, sizeof(buf), r.std_dev.value(), 6);
       out.append(" stdDev=\"");
       out.append(buf);
       out.push_back('"');

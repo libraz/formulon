@@ -402,15 +402,18 @@ set_target_properties(formulon_wasm_stack_probe PROPERTIES
 # always-active SAX). Native builds keep the threshold at 256 KiB.
 target_compile_definitions(formulon_core PRIVATE FORMULON_WASM=1)
 
-# pugixml parses numbers with strtod. Wrapping the symbol routes those calls
-# to the engine's decimal parser (`__wrap_strtod` in src/utils/double_parse.cpp),
-# which keeps libc's scanner and the 128-bit float routines it needs out of
-# the module: ~10 KB uncompressed, ~5 KB Brotli.
+# pugixml parses numbers with strtod and prints them with snprintf. Wrapping
+# the symbols routes those calls to the engine's decimal parser
+# (`__wrap_strtod` in src/utils/double_parse.cpp) and formatter
+# (`__wrap_snprintf` in src/utils/number_text.cpp), which keeps libc's scanner,
+# its printf machinery and the 128-bit float routines they need out of the
+# module.
 target_link_options(formulon_wasm PRIVATE
   ${_FM_WASM_OPT_FLAGS}
   ${_FM_WASM_LINK_OPT_FLAGS}
   ${_FM_WASM_COMMON_LINK_FLAGS}
   "-Wl,--wrap=strtod"
+  "-Wl,--wrap=snprintf"
 )
 
 # Land the artifact at <build>/<base>.{js,wasm}. Emscripten infers the

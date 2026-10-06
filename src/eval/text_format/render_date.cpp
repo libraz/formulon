@@ -9,7 +9,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <string>
 #include <string_view>
 
@@ -17,6 +16,7 @@
 #include "eval/text_format/render_common.h"
 #include "utils/date_time.h"
 #include "utils/japanese_era.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace text_format {
@@ -206,7 +206,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
       }
       case Tok::DateY4: {
         char buf[16];
-        const int n = std::snprintf(buf, sizeof(buf), "%04d", ymd.y);
+        const int n = format_signed(buf, sizeof(buf), ymd.y, 4);
         if (n > 0) {
           if (dbnum == DbNumMode::kNone) {
             out.append(buf, static_cast<std::size_t>(n));

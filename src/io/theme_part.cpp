@@ -1,7 +1,6 @@
 #include "io/theme_part.h"
 
 #include <array>
-#include <cstdio>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -12,6 +11,7 @@
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
+#include "utils/number_text.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
 
@@ -57,7 +57,7 @@ pugi::xml_node font_scheme_of(const pugi::xml_document& doc) {
 
 std::string hex6(std::uint32_t argb) {
   char buf[8];
-  std::snprintf(buf, sizeof(buf), "%06X", argb & 0xFFFFFFU);
+  format_hex(buf, sizeof(buf), argb & 0xFFFFFFU, 6, true);
   return buf;
 }
 

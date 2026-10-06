@@ -22,7 +22,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <string_view>
@@ -32,6 +31,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/number_text.h"
 #include "value.h"
 
 namespace formulon {
@@ -192,7 +192,7 @@ Expected<std::string, ErrorCode> input_digit_string(const Value& v) {
       // Use a fixed-width scratch buffer: the magnitude fits in a 64-bit
       // integer (signed range is well below 2^63 for our bases).
       char buf[32];
-      std::snprintf(buf, sizeof(buf), "%lld", static_cast<long long>(t));
+      format_signed(buf, sizeof(buf), static_cast<long long>(t));
       return std::string(buf);
     }
     case ValueKind::Bool:

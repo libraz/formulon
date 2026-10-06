@@ -11,12 +11,12 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
 #include <mutex>
 #include <string>
 #include <string_view>
 
 #include "utils/error.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace {
@@ -52,7 +52,8 @@ void AppendEscapedJsonString(std::string& out, std::string_view in) {
       default:
         if (c < 0x20) {
           char buf[8];
-          std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+          out.append("\\u");
+          format_hex(buf, sizeof(buf), c, 4, false);
           out.append(buf);
         } else {
           out.push_back(static_cast<char>(c));
@@ -117,7 +118,7 @@ StructuredLog& StructuredLog::field(std::string_view key, std::string_view value
 StructuredLog& StructuredLog::field(std::string_view key, int64_t value) {
   AppendKey(fields_, key);
   char buf[32];
-  std::snprintf(buf, sizeof(buf), "%lld", static_cast<long long>(value));
+  format_signed(buf, sizeof(buf), value);
   fields_.append(buf);
   return *this;
 }
@@ -130,7 +131,7 @@ StructuredLog& StructuredLog::field(std::string_view key, double value) {
     fields_.append(value < 0 ? "\"-Infinity\"" : "\"Infinity\"");
   } else {
     char buf[64];
-    std::snprintf(buf, sizeof(buf), "%.17g", value);
+    format_general(buf, sizeof(buf), value, 17);
     fields_.append(buf);
   }
   return *this;
@@ -145,7 +146,7 @@ StructuredLog& StructuredLog::field(std::string_view key, bool value) {
 StructuredLog& StructuredLog::error_code(FormulonErrorCode code) {
   AppendKey(fields_, "code");
   char buf[32];
-  std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(code));
+  format_signed(buf, sizeof(buf), static_cast<int>(code));
   fields_.append(buf);
   AppendKey(fields_, "code_name");
   AppendEscapedJsonString(fields_, to_cstring(code));

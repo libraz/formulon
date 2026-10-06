@@ -19,7 +19,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <string>
 #include <utility>
 #include <vector>
@@ -30,6 +29,7 @@
 #include "color_resolve.h"
 #include "io/cf_overlay.h"
 #include "utils/error.h"
+#include "utils/number_text.h"
 #include "workbook.h"
 
 using formulon::c_api::BorrowedArrayArena;
@@ -422,9 +422,9 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
     // nibble is `0`, which no random (version 4) GUID Excel generates
     // can carry, so a synthesized id can never collide with a loaded
     // one.
-    char buf[40];
-    std::snprintf(buf, sizeof(buf), "{FC000000-0000-0000-0000-%012X}", static_cast<unsigned>(out_rule.priority));
-    out_rule.id = buf;
+    char buf[16];
+    formulon::format_hex(buf, sizeof(buf), static_cast<unsigned>(out_rule.priority), 12, true);
+    out_rule.id = std::string("{FC000000-0000-0000-0000-") + buf + "}";
   }
   if (rule.formula1 != nullptr) {
     out_rule.formula1 = std::string(rule.formula1);

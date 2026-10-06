@@ -6,10 +6,11 @@
 
 #include <cmath>
 #include <cstddef>
-#include <cstdio>
+#include <cstring>
 #include <string_view>
 
 #include "utils/double_parse.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace text_format {
@@ -47,7 +48,7 @@ inline double round_display_decimal(double value, int decimals) noexcept {
     return value;
   }
   char text[32];
-  const int written = std::snprintf(text, sizeof(text), "%.*e", kExcelSignificantDigits - 1, std::fabs(value));
+  const int written = format_exponential(text, sizeof(text), std::fabs(value), kExcelSignificantDigits - 1);
   if (written <= 0 || static_cast<std::size_t>(written) >= sizeof(text)) {
     return value;
   }
@@ -117,17 +118,21 @@ inline double round_display_decimal(double value, int decimals) noexcept {
       ++exponent;
     }
   }
-  digits[keep] = '\0';
 
   // Rebuild through a point-free literal: the mantissa is an integer and the
   // exponent carries the scale, so the conversion back is exact for every
   // representable magnitude and never touches a locale decimal point.
   char rebuilt[kExcelSignificantDigits + 8];
-  const int rebuilt_length = std::snprintf(rebuilt, sizeof(rebuilt), "%se%d", digits, exponent - keep + 1);
-  if (rebuilt_length <= 0 || static_cast<std::size_t>(rebuilt_length) >= sizeof(rebuilt)) {
+  const std::size_t mantissa_length = static_cast<std::size_t>(keep);
+  std::memcpy(rebuilt, digits, mantissa_length);
+  rebuilt[mantissa_length] = 'e';
+  const std::size_t exponent_offset = mantissa_length + 1;
+  const int exponent_length =
+      format_signed(rebuilt + exponent_offset, sizeof(rebuilt) - exponent_offset, exponent - keep + 1);
+  if (exponent_length <= 0 || static_cast<std::size_t>(exponent_length) >= sizeof(rebuilt) - exponent_offset) {
     return value;
   }
-  const std::string_view literal(rebuilt, static_cast<std::size_t>(rebuilt_length));
+  const std::string_view literal(rebuilt, exponent_offset + static_cast<std::size_t>(exponent_length));
   return std::copysign(parse_double_prefix(literal).value, value);
 }
 

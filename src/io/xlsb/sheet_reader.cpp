@@ -3,7 +3,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <deque>
 #include <iterator>
@@ -28,6 +27,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/structured_log.h"
 #include "value.h"
@@ -189,15 +189,15 @@ constexpr std::uint32_t kWsPropSyncUnused = 0xFFFFFFFFU;
 /// default tab, and an explicit `auto="1"` would make the two containers
 /// disagree on an otherwise identical sheet.
 void AppendTabColor(std::string& out, const ColorSpec& spec, std::uint32_t argb) {
-  char buf[32];
+  char buf[16];
   switch (spec.kind) {
     case ColorSpec::Kind::kRgb:
-      std::snprintf(buf, sizeof(buf), "<tabColor rgb=\"%08X\"/>", argb);
-      out.append(buf);
+      format_hex(buf, sizeof(buf), argb, 8, true);
+      out.append("<tabColor rgb=\"").append(buf).append("\"/>");
       break;
     case ColorSpec::Kind::kTheme:
-      std::snprintf(buf, sizeof(buf), "<tabColor theme=\"%u\"", spec.theme);
-      out.append(buf);
+      format_unsigned(buf, sizeof(buf), spec.theme);
+      out.append("<tabColor theme=\"").append(buf).push_back('"');
       if (spec.tint != 0.0) {
         // Shortest round-trip spelling, matching the styles writer: the
         // same tint must not be spelled two ways depending on whether the
@@ -209,8 +209,8 @@ void AppendTabColor(std::string& out, const ColorSpec& spec, std::uint32_t argb)
       out.append("/>");
       break;
     case ColorSpec::Kind::kIndexed:
-      std::snprintf(buf, sizeof(buf), "<tabColor indexed=\"%u\"/>", spec.indexed);
-      out.append(buf);
+      format_unsigned(buf, sizeof(buf), spec.indexed);
+      out.append("<tabColor indexed=\"").append(buf).append("\"/>");
       break;
     case ColorSpec::Kind::kAuto:
     case ColorSpec::Kind::kNone:

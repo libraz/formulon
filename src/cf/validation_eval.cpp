@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
 #include <optional>
 #include <string>
@@ -17,6 +16,7 @@
 #include "eval/function_registry.h"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/utf8_length.h"
 #include "workbook.h"
@@ -227,7 +227,7 @@ bool inline_list_matches(const std::vector<std::string>& items, const Value& pro
 std::optional<std::string> literal_of(const Value& proposed) {
   if (proposed.is_number()) {
     char buf[40];
-    std::snprintf(buf, sizeof(buf), "%.17g", proposed.as_number());
+    format_general(buf, sizeof(buf), proposed.as_number(), 17);
     return std::string(buf);
   }
   if (proposed.is_boolean()) {

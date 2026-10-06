@@ -21,6 +21,7 @@
 #include "pivot/field_lookup.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/number_text.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_enum_domain;
@@ -543,10 +544,10 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(
                                "fm_workbook_pivot_field_set_date_group: interval_days=0");
     }
     if (has_start && has_end && start_serial_or_neg1 > end_serial_or_neg1) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "start_serial_or_neg1 must not exceed end_serial_or_neg1",
-                               "fm_workbook_pivot_field_set_date_group: start=" + std::to_string(start_serial_or_neg1) +
-                                   " end=" + std::to_string(end_serial_or_neg1));
+      return set_binding_error(
+          formulon::FormulonErrorCode::kInvalidArgument, "start_serial_or_neg1 must not exceed end_serial_or_neg1",
+          "fm_workbook_pivot_field_set_date_group: start=" + formulon::fixed_string(start_serial_or_neg1, 6) +
+              " end=" + formulon::fixed_string(end_serial_or_neg1, 6));
     }
     if ((has_start && !is_valid_date_serial(start_serial_or_neg1, wb->workbook().date1904())) ||
         (has_end && !is_valid_date_serial(end_serial_or_neg1, wb->workbook().date1904()))) {

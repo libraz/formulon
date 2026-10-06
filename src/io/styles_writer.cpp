@@ -4,7 +4,6 @@
 #include "io/styles_writer.h"
 
 #include <cstdint>
-#include <cstdio>
 #include <string>
 #include <string_view>
 
@@ -13,6 +12,7 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "styles.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace io {
@@ -24,19 +24,19 @@ constexpr std::string_view kXmlNs = "http://schemas.openxmlformats.org/spreadshe
 
 void AppendUint(std::string& out, std::uint64_t v) {
   char buf[24];
-  std::snprintf(buf, sizeof(buf), "%llu", static_cast<unsigned long long>(v));
+  format_unsigned(buf, sizeof(buf), v);
   out.append(buf);
 }
 
 void AppendInt(std::string& out, std::int64_t v) {
   char buf[24];
-  std::snprintf(buf, sizeof(buf), "%lld", static_cast<long long>(v));
+  format_signed(buf, sizeof(buf), v);
   out.append(buf);
 }
 
 void AppendArgb(std::string& out, std::uint32_t argb) {
   char buf[12];
-  std::snprintf(buf, sizeof(buf), "%08X", argb);
+  format_hex(buf, sizeof(buf), argb, 8, true);
   out.append(buf);
 }
 
