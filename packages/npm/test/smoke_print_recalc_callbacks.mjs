@@ -421,7 +421,7 @@ test('delete() from inside its own progress callback throws instead of crashing'
   const result = wb.recalc();
   assert.equal(calls, 1, 'the callback must run exactly once');
   assert.ok(caught instanceof Error, 'delete() inside the callback must throw, not free the handle');
-  assert.match(String(caught.message), /iterative progress callback/);
+  assert.match(String(caught.message), /cannot dispose Workbook during an active method call/);
   // The handle survived: delete() never reached fm_workbook_destroy, so
   // the workbook is still usable after the (deliberately cancelled) solve.
   assert.ok(result.ok, `recalc after a cancelled solve: ${JSON.stringify(result)}`);
