@@ -252,13 +252,11 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::MemNoMem, 0x28, "MemNoMem", PtgStatus::Full},
     {PtgKind::MemFunc, 0x29, "MemFunc", PtgStatus::Full},
     // `RefErr` / `AreaErr` / `RefErr3d` / `AreaErr3d`: the reader decodes
-    // these to an `#REF!` `ErrorLiteral` node (see `ptg_reader.cpp`'s
-    // combined error-reference case). The
-    // writer never emits them because the AST never distinguishes "a
-    // reference that is `#REF!`" from a plain `#REF!` error literal --
-    // both directions of the round-trip are covered, just through two
-    // different Ptg bytes (`PtgErr`, 0x1C, on write), so `Full` reflects
-    // the actual read+write contract despite the asymmetric wire form.
+    // all four to a `#REF!` `ErrorLiteral` (`ptg_reader.cpp`'s combined
+    // error-reference case). The writer emits a `#REF!` literal as `RefErr`
+    // (slot class, zero payload) in a formula without a base cell evaluated
+    // as dynamic-array, as Excel stores a typed `#REF!`, else as `PtgErr`
+    // (0x1C); it never emits the other three.
     {PtgKind::RefErr, 0x2A, "RefErr", PtgStatus::Full},
     {PtgKind::AreaErr, 0x2B, "AreaErr", PtgStatus::Full},
     // Offsets from the formula's base cell (`PtgBaseCell`); read and written
