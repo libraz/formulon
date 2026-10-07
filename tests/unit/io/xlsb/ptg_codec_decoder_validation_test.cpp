@@ -148,6 +148,28 @@ TEST(XlsbPtgCodec, PtgRefErrWithSentinelCoordinatesStillDecodesAsRef) {
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "#REF!");
 }
+TEST(XlsbPtgCodec, ErrorReferenceFormsConsumeTheirPayloads) {
+  // PtgAreaErr (0x2B): two locs. PtgRefErr3d (0x3C) / PtgAreaErr3d (0x3D):
+  // an ixti, then one or two locs. Each is followed by PtgInt(1) and PtgAdd,
+  // so a payload consumed short or long misreads the rest of the stream.
+  const std::vector<std::vector<std::uint8_t>> streams = {
+      {0x2B, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0x1E, 1, 0, 0x03},
+      {0x3C, 0, 0, 0, 0, 0, 0, 0, 0, 0x1E, 1, 0, 0x03},
+      {0x3D, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0x1E, 1, 0, 0x03},
+  };
+  for (const std::vector<std::uint8_t>& rgce : streams) {
+    Arena arena;
+    auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {}, {});
+    ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
+    EXPECT_EQ(parser::format_formula(*decoded.value()), "#REF!+1");
+  }
+  // One byte short of the second loc.
+  const std::vector<std::uint8_t> truncated = {0x2B, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1};
+  Arena arena;
+  auto decoded = decode_ptgs(ByteSpan{truncated.data(), truncated.size()}, {}, arena, {}, {}, {}, {});
+  ASSERT_FALSE(static_cast<bool>(decoded));
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
+}
 TEST(XlsbPtgCodec, DecoderKeepsParenTokenInTheText) {
   // PtgInt(1), PtgInt(2), PtgAdd, PtgParen: the written parentheses Excel
   // shows, which leave the value stack unchanged.

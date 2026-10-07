@@ -253,7 +253,7 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::MemFunc, 0x29, "MemFunc", PtgStatus::Full},
     // `RefErr` / `AreaErr` / `RefErr3d` / `AreaErr3d`: the reader decodes
     // these to an `#REF!` `ErrorLiteral` node (see `ptg_reader.cpp`'s
-    // combined `RefErr`/`RefErr3d` and `AreaErr`/`AreaErr3d` cases). The
+    // combined error-reference case). The
     // writer never emits them because the AST never distinguishes "a
     // reference that is `#REF!`" from a plain `#REF!` error literal --
     // both directions of the round-trip are covered, just through two

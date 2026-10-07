@@ -1118,45 +1118,29 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         break;
       }
       case PtgKind::RefErr:
-      case PtgKind::RefErr3d: {
-        // Consume the payload (ixti for the 3d form, then the loc) and
-        // emit a `#REF!` literal.
-        if (info->kind == PtgKind::RefErr3d) {
-          auto ixti_or = read_u16(cursor);
-          if (!ixti_or) {
-            return ixti_or.error();
-          }
-        }
-        auto skip = read_loc(cursor, {});
-        if (!skip) {
-          return skip.error();
-        }
-        parser::AstNode* n = parser::make_error_literal(arena, ErrorCode::Ref);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRefErr)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
-        break;
-      }
+      case PtgKind::RefErr3d:
       case PtgKind::AreaErr:
       case PtgKind::AreaErr3d: {
-        if (info->kind == PtgKind::AreaErr3d) {
+        // Consume the payload (ixti for the 3d forms, then one loc, or two
+        // for the area forms) and emit a `#REF!` literal.
+        const bool area = info->kind == PtgKind::AreaErr || info->kind == PtgKind::AreaErr3d;
+        if (info->kind == PtgKind::RefErr3d || info->kind == PtgKind::AreaErr3d) {
           auto ixti_or = read_u16(cursor);
           if (!ixti_or) {
             return ixti_or.error();
           }
         }
-        auto skip1 = read_loc(cursor, {});
-        if (!skip1) {
-          return skip1.error();
-        }
-        auto skip2 = read_loc(cursor, {});
-        if (!skip2) {
-          return skip2.error();
+        for (int i = area ? 2 : 1; i > 0; --i) {
+          auto skip = read_loc(cursor, {});
+          if (!skip) {
+            return skip.error();
+          }
         }
         parser::AstNode* n = parser::make_error_literal(arena, ErrorCode::Ref);
         if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgAreaErr)", "context=xlsb_ptg_reader");
+          return make_error(FormulonErrorCode::kOutOfMemory,
+                            area ? "arena exhausted (PtgAreaErr)" : "arena exhausted (PtgRefErr)",
+                            "context=xlsb_ptg_reader");
         }
         stack.push_back(n);
         break;
