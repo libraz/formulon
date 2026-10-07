@@ -2315,27 +2315,15 @@ std::vector<BlockedSpillFootprint> remap_blocked_spill_footprints(const std::vec
                                                                   std::uint32_t index, std::uint32_t count) {
   std::vector<BlockedSpillFootprint> mapped;
   mapped.reserve(footprints.size());
-  const std::uint32_t bound = axis == parser::RowColAxis::kRow ? Sheet::kMaxRows : Sheet::kMaxCols;
-  const std::uint64_t delete_end = static_cast<std::uint64_t>(index) + count;
   for (const BlockedSpillFootprint& original : footprints) {
-    std::uint32_t coordinate = axis == parser::RowColAxis::kRow ? original.anchor_row : original.anchor_col;
-    if (edit == parser::RowColEdit::kDelete) {
-      if (static_cast<std::uint64_t>(coordinate) >= index && static_cast<std::uint64_t>(coordinate) < delete_end) {
-        continue;
-      }
-      if (static_cast<std::uint64_t>(coordinate) >= delete_end) {
-        coordinate -= count;
-      }
-    } else if (coordinate >= index) {
-      const std::uint64_t shifted = static_cast<std::uint64_t>(coordinate) + count;
-      if (shifted >= bound) {
-        continue;
-      }
-      coordinate = static_cast<std::uint32_t>(shifted);
+    const CellShift shift =
+        shift_cell_coords_for_row_col_edit(axis, edit, index, count, original.anchor_row, original.anchor_col);
+    if (!shift.kept) {
+      continue;
     }
     BlockedSpillFootprint next = original;
-    next.anchor_row = axis == parser::RowColAxis::kRow ? coordinate : original.anchor_row;
-    next.anchor_col = axis == parser::RowColAxis::kRow ? original.anchor_col : coordinate;
+    next.anchor_row = shift.new_row;
+    next.anchor_col = shift.new_col;
     mapped.push_back(next);
   }
   return mapped;
