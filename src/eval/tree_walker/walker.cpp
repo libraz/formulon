@@ -199,26 +199,15 @@ Shaped read_whole_axis(const parser::Reference& lhs, const parser::Reference& rh
     return Shaped{Value::error(expanded.error()), nullptr};
   }
   const std::vector<Value>& walked = expanded.value();
-  const std::size_t tail_len = full_height ? rect.cols() : rect.rows();
   Value* cells = walked.empty() ? nullptr : arena.create_array<Value>(walked.size());
-  Value* tail = arena.create_array<Value>(tail_len);
-  if ((!walked.empty() && cells == nullptr) || tail == nullptr) {
+  if (!walked.empty() && cells == nullptr) {
     return Shaped{Value::error(ErrorCode::Num), nullptr};
   }
   for (std::size_t i = 0; i < walked.size(); ++i) {
     cells[i] = walked[i];
   }
-  for (std::size_t i = 0; i < tail_len; ++i) {
-    tail[i] = Value::blank(BlankGridProjection::kReferenceGridZero);
-  }
-  Shaped out;
-  out.tail_array = make_tail_array(arena, rect.rows(), rect.cols(), full_height ? walked_rows : walked_cols,
-                                   full_height ? TailAxis::kRows : TailAxis::kCols, cells, tail,
-                                   /*from_reference=*/true);
-  if (out.tail_array == nullptr) {
-    return Shaped{Value::error(ErrorCode::Num), nullptr};
-  }
-  return out;
+  return make_reference_tail(arena, rect.rows(), rect.cols(), full_height ? walked_rows : walked_cols,
+                             full_height ? TailAxis::kRows : TailAxis::kCols, cells);
 }
 
 // Builds the value of the bounded-corner rectangle a bare range declares: at

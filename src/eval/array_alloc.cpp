@@ -57,6 +57,24 @@ const TailArray* make_tail_array(Arena& arena, std::uint32_t rows, std::uint32_t
   return arena.create<TailArray>(TailArray{rows, cols, head, axis, cells, tail, from_reference});
 }
 
+Shaped make_reference_tail(Arena& arena, std::uint32_t rows, std::uint32_t cols, std::uint32_t head, TailAxis axis,
+                           const Value* cells) {
+  const std::uint32_t tail_len = axis == TailAxis::kRows ? cols : rows;
+  Value* tail = arena.create_array<Value>(tail_len);
+  if (tail == nullptr) {
+    return Shaped{Value::error(ErrorCode::Num), nullptr};
+  }
+  for (std::uint32_t i = 0; i < tail_len; ++i) {
+    tail[i] = Value::blank(BlankGridProjection::kReferenceGridZero);
+  }
+  Shaped out;
+  out.tail_array = make_tail_array(arena, rows, cols, head, axis, cells, tail, /*from_reference=*/true);
+  if (out.tail_array == nullptr) {
+    return Shaped{Value::error(ErrorCode::Num), nullptr};
+  }
+  return out;
+}
+
 const Value& tail_array_at(const TailArray& ta, std::uint32_t r, std::uint32_t c) {
   if (ta.axis == TailAxis::kRows) {
     return r < ta.head ? ta.cells[static_cast<std::size_t>(r) * ta.cols + c] : ta.tail[c];

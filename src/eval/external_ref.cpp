@@ -150,8 +150,7 @@ bool WholeAxisTail(const parser::AstNode& node, Arena& arena, const EvalContext&
     return true;
   }
   Value* cells = head_cells == 0 ? nullptr : arena.create_array<Value>(static_cast<std::size_t>(head_cells));
-  Value* tail = arena.create_array<Value>(tail_len);
-  if ((head_cells != 0 && cells == nullptr) || tail == nullptr) {
+  if (head_cells != 0 && cells == nullptr) {
     *out = Shaped{Value::error(ErrorCode::Num), nullptr};
     return true;
   }
@@ -169,14 +168,7 @@ bool WholeAxisTail(const parser::AstNode& node, Arena& arena, const EvalContext&
       }
     }
   }
-  for (std::uint32_t i = 0; i < tail_len; ++i) {
-    tail[i] = Value::blank(BlankGridProjection::kReferenceGridZero);
-  }
-  out->tail_array = make_tail_array(arena, rect.rows(), rect.cols(), head, by_rows ? TailAxis::kRows : TailAxis::kCols,
-                                    cells, tail, /*from_reference=*/true);
-  if (out->tail_array == nullptr) {
-    *out = Shaped{Value::error(ErrorCode::Num), nullptr};
-  }
+  *out = make_reference_tail(arena, rect.rows(), rect.cols(), head, by_rows ? TailAxis::kRows : TailAxis::kCols, cells);
   return true;
 }
 

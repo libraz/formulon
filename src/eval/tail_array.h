@@ -47,6 +47,12 @@ struct Shaped {
 const TailArray* make_tail_array(Arena& arena, std::uint32_t rows, std::uint32_t cols, std::uint32_t head,
                                  TailAxis axis, const Value* cells, const Value* tail, bool from_reference);
 
+/// The read of a whole column / row: `cells` (the walked head, possibly null
+/// when `head` is 0) followed by reference-grid blanks to the declared size.
+/// `#NUM!` when the arena is exhausted.
+Shaped make_reference_tail(Arena& arena, std::uint32_t rows, std::uint32_t cols, std::uint32_t head, TailAxis axis,
+                           const Value* cells);
+
 /// Value at position (`r`, `c`) of `ta`; both indices must be within the declared size.
 const Value& tail_array_at(const TailArray& ta, std::uint32_t r, std::uint32_t c);
 
