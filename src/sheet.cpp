@@ -209,6 +209,48 @@ std::vector<CellAddress> collect_anchors_intersecting(const AnchorMap* table, st
   return out;
 }
 
+/// Returns the committed region whose rectangle contains `(row, col)`, anchor
+/// included, or null. Callers hold the spill mutex.
+const SpillRegion* find_region_covering(const SpillTable& table, std::uint32_t row, std::uint32_t col) {
+  // Committed regions never overlap, so the first covering one is the only one.
+  const SpillRegion* covering = nullptr;
+  const std::uint64_t row_end = static_cast<std::uint64_t>(row) + 1U;
+  table.any_region_near_rows(row, row_end, [&](const SpillRegion& region) {
+    if (!RectIntersectsSpan(region, row, row_end, col, static_cast<std::uint64_t>(col) + 1U)) {
+      return false;
+    }
+    covering = &region;
+    return true;
+  });
+  return covering;
+}
+
+/// Anchor of the committed or blocked spill that a cell write at `(row, col)`
+/// displaces: the cell's own anchor entry, else the region covering it.
+std::optional<CellAddress> spill_displaced_by_write(const SpillTable* table, std::uint32_t row, std::uint32_t col) {
+  if (table == nullptr) {
+    return std::nullopt;
+  }
+  const CellAddress address{row, col};
+  if (table->by_anchor.find(address) != table->by_anchor.end() ||
+      table->blocked_by_anchor.find(address) != table->blocked_by_anchor.end()) {
+    return address;
+  }
+  if (const SpillRegion* covering = find_region_covering(*table, row, col); covering != nullptr) {
+    return CellAddress{covering->anchor_row, covering->anchor_col};
+  }
+  return std::nullopt;
+}
+
+/// Turns `slot` into a literal: drops the formula and the annotations the
+/// previous value carried.
+void reset_to_literal(Cell& slot) {
+  slot.formula_text.clear();
+  slot.dynamic_array = false;
+  slot.phonetic_runs.clear();
+  slot.phonetic_props = PhoneticProperties{};
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -371,21 +413,13 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
 
   // A literal write can replace either the anchor or a phantom. In both
   // cases the complete region must disappear before updating storage.
-  const CellAddress address{row, col};
-  if (spill_table_ != nullptr &&
-      (spill_table_->by_anchor.find(address) != spill_table_->by_anchor.end() ||
-       spill_table_->blocked_by_anchor.find(address) != spill_table_->blocked_by_anchor.end())) {
-    clear_spill_locked(row, col);
-  } else if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
-    clear_spill_locked(covering->anchor_row, covering->anchor_col);
+  if (const std::optional<CellAddress> anchor = spill_displaced_by_write(spill_table_.get(), row, col)) {
+    clear_spill_locked(anchor->row, anchor->col);
   }
 
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
-  slot.formula_text.clear();
-  slot.dynamic_array = false;
-  slot.phonetic_runs.clear();
-  slot.phonetic_props = PhoneticProperties{};
+  reset_to_literal(slot);
   slot.cached_value = v;
   index_formula_cell_locked(row, col, false);
   cell_enumeration_revision_.bump();
@@ -395,21 +429,13 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
   assert(row < kMaxRows && col < kMaxCols);
 
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  const CellAddress address{row, col};
-  if (spill_table_ != nullptr &&
-      (spill_table_->by_anchor.find(address) != spill_table_->by_anchor.end() ||
-       spill_table_->blocked_by_anchor.find(address) != spill_table_->blocked_by_anchor.end())) {
-    clear_spill_locked(row, col);
-  } else if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
-    clear_spill_locked(covering->anchor_row, covering->anchor_col);
+  if (const std::optional<CellAddress> anchor = spill_displaced_by_write(spill_table_.get(), row, col)) {
+    clear_spill_locked(anchor->row, anchor->col);
   }
 
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
-  slot.formula_text.clear();
-  slot.dynamic_array = false;
-  slot.phonetic_runs.clear();
-  slot.phonetic_props = PhoneticProperties{};
+  reset_to_literal(slot);
   auto owned = std::make_unique<std::string>(text);
   slot.cached_value = Value::text(*owned);
   slot.cached_text_owned = std::move(owned);
@@ -423,13 +449,8 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
 
   // Formula replacement can likewise target an anchor or a phantom.
-  const CellAddress address{row, col};
-  if (spill_table_ != nullptr &&
-      (spill_table_->by_anchor.find(address) != spill_table_->by_anchor.end() ||
-       spill_table_->blocked_by_anchor.find(address) != spill_table_->blocked_by_anchor.end())) {
-    clear_spill_locked(row, col);
-  } else if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
-    clear_spill_locked(covering->anchor_row, covering->anchor_col);
+  if (const std::optional<CellAddress> anchor = spill_displaced_by_write(spill_table_.get(), row, col)) {
+    clear_spill_locked(anchor->row, anchor->col);
   }
 
   RowCells& row_cells = rows_[row];
@@ -1028,16 +1049,7 @@ std::optional<BlockedSpillFootprint> Sheet::committed_spill_footprint_covering(s
   if (spill_table_ == nullptr) {
     return std::nullopt;
   }
-  // Committed regions never overlap, so the first covering one is the only one.
-  const SpillRegion* covering = nullptr;
-  const std::uint64_t row_end = static_cast<std::uint64_t>(row) + 1U;
-  spill_table_->any_region_near_rows(row, row_end, [&](const SpillRegion& region) {
-    if (!RectIntersectsSpan(region, row, row_end, col, static_cast<std::uint64_t>(col) + 1U)) {
-      return false;
-    }
-    covering = &region;
-    return true;
-  });
+  const SpillRegion* covering = find_region_covering(*spill_table_, row, col);
   if (covering == nullptr) {
     return std::nullopt;
   }
@@ -1139,16 +1151,7 @@ const SpillRegion* Sheet::spill_region_covering_locked(std::uint32_t row, std::u
   if (spill_table_ == nullptr) {
     return nullptr;
   }
-  // Committed regions never overlap, so the first covering one is the only one.
-  const SpillRegion* covering = nullptr;
-  const std::uint64_t row_end = static_cast<std::uint64_t>(row) + 1U;
-  spill_table_->any_region_near_rows(row, row_end, [&](const SpillRegion& region) {
-    if (!RectIntersectsSpan(region, row, row_end, col, static_cast<std::uint64_t>(col) + 1U)) {
-      return false;
-    }
-    covering = &region;
-    return true;
-  });
+  const SpillRegion* covering = find_region_covering(*spill_table_, row, col);
   if (covering != nullptr && row == covering->anchor_row && col == covering->anchor_col) {
     return nullptr;
   }
