@@ -125,10 +125,6 @@ Expected<void, Error> decode_hyperlink(const XlsbRecord& rec, Sheet& sheet) {
 }
 
 Expected<void, Error> emit_hyperlink(std::vector<std::uint8_t>& dst, const Hyperlink& hyperlink, std::string_view rid) {
-  constexpr std::uint32_t kMaxRelIdUnits = 32767U;
-  constexpr std::uint32_t kMaxLocationUnits = 2083U;
-  constexpr std::uint32_t kMaxTooltipUnits = 255U;
-  constexpr std::uint32_t kMaxDisplayUnits = 32767U;
   if (!Sheet::rect_in_grid(hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "xlsb hyperlink rectangle out of grid",
                       "context=xlsb_sheet_writer row=" + std::to_string(hyperlink.row) +
@@ -146,18 +142,19 @@ Expected<void, Error> emit_hyperlink(std::vector<std::uint8_t>& dst, const Hyper
                                     (static_cast<std::uint32_t>(payload[rid_start + 1U]) << 8U) |
                                     (static_cast<std::uint32_t>(payload[rid_start + 2U]) << 16U) |
                                     (static_cast<std::uint32_t>(payload[rid_start + 3U]) << 24U);
-    if (rid_units > kMaxRelIdUnits) {
+    if (rid_units > kMaxHyperlinkRelIdUnits) {
       return make_error(FormulonErrorCode::kInvalidArgument, "xlsb BrtHLink relationship id exceeds string limit",
                         "context=xlsb_sheet_writer cch=" + std::to_string(rid_units));
     }
   }
-  if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.location, kMaxLocationUnits, "location"); !r) {
+  if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.location, kMaxHyperlinkLocationUnits, "location");
+      !r) {
     return r.error();
   }
-  if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.tooltip, kMaxTooltipUnits, "tooltip"); !r) {
+  if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.tooltip, kMaxHyperlinkTooltipUnits, "tooltip"); !r) {
     return r.error();
   }
-  if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.display, kMaxDisplayUnits, "display"); !r) {
+  if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.display, kMaxHyperlinkDisplayUnits, "display"); !r) {
     return r.error();
   }
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtHLink), payload);

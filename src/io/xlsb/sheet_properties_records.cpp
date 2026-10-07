@@ -233,8 +233,8 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
 void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   const WorksheetProperties properties_model = ParseSheetProperties(sheet.print_settings().sheet_pr_xml);
   std::vector<std::uint8_t> properties;
-  emit_u16(properties, 0x04C9U);  // page breaks, publish, outline defaults
-  emit_u8(properties, 0x02U);     // evaluate conditional formatting
+  emit_u16(properties, kDefaultWsPropFlags);  // page breaks, publish, outline defaults
+  emit_u8(properties, kDefaultWsPropFlags2);  // evaluate conditional formatting
   // BrtColor. An automatic type with the automatic palette index is the
   // untinted tab; any other selector sets fValidRGB alongside it, matching
   // how the styles writer spells the same structure.
@@ -248,8 +248,8 @@ void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   emit_u8(properties, static_cast<std::uint8_t>((properties_model.color_argb >> 8U) & 0xFFU));
   emit_u8(properties, static_cast<std::uint8_t>(properties_model.color_argb & 0xFFU));
   emit_u8(properties, static_cast<std::uint8_t>((properties_model.color_argb >> 24U) & 0xFFU));
-  emit_u32(properties, 0xFFFFFFFFU);  // rwSync: unused
-  emit_u32(properties, 0xFFFFFFFFU);  // colSync: unused
+  emit_u32(properties, kWsPropSyncUnused);  // rwSync: unused
+  emit_u32(properties, kWsPropSyncUnused);  // colSync: unused
   emit_xlwidestring(properties, properties_model.code_name);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsProp), properties);
 }
