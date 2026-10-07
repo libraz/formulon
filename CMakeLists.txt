@@ -237,6 +237,7 @@ set(FORMULON_CORE_SOURCES
   src/pivot/filter_engine.cpp
   src/pivot/hierarchy_builder.cpp
   src/pivot/show_values_as.cpp
+  src/pivot/value_filter_pass.cpp
   src/pivot/pivot_evaluator.cpp
   src/pivot/pivot_index.cpp
   src/pivot/pivot_layout.cpp

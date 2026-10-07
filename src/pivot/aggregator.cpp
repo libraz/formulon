@@ -10,6 +10,7 @@
 
 #include "numeric_aggregate_kernels.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_result.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
 #include "utils/error.h"
@@ -206,6 +207,24 @@ Value AggregateProduct(const std::vector<Value>& values) {
   return Value::number(product);
 }
 
+// ---------------------------------------------------------------------------
+// Result-side text reification.
+// ---------------------------------------------------------------------------
+//
+// `PivotResult::values` / `subtotals` / grand totals must outlive the
+// cache they were computed against (GETPIVOTDATA reads them outside of
+// any specific evaluation arena). Numbers, bools, errors, and blanks
+// are trivially copyable. Text is the only kind that needs storage —
+// we copy the bytes into `result.text_storage` and rebuild a `Value`
+// pointing into the deque entry. Pointer/iterator stability of
+// `std::deque` keeps the views valid across subsequent appends.
+Value reify(const Value& v, PivotResult& result) {
+  if (!v.is_text()) {
+    return v;
+  }
+  result.text_storage.emplace_back(v.as_text());
+  return Value::text(result.text_storage.back());
+}
 }  // namespace
 
 Value apply_aggregation(Aggregation agg, const std::vector<Value>& values) {
@@ -270,6 +289,13 @@ void append_leaf_set_field_values(const PivotCache& cache, const RecordBuckets& 
       append_bucket_field_values(cache, buckets, row_leaf, col_leaf, field_index, out);
     }
   }
+}
+
+Value aggregate_or_blank(Aggregation aggregation, const std::vector<Value>& values, PivotResult& result) {
+  if (values.empty()) {
+    return Value::blank();
+  }
+  return reify(apply_aggregation(aggregation, values), result);
 }
 
 }  // namespace formulon::pivot

@@ -33,6 +33,8 @@ namespace formulon::pivot {
 /// `cache.records()`.
 using RecordBuckets = std::vector<std::vector<std::vector<std::size_t>>>;
 
+struct PivotResult;
+
 /// Applies the named aggregation to `values`. The dispatch handles
 /// blank-skip, error-propagation (arithmetic aggregations only, see
 /// above), and the Excel-specific empty-set semantics (e.g. MAX over an
@@ -59,6 +61,12 @@ void append_leaf_set_field_values(const PivotCache& cache, const RecordBuckets& 
                                   const std::vector<std::size_t>& row_leaves,
                                   const std::vector<std::size_t>& col_leaves, std::uint32_t field_index,
                                   std::vector<Value>& out);
+
+/// An empty row/column intersection is not the same as aggregating an empty
+/// value sequence. Excel leaves a sparse pivot cell blank; aggregation
+/// identities such as SUM's zero and AVERAGE's #DIV/0! only apply when a
+/// group exists and its values themselves are empty/non-numeric.
+Value aggregate_or_blank(Aggregation aggregation, const std::vector<Value>& values, PivotResult& result);
 
 }  // namespace formulon::pivot
 
