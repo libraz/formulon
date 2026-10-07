@@ -265,6 +265,10 @@ bool Workbook::ArgBool(const Napi::CallbackInfo& info, size_t idx) {
   return info[idx].ToBoolean().Value();
 }
 
+Napi::Object Workbook::ArgObjectOrEmpty(const Napi::CallbackInfo& info, size_t idx) {
+  return (info.Length() > idx && info[idx].IsObject()) ? info[idx].As<Napi::Object>() : Napi::Object::New(info.Env());
+}
+
 Napi::Value Workbook::InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

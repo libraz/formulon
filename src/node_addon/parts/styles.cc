@@ -217,6 +217,19 @@ Napi::Object CellXfResultToJs(Napi::Env env, fm_status_t rc, fm_cell_xf xf) {
   return out;
 }
 
+// Shared body of the style-pool count getters that take no argument.
+using StyleCountFn = fm_status_t (*)(fm_workbook_t*, uint32_t*);
+
+Napi::Value StyleCountResult(const Napi::CallbackInfo& info, fm_workbook_t* handle, StyleCountFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  uint32_t n = 0;
+  const fm_status_t rc = fn(handle, &n);
+  return MakeNumberResult(env, rc, n);
+}
+
 }  // namespace
 
 // ---- Cell-XF index --------------------------------------------------
@@ -371,7 +384,7 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
-  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object record = ArgObjectOrEmpty(info, 0);
   CheckedSpecReader reader(env);
   std::string name;
   fm_font_record fr{};
@@ -393,7 +406,7 @@ Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const uint32_t font_index = ArgU32(info, 0);
-  Napi::Object record = (info.Length() > 1 && info[1].IsObject()) ? info[1].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object record = ArgObjectOrEmpty(info, 1);
   CheckedSpecReader reader(env);
   std::string name;
   fm_font_record fr{};
@@ -410,7 +423,7 @@ Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object record = ArgObjectOrEmpty(info, 0);
   CheckedSpecReader reader(env);
   std::string name;
   fm_font_record fr{};
@@ -427,7 +440,7 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
-  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object record = ArgObjectOrEmpty(info, 0);
   CheckedSpecReader reader(env);
   const fm_fill_record fr = PullFillRecord(reader, record);
   if (!reader.ok()) {
@@ -445,7 +458,7 @@ Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
-  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object record = ArgObjectOrEmpty(info, 0);
   CheckedSpecReader reader(env);
   const fm_border_record br = PullBorderRecord(reader, record);
   if (!reader.ok()) {
@@ -474,7 +487,7 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
-  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object record = ArgObjectOrEmpty(info, 0);
   CheckedSpecReader reader(env);
   fm_cell_xf xf{};
   xf.font_index = reader.U32(record, "fontIndex", 0U);
@@ -562,7 +575,7 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
-  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object record = ArgObjectOrEmpty(info, 0);
 
   std::string font_name;
   std::string num_fmt_code;
@@ -618,35 +631,17 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
 // by the binding codegen (see `src/node_addon/generated/styles_counts.cc`).
 
 Napi::Value Workbook::DxfCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_styles_get_dxf_count(handle_, &n);
-  return MakeNumberResult(env, rc, n);
+  return StyleCountResult(info, handle_, &fm_styles_get_dxf_count);
 }
 
 // ---- Named cell styles ----------------------------------------------
 
 Napi::Value Workbook::CellStyleCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_styles_get_cell_style_count(handle_, &n);
-  return MakeNumberResult(env, rc, n);
+  return StyleCountResult(info, handle_, &fm_styles_get_cell_style_count);
 }
 
 Napi::Value Workbook::CellStyleXfCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_styles_get_cell_style_xf_count(handle_, &n);
-  return MakeNumberResult(env, rc, n);
+  return StyleCountResult(info, handle_, &fm_styles_get_cell_style_xf_count);
 }
 
 Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {
@@ -681,7 +676,7 @@ Napi::Value Workbook::SetCellStyle(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object record = ArgObjectOrEmpty(info, 0);
   CheckedSpecReader reader(env);
   std::string name;
   reader.String(record, "name", &name);
@@ -770,7 +765,7 @@ Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object record = ArgObjectOrEmpty(info, 0);
   CheckedSpecReader reader(env);
   std::string major_latin;
   std::string major_ea;

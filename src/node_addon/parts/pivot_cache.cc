@@ -128,7 +128,7 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
     return NullHandleError(env);
   }
   const uint32_t cache_id = ArgU32(info, 0);
-  Napi::Object source = (info.Length() > 1 && info[1].IsObject()) ? info[1].As<Napi::Object>() : Napi::Object::New(env);
+  Napi::Object source = ArgObjectOrEmpty(info, 1);
   CheckedSpecReader reader(env);
   const bool present = reader.Bool(source, "present", true);
   std::string ref;

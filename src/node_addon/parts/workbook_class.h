@@ -399,6 +399,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   static double ArgDouble(const Napi::CallbackInfo& info, size_t idx);
   static std::string ArgString(const Napi::CallbackInfo& info, size_t idx);
   static bool ArgBool(const Napi::CallbackInfo& info, size_t idx);
+  /// `info[idx]` when it is an object, else a fresh empty object.
+  static Napi::Object ArgObjectOrEmpty(const Napi::CallbackInfo& info, size_t idx);
 
   using RowColEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, uint32_t);
   Napi::Value InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn);
