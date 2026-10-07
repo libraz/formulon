@@ -40,12 +40,12 @@ std::uint64_t fraction_pow10(int n) noexcept {
 }
 
 std::uint64_t rounded_product(double target, std::uint64_t denominator) noexcept {
-  const long double product = static_cast<long double>(target) * static_cast<long double>(denominator);
-  if (!(product > 0.0L)) {
+  const double product = target * static_cast<double>(denominator);
+  if (!(product > 0.0)) {
     return 0;
   }
-  const long double rounded = std::floor(product + 0.5L);
-  if (rounded >= static_cast<long double>(denominator)) {
+  const double rounded = std::floor(product + 0.5);
+  if (rounded >= static_cast<double>(denominator)) {
     return denominator;
   }
   return static_cast<std::uint64_t>(rounded);
@@ -54,24 +54,24 @@ std::uint64_t rounded_product(double target, std::uint64_t denominator) noexcept
 struct RationalCandidate {
   std::uint64_t numerator = 0;
   std::uint64_t denominator = 1;
-  long double error = std::numeric_limits<long double>::max();
+  double error = std::numeric_limits<double>::max();
 };
 
-// Long double supplies arithmetic headroom for the bounded search. Candidate
-// comparisons account for the input's double precision on every platform.
-void consider_candidate(long double target, std::uint64_t numerator, std::uint64_t denominator,
+// All arithmetic is binary64, as in Excel: a wider long double (x86-64,
+// aarch64 Linux, WASM) rounds 0.015 * 100 below 1.5 and picks other candidates.
+void consider_candidate(double target, std::uint64_t numerator, std::uint64_t denominator,
                         RationalCandidate* best) noexcept {
   if (denominator == 0) {
     return;
   }
-  const long double approximation = static_cast<long double>(numerator) / static_cast<long double>(denominator);
-  const long double error = std::fabs(target - approximation);
+  const double approximation = static_cast<double>(numerator) / static_cast<double>(denominator);
+  const double error = std::fabs(target - approximation);
   // Excel treats adjacent binary64 values at a rational midpoint as ties
   // (17/144 with a one-digit denominator chooses 1/8, not 1/9). Use the
-  // input's precision rather than platform-dependent long-double precision.
+  // input's precision.
   // Scale the bound by approximation error, so an exact rational never ties
   // with a non-exact one and tiny fractions remain distinguishable from zero.
-  const long double tie_bound = 32.0L * std::numeric_limits<double>::epsilon() * std::max(error, best->error);
+  const double tie_bound = 32.0 * std::numeric_limits<double>::epsilon() * std::max(error, best->error);
   const bool tied = std::fabs(error - best->error) <= tie_bound;
   if ((!tied && error < best->error) || (tied && (denominator < best->denominator ||
                                                   (denominator == best->denominator && numerator < best->numerator)))) {
@@ -89,12 +89,11 @@ void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, s
   if (max_q < 1) {
     max_q = 1;
   }
-  const long double target_decimal = static_cast<long double>(target);
   RationalCandidate best;
 
   auto consider_boundary = [&](std::uint64_t denominator) noexcept {
     if (denominator > 0) {
-      consider_candidate(target_decimal, rounded_product(target, denominator), denominator, &best);
+      consider_candidate(target, rounded_product(target, denominator), denominator, &best);
     }
   };
 
@@ -103,8 +102,7 @@ void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, s
   // exceeds the denominator range.
   consider_boundary(1);
 
-  // Expand in binary64 as Excel does: a wider long double (x86-64, aarch64
-  // Linux, WASM) turns 1/0.1 into 9.99..., not 10, and picks a different term.
+  // A wider expansion would turn 1/0.1 into 9.99..., not 10, and pick another term.
   double x = target;
   std::uint64_t p_prev2 = 0;
   std::uint64_t p_prev1 = 1;
@@ -120,17 +118,17 @@ void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, s
       break;
     }
     const std::uint64_t quotient_limit = q_prev1 == 0 ? max_q : (max_q - q_prev2) / q_prev1;
-    // Compare before casting: a double cannot represent UINT64_MAX exactly.
-    if (static_cast<long double>(a_value) >= static_cast<long double>(quotient_limit) + 1.0L) {
+    // Compare before casting: a_value can exceed UINT64_MAX. The limit is below 2^53, so the bound is exact.
+    if (a_value >= static_cast<double>(quotient_limit) + 1.0) {
       // When even the first reciprocal is out of range Excel returns zero, not 1/max_q.
       if (p_prev1 == 0 && q_prev1 == 1) {
         break;
       }
       const std::uint64_t t = quotient_limit;
       if (t > 0) {
-        consider_candidate(target_decimal, p_prev2 + p_prev1 * t, q_prev2 + q_prev1 * t, &best);
+        consider_candidate(target, p_prev2 + p_prev1 * t, q_prev2 + q_prev1 * t, &best);
       }
-      consider_candidate(target_decimal, p_prev1, q_prev1, &best);
+      consider_candidate(target, p_prev1, q_prev1, &best);
       consider_boundary(max_q);
       break;
     }
@@ -146,7 +144,7 @@ void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, s
       consider_boundary(max_q);
       break;
     }
-    consider_candidate(target_decimal, p, q, &best);
+    consider_candidate(target, p, q, &best);
     const double fractional = x - a_value;
     if (fractional == 0.0) {
       break;
