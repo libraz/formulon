@@ -108,6 +108,7 @@ if(FM_WASM_VARIANT STREQUAL "embind")
   add_executable(formulon_wasm
     src/wasm/parts/bindings_register.cpp
     src/wasm/parts/embind_common.cpp
+    src/wasm/parts/workbook_auto_filter.cpp
     src/wasm/parts/workbook_cells.cpp
     src/wasm/parts/workbook_cf.cpp
     src/wasm/parts/workbook_core.cpp
