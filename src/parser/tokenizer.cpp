@@ -1089,11 +1089,7 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
   // Classify: CellRef first, then Bool, otherwise Ident.
   bool letters_only = false;
   if (looks_like_cellref(run, &letters_only)) {
-    Token t;
-    t.kind = TokenKind::CellRef;
-    t.range = make_range();
-    t.lexeme = run;
-    tokens_.push_back(t);
+    emit(TokenKind::CellRef, start);
     last_anchor_tail_end_byte_ = byte_pos_;
     return;
   }
@@ -1126,11 +1122,7 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
       }
     }
     if (letters_all_alpha && column_letters_to_index(letters) != 0) {
-      Token t;
-      t.kind = TokenKind::Ident;
-      t.range = make_range();
-      t.lexeme = run;
-      tokens_.push_back(t);
+      emit(TokenKind::Ident, start);
       return;
     }
   }
@@ -1140,20 +1132,12 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
   // reference. In particular this rejects repeated anchors such as `A$$1`;
   // treating those as identifiers silently defers a syntax error to #NAME?.
   if (run.find('$') != std::string_view::npos) {
-    Token t;
-    t.kind = TokenKind::Invalid;
-    t.range = make_range();
-    t.lexeme = run;
-    tokens_.push_back(t);
+    emit(TokenKind::Invalid, start);
     record_error(LexerErrorCode::InvalidReference, start);
     return;
   }
 
-  Token t;
-  t.kind = TokenKind::Ident;
-  t.range = make_range();
-  t.lexeme = run;
-  tokens_.push_back(t);
+  emit(TokenKind::Ident, start);
   // A defined name or a LET binding can anchor a spill (`Anchor#`,
   // `LET(x, A4, SUM(x#))`), so an identifier arms the operator too.
   last_anchor_tail_end_byte_ = byte_pos_;
