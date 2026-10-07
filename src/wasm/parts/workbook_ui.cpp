@@ -1001,7 +1001,7 @@ JsStatus JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment)
   c.created = created.c_str();
   c.text = text.c_str();
   c.parent_id = parent_id.c_str();
-  c.done = pull_flag(comment, "done", reader);
+  c.done = reader.boolean(comment, "done", false, "done") ? 1 : 0;
   c.mentions = mentions.items.empty() ? nullptr : mentions.items.data();
   c.mention_count = static_cast<uint32_t>(mentions.items.size());
   return status_from_rc(fm_sheet_add_threaded_comment(handle_, sheet, &c));
