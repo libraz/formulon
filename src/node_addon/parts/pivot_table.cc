@@ -99,7 +99,7 @@ Napi::Value Workbook::PivotSetLayout(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::int32_t layout = info.Length() > 2 ? info[2].ToNumber().Int32Value() : 0;
+  const std::int32_t layout = ArgI32(info, 2);
   fm_status_t rc = fm_workbook_pivot_set_layout(handle_, sheet, pivot_idx, layout);
   return MakeStatus(env, rc);
 }
@@ -176,7 +176,7 @@ Napi::Value Workbook::PivotFieldSetAxis(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  const std::int32_t axis = info.Length() > 3 ? info[3].ToNumber().Int32Value() : 0;
+  const std::int32_t axis = ArgI32(info, 3);
   fm_status_t rc = fm_workbook_pivot_field_set_axis(handle_, sheet, pivot_idx, field_idx, axis);
   return MakeStatus(env, rc);
 }
@@ -274,7 +274,7 @@ Napi::Value Workbook::PivotFieldAddSubtotalFn(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  const std::int32_t agg = info.Length() > 3 ? info[3].ToNumber().Int32Value() : 0;
+  const std::int32_t agg = ArgI32(info, 3);
   fm_status_t rc = fm_workbook_pivot_field_add_subtotal_fn(handle_, sheet, pivot_idx, field_idx, agg);
   return MakeStatus(env, rc);
 }
@@ -299,8 +299,8 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  const std::int32_t granularity = info.Length() > 3 ? info[3].ToNumber().Int32Value() : 0;
-  const std::int32_t calendar = info.Length() > 4 ? info[4].ToNumber().Int32Value() : 0;
+  const std::int32_t granularity = ArgI32(info, 3);
+  const std::int32_t calendar = ArgI32(info, 4);
   const int32_t start_year = info.Length() > 5 ? info[5].As<Napi::Number>().Int32Value() : -1;
   const int32_t end_year = info.Length() > 6 ? info[6].As<Napi::Number>().Int32Value() : -1;
   const std::uint32_t interval_days = info.Length() > 7 ? info[7].As<Napi::Number>().Uint32Value() : 1;

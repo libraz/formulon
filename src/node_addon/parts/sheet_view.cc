@@ -200,7 +200,7 @@ Napi::Value Workbook::SetSheetVisibility(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   // Raw ordinal: the C ABI rejects an unknown value, so coercing it to a
   // narrower type here would turn a caller's mistake into a silent state.
-  const std::int32_t visibility = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
+  const std::int32_t visibility = ArgI32(info, 1);
   fm_status_t rc = fm_sheet_set_visibility(handle_, sheet, visibility);
   return MakeStatus(env, rc);
 }

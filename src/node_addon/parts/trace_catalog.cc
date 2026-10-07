@@ -58,7 +58,7 @@ using FunctionNameMapFn = fm_status_t (*)(const char*, int32_t, const char**);
 
 Napi::Value MapFunctionName(const Napi::CallbackInfo& info, FunctionNameMapFn fn) {
   const std::string name = Workbook::ArgString(info, 0);
-  const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
+  const std::int32_t locale = Workbook::ArgI32(info, 1);
   const char* out = nullptr;
   const fm_status_t rc = fn(name.c_str(), locale, &out);
   return MakeStringResult(info.Env(), rc, out);
@@ -146,7 +146,7 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
   const std::string name = ArgString(info, 0);
-  const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
+  const std::int32_t locale = ArgI32(info, 1);
   fm_function_metadata_t md{};
   fm_status_t rc = fm_function_metadata(name.c_str(), locale, &md);
   if (rc != 0) {

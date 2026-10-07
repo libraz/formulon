@@ -82,7 +82,7 @@ Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const std::int32_t mode = info.Length() > 0 ? info[0].ToNumber().Int32Value() : 0;
+  const std::int32_t mode = ArgI32(info, 0);
   fm_status_t rc = fm_workbook_set_calc_mode(handle_, mode);
   return MakeStatus(env, rc);
 }

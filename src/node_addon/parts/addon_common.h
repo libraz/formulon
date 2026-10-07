@@ -214,6 +214,8 @@ class CheckedSpecReader final {
   bool ReadNumber(const Napi::Value& value, const char* key, double* out);
   bool ReadInteger(const Napi::Object& owner, const char* key, double* out, double min_value, double max_value,
                    const char* range_name, bool* present = nullptr);
+  bool ReadInteger(const Napi::Value& value, const char* key, double* out, double min_value, double max_value,
+                   const char* range_name);
   void ObservePending();
   void ReportType(const char* key, const char* expected);
   void ReportRange(const char* key, const char* range_name);

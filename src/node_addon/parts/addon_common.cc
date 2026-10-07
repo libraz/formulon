@@ -119,7 +119,16 @@ bool CheckedSpecReader::ReadNumber(const Napi::Value& value, const char* key, do
 
 bool CheckedSpecReader::ReadInteger(const Napi::Object& owner, const char* key, double* out, double min_value,
                                     double max_value, const char* range_name, bool* present) {
-  if (!ReadNumber(owner, key, out, present)) {
+  Napi::Value value;
+  if (!ReadOptional(owner, key, &value, present)) {
+    return ok();
+  }
+  return ReadInteger(value, key, out, min_value, max_value, range_name);
+}
+
+bool CheckedSpecReader::ReadInteger(const Napi::Value& value, const char* key, double* out, double min_value,
+                                    double max_value, const char* range_name) {
+  if (!ReadNumber(value, key, out)) {
     return false;
   }
   if (!std::isfinite(*out) || std::trunc(*out) != *out || *out < min_value || *out > max_value) {
@@ -257,12 +266,7 @@ uint8_t CheckedSpecReader::U8(const Napi::Object& owner, const char* key, uint8_
 
 uint8_t CheckedSpecReader::U8(const Napi::Value& value, const char* key, uint8_t dflt) {
   double result = static_cast<double>(dflt);
-  if (!ReadNumber(value, key, &result)) {
-    return dflt;
-  }
-  if (!std::isfinite(result) || std::trunc(result) != result || result < 0.0 ||
-      result > static_cast<double>(std::numeric_limits<uint8_t>::max())) {
-    ReportRange(key, "uint8");
+  if (!ReadInteger(value, key, &result, 0.0, static_cast<double>(std::numeric_limits<uint8_t>::max()), "uint8")) {
     return dflt;
   }
   return static_cast<uint8_t>(result);
@@ -279,12 +283,7 @@ uint16_t CheckedSpecReader::U16(const Napi::Object& owner, const char* key, uint
 
 uint16_t CheckedSpecReader::U16(const Napi::Value& value, const char* key, uint16_t dflt) {
   double result = static_cast<double>(dflt);
-  if (!ReadNumber(value, key, &result)) {
-    return dflt;
-  }
-  if (!std::isfinite(result) || std::trunc(result) != result || result < 0.0 ||
-      result > static_cast<double>(std::numeric_limits<uint16_t>::max())) {
-    ReportRange(key, "uint16");
+  if (!ReadInteger(value, key, &result, 0.0, static_cast<double>(std::numeric_limits<uint16_t>::max()), "uint16")) {
     return dflt;
   }
   return static_cast<uint16_t>(result);
@@ -301,12 +300,7 @@ uint32_t CheckedSpecReader::U32(const Napi::Object& owner, const char* key, uint
 
 uint32_t CheckedSpecReader::U32(const Napi::Value& value, const char* key, uint32_t dflt) {
   double result = static_cast<double>(dflt);
-  if (!ReadNumber(value, key, &result)) {
-    return dflt;
-  }
-  if (!std::isfinite(result) || std::trunc(result) != result || result < 0.0 ||
-      result > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
-    ReportRange(key, "uint32");
+  if (!ReadInteger(value, key, &result, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max()), "uint32")) {
     return dflt;
   }
   return static_cast<uint32_t>(result);
@@ -323,13 +317,8 @@ int32_t CheckedSpecReader::I32(const Napi::Object& owner, const char* key, int32
 
 int32_t CheckedSpecReader::I32(const Napi::Value& value, const char* key, int32_t dflt) {
   double result = static_cast<double>(dflt);
-  if (!ReadNumber(value, key, &result)) {
-    return dflt;
-  }
-  if (!std::isfinite(result) || std::trunc(result) != result ||
-      result < static_cast<double>(std::numeric_limits<int32_t>::min()) ||
-      result > static_cast<double>(std::numeric_limits<int32_t>::max())) {
-    ReportRange(key, "int32");
+  if (!ReadInteger(value, key, &result, static_cast<double>(std::numeric_limits<int32_t>::min()),
+                   static_cast<double>(std::numeric_limits<int32_t>::max()), "int32")) {
     return dflt;
   }
   return static_cast<int32_t>(result);
