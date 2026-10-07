@@ -18,8 +18,7 @@
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
-#include "io/xml_escape.h"
-#include "io/xml_utils.h"
+#include "io/xlsb/sheet_properties_records.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "phonetic.h"
@@ -27,7 +26,6 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/structured_log.h"
@@ -174,145 +172,6 @@ Expected<std::string, Error> ReadHyperlinkWideString(ByteSpan& cursor, const cha
                       "context=xlsb_reader cch=" + std::to_string(cch));
   }
   return read_xlwidestring(cursor);
-}
-
-/// The `BrtWsProp` fields `sheet_writer.cpp`'s `EmitWorksheetProperties`
-/// writes for a sheet with no source record of its own. A source record
-/// matching them carries nothing beyond what the writer will re-derive;
-/// one that differs carries flags (dialog-sheet, fit-to-page, outline
-/// direction, filter mode, sync anchors) the model has no field for.
-constexpr std::uint16_t kDefaultWsPropFlags = 0x04C9U;
-constexpr std::uint8_t kDefaultWsPropFlags2 = 0x02U;
-constexpr std::uint32_t kWsPropSyncUnused = 0xFFFFFFFFU;
-
-/// Appends `<tabColor .../>` for the decoded `BrtColor`, or nothing when
-/// the colour is automatic -- Excel writes no `<tabColor>` for the
-/// default tab, and an explicit `auto="1"` would make the two containers
-/// disagree on an otherwise identical sheet.
-void AppendTabColor(std::string& out, const ColorSpec& spec, std::uint32_t argb) {
-  char buf[16];
-  switch (spec.kind) {
-    case ColorSpec::Kind::kRgb:
-      format_hex(buf, sizeof(buf), argb, 8, true);
-      out.append("<tabColor rgb=\"").append(buf).append("\"/>");
-      break;
-    case ColorSpec::Kind::kTheme:
-      format_unsigned(buf, sizeof(buf), spec.theme);
-      out.append("<tabColor theme=\"").append(buf).push_back('"');
-      if (spec.tint != 0.0) {
-        // Shortest round-trip spelling, matching the styles writer: the
-        // same tint must not be spelled two ways depending on whether the
-        // sheet came in as XLSB or XLSX.
-        out.append(" tint=\"");
-        append_xml_number(out, spec.tint);
-        out.push_back('"');
-      }
-      out.append("/>");
-      break;
-    case ColorSpec::Kind::kIndexed:
-      format_unsigned(buf, sizeof(buf), spec.indexed);
-      out.append("<tabColor indexed=\"").append(buf).append("\"/>");
-      break;
-    case ColorSpec::Kind::kAuto:
-    case ColorSpec::Kind::kNone:
-      break;
-  }
-}
-
-/// Decodes `BrtWsProp` ([MS-XLSB] §2.4.858) into the sheet's raw
-/// `<sheetPr>` fragment. Layout, verified against a real
-/// Excel-365-produced `xl/worksheets/sheetN.bin` and symmetric with
-/// `sheet_writer.cpp`: three flag bytes, an 8-byte `BrtColor` tab colour,
-/// `rwSync` and `colSync`, then the VBA `CodeName` as an XLWideString.
-///
-/// The record reaches the model as XML rather than as typed fields
-/// because `<sheetPr>` is what `SheetPrintSettings` stores and what the
-/// introspection API hands back: routing the XLSB form through the same
-/// string makes a `.xlsb`-loaded sheet answer exactly as its `.xlsx` twin
-/// does. A sheet with neither a code name nor a tab colour produces no
-/// fragment at all, which is also what the OOXML reader records for a
-/// worksheet with no `<sheetPr>` element.
-///
-/// Returns `false` when the record carried flag or sync fields the model
-/// has no room for, so the caller can report the residue.
-Expected<bool, Error> DecodeWorksheetProperties(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index) {
-  ByteSpan p = rec.payload;
-  auto flags_or = read_u16(p);
-  auto flags2_or = read_u8(p);
-  auto color_flags_or = read_u8(p);
-  auto color_index_or = read_u8(p);
-  auto color_tint_or = read_u16(p);
-  auto red_or = read_u8(p);
-  auto green_or = read_u8(p);
-  auto blue_or = read_u8(p);
-  auto alpha_or = read_u8(p);
-  auto rw_sync_or = read_u32(p);
-  auto col_sync_or = read_u32(p);
-  if (!flags_or || !flags2_or || !color_flags_or || !color_index_or || !color_tint_or || !red_or || !green_or ||
-      !blue_or || !alpha_or || !rw_sync_or || !col_sync_or) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsProp fields truncated",
-                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
-  }
-  auto code_name_or = read_xlwidestring(p);
-  if (!code_name_or) {
-    return code_name_or.error();
-  }
-
-  const std::uint32_t argb =
-      (static_cast<std::uint32_t>(alpha_or.value()) << 24U) | (static_cast<std::uint32_t>(red_or.value()) << 16U) |
-      (static_cast<std::uint32_t>(green_or.value()) << 8U) | static_cast<std::uint32_t>(blue_or.value());
-  ColorSpec tab;
-  switch (static_cast<std::uint32_t>(color_flags_or.value() >> 1U)) {
-    case 1U:
-      tab.kind = ColorSpec::Kind::kIndexed;
-      tab.indexed = color_index_or.value();
-      break;
-    case 2U:
-      tab.kind = ColorSpec::Kind::kRgb;
-      tab.rgb = argb;
-      break;
-    case 3U:
-      tab.kind = ColorSpec::Kind::kTheme;
-      tab.theme = color_index_or.value();
-      tab.tint = static_cast<double>(static_cast<std::int16_t>(color_tint_or.value())) / 32767.0;
-      break;
-    default:
-      tab.kind = ColorSpec::Kind::kAuto;
-      break;
-  }
-  // Excel marks the default tab with the automatic palette slot rather
-  // than the automatic colour type, so both spellings mean "no tab
-  // colour" and neither produces a `<tabColor>` element.
-  constexpr std::uint8_t kAutomaticPaletteIndex = 0x40U;
-  if (tab.kind == ColorSpec::Kind::kIndexed && color_index_or.value() == kAutomaticPaletteIndex) {
-    tab.kind = ColorSpec::Kind::kAuto;
-  }
-
-  std::string sheet_pr;
-  const std::string& code_name = code_name_or.value();
-  std::string body;
-  AppendTabColor(body, tab, argb);
-  if (!code_name.empty() || !body.empty()) {
-    sheet_pr.append("<sheetPr");
-    if (!code_name.empty()) {
-      sheet_pr.append(" codeName=\"");
-      AppendXmlAttrEscaped(sheet_pr, code_name);
-      sheet_pr.push_back('"');
-    }
-    if (body.empty()) {
-      sheet_pr.append("/>");
-    } else {
-      sheet_pr.push_back('>');
-      sheet_pr.append(body);
-      sheet_pr.append("</sheetPr>");
-    }
-  }
-  if (!sheet_pr.empty()) {
-    sheet.mutable_print_settings().sheet_pr_xml = std::move(sheet_pr);
-  }
-
-  return flags_or.value() == kDefaultWsPropFlags && flags2_or.value() == kDefaultWsPropFlags2 &&
-         rw_sync_or.value() == kWsPropSyncUnused && col_sync_or.value() == kWsPropSyncUnused;
 }
 
 /// Decodes the fixed-width worksheet default-format record. The model only
@@ -735,7 +594,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtWsProp: {
-      auto complete_or = DecodeWorksheetProperties(rec, wb.sheet(sheet_index), sheet_index);
+      auto complete_or = decode_ws_prop(rec, wb.sheet(sheet_index), sheet_index);
       if (!complete_or) {
         return complete_or.error();
       }
