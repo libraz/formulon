@@ -390,6 +390,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::BorderCount>("borderCount"),
           GuardedInstanceMethod<&Workbook::CalcMode>("calcMode"),
           GuardedInstanceMethod<&Workbook::ClearRowHeight, 0x3ULL>("clearRowHeight"),
+          GuardedInstanceMethod<&Workbook::ClearColumnWidth, 0x7ULL>("clearColumnWidth"),
           GuardedInstanceMethod<&Workbook::ColumnCharsToPt, 0x1ULL, 0x2ULL, 0x0ULL, 0x4ULL>("columnCharsToPt"),
           GuardedInstanceMethod<&Workbook::ColumnPtToChars, 0x1ULL, 0x2ULL, 0x0ULL, 0x4ULL>("columnPtToChars"),
           GuardedInstanceMethod<&Workbook::FormatValue, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("formatValue"),

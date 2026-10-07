@@ -499,6 +499,8 @@ SHEET_FORMAT_DEFAULTS = Struct(
         ("base_col_width", F64),
         ("has_default_col_width", I32),
         ("has_default_row_height", I32),
+        ("effective_default_col_width", F64),
+        ("effective_default_row_height", F64),
     ],
 )
 

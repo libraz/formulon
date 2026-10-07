@@ -263,6 +263,32 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
+                                                   uint32_t last) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_clear_column_width"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_column_span(first, last, "fm_sheet_clear_column_width"); rc != 0) {
+    return rc;
+  }
+  formulon::SheetLayout& layout = wb->workbook().sheet(sheet_index).mutable_layout();
+  overlay_column_span(layout, first, last, [](formulon::ColumnLayout& entry) {
+    entry.width = 0.0;
+    entry.has_width = false;
+  });
+  // Spans left with no state (including empty ones synthesised for columns
+  // that had no entry) carry nothing to save.
+  auto& columns = layout.columns;
+  columns.erase(std::remove_if(columns.begin(), columns.end(),
+                               [](const formulon::ColumnLayout& entry) {
+                                 return !formulon::HasExplicitColumnWidth(entry) && !entry.hidden &&
+                                        entry.outline_level == 0U && !entry.has_style;
+                               }),
+                columns.end());
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                   int32_t hidden) {
   clear_last_error();
@@ -572,6 +598,9 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
   out->base_col_width = defaults.base_col_width;
   out->has_default_col_width = defaults.has_default_col_width ? 1 : 0;
   out->has_default_row_height = defaults.has_default_row_height ? 1 : 0;
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  out->effective_default_col_width = formulon::print::default_column_width_chars(sheet);
+  out->effective_default_row_height = formulon::print::default_row_height_pt(sheet);
   return 0;
 }
 

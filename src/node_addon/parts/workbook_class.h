@@ -277,6 +277,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetSheetRowOverrides(const Napi::CallbackInfo& info);
   Napi::Value SetRowHeight(const Napi::CallbackInfo& info);
   Napi::Value ClearRowHeight(const Napi::CallbackInfo& info);
+  Napi::Value ClearColumnWidth(const Napi::CallbackInfo& info);
   Napi::Value GetSheetFormatDefaults(const Napi::CallbackInfo& info);
   Napi::Value SetSheetFormatDefaults(const Napi::CallbackInfo& info);
   Napi::Value GetCellRectPt(const Napi::CallbackInfo& info);

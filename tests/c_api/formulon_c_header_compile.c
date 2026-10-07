@@ -65,7 +65,7 @@ int main(void) {
                  "fm_styles_batch.num_fmt_ids offset changed");
   // Records the geometry, display and pagination-detail entry points write
   // through caller pointers. All but the width model are target-independent.
-  _Static_assert(sizeof(fm_sheet_format_defaults) == 32, "fm_sheet_format_defaults ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_format_defaults) == 48, "fm_sheet_format_defaults ABI layout changed");
   _Static_assert(sizeof(fm_rect_pt) == 32, "fm_rect_pt ABI layout changed");
   _Static_assert(sizeof(fm_width_model) == (sizeof(void*) == 4 ? 40 : 48), "fm_width_model ABI layout changed");
   _Static_assert(sizeof(fm_paper_info) == 24, "fm_paper_info ABI layout changed");

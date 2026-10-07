@@ -276,6 +276,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getWidthModel", &JsWorkbook::getWidthModel)
       .function("formatValue", &JsWorkbook::formatValue)
       .function("clearRowHeight", &JsWorkbook::clearRowHeight)
+      .function("clearColumnWidth", &JsWorkbook::clearColumnWidth)
       .function("setSheetFormatDefaults", &JsWorkbook::setSheetFormatDefaults)
       .function("columnCharsToPt", &JsWorkbook::columnCharsToPt)
       .function("columnPtToChars", &JsWorkbook::columnPtToChars)

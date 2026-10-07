@@ -226,6 +226,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_clear_hyperlinks",
     "fm_sheet_clear_merges",
     "fm_sheet_clear_row_height",
+    "fm_sheet_clear_column_width",
     "fm_sheet_clear_validations",
     "fm_sheet_col_break_at",
     "fm_sheet_column_chars_to_pt",

@@ -288,6 +288,7 @@ class JsWorkbook {
   JsStatus setRowOutline(uint32_t sheet, uint32_t row, uint32_t level);
   /// Drops the height override at `row`, returning it to the sheet default.
   JsStatus clearRowHeight(uint32_t sheet, uint32_t row);
+  JsStatus clearColumnWidth(uint32_t sheet, uint32_t first, uint32_t last);
 
   /// Sheet default column / row metrics (`<sheetFormatPr>`).
   emscripten::val getSheetFormatDefaults(uint32_t sheet) const;

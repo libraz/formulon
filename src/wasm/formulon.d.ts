@@ -724,9 +724,14 @@ export interface SheetFormatDefaults {
   hasDefaultRowHeight: boolean;
 }
 
-/** Return type of `Workbook.getSheetFormatDefaults(sheet)`. */
+/** Return type of `Workbook.getSheetFormatDefaults(sheet)`. The effective
+ *  values are read-only and ignored by `setSheetFormatDefaults`. */
 export interface SheetFormatDefaultsResult extends SheetFormatDefaults {
   status: Status;
+  /** Character units the sheet lays columns out with: `defaultColWidth` when set, else 8.43. */
+  effectiveDefaultColWidth: number;
+  /** Points the sheet lays rows out with: `defaultRowHeight` when set, else 102/7 (about 14.57). */
+  effectiveDefaultRowHeight: number;
 }
 
 /** Return type of `Workbook.getFormula` / `getFormulaR1C1`. `formula` is `null` when the cell holds no formula. */
@@ -3156,7 +3161,9 @@ export interface Workbook {
    *  `index` is the new rule's position in the sheet's flattened CF rule
    *  sequence (the same indexing `getConditionalFormats` and
    *  `removeConditionalFormatAt` use); it stays valid until a subsequent
-   *  add/remove/clear mutation on the same sheet renumbers the sequence. */
+   *  add/remove/clear mutation on the same sheet renumbers the sequence.
+   *  A non-empty `formula1` / `formula2` that does not parse is rejected
+   *  with `kParserUnexpectedToken`. */
   addConditionalFormat(sheet: number, rule: ConditionalFormatInput): AddStyleResult;
   /** Removes the CF rule at `index` (flattened order). When the
    *  containing block becomes empty it is removed too. */

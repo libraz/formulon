@@ -35,6 +35,52 @@ class GeometryTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.set_sheet_format_defaults(0, SheetFormatDefaults(default_col_width=-1.0, has_default_col_width=True))
 
+    def test_clear_column_width_follows_default_and_keeps_state(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_sheet_format_defaults(
+                0, SheetFormatDefaults(default_col_width=10.0, base_col_width=8.0, has_default_col_width=True)
+            )
+            wb.set_column_width(0, 0, 0, 10.0)
+            wb.clear_column_width(0, 0, 0)
+            wb.set_sheet_format_defaults(
+                0, SheetFormatDefaults(default_col_width=20.0, base_col_width=8.0, has_default_col_width=True)
+            )
+            self.assertEqual(wb.get_column_width_pt(0, 0), wb.get_column_width_pt(0, 1))
+            self.assertEqual(wb.get_sheet_columns(0), [])
+
+            wb.set_column_width(0, 0, 4, 20.0)
+            wb.set_column_hidden(0, 2, 2, True)
+            wb.set_column_outline(0, 2, 2, 3)
+            wb.clear_column_width(0, 1, 3)
+            cols = wb.get_sheet_columns(0)
+            self.assertEqual(
+                [(c.first, c.last, c.has_width, c.hidden, c.outline_level) for c in cols],
+                [(0, 0, True, False, 0), (2, 2, False, True, 3), (4, 4, True, False, 0)],
+            )
+            with self.assertRaises(FormulonError):
+                wb.clear_column_width(0, 5, 3)
+            with self.assertRaises(FormulonError):
+                wb.clear_column_width(0, 0, 16384)
+
+    def test_effective_format_defaults(self) -> None:
+        with Workbook.create_default() as wb:
+            d = wb.get_sheet_format_defaults(0)
+            self.assertEqual(d.effective_default_col_width, 8.43)
+            self.assertEqual(d.effective_default_row_height, 102 / 7)
+            wb.set_sheet_format_defaults(
+                0,
+                SheetFormatDefaults(
+                    default_col_width=12.5,
+                    default_row_height=20.25,
+                    base_col_width=8.0,
+                    has_default_col_width=True,
+                    has_default_row_height=True,
+                ),
+            )
+            d = wb.get_sheet_format_defaults(0)
+            self.assertEqual(d.effective_default_col_width, 12.5)
+            self.assertEqual(d.effective_default_row_height, 20.25)
+
     def test_row_height_override_and_clear(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_row_height(0, 2, 30.0)

@@ -1194,6 +1194,9 @@ class SheetFormatDefaults:
 
     ``default_col_width`` is in characters and ``default_row_height`` in
     points; each is meaningful only when its ``has_*`` flag is set.
+    ``effective_default_col_width`` / ``effective_default_row_height`` are
+    read-only values the sheet lays out with: the stated default, else the
+    fallback (8.43 characters, 102/7 pt). They are ignored when setting.
     """
 
     default_col_width: float = 0.0
@@ -1201,6 +1204,8 @@ class SheetFormatDefaults:
     base_col_width: float = 8.0
     has_default_col_width: bool = False
     has_default_row_height: bool = False
+    effective_default_col_width: float = 0.0
+    effective_default_row_height: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -4043,6 +4048,14 @@ class Workbook:
             "fm_sheet_clear_row_height",
         )
 
+    def clear_column_width(self, sheet: int, first: int, last: int) -> None:
+        """Remove the width override on ``[first, last]`` (back to the sheet default)."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_clear_column_width(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")),
+            "fm_sheet_clear_column_width",
+        )
+
     def get_sheet_format_defaults(self, sheet: int) -> SheetFormatDefaults:
         """Read the sheet's default column / row metrics (``<sheetFormatPr>``)."""
         h = self._require()
@@ -4059,6 +4072,8 @@ class Workbook:
                 base_col_width=d["base_col_width"],
                 has_default_col_width=bool(d["has_default_col_width"]),
                 has_default_row_height=bool(d["has_default_row_height"]),
+                effective_default_col_width=d["effective_default_col_width"],
+                effective_default_row_height=d["effective_default_row_height"],
             )
         finally:
             LIB.free(ptr)

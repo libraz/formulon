@@ -427,6 +427,15 @@ Napi::Value Workbook::ClearRowHeight(const Napi::CallbackInfo& info) {
   return MakeStatus(env, fm_sheet_clear_row_height(handle_, sheet, ArgU32(info, 1)));
 }
 
+Napi::Value Workbook::ClearColumnWidth(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  return MakeStatus(env, fm_sheet_clear_column_width(handle_, sheet, ArgU32(info, 1), ArgU32(info, 2)));
+}
+
 Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   fm_sheet_format_defaults d{};
@@ -442,6 +451,8 @@ Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   out.Set("baseColWidth", Napi::Number::New(env, d.base_col_width));
   out.Set("hasDefaultColWidth", Napi::Boolean::New(env, d.has_default_col_width != 0));
   out.Set("hasDefaultRowHeight", Napi::Boolean::New(env, d.has_default_row_height != 0));
+  out.Set("effectiveDefaultColWidth", Napi::Number::New(env, d.effective_default_col_width));
+  out.Set("effectiveDefaultRowHeight", Napi::Number::New(env, d.effective_default_row_height));
   return out;
 }
 

@@ -72,7 +72,7 @@ class StructLayoutTests(unittest.TestCase):
         "PAGE_MARGINS": 96,
         "PRINT_OPTIONS": 32,
         "HEADER_FOOTER": 56,
-        "SHEET_FORMAT_DEFAULTS": 32,
+        "SHEET_FORMAT_DEFAULTS": 48,
         "RECT_PT": 32,
         "WIDTH_MODEL": 40,
         "PAPER_INFO": 24,

@@ -20,7 +20,7 @@
 namespace {
 
 static_assert(sizeof(fm_rect_pt) == 32U);
-static_assert(sizeof(fm_sheet_format_defaults) == 32U);
+static_assert(sizeof(fm_sheet_format_defaults) == 48U);
 static_assert(sizeof(fm_page_layout) == 56U);
 static_assert(offsetof(fm_page_layout, origin_x_pt) == 24U);
 static_assert(sizeof(fm_print_titles) == 24U);

@@ -183,6 +183,7 @@ fm_sheet_set_row_height
 fm_sheet_set_row_hidden
 fm_sheet_set_row_outline
 fm_sheet_clear_row_height
+fm_sheet_clear_column_width
 fm_sheet_get_format_defaults
 fm_sheet_set_format_defaults
 fm_sheet_cell_rect_pt

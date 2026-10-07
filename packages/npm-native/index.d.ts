@@ -1189,9 +1189,14 @@ export interface SheetFormatDefaults {
   hasDefaultRowHeight: boolean;
 }
 
-/** Return type of `Workbook.getSheetFormatDefaults(sheet)`. */
+/** Return type of `Workbook.getSheetFormatDefaults(sheet)`. The effective
+ *  values are read-only and ignored by `setSheetFormatDefaults`. */
 export interface SheetFormatDefaultsResult extends SheetFormatDefaults {
   status: Status;
+  /** Character units the sheet lays columns out with: `defaultColWidth` when set, else 8.43. */
+  effectiveDefaultColWidth: number;
+  /** Points the sheet lays rows out with: `defaultRowHeight` when set, else 102/7 (about 14.57). */
+  effectiveDefaultRowHeight: number;
 }
 
 /** Return type of `Workbook.getCellRectPt(sheet, range, mode)`: the
@@ -2842,6 +2847,8 @@ export interface Workbook {
   setRowHeight(sheet: number, row: number, height: number): Status;
   /** Removes the height override at `row`, returning it to the sheet default height. */
   clearRowHeight(sheet: number, row: number): Status;
+  /** Removes the width override on columns `first..last`, returning them to the sheet default width. Hidden state, outline level and column style are kept. */
+  clearColumnWidth(sheet: number, first: number, last: number): Status;
   /** Reads the sheet's default column / row metrics (`<sheetFormatPr>`). */
   getSheetFormatDefaults(sheet: number): SheetFormatDefaultsResult;
   /** Replaces the sheet's default column / row metrics. A `has*` flag left out is inferred from the matching value. */

@@ -766,6 +766,195 @@ TEST(FormulonCApiSheetLayout, ClearRowHeightDropsBareOverride) {
   EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 7, 0U), kInvalidArgument);
 }
 
+namespace {
+
+std::vector<fm_column_layout_t> ReadColumns(const fm_workbook_t* wb) {
+  size_t count = 0;
+  EXPECT_EQ(fm_sheet_get_column_count(wb, 0, &count), 0);
+  std::vector<fm_column_layout_t> columns(count);
+  for (size_t i = 0; i < count; ++i) {
+    EXPECT_EQ(fm_sheet_get_column(wb, 0, i, &columns[i]), 0);
+  }
+  return columns;
+}
+
+double ColumnWidthPt(const fm_workbook_t* wb, uint32_t col) {
+  double pt = 0.0;
+  EXPECT_EQ(fm_sheet_column_width_pt(wb, 0, col, FM_GEOMETRY_PRINT, &pt), 0);
+  return pt;
+}
+
+}  // namespace
+
+TEST(FormulonCApiSheetLayout, ClearColumnWidthSplitsSpanAndKeepsOtherState) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 4U, 20.0), 0);
+  ASSERT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, 2U, 2U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 2U, 2U, 3U), 0);
+
+  ASSERT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 1U, 3U), 0);
+
+  const auto columns = ReadColumns(wb.handle);
+  // [0,0] keeps width; [1,1] and [3,3] drop out; [2,2] survives for its
+  // hidden/outline state; [4,4] keeps width.
+  ASSERT_EQ(columns.size(), 3U);
+  EXPECT_EQ(columns[0].first, 0U);
+  EXPECT_EQ(columns[0].last, 0U);
+  EXPECT_EQ(columns[0].has_width, 1);
+  EXPECT_DOUBLE_EQ(columns[0].width, 20.0);
+  EXPECT_EQ(columns[1].first, 2U);
+  EXPECT_EQ(columns[1].last, 2U);
+  EXPECT_EQ(columns[1].has_width, 0);
+  EXPECT_DOUBLE_EQ(columns[1].width, 0.0);
+  EXPECT_EQ(columns[1].hidden, 1);
+  EXPECT_EQ(columns[1].outline_level, 3U);
+  EXPECT_EQ(columns[2].first, 4U);
+  EXPECT_EQ(columns[2].last, 4U);
+  EXPECT_EQ(columns[2].has_width, 1);
+}
+
+TEST(FormulonCApiSheetLayout, ClearColumnWidthKeepsColumnStyle) {
+  formulon::Workbook source = formulon::Workbook::create();
+  formulon::ColumnLayout styled;
+  styled.first = 0U;
+  styled.last = 1U;
+  styled.width = 30.0;
+  styled.has_width = true;
+  styled.has_style = true;
+  styled.style_xf = 1U;
+  source.sheet(0).mutable_layout().columns = {styled};
+  auto bytes = source.save();
+  ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 0U, 0U), 0);
+
+  const auto columns = ReadColumns(wb.handle);
+  ASSERT_EQ(columns.size(), 2U);
+  EXPECT_EQ(columns[0].has_width, 0);
+  EXPECT_EQ(columns[0].has_style, 1);
+  EXPECT_EQ(columns[0].style_xf, 1U);
+  EXPECT_EQ(columns[1].has_width, 1);
+  EXPECT_DOUBLE_EQ(columns[1].width, 30.0);
+}
+
+TEST(FormulonCApiSheetLayout, ClearColumnWidthDropsEmptySpansAndIgnoresUncoveredColumns) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  // No overrides at all: nothing is created.
+  ASSERT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 0U, 9U), 0);
+  EXPECT_TRUE(ReadColumns(wb.handle).empty());
+
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 3U, 4U, 14.0), 0);
+  // A span covering the override plus uncovered columns on both sides.
+  ASSERT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 0U, 9U), 0);
+  EXPECT_TRUE(ReadColumns(wb.handle).empty());
+
+  // Clearing outside an override leaves it intact.
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 3U, 4U, 14.0), 0);
+  ASSERT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 6U, 8U), 0);
+  const auto columns = ReadColumns(wb.handle);
+  ASSERT_EQ(columns.size(), 1U);
+  EXPECT_EQ(columns[0].first, 3U);
+  EXPECT_EQ(columns[0].last, 4U);
+  EXPECT_DOUBLE_EQ(columns[0].width, 14.0);
+}
+
+TEST(FormulonCApiSheetLayout, ClearColumnWidthRejectsBadArgumentsAndLeavesTheLayout) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 2U, 14.0), 0);
+
+  EXPECT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 5U, 3U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 0U, kLastColumn + 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_clear_column_width(wb.handle, 7, 0U, 0U), kInvalidArgument);
+  EXPECT_NE(fm_sheet_clear_column_width(nullptr, 0, 0U, 0U), 0);
+
+  const auto columns = ReadColumns(wb.handle);
+  ASSERT_EQ(columns.size(), 1U);
+  EXPECT_EQ(columns[0].first, 1U);
+  EXPECT_EQ(columns[0].last, 2U);
+  EXPECT_DOUBLE_EQ(columns[0].width, 14.0);
+  EXPECT_EQ(fm_sheet_clear_column_width(wb.handle, 0, kLastColumn, kLastColumn), 0);
+}
+
+TEST(FormulonCApiSheetLayout, ClearedColumnFollowsALaterSheetDefaultChange) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_sheet_format_defaults d{};
+  d.has_default_col_width = 1;
+  d.default_col_width = 10.0;
+  d.base_col_width = 8.0;
+  ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &d), 0);
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 0U, 10.0), 0);
+  ASSERT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 0U, 0U), 0);
+  d.default_col_width = 20.0;
+  ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &d), 0);
+
+  EXPECT_DOUBLE_EQ(ColumnWidthPt(wb.handle, 0U), ColumnWidthPt(wb.handle, 1U));
+}
+
+TEST(FormulonCApiSheetLayout, ClearColumnWidthSurvivesXlsxAndXlsbSaveLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 3U, 18.0), 0);
+  ASSERT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, 1U, 1U, 1), 0);
+  ASSERT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 1U, 2U), 0);
+
+  for (const int32_t format :
+       {static_cast<int32_t>(FM_WORKBOOK_FORMAT_XLSX), static_cast<int32_t>(FM_WORKBOOK_FORMAT_XLSB)}) {
+    BufferGuard saved;
+    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0) << "format=" << format;
+    WorkbookGuard reloaded;
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << "format=" << format;
+    const auto columns = ReadColumns(reloaded.handle);
+    ASSERT_EQ(columns.size(), 3U) << "format=" << format;
+    EXPECT_EQ(columns[0].first, 0U);
+    EXPECT_EQ(columns[0].has_width, 1);
+    EXPECT_DOUBLE_EQ(columns[0].width, 18.0);
+    EXPECT_EQ(columns[1].first, 1U);
+    EXPECT_EQ(columns[1].last, 1U);
+    EXPECT_EQ(columns[1].has_width, 0) << "format=" << format;
+    EXPECT_EQ(columns[1].hidden, 1);
+    EXPECT_EQ(columns[2].first, 3U);
+    EXPECT_EQ(columns[2].has_width, 1);
+    EXPECT_DOUBLE_EQ(columns[2].width, 18.0);
+  }
+}
+
+TEST(FormulonCApiSheetLayout, EffectiveFormatDefaultsFollowTheStatedValues) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_sheet_format_defaults d{};
+  ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
+  EXPECT_EQ(d.has_default_col_width, 0);
+  EXPECT_DOUBLE_EQ(d.effective_default_col_width, 8.43);
+  EXPECT_DOUBLE_EQ(d.effective_default_row_height, 102.0 / 7.0);
+
+  fm_sheet_format_defaults next{};
+  next.has_default_col_width = 1;
+  next.default_col_width = 12.5;
+  next.has_default_row_height = 1;
+  next.default_row_height = 20.25;
+  next.base_col_width = 8.0;
+  // The effective fields are read-only: whatever the caller leaves in them is ignored.
+  next.effective_default_col_width = 99.0;
+  next.effective_default_row_height = 99.0;
+  ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &next), 0);
+  ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
+  EXPECT_DOUBLE_EQ(d.effective_default_col_width, 12.5);
+  EXPECT_DOUBLE_EQ(d.effective_default_row_height, 20.25);
+
+  next.has_default_col_width = 0;
+  next.has_default_row_height = 0;
+  ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &next), 0);
+  ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
+  EXPECT_DOUBLE_EQ(d.effective_default_col_width, 8.43);
+  EXPECT_DOUBLE_EQ(d.effective_default_row_height, 102.0 / 7.0);
+}
+
 TEST(FormulonCApiSheetLayout, FormatDefaultsRoundTripThroughSave) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

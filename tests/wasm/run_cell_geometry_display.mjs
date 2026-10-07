@@ -12,6 +12,54 @@ function withWorkbook(Module, fn) {
 }
 
 export function registerCellGeometryDisplay(Module, test) {
+  test('clearColumnWidth returns a column to the sheet default and follows later default changes', () => {
+    withWorkbook(Module, (wb) => {
+      assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 10 }).ok);
+      assert.ok(wb.setColumnWidth(0, 0, 0, 10).ok);
+      assert.ok(wb.clearColumnWidth(0, 0, 0).ok);
+      assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 20 }).ok);
+      assert.equal(wb.getColumnWidthPt(0, 0, 0).value, wb.getColumnWidthPt(0, 1, 0).value);
+      assert.equal(wb.getSheetColumns(0).columns.length, 0);
+    });
+  });
+
+  test('clearColumnWidth splits a span, keeps hidden / outline, and rejects bad arguments', () => {
+    withWorkbook(Module, (wb) => {
+      assert.ok(wb.setColumnWidth(0, 0, 4, 20).ok);
+      assert.ok(wb.setColumnHidden(0, 2, 2, true).ok);
+      assert.ok(wb.setColumnOutline(0, 2, 2, 3).ok);
+      assert.ok(wb.clearColumnWidth(0, 1, 3).ok);
+      const cols = wb.getSheetColumns(0).columns;
+      assert.deepEqual(
+        cols.map((c) => [c.first, c.last, c.hasWidth, c.hidden, c.outlineLevel]),
+        [
+          [0, 0, 1, 0, 0],
+          [2, 2, 0, 1, 3],
+          [4, 4, 1, 0, 0],
+        ],
+      );
+      assert.ok(wb.clearColumnWidth(0, 8, 9).ok);
+      assert.equal(wb.getSheetColumns(0).columns.length, 3);
+      assert.equal(wb.clearColumnWidth(0, 5, 3).ok, false);
+      assert.equal(wb.clearColumnWidth(0, 0, 16384).ok, false);
+      assert.equal(wb.clearColumnWidth(9, 0, 0).ok, false);
+      assert.equal(wb.getSheetColumns(0).columns.length, 3);
+    });
+  });
+
+  test('getSheetFormatDefaults reports the effective default width and height', () => {
+    withWorkbook(Module, (wb) => {
+      let d = wb.getSheetFormatDefaults(0);
+      assert.equal(d.hasDefaultColWidth, false);
+      assert.equal(d.effectiveDefaultColWidth, 8.43);
+      assert.equal(d.effectiveDefaultRowHeight, 102 / 7);
+      assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 20.25 }).ok);
+      d = wb.getSheetFormatDefaults(0);
+      assert.equal(d.effectiveDefaultColWidth, 12.5);
+      assert.equal(d.effectiveDefaultRowHeight, 20.25);
+    });
+  });
+
   test('getFormula / getFormulaR1C1 report the stored formula or null', () => {
     withWorkbook(Module, (wb) => {
       assert.ok(wb.setNumber(0, 0, 0, 5).ok);

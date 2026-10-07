@@ -66,6 +66,44 @@ test('row overrides report hasHeight / customHeight and clearRowHeight drops the
   assert.equal(wb.clearRowHeight(0, 2000000).ok, false);
 });
 
+test('clearColumnWidth follows later default changes and keeps hidden / outline state', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 10 }).ok);
+  assert.ok(wb.setColumnWidth(0, 0, 0, 10).ok);
+  assert.ok(wb.clearColumnWidth(0, 0, 0).ok);
+  assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 20 }).ok);
+  assert.equal(wb.getColumnWidthPt(0, 0, 0).value, wb.getColumnWidthPt(0, 1, 0).value);
+  assert.equal(wb.getSheetColumns(0).columns.length, 0);
+
+  assert.ok(wb.setColumnWidth(0, 0, 4, 20).ok);
+  assert.ok(wb.setColumnHidden(0, 2, 2, true).ok);
+  assert.ok(wb.setColumnOutline(0, 2, 2, 3).ok);
+  assert.ok(wb.clearColumnWidth(0, 1, 3).ok);
+  assert.deepEqual(
+    wb.getSheetColumns(0).columns.map((c) => [c.first, c.last, c.hasWidth, c.hidden, c.outlineLevel]),
+    [
+      [0, 0, 1, 0, 0],
+      [2, 2, 0, 1, 3],
+      [4, 4, 1, 0, 0],
+    ],
+  );
+  assert.equal(wb.clearColumnWidth(0, 5, 3).ok, false);
+  assert.equal(wb.clearColumnWidth(0, 0, 16384).ok, false);
+});
+
+test('getSheetFormatDefaults reports the effective default width and height', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  let d = wb.getSheetFormatDefaults(0);
+  assert.equal(d.effectiveDefaultColWidth, 8.43);
+  assert.equal(d.effectiveDefaultRowHeight, 102 / 7);
+  assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 20.25 }).ok);
+  d = wb.getSheetFormatDefaults(0);
+  assert.equal(d.effectiveDefaultColWidth, 12.5);
+  assert.equal(d.effectiveDefaultRowHeight, 20.25);
+});
+
 test('sheet format defaults round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

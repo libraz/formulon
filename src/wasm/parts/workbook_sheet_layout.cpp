@@ -519,6 +519,13 @@ JsStatus JsWorkbook::clearRowHeight(uint32_t sheet, uint32_t row) {
   return status_from_rc(fm_sheet_clear_row_height(handle_, sheet, row));
 }
 
+JsStatus JsWorkbook::clearColumnWidth(uint32_t sheet, uint32_t first, uint32_t last) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  return status_from_rc(fm_sheet_clear_column_width(handle_, sheet, first, last));
+}
+
 // ---- Sheet format defaults and point geometry ---------------------------
 
 emscripten::val JsWorkbook::getSheetFormatDefaults(uint32_t sheet) const {
@@ -534,6 +541,8 @@ emscripten::val JsWorkbook::getSheetFormatDefaults(uint32_t sheet) const {
   o.set("baseColWidth", d.base_col_width);
   o.set("hasDefaultColWidth", d.has_default_col_width != 0);
   o.set("hasDefaultRowHeight", d.has_default_row_height != 0);
+  o.set("effectiveDefaultColWidth", d.effective_default_col_width);
+  o.set("effectiveDefaultRowHeight", d.effective_default_row_height);
   return o;
 }
 

@@ -5007,6 +5007,24 @@ FM_API fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_ind
                                              double width);
 
 /**
+ * @brief Removes the width override of the inclusive column span
+ *        `[first, last]`, returning those columns to the sheet default
+ *        width.
+ *
+ * Clears only the stored width; hidden state, outline level and column
+ * style are kept. Overlapping spans are split at the boundaries, and a span
+ * left with no state (no width, visible, outline level 0, no style) is
+ * dropped. Columns with no width override are unaffected. A rejected call
+ * leaves the layout exactly as it was.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range,
+ *         `last < first`, or `last` is past the last column (16383).
+ */
+FM_API fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
+
+/**
  * @brief Sets or replaces the column hidden flag for the inclusive
  *        column span `[first, last]`. See `fm_sheet_set_column_width`
  *        for the merge semantics.
@@ -5088,6 +5106,13 @@ FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_ind
  * points; each is meaningful only when its `has_*` flag is non-zero, since
  * an absent attribute and an explicit `0` are different states.
  * `base_col_width` is in characters and always present (OOXML default 8).
+ *
+ * `effective_default_col_width` (characters) and
+ * `effective_default_row_height` (points) are the values the sheet actually
+ * lays out with: the stated default when its `has_*` flag is set, else the
+ * built-in fallback (8.43 characters, 102/7 pt). They are filled by
+ * `fm_sheet_get_format_defaults` and ignored by
+ * `fm_sheet_set_format_defaults`.
  */
 typedef struct {
   double default_col_width;
@@ -5095,6 +5120,8 @@ typedef struct {
   double base_col_width;
   int32_t has_default_col_width;  /* 0/1 */
   int32_t has_default_row_height; /* 0/1 */
+  double effective_default_col_width;
+  double effective_default_row_height;
 } fm_sheet_format_defaults;
 
 /**
@@ -5110,7 +5137,8 @@ FM_API fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, size_t 
 /**
  * @brief Replaces the sheet's default column / row metrics.
  *
- * A value whose `has_*` flag is zero is ignored and stored as `0`. A
+ * A value whose `has_*` flag is zero is ignored and stored as `0`; the
+ * `effective_*` fields are read-only and ignored. A
  * rejected call leaves the sheet unchanged.
  *
  * @return `kOk` on success;
