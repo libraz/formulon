@@ -25,18 +25,6 @@ namespace parts {
 
 namespace {
 
-// Envelope for a C call that reports a newly appended index through `out`.
-JsAddStyleResult index_result(fm_status_t rc, std::size_t out) {
-  JsAddStyleResult r;
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = static_cast<uint32_t>(out);
-  return r;
-}
-
 bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscripten::val& spec,
                                    fm_pivot_data_field_spec_t& out, std::string& name_buf, std::string& nfmt_buf,
                                    bool& has_nfmt) {
@@ -78,14 +66,8 @@ JsAddStyleResult JsWorkbook::pivotCacheIdAt(uint32_t idx) const {
     return r;
   }
   uint32_t out = 0;
-  fm_status_t rc = fm_workbook_pivot_cache_id_at(handle_, idx, &out);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = out;
-  return r;
+  const fm_status_t rc = fm_workbook_pivot_cache_id_at(handle_, idx, &out);
+  return index_result(rc, out);
 }
 
 JsAddStyleResult JsWorkbook::pivotCacheCreate(uint32_t requestedId) {
@@ -95,14 +77,8 @@ JsAddStyleResult JsWorkbook::pivotCacheCreate(uint32_t requestedId) {
     return r;
   }
   uint32_t out = 0;
-  fm_status_t rc = fm_workbook_pivot_cache_create(handle_, requestedId, &out);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = out;
-  return r;
+  const fm_status_t rc = fm_workbook_pivot_cache_create(handle_, requestedId, &out);
+  return index_result(rc, out);
 }
 
 JsStatus JsWorkbook::pivotCacheRemove(uint32_t cacheId) {

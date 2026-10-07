@@ -542,6 +542,15 @@ JsStringResult string_result(fm_status_t rc, const char* value) {
   return out;
 }
 
+JsAddStyleResult index_result(fm_status_t rc, std::size_t index) {
+  JsAddStyleResult out;
+  out.status = status_from_rc(rc);
+  if (rc == 0) {
+    out.index = static_cast<uint32_t>(index);
+  }
+  return out;
+}
+
 JsValue translate_value(const fm_value_t& v) {
   JsValue out;
   out.kind = static_cast<int32_t>(v.kind);

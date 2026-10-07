@@ -49,20 +49,14 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf, JsNarrowNume
   const bool has_vertical_align_present = has_value(has_vertical_align);
   const bool has_wrap_text_present = has_value(has_wrap_text);
   const bool has_justify_last_line_present = has_value(has_justify_last_line);
-  xf->has_horizontal_align = has_horizontal_align_present
-                                 ? (reader.boolean_value(has_horizontal_align, false, "xf.hasHorizontalAlign") ? 1 : 0)
-                                 : (horizontal_align_present ? 1 : 0);
-  xf->has_vertical_align = has_vertical_align_present
-                               ? (reader.boolean_value(has_vertical_align, false, "xf.hasVerticalAlign") ? 1 : 0)
-                               : (vertical_align_present ? 1 : 0);
-  xf->has_wrap_text = has_wrap_text_present ? (reader.boolean_value(has_wrap_text, false, "xf.hasWrapText") ? 1 : 0)
-                                            : (wrap_text_present ? 1 : 0);
+  xf->has_horizontal_align =
+      reader.boolean_value(has_horizontal_align, horizontal_align_present, "xf.hasHorizontalAlign") ? 1 : 0;
+  xf->has_vertical_align =
+      reader.boolean_value(has_vertical_align, vertical_align_present, "xf.hasVerticalAlign") ? 1 : 0;
+  xf->has_wrap_text = reader.boolean_value(has_wrap_text, wrap_text_present, "xf.hasWrapText") ? 1 : 0;
   xf->has_justify_last_line =
-      has_justify_last_line_present
-          ? (reader.boolean_value(has_justify_last_line, false, "xf.hasJustifyLastLine") ? 1 : 0)
-          : (justify_last_line_present ? 1 : 0);
+      reader.boolean_value(has_justify_last_line, justify_last_line_present, "xf.hasJustifyLastLine") ? 1 : 0;
   const emscripten::val has_alignment = reader.value(record, "hasAlignment", "xf.hasAlignment");
-  const bool has_alignment_present = has_value(has_alignment);
   const emscripten::val text_rotation = reader.value(record, "textRotation", "xf.textRotation");
   const emscripten::val indent = reader.value(record, "indent", "xf.indent");
   const emscripten::val relative_indent = reader.value(record, "relativeIndent", "xf.relativeIndent");
@@ -88,8 +82,7 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf, JsNarrowNume
                                       relative_indent_present || shrink_to_fit_present || reading_order_present ||
                                       has_horizontal_align_present || has_vertical_align_present ||
                                       has_wrap_text_present || has_justify_last_line_present;
-  xf->has_alignment = has_alignment_present ? (reader.boolean_value(has_alignment, false, "xf.hasAlignment") ? 1 : 0)
-                                            : (has_supplied_alignment ? 1 : 0);
+  xf->has_alignment = reader.boolean_value(has_alignment, has_supplied_alignment, "xf.hasAlignment") ? 1 : 0;
 
   xf->apply_number_format = reader.boolean(record, "applyNumberFormat", false, "xf.applyNumberFormat") ? 1 : 0;
   xf->apply_font = reader.boolean(record, "applyFont", false, "xf.applyFont") ? 1 : 0;
@@ -101,14 +94,42 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf, JsNarrowNume
   const emscripten::val has_protection = reader.value(record, "hasProtection", "xf.hasProtection");
   const emscripten::val locked = reader.value(record, "locked", "xf.locked");
   const emscripten::val hidden = reader.value(record, "hidden", "xf.hidden");
-  const bool has_protection_present = has_value(has_protection);
   const bool locked_present = has_value(locked);
   const bool hidden_present = has_value(hidden);
-  const bool has_protection_value = reader.boolean_value(has_protection, false, "xf.hasProtection");
   xf->has_protection =
-      has_protection_present ? (has_protection_value ? 1 : 0) : ((locked_present || hidden_present) ? 1 : 0);
+      reader.boolean_value(has_protection, locked_present || hidden_present, "xf.hasProtection") ? 1 : 0;
   xf->locked = reader.boolean_value(locked, true, "xf.locked") ? 1 : 0;
   xf->hidden = reader.boolean_value(hidden, false, "xf.hidden") ? 1 : 0;
+}
+
+/// Diagnostic field names for the members of one border record.
+struct BorderFieldNames {
+  const char* left;
+  const char* right;
+  const char* top;
+  const char* bottom;
+  const char* diagonal;
+  const char* diagonal_up;
+  const char* diagonal_down;
+};
+
+constexpr BorderFieldNames kBorderFields{"border.left",     "border.right",      "border.top",         "border.bottom",
+                                         "border.diagonal", "border.diagonalUp", "border.diagonalDown"};
+constexpr BorderFieldNames kDxfBorderFields{"dxf.border.left",        "dxf.border.right",    "dxf.border.top",
+                                            "dxf.border.bottom",      "dxf.border.diagonal", "dxf.border.diagonalUp",
+                                            "dxf.border.diagonalDown"};
+
+fm_border_record js_pull_border_record(const emscripten::val& record, const BorderFieldNames& names,
+                                       JsNarrowNumericReader& reader) {
+  fm_border_record br{};
+  br.left = js_pull_border_side(reader.value(record, "left", names.left), &reader);
+  br.right = js_pull_border_side(reader.value(record, "right", names.right), &reader);
+  br.top = js_pull_border_side(reader.value(record, "top", names.top), &reader);
+  br.bottom = js_pull_border_side(reader.value(record, "bottom", names.bottom), &reader);
+  br.diagonal = js_pull_border_side(reader.value(record, "diagonal", names.diagonal), &reader);
+  br.diagonal_up = reader.boolean(record, "diagonalUp", false, names.diagonal_up) ? 1 : 0;
+  br.diagonal_down = reader.boolean(record, "diagonalDown", false, names.diagonal_down) ? 1 : 0;
+  return br;
 }
 
 /// Builds the JS mirror of a font record. Shared by `getFont` and the
@@ -402,14 +423,8 @@ JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
     return r;
   }
   uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = idx;
-  return r;
+  const fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
+  return index_result(rc, idx);
 }
 
 JsStatus JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
@@ -453,14 +468,8 @@ JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
     return r;
   }
   uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = idx;
-  return r;
+  const fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
+  return index_result(rc, idx);
 }
 
 JsAddStyleResult JsWorkbook::addBorder(emscripten::val record) {
@@ -470,27 +479,14 @@ JsAddStyleResult JsWorkbook::addBorder(emscripten::val record) {
     return r;
   }
   JsNarrowNumericReader reader("addBorder");
-  fm_border_record br{};
-  br.left = js_pull_border_side(reader.value(record, "left", "border.left"), &reader);
-  br.right = js_pull_border_side(reader.value(record, "right", "border.right"), &reader);
-  br.top = js_pull_border_side(reader.value(record, "top", "border.top"), &reader);
-  br.bottom = js_pull_border_side(reader.value(record, "bottom", "border.bottom"), &reader);
-  br.diagonal = js_pull_border_side(reader.value(record, "diagonal", "border.diagonal"), &reader);
-  br.diagonal_up = reader.boolean(record, "diagonalUp", false, "border.diagonalUp") ? 1 : 0;
-  br.diagonal_down = reader.boolean(record, "diagonalDown", false, "border.diagonalDown") ? 1 : 0;
+  const fm_border_record br = js_pull_border_record(record, kBorderFields, reader);
   if (!reader.ok()) {
     r.status = binding_error_status(kInvalidArgument, reader.message().c_str());
     return r;
   }
   uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_border(handle_, br, &idx);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = idx;
-  return r;
+  const fm_status_t rc = fm_styles_add_border(handle_, br, &idx);
+  return index_result(rc, idx);
 }
 
 JsAddNumFmtResult JsWorkbook::addNumFmt(const std::string& format_code) {
@@ -524,14 +520,8 @@ JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
     return r;
   }
   uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = idx;
-  return r;
+  const fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
+  return index_result(rc, idx);
 }
 
 JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
@@ -563,13 +553,7 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   emscripten::val border = reader.value(record, "border", "dxf.border");
   if (!border.isUndefined() && !border.isNull()) {
     dxf.border_engaged = 1;
-    dxf.border.left = js_pull_border_side(reader.value(border, "left", "dxf.border.left"), &reader);
-    dxf.border.right = js_pull_border_side(reader.value(border, "right", "dxf.border.right"), &reader);
-    dxf.border.top = js_pull_border_side(reader.value(border, "top", "dxf.border.top"), &reader);
-    dxf.border.bottom = js_pull_border_side(reader.value(border, "bottom", "dxf.border.bottom"), &reader);
-    dxf.border.diagonal = js_pull_border_side(reader.value(border, "diagonal", "dxf.border.diagonal"), &reader);
-    dxf.border.diagonal_up = reader.boolean(border, "diagonalUp", false, "dxf.border.diagonalUp") ? 1 : 0;
-    dxf.border.diagonal_down = reader.boolean(border, "diagonalDown", false, "dxf.border.diagonalDown") ? 1 : 0;
+    dxf.border = js_pull_border_record(border, kDxfBorderFields, reader);
   }
 
   emscripten::val num_fmt = reader.value(record, "numFmt", "dxf.numFmt");
@@ -591,14 +575,8 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   }
 
   uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_dxf(handle_, dxf, &idx);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = idx;
-  return r;
+  const fm_status_t rc = fm_styles_add_dxf(handle_, dxf, &idx);
+  return index_result(rc, idx);
 }
 
 // ---- Style count accessors ---------------------------------------------
@@ -674,9 +652,7 @@ JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {
   }
   uint32_t index = 0;
   const fm_status_t rc = fm_styles_add_cell_style_xf(handle_, xf, &index);
-  out.status = rc == 0 ? ok_status() : error_status(rc);
-  out.index = index;
-  return out;
+  return index_result(rc, index);
 }
 
 JsStatus JsWorkbook::setCellStyle(emscripten::val record) {

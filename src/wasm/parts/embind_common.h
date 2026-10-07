@@ -350,6 +350,9 @@ JsNumberResult number_result(fm_status_t rc, double value);
 /// A NULL `value` becomes the empty string.
 JsStringResult string_result(fm_status_t rc, const char* value);
 
+/// Builds a `JsAddStyleResult` from `rc`, carrying `index` only on success.
+JsAddStyleResult index_result(fm_status_t rc, std::size_t index);
+
 // ---- Guarded JS callback invocation -------------------------------------
 //
 // Every path that calls back into caller-supplied JavaScript from inside

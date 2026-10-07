@@ -418,14 +418,8 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   }
 
   std::size_t new_index = 0;
-  fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = static_cast<uint32_t>(new_index);
-  return r;
+  const fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);
+  return index_result(rc, new_index);
 }
 
 JsStatus JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
