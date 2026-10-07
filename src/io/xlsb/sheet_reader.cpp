@@ -154,100 +154,6 @@ bool IsWriterRegeneratedSheetRecord(XlsbRecordType type) {
   }
 }
 
-/// Decodes the fixed-width worksheet default-format record. The model only
-/// carries the default column/row metrics and base column width; the thick
-/// border and outline-level metadata has no corresponding model state, so it
-/// is surfaced as a structured warning while the representable fields still
-/// round-trip.
-Expected<void, Error> DecodeWorksheetFormatInfo(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index) {
-  constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
-  constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
-  if (rec.payload.size < 12U) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsFmtInfo payload truncated",
-                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
-  }
-
-  ByteSpan p = rec.payload;
-  auto dx_g_col_or = read_u32(p);
-  auto cch_def_col_width_or = read_u16(p);
-  auto miy_def_rw_height_or = read_u16(p);
-  auto flags_or = read_u32(p);
-  if (!dx_g_col_or || !cch_def_col_width_or || !miy_def_rw_height_or || !flags_or) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsFmtInfo fields truncated",
-                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
-  }
-  if (p.size != 0U) {
-    return make_error(
-        FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo has trailing bytes",
-        "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) + " trailing=" + std::to_string(p.size));
-  }
-
-  const std::uint32_t dx_g_col = dx_g_col_or.value();
-  const std::uint16_t cch_def_col_width = cch_def_col_width_or.value();
-  const std::uint16_t miy_def_rw_height = miy_def_rw_height_or.value();
-  const std::uint32_t flags = flags_or.value();
-  if (dx_g_col != kAbsentDefaultColumnWidth && dx_g_col > 65535U) {
-    return make_error(
-        FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo default column width out of range",
-        "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) + " dxGCol=" + std::to_string(dx_g_col));
-  }
-  if (cch_def_col_width > 255U) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo base column width out of range",
-                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) +
-                          " cchDefColWidth=" + std::to_string(cch_def_col_width));
-  }
-
-  const bool thick_top = (flags & 0x00000004U) != 0U;
-  const bool thick_bottom = (flags & 0x00000008U) != 0U;
-  const std::uint8_t row_outline_max = static_cast<std::uint8_t>((flags >> 16U) & 0xFFU);
-  const std::uint8_t col_outline_max = static_cast<std::uint8_t>((flags >> 24U) & 0xFFU);
-  if (row_outline_max > 7U || col_outline_max > 7U) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo outline level out of range",
-                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) + " row_outline_max=" +
-                          std::to_string(row_outline_max) + " col_outline_max=" + std::to_string(col_outline_max));
-  }
-
-  SheetFormatDefaults& defaults = sheet.mutable_format_defaults();
-  defaults.base_col_width = static_cast<double>(cch_def_col_width);
-  if (dx_g_col == kAbsentDefaultColumnWidth) {
-    defaults.has_default_col_width = false;
-    defaults.default_col_width = 0.0;
-  } else {
-    defaults.has_default_col_width = true;
-    defaults.default_col_width = static_cast<double>(dx_g_col) / 256.0;
-  }
-
-  const bool f_unsynced = (flags & 0x00000001U) != 0U;
-  const bool f_dy_zero = (flags & 0x00000002U) != 0U;
-  if (f_dy_zero) {
-    defaults.has_default_row_height = true;
-    defaults.default_row_height = 0.0;
-  } else if (f_unsynced) {
-    defaults.has_default_row_height = true;
-    defaults.default_row_height = static_cast<double>(miy_def_rw_height) / 20.0;
-  } else if (miy_def_rw_height == kCanonicalDefaultRowHeightTwips) {
-    defaults.has_default_row_height = false;
-    defaults.default_row_height = 0.0;
-  } else {
-    // Excel commonly writes FFFFFFFF/10/400/0 for an OOXML sheet whose
-    // visible default row height is 20pt. Preserve that effective value for
-    // compatibility even without fUnsynced.
-    defaults.has_default_row_height = true;
-    defaults.default_row_height = static_cast<double>(miy_def_rw_height) / 20.0;
-  }
-
-  if (thick_top || thick_bottom || row_outline_max != 0U || col_outline_max != 0U) {
-    StructuredLog("xlsb.reader.unsupported_ws_format_metadata")
-        .field("sheet_index", static_cast<std::int64_t>(sheet_index))
-        .field("thick_top", thick_top)
-        .field("thick_bottom", thick_bottom)
-        .field("row_outline_max", static_cast<std::int64_t>(row_outline_max))
-        .field("col_outline_max", static_cast<std::int64_t>(col_outline_max))
-        .warn();
-  }
-  return Expected<void, Error>::Ok();
-}
-
 /// Tail records in this slot occur after the model-owned merge block and
 /// before the model-owned hyperlink block, even when the source stream omits
 /// BrtBeginMergeCells/BrtEndMergeCells entirely.  The worksheet grammar uses
@@ -589,7 +495,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtWsFmtInfo: {
-      auto format_status = DecodeWorksheetFormatInfo(rec, wb.sheet(sheet_index), sheet_index);
+      auto format_status = decode_ws_fmt_info(rec, wb.sheet(sheet_index), sheet_index);
       if (!format_status) {
         return format_status.error();
       }

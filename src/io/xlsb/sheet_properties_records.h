@@ -15,6 +15,7 @@
 namespace formulon {
 
 class Sheet;
+struct SheetFormatDefaults;
 
 namespace io {
 namespace xlsb {
@@ -23,6 +24,12 @@ namespace xlsb {
 /// `false` when the record carried flag or sync fields the model has no
 /// room for.
 Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index);
+
+/// Decodes `BrtWsFmtInfo` into the sheet's default column/row metrics.
+Expected<void, Error> decode_ws_fmt_info(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index);
+
+/// Emits `BrtWsFmtInfo` for `defaults`.
+void emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults& defaults);
 
 /// Emits the worksheet-properties record which starts the mandatory
 /// worksheet prefix.

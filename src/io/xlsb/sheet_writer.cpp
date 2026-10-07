@@ -178,52 +178,7 @@ void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const Sheet
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsView), ByteSpan{});
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsViews), ByteSpan{});
 
-  // BrtWsFmtInfo stores the default column width as 1/256 character units,
-  // while the OOXML model stores it in character units. The sentinel is the
-  // only absent marker; zero is a valid explicit width.
-  constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
-  constexpr std::uint16_t kCanonicalDefaultColumnWidth = 8U;
-  constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
-  constexpr double kMaxDefaultColumnWidth = 65535.0 / 256.0;
-  constexpr double kMaxDefaultRowHeight = 65535.0 / 20.0;
-
-  const bool valid_base_col_width = std::isfinite(defaults.base_col_width) && defaults.base_col_width >= 0.0 &&
-                                    defaults.base_col_width <= 255.0 &&
-                                    std::floor(defaults.base_col_width) == defaults.base_col_width;
-  const bool valid_default_col_width =
-      !defaults.has_default_col_width ||
-      (std::isfinite(defaults.default_col_width) && defaults.default_col_width >= 0.0 &&
-       defaults.default_col_width <= kMaxDefaultColumnWidth);
-  const bool valid_default_row_height =
-      !defaults.has_default_row_height ||
-      (std::isfinite(defaults.default_row_height) && defaults.default_row_height >= 0.0 &&
-       defaults.default_row_height <= kMaxDefaultRowHeight &&
-       std::isfinite(std::round(defaults.default_row_height * 20.0)));
-
-  const std::uint16_t base_col_width =
-      valid_base_col_width ? static_cast<std::uint16_t>(defaults.base_col_width) : kCanonicalDefaultColumnWidth;
-  const bool emit_default_col_width = defaults.has_default_col_width && valid_default_col_width;
-  const std::uint32_t dx_g_col = emit_default_col_width
-                                     ? static_cast<std::uint32_t>(std::floor(defaults.default_col_width * 256.0))
-                                     : kAbsentDefaultColumnWidth;
-
-  std::uint16_t miy_default_row_height = kCanonicalDefaultRowHeightTwips;
-  std::uint32_t format_flags = 0U;
-  if (defaults.has_default_row_height && valid_default_row_height) {
-    miy_default_row_height = static_cast<std::uint16_t>(std::round(defaults.default_row_height * 20.0));
-    if (miy_default_row_height == 0U) {
-      format_flags |= 0x00000002U;  // fDyZero: explicit zero (including quantized-zero).
-    } else {
-      format_flags |= 0x00000001U;  // fUnsynced: explicit positive default row height.
-    }
-  }
-
-  std::vector<std::uint8_t> formatting;
-  emit_u32(formatting, dx_g_col);
-  emit_u16(formatting, base_col_width);
-  emit_u16(formatting, miy_default_row_height);
-  emit_u32(formatting, format_flags);  // thick/outline metadata is not authored by this model
-  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsFmtInfo), formatting);
+  emit_ws_fmt_info(dst, defaults);
 }
 
 /// Emits the bounding RfX of actual emitted cells.  Although BrtWsDim is

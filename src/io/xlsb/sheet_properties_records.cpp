@@ -1,6 +1,7 @@
 #include "io/xlsb/sheet_properties_records.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -18,6 +19,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
+#include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
@@ -252,6 +254,150 @@ void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   emit_u32(properties, kWsPropSyncUnused);  // colSync: unused
   emit_xlwidestring(properties, properties_model.code_name);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsProp), properties);
+}
+
+/// Decodes the fixed-width worksheet default-format record. The model only
+/// carries the default column/row metrics and base column width; the thick
+/// border and outline-level metadata has no corresponding model state, so it
+/// is surfaced as a structured warning while the representable fields still
+/// round-trip.
+Expected<void, Error> decode_ws_fmt_info(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index) {
+  constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
+  constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
+  if (rec.payload.size < 12U) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsFmtInfo payload truncated",
+                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
+  }
+
+  ByteSpan p = rec.payload;
+  auto dx_g_col_or = read_u32(p);
+  auto cch_def_col_width_or = read_u16(p);
+  auto miy_def_rw_height_or = read_u16(p);
+  auto flags_or = read_u32(p);
+  if (!dx_g_col_or || !cch_def_col_width_or || !miy_def_rw_height_or || !flags_or) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsFmtInfo fields truncated",
+                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
+  }
+  if (p.size != 0U) {
+    return make_error(
+        FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo has trailing bytes",
+        "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) + " trailing=" + std::to_string(p.size));
+  }
+
+  const std::uint32_t dx_g_col = dx_g_col_or.value();
+  const std::uint16_t cch_def_col_width = cch_def_col_width_or.value();
+  const std::uint16_t miy_def_rw_height = miy_def_rw_height_or.value();
+  const std::uint32_t flags = flags_or.value();
+  if (dx_g_col != kAbsentDefaultColumnWidth && dx_g_col > 65535U) {
+    return make_error(
+        FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo default column width out of range",
+        "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) + " dxGCol=" + std::to_string(dx_g_col));
+  }
+  if (cch_def_col_width > 255U) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo base column width out of range",
+                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) +
+                          " cchDefColWidth=" + std::to_string(cch_def_col_width));
+  }
+
+  const bool thick_top = (flags & 0x00000004U) != 0U;
+  const bool thick_bottom = (flags & 0x00000008U) != 0U;
+  const std::uint8_t row_outline_max = static_cast<std::uint8_t>((flags >> 16U) & 0xFFU);
+  const std::uint8_t col_outline_max = static_cast<std::uint8_t>((flags >> 24U) & 0xFFU);
+  if (row_outline_max > 7U || col_outline_max > 7U) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo outline level out of range",
+                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) + " row_outline_max=" +
+                          std::to_string(row_outline_max) + " col_outline_max=" + std::to_string(col_outline_max));
+  }
+
+  SheetFormatDefaults& defaults = sheet.mutable_format_defaults();
+  defaults.base_col_width = static_cast<double>(cch_def_col_width);
+  if (dx_g_col == kAbsentDefaultColumnWidth) {
+    defaults.has_default_col_width = false;
+    defaults.default_col_width = 0.0;
+  } else {
+    defaults.has_default_col_width = true;
+    defaults.default_col_width = static_cast<double>(dx_g_col) / 256.0;
+  }
+
+  const bool f_unsynced = (flags & 0x00000001U) != 0U;
+  const bool f_dy_zero = (flags & 0x00000002U) != 0U;
+  if (f_dy_zero) {
+    defaults.has_default_row_height = true;
+    defaults.default_row_height = 0.0;
+  } else if (f_unsynced) {
+    defaults.has_default_row_height = true;
+    defaults.default_row_height = static_cast<double>(miy_def_rw_height) / 20.0;
+  } else if (miy_def_rw_height == kCanonicalDefaultRowHeightTwips) {
+    defaults.has_default_row_height = false;
+    defaults.default_row_height = 0.0;
+  } else {
+    // Excel commonly writes FFFFFFFF/10/400/0 for an OOXML sheet whose
+    // visible default row height is 20pt. Preserve that effective value for
+    // compatibility even without fUnsynced.
+    defaults.has_default_row_height = true;
+    defaults.default_row_height = static_cast<double>(miy_def_rw_height) / 20.0;
+  }
+
+  if (thick_top || thick_bottom || row_outline_max != 0U || col_outline_max != 0U) {
+    StructuredLog("xlsb.reader.unsupported_ws_format_metadata")
+        .field("sheet_index", static_cast<std::int64_t>(sheet_index))
+        .field("thick_top", thick_top)
+        .field("thick_bottom", thick_bottom)
+        .field("row_outline_max", static_cast<std::int64_t>(row_outline_max))
+        .field("col_outline_max", static_cast<std::int64_t>(col_outline_max))
+        .warn();
+  }
+  return Expected<void, Error>::Ok();
+}
+
+/// Emits BrtWsFmtInfo from the sheet's modelled `<sheetFormatPr>` values.
+void emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults& defaults) {
+  // BrtWsFmtInfo stores the default column width as 1/256 character units,
+  // while the OOXML model stores it in character units. The sentinel is the
+  // only absent marker; zero is a valid explicit width.
+  constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
+  constexpr std::uint16_t kCanonicalDefaultColumnWidth = 8U;
+  constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
+  constexpr double kMaxDefaultColumnWidth = 65535.0 / 256.0;
+  constexpr double kMaxDefaultRowHeight = 65535.0 / 20.0;
+
+  const bool valid_base_col_width = std::isfinite(defaults.base_col_width) && defaults.base_col_width >= 0.0 &&
+                                    defaults.base_col_width <= 255.0 &&
+                                    std::floor(defaults.base_col_width) == defaults.base_col_width;
+  const bool valid_default_col_width =
+      !defaults.has_default_col_width ||
+      (std::isfinite(defaults.default_col_width) && defaults.default_col_width >= 0.0 &&
+       defaults.default_col_width <= kMaxDefaultColumnWidth);
+  const bool valid_default_row_height =
+      !defaults.has_default_row_height ||
+      (std::isfinite(defaults.default_row_height) && defaults.default_row_height >= 0.0 &&
+       defaults.default_row_height <= kMaxDefaultRowHeight &&
+       std::isfinite(std::round(defaults.default_row_height * 20.0)));
+
+  const std::uint16_t base_col_width =
+      valid_base_col_width ? static_cast<std::uint16_t>(defaults.base_col_width) : kCanonicalDefaultColumnWidth;
+  const bool emit_default_col_width = defaults.has_default_col_width && valid_default_col_width;
+  const std::uint32_t dx_g_col = emit_default_col_width
+                                     ? static_cast<std::uint32_t>(std::floor(defaults.default_col_width * 256.0))
+                                     : kAbsentDefaultColumnWidth;
+
+  std::uint16_t miy_default_row_height = kCanonicalDefaultRowHeightTwips;
+  std::uint32_t format_flags = 0U;
+  if (defaults.has_default_row_height && valid_default_row_height) {
+    miy_default_row_height = static_cast<std::uint16_t>(std::round(defaults.default_row_height * 20.0));
+    if (miy_default_row_height == 0U) {
+      format_flags |= 0x00000002U;  // fDyZero: explicit zero (including quantized-zero).
+    } else {
+      format_flags |= 0x00000001U;  // fUnsynced: explicit positive default row height.
+    }
+  }
+
+  std::vector<std::uint8_t> formatting;
+  emit_u32(formatting, dx_g_col);
+  emit_u16(formatting, base_col_width);
+  emit_u16(formatting, miy_default_row_height);
+  emit_u32(formatting, format_flags);  // thick/outline metadata is not authored by this model
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsFmtInfo), formatting);
 }
 
 }  // namespace xlsb
