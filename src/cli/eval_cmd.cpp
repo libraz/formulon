@@ -25,6 +25,7 @@
 
 #include "c_api/formulon_c.h"
 #include "cli/cli.h"
+#include "cli/diagnostics.h"
 #include "cli/render.h"
 
 namespace formulon {
@@ -48,17 +49,6 @@ void print_eval_usage(std::ostream& out) {
       << "Evaluate <formula> on a fresh empty workbook and print the result.\n"
       << "Cell-level Excel errors (#NAME?, #DIV/0!, ...) print to stdout and\n"
       << "do NOT cause a non-zero exit code; only structural failures do.\n";
-}
-
-// Logs the most recent `fm_*` diagnostic to `err`, prefixed with the
-// subcommand name so the output is grep-friendly.
-void emit_last_error(std::ostream& err, const char* subcommand) {
-  err << "formulon: " << subcommand << ": " << fm_last_error_message();
-  const char* ctx = fm_last_error_context();
-  if (ctx != nullptr && ctx[0] != '\0') {
-    err << " (" << ctx << ')';
-  }
-  err << '\n';
 }
 
 // Parses `--repeat` argument from `args[idx]`. Returns the parsed

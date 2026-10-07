@@ -166,6 +166,22 @@ JsWorkbook* JsWorkbook::loadBytes(emscripten::val bytes) {
   return wb.release();
 }
 
+namespace {
+
+// Moves a finished save's outcome into the result envelope: the error status,
+// or a JS copy of the buffer, after which the C buffer is freed.
+void finish_save(fm_status_t rc, uint8_t* out, std::size_t len, JsStatus& status, emscripten::val& bytes) {
+  if (rc != 0) {
+    status = error_status(rc);
+    return;
+  }
+  bytes = bytes_to_val(out, len);
+  fm_buffer_free(out);
+  status = ok_status();
+}
+
+}  // namespace
+
 JsSaveResult JsWorkbook::save() const {
   JsSaveResult r;
   if (handle_ == nullptr) {
@@ -174,14 +190,8 @@ JsSaveResult JsWorkbook::save() const {
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
-  fm_status_t rc = fm_workbook_save(handle_, &out, &len);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.bytes = bytes_to_val(out, len);
-  fm_buffer_free(out);
-  r.status = ok_status();
+  const fm_status_t rc = fm_workbook_save(handle_, &out, &len);
+  finish_save(rc, out, len, r.status, r.bytes);
   return r;
 }
 
@@ -193,14 +203,8 @@ JsSaveResult JsWorkbook::saveAs(int32_t format) const {
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
-  fm_status_t rc = fm_workbook_save_as(handle_, format, &out, &len);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.bytes = bytes_to_val(out, len);
-  fm_buffer_free(out);
-  r.status = ok_status();
+  const fm_status_t rc = fm_workbook_save_as(handle_, format, &out, &len);
+  finish_save(rc, out, len, r.status, r.bytes);
   return r;
 }
 
@@ -214,18 +218,15 @@ JsSaveDiagnosticsResult JsWorkbook::saveWithDiagnostics(int32_t format) const {
   std::size_t len = 0;
   fm_save_diagnostics_t d{};
   fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, format, &out, &len, &d);
+  finish_save(rc, out, len, r.status, r.bytes);
   if (rc != 0) {
-    r.status = error_status(rc);
     return r;
   }
-  r.bytes = bytes_to_val(out, len);
-  fm_buffer_free(out);
   r.downgradedFormulaCount = d.downgraded_formula_count;
   r.deferredFeatureCount = d.deferred_feature_count;
   r.droppedPartCount = d.dropped_part_count;
   r.droppedRelationshipCount = d.dropped_relationship_count;
   r.renumberedPartCount = d.renumbered_part_count;
-  r.status = ok_status();
   return r;
 }
 

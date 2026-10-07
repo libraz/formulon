@@ -281,6 +281,21 @@ void erase_break(std::vector<ManualBreak>& breaks, std::uint32_t index) {
   }
 }
 
+/// Shared body of `fm_sheet_add_row_break` / `fm_sheet_add_col_break`.
+fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t index, bool manual, bool rows,
+                      const char* fn) {
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+    return rc;
+  }
+  if (index >= (rows ? Sheet::kMaxRows : Sheet::kMaxCols)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, fn,
+                             std::string(rows ? "row=" : "col=") + std::to_string(index));
+  }
+  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
+  return rows ? upsert_break(print.manual_row_breaks, index, kWholeSheetColSpanMax, manual, fn)
+              : upsert_break(print.manual_col_breaks, index, kWholeSheetRowSpanMax, manual, fn);
+}
+
 // Counts one axis. The `size_t` return has no room for a status, so an
 // argument error is reported as `0` plus a populated thread-local
 // diagnostic; `clear_last_error` above is what makes the empty message a
@@ -422,29 +437,13 @@ extern "C" fm_status_t fm_sheet_set_fit_to_page(fm_workbook_t* wb, size_t sheet_
 /* -------------------------------------------------------------------------- */
 
 extern "C" fm_status_t fm_sheet_add_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t manual) {
-  static constexpr const char* kFn = "fm_sheet_add_row_break";
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
-    return rc;
-  }
-  if (row >= Sheet::kMaxRows) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, kFn, "row=" + std::to_string(row));
-  }
-  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
-  return upsert_break(print.manual_row_breaks, row, kWholeSheetColSpanMax, manual != 0, kFn);
+  return add_break(wb, sheet_index, row, manual != 0, /*rows=*/true, "fm_sheet_add_row_break");
 }
 
 extern "C" fm_status_t fm_sheet_add_col_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t manual) {
-  static constexpr const char* kFn = "fm_sheet_add_col_break";
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
-    return rc;
-  }
-  if (col >= Sheet::kMaxCols) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, kFn, "col=" + std::to_string(col));
-  }
-  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
-  return upsert_break(print.manual_col_breaks, col, kWholeSheetRowSpanMax, manual != 0, kFn);
+  return add_break(wb, sheet_index, col, manual != 0, /*rows=*/false, "fm_sheet_add_col_break");
 }
 
 extern "C" fm_status_t fm_sheet_remove_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row) {

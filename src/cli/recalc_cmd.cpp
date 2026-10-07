@@ -98,15 +98,6 @@ bool parse_thread_count(std::string_view text, std::uint32_t* out) {
   return true;
 }
 
-void emit_last_error(std::ostream& err, const char* subcommand) {
-  err << "formulon: " << subcommand << ": " << fm_last_error_message();
-  const char* ctx = fm_last_error_context();
-  if (ctx != nullptr && ctx[0] != '\0') {
-    err << " (" << ctx << ')';
-  }
-  err << '\n';
-}
-
 // Derives the `fm_workbook_save_with_diagnostics` container format from `path`'s
 // extension: `.xlsb` (case-insensitive) selects MS-XLSB; every other
 // extension (including none) selects `.xlsx` so existing callers that

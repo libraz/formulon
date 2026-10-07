@@ -34,15 +34,6 @@ void print_paginate_usage(std::ostream& out) {
       << "  --           end options; the next token is the input path\n";
 }
 
-void emit_last_error(std::ostream& err) {
-  err << "formulon: paginate: " << fm_last_error_message();
-  const char* context = fm_last_error_context();
-  if (context != nullptr && context[0] != '\0') {
-    err << " (" << context << ')';
-  }
-  err << '\n';
-}
-
 bool parse_sheet_index(std::string_view text, std::size_t& out) {
   std::size_t value = 0;
   const auto [end, ec] = std::from_chars(text.data(), text.data() + text.size(), value);
@@ -103,19 +94,19 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
   WorkbookGuard workbook;
   if (const auto status = fm_workbook_load(bytes.data(), bytes.size(), &workbook.handle); status != 0) {
-    emit_last_error(err);
+    emit_last_error(err, "paginate");
     return exit_code_for_status(status);
   }
   // Geometry resolved from a workbook that lost content on load is the
   // geometry of a different workbook, so the losses are reported before
   // any of it is written.
   if (const auto status = emit_read_diagnostics(workbook.handle, err, "paginate"); status != 0) {
-    emit_last_error(err);
+    emit_last_error(err, "paginate");
     return exit_code_for_status(status);
   }
   PaginationGuard pagination;
   if (const auto status = fm_workbook_paginate(workbook.handle, sheet_index, &pagination.handle); status != 0) {
-    emit_last_error(err);
+    emit_last_error(err, "paginate");
     return exit_code_for_status(status);
   }
 
@@ -125,7 +116,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   for (std::size_t i = 0; i < fm_pagination_print_area_count(pagination.handle); ++i) {
     fm_print_range_t range{};
     if (const auto status = fm_pagination_print_area_at(pagination.handle, i, &range); status != 0) {
-      emit_last_error(err);
+      emit_last_error(err, "paginate");
       return exit_code_for_status(status);
     }
     if (i != 0) {
@@ -139,7 +130,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     for (std::size_t i = 0; i < count_fn(pagination.handle); ++i) {
       uint32_t value = 0;
       if (const auto status = at_fn(pagination.handle, i, &value); status != 0) {
-        emit_last_error(err);
+        emit_last_error(err, "paginate");
         return false;
       }
       if (i != 0) {

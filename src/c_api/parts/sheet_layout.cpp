@@ -147,6 +147,14 @@ void overlay_column_span(formulon::SheetLayout& layout, std::uint32_t first, std
   layout.columns = std::move(merged);
 }
 
+fm_status_t check_sheet_column_span(const fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                    const char* fn) {
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+    return rc;
+  }
+  return check_column_span(first, last, fn);
+}
+
 // Returns a pointer to the row override whose `row` equals `row`,
 // creating one if none exists. The returned pointer is valid until
 // the next mutation of `layout.row_overrides`.
@@ -244,10 +252,7 @@ extern "C" fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t
 extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                  double width) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_column_width"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_column_span(first, last, "fm_sheet_set_column_width"); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_set_column_width"); rc != 0) {
     return rc;
   }
   if (auto rc = check_finite_non_negative(width, "fm_sheet_set_column_width", "width"); rc != 0) {
@@ -264,10 +269,7 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                    uint32_t last) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_clear_column_width"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_column_span(first, last, "fm_sheet_clear_column_width"); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_clear_column_width"); rc != 0) {
     return rc;
   }
   formulon::SheetLayout& layout = wb->workbook().sheet(sheet_index).mutable_layout();
@@ -290,10 +292,7 @@ extern "C" fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t she
 extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                   int32_t hidden) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_column_hidden"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_column_span(first, last, "fm_sheet_set_column_hidden"); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_set_column_hidden"); rc != 0) {
     return rc;
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
@@ -304,10 +303,7 @@ extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                    uint8_t level) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_column_outline"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_column_span(first, last, "fm_sheet_set_column_outline"); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_set_column_outline"); rc != 0) {
     return rc;
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
@@ -522,49 +518,44 @@ extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sh
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_show_grid_lines(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_show_grid_lines"); rc != 0) {
+namespace {
+
+fm_status_t set_view_flag(fm_workbook_t* wb, size_t sheet_index, const char* fn, bool formulon::SheetView::*member,
+                          int32_t value) {
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
     return rc;
   }
-  wb->workbook().sheet(sheet_index).mutable_view().show_grid_lines = (show != 0);
+  wb->workbook().sheet(sheet_index).mutable_view().*member = (value != 0);
   return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_set_show_grid_lines(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
+  clear_last_error();
+  return set_view_flag(wb, sheet_index, "fm_sheet_set_show_grid_lines", &formulon::SheetView::show_grid_lines, show);
 }
 
 extern "C" fm_status_t fm_sheet_set_show_row_col_headers(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_show_row_col_headers"); rc != 0) {
-    return rc;
-  }
-  wb->workbook().sheet(sheet_index).mutable_view().show_row_col_headers = (show != 0);
-  return 0;
+  return set_view_flag(wb, sheet_index, "fm_sheet_set_show_row_col_headers", &formulon::SheetView::show_row_col_headers,
+                       show);
 }
 
 extern "C" fm_status_t fm_sheet_set_show_zeros(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_show_zeros"); rc != 0) {
-    return rc;
-  }
-  wb->workbook().sheet(sheet_index).mutable_view().show_zeros = (show != 0);
-  return 0;
+  return set_view_flag(wb, sheet_index, "fm_sheet_set_show_zeros", &formulon::SheetView::show_zeros, show);
 }
 
 extern "C" fm_status_t fm_sheet_set_right_to_left(fm_workbook_t* wb, size_t sheet_index, int32_t right_to_left) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_right_to_left"); rc != 0) {
-    return rc;
-  }
-  wb->workbook().sheet(sheet_index).mutable_view().right_to_left = (right_to_left != 0);
-  return 0;
+  return set_view_flag(wb, sheet_index, "fm_sheet_set_right_to_left", &formulon::SheetView::right_to_left,
+                       right_to_left);
 }
 
 extern "C" fm_status_t fm_sheet_set_tab_selected(fm_workbook_t* wb, size_t sheet_index, int32_t selected) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_tab_selected"); rc != 0) {
-    return rc;
-  }
-  wb->workbook().sheet(sheet_index).mutable_view().tab_selected = (selected != 0);
-  return 0;
+  return set_view_flag(wb, sheet_index, "fm_sheet_set_tab_selected", &formulon::SheetView::tab_selected, selected);
 }
 
 extern "C" fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_index, const char* mode) {

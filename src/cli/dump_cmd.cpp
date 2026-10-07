@@ -56,15 +56,6 @@ void print_dump_usage(std::ostream& out) {
       << "  --           end options; the next token is the input path\n";
 }
 
-void emit_last_error(std::ostream& err, const char* subcommand) {
-  err << "formulon: " << subcommand << ": " << fm_last_error_message();
-  const char* ctx = fm_last_error_context();
-  if (ctx != nullptr && ctx[0] != '\0') {
-    err << " (" << ctx << ')';
-  }
-  err << '\n';
-}
-
 // Emits every formula cell (`Sheet!A1 =formula`) or, for `kValues`, every
 // non-blank cell (`Sheet!A1 <rendered>`) on every sheet.
 fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out) {

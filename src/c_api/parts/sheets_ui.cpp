@@ -44,6 +44,29 @@ formulon::MergeRange normalized_merge(const fm_merge_range& r) {
   return m;
 }
 
+using SheetItemSize = std::size_t (*)(const formulon::Sheet& sheet);
+
+// Shared body of the `fm_sheet_get_*_count` getters.
+fm_status_t sheet_item_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t* out_count, const char* fn,
+                             SheetItemSize size_of) {
+  if (out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(fn) + ": out_count is NULL").c_str());
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, fn); rc != 0) {
+    return rc;
+  }
+  *out_count = static_cast<std::uint32_t>(size_of(wb->workbook().sheet(sheet)));
+  return 0;
+}
+
+void fill_comment(const formulon::CellComment& c, fm_comment* out) {
+  out->row = c.row;
+  out->col = c.col;
+  out->author = c.author.c_str();
+  out->text = c.text.c_str();
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -135,15 +158,8 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_at(fm_workbook_t* wb, std::uint32_
 
 extern "C" fm_status_t fm_sheet_get_hyperlink_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t* out_count) {
   clear_last_error();
-  if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_hyperlink_count: out_count is NULL");
-  }
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_hyperlink_count"); rc != 0) {
-    return rc;
-  }
-  *out_count = static_cast<std::uint32_t>(wb->workbook().sheet(sheet).hyperlinks().size());
-  return 0;
+  return sheet_item_count(wb, sheet, out_count, "fm_sheet_get_hyperlink_count",
+                          [](const formulon::Sheet& s) { return s.hyperlinks().size(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -226,15 +242,8 @@ extern "C" fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, std::uint32_t sh
 
 extern "C" fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t* out_count) {
   clear_last_error();
-  if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_merge_count: out_count is NULL");
-  }
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_merge_count"); rc != 0) {
-    return rc;
-  }
-  *out_count = static_cast<std::uint32_t>(wb->workbook().sheet(sheet).merges().size());
-  return 0;
+  return sheet_item_count(wb, sheet, out_count, "fm_sheet_get_merge_count",
+                          [](const formulon::Sheet& s) { return s.merges().size(); });
 }
 
 extern "C" fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, std::uint32_t sheet, fm_merge_range range,
@@ -280,10 +289,7 @@ extern "C" fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, std::uint32_t 
   }
   for (const formulon::CellComment& c : wb->workbook().sheet(sheet).comments()) {
     if (c.row == row && c.col == col) {
-      out->row = c.row;
-      out->col = c.col;
-      out->author = c.author.c_str();
-      out->text = c.text.c_str();
+      fill_comment(c, out);
       return 0;
     }
   }
@@ -293,15 +299,8 @@ extern "C" fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, std::uint32_t 
 
 extern "C" fm_status_t fm_sheet_get_comment_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t* out_count) {
   clear_last_error();
-  if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_comment_count: out_count is NULL");
-  }
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_comment_count"); rc != 0) {
-    return rc;
-  }
-  *out_count = static_cast<std::uint32_t>(wb->workbook().sheet(sheet).comments().size());
-  return 0;
+  return sheet_item_count(wb, sheet, out_count, "fm_sheet_get_comment_count",
+                          [](const formulon::Sheet& s) { return s.comments().size(); });
 }
 
 extern "C" fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index,
@@ -319,10 +318,7 @@ extern "C" fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, std::uin
     return rc;
   }
   const formulon::CellComment& c = comments[index];
-  out->row = c.row;
-  out->col = c.col;
-  out->author = c.author.c_str();
-  out->text = c.text.c_str();
+  fill_comment(c, out);
   return 0;
 }
 
@@ -399,15 +395,8 @@ static_assert(offsetof(fm_merge_range, last_col) == offsetof(formulon::MergeRang
 
 extern "C" fm_status_t fm_sheet_get_validation_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t* out_count) {
   clear_last_error();
-  if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_validation_count: out_count is NULL");
-  }
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_validation_count"); rc != 0) {
-    return rc;
-  }
-  *out_count = static_cast<std::uint32_t>(wb->workbook().sheet(sheet).validations().size());
-  return 0;
+  return sheet_item_count(wb, sheet, out_count, "fm_sheet_get_validation_count",
+                          [](const formulon::Sheet& s) { return s.validations().size(); });
 }
 
 extern "C" fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index,

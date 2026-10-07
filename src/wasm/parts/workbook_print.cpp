@@ -39,22 +39,22 @@ bool value_present(const emscripten::val& value) {
   return !value.isUndefined() && !value.isNull();
 }
 
-emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGetter getter) {
+emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGetter getter, const char* key = "xml") {
   emscripten::val out = emscripten::val::object();
   if (handle == nullptr) {
     out.set("status", error_status(7000));
-    out.set("xml", std::string());
+    out.set(key, std::string());
     return out;
   }
   const char* xml = nullptr;
   const fm_status_t rc = getter(handle, sheet, &xml);
   if (rc != 0) {
     out.set("status", error_status(rc));
-    out.set("xml", std::string());
+    out.set(key, std::string());
     return out;
   }
   out.set("status", ok_status());
-  js_set_cstr(out, "xml", xml);
+  js_set_cstr(out, key, xml);
   return out;
 }
 
@@ -149,22 +149,7 @@ JsStatus JsWorkbook::setSheetFitToPage(uint32_t sheet, bool enabled) {
 // ---- Print area / titles -----------------------------------------------
 
 emscripten::val JsWorkbook::getSheetPrintArea(uint32_t sheet) const {
-  emscripten::val out = emscripten::val::object();
-  if (handle_ == nullptr) {
-    out.set("status", error_status(7000));
-    out.set("ranges", std::string());
-    return out;
-  }
-  const char* ranges = nullptr;
-  const fm_status_t rc = fm_sheet_get_print_area(handle_, sheet, &ranges);
-  if (rc != 0) {
-    out.set("status", error_status(rc));
-    out.set("ranges", std::string());
-    return out;
-  }
-  out.set("status", ok_status());
-  js_set_cstr(out, "ranges", ranges);
-  return out;
+  return xml_result(handle_, sheet, &fm_sheet_get_print_area, "ranges");
 }
 
 JsStatus JsWorkbook::setSheetPrintArea(uint32_t sheet, const std::string& rangesA1) {

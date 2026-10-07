@@ -143,6 +143,20 @@ JsStatus JsWorkbook::setFormula(uint32_t sheet, uint32_t row, uint32_t col, cons
   return status_from_rc(rc);
 }
 
+namespace {
+
+// Moves a value-producing C call's outcome into a result envelope.
+void adopt_value(fm_status_t rc, const fm_value_t& v, JsStatus& status, JsValue& value) {
+  if (rc != 0) {
+    status = error_status(rc);
+    return;
+  }
+  value = translate_value(v);
+  status = ok_status();
+}
+
+}  // namespace
+
 JsCellResult JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col) const {
   JsCellResult r;
   if (handle_ == nullptr) {
@@ -151,12 +165,7 @@ JsCellResult JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col) co
   }
   fm_value_t v{};
   fm_status_t rc = fm_workbook_get_value(handle_, sheet, row, col, &v);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.value = translate_value(v);
-  r.status = ok_status();
+  adopt_value(rc, v, r.status, r.value);
   return r;
 }
 
@@ -244,12 +253,7 @@ JsEvalResult JsWorkbook::evaluateFormulaText(uint32_t sheet, uint32_t row, uint3
   }
   fm_value_t v{};
   fm_status_t rc = fm_workbook_evaluate_formula(handle_, sheet, row, col, formula.c_str(), &v);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.value = translate_value(v);
-  r.status = ok_status();
+  adopt_value(rc, v, r.status, r.value);
   return r;
 }
 
@@ -262,12 +266,7 @@ JsEvalResult JsWorkbook::evaluateConditionalFormula(uint32_t sheet, uint32_t row
   }
   fm_value_t v{};
   fm_status_t rc = fm_workbook_evaluate_cf_formula(handle_, sheet, row, col, anchorRow, anchorCol, formula.c_str(), &v);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.value = translate_value(v);
-  r.status = ok_status();
+  adopt_value(rc, v, r.status, r.value);
   return r;
 }
 

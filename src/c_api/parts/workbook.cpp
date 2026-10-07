@@ -321,16 +321,26 @@ extern "C" fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t inde
   return 0;
 }
 
+namespace {
+
+// Shared entry check of the defined-name setters: a non-empty formula must parse.
+fm_status_t check_defined_name_formula(const char* fn, const char* name, const char* formula) {
+  if (formula[0] == '\0') {
+    return 0;
+  }
+  return check_formula_parses(fn, formula, "name=" + std::string(name));
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* name, const char* formula) {
   clear_last_error();
   if (wb == nullptr || name == nullptr || formula == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_defined_name: NULL argument");
   }
-  if (formula[0] != '\0') {
-    if (auto rc = check_formula_parses("fm_workbook_set_defined_name", formula, "name=" + std::string(name)); rc != 0) {
-      return rc;
-    }
+  if (auto rc = check_defined_name_formula("fm_workbook_set_defined_name", name, formula); rc != 0) {
+    return rc;
   }
   auto r = wb->workbook().set_defined_name(std::string(name), std::string(formula));
   if (!r) {
@@ -346,11 +356,8 @@ extern "C" fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, co
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_defined_name_scoped: NULL argument");
   }
-  if (formula[0] != '\0') {
-    if (auto rc = check_formula_parses("fm_workbook_set_defined_name_scoped", formula, "name=" + std::string(name));
-        rc != 0) {
-      return rc;
-    }
+  if (auto rc = check_defined_name_formula("fm_workbook_set_defined_name_scoped", name, formula); rc != 0) {
+    return rc;
   }
   auto r = wb->workbook().set_defined_name_scoped(std::string(name), std::string(formula), local_sheet_id);
   if (!r) {

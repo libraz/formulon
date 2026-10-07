@@ -90,29 +90,10 @@ inline std::vector<std::string_view> split(std::string_view input, std::string_v
   return parts;
 }
 
-/// Concatenates `parts` with `sep` between each consecutive pair.
-inline std::string join(const std::vector<std::string>& parts, std::string_view sep) {
-  if (parts.empty()) {
-    return {};
-  }
-  std::size_t total = 0;
-  for (const auto& p : parts) {
-    total += p.size();
-  }
-  total += sep.size() * (parts.size() - 1);
-  std::string out;
-  out.reserve(total);
-  for (std::size_t i = 0; i < parts.size(); ++i) {
-    if (i != 0) {
-      out.append(sep.data(), sep.size());
-    }
-    out.append(parts[i]);
-  }
-  return out;
-}
+namespace detail {
 
-/// Concatenates `parts` with `sep` between each consecutive pair.
-inline std::string join(const std::vector<std::string_view>& parts, std::string_view sep) {
+template <typename Part>
+inline std::string join_parts(const std::vector<Part>& parts, std::string_view sep) {
   if (parts.empty()) {
     return {};
   }
@@ -130,6 +111,18 @@ inline std::string join(const std::vector<std::string_view>& parts, std::string_
     out.append(parts[i].data(), parts[i].size());
   }
   return out;
+}
+
+}  // namespace detail
+
+/// Concatenates `parts` with `sep` between each consecutive pair.
+inline std::string join(const std::vector<std::string>& parts, std::string_view sep) {
+  return detail::join_parts(parts, sep);
+}
+
+/// Concatenates `parts` with `sep` between each consecutive pair.
+inline std::string join(const std::vector<std::string_view>& parts, std::string_view sep) {
+  return detail::join_parts(parts, sep);
 }
 
 /// Returns the ASCII lowercase form of `c`, or `c` unchanged for non-letters.

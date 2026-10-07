@@ -16,6 +16,27 @@ namespace parts {
 
 namespace {
 
+using EntryCountGetter = fm_status_t (*)(const fm_workbook_t*, size_t, size_t*);
+
+// Opens a `{ status, <key>: [] }` enumeration result and reads the entry
+// count. Returns false once `r` carries the failure status and the empty list.
+bool begin_entry_list(const fm_workbook_t* handle, uint32_t sheet, EntryCountGetter count_getter, const char* key,
+                      emscripten::val& r, emscripten::val& list, std::size_t& count) {
+  r = emscripten::val::object();
+  list = emscripten::val::array();
+  const fm_status_t rc = handle == nullptr ? 7000 : count_getter(handle, sheet, &count);
+  if (rc != 0) {
+    r.set("status", error_status(rc));
+    r.set(key, list);
+    return false;
+  }
+  return true;
+}
+
+uint8_t clamp_outline_level(uint32_t level) {
+  return static_cast<uint8_t>(level > 255U ? 255U : level);
+}
+
 emscripten::val js_rect_pt(const fm_rect_pt& r) {
   emscripten::val o = emscripten::val::object();
   o.set("x", r.x);
@@ -379,18 +400,10 @@ JsStatus JsWorkbook::setSheetViewMode(uint32_t sheet, std::string mode) {
 // ---- Column layout overrides --------------------------------------------
 
 emscripten::val JsWorkbook::getSheetColumns(uint32_t sheet) const {
-  emscripten::val r = emscripten::val::object();
-  emscripten::val columns = emscripten::val::array();
-  if (handle_ == nullptr) {
-    r.set("status", error_status(7000));
-    r.set("columns", columns);
-    return r;
-  }
+  emscripten::val r;
+  emscripten::val columns;
   std::size_t count = 0;
-  fm_status_t rc = fm_sheet_get_column_count(handle_, sheet, &count);
-  if (rc != 0) {
-    r.set("status", error_status(rc));
-    r.set("columns", columns);
+  if (!begin_entry_list(handle_, sheet, &fm_sheet_get_column_count, "columns", r, columns, count)) {
     return r;
   }
   std::size_t emitted = 0;
@@ -438,28 +451,17 @@ JsStatus JsWorkbook::setColumnOutline(uint32_t sheet, uint32_t first, uint32_t l
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  if (level > 255U) {
-    level = 255U;
-  }
-  fm_status_t rc = fm_sheet_set_column_outline(handle_, sheet, first, last, static_cast<uint8_t>(level));
+  fm_status_t rc = fm_sheet_set_column_outline(handle_, sheet, first, last, clamp_outline_level(level));
   return status_from_rc(rc);
 }
 
 // ---- Row layout overrides ----------------------------------------------
 
 emscripten::val JsWorkbook::getSheetRowOverrides(uint32_t sheet) const {
-  emscripten::val r = emscripten::val::object();
-  emscripten::val rows = emscripten::val::array();
-  if (handle_ == nullptr) {
-    r.set("status", error_status(7000));
-    r.set("rows", rows);
-    return r;
-  }
+  emscripten::val r;
+  emscripten::val rows;
   std::size_t count = 0;
-  fm_status_t rc = fm_sheet_get_row_override_count(handle_, sheet, &count);
-  if (rc != 0) {
-    r.set("status", error_status(rc));
-    r.set("rows", rows);
+  if (!begin_entry_list(handle_, sheet, &fm_sheet_get_row_override_count, "rows", r, rows, count)) {
     return r;
   }
   std::size_t emitted = 0;
@@ -505,10 +507,7 @@ JsStatus JsWorkbook::setRowOutline(uint32_t sheet, uint32_t row, uint32_t level)
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  if (level > 255U) {
-    level = 255U;
-  }
-  fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, static_cast<uint8_t>(level));
+  fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, clamp_outline_level(level));
   return status_from_rc(rc);
 }
 

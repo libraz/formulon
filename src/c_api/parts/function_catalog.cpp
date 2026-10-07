@@ -166,28 +166,36 @@ extern "C" fm_status_t fm_function_name_at(std::size_t idx, const char** out_nam
   return 0;
 }
 
+namespace {
+
+// Shared body of `fm_function_localize` / `fm_function_canonicalize`. No
+// locale has an alias table, so both resolve to the registry's canonical
+// name; `locale` is still validated so an out-of-range ordinal is rejected.
+fm_status_t resolve_function_name(const char* fn, const char* name_field, const char* name, std::int32_t locale,
+                                  const char** out) {
+  *out = nullptr;
+  if (locale < FM_LOCALE_EN_US || locale > FM_LOCALE_JA_JP) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(fn) + ": invalid locale").c_str(), "locale=" + std::to_string(locale));
+  }
+  const char* canonical = formulon::eval::resolve_builtin_function_name(std::string_view(name));
+  if (canonical == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(fn) + ": unknown function").c_str(), std::string(name_field) + "=" + name);
+  }
+  *out = canonical;
+  return 0;
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_function_localize(const char* canonical_name, std::int32_t locale,
                                             const char** out_localized) {
   clear_last_error();
   if (canonical_name == nullptr || out_localized == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_localize: NULL argument");
   }
-  *out_localized = nullptr;
-  if (locale < FM_LOCALE_EN_US || locale > FM_LOCALE_JA_JP) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_localize: invalid locale",
-                             "locale=" + std::to_string(locale));
-  }
-  const char* canonical = formulon::eval::resolve_builtin_function_name(std::string_view(canonical_name));
-  if (canonical == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_localize: unknown function",
-                             std::string("canonical_name=") + canonical_name);
-  }
-  // No alias table in any locale, so the canonical name IS the display
-  // name here. `locale` is still validated above: rejecting an
-  // out-of-range ordinal is part of the contract even when every valid
-  // ordinal produces the same answer.
-  *out_localized = canonical;
-  return 0;
+  return resolve_function_name("fm_function_localize", "canonical_name", canonical_name, locale, out_localized);
 }
 
 extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, std::int32_t locale,
@@ -197,20 +205,5 @@ extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, std:
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_function_canonicalize: NULL argument");
   }
-  *out_canonical = nullptr;
-  if (locale < FM_LOCALE_EN_US || locale > FM_LOCALE_JA_JP) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_canonicalize: invalid locale",
-                             "locale=" + std::to_string(locale));
-  }
-  // No alias table, so this is a case-insensitive canonical-name match
-  // across the registry, lazy, and special-form tables, in every locale,
-  // so that each enumerated function canonicalizes to itself.
-  const char* canonical = formulon::eval::resolve_builtin_function_name(std::string_view(localized_name));
-  if (canonical == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_function_canonicalize: unknown function",
-                             std::string("localized_name=") + localized_name);
-  }
-  *out_canonical = canonical;
-  return 0;
+  return resolve_function_name("fm_function_canonicalize", "localized_name", localized_name, locale, out_canonical);
 }

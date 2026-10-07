@@ -25,6 +25,18 @@ namespace parts {
 
 namespace {
 
+// Envelope for a C call that reports a newly appended index through `out`.
+JsAddStyleResult index_result(fm_status_t rc, std::size_t out) {
+  JsAddStyleResult r;
+  if (rc != 0) {
+    r.status = error_status(rc);
+    return r;
+  }
+  r.status = ok_status();
+  r.index = static_cast<uint32_t>(out);
+  return r;
+}
+
 bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscripten::val& spec,
                                    fm_pivot_data_field_spec_t& out, std::string& name_buf, std::string& nfmt_buf,
                                    bool& has_nfmt) {
@@ -182,13 +194,7 @@ JsAddStyleResult JsWorkbook::pivotCacheFieldAdd(uint32_t cacheId, const std::str
   }
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_cache_field_add(handle_, cacheId, name.c_str(), &out);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = static_cast<uint32_t>(out);
-  return r;
+  return index_result(rc, out);
 }
 
 JsStatus JsWorkbook::pivotCacheFieldClear(uint32_t cacheId) {
@@ -274,13 +280,7 @@ JsAddStyleResult JsWorkbook::pivotCacheRecordAdd(uint32_t cacheId) {
   }
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_cache_record_add(handle_, cacheId, &out);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = static_cast<uint32_t>(out);
-  return r;
+  return index_result(rc, out);
 }
 
 JsStatus JsWorkbook::pivotCacheRecordClear(uint32_t cacheId) {
@@ -345,13 +345,7 @@ JsAddStyleResult JsWorkbook::pivotCreate(uint32_t sheet, const std::string& name
   }
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_create(handle_, sheet, name.c_str(), cacheId, anchorRow, anchorCol, &out);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = static_cast<uint32_t>(out);
-  return r;
+  return index_result(rc, out);
 }
 
 JsStatus JsWorkbook::pivotRemove(uint32_t sheet, uint32_t pivotIdx) {
@@ -452,13 +446,7 @@ JsAddStyleResult JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, em
 
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_field_add(handle_, sheet, pivotIdx, &c_spec, &out);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = static_cast<uint32_t>(out);
-  return r;
+  return index_result(rc, out);
 }
 
 JsStatus JsWorkbook::pivotFieldClear(uint32_t sheet, uint32_t pivotIdx) {
@@ -657,13 +645,7 @@ JsAddStyleResult JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIdx
   }
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_data_field_add(handle_, sheet, pivotIdx, &c_spec, &out);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.index = static_cast<uint32_t>(out);
-  return r;
+  return index_result(rc, out);
 }
 
 JsStatus JsWorkbook::pivotDataFieldClear(uint32_t sheet, uint32_t pivotIdx) {

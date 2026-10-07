@@ -81,5 +81,14 @@ void emit_write_diagnostics(std::ostream& err, std::string_view subcommand, fm_w
   err << '\n';
 }
 
+void emit_last_error(std::ostream& err, std::string_view subcommand) {
+  err << "formulon: " << subcommand << ": " << fm_last_error_message();
+  const char* ctx = fm_last_error_context();
+  if (ctx != nullptr && ctx[0] != '\0') {
+    err << " (" << ctx << ')';
+  }
+  err << '\n';
+}
+
 }  // namespace cli
 }  // namespace formulon
