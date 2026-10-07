@@ -172,6 +172,13 @@ void emit_u32(std::vector<std::uint8_t>& dst, std::uint32_t value) {
   dst.push_back(static_cast<std::uint8_t>((value >> 24) & 0xFFU));
 }
 
+void emit_rfx(std::vector<std::uint8_t>& dst, const MergeRange& rect) {
+  emit_u32(dst, rect.first_row);
+  emit_u32(dst, rect.last_row);
+  emit_u32(dst, rect.first_col);
+  emit_u32(dst, rect.last_col);
+}
+
 void emit_double(std::vector<std::uint8_t>& dst, double value) {
   std::uint64_t bits = 0;
   std::memcpy(&bits, &value, sizeof(value));

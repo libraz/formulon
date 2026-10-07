@@ -50,6 +50,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "utils/structured_log.h"
 #include "value.h"
 #include "workbook.h"
@@ -246,11 +247,7 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: <f t='shared'> missing 'si'",
                       "context=sheet_reader");
   }
-  auto si_or = ParseSharedFormulaSi(si_attr.value());
-  if (!si_or) {
-    return si_or.error();
-  }
-  const std::uint32_t si = si_or.value();
+  ASSIGN_OR_RETURN(const std::uint32_t si, ParseSharedFormulaSi(si_attr.value()));
 
   std::string body = f_node.text().get();
   if (!body.empty() && body.front() == '=') {
@@ -520,11 +517,7 @@ Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: <f t='shared'> missing 'si'",
                       "context=sheet_reader_sax");
   }
-  auto si_or = ParseSharedFormulaSi(rec.f_si);
-  if (!si_or) {
-    return si_or.error();
-  }
-  const std::uint32_t si = si_or.value();
+  ASSIGN_OR_RETURN(const std::uint32_t si, ParseSharedFormulaSi(rec.f_si));
   std::string body(rec.formula);
   if (!body.empty()) {
     // Master occurrence: register and use its body verbatim.
@@ -558,11 +551,9 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
                                       ReadDiagnostics* diagnostics, ResourceBudget& cell_budget,
                                       RowGrowthTracker& cell_growth) {
   const bool value_present = rec.is_inline_string || !rec.value.empty();
-  auto payload_or = decode_cell_payload(rec.t, rec.value, value_present, rec.is_inline_string, text_storage);
-  if (!payload_or) {
-    return payload_or.error();
-  }
-  const ParsedCell& parsed = payload_or.value();
+  ASSIGN_OR_RETURN(auto payload,
+                   decode_cell_payload(rec.t, rec.value, value_present, rec.is_inline_string, text_storage));
+  const ParsedCell& parsed = payload;
   ParsedCell cell = parsed;
   cell.row = rec.row;
   cell.col = rec.col;
@@ -588,11 +579,8 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
     }
   }
   // Resolve shared-formula groups (plain formulas pass straight through).
-  auto formula_or = ResolveSharedFromRecord(rec, shared);
-  if (!formula_or) {
-    return formula_or.error();
-  }
-  const std::string& formula_text = formula_or.value();
+  ASSIGN_OR_RETURN(auto formula, ResolveSharedFromRecord(rec, shared));
+  const std::string& formula_text = formula;
 
   // Charge before `ApplyParsedCell` materialises -- mirrors the DOM
   // path's placement and no-op guard exactly (see `read_sheet_data`), so

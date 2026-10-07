@@ -15,6 +15,7 @@
 
 #include "io/cell_parser.h"
 #include "io/cf_reader.h"
+#include "io/data_validation_attr_names.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
@@ -22,6 +23,7 @@
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/structured_log.h"
 
 namespace formulon {
@@ -33,39 +35,14 @@ namespace {
 /// into a `MergeRange`. Single-cell tokens land as `first == last`.
 /// Both corners are normalised so `first <= last` componentwise.
 Expected<MergeRange, Error> ParseA1RangeMerge(std::string_view ref) {
-  const std::size_t colon = ref.find(':');
-  if (colon == std::string_view::npos) {
-    auto rc = parse_a1(ref);
-    if (!rc) {
-      std::string ctx("context=sheet_reader ref=");
-      ctx.append(ref);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "merge/hyperlink: ref token unparseable", std::move(ctx));
-    }
-    MergeRange out{};
-    out.first_row = rc.value().first;
-    out.first_col = rc.value().second;
-    out.last_row = out.first_row;
-    out.last_col = out.first_col;
-    return out;
-  }
-  const std::string_view a = ref.substr(0, colon);
-  const std::string_view b = ref.substr(colon + 1);
-  auto a_rc = parse_a1(a);
-  auto b_rc = parse_a1(b);
-  if (!a_rc || !b_rc) {
+  MergeRange out{};
+  if (!parse_a1_range(ref, &out)) {
     std::string ctx("context=sheet_reader ref=");
     ctx.append(ref);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "merge: ref token unparseable", std::move(ctx));
+    const char* message = ref.find(':') == std::string_view::npos ? "merge/hyperlink: ref token unparseable"
+                                                                  : "merge: ref token unparseable";
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, message, std::move(ctx));
   }
-  const std::uint32_t r0 = a_rc.value().first;
-  const std::uint32_t c0 = a_rc.value().second;
-  const std::uint32_t r1 = b_rc.value().first;
-  const std::uint32_t c1 = b_rc.value().second;
-  MergeRange out{};
-  out.first_row = (r0 < r1) ? r0 : r1;
-  out.first_col = (c0 < c1) ? c0 : c1;
-  out.last_row = (r0 < r1) ? r1 : r0;
-  out.last_col = (c0 < c1) ? c1 : c0;
   return out;
 }
 
@@ -93,23 +70,11 @@ void SkipOverlayEntry(std::string_view part, std::string_view reason, std::strin
 /// unparseable token.
 Expected<std::vector<MergeRange>, Error> ParseSqrefRanges(std::string_view sqref) {
   std::vector<MergeRange> out;
-  std::size_t i = 0;
-  while (i < sqref.size()) {
-    while (i < sqref.size() && (sqref[i] == ' ' || sqref[i] == '\t' || sqref[i] == '\n' || sqref[i] == '\r')) {
-      ++i;
-    }
-    const std::size_t start = i;
-    while (i < sqref.size() && sqref[i] != ' ' && sqref[i] != '\t' && sqref[i] != '\n' && sqref[i] != '\r') {
-      ++i;
-    }
-    if (start == i) {
-      break;
-    }
-    auto r = ParseA1RangeMerge(sqref.substr(start, i - start));
-    if (!r) {
-      return r.error();
-    }
-    out.push_back(r.value());
+  std::size_t pos = 0;
+  std::string_view token;
+  while (next_sqref_token(sqref, &pos, &token)) {
+    ASSIGN_OR_RETURN(auto range, ParseA1RangeMerge(token));
+    out.push_back(range);
   }
   return out;
 }
@@ -224,54 +189,13 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     v.ranges = std::move(ranges_or.value());
 
     // type
-    const std::string_view t = attr_str(dv, "type");
-    if (t == "whole") {
-      v.type = 1;
-    } else if (t == "decimal") {
-      v.type = 2;
-    } else if (t == "list") {
-      v.type = 3;
-    } else if (t == "date") {
-      v.type = 4;
-    } else if (t == "time") {
-      v.type = 5;
-    } else if (t == "textLength") {
-      v.type = 6;
-    } else if (t == "custom") {
-      v.type = 7;
-    } else {
-      v.type = 0;
-    }
+    v.type = enum_from_name(kDataValidationTypeNames, attr_str(dv, "type"), std::uint8_t{0});
 
-    // operator
-    const std::string_view op = attr_str(dv, "operator");
-    if (op == "notBetween") {
-      v.op = 1;
-    } else if (op == "equal") {
-      v.op = 2;
-    } else if (op == "notEqual") {
-      v.op = 3;
-    } else if (op == "greaterThan") {
-      v.op = 4;
-    } else if (op == "lessThan") {
-      v.op = 5;
-    } else if (op == "greaterThanOrEqual") {
-      v.op = 6;
-    } else if (op == "lessThanOrEqual") {
-      v.op = 7;
-    } else {
-      v.op = 0;  // "between" / unspecified
-    }
+    // operator ("between" / unspecified is 0)
+    v.op = enum_from_name(kDataValidationOperatorNames, attr_str(dv, "operator"), std::uint8_t{0});
 
     // errorStyle
-    const std::string_view es = attr_str(dv, "errorStyle");
-    if (es == "warning") {
-      v.error_style = 1;
-    } else if (es == "information") {
-      v.error_style = 2;
-    } else {
-      v.error_style = 0;
-    }
+    v.error_style = enum_from_name(kDataValidationErrorStyleNames, attr_str(dv, "errorStyle"), std::uint8_t{0});
 
     // Boolean attributes default to false: Excel omits allowBlank when it
     // is off (the .xlsb twin's fAllowBlank bit is clear) and writes "1"

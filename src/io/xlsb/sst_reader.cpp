@@ -13,6 +13,7 @@
 #include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 
@@ -153,16 +154,9 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
     // string, then the optional rich-format runs and phonetic guide the
     // flags announce.
     ByteSpan p = rec.payload;
-    auto flags_or = read_u8(p);
-    if (!flags_or) {
-      return flags_or.error();
-    }
-    const std::uint8_t flags = flags_or.value();
-    auto str_or = read_xlwidestring(p);
-    if (!str_or) {
-      return str_or.error();
-    }
-    text_storage.push_back(std::move(str_or.value()));
+    ASSIGN_OR_RETURN(const std::uint8_t flags, read_u8(p));
+    ASSIGN_OR_RETURN(auto str, read_xlwidestring(p));
+    text_storage.push_back(std::move(str));
     entries.push_back(text_storage.back());
     out_phonetic.emplace_back();
     out_phonetic_props.emplace_back();
@@ -174,11 +168,8 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
     // so they have to be stepped over even though the reader models
     // plain text only.
     if ((flags & kRichStrRichRuns) != 0U) {
-      auto run_count_or = read_u32(p);
-      if (!run_count_or) {
-        return run_count_or.error();
-      }
-      const std::uint32_t rich_runs = run_count_or.value();
+      ASSIGN_OR_RETURN(auto run_count, read_u32(p));
+      const std::uint32_t rich_runs = run_count;
       if (static_cast<std::size_t>(rich_runs) > p.size / kStrRunSize) {
         std::string ctx("context=xlsb.sst rich_runs=");
         ctx.append(std::to_string(rich_runs));

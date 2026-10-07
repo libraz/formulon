@@ -34,11 +34,27 @@ void append_xml_attr(std::string& out, std::string_view name, std::string_view v
   out.append("\"");
 }
 
-void append_xml_attr_uint(std::string& out, std::string_view name, std::uint32_t value) {
+void append_xml_attr_uint(std::string& out, std::string_view name, std::uint64_t value) {
   out.push_back(' ');
   out.append(name.data(), name.size());
   out.append("=\"");
   out.append(std::to_string(value));
+  out.append("\"");
+}
+
+void append_xml_attr_int(std::string& out, std::string_view name, std::int64_t value) {
+  out.push_back(' ');
+  out.append(name.data(), name.size());
+  out.append("=\"");
+  out.append(std::to_string(value));
+  out.append("\"");
+}
+
+void append_xml_attr_number(std::string& out, std::string_view name, double value) {
+  out.push_back(' ');
+  out.append(name.data(), name.size());
+  out.append("=\"");
+  append_xml_number(out, value);
   out.append("\"");
 }
 

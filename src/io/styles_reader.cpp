@@ -144,20 +144,6 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
   return rec;
 }
 
-void ReadFonts(const pugi::xml_node& root, StylesTable& table) {
-  pugi::xml_node fonts = root.child("fonts");
-  if (!fonts) {
-    table.fonts.emplace_back();
-    return;
-  }
-  for (pugi::xml_node f = fonts.child("font"); f; f = f.next_sibling("font")) {
-    table.fonts.push_back(ParseFontNode(f));
-  }
-  if (table.fonts.empty()) {
-    table.fonts.emplace_back();
-  }
-}
-
 FillRecord ParseFillNode(const pugi::xml_node& fill) {
   FillRecord rec;
   pugi::xml_node pattern = fill.child("patternFill");
@@ -171,20 +157,6 @@ FillRecord ParseFillNode(const pugi::xml_node& fill) {
   return rec;
 }
 
-void ReadFills(const pugi::xml_node& root, StylesTable& table) {
-  pugi::xml_node fills = root.child("fills");
-  if (!fills) {
-    table.fills.emplace_back();
-    return;
-  }
-  for (pugi::xml_node fill = fills.child("fill"); fill; fill = fill.next_sibling("fill")) {
-    table.fills.push_back(ParseFillNode(fill));
-  }
-  if (table.fills.empty()) {
-    table.fills.emplace_back();
-  }
-}
-
 void ReadBorderSide(const pugi::xml_node& side, BorderSide* out) {
   if (!side) {
     return;
@@ -192,28 +164,6 @@ void ReadBorderSide(const pugi::xml_node& side, BorderSide* out) {
   out->style = ParseBorderStyle(side.attribute("style").value());
   out->color_argb = ParseColorArgb(side.child("color"), 0U);
   out->color = read_color_spec(side.child("color"));
-}
-
-void ReadBorders(const pugi::xml_node& root, StylesTable& table) {
-  pugi::xml_node borders = root.child("borders");
-  if (!borders) {
-    table.borders.emplace_back();
-    return;
-  }
-  for (pugi::xml_node b = borders.child("border"); b; b = b.next_sibling("border")) {
-    BorderRecord rec;
-    rec.diagonal_up = b.attribute("diagonalUp").as_bool(false);
-    rec.diagonal_down = b.attribute("diagonalDown").as_bool(false);
-    ReadBorderSide(b.child("left"), &rec.left);
-    ReadBorderSide(b.child("right"), &rec.right);
-    ReadBorderSide(b.child("top"), &rec.top);
-    ReadBorderSide(b.child("bottom"), &rec.bottom);
-    ReadBorderSide(b.child("diagonal"), &rec.diagonal);
-    table.borders.push_back(rec);
-  }
-  if (table.borders.empty()) {
-    table.borders.emplace_back();
-  }
 }
 
 BorderRecord ParseBorderNode(const pugi::xml_node& b) {
@@ -226,6 +176,24 @@ BorderRecord ParseBorderNode(const pugi::xml_node& b) {
   ReadBorderSide(b.child("bottom"), &rec.bottom);
   ReadBorderSide(b.child("diagonal"), &rec.diagonal);
   return rec;
+}
+
+/// Fills `out` from the `<item_name>` children of `<list_name>`; a missing or
+/// empty list leaves the single default record every index may refer to.
+template <typename Record, typename ParseNode>
+void ReadRecordList(const pugi::xml_node& root, const char* list_name, const char* item_name, std::vector<Record>& out,
+                    ParseNode parse_node) {
+  pugi::xml_node list = root.child(list_name);
+  if (!list) {
+    out.emplace_back();
+    return;
+  }
+  for (pugi::xml_node n = list.child(item_name); n; n = n.next_sibling(item_name)) {
+    out.push_back(parse_node(n));
+  }
+  if (out.empty()) {
+    out.emplace_back();
+  }
 }
 
 void ReadNumFmts(const pugi::xml_node& root, StylesTable& table) {
@@ -635,9 +603,9 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
 
   StylesTable table;
   ReadNumFmts(root, table);
-  ReadFonts(root, table);
-  ReadFills(root, table);
-  ReadBorders(root, table);
+  ReadRecordList(root, "fonts", "font", table.fonts, ParseFontNode);
+  ReadRecordList(root, "fills", "fill", table.fills, ParseFillNode);
+  ReadRecordList(root, "borders", "border", table.borders, ParseBorderNode);
   RETURN_IF_ERROR(ReadCellStyleXfs(root, table));
   RETURN_IF_ERROR(ReadCellXfs(root, table));
   ReadCellStyles(root, table);

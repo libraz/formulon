@@ -682,11 +682,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing from package",
                       "context=xlsb_reader");
   }
-  auto ct_bytes_or = zip.read_entry("[Content_Types].xml");
-  if (!ct_bytes_or) {
-    return ct_bytes_or.error();
-  }
-  auto ct_view_or = LoadContentTypes(ct_bytes_or.value());
+  ASSIGN_OR_RETURN(auto ct_bytes, zip.read_entry("[Content_Types].xml"));
+  auto ct_view_or = LoadContentTypes(ct_bytes);
   if (!ct_view_or) {
     return ct_view_or.error();
   }
@@ -697,19 +694,10 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package",
                       "context=xlsb_reader");
   }
-  auto root_rels_or = zip.read_entry("_rels/.rels");
-  if (!root_rels_or) {
-    return root_rels_or.error();
-  }
-  auto wb_path_or = ResolveOfficeDocumentPath(root_rels_or.value());
-  if (!wb_path_or) {
-    return wb_path_or.error();
-  }
-  const std::string workbook_path = wb_path_or.value();
-  auto package_rels_or = ReadUnknownPackageRels(root_rels_or.value());
-  if (!package_rels_or) {
-    return package_rels_or.error();
-  }
+  ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
+  ASSIGN_OR_RETURN(auto wb_path, ResolveOfficeDocumentPath(root_rels));
+  const std::string workbook_path = wb_path;
+  ASSIGN_OR_RETURN(auto package_rels, ReadUnknownPackageRels(root_rels));
 
   // 3. xl/_rels/workbook.xml.rels (still XML in xlsb).
   auto wb_rels_or = LoadWorkbookRels(zip, workbook_path);
@@ -723,11 +711,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     return make_error(FormulonErrorCode::kIoXlsbCorrupt, "workbook.bin: not found at relationship target",
                       "context=xlsb_reader workbook_path=" + workbook_path);
   }
-  auto wb_bytes_or = zip.read_entry(workbook_path);
-  if (!wb_bytes_or) {
-    return wb_bytes_or.error();
-  }
-  auto bundle_or = DecodeWorkbookBin(wb_bytes_or.value());
+  ASSIGN_OR_RETURN(auto wb_bytes, zip.read_entry(workbook_path));
+  auto bundle_or = DecodeWorkbookBin(wb_bytes);
   if (!bundle_or) {
     return bundle_or.error();
   }
@@ -739,13 +724,13 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // ranges) both live in `xl/workbook.bin` globals; decode them once so
   // every sheet's `PtgName` / `PtgRef3d` / `PtgArea3d` tokens can
   // resolve against the same tables.
-  auto name_table_or = DecodeWorkbookNames(wb_bytes_or.value());
+  auto name_table_or = DecodeWorkbookNames(wb_bytes);
   if (!name_table_or) {
     return name_table_or.error();
   }
   const std::vector<XlsbName>& name_table = name_table_or.value();
-  const std::vector<XlsbSupBook> sup_books = DecodeSupBooks(wb_bytes_or.value());
-  auto sheet_ranges_or = DecodeExternSheet(wb_bytes_or.value(), sup_books);
+  const std::vector<XlsbSupBook> sup_books = DecodeSupBooks(wb_bytes);
+  auto sheet_ranges_or = DecodeExternSheet(wb_bytes, sup_books);
   if (!sheet_ranges_or) {
     return sheet_ranges_or.error();
   }
@@ -820,7 +805,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // only run after both are fully built above.
   std::uint32_t undecoded_formula_count = 0;
   std::uint32_t undecoded_defined_name_count = 0;
-  if (auto r = RegisterDefinedNames(wb_bytes_or.value(), name_table, sheet_names, sheet_ranges, external_books, wb,
+  if (auto r = RegisterDefinedNames(wb_bytes, name_table, sheet_names, sheet_ranges, external_books, wb,
                                     &undecoded_defined_name_count);
       !r) {
     return r.error();
@@ -836,15 +821,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   std::vector<std::vector<PhoneticRun>> sst_phonetic;
   std::vector<PhoneticProperties> sst_phonetic_props;
   if (!wb_rels.sst_path.empty() && zip.has_entry(wb_rels.sst_path)) {
-    auto sst_bytes_or = zip.read_entry(wb_rels.sst_path);
-    if (!sst_bytes_or) {
-      return sst_bytes_or.error();
-    }
-    auto sst_or = DecodeSharedStringsBin(sst_bytes_or.value(), text_storage, sst_phonetic, sst_phonetic_props);
-    if (!sst_or) {
-      return sst_or.error();
-    }
-    sst_entries = std::move(sst_or.value());
+    ASSIGN_OR_RETURN(auto sst_bytes, zip.read_entry(wb_rels.sst_path));
+    ASSIGN_OR_RETURN(auto sst, DecodeSharedStringsBin(sst_bytes, text_storage, sst_phonetic, sst_phonetic_props));
+    sst_entries = std::move(sst);
   }
 
   // Links each retained pivot / styles part's package path to the model
@@ -866,13 +845,10 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     }
     const std::vector<std::uint8_t>& styles_bytes = styles_bytes_or.value();
     ByteSpan styles_span{styles_bytes.data(), styles_bytes.size()};
-    auto styles_or = read_styles_bin(styles_span);
-    if (!styles_or) {
-      return styles_or.error();
-    }
+    ASSIGN_OR_RETURN(auto styles, read_styles_bin(styles_span));
     retained_part_origins.set(wb_rels.styles_path,
                               RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kStyles, 0, 0, 0});
-    wb.set_styles(std::move(styles_or.value()));
+    wb.set_styles(std::move(styles));
   }
 
   // 7. Each sheet binary.
@@ -905,13 +881,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       ctx.append(sheet_path);
       return make_error(FormulonErrorCode::kIoXlsbCorrupt, "sheet binary part missing from package", std::move(ctx));
     }
-    auto sheet_bytes_or = zip.read_entry(sheet_path);
-    if (!sheet_bytes_or) {
-      return sheet_bytes_or.error();
-    }
-    auto state_or =
-        DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
-                       sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count);
+    ASSIGN_OR_RETURN(auto sheet_bytes, zip.read_entry(sheet_path));
+    auto state_or = DecodeSheetBin(sheet_bytes, i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
+                                   sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count);
     if (!state_or) {
       return state_or.error();
     }
@@ -1006,14 +978,11 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (!zip.has_entry(part_name)) {
       continue;
     }
-    auto bytes_or = zip.read_entry(part_name);
-    if (!bytes_or) {
-      return bytes_or.error();
-    }
+    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(part_name));
     PassthroughPart part;
     part.path = part_name;
     part.content_type = content_type;
-    part.bytes = std::move(bytes_or.value());
+    part.bytes = std::move(part_bytes);
     apply_retained_origin(part);
     unknown_parts.push_back(std::move(part));
     captured_parts.insert(part_name);
@@ -1057,16 +1026,13 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       ++dropped_part_count;
       continue;
     }
-    auto bytes_or = zip.read_entry(entry);
-    if (!bytes_or) {
-      return bytes_or.error();
-    }
+    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(entry));
     PassthroughPart part;
     part.path = entry;
     // Default-typed parts deliberately do not copy the effective content
     // type into the per-part record. This keeps Override and Default
     // semantics distinguishable on the write side.
-    part.bytes = std::move(bytes_or.value());
+    part.bytes = std::move(part_bytes);
     apply_retained_origin(part);
     unknown_parts.push_back(std::move(part));
     captured_parts.insert(entry);
@@ -1086,7 +1052,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // payload. See `XlsbReadResult`.
   wb.set_passthrough_parts(std::move(unknown_parts));
   wb.set_default_content_types(std::move(ct_view.defaults));
-  wb.set_unknown_package_rels(std::move(package_rels_or.value()));
+  wb.set_unknown_package_rels(std::move(package_rels));
   wb.set_unknown_workbook_rels(std::move(wb_rels_or.value().unknown_rels));
 
   wb.apply_legacy_implicit_intersections();

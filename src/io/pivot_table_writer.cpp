@@ -12,6 +12,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/pivot_attr_names.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pivot/pivot_table.h"
@@ -48,164 +49,7 @@ void AppendOptionalLocationAttr(std::string& out, std::string_view name, std::op
   if (!value.has_value()) {
     return;
   }
-  out.push_back(' ');
-  out.append(name);
-  out.append("=\"");
-  out.append(std::to_string(*value));
-  out.push_back('"');
-}
-
-/// Maps a `PivotAxis` to the OOXML `axis="..."` attribute body for the
-/// non-Value cases. `Value` is intentionally absent: Value-axis fields
-/// emit `dataField="1"` instead, matching real Excel output and what
-/// the reader's "no axis attribute + dataField=1 -> Value" branch
-/// expects on the round trip.
-std::string_view AxisAttrName(pivot::PivotAxis axis) {
-  switch (axis) {
-    case pivot::PivotAxis::Row:
-      return "axisRow";
-    case pivot::PivotAxis::Col:
-      return "axisCol";
-    case pivot::PivotAxis::Page:
-      return "axisPage";
-    case pivot::PivotAxis::Value:
-    case pivot::PivotAxis::None:
-      // Value is handled by the caller via `dataField="1"`; None emits no
-      // axis at all. An empty view means "do not emit an axis attribute".
-      return {};
-  }
-  return {};
-}
-
-/// Maps a `ShowValuesAs` to the OOXML `showDataAs="..."` attribute body.
-/// `Normal` returns an empty view; the caller skips emission in that
-/// case so the default attribute stays absent. Mirrors the reader's
-/// `ParseShowDataAs` table for round-trip parity.
-std::string_view ShowDataAsAttrName(pivot::ShowValuesAs s) {
-  switch (s) {
-    case pivot::ShowValuesAs::Normal:
-      return {};
-    case pivot::ShowValuesAs::PercentOfRow:
-      return "percentOfRow";
-    case pivot::ShowValuesAs::PercentOfCol:
-      return "percentOfCol";
-    case pivot::ShowValuesAs::PercentOfTotal:
-      return "percentOfTotal";
-    case pivot::ShowValuesAs::RunningTotalInRow:
-    case pivot::ShowValuesAs::RunningTotalInCol:
-      // OOXML has only `runTotal`; the direction is carried by `baseField`,
-      // not the attribute spelling. Emit the standard name for both and let
-      // the base-field axis distinguish row vs column accumulation.
-      return "runTotal";
-    case pivot::ShowValuesAs::Index:
-      return "index";
-    case pivot::ShowValuesAs::DifferenceFrom:
-      return "difference";
-    case pivot::ShowValuesAs::PercentDifferenceFrom:
-      return "percentDiff";
-    case pivot::ShowValuesAs::PercentOfParentRow:
-      return "percentOfParentRow";
-    case pivot::ShowValuesAs::PercentOfParentCol:
-      return "percentOfParentCol";
-    case pivot::ShowValuesAs::PercentOfParent:
-      return "percentOfParent";
-  }
-  return {};
-}
-
-/// Maps an `Aggregation` to the OOXML `subtotal="..."` attribute body.
-/// Mirrors the reader's `ParseAggregation` table exactly so the round
-/// trip is bit-stable.
-std::string_view AggregationAttrName(pivot::Aggregation a) {
-  switch (a) {
-    case pivot::Aggregation::Sum:
-      return "sum";
-    case pivot::Aggregation::Count:
-      return "count";
-    case pivot::Aggregation::Average:
-      return "average";
-    case pivot::Aggregation::Max:
-      return "max";
-    case pivot::Aggregation::Min:
-      return "min";
-    case pivot::Aggregation::Product:
-      return "product";
-    case pivot::Aggregation::CountNumbers:
-      return "countNums";
-    case pivot::Aggregation::StdDev:
-      return "stdDev";
-    case pivot::Aggregation::StdDevP:
-      return "stdDevp";
-    case pivot::Aggregation::Var:
-      return "var";
-    case pivot::Aggregation::VarP:
-      return "varp";
-  }
-  return "sum";
-}
-
-/// Maps a `SubtotalFn` to the OOXML `<pivotField>` `*Subtotal` boolean
-/// attribute name. Mirrors the reader's `kSubtotalAttrs` table so a
-/// custom subtotal selection round-trips bit-stably. `countA` /
-/// `countNums` use the spec's distinct attribute names.
-std::string_view SubtotalAttrName(pivot::SubtotalFn fn) {
-  switch (fn) {
-    case pivot::SubtotalFn::Sum:
-      return "sumSubtotal";
-    case pivot::SubtotalFn::Count:
-      return "countASubtotal";
-    case pivot::SubtotalFn::Average:
-      return "avgSubtotal";
-    case pivot::SubtotalFn::Max:
-      return "maxSubtotal";
-    case pivot::SubtotalFn::Min:
-      return "minSubtotal";
-    case pivot::SubtotalFn::Product:
-      return "productSubtotal";
-    case pivot::SubtotalFn::CountNumbers:
-      return "countSubtotal";
-    case pivot::SubtotalFn::StdDev:
-      return "stdDevSubtotal";
-    case pivot::SubtotalFn::StdDevP:
-      return "stdDevPSubtotal";
-    case pivot::SubtotalFn::Var:
-      return "varSubtotal";
-    case pivot::SubtotalFn::VarP:
-      return "varPSubtotal";
-  }
-  return {};
-}
-
-/// Maps a `SubtotalFn` to the `<item t="...">` token that names it inside
-/// a field's `<items>` list. Distinct from `SubtotalAttrName`: the
-/// attribute family spells the selection (`countASubtotal`), the item
-/// token spells the same function as a list entry (`countA`).
-std::string_view SubtotalItemToken(pivot::SubtotalFn fn) {
-  switch (fn) {
-    case pivot::SubtotalFn::Sum:
-      return "sum";
-    case pivot::SubtotalFn::Count:
-      return "countA";
-    case pivot::SubtotalFn::Average:
-      return "avg";
-    case pivot::SubtotalFn::Max:
-      return "max";
-    case pivot::SubtotalFn::Min:
-      return "min";
-    case pivot::SubtotalFn::Product:
-      return "product";
-    case pivot::SubtotalFn::CountNumbers:
-      return "count";
-    case pivot::SubtotalFn::StdDev:
-      return "stdDev";
-    case pivot::SubtotalFn::StdDevP:
-      return "stdDevP";
-    case pivot::SubtotalFn::Var:
-      return "var";
-    case pivot::SubtotalFn::VarP:
-      return "varP";
-  }
-  return {};
+  append_xml_attr_uint(out, name, *value);
 }
 
 /// Emits one `<pivotField>` element. Self-closing when there are no
@@ -220,19 +64,13 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
   } else if (field.axis == pivot::PivotAxis::None) {
     // Unused ("available") field: emit neither an axis nor dataField.
   } else {
-    out.append(" axis=\"");
-    out.append(AxisAttrName(field.axis));
-    out.append("\"");
+    append_xml_attr(out, "axis", enum_name(kPivotAxisNames, field.axis));
   }
   if (!field.custom_name.empty()) {
-    out.append(" name=\"");
-    AppendXmlAttrEscaped(out, field.custom_name);
-    out.append("\"");
+    append_xml_attr(out, "name", field.custom_name);
   }
   if (!field.number_format.empty()) {
-    out.append(" numFmtId=\"");
-    AppendXmlAttrEscaped(out, field.number_format);
-    out.append("\"");
+    append_xml_attr(out, "numFmtId", field.number_format);
   }
   // `subtotalTop` defaults to true in OOXML; only emit it when turned OFF
   // so an explicit "subtotals at bottom" choice survives the round trip.
@@ -247,12 +85,12 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
     out.append(" defaultSubtotal=\"0\"");
   }
   for (const pivot::SubtotalFn fn : field.subtotal_fns) {
-    const std::string_view attr = SubtotalAttrName(fn);
-    if (attr.empty()) {
+    const PivotSubtotalName* names = find_pivot_subtotal_name(fn);
+    if (names == nullptr) {
       continue;
     }
     out.push_back(' ');
-    out.append(attr);
+    out.append(names->attr);
     out.append("=\"1\"");
   }
   // `sortType` defaults to ascending-by-label; only emit it when the
@@ -279,7 +117,7 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
   // nothing short of Excel's own verdict reports it.
   std::size_t subtotal_markers = field.default_subtotal ? 1U : 0U;
   for (const pivot::SubtotalFn fn : field.subtotal_fns) {
-    if (!SubtotalItemToken(fn).empty()) {
+    if (find_pivot_subtotal_name(fn) != nullptr) {
       ++subtotal_markers;
     }
   }
@@ -307,12 +145,12 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
     out.append("<item t=\"default\"/>");
   }
   for (const pivot::SubtotalFn fn : field.subtotal_fns) {
-    const std::string_view token = SubtotalItemToken(fn);
-    if (token.empty()) {
+    const PivotSubtotalName* names = find_pivot_subtotal_name(fn);
+    if (names == nullptr) {
       continue;
     }
     out.append("<item t=\"");
-    out.append(token);
+    out.append(names->item);
     out.append("\"/>");
   }
   out.append("</items></pivotField>");
@@ -364,30 +202,27 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
     // default. Real Excel files emit it explicitly and tests are
     // clearer when the round trip preserves the spelling.
     out.append("\" subtotal=\"");
-    out.append(AggregationAttrName(df.aggregation));
+    out.append(enum_name(kPivotAggregationNames, df.aggregation, "sum"));
     out.append("\"");
     if (!df.number_format.empty()) {
       // Pass through verbatim; the reader stored whatever string was
       // in the source attribute (typically a numFmtId integer in
       // string form, but we do not enforce that here).
-      out.append(" numFmtId=\"");
-      AppendXmlAttrEscaped(out, df.number_format);
-      out.append("\"");
+      append_xml_attr(out, "numFmtId", df.number_format);
     }
     if (df.show_as != pivot::ShowValuesAs::Normal) {
       out.append(" showDataAs=\"");
-      out.append(ShowDataAsAttrName(df.show_as));
+      // OOXML has only `runTotal`; the direction is carried by `baseField`.
+      const pivot::ShowValuesAs show_as =
+          df.show_as == pivot::ShowValuesAs::RunningTotalInCol ? pivot::ShowValuesAs::RunningTotalInRow : df.show_as;
+      out.append(enum_name(kPivotShowDataAsNames, show_as));
       out.append("\"");
     }
     if (df.show_as_base_field.has_value()) {
-      out.append(" baseField=\"");
-      out.append(std::to_string(*df.show_as_base_field));
-      out.append("\"");
+      append_xml_attr_uint(out, "baseField", *df.show_as_base_field);
     }
     if (df.show_as_base_item.has_value()) {
-      out.append(" baseItem=\"");
-      out.append(std::to_string(*df.show_as_base_item));
-      out.append("\"");
+      append_xml_attr_uint(out, "baseItem", *df.show_as_base_item);
     }
     out.append("/>");
   }

@@ -92,6 +92,19 @@ struct TagHeader {
   std::size_t end_offset = 0;  // byte offset just past the closing `>` / `/>`
 };
 
+/// Advances `*p` just past the first `len`-byte `terminator` at or after `*p`.
+/// Returns false, with `*p` near `end`, when none remains.
+inline bool ScanPast(const char** p, const char* end, const char* terminator, std::size_t len) {
+  while (*p + (len - 1U) < end) {
+    if (**p == terminator[0] && std::memcmp(*p, terminator, len) == 0) {
+      *p += len;
+      return true;
+    }
+    ++(*p);
+  }
+  return false;
+}
+
 /// Skips the rest of an XML processing instruction (`<? ... ?>`),
 /// comment (`<!-- ... -->`), or CDATA (`<![CDATA[ ... ]]>`). On entry
 /// `*p` points just past the leading `<`. Returns true on success.
@@ -104,12 +117,8 @@ bool SkipMarkupNonElement(const char* end, const char** p, std::size_t base_offs
   if (first == '?') {
     // Processing instruction: scan to "?>".
     ++(*p);
-    while (*p + 1 < end) {
-      if ((*p)[0] == '?' && (*p)[1] == '>') {
-        *p += 2;
-        return true;
-      }
-      ++(*p);
+    if (ScanPast(p, end, "?>", 2U)) {
+      return true;
     }
     *err = MakeXmlParseError(base_offset, "unterminated <? processing instruction");
     return false;
@@ -119,24 +128,16 @@ bool SkipMarkupNonElement(const char* end, const char** p, std::size_t base_offs
     ++(*p);
     if (*p + 1 < end && (*p)[0] == '-' && (*p)[1] == '-') {
       *p += 2;  // past "--"
-      while (*p + 2 < end) {
-        if ((*p)[0] == '-' && (*p)[1] == '-' && (*p)[2] == '>') {
-          *p += 3;
-          return true;
-        }
-        ++(*p);
+      if (ScanPast(p, end, "-->", 3U)) {
+        return true;
       }
       *err = MakeXmlParseError(base_offset, "unterminated <!-- comment");
       return false;
     }
     if (*p + 7 < end && std::memcmp(*p, "[CDATA[", 7) == 0) {
       *p += 7;
-      while (*p + 2 < end) {
-        if ((*p)[0] == ']' && (*p)[1] == ']' && (*p)[2] == '>') {
-          *p += 3;
-          return true;
-        }
-        ++(*p);
+      if (ScanPast(p, end, "]]>", 3U)) {
+        return true;
       }
       *err = MakeXmlParseError(base_offset, "unterminated <![CDATA[ section");
       return false;
@@ -494,6 +495,23 @@ bool ScanTextContent(const char* begin, const char* end, const char** p, std::st
   }
   *err = MakeXmlParseError(static_cast<std::size_t>(run_begin - begin), "unterminated text content");
   return false;
+}
+
+/// `ScanTextContent` plus entity / `_xHHHH_` decoding: `*text` is the element's
+/// character data, a view into the source when it needs no processing and into
+/// `*decoded` otherwise.
+bool ReadElementText(const char* begin, const char* end, const char** p, std::string_view tag_name,
+                     std::string* decoded, std::string_view* text, Error* err) {
+  bool needs_processing = false;
+  TextRunKind kind = TextRunKind::kPcdata;
+  if (!ScanTextContent(begin, end, p, tag_name, text, &needs_processing, &kind, err)) {
+    return false;
+  }
+  if (needs_processing) {
+    DecodeTextRunInto(*text, kind, decoded);
+    *text = std::string_view(*decoded);
+  }
+  return true;
 }
 
 /// Encodes a Unicode code point into UTF-8 bytes and appends them to
@@ -884,10 +902,9 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
       continue;
     }
     if (header.name == "t") {
-      std::string_view raw;
-      bool needs_processing = false;
-      TextRunKind kind = TextRunKind::kPcdata;
-      if (!ScanTextContent(begin, end, p, "t", &raw, &needs_processing, &kind, err)) {
+      std::string_view text;
+      std::string decoded;
+      if (!ReadElementText(begin, end, p, "t", &decoded, &text, err)) {
         return false;
       }
       // An `<rPh>` close tag clears `in_rph`, so the open run is always
@@ -897,16 +914,10 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
                               ? &scratch->inline_string_phonetic.back().text
                               : &scratch->inline_string;
       // `_xHHHH_` is plain ASCII text, not an XML entity, so it survives
-      // `needs_processing == false` and must be decoded unconditionally --
+      // the no-processing path and must be decoded unconditionally --
       // matching the DOM path's `AppendOoxmlTextUnescaped` on this same
       // `<t>` slot (`io::append_rich_text`).
-      if (needs_processing) {
-        std::string tmp;
-        DecodeTextRunInto(raw, kind, &tmp);
-        AppendOoxmlTextUnescaped(*dest, tmp);
-      } else {
-        AppendOoxmlTextUnescaped(*dest, raw);
-      }
+      AppendOoxmlTextUnescaped(*dest, text);
     }
     // Other open elements (e.g. <r>, <rPr>) are descended into by
     // simply continuing the loop; their <t> children will be picked
@@ -982,43 +993,21 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       if (child.self_closing) {
         continue;
       }
-      std::string_view raw;
-      bool needs_processing = false;
-      TextRunKind kind = TextRunKind::kPcdata;
-      if (!ScanTextContent(begin, end, p, "f", &raw, &needs_processing, &kind, err)) {
+      std::string_view body;
+      if (!ReadElementText(begin, end, p, "f", &scratch->decoded_formula, &body, err)) {
         return false;
       }
-      if (needs_processing) {
-        // Decode / normalize first, then strip the leading '='. This order
-        // matters for formula bodies such as `&#61;1+1`.
-        DecodeTextRunInto(raw, kind, &scratch->decoded_formula);
-        std::string_view decoded(scratch->decoded_formula);
-        if (!decoded.empty() && decoded.front() == '=') {
-          decoded.remove_prefix(1);
-        }
-        record->formula = decoded;
-      } else {
-        // Strip leading '=' from the zero-copy path as well.
-        if (!raw.empty() && raw.front() == '=') {
-          raw.remove_prefix(1);
-        }
-        record->formula = raw;
+      // Strip the leading '=' after decoding, so `&#61;1+1` is handled too.
+      if (!body.empty() && body.front() == '=') {
+        body.remove_prefix(1);
       }
+      record->formula = body;
     } else if (child.name == "v") {
       if (child.self_closing) {
         continue;
       }
-      std::string_view raw;
-      bool needs_processing = false;
-      TextRunKind kind = TextRunKind::kPcdata;
-      if (!ScanTextContent(begin, end, p, "v", &raw, &needs_processing, &kind, err)) {
+      if (!ReadElementText(begin, end, p, "v", &scratch->decoded_value, &record->value, err)) {
         return false;
-      }
-      if (needs_processing) {
-        DecodeTextRunInto(raw, kind, &scratch->decoded_value);
-        record->value = std::string_view(scratch->decoded_value);
-      } else {
-        record->value = raw;
       }
     } else if (child.name == "is") {
       if (child.self_closing) {

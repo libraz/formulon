@@ -28,12 +28,6 @@ void AppendUint(std::string& out, std::uint64_t v) {
   out.append(buf);
 }
 
-void AppendInt(std::string& out, std::int64_t v) {
-  char buf[24];
-  format_signed(buf, sizeof(buf), v);
-  out.append(buf);
-}
-
 void AppendArgb(std::string& out, std::uint32_t argb) {
   char buf[12];
   format_hex(buf, sizeof(buf), argb, 8, true);
@@ -128,9 +122,7 @@ void AppendBorderSide(std::string& out, const char* tag, const BorderSide& side)
   out.append(tag);
   const char* style = BorderStyleName(side.style);
   if (style != nullptr) {
-    out.append(" style=\"");
-    out.append(style);
-    out.append("\"");
+    append_xml_attr(out, "style", style);
   }
   if (HasColor(side.color, side.color_argb)) {
     out.append(">");
@@ -308,9 +300,7 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const Sty
   AppendUint(out, in_bounds(xf.border_index, bounds.borders));
   out.append("\"");
   if (emit_xf_id) {
-    out.append(" xfId=\"");
-    AppendUint(out, in_bounds(xf.xf_id, bounds.cell_style_xfs));
-    out.append("\"");
+    append_xml_attr_uint(out, "xfId", in_bounds(xf.xf_id, bounds.cell_style_xfs));
   }
   auto append_apply = [&out](const char* name, bool value) {
     if (value) {
@@ -337,14 +327,10 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const Sty
   if (has_alignment) {
     out.append("<alignment");
     if (HasHorizontalAlign(xf) && halign != nullptr) {
-      out.append(" horizontal=\"");
-      out.append(halign);
-      out.append("\"");
+      append_xml_attr(out, "horizontal", halign);
     }
     if (HasVerticalAlign(xf) && valign != nullptr) {
-      out.append(" vertical=\"");
-      out.append(valign);
-      out.append("\"");
+      append_xml_attr(out, "vertical", valign);
     }
     if (HasWrapText(xf)) {
       out.append(xf.wrap_text ? " wrapText=\"1\"" : " wrapText=\"0\"");
@@ -353,29 +339,19 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const Sty
       out.append(xf.justify_last_line ? " justifyLastLine=\"1\"" : " justifyLastLine=\"0\"");
     }
     if (xf.has_text_rotation) {
-      out.append(" textRotation=\"");
-      AppendUint(out, xf.text_rotation);
-      out.append("\"");
+      append_xml_attr_uint(out, "textRotation", xf.text_rotation);
     }
     if (xf.has_indent) {
-      out.append(" indent=\"");
-      AppendUint(out, xf.indent);
-      out.append("\"");
+      append_xml_attr_uint(out, "indent", xf.indent);
     }
     if (xf.has_relative_indent) {
-      out.append(" relativeIndent=\"");
-      AppendInt(out, xf.relative_indent);
-      out.append("\"");
+      append_xml_attr_int(out, "relativeIndent", xf.relative_indent);
     }
     if (xf.has_shrink_to_fit) {
-      out.append(" shrinkToFit=\"");
-      out.append(xf.shrink_to_fit ? "1" : "0");
-      out.append("\"");
+      append_xml_attr(out, "shrinkToFit", xf.shrink_to_fit ? "1" : "0");
     }
     if (xf.has_reading_order) {
-      out.append(" readingOrder=\"");
-      AppendUint(out, xf.reading_order);
-      out.append("\"");
+      append_xml_attr_uint(out, "readingOrder", xf.reading_order);
     }
     out.append("/>");
   }
@@ -458,14 +434,10 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
     AppendUint(out, cs.xf_id < style_xf_count ? cs.xf_id : 0U);
     out.append("\"");
     if (cs.builtin_id != CellStyleRecord::kBuiltinIdNone) {
-      out.append(" builtinId=\"");
-      AppendUint(out, cs.builtin_id);
-      out.append("\"");
+      append_xml_attr_uint(out, "builtinId", cs.builtin_id);
     }
     if (cs.i_level != 0U) {
-      out.append(" iLevel=\"");
-      AppendUint(out, cs.i_level);
-      out.append("\"");
+      append_xml_attr_uint(out, "iLevel", cs.i_level);
     }
     if (cs.hidden) {
       out.append(" hidden=\"1\"");

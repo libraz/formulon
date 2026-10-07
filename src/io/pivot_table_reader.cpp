@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "io/cell_parser.h"
+#include "io/pivot_attr_names.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "pivot/pivot_table.h"
@@ -25,107 +26,6 @@
 namespace formulon::io {
 namespace {
 
-/// Maps an OOXML `axis="..."` attribute body to a `PivotAxis`. Unknown /
-/// missing values fold to `Value` — both `axisValues` and the absent-
-/// axis case mean "this field is exclusively used as a data field" in
-/// the OOXML spec.
-pivot::PivotAxis ParseAxis(std::string_view text) {
-  if (text == "axisRow") {
-    return pivot::PivotAxis::Row;
-  }
-  if (text == "axisCol") {
-    return pivot::PivotAxis::Col;
-  }
-  if (text == "axisPage") {
-    return pivot::PivotAxis::Page;
-  }
-  return pivot::PivotAxis::Value;
-}
-
-/// Maps an OOXML `subtotal="..."` attribute body on a `<dataField>` to an
-/// `Aggregation`. Unknown spellings fold to `Sum` so the reader stays
-/// forward-compatible with Excel additions; the writer round-trips the
-/// original attribute through a separate passthrough path (future PR).
-pivot::Aggregation ParseAggregation(std::string_view text) {
-  if (text == "count") {
-    return pivot::Aggregation::Count;
-  }
-  if (text == "average") {
-    return pivot::Aggregation::Average;
-  }
-  if (text == "max") {
-    return pivot::Aggregation::Max;
-  }
-  if (text == "min") {
-    return pivot::Aggregation::Min;
-  }
-  if (text == "product") {
-    return pivot::Aggregation::Product;
-  }
-  if (text == "countNums") {
-    return pivot::Aggregation::CountNumbers;
-  }
-  if (text == "stdDev") {
-    return pivot::Aggregation::StdDev;
-  }
-  if (text == "stdDevp") {
-    return pivot::Aggregation::StdDevP;
-  }
-  if (text == "var") {
-    return pivot::Aggregation::Var;
-  }
-  if (text == "varp") {
-    return pivot::Aggregation::VarP;
-  }
-  // "sum" and anything unrecognised.
-  return pivot::Aggregation::Sum;
-}
-
-/// Maps an OOXML `showDataAs="..."` attribute body to a `ShowValuesAs`.
-/// Unknown spellings fold to `Normal` so the reader stays
-/// forward-compatible with Excel additions; the writer's inverse helper
-/// produces the same set of attribute names. The mapping for
-/// `RunningTotalInCol` uses the Excel-private `runTotalInCol` spelling
-/// since the standard OOXML schema only specifies a row-direction
-/// `runTotal`; this is documented as a known scoping in the round-trip
-/// table on the `ShowValuesAs` enum.
-pivot::ShowValuesAs ParseShowDataAs(std::string_view text) {
-  if (text == "percentOfRow") {
-    return pivot::ShowValuesAs::PercentOfRow;
-  }
-  if (text == "percentOfCol") {
-    return pivot::ShowValuesAs::PercentOfCol;
-  }
-  if (text == "percentOfTotal") {
-    return pivot::ShowValuesAs::PercentOfTotal;
-  }
-  if (text == "runTotal") {
-    return pivot::ShowValuesAs::RunningTotalInRow;
-  }
-  if (text == "runTotalInCol") {
-    return pivot::ShowValuesAs::RunningTotalInCol;
-  }
-  if (text == "index") {
-    return pivot::ShowValuesAs::Index;
-  }
-  if (text == "difference") {
-    return pivot::ShowValuesAs::DifferenceFrom;
-  }
-  if (text == "percentDiff") {
-    return pivot::ShowValuesAs::PercentDifferenceFrom;
-  }
-  if (text == "percentOfParentRow") {
-    return pivot::ShowValuesAs::PercentOfParentRow;
-  }
-  if (text == "percentOfParentCol") {
-    return pivot::ShowValuesAs::PercentOfParentCol;
-  }
-  if (text == "percentOfParent") {
-    return pivot::ShowValuesAs::PercentOfParent;
-  }
-  return pivot::ShowValuesAs::Normal;
-}
-
 /// Decodes one `<location ref="A3:D10"/>` (or single-cell `ref="A3"`)
 /// into 0-based anchor + spans. Defers cell-coordinate decoding to the
 /// shared `parse_a1` helper so the conventions match cell parsing
@@ -135,38 +35,16 @@ Expected<void, Error> DecodeLocationRef(std::string_view ref, pivot::PivotTable*
     return make_error(FormulonErrorCode::kIoSheetCorrupt,
                       "pivotTableDefinition: <location> missing required ref attribute", "context=pivot_table_reader");
   }
-  const std::size_t colon = ref.find(':');
-  if (colon == std::string_view::npos) {
-    // Single-cell anchor (Excel writes this for an empty pivot).
-    auto rc = parse_a1(ref);
-    if (!rc) {
-      std::string ctx("context=pivot_table_reader ref=");
-      ctx.append(ref);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "pivotTableDefinition: <location> ref unparseable",
-                        std::move(ctx));
-    }
-    out->set_anchor(rc.value().first, rc.value().second, 1U, 1U);
-    return Expected<void, Error>::Ok();
-  }
-  const std::string_view a = ref.substr(0, colon);
-  const std::string_view b = ref.substr(colon + 1);
-  auto a_rc = parse_a1(a);
-  auto b_rc = parse_a1(b);
-  if (!a_rc || !b_rc) {
+  // A single-cell ref is the anchor Excel writes for an empty pivot.
+  MergeRange rect;
+  if (!parse_a1_range(ref, &rect)) {
     std::string ctx("context=pivot_table_reader ref=");
     ctx.append(ref);
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "pivotTableDefinition: <location> ref unparseable",
                       std::move(ctx));
   }
-  const std::uint32_t r0 = a_rc.value().first;
-  const std::uint32_t c0 = a_rc.value().second;
-  const std::uint32_t r1 = b_rc.value().first;
-  const std::uint32_t c1 = b_rc.value().second;
-  const std::uint32_t row_top = (r0 < r1) ? r0 : r1;
-  const std::uint32_t row_bot = (r0 < r1) ? r1 : r0;
-  const std::uint32_t col_left = (c0 < c1) ? c0 : c1;
-  const std::uint32_t col_right = (c0 < c1) ? c1 : c0;
-  out->set_anchor(row_top, col_left, row_bot - row_top + 1U, col_right - col_left + 1U);
+  out->set_anchor(rect.first_row, rect.first_col, rect.last_row - rect.first_row + 1U,
+                  rect.last_col - rect.first_col + 1U);
   return Expected<void, Error>::Ok();
 }
 
@@ -185,8 +63,11 @@ Expected<void, Error> ParseItems(const pugi::xml_node& items_node, pivot::PivotF
   std::uint32_t ordinal = 0;
   for (pugi::xml_node it = items_node.child("item"); it; it = it.next_sibling("item")) {
     const std::string_view t = it.attribute("t").as_string();
-    if (t == "default" || t == "grand" || t == "blank" || t == "sum" || t == "count" || t == "avg" || t == "max" ||
-        t == "min" || t == "product" || t == "countA" || t == "stdDev" || t == "stdDevP" || t == "var" || t == "varP") {
+    bool is_marker = t == "default" || t == "grand" || t == "blank";
+    for (const PivotSubtotalName& e : kPivotSubtotalNames) {
+      is_marker = is_marker || t == e.item;
+    }
+    if (is_marker) {
       // Subtotal / grand-total marker; not a real item.
       continue;
     }
@@ -209,29 +90,6 @@ Expected<void, Error> ParseItems(const pugi::xml_node& items_node, pivot::PivotF
   return Expected<void, Error>::Ok();
 }
 
-/// Pairs an OOXML `<pivotField>` `*Subtotal` boolean attribute name with
-/// the `SubtotalFn` it selects. `defaultSubtotal` is handled separately
-/// (it gates the implicit default rather than a custom function) and is
-/// not part of this table. The ordering is the canonical ECMA-376
-/// attribute order so the writer can re-emit deterministically.
-struct SubtotalAttrEntry {
-  std::string_view attr;
-  pivot::SubtotalFn fn;
-};
-constexpr SubtotalAttrEntry kSubtotalAttrs[] = {
-    {"sumSubtotal", pivot::SubtotalFn::Sum},
-    {"countASubtotal", pivot::SubtotalFn::Count},
-    {"avgSubtotal", pivot::SubtotalFn::Average},
-    {"maxSubtotal", pivot::SubtotalFn::Max},
-    {"minSubtotal", pivot::SubtotalFn::Min},
-    {"productSubtotal", pivot::SubtotalFn::Product},
-    {"countSubtotal", pivot::SubtotalFn::CountNumbers},
-    {"stdDevSubtotal", pivot::SubtotalFn::StdDev},
-    {"stdDevPSubtotal", pivot::SubtotalFn::StdDevP},
-    {"varSubtotal", pivot::SubtotalFn::Var},
-    {"varPSubtotal", pivot::SubtotalFn::VarP},
-};
-
 /// Walks `<pivotFields>` in document order, materialising each
 /// `<pivotField>` into the table.
 Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out) {
@@ -242,7 +100,7 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     // unused ("available") field, which must round-trip as None rather
     // than being stamped `dataField="1"` on write.
     if (pugi::xml_attribute axis_attr = f.attribute("axis"); axis_attr) {
-      field.axis = ParseAxis(axis_attr.as_string());
+      field.axis = enum_from_name(kPivotAxisNames, axis_attr.as_string(), pivot::PivotAxis::Value);
     } else if (attr_bool(f, "dataField", false)) {
       field.axis = pivot::PivotAxis::Value;
     } else {
@@ -265,7 +123,7 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     if (pugi::xml_attribute ds = f.attribute("defaultSubtotal"); ds) {
       field.default_subtotal = parse_xml_bool_attr(ds);
     }
-    for (const SubtotalAttrEntry& e : kSubtotalAttrs) {
+    for (const PivotSubtotalName& e : kPivotSubtotalNames) {
       if (parse_xml_bool_attr(f.attribute(e.attr.data()))) {
         field.subtotal_fns.push_back(e.fn);
       }
@@ -364,12 +222,13 @@ Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::Pivot
     }
     entry.name = name_attr.value();
     entry.field_index = parse_xml_u32_attr(df.attribute("fld"), 0U);
-    entry.aggregation = ParseAggregation(df.attribute("subtotal").as_string());
+    entry.aggregation =
+        enum_from_name(kPivotAggregationNames, df.attribute("subtotal").as_string(), pivot::Aggregation::Sum);
     if (pugi::xml_attribute nf = df.attribute("numFmtId"); nf) {
       entry.number_format = nf.value();
     }
     if (pugi::xml_attribute sa = df.attribute("showDataAs"); sa) {
-      entry.show_as = ParseShowDataAs(sa.as_string());
+      entry.show_as = enum_from_name(kPivotShowDataAsNames, sa.as_string(), pivot::ShowValuesAs::Normal);
     }
     if (pugi::xml_attribute bf = df.attribute("baseField"); bf) {
       entry.show_as_base_field = parse_xml_u32_attr(bf, 0U);

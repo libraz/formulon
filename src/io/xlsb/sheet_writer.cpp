@@ -345,10 +345,7 @@ void EmitWorksheetDimensions(std::vector<std::uint8_t>& dst, const Sheet& sheet)
     return;
   }
   std::vector<std::uint8_t> payload;
-  emit_u32(payload, first_row);
-  emit_u32(payload, last_row);
-  emit_u32(payload, first_col);
-  emit_u32(payload, last_col);
+  emit_rfx(payload, MergeRange{first_row, first_col, last_row, last_col});
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsDim), payload);
 }
 
@@ -375,10 +372,7 @@ void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
       continue;
     }
     std::vector<std::uint8_t> payload;
-    emit_u32(payload, merge.first_row);
-    emit_u32(payload, merge.last_row);
-    emit_u32(payload, merge.first_col);
-    emit_u32(payload, merge.last_col);
+    emit_rfx(payload, merge);
     emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtMergeCell), payload);
   }
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndMergeCells), ByteSpan{});
@@ -415,10 +409,7 @@ Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet
               " last_row=" + std::to_string(hyperlink.last_row) + " last_col=" + std::to_string(hyperlink.last_col));
     }
     std::vector<std::uint8_t> payload;
-    emit_u32(payload, hyperlink.row);
-    emit_u32(payload, hyperlink.last_row);
-    emit_u32(payload, hyperlink.col);
-    emit_u32(payload, hyperlink.last_col);
+    emit_rfx(payload, MergeRange{hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col});
     const std::string_view rid =
         i < relationship_ids.size() ? std::string_view(relationship_ids[i]) : std::string_view{};
     // RelID is always present in BrtHLink. Empty-but-present is the internal

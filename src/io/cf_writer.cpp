@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "cf/cf_types.h"
+#include "io/cf_attr_names.h"
 #include "io/color_spec_xml.h"
 #include "io/future_functions.h"
 #include "io/ooxml/external_link_writer.h"
@@ -26,120 +27,8 @@
 namespace formulon::io {
 namespace {
 
-std::string_view RuleTypeToString(cf::RuleType t) {
-  switch (t) {
-    case cf::RuleType::Expression:
-      return "expression";
-    case cf::RuleType::CellIs:
-      return "cellIs";
-    case cf::RuleType::ColorScale:
-      return "colorScale";
-    case cf::RuleType::DataBar:
-      return "dataBar";
-    case cf::RuleType::IconSet:
-      return "iconSet";
-    case cf::RuleType::Top10:
-      return "top10";
-    case cf::RuleType::AboveAverage:
-      return "aboveAverage";
-    case cf::RuleType::ContainsText:
-      return "containsText";
-    case cf::RuleType::NotContainsText:
-      return "notContainsText";
-    case cf::RuleType::BeginsWith:
-      return "beginsWith";
-    case cf::RuleType::EndsWith:
-      return "endsWith";
-    case cf::RuleType::ContainsBlanks:
-      return "containsBlanks";
-    case cf::RuleType::NotContainsBlanks:
-      return "notContainsBlanks";
-    case cf::RuleType::ContainsErrors:
-      return "containsErrors";
-    case cf::RuleType::NotContainsErrors:
-      return "notContainsErrors";
-    case cf::RuleType::TimePeriod:
-      return "timePeriod";
-    case cf::RuleType::DuplicateValues:
-      return "duplicateValues";
-    case cf::RuleType::UniqueValues:
-      return "uniqueValues";
-  }
-  return "expression";
-}
-
-std::string_view CellIsOperatorToString(cf::CellIsOperator op) {
-  switch (op) {
-    case cf::CellIsOperator::LessThan:
-      return "lessThan";
-    case cf::CellIsOperator::LessThanOrEqual:
-      return "lessThanOrEqual";
-    case cf::CellIsOperator::Equal:
-      return "equal";
-    case cf::CellIsOperator::NotEqual:
-      return "notEqual";
-    case cf::CellIsOperator::GreaterThanOrEqual:
-      return "greaterThanOrEqual";
-    case cf::CellIsOperator::GreaterThan:
-      return "greaterThan";
-    case cf::CellIsOperator::Between:
-      return "between";
-    case cf::CellIsOperator::NotBetween:
-      return "notBetween";
-  }
-  return "equal";
-}
-
-std::string_view CfvoTypeToString(cf::CfvoType t) {
-  switch (t) {
-    case cf::CfvoType::Number:
-      return "num";
-    case cf::CfvoType::Percent:
-      return "percent";
-    case cf::CfvoType::Percentile:
-      return "percentile";
-    case cf::CfvoType::Min:
-      return "min";
-    case cf::CfvoType::Max:
-      return "max";
-    case cf::CfvoType::Formula:
-      return "formula";
-    case cf::CfvoType::AutoMin:
-      return "autoMin";
-    case cf::CfvoType::AutoMax:
-      return "autoMax";
-  }
-  return "num";
-}
-
 std::string_view IconSetNameToString(cf::IconSetName n) {
   return cf::kIconSetNames[static_cast<std::size_t>(n)];
-}
-
-std::string_view TimePeriodToString(cf::TimePeriod p) {
-  switch (p) {
-    case cf::TimePeriod::Today:
-      return "today";
-    case cf::TimePeriod::Yesterday:
-      return "yesterday";
-    case cf::TimePeriod::Tomorrow:
-      return "tomorrow";
-    case cf::TimePeriod::Last7Days:
-      return "last7Days";
-    case cf::TimePeriod::ThisWeek:
-      return "thisWeek";
-    case cf::TimePeriod::LastWeek:
-      return "lastWeek";
-    case cf::TimePeriod::NextWeek:
-      return "nextWeek";
-    case cf::TimePeriod::ThisMonth:
-      return "thisMonth";
-    case cf::TimePeriod::LastMonth:
-      return "lastMonth";
-    case cf::TimePeriod::NextMonth:
-      return "nextMonth";
-  }
-  return "today";
 }
 
 /// Appends one `CFCellRange` as A1 (single cell) or A1:B5 (range). The
@@ -224,12 +113,10 @@ void AppendColor(std::string& out, const cf::Color& c) {
 
 void AppendCfvo(std::string& out, const cf::CfValueObject& v, const parser::ExternalBookIndexer* indexer) {
   out.append("<cfvo type=\"");
-  out.append(CfvoTypeToString(v.type));
+  out.append(enum_name(kCfvoTypeNames, v.type, "num"));
   out.push_back('"');
   if (!v.value.empty()) {
-    out.append(" val=\"");
-    AppendXmlAttrEscaped(out, v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value, indexer) : v.value);
-    out.push_back('"');
+    append_xml_attr(out, "val", v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value, indexer) : v.value);
   }
   if (!v.gte) {
     out.append(" gte=\"0\"");
@@ -275,9 +162,7 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i, const parser::Ext
   out.append("<iconSet");
   // Excel omits the attribute for the schema default, 3TrafficLights1.
   if (i.name != cf::IconSetName::Three_TrafficLights1) {
-    out.append(" iconSet=\"");
-    out.append(IconSetNameToString(i.name));
-    out.push_back('"');
+    append_xml_attr(out, "iconSet", IconSetNameToString(i.name));
   }
   if (i.reverse) {
     out.append(" reverse=\"1\"");
@@ -388,7 +273,7 @@ void AppendX14Color(std::string& out, std::string_view element, const cf::Color&
 /// attribute.
 void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v, const parser::ExternalBookIndexer* indexer) {
   out.append("<x14:cfvo type=\"");
-  out.append(CfvoTypeToString(v.type));
+  out.append(enum_name(kCfvoTypeNames, v.type, "num"));
   out.push_back('"');
   if (!v.gte) {
     out.append(" gte=\"0\"");
@@ -473,7 +358,7 @@ void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vect
 void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
                   const parser::ExternalBookIndexer* indexer) {
   out.append("<cfRule type=\"");
-  out.append(RuleTypeToString(r.type));
+  out.append(enum_name(kCfRuleTypeNames, r.type, "expression"));
   out.append("\" priority=\"");
   out.append(std::to_string(r.priority));
   out.push_back('"');
@@ -484,14 +369,10 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
   // rather than emitted dangling — see `cf_writer.h` for why Excel's
   // reaction makes that the cheaper loss.
   if (r.dxf_id.has_value() && r.dxf_id.value() < dxf_count) {
-    out.append(" dxfId=\"");
-    out.append(std::to_string(r.dxf_id.value()));
-    out.push_back('"');
+    append_xml_attr_uint(out, "dxfId", r.dxf_id.value());
   }
   if (r.type == cf::RuleType::CellIs && r.op.has_value()) {
-    out.append(" operator=\"");
-    out.append(CellIsOperatorToString(r.op.value()));
-    out.push_back('"');
+    append_xml_attr(out, "operator", enum_name(kCfCellIsOperatorNames, r.op.value(), "equal"));
   }
   if ((r.type == cf::RuleType::ContainsText || r.type == cf::RuleType::NotContainsText ||
        r.type == cf::RuleType::BeginsWith || r.type == cf::RuleType::EndsWith) &&
@@ -518,19 +399,13 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
         break;
     }
     if (op_attr != nullptr) {
-      out.append(" operator=\"");
-      out.append(op_attr);
-      out.push_back('"');
+      append_xml_attr(out, "operator", op_attr);
     }
-    out.append(" text=\"");
-    AppendXmlAttrEscaped(out, r.text.value());
-    out.push_back('"');
+    append_xml_attr(out, "text", r.text.value());
   }
   if (r.type == cf::RuleType::Top10) {
     if (r.rank.has_value()) {
-      out.append(" rank=\"");
-      out.append(std::to_string(r.rank.value()));
-      out.push_back('"');
+      append_xml_attr_int(out, "rank", r.rank.value());
     }
     if (r.percent) {
       out.append(" percent=\"1\"");
@@ -549,15 +424,11 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
     if (r.std_dev.has_value()) {
       char buf[32];
       format_general(buf, sizeof(buf), r.std_dev.value(), 6);
-      out.append(" stdDev=\"");
-      out.append(buf);
-      out.push_back('"');
+      append_xml_attr(out, "stdDev", buf);
     }
   }
   if (r.type == cf::RuleType::TimePeriod && r.time_period.has_value()) {
-    out.append(" timePeriod=\"");
-    out.append(TimePeriodToString(r.time_period.value()));
-    out.push_back('"');
+    append_xml_attr(out, "timePeriod", enum_name(kCfTimePeriodNames, r.time_period.value(), "today"));
   }
   // `CFRule::id` is deliberately not emitted as an attribute here — see
   // `AppendRuleExtLst` for where the linkage actually goes.

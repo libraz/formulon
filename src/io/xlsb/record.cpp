@@ -12,6 +12,7 @@
 
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -82,6 +83,15 @@ Expected<std::uint32_t, Error> read_u32(ByteSpan& cursor) {
   return v;
 }
 
+Expected<MergeRange, Error> read_rfx(ByteSpan& cursor) {
+  MergeRange r;
+  ASSIGN_OR_RETURN(r.first_row, read_u32(cursor));
+  ASSIGN_OR_RETURN(r.last_row, read_u32(cursor));
+  ASSIGN_OR_RETURN(r.first_col, read_u32(cursor));
+  ASSIGN_OR_RETURN(r.last_col, read_u32(cursor));
+  return r;
+}
+
 Expected<double, Error> read_double(ByteSpan& cursor) {
   if (cursor.size < sizeof(double)) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb double read out of range",
@@ -95,11 +105,8 @@ Expected<double, Error> read_double(ByteSpan& cursor) {
 }
 
 Expected<std::string, Error> read_xlwidestring(ByteSpan& cursor) {
-  auto len_or = read_u32(cursor);
-  if (!len_or) {
-    return len_or.error();
-  }
-  const std::uint32_t cch = len_or.value();
+  ASSIGN_OR_RETURN(auto len, read_u32(cursor));
+  const std::uint32_t cch = len;
   // 16-bit code units per char; cap at the buffer to avoid large
   // synthetic allocations on hostile input. The bound on `cch` is also
   // what makes the `cch * 3` reservation below safe to compute as
@@ -204,16 +211,10 @@ double decode_rk_number(std::uint32_t rk) {
 
 Expected<XlsbRecord, Error> read_record(ByteSpan& cursor) {
   // Record-type: up to 2 MSB-continuation bytes encoding 14 bits.
-  auto type_or = ReadVarInt(cursor, /*max_bytes=*/2, "record_type");
-  if (!type_or) {
-    return type_or.error();
-  }
+  ASSIGN_OR_RETURN(auto type, ReadVarInt(cursor, /*max_bytes=*/2, "record_type"));
   // Payload-size: up to 4 MSB-continuation bytes encoding 28 bits.
-  auto size_or = ReadVarInt(cursor, /*max_bytes=*/4, "record_size");
-  if (!size_or) {
-    return size_or.error();
-  }
-  const std::uint32_t payload_size = size_or.value();
+  ASSIGN_OR_RETURN(auto size, ReadVarInt(cursor, /*max_bytes=*/4, "record_size"));
+  const std::uint32_t payload_size = size;
   if (cursor.size < payload_size) {
     std::string ctx("context=xlsb.record need=");
     ctx.append(std::to_string(payload_size));
@@ -222,7 +223,7 @@ Expected<XlsbRecord, Error> read_record(ByteSpan& cursor) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb record payload truncated", std::move(ctx));
   }
   XlsbRecord rec;
-  rec.type = static_cast<std::uint16_t>(type_or.value());
+  rec.type = static_cast<std::uint16_t>(type);
   rec.payload = ByteSpan{cursor.data, payload_size};
   cursor.data += payload_size;
   cursor.size -= payload_size;

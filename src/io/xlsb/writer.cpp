@@ -54,6 +54,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
+#include "utils/status_macros.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 
@@ -825,11 +826,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   // 4. xl/workbook.bin
   {
-    auto wb_bytes_or = BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids);
-    if (!wb_bytes_or) {
-      return wb_bytes_or.error();
-    }
-    if (auto r = AddPartBytes(writer.get(), "xl/workbook.bin", wb_bytes_or.value()); !r) {
+    ASSIGN_OR_RETURN(auto wb_bytes, BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids));
+    if (auto r = AddPartBytes(writer.get(), "xl/workbook.bin", wb_bytes); !r) {
       return r.error();
     }
   }
@@ -882,11 +880,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   // 6. xl/sharedStrings.bin (conditional)
   if (emit_sst_part) {
-    auto sst_body_or = emit_sst(sst);
-    if (!sst_body_or) {
-      return sst_body_or.error();
-    }
-    if (auto r = AddPartBytes(writer.get(), "xl/sharedStrings.bin", sst_body_or.value()); !r) {
+    ASSIGN_OR_RETURN(auto sst_body, emit_sst(sst));
+    if (auto r = AddPartBytes(writer.get(), "xl/sharedStrings.bin", sst_body); !r) {
       return r.error();
     }
   }
@@ -907,20 +902,14 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     }
   }
 
-  auto bytes_or = FinalizeArchive(writer, "context=write_xlsb");
-  if (!bytes_or) {
-    return bytes_or.error();
-  }
+  ASSIGN_OR_RETURN(auto bytes, FinalizeArchive(writer, "context=write_xlsb"));
   diagnostics.downgraded_formula_count = downgraded_formula_count;
-  return XlsbWriteResult{std::move(bytes_or.value()), diagnostics};
+  return XlsbWriteResult{std::move(bytes), diagnostics};
 }
 
 Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) {
-  auto result_or = write_xlsb_with_result(workbook);
-  if (!result_or) {
-    return result_or.error();
-  }
-  return std::move(result_or.value().bytes);
+  ASSIGN_OR_RETURN(auto result, write_xlsb_with_result(workbook));
+  return std::move(result.bytes);
 }
 
 }  // namespace xlsb

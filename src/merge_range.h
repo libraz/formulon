@@ -20,6 +20,11 @@ struct MergeRange {
   std::uint32_t first_col = 0;
   std::uint32_t last_row = 0;
   std::uint32_t last_col = 0;
+
+  friend bool operator==(const MergeRange& a, const MergeRange& b) noexcept {
+    return a.first_row == b.first_row && a.first_col == b.first_col && a.last_row == b.last_row &&
+           a.last_col == b.last_col;
+  }
 };
 
 }  // namespace formulon

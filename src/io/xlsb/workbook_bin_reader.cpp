@@ -24,6 +24,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 
@@ -48,11 +49,8 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
       // is f1904. The following theme-version and optional code-name
       // fields are irrelevant to the workbook model.
       ByteSpan p = rec.payload;
-      auto flags_or = read_u32(p);
-      if (!flags_or) {
-        return flags_or.error();
-      }
-      info.date1904 = (flags_or.value() & 0x00000001U) != 0U;
+      ASSIGN_OR_RETURN(auto flags, read_u32(p));
+      info.date1904 = (flags & 0x00000001U) != 0U;
       continue;
     }
     if (rec.type == kBrtBookProtectionIso) {
@@ -76,30 +74,24 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
     //   strName    : XLWideString
     ByteSpan p = rec.payload;
     // hsState: 0 = visible, 1 = hidden, 2 = very hidden.
-    auto hs_state_or = read_u32(p);
-    if (!hs_state_or) {
-      return hs_state_or.error();
-    }
+    ASSIGN_OR_RETURN(auto hs_state, read_u32(p));
     auto skip2 = read_u32(p);  // iTabID
     if (!skip2) {
       return skip2.error();
     }
-    auto rid_or = read_xlnullablewidestring(p);
-    if (!rid_or) {
-      return rid_or.error();
-    }
+    ASSIGN_OR_RETURN(auto rid, read_xlnullablewidestring(p));
     auto name_or = read_xlwidestring(p);
     if (!name_or) {
       return name_or.error();
     }
     SheetBundleEntry entry;
-    entry.rid = std::move(rid_or.value());
+    entry.rid = std::move(rid);
     entry.name = std::move(name_or.value());
     // An hsState outside the three defined values is not a visibility this
     // model can name; treat anything non-zero it cannot place as plain
     // hidden, which is the conservative direction (the sheet stays out of
     // sight rather than appearing unbidden).
-    switch (hs_state_or.value()) {
+    switch (hs_state) {
       case 0U:
         entry.visibility = SheetVisibility::kVisible;
         break;
@@ -236,21 +228,15 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
     }
     p.data += 3;  // 3 reserved bytes between flags and itab.
     p.size -= 3;
-    auto itab_or = read_u32(p);
-    if (!itab_or) {
-      return itab_or.error();
-    }
-    auto cch_or = read_u32(p);
-    if (!cch_or) {
-      return cch_or.error();
-    }
+    ASSIGN_OR_RETURN(auto itab, read_u32(p));
+    ASSIGN_OR_RETURN(auto cch, read_u32(p));
     std::string name;
-    if (!ReadFixedWideString(p, cch_or.value(), name)) {
+    if (!ReadFixedWideString(p, cch, name)) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb fixed-length wide string truncated",
                         "context=xlsb_reader");
     }
     XlsbName entry;
-    entry.itab = static_cast<std::int32_t>(itab_or.value());
+    entry.itab = static_cast<std::int32_t>(itab);
     entry.name = std::move(name);
     entry.hidden = (flags_or.value() & 0x0001U) != 0;
     names.push_back(std::move(entry));
@@ -344,18 +330,9 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
         static_cast<std::size_t>(std::min<std::uint64_t>(count_or.value(), p.size / kExternSheetEntryBytes));
     ranges.reserve(reservable);
     for (std::uint32_t i = 0; i < count_or.value(); ++i) {
-      auto sup_book_or = read_u32(p);
-      if (!sup_book_or) {
-        return sup_book_or.error();
-      }
-      auto first_or = read_u32(p);
-      if (!first_or) {
-        return first_or.error();
-      }
-      auto last_or = read_u32(p);
-      if (!last_or) {
-        return last_or.error();
-      }
+      ASSIGN_OR_RETURN(const std::uint32_t sup_book, read_u32(p));
+      ASSIGN_OR_RETURN(auto first, read_u32(p));
+      ASSIGN_OR_RETURN(auto last, read_u32(p));
       // An `iSupBook` past the end of the list cannot be resolved. Treat
       // it as external: that refuses the reference, where assuming
       // "internal" would bind it to a local sheet by index.
@@ -366,15 +343,14 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
       // does. Refusing every reference would regress such a file from
       // working to undecodable, so it keeps the weaker rule that index
       // 0 is this workbook.
-      const std::uint32_t sup_book = sup_book_or.value();
       std::uint32_t external_book = std::numeric_limits<std::uint32_t>::max();
       if (books.empty()) {
         external_book = sup_book == 0U ? 0U : sup_book;
       } else if (sup_book < books.size()) {
         external_book = books[sup_book].external_book;
       }
-      ranges.push_back(XlsbSheetRange{static_cast<std::int32_t>(first_or.value()),
-                                      static_cast<std::int32_t>(last_or.value()), external_book});
+      ranges.push_back(
+          XlsbSheetRange{static_cast<std::int32_t>(first), static_cast<std::int32_t>(last), external_book});
     }
     break;  // Exactly one BrtExternSheet record per workbook.
   }
@@ -434,22 +410,15 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     }
     p.data += 9;  // flags (2) + 3 reserved bytes + itab (4).
     p.size -= 9;
-    auto cch_or = read_u32(p);
-    if (!cch_or) {
-      return cch_or.error();
-    }
-    const std::size_t name_bytes = static_cast<std::size_t>(cch_or.value()) * 2;
+    ASSIGN_OR_RETURN(auto cch, read_u32(p));
+    const std::size_t name_bytes = static_cast<std::size_t>(cch) * 2;
     if (name_bytes > p.size) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
                         "workbook.bin: BrtName name truncated (defined-name pass)", "context=xlsb_reader");
     }
     p.data += name_bytes;
     p.size -= name_bytes;
-    auto cce_or = read_u32(p);
-    if (!cce_or) {
-      return cce_or.error();
-    }
-    const std::uint32_t cce = cce_or.value();
+    ASSIGN_OR_RETURN(const std::uint32_t cce, read_u32(p));
     if (cce > p.size) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
                         "workbook.bin: BrtName formula rgce length exceeds payload", "context=xlsb_reader");
@@ -464,11 +433,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     // array-constant / mem-area extra data for this formula's own Ptg
     // tokens. Must be skipped correctly (not just assumed absent) to
     // land on the trailing comment string below.
-    auto cb_or = read_u32(p);
-    if (!cb_or) {
-      return cb_or.error();
-    }
-    const std::uint32_t cb = cb_or.value();
+    ASSIGN_OR_RETURN(const std::uint32_t cb, read_u32(p));
     if (cb > p.size) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
                         "workbook.bin: BrtName formula rgcb length exceeds payload", "context=xlsb_reader");
@@ -492,10 +457,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     // optional Name Manager comment, as a null `XLNullableWideString`
     // when unset (`read_xlnullablewidestring` maps that to an empty
     // string). This mirrors the writer's `EmitName`.
-    auto comment_or = read_xlnullablewidestring(p);
-    if (!comment_or) {
-      return comment_or.error();
-    }
+    ASSIGN_OR_RETURN(auto comment, read_xlnullablewidestring(p));
     // Defined-name formulas store the bare expression text (no leading
     // `=`), matching the OOXML `<definedName>` element's text content.
     DefinedName dn;
@@ -506,7 +468,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     dn.formula = wb.ingest_stored_formula(parser::format_formula(*ast_or.value()));
     dn.local_sheet_id = entry.itab;
     dn.hidden = entry.hidden;
-    dn.comment = std::move(comment_or.value());
+    dn.comment = std::move(comment);
     out.push_back(std::move(dn));
   }
   wb.set_defined_names(std::move(out));

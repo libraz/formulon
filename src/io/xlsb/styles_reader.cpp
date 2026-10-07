@@ -43,6 +43,7 @@
 
 #include "io/xlsb/record.h"
 #include "io/xlsb/xf_flags.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -207,11 +208,8 @@ Expected<void, Error> DecodeFont(ByteSpan payload, StylesTable& table) {
   // 2=minor). Anything else is a value this build cannot name, and
   // writing back a link Excel would not resolve is worse than dropping it.
   rec.scheme = scheme_or.value() <= 2U ? scheme_or.value() : 0U;
-  auto name_or = read_xlwidestring(p);
-  if (!name_or) {
-    return name_or.error();
-  }
-  rec.name = std::move(name_or.value());
+  ASSIGN_OR_RETURN(auto name, read_xlwidestring(p));
+  rec.name = std::move(name);
   table.fonts.push_back(std::move(rec));
   return Expected<void, Error>::Ok();
 }
@@ -299,18 +297,12 @@ Expected<void, Error> DecodeBorder(ByteSpan payload, StylesTable& table) {
 
 Expected<void, Error> DecodeFmt(ByteSpan payload, StylesTable& table) {
   ByteSpan p = payload;
-  auto ifmt_or = read_u16(p);
-  if (!ifmt_or) {
-    return ifmt_or.error();
-  }
-  auto name_or = read_xlwidestring(p);
-  if (!name_or) {
-    return name_or.error();
-  }
+  ASSIGN_OR_RETURN(auto ifmt, read_u16(p));
+  ASSIGN_OR_RETURN(auto name, read_xlwidestring(p));
   NumFmtRecord rec;
-  rec.id = ifmt_or.value();
+  rec.id = ifmt;
   rec.format_string_index = static_cast<std::uint32_t>(table.num_fmt_strings.size());
-  table.num_fmt_strings.push_back(std::move(name_or.value()));
+  table.num_fmt_strings.push_back(std::move(name));
   table.num_fmts.push_back(rec);
   return Expected<void, Error>::Ok();
 }
@@ -320,49 +312,20 @@ Expected<void, Error> DecodeXf(ByteSpan payload, XfTarget target, StylesTable& t
   // 8 x u16: [ixfeParent, numFmtId, fontId, fillId, borderId,
   // trot|indent, flags, xfGrbitAtr]. Field positions are in
   // `io/xlsb/xf_flags.h`, shared with the writer.
-  auto parent_or = read_u16(p);
-  if (!parent_or) {
-    return parent_or.error();
-  }
-  auto num_fmt_id_or = read_u16(p);
-  if (!num_fmt_id_or) {
-    return num_fmt_id_or.error();
-  }
-  auto font_id_or = read_u16(p);
-  if (!font_id_or) {
-    return font_id_or.error();
-  }
-  auto fill_id_or = read_u16(p);
-  if (!fill_id_or) {
-    return fill_id_or.error();
-  }
-  auto border_id_or = read_u16(p);
-  if (!border_id_or) {
-    return border_id_or.error();
-  }
-  auto text_rotation_or = read_u8(p);
-  if (!text_rotation_or) {
-    return text_rotation_or.error();
-  }
-  auto indent_or = read_u8(p);
-  if (!indent_or) {
-    return indent_or.error();
-  }
-  auto flags_or = read_u16(p);
-  if (!flags_or) {
-    return flags_or.error();
-  }
-  auto apply_or = read_u16(p);
-  if (!apply_or) {
-    return apply_or.error();
-  }
-  const std::uint16_t flags = flags_or.value();
-  const std::uint16_t apply = apply_or.value();
+  ASSIGN_OR_RETURN(auto parent, read_u16(p));
+  ASSIGN_OR_RETURN(auto num_fmt_id, read_u16(p));
+  ASSIGN_OR_RETURN(auto font_id, read_u16(p));
+  ASSIGN_OR_RETURN(auto fill_id, read_u16(p));
+  ASSIGN_OR_RETURN(auto border_id, read_u16(p));
+  ASSIGN_OR_RETURN(auto text_rotation, read_u8(p));
+  ASSIGN_OR_RETURN(auto indent, read_u8(p));
+  ASSIGN_OR_RETURN(const std::uint16_t flags, read_u16(p));
+  ASSIGN_OR_RETURN(const std::uint16_t apply, read_u16(p));
   CellXf xf;
-  xf.num_fmt_id = num_fmt_id_or.value();
-  xf.font_index = font_id_or.value();
-  xf.fill_index = fill_id_or.value();
-  xf.border_index = border_id_or.value();
+  xf.num_fmt_id = num_fmt_id;
+  xf.font_index = font_id;
+  xf.fill_index = fill_id;
+  xf.border_index = border_id;
   // A `BrtXF` states every field unconditionally, so the OOXML presence
   // bits are derived from the value rather than read: a field holding its
   // schema default is what Excel writes as an omitted attribute, and the
@@ -378,9 +341,9 @@ Expected<void, Error> DecodeXf(ByteSpan payload, XfTarget target, StylesTable& t
   xf.has_shrink_to_fit = xf.shrink_to_fit;
   xf.reading_order = (flags & kXfReadingOrderMask) >> kXfReadingOrderShift;
   xf.has_reading_order = xf.reading_order != 0U;
-  xf.text_rotation = text_rotation_or.value();
+  xf.text_rotation = text_rotation;
   xf.has_text_rotation = xf.text_rotation != 0U;
-  xf.indent = indent_or.value();
+  xf.indent = indent;
   xf.has_indent = xf.indent != 0U;
   xf.quote_prefix = (flags & kXfQuotePrefix) != 0U;
   xf.locked = (flags & kXfLocked) != 0U;
@@ -401,8 +364,8 @@ Expected<void, Error> DecodeXf(ByteSpan payload, XfTarget target, StylesTable& t
       table.cell_style_xfs.push_back(xf);
       break;
     case XfTarget::kCellXfs:
-      if (parent_or.value() != kXfNoParent) {
-        xf.xf_id = parent_or.value();
+      if (parent != kXfNoParent) {
+        xf.xf_id = parent;
       }
       table.cell_xfs.push_back(xf);
       break;

@@ -91,9 +91,7 @@ void AppendStyleAttr(std::string& out, std::uint32_t xf_index, bool force) {
   if (xf_index == 0U && !force) {
     return;
   }
-  out.append(" s=\"");
-  out.append(std::to_string(xf_index));
-  out.append("\"");
+  append_xml_attr_uint(out, "s", xf_index);
 }
 
 // Emits the <c> element for an Error value at `addr`.
@@ -336,9 +334,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell));
     AppendFormulaValueType(out, cell.cached_value);
     if (dynamic) {
-      out.append(" cm=\"");
-      out.append(std::to_string(dynamic_array_cm_index));
-      out.append("\"");
+      append_xml_attr_uint(out, "cm", dynamic_array_cm_index);
     }
     out.push_back('>');
 
@@ -438,9 +434,7 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
     out.append(" hidden=\"1\"");
   }
   if (layout.outline_level != 0U) {
-    out.append(" outlineLevel=\"");
-    out.append(std::to_string(static_cast<unsigned int>(layout.outline_level)));
-    out.push_back('"');
+    append_xml_attr_uint(out, "outlineLevel", layout.outline_level);
   }
   if (layout.has_style) {
     // OOXML row style is effective only with customFormat=1. Emit s even

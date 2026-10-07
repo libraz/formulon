@@ -11,6 +11,7 @@
 #include "pivot/pivot_types.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -139,22 +140,15 @@ Expected<pivot::Aggregation, Error> AggregationFromSelector(std::uint32_t select
 /// axis-field-order record, rejecting a payload that is not exactly the
 /// size the count implies.
 Expected<std::vector<std::uint32_t>, Error> ReadFieldOrder(ByteSpan payload) {
-  auto count_or = read_u32(payload);
-  if (!count_or) {
-    return count_or.error();
-  }
-  const std::uint32_t count = count_or.value();
+  ASSIGN_OR_RETURN(const std::uint32_t count, read_u32(payload));
   if (payload.size != static_cast<std::size_t>(count) * sizeof(std::uint32_t)) {
     return CorruptError("xlsb pivot axis field order length does not match its count");
   }
   std::vector<std::uint32_t> order;
   order.reserve(count);
   for (std::uint32_t i = 0; i < count; ++i) {
-    auto index_or = read_u32(payload);
-    if (!index_or) {
-      return index_or.error();
-    }
-    order.push_back(index_or.value());
+    ASSIGN_OR_RETURN(auto index, read_u32(payload));
+    order.push_back(index);
   }
   return order;
 }
@@ -199,12 +193,9 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
         }
         payload.data += kPCDFieldNameOffset;
         payload.size -= kPCDFieldNameOffset;
-        auto name_or = read_xlwidestring(payload);
-        if (!name_or) {
-          return name_or.error();
-        }
+        ASSIGN_OR_RETURN(auto name, read_xlwidestring(payload));
         pivot::PivotCacheField field;
-        field.name = std::move(name_or).value();
+        field.name = std::move(name);
         cache->mutable_fields().push_back(std::move(field));
         in_field = true;
         field_has_shared_items = false;
@@ -293,21 +284,15 @@ Expected<void, Error> DecodeCacheRecords(ByteSpan cursor, const std::vector<Cell
     record.cell_is_index.reserve(encodings.size());
     for (std::size_t i = 0; i < encodings.size(); ++i) {
       if (encodings[i] == CellEncoding::SharedIndex) {
-        auto index_or = read_u32(payload);
-        if (!index_or) {
-          return index_or.error();
-        }
-        if (index_or.value() >= cache->fields()[i].shared_items.size()) {
+        ASSIGN_OR_RETURN(auto index, read_u32(payload));
+        if (index >= cache->fields()[i].shared_items.size()) {
           return CorruptError("xlsb pivot cache record indexes a shared item the definition did not carry");
         }
-        record.cells.push_back(Value::number(static_cast<double>(index_or.value())));
+        record.cells.push_back(Value::number(static_cast<double>(index)));
         record.cell_is_index.push_back(true);
       } else {
-        auto value_or = read_double(payload);
-        if (!value_or) {
-          return value_or.error();
-        }
-        record.cells.push_back(Value::number(value_or.value()));
+        ASSIGN_OR_RETURN(auto value, read_double(payload));
+        record.cells.push_back(Value::number(value));
         record.cell_is_index.push_back(false);
       }
     }
@@ -354,16 +339,10 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         }
         payload.data += kPivotTableDefNameOffset;
         payload.size -= kPivotTableDefNameOffset;
-        auto name_or = read_xlwidestring(payload);
-        if (!name_or) {
-          return name_or.error();
-        }
-        table.set_name(std::move(name_or).value());
-        auto caption_or = read_xlwidestring(payload);
-        if (!caption_or) {
-          return caption_or.error();
-        }
-        table.set_data_caption(std::move(caption_or).value());
+        ASSIGN_OR_RETURN(auto name, read_xlwidestring(payload));
+        table.set_name(std::move(name));
+        ASSIGN_OR_RETURN(auto caption, read_xlwidestring(payload));
+        table.set_data_caption(std::move(caption));
         in_definition = true;
         break;
       }
@@ -377,11 +356,8 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         }
         std::uint32_t bounds[kLocationMinU32s] = {};
         for (std::uint32_t& slot : bounds) {
-          auto value_or = read_u32(payload);
-          if (!value_or) {
-            return value_or.error();
-          }
-          slot = value_or.value();
+          ASSIGN_OR_RETURN(auto value, read_u32(payload));
+          slot = value;
         }
         if (bounds[1] < bounds[0] || bounds[3] < bounds[2]) {
           return CorruptError("xlsb pivot table location rectangle is inverted");
@@ -398,11 +374,8 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
       }
       case kBeginPivotFields: {
         ByteSpan payload = rec.payload;
-        auto count_or = read_u32(payload);
-        if (!count_or) {
-          return count_or.error();
-        }
-        declared_field_count = count_or.value();
+        ASSIGN_OR_RETURN(auto count, read_u32(payload));
+        declared_field_count = count;
         break;
       }
       case kBeginPivotField: {
@@ -429,10 +402,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
           return CorruptError("xlsb pivot field item payload has an unexpected size");
         }
         ByteSpan payload = rec.payload;
-        auto kind_or = read_u8(payload);
-        if (!kind_or) {
-          return kind_or.error();
-        }
+        ASSIGN_OR_RETURN(auto kind, read_u8(payload));
         auto flags_or = read_u16(payload);
         if (!flags_or) {
           return flags_or.error();
@@ -443,64 +413,43 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
           // field, so an unmeasured flag refuses the table instead.
           return CorruptError("xlsb pivot field item carries flags this reader has not characterised");
         }
-        auto index_or = read_u32(payload);
-        if (!index_or) {
-          return index_or.error();
-        }
-        if (kind_or.value() != kPivotFieldItemKindData) {
+        ASSIGN_OR_RETURN(auto index, read_u32(payload));
+        if (kind != kPivotFieldItemKindData) {
           // The automatic default / subtotal entry; the evaluator
           // synthesises it, so it contributes no modelled item.
           break;
         }
         pivot::PivotItem item;
         item.has_cache_index = true;
-        item.cache_index = index_or.value();
+        item.cache_index = index;
         table.mutable_fields().back().items.push_back(std::move(item));
         break;
       }
       case kPivotRowFields: {
-        auto order_or = ReadFieldOrder(rec.payload);
-        if (!order_or) {
-          return order_or.error();
-        }
-        row_order = std::move(order_or).value();
+        ASSIGN_OR_RETURN(auto order, ReadFieldOrder(rec.payload));
+        row_order = std::move(order);
         break;
       }
       case kPivotColFields: {
-        auto order_or = ReadFieldOrder(rec.payload);
-        if (!order_or) {
-          return order_or.error();
-        }
-        col_order = std::move(order_or).value();
+        ASSIGN_OR_RETURN(auto order, ReadFieldOrder(rec.payload));
+        col_order = std::move(order);
         break;
       }
       case kBeginPivotDataField: {
         ByteSpan payload = rec.payload;
-        auto field_index_or = read_u32(payload);
-        if (!field_index_or) {
-          return field_index_or.error();
-        }
-        auto selector_or = read_u32(payload);
-        if (!selector_or) {
-          return selector_or.error();
-        }
-        auto aggregation_or = AggregationFromSelector(selector_or.value());
-        if (!aggregation_or) {
-          return aggregation_or.error();
-        }
+        ASSIGN_OR_RETURN(auto field_index, read_u32(payload));
+        ASSIGN_OR_RETURN(auto selector, read_u32(payload));
+        ASSIGN_OR_RETURN(auto aggregation, AggregationFromSelector(selector));
         if (payload.size < kDataFieldNameGap) {
           return CorruptError("xlsb pivot data field header truncated");
         }
         payload.data += kDataFieldNameGap;
         payload.size -= kDataFieldNameGap;
-        auto name_or = read_xlwidestring(payload);
-        if (!name_or) {
-          return name_or.error();
-        }
+        ASSIGN_OR_RETURN(auto name, read_xlwidestring(payload));
         pivot::PivotDataField data_field;
-        data_field.field_index = field_index_or.value();
-        data_field.aggregation = aggregation_or.value();
-        data_field.name = std::move(name_or).value();
+        data_field.field_index = field_index;
+        data_field.aggregation = aggregation;
+        data_field.name = std::move(name);
         table.mutable_data_fields().push_back(std::move(data_field));
         break;
       }

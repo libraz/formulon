@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "io/zip_reader.h"
+#include "merge_range.h"
 
 namespace formulon {
 namespace io {
@@ -40,6 +41,9 @@ void emit_u16(std::vector<std::uint8_t>& dst, std::uint16_t value);
 
 /// Appends a little-endian 32-bit unsigned integer to `dst`.
 void emit_u32(std::vector<std::uint8_t>& dst, std::uint32_t value);
+
+/// Appends an `RfX` rectangle (rwFirst, rwLast, colFirst, colLast as u32) to `dst`.
+void emit_rfx(std::vector<std::uint8_t>& dst, const MergeRange& rect);
 
 /// Appends a little-endian IEEE 754 64-bit double to `dst`.
 void emit_double(std::vector<std::uint8_t>& dst, double value);

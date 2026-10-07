@@ -245,36 +245,21 @@ void CaptureUnconsumedWorksheetChildren(const pugi::xml_node& worksheet, Workshe
 Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std::size_t i, Workbook& wb,
                                              ReadDiagnostics* diagnostics) {
   const pugi::xml_node worksheet = doc.child("worksheet");
-  auto cfs_or = read_conditional_formats(worksheet, diagnostics);
-  if (!cfs_or) {
-    return cfs_or.error();
-  }
+  ASSIGN_OR_RETURN(auto cfs, read_conditional_formats(worksheet, diagnostics));
   // The `<dxfs>` table is loaded before any sheet, so this is the first
   // point where a rule's `dxfId` can be checked against it. Both the DOM
   // and the SAX path reach the model through here, which is what makes
   // "a loaded workbook holds no unresolvable dxf_id" hold for the reader
   // as a whole rather than for one of its two paths.
-  normalize_cf_dxf_ids(cfs_or.value(), wb.styles().dxfs.size());
-  wb.sheet(i).mutable_conditional_formats() = std::move(cfs_or.value());
-  auto view_layout_or = read_sheet_view_and_layout(doc, i, wb);
-  if (!view_layout_or) {
-    return view_layout_or.error();
-  }
-  auto merges_or = read_merges(worksheet, diagnostics);
-  if (!merges_or) {
-    return merges_or.error();
-  }
-  wb.sheet(i).mutable_merges() = std::move(merges_or.value());
-  auto hls_or = read_hyperlinks(worksheet, diagnostics);
-  if (!hls_or) {
-    return hls_or.error();
-  }
-  wb.sheet(i).mutable_hyperlinks() = std::move(hls_or.value());
-  auto dvs_or = read_data_validations(worksheet, diagnostics);
-  if (!dvs_or) {
-    return dvs_or.error();
-  }
-  wb.sheet(i).mutable_validations() = std::move(dvs_or.value());
+  normalize_cf_dxf_ids(cfs, wb.styles().dxfs.size());
+  wb.sheet(i).mutable_conditional_formats() = std::move(cfs);
+  RETURN_IF_ERROR(read_sheet_view_and_layout(doc, i, wb));
+  ASSIGN_OR_RETURN(auto merges, read_merges(worksheet, diagnostics));
+  wb.sheet(i).mutable_merges() = std::move(merges);
+  ASSIGN_OR_RETURN(auto hls, read_hyperlinks(worksheet, diagnostics));
+  wb.sheet(i).mutable_hyperlinks() = std::move(hls);
+  ASSIGN_OR_RETURN(auto dvs, read_data_validations(worksheet, diagnostics));
+  wb.sheet(i).mutable_validations() = std::move(dvs);
   wb.sheet(i).mutable_protection() = read_sheet_protection(worksheet);
   CaptureUnconsumedWorksheetChildren(worksheet, wb.sheet(i).mutable_raw_extensions());
 
@@ -403,19 +388,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package",
                       "context=ooxml_reader");
   }
-  auto root_rels_or = zip.read_entry("_rels/.rels");
-  if (!root_rels_or) {
-    return root_rels_or.error();
-  }
-  auto wb_path_or = ooxml::resolve_office_document_path(root_rels_or.value());
-  if (!wb_path_or) {
-    return wb_path_or.error();
-  }
-  const std::string workbook_path = wb_path_or.value();
-  auto package_rels_or = ReadUnknownPackageRels(root_rels_or.value());
-  if (!package_rels_or) {
-    return package_rels_or.error();
-  }
+  ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
+  ASSIGN_OR_RETURN(auto wb_path, ooxml::resolve_office_document_path(root_rels));
+  const std::string workbook_path = wb_path;
+  ASSIGN_OR_RETURN(auto package_rels, ReadUnknownPackageRels(root_rels));
 
   // 3. xl/_rels/workbook.xml.rels — load and validate. We need both the
   // sheet rId -> part-path map (for the per-sheet read loop below) and
@@ -657,11 +633,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       return make_error(FormulonErrorCode::kIoRelationshipBroken, "sharedStrings: rel target missing from package",
                         std::move(ctx));
     }
-    auto sst_bytes_or = zip.read_entry(wb_rels.sst_path);
-    if (!sst_bytes_or) {
-      return sst_bytes_or.error();
-    }
-    auto sst_or = read_shared_strings(std::move(sst_bytes_or.value()), result_text_storage);
+    ASSIGN_OR_RETURN(auto sst_bytes, zip.read_entry(wb_rels.sst_path));
+    auto sst_or = read_shared_strings(std::move(sst_bytes), result_text_storage);
     if (!sst_or) {
       return sst_or.error();
     }
@@ -693,15 +666,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     if (it->type != kRelPerson || it->target_external || !zip.has_entry(it->target)) {
       continue;
     }
-    auto pb_or = zip.read_entry(it->target);
-    if (!pb_or) {
-      return pb_or.error();
-    }
-    auto persons_or = read_persons(pb_or.value());
-    if (!persons_or) {
-      return persons_or.error();
-    }
-    wb.mutable_persons() = std::move(persons_or.value());
+    ASSIGN_OR_RETURN(auto pb, zip.read_entry(it->target));
+    ASSIGN_OR_RETURN(auto persons, read_persons(pb));
+    wb.mutable_persons() = std::move(persons);
     consumed_parts.insert(it->target);
     wb_rels.unknown_rels.erase(it);
     break;
@@ -718,15 +685,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       return make_error(FormulonErrorCode::kIoRelationshipBroken, "styles: rel target missing from package",
                         std::move(ctx));
     }
-    auto styles_bytes_or = zip.read_entry(wb_rels.styles_path);
-    if (!styles_bytes_or) {
-      return styles_bytes_or.error();
-    }
-    auto styles_or = read_styles(styles_bytes_or.value());
-    if (!styles_or) {
-      return styles_or.error();
-    }
-    wb.set_styles(std::move(styles_or.value()));
+    ASSIGN_OR_RETURN(auto styles_bytes, zip.read_entry(wb_rels.styles_path));
+    ASSIGN_OR_RETURN(auto styles, read_styles(styles_bytes));
+    wb.set_styles(std::move(styles));
     consumed_parts.insert(wb_rels.styles_path);
   }
   if (zip.has_entry("xl/styles.xml")) {
@@ -865,12 +826,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     const std::string sheet_rels_path = ooxml::rels_path_for_part(sheet_path);
     if (zip.has_entry(sheet_rels_path)) {
       const std::string sheet_dir = ooxml::dir_of(sheet_path);
-      auto targets_or = ooxml::load_sheet_table_targets(zip, sheet_rels_path, sheet_dir);
-      if (!targets_or) {
-        return targets_or.error();
-      }
+      ASSIGN_OR_RETURN(auto targets, ooxml::load_sheet_table_targets(zip, sheet_rels_path, sheet_dir));
       consumed_parts.insert(sheet_rels_path);
-      for (const std::string& table_path : targets_or.value()) {
+      for (const std::string& table_path : targets) {
         if (!zip.has_entry(table_path)) {
           std::string ctx("context=ooxml_reader sheet_index=");
           ctx.append(std::to_string(i));
@@ -878,26 +836,17 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
           return make_error(FormulonErrorCode::kIoRelationshipBroken, "table: rel target missing from package",
                             std::move(ctx));
         }
-        auto table_bytes_or = zip.read_entry(table_path);
-        if (!table_bytes_or) {
-          return table_bytes_or.error();
-        }
-        auto table_or = read_table(table_bytes_or.value(), i);
-        if (!table_or) {
-          return table_or.error();
-        }
-        tables_metadata.push_back(std::move(table_or.value()));
+        ASSIGN_OR_RETURN(auto table_bytes, zip.read_entry(table_path));
+        ASSIGN_OR_RETURN(auto table, read_table(table_bytes, i));
+        tables_metadata.push_back(std::move(table));
         consumed_parts.insert(table_path);
       }
 
       // Pivot tables anchored on this sheet. Each part feeds into the
       // pivot-table reader and is attached to the owning sheet; the
       // workbook-level pivot caches are loaded after the sheet loop.
-      auto pivot_targets_or = ooxml::load_sheet_pivot_table_targets(zip, sheet_rels_path, sheet_dir);
-      if (!pivot_targets_or) {
-        return pivot_targets_or.error();
-      }
-      for (const std::string& pivot_table_path : pivot_targets_or.value()) {
+      ASSIGN_OR_RETURN(auto pivot_targets, ooxml::load_sheet_pivot_table_targets(zip, sheet_rels_path, sheet_dir));
+      for (const std::string& pivot_table_path : pivot_targets) {
         if (!zip.has_entry(pivot_table_path)) {
           std::string ctx("context=ooxml_reader sheet_index=");
           ctx.append(std::to_string(i));
@@ -905,15 +854,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
           return make_error(FormulonErrorCode::kIoRelationshipBroken, "pivotTable: rel target missing from package",
                             std::move(ctx));
         }
-        auto pt_bytes_or = zip.read_entry(pivot_table_path);
-        if (!pt_bytes_or) {
-          return pt_bytes_or.error();
-        }
-        auto pt_or = read_pivot_table_definition(pt_bytes_or.value());
-        if (!pt_or) {
-          return pt_or.error();
-        }
-        wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(pt_or.value())));
+        ASSIGN_OR_RETURN(auto pt_bytes, zip.read_entry(pivot_table_path));
+        ASSIGN_OR_RETURN(auto pt, read_pivot_table_definition(pt_bytes));
+        wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(pt)));
         consumed_parts.insert(pivot_table_path);
         // The pivot-table part may carry its own rels file pointing back
         // at the parent cache definition. We do not need to re-resolve
@@ -951,14 +894,11 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         }
         print.printer_settings_path = aux.printer_settings_path;
         if (zip.has_entry(aux.printer_settings_path)) {
-          auto pb_or = zip.read_entry(aux.printer_settings_path);
-          if (!pb_or) {
-            return pb_or.error();
-          }
+          ASSIGN_OR_RETURN(auto pb, zip.read_entry(aux.printer_settings_path));
           PassthroughPart part;
           part.path = aux.printer_settings_path;
           part.content_type = std::string(kCtPrinterSettings);
-          part.bytes = std::move(pb_or.value());
+          part.bytes = std::move(pb);
           extra_passthrough_parts.push_back(std::move(part));
           consumed_parts.insert(aux.printer_settings_path);
         }
@@ -967,15 +907,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       // Threaded comments load before the legacy comments part so the
       // thread stubs in it can be told apart from notes.
       if (!aux.threaded_comments_path.empty() && zip.has_entry(aux.threaded_comments_path)) {
-        auto tb_or = zip.read_entry(aux.threaded_comments_path);
-        if (!tb_or) {
-          return tb_or.error();
-        }
-        auto threads_or = read_threaded_comments(tb_or.value());
-        if (!threads_or) {
-          return threads_or.error();
-        }
-        wb.sheet(i).mutable_threaded_comments() = std::move(threads_or.value());
+        ASSIGN_OR_RETURN(auto tb, zip.read_entry(aux.threaded_comments_path));
+        ASSIGN_OR_RETURN(auto threads, read_threaded_comments(tb));
+        wb.sheet(i).mutable_threaded_comments() = std::move(threads);
         consumed_parts.insert(aux.threaded_comments_path);
       }
 
@@ -984,16 +918,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       // unknown-parts passthrough mechanism unchanged; the anchors it was
       // read with let the writer tell whether those bytes are still current.
       if (!aux.comments_path.empty() && zip.has_entry(aux.comments_path)) {
-        auto cb_or = zip.read_entry(aux.comments_path);
-        if (!cb_or) {
-          return cb_or.error();
-        }
-        auto comments_or = read_comments(cb_or.value());
-        if (!comments_or) {
-          return comments_or.error();
-        }
-        drop_thread_stubs(comments_or.value(), wb.sheet(i).threaded_comments());
-        wb.sheet(i).mutable_comments() = std::move(comments_or.value());
+        ASSIGN_OR_RETURN(auto cb, zip.read_entry(aux.comments_path));
+        ASSIGN_OR_RETURN(auto comments, read_comments(cb));
+        drop_thread_stubs(comments, wb.sheet(i).threaded_comments());
+        wb.sheet(i).mutable_comments() = std::move(comments);
         wb.sheet(i).set_comment_vml_path(aux.vml_path);
         wb.sheet(i).set_comment_vml_anchors(wb.sheet(i).comment_anchor_set());
         consumed_parts.insert(aux.comments_path);
@@ -1103,14 +1031,11 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   }
 
   // 7. Defined names, read from `wb_doc` after sheet construction and resolved lazily at evaluation time.
-  auto defined_names_or = read_defined_names(wb_doc);
-  if (!defined_names_or) {
-    return defined_names_or.error();
-  }
-  for (DefinedName& entry : defined_names_or.value()) {
+  ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc));
+  for (DefinedName& entry : defined_names) {
     entry.formula = wb.ingest_stored_formula(entry.formula);
   }
-  wb.set_defined_names(std::move(defined_names_or.value()));
+  wb.set_defined_names(std::move(defined_names));
 
   // 8. Tables — already accumulated in the per-sheet loop above. Move
   // the workbook-scope vector onto the workbook for round-trip.
@@ -1153,11 +1078,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       return make_error(FormulonErrorCode::kIoRelationshipBroken,
                         "pivotCacheDefinition: rel target missing from package", std::move(ctx));
     }
-    auto def_bytes_or = zip.read_entry(definition_path);
-    if (!def_bytes_or) {
-      return def_bytes_or.error();
-    }
-    auto cache_or = read_pivot_cache_definition(def_bytes_or.value());
+    ASSIGN_OR_RETURN(auto def_bytes, zip.read_entry(definition_path));
+    auto cache_or = read_pivot_cache_definition(def_bytes);
     if (!cache_or) {
       return cache_or.error();
     }
@@ -1165,11 +1087,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     cache.set_cache_id(cache_id);
     consumed_parts.insert(definition_path);
 
-    auto records_target_or = ooxml::load_pivot_cache_records_target(zip, definition_path);
-    if (!records_target_or) {
-      return records_target_or.error();
-    }
-    const std::string& records_path = records_target_or.value();
+    ASSIGN_OR_RETURN(auto records_target, ooxml::load_pivot_cache_records_target(zip, definition_path));
+    const std::string& records_path = records_target;
     if (!records_path.empty()) {
       if (!zip.has_entry(records_path)) {
         std::string ctx("context=ooxml_reader cache_id=");
@@ -1179,11 +1098,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         return make_error(FormulonErrorCode::kIoRelationshipBroken,
                           "pivotCacheRecords: rel target missing from package", std::move(ctx));
       }
-      auto rec_bytes_or = zip.read_entry(records_path);
-      if (!rec_bytes_or) {
-        return rec_bytes_or.error();
-      }
-      auto rec_status = read_pivot_cache_records(std::move(rec_bytes_or.value()), cache);
+      ASSIGN_OR_RETURN(auto rec_bytes, zip.read_entry(records_path));
+      auto rec_status = read_pivot_cache_records(std::move(rec_bytes), cache);
       if (!rec_status) {
         return rec_status.error();
       }
@@ -1240,14 +1156,11 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       // bundle may surface a structured warning.
       continue;
     }
-    auto bytes_or = zip.read_entry(entry.part_name);
-    if (!bytes_or) {
-      return bytes_or.error();
-    }
+    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(entry.part_name));
     PassthroughPart part;
     part.path = entry.part_name;
     part.content_type = entry.content_type;
-    part.bytes = std::move(bytes_or.value());
+    part.bytes = std::move(part_bytes);
     unknown_parts.push_back(std::move(part));
   }
   for (PassthroughPart& part : extra_passthrough_parts) {
@@ -1289,15 +1202,12 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       if (captured.find(name) != captured.end()) {
         continue;
       }
-      auto bytes_or = zip.read_entry(name);
-      if (!bytes_or) {
-        return bytes_or.error();
-      }
+      ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(name));
       PassthroughPart part;
       part.path = name;
       // Empty content type: the part is Default-typed, so the writer
       // must not emit a per-part `<Override>` for it.
-      part.bytes = std::move(bytes_or.value());
+      part.bytes = std::move(part_bytes);
       unknown_parts.push_back(std::move(part));
       captured.insert(name);
     }
@@ -1311,7 +1221,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // with an 80 MB embedded image at one resident copy rather than two.
   wb.set_passthrough_parts(std::move(unknown_parts));
   wb.set_unknown_workbook_rels(std::move(wb_rels.unknown_rels));
-  wb.set_unknown_package_rels(std::move(package_rels_or.value()));
+  wb.set_unknown_package_rels(std::move(package_rels));
   wb.set_default_content_types(std::move(default_content_types));
 
   wb.apply_legacy_implicit_intersections();

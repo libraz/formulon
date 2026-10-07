@@ -82,19 +82,6 @@ std::string EncodeSqref(const std::vector<MergeRange>& ranges) {
   return out;
 }
 
-bool SameRanges(const std::vector<MergeRange>& a, const std::vector<MergeRange>& b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    if (a[i].first_row != b[i].first_row || a[i].first_col != b[i].first_col || a[i].last_row != b[i].last_row ||
-        a[i].last_col != b[i].last_col) {
-      return false;
-    }
-  }
-  return true;
-}
-
 void SyncCount(pugi::xml_node container) {
   pugi::xml_attribute count = container.attribute("count");
   if (!count) {
@@ -162,7 +149,7 @@ bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap) {
     if (ranges.empty()) {
       RemoveOwner(node);
       changed = true;
-    } else if (!SameRanges(before, ranges)) {
+    } else if (before != ranges) {
       node.text().set(EncodeSqref(ranges).c_str());
       changed = true;
     }

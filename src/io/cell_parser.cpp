@@ -196,6 +196,49 @@ Expected<std::pair<std::uint32_t, std::uint32_t>, Error> parse_a1(std::string_vi
   return std::pair<std::uint32_t, std::uint32_t>{row_1based - 1U, col_1based - 1U};
 }
 
+bool parse_a1_corners(std::string_view a, std::string_view b, MergeRange* out) {
+  auto a_rc = parse_a1(a);
+  auto b_rc = parse_a1(b);
+  if (!a_rc || !b_rc) {
+    return false;
+  }
+  const std::uint32_t r0 = a_rc.value().first;
+  const std::uint32_t c0 = a_rc.value().second;
+  const std::uint32_t r1 = b_rc.value().first;
+  const std::uint32_t c1 = b_rc.value().second;
+  out->first_row = (r0 < r1) ? r0 : r1;
+  out->first_col = (c0 < c1) ? c0 : c1;
+  out->last_row = (r0 < r1) ? r1 : r0;
+  out->last_col = (c0 < c1) ? c1 : c0;
+  return true;
+}
+
+bool parse_a1_range(std::string_view ref, MergeRange* out) {
+  const std::size_t colon = ref.find(':');
+  if (colon == std::string_view::npos) {
+    return parse_a1_corners(ref, ref, out);
+  }
+  return parse_a1_corners(ref.substr(0, colon), ref.substr(colon + 1), out);
+}
+
+bool next_sqref_token(std::string_view sqref, std::size_t* pos, std::string_view* token) {
+  const auto is_space = [](char ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'; };
+  std::size_t i = *pos;
+  while (i < sqref.size() && is_space(sqref[i])) {
+    ++i;
+  }
+  const std::size_t start = i;
+  while (i < sqref.size() && !is_space(sqref[i])) {
+    ++i;
+  }
+  *pos = i;
+  if (start == i) {
+    return false;
+  }
+  *token = sqref.substr(start, i - start);
+  return true;
+}
+
 Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_view v_text, bool value_present,
                                                 bool is_inline_string, std::deque<std::string>& text_storage) {
   ParsedCell out;

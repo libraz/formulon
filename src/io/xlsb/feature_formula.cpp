@@ -25,11 +25,7 @@ bool read_sqref(ByteSpan& cursor, std::vector<MergeRange>& out) {
   }
   out.clear();
   for (std::uint32_t i = 0; i < count.value(); ++i) {
-    MergeRange r;
-    r.first_row = read_u32(cursor).value();
-    r.last_row = read_u32(cursor).value();
-    r.first_col = read_u32(cursor).value();
-    r.last_col = read_u32(cursor).value();
+    const MergeRange r = read_rfx(cursor).value();
     if (r.last_row >= Sheet::kMaxRows || r.last_col >= Sheet::kMaxCols || r.first_row > r.last_row ||
         r.first_col > r.last_col) {
       return false;
@@ -42,10 +38,7 @@ bool read_sqref(ByteSpan& cursor, std::vector<MergeRange>& out) {
 void emit_sqref(std::vector<std::uint8_t>& dst, const std::vector<MergeRange>& ranges) {
   emit_u32(dst, static_cast<std::uint32_t>(ranges.size()));
   for (const MergeRange& r : ranges) {
-    emit_u32(dst, r.first_row);
-    emit_u32(dst, r.last_row);
-    emit_u32(dst, r.first_col);
-    emit_u32(dst, r.last_col);
+    emit_rfx(dst, r);
   }
 }
 

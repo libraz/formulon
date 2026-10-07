@@ -46,7 +46,13 @@ void append_xml_attr(std::string& out, std::string_view name, std::string_view v
 /// Numeric variant of `append_xml_attr`: appends ` name="value"` with
 /// `value` rendered via `std::to_string`. No escaping pass is required
 /// because the rendered digits are always XML-safe.
-void append_xml_attr_uint(std::string& out, std::string_view name, std::uint32_t value);
+void append_xml_attr_uint(std::string& out, std::string_view name, std::uint64_t value);
+
+/// Signed counterpart of `append_xml_attr_uint`.
+void append_xml_attr_int(std::string& out, std::string_view name, std::int64_t value);
+
+/// Appends ` name="value"` with `value` spelled by `append_xml_number`.
+void append_xml_attr_number(std::string& out, std::string_view name, double value);
 
 /// Appends a double in the shape Excel writes numbers into OOXML: the
 /// shortest decimal form that round-trips back to the same IEEE 754

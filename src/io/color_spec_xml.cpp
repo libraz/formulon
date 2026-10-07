@@ -39,20 +39,14 @@ void append_color_spec_attrs(std::string& out, const ColorSpec& spec, std::uint3
   switch (spec.kind) {
     case ColorSpec::Kind::kTheme:
       format_unsigned(buf, sizeof(buf), spec.theme);
-      out.append(" theme=\"");
-      out.append(buf);
-      out.push_back('"');
+      append_xml_attr(out, "theme", buf);
       if (spec.tint != 0.0) {
-        out.append(" tint=\"");
-        append_xml_number(out, spec.tint);
-        out.push_back('"');
+        append_xml_attr_number(out, "tint", spec.tint);
       }
       return;
     case ColorSpec::Kind::kIndexed:
       format_unsigned(buf, sizeof(buf), spec.indexed);
-      out.append(" indexed=\"");
-      out.append(buf);
-      out.push_back('"');
+      append_xml_attr(out, "indexed", buf);
       return;
     case ColorSpec::Kind::kAuto:
       out.append(" auto=\"1\"");
@@ -62,9 +56,7 @@ void append_color_spec_attrs(std::string& out, const ColorSpec& spec, std::uint3
       break;
   }
   format_hex(buf, sizeof(buf), spec.kind == ColorSpec::Kind::kRgb ? spec.rgb : fallback_argb, 8, true);
-  out.append(" rgb=\"");
-  out.append(buf);
-  out.push_back('"');
+  append_xml_attr(out, "rgb", buf);
 }
 
 }  // namespace io

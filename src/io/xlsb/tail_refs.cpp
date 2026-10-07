@@ -80,19 +80,6 @@ bool ParseRanges(const FramedRecord& rec, std::vector<MergeRange>& ranges, std::
   return true;
 }
 
-bool SameRanges(const std::vector<MergeRange>& a, const std::vector<MergeRange>& b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    if (a[i].first_row != b[i].first_row || a[i].first_col != b[i].first_col || a[i].last_row != b[i].last_row ||
-        a[i].last_col != b[i].last_col) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /// A slot's records with a keep mask and per-record replacement payloads.
 struct Edit {
   std::vector<FramedRecord> recs;
@@ -181,7 +168,7 @@ void RemapSlotSqrefs(std::vector<std::uint8_t>& buf, const SqrefRemap& remap) {
       changed = true;
       continue;
     }
-    if (SameRanges(before, ranges)) {
+    if (before == ranges) {
       continue;
     }
     std::vector<std::uint8_t> out(rec.payload.data, rec.payload.data + kSqrefOffset);

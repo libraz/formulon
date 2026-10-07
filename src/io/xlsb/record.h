@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "io/zip_reader.h"
+#include "merge_range.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -195,6 +196,10 @@ Expected<std::uint16_t, Error> read_u16(ByteSpan& cursor);
 
 /// Reads a little-endian 32-bit unsigned integer; advances `cursor`.
 Expected<std::uint32_t, Error> read_u32(ByteSpan& cursor);
+
+/// Reads an `RfX` rectangle (rwFirst, rwLast, colFirst, colLast as u32);
+/// advances `cursor`. The bounds are not validated.
+Expected<MergeRange, Error> read_rfx(ByteSpan& cursor);
 
 /// Reads a little-endian IEEE 754 64-bit double; advances `cursor`.
 Expected<double, Error> read_double(ByteSpan& cursor);

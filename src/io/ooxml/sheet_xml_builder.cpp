@@ -18,6 +18,7 @@
 #include "io/auto_filter_xml.h"
 #include "io/cf_overlay.h"
 #include "io/cf_writer.h"
+#include "io/data_validation_attr_names.h"
 #include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/relationship_writer.h"
@@ -93,59 +94,6 @@ std::string BuildMergeCellsBlock(const Sheet& sheet) {
   return out;
 }
 
-std::string_view DataValidationTypeToString(std::uint8_t type) {
-  switch (type) {
-    case 1:
-      return "whole";
-    case 2:
-      return "decimal";
-    case 3:
-      return "list";
-    case 4:
-      return "date";
-    case 5:
-      return "time";
-    case 6:
-      return "textLength";
-    case 7:
-      return "custom";
-    default:
-      return "";
-  }
-}
-
-std::string_view DataValidationOperatorToString(std::uint8_t op) {
-  switch (op) {
-    case 1:
-      return "notBetween";
-    case 2:
-      return "equal";
-    case 3:
-      return "notEqual";
-    case 4:
-      return "greaterThan";
-    case 5:
-      return "lessThan";
-    case 6:
-      return "greaterThanOrEqual";
-    case 7:
-      return "lessThanOrEqual";
-    default:
-      return "";  // 0 == between, omitted
-  }
-}
-
-std::string_view DataValidationErrorStyleToString(std::uint8_t style) {
-  switch (style) {
-    case 1:
-      return "warning";
-    case 2:
-      return "information";
-    default:
-      return "";  // 0 == stop (default)
-  }
-}
-
 std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::ExternalBookIndexer* indexer) {
   if (sheet.validations().empty()) {
     return {};
@@ -157,20 +105,14 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
   out.append("\">");
   for (const DataValidation& v : sheet.validations()) {
     out.append("<dataValidation");
-    if (const std::string_view t = DataValidationTypeToString(v.type); !t.empty()) {
-      out.append(" type=\"");
-      out.append(t);
-      out.append("\"");
+    if (const std::string_view t = enum_name(kDataValidationTypeNames, v.type); !t.empty()) {
+      append_xml_attr(out, "type", t);
     }
-    if (const std::string_view op = DataValidationOperatorToString(v.op); !op.empty()) {
-      out.append(" operator=\"");
-      out.append(op);
-      out.append("\"");
+    if (const std::string_view op = enum_name(kDataValidationOperatorNames, v.op); !op.empty()) {
+      append_xml_attr(out, "operator", op);
     }
-    if (const std::string_view es = DataValidationErrorStyleToString(v.error_style); !es.empty()) {
-      out.append(" errorStyle=\"");
-      out.append(es);
-      out.append("\"");
+    if (const std::string_view es = enum_name(kDataValidationErrorStyleNames, v.error_style); !es.empty()) {
+      append_xml_attr(out, "errorStyle", es);
     }
     if (v.allow_blank) {
       out.append(" allowBlank=\"1\"");
@@ -188,24 +130,16 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
       out.append(" showDropDown=\"1\"");
     }
     if (!v.error_title.empty()) {
-      out.append(" errorTitle=\"");
-      AppendXmlAttrEscaped(out, v.error_title);
-      out.append("\"");
+      append_xml_attr(out, "errorTitle", v.error_title);
     }
     if (!v.error_message.empty()) {
-      out.append(" error=\"");
-      AppendXmlAttrEscaped(out, v.error_message);
-      out.append("\"");
+      append_xml_attr(out, "error", v.error_message);
     }
     if (!v.prompt_title.empty()) {
-      out.append(" promptTitle=\"");
-      AppendXmlAttrEscaped(out, v.prompt_title);
-      out.append("\"");
+      append_xml_attr(out, "promptTitle", v.prompt_title);
     }
     if (!v.prompt_message.empty()) {
-      out.append(" prompt=\"");
-      AppendXmlAttrEscaped(out, v.prompt_message);
-      out.append("\"");
+      append_xml_attr(out, "prompt", v.prompt_message);
     }
     out.append(" sqref=\"");
     for (std::size_t i = 0; i < v.ranges.size(); ++i) {
@@ -251,24 +185,16 @@ std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::stri
     }
     out.append("\"");
     if (i < rid_per_hyperlink.size() && !rid_per_hyperlink[i].empty()) {
-      out.append(" r:id=\"");
-      AppendXmlAttrEscaped(out, rid_per_hyperlink[i]);
-      out.append("\"");
+      append_xml_attr(out, "r:id", rid_per_hyperlink[i]);
     }
     if (!h.location.empty()) {
-      out.append(" location=\"");
-      AppendXmlAttrEscaped(out, h.location);
-      out.append("\"");
+      append_xml_attr(out, "location", h.location);
     }
     if (!h.tooltip.empty()) {
-      out.append(" tooltip=\"");
-      AppendXmlAttrEscaped(out, h.tooltip);
-      out.append("\"");
+      append_xml_attr(out, "tooltip", h.tooltip);
     }
     if (!h.display.empty()) {
-      out.append(" display=\"");
-      AppendXmlAttrEscaped(out, h.display);
-      out.append("\"");
+      append_xml_attr(out, "display", h.display);
     }
     out.append("/>");
   }
@@ -488,15 +414,11 @@ std::string BuildSheetViewXml(const SheetView& view) {
     out.append(" tabSelected=\"1\"");
   }
   if (!view.view_mode.empty()) {
-    out.append(" view=\"");
-    AppendXmlAttrEscaped(out, view.view_mode);
-    out.push_back('"');
+    append_xml_attr(out, "view", view.view_mode);
   }
   out.append(" workbookViewId=\"0\"");
   if (!zoom_default) {
-    out.append(" zoomScale=\"");
-    out.append(std::to_string(view.zoom_scale));
-    out.push_back('"');
+    append_xml_attr_uint(out, "zoomScale", view.zoom_scale);
   }
   if (no_freeze) {
     out.append("/></sheetViews>");
@@ -509,14 +431,10 @@ std::string BuildSheetViewXml(const SheetView& view) {
   // absent. Excel gracefully accepts a freeze record without them.
   out.append("<pane");
   if (view.freeze_cols != 0U) {
-    out.append(" xSplit=\"");
-    out.append(std::to_string(view.freeze_cols));
-    out.push_back('"');
+    append_xml_attr_uint(out, "xSplit", view.freeze_cols);
   }
   if (view.freeze_rows != 0U) {
-    out.append(" ySplit=\"");
-    out.append(std::to_string(view.freeze_rows));
-    out.push_back('"');
+    append_xml_attr_uint(out, "ySplit", view.freeze_rows);
   }
   out.append(" state=\"frozen\"/></sheetView></sheetViews>");
   return out;
@@ -533,19 +451,13 @@ std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults) {
   }
   std::string out("<sheetFormatPr");
   if (defaults.base_col_width != ooxml_defaults::kBaseColWidthChars) {
-    out.append(" baseColWidth=\"");
-    append_xml_number(out, defaults.base_col_width);
-    out.push_back('"');
+    append_xml_attr_number(out, "baseColWidth", defaults.base_col_width);
   }
   if (defaults.has_default_col_width) {
-    out.append(" defaultColWidth=\"");
-    append_xml_number(out, defaults.default_col_width);
-    out.push_back('"');
+    append_xml_attr_number(out, "defaultColWidth", defaults.default_col_width);
   }
   if (defaults.has_default_row_height) {
-    out.append(" defaultRowHeight=\"");
-    append_xml_number(out, defaults.default_row_height);
-    out.push_back('"');
+    append_xml_attr_number(out, "defaultRowHeight", defaults.default_row_height);
   }
   out.append("/>");
   return out;
@@ -566,29 +478,19 @@ std::string BuildSheetProtectionXml(const SheetProtection& p) {
   out.reserve(256);
   out.append("<sheetProtection");
   if (!p.algorithm_name.empty()) {
-    out.append(" algorithmName=\"");
-    AppendXmlAttrEscaped(out, p.algorithm_name);
-    out.push_back('"');
+    append_xml_attr(out, "algorithmName", p.algorithm_name);
   }
   if (!p.hash_value.empty()) {
-    out.append(" hashValue=\"");
-    AppendXmlAttrEscaped(out, p.hash_value);
-    out.push_back('"');
+    append_xml_attr(out, "hashValue", p.hash_value);
   }
   if (!p.salt_value.empty()) {
-    out.append(" saltValue=\"");
-    AppendXmlAttrEscaped(out, p.salt_value);
-    out.push_back('"');
+    append_xml_attr(out, "saltValue", p.salt_value);
   }
   if (p.spin_count != 0U) {
-    out.append(" spinCount=\"");
-    out.append(std::to_string(p.spin_count));
-    out.push_back('"');
+    append_xml_attr_uint(out, "spinCount", p.spin_count);
   }
   if (!p.legacy_password.empty()) {
-    out.append(" password=\"");
-    AppendXmlAttrEscaped(out, p.legacy_password);
-    out.push_back('"');
+    append_xml_attr(out, "password", p.legacy_password);
   }
   // Boolean attributes — emit only when the value differs from the
   // attribute's ECMA-376 §18.3.1.85 schema default. Eleven action flags
@@ -656,17 +558,13 @@ std::string BuildColsXml(const SheetLayout& layout) {
       out.append("\" customWidth=\"1\"");
     }
     if (col.has_style) {
-      out.append(" style=\"");
-      out.append(std::to_string(col.style_xf));
-      out.push_back('\"');
+      append_xml_attr_uint(out, "style", col.style_xf);
     }
     if (col.hidden) {
       out.append(" hidden=\"1\"");
     }
     if (col.outline_level != 0U) {
-      out.append(" outlineLevel=\"");
-      out.append(std::to_string(static_cast<unsigned int>(col.outline_level)));
-      out.push_back('"');
+      append_xml_attr_uint(out, "outlineLevel", col.outline_level);
     }
     out.append("/>");
   }
@@ -781,11 +679,14 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // slot each one recorded at read time. A single forward cursor is
   // enough because the retained list is sorted by slot.
   std::size_t raw_cursor = 0;
+  const auto emit_line = [&](std::string_view xml) {
+    out.append("  ");
+    out.append(xml);
+    out.push_back('\n');
+  };
   const auto flush_raw_upto = [&](std::size_t slot) {
     while (raw_cursor < raw_extensions.size() && raw_extensions[raw_cursor].slot < slot) {
-      out.append("  ");
-      out.append(raw_extensions[raw_cursor].xml);
-      out.push_back('\n');
+      emit_line(raw_extensions[raw_cursor].xml);
       ++raw_cursor;
     }
   };
@@ -795,31 +696,19 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // The helpers stay quiet when their underlying field is at default
   // values so absent metadata yields no extra bytes.
   if (!sheet_pr_xml.empty()) {
-    out.append("  ");
-    out.append(sheet_pr_xml);
-    out.push_back('\n');
+    emit_line(sheet_pr_xml);
   }
-  out.append("  ");
-  out.append(BuildDimensionXml(sheet));
-  out.push_back('\n');
+  emit_line(BuildDimensionXml(sheet));
   if (!sheet_view_xml.empty()) {
-    out.append("  ");
-    out.append(sheet_view_xml);
-    out.push_back('\n');
+    emit_line(sheet_view_xml);
   }
   if (!sheet_format_xml.empty()) {
-    out.append("  ");
-    out.append(sheet_format_xml);
-    out.push_back('\n');
+    emit_line(sheet_format_xml);
   }
   if (!cols_xml.empty()) {
-    out.append("  ");
-    out.append(cols_xml);
-    out.push_back('\n');
+    emit_line(cols_xml);
   }
-  out.append("  ");
-  out.append(sheet_data);
-  out.push_back('\n');
+  emit_line(sheet_data);
   // <sheetProtection> sits between <sheetData> and <mergeCells> per
   // ECMA-376 document order. Helper returns "" when protection is
   // disabled, leaving no trailing whitespace in that case.
@@ -827,68 +716,48 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   {
     const std::string sp_xml = BuildSheetProtectionXml(sheet.protection());
     if (!sp_xml.empty()) {
-      out.append("  ");
-      out.append(sp_xml);
-      out.push_back('\n');
+      emit_line(sp_xml);
     }
   }
   // <autoFilter> sits between <sheetProtection>/<scenarios> and
   // <mergeCells> in ECMA-376 document order, serialized from the model.
   flush_raw_before("autoFilter");
   if (sheet.has_auto_filter()) {
-    out.append("  ");
-    out.append(serialize_auto_filter(*sheet.auto_filter()));
-    out.push_back('\n');
+    emit_line(serialize_auto_filter(*sheet.auto_filter()));
   }
   // Merge cells precede CF in ECMA-376 document order.
   flush_raw_before("mergeCells");
   if (!merges_xml.empty()) {
-    out.append("  ");
-    out.append(merges_xml);
-    out.push_back('\n');
+    emit_line(merges_xml);
   }
   flush_raw_before("conditionalFormatting");
   if (!cf_xml.empty()) {
-    out.append("  ");
-    out.append(cf_xml);
-    out.push_back('\n');
+    emit_line(cf_xml);
   }
   flush_raw_before("dataValidations");
   if (!dv_xml.empty()) {
-    out.append("  ");
-    out.append(dv_xml);
-    out.push_back('\n');
+    emit_line(dv_xml);
   }
   flush_raw_before("hyperlinks");
   if (!hl_xml.empty()) {
-    out.append("  ");
-    out.append(hl_xml);
-    out.push_back('\n');
+    emit_line(hl_xml);
   }
   // <printOptions> sits between <hyperlinks> and <pageMargins>.
   flush_raw_before("printOptions");
   if (!print.print_options_xml.empty()) {
-    out.append("  ");
-    out.append(print.print_options_xml);
-    out.push_back('\n');
+    emit_line(print.print_options_xml);
   }
   if (!print.page_margins_xml.empty()) {
-    out.append("  ");
-    out.append(PageMarginsWithRequiredAttributes(print.page_margins_xml));
-    out.push_back('\n');
+    emit_line(PageMarginsWithRequiredAttributes(print.page_margins_xml));
   }
   flush_raw_before("pageSetup");
   if (!page_setup_xml.empty()) {
-    out.append("  ");
-    out.append(page_setup_xml);
-    out.push_back('\n');
+    emit_line(page_setup_xml);
   }
   // <headerFooter> follows <pageSetup> and precedes <rowBreaks>.
   flush_raw_before("headerFooter");
   if (!print.header_footer_xml.empty()) {
-    out.append("  ");
-    out.append(print.header_footer_xml);
-    out.push_back('\n');
+    emit_line(print.header_footer_xml);
   }
   // Manual page breaks. ECMA-376 places <rowBreaks>/<colBreaks> after
   // <pageSetup> and before drawing parts / <tableParts>.
@@ -896,16 +765,12 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
     flush_raw_before("rowBreaks");
     const std::string row_breaks_xml = BuildPageBreaksXml("rowBreaks", print.manual_row_breaks);
     if (!row_breaks_xml.empty()) {
-      out.append("  ");
-      out.append(row_breaks_xml);
-      out.push_back('\n');
+      emit_line(row_breaks_xml);
     }
     flush_raw_before("colBreaks");
     const std::string col_breaks_xml = BuildPageBreaksXml("colBreaks", print.manual_col_breaks);
     if (!col_breaks_xml.empty()) {
-      out.append("  ");
-      out.append(col_breaks_xml);
-      out.push_back('\n');
+      emit_line(col_breaks_xml);
     }
   }
   // <drawing> precedes <tableParts> in ECMA-376 worksheet element order.
@@ -947,9 +812,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // survives the round trip.
   flush_raw_before("extLst");
   if (!ext_lst_xml.empty()) {
-    out.append("  ");
-    out.append(ext_lst_xml);
-    out.push_back('\n');
+    emit_line(ext_lst_xml);
   }
   // Anything the cursor has not reached -- an unplaceable element that
   // trailed the last schema child in the source -- still goes out rather

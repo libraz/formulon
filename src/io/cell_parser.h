@@ -16,6 +16,7 @@
 #ifndef FORMULON_IO_CELL_PARSER_H_
 #define FORMULON_IO_CELL_PARSER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <string>
@@ -23,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "merge_range.h"
 #include "phonetic.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -126,6 +128,19 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
 /// strictly for cell references. Out-of-range coordinates (column past
 /// `XFD`, row past `1048576`, or row `0`) are also rejected.
 Expected<std::pair<std::uint32_t, std::uint32_t>, Error> parse_a1(std::string_view ref);
+
+/// Parses the corners `a` and `b` (both cell references, see `parse_a1`) into a
+/// rectangle normalised so `first <= last` on both axes. Returns false when
+/// either corner does not parse.
+bool parse_a1_corners(std::string_view a, std::string_view b, MergeRange* out);
+
+/// Parses `A1` (a single-cell rectangle) or `A1:B5` via `parse_a1_corners`.
+/// Returns false when either corner does not parse.
+bool parse_a1_range(std::string_view ref, MergeRange* out);
+
+/// Advances `*pos` through `sqref` and yields the next whitespace-delimited
+/// token; returns false once the input is exhausted.
+bool next_sqref_token(std::string_view sqref, std::size_t* pos, std::string_view* token);
 
 /// String-view-only cell-payload decoder, shared between the DOM and
 /// SAX read paths. Encodes the type-specific behaviour ("n", "b",

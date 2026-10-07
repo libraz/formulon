@@ -14,6 +14,7 @@
 
 #include "cf/cf_types.h"
 #include "io/cell_parser.h"
+#include "io/cf_attr_names.h"
 #include "io/color_spec_xml.h"
 #include "io/future_functions.h"
 #include "io/xml_escape.h"
@@ -24,93 +25,12 @@
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 
 namespace formulon::io {
 namespace {
-
-cf::RuleType ParseRuleType(std::string_view text) {
-  if (text == "expression")
-    return cf::RuleType::Expression;
-  if (text == "cellIs")
-    return cf::RuleType::CellIs;
-  if (text == "colorScale")
-    return cf::RuleType::ColorScale;
-  if (text == "dataBar")
-    return cf::RuleType::DataBar;
-  if (text == "iconSet")
-    return cf::RuleType::IconSet;
-  if (text == "top10")
-    return cf::RuleType::Top10;
-  if (text == "aboveAverage")
-    return cf::RuleType::AboveAverage;
-  if (text == "containsText")
-    return cf::RuleType::ContainsText;
-  if (text == "notContainsText")
-    return cf::RuleType::NotContainsText;
-  if (text == "beginsWith")
-    return cf::RuleType::BeginsWith;
-  if (text == "endsWith")
-    return cf::RuleType::EndsWith;
-  if (text == "containsBlanks")
-    return cf::RuleType::ContainsBlanks;
-  if (text == "notContainsBlanks")
-    return cf::RuleType::NotContainsBlanks;
-  if (text == "containsErrors")
-    return cf::RuleType::ContainsErrors;
-  if (text == "notContainsErrors")
-    return cf::RuleType::NotContainsErrors;
-  if (text == "timePeriod")
-    return cf::RuleType::TimePeriod;
-  if (text == "duplicateValues")
-    return cf::RuleType::DuplicateValues;
-  if (text == "uniqueValues")
-    return cf::RuleType::UniqueValues;
-  // Forward-compat: unknown types fold to Expression. The captured
-  // formula1 (if any) is still observable to the caller.
-  return cf::RuleType::Expression;
-}
-
-cf::CellIsOperator ParseCellIsOperator(std::string_view text) {
-  if (text == "lessThan")
-    return cf::CellIsOperator::LessThan;
-  if (text == "lessThanOrEqual")
-    return cf::CellIsOperator::LessThanOrEqual;
-  if (text == "equal")
-    return cf::CellIsOperator::Equal;
-  if (text == "notEqual")
-    return cf::CellIsOperator::NotEqual;
-  if (text == "greaterThanOrEqual")
-    return cf::CellIsOperator::GreaterThanOrEqual;
-  if (text == "greaterThan")
-    return cf::CellIsOperator::GreaterThan;
-  if (text == "between")
-    return cf::CellIsOperator::Between;
-  if (text == "notBetween")
-    return cf::CellIsOperator::NotBetween;
-  return cf::CellIsOperator::Equal;
-}
-
-cf::CfvoType ParseCfvoType(std::string_view text) {
-  if (text == "num")
-    return cf::CfvoType::Number;
-  if (text == "percent")
-    return cf::CfvoType::Percent;
-  if (text == "percentile")
-    return cf::CfvoType::Percentile;
-  if (text == "min")
-    return cf::CfvoType::Min;
-  if (text == "max")
-    return cf::CfvoType::Max;
-  if (text == "formula")
-    return cf::CfvoType::Formula;
-  if (text == "autoMin")
-    return cf::CfvoType::AutoMin;
-  if (text == "autoMax")
-    return cf::CfvoType::AutoMax;
-  return cf::CfvoType::Number;
-}
 
 cf::IconSetName ParseIconSetName(std::string_view text) {
   for (std::size_t i = 0; i < cf::kIconSetNames.size(); ++i) {
@@ -120,29 +40,6 @@ cf::IconSetName ParseIconSetName(std::string_view text) {
   }
   // The schema default, which Excel omits the attribute for.
   return cf::IconSetName::Three_TrafficLights1;
-}
-
-cf::TimePeriod ParseTimePeriod(std::string_view text) {
-  if (text == "yesterday")
-    return cf::TimePeriod::Yesterday;
-  if (text == "tomorrow")
-    return cf::TimePeriod::Tomorrow;
-  if (text == "last7Days")
-    return cf::TimePeriod::Last7Days;
-  if (text == "thisWeek")
-    return cf::TimePeriod::ThisWeek;
-  if (text == "lastWeek")
-    return cf::TimePeriod::LastWeek;
-  if (text == "nextWeek")
-    return cf::TimePeriod::NextWeek;
-  if (text == "thisMonth")
-    return cf::TimePeriod::ThisMonth;
-  if (text == "lastMonth")
-    return cf::TimePeriod::LastMonth;
-  if (text == "nextMonth")
-    return cf::TimePeriod::NextMonth;
-  // "today" and any unknown spelling.
-  return cf::TimePeriod::Today;
 }
 
 /// Strips `$` absolute markers from an A1 token. CF `sqref` legitimately
@@ -212,20 +109,26 @@ std::uint32_t DecodeRowRun(std::string_view s) {
 }
 
 Expected<cf::CFCellRange, Error> ParseA1Range(std::string_view ref) {
+  const auto unparseable = [&ref]() {
+    std::string ctx("context=cf_reader ref=");
+    ctx.append(ref);
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "conditionalFormatting: sqref token unparseable",
+                      std::move(ctx));
+  };
+  const auto to_cf_range = [](const MergeRange& r) {
+    cf::CFCellRange out{};
+    out.first = {r.first_row, r.first_col};
+    out.last = {r.last_row, r.last_col};
+    return out;
+  };
+  MergeRange rect;
   const std::size_t colon = ref.find(':');
   if (colon == std::string_view::npos) {
     std::string norm_buf;
-    auto rc = parse_a1(StripAbsoluteMarkers(ref, norm_buf));
-    if (!rc) {
-      std::string ctx("context=cf_reader ref=");
-      ctx.append(ref);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "conditionalFormatting: sqref token unparseable",
-                        std::move(ctx));
+    if (!parse_a1_range(StripAbsoluteMarkers(ref, norm_buf), &rect)) {
+      return unparseable();
     }
-    cf::CFCellRange out{};
-    out.first = {rc.value().first, rc.value().second};
-    out.last = out.first;
-    return out;
+    return to_cf_range(rect);
   }
   std::string a_buf;
   std::string b_buf;
@@ -255,22 +158,10 @@ Expected<cf::CFCellRange, Error> ParseA1Range(std::string_view ref) {
     return out;
   }
 
-  auto a_rc = parse_a1(a);
-  auto b_rc = parse_a1(b);
-  if (!a_rc || !b_rc) {
-    std::string ctx("context=cf_reader ref=");
-    ctx.append(ref);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "conditionalFormatting: sqref token unparseable",
-                      std::move(ctx));
+  if (!parse_a1_corners(a, b, &rect)) {
+    return unparseable();
   }
-  const std::uint32_t r0 = a_rc.value().first;
-  const std::uint32_t c0 = a_rc.value().second;
-  const std::uint32_t r1 = b_rc.value().first;
-  const std::uint32_t c1 = b_rc.value().second;
-  cf::CFCellRange out{};
-  out.first = {(r0 < r1) ? r0 : r1, (c0 < c1) ? c0 : c1};
-  out.last = {(r0 < r1) ? r1 : r0, (c0 < c1) ? c1 : c0};
-  return out;
+  return to_cf_range(rect);
 }
 
 /// Splits a whitespace-separated sqref attribute into individual A1
@@ -278,24 +169,11 @@ Expected<cf::CFCellRange, Error> ParseA1Range(std::string_view ref) {
 /// first unparseable token.
 Expected<std::vector<cf::CFCellRange>, Error> ParseSqref(std::string_view sqref) {
   std::vector<cf::CFCellRange> out;
-  std::size_t i = 0;
-  while (i < sqref.size()) {
-    while (i < sqref.size() && (sqref[i] == ' ' || sqref[i] == '\t' || sqref[i] == '\n' || sqref[i] == '\r')) {
-      ++i;
-    }
-    const std::size_t start = i;
-    while (i < sqref.size() && sqref[i] != ' ' && sqref[i] != '\t' && sqref[i] != '\n' && sqref[i] != '\r') {
-      ++i;
-    }
-    if (start == i) {
-      break;
-    }
-    const std::string_view tok = sqref.substr(start, i - start);
-    auto range_or = ParseA1Range(tok);
-    if (!range_or) {
-      return range_or.error();
-    }
-    out.push_back(range_or.value());
+  std::size_t pos = 0;
+  std::string_view tok;
+  while (next_sqref_token(sqref, &pos, &tok)) {
+    ASSIGN_OR_RETURN(auto range, ParseA1Range(tok));
+    out.push_back(range);
   }
   if (out.empty()) {
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "conditionalFormatting: sqref attribute is empty",
@@ -340,7 +218,7 @@ cf::Color ReadColor(const pugi::xml_node& node) {
 
 cf::CfValueObject ReadCfvo(const pugi::xml_node& cfvo) {
   cf::CfValueObject out{};
-  out.type = ParseCfvoType(attr_str(cfvo, "type"));
+  out.type = enum_from_name(kCfvoTypeNames, attr_str(cfvo, "type"), cf::CfvoType::Number);
   out.value = attr_str(cfvo, "val");
   if (out.type == cf::CfvoType::Formula) {
     out.value = canonical_feature_formula(out.value);
@@ -559,7 +437,7 @@ void ReadIconSet(const pugi::xml_node& iset, cf::IconSetSpec* out) {
 
 cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   cf::CFRule out;
-  out.type = ParseRuleType(attr_str(rule, "type"));
+  out.type = enum_from_name(kCfRuleTypeNames, attr_str(rule, "type"), cf::RuleType::Expression);
   out.priority = attr_i32(rule, "priority", 1);
   out.stop_if_true = attr_bool(rule, "stopIfTrue");
   if (rule.attribute("dxfId")) {
@@ -568,10 +446,10 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   out.id = ReadX14RuleId(rule);
 
   if (out.type == cf::RuleType::CellIs) {
-    out.op = ParseCellIsOperator(attr_str(rule, "operator"));
+    out.op = enum_from_name(kCfCellIsOperatorNames, attr_str(rule, "operator"), cf::CellIsOperator::Equal);
   }
   if (out.type == cf::RuleType::TimePeriod) {
-    out.time_period = ParseTimePeriod(attr_str(rule, "timePeriod"));
+    out.time_period = enum_from_name(kCfTimePeriodNames, attr_str(rule, "timePeriod"), cf::TimePeriod::Today);
   }
   if (out.type == cf::RuleType::Top10) {
     out.rank = attr_i32(rule, "rank", 10);
