@@ -197,6 +197,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/metadata_bin.cpp
   src/io/xlsb/ptg.cpp
   src/io/xlsb/ptg_declarations.cpp
+  src/io/xlsb/ptg_formula_flags.cpp
   src/io/xlsb/ptg_operand_class.cpp
   src/io/xlsb/ptg_reader.cpp
   src/io/xlsb/ptg_writer.cpp
