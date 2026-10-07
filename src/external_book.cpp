@@ -1,11 +1,11 @@
 
 #include "external_book.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
 
+#include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -17,7 +17,7 @@ std::vector<std::uint64_t> ExternalBook::sorted_cell_keys() const {
   for (const auto& entry : cells) {
     keys.push_back(entry.first);
   }
-  std::sort(keys.begin(), keys.end());
+  sort_by_index(keys, [](std::uint64_t lhs, std::uint64_t rhs) { return lhs < rhs; });
   return keys;
 }
 
