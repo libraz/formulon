@@ -297,12 +297,13 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
 }  // namespace
 
 void apply_value_filters(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
-                         PivotResult& result, std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                         std::size_t row_leaf_count, std::size_t col_leaf_count, PivotResult& result,
+                         std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
                          std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets) {
   ValueFilterState state{table, cache, buckets, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets, {}, {}};
-  state.surviving_row_leaves.resize(buckets.size());
+  state.surviving_row_leaves.resize(row_leaf_count);
   std::iota(state.surviving_row_leaves.begin(), state.surviving_row_leaves.end(), std::size_t{0});
-  state.surviving_col_leaves.resize(buckets.front().size());
+  state.surviving_col_leaves.resize(col_leaf_count);
   std::iota(state.surviving_col_leaves.begin(), state.surviving_col_leaves.end(), std::size_t{0});
 
   for (const PivotFilter& f : table.active_filters()) {

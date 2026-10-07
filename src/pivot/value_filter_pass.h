@@ -34,8 +34,12 @@ namespace formulon::pivot {
 /// Both the active (slicer) filters and the authored `<filters>` entries feed
 /// this pass; the latter are projected onto the same shape. The subtotal
 /// leaf sets are recompacted in step with the pruned leaves.
+///
+/// The leaf counts are passed explicitly because either may be 0 (an axis
+/// field with no surviving records), leaving `buckets` empty.
 void apply_value_filters(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
-                         PivotResult& result, std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                         std::size_t row_leaf_count, std::size_t col_leaf_count, PivotResult& result,
+                         std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
                          std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);
 
 }  // namespace formulon::pivot

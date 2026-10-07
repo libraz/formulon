@@ -660,7 +660,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   }
 
   // 7. Value-axis filters (Top-N, GreaterThan, Between).
-  apply_value_filters(table, cache, buckets, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+  apply_value_filters(table, cache, buckets, row_leaf_count, col_leaf_count, result, row_subtotal_leaf_sets,
+                      col_subtotal_leaf_sets);
 
   // 8. Show-values-as transforms.
   apply_show_values_as_transforms(table, cache, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);

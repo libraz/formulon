@@ -148,6 +148,22 @@ TEST(PivotEvaluator, ValueTop10FilterSaturatesOutOfDomainCounts) {
   EXPECT_EQ(rows_kept(2.0), 2U);
 }
 
+TEST(PivotEvaluator, AxisFieldsOverAnEmptyCacheEvaluateToNoLeaves) {
+  // Row and column fields with no records leave zero leaves on both axes,
+  // so the value-filter pass sees an empty bucket matrix.
+  PivotCache cache;
+  cache.set_cache_id(1);
+  for (const char* name : {"Region", "Product", "Amount"}) {
+    cache.mutable_fields().push_back(PivotCacheField{name, {}});
+  }
+  for (const auto& col : {std::vector<std::uint32_t>{}, std::vector<std::uint32_t>{1}}) {
+    const PivotTable table = build_sum_amount_table({0}, col);
+    const auto r_or = evaluate(table, cache);
+    ASSERT_TRUE(static_cast<bool>(r_or));
+    EXPECT_TRUE(r_or.value().rows.empty());
+  }
+}
+
 TEST(PivotEvaluator, RowValueFilterCompactsEveryLeafIndexedStructure) {
   PivotCache cache = build_subtotal_grid_cache();
   PivotTable table = build_subtotal_grid_table();
