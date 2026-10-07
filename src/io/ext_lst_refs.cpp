@@ -28,15 +28,6 @@ void Collect(const pugi::xml_node& node, std::string_view name, std::vector<pugi
   }
 }
 
-bool HasElementChild(const pugi::xml_node& node) {
-  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
-    if (child.type() == pugi::node_element) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool ParseSqref(std::string_view text, std::vector<MergeRange>& out) {
   std::size_t i = 0;
   while (i < text.size()) {
@@ -101,7 +92,7 @@ void RemoveOwner(const pugi::xml_node& sqref) {
   if (std::string_view(doomed.name()) == "x14:sparkline") {
     pugi::xml_node list = doomed.parent();
     list.remove_child(doomed);
-    if (HasElementChild(list) || std::string_view(list.name()) != "x14:sparklines") {
+    if (has_element_child(list) || std::string_view(list.name()) != "x14:sparklines") {
       return;
     }
     doomed = list.parent();
@@ -109,7 +100,7 @@ void RemoveOwner(const pugi::xml_node& sqref) {
   for (;;) {
     pugi::xml_node parent = doomed.parent();
     parent.remove_child(doomed);
-    if (parent.parent().type() == pugi::node_document || HasElementChild(parent)) {
+    if (parent.parent().type() == pugi::node_document || has_element_child(parent)) {
       SyncCount(parent);
       return;
     }
@@ -123,7 +114,7 @@ bool Load(pugi::xml_document& doc, const std::string& xml) {
 
 void Store(std::string& xml, const pugi::xml_document& doc) {
   const pugi::xml_node root = doc.document_element();
-  xml = HasElementChild(root) ? raw_xml(root) : std::string();
+  xml = has_element_child(root) ? raw_xml(root) : std::string();
 }
 
 }  // namespace

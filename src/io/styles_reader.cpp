@@ -320,35 +320,31 @@ Expected<bool, Error> ParseBoolAttribute(const pugi::xml_attribute& attr, bool d
   return InvalidXfAttribute(section, index, attr.name(), text);
 }
 
-Expected<std::uint8_t, Error> ParseHorizontalAlignStrict(const pugi::xml_attribute& attr, std::string_view section,
-                                                         std::size_t index) {
+/// Strict parse of an `xsd:string`-derived alignment attribute: whitespace is
+/// significant (` center ` is not `center`), so a padded or unknown token is
+/// rejected. An absent attribute yields `absent_ordinal`.
+Expected<std::uint8_t, Error> ParseAlignStrict(const pugi::xml_attribute& attr, const char* const* names,
+                                               std::size_t count, std::uint8_t absent_ordinal, std::string_view section,
+                                               std::size_t index) {
   if (!attr) {
-    return static_cast<std::uint8_t>(0);
+    return absent_ordinal;
   }
-  // ST_HorizontalAlignment is an xsd:string-derived lexical type.  Unlike
-  // numeric and boolean attributes, its whitespace is significant: XML
-  // values such as ` center ` are not the `center` token.
   const std::string_view value(attr.value());
-  const std::uint8_t ordinal = FindStyleToken(kHorizontalAlignNames, kHorizontalAlignCount, value, kNoStyleToken);
+  const std::uint8_t ordinal = FindStyleToken(names, count, value, kNoStyleToken);
   if (ordinal != kNoStyleToken) {
     return ordinal;
   }
   return InvalidXfAttribute(section, index, attr.name(), value);
 }
 
+Expected<std::uint8_t, Error> ParseHorizontalAlignStrict(const pugi::xml_attribute& attr, std::string_view section,
+                                                         std::size_t index) {
+  return ParseAlignStrict(attr, kHorizontalAlignNames, kHorizontalAlignCount, 0, section, index);
+}
+
 Expected<std::uint8_t, Error> ParseVerticalAlignStrict(const pugi::xml_attribute& attr, std::string_view section,
                                                        std::size_t index) {
-  if (!attr) {
-    return static_cast<std::uint8_t>(2);
-  }
-  // ST_VerticalAlignment is also xsd:string-derived; preserve its lexical
-  // whitespace and reject padded tokens.
-  const std::string_view value(attr.value());
-  const std::uint8_t ordinal = FindStyleToken(kVerticalAlignNames, kVerticalAlignCount, value, kNoStyleToken);
-  if (ordinal != kNoStyleToken) {
-    return ordinal;
-  }
-  return InvalidXfAttribute(section, index, attr.name(), value);
+  return ParseAlignStrict(attr, kVerticalAlignNames, kVerticalAlignCount, 2, section, index);
 }
 
 Expected<void, Error> ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec, std::string_view section,
@@ -427,19 +423,24 @@ Expected<void, Error> ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec, std
   return Expected<void, Error>::Ok();
 }
 
+/// Parses every `<xf>` child of `xfs` into `out`, labelling errors with `section`.
+Expected<void, Error> ReadXfNodes(const pugi::xml_node& xfs, std::string_view section, std::vector<CellXf>& out) {
+  std::size_t index = 0;
+  for (pugi::xml_node xf = xfs.child("xf"); xf; xf = xf.next_sibling("xf")) {
+    CellXf rec;
+    RETURN_IF_ERROR(ParseCellXfNode(xf, &rec, section, index));
+    out.push_back(rec);
+    ++index;
+  }
+  return Expected<void, Error>::Ok();
+}
+
 Expected<void, Error> ReadCellStyleXfs(const pugi::xml_node& root, StylesTable& table) {
   pugi::xml_node xfs = root.child("cellStyleXfs");
   if (!xfs) {
     return Expected<void, Error>::Ok();
   }
-  std::size_t index = 0;
-  for (pugi::xml_node xf = xfs.child("xf"); xf; xf = xf.next_sibling("xf")) {
-    CellXf rec;
-    RETURN_IF_ERROR(ParseCellXfNode(xf, &rec, "cellStyleXfs", index));
-    table.cell_style_xfs.push_back(rec);
-    ++index;
-  }
-  return Expected<void, Error>::Ok();
+  return ReadXfNodes(xfs, "cellStyleXfs", table.cell_style_xfs);
 }
 
 Expected<void, Error> ReadCellXfs(const pugi::xml_node& root, StylesTable& table) {
@@ -448,13 +449,7 @@ Expected<void, Error> ReadCellXfs(const pugi::xml_node& root, StylesTable& table
     table.cell_xfs.emplace_back();
     return Expected<void, Error>::Ok();
   }
-  std::size_t index = 0;
-  for (pugi::xml_node xf = xfs.child("xf"); xf; xf = xf.next_sibling("xf")) {
-    CellXf rec;
-    RETURN_IF_ERROR(ParseCellXfNode(xf, &rec, "cellXfs", index));
-    table.cell_xfs.push_back(rec);
-    ++index;
-  }
+  RETURN_IF_ERROR(ReadXfNodes(xfs, "cellXfs", table.cell_xfs));
   if (table.cell_xfs.empty()) {
     CellXf def;
     def.vertical_align = 2;

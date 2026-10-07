@@ -164,6 +164,10 @@ inline std::string_view attr_str(const pugi::xml_node& n, const char* name, std:
   return v;
 }
 
+/// True when `node` has at least one element child (text / comment / PI
+/// children do not count).
+bool has_element_child(const pugi::xml_node& node);
+
 /// Returns the attribute value as `uint32_t`, or `def` on missing /
 /// empty / malformed / negative / out-of-range input. Behaviour
 /// matches the legacy `parse_xml_u32_attr(node.attribute(name), def)`

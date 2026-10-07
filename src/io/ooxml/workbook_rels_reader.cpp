@@ -14,6 +14,7 @@
 #include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -48,48 +49,33 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
           if (id.empty()) {
             return Expected<void, Error>::Ok();
           }
-          auto resolved = resolve_relative_path(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
+          ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
           WorkbookRels::SheetTarget sheet_target;
-          sheet_target.path = std::move(resolved).value();
+          sheet_target.path = std::move(resolved);
           sheet_target.relationship_type.assign(type);
           rels.sheet_targets.emplace(id, std::move(sheet_target));
         } else if (type == kRelSharedStrings) {
           // Last writer wins on duplicates (Excel never emits more than one,
           // but defending against malformed inputs costs almost nothing).
-          auto resolved = resolve_relative_path(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
-          rels.sst_path = std::move(resolved).value();
+          ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
+          rels.sst_path = std::move(resolved);
         } else if (type == kRelStyles) {
-          auto resolved = resolve_relative_path(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
-          rels.styles_path = std::move(resolved).value();
+          ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
+          rels.styles_path = std::move(resolved);
         } else if (type == kRelPivotCacheDefinition) {
           const std::string id(attr_str(rel, "Id"));
           if (id.empty()) {
             return Expected<void, Error>::Ok();
           }
-          auto resolved = resolve_relative_path(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
-          rels.pivot_cache_definition_paths_by_rid.emplace(id, std::move(resolved).value());
+          ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
+          rels.pivot_cache_definition_paths_by_rid.emplace(id, std::move(resolved));
         } else if (type == kRelExternalLink) {
           const std::string id(attr_str(rel, "Id"));
           if (id.empty()) {
             return Expected<void, Error>::Ok();
           }
-          auto resolved = resolve_relative_path(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
-          rels.external_link_paths_by_rid.emplace(id, std::move(resolved).value());
+          ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
+          rels.external_link_paths_by_rid.emplace(id, std::move(resolved));
         } else {
           // Unrecognised Type URI: capture verbatim so the writer can
           // re-emit the entry. Without this, the matching part (theme,
@@ -104,11 +90,8 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
           if (external) {
             entry.target.assign(target);
           } else {
-            auto resolved = resolve_relative_path(base_dir, target);
-            if (!resolved) {
-              return resolved.error();
-            }
-            entry.target = std::move(resolved).value();
+            ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
+            entry.target = std::move(resolved);
           }
           rels.unknown_rels.push_back(std::move(entry));
         }

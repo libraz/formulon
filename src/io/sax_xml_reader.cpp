@@ -778,6 +778,22 @@ bool ReadChildHeader(const char* begin, const char* end, const char** p, Error* 
   }
 }
 
+/// `ReadChildHeader` for a loop over `parent`'s children: sets `*closed` when
+/// the header is `parent`'s end tag, and fails on any other close tag.
+bool ReadChildOrClose(const char* begin, const char* end, const char** p, std::string_view parent, Error* err,
+                      TagHeader* child, bool* closed) {
+  std::size_t lt_off = 0;
+  if (!ReadChildHeader(begin, end, p, err, child, &lt_off)) {
+    return false;
+  }
+  *closed = child->is_end_tag;
+  if (*closed && child->name != parent) {
+    *err = MakeXmlParseError(lt_off, "unexpected close tag inside parent");
+    return false;
+  }
+  return true;
+}
+
 /// State carried across the per-cell scan so allocations amortise:
 ///   * `decoded_value`  - holds entity-decoded / normalized `<v>` body.
 ///   * `inline_string`  - holds the concatenation of `<is><t>` /
@@ -970,15 +986,11 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
 
   while (*p < end) {
     TagHeader child;
-    std::size_t lt_off = 0;
-    if (!ReadChildHeader(begin, end, p, err, &child, &lt_off)) {
+    bool closed = false;
+    if (!ReadChildOrClose(begin, end, p, "c", err, &child, &closed)) {
       return false;
     }
-    if (child.is_end_tag) {
-      if (child.name != "c") {
-        *err = MakeXmlParseError(lt_off, "unexpected close tag inside <c>");
-        return false;
-      }
+    if (closed) {
       return true;
     }
     if (child.name == "f") {
@@ -1080,15 +1092,11 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
 
   while (*p < end) {
     TagHeader child;
-    std::size_t lt_off = 0;
-    if (!ReadChildHeader(begin, end, p, err, &child, &lt_off)) {
+    bool closed = false;
+    if (!ReadChildOrClose(begin, end, p, "row", err, &child, &closed)) {
       return false;
     }
-    if (child.is_end_tag) {
-      if (child.name != "row") {
-        *err = MakeXmlParseError(lt_off, "unexpected close tag inside <row>");
-        return false;
-      }
+    if (closed) {
       if (cb.on_row_end != nullptr) {
         auto re = cb.on_row_end(cb.user_data, row_1based);
         if (!re) {
@@ -1131,15 +1139,11 @@ bool ScanSheetData(const char* begin, const char* end, const char** p, const Tag
   }
   while (*p < end) {
     TagHeader child;
-    std::size_t lt_off = 0;
-    if (!ReadChildHeader(begin, end, p, err, &child, &lt_off)) {
+    bool closed = false;
+    if (!ReadChildOrClose(begin, end, p, "sheetData", err, &child, &closed)) {
       return false;
     }
-    if (child.is_end_tag) {
-      if (child.name != "sheetData") {
-        *err = MakeXmlParseError(lt_off, "unexpected close tag inside <sheetData>");
-        return false;
-      }
+    if (closed) {
       return true;
     }
     if (child.name == "row") {

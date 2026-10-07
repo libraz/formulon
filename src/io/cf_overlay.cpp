@@ -23,17 +23,6 @@
 namespace formulon::io {
 namespace {
 
-/// True when `node` has at least one element child (text / comment /
-/// PI children do not count as extension payload).
-bool HasElementChild(const pugi::xml_node& node) {
-  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
-    if (child.type() == pugi::node_element) {
-      return true;
-    }
-  }
-  return false;
-}
-
 /// Collects the children of `parent` named `name` for which `doomed`
 /// returns true, then removes them. Two-phase so removal never races the
 /// sibling iteration.
@@ -291,11 +280,11 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml,
                              [](const pugi::xml_node& block) { return !block.child("x14:cfRule"); });
     }
     RemoveMatchingChildren(ext, "x14:conditionalFormattings",
-                           [](const pugi::xml_node& formattings) { return !HasElementChild(formattings); });
+                           [](const pugi::xml_node& formattings) { return !has_element_child(formattings); });
   }
-  RemoveMatchingChildren(ext_lst, "ext", [](const pugi::xml_node& ext) { return !HasElementChild(ext); });
+  RemoveMatchingChildren(ext_lst, "ext", [](const pugi::xml_node& ext) { return !has_element_child(ext); });
 
-  if (!HasElementChild(ext_lst)) {
+  if (!has_element_child(ext_lst)) {
     return std::string();
   }
   return raw_xml(ext_lst);

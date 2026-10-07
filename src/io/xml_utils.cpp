@@ -26,36 +26,38 @@
 namespace formulon {
 namespace io {
 
-void append_xml_attr(std::string& out, std::string_view name, std::string_view value) {
+namespace {
+
+void AppendAttrOpen(std::string& out, std::string_view name) {
   out.push_back(' ');
   out.append(name.data(), name.size());
   out.append("=\"");
+}
+
+}  // namespace
+
+void append_xml_attr(std::string& out, std::string_view name, std::string_view value) {
+  AppendAttrOpen(out, name);
   AppendXmlAttrEscaped(out, value);
-  out.append("\"");
+  out.push_back('"');
 }
 
 void append_xml_attr_uint(std::string& out, std::string_view name, std::uint64_t value) {
-  out.push_back(' ');
-  out.append(name.data(), name.size());
-  out.append("=\"");
+  AppendAttrOpen(out, name);
   out.append(std::to_string(value));
-  out.append("\"");
+  out.push_back('"');
 }
 
 void append_xml_attr_int(std::string& out, std::string_view name, std::int64_t value) {
-  out.push_back(' ');
-  out.append(name.data(), name.size());
-  out.append("=\"");
+  AppendAttrOpen(out, name);
   out.append(std::to_string(value));
-  out.append("\"");
+  out.push_back('"');
 }
 
 void append_xml_attr_number(std::string& out, std::string_view name, double value) {
-  out.push_back(' ');
-  out.append(name.data(), name.size());
-  out.append("=\"");
+  AppendAttrOpen(out, name);
   append_xml_number(out, value);
-  out.append("\"");
+  out.push_back('"');
 }
 
 void append_xml_number(std::string& out, double value) {
@@ -87,25 +89,17 @@ void append_xml_number(std::string& out, double value) {
   out.append(buf, static_cast<std::size_t>(builder.position()));
 }
 
+bool has_element_child(const pugi::xml_node& node) {
+  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
+    if (child.type() == pugi::node_element) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t default_value) {
-  if (!attr) {
-    return default_value;
-  }
-  const char* raw = attr.value();
-  if (raw == nullptr || *raw == '\0') {
-    return default_value;
-  }
-  if (*raw == '-' || *raw == '+') {
-    return default_value;
-  }
-  errno = 0;
-  char* end = nullptr;
-  const unsigned long parsed = std::strtoul(raw, &end, 10);
-  if (end == raw || *end != '\0' || errno != 0 ||
-      parsed > static_cast<unsigned long>(std::numeric_limits<std::uint32_t>::max())) {
-    return default_value;
-  }
-  return static_cast<std::uint32_t>(parsed);
+  return parse_xml_u32_attr_strict(attr).value_or(default_value);
 }
 
 std::optional<std::uint32_t> parse_xml_u32_attr_strict(const pugi::xml_attribute& attr) {

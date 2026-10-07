@@ -68,6 +68,17 @@ bool IsKnownWorkbookContentType(std::string_view content_type) {
          content_type == kCtWorkbookXltm;
 }
 
+/// Parses `[Content_Types].xml` into `doc` and returns its `<Types>` root.
+Expected<pugi::xml_node, Error> LoadTypesRoot(pugi::xml_document& doc, const std::vector<std::uint8_t>& ct_bytes) {
+  RETURN_IF_ERROR(load_xml_buffer(doc, ct_bytes, "ooxml_reader", "[Content_Types].xml"));
+  pugi::xml_node root = doc.child("Types");
+  if (!root) {
+    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
+                      "context=ooxml_reader part=[Content_Types].xml");
+  }
+  return root;
+}
+
 }  // namespace
 
 Expected<std::string, Error> resolve_office_document_path(const std::vector<std::uint8_t>& rels_bytes) {
@@ -112,12 +123,7 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
 Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_t>& ct_bytes,
                                                    ReadDiagnostics* diagnostics) {
   pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, ct_bytes, "ooxml_reader", "[Content_Types].xml"));
-  pugi::xml_node root = doc.child("Types");
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
-                      "context=ooxml_reader part=[Content_Types].xml");
-  }
+  ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
   // We need to recognise one of two situations:
   //   (a) An Override carries one of the four canonical workbook
   //       content types — we accept the package and pin the kind.
@@ -171,12 +177,7 @@ Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_
 Expected<std::vector<OverrideEntry>, Error> list_override_part_entries(const std::vector<std::uint8_t>& ct_bytes) {
   std::vector<OverrideEntry> out;
   pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, ct_bytes, "ooxml_reader", "[Content_Types].xml"));
-  pugi::xml_node root = doc.child("Types");
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
-                      "context=ooxml_reader part=[Content_Types].xml");
-  }
+  ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
   for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
     if (std::string_view(node.name()) == "Override") {
       std::string part_name(attr_str(node, "PartName"));
@@ -196,12 +197,7 @@ Expected<std::vector<OverrideEntry>, Error> list_override_part_entries(const std
 Expected<std::vector<DefaultContentType>, Error> list_default_content_types(const std::vector<std::uint8_t>& ct_bytes) {
   std::vector<DefaultContentType> out;
   pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, ct_bytes, "ooxml_reader", "[Content_Types].xml"));
-  pugi::xml_node root = doc.child("Types");
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
-                      "context=ooxml_reader part=[Content_Types].xml");
-  }
+  ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
   for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
     if (std::string_view(node.name()) != "Default") {
       continue;
@@ -210,14 +206,9 @@ Expected<std::vector<DefaultContentType>, Error> list_default_content_types(cons
     if (extension.empty()) {
       continue;
     }
-    // Normalise to lower case so lookups against archive entry suffixes
-    // stay case-insensitive (OPC treats extensions case-insensitively).
-    for (char& c : extension) {
-      if (c >= 'A' && c <= 'Z') {
-        c = static_cast<char>(c - 'A' + 'a');
-      }
-    }
-    out.push_back(DefaultContentType{std::move(extension), std::string(attr_str(node, "ContentType"))});
+    // Lower case so lookups against archive entry suffixes stay
+    // case-insensitive (OPC treats extensions case-insensitively).
+    out.push_back(DefaultContentType{lowercase_extension(extension), std::string(attr_str(node, "ContentType"))});
   }
   return out;
 }
