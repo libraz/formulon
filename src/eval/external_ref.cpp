@@ -7,12 +7,15 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "external_book.h"
 #include "external_link.h"
 #include "parser/ast.h"
+#include "sheet.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -155,6 +158,63 @@ Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const Eval
     col_last = col_first;
   }
   return MaterializeRect(book, sheet, row_first, row_last, col_first, col_last, arena);
+}
+
+Expected<ExternalRect, ErrorCode> resolve_external_rect(const parser::AstNode& node, const EvalContext& ctx) {
+  const parser::Reference* lhs = nullptr;
+  const parser::Reference* rhs = nullptr;
+  if (!external_ref_declared_endpoints(node, &lhs, &rhs)) {
+    return ErrorCode::Value;
+  }
+  const ExternalBook* book = BookFor(node, ctx);
+  if (book == nullptr) {
+    return ErrorCode::Ref;
+  }
+  const std::uint32_t sheet = book->sheet_index(node.as_external_ref_sheet());
+  if (sheet == ExternalBook::kNoSheet || !book->sheet_has_data(sheet)) {
+    return ErrorCode::Ref;
+  }
+  const Expected<DeclaredRect, ErrorCode> declared = declared_rect(*lhs, *rhs);
+  if (!declared) {
+    return declared.error();
+  }
+  ExternalRect out;
+  out.book = book;
+  out.sheet = sheet;
+  out.declared = declared.value();
+  out.walked = declared.value();
+  if (!TailRect(*book, sheet, *lhs, *rhs, &out.walked.row_first, &out.walked.row_last, &out.walked.col_first,
+                &out.walked.col_last)) {
+    // Nothing cached: a full read walks the first line, as it does over an
+    // unpopulated local whole axis.
+    out.walked = declared.value();
+    if (out.walked.rows() == Sheet::kMaxRows) {
+      out.walked.row_last = out.walked.row_first;
+    } else {
+      out.walked.col_last = out.walked.col_first;
+    }
+  }
+  return out;
+}
+
+bool external_whole_axis_footprint(const parser::AstNode& node, std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  const parser::Reference* lhs = nullptr;
+  const parser::Reference* rhs = nullptr;
+  if (!external_ref_declared_endpoints(node, &lhs, &rhs)) {
+    return false;
+  }
+  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*lhs, *rhs);
+  if (!rect || !rect.value().whole_axis) {
+    return false;
+  }
+  *out_rows = rect.value().rows();
+  *out_cols = rect.value().cols();
+  return true;
+}
+
+Value read_external_cell(const ExternalBook& book, std::uint32_t sheet, std::uint32_t row, std::uint32_t col,
+                         Arena& arena) {
+  return ReifyCached(book.cached_cell(sheet, row, col), arena);
 }
 
 Value resolve_external_book_name(const ExternalBook& book, std::uint32_t scope_sheet, std::string_view name,

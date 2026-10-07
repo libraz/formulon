@@ -263,6 +263,24 @@ inline bool declared_rect_endpoint_pair(const parser::AstNode& node, parser::Ref
   return true;
 }
 
+/// Writes the endpoint pair for `declared_rect` of a single-sheet cell-form
+/// `ExternalRef` (`[Book]Sheet!A1:B2`, `[Book]Sheet!A:A`), so a whole column
+/// of a supporting workbook declares every row whatever its cache holds.
+///
+/// Returns false for a defined-name or 3-D `ExternalRef` and for every other
+/// node. It is kept apart from `declared_rect_endpoint_pair` because that
+/// pair's callers resolve it against this workbook's own sheets.
+inline bool external_ref_declared_endpoints(const parser::AstNode& node, const parser::Reference** out_lhs,
+                                            const parser::Reference** out_rhs) {
+  if (node.kind() != parser::NodeKind::ExternalRef || !node.as_external_ref_name().empty() ||
+      !node.as_external_ref_sheet_end().empty()) {
+    return false;
+  }
+  *out_lhs = &node.as_external_ref_cell();
+  *out_rhs = &node.as_external_ref_cell_end();
+  return true;
+}
+
 }  // namespace eval
 }  // namespace formulon
 

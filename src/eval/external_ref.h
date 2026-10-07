@@ -17,8 +17,10 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/declared_rect.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -62,6 +64,34 @@ class FunctionRegistry;
 /// Text results are interned into `arena`, so the returned `Value` does
 /// not borrow the workbook's cache.
 Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const EvalContext& ctx);
+
+/// A single-sheet cell-form `ExternalRef` read by coordinate rather than
+/// materialised: the cached sheet it reads, the rectangle it declares (a
+/// whole column spans every row), and the part of it a full read walks.
+struct ExternalRect {
+  const ExternalBook* book = nullptr;
+  std::uint32_t sheet = 0;
+  DeclaredRect declared;
+  /// `declared` with a whole column or row clipped to the sheet's cached
+  /// extent, or to its first line when the sheet caches no cell.
+  DeclaredRect walked;
+};
+
+/// Resolves `node`, for which `external_ref_declared_endpoints` holds, to its
+/// `ExternalRect`, with the book and sheet rows of the `resolve_external_ref`
+/// error mapping.
+Expected<ExternalRect, ErrorCode> resolve_external_rect(const parser::AstNode& node, const EvalContext& ctx);
+
+/// True with the declared size in `*out_rows` x `*out_cols` when `node` is a
+/// single-sheet whole column or row of a supporting workbook. Standing as the
+/// whole formula, that size rather than the clipped value is its spill
+/// footprint, as for a local whole column.
+bool external_whole_axis_footprint(const parser::AstNode& node, std::uint32_t* out_rows, std::uint32_t* out_cols);
+
+/// Reads the cell at (`row`, `col`) of `book`'s sheet `sheet`, interning a
+/// Text result into `arena`. An address the cache does not hold reads `0`.
+Value read_external_cell(const ExternalBook& book, std::uint32_t sheet, std::uint32_t row, std::uint32_t col,
+                         Arena& arena);
 
 /// Resolves the defined name `name` of the supporting workbook `book` in
 /// `scope_sheet` (`ExternalBook::kNoSheet` for book scope), with the name

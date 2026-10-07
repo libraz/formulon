@@ -70,6 +70,20 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
     return false;
   }
   const parser::NodeKind k = arg_node.kind();
+  const parser::Reference* external_lhs = nullptr;
+  const parser::Reference* external_rhs = nullptr;
+  if (external_ref_declared_endpoints(arg_node, &external_lhs, &external_rhs)) {
+    // A supporting workbook's whole column is measured as written, not as
+    // the cached extent its value is clipped to.
+    const auto rect = resolve_external_rect(arg_node, ctx);
+    if (!rect) {
+      *out_err = Value::error(rect.error());
+      return false;
+    }
+    *out_rows = rect.value().declared.rows();
+    *out_cols = rect.value().declared.cols();
+    return true;
+  }
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
     parser::Reference lhs{};
     parser::Reference rhs{};

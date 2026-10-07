@@ -19,6 +19,8 @@
 
 namespace formulon {
 
+struct ExternalBook;
+
 namespace parser {
 class AstNode;
 }  // namespace parser
@@ -45,10 +47,16 @@ struct ReferenceTable {
   // What a full expansion would walk. A whole-axis reference with nothing
   // populated walks its first line. Every cell beyond it is blank.
   DeclaredRect walked;
+  // The supporting workbook a cross-workbook table reads from, and its sheet
+  // there; null for a table on this workbook. Its cells come from the
+  // external link's cache, where an uncached address reads 0.
+  const ExternalBook* external_book = nullptr;
+  std::uint32_t external_sheet = 0;
 };
 
 // True with `*out` filled when `arg` (after LET passthrough) is a static
-// reference; false for every other shape. A static reference that does not
+// reference, including a single-sheet cell-form `ExternalRef`; false for
+// every other shape. A static reference that does not
 // resolve reports the error its expansion would.
 Expected<bool, ErrorCode> resolve_reference_table(const parser::AstNode& arg, const EvalContext& ctx,
                                                   ReferenceTable* out);

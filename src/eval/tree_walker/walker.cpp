@@ -876,6 +876,22 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
     }
     return Value::error(ErrorCode::Num);
   }
+  // A supporting workbook's whole column or row spills at its declared size,
+  // as a local one does, though its value is clipped to the cached extent.
+  // The clipped array fits wherever the declared rectangle does, so only a
+  // refusal needs deciding here; it is recorded on the recalc path for the
+  // release machinery to retry, as `evaluate_bare_range_spill` records one.
+  std::uint32_t external_rows = 0;
+  std::uint32_t external_cols = 0;
+  if (v.is_array() && ctx.has_formula_cell() && ctx.current_sheet() != nullptr &&
+      external_whole_axis_footprint(node, &external_rows, &external_cols) &&
+      ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), external_rows, external_cols) !=
+          Sheet::SpillAdmission::kAdmissible) {
+    if (Sheet* target = ctx.mutable_sheet(); target == ctx.current_sheet()) {
+      target->reject_spill_footprint(ctx.formula_row(), ctx.formula_col(), external_rows, external_cols);
+    }
+    return Value::error(ErrorCode::Spill);
+  }
   // Dynamic-array spill-collision surface contract. When a 365-era formula
   // produces a multi-cell array and is anchored at a known formula cell on
   // a resolvable sheet, Excel reports `#SPILL!` at the anchor if any cell

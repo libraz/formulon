@@ -9,7 +9,8 @@
 //   * a name the link does not declare reads #NAME?, and a sheet-local
 //     name matches only under its own sheet;
 //   * 3-D, whole-column and whole-row forms evaluate like their local
-//     counterparts, the latter clipped to the cached extent;
+//     counterparts: a whole axis has its declared shape and spill
+//     footprint, while an aggregate reads it clipped to the cached extent;
 //   * book and sheet names match without regard to ASCII case.
 
 #include <cstdint>
@@ -17,12 +18,17 @@
 #include <utility>
 #include <vector>
 
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
+#include "eval/tree_walker.h"
 #include "external_book.h"
 #include "external_link.h"
 #include "gtest/gtest.h"
+#include "parser/parser.h"
 #include "sheet.h"
+#include "utils/arena.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -142,6 +148,23 @@ class ExternalRefEval : public ::testing::Test {
     wb_.set_external_links(std::move(links));
   }
 
+  // Fills Data!A2 = 20, so the cached column A reads 10, 20, 30.
+  void CacheColumnA() {
+    std::vector<ExternalLinkRecord> links;
+    links.push_back(SourceLink());
+    Cache(links[0].book, 0, 1, 0, 20.0);
+    wb_.set_external_links(std::move(links));
+  }
+
+  // Evaluates `formula` placed at (`row`, `col`) of the host sheet.
+  Value EvalAt(std::uint32_t row, std::uint32_t col, const std::string& formula) {
+    EXPECT_TRUE(static_cast<bool>(wb_.set_cell_formula(0, row, col, formula))) << formula;
+    auto recalc_or = wb_.recalc(eval::default_registry());
+    EXPECT_TRUE(static_cast<bool>(recalc_or)) << formula;
+    const Cell* cell = wb_.sheet(0).cell_at(row, col);
+    return cell == nullptr ? Value::blank() : cell->cached_value;
+  }
+
   Workbook wb_ = Workbook::create_empty();
 };
 
@@ -257,6 +280,61 @@ TEST_F(ExternalRefEval, WholeColumnsAndRowsClipToTheCachedExtent) {
   ExpectNumber("=SUM([Src.xlsx]Data!2:2)", 5.0);
   ExpectNumber("=SUM([Src.xlsx]Data!1:3)", 45.0);
   ExpectError("=SUM([Src.xlsx]Empty!A:A)", ErrorCode::Ref);
+}
+
+TEST_F(ExternalRefEval, WholeAxisShapeIsTheDeclaredRectangle) {
+  CacheColumnA();
+  ExpectNumber("=ROWS([Src.xlsx]Data!A:A)", 1048576.0);
+  ExpectNumber("=COLUMNS([Src.xlsx]Data!1:1)", 16384.0);
+  ExpectNumber("=ROWS([Src.xlsx]Data!A1:A10)", 10.0);
+  ExpectError("=ROWS([Src.xlsx]Empty!A:A)", ErrorCode::Ref);
+  ExpectError("=ROWS([Src.xlsx]Nowhere!A:A)", ErrorCode::Ref);
+}
+
+TEST_F(ExternalRefEval, WholeAxisIndexReadsTheCache) {
+  CacheColumnA();
+  ExpectNumber("=INDEX([Src.xlsx]Data!A:A,2)", 20.0);
+  // Past the cached extent: an uncached address reads 0.
+  ExpectNumber("=INDEX([Src.xlsx]Data!A:A,5)", 0.0);
+}
+
+TEST_F(ExternalRefEval, WholeAxisAggregatesReadTheCachedCells) {
+  CacheColumnA();
+  ExpectNumber("=COUNTA([Src.xlsx]Data!A:A)", 3.0);
+  ExpectNumber("=SUM([Src.xlsx]Data!A:A)", 60.0);
+}
+
+TEST_F(ExternalRefEval, WholeAxisSpillsLikeALocalWholeColumn) {
+  CacheColumnA();
+  // The recalc path commits the clipped array unless the declared footprint
+  // is refused first, and records that footprint for the retry.
+  const Value spilled = EvalAt(1, 0, "=[Src.xlsx]Data!A:A");
+  ASSERT_TRUE(spilled.is_error()) << spilled.debug_to_string();
+  EXPECT_EQ(spilled.as_error(), ErrorCode::Spill);
+  bool recorded = false;
+  for (const BlockedSpillFootprint& blocked : wb_.sheet(0).blocked_spill_footprints()) {
+    recorded = recorded || (blocked.anchor_row == 1U && blocked.anchor_col == 0U && blocked.rows == Sheet::kMaxRows &&
+                            blocked.cols == 1U);
+  }
+  EXPECT_TRUE(recorded);
+  // Only the whole formula spills; an argument reads the cached cells.
+  const Value summed = EvalAt(1, 1, "=SUM([Src.xlsx]Data!A:A)");
+  ASSERT_TRUE(summed.is_number()) << summed.debug_to_string();
+  EXPECT_DOUBLE_EQ(summed.as_number(), 60.0);
+}
+
+TEST_F(ExternalRefEval, WholeAxisSpillsOnTheReadOnlyPath) {
+  CacheColumnA();
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser p("=[Src.xlsx]Data!A:A", parse_arena);
+  const parser::AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  eval::EvalState state;
+  const eval::EvalContext base(wb_, wb_.sheet(0), state);
+  const Value spilled = eval::evaluate(*root, eval_arena, eval::default_registry(), base.with_formula_cell(1U, 0U));
+  ASSERT_TRUE(spilled.is_error()) << spilled.debug_to_string();
+  EXPECT_EQ(spilled.as_error(), ErrorCode::Spill);
 }
 
 TEST_F(ExternalRefEval, BookAndSheetMatchWithoutCase) {
