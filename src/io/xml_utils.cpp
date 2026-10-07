@@ -9,7 +9,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <iterator>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -252,8 +251,12 @@ void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std
 
   // Declarations first, so the re-emitted element reads the way Excel
   // writes it and a prefix is bound before the eye reaches its user.
-  out.insert(out.end(), std::make_move_iterator(bindings.begin()), std::make_move_iterator(bindings.end()));
-  out.insert(out.end(), std::make_move_iterator(captured.begin()), std::make_move_iterator(captured.end()));
+  for (auto& entry : bindings) {
+    out.emplace_back(std::move(entry.first), std::move(entry.second));
+  }
+  for (auto& entry : captured) {
+    out.emplace_back(std::move(entry.first), std::move(entry.second));
+  }
 }
 
 namespace {
