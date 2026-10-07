@@ -22,7 +22,7 @@ namespace text_detail {
 Expected<int, ErrorCode> read_int_arg(const Value& v) {
   auto coerced = coerce_to_number(v);
   if (!coerced) {
-    return coerced.error();
+    return std::move(coerced.error());
   }
   const double d = coerced.value();
   if (std::isnan(d) || std::isinf(d)) {
@@ -116,21 +116,21 @@ std::size_t find_folded(const std::string& haystack, const std::string& needle, 
 Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
-    return text.error();
+    return std::move(text.error());
   }
   auto start = read_int_arg(args[1]);
   if (!start) {
-    return start.error();
+    return std::move(start.error());
   }
   auto count = read_int_arg(args[2]);
   if (!count) {
-    return count.error();
+    return std::move(count.error());
   }
   std::string new_text;
   if (arity > 3) {
     auto coerced = coerce_to_text(args[3]);
     if (!coerced) {
-      return coerced.error();
+      return std::move(coerced.error());
     }
     new_text = std::move(coerced.value());
   }

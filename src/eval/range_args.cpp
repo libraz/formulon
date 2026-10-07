@@ -573,7 +573,7 @@ Expected<RangeResult, ErrorCode> resolve_range_arg_no_scalar(const parser::AstNo
                                                              ErrorCode scalar_error) {
   auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
   if (!resolved) {
-    return resolved.error();
+    return std::move(resolved.error());
   }
   if (resolved.value().from_scalar) {
     return scalar_error;

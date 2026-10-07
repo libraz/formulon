@@ -402,12 +402,12 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // Both surface `kFnOverflow` so the caller keeps one recoverable path.
   auto value_count_or = checked_mul_size_t(row_leaf_count, col_leaf_count);
   if (!value_count_or) {
-    return value_count_or.error();
+    return std::move(value_count_or.error());
   }
   ResourceBudget result_cell_budget(kMaxPivotResultCells, FormulonErrorCode::kFnOverflow);
   auto budget_ok = result_cell_budget.consume(static_cast<std::uint64_t>(value_count_or.value()));
   if (!budget_ok) {
-    return budget_ok.error();
+    return std::move(budget_ok.error());
   }
 
   // Bucket surviving record indices by (row_leaf, col_leaf).

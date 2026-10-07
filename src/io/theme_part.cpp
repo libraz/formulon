@@ -252,7 +252,7 @@ Expected<void, Error> set_theme_colors(Workbook& wb, const ThemeColors& colors) 
   pugi::xml_document doc;
   auto path_or = open_theme_for_edit(wb, doc);
   if (!path_or) {
-    return Expected<void, Error>(path_or.error());
+    return Expected<void, Error>(std::move(path_or.error()));
   }
   const pugi::xml_node clr = clr_scheme_of(doc);
   const std::string prefix = prefix_of(clr.name());
@@ -270,7 +270,7 @@ Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
   pugi::xml_document doc;
   auto path_or = open_theme_for_edit(wb, doc);
   if (!path_or) {
-    return Expected<void, Error>(path_or.error());
+    return Expected<void, Error>(std::move(path_or.error()));
   }
   const pugi::xml_node scheme = font_scheme_of(doc);
   const pugi::xml_node major = find_child(scheme, "majorFont");

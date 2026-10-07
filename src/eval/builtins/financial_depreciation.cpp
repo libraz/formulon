@@ -60,7 +60,7 @@ struct AmorArgs {
 Expected<DepreciationArgs3, ErrorCode> read_depreciation_args3(const Value* args) {
   double v[3];
   if (auto read = read_required_numbers(args, "nnn", v); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   return DepreciationArgs3{v[0], v[1], v[2]};
 }
@@ -68,7 +68,7 @@ Expected<DepreciationArgs3, ErrorCode> read_depreciation_args3(const Value* args
 Expected<DepreciationArgs4, ErrorCode> read_depreciation_args4(const Value* args) {
   double v[4];
   if (auto read = read_required_numbers(args, "nnnn", v); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   return DepreciationArgs4{v[0], v[1], v[2], v[3]};
 }
@@ -76,15 +76,15 @@ Expected<DepreciationArgs4, ErrorCode> read_depreciation_args4(const Value* args
 Expected<VdbArgs, ErrorCode> read_vdb_args(const Value* args, std::uint32_t arity) {
   double v[5];
   if (auto read = read_required_numbers(args, "nnnnn", v); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   auto factor = read_optional_number(args, arity, 5, 2.0);
   if (!factor) {
-    return factor.error();
+    return std::move(factor.error());
   }
   auto no_switch = read_optional_number(args, arity, 6, 0.0);
   if (!no_switch) {
-    return no_switch.error();
+    return std::move(no_switch.error());
   }
   return VdbArgs{v[0], v[1], v[2], v[3], v[4], factor.value(), no_switch.value() != 0.0};
 }
@@ -93,11 +93,11 @@ Expected<VdbArgs, ErrorCode> read_vdb_args(const Value* args, std::uint32_t arit
 Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t arity) {
   double v[6];
   if (auto read = read_required_numbers(args, "nddnnn", v); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   auto basis = read_day_count_basis(args, arity, 6);
   if (!basis) {
-    return basis.error();
+    return std::move(basis.error());
   }
   const double cost = v[0];
   const double salvage = v[3];

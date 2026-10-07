@@ -199,7 +199,7 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
     if (zip.has_entry(rec.part_path)) {
       auto body_or = zip.read_entry(rec.part_path);
       if (!body_or) {
-        return body_or.error();
+        return std::move(body_or.error());
       }
       const std::vector<std::uint8_t>& body_bytes = body_or.value();
       pugi::xml_document body_doc;
@@ -229,7 +229,7 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
     if (zip.has_entry(body_rels_path)) {
       auto rels_or = zip.read_entry(body_rels_path);
       if (!rels_or) {
-        return rels_or.error();
+        return std::move(rels_or.error());
       }
       const std::vector<std::uint8_t>& rels_bytes = rels_or.value();
       pugi::xml_document rels_doc;

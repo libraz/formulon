@@ -153,7 +153,7 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
     // not truncation: -1.6 -> -2 selects the second-to-last occurrence.
     auto coerced = coerce_to_number(args[2]);
     if (!coerced) {
-      return coerced.error();
+      return std::move(coerced.error());
     }
     const double d = coerced.value();
     if (std::isnan(d) || std::isinf(d)) {
@@ -163,12 +163,12 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
   }
   auto match_mode = text_detail::read_optional_int_arg(args, arity, 3u, 0);
   if (!match_mode) {
-    return match_mode.error();
+    return std::move(match_mode.error());
   }
   opts.match_mode = match_mode.value();
   auto match_end = text_detail::read_optional_int_arg(args, arity, 4u, 0);
   if (!match_end) {
-    return match_end.error();
+    return std::move(match_end.error());
   }
   opts.match_end = match_end.value();
   if (arity >= 6) {

@@ -764,7 +764,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // emits into `xl/workbook.bin`.
   auto sheet_ranges_or = BuildSheetRangeTable(workbook, sheet_names);
   if (!sheet_ranges_or) {
-    return sheet_ranges_or.error();
+    return std::move(sheet_ranges_or.error());
   }
   const SheetRangeTable& sheet_ranges = sheet_ranges_or.value();
 
@@ -780,7 +780,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table,
                                     &downgraded_formula_count, dynamic_array.ifmd, name_shapes(workbook, i));
     if (!sheet_body_or) {
-      return sheet_body_or.error();
+      return std::move(sheet_body_or.error());
     }
     sheet_bodies.push_back(std::move(sheet_body_or.value()));
   }
@@ -789,7 +789,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   auto plan_or =
       BuildEmissionPlan(workbook, emit_sst_part, dynamic_array.generate_part, sheet_ranges.links.size(), &diagnostics);
   if (!plan_or) {
-    return plan_or.error();
+    return std::move(plan_or.error());
   }
   const EmissionPlan plan = plan_or.take();
   const std::vector<const ExternalLinkRecord*> links = written_external_links(workbook);
@@ -806,14 +806,14 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
 
   // 1. [Content_Types].xml
   if (auto r = AddPart(writer.get(), "[Content_Types].xml", BuildContentTypes(workbook, plan)); !r) {
-    return r.error();
+    return std::move(r.error());
   }
   // 2. _rels/.rels
   if (auto r = AddPart(writer.get(), "_rels/.rels",
                        BuildPackageRels(workbook, "xl/workbook.bin", plan.passthrough_kept,
                                         "xlsb.writer.package_rel_skipped", &diagnostics));
       !r) {
-    return r.error();
+    return std::move(r.error());
   }
   // 3. xl/_rels/workbook.bin.rels
   // Passthrough parts (styles.bin, theme, metadata, sharedStrings) are only
@@ -822,13 +822,13 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   if (auto r = AddPart(writer.get(), "xl/_rels/workbook.bin.rels",
                        BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook, link_rel_ids, &diagnostics));
       !r) {
-    return r.error();
+    return std::move(r.error());
   }
   // 4. xl/workbook.bin
   {
     ASSIGN_OR_RETURN(auto wb_bytes, BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids));
     if (auto r = AddPartBytes(writer.get(), "xl/workbook.bin", wb_bytes); !r) {
-      return r.error();
+      return std::move(r.error());
     }
   }
   // 4b. xl/styles.bin, when the source was not already an XLSB package with
@@ -837,7 +837,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   if (plan.has_generated_styles) {
     const std::vector<std::uint8_t> styles_bytes = write_styles_bin(workbook.styles());
     if (auto r = AddPartBytes(writer.get(), "xl/styles.bin", styles_bytes); !r) {
-      return r.error();
+      return std::move(r.error());
     }
   }
   // 4c. xl/metadata.bin for dynamic-array spill anchors. The worksheet
@@ -845,7 +845,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   if (plan.has_generated_dynamic_metadata) {
     const std::vector<std::uint8_t> metadata_bytes = build_dynamic_array_metadata_bin();
     if (auto r = AddPartBytes(writer.get(), "xl/metadata.bin", metadata_bytes); !r) {
-      return r.error();
+      return std::move(r.error());
     }
   }
   // 5. xl/worksheets/sheet<N>.bin, plus its rels when the sheet's retained
@@ -855,7 +855,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     path.append(std::to_string(i + 1));
     path.append(".bin");
     if (auto r = AddPartBytes(writer.get(), path, sheet_bodies[i]); !r) {
-      return r.error();
+      return std::move(r.error());
     }
     const std::string sheet_rels = BuildSheetRels(workbook.sheet(i), plan, &diagnostics);
     if (!sheet_rels.empty()) {
@@ -863,7 +863,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       rels_path.append(std::to_string(i + 1));
       rels_path.append(".bin.rels");
       if (auto r = AddPart(writer.get(), rels_path, sheet_rels); !r) {
-        return r.error();
+        return std::move(r.error());
       }
     }
   }
@@ -872,17 +872,17 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   for (std::size_t i = 0; i < links.size(); ++i) {
     const std::vector<std::uint8_t> link_bytes = build_external_link_bin(*links[i], sheet_ranges.links[i]);
     if (auto r = AddPartBytes(writer.get(), external_link_part_path(i + 1U), link_bytes); !r) {
-      return r.error();
+      return std::move(r.error());
     }
     if (auto r = AddPart(writer.get(), ExternalLinkRelsPath(i + 1U), build_external_link_rels(*links[i])); !r) {
-      return r.error();
+      return std::move(r.error());
     }
   }
   // 6. xl/sharedStrings.bin (conditional)
   if (emit_sst_part) {
     ASSIGN_OR_RETURN(auto sst_body, emit_sst(sst));
     if (auto r = AddPartBytes(writer.get(), "xl/sharedStrings.bin", sst_body); !r) {
-      return r.error();
+      return std::move(r.error());
     }
   }
   // 7. Passthrough parts.
@@ -895,10 +895,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     }
     // Retained bytes must not silently drop a mutation made since load.
     if (auto fresh = CheckRetainedPartFreshness(workbook, *part); !fresh) {
-      return fresh.error();
+      return std::move(fresh.error());
     }
     if (auto r = AddPartBytes(writer.get(), part->path, part->bytes); !r) {
-      return r.error();
+      return std::move(r.error());
     }
   }
 

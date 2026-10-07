@@ -1075,7 +1075,7 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
     rec.style = AttrOfDecoded(row_header, "s", &scratch->row_attr_style);
     auto rs = cb.on_row_start(cb.user_data, rec);
     if (!rs) {
-      *err = rs.error();
+      *err = std::move(rs.error());
       return false;
     }
   }
@@ -1083,7 +1083,7 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
     if (cb.on_row_end != nullptr) {
       auto re = cb.on_row_end(cb.user_data, row_1based);
       if (!re) {
-        *err = re.error();
+        *err = std::move(re.error());
         return false;
       }
     }
@@ -1100,7 +1100,7 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
       if (cb.on_row_end != nullptr) {
         auto re = cb.on_row_end(cb.user_data, row_1based);
         if (!re) {
-          *err = re.error();
+          *err = std::move(re.error());
           return false;
         }
       }
@@ -1114,7 +1114,7 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
       if (cb.on_cell != nullptr) {
         auto cr = cb.on_cell(cb.user_data, rec);
         if (!cr) {
-          *err = cr.error();
+          *err = std::move(cr.error());
           return false;
         }
       }

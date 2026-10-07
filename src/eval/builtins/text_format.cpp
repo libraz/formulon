@@ -133,7 +133,7 @@ namespace {
 Expected<int, ErrorCode> fixed_read_int(const Value& v) {
   auto d = coerce_to_number(v);
   if (!d) {
-    return d.error();
+    return std::move(d.error());
   }
   if (std::isnan(d.value()) || std::isinf(d.value())) {
     return ErrorCode::Num;
@@ -148,7 +148,7 @@ Expected<int, ErrorCode> fixed_read_int(const Value& v) {
 Expected<double, ErrorCode> read_finite_number_arg(const Value* args, std::uint32_t index) {
   auto number = coerce_to_number(args[index]);
   if (!number) {
-    return number.error();
+    return std::move(number.error());
   }
   const double d = number.value();
   if (std::isnan(d) || std::isinf(d)) {
@@ -163,7 +163,7 @@ Expected<int, ErrorCode> read_optional_fixed_decimals(const Value* args, std::ui
   if (arity >= index + 1u) {
     auto parsed = fixed_read_int(args[index]);
     if (!parsed) {
-      return parsed.error();
+      return std::move(parsed.error());
     }
     decimals = parsed.value();
   }

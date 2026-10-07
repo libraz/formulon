@@ -50,15 +50,15 @@ namespace financial_detail {
 Expected<CouponBondInputs, ErrorCode> read_coupon_bond(const Value* args, std::uint32_t arity, bool date1904) {
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
-    return settlement.error();
+    return std::move(settlement.error());
   }
   auto maturity = read_financial_date(args, 1);
   if (!maturity) {
-    return maturity.error();
+    return std::move(maturity.error());
   }
   auto tail = read_coupon_bond_tail(args, arity, 2);
   if (!tail) {
-    return tail.error();
+    return std::move(tail.error());
   }
   // Every domain check past the reads is `#NUM!`, so the tail reader's rate / redemption checks may run
   // ahead of the date ordering.
@@ -87,7 +87,7 @@ Expected<CouponBondInputs, ErrorCode> read_coupon_bond(const Value* args, std::u
 Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
   auto in = read_coupon_bond(args, arity, date1904);
   if (!in) {
-    return in.error();
+    return std::move(in.error());
   }
   const auto& [tail, cd, freq_d, cf, ai] = in.value();
   const double yld = tail.amount;

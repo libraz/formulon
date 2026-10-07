@@ -297,7 +297,7 @@ Expected<std::uint16_t, Error> ParseU16Attribute(const pugi::xml_attribute& attr
                                                  std::string_view section, std::size_t index) {
   auto parsed = ParseU32Attribute(attr, default_value, section, index);
   if (!parsed) {
-    return parsed.error();
+    return std::move(parsed.error());
   }
   if (parsed.value() > std::numeric_limits<std::uint16_t>::max()) {
     return InvalidXfAttribute(section, index, attr.name(), attr.value());

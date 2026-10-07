@@ -1374,7 +1374,7 @@ Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const s
   }
   auto status = enc.emit(node);
   if (!status) {
-    return status.error();
+    return std::move(status.error());
   }
   return enc.take();
 }

@@ -97,15 +97,15 @@ Expected<void, Error> decode_hyperlink(const XlsbRecord& rec, Sheet& sheet) {
   ASSIGN_OR_RETURN(auto rid, read_xlnullablewidestring(p));
   auto location_or = ReadHyperlinkWideString(p, "location", kMaxHyperlinkLocationUnits);
   if (!location_or) {
-    return location_or.error();
+    return std::move(location_or.error());
   }
   auto tooltip_or = ReadHyperlinkWideString(p, "tooltip", kMaxHyperlinkTooltipUnits);
   if (!tooltip_or) {
-    return tooltip_or.error();
+    return std::move(tooltip_or.error());
   }
   auto display_or = ReadHyperlinkWideString(p, "display", kMaxHyperlinkDisplayUnits);
   if (!display_or) {
-    return display_or.error();
+    return std::move(display_or.error());
   }
   if (p.size != 0U) {
     return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink has trailing bytes",
@@ -149,13 +149,13 @@ Expected<void, Error> emit_hyperlink(std::vector<std::uint8_t>& dst, const Hyper
   }
   if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.location, kMaxHyperlinkLocationUnits, "location");
       !r) {
-    return r.error();
+    return std::move(r.error());
   }
   if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.tooltip, kMaxHyperlinkTooltipUnits, "tooltip"); !r) {
-    return r.error();
+    return std::move(r.error());
   }
   if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.display, kMaxHyperlinkDisplayUnits, "display"); !r) {
-    return r.error();
+    return std::move(r.error());
   }
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtHLink), payload);
   return Expected<void, Error>::Ok();

@@ -369,7 +369,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   std::string_view ref = r_attr.value();
   auto rc_or = parse_a1(ref);
   if (!rc_or) {
-    return rc_or.error();
+    return std::move(rc_or.error());
   }
   std::uint32_t row = rc_or.value().first;
   std::uint32_t col = rc_or.value().second;
@@ -423,7 +423,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   if (!payload_or) {
     // Re-decorate the error context with the cell ref for actionable
     // diagnostics.
-    Error e = payload_or.error();
+    Error e = std::move(payload_or.error());
     if (!ref.empty()) {
       e.context.append(" ref=").append(ref);
     }

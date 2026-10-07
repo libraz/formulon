@@ -308,7 +308,7 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
   for (;;) {
     auto next = read_record(cursor);
     if (!next) {
-      return next.error();
+      return std::move(next.error());
     }
     if (next.value().type == end_type) {
       break;
@@ -482,7 +482,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
     case XlsbRecordType::BrtWsProp: {
       auto complete_or = decode_ws_prop(rec, wb.sheet(sheet_index), sheet_index);
       if (!complete_or) {
-        return complete_or.error();
+        return std::move(complete_or.error());
       }
       if (!complete_or.value()) {
         StructuredLog("xlsb.record.dropped")
@@ -497,7 +497,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
     case XlsbRecordType::BrtWsFmtInfo: {
       auto format_status = decode_ws_fmt_info(rec, wb.sheet(sheet_index), sheet_index);
       if (!format_status) {
-        return format_status.error();
+        return std::move(format_status.error());
       }
       return RecordDisposition::kModelled;
     }
@@ -546,7 +546,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       ByteSpan p = rec.payload;
       auto row_or = read_u32(p);
       if (!row_or) {
-        return row_or.error();
+        return std::move(row_or.error());
       }
       if (row_or.value() >= Sheet::kMaxRows) {
         return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtRowHdr row out of range",
@@ -648,7 +648,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
     case XlsbRecordType::BrtHLink: {
       auto link_status = decode_hyperlink(rec, wb.sheet(sheet_index));
       if (!link_status) {
-        return link_status.error();
+        return std::move(link_status.error());
       }
       return RecordDisposition::kModelled;
     }
@@ -709,7 +709,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
       auto code_or = read_u8(p);
       if (!code_or) {
-        return code_or.error();
+        return std::move(code_or.error());
       }
       // Map the OOXML wire code to `ErrorCode` via the single
       // `kErrorTable`-backed lookup shared with the writer, so this
@@ -802,7 +802,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         case XlsbRecordType::BrtFmlaString: {
           auto s = read_xlwidestring(p);
           if (!s) {
-            return s.error();
+            return std::move(s.error());
           }
           text_storage.push_back(std::move(s.value()));
           cached = Value::text(text_storage.back());
@@ -811,7 +811,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         case XlsbRecordType::BrtFmlaBool: {
           auto b = read_u8(p);
           if (!b) {
-            return b.error();
+            return std::move(b.error());
           }
           cached = Value::boolean(b.value() != 0);
           break;
@@ -819,7 +819,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         case XlsbRecordType::BrtFmlaError: {
           auto b = read_u8(p);
           if (!b) {
-            return b.error();
+            return std::move(b.error());
           }
           // Same `kErrorTable`-backed lookup the literal path uses.
           cached = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(b.value())));
@@ -851,7 +851,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         // value is preserved separately below.
         auto wf = wb.set_cell_formula(sheet_index, state.current_row, col.col, wb.ingest_stored_formula(formula_text));
         if (!wf) {
-          return wf.error();
+          return std::move(wf.error());
         }
       }
       // Always preserve the cached value (for undecodable formulas this
@@ -925,7 +925,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       const std::string cached_text = cached.is_text() ? std::string(cached.as_text()) : std::string();
       auto wf = wb.set_cell_formula(sheet_index, rw_first, col_first, wb.ingest_stored_formula(formula_text));
       if (!wf) {
-        return wf.error();
+        return std::move(wf.error());
       }
       if (cached.is_text()) {
         cached = Value::text(cached_text);  // the cell's own copy went with the shell
@@ -965,7 +965,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::uint8_t* const framed = cursor.data;
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     const auto type = static_cast<XlsbRecordType>(rec.type);
@@ -976,7 +976,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     if (state.in_tail) {
       auto feature = DecodeTailFeature(cursor, framed, rec, state, wb.sheet(sheet_index), feature_ctx);
       if (!feature) {
-        return feature.error();
+        return std::move(feature.error());
       }
       if (feature.value()) {
         continue;
@@ -1002,7 +1002,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
   }
   auto spills = RegisterArraySpills(wb, sheet_index, state.array_anchors);
   if (!spills) {
-    return spills.error();
+    return std::move(spills.error());
   }
   if (!state.tail.empty()) {
     std::vector<cf::ConditionalFormat>& formats = wb.sheet(sheet_index).mutable_conditional_formats();

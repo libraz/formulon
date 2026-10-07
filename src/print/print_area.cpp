@@ -322,7 +322,7 @@ Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, s
   auto tokens = SplitDefinedNameAreas(wb, sheet_index, kPrintAreaName, "Empty Print_Area formula",
                                       "Empty area in Print_Area formula");
   if (!tokens) {
-    return tokens.error();
+    return std::move(tokens.error());
   }
   std::vector<CellRange> ranges;
   for (const std::string& cleaned : tokens.value()) {
@@ -340,7 +340,7 @@ Expected<PrintTitles, Error> resolve_print_titles(const Workbook& wb, std::uint3
   auto tokens = SplitDefinedNameAreas(wb, sheet_index, kPrintTitlesName, "Empty Print_Titles formula",
                                       "Empty token in Print_Titles formula");
   if (!tokens) {
-    return tokens.error();
+    return std::move(tokens.error());
   }
   PrintTitles titles;
   for (const std::string& cleaned : tokens.value()) {

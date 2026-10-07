@@ -61,7 +61,7 @@ inline constexpr double kMaxDepreciationPeriods = 1048576.0;
 inline Expected<double, ErrorCode> read_financial_date(const Value* args, std::uint32_t index) {
   auto raw = read_required_number(args, index);
   if (!raw) {
-    return raw.error();
+    return std::move(raw.error());
   }
   const double t = std::trunc(raw.value());
   constexpr double kExcelMaxSerial = 2958465.0;
@@ -93,7 +93,7 @@ inline Expected<int, ErrorCode> read_day_count_basis(const Value* args, std::uin
   }
   auto raw = read_required_number(args, index);
   if (!raw) {
-    return raw.error();
+    return std::move(raw.error());
   }
   const int basis = static_cast<int>(std::trunc(raw.value()));
   if (basis < 0 || basis > 4) {
@@ -107,7 +107,7 @@ inline Expected<int, ErrorCode> read_day_count_basis(const Value* args, std::uin
 inline Expected<int, ErrorCode> read_coupon_frequency(const Value* args, std::uint32_t index) {
   auto raw = read_required_number(args, index);
   if (!raw) {
-    return raw.error();
+    return std::move(raw.error());
   }
   const int frequency = static_cast<int>(std::trunc(raw.value()));
   if (frequency != 1 && frequency != 2 && frequency != 4) {
@@ -132,11 +132,11 @@ struct SecurityRateArgs {
 inline Expected<SecurityRateArgs, ErrorCode> read_security_rate_args(const Value* args, std::uint32_t arity) {
   double v[4];
   if (auto read = read_required_numbers(args, "ddnn", v); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   auto basis = read_day_count_basis(args, arity, 4);
   if (!basis) {
-    return basis.error();
+    return std::move(basis.error());
   }
   if (v[0] >= v[1]) {
     return ErrorCode::Num;
@@ -165,15 +165,15 @@ inline Expected<CouponBondTail, ErrorCode> read_coupon_bond_tail(const Value* ar
                                                                  std::uint32_t rate_index) {
   double v[3];
   if (auto read = read_required_numbers(args + rate_index, "nnn", v); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   auto frequency = read_coupon_frequency(args, rate_index + 3);
   if (!frequency) {
-    return frequency.error();
+    return std::move(frequency.error());
   }
   auto basis = read_day_count_basis(args, arity, rate_index + 4);
   if (!basis) {
-    return basis.error();
+    return std::move(basis.error());
   }
   if (v[0] < 0.0 || v[2] <= 0.0) {
     return ErrorCode::Num;
@@ -397,7 +397,7 @@ inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, c
   for (int iter = 0; iter < kMaxIter; ++iter) {
     auto f0 = price_at(args, arity, yld, date1904);
     if (!f0) {
-      return f0.error();
+      return std::move(f0.error());
     }
     const double residual = f0.value() - target_price;
     if (std::fabs(residual) < f_tol) {
@@ -409,7 +409,7 @@ inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, c
     const double step = 1.0e-7 * std::fmax(1.0, std::fabs(yld));
     auto f_plus = price_at(args, arity, yld + step, date1904);
     if (!f_plus) {
-      return f_plus.error();
+      return std::move(f_plus.error());
     }
     double df = 0.0;
     if (yld < step) {
@@ -417,7 +417,7 @@ inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, c
     } else {
       auto f_minus = price_at(args, arity, yld - step, date1904);
       if (!f_minus) {
-        return f_minus.error();
+        return std::move(f_minus.error());
       }
       df = (f_plus.value() - f_minus.value()) / (2.0 * step);
     }
@@ -442,7 +442,7 @@ inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, c
       // residual here too before accepting the answer.
       auto f_new = price_at(args, arity, new_yld, date1904);
       if (!f_new) {
-        return f_new.error();
+        return std::move(f_new.error());
       }
       if (std::fabs(f_new.value() - target_price) < f_tol) {
         return new_yld;

@@ -519,7 +519,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
                                          sheet_ranges, name_table, sst, downgraded_formula_count,
                                          &downgraded_to_literal, name_shapes);
               !r) {
-            return r.error();
+            return std::move(r.error());
           }
           if (downgraded_to_literal) {
             downgraded_array_anchors.insert(anchor_key(row, col));
@@ -527,7 +527,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
         } else if (auto r = emit_cell(body, *cell, row, col, always, sst, sheet_names, sheet_ranges, name_table,
                                       downgraded_formula_count, name_shapes);
                    !r) {
-          return r.error();
+          return std::move(r.error());
         }
         continue;
       }
@@ -556,14 +556,14 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
     reconcile_x14_data_bars(*slot, sheet.conditional_formats(), x14_linked);
   }
   if (auto added = add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked); !added) {
-    return added.error();
+    return std::move(added.error());
   }
   const std::vector<std::string> hyperlink_rids = hyperlink_relationship_ids(sheet);
   // Protection, conditional formatting and data validation are emitted
   // from the model. Protection leads the tail: the one record the grammar
   // puts ahead of it (BrtSheetCalcProp) is one Excel does not persist.
   if (auto protection = emit_sheet_protection(body, sheet.protection()); !protection) {
-    return protection.error();
+    return std::move(protection.error());
   }
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);
@@ -571,10 +571,10 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
           EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks,
                                       FeatureFormulaWriteContext{sheet_names, sheet_ranges, name_table}, x14_linked);
       !features) {
-    return features.error();
+    return std::move(features.error());
   }
   if (auto hyperlinks = EmitHyperlinks(body, sheet, hyperlink_rids); !hyperlinks) {
-    return hyperlinks.error();
+    return std::move(hyperlinks.error());
   }
   body.insert(body.end(), tail.after_hyperlinks.begin(), tail.after_hyperlinks.end());
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheet), ByteSpan{});

@@ -38,15 +38,15 @@ namespace {
 Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t arity, bool date1904) {
   double dates[2];
   if (auto read = read_required_numbers(args, "dd", dates); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   auto f_e = read_coupon_frequency(args, 2);
   if (!f_e) {
-    return f_e.error();
+    return std::move(f_e.error());
   }
   auto b_e = read_day_count_basis(args, arity, 3);
   if (!b_e) {
-    return b_e.error();
+    return std::move(b_e.error());
   }
 
   const double s = dates[0];

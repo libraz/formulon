@@ -313,7 +313,7 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
       context.push_back(' ');
       context.append(budget_context);
     }
-    Error error = charged.error();
+    Error error = std::move(charged.error());
     error.message = "ZipReader::read_entry: cumulative extracted bytes exceed cap";
     error.context = std::move(context);
     return error;

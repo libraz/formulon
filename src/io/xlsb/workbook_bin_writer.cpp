@@ -434,7 +434,7 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
   }
   auto ranges = SeedFromRetainedTails(wb, collected.links);
   if (!ranges) {
-    return ranges.error();
+    return std::move(ranges.error());
   }
   std::vector<XtiEntry>& xti = ranges.value().xti;
   for (const XtiEntry& entry : collected.xti) {
@@ -537,7 +537,7 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
     // Measured: a defined-name body's root reference stays reference class.
     auto encoded_or = encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kReference);
     if (!encoded_or) {
-      return encoded_or.error();
+      return std::move(encoded_or.error());
     }
     const EncodedFormula& encoded = encoded_or.value();
     emit_u32(p, static_cast<std::uint32_t>(encoded.rgce.size()));
@@ -607,7 +607,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtWbProp), wb_prop_payload);
   // Excel places the protection records between BrtWbProp and the views.
   if (auto protection = emit_book_protection(body, wb.workbook_protection_xml()); !protection) {
-    return protection.error();
+    return std::move(protection.error());
   }
   emit_record(body, kBrtBeginBookViews, ByteSpan{});
   // itabCur (u32 at offset 24): measured to equal the tab-selected sheet's
@@ -707,7 +707,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
       if (auto r = EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, shapes[i].calc_exp, dn.comment,
                             sheet_names, sheet_ranges, table_for_scope(dn.local_sheet_id));
           !r) {
-        return r.error();
+        return std::move(r.error());
       }
     } else {
       // Placeholders carry no formula body, so the table they are handed is
@@ -717,7 +717,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
       if (auto r = EmitName(body, slot.name, /*formula=*/{}, slot.itab, /*hidden=*/false, /*calc_exp=*/false,
                             /*comment=*/{}, sheet_names, sheet_ranges, table_for_scope(-1));
           !r) {
-        return r.error();
+        return std::move(r.error());
       }
     }
   }

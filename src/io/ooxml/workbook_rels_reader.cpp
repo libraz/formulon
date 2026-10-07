@@ -98,7 +98,7 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
         return Expected<void, Error>::Ok();
       });
   if (!visit_status) {
-    return visit_status.error();
+    return std::move(visit_status.error());
   }
   return rels;
 }

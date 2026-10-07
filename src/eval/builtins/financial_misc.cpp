@@ -49,19 +49,19 @@ Expected<NumberQuad, ErrorCode> read_number_quad(const Value* args, std::uint32_
                                                  std::uint32_t fourth_index) {
   auto first = builtins_detail::read_required_number(args, first_index);
   if (!first) {
-    return first.error();
+    return std::move(first.error());
   }
   auto second = builtins_detail::read_required_number(args, second_index);
   if (!second) {
-    return second.error();
+    return std::move(second.error());
   }
   auto third = builtins_detail::read_required_number(args, third_index);
   if (!third) {
-    return third.error();
+    return std::move(third.error());
   }
   auto fourth = builtins_detail::read_required_number(args, fourth_index);
   if (!fourth) {
-    return fourth.error();
+    return std::move(fourth.error());
   }
   return NumberQuad{first.value(), second.value(), third.value(), fourth.value()};
 }

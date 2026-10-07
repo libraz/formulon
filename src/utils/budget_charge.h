@@ -39,7 +39,7 @@ inline Expected<void, Error> charge(ResourceBudget& budget, std::uint64_t count,
     context.push_back(' ');
   }
   context.append(budget_context);
-  Error error = charged.error();
+  Error error = std::move(charged.error());
   error.context = std::move(context);
   return error;
 }
@@ -65,7 +65,7 @@ Expected<void, Error> charge_then_reserve(ResourceBudget& budget, Container& con
   }
   auto charged = charge(budget, count, std::move(context));
   if (!charged) {
-    return charged.error();
+    return std::move(charged.error());
   }
   container.reserve(static_cast<std::size_t>(count));
   return Expected<void, Error>::Ok();

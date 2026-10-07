@@ -156,7 +156,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   {
     auto open_result = zip.open(bytes);
     if (!open_result) {
-      return open_result.error();
+      return std::move(open_result.error());
     }
   }
 
@@ -167,22 +167,22 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   }
   auto ct_bytes_or = zip.read_entry("[Content_Types].xml");
   if (!ct_bytes_or) {
-    return ct_bytes_or.error();
+    return std::move(ct_bytes_or.error());
   }
   const std::vector<std::uint8_t>& ct_bytes = ct_bytes_or.value();
   auto kind_or = ooxml::verify_content_types(ct_bytes, &diagnostics);
   if (!kind_or) {
-    return kind_or.error();
+    return std::move(kind_or.error());
   }
   const WorkbookKind workbook_kind = kind_or.value();
   auto override_part_entries_or = ooxml::list_override_part_entries(ct_bytes);
   if (!override_part_entries_or) {
-    return override_part_entries_or.error();
+    return std::move(override_part_entries_or.error());
   }
   const std::vector<ooxml::OverrideEntry> override_part_entries = std::move(override_part_entries_or.value());
   auto default_content_types_or = ooxml::list_default_content_types(ct_bytes);
   if (!default_content_types_or) {
-    return default_content_types_or.error();
+    return std::move(default_content_types_or.error());
   }
   std::vector<DefaultContentType> default_content_types = std::move(default_content_types_or.value());
 
@@ -202,7 +202,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // load them at the right point in the pipeline.
   auto wb_rels_or = ooxml::load_workbook_rels(zip, workbook_path);
   if (!wb_rels_or) {
-    return wb_rels_or.error();
+    return std::move(wb_rels_or.error());
   }
   ooxml::WorkbookRels& wb_rels = wb_rels_or.value();
 
@@ -213,7 +213,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   }
   auto wb_bytes_or = zip.read_entry(workbook_path);
   if (!wb_bytes_or) {
-    return wb_bytes_or.error();
+    return std::move(wb_bytes_or.error());
   }
   const std::vector<std::uint8_t>& wb_bytes = wb_bytes_or.value();
 
@@ -314,7 +314,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     auto added = wb.add_sheet_validated(name);
     if (!added) {
       if (added.error().code != FormulonErrorCode::kInvalidSheetName) {
-        return added.error();
+        return std::move(added.error());
       }
       std::string ctx("context=ooxml_reader part=");
       ctx.append(workbook_path);
@@ -368,7 +368,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     ASSIGN_OR_RETURN(auto sst_bytes, zip.read_entry(wb_rels.sst_path));
     auto sst_or = read_shared_strings(std::move(sst_bytes), result_text_storage);
     if (!sst_or) {
-      return sst_or.error();
+      return std::move(sst_or.error());
     }
     sst = std::move(sst_or.value());
     consumed_parts.insert(wb_rels.sst_path);
@@ -438,7 +438,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   {
     auto ext_or = ooxml::load_external_links(zip, wb_root, wb_rels);
     if (!ext_or) {
-      return ext_or.error();
+      return std::move(ext_or.error());
     }
     ooxml::ExternalLinkLoadResult ext = ext_or.take();
     for (const std::string& rels_path : ext.consumed_rels_paths) {
@@ -489,7 +489,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     }
     auto sheet_bytes_or = zip.read_entry(sheet_path);
     if (!sheet_bytes_or) {
-      return sheet_bytes_or.error();
+      return std::move(sheet_bytes_or.error());
     }
     // Bound to a mutable reference because the DOM path below parses it
     // in place; nothing else in this iteration reads the sheet bytes
@@ -515,7 +515,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         ByteSpan sheet_span{sheet_bytes.data(), sheet_bytes.size()};
         auto rs = read_sheet_data_sax(sheet_span, i, wb, sheet_contexts[i], result_text_storage, &diagnostics);
         if (!rs) {
-          return rs.error();
+          return std::move(rs.error());
         }
         sax_used = true;
       }
@@ -545,7 +545,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, sheet_bytes, "ooxml_reader", "sheet*.xml"));
       auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage, &diagnostics);
       if (!rs) {
-        return rs.error();
+        return std::move(rs.error());
       }
     }
     RETURN_IF_ERROR(ooxml::apply_worksheet_metadata(sheet_doc, i, wb, &diagnostics));
@@ -612,7 +612,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
           ooxml::relationship_ref_id(sheet_doc.child("worksheet").child("legacyDrawing"));
       auto aux_or = ooxml::load_sheet_aux_rels(zip, sheet_rels_path, sheet_dir, legacy_drawing_body_rid);
       if (!aux_or) {
-        return aux_or.error();
+        return std::move(aux_or.error());
       }
       const ooxml::SheetAuxRels& aux = aux_or.value();
       wb.sheet(i).set_unknown_relationships(aux.unknown_rels);
@@ -739,7 +739,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // `SheetReadContext::array_anchors`).
   for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
     if (auto r = RegisterArraySpills(wb.sheet(i), sheet_contexts[i].array_anchors); !r) {
-      return r.error();
+      return std::move(r.error());
     }
   }
 
@@ -813,7 +813,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     ASSIGN_OR_RETURN(auto def_bytes, zip.read_entry(definition_path));
     auto cache_or = read_pivot_cache_definition(def_bytes);
     if (!cache_or) {
-      return cache_or.error();
+      return std::move(cache_or.error());
     }
     pivot::PivotCache cache = std::move(cache_or.value());
     cache.set_cache_id(cache_id);
@@ -833,7 +833,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       ASSIGN_OR_RETURN(auto rec_bytes, zip.read_entry(records_path));
       auto rec_status = read_pivot_cache_records(std::move(rec_bytes), cache);
       if (!rec_status) {
-        return rec_status.error();
+        return std::move(rec_status.error());
       }
       consumed_parts.insert(records_path);
     }

@@ -156,7 +156,7 @@ Expected<void, Error> collect_axis_entries_impl(const AxisHierarchyNode& node, s
                                                 subtotal_first_by_depth, subtotal_counts);
       if (!child_or) {
         path.pop_back();
-        return child_or.error();
+        return std::move(child_or.error());
       }
     }
 
@@ -224,7 +224,7 @@ Expected<std::vector<AxisEntry>, Error> collect_axis_entries_view(const std::vec
     auto root_or = collect_axis_entries_impl(root, path, subtotals, subtotal_cursor, entries, axis,
                                              subtotal_first_by_depth, subtotal_counts);
     if (!root_or) {
-      return root_or.error();
+      return std::move(root_or.error());
     }
   }
   if (subtotal_cursor != subtotals.size()) {
@@ -322,7 +322,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   auto row_entries_or = collect_axis_entries(result.rows, result.row_subtotals, row_depth, include_row_subtotals, "row",
                                              subtotal_first_by_depth, row_subtotal_counts);
   if (!row_entries_or) {
-    return row_entries_or.error();
+    return std::move(row_entries_or.error());
   }
   std::vector<RowEntry> row_entries = row_entries_or.take();
   const bool include_col_subtotals = !result.col_subtotals.empty();
@@ -330,18 +330,18 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   auto col_entries_or = collect_axis_entries(result.cols, result.col_subtotals, col_depth, include_col_subtotals,
                                              "column", {}, col_subtotal_counts);
   if (!col_entries_or) {
-    return col_entries_or.error();
+    return std::move(col_entries_or.error());
   }
   std::vector<ColEntry> col_entries = col_entries_or.take();
 
   auto valid_or = validate_result_shape(table, result, row_leaves.size(), col_leaves.size());
   if (!valid_or) {
-    return valid_or.error();
+    return std::move(valid_or.error());
   }
 
   auto data_cols_or = checked_mul_size_t(col_entries.size(), data_field_count);
   if (!data_cols_or) {
-    return data_cols_or.error();
+    return std::move(data_cols_or.error());
   }
   const std::size_t data_cols = data_cols_or.value();
   // Compact form merges every row-field level into the same physical
@@ -393,7 +393,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   }
   auto cell_count_or = checked_mul_size_t(total_rows, total_cols);
   if (!cell_count_or) {
-    return cell_count_or.error();
+    return std::move(cell_count_or.error());
   }
 
   PivotCells cells;

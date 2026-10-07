@@ -55,7 +55,7 @@ Expected<std::string, Error> read_feature_formula(ByteSpan& cursor, std::uint32_
                                                   const FeatureFormulaReadContext& ctx) {
   auto cce = read_u32(cursor);
   if (!cce) {
-    return cce.error();
+    return std::move(cce.error());
   }
   if (cce.value() > cursor.size) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "feature formula rgce truncated",
@@ -66,7 +66,7 @@ Expected<std::string, Error> read_feature_formula(ByteSpan& cursor, std::uint32_
   cursor.size -= cce.value();
   auto cb = read_u32(cursor);
   if (!cb) {
-    return cb.error();
+    return std::move(cb.error());
   }
   if (cb.value() > cursor.size) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "feature formula rgcb truncated",
@@ -83,7 +83,7 @@ Expected<std::string, Error> read_feature_formula(ByteSpan& cursor, std::uint32_
       decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, rgcb, arena, ctx.sheet_names, ctx.name_table, ctx.sheet_ranges,
                   ctx.external_books, static_cast<std::int32_t>(ctx.sheet_index), PtgBaseCell{base_row, base_col});
   if (!ast) {
-    return ast.error();
+    return std::move(ast.error());
   }
   return canonical_feature_formula(parser::format_formula(*ast.value()));
 }
@@ -108,7 +108,7 @@ Expected<EncodedFeatureFormula, Error> encode_feature_formula(std::string_view t
   auto encoded = encode_ptgs(*root, ctx.sheet_names, ctx.sheet_ranges, ctx.name_table, root_class,
                              PtgBaseCell{base_row, base_col}, evaluation);
   if (!encoded) {
-    return encoded.error();
+    return std::move(encoded.error());
   }
   const std::vector<std::uint8_t>& rgce = encoded.value().rgce;
   out.cb_fmla = static_cast<std::uint32_t>(rgce.size());

@@ -158,7 +158,7 @@ inline constexpr std::uint64_t kMaxSheetLoadCellBytes = 256ULL * 1024ULL * 1024U
 /// ResourceBudget cells(kMaxPivotResultCells, FormulonErrorCode::kFnOverflow);
 /// auto ok = cells.consume(rows * cols);
 /// if (!ok) {
-///   return ok.error();
+///   return std::move(ok.error());
 /// }
 /// ```
 class ResourceBudget {

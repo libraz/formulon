@@ -273,7 +273,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
           }
           auto val_or = DecodeTypedValue(child, cache.mutable_text_storage());
           if (!val_or) {
-            return val_or.error();
+            return std::move(val_or.error());
           }
           field.shared_items.push_back(val_or.value());
         }
@@ -346,7 +346,7 @@ Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records
       if (IsTypedValueElement(child_name)) {
         auto val_or = DecodeTypedValue(child, cache.mutable_text_storage());
         if (!val_or) {
-          return val_or.error();
+          return std::move(val_or.error());
         }
         record.cells[field_pos] = val_or.value();
         record.cell_is_index[field_pos] = false;

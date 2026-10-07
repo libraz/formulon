@@ -83,7 +83,7 @@ inline Expected<double, ErrorCode> read_required_number(const Value* args, std::
                                                         bool check_finite = true) {
   auto coerced = coerce_to_number(args[index]);
   if (!coerced) {
-    return coerced.error();
+    return std::move(coerced.error());
   }
   const double v = coerced.value();
   if (check_finite && (std::isnan(v) || std::isinf(v))) {
@@ -111,11 +111,11 @@ inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::
                                                         std::uint32_t second_index, bool check_finite = true) {
   auto first = read_required_number(args, first_index, check_finite);
   if (!first) {
-    return first.error();
+    return std::move(first.error());
   }
   auto second = read_required_number(args, second_index, check_finite);
   if (!second) {
-    return second.error();
+    return std::move(second.error());
   }
   return NumberPair{first.value(), second.value()};
 }
@@ -128,15 +128,15 @@ inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, s
                                                             bool check_finite = true) {
   auto first = read_required_number(args, first_index, check_finite);
   if (!first) {
-    return first.error();
+    return std::move(first.error());
   }
   auto second = read_required_number(args, second_index, check_finite);
   if (!second) {
-    return second.error();
+    return std::move(second.error());
   }
   auto third = read_required_number(args, third_index, check_finite);
   if (!third) {
-    return third.error();
+    return std::move(third.error());
   }
   return NumberTriple{first.value(), second.value(), third.value()};
 }

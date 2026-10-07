@@ -690,7 +690,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
                       "context=pivot_table_reader");
   }
   if (auto status = DecodeLocationRef(ref_attr.value(), &table); !status) {
-    return status.error();
+    return std::move(status.error());
   }
   // The span now describes a range Excel itself wrote. Recording that keeps
   // the writer from replacing it with our own layout projection, which would
@@ -738,7 +738,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   }
   if (pugi::xml_node data = root.child("dataFields"); data) {
     if (auto status = ParseDataFields(data, &table); !status) {
-      return status.error();
+      return std::move(status.error());
     }
   }
   // `<filters>` is decoded for evaluation but deliberately left out of

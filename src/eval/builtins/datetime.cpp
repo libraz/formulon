@@ -85,7 +85,7 @@ double serial_from_date_components(int y, unsigned m, long long d, bool date1904
 Expected<double, ErrorCode> coerce_serial(const Value& v) {
   auto n = coerce_to_number(v);
   if (!n) {
-    return n.error();
+    return std::move(n.error());
   }
   if (n.value() < 0.0 || n.value() >= kExcelMaxSerial + 1.0) {
     return ErrorCode::Num;
@@ -107,7 +107,7 @@ struct CoercedDateArg {
 Expected<CoercedDateArg, ErrorCode> coerce_date_arg(const Value& v, bool date1904) {
   auto n = coerce_to_number(v);
   if (!n) {
-    return n.error();
+    return std::move(n.error());
   }
   CoercedDateArg out{n.value(), false};
   if (!date1904 || v.kind() != ValueKind::Text) {
@@ -156,7 +156,7 @@ double workbook_date_serial(const CoercedDateArg& arg, bool date1904) noexcept {
 Expected<CoercedDateArg, ErrorCode> coerce_bounded_date_arg(const Value& v, bool date1904) {
   auto out = coerce_date_arg(v, date1904);
   if (!out) {
-    return out.error();
+    return std::move(out.error());
   }
   const double workbook_serial = workbook_date_serial(out.value(), date1904);
   if (!is_valid_date_time_serial(workbook_serial, date1904)) {
@@ -168,7 +168,7 @@ Expected<CoercedDateArg, ErrorCode> coerce_bounded_date_arg(const Value& v, bool
 Expected<double, ErrorCode> read_truncated_number_arg(const Value* args, std::uint32_t index) {
   auto n = coerce_to_number(args[index]);
   if (!n) {
-    return n.error();
+    return std::move(n.error());
   }
   return std::trunc(n.value());
 }
@@ -192,7 +192,7 @@ Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std:
   }
   auto n = coerce_to_number(args[index]);
   if (!n) {
-    return n.error();
+    return std::move(n.error());
   }
   const double truncated = std::trunc(n.value());
   if (!std::isfinite(truncated) || truncated < static_cast<double>(std::numeric_limits<int>::lowest()) ||
@@ -205,7 +205,7 @@ Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std:
 Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v, bool date1904) {
   auto serial = coerce_bounded_date_arg(v, date1904);
   if (!serial) {
-    return serial.error();
+    return std::move(serial.error());
   }
   const double day_serial = std::floor(normal_date_serial(serial.value(), date1904));
   if (day_serial == 0.0 && !date1904) {
@@ -217,7 +217,7 @@ Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v, bool date1
 Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v) {
   auto serial = coerce_serial(v);
   if (!serial) {
-    return serial.error();
+    return std::move(serial.error());
   }
   return date_time::hms_from_fraction(serial.value());
 }
@@ -387,11 +387,11 @@ Expected<DateAndReturnType, ErrorCode> read_date_and_return_type(const Value* ar
                                                                  bool date1904) {
   auto serial = coerce_bounded_date_arg(args[0], date1904);
   if (!serial) {
-    return serial.error();
+    return std::move(serial.error());
   }
   auto return_type = read_optional_truncated_int_arg(args, arity, 1, 1);
   if (!return_type) {
-    return return_type.error();
+    return std::move(return_type.error());
   }
   return DateAndReturnType{serial.value(), return_type.value()};
 }
@@ -469,11 +469,11 @@ struct ShiftedMonth {
 Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904) {
   auto serial = coerce_bounded_date_arg(args[0], date1904);
   if (!serial) {
-    return serial.error();
+    return std::move(serial.error());
   }
   auto months_c = coerce_to_number(args[1]);
   if (!months_c) {
-    return months_c.error();
+    return std::move(months_c.error());
   }
   const double canonical_input = workbook_date_serial(serial.value(), date1904);
   if (!is_valid_date_time_serial(canonical_input, date1904)) {
@@ -985,7 +985,7 @@ struct ParsedDateTimeText {
 Expected<ParsedDateTimeText, ErrorCode> parse_date_time_arg(const Value& arg, int current_year = 0) {
   auto text = coerce_to_text(arg);
   if (!text) {
-    return text.error();
+    return std::move(text.error());
   }
   const std::string_view trimmed = date_parse::trim_date_text(text.value());
   if (trimmed.empty()) {

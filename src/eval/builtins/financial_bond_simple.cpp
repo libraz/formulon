@@ -49,11 +49,11 @@ struct MaturityInterestArgs {
 Expected<MaturityInterestArgs, ErrorCode> read_maturity_interest_args(const Value* args, std::uint32_t arity) {
   double v[5];
   if (auto read = read_required_numbers(args, "dddnn", v); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   auto basis = read_day_count_basis(args, arity, 5);
   if (!basis) {
-    return basis.error();
+    return std::move(basis.error());
   }
   if (v[2] >= v[0]) {
     return ErrorCode::Num;
@@ -77,15 +77,15 @@ struct MaturityYearFracs {
 Expected<MaturityYearFracs, ErrorCode> maturity_year_fracs(const MaturityInterestArgs& in, bool date1904) {
   auto a_yf = yearfrac_for_basis(in.issue, in.settlement, in.basis, date1904);
   if (!a_yf) {
-    return a_yf.error();
+    return std::move(a_yf.error());
   }
   auto dsm_yf = yearfrac_for_basis(in.settlement, in.maturity, in.basis, date1904);
   if (!dsm_yf) {
-    return dsm_yf.error();
+    return std::move(dsm_yf.error());
   }
   auto dim_yf = yearfrac_for_basis(in.issue, in.maturity, in.basis, date1904);
   if (!dim_yf) {
-    return dim_yf.error();
+    return std::move(dim_yf.error());
   }
   return MaturityYearFracs{a_yf.value(), dsm_yf.value(), dim_yf.value()};
 }

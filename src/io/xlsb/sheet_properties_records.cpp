@@ -175,7 +175,7 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
   }
   auto code_name_or = read_xlwidestring(p);
   if (!code_name_or) {
-    return code_name_or.error();
+    return std::move(code_name_or.error());
   }
 
   const std::uint32_t argb =

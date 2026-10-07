@@ -85,7 +85,7 @@ inline Expected<double, ErrorCode> read_number_arg(const Value* args, std::uint3
 Expected<std::uint64_t, ErrorCode> read_nonneg_uint_arg(const Value* args, std::uint32_t index, std::uint64_t max) {
   auto x = read_number_arg(args, index);
   if (!x) {
-    return x.error();
+    return std::move(x.error());
   }
   std::uint64_t out = 0;
   if (!try_truncate_nonneg(x.value(), max, &out)) {
@@ -104,11 +104,11 @@ Expected<UIntPair, ErrorCode> read_nonneg_uint_pair(const Value* args) {
   constexpr std::uint64_t max = static_cast<std::uint64_t>(1) << 53u;
   auto first = read_nonneg_uint_arg(args, 0, max);
   if (!first) {
-    return first.error();
+    return std::move(first.error());
   }
   auto second = read_nonneg_uint_arg(args, 1, max);
   if (!second) {
-    return second.error();
+    return std::move(second.error());
   }
   return UIntPair{first.value(), second.value()};
 }

@@ -108,7 +108,7 @@ Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t 
   OddFirstSchedule sched{};
   auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/true, date1904, sched);
   if (!in) {
-    return in.error();
+    return std::move(in.error());
   }
 
   const double freq_d = in.value().freq_d;

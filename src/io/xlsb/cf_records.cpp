@@ -562,7 +562,7 @@ Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValue
     auto f = encode_feature_formula(v.value, base.first_row, base.first_col, PtgRootClass::kValue, ctx,
                                     PtgEvaluation::kConditionalFormat);
     if (!f) {
-      return f.error();
+      return std::move(f.error());
     }
     formula = std::move(f).value();
   } else if (v.type != cf::CfvoType::Min && v.type != cf::CfvoType::Max &&
@@ -639,7 +639,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
                                const FeatureFormulaWriteContext& ctx, bool linked) {
   auto codes = RuleCodes(rule);
   if (!codes) {
-    return codes.error();
+    return std::move(codes.error());
   }
   std::array<std::uint8_t, kGuidBytes> guid{};
   if (!rule.id.empty() && !ParseGuid(rule.id, guid)) {
@@ -668,7 +668,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
       auto f = encode_feature_formula(**sources[i], base.first_row, base.first_col, PtgRootClass::kValue, ctx,
                                       PtgEvaluation::kConditionalFormat);
       if (!f) {
-        return f.error();
+        return std::move(f.error());
       }
       formulas[i] = std::move(f).value();
     }

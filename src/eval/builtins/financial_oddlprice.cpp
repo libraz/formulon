@@ -133,14 +133,14 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
                                                         bool slot4_must_be_positive, bool date1904) {
   double dates[3];
   if (auto read = read_required_numbers(args, "ddd", dates); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   const double settlement = dates[0];
   const double maturity = dates[1];
   const double last_interest = dates[2];
   auto tail = read_coupon_bond_tail(args, arity, 3);
   if (!tail) {
-    return tail.error();
+    return std::move(tail.error());
   }
   const auto [rate, slot4, redemption, frequency, basis] = tail.value();
 
@@ -159,7 +159,7 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
 
   auto sched = compute_odd_last_schedule(settlement, maturity, last_interest, frequency, basis, date1904);
   if (!sched) {
-    return sched.error();
+    return std::move(sched.error());
   }
 
   const double freq_d = static_cast<double>(frequency);
@@ -177,7 +177,7 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
 Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
   auto in = read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/false, date1904);
   if (!in) {
-    return in.error();
+    return std::move(in.error());
   }
   const double disc = 1.0 + in.value().dsc * in.value().slot4 / in.value().freq_d / in.value().e;
   if (disc == 0.0) {

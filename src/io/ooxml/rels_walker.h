@@ -43,7 +43,7 @@ Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string
                                                std::string_view context, Fn&& fn) {
   auto rels_bytes_or = zip.read_entry(rels_path);
   if (!rels_bytes_or) {
-    return rels_bytes_or.error();
+    return std::move(rels_bytes_or.error());
   }
   const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
 
@@ -75,7 +75,7 @@ Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string
   for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
     auto status = fn(rel);
     if (!status) {
-      return status.error();
+      return std::move(status.error());
     }
   }
   return Expected<void, Error>::Ok();

@@ -305,7 +305,7 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     with_eq.append(formula_text);
     auto wf = workbook.set_cell_formula(sheet_index, parsed.row, parsed.col, workbook.ingest_stored_formula(with_eq));
     if (!wf) {
-      return wf.error();
+      return std::move(wf.error());
     }
     // Preserve Excel's cached result until a caller explicitly recalculates.
     // This is essential when a workbook uses functions Formulon does not yet
@@ -335,7 +335,7 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     if (existing != nullptr && !existing->formula_text.empty()) {
       auto wv = workbook.set_cell_value(sheet_index, parsed.row, parsed.col, stored_value);
       if (!wv) {
-        return wv.error();
+        return std::move(wv.error());
       }
     } else {
       sheet.set_cell_value(parsed.row, parsed.col, stored_value);
@@ -349,7 +349,7 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
   if (xf_index != 0U || parsed.has_explicit_xf) {
     auto sx = workbook.set_cell_xf_index(sheet_index, parsed.row, parsed.col, xf_index);
     if (!sx) {
-      return sx.error();
+      return std::move(sx.error());
     }
   }
 
@@ -400,7 +400,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
     for (pugi::xml_node c = row.child("c"); c; c = c.next_sibling("c")) {
       auto parsed_or = parse_cell_element(c, text_storage);
       if (!parsed_or) {
-        return parsed_or.error();
+        return std::move(parsed_or.error());
       }
       // Take a const reference rather than moving so the `string_view`
       // inside `parsed.value` (which references `text_storage`)
@@ -414,7 +414,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       {
         auto resolved = ResolveFormula(c, shared_formulas, parsed.row, parsed.col, formula_text, diagnostics);
         if (!resolved) {
-          return resolved.error();
+          return std::move(resolved.error());
         }
       }
 
@@ -434,7 +434,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
           ctxs.append(std::to_string(parsed.col));
           auto charged = charge(cell_budget, growth * sizeof(Cell), std::move(ctxs));
           if (!charged) {
-            return charged.error();
+            return std::move(charged.error());
           }
         }
       }
@@ -442,7 +442,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       auto applied = ApplyParsedCell(parsed, formula_text, parsed.xf_index, &parsed.phonetic_runs,
                                      parsed.phonetic_props, sheet_index, workbook, ctx);
       if (!applied) {
-        return applied.error();
+        return std::move(applied.error());
       }
 
       // Record a dynamic-array anchor so its cached spill targets do not
@@ -596,7 +596,7 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
       ctxs.append(std::to_string(rec.col));
       auto charged = charge(cell_budget, growth * sizeof(Cell), std::move(ctxs));
       if (!charged) {
-        return charged.error();
+        return std::move(charged.error());
       }
     }
   }
@@ -606,7 +606,7 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   // resolution pass instead — same contract the DOM path uses.
   auto applied = ApplyParsedCell(cell, formula_text, xf, rec.phonetic, rec.phonetic_props, sheet_index, workbook, ctx);
   if (!applied) {
-    return applied.error();
+    return std::move(applied.error());
   }
   // Record a dynamic-array anchor so its cached spill targets do not read
   // back as blocking literals (see `RegisterArraySpills`).
@@ -696,7 +696,7 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
   cb.on_cell = &SaxOnCellTrampoline;
   auto scanned = scan_sheet_data(sheet_xml, cb);
   if (!scanned) {
-    return scanned.error();
+    return std::move(scanned.error());
   }
   // Spill registration is the caller's job (see `SheetReadContext::
   // array_anchors`): it must run after `ctx.pending_sst_cells` has been

@@ -563,7 +563,7 @@ Expected<void, Error> apply_auto_filter(Workbook& wb, std::size_t sheet_index, c
   Sheet& sheet = wb.sheet(sheet_index);
   auto visible = evaluate_auto_filter(wb, sheet, filter, deps);
   if (!visible) {
-    return visible.error();
+    return std::move(visible.error());
   }
   const std::uint32_t first = filter.range.first_row + 1U;
   std::vector<RowLayout>& overrides = sheet.mutable_layout().row_overrides;

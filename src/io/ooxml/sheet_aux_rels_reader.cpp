@@ -36,14 +36,14 @@ Expected<std::vector<std::string>, Error> load_targets_of_type(const ZipReader& 
                                                  if (type == rel_type) {
                                                    auto resolved = resolve_relative_path(sheet_dir, target);
                                                    if (!resolved) {
-                                                     return resolved.error();
+                                                     return std::move(resolved.error());
                                                    }
                                                    targets.push_back(std::move(resolved).value());
                                                  }
                                                  return Expected<void, Error>::Ok();
                                                });
   if (!visit_status) {
-    return visit_status.error();
+    return std::move(visit_status.error());
   }
   return targets;
 }
@@ -87,32 +87,32 @@ Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::str
         } else if (type == kRelComments) {
           auto resolved = resolve_relative_path(sheet_dir, target);
           if (!resolved) {
-            return resolved.error();
+            return std::move(resolved.error());
           }
           out.comments_path = std::move(resolved).value();
         } else if (type == kRelThreadedComment) {
           auto resolved = resolve_relative_path(sheet_dir, target);
           if (!resolved) {
-            return resolved.error();
+            return std::move(resolved.error());
           }
           out.threaded_comments_path = std::move(resolved).value();
         } else if (type == kRelVmlDrawing) {
           auto resolved = resolve_relative_path(sheet_dir, target);
           if (!resolved) {
-            return resolved.error();
+            return std::move(resolved.error());
           }
           vml_candidates.push_back(VmlCandidate{std::string(rel.attribute("Id").value()), std::move(resolved).value()});
         } else if (type == kRelPrinterSettings) {
           auto resolved = resolve_relative_path(sheet_dir, target);
           if (!resolved) {
-            return resolved.error();
+            return std::move(resolved.error());
           }
           out.printer_settings_rid.assign(rel.attribute("Id").value());
           out.printer_settings_path = std::move(resolved).value();
         } else if (type == kRelDrawing) {
           auto resolved = resolve_relative_path(sheet_dir, target);
           if (!resolved) {
-            return resolved.error();
+            return std::move(resolved.error());
           }
           out.drawing_path = std::move(resolved).value();
         } else if (type != kRelTable && type != kRelPivotTable) {
@@ -125,7 +125,7 @@ Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::str
           } else {
             auto resolved = resolve_relative_path(sheet_dir, target);
             if (!resolved) {
-              return resolved.error();
+              return std::move(resolved.error());
             }
             entry.target = std::move(resolved).value();
           }
@@ -136,7 +136,7 @@ Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::str
         return Expected<void, Error>::Ok();
       });
   if (!visit_status) {
-    return visit_status.error();
+    return std::move(visit_status.error());
   }
   // Select the one `kRelVmlDrawing` candidate that models comment
   // geometry: prefer the id the worksheet body's `<legacyDrawing>`

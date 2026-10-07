@@ -76,7 +76,7 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
   }
   auto coerced = coerce_to_number(args[index]);
   if (!coerced) {
-    return coerced.error();
+    return std::move(coerced.error());
   }
   const double d = coerced.value();
   if (std::isnan(d) || std::isinf(d)) {
@@ -400,11 +400,11 @@ Expected<builtins_detail::NumberPair, ErrorCode> coerce_non_bool_pair(const Valu
   }
   auto first = coerce_to_number(args[0]);
   if (!first) {
-    return first.error();
+    return std::move(first.error());
   }
   auto second = coerce_to_number(args[1]);
   if (!second) {
-    return second.error();
+    return std::move(second.error());
   }
   return builtins_detail::NumberPair{first.value(), second.value()};
 }

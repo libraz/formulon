@@ -126,11 +126,11 @@ struct TextAndCount {
 Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::uint32_t arity) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
-    return text.error();
+    return std::move(text.error());
   }
   auto parsed = read_optional_int_arg(args, arity, 1u, 1);
   if (!parsed) {
-    return parsed.error();
+    return std::move(parsed.error());
   }
   if (parsed.value() < 0) {
     return ErrorCode::Value;

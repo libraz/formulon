@@ -197,7 +197,7 @@ Expected<void, Error> DecodeFont(ByteSpan payload, StylesTable& table) {
   rec.has_charset = charset_or.value() != 0U;
   rec.charset = charset_or.value();
   if (auto color = DecodeColor(p, /*unset_argb=*/rec.color_argb, rec.color_argb, rec.color); !color) {
-    return color.error();
+    return std::move(color.error());
   }
   auto scheme_or = read_u8(p);
   if (!scheme_or) {
@@ -231,10 +231,10 @@ Expected<void, Error> DecodeFill(ByteSpan payload, StylesTable& table) {
   // keeps the converted `<fill>` identical to the one Excel writes.
   if (rec.pattern != 0U) {
     if (auto fg = DecodeColor(p, /*unset_argb=*/0U, rec.fg_argb, rec.fg); !fg) {
-      return fg.error();
+      return std::move(fg.error());
     }
     if (auto bg = DecodeColor(p, /*unset_argb=*/0U, rec.bg_argb, rec.bg); !bg) {
-      return bg.error();
+      return std::move(bg.error());
     }
     // The system-foreground / system-background palette pair is how a
     // patterned fill says it chose neither colour; Excel writes no
@@ -265,7 +265,7 @@ Expected<void, Error> DecodeBorderSide(ByteSpan& p, BorderSide& side) {
   std::uint32_t argb = 0;
   ColorSpec spec;
   if (auto color = DecodeColor(p, /*unset_argb=*/0U, argb, spec); !color) {
-    return color.error();
+    return std::move(color.error());
   }
   // A `none` side has no `<color>` child in OOXML; the wire always carries
   // one, so drop it rather than emit a colour Excel never wrote.
@@ -288,7 +288,7 @@ Expected<void, Error> DecodeBorder(ByteSpan payload, StylesTable& table) {
   rec.diagonal_up = (flags_or.value() & 0x02U) != 0U;
   for (BorderSide* side : {&rec.top, &rec.bottom, &rec.left, &rec.right, &rec.diagonal}) {
     if (auto decoded = DecodeBorderSide(p, *side); !decoded) {
-      return decoded.error();
+      return std::move(decoded.error());
     }
   }
   table.borders.push_back(rec);
@@ -386,31 +386,31 @@ Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     switch (static_cast<XlsbRecordType>(rec.type)) {
       case XlsbRecordType::BrtFmt: {
         if (auto r = DecodeFmt(rec.payload, table); !r) {
-          return r.error();
+          return std::move(r.error());
         }
         break;
       }
       case XlsbRecordType::BrtFont: {
         if (auto r = DecodeFont(rec.payload, table); !r) {
-          return r.error();
+          return std::move(r.error());
         }
         break;
       }
       case XlsbRecordType::BrtFill: {
         if (auto r = DecodeFill(rec.payload, table); !r) {
-          return r.error();
+          return std::move(r.error());
         }
         break;
       }
       case XlsbRecordType::BrtBorder: {
         if (auto r = DecodeBorder(rec.payload, table); !r) {
-          return r.error();
+          return std::move(r.error());
         }
         break;
       }
@@ -428,7 +428,7 @@ Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
         break;
       case XlsbRecordType::BrtXF: {
         if (auto r = DecodeXf(rec.payload, xf_target, table); !r) {
-          return r.error();
+          return std::move(r.error());
         }
         break;
       }

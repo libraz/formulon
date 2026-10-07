@@ -92,7 +92,7 @@ inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, s
 inline Expected<bool, ErrorCode> read_bool_arg(const Value* args, std::uint32_t index) {
   auto value = coerce_to_bool(args[index]);
   if (!value) {
-    return value.error();
+    return std::move(value.error());
   }
   return value.value();
 }
@@ -115,11 +115,11 @@ struct TripleCumulative {
 inline Expected<PairCumulative, ErrorCode> read_pair_cumulative(const Value* args) {
   auto input = read_number_pair(args, 0, 1);
   if (!input) {
-    return input.error();
+    return std::move(input.error());
   }
   auto cum = read_bool_arg(args, 2);
   if (!cum) {
-    return cum.error();
+    return std::move(cum.error());
   }
   return PairCumulative{input.value().first, input.value().second, cum.value()};
 }
@@ -127,11 +127,11 @@ inline Expected<PairCumulative, ErrorCode> read_pair_cumulative(const Value* arg
 inline Expected<TripleCumulative, ErrorCode> read_triple_cumulative(const Value* args) {
   auto input = read_number_triple(args, 0, 1, 2);
   if (!input) {
-    return input.error();
+    return std::move(input.error());
   }
   auto cum = read_bool_arg(args, 3);
   if (!cum) {
-    return cum.error();
+    return std::move(cum.error());
   }
   return TripleCumulative{input.value().first, input.value().second, input.value().third, cum.value()};
 }

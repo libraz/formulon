@@ -137,7 +137,7 @@ Expected<double, ErrorCode> coerce_to_number(const Value& v) {
 Expected<double, ErrorCode> coerce_to_index_number(const Value& v) {
   auto number = coerce_to_number(v);
   if (!number) {
-    return number.error();
+    return std::move(number.error());
   }
   return truncate_index(number.value());
 }
@@ -258,7 +258,7 @@ Expected<std::vector<double>, ErrorCode> collect_numerics(const Value* args, std
           auto coerced = coerce_to_number(cell);
           if (!coerced) {
             if (policy.error_on_text) {
-              return coerced.error();
+              return std::move(coerced.error());
             }
             // Silent skip on unparseable text — matches the lenient
             // `SMALL` / `LARGE` direct-scalar path when paired with

@@ -43,7 +43,7 @@ namespace financial_detail {
 Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t arity, bool date1904) {
   auto in = read_odd_last_inputs(args, arity, /*slot4_must_be_positive=*/true, date1904);
   if (!in) {
-    return in.error();
+    return std::move(in.error());
   }
   const double pr_v = in.value().slot4;
   const double denom = pr_v + in.value().ai;

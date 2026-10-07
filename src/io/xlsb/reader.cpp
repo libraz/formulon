@@ -285,19 +285,19 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
           }
           auto resolved = ResolveRelativePath(base_dir, target);
           if (!resolved) {
-            return resolved.error();
+            return std::move(resolved.error());
           }
           rels.sheet_targets.emplace(id, std::move(resolved).value());
         } else if (type == kRelSharedStrings) {
           auto resolved = ResolveRelativePath(base_dir, target);
           if (!resolved) {
-            return resolved.error();
+            return std::move(resolved.error());
           }
           rels.sst_path = std::move(resolved).value();
         } else if (type == kRelStyles) {
           auto resolved = ResolveRelativePath(base_dir, target);
           if (!resolved) {
-            return resolved.error();
+            return std::move(resolved.error());
           }
           rels.styles_path = std::move(resolved).value();
         } else {
@@ -310,7 +310,7 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
           } else {
             auto resolved = ResolveRelativePath(base_dir, target);
             if (!resolved) {
-              return resolved.error();
+              return std::move(resolved.error());
             }
             unknown.target = std::move(resolved).value();
           }
@@ -321,7 +321,7 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
         return Expected<void, Error>::Ok();
       });
   if (!visit_status) {
-    return visit_status.error();
+    return std::move(visit_status.error());
   }
   return rels;
 }
@@ -353,7 +353,7 @@ Expected<std::vector<UnknownRelationship>, Error> LoadSheetRelationships(const Z
         } else {
           auto resolved = ResolveRelativePath(sheet_dir, target);
           if (!resolved) {
-            return Expected<void, Error>(resolved.error());
+            return Expected<void, Error>(std::move(resolved.error()));
           }
           entry.target = std::move(resolved).value();
         }
@@ -361,7 +361,7 @@ Expected<std::vector<UnknownRelationship>, Error> LoadSheetRelationships(const Z
         return Expected<void, Error>::Ok();
       });
   if (!status) {
-    return status.error();
+    return std::move(status.error());
   }
   return out;
 }
@@ -388,13 +388,13 @@ Expected<std::string, Error> FindRelationship(const ZipReader& zip, std::string_
         }
         auto resolved = ResolveRelativePath(dir, rel.attribute("Target").value());
         if (!resolved) {
-          return Expected<void, Error>(resolved.error());
+          return Expected<void, Error>(std::move(resolved.error()));
         }
         found = std::move(resolved).value();
         return Expected<void, Error>::Ok();
       });
   if (!status) {
-    return status.error();
+    return std::move(status.error());
   }
   return found;
 }
@@ -693,7 +693,7 @@ Expected<void, Error> ResolveSheetHyperlinks(Sheet& sheet, std::vector<UnknownRe
 Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   ZipReader zip;
   if (auto open_result = zip.open(bytes); !open_result) {
-    return open_result.error();
+    return std::move(open_result.error());
   }
 
   // 1. [Content_Types].xml — gate + Override list.
@@ -704,7 +704,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   ASSIGN_OR_RETURN(auto ct_bytes, zip.read_entry("[Content_Types].xml"));
   auto ct_view_or = LoadContentTypes(ct_bytes);
   if (!ct_view_or) {
-    return ct_view_or.error();
+    return std::move(ct_view_or.error());
   }
   ContentTypesView ct_view = ct_view_or.take();
 
@@ -721,7 +721,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // 3. xl/_rels/workbook.xml.rels (still XML in xlsb).
   auto wb_rels_or = LoadWorkbookRels(zip, workbook_path);
   if (!wb_rels_or) {
-    return wb_rels_or.error();
+    return std::move(wb_rels_or.error());
   }
   const WorkbookRels& wb_rels = wb_rels_or.value();
 
@@ -733,7 +733,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   ASSIGN_OR_RETURN(auto wb_bytes, zip.read_entry(workbook_path));
   auto bundle_or = DecodeWorkbookBin(wb_bytes);
   if (!bundle_or) {
-    return bundle_or.error();
+    return std::move(bundle_or.error());
   }
   const WorkbookBinInfo& workbook_info = bundle_or.value();
   const std::vector<SheetBundleEntry>& bundle = workbook_info.sheets;
@@ -745,13 +745,13 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // resolve against the same tables.
   auto name_table_or = DecodeWorkbookNames(wb_bytes);
   if (!name_table_or) {
-    return name_table_or.error();
+    return std::move(name_table_or.error());
   }
   const std::vector<XlsbName>& name_table = name_table_or.value();
   const std::vector<XlsbSupBook> sup_books = DecodeSupBooks(wb_bytes);
   auto sheet_ranges_or = DecodeExternSheet(wb_bytes, sup_books);
   if (!sheet_ranges_or) {
-    return sheet_ranges_or.error();
+    return std::move(sheet_ranges_or.error());
   }
   const std::vector<XlsbSheetRange>& sheet_ranges = sheet_ranges_or.value();
 
@@ -790,7 +790,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     auto added = wb.add_sheet_validated(b.name);
     if (!added) {
       if (added.error().code != FormulonErrorCode::kInvalidSheetName) {
-        return added.error();
+        return std::move(added.error());
       }
       return make_error(FormulonErrorCode::kIoSheetCorrupt,
                         "workbook.bin: BrtBundleSh name is invalid or collides with an earlier sheet",
@@ -827,7 +827,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   if (auto r = RegisterDefinedNames(wb_bytes, name_table, sheet_names, sheet_ranges, external_books, wb,
                                     &undecoded_defined_name_count);
       !r) {
-    return r.error();
+    return std::move(r.error());
   }
 
   // 6. xl/sharedStrings.bin — load before the per-sheet decode loop so
@@ -860,7 +860,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   if (!wb_rels.styles_path.empty() && zip.has_entry(wb_rels.styles_path)) {
     auto styles_bytes_or = zip.read_entry(wb_rels.styles_path);
     if (!styles_bytes_or) {
-      return styles_bytes_or.error();
+      return std::move(styles_bytes_or.error());
     }
     const std::vector<std::uint8_t>& styles_bytes = styles_bytes_or.value();
     ByteSpan styles_span{styles_bytes.data(), styles_bytes.size()};
@@ -904,7 +904,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     auto state_or = DecodeSheetBin(sheet_bytes, i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
                                    sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count);
     if (!state_or) {
-      return state_or.error();
+      return std::move(state_or.error());
     }
     cells_read += state_or.value().cells_decoded;
     dropped_record_count += state_or.value().dropped_records;
@@ -926,12 +926,12 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (zip.has_entry(sheet_rels_path)) {
       auto rels_or = LoadSheetRelationships(zip, sheet_rels_path, ooxml::dir_of(sheet_path));
       if (!rels_or) {
-        return rels_or.error();
+        return std::move(rels_or.error());
       }
       auto relationships = std::move(rels_or.value());
       auto hyperlinks = ResolveSheetHyperlinks(wb.sheet(i), relationships);
       if (!hyperlinks) {
-        return hyperlinks.error();
+        return std::move(hyperlinks.error());
       }
       wb.sheet(i).set_unknown_relationships(std::move(relationships));
       consumed_parts.insert(sheet_rels_path);
@@ -939,7 +939,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       std::vector<UnknownRelationship> no_relationships;
       auto hyperlinks = ResolveSheetHyperlinks(wb.sheet(i), no_relationships);
       if (!hyperlinks) {
-        return hyperlinks.error();
+        return std::move(hyperlinks.error());
       }
     }
   }

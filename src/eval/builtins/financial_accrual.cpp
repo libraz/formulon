@@ -41,7 +41,7 @@ Expected<bool, ErrorCode> read_calc_method(const Value* args, std::uint32_t arit
   }
   auto coerced = coerce_to_number(v);
   if (!coerced) {
-    return coerced.error();
+    return std::move(coerced.error());
   }
   return coerced.value() != 0.0;
 }

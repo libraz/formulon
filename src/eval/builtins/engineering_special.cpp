@@ -86,7 +86,7 @@ Expected<int, ErrorCode> coerce_bessel_order(const Value& v) {
   // ceiling that still accommodates any realistic engineering query.
   auto t = builtins_detail::coerce_truncated_in_range(v, 0.0, static_cast<double>((1 << 30)), /*reject_bool=*/true);
   if (!t) {
-    return t.error();
+    return std::move(t.error());
   }
   return static_cast<int>(t.value());
 }

@@ -38,7 +38,7 @@ namespace stats_detail {
 static Expected<NumberTriple, ErrorCode> read_confidence_args(const Value* args) {
   auto input = read_number_triple(args, 0, 1, 2);
   if (!input) {
-    return input.error();
+    return std::move(input.error());
   }
   const auto [alpha, sd, size_raw] = input.value();
   // Reject negative / non-finite sizes before flooring. Excel truncates

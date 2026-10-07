@@ -98,7 +98,7 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     ByteSpan payload = rec.payload;
@@ -110,11 +110,11 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
         }
         auto sbt_or = read_u16(payload);
         if (!sbt_or) {
-          return sbt_or.error();
+          return std::move(sbt_or.error());
         }
         auto rel_or = read_xlwidestring(payload);
         if (!rel_or) {
-          return rel_or.error();
+          return std::move(rel_or.error());
         }
         *book_rel_id = std::move(rel_or.value());
         break;
@@ -122,12 +122,12 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       case XlsbRecordType::BrtSupTabs: {
         auto count_or = read_u32(payload);
         if (!count_or) {
-          return count_or.error();
+          return std::move(count_or.error());
         }
         for (std::uint32_t i = 0; i < count_or.value(); ++i) {
           auto name_or = read_xlwidestring(payload);
           if (!name_or) {
-            return name_or.error();
+            return std::move(name_or.error());
           }
           book.sheet_names.push_back(std::move(name_or.value()));
         }
@@ -136,7 +136,7 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       case XlsbRecordType::BrtExternNameStart: {
         auto name_or = read_xlwidestring(payload);
         if (!name_or) {
-          return name_or.error();
+          return std::move(name_or.error());
         }
         ExternalBookName entry;
         entry.name = std::move(name_or.value());
@@ -149,7 +149,7 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
         }
         auto cce_or = read_u32(payload);
         if (!cce_or) {
-          return cce_or.error();
+          return std::move(cce_or.error());
         }
         if (cce_or.value() > payload.size) {
           return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb external name formula truncated",
@@ -163,7 +163,7 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       case XlsbRecordType::BrtBeginExternTable: {
         auto sheet_or = read_u32(payload);
         if (!sheet_or) {
-          return sheet_or.error();
+          return std::move(sheet_or.error());
         }
         if (sheet_or.value() >= book.sheet_names.size()) {
           return CorruptError("xlsb external cached sheet index is outside the supporting book's sheet table");
@@ -181,7 +181,7 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       case XlsbRecordType::BrtExternRowHdr: {
         auto row_or = read_u32(payload);
         if (!row_or) {
-          return row_or.error();
+          return std::move(row_or.error());
         }
         current_row = row_or.value();
         row_seen = true;
@@ -190,11 +190,11 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       case XlsbRecordType::BrtExternCellReal: {
         auto col_or = read_u32(payload);
         if (!col_or) {
-          return col_or.error();
+          return std::move(col_or.error());
         }
         auto value_or = read_double(payload);
         if (!value_or) {
-          return value_or.error();
+          return std::move(value_or.error());
         }
         ExternalCell cell;
         cell.value = Value::number(value_or.value());
@@ -206,11 +206,11 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       case XlsbRecordType::BrtExternCellBool: {
         auto col_or = read_u32(payload);
         if (!col_or) {
-          return col_or.error();
+          return std::move(col_or.error());
         }
         auto flag_or = read_u8(payload);
         if (!flag_or) {
-          return flag_or.error();
+          return std::move(flag_or.error());
         }
         ExternalCell cell;
         cell.value = Value::boolean(flag_or.value() != 0U);
@@ -222,11 +222,11 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       case XlsbRecordType::BrtExternCellError: {
         auto col_or = read_u32(payload);
         if (!col_or) {
-          return col_or.error();
+          return std::move(col_or.error());
         }
         auto code_or = read_u8(payload);
         if (!code_or) {
-          return code_or.error();
+          return std::move(code_or.error());
         }
         ExternalCell cell;
         // The byte is the OOXML wire code, the same one a cached error
@@ -240,11 +240,11 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       case XlsbRecordType::BrtExternCellString: {
         auto col_or = read_u32(payload);
         if (!col_or) {
-          return col_or.error();
+          return std::move(col_or.error());
         }
         auto text_or = read_xlwidestring(payload);
         if (!text_or) {
-          return text_or.error();
+          return std::move(text_or.error());
         }
         ExternalCell cell;
         // The kind is carried on `value` and the bytes on `text`; see

@@ -400,7 +400,7 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
   // 2) lookup_array — must be a 1-D range.
   auto lookup_resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
   if (!lookup_resolved) {
-    return lookup_resolved.error();
+    return std::move(lookup_resolved.error());
   }
   // A static reference is judged by its declared shape: `A:C` is 2-D
   // however few rows hold values, and `1:1` is a row even with one cell.
@@ -420,7 +420,7 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
   //    vertically). A 1x1 lookup defaults to the vertical convention.
   auto return_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
   if (!return_resolved) {
-    return return_resolved.error();
+    return std::move(return_resolved.error());
   }
   const std::uint32_t r_rows = return_resolved.value().rows;
   const std::uint32_t r_cols = return_resolved.value().cols;

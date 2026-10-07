@@ -171,7 +171,7 @@ Expected<bool, ErrorCode> truncated_is_even(const Value& v) {
   }
   auto coerced = coerce_to_number(v);
   if (!coerced) {
-    return coerced.error();
+    return std::move(coerced.error());
   }
   const double x = coerced.value();
   if (std::isnan(x) || std::isinf(x)) {

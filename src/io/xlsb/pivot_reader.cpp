@@ -164,7 +164,7 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     // Inside a cache field only the records the measured fixture carries are
@@ -227,7 +227,7 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
         ByteSpan payload = rec.payload;
         auto text_or = read_xlwidestring(payload);
         if (!text_or) {
-          return text_or.error();
+          return std::move(text_or.error());
         }
         // `Value::text` aliases its argument rather than owning it, so the
         // bytes have to outlive the record: the cache's `text_storage` is a
@@ -263,7 +263,7 @@ Expected<void, Error> DecodeCacheRecords(ByteSpan cursor, const std::vector<Cell
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     if (rec.type != kPCRecordRow) {
@@ -307,13 +307,13 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_bin(ByteSpan definition, Byt
   pivot::PivotCache cache;
   std::vector<CellEncoding> encodings;
   if (auto status = DecodeCacheDefinition(definition, &cache, &encodings); !status) {
-    return status.error();
+    return std::move(status.error());
   }
   if (encodings.size() != cache.fields().size()) {
     return CorruptError("xlsb pivot cache definition closed fewer fields than it opened");
   }
   if (auto status = DecodeCacheRecords(records, encodings, &cache); !status) {
-    return status.error();
+    return std::move(status.error());
   }
   return cache;
 }
@@ -328,7 +328,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     switch (rec.type) {
@@ -405,7 +405,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         ASSIGN_OR_RETURN(auto kind, read_u8(payload));
         auto flags_or = read_u16(payload);
         if (!flags_or) {
-          return flags_or.error();
+          return std::move(flags_or.error());
         }
         if (flags_or.value() != 0U) {
           // Hidden / missing / expanded state lives here. Dropping a

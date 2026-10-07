@@ -316,7 +316,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   {
     auto result = AddPart(writer.get(), "[Content_Types].xml", BuildContentTypes(wb, plan), &written_paths);
     if (!result) {
-      return result.error();
+      return std::move(result.error());
     }
   }
 
@@ -324,7 +324,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   {
     auto result = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(wb, plan, &diagnostics), &written_paths);
     if (!result) {
-      return result.error();
+      return std::move(result.error());
     }
   }
 
@@ -332,7 +332,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   {
     auto result = AddPart(writer.get(), "xl/workbook.xml", BuildWorkbookXml(wb, plan), &written_paths);
     if (!result) {
-      return result.error();
+      return std::move(result.error());
     }
   }
 
@@ -341,7 +341,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     auto result = AddPart(writer.get(), "xl/_rels/workbook.xml.rels",
                           BuildWorkbookRels(sheet_count, plan, wb, &diagnostics), &written_paths);
     if (!result) {
-      return result.error();
+      return std::move(result.error());
     }
   }
 
@@ -367,7 +367,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
                                   dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer),
                 &written_paths);
     if (!wresult) {
-      return wresult.error();
+      return std::move(wresult.error());
     }
     // An empty rels file is invalid OOXML; Excel repairs the package and
     // drops it. `relationship_count` is the single predicate for whether
@@ -381,7 +381,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       rels_path.append(".xml.rels");
       auto rels_add = AddPart(writer.get(), rels_path, rels_result.xml, &written_paths);
       if (!rels_add) {
-        return rels_add.error();
+        return std::move(rels_add.error());
       }
     }
   }
@@ -390,7 +390,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   {
     auto result = AddPart(writer.get(), "xl/styles.xml", write_styles(wb.styles()), &written_paths);
     if (!result) {
-      return result.error();
+      return std::move(result.error());
     }
   }
 
@@ -398,7 +398,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   if (plan.generated_dynamic_metadata) {
     auto result = AddPart(writer.get(), "xl/metadata.xml", std::string(kDynamicArrayMetadataXml), &written_paths);
     if (!result) {
-      return result.error();
+      return std::move(result.error());
     }
   }
 
@@ -408,7 +408,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   if (!shared_strings.empty()) {
     auto result = AddPart(writer.get(), "xl/sharedStrings.xml", WriteSharedStrings(shared_strings), &written_paths);
     if (!result) {
-      return result.error();
+      return std::move(result.error());
     }
   }
 
@@ -417,7 +417,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     for (const EmissionPlan::PerSheetTable& t : per_sheet) {
       auto result = AddPart(writer.get(), t.path, BuildTableXml(*t.table, t.numeric_id), &written_paths);
       if (!result) {
-        return result.error();
+        return std::move(result.error());
       }
     }
   }
@@ -446,13 +446,13 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     {
       auto result = AddPart(writer.get(), c.definition_path, write_pivot_cache_definition(*c.cache), &written_paths);
       if (!result) {
-        return result.error();
+        return std::move(result.error());
       }
     }
     {
       auto result = AddPart(writer.get(), c.records_path, write_pivot_cache_records(*c.cache), &written_paths);
       if (!result) {
-        return result.error();
+        return std::move(result.error());
       }
     }
     {
@@ -467,7 +467,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       auto result = AddPart(writer.get(), c.definition_rels_path,
                             BuildSingleRelationshipRels(kRelPivotCacheRecords, records_filename), &written_paths);
       if (!result) {
-        return result.error();
+        return std::move(result.error());
       }
     }
   }
@@ -479,7 +479,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       auto result = AddPart(writer.get(), t.path,
                             write_pivot_table_definition(*t.table, ProjectPivotSpan(wb, *t.table)), &written_paths);
       if (!result) {
-        return result.error();
+        return std::move(result.error());
       }
       // The table's own rels file names the cache definition it draws
       // from. A table whose cache id resolved to no planned cache gets
@@ -489,7 +489,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
             AddPart(writer.get(), t.rels_path,
                     BuildSingleRelationshipRels(kRelPivotCacheDefinition, t.cache_definition_target), &written_paths);
         if (!rels_result) {
-          return rels_result.error();
+          return std::move(rels_result.error());
         }
       }
     }
@@ -518,7 +518,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     if (!e.generated_body.empty()) {
       auto result = AddPart(writer.get(), e.part_path, e.generated_body, &written_paths);
       if (!result) {
-        return result.error();
+        return std::move(result.error());
       }
     }
     std::string rels_xml = BuildExternalLinkRels(*e.record);
@@ -527,7 +527,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
     auto result = AddPart(writer.get(), rels_path, rels_xml, &written_paths);
     if (!result) {
-      return result.error();
+      return std::move(result.error());
     }
   }
 
@@ -546,32 +546,32 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     auto cresult =
         AddPart(writer.get(), cplan.comments_path, write_comments(legacy_comments_with_stubs(sheet)), &written_paths);
     if (!cresult) {
-      return cresult.error();
+      return std::move(cresult.error());
     }
     if (cplan.vml_source != nullptr) {
       auto vresult = AddPartBytes(writer.get(), cplan.vml_path, cplan.vml_source->bytes, &written_paths);
       if (!vresult) {
-        return vresult.error();
+        return std::move(vresult.error());
       }
     } else {
       auto vresult = AddPart(writer.get(), cplan.vml_path,
                              write_vml_drawing(sheet.comment_anchor_set(), cplan.numeric_id), &written_paths);
       if (!vresult) {
-        return vresult.error();
+        return std::move(vresult.error());
       }
     }
     if (!cplan.threaded_path.empty()) {
       auto tresult = AddPart(writer.get(), cplan.threaded_path, write_threaded_comments(sheet.threaded_comments()),
                              &written_paths);
       if (!tresult) {
-        return tresult.error();
+        return std::move(tresult.error());
       }
     }
   }
   if (plan.generated_persons) {
     auto presult = AddPart(writer.get(), kPersonsPartPath, write_persons(wb.persons()), &written_paths);
     if (!presult) {
-      return presult.error();
+      return std::move(presult.error());
     }
   }
 
@@ -587,13 +587,13 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
     auto result = AddPartBytes(writer.get(), part->path, part->bytes, &written_paths);
     if (!result) {
-      return result.error();
+      return std::move(result.error());
     }
   }
 
   auto bytes_or = FinalizeArchive(writer, "context=write_ooxml");
   if (!bytes_or) {
-    return bytes_or.error();
+    return std::move(bytes_or.error());
   }
   return OoxmlWriteResult{std::move(bytes_or.value()), diagnostics};
 }
@@ -601,7 +601,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
 Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
   auto result = write_ooxml_with_result(wb);
   if (!result) {
-    return result.error();
+    return std::move(result.error());
   }
   return std::move(result.value().bytes);
 }

@@ -45,7 +45,7 @@ struct TBillArgs {
 Expected<double, ErrorCode> positive_yearfrac(double settlement, double maturity, int basis, bool date1904) {
   auto yf = yearfrac_for_basis(settlement, maturity, basis, date1904);
   if (!yf) {
-    return yf.error();
+    return std::move(yf.error());
   }
   if (yf.value() <= 0.0) {
     return ErrorCode::Num;
@@ -84,19 +84,19 @@ Expected<TBillArgs, ErrorCode> read_tbill_args(const Value* args, bool date1904)
   }
   auto settlement = read_financial_date(args, 0);
   if (!settlement) {
-    return settlement.error();
+    return std::move(settlement.error());
   }
   auto maturity = read_financial_date(args, 1);
   if (!maturity) {
-    return maturity.error();
+    return std::move(maturity.error());
   }
   auto value = read_required_number(args, 2);
   if (!value) {
-    return value.error();
+    return std::move(value.error());
   }
   auto dsm = t_bill_dsm(settlement.value(), maturity.value(), date1904);
   if (!dsm) {
-    return dsm.error();
+    return std::move(dsm.error());
   }
   return TBillArgs{value.value(), dsm.value()};
 }

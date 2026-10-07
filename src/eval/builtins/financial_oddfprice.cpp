@@ -296,7 +296,7 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
                                                         OddFirstSchedule& sched_out) {
   double dates[4];
   if (auto read = read_required_numbers(args, "dddd", dates); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   const double settlement = dates[0];
   const double maturity = dates[1];
@@ -304,7 +304,7 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
   const double first_coupon = dates[3];
   auto tail = read_coupon_bond_tail(args, arity, 4);
   if (!tail) {
-    return tail.error();
+    return std::move(tail.error());
   }
   const auto [rate, slot5, redemption, frequency, basis] = tail.value();
 
@@ -330,7 +330,7 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
 
   auto sched_e = compute_odd_first_schedule(settlement, maturity, issue, first_coupon, frequency, basis, date1904);
   if (!sched_e) {
-    return sched_e.error();
+    return std::move(sched_e.error());
   }
   sched_out = sched_e.value();
 
@@ -346,7 +346,7 @@ Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uin
   OddFirstSchedule sched{};
   auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/false, date1904, sched);
   if (!in) {
-    return in.error();
+    return std::move(in.error());
   }
   const double redemption_v = in.value().redemption;
 

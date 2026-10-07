@@ -31,7 +31,7 @@ namespace {
 Expected<int, ErrorCode> read_int(const Value& v) {
   auto coerced = coerce_to_number(v);
   if (!coerced) {
-    return coerced.error();
+    return std::move(coerced.error());
   }
   const double d = coerced.value();
   if (std::isnan(d) || std::isinf(d)) {

@@ -97,11 +97,11 @@ struct CumulativeTriple {
 Expected<CumulativeTriple, ErrorCode> read_cumulative_triple(const Value* args) {
   auto parsed = read_number_triple(args);
   if (!parsed) {
-    return parsed.error();
+    return std::move(parsed.error());
   }
   auto cum_e = coerce_to_bool(args[3]);
   if (!cum_e) {
-    return cum_e.error();
+    return std::move(cum_e.error());
   }
   return CumulativeTriple{parsed.value(), cum_e.value()};
 }
@@ -111,7 +111,7 @@ Expected<CumulativeTriple, ErrorCode> read_cumulative_triple(const Value* args) 
 Expected<CumulativeTriple, ErrorCode> read_scaled_cumulative_triple(const Value* args) {
   auto parsed = read_cumulative_triple(args);
   if (!parsed) {
-    return parsed.error();
+    return std::move(parsed.error());
   }
   const NumberTriple& p = parsed.value().params;
   if (p.first < 0.0 || p.second <= 0.0 || p.third <= 0.0) {

@@ -78,12 +78,12 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
                                          PhoneticProperties& out_props) {
   auto phonetic_or = read_xlwidestring(cursor);
   if (!phonetic_or) {
-    return phonetic_or.error();
+    return std::move(phonetic_or.error());
   }
   const std::string phonetic = std::move(phonetic_or.value());
   auto count_or = read_u32(cursor);
   if (!count_or) {
-    return count_or.error();
+    return std::move(count_or.error());
   }
   const std::uint32_t run_count = count_or.value();
   if (run_count == 0U) {
@@ -111,7 +111,7 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
     for (std::uint16_t& field : fields) {
       auto field_or = read_u16(cursor);
       if (!field_or) {
-        return field_or.error();
+        return std::move(field_or.error());
       }
       field = field_or.value();
     }
@@ -144,7 +144,7 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem)) {
@@ -182,7 +182,7 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
     }
     if (auto decoded = DecodePhoneticTail(p, entries.back(), out_phonetic.back(), out_phonetic_props.back());
         !decoded) {
-      return decoded.error();
+      return std::move(decoded.error());
     }
   }
   return entries;

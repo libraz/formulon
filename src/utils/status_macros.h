@@ -33,12 +33,12 @@
 
 /// Returns from the enclosing function if `expr` evaluates to an error-state
 /// `Expected<...>`. On success falls through.
-#define RETURN_IF_ERROR(expr)    \
-  do {                           \
-    auto _fm_status = (expr);    \
-    if (!_fm_status) {           \
-      return _fm_status.error(); \
-    }                            \
+#define RETURN_IF_ERROR(expr)               \
+  do {                                      \
+    auto _fm_status = (expr);               \
+    if (!_fm_status) {                      \
+      return std::move(_fm_status.error()); \
+    }                                       \
   } while (0)
 
 // Implementation helper for ASSIGN_OR_RETURN. `tmp` is a compiler-generated
@@ -46,7 +46,7 @@
 #define FM_ASSIGN_OR_RETURN_IMPL(tmp, lhs, expr) \
   auto tmp = (expr);                             \
   if (!tmp) {                                    \
-    return tmp.error();                          \
+    return std::move(tmp.error());               \
   }                                              \
   lhs = std::move(tmp.value())
 

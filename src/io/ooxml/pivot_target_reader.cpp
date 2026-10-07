@@ -34,14 +34,14 @@ Expected<std::string, Error> load_pivot_cache_records_target(const ZipReader& zi
                                                  if (type == kRelPivotCacheRecords && records_target.empty()) {
                                                    auto resolved = resolve_relative_path(base_dir, target);
                                                    if (!resolved) {
-                                                     return resolved.error();
+                                                     return std::move(resolved.error());
                                                    }
                                                    records_target = std::move(resolved).value();
                                                  }
                                                  return Expected<void, Error>::Ok();
                                                });
   if (!visit_status) {
-    return visit_status.error();
+    return std::move(visit_status.error());
   }
   return records_target;
 }

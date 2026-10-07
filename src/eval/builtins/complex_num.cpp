@@ -494,11 +494,11 @@ Value ImSum(const Value* args, std::uint32_t arity, Arena& arena) {
 Expected<std::pair<Complex, Complex>, ErrorCode> parse_complex_pair(const Value* args, char* suffix) {
   auto a = parse_complex_value(args[0]);
   if (!a) {
-    return a.error();
+    return std::move(a.error());
   }
   auto b = parse_complex_value(args[1]);
   if (!b) {
-    return b.error();
+    return std::move(b.error());
   }
   *suffix = 'i';
   if (!reconcile_suffix(a.value(), b.value(), suffix)) {

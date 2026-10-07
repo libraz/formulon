@@ -67,7 +67,7 @@ Error corrupt_stack(const char* detail) {
 Expected<void, Error> skip_ptg_extra_mem(ByteSpan& extra) {
   auto count_or = read_u32(extra);
   if (!count_or) {
-    return count_or.error();
+    return std::move(count_or.error());
   }
   constexpr std::size_t kUncheckedRfXBytes = 16U;
   const std::size_t count = count_or.value();
@@ -88,7 +88,7 @@ Expected<void, Error> skip_ptg_extra_mem(ByteSpan& extra) {
 Expected<void, Error> read_mem_expression_size(ByteSpan& cursor, const char* ptg_name) {
   auto cce_or = read_u16(cursor);
   if (!cce_or) {
-    return cce_or.error();
+    return std::move(cce_or.error());
   }
   if (static_cast<std::size_t>(cce_or.value()) > cursor.size) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
@@ -114,7 +114,7 @@ ErrorCode error_from_wire(std::uint8_t code) {
 Expected<std::string, Error> read_ptg_string(ByteSpan& cursor) {
   auto cch_or = read_u16(cursor);
   if (!cch_or) {
-    return cch_or.error();
+    return std::move(cch_or.error());
   }
   const std::uint32_t cch = cch_or.value();
   std::string out;
@@ -122,7 +122,7 @@ Expected<std::string, Error> read_ptg_string(ByteSpan& cursor) {
   for (std::uint32_t i = 0; i < cch; ++i) {
     auto unit_or = read_u16(cursor);
     if (!unit_or) {
-      return unit_or.error();
+      return std::move(unit_or.error());
     }
     const std::uint16_t cu = unit_or.value();
     // Best-effort UTF-16 -> UTF-8 for the BMP. Surrogate handling mirrors
@@ -158,11 +158,11 @@ parser::Reference make_corner(std::uint32_t row, std::uint16_t col, std::string_
 Expected<parser::Reference, Error> read_loc(ByteSpan& cursor, std::string_view sheet) {
   auto row_or = read_u32(cursor);
   if (!row_or) {
-    return row_or.error();
+    return std::move(row_or.error());
   }
   auto col_or = read_u16(cursor);
   if (!col_or) {
-    return col_or.error();
+    return std::move(col_or.error());
   }
   return make_corner(row_or.value(), col_or.value(), sheet);
 }
@@ -176,19 +176,19 @@ Expected<std::pair<parser::Reference, parser::Reference>, Error> read_area(ByteS
                                                                            std::string_view sheet_last) {
   auto row1_or = read_u32(cursor);
   if (!row1_or) {
-    return row1_or.error();
+    return std::move(row1_or.error());
   }
   auto row2_or = read_u32(cursor);
   if (!row2_or) {
-    return row2_or.error();
+    return std::move(row2_or.error());
   }
   auto col1_or = read_u16(cursor);
   if (!col1_or) {
-    return col1_or.error();
+    return std::move(col1_or.error());
   }
   auto col2_or = read_u16(cursor);
   if (!col2_or) {
-    return col2_or.error();
+    return std::move(col2_or.error());
   }
   return std::make_pair(make_corner(row1_or.value(), col1_or.value(), sheet_first),
                         make_corner(row2_or.value(), col2_or.value(), sheet_last));
@@ -285,11 +285,11 @@ Expected<void, Error> check_area_domain(const parser::Reference& first, const pa
 Expected<parser::Reference, Error> read_checked_loc(ByteSpan& cursor, std::string_view sheet, const char* ptg_name) {
   auto ref_or = read_loc(cursor, sheet);
   if (!ref_or) {
-    return ref_or.error();
+    return std::move(ref_or.error());
   }
   auto domain_or = check_ref_domain(ref_or.value(), ptg_name);
   if (!domain_or) {
-    return domain_or.error();
+    return std::move(domain_or.error());
   }
   return ref_or;
 }
@@ -300,11 +300,11 @@ Expected<std::pair<parser::Reference, parser::Reference>, Error> read_checked_ar
                                                                                    const char* ptg_name) {
   auto area_or = read_area(cursor, sheet_first, {});
   if (!area_or) {
-    return area_or.error();
+    return std::move(area_or.error());
   }
   auto domain_or = check_area_domain(area_or.value().first, area_or.value().second, ptg_name);
   if (!domain_or) {
-    return domain_or.error();
+    return std::move(domain_or.error());
   }
   return area_or;
 }
@@ -620,16 +620,16 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::MemNoMem: {
         auto unused_or = read_u32(cursor);
         if (!unused_or) {
-          return unused_or.error();
+          return std::move(unused_or.error());
         }
         auto size_check = read_mem_expression_size(cursor, info->name);
         if (!size_check) {
-          return size_check.error();
+          return std::move(size_check.error());
         }
         if (info->kind == PtgKind::MemArea) {
           auto extra_check = skip_ptg_extra_mem(extra);
           if (!extra_check) {
-            return extra_check.error();
+            return std::move(extra_check.error());
           }
         }
         break;
@@ -637,26 +637,26 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::MemErr: {
         auto error_or = read_u8(cursor);
         if (!error_or) {
-          return error_or.error();
+          return std::move(error_or.error());
         }
         auto unused_or = read_u8(cursor);
         if (!unused_or) {
-          return unused_or.error();
+          return std::move(unused_or.error());
         }
         auto unused2_or = read_u16(cursor);
         if (!unused2_or) {
-          return unused2_or.error();
+          return std::move(unused2_or.error());
         }
         auto size_check = read_mem_expression_size(cursor, info->name);
         if (!size_check) {
-          return size_check.error();
+          return std::move(size_check.error());
         }
         break;
       }
       case PtgKind::MemFunc: {
         auto size_check = read_mem_expression_size(cursor, info->name);
         if (!size_check) {
-          return size_check.error();
+          return std::move(size_check.error());
         }
         break;
       }
@@ -665,7 +665,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Int: {
         auto v_or = read_u16(cursor);
         if (!v_or) {
-          return v_or.error();
+          return std::move(v_or.error());
         }
         parser::AstNode* n = parser::make_literal(arena, Value::number(static_cast<double>(v_or.value())));
         if (n == nullptr) {
@@ -698,7 +698,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Str: {
         auto s_or = read_ptg_string(cursor);
         if (!s_or) {
-          return s_or.error();
+          return std::move(s_or.error());
         }
         const std::string_view interned = arena.intern(s_or.value());
         parser::AstNode* n = parser::make_literal(arena, Value::text(interned));
@@ -711,7 +711,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Bool: {
         auto b_or = read_u8(cursor);
         if (!b_or) {
-          return b_or.error();
+          return std::move(b_or.error());
         }
         parser::AstNode* n = parser::make_literal(arena, Value::boolean(b_or.value() != 0));
         if (n == nullptr) {
@@ -723,7 +723,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Err: {
         auto code_or = read_u8(cursor);
         if (!code_or) {
-          return code_or.error();
+          return std::move(code_or.error());
         }
         parser::AstNode* n = parser::make_error_literal(arena, error_from_wire(code_or.value()));
         if (n == nullptr) {
@@ -761,11 +761,11 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         cursor.size -= 14;
         auto rows_or = read_u32(extra);
         if (!rows_or) {
-          return rows_or.error();
+          return std::move(rows_or.error());
         }
         auto cols_or = read_u32(extra);
         if (!cols_or) {
-          return cols_or.error();
+          return std::move(cols_or.error());
         }
         const std::uint32_t rows = rows_or.value();
         const std::uint32_t cols = cols_or.value();
@@ -785,7 +785,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         for (std::uint32_t i = 0; i < count; ++i) {
           auto tag_or = read_u8(extra);
           if (!tag_or) {
-            return tag_or.error();
+            return std::move(tag_or.error());
           }
           parser::AstNode* elem = nullptr;
           switch (tag_or.value()) {
@@ -804,7 +804,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
             case 1: {  // string: u16 count + UTF-16LE, as PtgStr carries it
               auto s_or = read_ptg_string(extra);
               if (!s_or) {
-                return s_or.error();
+                return std::move(s_or.error());
               }
               elem = parser::make_literal(arena, Value::text(arena.intern(s_or.value())));
               break;
@@ -812,7 +812,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
             case 2: {  // boolean: one byte
               auto b_or = read_u8(extra);
               if (!b_or) {
-                return b_or.error();
+                return std::move(b_or.error());
               }
               elem = parser::make_literal(arena, Value::boolean(b_or.value() != 0));
               break;
@@ -820,7 +820,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
             case 4: {  // error: the code, then three unused bytes
               auto e_or = read_u32(extra);
               if (!e_or) {
-                return e_or.error();
+                return std::move(e_or.error());
               }
               elem =
                   parser::make_error_literal(arena, error_from_wire(static_cast<std::uint8_t>(e_or.value() & 0xFFU)));
@@ -854,7 +854,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // apart, by inspecting the resolved name's prefix.
         auto ilbl_or = read_u32(cursor);
         if (!ilbl_or) {
-          return ilbl_or.error();
+          return std::move(ilbl_or.error());
         }
         const std::string_view name = resolve_name(ilbl_or.value());
         if (name.empty()) {
@@ -878,11 +878,11 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // `external_sheet_for_ixti` for a sheet.
         auto ixti_or = read_u16(cursor);
         if (!ixti_or) {
-          return ixti_or.error();
+          return std::move(ixti_or.error());
         }
         auto ilbl_or = read_u32(cursor);
         if (!ilbl_or) {
-          return ilbl_or.error();
+          return std::move(ilbl_or.error());
         }
         const std::uint32_t ixti = ixti_or.value();
         // An ExternSheet entry of this workbook names one of its own
@@ -931,7 +931,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Ref: {
         auto ref_or = read_checked_loc(cursor, {}, "PtgRef");
         if (!ref_or) {
-          return ref_or.error();
+          return std::move(ref_or.error());
         }
         parser::AstNode* n = parser::make_ref(arena, ref_or.value());
         if (n == nullptr) {
@@ -949,24 +949,24 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (info->kind == PtgKind::RefN) {
           auto ref_or = read_loc(cursor, {});
           if (!ref_or) {
-            return ref_or.error();
+            return std::move(ref_or.error());
           }
           resolve_relative(ref_or.value(), *base);
           auto domain_or = check_ref_domain(ref_or.value(), info->name);
           if (!domain_or) {
-            return domain_or.error();
+            return std::move(domain_or.error());
           }
           n = parser::make_ref(arena, ref_or.value());
         } else {
           auto area_or = read_area(cursor, {}, {});
           if (!area_or) {
-            return area_or.error();
+            return std::move(area_or.error());
           }
           resolve_relative(area_or.value().first, *base);
           resolve_relative(area_or.value().second, *base);
           auto domain_or = check_area_domain(area_or.value().first, area_or.value().second, info->name);
           if (!domain_or) {
-            return domain_or.error();
+            return std::move(domain_or.error());
           }
           n = make_area(arena, area_or.value().first, area_or.value().second);
         }
@@ -980,7 +980,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Area: {
         auto area_or = read_checked_area(cursor, {}, "PtgArea");
         if (!area_or) {
-          return area_or.error();
+          return std::move(area_or.error());
         }
         parser::AstNode* n = make_area(arena, area_or.value().first, area_or.value().second);
         if (n == nullptr) {
@@ -993,7 +993,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Ref3d: {
         auto ixti_or = read_u16(cursor);
         if (!ixti_or) {
-          return ixti_or.error();
+          return std::move(ixti_or.error());
         }
         // A single-cell 3-D reference can span more than one sheet
         // (e.g. `Data:S2!B1`) entirely through the ExternSheet entry's
@@ -1012,7 +1012,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           }
           auto loc_or = read_checked_loc(cursor, {}, "PtgRef3d");
           if (!loc_or) {
-            return loc_or.error();
+            return std::move(loc_or.error());
           }
           parser::AstNode* n = parser::make_external_ref(arena, {}, std::to_string(book), external_sheet,
                                                          external_sheet_end, loc_or.value(), loc_or.value(),
@@ -1029,7 +1029,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (sheet_range_for_ixti(ixti_or.value(), begin_sheet, end_sheet)) {
           auto loc_or = read_checked_loc(cursor, {}, "PtgRef3d");
           if (!loc_or) {
-            return loc_or.error();
+            return std::move(loc_or.error());
           }
           parser::AstNode* n =
               parser::make_ref3d(arena, arena.intern(begin_sheet), arena.intern(end_sheet), loc_or.value());
@@ -1042,7 +1042,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         auto ref_or = read_checked_loc(cursor, sheet_for_ixti(ixti_or.value()), "PtgRef3d");
         if (!ref_or) {
-          return ref_or.error();
+          return std::move(ref_or.error());
         }
         parser::Reference ref = ref_or.value();
         ref.sheet = arena.intern(ref.sheet);
@@ -1057,7 +1057,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Area3d: {
         auto ixti_or = read_u16(cursor);
         if (!ixti_or) {
-          return ixti_or.error();
+          return std::move(ixti_or.error());
         }
         // A genuine 3-D range (multiple sheets AND a cell rectangle, e.g.
         // `Sheet1:Sheet2!A1:B2`) decodes into a range-tail `Ref3D`. A
@@ -1074,7 +1074,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           }
           auto area_or = read_checked_area(cursor, {}, "PtgArea3d");
           if (!area_or) {
-            return area_or.error();
+            return std::move(area_or.error());
           }
           parser::AstNode* n = make_external_area(arena, std::to_string(book), external_sheet, external_sheet_end,
                                                   area_or.value().first, area_or.value().second);
@@ -1090,7 +1090,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (sheet_range_for_ixti(ixti_or.value(), begin_sheet, end_sheet)) {
           auto area_or = read_checked_area(cursor, {}, "PtgArea3d");
           if (!area_or) {
-            return area_or.error();
+            return std::move(area_or.error());
           }
           parser::AstNode* n = parser::make_ref3d_range(arena, arena.intern(begin_sheet), arena.intern(end_sheet),
                                                         area_or.value().first, area_or.value().second);
@@ -1104,7 +1104,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         const std::string_view sheet = sheet_for_ixti(ixti_or.value());
         auto area_or = read_checked_area(cursor, sheet, "PtgArea3d");
         if (!area_or) {
-          return area_or.error();
+          return std::move(area_or.error());
         }
         parser::Reference first = area_or.value().first;
         first.sheet = arena.intern(first.sheet);
@@ -1127,13 +1127,13 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (info->kind == PtgKind::RefErr3d || info->kind == PtgKind::AreaErr3d) {
           auto ixti_or = read_u16(cursor);
           if (!ixti_or) {
-            return ixti_or.error();
+            return std::move(ixti_or.error());
           }
         }
         for (int i = area ? 2 : 1; i > 0; --i) {
           auto skip = read_loc(cursor, {});
           if (!skip) {
-            return skip.error();
+            return std::move(skip.error());
           }
         }
         parser::AstNode* n = parser::make_error_literal(arena, ErrorCode::Ref);
@@ -1291,7 +1291,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Func: {
         auto id_or = read_u16(cursor);
         if (!id_or) {
-          return id_or.error();
+          return std::move(id_or.error());
         }
         const XlsbFuncEntry* entry = lookup_func_by_id(id_or.value());
         if (entry == nullptr) {
@@ -1301,7 +1301,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // Fixed arity.
         auto call_or = pop_call(entry->name, entry->arg_min, "PtgFunc", "function (fixed)");
         if (!call_or) {
-          return call_or.error();
+          return std::move(call_or.error());
         }
         stack.push_back(call_or.value());
         break;
@@ -1309,11 +1309,11 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::FuncVar: {
         auto cparams_or = read_u8(cursor);
         if (!cparams_or) {
-          return cparams_or.error();
+          return std::move(cparams_or.error());
         }
         auto id_or = read_u16(cursor);
         if (!id_or) {
-          return id_or.error();
+          return std::move(id_or.error());
         }
         const std::uint32_t cparams = cparams_or.value();
         // id == 255 is the "future function" sentinel: the real callee
@@ -1324,7 +1324,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (id_or.value() == 255) {
           auto call_or = decode_future_function(cparams);
           if (!call_or) {
-            return call_or.error();
+            return std::move(call_or.error());
           }
           stack.push_back(call_or.value());
           break;
@@ -1336,7 +1336,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         auto call_or = pop_call(entry->name, cparams, "PtgFuncVar", "function (var)");
         if (!call_or) {
-          return call_or.error();
+          return std::move(call_or.error());
         }
         stack.push_back(call_or.value());
         break;
@@ -1346,7 +1346,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Attr: {
         auto sub_or = read_u8(cursor);
         if (!sub_or) {
-          return sub_or.error();
+          return std::move(sub_or.error());
         }
         const auto sub = static_cast<PtgAttrKind>(sub_or.value());
         switch (sub) {
@@ -1355,7 +1355,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
             // unused data; collapse the top operand into `SUM(x)`.
             auto unused_or = read_u16(cursor);
             if (!unused_or) {
-              return unused_or.error();
+              return std::move(unused_or.error());
             }
             if (stack.empty()) {
               return corrupt_stack("attr-sum");
@@ -1396,19 +1396,19 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
             if (sub == PtgAttrKind::Choose) {
               auto count_or = read_u16(cursor);
               if (!count_or) {
-                return count_or.error();
+                return std::move(count_or.error());
               }
               const std::uint32_t entries = static_cast<std::uint32_t>(count_or.value()) + 1U;
               for (std::uint32_t i = 0; i < entries; ++i) {
                 auto off_or = read_u16(cursor);
                 if (!off_or) {
-                  return off_or.error();
+                  return std::move(off_or.error());
                 }
               }
             } else {
               auto unused_or = read_u16(cursor);
               if (!unused_or) {
-                return unused_or.error();
+                return std::move(unused_or.error());
               }
             }
             // These attrs are control-flow only; they do not consume or

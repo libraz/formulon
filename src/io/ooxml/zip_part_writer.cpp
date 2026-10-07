@@ -42,7 +42,7 @@ Expected<void, Error> CheckAndRecordPath(std::string_view path, std::unordered_s
 Expected<void, Error> AddEntry(mz_zip_archive* archive, std::string_view path, const void* data, std::size_t size,
                                std::unordered_set<std::string>* seen_paths, const char* failure) {
   if (auto dup_check = CheckAndRecordPath(path, seen_paths); !dup_check) {
-    return dup_check.error();
+    return std::move(dup_check.error());
   }
   const mz_bool ok = mz_zip_writer_add_mem(archive, std::string(path).c_str(), data, size,
                                            static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));

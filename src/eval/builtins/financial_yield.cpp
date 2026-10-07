@@ -103,7 +103,7 @@ Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arit
 Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity, bool date1904) {
   auto in = read_coupon_bond(args, arity, date1904);
   if (!in) {
-    return in.error();
+    return std::move(in.error());
   }
   const auto& [tail, cd, freq_d, cf, ai] = in.value();
   const double rate = tail.rate;

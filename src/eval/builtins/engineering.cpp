@@ -161,7 +161,7 @@ Expected<std::string, ErrorCode> encode_base_string(std::int64_t value, const Ba
 Expected<int, ErrorCode> coerce_places(const Value& v) {
   auto t = coerce_truncated_in_range(v, 1.0, 10.0, /*reject_bool=*/true);
   if (!t) {
-    return t.error();
+    return std::move(t.error());
   }
   return static_cast<int>(t.value());
 }
@@ -215,7 +215,7 @@ Expected<std::string, ErrorCode> input_digit_string(const Value& v) {
 Expected<std::int64_t, ErrorCode> decode_source_arg(const Value& arg, const BaseSpec& src) {
   auto s = input_digit_string(arg);
   if (!s) {
-    return s.error();
+    return std::move(s.error());
   }
   return decode_digit_string(s.value(), src);
 }
@@ -341,7 +341,7 @@ constexpr int kBitShiftMagnitudeMax = 53;
 Expected<std::uint64_t, ErrorCode> coerce_48_bit_unsigned(const Value& v) {
   auto n = coerce_to_number(v);
   if (!n) {
-    return n.error();
+    return std::move(n.error());
   }
   const double d = n.value();
   if (std::isnan(d) || std::isinf(d)) {
@@ -364,7 +364,7 @@ Expected<int, ErrorCode> coerce_shift(const Value& v) {
   auto t = coerce_truncated_in_range(v, -static_cast<double>(kBitShiftMagnitudeMax),
                                      static_cast<double>(kBitShiftMagnitudeMax), /*reject_bool=*/false);
   if (!t) {
-    return t.error();
+    return std::move(t.error());
   }
   return static_cast<int>(t.value());
 }
@@ -510,7 +510,7 @@ Expected<double, ErrorCode> coerce_truncated_in_range(const Value& v, double lo,
   }
   auto n = coerce_to_number(v);
   if (!n) {
-    return n.error();
+    return std::move(n.error());
   }
   const double d = n.value();
   if (std::isnan(d) || std::isinf(d)) {

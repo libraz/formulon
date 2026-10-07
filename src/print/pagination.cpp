@@ -192,7 +192,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // and walk the page grid below.
   auto area_or = resolve_print_area(wb, sheet_index);
   if (!area_or) {
-    return area_or.error();
+    return std::move(area_or.error());
   }
   PaginationResult result;
   result.print_area = area_or.value();
@@ -319,7 +319,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // converted below, once the scale is known.
   auto titles_or = resolve_print_titles(wb, sheet_index);
   if (!titles_or) {
-    return titles_or.error();
+    return std::move(titles_or.error());
   }
   const PrintTitles& titles = titles_or.value();
   double title_height = 0.0;

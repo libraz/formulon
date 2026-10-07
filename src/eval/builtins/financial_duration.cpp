@@ -49,7 +49,7 @@ namespace {
 Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t arity, bool date1904) {
   double v4[4];
   if (auto read = read_required_numbers(args, "ddnn", v4); !read) {
-    return read.error();
+    return std::move(read.error());
   }
   const double settlement = v4[0];
   const double maturity = v4[1];
@@ -57,11 +57,11 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
   const double yld = v4[3];
   auto frequency_e = read_coupon_frequency(args, 4);
   if (!frequency_e) {
-    return frequency_e.error();
+    return std::move(frequency_e.error());
   }
   auto basis_e = read_day_count_basis(args, arity, 5);
   if (!basis_e) {
-    return basis_e.error();
+    return std::move(basis_e.error());
   }
 
   // Validation order matches Microsoft's documented contract and the

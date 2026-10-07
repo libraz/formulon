@@ -82,7 +82,7 @@ inline Expected<void, Error> register_array_spills(Sheet& sheet, const std::vect
   for (const ArrayAnchor& a : anchors) {
     auto cells_or = checked_array_anchor_cells(a.row, a.col, a.last_row, a.last_col, error_code, cells_context.c_str());
     if (!cells_or) {
-      return cells_or.error();
+      return std::move(cells_or.error());
     }
     std::string context("context=");
     context.append(reader);
@@ -98,7 +98,7 @@ inline Expected<void, Error> register_array_spills(Sheet& sheet, const std::vect
     context.append(std::to_string(a.last_col));
     auto charged = consume_array_anchor_budget(budget, cells_or.value(), std::move(context));
     if (!charged) {
-      return charged.error();
+      return std::move(charged.error());
     }
   }
 

@@ -41,7 +41,7 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     if (rec.type == static_cast<std::uint16_t>(XlsbRecordType::BrtWbProp)) {
@@ -77,12 +77,12 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
     ASSIGN_OR_RETURN(auto hs_state, read_u32(p));
     auto skip2 = read_u32(p);  // iTabID
     if (!skip2) {
-      return skip2.error();
+      return std::move(skip2.error());
     }
     ASSIGN_OR_RETURN(auto rid, read_xlnullablewidestring(p));
     auto name_or = read_xlwidestring(p);
     if (!name_or) {
-      return name_or.error();
+      return std::move(name_or.error());
     }
     SheetBundleEntry entry;
     entry.rid = std::move(rid);
@@ -211,7 +211,7 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtName)) {
@@ -224,7 +224,7 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
     }
     auto flags_or = read_u16(p);
     if (!flags_or) {
-      return flags_or.error();
+      return std::move(flags_or.error());
     }
     p.data += 3;  // 3 reserved bytes between flags and itab.
     p.size -= 3;
@@ -310,7 +310,7 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtExternSheet)) {
@@ -319,7 +319,7 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
     ByteSpan p = rec.payload;
     auto count_or = read_u32(p);
     if (!count_or) {
-      return count_or.error();
+      return std::move(count_or.error());
     }
     // Each entry consumes three u32s. Never reserve beyond what the
     // remaining payload can actually hold, so an attacker-controlled
@@ -389,7 +389,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      return rec_or.error();
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtName)) {

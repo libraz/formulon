@@ -162,7 +162,7 @@ Expected<double, ErrorCode> run_stdev(const NumericInputView& values, bool sampl
 Expected<double, ErrorCode> run_stdev(const std::vector<double>& xs, bool sample) {
   auto var = run_variance(xs, sample);
   if (!var) {
-    return var.error();
+    return std::move(var.error());
   }
   const double v = var.value();
   if (v < 0.0) {
