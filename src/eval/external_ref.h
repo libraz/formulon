@@ -38,7 +38,7 @@ class FunctionRegistry;
 /// its book.
 ///
 /// A single cell yields a scalar; a rectangle — written out, a whole column
-/// or row clipped to the sheet's cached extent, or named by a
+/// or row at its declared size, or named by a
 /// supporting-workbook defined name — yields an `Array`, so the ordinary
 /// dynamic-array machinery spills it and range-taking functions consume it
 /// without a dedicated path. A 3-D span in this scalar context is `#REF!`,
@@ -56,18 +56,20 @@ class FunctionRegistry;
 /// | Name absent from the book or that sheet's scope  | `#NAME?`  |
 /// | Name present but its target is not a rectangle   | `#REF!`   |
 /// | Rectangle too large to materialise               | `#NUM!`   |
-/// | Address the cache does not hold                  | `0`       |
+/// | Address the cache does not hold                  | blank     |
 ///
 /// The final row is Excel's own behaviour rather than a fallback: a
 /// reference into a supporting workbook whose value Excel does not hold
-/// reads as zero.
+/// is an empty cell (a formula result displays it as `0`).
 ///
 /// Text results are interned into `arena`, so the returned `Value` does
 /// not borrow the workbook's cache.
 Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const EvalContext& ctx);
 
-/// `resolve_external_ref` in the evaluator's internal result type, which can
-/// carry a whole column or row at its declared size.
+/// `resolve_external_ref` in the evaluator's internal result type. A
+/// single-sheet whole column or row is a `TailArray` at its declared size:
+/// the cached extent as the head, a reference-grid blank as the tail (head 0
+/// when nothing is cached).
 Shaped resolve_external_ref_shaped(const parser::AstNode& node, Arena& arena, const EvalContext& ctx);
 
 /// A single-sheet cell-form `ExternalRef` read by coordinate rather than
@@ -87,14 +89,8 @@ struct ExternalRect {
 /// error mapping.
 Expected<ExternalRect, ErrorCode> resolve_external_rect(const parser::AstNode& node, const EvalContext& ctx);
 
-/// True with the declared size in `*out_rows` x `*out_cols` when `node` is a
-/// single-sheet whole column or row of a supporting workbook. Standing as the
-/// whole formula, that size rather than the clipped value is its spill
-/// footprint, as for a local whole column.
-bool external_whole_axis_footprint(const parser::AstNode& node, std::uint32_t* out_rows, std::uint32_t* out_cols);
-
 /// Reads the cell at (`row`, `col`) of `book`'s sheet `sheet`, interning a
-/// Text result into `arena`. An address the cache does not hold reads `0`.
+/// Text result into `arena`. An address the cache does not hold reads blank.
 Value read_external_cell(const ExternalBook& book, std::uint32_t sheet, std::uint32_t row, std::uint32_t col,
                          Arena& arena);
 

@@ -981,9 +981,7 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
     // A whole column or row spills at its declared size, though only its
     // populated head is stored. The footprint is decided before the array is
     // expanded: a refusal is recorded on the recalc path for the release
-    // machinery to retry, as `evaluate_bare_range_spill` records one. A
-    // supporting workbook's whole column or row is still clipped to its cached
-    // extent and takes its declared size from the AST.
+    // machinery to retry, as `evaluate_bare_range_spill` records one.
     std::uint32_t footprint_rows = 0;
     std::uint32_t footprint_cols = 0;
     bool has_footprint = false;
@@ -991,8 +989,6 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
       footprint_rows = sv.tail_array->rows;
       footprint_cols = sv.tail_array->cols;
       has_footprint = true;
-    } else if (sv.value.is_array()) {
-      has_footprint = external_whole_axis_footprint(node, &footprint_rows, &footprint_cols);
     }
     if (has_footprint && !footprint_probed && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
       if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), footprint_rows,

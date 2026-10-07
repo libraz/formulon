@@ -57,7 +57,7 @@ bool ExternalBook::cached_extent(std::uint32_t sheet, std::uint32_t* last_row, s
 Value ExternalBook::cached_cell(std::uint32_t sheet, std::uint32_t row, std::uint32_t col) const noexcept {
   const auto found = cells.find(cell_key(sheet, row, col));
   if (found == cells.end()) {
-    return Value::number(0.0);
+    return Value::blank(BlankGridProjection::kReferenceGridZero);
   }
   return found->second.resolved();
 }

@@ -113,9 +113,74 @@ const ExternalBook* BookFor(const parser::AstNode& node, const EvalContext& ctx)
   return link == nullptr ? nullptr : &link->book;
 }
 
-}  // namespace
+/// Builds the `TailArray` of a single-sheet whole column or row: the cached
+/// extent as the dense head, a reference-grid blank as the tail. False when
+/// `node` is not such a reference or names no readable sheet, which the
+/// dense path reports.
+bool WholeAxisTail(const parser::AstNode& node, Arena& arena, const EvalContext& ctx, Shaped* out) {
+  const parser::Reference& first = node.as_external_ref_cell();
+  if (!node.as_external_ref_name().empty() || !node.as_external_ref_sheet_end().empty() ||
+      (!first.is_full_col && !first.is_full_row)) {
+    return false;
+  }
+  const parser::Reference* lhs = nullptr;
+  const parser::Reference* rhs = nullptr;
+  const ExternalBook* book = BookFor(node, ctx);
+  if (book == nullptr || !external_ref_declared_endpoints(node, &lhs, &rhs)) {
+    return false;
+  }
+  const std::uint32_t sheet = book->sheet_index(node.as_external_ref_sheet());
+  if (sheet == ExternalBook::kNoSheet || !book->sheet_has_data(sheet)) {
+    return false;
+  }
+  const Expected<DeclaredRect, ErrorCode> declared = declared_rect(*lhs, *rhs);
+  if (!declared || !declared.value().whole_axis) {
+    return false;
+  }
+  const DeclaredRect& rect = declared.value();
+  const bool by_rows = rect.rows() == Sheet::kMaxRows;
+  std::uint32_t extent_row = 0;
+  std::uint32_t extent_col = 0;
+  const bool cached = book->cached_extent(sheet, &extent_row, &extent_col);
+  const std::uint32_t head = !cached ? 0U : (by_rows ? extent_row : extent_col) + 1U;
+  const std::uint32_t tail_len = by_rows ? rect.cols() : rect.rows();
+  const std::uint64_t head_cells = static_cast<std::uint64_t>(head) * tail_len;
+  if (head_cells > kMaxRangeExpansionCells) {
+    *out = Shaped{Value::error(ErrorCode::Calc), nullptr};
+    return true;
+  }
+  Value* cells = head_cells == 0 ? nullptr : arena.create_array<Value>(static_cast<std::size_t>(head_cells));
+  Value* tail = arena.create_array<Value>(tail_len);
+  if ((head_cells != 0 && cells == nullptr) || tail == nullptr) {
+    *out = Shaped{Value::error(ErrorCode::Num), nullptr};
+    return true;
+  }
+  std::size_t k = 0;
+  if (by_rows) {
+    for (std::uint32_t r = 0; r < head; ++r) {
+      for (std::uint32_t c = rect.col_first; c <= rect.col_last; ++c) {
+        cells[k++] = ReifyCached(book->cached_cell(sheet, r, c), arena);
+      }
+    }
+  } else {
+    for (std::uint32_t r = rect.row_first; r <= rect.row_last; ++r) {
+      for (std::uint32_t c = 0; c < head; ++c) {
+        cells[k++] = ReifyCached(book->cached_cell(sheet, r, c), arena);
+      }
+    }
+  }
+  for (std::uint32_t i = 0; i < tail_len; ++i) {
+    tail[i] = Value::blank(BlankGridProjection::kReferenceGridZero);
+  }
+  out->tail_array = make_tail_array(arena, rect.rows(), rect.cols(), head, by_rows ? TailAxis::kRows : TailAxis::kCols,
+                                    cells, tail, /*from_reference=*/true);
+  if (out->tail_array == nullptr) {
+    *out = Shaped{Value::error(ErrorCode::Num), nullptr};
+  }
+  return true;
+}
 
-Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const EvalContext& ctx) {
+Value ResolveDense(const parser::AstNode& node, Arena& arena, const EvalContext& ctx) {
   const ExternalBook* found = BookFor(node, ctx);
   if (found == nullptr) {
     return Value::error(ErrorCode::Ref);
@@ -160,9 +225,18 @@ Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const Eval
   return MaterializeRect(book, sheet, row_first, row_last, col_first, col_last, arena);
 }
 
+}  // namespace
+
+Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const EvalContext& ctx) {
+  return densify(resolve_external_ref_shaped(node, arena, ctx), arena);
+}
+
 Shaped resolve_external_ref_shaped(const parser::AstNode& node, Arena& arena, const EvalContext& ctx) {
   Shaped out;
-  out.value = resolve_external_ref(node, arena, ctx);
+  if (WholeAxisTail(node, arena, ctx, &out)) {
+    return out;
+  }
+  out.value = ResolveDense(node, arena, ctx);
   return out;
 }
 
@@ -201,21 +275,6 @@ Expected<ExternalRect, ErrorCode> resolve_external_rect(const parser::AstNode& n
     }
   }
   return out;
-}
-
-bool external_whole_axis_footprint(const parser::AstNode& node, std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  const parser::Reference* lhs = nullptr;
-  const parser::Reference* rhs = nullptr;
-  if (!external_ref_declared_endpoints(node, &lhs, &rhs)) {
-    return false;
-  }
-  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(*lhs, *rhs);
-  if (!rect || !rect.value().whole_axis) {
-    return false;
-  }
-  *out_rows = rect.value().rows();
-  *out_cols = rect.value().cols();
-  return true;
 }
 
 Value read_external_cell(const ExternalBook& book, std::uint32_t sheet, std::uint32_t row, std::uint32_t col,

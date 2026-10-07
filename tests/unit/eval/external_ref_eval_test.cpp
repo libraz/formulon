@@ -3,7 +3,7 @@
 // the cache of the external link the name matches.
 //
 // The rules under test:
-//   * a cached cell reads its value, an uncached one in a cached sheet 0;
+//   * a cached cell reads its value, an uncached one in a cached sheet blank;
 //   * a sheet the link lists without cached data reads #REF!, as does a
 //     sheet the link does not list;
 //   * a name the link does not declare reads #NAME?, and a sheet-local
@@ -294,8 +294,109 @@ TEST_F(ExternalRefEval, WholeAxisShapeIsTheDeclaredRectangle) {
 TEST_F(ExternalRefEval, WholeAxisIndexReadsTheCache) {
   CacheColumnA();
   ExpectNumber("=INDEX([Src.xlsx]Data!A:A,2)", 20.0);
-  // Past the cached extent: an uncached address reads 0.
+  // Past the cached extent: an uncached address reads blank, shown as 0.
   ExpectNumber("=INDEX([Src.xlsx]Data!A:A,5)", 0.0);
+}
+
+// Closed-book cache of sheet `S`: A1="k1" A2="k2" A3="k3" A5="k5" (A4 not
+// cached) and B1:B5 = 10..50.
+class ExternalRefBlank : public ExternalRefEval {
+ protected:
+  void SetUp() override {
+    ExternalRefEval::SetUp();
+    std::vector<ExternalLinkRecord> links;
+    links.push_back(SourceLink());
+    ExternalBook& book = links[0].book;
+    book.sheet_names.push_back("S");
+    book.sheet_data.push_back(true);
+    const std::uint32_t sheet = 4;
+    const char* const keys[] = {"k1", "k2", "k3", nullptr, "k5"};
+    for (std::uint32_t row = 0; row < 5; ++row) {
+      if (keys[row] != nullptr) {
+        ExternalCell cell;
+        cell.value = Value::text("");
+        cell.text = keys[row];
+        book.cells.emplace(ExternalBook::cell_key(sheet, row, 0), std::move(cell));
+      }
+      Cache(book, sheet, row, 1, 10.0 * (row + 1));
+    }
+    wb_.set_external_links(std::move(links));
+  }
+
+  // Evaluates `formula` as the only formula of the host sheet's A1 and
+  // returns its un-spilled array result.
+  Value EvalArrayAt(std::uint32_t row, const std::string& formula, Arena& eval_arena) {
+    Arena parse_arena;
+    parser::Parser p(formula, parse_arena);
+    const parser::AstNode* root = p.parse();
+    EXPECT_NE(root, nullptr) << formula;
+    eval::EvalState state;
+    const eval::EvalContext base(wb_, wb_.sheet(0), state);
+    return eval::evaluate(*root, eval_arena, eval::default_registry(), base.with_formula_cell(row, 0U));
+  }
+
+  void ExpectTailSpill(const std::string& formula, double head_first, double head_last) {
+    Arena arena;
+    const Value v = EvalArrayAt(0U, formula, arena);
+    ASSERT_TRUE(v.is_array()) << formula << " -> " << v.debug_to_string();
+    ASSERT_EQ(v.as_array_rows(), Sheet::kMaxRows) << formula;
+    ASSERT_EQ(v.as_array_cols(), 1U) << formula;
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), head_first) << formula;
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[4].as_number(), head_last) << formula;
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[5].as_number(), 0.0) << formula;
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[Sheet::kMaxRows - 1U].as_number(), 0.0) << formula;
+  }
+};
+
+TEST_F(ExternalRefBlank, AnUncachedCellConcatenatesAsEmptyAndIsBlank) {
+  const Value joined = Eval("=[Src.xlsx]S!A4&\"x\"");
+  ASSERT_TRUE(joined.is_text()) << joined.debug_to_string();
+  EXPECT_EQ(joined.as_text(), "x");
+  const Value blank = Eval("=ISBLANK([Src.xlsx]S!A4)");
+  ASSERT_TRUE(blank.is_boolean()) << blank.debug_to_string();
+  EXPECT_TRUE(blank.as_boolean());
+  ExpectNumber("=[Src.xlsx]S!A4", 0.0);
+}
+
+TEST_F(ExternalRefBlank, AWholeColumnSpillsAtItsDeclaredHeight) {
+  ExpectTailSpill("=[Src.xlsx]S!B:B", 10.0, 50.0);
+  ExpectTailSpill("=[Src.xlsx]S!B:B+0", 10.0, 50.0);
+  ExpectTailSpill("=LET(x,[Src.xlsx]S!B:B,x)", 10.0, 50.0);
+}
+
+TEST_F(ExternalRefBlank, AWholeColumnNotAtTheTopIsASpillError) {
+  const Value v = EvalAt(1, 0, "=[Src.xlsx]S!B:B");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Spill);
+}
+
+TEST_F(ExternalRefBlank, AWholeColumnKeepsItsDeclaredShapeInExpressions) {
+  ExpectNumber("=ROWS([Src.xlsx]S!B:B+0)", 1048576.0);
+  ExpectNumber("=SUM([Src.xlsx]S!B:B*1)", 150.0);
+  ExpectNumber("=COUNT([Src.xlsx]S!B:B+0)", 1048576.0);
+  ExpectNumber("=SUMPRODUCT(([Src.xlsx]S!A:A=\"\")*1)", 1048572.0);
+}
+
+TEST_F(ExternalRefBlank, RangeCriteriaFunctionsReadAClosedBookAsValue) {
+  for (const std::string formula :
+       {"=COUNTBLANK([Src.xlsx]S!A1:A5)", "=COUNTIF([Src.xlsx]S!A1:A5,\"k2\")", "=COUNTIFS([Src.xlsx]S!A1:A5,\"k2\")",
+        "=SUMIF([Src.xlsx]S!A:A,\"k2\",[Src.xlsx]S!B:B)", "=SUMIFS([Src.xlsx]S!B:B,[Src.xlsx]S!A:A,\"k2\")",
+        "=AVERAGEIF([Src.xlsx]S!A:A,\"k2\",[Src.xlsx]S!B:B)", "=MAXIFS([Src.xlsx]S!B:B,[Src.xlsx]S!A:A,\"k2\")"}) {
+    ExpectError(formula, ErrorCode::Value);
+  }
+}
+
+TEST_F(ExternalRefBlank, LookupsOverAnExternalTableReadTheUncachedCellAsBlank) {
+  const Value indexed = Eval("=INDEX([Src.xlsx]S!A1:A5,4)&\"x\"");
+  ASSERT_TRUE(indexed.is_text()) << indexed.debug_to_string();
+  EXPECT_EQ(indexed.as_text(), "x");
+  const Value blank = Eval("=ISBLANK(INDEX([Src.xlsx]S!A:A,4))");
+  ASSERT_TRUE(blank.is_boolean()) << blank.debug_to_string();
+  EXPECT_TRUE(blank.as_boolean());
+  ExpectNumber("=MATCH(\"k5\",[Src.xlsx]S!A1:A5,0)", 5.0);
+  ExpectNumber("=MATCH(\"k5\",[Src.xlsx]S!A:A,0)", 5.0);
+  ExpectNumber("=INDEX([Src.xlsx]S!B1:B5,MATCH(\"k2\",[Src.xlsx]S!A1:A5,0))", 20.0);
+  ExpectError("=MATCH(\"k4\",[Src.xlsx]S!A1:A5,0)", ErrorCode::NA);
 }
 
 TEST_F(ExternalRefEval, WholeAxisAggregatesReadTheCachedCells) {

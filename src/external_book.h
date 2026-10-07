@@ -130,10 +130,9 @@ struct ExternalBook {
   /// Returns the cached value at `(sheet, row, col)`, borrowing this
   /// book's storage for a Text result.
   ///
-  /// An address Excel never cached reads as numeric zero rather than as
-  /// blank or `#REF!`. Excel caches only the cells this workbook
-  /// actually references, and shows `0` for a reference into a
-  /// supporting workbook whose value it does not hold.
+  /// An address Excel never cached reads as a blank (an empty cell of the
+  /// reference grid), not `#REF!`: it concatenates as "", `ISBLANK` is TRUE,
+  /// and a formula result displays it as `0`.
   Value cached_cell(std::uint32_t sheet, std::uint32_t row, std::uint32_t col) const noexcept;
 
   static constexpr std::uint32_t kNoSheet = static_cast<std::uint32_t>(-1);
