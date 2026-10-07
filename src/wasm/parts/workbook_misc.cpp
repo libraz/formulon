@@ -102,7 +102,7 @@ emscripten::val JsWorkbook::functionNames() const {
     if (rc != 0) {
       break;
     }
-    arr.set(static_cast<uint32_t>(i), std::string(name != nullptr ? name : ""));
+    arr.set(static_cast<uint32_t>(i), string_from_cstr(name));
   }
   arr.set("status", status_from_rc(rc));
   return arr;

@@ -146,20 +146,10 @@ JsNumberResult JsWorkbook::pivotCacheFieldCount(uint32_t cacheId) const {
 }
 
 JsStringResult JsWorkbook::pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIdx) const {
-  JsStringResult r;
-  if (handle_ == nullptr) {
-    r.status = error_status(7000);
-    return r;
-  }
   const char* name = nullptr;
-  fm_status_t rc = fm_workbook_pivot_cache_field_name(handle_, cacheId, fieldIdx, &name);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.status = ok_status();
-  r.value = (name != nullptr) ? std::string(name) : std::string();
-  return r;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_cache_field_name(handle_, cacheId, fieldIdx, &name)
+                                            : kBindingInvalidHandle;
+  return string_result(rc, name);
 }
 
 JsAddStyleResult JsWorkbook::pivotCacheFieldAdd(uint32_t cacheId, const std::string& name) {

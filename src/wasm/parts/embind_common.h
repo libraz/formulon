@@ -467,6 +467,9 @@ struct JsStrField {
   const char* value;  ///< NULL is emitted as the empty string.
 };
 
+/// Copies `s`, or returns the empty string when `s` is NULL.
+std::string string_from_cstr(const char* s);
+
 /// Sets `o[key]` to `s`, or to the empty string when `s` is NULL.
 void js_set_cstr(emscripten::val& o, const char* key, const char* s);
 

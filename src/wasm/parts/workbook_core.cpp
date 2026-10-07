@@ -330,20 +330,9 @@ JsStatus JsWorkbook::deleteCols(uint32_t sheet, uint32_t col, uint32_t count) {
 // `src/wasm/generated/workbook_counts.cpp`).
 
 JsStringResult JsWorkbook::sheetName(uint32_t idx) const {
-  JsStringResult r;
-  if (handle_ == nullptr) {
-    r.status = error_status(7000);
-    return r;
-  }
   const char* name = nullptr;
-  fm_status_t rc = fm_workbook_sheet_name(handle_, idx, &name);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
-  }
-  r.value = (name != nullptr) ? std::string(name) : std::string();
-  r.status = ok_status();
-  return r;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_sheet_name(handle_, idx, &name) : kBindingInvalidHandle;
+  return string_result(rc, name);
 }
 
 // ---- Recalc / calc mode --------------------------------------------------
@@ -649,28 +638,23 @@ JsEvalResult eval_formula(const std::string& formula) {
 }
 
 std::string version_string() {
-  const char* s = fm_version_string();
-  return s != nullptr ? std::string(s) : std::string();
+  return string_from_cstr(fm_version_string());
 }
 
 std::string status_string(int32_t status) {
-  const char* s = fm_status_string(static_cast<fm_status_t>(status));
-  return s != nullptr ? std::string(s) : std::string();
+  return string_from_cstr(fm_status_string(static_cast<fm_status_t>(status)));
 }
 
 std::string error_display_name(int32_t error_code) {
-  const char* s = fm_error_display_name(static_cast<fm_error_code_t>(error_code));
-  return s != nullptr ? std::string(s) : std::string();
+  return string_from_cstr(fm_error_display_name(static_cast<fm_error_code_t>(error_code)));
 }
 
 std::string last_error_message() {
-  const char* s = fm_last_error_message();
-  return s != nullptr ? std::string(s) : std::string();
+  return string_from_cstr(fm_last_error_message());
 }
 
 std::string last_error_context() {
-  const char* s = fm_last_error_context();
-  return s != nullptr ? std::string(s) : std::string();
+  return string_from_cstr(fm_last_error_context());
 }
 
 // ---- Structured logging (process-wide, not per handle) --------------------

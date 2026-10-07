@@ -20,30 +20,30 @@ namespace parts {
 
 // ---- Merges ------------------------------------------------------------
 
-JsStatus JsWorkbook::addMerge(uint32_t sheet, emscripten::val range) {
-  if (handle_ == nullptr) {
+namespace {
+
+// Reads `range` and hands it to `edit`, the add or remove half of the merge API.
+JsStatus edit_merge(fm_workbook_t* wb, uint32_t sheet, const emscripten::val& range, const char* operation,
+                    fm_status_t (*edit)(fm_workbook_t*, uint32_t, fm_merge_range)) {
+  if (wb == nullptr) {
     return error_status(7000);
   }
-  JsNarrowNumericReader reader("addMerge");
+  JsNarrowNumericReader reader(operation);
   const fm_merge_range m = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return binding_error_status(kInvalidArgument, reader.message().c_str());
   }
-  fm_status_t rc = fm_sheet_add_merge(handle_, sheet, m);
-  return status_from_rc(rc);
+  return status_from_rc(edit(wb, sheet, m));
+}
+
+}  // namespace
+
+JsStatus JsWorkbook::addMerge(uint32_t sheet, emscripten::val range) {
+  return edit_merge(handle_, sheet, range, "addMerge", &fm_sheet_add_merge);
 }
 
 JsStatus JsWorkbook::removeMerge(uint32_t sheet, emscripten::val range) {
-  if (handle_ == nullptr) {
-    return error_status(7000);
-  }
-  JsNarrowNumericReader reader("removeMerge");
-  const fm_merge_range m = js_pull_range(range, &reader);
-  if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
-  }
-  fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, m);
-  return status_from_rc(rc);
+  return edit_merge(handle_, sheet, range, "removeMerge", &fm_sheet_remove_merge);
 }
 
 JsStatus JsWorkbook::removeMergeAt(uint32_t sheet, uint32_t index) {

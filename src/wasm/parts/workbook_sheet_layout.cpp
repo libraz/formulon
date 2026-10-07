@@ -18,18 +18,69 @@ namespace {
 
 using EntryCountGetter = fm_status_t (*)(const fm_workbook_t*, size_t, size_t*);
 
-// Opens a `{ status, <key>: [] }` enumeration result and reads the entry
-// count. Returns false once `r` carries the failure status and the empty list.
-bool begin_entry_list(const fm_workbook_t* handle, uint32_t sheet, EntryCountGetter count_getter, const char* key,
-                      emscripten::val& r, emscripten::val& list, std::size_t& count) {
-  r = emscripten::val::object();
-  list = emscripten::val::array();
+// Reads entry `index` of `sheet` into `*out`; false skips an unreadable entry.
+using EntryItemGetter = bool (*)(const fm_workbook_t*, uint32_t, std::size_t, emscripten::val*);
+
+// Builds a `{ status, <key>: [...] }` enumeration result. Only a failed
+// count fails the call; an unreadable entry is left out of the list.
+emscripten::val entry_list(const fm_workbook_t* handle, uint32_t sheet, EntryCountGetter count_getter, const char* key,
+                           EntryItemGetter item_getter) {
+  emscripten::val r = emscripten::val::object();
+  emscripten::val list = emscripten::val::array();
+  std::size_t count = 0;
   const fm_status_t rc = handle == nullptr ? 7000 : count_getter(handle, sheet, &count);
   if (rc != 0) {
     r.set("status", error_status(rc));
     r.set(key, list);
+    return r;
+  }
+  std::size_t emitted = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    emscripten::val out = emscripten::val::undefined();
+    if (!item_getter(handle, sheet, i, &out)) {
+      continue;
+    }
+    list.set(emitted, out);
+    ++emitted;
+  }
+  r.set("status", ok_status());
+  r.set(key, list);
+  return r;
+}
+
+bool column_entry(const fm_workbook_t* handle, uint32_t sheet, std::size_t index, emscripten::val* out) {
+  fm_column_layout_t entry{};
+  if (fm_sheet_get_column(handle, sheet, index, &entry) != 0) {
     return false;
   }
+  *out = emscripten::val::object();
+  out->set("first", entry.first);
+  out->set("last", entry.last);
+  out->set("width", entry.width);
+  out->set("hidden", entry.hidden);
+  out->set("outlineLevel", static_cast<int32_t>(entry.outline_level));
+  // Normalize legacy non-zero widths at the binding boundary as well as in
+  // the C getter, so a mixed-version host still sees logical presence.
+  out->set("hasWidth", (entry.has_width || entry.width != 0.0) ? 1 : 0);
+  out->set("hasStyle", entry.has_style ? 1 : 0);
+  out->set("styleXf", entry.style_xf);
+  return true;
+}
+
+bool row_entry(const fm_workbook_t* handle, uint32_t sheet, std::size_t index, emscripten::val* out) {
+  fm_row_layout_t entry{};
+  if (fm_sheet_get_row_override(handle, sheet, index, &entry) != 0) {
+    return false;
+  }
+  *out = emscripten::val::object();
+  out->set("row", entry.row);
+  out->set("height", entry.height);
+  out->set("hidden", entry.hidden);
+  out->set("outlineLevel", static_cast<int32_t>(entry.outline_level));
+  out->set("hasStyle", entry.has_style ? 1 : 0);
+  out->set("styleXf", entry.style_xf);
+  out->set("hasHeight", entry.has_height ? 1 : 0);
+  out->set("customHeight", entry.custom_height ? 1 : 0);
   return true;
 }
 
@@ -216,7 +267,7 @@ JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
   r.view.showZeros = v.show_zeros;
   r.view.rightToLeft = v.right_to_left;
   r.view.tabSelected = v.tab_selected;
-  r.view.viewMode = v.view_mode == nullptr ? std::string() : v.view_mode;
+  r.view.viewMode = string_from_cstr(v.view_mode);
   r.status = ok_status();
   return r;
 }
@@ -234,11 +285,11 @@ JsSheetProtectionResult JsWorkbook::getSheetProtection(uint32_t sheet) const {
     return r;
   }
   r.protection.enabled = p.enabled;
-  r.protection.algorithmName = p.algorithm_name == nullptr ? std::string() : p.algorithm_name;
-  r.protection.hashValue = p.hash_value == nullptr ? std::string() : p.hash_value;
-  r.protection.saltValue = p.salt_value == nullptr ? std::string() : p.salt_value;
+  r.protection.algorithmName = string_from_cstr(p.algorithm_name);
+  r.protection.hashValue = string_from_cstr(p.hash_value);
+  r.protection.saltValue = string_from_cstr(p.salt_value);
   r.protection.spinCount = p.spin_count;
-  r.protection.legacyPassword = p.legacy_password == nullptr ? std::string() : p.legacy_password;
+  r.protection.legacyPassword = string_from_cstr(p.legacy_password);
   r.protection.sheet = p.sheet;
   r.protection.objects = p.objects;
   r.protection.scenarios = p.scenarios;
@@ -400,35 +451,7 @@ JsStatus JsWorkbook::setSheetViewMode(uint32_t sheet, std::string mode) {
 // ---- Column layout overrides --------------------------------------------
 
 emscripten::val JsWorkbook::getSheetColumns(uint32_t sheet) const {
-  emscripten::val r;
-  emscripten::val columns;
-  std::size_t count = 0;
-  if (!begin_entry_list(handle_, sheet, &fm_sheet_get_column_count, "columns", r, columns, count)) {
-    return r;
-  }
-  std::size_t emitted = 0;
-  for (std::size_t i = 0; i < count; ++i) {
-    fm_column_layout_t entry{};
-    if (fm_sheet_get_column(handle_, sheet, i, &entry) != 0) {
-      continue;
-    }
-    emscripten::val out = emscripten::val::object();
-    out.set("first", entry.first);
-    out.set("last", entry.last);
-    out.set("width", entry.width);
-    out.set("hidden", entry.hidden);
-    out.set("outlineLevel", static_cast<int32_t>(entry.outline_level));
-    // Normalize legacy non-zero widths at the binding boundary as well as in
-    // the C getter, so a mixed-version host still sees logical presence.
-    out.set("hasWidth", (entry.has_width || entry.width != 0.0) ? 1 : 0);
-    out.set("hasStyle", entry.has_style ? 1 : 0);
-    out.set("styleXf", entry.style_xf);
-    columns.set(emitted, out);
-    ++emitted;
-  }
-  r.set("status", ok_status());
-  r.set("columns", columns);
-  return r;
+  return entry_list(handle_, sheet, &fm_sheet_get_column_count, "columns", &column_entry);
 }
 
 JsStatus JsWorkbook::setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width) {
@@ -458,33 +481,7 @@ JsStatus JsWorkbook::setColumnOutline(uint32_t sheet, uint32_t first, uint32_t l
 // ---- Row layout overrides ----------------------------------------------
 
 emscripten::val JsWorkbook::getSheetRowOverrides(uint32_t sheet) const {
-  emscripten::val r;
-  emscripten::val rows;
-  std::size_t count = 0;
-  if (!begin_entry_list(handle_, sheet, &fm_sheet_get_row_override_count, "rows", r, rows, count)) {
-    return r;
-  }
-  std::size_t emitted = 0;
-  for (std::size_t i = 0; i < count; ++i) {
-    fm_row_layout_t entry{};
-    if (fm_sheet_get_row_override(handle_, sheet, i, &entry) != 0) {
-      continue;
-    }
-    emscripten::val out = emscripten::val::object();
-    out.set("row", entry.row);
-    out.set("height", entry.height);
-    out.set("hidden", entry.hidden);
-    out.set("outlineLevel", static_cast<int32_t>(entry.outline_level));
-    out.set("hasStyle", entry.has_style ? 1 : 0);
-    out.set("styleXf", entry.style_xf);
-    out.set("hasHeight", entry.has_height ? 1 : 0);
-    out.set("customHeight", entry.custom_height ? 1 : 0);
-    rows.set(emitted, out);
-    ++emitted;
-  }
-  r.set("status", ok_status());
-  r.set("rows", rows);
-  return r;
+  return entry_list(handle_, sheet, &fm_sheet_get_row_override_count, "rows", &row_entry);
 }
 
 JsStatus JsWorkbook::setRowHeight(uint32_t sheet, uint32_t row, double height) {

@@ -162,7 +162,7 @@ JsStatus binding_error_status(int32_t code, const char* message) {
   JsStatus s;
   s.ok = false;
   s.status = code;
-  s.message = message != nullptr ? message : "";
+  s.message = string_from_cstr(message);
   return s;
 }
 
@@ -175,10 +175,8 @@ JsStatus error_status(int32_t code) {
   JsStatus s;
   s.ok = false;
   s.status = code;
-  const char* msg = fm_last_error_message();
-  const char* ctx = fm_last_error_context();
-  s.message = msg != nullptr ? msg : "";
-  s.context = ctx != nullptr ? ctx : "";
+  s.message = string_from_cstr(fm_last_error_message());
+  s.context = string_from_cstr(fm_last_error_context());
   return s;
 }
 
@@ -768,8 +766,12 @@ fm_border_side js_pull_border_side(const emscripten::val& v, JsNarrowNumericRead
   return s;
 }
 
+std::string string_from_cstr(const char* s) {
+  return s != nullptr ? std::string(s) : std::string();
+}
+
 void js_set_cstr(emscripten::val& o, const char* key, const char* s) {
-  o.set(key, s != nullptr ? std::string(s) : std::string());
+  o.set(key, string_from_cstr(s));
 }
 
 emscripten::val js_text_result(fm_status_t rc, const char* key, const char* text) {
