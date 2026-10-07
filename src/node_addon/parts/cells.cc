@@ -11,6 +11,36 @@
 
 namespace formulon_node {
 
+namespace {
+
+// Shared body of the `(sheet, row, col, string)` cell setters.
+using CellTextFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t, uint32_t, const char*);
+
+Napi::Value InvokeCellText(const Napi::CallbackInfo& info, fm_workbook_t* handle, CellTextFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeErrorStatus(env, kBindingInvalidHandle);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
+  const uint32_t row = Workbook::ArgU32(info, 1);
+  const uint32_t col = Workbook::ArgU32(info, 2);
+  const std::string text = Workbook::ArgString(info, 3);
+  fm_status_t rc = fn(handle, sheet, row, col, text.c_str());
+  return MakeStatus(env, rc);
+}
+
+// Builds `{ status, rows: 0, cols: 0, cells: [] }` for a failed array evaluation.
+Napi::Object EmptyFormulaArrayResult(Napi::Env env, Napi::Object status) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", status);
+  out.Set("rows", Napi::Number::New(env, 0));
+  out.Set("cols", Napi::Number::New(env, 0));
+  out.Set("cells", Napi::Array::New(env, 0));
+  return out;
+}
+
+}  // namespace
+
 // ---- Cell mutation --------------------------------------------------
 
 Napi::Value Workbook::SetNumber(const Napi::CallbackInfo& info) {
@@ -74,29 +104,11 @@ Napi::Value Workbook::SetError(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetText(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  const std::string text = ArgString(info, 3);
-  fm_status_t rc = fm_workbook_set_text(handle_, sheet, row, col, text.c_str());
-  return MakeStatus(env, rc);
+  return InvokeCellText(info, handle_, &fm_workbook_set_text);
 }
 
 Napi::Value Workbook::SetCellPhonetic(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  const std::string phonetic = ArgString(info, 3);
-  fm_status_t rc = fm_workbook_set_cell_phonetic(handle_, sheet, row, col, phonetic.c_str());
-  return MakeStatus(env, rc);
+  return InvokeCellText(info, handle_, &fm_workbook_set_cell_phonetic);
 }
 
 Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
@@ -189,16 +201,7 @@ Napi::Value Workbook::SetBlank(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetFormula(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  const std::string formula = ArgString(info, 3);
-  fm_status_t rc = fm_workbook_set_formula(handle_, sheet, row, col, formula.c_str());
-  return MakeStatus(env, rc);
+  return InvokeCellText(info, handle_, &fm_workbook_set_formula);
 }
 
 // ---- Cell read ------------------------------------------------------
@@ -302,13 +305,8 @@ Napi::Value Workbook::EvaluateFormulaText(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::EvaluateFormulaArray(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("rows", Napi::Number::New(env, 0));
-    out.Set("cols", Napi::Number::New(env, 0));
-    out.Set("cells", Napi::Array::New(env, 0));
-    return out;
+    return EmptyFormulaArrayResult(env, NullHandleError(env));
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const uint32_t row = ArgU32(info, 1);
@@ -319,11 +317,7 @@ Napi::Value Workbook::EvaluateFormulaArray(const Napi::CallbackInfo& info) {
   uint32_t cols = 0;
   fm_status_t rc = fm_workbook_evaluate_formula_array(handle_, sheet, row, col, formula.c_str(), &rows, &cols);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("rows", Napi::Number::New(env, 0));
-    out.Set("cols", Napi::Number::New(env, 0));
-    out.Set("cells", Napi::Array::New(env, 0));
-    return out;
+    return EmptyFormulaArrayResult(env, MakeErrorStatus(env, rc));
   }
 
   // Build a rows x cols nested array of Value objects, reading each stashed
@@ -336,17 +330,14 @@ Napi::Value Workbook::EvaluateFormulaArray(const Napi::CallbackInfo& info) {
       fm_value_t v{};
       fm_status_t cell_rc = fm_workbook_evaluate_formula_array_cell(handle_, index, &v);
       if (cell_rc != 0) {
-        out.Set("status", MakeErrorStatus(env, cell_rc));
-        out.Set("rows", Napi::Number::New(env, 0));
-        out.Set("cols", Napi::Number::New(env, 0));
-        out.Set("cells", Napi::Array::New(env, 0));
-        return out;
+        return EmptyFormulaArrayResult(env, MakeErrorStatus(env, cell_rc));
       }
       js_row.Set(c, TranslateValue(env, v));
     }
     cells.Set(r, js_row);
   }
 
+  Napi::Object out = Napi::Object::New(env);
   out.Set("status", MakeOkStatus(env));
   out.Set("rows", Napi::Number::New(env, rows));
   out.Set("cols", Napi::Number::New(env, cols));
@@ -395,6 +386,20 @@ Napi::Object MakeFormulaResult(Napi::Env env, fm_status_t code, const char* form
                          present ? static_cast<Napi::Value>(Napi::String::New(env, formula)) : env.Null());
 }
 
+// Shared body of the A1 / R1C1 formula-text getters.
+using FormulaTextFn = fm_status_t (*)(const fm_workbook_t*, size_t, uint32_t, uint32_t, const char**);
+
+Napi::Value FormulaTextResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, FormulaTextFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeFormulaResult(env, kBindingInvalidHandle, nullptr);
+  }
+  const char* formula = nullptr;
+  const fm_status_t rc =
+      fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1), Workbook::ArgU32(info, 2), &formula);
+  return MakeFormulaResult(env, rc, formula);
+}
+
 // Builds `{ status, text, displayStatus }`; `text` is "" and the display
 // status OK when the call failed.
 Napi::Object MakeDisplayResult(Napi::Env env, fm_status_t code, const char* text, int32_t display_status) {
@@ -409,24 +414,11 @@ Napi::Object MakeDisplayResult(Napi::Env env, fm_status_t code, const char* text
 }  // namespace
 
 Napi::Value Workbook::GetFormula(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeFormulaResult(env, kBindingInvalidHandle, nullptr);
-  }
-  const char* formula = nullptr;
-  const fm_status_t rc = fm_workbook_get_formula(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &formula);
-  return MakeFormulaResult(env, rc, formula);
+  return FormulaTextResult(info, handle_, &fm_workbook_get_formula);
 }
 
 Napi::Value Workbook::GetFormulaR1C1(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeFormulaResult(env, kBindingInvalidHandle, nullptr);
-  }
-  const char* formula = nullptr;
-  const fm_status_t rc =
-      fm_workbook_get_formula_r1c1(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &formula);
-  return MakeFormulaResult(env, rc, formula);
+  return FormulaTextResult(info, handle_, &fm_workbook_get_formula_r1c1);
 }
 
 namespace {
